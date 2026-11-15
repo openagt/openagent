@@ -1,23 +1,27 @@
-import { useState } from 'react'
-import { Bot, FastForward, Play, Plus, Trash2 } from 'lucide-react'
+import { useEffect, useId, useRef, useState } from 'react'
+import { FastForward, Play, Plus, Trash2 } from 'lucide-react'
 import {
   Button,
   ConfirmDialog,
   Input,
+  List,
   Page,
+  Row,
+  RowShapes,
+  Section,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
+  Slot,
   StartAgentButton,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
   cn,
+  inPlace,
   pathsIn,
   useFileNames,
   useModuleHost,
+  useOpenAgentDown,
   usePolled,
   useSchedule,
   type FileNames,
@@ -27,15 +31,16 @@ import {
   type Schedule,
 } from '@openagt/dashboard/module'
 import type { PlacedEntry } from '../src/queue.js'
-import { DEFAULT_PRIORITY, PRIORITIES, QUEUE_COMMAND, addTextArgs, doneArgs, fanOutLabel, isWorkingOn, priorityMeaning, workOnEntryPrompt } from '../src/module.js'
-import { EntryTitle, entryView } from './entry.js'
+import { DEFAULT_PRIORITY, PRIORITIES, QUEUE_COMMAND, addTextArgs, doneArgs, fanOutLabel, fanOutPress, isPlacedEntry, isWorkingOn, priorityMeaning, readEntries, unclaimedEntries, workOnEntryPrompt } from '../src/module.js'
+import { AgentOnEntry, EntryTitle, entryView } from './entry.js'
 import { useQueueStarts, type QueueStarts } from './starts.js'
+import { BatchCount } from './batch-count.js'
 
 /** One project's queue as read: its entries with their sections and the project's agents at work, or why the command failed. */
 interface ProjectRead {
   project: ModuleProject
   entries?: PlacedEntry[]
-  /** The project's agents that are working now: an entry one of them was asked is being worked on. */
+  /** The project's agents that are working now or waiting on the person: an entry one of them was asked is being worked on. */
   working: ModuleAgent[]
   error?: string
 }
@@ -66,7 +71,7 @@ function sections(entries: PlacedEntry[]): { priority: number | undefined; entri
 /**
  * The Queue page: every project's open entries, in the order agents will take them, numbered,
  * under the priority section each sits in, from `queue --local --full` in each project. A place
- * to act: a line on top says whether anything takes from the queue by itself; an entry is started
+ * to act: a line under them says whether anything takes from the queue by itself; an entry is started
  * here, alone or as a batch from the top, as on the Overview's card; an entry is removed, and a
  * new one added, through the same `queue done` and `queue add` an agent runs. An entry that names
  * a file another page opens reads as that page's name for it. A project whose command fails is
@@ -77,130 +82,157 @@ export function QueuePage({ projects }: ModulePageProps) {
   const key = projects.map(p => p.id).join(',')
   const {
     value: reads,
-    loaded,
+    state,
+    failing,
     reload,
   } = usePolled<ProjectRead[]>(
     () =>
       Promise.all(
         projects.map(async (project): Promise<ProjectRead> => {
-          const [result, agents] = await Promise.all([host.runCommand(project.id, ['--local', '--full']), host.agents(project.id).catch(() => [])])
-          const working = agents.filter(agent => agent.status === 'running')
-          if (!result.ok) return { project, working, error: result.error }
-          if (!Array.isArray(result.output)) return { project, working, error: 'the queue command did not print a list' }
-          return { project, working, entries: result.output.filter(isPlacedEntry) }
+          const [read, agents] = await Promise.all([host.runCommand(project.id, ['--local', '--full']).then(result => readEntries(result, isPlacedEntry)), host.agents(project.id).catch(() => [])])
+          const working = agents.filter(agent => agent.status === 'running' || agent.status === 'waiting')
+          return 'error' in read ? { project, working, error: read.error } : { project, working, entries: read.entries }
         }),
       ),
     NOTHING_READ,
     // A local read, no fetch: cheap enough to follow the queue closely.
     10_000,
     [key],
+    // Kept for the next visit: the page opens with the last list, faded until it is read again.
+    { remember: `skill-queue:page:${key}`, stored: true },
   )
   const schedule = useSchedule(projects)
-  const names = useFileNames(reads.map(read => ({ projectId: read.project.id, paths: (read.entries ?? []).flatMap(placed => pathsIn(placed.entry)) })))
+  const names = useFileNames(
+    reads.map(read => ({ projectId: read.project.id, paths: (read.entries ?? []).flatMap(placed => pathsIn(placed.entry)) })),
+    `skill-queue:page-names:${key}`,
+  )
   const starts = useQueueStarts(host)
+
+  const total = reads.reduce((sum, read) => sum + (read.entries?.length ?? 0), 0)
+  // One project's page: its start is the page's one primary press.
+  const only = projects.length === 1 ? reads[0] : undefined
 
   return (
     <Page
       title="Queue"
+      count={state !== 'unknown' && total > 0 ? total : undefined}
       description={`What agents will work on next, from the top${projects.length > 1 ? ', one list per project' : ''}. A higher priority is taken first: 10 is the most urgent, 0 is only if there is capacity.`}
+      actions={only && <BatchStart read={only} primary names={names} starts={starts} />}
     >
-      {!loaded && <p className="text-sm text-muted-foreground">Loading…</p>}
       {starts.error && (
         <p role="alert" className="mb-4 text-sm text-danger">
           {starts.error}
         </p>
       )}
-      <div className="space-y-6">
-        {reads.map(read => (
-          <ProjectQueue key={read.project.id} read={read} titled={projects.length > 1} schedule={schedule} names={names} starts={starts} reload={reload} />
-        ))}
-      </div>
+      <Slot of={{ state, value: reads, failing }} shape={<RowShapes rows={3} />} className="space-y-8">
+        {reads =>
+          reads.map(read =>
+            only ? (
+              <ProjectQueue key={read.project.id} read={read} schedule={schedule} names={names} starts={starts} reload={reload} />
+            ) : (
+              <Section key={read.project.id} title={read.project.name} count={read.entries?.length || undefined} action={<BatchStart read={read} primary={false} names={names} starts={starts} />}>
+                <ProjectQueue read={read} schedule={schedule} names={names} starts={starts} reload={reload} />
+              </Section>
+            ),
+          )
+        }
+      </Slot>
     </Page>
   )
 }
 
-/** One project's queue: who takes from it, its batch start, its entries, and the field that adds one. */
-function ProjectQueue({ read, titled, schedule, names, starts, reload }: { read: ProjectRead; titled: boolean; schedule: Schedule; names: FileNames; starts: QueueStarts; reload: () => Promise<void> }) {
+/**
+ * A project's batch act, as one control: how many, then the press the count qualifies. The chevron
+ * sends the top entry alone: a launcher can only ever start one agent.
+ */
+function BatchStart({ read, primary, names, starts }: { read: ProjectRead; primary: boolean; names: FileNames; starts: QueueStarts }) {
   const host = useModuleHost()
-  const { project, entries, error, working } = read
-  const raw = (entries ?? []).map(placed => placed.entry)
-  const count = Math.min(starts.countOf(project.id), Math.max(raw.length, 1))
+  const { project } = read
+  // An entry an agent is on gets no second one, and one that is done already none at all: the batch starts from the top of the others.
+  const free = unclaimedEntries((read.entries ?? []).map(placed => placed.entry), read.working).filter(entry => !entryView(project.id, entry, names).done)
+  if (free.length === 0) return null
+  const count = starts.batchOf(project.id, free)
   return (
-    <section aria-label={project.name}>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        {titled && <h2 className="text-sm font-semibold">{project.name}</h2>}
-        {raw.length > 0 && <span className="rounded-full bg-muted px-2 py-0.5 text-xs tabular-nums text-muted-foreground">{raw.length === 1 ? '1 entry' : `${raw.length} entries`}</span>}
-        {raw.length > 0 && (
-          <div className="ml-auto flex items-center gap-2">
-            {/* The project's batch act: how many, then the button the count qualifies. */}
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <Input
-                    type="number"
-                    min={1}
-                    // Never more than the entries, as the Overview's card counts them: the box says the
-                    // number the button will start, not a 3 beside "Start 2 agents".
-                    max={raw.length}
-                    step={1}
-                    value={count}
-                    aria-label="How many agents to start"
-                    onChange={event => {
-                      // An emptied box is mid-edit rather than a count: `Number('')` is 0.
-                      const typed = event.target.value.trim()
-                      if (!typed) return
-                      const next = Math.round(Number(typed))
-                      if (Number.isFinite(next)) starts.setCount(project.id, next)
-                    }}
-                    className="h-7 w-14 px-1 text-center text-xs tabular-nums"
-                  />
-                }
-              />
-              <TooltipContent>How many agents to start: one per entry, from the top of the queue.</TooltipContent>
-            </Tooltip>
-            {/* The chevron sends the top entry alone: a launcher can only ever start one agent. */}
-            <StartAgentButton
-              size="xs"
-              icon={<FastForward className="h-3.5 w-3.5" aria-hidden />}
-              label={count === 1 ? 'Start 1 agent' : `Start ${count} agents`}
-              menuAriaLabel={`Other ways to start agents on ${project.name}'s queue`}
-              tooltip={fanOutLabel(count)}
-              busy={starts.inFlight}
-              starting={starts.fanningOut(project.id)}
-              onStart={() => void starts.fanOutProject(project.id, raw)}
-              onConfigure={() => host.configureRun(project.id, workOnEntryPrompt(raw[0]!))}
-              prompt={workOnEntryPrompt(raw[0]!)}
-              configureDescription="Opens the launcher with the top entry's prompt: one agent, not the batch."
-            />
-          </div>
-        )}
-      </div>
-      {error === undefined && <TakerLine schedule={schedule} projectId={project.id} />}
-      {error !== undefined ? (
-        <p role="alert" className="mt-2 text-sm text-danger">
-          Could not read the queue of {project.name}: {error}
-        </p>
-      ) : entries!.length === 0 ? (
-        <p className="mt-3 text-sm text-muted-foreground">Nothing queued.</p>
+    <StartAgentButton
+      variant={primary ? 'default' : 'secondary'}
+      size="default"
+      leading={<BatchCount count={count} max={free.length} onChange={next => starts.setCount(project.id, next)} className="h-8" />}
+      icon={<FastForward className="size-4" aria-hidden />}
+      label={fanOutPress(count)}
+      menuAriaLabel={`Other ways to start agents on ${project.name}'s queue`}
+      tooltip={fanOutLabel(count)}
+      busy={starts.inFlight}
+      starting={starts.fanningOut(project.id)}
+      onStart={() => void starts.fanOutProject(project.id, free)}
+      onConfigure={() => host.configureRun(project.id, workOnEntryPrompt(free[0]!))}
+      prompt={workOnEntryPrompt(free[0]!)}
+      configureDescription="Opens the launcher with the top entry's prompt: one agent, not the batch."
+    />
+  )
+}
+
+/** One project's queue: its entries by priority, the field that adds one, and who takes from it; an empty one says so in one line, over the field. */
+function ProjectQueue({ read, schedule, names, starts, reload }: { read: ProjectRead; schedule: Schedule; names: FileNames; starts: QueueStarts; reload: () => Promise<void> }) {
+  const { project, entries, error, working } = read
+  const queue = useRef<HTMLDivElement>(null)
+  // A removed row takes the focus with it: it goes to the entry now in its place, else the one before it, else the field that adds one.
+  const [removed, setRemoved] = useState<{ place: number }>()
+  useEffect(() => {
+    if (!removed || !queue.current) return
+    const bins = queue.current.querySelectorAll<HTMLElement>('[data-remove-entry]')
+    ;(bins[removed.place - 1] ?? bins[bins.length - 1] ?? queue.current.querySelector<HTMLElement>('input[name="task"]'))?.focus()
+  }, [removed])
+  if (error !== undefined)
+    return (
+      <p role="alert" className="text-sm text-danger">
+        Could not read the queue of {project.name}: {error}
+      </p>
+    )
+  return (
+    <div ref={queue} className="space-y-6">
+      {entries!.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Nothing queued.</p>
       ) : (
         sections(entries!).map((section, index) => (
-          <div key={index} className="mt-4">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              {section.priority === undefined ? 'No priority' : `Priority ${section.priority}`}
-              {section.priority !== undefined && priorityMeaning(section.priority) !== undefined && ' '}
-              {section.priority !== undefined && priorityMeaning(section.priority) !== undefined && <span className="ml-1 font-normal normal-case tracking-normal">{priorityMeaning(section.priority)}</span>}
-            </h3>
-            {/* Counted on from the section before, so the number a screen reader says is the one shown. */}
-            <ol start={section.entries[0]!.place} className="mt-1.5 list-none divide-y divide-border rounded-md border border-border">
+          <Section key={index} title={<PriorityTitle priority={section.priority} />} count={section.entries.length === 1 ? '1 entry' : `${section.entries.length} entries`}>
+            <List>
               {section.entries.map(placed => (
-                <EntryRow key={`${placed.place}\n${placed.entry}`} project={project} placed={placed} agent={working.find(agent => isWorkingOn(agent.ask, placed.entry))} names={names} starts={starts} reload={reload} />
+                <EntryRow
+                  key={`${placed.place}\n${placed.entry}`}
+                  project={project}
+                  placed={placed}
+                  agent={working.find(agent => isWorkingOn(agent.ask, placed.entry))}
+                  names={names}
+                  starts={starts}
+                  reload={reload}
+                  onRemoved={() => setRemoved({ place: placed.place })}
+                />
               ))}
-            </ol>
-          </div>
+            </List>
+          </Section>
         ))
       )}
-      {error === undefined && <AddEntry project={project} reload={reload} />}
-    </section>
+      <AddEntry project={project} among={entries!.length > 0} reload={reload} />
+      {/* Under the field, so that the line, read after the entries, moves nothing when it comes. */}
+      {entries!.length > 0 && <TakerLine schedule={schedule} projectId={project.id} />}
+    </div>
+  )
+}
+
+/** A run of entries' heading: the priority section they sit in, with what its number means at either end of the scale. */
+function PriorityTitle({ priority }: { priority: number | undefined }) {
+  if (priority === undefined) return 'No priority'
+  const meaning = priorityMeaning(priority)
+  return (
+    <>
+      Priority {priority}
+      {meaning !== undefined && (
+        <>
+          {' '}
+          <span className="font-normal text-muted-foreground">{meaning}</span>
+        </>
+      )}
+    </>
   )
 }
 
@@ -216,8 +248,8 @@ function TakerLine({ schedule, projectId }: { schedule: Schedule; projectId: str
   const taker = known.find(command => command.command === QUEUE_COMMAND)
   const page = schedule.page
   return (
-    <p role="status" aria-label="Who takes from the queue" className="mt-3 flex items-baseline gap-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm">
-      <span aria-hidden className={cn('h-1.5 w-1.5 shrink-0 -translate-y-0.5 rounded-full', taker?.on ? 'bg-success' : 'bg-muted-foreground/50')} />
+    <p role="status" aria-label="Who takes from the queue" className="flex items-baseline gap-2 text-sm text-muted-foreground">
+      <span aria-hidden className={cn('size-2 shrink-0 rounded-full', taker?.on ? 'bg-success' : 'bg-faint-foreground')} />
       <span className="min-w-0">
         {taker === undefined ? (
           'Nothing takes from this queue by itself: entries wait until you start them.'
@@ -228,17 +260,9 @@ function TakerLine({ schedule, projectId }: { schedule: Schedule; projectId: str
           </>
         )}
         {taker !== undefined && page && (
-          <span className="ml-2 whitespace-nowrap text-xs text-muted-foreground">
+          <span className="ml-2 whitespace-nowrap">
             Change it in{' '}
-            <a
-              href={page.href}
-              onClick={event => {
-                if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
-                event.preventDefault()
-                schedule.open()
-              }}
-              className="underline hover:text-foreground"
-            >
+            <a href={page.href} onClick={inPlace(schedule.open)} className="text-primary hover:underline">
               {page.label}
             </a>
           </span>
@@ -249,7 +273,23 @@ function TakerLine({ schedule, projectId }: { schedule: Schedule; projectId: str
 }
 
 /** One entry: its place, what it reads as, the agent on it when one is, its start button, and its removal. */
-function EntryRow({ project, placed, agent, names, starts, reload }: { project: ModuleProject; placed: Numbered; agent: ModuleAgent | undefined; names: FileNames; starts: QueueStarts; reload: () => Promise<void> }) {
+function EntryRow({
+  project,
+  placed,
+  agent,
+  names,
+  starts,
+  reload,
+  onRemoved,
+}: {
+  project: ModuleProject
+  placed: Numbered
+  agent: ModuleAgent | undefined
+  names: FileNames
+  starts: QueueStarts
+  reload: () => Promise<void>
+  onRemoved: () => void
+}) {
   const host = useModuleHost()
   const { entry, place } = placed
   const view = entryView(project.id, entry, names)
@@ -257,75 +297,82 @@ function EntryRow({ project, placed, agent, names, starts, reload }: { project: 
     const answer = await host.act(project.id, doneArgs(entry))
     if (!answer.ok) throw new Error(answer.error)
     await reload()
+    onRemoved()
   }
   return (
-    <li className="flex items-center gap-3 px-3 py-2 text-sm max-md:gap-1.5 max-md:px-2">
-      <span aria-hidden className="w-5 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
-        {place}.
-      </span>
-      <div className="min-w-0 flex-1">
-        <EntryTitle view={view} entry={entry} className={cn('block max-w-full truncate text-left max-md:line-clamp-2 max-md:whitespace-normal', (view.open ?? view.url) !== undefined && 'hover:underline')} />
-        {/* The line as written, under a name that stands in for it: it is what an agent is handed. */}
-        {view.renamed && <span className="block truncate font-mono text-xs text-muted-foreground">{entry}</span>}
-      </div>
-      {agent && (
-        <Tooltip>
-          <TooltipTrigger
-            render={<button type="button" onClick={() => host.openAgent(project.id, agent.id)} className="inline-flex shrink-0 items-center gap-1 rounded-full bg-success/15 px-2 py-0.5 text-xs font-medium text-success hover:underline" />}
-          >
-            <Bot className="h-3 w-3" aria-hidden />
-            <span className="max-md:sr-only">An agent is on it</span>
-          </TooltipTrigger>
-          <TooltipContent>An agent is working on this entry: open it</TooltipContent>
-        </Tooltip>
-      )}
-      <StartAgentButton
-        variant="ghost"
-        size="icon-sm"
-        icon={<Play className="h-3.5 w-3.5" aria-hidden />}
-        ariaLabel={`Start an agent on entry ${place}`}
-        menuAriaLabel={`Other ways to run ${view.title}`}
-        tooltip="Spin up an agent working on this entry"
-        busy={starts.inFlight}
-        starting={starts.starting(project.id, entry)}
-        onStart={() => void starts.startEntry(project.id, entry)}
-        onConfigure={() => host.configureRun(project.id, workOnEntryPrompt(entry))}
-        prompt={workOnEntryPrompt(entry)}
-        configureDescription="Opens the launcher with this entry's prompt, so you can set the model and where it runs."
-        className="text-muted-foreground hover:text-foreground"
-      />
-      <ConfirmDialog
-        trigger={
-          <Button variant="ghost" size="icon-sm" aria-label={`Remove entry ${place} from the queue`} title="Remove from the queue" className="shrink-0 text-muted-foreground hover:text-danger">
-            <Trash2 className="h-3.5 w-3.5" aria-hidden />
-          </Button>
-        }
-        title="Remove this entry from the queue?"
-        body={
-          <>
-            <span className="block break-words font-mono text-xs">{entry}</span>
-            <span className="mt-2 block">It is deleted from the queue of {project.name}, for everyone who shares it. Nothing else changes: no ticket is closed, and an agent already working on it goes on.</span>
-          </>
-        }
-        confirmLabel="Remove"
-        confirmBusyLabel="Removing…"
-        onConfirm={remove}
-        fallbackError="The entry was not removed."
-      />
-    </li>
+    <Row
+      stackOnPhone
+      leading={<span className="w-5 text-right text-xs tabular-nums">{place}.</span>}
+      title={<EntryTitle view={view} entry={entry} className={cn('block max-w-full truncate text-left max-md:line-clamp-2 max-md:whitespace-normal', (view.open ?? view.url) !== undefined && 'hover:underline')} />}
+      // The line as written, under a name that stands in for it: it is what an agent is handed.
+      detail={view.renamed ? <span className="font-mono">{entry}</span> : undefined}
+      meta={agent && <AgentOnEntry projectId={project.id} agent={agent} />}
+      actions={
+        <>
+          {!agent && !view.done && (
+            <StartAgentButton
+              variant="ghost"
+              size="icon-sm"
+              icon={<Play className="size-4" aria-hidden />}
+              ariaLabel={`Start an agent on entry ${place}`}
+              menuAriaLabel={`Other ways to run ${view.title}`}
+              tooltip="Start an agent working on this entry"
+              busy={starts.inFlight}
+              starting={starts.starting(project.id, entry)}
+              onStart={() => void starts.startEntry(project.id, entry)}
+              onConfigure={() => host.configureRun(project.id, workOnEntryPrompt(entry))}
+              prompt={workOnEntryPrompt(entry)}
+              configureDescription="Opens the launcher with this entry's prompt, so you can set the model and where it runs."
+              className="text-muted-foreground hover:text-foreground"
+            />
+          )}
+          <ConfirmDialog
+            trigger={
+              <Button data-remove-entry variant="ghost" size="icon-sm" aria-label={`Remove entry ${place} from the queue`} title="Remove from the queue" className="text-muted-foreground hover:text-danger">
+                <Trash2 className="size-4" aria-hidden />
+              </Button>
+            }
+            title="Remove this entry from the queue?"
+            body={
+              <>
+                {/* Named as the row names it; the line as written under a name that stands in for it, as on the row. */}
+                <span className="block break-words">{view.title}</span>
+                {view.renamed && <span className="block break-words font-mono text-xs">{entry}</span>}
+                <span className="mt-2 block">It is deleted from the queue of {project.name}, for everyone who shares it. Nothing else changes: no ticket is closed, and an agent already working on it goes on.</span>
+              </>
+            }
+            confirmLabel="Remove"
+            confirmBusyLabel="Removing…"
+            onConfirm={remove}
+            fallbackError="The entry was not removed."
+          />
+        </>
+      }
+    />
   )
 }
 
-/** The field that adds an entry: its text and the priority section it goes to the end of, through `queue add`. */
-function AddEntry({ project, reload }: { project: ModuleProject; reload: () => Promise<void> }) {
+/** The field that adds an entry: its text and the priority section it goes to the end of, through `queue add`. `among`: the queue has entries. */
+function AddEntry({ project, among, reload }: { project: ModuleProject; among: boolean; reload: () => Promise<void> }) {
   const host = useModuleHost()
   const [text, setText] = useState('')
   const [priority, setPriority] = useState(DEFAULT_PRIORITY)
   const [adding, setAdding] = useState(false)
   const [failed, setFailed] = useState<string | undefined>()
+  const [asked, setAsked] = useState(false)
+  // The next task goes in where this one went: the caret is back in the field once it is added.
+  const field = useRef<HTMLInputElement>(null)
+  const down = useOpenAgentDown()
   const items = PRIORITIES.map(p => ({ value: String(p), label: `Priority ${p}` }))
+  const untyped = text.trim() === ''
+  const formId = useId()
   const add = async (): Promise<void> => {
-    if (text.trim() === '' || adding) return
+    if (adding) return
+    if (untyped) {
+      setAsked(true)
+      field.current?.focus()
+      return
+    }
     setAdding(true)
     setFailed(undefined)
     const answer = await host.act(project.id, addTextArgs(text, priority)).catch((err: unknown) => ({ ok: false as const, error: err instanceof Error ? err.message : String(err) }))
@@ -334,6 +381,7 @@ function AddEntry({ project, reload }: { project: ModuleProject; reload: () => P
       await reload()
     } else setFailed(answer.error)
     setAdding(false)
+    field.current?.focus()
   }
   return (
     <form
@@ -342,12 +390,22 @@ function AddEntry({ project, reload }: { project: ModuleProject; reload: () => P
         event.preventDefault()
         void add()
       }}
-      className="mt-4"
     >
       <div className="flex flex-wrap items-center gap-2">
-        <Input value={text} onChange={event => (setText(event.target.value), setFailed(undefined))} disabled={adding} placeholder="Add a task: what an agent should do" aria-label="A task to add to the queue" className="h-8 min-w-48 flex-1 px-2" />
+        <Input
+          ref={field}
+          name="task"
+          value={text}
+          onChange={event => (setText(event.target.value), setFailed(undefined), setAsked(false))}
+          readOnly={adding}
+          placeholder="Add a task: what an agent should do"
+          aria-label="A task to add to the queue"
+          aria-invalid={asked && untyped}
+          aria-describedby={asked && untyped ? `${formId}-missing` : undefined}
+          className="min-w-48 flex-1 max-md:basis-full"
+        />
         <Select items={items} value={String(priority)} disabled={adding} onValueChange={next => setPriority(Number(next))}>
-          <SelectTrigger size="sm" aria-label="Priority of the new task" className="w-32">
+          <SelectTrigger aria-label="Priority of the new task" className="w-32">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -359,12 +417,20 @@ function AddEntry({ project, reload }: { project: ModuleProject; reload: () => P
             ))}
           </SelectContent>
         </Select>
-        <Button type="submit" variant="outline" size="sm" disabled={text.trim() === '' || adding}>
-          <Plus className="h-3.5 w-3.5" aria-hidden />
+        <Button type="submit" variant="secondary" loading={adding} disabled={down}>
+          <Plus className="size-4" aria-hidden />
           {adding ? 'Adding…' : 'Add to queue'}
         </Button>
       </div>
-      <p className="mt-1.5 text-xs text-muted-foreground">It goes to the end of its priority. The text is what an agent is handed, so write the whole task.</p>
+      {/* One line under the field: what is missing, or what the press does with the task. Among entries it
+          stands from the start, so a keystroke moves nothing under it; an empty queue gets it with the task. */}
+      {asked && untyped ? (
+        <p id={`${formId}-missing`} className="mt-2 text-xs text-danger">
+          Write the task first.
+        </p>
+      ) : (
+        (among || !untyped) && <p className="mt-2 text-xs text-muted-foreground">It goes to the end of its priority. The text is what an agent is handed, so write the whole task.</p>
+      )}
       {failed !== undefined && (
         <p role="alert" className="mt-1 text-xs text-danger">
           Not added: {failed}
@@ -372,11 +438,4 @@ function AddEntry({ project, reload }: { project: ModuleProject; reload: () => P
       )}
     </form>
   )
-}
-
-/** Whether the command printed one entry as `--full` prints it. */
-function isPlacedEntry(value: unknown): value is PlacedEntry {
-  if (!value || typeof value !== 'object') return false
-  const { entry, priority } = value as Record<string, unknown>
-  return typeof entry === 'string' && (priority === undefined || typeof priority === 'number')
 }

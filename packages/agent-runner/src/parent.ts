@@ -1,3 +1,4 @@
+import { errorMessage } from '@openagt/agent-data'
 import { appendInbox, promptLines, takeInbox, type PromptLine } from '@openagt/agent-driver'
 import { worktreePath } from '@openagt/skill-branches'
 import { inboxPath, readLiveCard } from './live-card.js'
@@ -74,6 +75,6 @@ export async function tellParent(repo: string, parent: string, text: string, dep
     if (!deps.resume) return
     for (const stranded of lines) await deps.resume(parent, stranded.kind === 'message' ? { text: stranded.text } : { answer: stranded.answer })
   } catch (err) {
-    deps.log(`[agent-runner] the parent run ${parent} could not be told: ${err instanceof Error ? err.message : String(err)}`)
+    deps.log(`[agent-runner] the parent run ${parent} could not be told: ${errorMessage(err)}`)
   }
 }

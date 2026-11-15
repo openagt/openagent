@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Check } from 'lucide-react'
 import type { ChoiceRequest } from '../../src/index.js'
 import { pickedIds } from '../../src/client.js'
 import { cn } from '../lib/utils.js'
@@ -24,7 +25,7 @@ export function AnsweredChoice({
         className="flex w-full items-baseline gap-2 px-4 py-2 text-left text-xs text-muted-foreground hover:bg-accent/40"
         aria-expanded={expanded}
       >
-        <span className="shrink-0 text-success">✓</span>
+        <Check className="h-3.5 w-3.5 shrink-0 self-center text-success" aria-hidden />
         <span className="truncate font-medium text-foreground">{choice.title}</span>
         <span className="ml-auto shrink-0">{expanded ? 'Collapse' : 'Expand'}</span>
       </button>
@@ -33,7 +34,7 @@ export function AnsweredChoice({
           <ul className="space-y-1 text-sm">
             {choice.options.map(o => (
               <li key={o.id} className={cn('flex items-baseline gap-2', picked.has(o.id) ? '' : 'text-muted-foreground')}>
-                <span className={cn('w-4 shrink-0', picked.has(o.id) ? 'text-success' : '')}>{picked.has(o.id) ? '✓' : ''}</span>
+                <span className="flex w-4 shrink-0 self-center text-success">{picked.has(o.id) && <Check role="img" aria-label="Picked" className="h-3.5 w-3.5" />}</span>
                 <span>{o.label}</span>
               </li>
             ))}

@@ -1,9 +1,9 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react'
 import type { ProjectSummary, CustomPreset } from '../../src/index.js'
 import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import { Markdown } from 'tiptap-markdown'
-import type { Editor, Range } from '@tiptap/core'
+import { createDocument, type Editor, type JSONContent, type Range } from '@tiptap/core'
 import { Token, type TokenSpec } from './prompt-editor/tokens.js'
 import { makeTrigger } from './prompt-editor/suggestion.js'
 import { ScrollArea } from './ui/scroll-area.js'
@@ -11,20 +11,29 @@ import type { SuggestionItem } from './prompt-editor/SuggestionList.js'
 // The same entry the Commands button renders: the `/` menu is the other face of that one list,
 // so it reads the shape rather than restating it structurally.
 import type { CommandEntry } from './CommandsMenu.js'
+import { pressed } from '../lib/shortcut.js'
 
 // The rich prompt editor (#470): a Tiptap surface that replaces the plain textarea. `/` opens
 // the project's commands and the saved prompts, `@` the registered projects, `#` the project's
 // files. A project or a file is inserted as a chip that serializes back to plain text, so the
 // prompt over the wire is what it reads as, and it also adds the project's path or the file to
 // the Context (#439/#504); deleting the chip takes it out again. Markdown is live (StarterKit shortcuts) and
-// round-trips via tiptap-markdown. Text flows out via onChange, and the handle only clears,
-// focuses and loads.
+// round-trips via tiptap-markdown. Text flows out via onChange, and the handle only clears (handing
+// back what it held), restores that, focuses, loads and appends.
+
+/** What a box held, chips and all, as `clear` hands it back for `restore`. */
+export type PromptDraft = JSONContent
 
 export interface PromptEditorHandle {
-  clear: () => void
+  /** Empty the box, its chips' Context going with them as at any deletion. Returns what it held, for `restore`. */
+  clear: () => PromptDraft
+  /** Put back a draft `clear` returned, after what is typed: its chips are chips again. The Context they added is the caller's to give back. */
+  restore: (draft: PromptDraft) => void
   focus: () => void
-  /** Load a text (a command, a saved prompt) into the editor. Returns whether it replaced a draft. */
-  loadTemplate: (text: string) => boolean
+  /** Load a text (a command, a saved prompt) into the editor, with the caret unless `focus` is false. Returns whether it replaced a draft. */
+  loadTemplate: (text: string, focus?: boolean) => boolean
+  /** Add a text after the draft's last line, as lines of its own: the caret, the chips and the scroll stay as they are, and one undo takes it out. */
+  append: (text: string) => void
 }
 
 interface PromptEditorProps {
@@ -50,11 +59,13 @@ interface PromptEditorProps {
   customPresets?: CustomPreset[]
   /** The open project's shared saved prompts (#1025), committed in its repo; loaded verbatim like the user's. */
   projectPresets?: CustomPreset[]
-  /** Open the create panel from the `/` menu's "Save prompt…" (#722). Omit where there is no panel
-   *  (the compact navbar launch), which also drops the item. */
+  /** Open the create panel from the `/` menu's "Save prompt…" (#722). Omit where there is no panel,
+   *  which also drops the item. */
   onNewPreset?: () => void
   disabled?: boolean
   placeholder?: string
+  /** What a screen reader calls the box: the launcher's takes a prompt, a session's a message. */
+  label?: string
   /**
    * Text to open with, applied once as soon as the editor exists (#1066/#1139).
    *
@@ -64,8 +75,12 @@ interface PromptEditorProps {
    * lets the editor apply it when it is ready instead of the caller guessing when that is.
    */
   initialText?: string | undefined
-  /** A shorter surface for the navbar quick-launch (#723): starts one line tall instead of ~three. */
-  compact?: boolean
+  /** Whether `initialText` takes the caret as it is applied: it does unless told not to. */
+  initialFocus?: boolean
+  /** A draft `initialText` is loaded over: one undo brings it back. */
+  replacedText?: string | undefined
+  /** Take the caret as soon as the editor exists. */
+  autoFocus?: boolean
 }
 
 /** Insert a token chip at the suggestion range, followed by a space. */
@@ -83,19 +98,28 @@ function insertToken(editor: Editor, range: Range, spec: TokenSpec): void {
  * so it works from the `/` menu — whose closures are built once on first render, when the
  * useEditor result is still null.
  */
-function applyTemplate(editor: Editor, text: string): void {
+function applyTemplate(editor: Editor, text: string, focus = true): void {
   editor.commands.setContent(text)
-  editor.commands.focus('end')
+  if (focus) editor.commands.focus('end')
   // Parsing the text as markdown drops a trailing space; a command loads as `/<name> ` so the
   // cursor waits after the space, where the `/` menu no longer matches and stays closed.
   if (/\s$/.test(text)) editor.commands.insertContent({ type: 'text', text: ' ' })
 }
 
 export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(function PromptEditor(
-  { onChange, onSubmit, onPreset, onMentionProject, onMentionFile, onMentionRemoved, projects, files = [], commands, customPresets = [], projectPresets = [], onNewPreset, disabled = false, placeholder = 'Describe what to do…', initialText, compact = false },
+  { onChange, onSubmit, onPreset, onMentionProject, onMentionFile, onMentionRemoved, projects, files = [], commands, customPresets = [], projectPresets = [], onNewPreset, disabled = false, placeholder = 'Describe what to do…', label = 'Prompt', initialText, initialFocus = true, replacedText, autoFocus = false },
   ref,
 ) {
   const [isEmpty, setIsEmpty] = useState(true)
+
+  // The box takes the keyboard as it opens (`autoFocus`, the text it opens with) only while nobody
+  // took it since the box was drawn. Its editor comes a moment later, and a control that took the
+  // keyboard meanwhile keeps it: the question a session's page opens on, which the keys answer.
+  const keysAtDraw = useRef<Element | null>(null)
+  useLayoutEffect(() => {
+    keysAtDraw.current = document.activeElement
+  }, [])
+  const keysUntaken = (): boolean => document.activeElement === null || document.activeElement === document.body || document.activeElement === keysAtDraw.current
 
   // Refs so the once-built suggestion closures always see the latest props/editor.
   const projectsRef = useRef(projects)
@@ -155,9 +179,9 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
   // Replacing a typed draft loads without a blocking confirm (#948): the replacement is one
   // undo step (history groups the draft separately after its ~500ms window), and the caller
   // gets `replaced` back so its note can say "undo brings it back".
-  const loadTemplateInto = (ed: Editor, text: string): boolean => {
+  const loadTemplateInto = (ed: Editor, text: string, focus = true): boolean => {
     const replaced = !ed.isEmpty
-    applyTemplate(ed, text)
+    applyTemplate(ed, text, focus)
     // setContent emits no update, so the chips are reconciled here too.
     syncMentions(ed)
     setIsEmpty(ed.isEmpty)
@@ -165,8 +189,21 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
     return replaced
   }
 
+  // What a `/` menu item loads, and what the form's note calls it: a command as `/<name> `, for the
+  // person to add an argument or send; a saved prompt, the user's own (#626) or the project's
+  // (#1025), verbatim.
+  const loadedBy = (id: string): { label: string; text: string } | undefined => {
+    const command = commandsRef.current.find(c => `command:${c.name}` === id)
+    if (command) return { label: `/${command.name}`, text: `/${command.name} ` }
+    const preset = customPresetsRef.current.find(p => `custom-preset:${p.id}` === id) ?? projectPresetsRef.current.find(p => `project-preset:${p.id}` === id)
+    return preset && { label: preset.label, text: preset.prompt }
+  }
+
   const editor = useEditor({
     immediatelyRender: false,
+    onCreate: ({ editor: created }) => {
+      if (autoFocus && keysUntaken()) created.commands.focus('end')
+    },
     extensions: [
       StarterKit,
       // breaks:true keeps a single newline as a hard break, so a saved prompt's line-per-line
@@ -193,8 +230,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
           const projectItems: SuggestionItem[] = projectPresetsRef.current
             .filter(p => p.label.toLowerCase().includes(q))
             .map(p => ({ id: `project-preset:${p.id}`, label: p.label, hint: 'project saved prompt', group: 'Saved prompts' }))
-          // "Save prompt…" to capture the current prompt (#722), only where the create panel exists
-          // (the full composer, not the compact navbar launch, which passes no onNewPreset).
+          // "Save prompt…" to capture the current prompt (#722), only where the create panel exists.
           const newPresetItem: SuggestionItem[] =
             onNewPresetRef.current && 'save prompt'.includes(q)
               ? [{ id: 'new-preset', label: 'Save prompt…', hint: 'save the current prompt', group: 'Saved prompts' }]
@@ -202,39 +238,18 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
           return [...commandItems, ...customItems, ...projectItems, ...newPresetItem]
         },
         onSelect: (item, { editor: ed, range }) => {
-          if (item.id.startsWith('command:')) {
-            const command = commandsRef.current.find(c => `command:${c.name}` === item.id)
-            if (command) {
-              // Drop the `/query` trigger first so it does not count as a replaced draft.
-              ed.chain().focus().deleteRange(range).run()
-              const replaced = loadTemplateInto(ed, `/${command.name} `)
-              onPresetRef.current?.(`/${command.name}`, replaced)
-            }
-            return
-          }
-          if (item.id.startsWith('custom-preset:')) {
-            const preset = customPresetsRef.current.find(p => `custom-preset:${p.id}` === item.id)
-            if (preset) {
-              ed.chain().focus().deleteRange(range).run()
-              const replaced = loadTemplateInto(ed, preset.prompt)
-              onPresetRef.current?.(preset.label, replaced)
-            }
-            return
-          }
-          if (item.id.startsWith('project-preset:')) {
-            const preset = projectPresetsRef.current.find(p => `project-preset:${p.id}` === item.id)
-            if (preset) {
-              ed.chain().focus().deleteRange(range).run()
-              const replaced = loadTemplateInto(ed, preset.prompt)
-              onPresetRef.current?.(preset.label, replaced)
-            }
-            return
-          }
           if (item.id === 'new-preset') {
             // Drop the `/query` trigger so the create panel captures the real prompt, not the slash.
             ed.chain().focus().deleteRange(range).run()
             onNewPresetRef.current?.()
+            return
           }
+          const loaded = loadedBy(item.id)
+          if (!loaded) return
+          // Drop the `/query` trigger first so it does not count as a replaced draft.
+          ed.chain().focus().deleteRange(range).run()
+          const replaced = loadTemplateInto(ed, loaded.text)
+          onPresetRef.current?.(loaded.label, replaced)
         },
       }),
       // `@` — references: the registered projects, by name.
@@ -280,11 +295,11 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
         class: 'pe-prose focus:outline-none',
         role: 'textbox',
         'aria-multiline': 'true',
-        'aria-label': 'Prompt',
+        'aria-label': label,
         'aria-placeholder': placeholder,
       },
       handleKeyDown: (view, event) => {
-        if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+        if (pressed(event, 'sendLater')) {
           event.preventDefault()
           onSubmitRef.current(true)
           return true
@@ -293,7 +308,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
         // direct prop outranks the plugins' handlers, so it must step aside where Enter already
         // means something: picking from an open suggestion menu (aria-expanded mirrors its
         // visibility), typing a newline in a code block, or confirming an IME composition.
-        if (event.key === 'Enter' && !event.shiftKey && !event.altKey && !event.isComposing) {
+        if (pressed(event, 'send')) {
           if (view.dom.getAttribute('aria-expanded') === 'true') return false
           if (view.state.selection.$from.parent.type.name === 'codeBlock') return false
           event.preventDefault()
@@ -312,13 +327,28 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
 
   useImperativeHandle(ref, () => ({
     clear: () => {
+      const draft = editor?.getJSON() ?? {}
       editor?.commands.clearContent()
       if (editor) syncMentions(editor)
       setIsEmpty(true)
       onChangeRef.current('')
+      return draft
+    },
+    restore: draft => {
+      if (!editor) return
+      // Over the empty paragraph of an empty box, else after the draft's last line, the caret left where it is.
+      const end = editor.state.doc.content.size
+      editor.commands.insertContentAt(editor.isEmpty ? { from: 0, to: end } : end, draft.content ?? [], { updateSelection: false })
     },
     focus: () => editor?.commands.focus('end'),
-    loadTemplate: (text: string) => (editor ? loadTemplateInto(editor, text) : false),
+    loadTemplate: (text: string, focus?: boolean) => (editor ? loadTemplateInto(editor, text, focus) : false),
+    append: (text: string) => {
+      if (!editor) return
+      if (editor.isEmpty) return void loadTemplateInto(editor, text, false)
+      // Parsed as blocks, as a loaded text is: the insert command's own inline parse leaves `<` as `&lt;` in plain words.
+      const blocks = createDocument(editor.storage.markdown.parser.parse(text), editor.schema).content
+      editor.commands.insertContentAt(editor.state.doc.content.size, blocks, { updateSelection: false })
+    },
   }))
 
   // Switched off while a start is asked for, and on again after. That is no edit, so no change is
@@ -334,32 +364,31 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
   useEffect(() => {
     if (!editor || seeded.current || !initialText) return
     seeded.current = true
-    loadTemplateInto(editor, initialText)
+    // The draft beneath is no step of its own, so the undo of the load ends on it, not on an empty box.
+    if (replacedText) editor.chain().setMeta('addToHistory', false).setContent(replacedText).run()
+    loadTemplateInto(editor, initialText, initialFocus && keysUntaken())
   }, [editor, initialText])
 
-  // The placeholder is absolutely positioned, so it must share the editor's padding to sit exactly
-  // where the first typed character will (#721). The full composer's box is one line tall when
-  // empty, as tall as the submit beside it; the compact navbar row stays tight. One line too: on a
-  // phone a long one is cut short, where a second line would hang out of the box.
-  const pad = compact ? 'px-2 py-1.5' : 'px-3 py-2.5'
-  const placeholderInset = compact ? 'inset-x-2 top-1.5' : 'inset-x-3 top-2.5'
+  // The placeholder is absolutely positioned, so it must share the editor's padding (`px-3 py-2`)
+  // to sit exactly where the first typed character will (#721). The composer's box is one line tall
+  // when empty, as tall as the submit beside it. One line too: on a phone a long one is cut short,
+  // where a second line would hang out of the box.
   return (
     <div className="relative">
       {/* The scroll rides a ScrollArea (#1046) so a long prompt shows our thin overlay bar, not the
           OS one. The resting height is deliberately short (#756): the editor grows with its content
           up to max-h, so the tall empty box no longer reserves room for text nobody has typed.
-          Compact (navbar) keeps its own border+ring; the full composer's border lives on the
-          surrounding composer box (#721) so the editor and its controls read as one surface. */}
+          The border lives on the surrounding composer box (#721) so the editor and its controls
+          read as one surface. */}
       <ScrollArea
-        className={compact ? 'rounded-md border border-border focus-within:ring-2 focus-within:ring-[var(--color-primary)]' : ''}
         // The height cap goes on the viewport (the scroller), not the Root — a Root max-h cannot be
         // resolved by the viewport's height, so the editor would grow instead of scrolling.
-        viewportClassName={compact ? 'max-h-32 min-h-8' : 'max-h-64 min-h-10'}
+        viewportClassName="max-h-64 min-h-9"
       >
-        <EditorContent editor={editor} className={`w-full bg-transparent text-sm pointer-coarse:text-base ${pad}`} />
+        <EditorContent editor={editor} className="w-full bg-transparent not-pointer-coarse:text-sm pointer-coarse:text-base px-3 py-2" />
       </ScrollArea>
       {isEmpty && (
-        <span className={`pointer-events-none absolute truncate text-sm text-muted-foreground pointer-coarse:text-base ${placeholderInset}`}>
+        <span className="pointer-events-none absolute truncate not-pointer-coarse:text-sm text-faint-foreground pointer-coarse:text-base inset-x-3 top-2">
           {placeholder}
         </span>
       )}

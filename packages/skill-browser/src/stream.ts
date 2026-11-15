@@ -106,13 +106,8 @@ export type Cursor = (typeof CURSORS)[number]
 
 /** What a `CURSOR` message says; nothing when it is no cursor this screen passes on. */
 export function readCursor(bytes: Uint8Array): Cursor | undefined {
-  if (bytes.length > MAX_SMALL) return undefined
-  try {
-    const said = JSON.parse(new TextDecoder().decode(bytes)) as { cursor?: unknown } | null
-    return CURSORS.find(known => known === said?.cursor)
-  } catch {
-    return undefined
-  }
+  const said = jsonOf(bytes, MAX_SMALL)
+  return CURSORS.find(known => known === said?.cursor)
 }
 
 /** Where the agent last clicked or typed, in the picture's own pixels. */
@@ -124,26 +119,16 @@ export interface ActedPoint {
 
 /** What an `ACTED` message says; nothing when it is no point of the agent's. */
 export function readActed(bytes: Uint8Array): ActedPoint | undefined {
-  if (bytes.length > MAX_SMALL) return undefined
-  try {
-    const said = JSON.parse(new TextDecoder().decode(bytes)) as { x?: unknown; y?: unknown; act?: unknown } | null
-    const place = (n: unknown): boolean => typeof n === 'number' && Number.isFinite(n) && n >= 0 && n <= MAX_POINT
-    if (!said || !place(said.x) || !place(said.y) || (said.act !== 'click' && said.act !== 'type')) return undefined
-    return { x: said.x as number, y: said.y as number, act: said.act }
-  } catch {
-    return undefined
-  }
+  const said = jsonOf(bytes, MAX_SMALL)
+  const place = (n: unknown): boolean => typeof n === 'number' && Number.isFinite(n) && n >= 0 && n <= MAX_POINT
+  if (!said || !place(said.x) || !place(said.y) || (said.act !== 'click' && said.act !== 'type')) return undefined
+  return { x: said.x as number, y: said.y as number, act: said.act }
 }
 
 /** What a `SELECTED` message says; nothing when it is no selection of a page's. */
 export function readSelection(bytes: Uint8Array): string | undefined {
-  if (bytes.length > MAX_SELECTION + MAX_SMALL) return undefined
-  try {
-    const said = JSON.parse(new TextDecoder().decode(bytes)) as { text?: unknown } | null
-    return typeof said?.text === 'string' ? said.text.slice(0, MAX_SELECTION) : undefined
-  } catch {
-    return undefined
-  }
+  const said = jsonOf(bytes, MAX_SELECTION + MAX_SMALL)
+  return typeof said?.text === 'string' ? said.text.slice(0, MAX_SELECTION) : undefined
 }
 
 /** What kind of line: the console's own levels, and `went` for the page going to another address. */
@@ -172,6 +157,25 @@ export function streamPart(kind: number, bytes: Uint8Array = new Uint8Array(0)):
   new DataView(part.buffer).setUint32(1, bytes.length)
   part.set(bytes, HEAD)
   return part
+}
+
+/** One message whose bytes are `value` as JSON: every kind but a picture and the pulse. */
+export function jsonPart(kind: number, value: unknown): Uint8Array {
+  return streamPart(kind, new TextEncoder().encode(JSON.stringify(value)))
+}
+
+/**
+ * The JSON object a message holds, read only when the message is no longer than `max`, the most
+ * its kind ever is; nothing when it holds no object. What each kind says is its own reader's to check.
+ */
+function jsonOf(bytes: Uint8Array, max: number): Record<string, unknown> | undefined {
+  if (bytes.length > max) return undefined
+  try {
+    const said: unknown = JSON.parse(new TextDecoder().decode(bytes))
+    return typeof said === 'object' && said !== null ? (said as Record<string, unknown>) : undefined
+  } catch {
+    return undefined
+  }
 }
 
 /**
@@ -232,33 +236,23 @@ export function streamReader(): (chunk: Uint8Array) => StreamPart[] {
 
 /** What a `STATE` message says; nothing when it says nothing readable, or more than an address bar holds. */
 export function readState(bytes: Uint8Array): ScreenState | undefined {
-  if (bytes.length > MAX_STATE) return undefined
-  try {
-    const said = JSON.parse(new TextDecoder().decode(bytes)) as { url?: unknown; title?: unknown } | null
-    return said && typeof said.url === 'string' && typeof said.title === 'string' ? { url: said.url.slice(0, MAX_URL), title: said.title.slice(0, MAX_TITLE) } : undefined
-  } catch {
-    return undefined
-  }
+  const said = jsonOf(bytes, MAX_STATE)
+  return typeof said?.url === 'string' && typeof said.title === 'string' ? { url: said.url.slice(0, MAX_URL), title: said.title.slice(0, MAX_TITLE) } : undefined
 }
 
 /** What a `CONSOLE` message says; nothing when it is no line of a console, or longer than one. */
 export function readConsoleLine(bytes: Uint8Array): ConsoleLine | undefined {
-  if (bytes.length > MAX_CONSOLE) return undefined
-  try {
-    const said = JSON.parse(new TextDecoder().decode(bytes)) as { n?: unknown; at?: unknown; level?: unknown; text?: unknown; where?: unknown; errors?: unknown } | null
-    if (!said || !Number.isSafeInteger(said.n) || (said.n as number) < 1 || !Number.isFinite(said.at) || typeof said.text !== 'string') return undefined
-    const level = CONSOLE_LEVELS.find(known => known === said.level)
-    if (!level) return undefined
-    return {
-      n: said.n as number,
-      at: said.at as number,
-      level,
-      text: said.text.slice(0, MAX_CONSOLE_TEXT),
-      ...(typeof said.where === 'string' && said.where ? { where: said.where.slice(0, MAX_CONSOLE_WHERE) } : {}),
-      ...(level === 'went' && Number.isSafeInteger(said.errors) && (said.errors as number) > 0 ? { errors: said.errors as number } : {}),
-    }
-  } catch {
-    return undefined
+  const said = jsonOf(bytes, MAX_CONSOLE)
+  if (!said || !Number.isSafeInteger(said.n) || (said.n as number) < 1 || !Number.isFinite(said.at) || typeof said.text !== 'string') return undefined
+  const level = CONSOLE_LEVELS.find(known => known === said.level)
+  if (!level) return undefined
+  return {
+    n: said.n as number,
+    at: said.at as number,
+    level,
+    text: said.text.slice(0, MAX_CONSOLE_TEXT),
+    ...(typeof said.where === 'string' && said.where ? { where: said.where.slice(0, MAX_CONSOLE_WHERE) } : {}),
+    ...(level === 'went' && Number.isSafeInteger(said.errors) && (said.errors as number) > 0 ? { errors: said.errors as number } : {}),
   }
 }
 

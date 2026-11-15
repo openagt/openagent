@@ -2,7 +2,7 @@
 // are unit-tested like the rest of the package: the sentences the pages start agents with, how a
 // page finds the agent behind a claim or a plan, how the module's URL reads, what a ticket is as
 // a link, which lane of the Overview card a ticket sits in, and how the command's answers are read back.
-import { TICKETS_DIR, isTicketFile, queuePriorityForTicket, ticketPlanName } from './names.js'
+import { TICKETS_DIR, isTicketFile, nameInTickets, noTicketSaid, queuePriorityForTicket, ticketOfPlan, ticketPlanName } from './names.js'
 import type { Ticket, TicketDetail, TicketsMeta } from './tickets.js'
 
 export type { Ticket, TicketDetail, TicketsMeta }
@@ -17,12 +17,19 @@ export const UPDATE_TICKETS_PROMPT = '/update-tickets'
  * wrote a plan is found by it.
  */
 export function planTicketPrompt(file: string): string {
-  return `Create ${TICKETS_DIR}/${ticketPlanName(file)}`
+  return `Create ${planPath(file)}`
 }
 
 /** The prompt the start column fires a session with: work on this one ticket, nothing else. */
 export function workOnTicketPrompt(file: string): string {
   return `Work on ${TICKETS_DIR}/${file}. Do not start any other ticket.`
+}
+
+/** A ticket's text below its `# ` title, which its page shows apart, as it shows the keys above the title; all of it when it has no title. */
+export function ticketBody(content: string): string {
+  const lines = content.split('\n')
+  const titleAt = lines.findIndex(line => line.startsWith('# '))
+  return titleAt === -1 ? content : lines.slice(titleAt + 1).join('\n')
 }
 
 /** A ticket's plan, repo-relative: `tickets/<stem>.plan.md`, shown beside the way back on the plan page. */
@@ -51,6 +58,41 @@ export function planAgentFor<A extends AgentLike>(agents: readonly A[], file: st
 }
 
 /**
+ * The agent that worked a ticket, as far as its runs say: the newest whose ask names the ticket's
+ * file — the start column's ask, or a queued entry linking it, started from the queue's page. A
+ * run the scheduler took off the queue was asked `/work-queue`, and is found only while it holds
+ * the ticket's claim ({@link holderAgent}).
+ */
+export function workAgentFor<A extends AgentLike>(agents: readonly A[], file: string): A | undefined {
+  const named = `${TICKETS_DIR}/${file}`
+  return agents.filter(agent => agent.ask !== undefined && mentions(agent.ask, named)).sort((a, b) => b.startedAt.localeCompare(a.startedAt))[0]
+}
+
+/** Whether `text` names `path` itself, not a longer path it begins (`tickets/a.md` in `tickets/a.md.bak`). */
+function mentions(text: string, path: string): boolean {
+  for (let at = text.indexOf(path); at >= 0; at = text.indexOf(path, at + 1)) {
+    // A full stop ends a sentence, unless a name goes on after it (`.bak`).
+    const after = text.slice(at + path.length, at + path.length + 2)
+    if (!/^[\w-]/.test(after) && !/^\.\w/.test(after)) return true
+  }
+  return false
+}
+
+/**
+ * A plan's text as a page shows it, under its own heading: without the lines above its title
+ * (`Effort:`, `Uncertainty:`, `Outdated:`, which the page shows as facts) and without the
+ * `# [Plan] …` title itself, which only repeats the ticket's.
+ */
+export function planBody(plan: string): string {
+  const lines = plan.replace(/\r\n/g, '\n').split('\n')
+  const at = lines.findIndex(line => line.startsWith('# '))
+  const head = at < 0 ? [] : lines.slice(0, at)
+  // Only a head of `key: value` lines is a preamble; anything else above the title is kept.
+  if (at < 0 || head.some(line => line.trim() !== '' && !/^[A-Za-z]+:\s/.test(line))) return plan.trim()
+  return lines.slice(at + 1).join('\n').trim()
+}
+
+/**
  * The agent a claim names, when the lock's holder is one of the project's runs: a lock names an
  * agent id — the same id the run's checkout is named with — so a claim a run made resolves to the
  * run's page and its session name; any other holder (another machine's, a branch name) is shown
@@ -60,19 +102,55 @@ export function holderAgent<A extends AgentLike>(agents: readonly A[], lockedBy:
   return lockedBy === undefined ? undefined : agents.find(agent => agent.id === lockedBy)
 }
 
-/** Where the module's URL points: the list of tickets, one ticket, or its plan. */
-export type ModuleRoute = { view: 'list' } | { view: 'ticket'; projectId: string; file: string } | { view: 'plan'; projectId: string; file: string } | { view: 'unknown' }
+/** The run behind a claim, as a page names it: its id and, once the run has one, its name. */
+export interface HoldingRun {
+  id: string
+  name?: string
+}
+
+/** The ticket with the run its claim names ({@link holderAgent}), when that run is one of the project's; else as it is. */
+export function withHolder<T extends object>(ticket: T, run: HoldingRun | undefined): T & { lockedByAgent?: HoldingRun } {
+  return run ? { ...ticket, lockedByAgent: run } : ticket
+}
+
+/** How a claim stands, told by the run holding it: see {@link claimState}. */
+export type ClaimState = 'working' | 'offline' | 'stale'
+
+/**
+ * How a claim stands, by the status of the run holding it (`undefined` when no run of the
+ * project's holds it): `working` while that run is at it, or stopped on a question to the
+ * person; `offline` while its computer does not answer, so how it stands is not known; `stale`
+ * when it stopped, failed or ended, or there is no such run — a claim held for nobody, which
+ * nothing lifts but a person.
+ */
+export function claimState(holderStatus: string | undefined): ClaimState {
+  if (holderStatus === 'running' || holderStatus === 'waiting') return 'working'
+  if (holderStatus === 'unknown') return 'offline'
+  return 'stale'
+}
+
+/** Where the module's URL points: the list of tickets, a new ticket, one ticket, or its plan. */
+export type ModuleRoute =
+  | { view: 'list' }
+  | { view: 'new'; projectId: string }
+  | { view: 'ticket'; projectId: string; file: string }
+  | { view: 'plan'; projectId: string; file: string }
+  | { view: 'unknown' }
+
+/** The segment of a new ticket's page: never a ticket's filename, which ends in `.md`. */
+export const NEW_TICKET = 'new'
 
 /**
  * The module's page from the project the address starts with, if any, and the URL segments after
  * its own: none is the list; a ticket filename in a project is that ticket's page (the dashboard's
  * link convention: `tickets/<file>` in a project opens `/<project>/tickets/<file>`); `plan` after it
- * is the ticket's plan. A ticket with no project, a filename that is not a ticket's, or anything
- * longer, names nothing.
+ * is the ticket's plan; `new` in a project is a new ticket's page. A ticket with no project, a
+ * filename that is not a ticket's, or anything longer, names nothing.
  */
 export function routeOf(projectId: string | null, path: readonly string[]): ModuleRoute {
   const [file, plan, ...rest] = path
   if (file === undefined) return { view: 'list' }
+  if (file === NEW_TICKET && plan === undefined) return projectId === null ? { view: 'unknown' } : { view: 'new', projectId }
   if (projectId === null || !isTicketFile(file) || rest.length > 0) return { view: 'unknown' }
   if (plan === undefined) return { view: 'ticket', projectId, file }
   return plan === 'plan' ? { view: 'plan', projectId, file } : { view: 'unknown' }
@@ -83,28 +161,37 @@ export interface NamedPath {
   title: string
   /** The path opened for it, when it is not the path itself. */
   href?: string
+  /** The ask for what it names, once it is there already, and what an entry asking just that is called: a plan already written, whose ask to write it is left over. */
+  done?: { ask: string; title: string }
 }
 
 /**
  * What each of `paths` is called, by the tickets as listed: a ticket's file is its title; a
  * ticket's plan file (`tickets/<stem>.plan.md`) is "Plan: " and the ticket's title, and opens the
- * ticket, since an entry that names a plan is often the ask to write it. A path that is no
+ * ticket, since an entry that names a plan is often the ask to write it. A plan the ticket already
+ * has, and not outdated, has its ask ({@link planTicketPrompt}) done: an entry asking it again is
+ * left over, and only that one says the plan is written already; any other entry naming the plan is
+ * still work, and is called the plan's plain name. A path that is no
  * ticket's, or whose ticket is not listed (closed, deleted), has no name.
  */
-export function namesOf(paths: readonly string[], tickets: readonly { file: string; title: string }[]): Record<string, NamedPath> {
-  const titles = new Map(tickets.map(ticket => [ticket.file, ticket.title]))
+export function namesOf(paths: readonly string[], tickets: readonly { file: string; title: string; planned?: boolean; outdated?: true }[]): Record<string, NamedPath> {
+  const byFile = new Map(tickets.map(ticket => [ticket.file, ticket]))
   const named: Record<string, NamedPath> = {}
   for (const path of paths) {
-    if (!path.startsWith(`${TICKETS_DIR}/`)) continue
-    const file = path.slice(TICKETS_DIR.length + 1)
-    const title = titles.get(file)
-    if (title !== undefined) {
-      named[path] = { title }
+    const file = nameInTickets(path)
+    if (file === undefined) continue
+    const listed = byFile.get(file)
+    if (listed !== undefined) {
+      named[path] = { title: listed.title }
       continue
     }
-    const ticket = file.endsWith('.plan.md') ? `${file.slice(0, -'.plan.md'.length)}.md` : undefined
-    const planned = ticket === undefined ? undefined : titles.get(ticket)
-    if (ticket !== undefined && planned !== undefined) named[path] = { title: `Plan: ${planned}`, href: `${TICKETS_DIR}/${ticket}` }
+    const ticket = ticketOfPlan(file)
+    const planned = ticket === undefined ? undefined : byFile.get(ticket)
+    if (ticket !== undefined && planned !== undefined) {
+      const written = planned.planned === true && planned.outdated !== true
+      const title = `Plan: ${planned.title}`
+      named[path] = { title, href: `${TICKETS_DIR}/${ticket}`, ...(written ? { done: { ask: planTicketPrompt(ticket), title: `${title} · already written` } } : {}) }
+    }
   }
   return named
 }
@@ -166,14 +253,14 @@ export interface ShownTicket {
 }
 
 /**
- * What `show` answered: the ticket, `null` for a refusal (no such ticket — deleted since the list
- * read, or a stale link), or the error of a command that could not run or printed no ticket.
+ * What `show <file>` answered: the ticket, `null` for its refusal of a ticket it does not have
+ * (deleted since the list read, or a stale link), or the error of a command that could not run or
+ * printed no ticket.
  */
-export function readShown(result: CommandResult): { shown: ShownTicket | null } | { error: string } {
-  if (!result.ok) return { error: result.error }
-  const answer = result.output as { ok?: unknown; ticket?: unknown; plan?: unknown; holder?: unknown } | null
+export function readShown(result: CommandResult, file: string): { shown: ShownTicket | null } | { error: string } {
+  if (!result.ok) return result.error === noTicketSaid(file) ? { shown: null } : { error: result.error }
+  const answer = result.output as { ticket?: unknown; plan?: unknown; holder?: unknown } | null
   if (!answer || typeof answer !== 'object') return { error: 'the tickets command did not print a ticket' }
-  if (answer.ok === false) return { shown: null }
   if (!isTicket(answer.ticket) || typeof (answer.ticket as { content?: unknown }).content !== 'string') return { error: 'the tickets command did not print a ticket' }
   return {
     shown: {

@@ -3,14 +3,15 @@ import type { AgentAccount } from '@openagt/agent-driver'
 import { markerCard, runnerMark, type Publish, type RunnerMark } from '@openagt/agent-runner'
 import type { FileBranchWrite } from '@openagt/agent-data'
 import type { RunCard } from '@openagt/skill-logs'
-import { AGENT_LABELS, AGENT_SKILLS_DIR, DEFAULT_AGENT, LAST_RUN_ENV, NEVER_STARTED_SINCE_MS, SWITCHED_ON_ENV, NOW_READY_MS, isAgent, type AgentName } from './names.js'
+import { AGENT_LABELS, AGENT_SKILLS_DIR, DEFAULT_AGENT, NOW_READY_MS, isAgent, type AgentName } from './names.js'
 import type { LastRun } from './records.js'
 import { dueFrom, localStamp, paceInForce, paceText } from './pace.js'
 import { quotaBoundaryStatus, quotaHeadroom } from './quota-boundary.js'
 import { accountWithRoom, readClaudeAccount, readCodexAccount } from './accounts.js'
-import { ableAgents, checkFound, commandPrompt, homeAgent, isDue, lastRunValue, ownAttached, resumeText, eachItems, skillFile, type Schedule, type ScheduledCommand, type StartItem } from './schedule.js'
+import { checkFound, eachItems, isDue, lastRunValue, neverStartedSince, ownAttached, resumeText, type CheckResult, type StartItem } from './check.js'
+import { ableAgents, commandPrompt, skillFile, type Schedule, type ScheduledCommand } from './schedule.js'
 import type { StartPoint } from './start-point.js'
-import { agentInForce, capInForce, modelInForce, publishInForce, switchedOnAt, type ListedCommand, type State, type TickDecision, type TickRecord } from './state.js'
+import { agentInForce, capInForce, listed, modelInForce, publishInForce, switchedOnAt, type State, type TickDecision, type TickRecord } from './state.js'
 
 /**
  * One tick (#1774): pull the branch, sweep, read the schedule, and for each command decide in
@@ -27,13 +28,6 @@ import { agentInForce, capInForce, modelInForce, publishInForce, switchedOnAt, t
  * marker that landed second past the cap is withdrawn, and that machine does not spawn. A push
  * that fails twice means another machine got there first; no spawn either.
  */
-
-/** What a check said. */
-export interface CheckResult {
-  ok: boolean
-  stdout: string
-  stderr: string
-}
 
 export interface TickDeps {
   state: State
@@ -87,9 +81,7 @@ export async function tick(deps: TickDeps): Promise<TickRecord> {
   if (record.decisions.length === 0 && deps.schedule.commands.length === 0) return { ...record, note: 'no skill of this project schedules a command' }
 
   const held: Readings = { readiness: {}, accounts: {} }
-  for (const command of deps.schedule.commands) {
-    for (const { outcome, started } of await decide(deps, command, held)) record.decisions.push({ command: command.name, outcome, ...(started ? { run: started.id } : {}) })
-  }
+  for (const command of deps.schedule.commands) record.decisions.push(...(await decisions(deps, command, held)))
   return record
 }
 
@@ -101,12 +93,11 @@ export async function tick(deps: TickDeps): Promise<TickRecord> {
 export async function glance(deps: TickDeps, due: (command: ScheduledCommand) => boolean): Promise<TickDecision[]> {
   if (!deps.state.on) return []
   const held: Readings = { readiness: {}, accounts: {} }
-  const decisions: TickDecision[] = []
+  const decided: TickDecision[] = []
   for (const command of deps.schedule.commands) {
-    if (!command.checkEvery || !due(command)) continue
-    for (const { outcome, started } of await decide(deps, command, held)) decisions.push({ command: command.name, outcome, ...(started ? { run: started.id } : {}) })
+    if (command.checkEvery && due(command)) decided.push(...(await decisions(deps, command, held)))
   }
-  return decisions
+  return decided
 }
 
 /** What starting a command by hand answered: the run it started or resumed, or the decisions that started none, in the tick's own words. */
@@ -165,6 +156,11 @@ async function decide(deps: TickDeps, command: ScheduledCommand, held: Readings,
   return command.each ? eachNamed(deps, command, asked, held, byHand) : [await start(deps, command, asked, held, byHand)]
 }
 
+/** One command decided, as the lines a tick records of it: each outcome, with the run it started or resumed. */
+async function decisions(deps: TickDeps, command: ScheduledCommand, held: Readings): Promise<TickDecision[]> {
+  return (await decide(deps, command, held)).map(({ outcome, started }) => ({ command: command.name, outcome, ...(started ? { run: started.id } : {}) }))
+}
+
 /** Whether a command is due now, and what its check found when it has one: what a start and a resume both go on from. */
 type Asked = { now: Date; found?: { stdout: string; lastRun: string } }
 
@@ -194,9 +190,9 @@ async function ask(deps: TickDeps, command: ScheduledCommand, byHand?: { late: (
   // What the check printed, handed to the run it starts: a command its pace alone starts has none.
   if (command.when === undefined) return { now }
   // What is new for the check: since its command last started, or since it was switched on here when that is later.
-  const since = lastRunValue(latest(last, switchedOn) ?? new Date(now.getTime() - NEVER_STARTED_SINCE_MS).toISOString())
+  const since = lastRunValue(latest(last, switchedOn) ?? neverStartedSince(now))
   // When the command was switched on here: a check that starts runs for what is new leaves what came before.
-  const on = lastRunValue(switchedOn ?? new Date(now.getTime() - NEVER_STARTED_SINCE_MS).toISOString())
+  const on = lastRunValue(switchedOn ?? neverStartedSince(now))
   const checked = await deps.check(command.when, since, on).catch((err): CheckResult => ({ ok: false, stdout: '', stderr: String(err) }))
   if (!checked.ok) return { outcome: `check failed: ${checked.stderr.trim().split('\n').at(-1) ?? ''}` }
   if (!isDue(checked.stdout)) return { outcome: 'not due' }
@@ -217,7 +213,7 @@ async function start(deps: TickDeps, command: ScheduledCommand, { now, found }: 
   // The cap in force: this machine's number for the command, else the skill's, held against every machine's runs.
   const cap = capInForce(deps.state, command)
   const running = [...(await deps.inFlight(command.name)).map(describe), ...(item?.resumed ?? [])]
-  if (running.length >= cap) return { outcome: `cap reached (${running.length} in flight: ${running.join(', ')})` }
+  if (running.length >= cap) return { outcome: capReached(running) }
   // A run's checkout starts from the project's published commit, not from the files here: a skill
   // that is not there is no command to the agent. Asked only now, when a run would start: it fetches.
   if (command.text === undefined) {
@@ -255,8 +251,7 @@ async function start(deps: TickDeps, command: ScheduledCommand, { now, found }: 
   }
   if (rank + (item?.resumed.length ?? 0) >= cap) {
     await deps.withdrawMarker(id)
-    const others = [...after.filter(c => c.id !== id).map(describe), ...(item?.resumed ?? [])]
-    return { outcome: `cap reached (${others.length} in flight: ${others.join(', ')})` }
+    return { outcome: capReached([...after.filter(c => c.id !== id).map(describe), ...(item?.resumed ?? [])]) }
   }
   // One run for what an item names, across every machine: the first marker in time order keeps it.
   const first = item && after.filter(card => runnerMark(card)?.for === item.start.for).map(card => card.id).sort()[0]
@@ -322,7 +317,7 @@ async function eachNamed(deps: TickDeps, command: ScheduledCommand, asked: Asked
     const agent = card.driver ?? DEFAULT_AGENT
     if (!isAgent(agent)) return `it is on ${agent}, which agent-runner cannot start`
     if (!ableAgents(command).includes(agent)) return notACommandOf(command, agent)
-    if (running.length >= cap) return `cap reached (${running.length} in flight: ${running.join(', ')})`
+    if (running.length >= cap) return capReached(running)
     const may = await mayStart(deps, agent, card.model, held, byHand)
     if ('reason' in may) return may.reason
     if (!byHand && !(await deps.stillOn(command.name))) return 'switched off on this machine'
@@ -372,6 +367,11 @@ function notACommandOf(command: ScheduledCommand, agent: AgentName): string {
   return `not a command of ${AGENT_LABELS[agent]}: its skill is only under ${command.dirs.join(' and ')}, not ${AGENT_SKILLS_DIR[agent]}`
 }
 
+/** Why a command's cap holds a run back: how many of its runs are in flight, and which. */
+function capReached(running: string[]): string {
+  return `cap reached (${running.length} in flight: ${running.join(', ')})`
+}
+
 function lateOutcome(): string {
   return `took longer than ${NOW_READY_MS / 1000} seconds to get ready, so nothing was started: ask again`
 }
@@ -380,11 +380,6 @@ function lateOutcome(): string {
 function latest(a: string | undefined, b: string | undefined): string | undefined {
   if (a === undefined || b === undefined) return a ?? b
   return Date.parse(a) > Date.parse(b) ? a : b
-}
-
-/** A command as a dashboard lists it: what its skill says; not this machine's switch or picks, which the state carries, nor its runs, which the records do. */
-export function listed(command: ScheduledCommand): ListedCommand {
-  return { command: command.name, ...(command.each ? { each: true as const } : {}), ...(command.every ? { every: command.every.text } : {}), ...(command.when !== undefined ? { when: command.when } : {}), ...(command.waitsFor !== undefined ? { waitsFor: command.waitsFor } : {}), ...(command.checkEvery ? { checkEvery: command.checkEvery.text } : {}), ...(command.description !== undefined ? { description: command.description } : {}), ...(command.cap > 1 ? { agents: command.cap } : {}), ...(command.text !== undefined ? { onThisMachine: true as const } : {}), ...(command.editable ? { editable: true as const } : {}), agent: homeAgent(command), ...(command.model !== undefined ? { model: command.model, modelAgent: command.agent ?? DEFAULT_AGENT } : {}), able: ableAgents(command) }
 }
 
 /** An age for a decision line: `less than a minute`, `12m`, `3h`, `2d`, floored. */
@@ -400,24 +395,6 @@ function age(ms: number): string {
 function describe(card: RunCard): string {
   const host = runnerMark(card)?.host
   return host ? `${card.id} on ${host}` : card.id
-}
-
-/**
- * Run a check at the repository root through the shell, within its budget; the check reads
- * `lastRun` as `$LAST_RUN`, and `switchedOn` as `$SWITCHED_ON` when given. `account` is the
- * environment of the account runs work as at the git host, so a check that asks `gh` asks as it.
- */
-export async function runCheck(repo: string, shell: string, timeoutMs: number, lastRun: string, switchedOn?: string, account: Record<string, string> = {}): Promise<CheckResult> {
-  const { execFile } = await import('node:child_process')
-  return new Promise<CheckResult>(resolve => {
-    const child = execFile('sh', ['-c', shell], { cwd: repo, timeout: timeoutMs, maxBuffer: 4 * 1024 * 1024, env: { ...process.env, ...account, [LAST_RUN_ENV]: lastRun, ...(switchedOn !== undefined ? { [SWITCHED_ON_ENV]: switchedOn } : {}) } }, (err, stdout, stderr) => {
-      // A check ended for running out of its time says so: what it had printed to then says nothing of why it failed.
-      const why = err?.killed ? `it took longer than ${timeoutMs / 1000} seconds` : err && !String(stderr).trim() ? err.message : String(stderr)
-      resolve({ ok: !err, stdout: String(stdout), stderr: why })
-    })
-    // Nobody types to a check: one that reads its input finds it at its end at once, where it would wait out its whole budget.
-    child.stdin?.end()
-  })
 }
 
 export type { TickDecision }

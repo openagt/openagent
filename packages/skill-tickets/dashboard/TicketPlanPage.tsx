@@ -1,15 +1,16 @@
-import { Button, Markdown, Tooltip, TooltipTrigger, TooltipContent, usePolled, useModuleHost, type ModuleAgent } from '@openagt/dashboard/module'
-import { planAgentFor, planPath, readShown } from '../src/module.js'
-import { TicketPageShell, TicketPageNote } from './TicketPageShell.js'
+import { ClipboardPlus } from 'lucide-react'
+import { Button, Markdown, Slot, useAction, useModuleHost } from '@openagt/dashboard/module'
+import { heldBack, planBody, planTicketPrompt } from '../src/module.js'
+import { TicketPageShell, TicketPageNote, TicketPageShape } from './TicketPageShell.js'
+import { TicketHeader } from './TicketHeader.js'
+import { openToEdit } from './TicketDetailPage.js'
+import type { WorkspaceTicketDetail } from './lib/types.js'
+import { useTicket } from './lib/use-ticket.js'
 
-/** The page's read: the plan's text (none when the ticket has no plan, or no ticket), or why the command failed. */
-type Read = { plan: string | null; agent: ModuleAgent | undefined } | { error: string }
-
-// One ticket's plan: its `<stem>.plan.md` rendered as markdown, the destination of the tickets
-// list's plan-column link. The plan comes with the ticket from `tickets show <file> --local`, and
-// the agent that wrote it from the dashboard's runs — the plan file carries no marker, so the run
-// whose ask named this plan is the author. `slug` is the ticket's filename, the same the list row
-// and the URL carry, so the plan is addressed by the ticket it belongs to.
+// One ticket's plan, its second tab: under the head it shares with the ticket's page, the plan set
+// as a document, without the lines the head already says (its title, its effort and uncertainty).
+// `slug` is the ticket's filename, the same the list row and the URL carry, so the plan is
+// addressed by the ticket it belongs to.
 export function TicketPlanPage({
   projectId,
   slug,
@@ -19,59 +20,61 @@ export function TicketPlanPage({
   slug: string
 }) {
   const host = useModuleHost()
-  const path = planPath(slug)
-  const { value: read, loaded } = usePolled<Read | null>(
-    async () => {
-      const [shown, agents] = await Promise.all([host.runCommand(projectId, ['show', slug, '--local']).then(readShown), host.agents(projectId).catch(() => [])])
-      if ('error' in shown) return shown
-      return { plan: shown.shown?.plan ?? null, agent: planAgentFor(agents, slug) }
-    },
-    null,
-    10_000,
-    [projectId, slug],
-  )
+  const { read, state, reload } = useTicket(projectId, slug)
+  const ticket = read && 'ticket' in read ? read.ticket : null
+  const onBack = () => host.backToPage('tickets')
 
   return (
-    <TicketPageShell onBack={() => host.openPage('tickets')} path={path}>
-      {!loaded ? (
-        <TicketPageNote>Loading…</TicketPageNote>
-      ) : read && 'error' in read ? (
-        <TicketPageNote>
-          <span role="alert">Could not read the plan: {read.error}</span>
-        </TicketPageNote>
-      ) : !read || read.plan === null ? (
-        // No `.plan.md` beside the ticket — never written, or removed since the list read.
-        <TicketPageNote>This ticket has no plan yet.</TicketPageNote>
-      ) : (
-        <>
-          {read.agent && <PlanAgentRow agent={read.agent} onOpen={() => host.openAgent(projectId, read.agent!.id)} />}
-          <Markdown text={read.plan} />
-        </>
-      )}
+    <TicketPageShell onBack={onBack} crumbs={ticket ? [{ label: ticket.title, onOpen: () => host.openPage('tickets', [ticket.file], projectId, { beside: true }) }, { label: 'Plan' }] : []}>
+      <Slot of={{ state, value: read }} shape={<TicketPageShape />}>
+        {read =>
+          read && 'error' in read ? (
+            <TicketPageNote>
+              <span role="alert">Could not read the plan: {read.error}</span>
+            </TicketPageNote>
+          ) : !ticket || !read ? (
+            <TicketPageNote>This ticket does not exist.</TicketPageNote>
+          ) : (
+            <>
+              <TicketHeader
+                projectId={projectId}
+                ticket={ticket}
+                holderStatus={read.holderStatus}
+                sessions={read.sessions}
+                tab="plan"
+                onEdit={() => openToEdit(host, projectId, ticket.file)}
+                onChanged={() => void reload()}
+              />
+              <div className="mt-6 max-w-180">
+                {read.plan === null ? (
+                  // No `.plan.md` beside the ticket: never written, or removed since.
+                  <NoPlan projectId={projectId} ticket={ticket} />
+                ) : (
+                  <Markdown text={planBody(read.plan)} page />
+                )}
+              </div>
+            </>
+          )
+        }
+      </Slot>
     </TicketPageShell>
   )
 }
 
-/**
- * Who wrote the plan and the way back to them. A finished agent is resumed — same session, same
- * branch, same conversation — so the plan can be discussed with the agent that has it in context;
- * one still running is simply opened.
- */
-function PlanAgentRow({ agent, onOpen }: { agent: ModuleAgent; onOpen: () => void }) {
-  const running = agent.status === 'running'
+/** The tab of a ticket with no plan: one line, and the press that has an agent write it, where an agent may be handed the ticket. */
+function NoPlan({ projectId, ticket }: { projectId: string; ticket: WorkspaceTicketDetail }) {
+  const host = useModuleHost()
+  const { busy, error, run } = useAction()
+  const offered = !heldBack(ticket) && !ticket.locked
   return (
-    <div className="mb-4 flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2 text-xs text-muted-foreground">
-      <span>{running ? 'An agent is writing this plan right now.' : 'Written by an agent whose session can be picked up where it left off.'}</span>
-      <Tooltip>
-        <TooltipTrigger render={<Button variant="outline" size="sm" className="h-7 shrink-0 text-xs" onClick={onOpen} />}>
-          {running ? 'Open agent' : 'Resume agent'}
-        </TooltipTrigger>
-        <TooltipContent className="max-w-72">
-          {running
-            ? 'Opens the session writing this plan, so you can watch it or step in.'
-            : 'Opens the session of the agent that wrote this plan. Anything you send there continues that same conversation — the plan, the ticket and the reasoning behind it are already in its context.'}
-        </TooltipContent>
-      </Tooltip>
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+      <TicketPageNote>No plan yet.</TicketPageNote>
+      {offered && (
+        <Button variant="secondary" loading={busy} onClick={() => void run(() => host.startRun(projectId, planTicketPrompt(ticket.file)), 'The planning agent could not be started.')}>
+          <ClipboardPlus className="size-4" aria-hidden /> Plan now
+        </Button>
+      )}
+      {error && <p role="alert" className="basis-full text-xs text-danger">{error}</p>}
     </div>
   )
 }

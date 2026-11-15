@@ -99,8 +99,3 @@ export function writeCopied(logins: CopiedLogin[]): void {
 /** The same login of the same computer: its kind, its host, and which of the computer's accounts it is. */
 export const same = (a: Pick<CopiedLogin, 'kind' | 'host' | 'source'>, b: Pick<CopiedLogin, 'kind' | 'host' | 'source'>): boolean => a.kind === b.kind && (a.host ?? '') === (b.host ?? '') && a.source === b.source
 
-/** The copied login of an account row here, by its kind and its name. */
-export function copiedOf(kind: CopiedKind, name: string, host?: string): CopiedLogin | undefined {
-  return readCopied().find(login => login.kind === kind && login.name === name && (login.host ?? '') === (host ?? ''))
-}
-

@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react'
+import PICTURES from './pictures.json'
 
 export const DISCORD_URL = 'https://discord.gg/qc8zvdzWNR'
 export const GITHUB_URL = 'https://github.com/openagt/openagent'
@@ -6,163 +7,129 @@ export const NPM_URL = 'https://www.npmjs.com/package/@openagt/dashboard'
 
 export const mono = "'IBM Plex Mono', monospace" as const
 
+/** A step of the site's type scale (styles.css): its size and its line. */
+export const text = (step: 'xs' | 'sm' | 'base' | 'lg' | 'xl' | '2xl' | '3xl'): CSSProperties => ({
+  fontSize: `var(--text-${step})`,
+  lineHeight: `var(--leading-${step})`,
+})
+
+/** Prose: the body size, in lines of 68 characters at most. */
+export const proseStyle: CSSProperties = { margin: 0, ...text('base'), maxWidth: 'var(--measure)', textWrap: 'pretty' }
+
+/** The three claims under the hero's title; the banner says them too, each in its colour. */
+export const BADGES = [
+  ['100% Open Source', 'var(--success)'],
+  ['100% Free', 'var(--warning)'],
+  ['100% Local', 'var(--primary)'],
+] as const
+
 // A content section: max-width column with the shared vertical rhythm. The
 // rhythm is a MARGIN, not padding: anchors target the border box, so nav
 // clicks land on the section's content instead of a screen of padding.
 export const sectionStyle: CSSProperties = {
-  maxWidth: 1120,
-  margin: 'clamp(72px, 13vw, 140px) auto 0',
-  padding: '0 clamp(14px, 4vw, 24px)',
+  maxWidth: 'var(--container)',
+  margin: 'var(--space-section) auto 0',
+  padding: '0 var(--space-gutter)',
   display: 'flex',
   flexDirection: 'column',
-  gap: 36,
+  gap: 'var(--space-head)',
 }
 
+/** A section's heading: the scale's 40, tighter (28 on a phone, styles.css). */
 export const h2Style: CSSProperties = {
   margin: 0,
-  fontSize: 'clamp(30px, 6vw, 40px)',
-  fontWeight: 700,
-  letterSpacing: '-0.015em',
+  fontSize: 'var(--text-heading)',
+  lineHeight: 'var(--leading-heading)',
+  fontWeight: 600,
+  letterSpacing: '-0.02em',
 }
 
 // Subsection heading (the "How it works" children).
 export const h3Style: CSSProperties = {
   margin: 0,
-  fontSize: 'clamp(23px, 4.5vw, 28px)',
-  fontWeight: 700,
-  letterSpacing: '-0.01em',
+  ...text('lg'),
+  fontWeight: 600,
 }
 
-export const cardStyle: CSSProperties = {
-  background: '#343f44',
-  border: '1px solid #3d484d',
-  borderRadius: 12,
+/** Side by side where there is room, each at least `min` wide: a section's columns. */
+export const columnsStyle = (min: number): CSSProperties => ({
+  display: 'grid',
+  gridTemplateColumns: `repeat(auto-fit, minmax(min(${min}px, 100%), 1fr))`,
+  gap: 'var(--space-items) var(--space-columns)',
+})
+
+/** A column's title, then its sentences: a section's part, on the page itself. */
+export const columnStyle: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 8 }
+
+/** A label over what it names ("Try:", "What is it?", "Any software"): the body face a step smaller, as written. */
+export const labelStyle: CSSProperties = {
+  ...text('sm'),
+  fontWeight: 500,
+  color: 'var(--muted-foreground)',
 }
 
-// Small mono uppercase label (e.g. "Try", "What is it?", "Problem").
-export const kickerStyle: CSSProperties = {
-  fontFamily: mono,
-  fontSize: 11.5,
-  letterSpacing: '0.12em',
-  textTransform: 'uppercase',
-  color: '#a7c080',
-}
-
-// Centered chapter break: the one centered element on a left-anchored page, so
-// the eye finds section boundaries instantly. The accent bar is straight — at
-// this size a tilt reads as misalignment, not as a hero-strike echo.
-export function SectionHead({ title, sub }: { title: ReactNode; sub?: string | React.ReactNode }) {
+/** A section's opening: its heading on the column's left edge, its lead under it. */
+export function SectionHead({ title, sub }: { title: ReactNode; sub?: string }) {
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        textAlign: 'center',
-        gap: 12,
-        maxWidth: 640,
-        margin: '0 auto',
-      }}
-    >
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 'var(--measure)' }}>
       <h2 style={h2Style}>{title}</h2>
-      <span aria-hidden style={{ width: 68, height: 4, borderRadius: 2, background: '#a7c080' }} />
-      {sub && <p style={{ margin: 0, fontSize: 17, lineHeight: 1.6, color: '#9da9a0' }}>{sub}</p>}
+      {sub && <p style={{ margin: 0, ...text('lg'), color: 'var(--muted-foreground)', textWrap: 'balance' }}>{sub}</p>}
     </div>
   )
 }
 
 // The note look, shared with note-shaped blocks that can't be a <p> (e.g. the
-// prompts band, whose chip row needs a block container).
+// prompts band, whose chip row needs a block container): muted text, around NoteText.
 export const noteContainerStyle: CSSProperties = {
   margin: 0,
-  fontSize: 14,
-  lineHeight: 1.6,
-  color: '#9da9a0',
-  background: 'rgba(219, 188, 127, 0.07)',
-  borderLeft: '3px solid #dbbc7f',
-  borderRadius: '0 8px 8px 0',
-  padding: '12px 16px',
+  ...text('sm'),
+  color: 'var(--muted-foreground)',
 }
 
-export const noteLabelStyle: CSSProperties = {
-  fontFamily: mono,
-  fontSize: 11,
+const noteLabelStyle: CSSProperties = {
   fontWeight: 600,
-  letterSpacing: '0.1em',
-  textTransform: 'uppercase',
-  color: '#dbbc7f',
-  marginRight: 10,
+  color: 'var(--foreground)',
+  marginRight: 8,
 }
 
-export function Note({ children, style, label }: { children: ReactNode; style?: CSSProperties; label?: ReactNode }) {
-  return (
-    <p style={{ ...noteContainerStyle, ...style }}>
-      {label ?? <span style={noteLabelStyle}>Note</span>}{' '}
-      <span
-        style={{
-          fontStyle: 'italic',
-        }}
-      >
-        {children}
-      </span>
-    </p>
-  )
-}
-
-export function WipBadge({ style, icon = true }: { style?: CSSProperties; icon?: boolean }) {
+/** A note's words: its "Note" label, then the note. */
+export function NoteText({ children }: { children: ReactNode }) {
   return (
     <>
-      {icon && (
-        <>
-          <Emoji e="🚧" />{' '}
-        </>
-      )}
-      <span
-        style={{
-          fontStyle: 'normal',
-          fontFamily: mono,
-          fontSize: 10.5,
-          fontWeight: 600,
-          letterSpacing: '0.08em',
-          color: '#dbbc7f',
-          border: '1px solid rgba(219, 188, 127, 0.4)',
-          borderRadius: 4,
-          padding: '1px 6px',
-          whiteSpace: 'nowrap',
-          ...style,
-        }}
-      >
-         Coming soon
-      </span>
+      <span style={noteLabelStyle}>Note</span> {children}
     </>
   )
 }
 
-// Emoji as static SVGs (Chrome's Noto set, in public/assets): identical on
-// every platform instead of whatever the browser's emoji font ships.
-const EMOJIS = {
-  '💪': 'flex',
-  '🦾': 'mech-arm',
-  '🧭': 'compass',
-  '🤖': 'robot',
-  '🙋': 'hand-raised',
-  '😕': 'confused',
-  '🚀': 'rocket',
-  '🚧': 'construction',
-} as const
-export type EmojiChar = keyof typeof EMOJIS
-
-export function Emoji({ e, style }: { e: EmojiChar; style?: CSSProperties }) {
+export function Note({ children }: { children: ReactNode }) {
   return (
-    <img
-      src={`/assets/emoji-${EMOJIS[e]}.svg`}
-      alt={e}
-      style={{ height: '1em', verticalAlign: '-0.12em', ...style }}
-    />
+    <p style={noteContainerStyle}>
+      <NoteText>{children}</NoteText>
+    </p>
   )
 }
 
-export function CodeChip({ children, fontSize }: { children: string; fontSize: number }) {
+/** "Coming soon", beside a feature that is not there yet. */
+export function WipBadge() {
+  return (
+    <span
+      style={{
+        ...text('xs'),
+        fontWeight: 600,
+        color: 'var(--muted-foreground)',
+        border: '1px solid var(--border)',
+        borderRadius: 'var(--radius-sm)',
+        padding: '0 6px',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      Coming soon
+    </span>
+  )
+}
+
+/** A path or a file name in the text, in mono a step (2px) under the text around it. */
+export function CodeChip({ children }: { children: string }) {
   return (
     <code
       style={{
@@ -171,20 +138,67 @@ export function CodeChip({ children, fontSize }: { children: string; fontSize: n
         overflowWrap: 'anywhere',
         boxDecorationBreak: 'clone',
         WebkitBoxDecorationBreak: 'clone',
-        // Upright even inside italic contexts (notes).
-        fontStyle: 'normal',
         fontFamily: mono,
-        fontSize,
-        background: '#232a2e',
-        // The border keeps the chip visible even on #232a2e surfaces (e.g. the
+        fontSize: 'calc(1em - 2px)',
+        background: 'var(--card)',
+        // The border keeps the chip visible even on surfaces of its own fill (e.g. the
         // good-solution rows), where the background alone disappears.
-        border: '1px solid #475258',
-        borderRadius: 5,
-        padding: '1px 6px',
-        color: '#dbbc7f',
+        border: '1px solid var(--border)',
+        borderRadius: 'var(--radius-sm)',
+        padding: '0 4px',
+        color: 'var(--foreground)',
       }}
     >
       {children}
     </code>
+  )
+}
+
+/**
+ * A capture of the dashboard (public/pictures/, taken by pictures.mjs), dark or light as the visitor's
+ * computer asks, at its own pixels: one capture for each width of room the page gives it, so its words are
+ * the dashboard's own size. Each source carries its size, so the box is laid out before the picture arrives.
+ */
+export function Screenshot({ name, alt, first }: {
+  name: keyof typeof PICTURES
+  alt: string
+  /** The page's first picture: fetched with the page (after its fonts), not when it nears the screen. */
+  first?: boolean
+}) {
+  const sizes = PICTURES[name]
+  const file = (window: number, scheme: 'dark' | 'light') => `/pictures/${name}-${window}-${scheme}.webp 2x`
+  const last = sizes[sizes.length - 1]!
+  return (
+    <picture>
+      {sizes.flatMap(({ window, width, height, media }) => [
+        <source
+          key={`${window}-light`}
+          media={[media, '(prefers-color-scheme: light)'].filter(Boolean).join(' and ')}
+          srcSet={file(window, 'light')}
+          width={width}
+          height={height}
+        />,
+        media && <source key={`${window}-dark`} media={media} srcSet={file(window, 'dark')} width={width} height={height} />,
+      ])}
+      <img
+        srcSet={file(last.window, 'dark')}
+        width={last.width}
+        height={last.height}
+        alt={alt}
+        loading={first ? 'eager' : 'lazy'}
+        style={{
+          // Inline, so it stands where its parent aligns text; never wider than its room.
+          display: 'inline-block',
+          verticalAlign: 'top',
+          maxWidth: '100%',
+          height: 'auto',
+          // An outline, not a border: a border would change the box's ratio once the picture arrives.
+          outline: '1px solid var(--border)',
+          outlineOffset: -1,
+          borderRadius: 'var(--radius-lg)',
+          background: 'var(--card)',
+        }}
+      />
+    </picture>
   )
 }

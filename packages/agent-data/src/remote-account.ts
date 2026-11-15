@@ -1,4 +1,5 @@
 import { nodeGitRunner, type GitRunner } from './git.js'
+import { originUrl } from './origin.js'
 import { spellingOfRemote } from './repository-address.js'
 
 /**
@@ -86,11 +87,8 @@ export function noAccountSentence(host: string): string {
 export function accountGit(git: GitRunner = nodeGitRunner(), account?: RemoteAccount): GitRunner {
   return async (args, cwd) => {
     if (!REMOTE_COMMANDS.has(args[0] ?? '') || !args.includes('origin')) return git(args, cwd)
-    const url = await git(['remote', 'get-url', 'origin'], cwd).then(
-      out => out.trim(),
-      () => '',
-    )
-    const host = url ? remoteHostOf(url) : undefined
+    const url = await originUrl(cwd, git)
+    const host = url === undefined ? undefined : remoteHostOf(url)
     if (host === undefined) return git(args, cwd)
     const as = account ?? (await readRemoteAccount(cwd, git))
     if (!as) throw new NoRemoteAccountError(noAccountSentence(host))

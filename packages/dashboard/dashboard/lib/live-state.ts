@@ -1,4 +1,4 @@
-import type { AgentMeta, OpenAgentEvent, ChoiceRequest } from '../../src/index.js'
+import type { AgentMeta, OpenAgentEvent } from '../../src/index.js'
 
 // Live-run state derived from the event stream — kept pure so it can be driven and
 // tested on its own, away from React. The dashboard is a projection of the diary the

@@ -1,6 +1,6 @@
 {
   "name": "@openagt/skill-orchestration",
-  "version": "0.1.19",
+  "version": "0.1.21",
   "description": "Orchestration as a skill: a main agent plans its task, starts subagents on the parts once the person approved the plan, each a run of its own on a branch started from the main agent's, and lists them, reads their results, stops them and lands their work with the orchestration command, and brings the Subagents section of the dashboard's Settings page.",
   "license": "MIT",
   "repository": {
@@ -39,7 +39,7 @@
     "build": "cp ../../skills/orchestration/SKILL.md SKILL.md && tsc -p tsconfig.build.json && vite build -c dashboard/vite.config.ts",
     "prepack": "node -e \"if(!process.env.npm_config_user_agent?.startsWith('pnpm/')){console.error('Pack and publish with pnpm: it replaces workspace:* with the real version, npm does not');process.exit(1)}\" && cp ../../skills/orchestration/SKILL.md SKILL.md",
     "typecheck": "tsc --noEmit && tsc --noEmit -p dashboard/tsconfig.json",
-    "test": "tsc -p tsconfig.test.json && XDG_CONFIG_HOME=$(mktemp -d) node --test --test-timeout=60000 'dist-test/**/*.test.js' && cd dashboard && vitest run",
+    "test": "tsc -p tsconfig.test.json && node ../../scripts/test-node.mjs && cd dashboard && vitest run",
     "clean": "rm -rf dist dist-test SKILL.md"
   },
   "dependencies": {

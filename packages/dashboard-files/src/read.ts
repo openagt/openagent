@@ -67,14 +67,21 @@ export function cutToPreview(body: string): { body: string; truncated: boolean }
 }
 
 /**
+ * What the pane shows of a file, from its bytes on disk or its text in a commit: nothing when it
+ * is not text (a NUL in it), else its text without the newline that ends it, cut to the preview.
+ */
+export function fileContent(path: string, raw: Buffer | string): FileContent {
+  if (raw.includes('\0')) return { path, text: '', truncated: false, binary: true }
+  const { body, truncated } = cutToPreview(raw.toString().replace(/\n$/, ''))
+  return { path, text: body, truncated, binary: false }
+}
+
+/**
  * One file's contents (#828). Null when the path is unsafe, outside the checkout, or unreadable.
  * Read from the resolved checkout, so a session's pane shows its worktree's copy rather than the
  * project root's (#815).
  */
 export async function readFileContent(cwd: string, path: string): Promise<FileContent | null> {
   const raw = await readConfinedFile(cwd, path)
-  if (!raw) return null
-  if (raw.includes(0)) return { path, text: '', truncated: false, binary: true }
-  const { body, truncated } = cutToPreview(raw.toString('utf8').replace(/\n$/, ''))
-  return { path, text: body, truncated, binary: false }
+  return raw ? fileContent(path, raw) : null
 }

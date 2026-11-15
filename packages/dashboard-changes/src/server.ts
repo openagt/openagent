@@ -1,6 +1,7 @@
 import type { ModuleReadInput, ModuleServer, ModuleServerHost } from '@openagt/dashboard/module-server'
 import { readFileStatuses, type FileGitStatus } from './status.js'
-import { CONTEXT_LINES, WHOLE_FILE, readFileChanges, readFileDiff, type FileChange, type FileDiff } from './diff.js'
+import { CONTEXT_LINES } from './confined.js'
+import { WHOLE_FILE, readFileChanges, readFileDiff, type FileChange, type FileDiff } from './diff.js'
 import { checkoutBranch, defaultBranchName, pendingChanges, readAgentChanges, readAgentCommitChanges, readAgentCommitFileDiff, readAgentCommits, readAgentFileDiff, resolveAgentWork, type AgentChanges, type AgentCommit, type FileMark } from './run.js'
 
 // The Changes module's server part: the reads its browser part makes. A read about a run takes the
@@ -62,14 +63,15 @@ async function run(host: ModuleServerHost, input: ModuleReadInput): Promise<RunC
 async function diff(host: ModuleServerHost, input: ModuleReadInput): Promise<FileDiff | null> {
   const path = pathOf(input)
   if (path === undefined) return null
+  const context = contextOf(input)
   const agentId = runId(input)
   if (agentId !== undefined) {
     const at = await resolveAgentWork(host, agentId)
     const sha = commitId(input)
-    return (sha !== undefined ? readAgentCommitFileDiff(host.root, at, sha, path, undefined, contextOf(input)) : readAgentFileDiff(host.root, at, path, undefined, contextOf(input))).catch(() => null)
+    return (sha !== undefined ? readAgentCommitFileDiff(host.root, at, sha, path, context) : readAgentFileDiff(host.root, at, path, context)).catch(() => null)
   }
   const status: FileGitStatus | undefined = (await readFileStatuses(host.root))[path]
-  return status ? readFileDiff(host.root, path, status, undefined, undefined, contextOf(input)).catch(() => null) : null
+  return status ? readFileDiff(host.root, path, status, { context }).catch(() => null) : null
 }
 
 /**

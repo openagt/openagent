@@ -6,13 +6,13 @@ import { tmpdir, hostname } from 'node:os'
 import { basename, join } from 'node:path'
 import { EventStream } from '../event-stream.js'
 import { startDashboard, type Dashboard } from './server.js'
-import { testDashboardOptions } from '../dashboard-rpc/test-context.js'
+import { testDashboardContext, testDashboardOptions } from '../dashboard-rpc/test-context.js'
 import { relayRpc, remoteProject } from './remote-run.js'
 import type { Cloned } from '../clone-project.js'
 import { readSharing } from '@openagt/agent-data'
 import { createProjectRuntime, type ProjectRuntime } from '../daemon-runtime.js'
 import { forwardStream } from '../dashboard-rpc/stream-forward.js'
-import { dispatchMachineRpc } from '../dashboard-rpc/relay-dispatch.js'
+import { dispatchMachineRpc, dispatchRelayRpc } from '../dashboard-rpc/relay-dispatch.js'
 import { asCaller } from './person.js'
 import { elsewhereId } from './elsewhere.js'
 import type { ProjectLauncher } from '../dashboard-rpc/projects.js'
@@ -107,8 +107,8 @@ async function twoMachines(opts: { shopOnB?: boolean; machineCalls?: (fn: string
   // B: another project first on its list, then (unless the test says not) the shop, cloned over HTTPS.
   const otherB = await repository(join(root, 'b'), 'other', 'https://github.com/acme/other.git')
   const shopB = await repository(join(root, 'b'), 'work-shop', 'https://github.com/Acme/Shop.git')
-  await addProject(otherB, at, undefined, envB)
-  if (opts.shopOnB !== false) await addProject(shopB, at, undefined, envB)
+  await addProject(otherB, at, envB)
+  if (opts.shopOnB !== false) await addProject(shopB, at, envB)
   const bClones: TwoMachines['bClones'] = []
   const runtimeB = createProjectRuntime({ cwd: otherB, env: envB, clone: from => new Promise<Cloned>(land => bClones.push({ from, land })) })
 
@@ -132,17 +132,17 @@ async function twoMachines(opts: { shopOnB?: boolean; machineCalls?: (fn: string
   const b = await startDashboard(
     testDashboardOptions({
       clientBundleDir: bundle,
-      onStart: bStart,
-      relay: { project: runtimeB.projectAt, tailEvents: bTail, rpc: runtimeB.onRelayRpc, machine: (fn, args) => opts.machineCalls?.(fn, args) ?? dispatchMachineRpc(fn, args), bring: runtimeB.bringProject },
+      context: testDashboardContext({ startAgent: bStart }),
+      relay: { project: runtimeB.projectAt, tailEvents: bTail, rpc: dispatchRelayRpc, machine: (fn, args) => opts.machineCalls?.(fn, args) ?? dispatchMachineRpc(fn, args), bring: runtimeB.bringProject },
     }),
   )
 
   // A: the shop cloned over SSH into another folder, a project with no remote, and B saved as a machine.
   const shopA = await repository(join(root, 'a'), 'shop', 'git@github.com:acme/shop.git')
   const localOnlyA = await repository(join(root, 'a'), 'notes')
-  await addProject(shopA, at, undefined, envA)
-  await addProject(localOnlyA, at, undefined, envA)
-  const machineB = (await addMachine({ url: b.url, key: KEY, door: `${b.url}/_devices/enter`, label: 'Studio' }, undefined, envA)).record.id
+  await addProject(shopA, at, envA)
+  await addProject(localOnlyA, at, envA)
+  const machineB = (await addMachine({ url: b.url, key: KEY, door: `${b.url}/_devices/enter`, label: 'Studio' }, envA)).record.id
   const a = createProjectRuntime({ cwd: shopA, env: envA })
 
   return {
@@ -363,11 +363,24 @@ test('a machine that is no longer saved is refused, and the run does not start h
   }
 })
 
+/**
+ * A's list of its other computers' projects, once B has said its own. A list waits only a moment for
+ * a computer it never heard from, then comes without it, and B on a loaded test runner takes longer
+ * than that moment: asked again until B's word is in.
+ */
+async function elsewhereOnceSaid(m: TwoMachines): ReturnType<TwoMachines['a']['remoteAgents']['elsewhere']> {
+  for (let i = 0; ; i++) {
+    const listed = await m.a.remoteAgents.elsewhere()
+    if (listed.length > 0 || i >= 300) return listed
+    await new Promise(r => setTimeout(r, 100))
+  }
+}
+
 test("a project only the other machine has is listed here, marked with that machine, and a run of it starts there in its own copy, from a branch of its own", async () => {
   const m = await twoMachines()
   try {
     // The shop is A's too, by its address: only B's other project is B's alone.
-    const listed = await m.a.remoteAgents.elsewhere()
+    const listed = await elsewhereOnceSaid(m)
     const otherB = otherOf(m.shopB)
     const id = elsewhereId(projectId(otherB), m.machineB)
     assert.deepEqual(listed, [{ id, path: otherB, name: 'other', activated: false, gitHost: true, machine: m.machineB, modules: ['@openagt/dashboard-changes', '@openagt/dashboard-files'] }])
@@ -402,7 +415,7 @@ test("a person the owner invited is listed none of the owner's other computers' 
   const m = await twoMachines()
   try {
     const id = elsewhereId(projectId(otherOf(m.shopB)), m.machineB)
-    assert.equal((await m.a.remoteAgents.elsewhere()).length, 1)
+    assert.equal((await elsewhereOnceSaid(m)).length, 1)
     assert.deepEqual(await asCaller('Tester', () => m.a.remoteAgents.elsewhere()), [])
     assert.deepEqual(await asCaller('Tester', () => m.a.onStart('run on the owner\'s computer', { machine: m.machineB }, id)), { ok: false, error: 'That project is no longer listed on any of your computers.' })
     await assert.rejects(asCaller('Tester', () => m.a.remoteAgents.forward(id, 'onCommands', [id])), /no longer listed/)
@@ -428,7 +441,7 @@ test("the other machine's Human Queue is named here by the projects as they are 
   try {
     ids = [projectId(otherOf(m.shopB)), projectId(m.shopB)]
     // B's projects are known first: it says them when the list is read.
-    await m.a.remoteAgents.elsewhere()
+    await elsewhereOnceSaid(m)
     const queue = await m.a.remoteAgents.machinesQueue()
     const other = elsewhereId(projectId(otherOf(m.shopB)), m.machineB)
     // B's shop is A's shop, by its address; B's other project is listed here under B's mark.
@@ -457,7 +470,7 @@ test("the other machine's Human Queue is named here by the projects as they are 
 test("what the other machine said of its projects is kept: they stay listed while it does not answer", async () => {
   const m = await twoMachines()
   try {
-    assert.equal((await m.a.remoteAgents.elsewhere()).length, 1)
+    assert.equal((await elsewhereOnceSaid(m)).length, 1)
     await m.b.close()
     assert.deepEqual(
       (await m.a.remoteAgents.elsewhere()).map(project => project.name),

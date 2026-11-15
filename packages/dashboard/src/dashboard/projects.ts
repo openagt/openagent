@@ -76,7 +76,6 @@ export interface SummarizeDeps {
   name?: (path: string) => Promise<string>
 }
 
-/** A project's runs, live prepended to the archived history. Forgiving: a failed read is `[]`. */
 /**
  * Derive a {@link ProjectSummary} from a registry record: its name (its repository's), whether
  * it is still activated, and its last activity. Forgiving: a failed read reads as an
@@ -137,7 +136,7 @@ export interface ProviderDeps {
  * that comes back (renamed back, a volume remounted) is a project again on the next read.
  */
 export function defaultProjectsProvider(deps: ProviderDeps = {}): ProjectsProvider {
-  const listRecords = deps.listRecords ?? (() => listProjects().catch(() => []))
+  const listRecords = deps.listRecords ?? (() => listProjects())
   const isDirectory = deps.isDirectory ?? nodeFs().isDirectory
   const summarize = deps.summarize ?? (record => summarizeProject(record))
   const present = async (): Promise<ProjectRecord[]> => {

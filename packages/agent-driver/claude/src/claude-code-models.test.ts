@@ -1,6 +1,8 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { existsSync } from 'node:fs'
+import { chmodSync, existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { Readable, Writable } from 'node:stream'
 import { contextWindowOf, parseInitializeLine, readClaudeModels } from './claude-code-models.js'
 import { ClaudeCodeDriver } from './claude-code.js'
@@ -92,6 +94,18 @@ test('readClaudeModels rejects with the reason when the CLI never answers', asyn
   const seen: Seen = { sent: [], killed: false }
   await assert.rejects(readClaudeModels({ spawn: fakeCli([], seen), timeoutMs: 20 }), /did not list its models within/)
   assert.equal(seen.killed, true)
+})
+
+test('readClaudeModels rejects with the code of a CLI that is not on this computer, or cannot be run', async () => {
+  const folder = mkdtempSync(join(tmpdir(), 'openagent-claude-bin-'))
+  try {
+    await assert.rejects(readClaudeModels({ bin: join(folder, 'claude') }), { code: 'ENOENT', message: /could not start/ })
+    writeFileSync(join(folder, 'claude'), '#!/bin/sh\n')
+    chmodSync(join(folder, 'claude'), 0o644)
+    await assert.rejects(readClaudeModels({ bin: join(folder, 'claude') }), { code: 'EACCES' })
+  } finally {
+    rmSync(folder, { recursive: true, force: true })
+  }
 })
 
 test('readClaudeModels asks in a fresh folder when told, and removes it once the CLI is gone, not when it answered', async () => {

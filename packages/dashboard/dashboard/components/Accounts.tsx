@@ -1,13 +1,17 @@
-import { Card, CardContent } from './ui/card.js'
-import { ClaudeLogo, CodexLogo } from './driver-logos.js'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Skeleton } from './ui/skeleton.js'
+import { SentenceShape, Slot } from './ui/slot.js'
 import type { DriverName } from '../../src/client.js'
+import { takeLostFocus } from '../lib/lost-focus.js'
 import { useMountedModules } from '../lib/use-modules.js'
 import { useAgentAccounts } from './AgentAccounts.js'
 import { GitHostsCard } from './GitHosts.js'
-import { AgentFix, StatePill, agentLoginState, agentWords, useAgentState } from './Logins.js'
+import { AgentFix, agentLoginState, agentWords, useAgentState, type LoginState } from './Logins.js'
+import type { AgentState } from '../rpc/logins.js'
+import { Badge, type BadgeTone } from './ui/badge.js'
 import { ModuleSlot } from './ModulePageView.js'
 import { Page } from './Page.js'
+import { Section } from './ui/section.js'
 import { AccountWhere, ServerAsks, ServersProvider } from './ServerLogins.js'
 
 // The Permissions page: every account OpenAgent's agents work with, in one place. An agent can
@@ -34,10 +38,11 @@ export function PermissionsPage() {
 export function AccountsList() {
   return (
     <ServersProvider>
-      <div className="space-y-4">
+      <div className="space-y-8">
         <FromLine />
-        <AgentSetup driver="claude-code" title="Claude Code" Logo={ClaudeLogo} />
-        <AgentSetup driver="codex" title="Codex" Logo={CodexLogo} />
+        {/* Claude Code's press is the page's one primary, as the Overview draws it: the agent runs start on unless a person picks another. */}
+        <AgentSetup driver="claude-code" title="Claude Code" primary />
+        <AgentSetup driver="codex" title="Codex" primary={false} />
         <ServerAsks />
         <RotationCard />
         <GitHostsCard />
@@ -46,39 +51,67 @@ export function AccountsList() {
   )
 }
 
-/** The skill's card, as the Overview draws it. */
+/** The skill's card, as the Overview draws it. While the modules load, it waits in the room of its emptiest answer: its heading and one sentence. */
 function RotationCard() {
   const { cards, loaded } = useMountedModules()
   const card = cards.find(each => each.package === ACCOUNT_ROTATION && each.id === 'accounts')
-  if (!card)
-    return loaded ? (
-      <Card>
-        <CardContent className="pt-6 text-sm text-muted-foreground">The accounts card did not load.</CardContent>
-      </Card>
-    ) : (
-      <Skeleton className="h-32 w-full" />
-    )
   return (
-    <ModuleSlot package={card.package} label="accounts card">
-      <card.Card projects={[]} accountWhere={account => <AccountWhere account={{ kind: account.agent, own: account.own, name: account.name }} />} />
-    </ModuleSlot>
+    <Slot of={{ value: card, state: card || loaded ? 'fresh' : 'unknown' }} shape={<CardShape />}>
+      {card =>
+        card ? (
+          <ModuleSlot package={card.package} label="accounts card">
+            <card.Card projects={[]} accountWhere={account => <AccountWhere account={{ kind: account.agent, own: account.own, name: account.name }} />} />
+          </ModuleSlot>
+        ) : (
+          <p className="text-sm text-danger">The accounts card did not load.</p>
+        )
+      }
+    </Slot>
   )
 }
 
-/** An agent that needs its press before it can run: its state, and the press that installs it or logs it in. Nothing once it can run. */
-function AgentSetup({ driver, title, Logo }: { driver: DriverName; title: string; Logo: typeof ClaudeLogo }) {
-  const { state, reload } = useAgentState(driver)
-  if (!state || state.ready || (state.fix === undefined && agentLoginState(state) !== 'not-installed')) return null
+/** A part's heading and its one sentence, while they are read. */
+function CardShape() {
   return (
-    <section aria-label={title} className="space-y-2 rounded-lg border border-border px-3 py-2.5">
-      <div className="flex items-center gap-2">
-        <Logo className="size-4 shrink-0" />
-        <h3 className="flex-1 text-sm font-medium">{title}</h3>
-        <StatePill state={agentLoginState(state)!} />
+    <>
+      <div className="mb-2 flex h-8 items-center">
+        <Skeleton className="h-5 w-48" />
       </div>
-      <p className="text-xs text-muted-foreground">{agentWords(state)}</p>
-      <AgentFix state={state} onChanged={() => void reload()} />
-    </section>
+      <SentenceShape />
+    </>
+  )
+}
+
+/** An agent that needs its press before it can run, as a part of the page: what is missing, and the press that installs it or logs it in. Once it can run, it says so while the page is open, then nothing. */
+function AgentSetup({ driver, title, primary }: { driver: DriverName; title: string; /** Whether its press is the page's primary. */ primary: boolean }) {
+  const { state, reload } = useAgentState(driver)
+  const missing = !!state && !state.ready && (state.fix !== undefined || agentLoginState(state) === 'not-installed')
+  const [wasMissing, setWasMissing] = useState(false)
+  useEffect(() => {
+    if (missing) setWasMissing(true)
+  }, [missing])
+  if (!state || (!missing && !(wasMissing && state.ready))) return null
+  return (
+    <Section title={title}>
+      {state.ready ? (
+        <p ref={takeLostFocus} role="status" tabIndex={-1} className="text-sm text-muted-foreground outline-none">
+          <StateWords state={state}>{`${title} is ready: runs can start with it.`}</StateWords>
+        </p>
+      ) : (
+        <AgentFix state={state} words={<StateWords state={state}>{agentWords(state)}</StateWords>} variant={primary ? undefined : 'secondary'} onChanged={() => void reload()} />
+      )}
+    </Section>
+  )
+}
+
+/** A login's state by its colour, as a dot before the sentence that says it: the one mark of its part. */
+const TONE: Record<LoginState, BadgeTone> = { connected: 'success', step: 'warning', 'not-installed': 'neutral' }
+
+function StateWords({ state, children }: { state: AgentState; children: ReactNode }) {
+  return (
+    <Badge tone={TONE[agentLoginState(state)!]} className="text-sm font-normal whitespace-normal text-muted-foreground">
+      {children}
+    </Badge>
   )
 }
 
@@ -87,7 +120,7 @@ function FromLine() {
   const from = useAgentAccounts('claude').view?.from
   if (from === undefined) return null
   return (
-    <div className="rounded-lg bg-muted px-3 py-2.5">
+    <div className="rounded-lg bg-muted px-3 py-3">
       <p className="text-sm font-medium">{`Your logins and settings from ${from}`}</p>
       <p className="text-xs text-muted-foreground">Log in or out there, or change a setting, and this server follows.</p>
     </div>

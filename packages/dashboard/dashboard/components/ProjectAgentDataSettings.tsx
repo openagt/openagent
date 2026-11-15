@@ -1,11 +1,13 @@
-import { useState } from 'react'
+import { useState, useContext } from 'react'
 import { onProjectAgentData, sendProjectDataAs, type KeptData, type ProjectAgentData } from '../rpc/project-agent-data.js'
 import { sendShareRecords } from '../rpc/projects.js'
 import { usePolled } from '../lib/use-async.js'
 import { useAction } from '../lib/use-action.js'
-import { openSettings, settingsHref } from '../lib/use-route.js'
+import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
 import { ConfirmDialog } from './ui/confirm-dialog.js'
-import { SettingsSection, SettingsSelectRow, SettingsRow } from './SettingsRows.js'
+import { SettingsRowShapes, SettingsSection, SettingsSelectRow, SettingsRow } from './SettingsRows.js'
+import { Slot } from './ui/slot.js'
+import { PathStrip } from './PathStrip.js'
 import { AGENT_DATA_ENTRY } from './AgentDataSettings.js'
 import { SendAs, firstSendAs } from './SendAs.js'
 
@@ -23,41 +25,44 @@ const KIND_WORDS: Record<KeptData['kind'], (n: number) => string> = {
 }
 
 /**
- * Settings › Project › Agent data: where one project's agent data is, the person's own folder or
+ * Settings › Project › Project agent data: where one project's agent data is, the person's own folder or
  * the project's own repository, switched here, and what the skills keep there. Kept in the
  * repository, it is sent as one of OpenAgent's own accounts at the remote's host, named here,
  * never as the person's own login.
  */
 export function ProjectAgentDataSettings({ projectId }: { projectId: string }) {
-  const { value: data, loaded, reload } = usePolled<ProjectAgentData | null>(() => onProjectAgentData(projectId), null, EVERY_MS, [projectId])
+  const read = usePolled<ProjectAgentData | null>(() => onProjectAgentData(projectId), null, EVERY_MS, [projectId])
+  return (
+    <Slot of={read} shape={<SettingsRowShapes />}>
+      {data =>
+        data ? (
+          <ProjectData projectId={projectId} data={data} reload={read.reload} />
+        ) : (
+          <p className="text-sm text-muted-foreground">This project&rsquo;s agent data is on the computer the project is on.</p>
+        )
+      }
+    </Slot>
+  )
+}
+
+/** Where one project's agent data is, the pick that moves it, and what is kept there. */
+function ProjectData({ projectId, data, reload }: { projectId: string; data: ProjectAgentData; reload: () => Promise<void> }) {
+  const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
   const [confirmShare, setConfirmShare] = useState(false)
   const [picked, setPicked] = useState<string | undefined>()
   const { busy, error, run } = useAction()
-  if (!loaded) return null
-  if (!data) return <p className="text-sm text-muted-foreground">This project&rsquo;s agent data is on the computer the project is on.</p>
 
   const folder = (
     <>
       your folder{' '}
-      {/* A link, not a button: a button is never inline, so a long path stood alone on lines of its
-          own, centred, and the sentence's end began its own line with a comma. */}
-      <a
-        href={settingsHref(AGENT_DATA_ENTRY)}
-        onClick={event => {
-          // A modified click is the browser's to handle: a new tab, a new window.
-          if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return
-          event.preventDefault()
-          openSettings(AGENT_DATA_ENTRY)
-        }}
-        className="underline underline-offset-2 [overflow-wrap:anywhere] hover:text-foreground"
-      >
-        {data.folder.path}
-      </a>
+      <button type="button" className="focus-ring rounded-sm align-bottom hover:underline" onClick={() => services.openSettings(AGENT_DATA_ENTRY)}>
+        <PathStrip path={data.folder.path} className="text-primary" />
+      </button>
       {data.folder.remote ? (
         <>
           , synced with{' '}
           {data.folder.remoteUrl ? (
-            <a href={data.folder.remoteUrl} target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-foreground">
+            <a href={data.folder.remoteUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline">
               {data.folder.remote}
             </a>
           ) : (
@@ -101,11 +106,11 @@ export function ProjectAgentDataSettings({ projectId }: { projectId: string }) {
         onChange={pick}
       />
       {data.place === 'repository' && data.accounts && (
-        <div className="pb-3">
+        <div>
           <SendAs host={data.accounts} value={data.account} disabled={busy} onChange={login => void run(() => sendProjectDataAs(projectId, login), 'Could not change the account.').then(() => reload())} />
         </div>
       )}
-      {error && <p className="py-3 text-xs text-danger">{error}</p>}
+      {error && <p className="text-xs text-danger">{error}</p>}
       <SettingsRow
         label="What is kept"
         description={kept.length > 0 ? kept.map(k => `${KIND_WORDS[k.kind](k.count)} (${k.skill})`).join(' · ') : 'Nothing yet.'}
@@ -122,7 +127,7 @@ export function ProjectAgentDataSettings({ projectId }: { projectId: string }) {
             git email. Everyone who can read the repository can read it.
           </>
         }
-        extra={data.accounts && <SendAs host={data.accounts} value={sendAs} onChange={setPicked} label="Push as" />}
+        extra={data.accounts && <SendAs host={data.accounts} value={sendAs} onChange={setPicked} />}
         confirmLabel="Move and push"
         confirmBusyLabel="Moving…"
         fallbackError="Could not move the agent data."

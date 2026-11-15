@@ -1,1 +1,2 @@
-export { install, uninstall, type InstallIO } from './install.js'
+export { runCommand } from './command.js'
+export type { InstallIO } from './install.js'

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import type { HighlighterCore, LanguageRegistration, ThemeRegistration } from 'shiki/core'
 
 // Colours by language for code, in the chat and in the panes: Shiki reads which kind of word each
@@ -183,5 +183,15 @@ export function Pieces({ pieces }: { pieces: Piece[] }) {
     <span key={i} style={{ color: `var(--code-${piece.kind})` }}>
       {piece.text}
     </span>
+  ))
+}
+
+/** Lines in colour, a new line between two: a block of code drawn whole, in its `<pre>`. */
+export function ColouredLines({ lines }: { lines: Piece[][] }) {
+  return lines.map((pieces, i) => (
+    <Fragment key={i}>
+      <Pieces pieces={pieces} />
+      {i < lines.length - 1 ? '\n' : null}
+    </Fragment>
   ))
 }

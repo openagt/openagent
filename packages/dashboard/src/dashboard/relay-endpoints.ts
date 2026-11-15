@@ -144,14 +144,14 @@ async function handlePing(req: IncomingMessage, res: ServerResponse): Promise<vo
   if (!requireGet(req, res)) return
   // The ids this OpenAgent is listed under at the doors of the machines it saved: a computer that
   // saved this one, and that this one saved too, finds this one among its own door's devices by them.
-  const listed = (await listMachines().catch(() => []))
+  const listed = (await listMachines())
     .filter(machine => !machine.url.includes(THROUGH_PATH))
     .flatMap(machine => deviceIdOf(machine.key) ?? [])
   // A server says so: a computer of its person's offers it its logins (`logins-sync.ts`).
   const health = await computerHealth().catch(() => undefined)
   // The name every page shows this computer under is its own, said here: a rename made anywhere is read from it.
-  const name = await thisComputerName().catch(() => undefined)
-  sendJson(res, { version: openagentVersion(), host: hostname(), ...(name !== undefined ? { name } : {}), listed, ...(process.env.OPENAGENT_SERVER === '1' ? { server: true } : {}), ...(health ? { health } : {}) })
+  const name = await thisComputerName()
+  sendJson(res, { version: openagentVersion(), host: hostname(), name, listed, ...(process.env.OPENAGENT_SERVER === '1' ? { server: true } : {}), ...(health ? { health } : {}) })
 }
 
 /** `POST /_relay/start`: read the agent request, start it locally, and answer with the result JSON. */

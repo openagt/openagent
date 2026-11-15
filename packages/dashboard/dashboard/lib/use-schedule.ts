@@ -31,8 +31,8 @@ export function useSchedule(projects: readonly ModuleProject[]): Schedule {
   const ids = projects.map(p => p.id).join(',')
   const { value: commands } = usePolled<Record<string, ModuleScheduledCommand[]>>(
     async () => {
-      // Which modules are installed is not known yet: neither is what starts.
-      if (!mounted) return UNKNOWN
+      // Which modules are installed is not known yet: neither is what starts, so what was read last time stands.
+      if (!mounted) throw new Error('the modules are not in yet')
       const host = schedule ? moduleHost({ ...services, package: schedule.package }) : undefined
       const read = await Promise.all(
         projects.map(async (project): Promise<[string, ModuleScheduledCommand[]] | undefined> => {
@@ -48,7 +48,8 @@ export function useSchedule(projects: readonly ModuleProject[]): Schedule {
     UNKNOWN,
     10_000,
     [mounted, schedule?.package, schedule?.projects.join(','), ids],
-    'previous',
+    // Back on a page, or opening it again, the last answer stands until the fresh one lands, so its line does not pop in.
+    { remember: `schedule:${ids}`, stored: true },
   )
   // What was read for other projects is not this page's: only the projects asked about are answered.
   const asked = Object.fromEntries(projects.flatMap(project => (commands[project.id] ? [[project.id, commands[project.id]!]] : [])))

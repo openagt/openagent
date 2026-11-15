@@ -43,7 +43,7 @@ export function longest(account: AccountRow): AccountWindow | undefined {
 }
 
 /** That window as a line: "62% this week", "7% this month", with when an added one's was said. */
-export function usageWords(account: AccountRow): string | undefined {
+function usageWords(account: AccountRow): string | undefined {
   const window = longest(account)
   if (window === undefined) return account.own ? undefined : 'not used yet'
   return `${Math.round(window.percent)}% ${window.label === '5 h' ? 'of 5 h' : `this ${window.label}`}${account.asOf !== undefined ? ` · as of ${clock(account.asOf)}` : ''}`

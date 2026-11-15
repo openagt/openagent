@@ -1,9 +1,11 @@
 'use client'
-import { useState, type ReactNode } from 'react'
+import { useContext, useState, type ReactNode } from 'react'
 import { AlertDialog } from '@base-ui/react/alert-dialog'
 import { useAction } from '../../lib/use-action.js'
+import { DaemonDown } from '../../lib/use-daemon-health.js'
 import { Button } from './button.js'
 import { cn } from '../../lib/utils.js'
+import { BACKDROP_CLASS, DIALOG_POPUP_CLASS, DIALOG_PRESSES_CLASS } from './dialog.js'
 
 // A confirm-before-you-act dialog on Base UI's AlertDialog (#1032): for the one action that cannot
 // be taken back. The trigger is whatever the caller renders; confirming runs `onConfirm` through
@@ -38,8 +40,8 @@ export function ConfirmDialog({
   body: ReactNode
   confirmLabel: string
   confirmBusyLabel?: string
-  /** Runs on confirm; a refused or thrown result keeps the dialog open with the error. */
-  onConfirm: () => Promise<unknown>
+  /** Runs on confirm; a refused or thrown result keeps the dialog open with the error. Omitted, the confirm sends nothing, so it stays on while OpenAgent is not answering. */
+  onConfirm?: () => Promise<unknown>
   /** Fires once, after the dialog has closed on a successful confirm — safe to navigate away in. */
   onSuccess?: () => void
   fallbackError?: string
@@ -53,14 +55,18 @@ export function ConfirmDialog({
   const open = controlledOpen ?? uncontrolledOpen
   const setOpen = onOpenChange ?? setUncontrolledOpen
   const { busy, error, run, reset } = useAction()
+  const down = useContext(DaemonDown)
 
+  const close = (): void => {
+    setOpen(false)
+    // After the close, so a caller that unmounts this (navigating off the deleted session) does
+    // not tear the dialog down mid-transition.
+    queueMicrotask(() => onSuccess?.())
+  }
   const confirm = (): void => {
+    if (!onConfirm) return close()
     void run(onConfirm, fallbackError).then(outcome => {
-      if (!outcome.ok) return
-      setOpen(false)
-      // After the close, so a caller that unmounts this (navigating off the deleted session) does
-      // not tear the dialog down mid-transition.
-      queueMicrotask(() => onSuccess?.())
+      if (outcome.ok) close()
     })
   }
 
@@ -76,29 +82,23 @@ export function ConfirmDialog({
     >
       {trigger && <AlertDialog.Trigger render={trigger as never} />}
       <AlertDialog.Portal>
-        <AlertDialog.Backdrop className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[1px]" />
-        <AlertDialog.Popup className="fixed left-1/2 top-1/2 z-50 w-[min(26rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-border bg-card p-5 text-card-foreground shadow-lg">
-          <AlertDialog.Title className="text-sm font-semibold">{title}</AlertDialog.Title>
-          <AlertDialog.Description className="mt-2 text-xs leading-relaxed text-muted-foreground">
+        <AlertDialog.Backdrop className={BACKDROP_CLASS} />
+        <AlertDialog.Popup data-overlay="question" className={cn(DIALOG_POPUP_CLASS, 'md:w-[min(26rem,calc(100vw-2rem))]')}>
+          <AlertDialog.Title className="text-base font-semibold">{title}</AlertDialog.Title>
+          <AlertDialog.Description className="mt-2 text-sm text-muted-foreground">
             {body}
           </AlertDialog.Description>
           {extra && <div className="mt-3">{extra}</div>}
           {error && <p className="mt-2 text-xs text-danger">{error}</p>}
-          <div className="mt-4 flex justify-end gap-2">
+          <div className={cn('mt-5 flex justify-end gap-2', DIALOG_PRESSES_CLASS)}>
             <AlertDialog.Close
               render={
-                <Button variant="outline" size="sm" disabled={busy}>
+                <Button variant="secondary" disabled={busy}>
                   Cancel
                 </Button>
               }
             />
-            <Button
-              variant={destructive ? 'destructive' : 'default'}
-              size="sm"
-              disabled={busy || confirmDisabled}
-              onClick={confirm}
-              className={cn(busy && 'cursor-progress')}
-            >
+            <Button variant={destructive ? 'destructive' : 'default'} disabled={(down && onConfirm !== undefined) || confirmDisabled} loading={busy} onClick={confirm}>
               {busy ? confirmBusyLabel : confirmLabel}
             </Button>
           </div>

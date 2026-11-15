@@ -48,6 +48,12 @@ test('an agent whose CLI is not on this computer is marked missing, by the code 
   assert.deepEqual((await source.read()).codex, { models: [], error: '`codex` could not start: spawn codex ENOENT', missing: true })
 })
 
+test('an agent whose CLI is there but cannot be run is marked missing too', async () => {
+  const claude = driver(Object.assign(new Error('`claude` could not start: spawn claude EACCES'), { code: 'EACCES' }))
+  const source = cachedModelsSource({ 'claude-code': claude, codex: driver([]) })
+  assert.deepEqual((await source.read())['claude-code'], { models: [], error: '`claude` could not start: spawn claude EACCES', missing: true })
+})
+
 test('an agent without a way to list its models says so', async () => {
   const source = cachedModelsSource({ 'claude-code': driver([]), codex: {} })
   assert.deepEqual((await source.read()).codex, { models: [], error: 'this agent cannot list its models' })

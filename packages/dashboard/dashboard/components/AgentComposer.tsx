@@ -1,10 +1,12 @@
 import { SESSIONS_ID } from '../../src/project-address.js'
 import type { GitHostHome } from '../../src/index.js'
-import { useEffect, useRef, useState, type MutableRefObject, type ReactNode } from 'react'
+import { useContext, useEffect, useRef, useState, type MutableRefObject, type ReactNode } from 'react'
 import { Loader2, Square } from 'lucide-react'
 import { Composer, type ComposerHandle } from './Composer.js'
 import { sendMessage, sendStop } from '../rpc/control.js'
 import { useAction } from '../lib/use-action.js'
+import { keepDraft, keptDraft } from '../lib/draft-handoff.js'
+import { DaemonDown } from '../lib/use-daemon-health.js'
 import { Button } from './ui/button.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { ProjectContextMenu } from './ContextMenu.js'
@@ -15,7 +17,11 @@ import { SkillsOff } from './SkillsMenu.js'
 import { isPublishPick, offeredPublishPicks, type PublishPick } from '../../src/client.js'
 import { useProjectLauncher } from '../lib/use-project-launcher.js'
 import { promptWithContext, type ContextSet } from '../lib/use-context-set.js'
-import { shortcut } from '../lib/shortcut.js'
+import { overlayOpen, pressed, shortcut } from '../lib/shortcut.js'
+import { useIsMobile } from '../lib/use-mobile.js'
+
+/** How long after an Esc that closed something a second Esc is still that press, said twice: a double press. */
+const DOUBLE_PRESS_MS = 500
 
 /** A message sent to a working agent that it has not read yet: shown waiting until it lands. */
 export interface QueuedMessage {
@@ -43,11 +49,14 @@ export function AgentComposer({
   projectId,
   agentId,
   live,
+  asked = false,
   files,
   onAgentStarted,
   onSending,
   onQueued,
   editInBox,
+  giveBack,
+  focusBox,
   model,
   context,
   controls,
@@ -67,6 +76,8 @@ export function AgentComposer({
   agentId: string
   /** Whether the agent is still running: what a send does is the same call, the note differs. */
   live: boolean
+  /** It ended on a question its card asks: a message is the answer, in the person's own words. */
+  asked?: boolean
   files: string[]
   /** An ended run was continued: the shell follows the same run as it goes live again. */
   onAgentStarted?: ((intent: string, agentId: string) => void) | undefined
@@ -77,6 +88,10 @@ export function AgentComposer({
   onQueued?: ((message: QueuedMessage) => void) | undefined
   /** Set here to what puts a text in the box to edit: Cancel and edit on a waiting message. */
   editInBox?: MutableRefObject<((text: string) => void) | null> | undefined
+  /** Set here to what hands the box back what the run ended without reading, after any draft, and says it was not sent. */
+  giveBack?: MutableRefObject<((text: string) => void) | null> | undefined
+  /** Set here to what gives the box the focus: a question answered from its card. */
+  focusBox?: MutableRefObject<(() => void) | null> | undefined
   /** The model the session runs on, by its name: said under the box. */
   model?: string | undefined
   /** How full the session's context is, as a circle beside the model. */
@@ -110,19 +125,44 @@ export function AgentComposer({
       editInBox.current = null
     }
   }, [editInBox])
-  const { busy, error, run } = useAction()
+  // Messages handed back unsent: said above the box until the next send, or another session.
+  const [notSent, setNotSent] = useState(false)
+  useEffect(() => setNotSent(false), [agentId])
+  useEffect(() => {
+    if (!giveBack) return
+    giveBack.current = text => {
+      composerRef.current?.append(text)
+      setNotSent(true)
+    }
+    return () => {
+      giveBack.current = null
+    }
+  }, [giveBack])
+  useEffect(() => {
+    if (!focusBox) return
+    focusBox.current = () => composerRef.current?.focus()
+    return () => {
+      focusBox.current = null
+    }
+  }, [focusBox])
+  const phone = useIsMobile()
+  // A touch screen has no keys to name: its pointer is a finger. A phone's box has no room for them either.
+  const touch = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches
+  const { busy, error, run } = useAction(agentId)
   // The slot's Stop (#1455), its own action so a message send's busy beat cannot read as
   // "stopping". A landed Stop stays "Stopping…" until the end event flips `live`, so it cannot
   // be re-fired. Released the moment `live` drops, not only on an agent switch: a message continues
   // the SAME agent (#762), so a latch keyed to the agent id alone re-engaged on the continued
   // session and froze its Stop as a disabled spinner.
-  const { busy: stopBusy, error: stopError, run: runStop } = useAction()
+  const { busy: stopBusy, error: stopError, run: runStop } = useAction(agentId)
   const [stopRequested, setStopRequested] = useState(false)
   useEffect(() => setStopRequested(false), [agentId])
   useEffect(() => {
     if (!live) setStopRequested(false)
   }, [live])
   const stopping = stopBusy || (stopRequested && live)
+  // OpenAgent is not answering: Stop cannot reach the agent, by the button or by Esc.
+  const down = useContext(DaemonDown)
   // The "Auto" menu, as the launcher's (his pick): how far the run takes its work. A pick goes with
   // the next message and holds from it on. Sent to a working run, it shows until the run's record
   // says it, which is when its turn ends and it takes the message. Sent to an ended run, the menu
@@ -136,6 +176,9 @@ export function AgentComposer({
   useEffect(() => {
     if (picked === recorded) setPicked(null)
   }, [picked, recorded])
+  // The session shown now: a send's answer, back after another was picked, leaves that one's box and menus alone.
+  const shown = useRef(agentId)
+  shown.current = agentId
   /** Say `text` to the run, `later` for after its turn. Resolves whether it went through; a refusal's words are shown. */
   const say = async (text: string, later: boolean): Promise<boolean> => {
     const wasLive = live
@@ -150,7 +193,7 @@ export function AgentComposer({
       if (!wasLive) onSending?.(null)
       return false
     }
-    if (!wasLive) setPicked(null)
+    if (!wasLive && shown.current === agentId) setPicked(null)
     if (wasLive) onQueued?.({ id, text, later })
     // An ended run goes live again under the same id: tell the shell, which keeps its feed (#762).
     else onAgentStarted?.(text, agentId)
@@ -159,48 +202,69 @@ export function AgentComposer({
 
   const send = async (text: string, { later }: { later: boolean } = { later: false }): Promise<void> => {
     if (busy) return
-    if (await say(contextSet ? promptWithContext(text, contextSet.context) : text, later)) {
-      composerRef.current?.clear()
-      contextSet?.reset()
+    // The box is emptied as the message goes, so what is typed meanwhile stays; a message refused comes back to it
+    // as the same draft: its chips, and the Context it went with.
+    const sent = contextSet?.context
+    const draft = composerRef.current?.clear()
+    // The Context goes with the message, out of the set as the box empties: what is picked while it goes, a path it
+    // went with picked again included, is the next message's, and its landing leaves the set alone.
+    for (const path of sent ?? []) contextSet?.remove(path)
+    const went = await say(sent ? promptWithContext(text, sent) : text, later)
+    if (shown.current === agentId) {
+      if (went) setNotSent(false)
+      else {
+        if (draft) composerRef.current?.restore(draft)
+        for (const path of sent ?? []) contextSet?.add(path)
+      }
+      composerRef.current?.focus()
+    } else if (!went) {
+      // Another session's box is shown by now: the words go back to the one they were written in, after what it holds, as its append puts them.
+      const draftKey = `${projectId}:${agentId}`
+      const kept = keptDraft(draftKey)
+      keepDraft(draftKey, kept === undefined ? text : `${kept}\n\n${text}`)
     }
-    composerRef.current?.focus()
   }
 
   const stopSession = () =>
     void runStop(() => sendStop(projectId, agentId).then(() => true), 'Could not stop the agent.').then(result => {
-      if (result) setStopRequested(true)
+      // A Stop that lands once another session is shown latches nothing there: that one still works.
+      if (result.ok && shown.current === agentId) setStopRequested(true)
     })
 
   // Esc stops the agent, as in Claude Code, also typed in the box, unless it closes something open
   // first: a menu, a dialog, the box's own suggestions. Read before anything on the page takes the
-  // key, while what it closes still reads open.
+  // key, while what it closes still reads open. An Esc straight after the one that closed something
+  // is the same press to a person, and a key held down is no press: neither stops the agent.
+  const closedAt = useRef(-Infinity)
   useEffect(() => {
     if (!live) return
     const onKey = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || stopping || document.querySelector('[role="dialog"], [role="menu"], [role="listbox"], .ProseMirror[aria-expanded="true"]')) return
+      if (!pressed(event, 'stop')) return
+      if (overlayOpen() || document.querySelector('.ProseMirror[aria-expanded="true"]')) return void (closedAt.current = Date.now())
+      if (event.repeat || Date.now() - closedAt.current < DOUBLE_PRESS_MS || stopping || down) return
       stopSession()
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
   })
 
-  // The empty box's slot control while the agent works: Stop, as Claude Code's, a square and no button around it.
+  // The empty box's slot control while the agent works: Stop, as Claude Code's, a square in the box's one primary press.
   const idleControl = live ? (
     <Tooltip>
       <TooltipTrigger
         render={
           <Button
             type="button"
-            variant="ghost"
             size="icon-sm"
             onClick={stopSession}
-            disabled={stopping}
+            disabled={stopping || down}
             aria-label="Stop agent"
-            className="h-8 w-8 shrink-0 disabled:opacity-100"
+            // Stopping draws its spinner in full; off while OpenAgent is not answering, Stop is dimmed as any button off.
+            className={stopping ? 'shrink-0 disabled:opacity-100' : 'shrink-0'}
           />
         }
       >
-        {stopping ? <Loader2 className="h-4 w-4 animate-spin" /> : <Square className="h-3.5 w-3.5 rounded-[3px] fill-current" />}
+        {stopping ? <Loader2 className="h-4 w-4 animate-spin" /> : <Square className="size-3 fill-current" />}
       </TooltipTrigger>
       <TooltipContent className="flex items-center gap-1.5">
         {stopping ? (
@@ -208,7 +272,7 @@ export function AgentComposer({
         ) : (
           <>
             Stop
-            <kbd className="flex h-[17px] items-center justify-center rounded border border-background/20 px-1 font-sans text-[11px]">Esc</kbd>
+            <kbd className="flex h-5 items-center justify-center rounded-sm border border-hairline px-1 font-sans text-xs">Esc</kbd>
           </>
         )}
       </TooltipContent>
@@ -218,16 +282,22 @@ export function AgentComposer({
   const surfacedError = error ?? stopError
 
   return (
-    <div className="mx-auto w-full max-w-3xl p-2">
+    // The chat's column and its side padding (EventList), so the box and what is in the chat share both edges.
+    <div className="@container mx-auto w-full max-w-3xl px-4 pt-2 pb-4">
       {surfacedError && <p role="alert" className="mb-1 px-2 text-xs text-danger">{surfacedError}</p>}
+      {notSent && <p role="status" className="mb-1 px-2 text-xs text-muted-foreground">Not sent: the session stopped first.</p>}
       <Composer
+        // A box of its own per session, with the draft it was left with.
+        key={agentId}
         ref={composerRef}
+        draftKey={`${projectId}:${agentId}`}
+        // A session opened takes what is typed next, as the launcher does; not on a phone, where the keyboard would rise over the chat.
+        autoFocus={!phone}
         files={files}
         onSubmit={send}
         busy={busy}
         submitLabel="Send"
         submitBusyLabel={live ? 'Sending…' : 'Continuing…'}
-        showDriverModel={false}
         inAgent
         sessionRow={row}
         sessionModel={model}
@@ -241,7 +311,7 @@ export function AgentComposer({
         controls={
           <>
             <AgentOff agent={agent} />
-            <SkillsOff skillsOn={skillsOn} skillsOff={skillsOff} projectSkills={projectSkills} noProject={projectId === SESSIONS_ID} />
+            <SkillsOff projectId={projectId === SESSIONS_ID ? undefined : projectId} agent={agent} skillsOn={skillsOn} skillsOff={skillsOff} projectSkills={projectSkills} />
             {projectId !== SESSIONS_ID && contextSet && <ProjectContextMenu projectId={projectId} context={contextSet.context} busy={busy} onToggle={contextSet.toggle} />}
             {controls}
           </>
@@ -262,8 +332,8 @@ export function AgentComposer({
         }
         idleControl={idleControl}
         // What the box can do, not what it is for: the keys for a working agent, as Claude Code's box
-        // says them in the same place.
-        placeholder={live ? `⏎ to send, ${shortcut('⏎')} to queue for later` : 'Message the agent to continue it…'}
+        // says them in the same place; a touch screen has none to name.
+        placeholder={down ? 'OpenAgent is not answering' : live ? (touch || phone ? 'Message the agent…' : `Enter to send, ${shortcut('Enter')} to queue for later`) : asked ? 'Or answer in your own words…' : 'Message the agent to continue it…'}
       />
     </div>
   )

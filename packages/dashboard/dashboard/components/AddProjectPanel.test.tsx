@@ -9,6 +9,9 @@ vi.mock('../rpc/projects.js', () => ({ sendAddProject, sendPickProjectDirectory,
 
 const { AddProjectPanel } = await import('./AddProjectPanel.js')
 
+/** Opened here with no control to give focus back to. */
+const NO_OPENER = { current: null }
+
 afterEach(() => {
   cleanup()
   sendAddProject.mockReset()
@@ -21,11 +24,11 @@ describe('AddProjectPanel (#1150)', () => {
   test('the system dialog opens with the modal, and the picked repo is added only after the trust confirmation', async () => {
     sendPickProjectDirectory.mockResolvedValue({ ok: true, path: '/Users/dev/my-repo' })
     sendAddProject.mockResolvedValue({ ok: true, alreadyActivated: false })
-    render(<AddProjectPanel onAdded={() => {}} onClose={() => {}} />)
+    render(<AddProjectPanel opener={NO_OPENER} onAdded={() => {}} onClose={() => {}} />)
     // Picking is the form: the dialog is already open, the modal just says so.
     expect(sendPickProjectDirectory).toHaveBeenCalledTimes(1)
     // The picked path is shown back for the trust gate (#439); nothing is registered yet.
-    await screen.findByText('/Users/dev/my-repo')
+    await screen.findByTitle('/Users/dev/my-repo')
     expect(sendAddProject).not.toHaveBeenCalled()
     // The question is short: the warning and the button, no list and no other choice (Rom).
     const dialog = screen.getByRole('dialog', { name: 'Add project' })
@@ -41,8 +44,8 @@ describe('AddProjectPanel (#1150)', () => {
   test('a folder handed in is asked about at once: no system dialog, and Cancel closes', async () => {
     const onClose = vi.fn()
     sendAddProject.mockResolvedValue({ ok: true, alreadyActivated: false })
-    render(<AddProjectPanel folder="/Users/dev/here" onAdded={() => {}} onClose={onClose} />)
-    expect(screen.getByText('/Users/dev/here')).toBeTruthy()
+    render(<AddProjectPanel opener={NO_OPENER} folder="/Users/dev/here" onAdded={() => {}} onClose={onClose} />)
+    expect(screen.getByTitle('/Users/dev/here')).toBeTruthy()
     expect(sendPickProjectDirectory).not.toHaveBeenCalled()
     expect(screen.queryByRole('button', { name: 'Choose again' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
@@ -53,10 +56,20 @@ describe('AddProjectPanel (#1150)', () => {
     expect(sendAddProject).toHaveBeenCalledWith('/Users/dev/here')
   })
 
+  test('the trust question opens on the press that adds nothing: a second Enter trusts no repository unread', async () => {
+    sendPickProjectDirectory.mockResolvedValue({ ok: true, path: '/Users/dev/my-repo' })
+    render(<AddProjectPanel opener={NO_OPENER} onAdded={() => {}} onClose={() => {}} />)
+    await screen.findByTitle('/Users/dev/my-repo')
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Choose again' }))
+    cleanup()
+    render(<AddProjectPanel opener={NO_OPENER} folder="/Users/dev/here" onAdded={() => {}} onClose={() => {}} />)
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Cancel' }))
+  })
+
   test('a repo that was already a project reads "Already added"', async () => {
     sendPickProjectDirectory.mockResolvedValue({ ok: true, path: '/Users/dev/my-repo' })
     sendAddProject.mockResolvedValue({ ok: true, alreadyActivated: true })
-    render(<AddProjectPanel onAdded={() => {}} onClose={() => {}} />)
+    render(<AddProjectPanel opener={NO_OPENER} onAdded={() => {}} onClose={() => {}} />)
     fireEvent.click(await screen.findByRole('button', { name: 'I trust it, add it' }))
     await screen.findByText('Already added')
   })
@@ -64,7 +77,7 @@ describe('AddProjectPanel (#1150)', () => {
   test('dismissing the system dialog closes the modal without adding anything', async () => {
     sendPickProjectDirectory.mockResolvedValue({ ok: true, path: null })
     const onClose = vi.fn()
-    render(<AddProjectPanel onAdded={() => {}} onClose={onClose} />)
+    render(<AddProjectPanel opener={NO_OPENER} onAdded={() => {}} onClose={onClose} />)
     await waitFor(() => expect(onClose).toHaveBeenCalled())
     expect(sendAddProject).not.toHaveBeenCalled()
   })
@@ -72,16 +85,16 @@ describe('AddProjectPanel (#1150)', () => {
   test('a dialog that could not be opened reports why, and Try again asks again', async () => {
     sendPickProjectDirectory.mockResolvedValueOnce({ ok: false, error: 'The machine running OpenAgent has no desktop session, so no folder dialog can open there.' })
     sendPickProjectDirectory.mockResolvedValueOnce({ ok: true, path: '/Users/dev/my-repo' })
-    render(<AddProjectPanel onAdded={() => {}} onClose={() => {}} />)
+    render(<AddProjectPanel opener={NO_OPENER} onAdded={() => {}} onClose={() => {}} />)
     await screen.findByText(/no desktop session/)
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
-    await screen.findByText('/Users/dev/my-repo')
+    await screen.findByTitle('/Users/dev/my-repo')
   })
 
   test('a failed add reports the daemon’s reason and stays on the trust step', async () => {
     sendPickProjectDirectory.mockResolvedValue({ ok: true, path: '/Users/dev/my-repo' })
     sendAddProject.mockResolvedValue({ ok: false, error: 'path does not exist or is not a directory: /Users/dev/my-repo' })
-    render(<AddProjectPanel onAdded={() => {}} onClose={() => {}} />)
+    render(<AddProjectPanel opener={NO_OPENER} onAdded={() => {}} onClose={() => {}} />)
     fireEvent.click(await screen.findByRole('button', { name: 'I trust it, add it' }))
     await screen.findByText(/path does not exist/)
     expect(screen.getByRole('button', { name: 'I trust it, add it' })).toBeTruthy()
@@ -90,10 +103,10 @@ describe('AddProjectPanel (#1150)', () => {
   test('Choose again reopens the system dialog from the trust step', async () => {
     sendPickProjectDirectory.mockResolvedValueOnce({ ok: true, path: '/Users/dev/first' })
     sendPickProjectDirectory.mockResolvedValueOnce({ ok: true, path: '/Users/dev/second' })
-    render(<AddProjectPanel onAdded={() => {}} onClose={() => {}} />)
-    await screen.findByText('/Users/dev/first')
+    render(<AddProjectPanel opener={NO_OPENER} onAdded={() => {}} onClose={() => {}} />)
+    await screen.findByTitle('/Users/dev/first')
     fireEvent.click(screen.getByRole('button', { name: 'Choose again' }))
-    await screen.findByText('/Users/dev/second')
+    await screen.findByTitle('/Users/dev/second')
     expect(sendPickProjectDirectory).toHaveBeenCalledTimes(2)
   })
 
@@ -101,7 +114,7 @@ describe('AddProjectPanel (#1150)', () => {
     onCloneTarget.mockResolvedValue({ ok: true, address: 'github.com/ada/shop', path: '/home/openagent/projects/shop' })
     sendAddProjectFromAddress.mockResolvedValue({ ok: true, alreadyActivated: false, path: '/home/openagent/projects/shop' })
     const onAdded = vi.fn()
-    render(<AddProjectPanel fromAddress onAdded={onAdded} onClose={() => {}} />)
+    render(<AddProjectPanel opener={NO_OPENER} fromAddress onAdded={onAdded} onClose={() => {}} />)
     expect(sendPickProjectDirectory).not.toHaveBeenCalled()
     const next = screen.getByRole('button', { name: 'Next' }) as HTMLButtonElement
     expect(next.disabled).toBe(true)
@@ -123,7 +136,7 @@ describe('AddProjectPanel (#1150)', () => {
 
   test('by address: what is no address is said and the field stays; a clone that fails is said and the address can be changed', async () => {
     onCloneTarget.mockResolvedValueOnce({ ok: false, error: '"shop" is not a repository\u2019s address. One looks like github.com/you/project.' })
-    render(<AddProjectPanel fromAddress onAdded={() => {}} onClose={() => {}} />)
+    render(<AddProjectPanel opener={NO_OPENER} fromAddress onAdded={() => {}} onClose={() => {}} />)
     const field = screen.getByLabelText(/The repository\u2019s address/) as HTMLInputElement
     fireEvent.change(field, { target: { value: 'shop' } })
     fireEvent.click(screen.getByRole('button', { name: 'Next' }))
@@ -144,7 +157,7 @@ describe('AddProjectPanel (#1150)', () => {
 
   test('a computer whose folder dialog cannot open says why, and offers the address in its place', async () => {
     sendPickProjectDirectory.mockResolvedValue({ ok: false, error: 'The machine running OpenAgent has no desktop session, so no folder dialog can open there.' })
-    render(<AddProjectPanel onAdded={() => {}} onClose={() => {}} />)
+    render(<AddProjectPanel opener={NO_OPENER} onAdded={() => {}} onClose={() => {}} />)
     await screen.findByText(/has no desktop session/)
     fireEvent.click(screen.getByRole('button', { name: 'Add from a GitHub address' }))
     expect(screen.getByLabelText(/The repository\u2019s address/)).toBeTruthy()

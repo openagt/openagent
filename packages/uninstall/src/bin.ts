@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-import { uninstall } from '@openagt/install'
+import { runCommand } from '@openagt/install'
 
-uninstall()
+runCommand('uninstall', process.argv.slice(2))
   .then(code => process.exit(code))
   .catch((err: unknown) => {
     console.error(err)

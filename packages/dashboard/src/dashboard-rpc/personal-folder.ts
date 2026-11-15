@@ -7,7 +7,7 @@ import { providedDataChanged } from '../store/provided.js'
 import { repositoryUrlOf } from '../repository-url.js'
 import { personalFolderShown, type PersonalFolderShown } from '../personal-folder-shown.js'
 
-// Settings › Agent data: where everything the agents keep is. The person's own folder, `~/.openagent`,
+// Settings › Your agent data: where everything the agents keep is. The person's own folder, `~/.openagent`,
 // which may sync with a repository of theirs so every machine of theirs has the same data.
 
 export interface PersonalFolderView extends PersonalFolderShown {

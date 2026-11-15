@@ -160,7 +160,6 @@ export interface BridgeHandlers {
 }
 
 const MAX_BODY = 64 * 1024
-const SESSION_ID = /^session_[A-Za-z0-9]{1,128}$/
 const MAX_TITLE = 500
 const MAX_LABEL = 300
 const MAX_DETAIL = 500
@@ -172,6 +171,11 @@ const MAX_SEQ = 10_000
 const LIST_STATUSES: ReadonlySet<string> = new Set<BridgeListStatus>(['awaiting', 'unread', 'idle', 'running', 'landed', 'missing', 'unknown'])
 const MAX_STATUSES = 500
 const MAX_STATUS_LABEL = 80
+
+/** Whether a value reads as a claude.ai session's id, the key the bridge knows a cloud session by: `session_` and letters and digits. */
+export function isCloudSessionId(value: unknown): value is string {
+  return typeof value === 'string' && /^session_[A-Za-z0-9]{1,128}$/.test(value)
+}
 
 /** Route a `/_bridge/*` request. A daemon with the bridge off 404s every route. */
 export async function handleBridgeRequest(
@@ -251,7 +255,7 @@ function bodySessionId(body: unknown): { sessionId: string; raw: Record<string, 
   if (typeof body !== 'object' || body === null) return 'body must be an object'
   const raw = body as Record<string, unknown>
   const sessionId = raw.sessionId
-  if (typeof sessionId !== 'string' || !SESSION_ID.test(sessionId)) return 'sessionId must look like session_<id>'
+  if (!isCloudSessionId(sessionId)) return 'sessionId must look like session_<id>'
   return { sessionId, raw }
 }
 
@@ -316,7 +320,7 @@ async function handleHello(req: IncomingMessage, res: ServerResponse, handlers: 
   const raw = (typeof body === 'object' && body !== null ? body : {}) as Record<string, unknown>
   handlers.hello?.({
     version: typeof raw.version === 'string' ? raw.version.slice(0, 32) : 'unknown',
-    sessionId: typeof raw.sessionId === 'string' && SESSION_ID.test(raw.sessionId) ? raw.sessionId : undefined,
+    sessionId: isCloudSessionId(raw.sessionId) ? raw.sessionId : undefined,
     note: typeof raw.note === 'string' ? raw.note.slice(0, 300) : '',
     at: now(handlers).toISOString(),
   })
@@ -380,7 +384,7 @@ function validateStatuses(body: unknown, now: Date): BridgeSessionStatus[] | str
   for (const entry of raw) {
     if (typeof entry !== 'object' || entry === null) return 'each status must be an object'
     const { sessionId, status, label } = entry as Record<string, unknown>
-    if (typeof sessionId !== 'string' || !SESSION_ID.test(sessionId)) return 'each status needs a sessionId that looks like session_<id>'
+    if (!isCloudSessionId(sessionId)) return 'each status needs a sessionId that looks like session_<id>'
     if (typeof status !== 'string' || !LIST_STATUSES.has(status)) return `each status must be one of ${[...LIST_STATUSES].join(', ')}`
     if (label !== undefined && typeof label !== 'string') return 'label must be a string'
     out.push({
@@ -402,7 +406,7 @@ function validateStatuses(body: unknown, now: Date): BridgeSessionStatus[] | str
 async function handleAnswer(req: IncomingMessage, res: ServerResponse, handlers: BridgeHandlers): Promise<void> {
   if (!requireGet(req, res)) return
   const sessionId = new URL(req.url ?? '', 'http://bridge.invalid').searchParams.get('sessionId')
-  if (typeof sessionId !== 'string' || !SESSION_ID.test(sessionId)) return end(res, 400, 'sessionId must look like session_<id>')
+  if (!isCloudSessionId(sessionId)) return end(res, 400, 'sessionId must look like session_<id>')
   sendJson(res, { answer: handlers.answer?.(sessionId) ?? null })
 }
 
@@ -412,7 +416,7 @@ async function handleAnswered(req: IncomingMessage, res: ServerResponse, handler
   if (body === undefined) return
   if (typeof body !== 'object' || body === null) return end(res, 400, 'body must be an object')
   const { sessionId, id, ok, note } = body as Record<string, unknown>
-  if (typeof sessionId !== 'string' || !SESSION_ID.test(sessionId)) return end(res, 400, 'sessionId must look like session_<id>')
+  if (!isCloudSessionId(sessionId)) return end(res, 400, 'sessionId must look like session_<id>')
   if (typeof id !== 'string' || !id || id.length > 64) return end(res, 400, 'id must be the answer id')
   if (typeof ok !== 'boolean') return end(res, 400, 'ok must be a boolean')
   if (note !== undefined && typeof note !== 'string') return end(res, 400, 'note must be a string')
@@ -441,7 +445,7 @@ async function handleStarted(req: IncomingMessage, res: ServerResponse, handlers
   const { id, ok, sessionId, note } = body as Record<string, unknown>
   if (typeof id !== 'string' || !id || id.length > 64) return end(res, 400, 'id must be the start request id')
   if (typeof ok !== 'boolean') return end(res, 400, 'ok must be a boolean')
-  if (sessionId !== undefined && (typeof sessionId !== 'string' || !SESSION_ID.test(sessionId))) {
+  if (sessionId !== undefined && !isCloudSessionId(sessionId)) {
     return end(res, 400, 'sessionId must look like session_<id>')
   }
   if (note !== undefined && typeof note !== 'string') return end(res, 400, 'note must be a string')

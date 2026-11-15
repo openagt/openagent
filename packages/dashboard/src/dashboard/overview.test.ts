@@ -41,8 +41,8 @@ test('buildOverview sums the open queue and lists recent projects newest-first (
     project(`p${i}`, `/p${i}`, `2026-07-${String(10 + i).padStart(2, '0')}T00:00:00Z`),
   )
   const queues: ProjectQueue[] = [
-    { projectId: 'p0', projectName: 'p0', package: 'q', entries: ['a', 'b', 'c'] },
-    { projectId: 'p1', projectName: 'p1', package: 'q', entries: ['d', 'e'] },
+    { projectId: 'p0', projectName: 'p0', entries: ['a', 'b', 'c'] },
+    { projectId: 'p1', projectName: 'p1', entries: ['d', 'e'] },
   ]
   const overview = await buildOverview(projects, { liveAgents: async () => [], queue: async () => queues })
   assert.equal(overview.active.length, 0)
@@ -95,6 +95,16 @@ test('buildRecentAgents pools the sessions with no project among the projects\' 
       { projectId: project('alpha', '/a').id, project: 'alpha', id: 'a1' },
     ],
   )
+})
+
+test('buildRecentAgents keeps the newest thirty for the sidebar, and every run when asked for all of them', async () => {
+  const runs = Array.from({ length: 1000 }, (_, at) => agent(`r${at}`, new Date(Date.UTC(2026, 0, 1, 0, at)).toISOString()))
+  const read = { agents: async () => runs }
+  const recent = await buildRecentAgents([project('alpha', '/a')], read)
+  assert.equal(recent.length, 30)
+  assert.equal(recent[0]!.agent.id, 'r999')
+  const all = await buildRecentAgents([project('alpha', '/a')], read, Infinity)
+  assert.equal(all.length, 1000)
 })
 
 test('buildRecentAgents tolerates a project whose runs cannot be read', async () => {

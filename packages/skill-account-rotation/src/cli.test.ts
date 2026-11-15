@@ -5,8 +5,8 @@ import { join } from 'node:path'
 import { test } from 'node:test'
 import { runAdding, type AddingNow } from './adding.js'
 import { accountsPath, addAccount, copiedPath, markLimited, nameOwnAccount, readAccounts } from './accounts.js'
-import { runCli } from './cli.js'
-import { loginWiring, type LoginWiring } from './login.js'
+import { runCli, USAGE } from './cli.js'
+import { loginWiring, type LoginWiring } from './wiring.js'
 
 interface Run {
   code: number
@@ -17,7 +17,8 @@ interface Run {
 async function inDir(body: (env: NodeJS.ProcessEnv, dir: string) => Promise<void>): Promise<void> {
   const dir = await mkdtemp(join(tmpdir(), 'account-rotation-cli-'))
   try {
-    await body({ HOME: join(dir, 'home'), XDG_CONFIG_HOME: join(dir, 'config'), XDG_STATE_HOME: join(dir, 'state') }, dir)
+    // A computer with a screen: a browser opens on it.
+    await body({ HOME: join(dir, 'home'), XDG_CONFIG_HOME: join(dir, 'config'), XDG_STATE_HOME: join(dir, 'state'), DISPLAY: ':0' }, dir)
   } finally {
     await rm(dir, { recursive: true, force: true })
   }
@@ -132,6 +133,14 @@ test('on a server, the account on the list already is told apart in words a code
     assert.doesNotMatch(failed, /copy the link/)
   }))
 
+test('list names the agents whose program is not installed, and only those', () =>
+  inDir(async env => {
+    const said = (installed: string[]) => run(['list'], env, { installed: agent => Promise.resolve(installed.includes(agent)) }).then(answer => (JSON.parse(answer.out[0]!) as { notInstalled: string[] }).notInstalled)
+    assert.deepEqual(await said(['claude']), ['codex'])
+    assert.deepEqual(await said([]), ['claude', 'codex'])
+    assert.deepEqual(await said(['claude', 'codex']), [])
+  }))
+
 test('list says which computer handed an account over, only the agent it is of, and only on a row it has', () =>
   inDir(async env => {
     addAccount('Dani', 'login-dani', accountsPath('claude', env))
@@ -147,10 +156,13 @@ test('list says which computer handed an account over, only the agent it is of, 
     assert.equal((await run(['list'], env)).code, 0)
   }))
 
-test('adding says a computer has no browser only on a server', () =>
+test('adding says a computer has no browser on a server, and on Linux with no display', () =>
   inDir(async env => {
     assert.deepEqual(await adding(env), {})
     assert.deepEqual(await adding({ ...env, OPENAGENT_SERVER: '1' }), { noBrowser: true })
+    const { DISPLAY: _, ...noScreen } = env
+    assert.deepEqual(await adding(noScreen), process.platform === 'linux' ? { noBrowser: true } : {})
+    assert.deepEqual(await adding({ ...noScreen, WAYLAND_DISPLAY: 'wayland-0' }), {})
   }))
 
 test('remove takes an added account off, a Codex one with its folder; the person\'s own and a name not there are refused', () =>
@@ -381,12 +393,19 @@ test('add-cancel stops the sign-in under way and forgets it, keeping nothing', (
     assert.deepEqual(readAccounts(accountsPath('claude', env)).map(a => a.name), ['This computer'])
   }))
 
-test('a command that cannot be read says the usage and exits 2', () =>
+test('--help is the usage on stdout, exit 0', () =>
+  inDir(async env => {
+    for (const help of ['--help', '-h']) assert.deepEqual(await run([help], env), { code: 0, out: [USAGE], err: [] })
+  }))
+
+test('a command that cannot be read says what was wrong and where the usage is, and exits 2; no command at all, the usage', () =>
   inDir(async env => {
     for (const argv of [[], ['nope'], ['list', 'claude'], ['add'], ['add', 'claude'], ['add', 'gemini', 'Rom'], ['add', 'claude', 'Rom', 'extra'], ['adding', 'claude'], ['add-code'], ['add-cancel', 'gemini']]) {
       const wrong = await run(argv, env)
       assert.equal(wrong.code, 2, argv.join(' '))
-      assert.match(wrong.err.join('\n'), /usage: account-rotation/)
+      assert.match(wrong.err.join('\n'), argv.length ? /\nRun `account-rotation --help` for usage\.$/ : /^usage: account-rotation/)
     }
+    assert.deepEqual((await run(['nope'], env)).err, ['unknown command: nope\nRun `account-rotation --help` for usage.'])
+    assert.deepEqual((await run(['add', 'gemini', 'Rom'], env)).err, ['wrong arguments for add: gemini Rom\nRun `account-rotation --help` for usage.'])
     assert.deepEqual(await readFile(accountsPath('claude', env), 'utf8').catch(() => 'no file'), 'no file')
   }))

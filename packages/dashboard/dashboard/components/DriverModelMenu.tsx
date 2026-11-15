@@ -1,9 +1,9 @@
 import type { ReactNode } from 'react'
-import { ChevronDown, Check } from 'lucide-react'
+import { Check } from 'lucide-react'
 import { cn } from '../lib/utils.js'
 import { NO_MODEL_PINNED } from '../lib/agent-settings.js'
 import { effortLabel } from '../lib/effort.js'
-import { rowButtonClass } from './ui/row-item.js'
+import { rowButtonClass, RowChevron } from './ui/row-item.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import {
   DropdownMenu,
@@ -101,7 +101,7 @@ export function DriverModelMenu({
   // A level the model does not offer is still what a run would be given, so it is said rather than
   // silently read as the default.
   const level = effort?.level !== undefined ? effortLabel(effort.level) : undefined
-  const said = `Driver: ${current?.label ?? ''} · Model: ${currentModelLabel ?? NO_MODEL_PINNED}${levels.length > 0 ? ` · Effort: ${level ?? 'the agent’s default'}` : ''}`
+  const said = `Coding agent: ${current?.label ?? ''} · Model: ${currentModelLabel ?? NO_MODEL_PINNED}${levels.length > 0 ? ` · Effort: ${level ?? "the coding agent's default"}` : ''}`
   return (
     <DropdownMenu>
       <Tooltip>
@@ -116,44 +116,47 @@ export function DriverModelMenu({
           }
         >
           {current?.icon ? (
-            <span className="flex h-3.5 w-3.5 items-center justify-center [&>svg]:size-3.5">{current.icon}</span>
+            <span className="flex size-4 items-center justify-center [&>svg]:size-4">{current.icon}</span>
           ) : (
             current?.label
           )}
           {currentModelLabel}
           {level && <span className="text-muted-foreground">{level}</span>}
-          <ChevronDown className="h-3 w-3 shrink-0 opacity-70" />
+          <RowChevron />
         </TooltipTrigger>
         <TooltipContent>{said}</TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="end">
-        {drivers.map(a => (
-          <DropdownMenuSub key={a.value}>
-            {/* The tick leads every row of this menu (his pick): the rows' ends carry the account and the way into its models. */}
-            <DropdownMenuSubTrigger>
-              <Check className={cn('h-3.5 w-3.5 shrink-0', a.value === driver ? 'opacity-100' : 'opacity-0')} aria-hidden />
-              {a.icon && <span className="flex h-4 w-4 items-center justify-center">{a.icon}</span>}
-              <span className="flex-1">{a.label}</span>
-              {/* A long name gives way, never how full the account is. */}
-              {a.account && (
-                <span className="flex max-w-36 min-w-0 text-muted-foreground">
-                  <span className="truncate">{a.account.name}</span>
-                  <span className="shrink-0 whitespace-pre">{a.account.percent}</span>
-                </span>
-              )}
-            </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent className="min-w-[15rem]">
-              {a.models.length === 0 && a.modelsNote && <DropdownMenuItem disabled>{a.modelsNote}</DropdownMenuItem>}
-              {a.models.map(m => (
-                <DropdownMenuItem key={m.value} onClick={() => onChange(a.value, m.value)}>
-                  <Check className={cn('h-3.5 w-3.5 shrink-0', a.value === driver && m.value === model ? 'opacity-100' : 'opacity-0')} aria-hidden />
-                  {m.label}
-                </DropdownMenuItem>
-              ))}
-              {a.accounts}
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
-        ))}
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>Coding agent</DropdownMenuLabel>
+          {drivers.map(a => (
+            <DropdownMenuSub key={a.value}>
+              {/* The tick leads every row of this menu (his pick): the rows' ends carry the account and the way into its models. */}
+              <DropdownMenuSubTrigger>
+                <Check className={cn('h-3.5 w-3.5 shrink-0', a.value === driver ? 'opacity-100' : 'opacity-0')} aria-hidden />
+                {a.icon && <span className="flex h-4 w-4 items-center justify-center">{a.icon}</span>}
+                <span className="flex-1">{a.label}</span>
+                {/* A long name gives way, never how full the account is. */}
+                {a.account && (
+                  <span className="flex max-w-48 min-w-0 text-muted-foreground">
+                    <span className="truncate">{a.account.name}</span>
+                    <span className="shrink-0 whitespace-pre">{a.account.percent}</span>
+                  </span>
+                )}
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="min-w-[15rem]">
+                {a.models.length === 0 && a.modelsNote && <DropdownMenuItem disabled>{a.modelsNote}</DropdownMenuItem>}
+                {a.models.map(m => (
+                  <DropdownMenuItem key={m.value} onClick={() => onChange(a.value, m.value)}>
+                    <Check className={cn('h-3.5 w-3.5 shrink-0', a.value === driver && m.value === model ? 'opacity-100' : 'opacity-0')} aria-hidden />
+                    {m.label}
+                  </DropdownMenuItem>
+                ))}
+                {a.accounts}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+          ))}
+        </DropdownMenuGroup>
         {levels.length > 0 && (
           <>
             <DropdownMenuSeparator />
@@ -161,7 +164,7 @@ export function DriverModelMenu({
               <DropdownMenuLabel>Effort</DropdownMenuLabel>
               <DropdownMenuItem onClick={() => effort!.onChange(undefined)}>
                 <Check className={cn('h-3.5 w-3.5 shrink-0', effort?.level === undefined ? 'opacity-100' : 'opacity-0')} aria-hidden />
-                The agent’s default
+                The coding agent's default
               </DropdownMenuItem>
               {levels.map(one => (
                 <DropdownMenuItem key={one} onClick={() => effort!.onChange(one)}>

@@ -28,7 +28,7 @@ const Menu = () => (
 beforeEach(() => {
   prefs = {}
   updatePreferences.mockReset()
-  vi.stubGlobal('Notification', { permission: 'granted', requestPermission: vi.fn() })
+  vi.stubGlobal('Notification', { permission: 'granted', requestPermission: vi.fn(async () => 'default') })
 })
 afterEach(() => {
   cleanup()
@@ -66,12 +66,32 @@ describe('NotificationsSubmenu (#676)', () => {
 
   test('enabling Browser asks for permission when it has not been granted yet', async () => {
     prefs = { notifyBrowser: false }
-    vi.stubGlobal('Notification', { permission: 'default', requestPermission: vi.fn() })
+    vi.stubGlobal('Notification', { permission: 'default', requestPermission: vi.fn(async () => 'default') })
     render(<Menu />)
     open()
     fireEvent.click(screen.getByText('Browser'))
     expect(updatePreferences).toHaveBeenCalledWith({ notifyBrowser: true })
     expect((globalThis.Notification as unknown as { requestPermission: () => void }).requestPermission).toHaveBeenCalled()
+  })
+
+  test('Browser on and not allowed yet reads unticked: the click its hint invites asks the browser, and leaves it on', async () => {
+    vi.stubGlobal('Notification', { permission: 'default', requestPermission: vi.fn(async () => 'default') })
+    render(<Menu />)
+    open()
+    const browser = screen.getByRole('menuitemcheckbox', { name: /^Browser/ })
+    expect(browser.getAttribute('aria-checked')).toBe('false')
+    expect(screen.getByText(/Switched on, the browser asks to allow them/)).toBeTruthy()
+    fireEvent.click(browser)
+    expect(updatePreferences).toHaveBeenCalledWith({ notifyBrowser: true })
+    expect((globalThis.Notification as unknown as { requestPermission: () => void }).requestPermission).toHaveBeenCalled()
+  })
+
+  test('with Browser off, each kind of notification says it is sent once Browser is on', () => {
+    prefs = { notifyBrowser: false }
+    render(<Menu />)
+    open()
+    expect(screen.getByText('An agent awaiting your answer, or a PR ready to review. Sent once Browser is on.')).toBeTruthy()
+    expect(screen.getByText('An agent starts or finishes. Sent once Browser is on.')).toBeTruthy()
   })
 
   test('the row says On when Browser is on and granted, Off otherwise', () => {
@@ -83,14 +103,14 @@ describe('NotificationsSubmenu (#676)', () => {
   })
 
   test('a blocked browser permission disables the Browser toggle with a hint', async () => {
-    vi.stubGlobal('Notification', { permission: 'denied', requestPermission: vi.fn() })
+    vi.stubGlobal('Notification', { permission: 'denied', requestPermission: vi.fn(async () => 'default') })
     render(<Menu />)
     open()
     expect(screen.getByText('Blocked in your browser settings')).toBeTruthy()
   })
 
   test('Browser on but not yet granted reads Off', () => {
-    vi.stubGlobal('Notification', { permission: 'default', requestPermission: vi.fn() })
+    vi.stubGlobal('Notification', { permission: 'default', requestPermission: vi.fn(async () => 'default') })
     render(<Menu />)
     expect(row().textContent).toBe('NotificationsOff')
   })

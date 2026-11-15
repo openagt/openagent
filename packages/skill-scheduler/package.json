@@ -1,6 +1,6 @@
 {
   "name": "@openagt/skill-scheduler",
-  "version": "0.1.26",
+  "version": "0.1.28",
   "description": "Start coding agents on a schedule, with the skill that tells an agent how: a project's skills say which commands can run on a schedule, each with its check, its pace and how many at once, and each person switches them on for their own machine; the scheduler pulls the project's agent-data branch, checks, and asks agent-runner to run one agent per due command; and it brings the dashboard's Automations page, where a person switches each scheduled command, sets its pace and how many agents work on it at once, and picks how far its runs publish, the Scheduler section of its Settings page, the Scheduler card of its Overview and the stop line on its usage bar.",
   "license": "MIT",
   "repository": {
@@ -41,7 +41,7 @@
     "build": "cp ../../skills/scheduler/SKILL.md SKILL.md && tsc -p tsconfig.build.json && vite build -c dashboard/vite.config.ts",
     "prepack": "node -e \"if(!process.env.npm_config_user_agent?.startsWith('pnpm/')){console.error('Pack and publish with pnpm: it replaces workspace:* with the real version, npm does not');process.exit(1)}\" && cp ../../skills/scheduler/SKILL.md SKILL.md",
     "typecheck": "tsc --noEmit && tsc --noEmit -p dashboard/tsconfig.json",
-    "test": "tsc -p tsconfig.test.json && XDG_CONFIG_HOME=$(mktemp -d) node --test --test-timeout=60000 'dist-test/**/*.test.js' && cd dashboard && vitest run",
+    "test": "tsc -p tsconfig.test.json && node ../../scripts/test-node.mjs && cd dashboard && vitest run",
     "clean": "rm -rf dist dist-test SKILL.md"
   },
   "dependencies": {

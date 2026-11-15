@@ -1,3 +1,4 @@
+import { lstat, mkdir, readdir, readlink, symlink, unlink } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { nodeGitRunner, type GitRunner, BRANCHES_DIR } from '@openagt/agent-data'
 import { isAgentBranch } from './branch-names.js'
@@ -30,16 +31,13 @@ export interface LinksFs {
 }
 
 /** A {@link LinksFs} over `node:fs/promises`. */
-function nodeLinksFs(): LinksFs {
-  const fs = () => import('node:fs/promises')
-  return {
-    readdir: dir => fs().then(f => f.readdir(dir)).catch(() => []),
-    mkdir: dir => fs().then(f => f.mkdir(dir, { recursive: true })).then(() => {}),
-    symlink: (target, path) => fs().then(f => f.symlink(target, path)),
-    readlink: path => fs().then(f => f.readlink(path)).catch(() => undefined),
-    unlink: path => fs().then(f => f.unlink(path)),
-    lexists: path => fs().then(f => f.lstat(path)).then(() => true, () => false),
-  }
+const nodeLinksFs: LinksFs = {
+  readdir: dir => readdir(dir).catch(() => []),
+  mkdir: dir => mkdir(dir, { recursive: true }).then(() => {}),
+  symlink: (target, path) => symlink(target, path),
+  readlink: path => readlink(path).catch(() => undefined),
+  unlink: path => unlink(path),
+  lexists: path => lstat(path).then(() => true, () => false),
 }
 
 /** Injectable seams for {@link reconcileBranchLinks}. */
@@ -63,7 +61,7 @@ export interface BranchLinksDeps {
  */
 export async function reconcileBranchLinks(cwd: string, deps: BranchLinksDeps = {}): Promise<void> {
   const git = deps.git ?? nodeGitRunner()
-  const fs = deps.fs ?? nodeLinksFs()
+  const fs = deps.fs ?? nodeLinksFs
   const worktrees = deps.worktrees ?? worktreeDirEntries
   // A `.branches/` directory that is not a worktree root reads as no branch (#1654): otherwise
   // it reads as the enclosing repo's, and a link named after the user's own branch appears.

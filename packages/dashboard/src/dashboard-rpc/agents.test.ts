@@ -49,15 +49,16 @@ test('the agents, the skills to pick from and the accounts this computer knows; 
     assert.deepEqual(view.agents, [{ id: 'default', name: 'Default', skills: ['ask', 'github'], accounts: {}, projectSkills: true }])
     assert.deepEqual(view.skills[0], { title: 'Every agent starts with', skills: [{ name: 'ask', description: view.skills[0]!.skills[0]!.description }, { name: 'github', description: view.skills[0]!.skills[1]!.description }] })
     assert.ok(view.skills[0]!.skills.every(skill => skill.description.length > 0), 'each default skill says what it is')
-    assert.ok(view.skills.some(group => group.skills.some(skill => skill.name === 'readability')), 'the catalogue is there')
-    assert.deepEqual(view.github, { accounts: ['octo', 'octo-agent'] }, 'a login GitHub no longer takes is not offered')
+    assert.ok(view.skills.some(group => group.skills.some(skill => skill.name === 'reply')), 'the catalogue is there')
+    assert.deepEqual(view.github, { host: 'github.com', accounts: ['octo', 'octo-agent'] }, 'a login GitHub no longer takes is not offered, and one more is added at the host')
     assert.ok(view.claude.some(account => account.id === 'Dani'))
+    assert.deepEqual(view.claude.filter(account => account.loggedOut).length, 1, "this computer's own login, not logged in here, says so")
 
-    // Saved under the id its name gives; a second one of that name is refused.
-    const saved = await sendSaveAgent({ name: 'Social Media', skills: ['ask', 'readability'], accounts: { github: 'octo-agent', claude: ['Dani'] }, projectSkills: false })
+    // Saved under the id its name gives; a second name that gives that id is refused, naming the agent that has it.
+    const saved = await sendSaveAgent({ name: 'Social Media', skills: ['ask', 'reply'], accounts: { github: 'octo-agent', claude: ['Dani'] }, projectSkills: false })
     assert.deepEqual(saved, { ok: true, id: 'social-media' })
-    assert.deepEqual(JSON.parse(readFileSync(join(dir, 'cfg', 'openagent', 'agents', 'social-media.json'), 'utf8')), { name: 'Social Media', skills: ['ask', 'readability'], accounts: { github: 'octo-agent', claude: ['Dani'] }, projectSkills: false })
-    assert.equal((await sendSaveAgent({ name: 'social media', skills: [], accounts: {}, projectSkills: true })).ok, false)
+    assert.deepEqual(JSON.parse(readFileSync(join(dir, 'cfg', 'openagent', 'agents', 'social-media.json'), 'utf8')), { name: 'Social Media', skills: ['ask', 'reply'], accounts: { github: 'octo-agent', claude: ['Dani'] }, projectSkills: false })
+    assert.deepEqual(await sendSaveAgent({ name: 'social media!', skills: [], accounts: {}, projectSkills: true }), { ok: false, error: 'There is an agent Social Media already: pick another name.', field: 'name' })
     view = await onAgentsList()
     assert.deepEqual(view.agents.map(agent => agent.id), ['default', 'social-media'])
     // Edited under its own id, renamed too; the default keeps its name.

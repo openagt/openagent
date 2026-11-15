@@ -28,6 +28,21 @@ export function lockHolder(md: string): string | undefined {
   return holder || undefined
 }
 
+/** Where a ticket's lock sits in a checkout of the branch. */
+function lockPath(dir: string, ticket: string): string {
+  return join(dir, TICKETS_DIR, ticketLockName(ticket))
+}
+
+/**
+ * The claim on a ticket in a checkout of the branch: `undefined` when it has no lock, else the
+ * holder the lock names — `undefined` too when it names nobody readable, and the lock stands all
+ * the same: its existence is the claim.
+ */
+export async function lockOn(dir: string, ticket: string, files: Pick<TicketFiles, 'read'>): Promise<{ holder: string | undefined } | undefined> {
+  const md = await files.read(lockPath(dir, ticket)).catch(() => undefined)
+  return md === undefined ? undefined : { holder: lockHolder(md) }
+}
+
 /**
  * The holders a lock file's history named, newest first, each once: the claim lines its commits
  * added, read from `git log -p` of the lock. A released claim leaves the file but not the history,
@@ -67,14 +82,13 @@ export type ClaimPhase = 'plan' | 'drain'
 export async function applyClaims(dir: string, claims: readonly TicketClaim[], phase: ClaimPhase, files: TicketFiles): Promise<TicketClaim[]> {
   const locked: TicketClaim[] = []
   for (const claim of claims) {
-    const lock = join(dir, TICKETS_DIR, ticketLockName(claim.ticket))
-    const existing = await files.read(lock).catch(() => undefined)
-    if (existing !== undefined) {
-      if (lockHolder(existing) === claim.holder) locked.push(claim)
+    const lock = await lockOn(dir, claim.ticket, files)
+    if (lock) {
+      if (lock.holder === claim.holder) locked.push(claim)
       continue
     }
     if (phase === 'plan' && (await files.read(join(dir, TICKETS_DIR, ticketPlanName(claim.ticket))).then(() => true, () => false))) continue
-    await files.write(lock, lockContent(claim.holder))
+    await files.write(lockPath(dir, claim.ticket), lockContent(claim.holder))
     locked.push(claim)
   }
   return locked
@@ -120,11 +134,10 @@ export type ReleaseOutcome = 'released' | 'no-lock' | 'not-holder'
  * release; without it, whoever holds the lock is released.
  */
 export async function applyRelease(dir: string, ticket: string, heldBy: string | undefined, files: TicketFiles): Promise<ReleaseOutcome> {
-  const lock = join(dir, TICKETS_DIR, ticketLockName(ticket))
-  const md = await files.read(lock).catch(() => undefined)
-  if (md === undefined) return 'no-lock'
-  if (heldBy !== undefined && lockHolder(md) !== heldBy) return 'not-holder'
-  await files.remove(lock)
+  const lock = await lockOn(dir, ticket, files)
+  if (!lock) return 'no-lock'
+  if (heldBy !== undefined && lock.holder !== heldBy) return 'not-holder'
+  await files.remove(lockPath(dir, ticket))
   return 'released'
 }
 

@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
-import type { CSSProperties } from 'react'
+import type { CSSProperties, MouseEvent } from 'react'
 
 /**
  * Where "Dashboard" goes (#1919). On a computer with OpenAgent installed, this page is the
  * dashboard's own copy of the website, which answers `/_view` with 204: there it switches `/` to
- * the dashboard. Everywhere else it is the public website (404 there), and it goes to the page
- * that says how to get the dashboard.
+ * the dashboard. Everywhere else it is the public website (200 there, its `public/_view` file), and
+ * it goes to the page that says how to get the dashboard.
  */
 export function useDashboardHref(): string {
   const [href, setHref] = useState('/go-to-dashboard')
@@ -67,31 +67,44 @@ export function ViewToggle({ style }: { style?: CSSProperties }) {
     <div
       // Shown only where OpenAgent is installed (styles.css), with no dashboard to switch to elsewhere.
       className="view-toggle"
+      role="group"
+      aria-label="View"
       style={{
         // The thumb is placed in it: in place, or where the caller puts it.
         position: 'relative',
         ...style,
         gap: 2,
         padding: 2,
-        border: '1px solid #4f585e',
+        border: '1px solid var(--border)',
         borderRadius: 8,
-        background: '#232a2e',
+        background: 'var(--card)',
         viewTransitionName: 'oa-toggle',
       }}
     >
       <span
         aria-hidden
-        style={{ position: 'absolute', top: 2, left: 2, width: 96, height: 24, borderRadius: 6, background: '#a7c080', viewTransitionName: 'oa-toggle-thumb' }}
+        style={{ position: 'absolute', top: 2, left: 2, width: 96, height: 24, borderRadius: 6, background: 'var(--primary)', viewTransitionName: 'oa-toggle-thumb' }}
       />
       {/* The labels after the thumb, and named apart from it: the switch draws them above the thumb as it slides. */}
       <span style={{ position: 'relative', display: 'inline-flex', gap: 2, viewTransitionName: 'oa-toggle-labels' }}>
-        <span aria-current="page" style={{ ...pillStyle, width: 96, color: '#232a2e' }}>
+        <span aria-current="page" style={{ ...pillStyle, width: 96, color: 'var(--primary-foreground)' }}>
           Landing page
         </span>
-        <a href={dashboardHref} className="view-toggle-off" style={{ ...pillStyle, width: 84, color: '#d3c6aa' }}>
+        <a href={dashboardHref} onClick={switchInPlace} className="view-toggle-off" style={{ ...pillStyle, width: 84, color: 'var(--foreground)' }}>
           Dashboard
         </a>
       </span>
     </div>
   )
+}
+
+/**
+ * The switch to the dashboard takes the place of this page in the history: both views are at `/`,
+ * so Back could only show the view just left. A click with a modifier, or another button, is the browser's.
+ */
+export function switchInPlace(event: MouseEvent<HTMLAnchorElement>): void {
+  if (!event.currentTarget.pathname.startsWith('/_view/')) return
+  if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+  event.preventDefault()
+  location.replace(event.currentTarget.href)
 }

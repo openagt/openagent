@@ -1,11 +1,11 @@
 import { SESSIONS_ID } from '../../src/project-address.js'
-import { useEffect, useRef, useState } from 'react'
+import { useContext, useEffect, useRef, useState } from 'react'
 import type { GitHostHome, OpenAgentEvent, RepositoryOffer } from '../../src/index.js'
 import { sessionInfo } from '../../src/client.js'
 import { RevealedTitle } from './RevealedTitle.js'
-import { MoreVertical, ChevronDown, FolderOpen, Code, Check, ExternalLink, Square, FolderX, Trash2, Copy, CloudUpload, Database, Info } from 'lucide-react'
+import { MoreVertical, ChevronDown, FolderOpen, Code, Check, ExternalLink, Square, FolderX, Trash2, Copy, CloudUpload, Database, Info, PanelBottomOpen } from 'lucide-react'
 import { onGitHostHome, onRepositoryOffer } from '../rpc/reads.js'
-import { openSettings } from '../lib/use-route.js'
+import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
 import { PROJECT_AGENT_DATA_ENTRY } from './ProjectAgentDataSettings.js'
 import {
   sendOpenInApp,
@@ -17,8 +17,8 @@ import {
 import { useLoaded } from '../lib/use-async.js'
 import { buttonVariants } from './ui/button.js'
 import { useAction } from '../lib/use-action.js'
+import { DaemonDown } from '../lib/use-daemon-health.js'
 import { cn } from '../lib/utils.js'
-import { isAgentActive } from '../lib/live-state.js'
 import { describeSessionLink } from '../lib/session-link.js'
 import { buildResumeCommand } from '../lib/resume-command.js'
 import { PreferredEditorItems } from './PreferredEditorItems.js'
@@ -51,8 +51,9 @@ import {
 // (a menu item cannot also be the dialog's trigger, so the dialog is controlled).
 export function AgentActionsMenu({
   projectId,
-  agentId: agentId,
+  agentId,
   events,
+  live = false,
   label,
   naming = false,
   retainedWorktree = false,
@@ -61,10 +62,13 @@ export function AgentActionsMenu({
   onProjectRemoved,
   details,
   size,
+  showWorkBar,
 }: {
   projectId: string
   agentId?: string | null | undefined
   events: OpenAgentEvent[]
+  /** The run works, as its page knows it: before its feed shows the leg a message continued it with, too. */
+  live?: boolean
   /** The session's name: what the session's menu reads. Not known yet, a grey bar holds its place. */
   label?: string | undefined
   /** The session's name is still coming (a run just started): when it arrives it comes in letter by letter. A name that was only slow to load comes in plain. */
@@ -78,10 +82,12 @@ export function AgentActionsMenu({
   details?: { open: boolean; onToggle: () => void } | undefined
   /** The size on disk of the session's worktree, said beside "Remove worktree". */
   size?: string | undefined
+  /** Given while the session's work bar is put away: brings it back. */
+  showWorkBar?: (() => void) | undefined
 }) {
+  const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
   // Given an agent, this is its page's menu, under the session's name; with none, the ⋮ of a page with no session.
   const session = !!agentId
-  const active = isAgentActive(events)
   const info = sessionInfo(events)
   const sessionLink = describeSessionLink(info)
 
@@ -90,7 +96,7 @@ export function AgentActionsMenu({
   // teardown waits for before reclaiming it. Without this the folder item promised the session's
   // folder and silently opened the project root instead, because `resolveAgentCheckout` falls back
   // there once the worktree is gone.
-  const hasOwnFolder = active || retainedWorktree
+  const hasOwnFolder = live || retainedWorktree
 
   // What to put on the clipboard to pick this session back up in a terminal (#1195). `mkdir -p`
   // leads because the directory is usually gone by the time you want it: the CLI finds a session
@@ -123,19 +129,25 @@ export function AgentActionsMenu({
   // asked once more, and the question says what stays.
   const [confirmRemove, setConfirmRemove] = useState(false)
 
-  const { busy, error, run } = useAction()
+  // Per session, as in the composer: the page keeps this menu from one session to the next, and an answer is the session's it was pressed in.
+  const { busy, error, run } = useAction(agentId ?? '')
+  const shown = useRef(agentId)
+  shown.current = agentId
 
-  // A landed Stop stays "Stopping…" until the end event flips `active`, so it can't be re-fired.
+  // A landed Stop stays "Stopping…" until the run is no longer live, so it can't be re-fired; continued later, it can be stopped again.
   const [stopRequested, setStopRequested] = useState(false)
-  useEffect(() => setStopRequested(false), [agentId])
-  const stopping = busy || (stopRequested && active)
+  useEffect(() => setStopRequested(false), [agentId, live])
+  const stopping = busy || (stopRequested && live)
+  // OpenAgent is not answering: Stop cannot reach the agent, here as in the composer.
+  const down = useContext(DaemonDown)
 
   const [confirmDelete, setConfirmDelete] = useState(false)
 
   const openApp = (target: 'files' | 'editor') => run(() => sendOpenInApp(projectId, target, agentId ?? undefined), 'Failed to open.')
   const stopSession = () =>
     void run(() => sendStop(projectId, agentId ?? undefined), 'Could not stop the session.').then(outcome => {
-      if (outcome.ok) setStopRequested(true)
+      // A Stop that lands once another session is shown latches nothing there: that one still works.
+      if (outcome.ok && shown.current === agentId) setStopRequested(true)
     })
   const removeWorktree = () => {
     if (!agentId) return
@@ -153,8 +165,8 @@ export function AgentActionsMenu({
   // What the button is called: the menu acts on one session, or, with none, on the project.
   const title = session ? 'Session actions' : 'Project actions'
   // A session with no project keeps its folder, its work: it goes only with the session, by Delete.
-  const removable = retainedWorktree && !active && !!agentId && projectId !== SESSIONS_ID
-  const deletable = !!onDeleted && !active && !!agentId
+  const removable = retainedWorktree && !live && !!agentId && projectId !== SESSIONS_ID
+  const deletable = !!onDeleted && !live && !!agentId
   // The project's page on its git host: the first item of the project's menu, and in a session's
   // menu after what opens the session's own.
   const homeItem = home && (
@@ -172,16 +184,16 @@ export function AgentActionsMenu({
           // same from the first frame.
           <DropdownMenuTrigger
             type="button"
-            aria-label={title}
+            aria-label={label ? `${label}, ${title.toLowerCase()}` : title}
             title={label}
-            className="flex min-w-0 items-center gap-1 rounded px-1 py-0.5 text-left text-xs hover:bg-muted data-[popup-open]:bg-muted"
+            className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'min-w-0 shrink justify-start gap-1 text-left data-[popup-open]:bg-accent')}
           >
             {label ? (
-              <span className="min-w-0 truncate font-medium text-foreground">
+              <span className="min-w-0 truncate text-foreground">
                 <RevealedTitle key={label} text={label} start={waited.current.naming} />
               </span>
-            ) : <span data-testid="title-placeholder" className="h-3 w-40 max-w-full rounded bg-muted" />}
-            <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" aria-hidden />
+            ) : <span data-testid="title-placeholder" className="h-3 w-40 max-w-full rounded-sm bg-muted" />}
+            <ChevronDown className="size-3 shrink-0 text-faint-foreground" aria-hidden />
           </DropdownMenuTrigger>
         ) : (
           <Tooltip>
@@ -190,11 +202,11 @@ export function AgentActionsMenu({
                 <DropdownMenuTrigger
                   type="button"
                   aria-label={title}
-                  className={cn(buttonVariants({ variant: 'outline', size: 'icon-sm' }), 'shrink-0')}
+                  className={cn(buttonVariants({ variant: 'ghost', size: 'icon-bar' }), 'text-muted-foreground data-[popup-open]:bg-accent')}
                 />
               }
             >
-              <MoreVertical className="h-3.5 w-3.5" />
+              <MoreVertical className="size-4" />
             </TooltipTrigger>
             <TooltipContent>{title}</TooltipContent>
           </Tooltip>
@@ -205,6 +217,11 @@ export function AgentActionsMenu({
               <Info className="h-3.5 w-3.5 shrink-0" /> {details.open ? 'Hide details' : 'Show details'}
             </DropdownMenuItem>
           )}
+          {showWorkBar && (
+            <DropdownMenuItem onClick={showWorkBar}>
+              <PanelBottomOpen className="h-3.5 w-3.5 shrink-0" /> Show the work bar
+            </DropdownMenuItem>
+          )}
           {!session && homeItem}
           {offer && (
             <DropdownMenuItem onClick={() => setConfirmCreate(true)}>
@@ -212,7 +229,7 @@ export function AgentActionsMenu({
             </DropdownMenuItem>
           )}
           {!session && (
-            <DropdownMenuItem onClick={() => openSettings(PROJECT_AGENT_DATA_ENTRY, projectId)}>
+            <DropdownMenuItem onClick={() => services.openSettings(PROJECT_AGENT_DATA_ENTRY, projectId)}>
               <Database className="h-3.5 w-3.5 shrink-0" /> Agent data…
             </DropdownMenuItem>
           )}
@@ -232,8 +249,12 @@ export function AgentActionsMenu({
               <Code className="h-3.5 w-3.5 shrink-0" /> Open in editor
             </DropdownMenuSubTrigger>
             <DropdownMenuSubContent className="min-w-[15rem]">
-              <DropdownMenuItem disabled={busy} onClick={() => void openApp('editor')}>
-                <Code className="h-3.5 w-3.5 shrink-0" /> {agentId ? "Open this session's checkout" : 'Open in your editor'}
+              <DropdownMenuItem
+                disabled={busy}
+                onClick={() => void openApp('editor')}
+                title={agentId && !hasOwnFolder ? 'This session no longer has its own checkout' : undefined}
+              >
+                <Code className="h-3.5 w-3.5 shrink-0" /> {agentId ? (hasOwnFolder ? "Open this session's checkout" : 'Open the project') : 'Open in your editor'}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <PreferredEditorItems busy={busy} />
@@ -259,17 +280,17 @@ export function AgentActionsMenu({
               <span className="flex-1">
                 {copied ? 'Copied' : info.workspace ? 'Copy resume command' : 'Copy session id'}
               </span>
-              <span className="ml-auto pl-3 font-mono text-[10px] text-muted-foreground">
+              <span className="ml-auto pl-3 font-mono text-xs text-muted-foreground">
                 {info.sessionId.slice(0, 8)}
               </span>
             </DropdownMenuItem>
           )}
 
           {/* A rule only above something: a menu with nothing to stop, remove or delete ends on its last item. */}
-          {(active || removable || deletable) && <DropdownMenuSeparator />}
+          {(live || removable || deletable) && <DropdownMenuSeparator />}
 
-          {active && (
-            <DropdownMenuItem disabled={stopping} onClick={() => void stopSession()}>
+          {live && (
+            <DropdownMenuItem disabled={stopping || down} onClick={() => void stopSession()}>
               <Square className="h-3 w-3 shrink-0 fill-current" /> {stopping ? 'Stopping…' : 'Stop agent'}
             </DropdownMenuItem>
           )}
@@ -277,12 +298,12 @@ export function AgentActionsMenu({
           {removable && (
             <DropdownMenuItem disabled={busy} onClick={() => removeWorktree()}>
               <FolderX className="h-3.5 w-3.5 shrink-0" /> <span className="flex-1">Remove worktree</span>
-              {size && <span className="ml-auto pl-3 text-[10px] text-muted-foreground">{size}</span>}
+              {size && <span className="ml-auto pl-3 text-xs text-muted-foreground">{size}</span>}
             </DropdownMenuItem>
           )}
           {deletable && (
             <DropdownMenuItem onClick={() => setConfirmDelete(true)} className="text-danger">
-              <Trash2 className="h-3.5 w-3.5 shrink-0" /> Delete session
+              <Trash2 className="h-3.5 w-3.5 shrink-0" /> Delete session…
             </DropdownMenuItem>
           )}
 
@@ -326,7 +347,6 @@ export function AgentActionsMenu({
         <ConfirmDialog
           open={confirmDelete}
           onOpenChange={setConfirmDelete}
-          // Named as the item that opens it names it, and as the Log lists it: a session.
           title="Delete this session?"
           body={
             <>
@@ -336,7 +356,7 @@ export function AgentActionsMenu({
           }
           confirmLabel="Delete"
           confirmBusyLabel="Deleting…"
-          fallbackError="Could not delete the session."
+          fallbackError="Could not delete the agent."
           onConfirm={() => sendDeleteAgent(projectId, agentId)}
           onSuccess={onDeleted}
         />

@@ -17,14 +17,14 @@ afterEach(() => {
 describe('BridgeBrowserSettings (#1332)', () => {
   test('a launch under way names its step, so a minutes-long download is not a hang', async () => {
     onBridgeBrowser.mockResolvedValue({ state: 'starting', detail: 'downloading Chrome for Testing 150: 42%' })
-    render(<BridgeBrowserSettings enabled />)
+    render(<BridgeBrowserSettings />)
     const line = await screen.findByText(/Starting the bridge browser/)
     expect(line.textContent).toContain('42%')
   })
 
   test('a running browser on the sign-in page asks for the one thing only a person can do', async () => {
     onBridgeBrowser.mockResolvedValue({ state: 'running', since: '2026-08-26T12:00:00.000Z', visible: false, signIn: true })
-    render(<BridgeBrowserSettings enabled />)
+    render(<BridgeBrowserSettings />)
     const button = await screen.findByText('Show the window to sign in')
     expect(screen.getByText(/sign in once/)).toBeTruthy()
     fireEvent.click(button)
@@ -33,7 +33,7 @@ describe('BridgeBrowserSettings (#1332)', () => {
 
   test('a shown window offers to hide it; a signed-in browser has no sign-in prompt', async () => {
     onBridgeBrowser.mockResolvedValue({ state: 'running', since: '2026-08-26T12:00:00.000Z', visible: true, signIn: false })
-    render(<BridgeBrowserSettings enabled />)
+    render(<BridgeBrowserSettings />)
     const hide = await screen.findByText('Hide the window')
     expect(screen.queryByText(/sign in once/)).toBeNull()
     fireEvent.click(hide)
@@ -42,16 +42,10 @@ describe('BridgeBrowserSettings (#1332)', () => {
 
   test('a browser that stopped says why and offers a restart, because quitting it was an act', async () => {
     onBridgeBrowser.mockResolvedValue({ state: 'stopped', detail: 'Chrome exited on SIGTERM' })
-    render(<BridgeBrowserSettings enabled />)
+    render(<BridgeBrowserSettings />)
     const line = await screen.findByText(/The bridge browser is not running/)
     expect(line.textContent).toContain('Chrome exited on SIGTERM')
     fireEvent.click(screen.getByText('Restart'))
     expect(sendBridgeBrowser).toHaveBeenCalledWith('restart')
-  })
-
-  test('nothing is shown while the switch is off', () => {
-    const { container } = render(<BridgeBrowserSettings enabled={false} />)
-    expect(container.textContent).toBe('')
-    expect(onBridgeBrowser).not.toHaveBeenCalled()
   })
 })

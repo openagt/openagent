@@ -29,15 +29,35 @@ describe('Settings → Scheduler', () => {
     expect(container.textContent).toBe('')
   })
 
+  test('while the scheduler is read, the section says so', async () => {
+    const { host, runCommand } = scheduler()
+    runCommand.mockImplementation(() => new Promise<ModuleCommandResult>(() => {}))
+    // A project of its own: a read is shared by everything that asks it under the same projects, and this one never answers.
+    show(host, [{ id: 'p3', name: 'slow', gitHost: false }])
+    expect(screen.getByText('Loading…')).toBeTruthy()
+    expect(screen.queryByLabelText('Spend offset')).toBeNull()
+  })
+
   test('the section holds the spend offset alone: no scheduled command is listed, switched or given a publish level here', async () => {
     const { host } = scheduler()
     show(host, [GEMSTACK, OTHER])
     expect(await screen.findByLabelText('Spend offset')).toBeTruthy()
-    expect(screen.getByText(/What a project starts by itself is on the Automations page\./)).toBeTruthy()
+    expect(screen.getByText(/What a project starts by itself is on the/)).toBeTruthy()
+    fireEvent.click(screen.getByRole('link', { name: 'Automations page' }))
+    expect(host.openPage).toHaveBeenCalledWith('automations')
     expect(screen.getByText(/The handle on the usage bar moves the same number/)).toBeTruthy()
     expect(screen.queryByText(/work-queue/)).toBeNull()
     expect(screen.queryByRole('checkbox')).toBeNull()
     expect(screen.queryByRole('combobox')).toBeNull()
+  })
+
+  test('a spend offset in tenths is a valid number of the field, and the arrows step it by a tenth', async () => {
+    const { host } = hostAnswering((_projectId, args) => (args[0] === 'status' ? { ok: true, output: { ...STATUS, spendOffset: 7.1 } } : { ok: true, output: { ok: true } }))
+    show(host)
+    const offset = (await screen.findByLabelText('Spend offset')) as HTMLInputElement
+    expect(offset.validity.valid).toBe(true)
+    offset.stepUp()
+    expect(offset.value).toBe('7.2')
   })
 
   test('the spend offset shows the loosest one, and a typed one is saved in every project once it rests, held to the reach of the bar', async () => {
@@ -55,6 +75,16 @@ describe('Settings → Scheduler', () => {
     expect(runCommand).toHaveBeenCalledWith('p1', ['offset', '--', '-50'])
     // Typing is several changes: only the resting value is saved.
     expect(runCommand.mock.calls.filter(([, args]) => args[0] === 'offset')).toHaveLength(2)
+  })
+
+  test('an offset that was saved says so, until it is changed again', async () => {
+    const { host } = scheduler()
+    show(host)
+    const offset = (await screen.findByLabelText('Spend offset')) as HTMLInputElement
+    fireEvent.change(offset, { target: { value: '20' } })
+    expect((await screen.findByRole('status')).textContent).toBe('Saved.')
+    fireEvent.change(offset, { target: { value: '21' } })
+    expect(screen.queryByRole('status')).toBeNull()
   })
 
   test('an offset the command refused says why, and the number shown is the saved one again', async () => {

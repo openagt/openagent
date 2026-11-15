@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { refreshPreferences } from '../lib/preferences.js'
 import { forgetRemembered } from '../lib/use-async.js'
+import { DaemonDown } from '../lib/use-daemon-health.js'
 import { ModulesContext, byMountOrder, type MountedModules } from '../lib/use-modules.js'
 import { CalendarClock, Network, Smartphone } from 'lucide-react'
 import { checked, choices, closeList, offered, openList, pick, showing } from '../test-controls.js'
@@ -49,6 +50,8 @@ vi.mock('../rpc/reads.js', async importOriginal => ({
 }))
 
 import { SettingsDialog } from './SettingsDialog.js'
+import { useRoute } from '../lib/use-route.js'
+import { NO_PROJECTS } from '../../src/project-address.js'
 import type { ProjectSummary } from '../../src/index.js'
 
 const onClose = vi.fn()
@@ -95,8 +98,8 @@ describe('Settings dropdowns (#1172)', () => {
       }
     }
     await usable(['Project', 'Theme', 'Colours', 'Primary colour', 'Font', 'Code font', 'File preview font', 'Editor'])
-    fireEvent.click(screen.getByRole('button', { name: 'Agent' }))
-    await usable(['Project', 'Agent', 'Model'])
+    fireEvent.click(screen.getByRole('button', { name: 'Coding agent' }))
+    await usable(['Project', 'Coding agent', 'Model'])
   })
 
   test('an editor list the daemon could not fill still leaves a usable Editor row', async () => {
@@ -120,25 +123,38 @@ describe('Settings dropdowns (#1172)', () => {
   })
 })
 
-describe('Settings › Agent', () => {
+describe('Settings › Coding agent', () => {
+  test('a coding agent that is not installed says so in its row', async () => {
+    const answered = onModels.getMockImplementation()!
+    onModels.mockResolvedValue({ 'claude-code': { models: [], error: 'not found', missing: true }, codex: { models: [], error: 'not logged in' } } as never)
+    prefsRead.mockResolvedValueOnce({})
+    refreshPreferences()
+    try {
+      open('agent')
+      expect(await screen.findByText('Claude Code is not installed on this computer.')).toBeTruthy()
+    } finally {
+      onModels.mockImplementation(answered)
+    }
+  })
+
   test("the Model row offers the agent's own list, the start menu's, after the agent's own default", async () => {
     prefsRead.mockResolvedValueOnce({})
     refreshPreferences()
     open('agent')
     await waitFor(async () =>
       expect(await offered(select('Model'))).toEqual([
-        ["The CLI's own default", false],
+        ['Default', false],
         ['Opus 5.5', false],
         ['Fable 5.1', false],
       ]),
     )
-    expect(showing(select('Model'))).toBe("The CLI's own default")
+    expect(showing(select('Model'))).toBe('Default')
     // Each is saved by the id the agent gave it, and the agent's own default as no model at all.
     await pick(select('Model'), 'Opus 5.5')
     await pick(select('Model'), 'Fable 5.1')
-    await pick(select('Model'), "The CLI's own default")
+    await pick(select('Model'), 'Default')
     expect(saves()).toEqual([{ model: 'opus' }, { model: 'claude-fable-5-1' }, { model: '' }])
-    expect(showing(select('Model'))).toBe("The CLI's own default")
+    expect(showing(select('Model'))).toBe('Default')
   })
 
   test('a saved model the agent does not list is kept, by its id, since a start is still given it', async () => {
@@ -146,7 +162,7 @@ describe('Settings › Agent', () => {
     refreshPreferences()
     open('agent')
     await waitFor(() => expect(showing(select('Model'))).toBe('fable'))
-    await waitFor(async () => expect((await choices(select('Model'))).slice(0, -1)).toEqual(["The CLI's own default", 'Opus 5.5', 'Fable 5.1']))
+    await waitFor(async () => expect((await choices(select('Model'))).slice(0, -1)).toEqual(['Default', 'Opus 5.5', 'Fable 5.1']))
     expect((await offered(select('Model'))).at(-1)).toEqual(['fable', false])
     // The line is the saved id itself, not only its words: it is the one the list marks as the pick.
     const lines = within(await openList(select('Model'))).getAllByRole('option')
@@ -158,10 +174,10 @@ describe('Settings › Agent', () => {
     prefsRead.mockResolvedValueOnce({ driver: 'codex' })
     refreshPreferences()
     open('agent')
-    await waitFor(() => expect(showing(select('Agent'))).toBe('Codex'))
+    await waitFor(() => expect(showing(select('Coding agent'))).toBe('Codex'))
     await waitFor(async () =>
       expect(await offered(select('Model'))).toEqual([
-        ["The CLI's own default", false],
+        ['Default', false],
         ['not logged in', true],
       ]),
     )
@@ -172,11 +188,11 @@ describe('Settings › Agent', () => {
     refreshPreferences()
     open('agent')
     await waitFor(() => expect(showing(select('Model'))).toBe('Opus 5.5'))
-    expect(await choices(select('Agent'))).toEqual(['Claude Code', 'Codex'])
-    await pick(select('Agent'), 'Codex')
+    expect(await choices(select('Coding agent'))).toEqual(['Claude Code', 'Codex'])
+    await pick(select('Coding agent'), 'Codex')
     expect(saves()).toEqual([{ driver: 'codex', model: '' }])
-    expect(showing(select('Agent'))).toBe('Codex')
-    expect(showing(select('Model'))).toBe("The CLI's own default")
+    expect(showing(select('Coding agent'))).toBe('Codex')
+    expect(showing(select('Model'))).toBe('Default')
   })
 })
 
@@ -187,19 +203,19 @@ describe('Settings on and off rows', () => {
     prefsRead.mockResolvedValueOnce({ showThinking: true, notifyNewActivity: false })
     refreshPreferences()
     open('agent')
-    await waitFor(() => expect(checked(row('Show what the agent thought'))).toBe(true))
+    await waitFor(() => expect(checked(row('Show what the coding agent thought'))).toBe(true))
     // No box to tick anywhere among Settings' own rows: on and off is a switch.
     const switches = () => screen.getAllByRole('switch').map(each => [each.getAttribute('aria-label'), checked(each)])
     expect(switches()).toEqual([
       // Naming a run costs money for something only a person looks at, so it is a switch — on
       // until it is turned off, since a list of first lines is what it was put there to fix.
       ['Name each run', true],
-      ['Show what the agent thought', true],
+      ['Show what the coding agent thought', true],
     ])
     fireEvent.click(row('Name each run'))
     expect(checked(row('Name each run'))).toBe(false)
-    fireEvent.click(row('Show what the agent thought'))
-    expect(checked(row('Show what the agent thought'))).toBe(false)
+    fireEvent.click(row('Show what the coding agent thought'))
+    expect(checked(row('Show what the coding agent thought'))).toBe(false)
     fireEvent.click(screen.getByRole('button', { name: 'Notifications' }))
     expect(switches()).toEqual([
       ['Browser', true],
@@ -207,7 +223,7 @@ describe('Settings on and off rows', () => {
       ['New activity', false],
     ])
     fireEvent.click(screen.getByRole('button', { name: 'Claude web' }))
-    expect(switches()).toEqual([['Browser bridge', false]])
+    expect(switches()).toEqual([['Claude web bridge', false]])
     fireEvent.click(screen.getByRole('button', { name: 'Notifications' }))
     fireEvent.click(row('New activity'))
     expect(checked(row('New activity'))).toBe(true)
@@ -215,6 +231,53 @@ describe('Settings on and off rows', () => {
     fireEvent.click(row('Browser'))
     expect(saves()).toEqual([{ nameRuns: false }, { showThinking: false }, { notifyNewActivity: true }, { notifyHumanIntervention: false }, { notifyBrowser: false }])
     expect([checked(row('Human Queue')), checked(row('Browser'))]).toEqual([false, false])
+  })
+
+  test("a click on a switch's name switches it, as a click on the switch does", async () => {
+    prefsRead.mockResolvedValueOnce({ notifyNewActivity: false })
+    refreshPreferences()
+    open('notifications')
+    await waitFor(() => expect(checked(row('New activity'))).toBe(false))
+    fireEvent.click(screen.getByText('New activity'))
+    expect(checked(row('New activity'))).toBe(true)
+    expect(saves()).toEqual([{ notifyNewActivity: true }])
+  })
+
+  test('notifications the browser was not asked for yet: the Browser row reads off, and switching it on asks the browser', async () => {
+    const requestPermission = vi.fn(async () => 'default')
+    vi.stubGlobal('Notification', { permission: 'default', requestPermission })
+    prefsRead.mockResolvedValueOnce({ notifyBrowser: true })
+    refreshPreferences()
+    open('notifications')
+    const browser = row('Browser')
+    await waitFor(() => expect(checked(browser)).toBe(false))
+    fireEvent.click(browser)
+    expect(saves()).toEqual([{ notifyBrowser: true }])
+    expect(requestPermission).toHaveBeenCalled()
+  })
+
+  test('the browser refuses when asked: the Browser row says it is blocked as soon as the browser answers', async () => {
+    // The person answers the browser's question after the switch has saved and drawn.
+    let refuse = () => {}
+    const stub = { permission: 'default', requestPermission: vi.fn(() => new Promise<string>(resolve => (refuse = () => resolve((stub.permission = 'denied'))))) }
+    vi.stubGlobal('Notification', stub)
+    prefsRead.mockResolvedValueOnce({ notifyBrowser: false })
+    refreshPreferences()
+    open('notifications')
+    const browser = row('Browser')
+    fireEvent.click(browser)
+    await waitFor(() => expect(within(browser.parentElement!.parentElement!).getByText(/Switched on, the browser asks/)).toBeTruthy())
+    expect(saves()).toEqual([{ notifyBrowser: true }])
+    refuse()
+    await waitFor(() => expect(browser.getAttribute('aria-disabled')).toBe('true'), { timeout: 1000 })
+  })
+
+  test('Notifications groups its switches under the headings of the person menu', () => {
+    open('notifications')
+    expect(screen.getByRole('region', { name: 'Deliver to' }).textContent).toContain('Browser')
+    const kinds = screen.getByRole('region', { name: 'Notify me about' }).textContent
+    expect(kinds).toContain('Human Queue')
+    expect(kinds).toContain('New activity')
   })
 
   test('notifications the browser blocked: the Browser row says so, reads off, and cannot be switched', async () => {
@@ -242,7 +305,7 @@ describe('Settings › Claude web (#1332)', () => {
     prefsRead.mockResolvedValueOnce({ bridge: true, bridgeBrowser: true })
     refreshPreferences()
     open('claude-web')
-    const daemon = await screen.findByRole('radio', { name: /A browser the daemon runs/ })
+    const daemon = await screen.findByRole('radio', { name: /A browser the dashboard runs/ })
     const own = screen.getByRole('radio', { name: 'Your own Chrome' })
     // One choice: the two are the radios of one group, named by the question.
     const group = screen.getByRole('radiogroup', { name: 'Which browser does the work?' })
@@ -261,20 +324,20 @@ describe('Settings › Claude web (#1332)', () => {
     fireEvent.click(await screen.findByRole('radio', { name: 'Your own Chrome' }))
     expect(saves()).toEqual([{ bridgeBrowser: false }])
     expect(checked(screen.getByRole('radio', { name: 'Your own Chrome' }))).toBe(true)
-    expect(checked(screen.getByRole('radio', { name: /A browser the daemon runs/ }))).toBe(false)
+    expect(checked(screen.getByRole('radio', { name: /A browser the dashboard runs/ }))).toBe(false)
     // The status of the daemon's browser goes with its option.
     expect(screen.queryByText(/The bridge browser is off/)).toBeNull()
     // The words are the radio's label: a click on them picks it too.
-    fireEvent.click(screen.getByText('A browser the daemon runs — recommended'))
+    fireEvent.click(screen.getByText('A browser the dashboard runs'))
     expect(saves()).toEqual([{ bridgeBrowser: false }, { bridgeBrowser: true }])
-    expect(checked(screen.getByRole('radio', { name: /A browser the daemon runs/ }))).toBe(true)
+    expect(checked(screen.getByRole('radio', { name: /A browser the dashboard runs/ }))).toBe(true)
   })
 
   test('with the bridge off there is no browser to choose, and switching the bridge on asks which', async () => {
     prefsRead.mockResolvedValueOnce({ bridge: false })
     refreshPreferences()
     open('claude-web')
-    const bridge = await screen.findByRole('switch', { name: 'Browser bridge' })
+    const bridge = await screen.findByRole('switch', { name: 'Claude web bridge' })
     await waitFor(() => expect(checked(bridge)).toBe(false))
     expect(screen.queryByText(/Which browser does the work/)).toBeNull()
     expect(screen.queryByRole('radio')).toBeNull()
@@ -327,9 +390,9 @@ describe('the Settings list', () => {
 
   test("two groups: yours and this computer's, the computer's packages among them; then the picked project's packages", () => {
     show('', 'p1')
-    expect(entries('You and this computer')).toEqual(['Profile', 'Appearance', 'Notifications', 'Agent', 'Agent data', 'Repos', 'Claude web', 'Devices'])
+    expect(entries('You and this computer')).toEqual(['Profile', 'Appearance', 'Notifications', 'Coding agent', 'Your agent data', 'Repos', 'Claude web', 'Keyboard shortcuts', 'Devices'])
     // gemstack has orchestration and no scheduler; every project has its skills.
-    expect(entries('Project')).toEqual(['Skills', 'Agent data', 'Orchestration'])
+    expect(entries('Project')).toEqual(['Skills', 'Project agent data', 'Orchestration'])
     expect(showing(select('Project'))).toBe('gemstack')
     // Opened on nothing in particular: the first entry.
     expect(title()).toBe('SettingsProfile')
@@ -349,7 +412,7 @@ describe('the Settings list', () => {
   test('the project select changes the project group, and All projects gives an entry every project that has its package, saying which', async () => {
     show('orchestration', 'p1')
     await pick(select('Project'), 'All projects')
-    expect(entries('Project')).toEqual(['Skills', 'Agent data', 'Orchestration', 'Scheduler'])
+    expect(entries('Project')).toEqual(['Skills', 'Project agent data', 'Orchestration', 'Scheduler'])
     expect(title()).toBe('SettingsAll projectsOrchestration')
     expect(screen.getByText('for: gemstack, other')).toBeTruthy()
     expect(screen.getByText('Saved to 2 projects: gemstack, other.')).toBeTruthy()
@@ -358,7 +421,7 @@ describe('the Settings list', () => {
     expect(screen.getByText('The Scheduler settings failed: boom')).toBeTruthy()
     expect(screen.getByText('Saved to one project: other.')).toBeTruthy()
     await pick(select('Project'), 'plain')
-    expect(entries('Project')).toEqual(['Skills', 'Agent data'])
+    expect(entries('Project')).toEqual(['Skills', 'Project agent data'])
     // The entry it was on is not plain's: the first entry shows.
     expect(title()).toBe('SettingsProfile')
   })
@@ -366,7 +429,7 @@ describe('the Settings list', () => {
   test('with no project picked in the sidebar, the project group opens on every project', () => {
     show('')
     expect(showing(select('Project'))).toBe('All projects')
-    expect(entries('Project')).toEqual(['Skills', 'Agent data', 'Orchestration', 'Scheduler'])
+    expect(entries('Project')).toEqual(['Skills', 'Project agent data', 'Orchestration', 'Scheduler'])
   })
 
   test('Skills opened for a project is that project\'s, whatever the sidebar has picked; the select changes it', async () => {
@@ -379,6 +442,99 @@ describe('the Settings list', () => {
     expect(await screen.findByRole('checkbox', { name: 'skill-of-p1' })).toBeTruthy()
     expect(screen.queryByRole('checkbox', { name: 'skill-of-p2' })).toBeNull()
     expect(title()).toBe('SettingsgemstackSkills')
+  })
+
+  test('a tick on Skills not saved asks before another entry shows: Cancel keeps it, Discard goes', async () => {
+    show('skills', 'p1')
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'skill-of-p1' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Appearance' }))
+    const asked = await screen.findByRole('alertdialog', { name: 'Discard your changes to Skills?' })
+    fireEvent.click(within(asked).getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
+    expect(screen.getByRole('checkbox', { name: 'skill-of-p1' }).getAttribute('aria-checked')).toBe('false')
+    fireEvent.click(screen.getByRole('button', { name: 'Appearance' }))
+    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Discard' }))
+    await waitFor(() => expect(title()).toBe('SettingsAppearance'))
+    // Nothing held any more: the next step asks nothing.
+    fireEvent.click(screen.getByRole('button', { name: 'Skills' }))
+    await waitFor(() => expect(title()).toBe('SettingsgemstackSkills'))
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+  })
+
+  test('a press on the entry already shown asks nothing and keeps the tick held: the next entry still asks', async () => {
+    show('skills', 'p1')
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'skill-of-p1' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Skills' }))
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+    expect(screen.getByRole('checkbox', { name: 'skill-of-p1' }).getAttribute('aria-checked')).toBe('false')
+    expect(title()).toBe('SettingsgemstackSkills')
+    fireEvent.click(screen.getByRole('button', { name: 'Appearance' }))
+    expect(await screen.findByRole('alertdialog', { name: 'Discard your changes to Skills?' })).toBeTruthy()
+  })
+
+  test('with OpenAgent not answering, Discard still goes: it sends nothing', async () => {
+    render(
+      <DaemonDown.Provider value={true}>
+        <ModulesContext.Provider value={MODULES}>
+          <Shown start="skills" scope="p1" projects={PROJECTS as ProjectSummary[]} />
+        </ModulesContext.Provider>
+      </DaemonDown.Provider>,
+    )
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'skill-of-p1' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Appearance' }))
+    const leave = within(await screen.findByRole('alertdialog', { name: 'Discard your changes to Skills?' })).getByRole('button', { name: 'Discard' }) as HTMLButtonElement
+    expect(leave.disabled).toBe(false)
+    fireEvent.click(leave)
+    await waitFor(() => expect(title()).toBe('SettingsAppearance'))
+  })
+
+  test('Back with a tick on Skills not saved asks first, and the address stays on Settings: Cancel keeps the tick, Discard goes back', async () => {
+    window.history.replaceState(null, '', '/page')
+    window.history.pushState(null, '', '/page?settings=skills')
+    // The app's route, which follows Back.
+    const Routed = () => (useRoute(NO_PROJECTS), null)
+    render(<Routed />)
+    show('skills', 'p1')
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'skill-of-p1' }))
+    const back = async () => {
+      const popped = new Promise(resolve => window.addEventListener('popstate', resolve, { once: true }))
+      window.history.back()
+      await act(async () => void (await popped))
+    }
+    await back()
+    const asked = await screen.findByRole('alertdialog', { name: 'Discard your changes to Skills?' })
+    await waitFor(() => expect(window.location.search).toBe('?settings=skills'))
+    fireEvent.click(within(asked).getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
+    expect(screen.getByRole('checkbox', { name: 'skill-of-p1' }).getAttribute('aria-checked')).toBe('false')
+    await back()
+    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Discard' }))
+    await waitFor(() => expect(window.location.pathname + window.location.search).toBe('/page'))
+  })
+
+  test("Forward with a tick on Skills not saved asks as Back does, and the tab's list stays as it was: Cancel keeps Settings, Discard goes on to the later page, and Back from there reaches Settings once", async () => {
+    window.history.replaceState(null, '', '/page?settings=skills')
+    window.history.pushState(null, '', '/later')
+    const Routed = () => (useRoute(NO_PROJECTS), null)
+    render(<Routed />)
+    const entries = window.history.length
+    /** The tab is at `address`, its list as long as it was. */
+    const at = (address: string) => waitFor(() => expect([window.location.pathname + window.location.search, window.history.length]).toEqual([address, entries]))
+    window.history.back()
+    await at('/page?settings=skills')
+    show('skills', 'p1')
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'skill-of-p1' }))
+    window.history.forward()
+    const asked = await screen.findByRole('alertdialog', { name: 'Discard your changes to Skills?' })
+    await at('/page?settings=skills')
+    fireEvent.click(within(asked).getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
+    await at('/page?settings=skills')
+    window.history.forward()
+    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Discard' }))
+    await at('/later')
+    window.history.back()
+    await at('/page?settings=skills')
   })
 
   test('Skills with no project given follows the sidebar\'s pick', async () => {
@@ -408,12 +564,40 @@ describe('the Settings list', () => {
     expect(screen.getByText('Nothing to set for your projects.')).toBeTruthy()
   })
 
+  test('opened with no entry, a computer shows Profile and its address says so; a phone shows the list, whose address is none', () => {
+    const onEntry = vi.fn()
+    const { unmount } = render(<SettingsDialog entry="" onEntry={onEntry} onClose={onClose} scope={null} projects={[]} />)
+    expect(onEntry).toHaveBeenCalledWith('profile')
+    unmount()
+    onEntry.mockClear()
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: true, media: query, addEventListener: () => {}, removeEventListener: () => {} }))
+    render(<SettingsDialog entry="" onEntry={onEntry} onClose={onClose} scope={null} projects={[]} />)
+    expect(screen.getByRole('navigation', { name: 'Settings' })).toBeTruthy()
+    expect(onEntry).not.toHaveBeenCalled()
+  })
+
   test('the ✕ and Escape close it', () => {
     show('')
     fireEvent.click(screen.getAllByRole('button', { name: 'Close settings' }).at(-1)!)
     expect(onClose).toHaveBeenCalledTimes(1)
     fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
     expect(onClose).toHaveBeenCalledTimes(2)
+  })
+
+  test('opened by its address and closed, the focus goes to the page\u2019s title, not to the page\u2019s body', async () => {
+    const Page = () => {
+      const [shown, setShown] = useState(true)
+      return (
+        <>
+          <h1>Agents</h1>
+          {shown && <SettingsDialog entry="" onEntry={() => {}} onClose={() => setShown(false)} scope={null} projects={[]} />}
+        </>
+      )
+    }
+    render(<Page />)
+    fireEvent.keyDown(await screen.findByRole('dialog'), { key: 'Escape' })
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Agents' })))
   })
 
   test('on a phone the list is the whole dialog until an entry is picked, and an entry has a way back to it', () => {
@@ -426,6 +610,14 @@ describe('the Settings list', () => {
     expect(screen.getByRole('switch', { name: 'Onboarding on the Overview' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'All settings' }))
     expect(screen.getByRole('navigation', { name: 'Settings' })).toBeTruthy()
+  })
+
+  test('on a phone a press on the list\'s first entry opens it', () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: true, media: query, addEventListener: () => {}, removeEventListener: () => {} }))
+    show('')
+    fireEvent.click(screen.getByRole('button', { name: 'Profile' }))
+    expect(screen.queryByRole('navigation', { name: 'Settings' })).toBeNull()
+    expect(screen.getByText('Your name and picture')).toBeTruthy()
   })
 
   test('entries are ordered by their order, 50 when unsaid, then by package name', () => {

@@ -12,7 +12,6 @@ vi.mock('./ProjectActions.js', () => ({ ProjectActions: () => null }))
 vi.mock('./ProjectErrorBanner.js', () => ({ ProjectErrorBanner: () => null }))
 vi.mock('./ProjectSkills.js', () => ({ ProjectSkillsLine: () => <div>skills line</div> }))
 vi.mock('./StartAgentForm.js', () => ({ StartAgentForm: () => <div>start form</div> }))
-vi.mock('./AgentOverview.js', () => ({ AgentOverview: () => <div>overview</div> }))
 vi.mock('./HumanQueueList.js', () => ({ HumanQueueList: ({ items }: { items: unknown[] }) => <div>{items.length} rows</div> }))
 
 const { ProjectHome } = await import('./ProjectHome.js')
@@ -31,7 +30,6 @@ describe('ProjectHome', () => {
       <ProjectHome
         projectId="p1"
         waiting={[WAITS]}
-        events={[]}
         files={[]}
         context={new Set()}
         addContext={() => {}}
@@ -47,11 +45,13 @@ describe('ProjectHome', () => {
       await Promise.resolve()
       await Promise.resolve()
     })
-    // The waiting rows come first and the box to start an agent last, as on an agent's page.
-    expect(screen.getByRole('heading', { name: 'Waiting on you · 1' })).toBeTruthy()
+    // The box to start an agent first and the waiting rows under it; on a phone the box is drawn last, at the bottom.
+    expect(screen.getByRole('region', { name: 'Waiting on you' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Waiting on you 1' })).toBeTruthy()
     const questions = screen.getByText('1 rows')
     const form = screen.getByText('start form')
-    expect(questions.compareDocumentPosition(form) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(form.compareDocumentPosition(questions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(form.parentElement!.className).toContain('max-md:order-last')
     // The rows scroll in the chat's column; the box is outside what scrolls, so it stays in place.
     expect(questions.closest('.max-w-3xl')).toBeTruthy()
     expect(form.closest('[data-slot="scroll-area"]')).toBeNull()
@@ -63,7 +63,7 @@ describe('ProjectHome', () => {
   })
 
   test('nothing waits: no section, no heading', () => {
-    render(<ProjectHome projectId="p1" waiting={[]} events={[]} files={[]} context={new Set()} addContext={() => {}} removeContext={() => {}} toggleContext={() => {}} onOpenAgent={() => {}} projects={[]} onPickProject={() => {}} onProjectAdded={() => {}} />)
+    render(<ProjectHome projectId="p1" waiting={[]} files={[]} context={new Set()} addContext={() => {}} removeContext={() => {}} toggleContext={() => {}} onOpenAgent={() => {}} projects={[]} onPickProject={() => {}} onProjectAdded={() => {}} />)
     expect(screen.queryByRole('region', { name: 'Waiting on you' })).toBeNull()
     expect(screen.queryByText(/Waiting on you/)).toBeNull()
   })

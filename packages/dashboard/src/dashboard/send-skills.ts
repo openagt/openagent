@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { accountGit, gitReason, nodeGitRunner, type GitRunner, type RemoteAccount } from '@openagt/agent-data'
+import { accountGit, gitReason, nodeGitRunner, originUrl, type GitRunner, type RemoteAccount } from '@openagt/agent-data'
 import { commitSkills, skillPaths } from '../project-skills/branch.js'
 import { projectGitHost, type GitHostFor } from '../store/git-host.js'
 import { forgetBranchPrs, forgetPr } from './pull-requests.js'
@@ -14,7 +14,8 @@ import { startBranch } from './start-branch.js'
  * reaches agents only once it is there. The files of the named skills are committed in the folder,
  * then the same files go to the remote's default branch; where that push is refused (a protected
  * branch), they go to {@link SKILLS_BRANCH} and a pull request is opened for it. A project with no
- * remote starts its agents from its own commits, so the commit is all it takes.
+ * remote, or whose remote has no branch yet, starts its agents from its own commits, so the commit
+ * is all it takes.
  *
  * Nothing else the person has is pushed: the folder's branch is pushed as it is only when it is the
  * default branch and holds nothing past the remote's but skill files; else the skills' files are
@@ -31,8 +32,8 @@ export const SKILLS_BRANCH = 'openagent/skills'
 const MESSAGE = 'Update OpenAgent skills\n'
 
 export type SendSkillsResult =
-  /** No remote: committed in the folder, where agents start from. */
-  | { ok: true; sent: 'committed' }
+  /** No remote, or one with no branch to send to (`unsent` says so): committed in the folder, where agents start from. */
+  | { ok: true; sent: 'committed'; unsent?: string }
   /** On the remote's default branch, `branch` by name. */
   | { ok: true; sent: 'pushed'; branch: string }
   /** The default branch took no push: in this pull request. */
@@ -47,7 +48,7 @@ export async function sendSkills(cwd: string, names: readonly string[], deps: { 
   const committed = await commitSkills(cwd, names, local)
   if (!committed.ok) return committed
   const start = await startBranch(cwd)
-  if (!start || start.ref === 'HEAD') return { ok: true, sent: 'committed' }
+  if (!start || start.ref === 'HEAD') return { ok: true, sent: 'committed', ...(start && (await originUrl(cwd, local)) !== undefined ? { unsent: `the remote has no ${start.name} branch that this folder knows of` } : {}) }
   const as = deps.pushAccount ? await deps.pushAccount(cwd) : { ok: true as const }
   if (!as.ok) return { ok: false, error: `committed here, not sent: ${as.error}` }
   const git = accountGit(local, as.account)

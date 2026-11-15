@@ -6,7 +6,7 @@ import { test } from 'node:test'
 import type { DriverQuota } from '@openagt/agent-driver'
 import { accountsPath, addAccount, noteWindows } from './accounts.js'
 import { runCli } from './cli.js'
-import { loginWiring, type LoginWiring } from './login.js'
+import { loginWiring, type LoginWiring } from './wiring.js'
 import { claudeUsagePath, keepClaudeReading, READING_KEPT_MS } from './usage.js'
 
 const NOW = 1_800_000_000_000

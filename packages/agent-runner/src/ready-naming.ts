@@ -1,10 +1,7 @@
-import { mkdtemp, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import type { Driver, DriverSession, ReadyPrompt } from '@openagt/agent-driver'
+import type { Driver, ReadyPrompt } from '@openagt/agent-driver'
 import { readPersonal } from './config.js'
 import { driverFor, type DriverName } from './runner.js'
-import { isBareCommand, TITLE_MODELS, TITLE_SYSTEM, titleOf, titlePrompt } from './title.js'
+import { isBareCommand, startNaming, TITLE_MODELS, titleOf, titlePrompt, type NamingSession } from './title.js'
 
 // A run's name, ready the moment the run is started: what keeps a session's row from waiting
 // seconds for it, as Claude Code on the web has its name in about a second and a half.
@@ -53,8 +50,7 @@ export async function namingSetup(repo: string, driver: DriverName): Promise<Nam
 
 interface Waiting {
   ready: ReadyPrompt
-  session: DriverSession
-  dir: string
+  naming: NamingSession
   since: number
   setup: NamingSetup
 }
@@ -136,12 +132,17 @@ export class ReadyNaming {
     return (this.deps.now ?? Date.now)()
   }
 
-  /** The waiting session of a setup, taken off the list: only one still waiting and not too old. */
+  /** Whether a waiting session may still be asked: its process still waits for words, and it has not waited too long. */
+  private fresh(one: Waiting): boolean {
+    return one.ready.waiting && this.now() - one.since < (this.deps.maxWaitMs ?? READY_NAMING_MAX_WAIT_MS)
+  }
+
+  /** The waiting session of a setup, taken off the list: only one that is {@link fresh}. */
   private take(key: string): Waiting | undefined {
     const one = this.waiting.get(key)
     if (!one) return undefined
     this.waiting.delete(key)
-    if (one.ready.waiting && this.now() - one.since < (this.deps.maxWaitMs ?? READY_NAMING_MAX_WAIT_MS)) return one
+    if (this.fresh(one)) return one
     void this.end(one)
     return undefined
   }
@@ -169,37 +170,27 @@ export class ReadyNaming {
     return started
   }
 
-  /** A naming session started now, in an empty folder of its own (`title.ts` says why), its process waiting for words. */
+  /** A naming session started now (`title.ts`), its process waiting for words; none where the driver cannot start one ready. */
   private async start(setup: NamingSetup): Promise<Waiting | undefined> {
-    const model = TITLE_MODELS[setup.driver.id]
-    if (model === undefined) return undefined
-    let dir: string | undefined
-    try {
-      dir = await mkdtemp(join(tmpdir(), 'openagent-naming-'))
-      const session = await setup.driver.start({ cwd: dir, model, system: TITLE_SYSTEM, noTools: true })
-      const ready = session.ready?.()
-      if (!ready) {
-        await session.dispose().catch(() => {})
-        await rm(dir, { recursive: true, force: true }).catch(() => {})
-        return undefined
-      }
-      return { ready, session, dir, since: this.now(), setup }
-    } catch {
-      if (dir !== undefined) await rm(dir, { recursive: true, force: true }).catch(() => {})
+    const naming = await startNaming(setup.driver).catch(() => undefined)
+    if (!naming) return undefined
+    const ready = naming.session.ready?.()
+    if (!ready) {
+      await naming.close()
       return undefined
     }
+    return { ready, naming, since: this.now(), setup }
   }
 
   private async end(one: Waiting): Promise<void> {
     one.ready.cancel()
-    await one.session.dispose().catch(() => {})
-    await rm(one.dir, { recursive: true, force: true }).catch(() => {})
+    await one.naming.close()
   }
 
   /** Replace each waiting session that is too old, or whose process ended on its own. */
   private lookOver(): void {
     for (const [key, one] of [...this.waiting]) {
-      if (one.ready.waiting && this.now() - one.since < (this.deps.maxWaitMs ?? READY_NAMING_MAX_WAIT_MS)) continue
+      if (this.fresh(one)) continue
       this.waiting.delete(key)
       void this.end(one).then(() => this.keep(one.setup))
     }

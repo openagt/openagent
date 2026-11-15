@@ -5,7 +5,6 @@ import { mkdir, mkdtemp, rm, writeFile, stat, realpath, symlink } from 'node:fs/
 import { tmpdir } from 'node:os'
 import { nodeGitRunner, type GitRunner, BRANCHES_DIR } from '@openagt/agent-data'
 import {
-  nameBranch,
   addWorktree,
   attachWorktree,
   deleteBranch,
@@ -18,7 +17,7 @@ import {
   worktreeClean,
   worktreePath,
   currentBranch,
-  listWorktreeDirs,
+  worktreeDirEntries,
   leaveOut,
   FRESH_START_FETCH_MS,
 } from './worktree.js'
@@ -398,15 +397,18 @@ test('currentBranch reads the checked-out branch, and reads detached/non-repo as
 /** A directory reader over one listing: `entries[dir]` are the directory names under `dir`. */
 const listing = (entries: Record<string, string[]>) => async (dir: string) => entries[dir] ?? []
 
-test('listWorktreeDirs lists the agent-branch-named dirs under .branches/ and nothing else (#737/#1580)', async () => {
+test('worktreeDirEntries lists the agent-branch-named dirs under .branches/ and nothing else (#737/#1580)', async () => {
   const root = join('/repo', BRANCHES_DIR)
   // `agent-data` is the data branch's checkout, not agent `data`'s.
   const readdir = listing({ [root]: ['agent-r1', 'agent-r2', '.tmp', 'agent-data'] })
-  assert.deepEqual((await listWorktreeDirs('/repo', readdir)).sort(), ['r1', 'r2'])
-  assert.deepEqual(await listWorktreeDirs('/never-ran', readdir), [])
+  assert.deepEqual(await worktreeDirEntries('/repo', readdir), [
+    { path: join(root, 'agent-r1'), agentId: 'r1' },
+    { path: join(root, 'agent-r2'), agentId: 'r2' },
+  ])
+  assert.deepEqual(await worktreeDirEntries('/never-ran', readdir), [])
 })
 
-test('listWorktreeDirs never mistakes a rename link for a checkout: a link is not a directory (#1580)', async () => {
+test('worktreeDirEntries never mistakes a rename link for a checkout: a link is not a directory (#1580)', async () => {
   // A rename link beside the checkouts is named as an agent branch too; only the real directory
   // is a checkout, so the default reader must tell them apart by type, not by name.
   const repo = await realpath(await mkdtemp(join(tmpdir(), 'worktree-')))
@@ -414,37 +416,10 @@ test('listWorktreeDirs never mistakes a rename link for a checkout: a link is no
     await mkdir(join(repo, BRANCHES_DIR, 'agent-r1'), { recursive: true })
     await symlink('agent-r1', join(repo, BRANCHES_DIR, 'agent-cool-name'))
     await writeFile(join(repo, BRANCHES_DIR, 'agent-note'), 'not a checkout either\n')
-    assert.deepEqual(await listWorktreeDirs(repo), ['r1'])
+    assert.deepEqual(await worktreeDirEntries(repo), [{ path: join(repo, BRANCHES_DIR, 'agent-r1'), agentId: 'r1' }])
   } finally {
     await rm(repo, { recursive: true, force: true })
   }
-})
-
-test('nameBranch: a rename lost to a sibling naming the same thing at the same moment takes the next suffix (review)', async () => {
-  // The branches read says `agent-x` is free; the rename then loses the race; the re-read shows it taken.
-  let renames = 0
-  const racing: GitRunner = async (args, cwd) => {
-    if (args[0] === 'rev-parse' && args[1] === '--show-toplevel') return cwd + '\n'
-    if (args[0] === 'rev-parse') return 'agent-1\n'
-    if (args[0] === 'for-each-ref') return renames === 0 ? 'refs/heads/agent-1\n' : 'refs/heads/agent-1\nrefs/heads/agent-x\n'
-    if (args[0] === 'branch' && args[1] === '-m') {
-      if (renames++ === 0) throw new Error("fatal: a branch named 'agent-x' already exists")
-      return ''
-    }
-    throw new Error(`unexpected git ${args.join(' ')}`)
-  }
-  const wt = await realpath(tmpdir())
-  assert.deepEqual(await nameBranch(wt, 'x', racing), { ok: true, branch: 'agent-x-2' })
-  assert.equal(renames, 2)
-
-  // Any other rename failure is the caller's to see.
-  const broken: GitRunner = async (args, cwd) => {
-    if (args[0] === 'rev-parse' && args[1] === '--show-toplevel') return cwd + '\n'
-    if (args[0] === 'rev-parse') return 'agent-1\n'
-    if (args[0] === 'for-each-ref') return ''
-    throw new Error('fatal: disk full')
-  }
-  await assert.rejects(() => nameBranch(wt, 'x', broken), /disk full/)
 })
 
 test('a new checkout started from a published base takes origin\'s copy, fetched then, whatever this clone holds of that branch; one gone from origin leaves no checkout and no branch', async () => {

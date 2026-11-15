@@ -1,7 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import type { WorkspaceTicket } from './types.js'
 import {
-  EFFORT_BUCKETS,
   PRIORITY_BUCKETS,
   bucketUnionRange,
   defaultView,
@@ -180,7 +179,7 @@ describe('facet counts', () => {
   test('counts every option with the OTHER facets applied but its own facet ignored', () => {
     // With the dx topic selected, priority counts still cover only dx rows…
     const f = filtersWith({ topics: ['dx'] })
-    const priority = rangeFacetCounts(rows, f, 'priority', PRIORITY_BUCKETS)
+    const priority = rangeFacetCounts(rows, f, 'priority')
     expect(priority.buckets['critical']).toBe(1)
     expect(priority.buckets['low']).toBe(0)
     // …while topic counts ignore the topic selection itself, so ux stays pickable.
@@ -200,7 +199,7 @@ describe('facet counts', () => {
 
   test('effort none-counts come from the pool, so the option can be shown only when real', () => {
     const withEffort = [row('e.md', { effort: 1 }), row('none.md')]
-    const counts = rangeFacetCounts(withEffort, defaultView().filters, 'effort', EFFORT_BUCKETS)
+    const counts = rangeFacetCounts(withEffort, defaultView().filters, 'effort')
     expect(counts.buckets['trivial']).toBe(1)
     expect(counts.none).toBe(1)
   })

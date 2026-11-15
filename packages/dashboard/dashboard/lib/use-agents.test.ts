@@ -6,6 +6,7 @@ const onAgents = vi.hoisted(() => vi.fn())
 vi.mock('../rpc/reads.js', () => ({ onAgents }))
 
 const { useAgents } = await import('./use-agents.js')
+const { forgetRemembered } = await import('./use-async.js')
 
 const agents = (id: string): AgentMeta[] => [{ id, status: 'done' } as AgentMeta]
 const settle = (ms = 0): Promise<void> => act(async () => void (await vi.advanceTimersByTimeAsync(ms)))
@@ -14,6 +15,7 @@ describe('useAgents', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     onAgents.mockReset()
+    forgetRemembered()
   })
   afterEach(() => vi.useRealTimers())
 
@@ -22,6 +24,16 @@ describe('useAgents', () => {
     await settle(10_000)
     expect(onAgents).not.toHaveBeenCalled()
     expect(result.current.agents).toEqual([])
+  })
+
+  test('a project shown again lists its last runs from the first frame, while they are read again', async () => {
+    onAgents.mockResolvedValue(agents('a1'))
+    const first = renderHook(() => useAgents('a'))
+    await settle()
+    first.unmount()
+    onAgents.mockReturnValue(new Promise(() => {}))
+    const { result } = renderHook(() => useAgents('a'))
+    expect(result.current.agents).toEqual(agents('a1'))
   })
 
   test('polls the selected project every 2s', async () => {
@@ -111,7 +123,7 @@ describe('useAgents', () => {
 
   test('an agent just started is read every 400ms until its name has come too, then every 2s again', async () => {
     const startedAt = new Date().toISOString()
-    onAgents.mockResolvedValue([{ id: 'new', status: 'running', branch: 'agent-new', startedAt } as AgentMeta])
+    onAgents.mockResolvedValue([{ id: 'new', status: 'running', branch: 'agent-new', startedAt, naming: true } as AgentMeta])
     renderHook(() => useAgents('a', 'new'))
     await settle()
     // Set up, but no name yet: the name is what the person waits on now.

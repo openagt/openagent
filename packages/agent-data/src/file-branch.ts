@@ -1,8 +1,10 @@
+import { lstat, mkdir, mkdtemp, readdir, readFile, realpath, rm, rmdir, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { BRANCHES_DIR } from './names.js'
-import { nodeGitRunner, type GitRunner } from './git.js'
+import { EMPTY_TREE, errorMessage, nodeGitRunner, type GitRunner } from './git.js'
 import { accountGit } from './remote-account.js'
-import { excludeFromGit, repositoryCheckouts, unexcludeFromGit } from './git-exclude.js'
+import { excludeFromGit, unexcludeOnceGone } from './git-exclude.js'
 import { withCheckoutLock, type CheckoutLockDeps } from './checkout-lock.js'
 
 // A branch used as a file store: a branch of the project's repository that holds files nobody
@@ -50,13 +52,6 @@ function cloneHome(cwd: string, git: GitRunner): Promise<string> {
   }
   return home
 }
-
-/**
- * git's well-known empty tree, present in every repository without being written first. Committing
- * it is how a branch is born parentless with no working-tree gymnastics: `git commit-tree` +
- * `git branch` never touches any checkout, and no code commit is ever an ancestor of the history.
- */
-const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904'
 
 /** Injectable seams; production takes the defaults. */
 export interface FileBranchDeps {
@@ -143,30 +138,6 @@ async function refExists(cwd: string, ref: string, git: GitRunner): Promise<bool
   )
 }
 
-/** The message a failed git invocation carries, or the value itself as text. */
-function errorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err)
-}
-
-/**
- * One cycle at a time per branch of a project, so a writer and the eager pull can never
- * interleave: within the process the promise chain orders them, and across processes on the
- * clone the checkout's lock file does; every public entry point below joins both. Rejects when
- * another process holds the lock past the wait.
- */
-const chains = new Map<string, Promise<unknown>>()
-
-function serialize<T>(repo: string, branch: string, lock: CheckoutLockDeps, task: () => Promise<T>): Promise<T> {
-  const key = `${repo}\0${branch}`
-  const locked = () => withCheckoutLock(repo, branch, task, lock)
-  const next = (chains.get(key) ?? Promise.resolve()).then(locked, locked)
-  chains.set(
-    key,
-    next.catch(() => {}),
-  )
-  return next
-}
-
 /**
  * Make the branch exist locally: origin's copy when there is one, else born here, parentless. Never
  * tracking (`--no-track`): setting up tracking writes the repository's shared `.git/config`, whose
@@ -179,9 +150,17 @@ async function ensureBranchRef(repo: string, branch: string, git: GitRunner): Pr
   if (await refExists(repo, `refs/remotes/origin/${branch}`, git)) {
     await git(['branch', '--no-track', branch, `origin/${branch}`], repo)
   } else {
-    const commit = (await git(['commit-tree', EMPTY_TREE, '-m', `create the ${branch} branch`], repo)).trim()
-    await git(['branch', branch, commit], repo)
+    await git(['branch', branch, await birthCommit(repo, branch, git)], repo)
   }
+}
+
+/**
+ * The commit a branch is born on: parentless, holding git's empty tree. How a branch is born with
+ * no working-tree gymnastics: `git commit-tree` never touches any checkout, and no code commit is
+ * ever an ancestor of the history.
+ */
+async function birthCommit(repo: string, branch: string, git: GitRunner): Promise<string> {
+  return (await git(['commit-tree', EMPTY_TREE, '-m', `create the ${branch} branch`], repo)).trim()
 }
 
 /** The branch HEAD is attached to in a checkout, or `undefined` when HEAD is detached. */
@@ -196,7 +175,6 @@ async function attachedBranch(path: string, git: GitRunner): Promise<string | un
  * worktree owns) reads as absent, and so does a registration whose directory is gone.
  */
 async function checkoutRegistered(repo: string, path: string, git: GitRunner): Promise<boolean> {
-  const { realpath } = await import('node:fs/promises')
   const want = await realpath(path).catch(() => undefined)
   if (!want) return false
   const list = await git(['worktree', 'list', '--porcelain'], repo).catch(() => '')
@@ -227,7 +205,7 @@ async function attachBranch(path: string, branch: string, git: GitRunner): Promi
 
 /**
  * The unserialized ensure: branch and checkout. Split from {@link ensureFileBranch} so the
- * writer and the pull can run it inside the cycle they already hold the chain for.
+ * writer and the pull can run it inside the cycle they already hold the checkout's lock for.
  */
 async function ensureCore(repo: string, branch: string, r: Resolved): Promise<void> {
   const path = checkoutPath(repo, branch)
@@ -280,7 +258,7 @@ async function syncCore(repo: string, branch: string, r: Resolved): Promise<void
 export async function ensureFileBranch(cwd: string, branch: string, deps: FileBranchDeps = {}): Promise<{ ok: boolean; error?: string }> {
   const r = resolveDeps(deps)
   const repo = await cloneHome(cwd, r.git)
-  return serialize(repo, branch, r.lock, async () => {
+  return withCheckoutLock(repo, branch, r.lock, async () => {
     await ensureCore(repo, branch, r)
     return { ok: true }
   }).catch(err => ({ ok: false, error: errorMessage(err) }))
@@ -306,7 +284,6 @@ export type FileBranchRemoval =
  */
 export async function removeFileBranch(cwd: string, branch: string, deps: FileBranchDeps = {}): Promise<FileBranchRemoval> {
   const r = resolveDeps(deps)
-  const { lstat, realpath } = await import('node:fs/promises')
   const repo = await cloneHome(cwd, r.git)
   const path = checkoutPath(repo, branch)
   const rel = `${BRANCHES_DIR}/${branch}`
@@ -315,7 +292,7 @@ export async function removeFileBranch(cwd: string, branch: string, deps: FileBr
   try {
     if ((await realpath(cwd)) !== (await realpath(repo))) return { ok: true, removed: [], kept: [{ path: label, reason: `it belongs to the repository at ${repo}` }] }
     if (!(await there()) && !(await refExists(repo, `refs/heads/${branch}`, r.git))) return { ok: true, removed: [], kept: [] }
-    return await serialize(repo, branch, r.lock, async (): Promise<FileBranchRemoval> => {
+    return await withCheckoutLock(repo, branch, r.lock, async (): Promise<FileBranchRemoval> => {
       const removed: string[] = []
       const kept: { path: string; reason: string }[] = []
       if (await checkoutRegistered(repo, path, r.git)) {
@@ -346,14 +323,8 @@ export async function removeFileBranch(cwd: string, branch: string, deps: FileBr
  * whether the directory went.
  */
 async function removeCheckoutsDir(repo: string, git: GitRunner): Promise<boolean> {
-  const { lstat, rmdir } = await import('node:fs/promises')
   if (!(await rmdir(join(repo, BRANCHES_DIR)).then(() => true, () => false))) return false
-  const checkouts = await repositoryCheckouts(repo, git).catch(() => undefined)
-  if (checkouts) {
-    let held = false
-    for (const checkout of checkouts) held ||= await lstat(join(checkout, BRANCHES_DIR)).then(() => true, () => false)
-    if (!held) await unexcludeFromGit(repo, '/' + BRANCHES_DIR, undefined, git).catch(() => {})
-  }
+  await unexcludeOnceGone(repo, BRANCHES_DIR, git)
   return true
 }
 
@@ -369,8 +340,16 @@ export type FileBranchWrite =
 /** A writer's message: fixed, or resolved after the op ran (a batch only knows what it did then). */
 export type CommitMessage = string | (() => string)
 
-function resolveMessage(message: CommitMessage): string {
-  return typeof message === 'function' ? message() : message
+/**
+ * Run a write's op and commit whatever it changed in the checkout at `dir`, under the write's
+ * message, made once the op ran: whether the op changed anything. A change of nothing is no commit.
+ */
+export async function commitChange(dir: string, message: CommitMessage, op: () => Promise<void>, git: GitRunner): Promise<boolean> {
+  await op()
+  await git(['add', '-A'], dir)
+  if (!(await git(['status', '--porcelain'], dir)).trim()) return false
+  await git(['commit', '-m', typeof message === 'function' ? message() : message], dir)
+  return true
 }
 
 /**
@@ -414,7 +393,7 @@ export async function withFileBranch(
   const r = resolveDeps(deps)
   const repo = await cloneHome(cwd, r.git)
   const path = checkoutPath(repo, branch)
-  return serialize(repo, branch, r.lock, async (): Promise<FileBranchWrite> => {
+  return withCheckoutLock(repo, branch, r.lock, async (): Promise<FileBranchWrite> => {
     for (let locked = 0; ; locked++) {
       const outcome = await cycle(repo, branch, path, message, op, r)
       if (outcome.ok || !isGitLocked(outcome.error) || locked >= LOCK_RETRIES) return outcome
@@ -440,11 +419,8 @@ async function cycle(
       // The tip before this op's commit: what a lost push winds back to before re-applying, so
       // the op's first serialization is dropped rather than rebased under its second run.
       const before = (await r.git(['rev-parse', 'HEAD'], path)).trim()
-      await op(path)
-      await r.git(['add', '-A'], path)
-      const staged = (await r.git(['status', '--porcelain'], path)).trim()
-      if (staged) await r.git(['commit', '-m', resolveMessage(message)], path)
-      if (!remote) return { ok: true, changed: Boolean(staged), pushed: false }
+      const changed = await commitChange(path, message, () => op(path), r.git)
+      if (!remote) return { ok: true, changed, pushed: false }
       // Unpushed commits — this cycle's, or an earlier cycle's that the sync just rebased. The
       // push is owed whenever any exist, even when this op itself wrote nothing new.
       const ahead = (await refExists(repo, `refs/remotes/origin/${branch}`, r.git))
@@ -453,10 +429,10 @@ async function cycle(
       if (!ahead) return { ok: true, changed: false, pushed: false }
       try {
         await r.git(['push', 'origin', `${branch}:${branch}`], path)
-        return { ok: true, changed: Boolean(staged), pushed: true }
+        return { ok: true, changed, pushed: true }
       } catch (err) {
         if (attempt >= 1) return { ok: false, committed: true, error: `the ${branch} branch could not be pushed: ${errorMessage(err)}` }
-        if (staged) await r.git(['reset', '--hard', before], path)
+        if (changed) await r.git(['reset', '--hard', before], path)
       }
     }
   } catch (err) {
@@ -540,7 +516,6 @@ export async function readBranchFile(
       () => false,
     )
     if (fromCheckout) {
-      const { readFile } = await import('node:fs/promises')
       const md = await readFile(join(path, rel), 'utf8').catch(() => undefined)
       if (md !== undefined) return md
     }
@@ -649,24 +624,18 @@ export async function writeFileBranchDetached(
     if (!local.ok) throw new Error(local.error)
     return { changed: local.changed }
   }
-  const { mkdtemp, rm } = await import('node:fs/promises')
-  const { tmpdir } = await import('node:os')
   // A slash in the branch name would name a directory under tmpdir that does not exist (#1762).
   const dir = await mkdtemp(join(tmpdir(), `${branch.replace(/[\\/]/g, '-')}-write-`))
   // The remote's tip, or a parentless start for a branch origin does not have yet.
   const tip = async (): Promise<string> => {
     await r.git(['fetch', 'origin', branch], cwd).catch(() => {})
     if (await refExists(cwd, `refs/remotes/origin/${branch}`, r.git)) return `origin/${branch}`
-    return (await r.git(['commit-tree', EMPTY_TREE, '-m', `create the ${branch} branch`], cwd)).trim()
+    return birthCommit(cwd, branch, r.git)
   }
   try {
     await r.git(['worktree', 'add', '--detach', dir, await tip()], cwd)
     for (let attempt = 0; ; attempt++) {
-      await op(dir)
-      await r.git(['add', '-A'], dir)
-      const staged = (await r.git(['status', '--porcelain'], dir)).trim()
-      if (!staged) return { changed: false }
-      await r.git(['commit', '-m', resolveMessage(message)], dir)
+      if (!(await commitChange(dir, message, () => op(dir), r.git))) return { changed: false }
       try {
         await r.git(['push', 'origin', `HEAD:refs/heads/${branch}`], dir)
         return { changed: true }
@@ -702,15 +671,13 @@ export interface BranchFileFs {
 
 /** {@link BranchFileFs} over `node:fs/promises`. */
 export function nodeBranchFileFs(): BranchFileFs {
-  const fs = () => import('node:fs/promises')
   return {
-    read: path => fs().then(f => f.readFile(path, 'utf8')),
+    read: path => readFile(path, 'utf8'),
     write: async (path, content) => {
-      const f = await fs()
-      await f.mkdir(dirname(path), { recursive: true })
-      await f.writeFile(path, content, 'utf8')
+      await mkdir(dirname(path), { recursive: true })
+      await writeFile(path, content, 'utf8')
     },
-    remove: path => fs().then(f => f.rm(path)),
-    list: dir => fs().then(f => f.readdir(dir)).catch((): string[] => []),
+    remove: path => rm(path),
+    list: dir => readdir(dir).catch((): string[] => []),
   }
 }

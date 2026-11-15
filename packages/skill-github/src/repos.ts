@@ -1,5 +1,6 @@
 import { HOST } from './accounts.js'
-import { errorMessage, type GhRunner } from './gh.js'
+import { errorMessage } from '@openagt/agent-data'
+import type { GhRunner } from './gh.js'
 
 /**
  * The repositories of a GitHub user or organization, as an account of OpenAgent's sees them:

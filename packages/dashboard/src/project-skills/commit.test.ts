@@ -14,19 +14,19 @@ test('the one commit holds the skill files alone: a file the person staged stays
     await run(root, 'add', 'staged.txt')
     await writeFile(join(root, 'README.md'), '# edited\n')
 
-    await applyChange(root, { write: ['maintenance', 'readability'] })
-    const added = await commitSkills(root, ['maintenance', 'readability'])
+    await applyChange(root, { write: ['plan-tickets', 'reply'] })
+    const added = await commitSkills(root, ['plan-tickets', 'reply'])
     assert.ok(added.ok && added.committed && /^[0-9a-f]{7,}$/.test(added.commit!))
-    assert.equal(await run(root, 'show', '--format=', '--name-only', 'HEAD'), '.agents/skills/maintenance/SKILL.md\n.agents/skills/readability/SKILL.md\n.claude/skills/maintenance\n.claude/skills/readability\n')
+    assert.equal(await run(root, 'show', '--format=', '--name-only', 'HEAD'), '.agents/skills/plan-tickets/SKILL.md\n.agents/skills/reply/SKILL.md\n.claude/skills/plan-tickets\n.claude/skills/reply\n')
     assert.equal(await run(root, 'status', '--porcelain'), ' M README.md\nA  staged.txt\n', 'what the person had open is as they left it')
 
-    await applyChange(root, { remove: ['readability'] })
-    await commitSkills(root, ['readability'])
-    assert.equal(await run(root, 'show', '--format=', '--name-status', 'HEAD'), 'D\t.agents/skills/readability/SKILL.md\nD\t.claude/skills/readability\n')
+    await applyChange(root, { remove: ['reply'] })
+    await commitSkills(root, ['reply'])
+    assert.equal(await run(root, 'show', '--format=', '--name-status', 'HEAD'), 'D\t.agents/skills/reply/SKILL.md\nD\t.claude/skills/reply\n')
     assert.equal(await run(root, 'status', '--porcelain'), ' M README.md\nA  staged.txt\n')
 
     // Nothing changed at the paths: no commit, and no error.
-    assert.deepEqual(await commitPaths(root, ['.agents/skills/maintenance/SKILL.md', '.agents/skills/never/SKILL.md'], 'again'), { ok: true, committed: false })
+    assert.deepEqual(await commitPaths(root, ['.agents/skills/plan-tickets/SKILL.md', '.agents/skills/never/SKILL.md'], 'again'), { ok: true, committed: false })
   } finally {
     await gone(root)
   }
@@ -38,9 +38,9 @@ test('a project whose ignore rules cover the skill folders is told so, and nothi
     await writeFile(join(root, '.gitignore'), '.claude/\n')
     await run(root, 'add', '.gitignore')
     await run(root, 'commit', '-q', '-m', 'ignore')
-    await applyChange(root, { write: ['maintenance'] })
-    assert.deepEqual(await commitSkills(root, ['maintenance']), { ok: false, error: 'git ignores .claude/skills/maintenance: an ignore rule of this project, or of yours, covers it' })
-    assert.equal(await run(root, 'status', '--porcelain', '-uall'), '?? .agents/skills/maintenance/SKILL.md\n', 'written, and nothing staged')
+    await applyChange(root, { write: ['plan-tickets'] })
+    assert.deepEqual(await commitSkills(root, ['plan-tickets']), { ok: false, error: 'git ignores .claude/skills/plan-tickets: an ignore rule of this project, or of yours, covers it' })
+    assert.equal(await run(root, 'status', '--porcelain', '-uall'), '?? .agents/skills/plan-tickets/SKILL.md\n', 'written, and nothing staged')
   } finally {
     await gone(root)
   }

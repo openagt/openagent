@@ -118,6 +118,20 @@ test('a default branch that takes no push: the skills go to a branch of OpenAgen
   }
 })
 
+test('a remote with no branch yet gets nothing: the skills are committed here, agents start from them, and the answer says why nothing was sent', async () => {
+  const { dir, git, remote, done } = await project()
+  try {
+    remote('update-ref', '-d', 'refs/heads/main')
+    git('update-ref', '-d', 'refs/remotes/origin/main')
+    await applyChange(dir, { write: ['triage'] })
+    assert.deepEqual(await sendSkills(dir, ['triage']), { ok: true, sent: 'committed', unsent: 'the remote has no main branch that this folder knows of' })
+    assert.equal(git('log', '--format=%s', '-1').trim(), 'Update OpenAgent skills')
+    assert.equal(remote('for-each-ref', '--format=%(refname)').trim(), '')
+  } finally {
+    await done()
+  }
+})
+
 test('a remote that cannot be reached is said, after the commit in the folder', async () => {
   const { dir, git, done } = await project()
   try {

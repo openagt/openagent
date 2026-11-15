@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react'
-import { Button, type ModuleCommandResult, type ModuleProject } from '@openagt/dashboard/module'
+import { useEffect, useRef, useState } from 'react'
+import { Button, useOpenAgentDown, type ModuleCommandResult, type ModuleProject } from '@openagt/dashboard/module'
 import type { PublishPick } from '../src/state.js'
 import { MAX_AGENTS, OWN_AUTOMATIONS_DIR, type AgentName } from '../src/names.js'
 import { parseInterval, parseTimeOfDay } from '../src/pace.js'
 import { atRowsPace, draftProblem, draftRow, editArgs, editedWords, keptWhereHint, ownPaceArgs, removeWarning, removedWords, savedFile, saysTheSame, type AutomationDraft, type OpenedAutomation, type OwnPace } from './automation-form.js'
-import { AgentsFields, PaceFields, PublishField, RunsOnFields, SaidFields, SaidShown, Section, type ModelDraft } from './fields.js'
-import { EACH_KEEPS_OWN, agentOf, agentsArgs, agentsDraftOf, atOnce, atOnceWords, draftOf, isOwn, pace, runsOnWords, paceArgs, paceProblem, publishes, rowTitle, saysAtOnce, spelled, withDraft, type AgentModels, type AgentsDraft, type PaceDraft, type SchedulerCommand } from './schedulers.js'
+import { AgentsFields, FormFoot, PaceFields, PublishField, RunsOnFields, SaidFields, SaidShown, SaveWords, Section, type ModelDraft } from './fields.js'
+import { EACH_KEEPS_OWN, agentOf, agentsArgs, agentsDraftOf, atOnce, atOnceWords, draftOf, isOwn, pace, runsOnWords, paceArgs, paceProblem, publishes, rowTitle, saysAtOnce, spelled, stopped, withDraft, type AgentModels, type AgentsDraft, type PaceDraft, type SchedulerCommand } from './schedulers.js'
 
 // The Edit panel of the Automations page: one panel, with the same parts in the same order, for
 // every row. What it does; when it runs: what it waits for, and how long it waits after a start; how many agents at once; what it runs on, a coding agent
@@ -26,9 +26,6 @@ import { EACH_KEEPS_OWN, agentOf, agentsArgs, agentsDraftOf, atOnce, atOnceWords
 // taken; one that is not taken stops there and says why, with everything still as picked.
 
 const lower = (text: string): string => text.charAt(0).toLowerCase() + text.slice(1)
-
-/** A sentence with its full stop, added only when it has none. */
-const stopped = (text: string): string => (/[.!?]$/.test(text.trim()) ? text.trim() : `${text.trim()}.`)
 
 /** What a save of an automation's file answered: the file, where a run's checkout starts, and whether it is kept on this machine alone. */
 type Written = ReturnType<typeof savedFile>
@@ -86,6 +83,7 @@ export function EditPanel({
   const [runsOn, setRunsOn] = useState<{ agent: AgentName; model: ModelDraft }>(() => ({ agent: agentOf(scheduled), model: scheduled.model ?? 'skill' }))
   const [publish, setPublish] = useState<PublishPick>(scheduled.publish)
   const [saving, setSaving] = useState(false)
+  const down = useOpenAgentDown()
   const [failed, setFailed] = useState<string | undefined>()
   const [asking, setAsking] = useState(false)
   /** What the file said when the panel last read or wrote it, by the name the tool gives it: a save is held against it, so it writes over no change made to the file by hand since. */
@@ -185,10 +183,23 @@ export function EditPanel({
     if (!answer.ok) setFailed(`It was not removed: ${answer.error}`)
   }
 
+  // Back from the question, the keyboard is on Remove, which asked it, not on the panel's first field.
+  const removeButton = useRef<HTMLButtonElement>(null)
+  const backFromAsking = useRef(false)
+  useEffect(() => {
+    if (asking || !backFromAsking.current) return
+    backFromAsking.current = false
+    removeButton.current?.focus()
+  }, [asking])
   /** Back from the question to the panel: why a removal was not taken is said in the question alone. */
-  const back = (): void => (setAsking(false), setFailed(undefined))
+  const back = (): void => {
+    setAsking(false)
+    setFailed(undefined)
+    backFromAsking.current = true
+  }
 
-  const frame = 'mt-3 rounded-md border border-border bg-muted/40 p-4'
+  /** What stands in the panel's place after a save or before a removal: one thing said, in a box of its own. */
+  const frame = 'mt-3 rounded-lg border border-hairline p-4'
 
   if (saved) {
     return (
@@ -198,7 +209,7 @@ export function EditPanel({
         </p>
         <p className="mt-2">{editedWords(saved)}</p>
         <div className="mt-3 flex justify-end">
-          <Button size="sm" autoFocus onClick={onClose}>
+          <Button autoFocus onClick={onClose}>
             Done
           </Button>
         </div>
@@ -227,10 +238,10 @@ export function EditPanel({
         )}
         <div className="mt-3 flex justify-end gap-2">
           {/* The keyboard lands on the way out, not on the deletion. */}
-          <Button variant="outline" size="sm" autoFocus disabled={saving} onClick={back}>
+          <Button variant="secondary" autoFocus disabled={saving} onClick={back}>
             Cancel
           </Button>
-          <Button variant="destructive" size="sm" disabled={saving} onClick={() => void remove()}>
+          <Button variant="destructive" disabled={saving || down} onClick={() => void remove()}>
             Remove
           </Button>
         </div>
@@ -249,7 +260,7 @@ export function EditPanel({
         // Escape closes a panel that has nothing to lose. Any other is closed with Cancel, so a slip of a key loses no prompt and no pick.
         if (e.key === 'Escape' && !saving && !dirty) onClose()
       }}
-      className={`${frame} space-y-5`}
+      className="mt-4 max-w-180 space-y-6"
     >
       <Section title="What it does">
         {own ? (
@@ -317,29 +328,26 @@ export function EditPanel({
         <PublishField gitHost={project.gitHost} own={isOwn(scheduled)} pick={publish} disabled={saving} onChange={next => (setPublish(next), setFailed(undefined))} />
         {scheduled.each && <p className="text-sm text-muted-foreground">{EACH_KEEPS_OWN}.</p>}
       </Section>
-      <p className="rounded-md border border-border bg-background px-3 py-2 text-sm">{problem ?? (dirty ? sentence : `${sentence} Nothing is changed yet.`)}</p>
+      <p className="text-sm">{problem ?? (dirty ? sentence : `${sentence} Nothing is changed yet.`)}</p>
       {failed !== undefined && (
         <p role="alert" className="text-xs text-danger">
           {failed}
         </p>
       )}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="min-w-0 flex-1 text-xs text-muted-foreground">{keptWhereHint(opened)}</p>
-        <div className="flex gap-2">
-          {/* Only what the tool wrote is the tool's to delete. */}
-          {scheduled.editable && opened && (
-            <Button variant="outline" size="sm" disabled={saving} onClick={() => (setAsking(true), setFailed(undefined))} className="text-danger">
-              Remove
-            </Button>
-          )}
-          <Button variant="outline" size="sm" disabled={saving} onClick={onClose}>
-            Cancel
+      <FormFoot where={keptWhereHint(opened)}>
+        {/* Only what the tool wrote is the tool's to delete. */}
+        {scheduled.editable && opened && (
+          <Button ref={removeButton} variant="ghost" disabled={saving} onClick={() => (setAsking(true), setFailed(undefined))} className="text-danger">
+            Remove
           </Button>
-          <Button size="sm" disabled={saving || problem !== undefined || !dirty} onClick={() => void save()}>
-            Save
-          </Button>
-        </div>
-      </div>
+        )}
+        <Button variant="secondary" disabled={saving} onClick={onClose}>
+          Cancel
+        </Button>
+        <Button disabled={saving || down || problem !== undefined || !dirty} onClick={() => void save()}>
+          <SaveWords saving={saving} />
+        </Button>
+      </FormFoot>
     </div>
   )
 }

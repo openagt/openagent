@@ -257,6 +257,42 @@ test('a run asked only a slash command keeps it while it works, and is named fro
   }
 })
 
+test('a run\'s card says its name is being asked while it is, not once the ask ends without one, nor for a slash command', async () => {
+  const repo = await testRepo()
+  try {
+    let answer: (title: string | undefined) => void = () => {}
+    const title = new Promise<string | undefined>(resolve => (answer = resolve))
+    const seen: unknown[] = []
+    const driver: Driver = {
+      id: 'claude-code',
+      start: async opts => {
+        const fake = (await new FakeDriver({ respond: () => 'Done.' }).start(opts)) as FakeDriverSession
+        // What the card says once the writes made so far have landed.
+        const naming = async () => {
+          await fake.log?.settled()
+          return (await readLiveCard(opts.cwd, opts.log!.card.id))?.caller?.['naming']
+        }
+        return wrap(fake, async () => {
+          seen.push(await naming())
+          answer(undefined)
+          for (let tries = 0; (await naming()) === true && tries < 100; tries++) await new Promise(resolve => setTimeout(resolve, 20))
+          seen.push(await naming())
+        })
+      },
+    }
+    const run = await runCommand(repo, { prompt: 'make readme.md shorter', naming: { title, stop: new AbortController() }, driver, now: () => NOW, gitHost: noGitHost })
+    assert.deepEqual(seen, [true, undefined])
+    assert.equal((await findRun(repo, run.id))?.title, undefined)
+
+    // A slash command is named from its report, at its end: nothing is asked while it works.
+    seen.length = 0
+    await runCommand(repo, { prompt: '/work-queue', driver, now: () => new Date(NOW.getTime() + 60_000), gitHost: noGitHost })
+    assert.deepEqual(seen, [undefined, undefined])
+  } finally {
+    await removeRepo(repo)
+  }
+})
+
 test('a run told how hard to think starts its agent that way and keeps it on its record', async () => {
   const repo = await testRepo()
   try {

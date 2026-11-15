@@ -125,6 +125,3 @@ export function providedTickets(now: () => number = Date.now): TicketsReader {
 
 /** OpenAgent's one reader of the tickets, shared by every caller so they share its cache. */
 export const projectTickets: TicketsReader = providedTickets()
-
-/** A {@link TicketsFor} for a project with no provider: no tickets. */
-export const noTickets: TicketsFor = async () => undefined

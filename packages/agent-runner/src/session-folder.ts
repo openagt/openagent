@@ -1,6 +1,6 @@
 import { mkdir, stat } from 'node:fs/promises'
 import { basename, join } from 'node:path'
-import { checkoutRoot, nodeGitRunner, sessionFolder, type GitRunner } from '@openagt/agent-data'
+import { checkoutRoot, nodeGitRunner, originUrl, sessionFolder, type GitRunner } from '@openagt/agent-data'
 import { agentBranchName, linkSkillsInFolder, type SkillLink } from '@openagt/skill-branches'
 import type { SessionRepo } from './records.js'
 
@@ -25,6 +25,9 @@ export async function sessionRepos(folders: readonly string[], git: GitRunner = 
   return repos
 }
 
+/** Why a run with no project keeps where it worked, whatever its end: see {@link openSessionFolder}. */
+export const SESSION_FOLDER_STAYS = 'a session folder stays'
+
 /**
  * Where a run with no project works: a folder of its own in the sessions home, made when it is not
  * there yet, the run's skills linked in where its coding agent looks for them. The folder itself has
@@ -45,7 +48,7 @@ export async function openSessionFolder(home: string, id: string, skills: readon
     const copy = join(path, repo.name)
     if (await stat(copy).then(() => true, () => false)) continue
     await git(['clone', '--quiet', '--', repo.from, copy], path)
-    const origin = (await git(['remote', 'get-url', 'origin'], repo.from).catch(() => '')).trim()
+    const origin = await originUrl(repo.from, git)
     await git(origin ? ['remote', 'set-url', 'origin', origin] : ['remote', 'remove', 'origin'], copy)
     await git(['checkout', '--quiet', '-b', agentBranchName(id)], copy)
   }

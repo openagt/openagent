@@ -59,7 +59,7 @@ test("each command's last run, with its id and its start: the latest run of a co
     await run('x1', '2026-09-16T11:00:00.000Z', 'failed', 'fix the tests')
     await run('q3', 'later', 'done', '/work-queue')
     const at = '2026-09-16T10:00:00.000Z'
-    const shared = { 'work-queue': { id: 'q2', at, failed: true }, 'update-tickets': { id: 'u2', at }, triage: { id: 't2', at }, 'plan-tickets': { id: 'p2', at } }
+    const shared = { 'work-queue': { id: 'q2', at, failed: true }, 'update-tickets': { id: 'u2', at }, triage: { id: 't2', at, running: true }, 'plan-tickets': { id: 'p2', at } }
     assert.deepEqual(await lastRuns(repo, schedule, 'this-box'), { ...shared, tidy: { id: 'o1', at: '2026-09-16T09:00:00.000Z', failed: true } })
     assert.deepEqual(await lastRuns(repo, schedule, 'their-box'), { ...shared, tidy: { id: 'o2', at } })
     assert.deepEqual(await lastRuns(repo, NONE, 'this-box'), {})
@@ -139,9 +139,9 @@ test('a run a row resumed counts for that row from its resume on, on the machine
     assert.deepEqual((await inFlight(repo, 'reply', schedule, 'this-box')).map(c => c.id), ['w1'])
     assert.equal(await lastStart(repo, 'reply', schedule, 'this-box'), '2026-09-16T12:00:00.000Z')
     const last = await lastRuns(repo, schedule, 'this-box')
-    assert.deepEqual(last['reply'], { id: 'w1', at: '2026-09-16T12:00:00.000Z' })
+    assert.deepEqual(last['reply'], { id: 'w1', at: '2026-09-16T12:00:00.000Z', running: true })
     // The command it was started for keeps counting it, by its own start.
-    assert.deepEqual(last['work-queue'], { id: 'w4', at: '2026-09-16T10:40:00.000Z' })
+    assert.deepEqual(last['work-queue'], { id: 'w4', at: '2026-09-16T10:40:00.000Z', running: true })
     assert.deepEqual((await inFlight(repo, 'work-queue', schedule, 'this-box')).map(c => c.id).sort(), ['w1', 'w3', 'w4'])
     assert.equal(await lastStart(repo, 'reply', schedule, 'their-box'), '2026-09-16T13:00:00.000Z')
   } finally {

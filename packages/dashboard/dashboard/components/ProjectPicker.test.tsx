@@ -13,7 +13,7 @@ vi.mock('../rpc/projects.js', () => ({ onRepos, sendAddRepoFolder, sendAddProjec
 const MACBOOK = { id: 'http://127.0.0.1:4210', url: 'http://127.0.0.1:4210', label: 'Suleimans-MacBook-Pro' }
 vi.mock('../lib/machines.js', () => ({ useMachines: () => [MACBOOK] }))
 
-const { ProjectPicker, REPOS_SHOWN, shownAddress } = await import('./ProjectPicker.js')
+const { ProjectPicker, REPOS_SHOWN, repoDetail, shownAddress } = await import('./ProjectPicker.js')
 
 const ALPHA: ProjectSummary = { id: 'alpha-1', path: '/home/me/alpha', name: 'alpha', activated: true, gitHost: true }
 const VIKE = { path: '/home/me/oss/vike', name: 'vike', url: 'https://github.com/vikejs/vike.git' }
@@ -50,24 +50,18 @@ describe('ProjectPicker', () => {
     expect(options()).toEqual(['vikegithub.com/vikejs/vike', 'notes/home/me/notes'])
   })
 
-  test('opened downward, from the sidebar, the list is only as tall as its rows; opened upward, from the box, it keeps its height', async () => {
-    const viewport = () => screen.getByRole('listbox').closest('[data-slot="scroll-area-viewport"]')!
-    const sidebar = renderPicker({ look: 'sidebar', none: { label: 'All projects' } })
-    await openMenu(screen.getByRole('combobox', { name: 'Project: All projects' }))
-    await screen.findByRole('option', { name: /vike/ })
-    expect(viewport().className).toMatch(/(^| )max-h-\[/)
-    sidebar.unmount()
-    renderPicker()
-    await openMenu(trigger())
-    await screen.findByRole('option', { name: /vike/ })
-    expect(viewport().className).toMatch(/(^| )h-\[/)
-  })
-
   test('a repo\'s address is said as its host and path, over https or ssh, and never with a login in it', () => {
     expect(shownAddress('https://github.com/vikejs/vike.git')).toBe('github.com/vikejs/vike')
     expect(shownAddress('git@github.com:vikejs/vike.git')).toBe('github.com/vikejs/vike')
     expect(shownAddress('ssh://git@gitlab.com/team/app')).toBe('gitlab.com/team/app')
     expect(shownAddress('https://me:ghp_secret@github.com/me/private.git')).toBe('github.com/me/private')
+  })
+
+  test("a repo is said by its address at its host, or by its folder when its remote is a folder too", () => {
+    expect(repoDetail({ path: '/home/me/oss/vike', url: 'git@github.com:vikejs/vike.git' })).toBe('github.com/vikejs/vike')
+    expect(repoDetail({ path: '/home/me/blog', url: '/srv/git/blog.git' })).toBe('/home/me/blog')
+    expect(repoDetail({ path: '/home/me/blog', url: 'file:///srv/git/blog.git' })).toBe('/home/me/blog')
+    expect(repoDetail({ path: '/home/me/notes' })).toBe('/home/me/notes')
   })
 
   test('the button reads where the session works: no project, or the project by its name', () => {
@@ -125,12 +119,16 @@ describe('ProjectPicker', () => {
     fireEvent.click(screen.getByRole('option', { name: /Add github.com\/ada\/shop/ }))
     expect(await screen.findByText('Do you trust this repository?')).toBeTruthy()
     await waitFor(() => expect(onCloneTarget).toHaveBeenCalledWith('https://github.com/ada/shop'))
-    expect(screen.getByText('/home/me/projects/shop')).toBeTruthy()
+    expect(screen.getByTitle('/home/me/projects/shop')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'I trust it, clone and add it' }))
     await waitFor(() => expect(sendAddProjectFromAddress).toHaveBeenCalledWith('https://github.com/ada/shop'))
     await waitFor(() => expect(onProjectAdded).toHaveBeenCalledTimes(1))
     rerender(<ProjectPicker {...props} projects={[ALPHA, { id: 'shop-5', path: '/home/me/projects/shop', name: 'shop', activated: true, gitHost: true }]} />)
     await waitFor(() => expect(onPick).toHaveBeenCalledWith('shop-5'))
+    // Picked, it still says it was added, until Done.
+    expect(screen.getByRole('status').textContent).toBe('Project added')
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }))
+    expect(screen.queryByRole('dialog', { name: 'Add project' })).toBeNull()
   })
 
   test("the git hosts' repos follow the ones on this computer, with their address and why they are listed; picked, one is cloned the way a typed address is", async () => {
@@ -157,6 +155,14 @@ describe('ProjectPicker', () => {
     fireEvent.click(screen.getByRole('option', { name: /vikejs\/bati/ }))
     expect(await screen.findByText('Do you trust this repository?')).toBeTruthy()
     await waitFor(() => expect(onCloneTarget).toHaveBeenCalledWith('github.com/vikejs/bati'))
+  })
+
+  test('a git host that could not be reached is said so, under the repos that are listed', async () => {
+    onRepos.mockResolvedValue({ repos: [VIKE], hosted: [], reposLoading: false, hostedLoading: false, hostedUnreached: true, canAddFolder: false })
+    renderPicker()
+    await openMenu(trigger())
+    expect(await screen.findByText('GitHub could not be reached: its repos are not listed.')).toBeTruthy()
+    expect(screen.getByRole('option', { name: /vike/ })).toBeTruthy()
   })
 
   test("while the git hosts are being asked, the menu says so and asks again", async () => {
@@ -212,6 +218,16 @@ describe('ProjectPicker', () => {
     expect(screen.getByText('No project or repo by that name.')).toBeTruthy()
   })
 
+  test('the first match of a search is highlighted, so Enter picks it', async () => {
+    const { onPick } = renderPicker()
+    await openMenu(trigger())
+    await screen.findByRole('option', { name: /vike/ })
+    // Typed, as a person types: the combobox highlights on an input that carries its input type.
+    fireEvent.input(search(), { target: { value: 'alp' }, inputType: 'insertText' })
+    fireEvent.keyDown(search(), { key: 'Enter' })
+    expect(onPick).toHaveBeenLastCalledWith('alpha-1')
+  })
+
   test('with nothing typed only the first repos are listed, and the search reaches the rest', async () => {
     const many = Array.from({ length: REPOS_SHOWN + 5 }, (_, i) => ({ path: `/home/me/r${i}`, name: `r${i}` }))
     onRepos.mockResolvedValue({ repos: many, hosted: [], reposLoading: false, hostedLoading: false, canAddFolder: false })
@@ -248,7 +264,7 @@ describe('ProjectPicker', () => {
     fireEvent.click(await screen.findByRole('option', { name: /vike/ }))
     expect(onPick).not.toHaveBeenCalled()
     expect(await screen.findByText('Do you trust this repository?')).toBeTruthy()
-    expect(screen.getByText(VIKE.path)).toBeTruthy()
+    expect(screen.getByTitle(VIKE.path)).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'I trust it, add it' }))
     await waitFor(() => expect(sendAddProject).toHaveBeenCalledWith(VIKE.path))
     await waitFor(() => expect(onProjectAdded).toHaveBeenCalledTimes(1))
@@ -256,6 +272,30 @@ describe('ProjectPicker', () => {
     rerender(<ProjectPicker {...props} projects={[ALPHA, { id: 'vike-9', path: VIKE.path, name: 'vike', activated: true, gitHost: true }]} />)
     await waitFor(() => expect(onPick).toHaveBeenCalledWith('vike-9'))
     expect(screen.queryByText('Do you trust this repository?')).toBeNull()
+  })
+
+  test('a project added is picked once the projects read again have it, after its panel has gone too, unless another was picked meanwhile', async () => {
+    sendAddProject.mockResolvedValue({ ok: true, alreadyActivated: false })
+    const VIKE_PROJECT = { id: 'vike-9', path: VIKE.path, name: 'vike', activated: true, gitHost: true }
+    const { onPick, props, rerender } = renderPicker()
+    await openMenu(trigger())
+    fireEvent.click(await screen.findByRole('option', { name: /vike/ }))
+    fireEvent.click(await screen.findByRole('button', { name: 'I trust it, add it' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Done' }))
+    expect(screen.queryByRole('dialog', { name: 'Add project' })).toBeNull()
+    rerender(<ProjectPicker {...props} projects={[ALPHA, VIKE_PROJECT]} />)
+    await waitFor(() => expect(onPick).toHaveBeenCalledWith('vike-9'))
+    cleanup()
+    // alpha opened before the projects are read again: alpha stays.
+    const second = renderPicker()
+    await openMenu(trigger())
+    fireEvent.click(await screen.findByRole('option', { name: /vike/ }))
+    fireEvent.click(await screen.findByRole('button', { name: 'I trust it, add it' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Done' }))
+    second.rerender(<ProjectPicker {...second.props} picked="alpha-1" />)
+    second.rerender(<ProjectPicker {...second.props} picked="alpha-1" projects={[ALPHA, VIKE_PROJECT]} />)
+    await new Promise(resolve => setTimeout(resolve, 50))
+    expect(second.onPick).not.toHaveBeenCalled()
   })
 
   test('a repo the person does not trust stays a repo: Cancel adds nothing and opens nothing', async () => {
@@ -266,6 +306,21 @@ describe('ProjectPicker', () => {
     expect(screen.queryByText('Do you trust this repository?')).toBeNull()
     expect(sendAddProject).not.toHaveBeenCalled()
     expect(onPick).not.toHaveBeenCalled()
+  })
+
+  test('the trust question closed, by Escape or a yes, gives focus back to the picker', async () => {
+    sendAddProject.mockResolvedValue({ ok: true, alreadyActivated: false })
+    renderPicker()
+    await openMenu(trigger())
+    fireEvent.click(await screen.findByRole('option', { name: /notes/ }))
+    fireEvent.keyDown(await screen.findByText('Do you trust this repository?'), { key: 'Escape' })
+    expect(screen.queryByText('Do you trust this repository?')).toBeNull()
+    expect(document.activeElement).toBe(trigger())
+    await openMenu(trigger())
+    fireEvent.click(await screen.findByRole('option', { name: /notes/ }))
+    fireEvent.click(await screen.findByRole('button', { name: 'I trust it, add it' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Done' }))
+    expect(document.activeElement).toBe(trigger())
   })
 
   test('"Search another folder…" adds a folder to look in, and the repos are read again', async () => {

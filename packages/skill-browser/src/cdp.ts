@@ -12,6 +12,12 @@ export interface PageTarget {
   webSocketDebuggerUrl?: string
 }
 
+/** One DevTools call, to send as it is. */
+export interface CdpCall {
+  method: string
+  params: Record<string, unknown>
+}
+
 export interface CdpSession {
   send<T = unknown>(method: string, params?: Record<string, unknown>): Promise<T>
   /** `size`: how long the message was as it came, in characters. */

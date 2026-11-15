@@ -6,7 +6,8 @@ import { hostname, networkInterfaces, type NetworkInterfaceInfo } from 'node:os'
  * Where a phone finds this computer on the network it is on: by the computer's name
  * (`my-macbook.local`), which stays when the network hands it another number, and by its number
  * (`192.168.1.23`), which every phone can open. And who may knock: only an address on one of the
- * networks this computer is on itself.
+ * networks this computer is on itself. And a server's address, as a person types it and as the
+ * files keep it.
  */
 
 /** What reading the computer's network is done through; each defaults to the real one. */
@@ -14,6 +15,11 @@ export interface AddressDeps {
   interfaces?: () => NodeJS.Dict<NetworkInterfaceInfo[]>
   hostname?: () => string
   lookup?: (name: string) => Promise<string[]>
+}
+
+/** This computer's own name, as its host name says it without `.local`: what a server lists it under, and what the Wi-Fi is told and asked by. */
+export function ownName(deps: AddressDeps = {}): string {
+  return (deps.hostname ?? hostname)().replace(/\.local$/i, '') || 'A computer'
 }
 
 /** How long the name may take to answer: a name nobody answers to is asked on the network, slowly. */
@@ -86,4 +92,47 @@ export function onOwnNetwork(peer: string | undefined, deps: AddressDeps = {}): 
 /** A host as a URL carries it: an IPv6 number in brackets. */
 export function urlHost(host: string): string {
   return isIP(host) === 6 ? `[${host}]` : host
+}
+
+/** A server's door as a person types it, and as its links go: its number or name, with its port when that is not HTTPS's own. */
+export function serverWhere(address: string, port: number): string {
+  return `${urlHost(address)}${port === 443 ? '' : `:${port}`}`
+}
+
+/**
+ * A server's number or name as the files keep it: what a certificate can be for, written the one
+ * way a certificate office and a link both read it. A name in small letters; an IPv6 number in
+ * its short form, with no zone and no IPv4 tail.
+ */
+export const isAddress = (value: unknown): value is string => typeof value === 'string' && addressOf(value) === value
+
+/**
+ * `said` as the files keep an address, or `undefined` for what is no server's number or name: the
+ * door's file and that of the servers this computer sets up over SSH, so the two always read the
+ * same; and nothing that a command could read as an option of its own passes.
+ */
+export function addressOf(said: string): string | undefined {
+  if (said.length > 253) return undefined
+  if (isIP(said) === 4) return said
+  if (isIP(said) === 6) {
+    if (said.includes('%') || said.includes('.')) return undefined
+    return new URL(`http://[${said}]`).hostname.slice(1, -1)
+  }
+  return /^(?=.*[a-z])[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/i.test(said) ? said.toLowerCase() : undefined
+}
+
+/** Whether a name is one Tailscale gives a computer on a person's network: a name under `ts.net`. */
+export function isTailscaleName(said: string): boolean {
+  return /\.ts\.net$/.test(said) && addressOf(said) === said
+}
+
+/** A server's door as a line is kept under: an HTTPS origin, written the one way. */
+export function isLineUrl(value: unknown): value is string {
+  if (typeof value !== 'string') return false
+  try {
+    const url = new URL(value)
+    return url.protocol === 'https:' && url.origin === value
+  } catch {
+    return false
+  }
 }

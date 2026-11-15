@@ -110,12 +110,16 @@ export function mintedIn(shown: string): string | undefined {
   return MINTED.exec(words(shown))?.[1]
 }
 
+/** What the lent terminal says when there is no Claude Code to start. */
+const NOT_INSTALLED = 'Claude Code is not on this computer.'
+
 /** Why Claude Code ended without a login, from what it showed: its last lines, never a part of a login. */
 export function notMinted(shown: string): string {
   const text = words(shown)
   // However the screen was drawn: where a login or its heading shows, none of the screen is told.
   if (/YourOAuthtoken|sk-ant-/.test(text.replace(/\s/g, ''))) return 'Claude Code made a login, and this OpenAgent could not read it off what Claude Code showed.'
   const lines = [...new Set(text.split('\n').map(line => line.trim().replace(/\s+/g, ' ')).filter(line => line && !STARTED_AS.test(line)))]
+  if (lines.includes(NOT_INSTALLED)) return NOT_INSTALLED
   return ['Claude Code ended without a login.', ...lines.slice(-5)].join('\n')
 }
 
@@ -181,7 +185,7 @@ const STARTED_AS = /^started as \d+$/
  */
 export const mintClaude: Mint = ({ signal, timeoutMs = MINT_TIMEOUT_MS, command = 'claude setup-token', onLink, onRefused } = {}) =>
   new Promise(resolve => {
-    const inner = `echo "started as $$"; stty cols ${COLUMNS} rows ${ROWS}; command -v ${command.split(' ')[0]} >/dev/null || { echo "Claude Code is not on this computer."; exit 1; }; exec ${command}`
+    const inner = `echo "started as $$"; stty cols ${COLUMNS} rows ${ROWS}; command -v ${command.split(' ')[0]} >/dev/null || { echo "${NOT_INSTALLED}"; exit 1; }; exec ${command}`
     const lent = process.platform === 'darwin' ? 'script -q /dev/null sh -c "$0"' : 'script -q -e -c "$0" /dev/null'
     // On Linux `script` starts its program with the person's own shell, and the line above is written for sh.
     const child = spawn('sh', ['-c', `cat | { ${lent}; kill 0; }`, inner], { stdio: ['pipe', 'pipe', 'pipe'], detached: true, env: { ...process.env, SHELL: '/bin/sh' } })
@@ -190,8 +194,8 @@ export const mintClaude: Mint = ({ signal, timeoutMs = MINT_TIMEOUT_MS, command 
     let lentTo: number | undefined
     let linked = false
     let ended = false
-    /** Where in what is shown the words about the last code pasted start; none while no code waits for an answer. */
-    let answerFrom: number | undefined
+    /** What Claude Code showed since the last code pasted was entered, its reply to the code; none while no code waits for one. */
+    let reply: string | undefined
     let enter: NodeJS.Timeout | undefined
     const end = (answer: { ok: true; login: string } | Failed): void => {
       if (ended) return
@@ -216,17 +220,12 @@ export const mintClaude: Mint = ({ signal, timeoutMs = MINT_TIMEOUT_MS, command 
     const timer = setTimeout(() => end({ ok: false, error: `No yes came from the browser in ${Math.round(timeoutMs / 60_000)} minutes.` }), timeoutMs)
     signal?.addEventListener('abort', stopped, { once: true })
     if (signal?.aborted) stopped()
-    /** How much was ever shown: what is kept of it is only its end. */
-    let shownEver = 0
-    let answer = ''
     const read = (said: string): void => {
       shown = (shown + said).slice(-SHOWN)
-      shownEver += said.length
-      if (answerFrom !== undefined) {
-        answer = (answer + said).slice(-SHOWN)
-        if (REFUSED.test(words(answer))) {
-          answerFrom = undefined
-          answer = ''
+      if (reply !== undefined) {
+        reply = (reply + said).slice(-SHOWN)
+        if (REFUSED.test(words(reply))) {
+          reply = undefined
           child.stdin.write('\r')
           onRefused?.()
         }
@@ -241,8 +240,7 @@ export const mintClaude: Mint = ({ signal, timeoutMs = MINT_TIMEOUT_MS, command 
           if (ended || !isSignInCode(word)) return false
           child.stdin.write(word)
           enter = setTimeout(() => {
-            answerFrom = shownEver
-            answer = ''
+            reply = ''
             child.stdin.write('\r')
           }, ENTER_AFTER_MS)
           return true

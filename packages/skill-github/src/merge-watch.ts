@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process'
 import { closeSync, mkdirSync, openSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { BRANCHES_DIR } from '@openagt/agent-data'
+import { BRANCHES_DIR, errorMessage } from '@openagt/agent-data'
 import type { GhRunner } from './gh.js'
 
 /**
@@ -106,7 +106,7 @@ export async function watchAndMerge(repo: string, number: number, opts: WatchOpt
         await opts.gh(['pr', 'merge', String(number), '--squash'], repo)
         return { outcome: 'merged' }
       } catch (err) {
-        return { outcome: 'failed', error: err instanceof Error ? err.message : String(err) }
+        return { outcome: 'failed', error: errorMessage(err) }
       }
     }
     if (elapsed >= (opts.forMs ?? WATCH_FOR_MS)) return { outcome: 'timed-out' }

@@ -1,5 +1,5 @@
 import { strict as assert } from 'node:assert'
-import { test } from 'node:test'
+import { mock, test } from 'node:test'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { join } from 'node:path'
@@ -17,6 +17,7 @@ import { RUN_INBOX_FILE } from '../dashboard/run-inbox.js'
 import { PROJECT_HOOKS_FILE } from '../project-hooks.js'
 import { NO_ELSEWHERE, provideTestContext } from './test-context.js'
 import { elsewhereId } from '../dashboard/elsewhere.js'
+import { STARTING_AT_MOST_MS } from '../starting.js'
 
 // #749, #1774: what is addressed at a RUN has to resolve the run's own checkout, not the project:
 // the run's card is there, and so is the inbox its tool reads. Addressed at the project root, a
@@ -143,6 +144,33 @@ test('sendStop leaves an agent alone whose process is not this machine\'s, or is
   } finally {
     dead.restore()
     await rm(dead.dir, { recursive: true, force: true })
+  }
+})
+
+// The clock is the test's: the Stop's wait is ticked through, a quarter second at a time, while the
+// checkout is read for real between the ticks.
+test('sendStop for a run that never writes its card waits as long as a start may take, then returns and signals nothing', async () => {
+  const ctx = await projectWithWorktreeAgent({ pid: process.pid, host: hostname() })
+  const onSignal = (): void => assert.fail('signalled a run that never wrote a card')
+  process.on('SIGINT', onSignal)
+  const realTimeout = setTimeout
+  const pause = (ms: number) => new Promise(resolve => realTimeout(resolve, ms))
+  mock.timers.enable({ apis: ['setTimeout', 'Date'], now: Date.now() })
+  try {
+    const pressed = Date.now()
+    let returnedAfter: number | undefined
+    void sendStop(ctx.projectId, '2026-07-19T11-00-00-000Z').then(() => (returnedAfter = Date.now() - pressed))
+    while (returnedAfter === undefined && Date.now() - pressed < STARTING_AT_MOST_MS + 5000) {
+      await pause(20)
+      mock.timers.tick(250)
+    }
+    assert.ok(returnedAfter !== undefined, 'the Stop returned')
+    assert.ok(returnedAfter >= STARTING_AT_MOST_MS, `returned after ${returnedAfter} ms, before a start may have ended`)
+  } finally {
+    mock.timers.reset()
+    process.off('SIGINT', onSignal)
+    ctx.restore()
+    await rm(ctx.dir, { recursive: true, force: true })
   }
 })
 

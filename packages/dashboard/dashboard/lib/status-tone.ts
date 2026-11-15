@@ -1,5 +1,5 @@
 // The one color vocabulary for an agent's status, shared by every list that shows one
-// (the Runs rail, the project log) so the same status can never read as two colors.
+// (the Runs rail, the project log, the pages modules add) so the same status can never read as two colors.
 export const STATUS_TONE: Record<string, string> = {
   running: 'text-primary',
   done: 'text-success',
@@ -15,11 +15,11 @@ export const STATUS_DOT: Record<string, string> = {
   running: 'bg-primary',
   waiting: 'bg-warning',
   saving: 'bg-success',
-  failed: 'bg-danger',
 }
 
 export const STATUS_RING: Record<string, string> = {
   stopped: 'border-warning/70',
+  failed: 'border-danger/70',
   merged: 'border-success/70',
   done: 'border-muted-foreground/60',
   // Its computer does not answer: a broken ring, nothing known to be going.

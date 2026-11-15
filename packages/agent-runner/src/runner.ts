@@ -10,13 +10,12 @@ import { readPersonal } from './config.js'
 import { runAgent, type SkillPicks } from './agent.js'
 import { basicSkills } from './basic-skills.js'
 import { gitHostCommand, gitHostEnv } from './git-host.js'
-import { namedAtStart, resumeRun, runCommand, runIdFrom, type RunOutcome } from './run.js'
-import { runnerMark } from './records.js'
+import { namedAtStart, resumeRun, runCommand, runIdFrom, type RunOutcome, type RunRequest } from './run.js'
 import { askName } from './title.js'
-import { publishChange, type NO_PUBLISH, type Publish, type SessionRepo } from './records.js'
+import { publishChange, runnerMark, type NO_PUBLISH, type Publish } from './records.js'
 import { acquireRunLock, handOverRunLock, isPidAlive, releaseRunLock, runStderrPath } from './run-lock.js'
 import { accountRotation, accountsPath, hasAddedAccount, readAccounts } from '@openagt/skill-account-rotation'
-import type { AgentRecord } from '@openagt/agent-data'
+import { AGENT_ID_ENV, type AgentRecord } from '@openagt/agent-data'
 
 /**
  * The tool's process side: a run in this process, the same run detached in its own process and
@@ -26,9 +25,6 @@ import type { AgentRecord } from '@openagt/agent-data'
 
 /** This package's executable, for the processes it spawns: the bin beside `dist/`. */
 const BIN = fileURLToPath(new URL('../bin/agent-runner', import.meta.url))
-
-/** The environment name the tickets skill reads the claiming agent's id from. */
-export const AGENT_ID_ENV = 'AGENT_ID'
 
 /** The coding agents a run can be on, by the name the run's record carries. */
 export const DRIVER_NAMES = ['claude-code', 'codex'] as const
@@ -97,33 +93,13 @@ export function runArgs(run: SpawnedRun): string[] {
 }
 
 /** A run spawned in its own process, its marker already on the branch unless it is to write it itself. */
-export interface SpawnedRun {
+export interface SpawnedRun extends RunRequest {
   id: string
-  prompt: string
   /** When the run was asked for (`run --started`), ISO: the start on its marker, kept as its record's start. */
   startedAt?: string
   /** The run writes its own marker: a person's detached start, answered before the marker is pushed. */
   mark?: boolean
-  model?: string
-  /** How hard the model may think (`run --effort`); the agent's own default when absent. */
-  effort?: string
   driver?: DriverName
-  /** How far the run publishes (`run --publish`): the level in force for a scheduler's run, the person's pick for a detached start. */
-  publish?: Publish
-  /** A text handed to the agent with the prompt (`run --attach`): what a scheduler's check found. */
-  attached?: string
-  /** The run this one is started for (`run --parent`). */
-  parent?: string
-  /** The branch this run's branch starts from (`run --base`). */
-  base?: string
-  /** The branch the run's pull request goes into (`run --pr-base`). */
-  prBase?: string
-  /** The branch the run works on, one that exists (`run --branch`): a person's pull request's. */
-  branch?: string
-  /** What the run is started for (`run --for`): a thread on the git host, by its address. */
-  for?: string
-  /** The repos a session with no project has as context (`run --repos`). */
-  repos?: SessionRepo[]
   /** The account it starts on, of its agent's, by name: put in its environment ({@link ACCOUNT_ENV}). */
   account?: string
 }
@@ -203,16 +179,13 @@ async function spawnDetached(repo: string, id: string, args: string[], account?:
  */
 export async function detachRun(
   repo: string,
-  opts: { prompt: string; model?: string; effort?: string; driver?: DriverName; publish?: Publish; attached?: string; parent?: string; base?: string; prBase?: string; branch?: string; for?: string; repos?: SessionRepo[]; now?: () => Date },
+  opts: RunRequest & { driver?: DriverName; now?: () => Date },
   deps: { spawn?: typeof spawnRun } = {},
 ): Promise<{ id: string; driver: DriverName; model?: string }> {
-  const now = opts.now ?? (() => new Date())
+  const { now = () => new Date(), driver = 'claude-code', ...request } = opts
   const id = runIdFrom(now().toISOString())
-  const driver = opts.driver ?? 'claude-code'
-  const model = opts.model
-  const named = { ...(opts.publish !== undefined ? { publish: opts.publish } : {}), ...(opts.attached !== undefined ? { attached: opts.attached } : {}), ...(opts.parent !== undefined ? { parent: opts.parent } : {}), ...(opts.base !== undefined ? { base: opts.base } : {}), ...(opts.prBase !== undefined ? { prBase: opts.prBase } : {}), ...(opts.branch !== undefined ? { branch: opts.branch } : {}), ...(opts.for !== undefined ? { for: opts.for } : {}), ...(opts.repos !== undefined ? { repos: opts.repos } : {}) }
-  await (deps.spawn ?? spawnRun)(repo, { id, prompt: opts.prompt, mark: true, driver, ...(model !== undefined ? { model } : {}), ...(opts.effort !== undefined ? { effort: opts.effort } : {}), ...named })
-  return { id, driver, ...(model !== undefined ? { model } : {}) }
+  await (deps.spawn ?? spawnRun)(repo, { ...request, id, mark: true, driver })
+  return { id, driver, ...(request.model !== undefined ? { model: request.model } : {}) }
 }
 
 /**
@@ -230,6 +203,25 @@ export async function detachResume(
   return { id: opts.id }
 }
 
+/** A run of the real project in this process, as the command line starts one: what it is asked, and what the command read off its flags and its environment. */
+export interface ProjectRun extends RunRequest {
+  /** The run's id, from whoever spawned it with its marker written; minted here when absent. */
+  id?: string
+  /** When the run was asked for (`run --started`), ISO; this process's clock when absent. */
+  startedAt?: string
+  /** A run given its id that writes its own marker all the same (`run --mark`): a person's detached start. */
+  mark?: boolean
+  /** The coding agent; Claude Code when absent. */
+  driver?: DriverName
+  /** The account at the git host picked for this session ({@link GIT_ACCOUNT_ENV}); its agent's, else the computer's, when absent. */
+  gitAccount?: string
+  /** The agent the run is on, by its id; the default agent when absent. */
+  agent?: string
+  /** The session's picks of skills. */
+  skills?: SkillPicks
+  log?: (line: string) => void
+}
+
 /**
  * A run of the real project, in this process, on the coding agent named (Claude Code when none is). A
  * scheduler's run comes with its id and its marker already on the branch; a person's run mints its
@@ -237,46 +229,33 @@ export async function detachResume(
  * one given; none given, the coding agent starts on its own default. A parent it names that has
  * ended by the time this run ends is continued in a process of its own.
  */
-export async function runProject(repo: string, opts: { prompt: string; id?: string; startedAt?: string; mark?: boolean; model?: string; effort?: string; driver?: DriverName; publish?: Publish; attached?: string; parent?: string; base?: string; prBase?: string; branch?: string; for?: string; repos?: SessionRepo[]; gitAccount?: string; agent?: string; skills?: SkillPicks; log?: (line: string) => void }, deps: { workAs?: typeof workAs } = {}): Promise<RunOutcome> {
-  const id = opts.id ?? runIdFrom(new Date().toISOString())
-  const driver = opts.driver ?? 'claude-code'
-  const log = opts.log ?? (() => {})
+export async function runProject(repo: string, opts: ProjectRun, deps: { workAs?: typeof workAs } = {}): Promise<RunOutcome> {
+  // What the run is asked, its start, its agent and its log go on to it as they are; the rest is read here.
+  const { id: given, mark, driver = 'claude-code', gitAccount, skills: picks = {}, ...rest } = opts
+  const id = given ?? runIdFrom(new Date().toISOString())
+  const log = rest.log ?? (() => {})
   const setup = await readPersonal(repo, log)
   // The agent the run is on: its skills, with the session's picks, go into the checkout; its accounts are the run's unless the session picked one.
-  const on = await runAgent(opts.agent, log)
-  const picks = opts.skills ?? {}
+  const on = await runAgent(rest.agent, log)
   const accounts = accountsOn(on)
+  // A run given its id was marked by whoever spawned it, unless it was told to mark itself.
+  const marked = given !== undefined && mark !== true
   // The name is asked for before the git host's account is read, which takes a second or more
   // (`gitHostEnv` runs the git host's command) and is nothing the small model naming the run needs.
-  const marked = opts.id !== undefined && opts.mark !== true
-  const naming = namedAtStart({ prompt: opts.prompt, marked, ...(opts.parent !== undefined ? { parent: opts.parent } : {}) }) ? askName(driverFor(driver, undefined, setup, accounts), opts.prompt) : undefined
-  const as = await (deps.workAs ?? workAs)(repo, opts.gitAccount ?? (await agentLoginFor(repo, on)))
+  const naming = namedAtStart({ ...rest, marked }) ? askName(driverFor(driver, undefined, setup, accounts), rest.prompt) : undefined
+  const as = await (deps.workAs ?? workAs)(repo, gitAccount ?? (await agentLoginFor(repo, on)))
   return runCommand(repo, {
-    prompt: opts.prompt,
+    ...rest,
     ...(naming !== undefined ? { naming } : {}),
     id,
-    ...(opts.startedAt !== undefined ? { startedAt: opts.startedAt } : {}),
-    // A run given its id was marked by whoever spawned it, unless it was told to mark itself.
     marked,
-    ...(opts.model !== undefined ? { model: opts.model } : {}),
-    ...(opts.effort !== undefined ? { effort: opts.effort } : {}),
     driver: driverFor(driver, id, setup, accounts),
     skills: (where, agent) => basicSkills(where, agent, on, picks),
     ...(as !== undefined ? { gitAccount: as } : {}),
-    ...(opts.agent !== undefined ? { agent: opts.agent } : {}),
     ...(picks.on !== undefined ? { skillsOn: picks.on } : {}),
     ...(picks.off !== undefined ? { skillsOff: picks.off } : {}),
     ...(picks.project !== undefined ? { projectSkills: picks.project } : {}),
-    ...(opts.publish !== undefined ? { publish: opts.publish } : {}),
-    ...(opts.attached !== undefined ? { attached: opts.attached } : {}),
-    ...(opts.parent !== undefined ? { parent: opts.parent } : {}),
-    ...(opts.base !== undefined ? { base: opts.base } : {}),
-    ...(opts.prBase !== undefined ? { prBase: opts.prBase } : {}),
-    ...(opts.branch !== undefined ? { branch: opts.branch } : {}),
-    ...(opts.for !== undefined ? { for: opts.for } : {}),
-    ...(opts.repos !== undefined ? { repos: opts.repos } : {}),
     resume: resumeDetached(repo),
-    ...(opts.log ? { log: opts.log } : {}),
   })
 }
 

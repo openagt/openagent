@@ -1,9 +1,9 @@
-import { useState } from 'react'
+import { createElement, useState } from 'react'
 
-// Copy-to-clipboard with the "copied!" badge timing of the original page:
-// instant copy on single click, but ignore the extra clicks of a double/triple-
-// click (text selection), and don't flip state back mid-selection (the badge
-// would distract while the user is selecting text).
+// Copy-to-clipboard with the check's timing: instant copy on single click, but
+// ignore the extra clicks of a double/triple-click (text selection), and don't
+// flip state back mid-selection (the check would distract while the user is
+// selecting text).
 export function useCopy() {
   const [copied, setCopied] = useState(false)
 
@@ -42,4 +42,11 @@ export function useCopy() {
   }
 
   return { copied, copy }
+}
+
+const visuallyHidden = { position: 'absolute', width: 1, height: 1, overflow: 'hidden', clipPath: 'inset(50%)', whiteSpace: 'nowrap' } as const
+
+/** "Copied", said to a screen reader once a copy worked; the press's check shows it. */
+export function CopiedStatus({ copied }: { copied: boolean }) {
+  return createElement('span', { role: 'status', style: visuallyHidden }, copied ? 'Copied' : '')
 }

@@ -1,12 +1,12 @@
-import type { Ticket, TicketDetail } from '../../src/module.js'
+import type { HoldingRun, Ticket, TicketDetail } from '../../src/module.js'
 
 // The tickets as the module's pages show them: the command's rows, with the holder of a claim
 // resolved against the project's runs the dashboard knows.
 
 /** A ticket as the pages show it: the `tickets` command's row, with the run behind its claim when the lock names one. */
 export interface WorkspaceTicket extends Ticket {
-  /** The run whose id the lock names, when it is one of this project's: its id and, once named, its session name. */
-  lockedByAgent?: { id: string; name?: string }
+  /** The run whose id the lock names, when it is one of this project's (`withHolder`). */
+  lockedByAgent?: HoldingRun
 }
 
 /** One ticket with its entire markdown, for its own page. */

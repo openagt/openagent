@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { act, renderHook } from '@testing-library/react'
-import { openSettings, useRoute } from './use-route.js'
+import { holdEntry, useRoute } from './use-route.js'
 import { projectAddresses } from '../../src/project-address.js'
 
 // F1: this used to mock Vike's `usePageContext` and `navigate`. There is nothing to mock now —
@@ -36,11 +36,11 @@ describe('useRoute', () => {
     expect(window.location.pathname).toBe('/my-repo/1-run')
   })
 
-  it('replaces the history entry when asked, rather than adding one', () => {
+  it('an adjust replaces the history entry, rather than adding one', () => {
     const { result } = renderHook(() => useRoute(projects))
     act(() => result.current.go({ projectId: 'my-repo-a1', agentId: '1-run', scope: 'my-repo-a1' }))
     const entries = window.history.length
-    act(() => result.current.go({ projectId: 'my-repo-a1', agentId: null, scope: 'my-repo-a1' }, { replace: true }))
+    act(() => result.current.adjust({ projectId: 'my-repo-a1', agentId: null, scope: 'my-repo-a1' }))
     expect(window.location.pathname).toBe('/my-repo')
     expect(window.history.length).toBe(entries)
   })
@@ -62,6 +62,55 @@ describe('useRoute', () => {
       window.dispatchEvent(new PopStateEvent('popstate'))
     })
     expect(result.current.route).toEqual({ projectId: 'my-repo-a1', agentId: null, scope: 'my-repo-a1' })
+  })
+
+  it('Back to a page that scrolled comes back to its place, once the page is tall enough to have it again', async () => {
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
+    const scrollY = vi.spyOn(window, 'scrollY', 'get').mockReturnValue(800)
+    const tall = vi.spyOn(document.documentElement, 'scrollHeight', 'get').mockReturnValue(0)
+    let grown = (): void => {}
+    vi.stubGlobal('ResizeObserver', class { constructor(seen: () => void) { grown = seen } observe() {} disconnect() {} })
+    try {
+      const { result } = renderHook(() => useRoute(projects))
+      act(() => result.current.go({ projectId: 'my-repo-a1', agentId: '1-run', scope: 'my-repo-a1' }))
+      // The new page opened at its top.
+      expect(scrollTo).toHaveBeenCalledWith(0, 0)
+      scrollTo.mockClear()
+      scrollY.mockReturnValue(0)
+      // Back: the entry left kept its place, and the lists that fill the page have not shown yet.
+      await act(async () => {
+        const back = new Promise(resolve => window.addEventListener('popstate', resolve, { once: true }))
+        window.history.back()
+        await back
+      })
+      expect(window.location.pathname).toBe('/')
+      expect(scrollTo).not.toHaveBeenCalled()
+      tall.mockReturnValue(800 + window.innerHeight)
+      grown()
+      expect(scrollTo).toHaveBeenCalledWith(0, 800)
+    } finally {
+      vi.unstubAllGlobals()
+      vi.restoreAllMocks()
+    }
+  })
+
+  it('a new page opens at its top, its own page and another project\'s alike; Settings over the page and a change of the query alone leave the page where it was scrolled', () => {
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
+    try {
+      at('/my-repo/logs')
+      const { result } = renderHook(() => useRoute(projects))
+      act(() => result.current.go({ projectId: null, agentId: null, page: 'logs' }))
+      expect(scrollTo).toHaveBeenCalledWith(0, 0)
+      scrollTo.mockClear()
+      act(() => result.current.go({ projectId: null, agentId: null, page: 'permissions' }))
+      expect(scrollTo).toHaveBeenCalledWith(0, 0)
+      scrollTo.mockClear()
+      act(() => result.current.go({ ...result.current.route, settings: 'general' }, { keepQuery: true }))
+      act(() => result.current.go({ projectId: null, agentId: null, page: 'permissions', settings: 'profile' }, { keepQuery: true }))
+      expect(scrollTo).not.toHaveBeenCalled()
+    } finally {
+      vi.restoreAllMocks()
+    }
   })
 
   it('reads the picked project off the address, and a change of it alone is a navigation (#1513)', () => {
@@ -92,19 +141,28 @@ describe('useRoute', () => {
   })
 })
 
-// Opening Settings from a part of the page that has no route to hand: the "Run on" menu's "Add a machine…".
-describe('openSettings', () => {
-  beforeEach(() => {
-    at('/')
+describe('holdEntry', () => {
+  /** Whether leaving the document now would have the browser ask. */
+  const asks = (): boolean => {
+    const leaving = new Event('beforeunload', { cancelable: true })
+    window.dispatchEvent(leaving)
+    return leaving.defaultPrevented
+  }
+
+  it('has the browser ask before the document is left while an entry is held, and only then', () => {
+    expect(asks()).toBe(false)
+    const release = holdEntry(() => {})
+    expect(asks()).toBe(true)
+    release()
+    expect(asks()).toBe(false)
   })
 
-  it('opens a Settings entry over the page you are on, its own query kept, as a step Back undoes', () => {
-    at('/my-repo/1-run?all')
-    const { result } = renderHook(() => useRoute(projects))
-    const entries = window.history.length
-    act(() => openSettings('devices'))
-    expect(window.location.pathname + window.location.search).toBe('/my-repo/1-run?all=&settings=devices')
-    expect(window.history.length).toBe(entries + 1)
-    expect(result.current.route.settings).toBe('devices')
+  it('a hold that replaced another asks until it is released itself', () => {
+    const first = holdEntry(() => {})
+    const second = holdEntry(() => {})
+    first()
+    expect(asks()).toBe(true)
+    second()
+    expect(asks()).toBe(false)
   })
 })

@@ -54,6 +54,8 @@ export interface AgentMeta {
   intent?: string
   /** The session's short name, as a list shows it: two to five words a small model gave it. */
   title?: string
+  /** Set while that name is being asked for, by the runner on the run's card: a list holds the run's place for it then. */
+  naming?: true
   /**
    * The run this one was started for, by its id: this run is that run's subagent. Written on the
    * card by the tool that started it; absent on a run a person or a schedule started.
@@ -184,6 +186,8 @@ export interface AgentMeta {
    * on the way to the dashboard like {@link saving}, since it changes on the git host, not here.
    */
   prState?: 'open' | 'draft' | 'merged' | 'closed'
+  /** The title of the run's pull request ({@link pr}), as the git host last said: the jump finds the run by it. Not stored, like {@link prState}. */
+  prTitle?: string
   /**
    * The pull requests the run opened before {@link pr}, oldest first: a run that moved its work to a
    * new branch opened one for each. Kept by the tool that ran it, under its `caller` key; each one
@@ -249,11 +253,8 @@ export interface AgentMeta {
 export interface StoreFs {
   read(path: string): Promise<string>
   write(path: string, contents: string): Promise<void>
-  append(path: string, contents: string): Promise<void>
   exists(path: string): Promise<boolean>
   mkdir(path: string): Promise<void>
-  /** List a directory's entries (names only). Missing dir yields `[]`. */
-  readdir(path: string): Promise<string[]>
 }
 
 /** Newest run first: an id sorts chronologically, so the id order IS the time order (no parse). */
@@ -420,8 +421,8 @@ export async function readDoing(cwd: string, ids: readonly string[], fs: StoreFs
 export function nodeStoreFs(): StoreFs {
   // Destructured rather than returned whole: the narrow interface is the contract,
   // so the object should not carry methods the store was never handed.
-  const { read, write, append, exists, mkdir, readdir } = nodeFs()
-  return { read, write, append, exists, mkdir, readdir }
+  const { read, write, exists, mkdir } = nodeFs()
+  return { read, write, exists, mkdir }
 }
 
 /** The runs each project had a checkout for at its last {@link readAllAgents}, by project path. */
@@ -442,16 +443,23 @@ export async function readAllAgents(cwd: string, fs: StoreFs = nodeStoreFs(), ru
   const before = liveSeen.get(cwd)
   liveSeen.set(cwd, ids)
   const fresh = before !== undefined && [...before].some(id => !ids.has(id))
-  const archived = await listAgents(cwd, runs, { fresh }).catch(() => [] as AgentMeta[])
-  // A run that is both (a stopped run keeps its checkout, and is recorded) reads as its checkout's
-  // card, plus the one late fact the record alone learns: the pull request the dashboard's own
-  // Open PR wrote onto the record, since OpenAgent never writes a checkout's card.
+  return checkoutsFirst(live, await listAgents(cwd, runs, { fresh }).catch(() => [] as AgentMeta[]))
+}
+
+/**
+ * A project's runs from both sides, the ones with a checkout first. A run that is both (a resumed
+ * run has a record from its first leg, a stopped run keeps its checkout) reads as its checkout's
+ * card, plus the one late fact the record alone learns: the pull request the dashboard's own Open
+ * PR wrote onto the record, since OpenAgent never writes a checkout's card.
+ */
+export function checkoutsFirst(live: readonly AgentMeta[], archived: readonly AgentMeta[]): AgentMeta[] {
   const recorded = new Map(archived.map(agent => [agent.id, agent]))
-  const withRecordedPr = (agent: LiveAgent): AgentMeta => {
+  const withRecordedPr = (agent: AgentMeta): AgentMeta => {
     const pr = recorded.get(agent.id)?.pr
     return agent.pr === undefined && pr ? { ...agent, pr } : agent
   }
-  return [...live.map(withRecordedPr), ...archived.filter(agent => !live.some(l => l.id === agent.id))]
+  const ids = new Set(live.map(agent => agent.id))
+  return [...live.map(withRecordedPr), ...archived.filter(agent => !ids.has(agent.id))]
 }
 
 /** One run's meta by id, the checkout's card winning over the record: {@link readAllAgents}'s rule for a single row. */

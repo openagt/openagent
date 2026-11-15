@@ -86,7 +86,7 @@ export function onRunsChanged(projectId: string | undefined, read: (turn: number
 }
 
 /** Whether the daemon tells the page of every change of the runs right now. */
-export function useRunsTold(): boolean {
+function useRunsTold(): boolean {
   return useSyncExternalStore(
     listener => {
       openListeners.add(listener)

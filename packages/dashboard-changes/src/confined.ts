@@ -1,6 +1,9 @@
 // Reading one file out of a checkout for a diff (diff.ts). The path comes from the browser, so the
 // guard and the confined read live here, once, and every caller goes through them.
 
+/** The unchanged lines a diff shows around each change, as git does. */
+export const CONTEXT_LINES = 3
+
 /** Cap what a diff renders: its first lines, and no more than its first characters. */
 export const MAX_PREVIEW_LINES = 5000
 export const MAX_PREVIEW_CHARS = 500_000

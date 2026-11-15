@@ -26,6 +26,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { FakeDriver, QUESTION_TAG, continuationPrompt, logDiaryFile, parseQuestion, type LogEndStatus } from '@openagt/agent-driver'
 import { nodeGitRunner } from '@openagt/agent-data'
+import { NAME_FILE_ENV, givenName, isPublish, type Publish } from '@openagt/agent-runner'
 import { agentBranchName, attachCheckout, createCheckout, reclaimWorktree, worktreeBranch, worktreePath } from '@openagt/skill-branches'
 import { findRun, parseRunCard, readDiary, writeRun, type AnyDiaryLine, type RunCard } from '@openagt/skill-logs'
 import { agentIdFromStartedAt } from '../agent-id.js'
@@ -47,8 +48,29 @@ function detach(args: string[]): void {
   spawn(process.execPath, [fileURLToPath(import.meta.url), ...args], { cwd: repo, detached: true, stdio: 'ignore', env: process.env }).unref()
 }
 
+/** How far the run takes its work, on its card as agent-runner keeps it: the level its hook was given, none for `nothing`, else the one it had. */
+function publishOf(given: string | undefined, had: unknown): { publish?: Publish } {
+  if (isPublish(given)) return { publish: given }
+  return given === undefined && isPublish(had) ? { publish: had } : {}
+}
+
 async function exists(path: string): Promise<boolean> {
   return stat(path).then(() => true, () => false)
+}
+
+/**
+ * The run's record, once there: the process of its first session takes the name its starter asked
+ * for before it records the run, and an answer can come sooner. agent-runner's resume waits for
+ * that process the same way.
+ */
+async function recorded(id: string): Promise<RunCard> {
+  const until = Date.now() + 60_000
+  for (;;) {
+    const card = await findRun(repo, id)
+    if (card) return card
+    if (Date.now() > until) throw new Error(`no run ${id}`)
+    await new Promise(r => setTimeout(r, 100))
+  }
 }
 
 /** One session of the run in `checkout`: the prompt, the log, the inbox, the record, the reclaim. */
@@ -69,11 +91,21 @@ async function session(id: string, checkout: string, prompt: string, card: Omit<
   })
   const { id: _id, ...startCard } = card
   const driverSession = await driver.start({ cwd: checkout, signal: stop.signal, log: { dir, card: { id, ...startCard }, continue: continued } })
+  const log = driverSession.log!
+  // The name its starter asked for, taken beside the first turn as agent-runner takes it: the page
+  // shows it for a while from the starter, and for good once the run's record has it. The scripted
+  // agent asks no name of its own when the starter got none.
+  const file = continued ? undefined : process.env[NAME_FILE_ENV]
+  const named = file === undefined ? Promise.resolve() : givenName(file, stop.signal).then(title => (title === undefined || title === 'ask' ? undefined : log.title(title))).catch(() => {})
   let status: LogEndStatus = 'done'
   let lastText = ''
   try {
     if (prompt.includes('hold')) {
-      while (!stop.signal.aborted && !(await exists(join(dir, 'go')))) await new Promise(r => setTimeout(r, 50))
+      while (!stop.signal.aborted && !(await exists(join(dir, 'go')))) {
+        // Its checkout removed under it (the demo's home gone): nothing is left to release it or to write to.
+        if (!(await exists(checkout))) return
+        await new Promise(r => setTimeout(r, 50))
+      }
     }
     if (prompt.includes('commit') && !continued) {
       await writeFile(join(checkout, 'work.txt'), `${prompt}\n`)
@@ -88,9 +120,10 @@ async function session(id: string, checkout: string, prompt: string, card: Omit<
   else if (status === 'done' && parseQuestion(lastText)) status = 'waiting'
 
   const branch = (await worktreeBranch(checkout, git).catch(() => undefined)) ?? agentBranchName(id)
-  const log = driverSession.log!
   await log.patch({ branch })
   await log.end(status)
+  // On the card before the record is copied, as agent-runner has it.
+  await named
   await log.settled()
 
   const written = parseRunCard(await readFile(join(dir, `${id}.json`), 'utf8'))
@@ -122,13 +155,13 @@ async function main(): Promise<void> {
   if (mode === 'run' && runId) {
     const prompt = process.env['PROMPT'] ?? ''
     const checkout = await createCheckout(repo, { agentId: runId }, git)
-    const caller = { pid: process.pid, host: hostname(), workspace: checkout.path }
-    await session(runId, checkout.path, prompt, { id: runId, startedAt: new Date().toISOString(), intent: prompt, driver: process.env['DRIVER'] ?? 'fake', ...(process.env['MODEL'] ? { model: process.env['MODEL'] } : {}), branch: checkout.branch, caller }, false)
+    const caller = { pid: process.pid, host: hostname(), workspace: checkout.path, ...publishOf(process.env['PUBLISH'], undefined) }
+    // The coding agent named as agent-runner names it, its default when the start named none.
+    await session(runId, checkout.path, prompt, { id: runId, startedAt: new Date().toISOString(), intent: prompt, driver: process.env['DRIVER'] ?? 'claude-code', ...(process.env['MODEL'] ? { model: process.env['MODEL'] } : {}), branch: checkout.branch, caller }, false)
     return
   }
   if (mode === 'continue' && runId) {
-    const card = await findRun(repo, runId)
-    if (!card) throw new Error(`no run ${runId}`)
+    const card = await recorded(runId)
     const kept = worktreePath(repo, runId)
     const checkout = (await exists(kept)) ? kept : (await attachCheckout(repo, { agentId: runId, branch: card.branch ?? agentBranchName(runId) }, git)).path
     // A checkout made again holds no diary: the recorded one is put back, so the log continues it.
@@ -140,7 +173,8 @@ async function main(): Promise<void> {
     const answer = process.env['ANSWER']
     const prompt = answer !== undefined ? continuationPrompt(String(question?.['title'] ?? ''), answer) : (process.env['TEXT'] ?? '')
     const { status: _status, endedAt: _endedAt, ...rest } = card
-    await session(runId, checkout, prompt, { ...rest, caller: { ...card.caller, pid: process.pid, host: hostname(), workspace: checkout } }, true)
+    const { publish: had, ...caller } = card.caller ?? {}
+    await session(runId, checkout, prompt, { ...rest, caller: { ...caller, pid: process.pid, host: hostname(), workspace: checkout, ...publishOf(process.env['PUBLISH'], had) } }, true)
     return
   }
   throw new Error(`fake-run-bin: unknown mode ${mode}`)

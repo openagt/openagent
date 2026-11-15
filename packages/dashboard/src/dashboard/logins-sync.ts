@@ -112,13 +112,13 @@ export const syncWiring: {
   now: () => number
 } = {
   env: process.env,
-  machines: () => listMachines(undefined, syncWiring.env),
+  machines: () => listMachines(syncWiring.env),
   facts: machine => remoteFacts(machine),
   call: (machine, fn, args) => machineCall(machine, fn, args),
   local: () => localLogins(syncWiring.env),
   agentLogins: async () => (await listAgents()).flatMap(agent => (agent.accounts.github !== undefined ? [agent.accounts.github] : [])),
   usage: ownUsage,
-  preferences: () => readPreferences(undefined, syncWiring.env),
+  preferences: () => readPreferences(syncWiring.env),
   mint: mintClaude,
   loginCodex,
   computer: computerName,

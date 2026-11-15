@@ -77,6 +77,16 @@ test('a host that answers slowly: the first read says the lists are on their way
     assert.equal((await readHosted()).repos.length, 5)
   }))
 
+test('a host that cannot be reached is said so, with what the others listed', () =>
+  withHosts(async () => {
+    const reached = hostedWiring.run
+    hostedWiring.run = async (host, args) => (args[2] === 'vikejs' ? Promise.reject(new Error('getaddrinfo ENOTFOUND api.github.com')) : reached(host, args))
+    const read = await readHosted()
+    assert.equal(read.unreached, true)
+    assert.equal(read.repos.length, 3)
+    assert.equal((await readHosted()).unreached, true, 'kept with the lists')
+  }))
+
 test('Settings › Repos names an owner as a person types it, GitHub when no host is said, kept in their own folder', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'oa-repo-owners-'))
   const previous = process.env.XDG_CONFIG_HOME

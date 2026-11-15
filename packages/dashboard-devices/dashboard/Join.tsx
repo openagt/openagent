@@ -1,8 +1,7 @@
-import { useState, type ClipboardEvent, type FormEvent } from 'react'
-import { Loader2 } from 'lucide-react'
-import { Button, Checkbox, Dialog, Input } from '@openagt/dashboard/module'
+import { useId, useRef, useState, type ClipboardEvent, type FormEvent } from 'react'
+import { Button, Checkbox, Input, useOpenAgentDown } from '@openagt/dashboard/module'
 import { hasDoor } from './model.js'
-import { Problem } from './parts.js'
+import { Presses, Problem, useFlowHold } from './parts.js'
 import { sharedReach } from './servers.js'
 import type { Devices } from './use-devices.js'
 
@@ -29,12 +28,14 @@ function hostOfLink(link: string): string {
   }
 }
 
-/** The address typed under Where, as a door's origin: a server's door speaks HTTPS. */
+/** The address typed under Where, as a door's origin: a server's door speaks HTTPS, a Wi-Fi's door the plain HTTP it was typed with. */
 export function originOf(where: string): string | undefined {
-  const host = where.trim().replace(/^https:\/\//i, '').replace(/\/+$/, '')
+  const typed = where.trim()
+  const scheme = /^http:\/\//i.test(typed) ? 'http' : 'https'
+  const host = typed.replace(/^https?:\/\//i, '').replace(/\/+$/, '')
   if (!host || /[\s/#?@]/.test(host)) return undefined
   try {
-    return new URL(`https://${host}`).origin
+    return new URL(`${scheme}://${host}`).origin
   } catch {
     return undefined
   }
@@ -42,20 +43,37 @@ export function originOf(where: string): string | undefined {
 
 /** The link the door would have given for where and the code: what OpenAgent gets in with. */
 export function linkOf(where: string, code: string): string | undefined {
-  if (isLink(where)) return where.trim()
+  if (isLink(where)) return URL.canParse(where.trim()) ? where.trim() : undefined
   const origin = originOf(where)
-  const typed = code.toUpperCase().replace(/[\s-]/g, '')
-  return origin && /^[A-Z0-9]{4,32}$/.test(typed) ? `${origin}/_devices/enter#${typed}` : undefined
+  const typed = typedCode(code)
+  return origin && typed ? `${origin}/_devices/enter#${typed}` : undefined
 }
 
-export function JoinDialog({ d, onClose, onJoined }: { d: Devices; onClose: () => void; /** The code was someone else's computer's: its page opens, where their logins are set. */ onJoined?: (machineId: string) => void }) {
+/** The code as a door reads it, without the spaces and dashes it is shown with; undefined when it is no code. */
+const typedCode = (code: string): string | undefined => {
+  const typed = code.toUpperCase().replace(/[\s-]/g, '')
+  return /^[A-Z0-9]{4,32}$/.test(typed) ? typed : undefined
+}
+
+export function Join({ d, onClose, onJoined }: { d: Devices; onClose: () => void; /** The code was someone else's computer's: its page opens, where their logins are set. */ onJoined?: (machineId: string) => void }) {
+  const down = useOpenAgentDown()
   const { host } = d
   const [where, setWhere] = useState('')
   const [code, setCode] = useState('')
   const [both, setBoth] = useState(true)
   const [joining, setJoining] = useState(false)
   const [error, setError] = useState<string | undefined>()
+  // Join stands in Settings' foot, outside the form's box: it is the form's own press by its id.
+  const formId = useId()
+  // What was typed is held until it is sent: Join, or Cancel, which throws it away.
+  const leave = useFlowHold((where.trim() !== '' || code.trim() !== '') && !error?.startsWith('Joined.'))
   const link = linkOf(where, code)
+  // Pressed with what is no address or no code: the field says so, and the caret goes there.
+  const [pressed, setPressed] = useState(false)
+  const whereField = useRef<HTMLInputElement>(null)
+  const codeField = useRef<HTMLInputElement>(null)
+  const whereWrong = pressed && (isLink(where) ? link : originOf(where)) === undefined
+  const codeWrong = pressed && !isLink(where) && typedCode(code) === undefined
   // Through a server: a link pasted whole may be a computer's on its Wi-Fi, or one on Tailscale, which keeps no line.
   const server = link !== undefined && hasDoor({ url: new URL(link).origin })
   // Where, never the code: a link pasted whole is said by its address alone.
@@ -72,7 +90,11 @@ export function JoinDialog({ d, onClose, onJoined }: { d: Devices; onClose: () =
 
   const join = async (event: FormEvent): Promise<void> => {
     event.preventDefault()
-    if (!link) return
+    if (!link) {
+      setPressed(true)
+      ;(originOf(where) === undefined ? whereField : codeField).current?.focus()
+      return
+    }
     setJoining(true)
     setError(undefined)
     const added = await host.addMachine(link)
@@ -102,47 +124,82 @@ export function JoinDialog({ d, onClose, onJoined }: { d: Devices; onClose: () =
     setJoining(false)
     if (problems.length) setError(`Joined. ${problems.join(' ')}`)
     // Someone else's computer: its page says whose it is, and takes this person's logins for it.
-    else if (machine?.owner !== undefined && onJoined) onJoined(machine.id)
-    else onClose()
+    else if (machine?.owner !== undefined && onJoined) leave(() => onJoined(machine.id))
+    else leave(onClose)
   }
 
   return (
-    <Dialog open onOpenChange={open => !open && onClose()} title="Join with a code">
-      <form className="space-y-4" onSubmit={event => void join(event)}>
-        <p className="text-xs text-muted-foreground">Type what the other device shows.</p>
-        <label className="block space-y-1">
-          <span className="text-xs text-muted-foreground">Where</span>
-          <Input autoFocus aria-label="Where" placeholder="203.0.113.10" value={where} onPaste={paste} onChange={event => setWhere(event.target.value)} className="bg-background font-mono" />
-          <span className="block text-xs text-muted-foreground">An address, or the whole link the other device gave.</span>
-        </label>
-        {!isLink(where) && (
-          <label className="block space-y-1">
-            <span className="text-xs text-muted-foreground">Code</span>
-            <Input aria-label="Code" placeholder="K7P4-QX9M" autoCapitalize="characters" autoComplete="off" spellCheck={false} value={code} onPaste={paste} onChange={event => setCode(event.target.value)} className="bg-background font-mono uppercase" />
-          </label>
+    <form id={formId} className="space-y-4" onSubmit={event => void join(event)}>
+      <p className="text-sm text-muted-foreground">Type what the other device shows.</p>
+      {/* The two fields are one column, as wide as an address: a link pasted whole scrolls in its field. */}
+      <label className="block max-w-xs space-y-1">
+        <span className="block text-sm font-medium">Where</span>
+        <Input
+          ref={whereField}
+          name="pairing-address"
+          autoFocus
+          aria-label="Where"
+          placeholder="203.0.113.10"
+          value={where}
+          onPaste={paste}
+          onChange={event => setWhere(event.target.value)}
+          aria-invalid={whereWrong}
+          aria-describedby={whereWrong ? 'pairing-address-error' : undefined}
+          className="font-mono"
+        />
+        <span className="block text-xs text-muted-foreground">An address, or the whole link the other device gave.</span>
+        {whereWrong && (
+          <span id="pairing-address-error" className="block text-xs text-danger">
+            That is no address: type it as the other device shows it, like 203.0.113.10.
+          </span>
         )}
-        {server && (
-          <label className="flex items-start gap-2 text-sm">
-            <Checkbox className="mt-0.5" checked={both} onCheckedChange={checked => setBoth(checked === true)} aria-label="Your other devices can start runs on this computer" />
-            <span>
-              Your other devices can start runs on this computer
-              <span className="block text-xs text-muted-foreground">{`Through ${shownWhere}, while it is on.`}</span>
+      </label>
+      {!isLink(where) && (
+        <label className="block max-w-xs space-y-1">
+          <span className="block text-sm font-medium">Code</span>
+          <Input
+            ref={codeField}
+            name="pairing-code"
+            aria-label="Code"
+            placeholder="K7P4-QX9M"
+            autoCapitalize="characters"
+            autoComplete="off"
+            spellCheck={false}
+            value={code}
+            onPaste={paste}
+            onChange={event => setCode(event.target.value)}
+            aria-invalid={codeWrong}
+            aria-describedby={codeWrong ? 'pairing-code-error' : undefined}
+            className="font-mono uppercase placeholder:normal-case"
+          />
+          {codeWrong && (
+            <span id="pairing-code-error" className="block text-xs text-danger">
+              That is no code: it is letters and digits, like K7P4-QX9M.
             </span>
-          </label>
-        )}
-        {error !== undefined && <Problem>{error}</Problem>}
-        <div className="flex justify-end gap-2">
-          <Button size="sm" type="button" variant="ghost" onClick={onClose}>
-            {error?.startsWith('Joined.') ? 'Done' : 'Cancel'}
-          </Button>
-          {!error?.startsWith('Joined.') && (
-            <Button size="sm" type="submit" disabled={joining || link === undefined}>
-              {joining && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}
-              Join
-            </Button>
           )}
-        </div>
-      </form>
-    </Dialog>
+        </label>
+      )}
+      {server && (
+        <label className="flex items-start gap-2 text-sm">
+          <Checkbox className="mt-0.5" checked={both} onCheckedChange={checked => setBoth(checked === true)} aria-label="Your other devices can start runs on this computer" />
+          <span>
+            Your other devices can start runs on this computer
+            <span className="block text-xs text-muted-foreground">{`Through ${shownWhere}, while it is on.`}</span>
+          </span>
+        </label>
+      )}
+      {error !== undefined && <Problem>{error}</Problem>}
+      <Presses>
+        <Button type="button" variant="ghost" onClick={() => leave(onClose)}>
+          {error?.startsWith('Joined.') ? 'Done' : 'Cancel'}
+        </Button>
+        {!error?.startsWith('Joined.') && (
+          // Pressable once both fields hold something: pressed with what is no address or no code, that field says so.
+          <Button type="submit" form={formId} loading={joining} disabled={!where.trim() || (!isLink(where) && !code.trim()) || down}>
+            Join
+          </Button>
+        )}
+      </Presses>
+    </form>
   )
 }

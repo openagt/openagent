@@ -8,7 +8,7 @@ import { formatElapsed } from '../lib/format-date.js'
 import { Markdown } from './Markdown.js'
 import { CROSS_FADE_MS, CrossFade } from './CrossFade.js'
 import { CopyButton } from './ui/copy-button.js'
-import { languageOf, Pieces, useHighlightedIn, type Piece } from '../lib/highlight.js'
+import { ColouredLines, languageOf, Pieces, useHighlightedIn, type Piece } from '../lib/highlight.js'
 
 /**
  * What a file named in a step does on a click: opens the pane that shows the run's files, on it.
@@ -72,7 +72,10 @@ function firstWords(text: string): string {
 
 // What an opened call shows, in the page's code font: what it was given scrolls, as does what it
 // printed, once taller than their limit.
-const CODE = 'max-h-64 overflow-auto whitespace-pre-wrap break-all font-mono text-[13px] leading-[19px]'
+const CODE = 'max-h-64 overflow-auto whitespace-pre-wrap break-all font-mono text-chat-code'
+
+/** The calls that start a subagent: their detail is the task the agent wrote for it. */
+const SUBAGENT_CALLS = new Set(['Agent', 'Task'])
 
 // One tool call: the verb in grey, what it was done to in dark, on one line. A command the coding
 // agent said in a few words of its own reads as those words ("List project files"), the command
@@ -80,9 +83,6 @@ const CODE = 'max-h-64 overflow-auto whitespace-pre-wrap break-all font-mono tex
 // box (a command with "$" in front) and, under it, what the call printed, in a box that scrolls; a
 // call that failed says so, with its exit code when it has one. A call still going on (`live`)
 // reads in the present ("Running"), shimmers, and counts the seconds when it says since when.
-/** The calls that start a subagent: their detail is the task the agent wrote for it. */
-const SUBAGENT_CALLS = new Set(['Agent', 'Task'])
-
 function CallLine(call: Call) {
   const [open, setOpen] = useState(false)
   const openFile = useContext(OpenFile)
@@ -194,7 +194,7 @@ interface FileLines {
  * a tab and the line ("1\t<!DOCTYPE html>"), an empty line as its number alone. A text that does
  * not open with them is no file's lines.
  */
-export function fileLines(text: string): FileLines | undefined {
+function fileLines(text: string): FileLines | undefined {
   const all = text.split('\n')
   const lines: FileLines['lines'] = []
   let at = 0
@@ -220,18 +220,18 @@ function ReadDetail({ path, read }: { path: string; read: FileLines }) {
   // The widest number, and the room after it.
   const width = `${String(read.lines.at(-1)!.number).length}ch`
   return (
-    <div className="mt-1.5 flex flex-col gap-2.5">
+    <div className="mt-1.5 flex flex-col gap-2">
       {openFile ? (
-        <button type="button" title={`Open ${path}`} onClick={() => openFile(path)} className="min-w-0 truncate text-left text-[13px] text-foreground hover:underline hover:underline-offset-2">
+        <button type="button" title={`Open ${path}`} onClick={() => openFile(path)} className="min-w-0 truncate text-left text-chat-code text-foreground hover:underline hover:underline-offset-2">
           {path}
         </button>
       ) : (
-        <div className="min-w-0 truncate text-[13px] text-foreground">{path}</div>
+        <div className="min-w-0 truncate text-chat-code text-foreground">{path}</div>
       )}
-      <div aria-label="File" className="max-h-[400px] overflow-auto rounded-lg border border-border py-1.5 font-mono text-[13px] leading-[19px]">
+      <div aria-label="File" className="max-h-[400px] overflow-auto rounded-lg border border-border py-1.5 font-mono text-chat-code">
         {read.lines.map((line, i) => (
           <div key={line.number} className="flex w-max min-w-full whitespace-pre text-foreground">
-            <span className="shrink-0 select-none pr-4 pl-3 text-right tabular-nums text-muted-foreground/60" style={{ width: `calc(${width} + 1.75rem)` }}>
+            <span className="shrink-0 select-none pr-4 pl-3 text-right tabular-nums text-faint-foreground" style={{ width: `calc(${width} + 1.75rem)` }}>
               {line.number}
             </span>
             <span className="pr-3">{coloured?.[i] ? <ColouredLine pieces={coloured[i]} /> : line.text || ' '}</span>
@@ -253,20 +253,13 @@ function GivenDetail({ label, call, whole, output, card }: { label: string; call
   const command = call.kind === 'command' && given !== undefined
   const coloured = useHighlightedIn(command ? given : '', command ? 'shellscript' : undefined)
   return (
-    <div className={cn('mt-1.5 flex flex-col gap-1.5', card && 'rounded-xl border border-border px-3 py-3')}>
+    <div className={cn('mt-1.5 flex flex-col gap-1.5', card && 'rounded-lg border border-border px-3 py-3')}>
       {card && <div className="text-sm text-muted-foreground">{label}</div>}
       {given !== undefined && (
         <div className="relative rounded-lg border border-border">
           <pre aria-label={command ? 'Command' : 'Detail'} className={cn(CODE, 'py-1.5 pl-3 pr-10 text-foreground')}>
             {command && <span className="select-none text-muted-foreground">$ </span>}
-            {coloured
-              ? coloured.map((pieces, i) => (
-                  <Fragment key={i}>
-                    <Pieces pieces={pieces} />
-                    {i < coloured.length - 1 ? '\n' : null}
-                  </Fragment>
-                ))
-              : given}
+            {coloured ? <ColouredLines lines={coloured} /> : given}
           </pre>
           <CopyButton text={given} label={command ? 'Copy the command' : 'Copy'} className="absolute top-[7px] right-2" />
         </div>
@@ -297,7 +290,7 @@ export function Caret({ open = false }: { open?: boolean }) {
  * small letters, a pixel and a half under the middle of the line (measured on the page's 14px
  * font), not with the line's middle, which reads as above the words.
  */
-export function LiveDots({ leaving = false }: { leaving?: boolean }) {
+function LiveDots({ leaving = false }: { leaving?: boolean }) {
   return (
     <span className={cn('relative top-[1.5px] flex w-[18px] shrink-0 items-center', leaving && 'dots-leave')}>
       <Dots />
@@ -334,8 +327,7 @@ function ThoughtLine({ text }: { text: string }) {
   return (
     <div className="min-w-0">
       <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open} aria-label="Thought" className="flex min-w-0 max-w-full items-center gap-1.5 hover:text-foreground">
-        {/* Room for the slant of its last letter, which `truncate` would clip. */}
-        <span className="truncate pr-0.5 italic">{firstWords(text)}</span>
+        <span className="truncate italic">{firstWords(text)}</span>
         <Caret open={open} />
       </button>
       {open && (
@@ -407,8 +399,8 @@ export function tokenWords(tokens: number): string {
 // counting the commands and naming the file the edits changed with how much ("Ran 2 commands,
 // edited README.md +12 −54"), opening to one bordered panel with a row per step, a line between
 // two rows, each row opening further. `lead` is a row the panel opens with: the session's
-// set-up, before the first turn's steps. A lone call with nothing to lead it is its own line
-// ("Read AGENTS.md"). A run with no call in it draws nothing.
+// set-up, before the first turn's steps. A lone call is its own line ("Read AGENTS.md"), opening
+// to its detail, or to the panel when a lead goes with it. A run with no call in it draws nothing.
 export function ToolCalls({ steps, lead, live }: { steps: readonly ToolStep[]; lead?: ReactNode; live?: { call: Call; since?: string | undefined } | undefined }) {
   const [open, setOpen] = useState(false)
   const openFile = useContext(OpenFile)
@@ -419,7 +411,7 @@ export function ToolCalls({ steps, lead, live }: { steps: readonly ToolStep[]; l
   const calls = steps.filter(step => step.type === 'action')
   if (calls.length === 0 && !live) return null
   const summary = callsSummary(calls.map(call => ({ ...toolCall(call.label, call.detail, call.output?.changed), ...(call.output?.failed ? { failed: true as const } : {}) })))
-  const only = !live && !lead && shown.length === 1 && shown[0]!.type === 'action' ? shown[0] : undefined
+  const only = !live && shown.length === 1 && shown[0]!.type === 'action' ? shown[0] : undefined
   // The row's words: the call going on now, as going on; once it is done, as Claude Code on the
   // web's row does, the same row says the steps it took ("Ran 2 commands"), the old words fading
   // out as the new come in. A row of one call says that call.
@@ -435,18 +427,18 @@ export function ToolCalls({ steps, lead, live }: { steps: readonly ToolStep[]; l
       <span className="min-w-0 truncate text-left">
         {summary.parts.map((part, at) => (
           <Fragment key={at}>
-            <span className="group-hover/status:text-foreground/80 group-has-focus-visible/status:text-foreground/80">
+            <span className="group-hover/status:text-foreground group-has-focus-visible/status:text-foreground">
               {at > 0 && ', '}
               {part.words}
             </span>
-            {part.target !== undefined && <span className="text-foreground/80 group-hover/status:text-foreground group-has-focus-visible/status:text-foreground"> {part.target}</span>}
+            {part.target !== undefined && <span className="text-foreground"> {part.target}</span>}
           </Fragment>
         ))}
       </span>
       {summary.size !== undefined && <LinesPill {...summary.size} />}
     </CrossFade>
   )
-  const opens = one ? one.opens : true
+  const opens = one ? one.opens || lead !== undefined : true
   return (
     <div className="min-w-0 flex-1 font-sans text-sm text-muted-foreground">
       {/* The pointer anywhere on the line, as wide as the chat, lights its words a step: the
@@ -466,7 +458,7 @@ export function ToolCalls({ steps, lead, live }: { steps: readonly ToolStep[]; l
         )}
       </div>
       {open &&
-        (one && only?.type === 'action' ? (
+        (one && only?.type === 'action' && !lead ? (
           <CallDetail {...only} card />
         ) : (
           <div className="mt-1.5 flex flex-col divide-y divide-border rounded-lg border border-border">

@@ -1,6 +1,6 @@
 import { contextRemote } from './context.js'
 import { runComputerCommand } from './modules.js'
-import { saveMachine } from './machines.js'
+import { saveMachine } from './save-machine.js'
 import { computersWiring, forgetHere, ownComputersOf, reachedAtAddress, removedSince, type OwnComputers, type OwnDoor } from '../dashboard/computers-sync.js'
 import { listForgotten, listMachines, removeMachine, type MachineRecord } from '../registry.js'
 import { THROUGH_PATH, leaveRemote } from '../dashboard/remote-run.js'

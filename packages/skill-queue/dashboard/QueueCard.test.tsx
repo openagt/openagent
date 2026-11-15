@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
 import { QueueCard } from './QueueCard.js'
 import { HostServicesContext, INERT_HOST_SERVICES } from '../../dashboard/dashboard/lib/host-services.js'
-import type { MountedModules } from '../../dashboard/dashboard/lib/use-modules.js'
+import type { MountedModules } from '@openagt/dashboard/module/testing'
 import { NO_MODULES, fakeHost, renderWithHost, type FakeHost } from './test-host.js'
 import { workOnEntryPrompt } from '../src/module.js'
 import { configureFirst } from '../../dashboard/dashboard/test-utils.js'
@@ -27,11 +27,12 @@ const started = () => host.startRun.mock.calls.map(([projectId, prompt, opts]) =
 afterEach(cleanup)
 
 describe('QueueCard', () => {
-  test('lists every project with open entries from `queue --local`, and leaves out a project with none', async () => {
+  test('lists every project with open entries from `queue --local`, counted as the Queue page counts them, and leaves out a project with none', async () => {
     render({ p1: [LOGIN, 'Tidy the loader'], p2: [] })
     expect(await screen.findByText('Login page')).toBeTruthy()
     expect(screen.getByText('Tidy the loader')).toBeTruthy()
     expect(screen.getByText('alpha')).toBeTruthy()
+    expect(screen.getByText('2 entries')).toBeTruthy()
     expect(screen.queryByText('beta')).toBeNull()
     expect(host.runCommand).toHaveBeenCalledWith('p1', ['--local'])
     expect(host.runCommand).toHaveBeenCalledWith('p2', ['--local'])
@@ -59,7 +60,7 @@ describe('QueueCard', () => {
   test('the play button starts one agent on that entry alone, landing on it', async () => {
     render({ p1: [LOGIN, 'Tidy the loader'] })
     await screen.findByText('Login page')
-    fireEvent.click(screen.getAllByRole('button', { name: 'Spin up an agent working on this entry' })[1]!)
+    fireEvent.click(screen.getAllByRole('button', { name: 'Start an agent working on this entry' })[1]!)
     await waitFor(() => expect(started()).toEqual([['p1', workOnEntryPrompt('Tidy the loader'), undefined]]))
   })
 
@@ -68,7 +69,7 @@ describe('QueueCard', () => {
     await screen.findByText('Login page')
     // Three at first; one fewer is two.
     fireEvent.click(screen.getByRole('button', { name: 'One agent fewer' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Start 2' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Start 2 agents' }))
     await waitFor(() =>
       expect(started()).toEqual([
         ['p1', workOnEntryPrompt(LOGIN), { land: false }],
@@ -77,12 +78,52 @@ describe('QueueCard', () => {
     )
   })
 
+  test('the fan-out starts the entries nobody is on: an entry a working agent was asked gets no second agent', async () => {
+    host = fakeHost({ p1: { '--local': [LOGIN, 'Tidy the loader', 'Third'] }, p2: { '--local': [] } })
+    host.agents.mockImplementation(async (projectId: string) => (projectId === 'p1' ? [{ id: 'run-7', status: 'running', startedAt: '2026-10-01T10:00:00.000Z', ask: workOnEntryPrompt(LOGIN) }] : []))
+    renderWithHost(<QueueCard projects={[alpha, beta]} />, host)
+    fireEvent.click(await screen.findByRole('button', { name: 'Start 2 agents' }))
+    await waitFor(() =>
+      expect(started()).toEqual([
+        ['p1', workOnEntryPrompt('Tidy the loader'), { land: false }],
+        ['p1', workOnEntryPrompt('Third'), { land: false }],
+      ]),
+    )
+  })
+
+  test('an agent waiting on the person\'s answer is on its entry too: the fan-out gives that entry no second agent', async () => {
+    host = fakeHost({ p1: { '--local': [LOGIN, 'Tidy the loader'] }, p2: { '--local': [] } })
+    host.agents.mockImplementation(async (projectId: string) => (projectId === 'p1' ? [{ id: 'run-7', status: 'waiting', startedAt: '2026-10-01T10:00:00.000Z', ask: workOnEntryPrompt(LOGIN) }] : []))
+    renderWithHost(<QueueCard projects={[alpha, beta]} />, host)
+    await screen.findByRole('button', { name: 'An agent is on it' })
+    fireEvent.click(screen.getByRole('button', { name: 'Start 1 agent' }))
+    await waitFor(() => expect(started()).toEqual([['p1', workOnEntryPrompt('Tidy the loader'), { land: false }]]))
+  })
+
+  test('an entry a working agent was asked says so, as on the Queue page, and opens that agent in place of a start', async () => {
+    host = fakeHost({ p1: { '--local': [LOGIN, 'Tidy the loader'] }, p2: { '--local': [] } })
+    host.agents.mockImplementation(async (projectId: string) => (projectId === 'p1' ? [{ id: 'run-7', status: 'running', startedAt: '2026-10-01T10:00:00.000Z', ask: workOnEntryPrompt(LOGIN) }] : []))
+    renderWithHost(<QueueCard projects={[alpha, beta]} />, host)
+    const on = await screen.findByRole('button', { name: 'An agent is on it' })
+    expect(on.closest('li')?.textContent).toContain('Login page')
+    expect(screen.getAllByRole('button', { name: 'Start an agent working on this entry' })).toHaveLength(1)
+    fireEvent.click(on)
+    expect(host.openAgent).toHaveBeenCalledWith('p1', 'run-7')
+  })
+
+  test('the count is the Queue page\'s control: typed in its box as well as stepped', async () => {
+    render({ p1: [LOGIN, 'Tidy the loader', 'Third', 'Fourth'] })
+    await screen.findByText('Login page')
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'How many agents to start' }), { target: { value: '4' } })
+    expect(screen.getByRole('button', { name: 'Start 4 agents' })).toBeTruthy()
+  })
+
   test('the fan-out is capped at the entries there are, and stops at the first refusal with its reason', async () => {
     render({ p1: [LOGIN, 'Tidy the loader'], p2: [] })
     await screen.findByText('Login page')
     host.startRun.mockResolvedValueOnce({ ok: true, agentId: 'run-1' }).mockResolvedValueOnce({ ok: false, error: 'the daemon refused' })
     // Three asked for, two entries there: the button says two.
-    fireEvent.click(screen.getByRole('button', { name: 'Start 2' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Start 2 agents' }))
     expect((await screen.findByRole('alert')).textContent).toBe('the daemon refused')
     expect(started()).toHaveLength(2)
   })
@@ -95,11 +136,11 @@ describe('QueueCard', () => {
     expect(started()).toEqual([])
   })
 
-  test('the entries are numbered in the order agents take them, and the card\'s title opens the Queue page', async () => {
+  test('the entries are numbered in the order agents take them, and the link at its heading opens the Queue page', async () => {
     render({ p1: [LOGIN, 'Tidy the loader'] })
     await screen.findByText('Login page')
     expect([...document.querySelectorAll('ul ul > li')].map(row => row.querySelector('span')?.textContent)).toEqual(['1.', '2.'])
-    const title = screen.getByRole('link', { name: 'AI Queue' })
+    const title = screen.getByRole('link', { name: 'Queue' })
     expect(title.getAttribute('href')).toBe('/queue')
     fireEvent.click(title)
     expect(host.openPage).toHaveBeenCalledWith('queue')
@@ -120,5 +161,27 @@ describe('QueueCard', () => {
     expect(entry.getAttribute('title')).toBe('Create tickets/2026-08-01_login-page.plan.md')
     fireEvent.click(entry)
     expect(openPage).toHaveBeenCalledWith('tickets', ['2026-08-01_login-page.md'], 'p1')
+  })
+
+  test('an entry whose file is there already (a plan already written) offers no start, and the fan-out leaves it out', async () => {
+    host = fakeHost({ p1: { '--local': ['Create tickets/2026-08-01_login-page.plan.md', 'Tidy the loader'] }, p2: { '--local': [] } })
+    const modules: MountedModules = { ...NO_MODULES, pages: [{ segment: 'tickets', label: 'Tickets', Page: () => null, package: 'a-tickets', projects: ['p1'], names: async () => ({ 'tickets/2026-08-01_login-page.plan.md': { title: 'Plan: Login page', href: 'tickets/2026-08-01_login-page.md', done: { ask: 'Create tickets/2026-08-01_login-page.plan.md', title: 'Plan: Login page · already written' } } }) }] }
+    renderWithHost(<QueueCard projects={[alpha, beta]} />, host, modules)
+    await screen.findByRole('button', { name: 'Plan: Login page · already written' })
+    expect(screen.getAllByRole('button', { name: 'Start an agent working on this entry' })).toHaveLength(1)
+    fireEvent.click(screen.getByRole('button', { name: 'Start 1 agent' }))
+    await waitFor(() => expect(started()).toEqual([['p1', workOnEntryPrompt('Tidy the loader'), { land: false }]]))
+  })
+
+  test('an entry that names a plan already written but asks something else of it is work: it offers a start, and the fan-out takes it', async () => {
+    const review = 'Review tickets/2026-08-01_login-page.plan.md for accessibility issues'
+    host = fakeHost({ p1: { '--local': [review] }, p2: { '--local': [] } })
+    const modules: MountedModules = { ...NO_MODULES, pages: [{ segment: 'tickets', label: 'Tickets', Page: () => null, package: 'a-tickets', projects: ['p1'], names: async () => ({ 'tickets/2026-08-01_login-page.plan.md': { title: 'Plan: Login page', href: 'tickets/2026-08-01_login-page.md', done: { ask: 'Create tickets/2026-08-01_login-page.plan.md', title: 'Plan: Login page · already written' } } }) }] }
+    renderWithHost(<QueueCard projects={[alpha, beta]} />, host, modules)
+    // Named as the plan it asks about: "already written" would say it is done.
+    await screen.findByRole('button', { name: 'Plan: Login page' })
+    expect(screen.getAllByRole('button', { name: 'Start an agent working on this entry' })).toHaveLength(1)
+    fireEvent.click(screen.getByRole('button', { name: 'Start 1 agent' }))
+    await waitFor(() => expect(started()).toEqual([['p1', workOnEntryPrompt(review), { land: false }]]))
   })
 })

@@ -1,6 +1,6 @@
 import { AGENTS, DEFAULT_AGENT, MAX_NAME, isCommandName } from '../src/names.js'
 import { parseInterval } from '../src/pace.js'
-import { draftOf, pace, paceArgs, paceProblem, type PaceDraft, type SchedulerCommand } from './schedulers.js'
+import { draftOf, pace, paceArgs, paceProblem, record, type PaceDraft, type SchedulerCommand } from './schedulers.js'
 
 // A person's own automation as data: what they have typed so far, into the "New automation" form
 // or into the Edit panel of a row they made; what still keeps it from being saved; the commands
@@ -58,7 +58,7 @@ export interface OpenedAutomation {
  * panel cannot show: it would then save something other than what is there.
  */
 export function openedAutomation(output: unknown): OpenedAutomation | undefined {
-  const answer = typeof output === 'object' && output !== null ? (output as Record<string, unknown>) : {}
+  const answer = record(output)
   const { name, prompt, every, when, waitsFor, file } = answer
   if (typeof name !== 'string' || typeof prompt !== 'string' || typeof file !== 'string') return undefined
   const read = every === undefined ? undefined : typeof every === 'string' ? parseInterval(every) : undefined
@@ -82,21 +82,29 @@ export function atRowsPace(opened: AutomationDraft, row: SchedulerCommand): Auto
 }
 
 /**
- * What keeps a draft from being saved yet, for the person typing it, the first thing first; nothing
- * when it can be saved. `file` is the file of an automation opened from its row: a text too long
+ * What keeps a draft from being saved yet, for the person typing it, the first thing first in the
+ * form's order; nothing when it can be saved. A name it cannot have is pointed at, its rule being
+ * said under its field. `file` is the file of an automation opened from its row: a text too long
  * for the form is then changed in that file.
  */
 export function draftProblem(draft: AutomationDraft, file?: string): string | undefined {
-  const name = draft.name.trim()
-  if (name === '') return draft.onThisMachine ? 'Give it a name, like answer-comments.' : 'Give it a name. It becomes the command, like /answer-comments.'
-  if (!isCommandName(name)) return 'A name is lower-case letters, digits and dashes, never three dashes in a row, like answer-comments.'
-  if (name.length > MAX_NAME) return `A name is ${MAX_NAME} characters at most.`
+  if (draft.name.trim() === '') return draft.onThisMachine ? 'Give it a name, like answer-comments.' : 'Give it a name. It becomes the command, like /answer-comments.'
+  if (nameProblem(draft.name) !== undefined) return "Give it another name: the one above cannot be an automation's."
   if (draft.prompt.trim() === '') return 'Write what the agent is told.'
   if (draft.prompt.trim().length > TEXT_MAX) return `What the agent is told is ${draft.prompt.trim().length} characters, and this form takes ${TEXT_MAX} at most. ${file === undefined ? 'Save a shorter one, then write the rest into the file.' : `Change it in its file, ${file}.`}`
   if (draft.when.trim().length > TEXT_MAX) return `The shell line is ${draft.when.trim().length} characters, and this form takes ${TEXT_MAX} at most.`
   if (draft.when.trim() !== '' && draft.waitsFor.trim().length > TEXT_MAX) return `What the line waits for is ${draft.waitsFor.trim().length} characters, and this form takes ${TEXT_MAX} at most.`
   if (draft.pace.kind === 'work' && draft.when.trim() === '') return 'Say when it runs: on a pace, by a shell line, or both.'
   return paceProblem(draft.pace)
+}
+
+/** Why a name typed cannot be an automation's, said under its field; nothing for one that can, or for none typed yet. */
+export function nameProblem(typed: string): string | undefined {
+  const name = typed.trim()
+  if (name === '') return undefined
+  if (!isCommandName(name)) return 'A name is lower-case letters, digits and dashes, never three dashes in a row, like answer-comments.'
+  if (name.length > MAX_NAME) return `A name is ${MAX_NAME} characters at most.`
+  return undefined
 }
 
 /**
@@ -182,7 +190,7 @@ export interface TriedLine {
 
 /** Read what `scheduler try` printed. Forgiving: an answer that is not what the command promises reads as a line that could not be tried. */
 export function triedLine(output: unknown): TriedLine {
-  const answer = typeof output === 'object' && output !== null ? (output as Record<string, unknown>) : {}
+  const answer = record(output)
   const printed = typeof answer['printed'] === 'string' ? answer['printed'] : ''
   const lastRun = typeof answer['lastRun'] === 'string' ? { lastRun: answer['lastRun'] } : {}
   if (answer['ran'] !== true) return { ...lastRun, printed, verdict: `The line failed${typeof answer['error'] === 'string' && answer['error'] !== '' ? `: ${answer['error']}` : '.'}`, tone: 'failed' }
@@ -191,20 +199,23 @@ export function triedLine(output: unknown): TriedLine {
 
 /** Read what `scheduler write-line` printed: the line, or why no line can do it. Forgiving: an answer that is neither reads as a line not written. */
 export function writtenLine(output: unknown): { line: string } | { said: string } {
-  const answer = typeof output === 'object' && output !== null ? (output as Record<string, unknown>) : {}
+  const answer = record(output)
   if (typeof answer['line'] === 'string' && answer['line'] !== '') return { line: answer['line'] }
   return { said: typeof answer['none'] === 'string' ? `No line can do that: ${answer['none']}` : 'The line was not written.' }
 }
 
 /** Read what `scheduler add` or `edit` printed: the file it wrote, where a run's checkout starts, whether it is kept on this machine alone, and the tool's name for what the file says now, when it gives one. */
 export function savedFile(output: unknown): { file: string; startsFrom: string; onThisMachine: boolean; version?: string } {
-  const answer = typeof output === 'object' && output !== null ? (output as Record<string, unknown>) : {}
+  const answer = record(output)
   return { file: typeof answer['file'] === 'string' ? answer['file'] : 'a skill file', startsFrom: typeof answer['startsFrom'] === 'string' ? answer['startsFrom'] : 'HEAD', onThisMachine: answer['onThisMachine'] === true, ...(typeof answer['version'] === 'string' ? { version: answer['version'] } : {}) }
 }
 
+/** When a row kept on this machine can start: at once once switched on while the scheduler runs, else once it runs too. */
+const canStart = (schedulerRuns: boolean): string => (schedulerRuns ? 'can start as soon as you switch it on' : 'can start once you switch it on and the scheduler runs')
+
 /** What a saved automation is and what the person has to do with it, in a sentence: a shared one is a file to commit that must reach where a run's checkout starts; one kept on this machine needs nothing. */
-export function savedWords(saved: { startsFrom: string; onThisMachine: boolean }): string {
-  if (saved.onThisMachine) return 'It is kept on this machine alone: nothing to commit, and nobody else gets the row. Its row can start as soon as you switch it on. Its prompt is in the record of each run, which is shared where this project shares its records.'
+export function savedWords(saved: { startsFrom: string; onThisMachine: boolean }, schedulerRuns: boolean): string {
+  if (saved.onThisMachine) return `It is kept on this machine alone: nothing to commit, and nobody else gets the row. Its row ${canStart(schedulerRuns)}. Its prompt is in the record of each run, which is shared where this project shares its records.`
   return `It is a file of yours, in this project, and nothing was committed for you. ${startsWhen(saved.startsFrom)}`
 }
 
@@ -231,9 +242,10 @@ export function keptWhereHint(opened: OpenedAutomation | undefined): string {
 }
 
 /** What a row says before its automation is removed, for the person to confirm: what is deleted, what of it can be brought back, and what stays. */
-export function removeWarning(command: { onThisMachine?: true }): string {
+export function removeWarning(command: { onThisMachine?: true; untracked?: true }): string {
   const rest = 'Its switch and your picks for it go with it. The records of its past runs stay.'
   if (command.onThisMachine) return `Its file is deleted. It is kept on this machine alone, outside git, so it cannot be brought back. ${rest}`
+  if (command.untracked) return `Its skill file is deleted from your files in this project. It was never committed, so nobody else has it, and it cannot be brought back. ${rest}`
   return `Its skill file is deleted from your files in this project, and nothing is committed for you. Git can bring back only what you committed of it: a file never committed, or your last changes to it, cannot be brought back. Everyone else who has the project keeps the row until your deletion reaches them. ${rest}`
 }
 
@@ -243,19 +255,19 @@ export function removeWarning(command: { onThisMachine?: true }): string {
  * does not say sends the person to git to look.
  */
 export function removedWords(title: string, output: unknown): string {
-  const answer = typeof output === 'object' && output !== null ? (output as Record<string, unknown>) : {}
+  const answer = record(output)
   const file = typeof answer['file'] === 'string' ? answer['file'] : 'its file'
   const startsFrom = typeof answer['startsFrom'] === 'string' ? answer['startsFrom'] : 'HEAD'
-  if (answer['onThisMachine'] === true) return `Removed ${title}: ${file} is deleted. Nothing is to commit.`
+  if (answer['onThisMachine'] === true) return `Removed ${title}: ${file} is deleted. Nothing to commit.`
   if (answer['git'] === 'committed') return `Removed ${title}: ${file} is deleted, and nothing was committed for you. ${startsFrom === 'HEAD' ? 'Commit the deletion.' : `Commit the deletion and bring it to ${startsFrom}: until then everyone else who has the project keeps the row.`}`
   if (answer['git'] === 'staged') return `Removed ${title}: ${file} is deleted. It was staged and never committed, so a commit made now would still add it: take it out of the next commit with "git rm --cached ${file}".`
-  if (answer['git'] === 'nothing') return `Removed ${title}: ${file} is deleted. Git never had the file, so nothing is to commit.`
+  if (answer['git'] === 'nothing') return `Removed ${title}: ${file} is deleted. Git never had the file, so there is nothing to commit.`
   return `Removed ${title}: ${file} is deleted. What git holds of it could not be read: look with "git status".`
 }
 
 /** What the form says of where a draft will be saved, under its two choices. */
-export function whereHint(draft: AutomationDraft): string {
-  return draft.onThisMachine ? 'Kept on this machine alone, outside git. The row starts switched off, and can start as soon as you switch it on.' : 'Saved as a skill file in this project, which you commit. The row starts switched off.'
+export function whereHint(draft: AutomationDraft, schedulerRuns: boolean): string {
+  return draft.onThisMachine ? `Kept on this machine alone, outside git. The row starts switched off, and ${canStart(schedulerRuns)}.` : 'Saved as a skill file in this project, which you commit. The row starts switched off.'
 }
 
 /** Where a saved automation's file has to get to before its row can start, in a sentence. */

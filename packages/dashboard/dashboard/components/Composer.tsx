@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { forwardRef, useContext, useEffect, useImperativeHandle, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { ArrowUp, Loader2 } from 'lucide-react'
 import type { ProjectSummary } from '../../src/index.js'
 import { machineName, type DriverName } from '../../src/client.js'
@@ -16,23 +16,28 @@ import { Button } from './ui/button.js'
 import { cn } from '../lib/utils.js'
 import { ClaudeLogo, CodexLogo } from './driver-logos.js'
 import { onProjects } from '../rpc/projects.js'
-import { PromptEditor, type PromptEditorHandle } from './PromptEditor.js'
+import { PromptEditor, type PromptDraft, type PromptEditorHandle } from './PromptEditor.js'
 import { PresetCreatePanel } from './PresetCreatePanel.js'
 import { CommandsMenu } from './CommandsMenu.js'
 import { DriverModelMenu, type DriverOption } from './DriverModelMenu.js'
 import { RunOnMenu } from './RunOnMenu.js'
-import { openPermissions, openSettings } from '../lib/use-route.js'
+import { PERMISSIONS_PAGE } from '../lib/use-route.js'
+import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
 import { useMachines, useMachinesRead, tellMachine, type Machine } from '../lib/machines.js'
 import { restoreRunOn, runTarget, useRunOnFallback, useSelectedMachineId, selectMachine } from '../lib/remote-target.js'
 import { thisMachineName } from '../lib/this-machine.js'
 import { useMachineStatus } from '../lib/use-machine-status.js'
-import { takePendingDraft } from '../lib/draft-handoff.js'
+import { keepDraft, keptDraft, takePendingDraft } from '../lib/draft-handoff.js'
+import { DaemonDown } from '../lib/use-daemon-health.js'
+import { useIsMobile } from '../lib/use-mobile.js'
 import { driverOptions, modelEfforts, readMachineModelsAhead, useModelsOn } from '../lib/models.js'
 import { readyCommands, useProjectLauncher } from '../lib/use-project-launcher.js'
 import { AgentAccountItems, firstAccount, readMachineAccountsAhead, useAccountsOn } from './AgentAccounts.js'
 import { readMachineGitHostsAhead } from './GitHosts.js'
-import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
-import { RowAboveBox, rowClass, rowLeftClass } from './ui/row-item.js'
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipsPastBox } from './ui/tooltip.js'
+import { RowAboveBox, rowClass, rowItemClass, rowLeftClass } from './ui/row-item.js'
+import { Skeleton } from './ui/skeleton.js'
+import { Slot } from './ui/slot.js'
 
 // The driver + model tree (#650/#656/#658): each driver lists ONLY its own models, since the
 // model passes straight through to that coding agent. Picking a model in a driver's submenu sets both, so an
@@ -49,11 +54,36 @@ const DRIVER_UI: Record<DriverName, { icon: DriverOption['icon'] }> = {
   codex: { icon: <CodexLogo className="h-4 w-4" /> },
 }
 
+/**
+ * The message box's surface: the raised one, with the hairline, holding the row of where the agent
+ * starts as its first line and the row of how it runs as its last. It is focused almost all the time
+ * it is on screen, so focus is its own edge in the primary colour and nothing more: the caret says the
+ * rest. The edge stays while the keyboard is on one of its items or in a menu one of them opened.
+ */
+const SURFACE = '[view-transition-name:composer] flex flex-col rounded-box border border-hairline bg-card p-1 shadow-lg transition-colors focus-within:border-primary has-[[aria-expanded=true]]:border-primary'
+
+/**
+ * The box while the page it stands on is read: a {@link Slot}'s shape at the box's size and corner,
+ * its three rows' heights and nothing in them, so the box takes its place without moving anything.
+ */
+export function ComposerShape() {
+  return (
+    <Slot of={{ value: null, state: 'unknown' }} shape={<Skeleton className="rounded-box border border-transparent p-1"><div className="mb-1 h-8" /><div className="h-9" /><div className="mt-1 h-8" /></Skeleton>}>
+      {() => null}
+    </Slot>
+  )
+}
+
 export interface ComposerHandle {
-  clear: () => void
+  /** Empty the box. Returns what it held, chips and all, for `restore`. */
+  clear: () => PromptDraft | undefined
+  /** Put back a draft `clear` returned, after what is typed there, the caret left where it is. */
+  restore: (draft: PromptDraft) => void
   focus: () => void
-  /** Put `text` in the box to edit, in place of what is there, and focus it. */
+  /** Put `text` in the box to edit, after what is typed there, and focus it. */
   edit: (text: string) => void
+  /** Put `text` in the box after what is typed there, the caret left where it is. */
+  append: (text: string) => void
 }
 
 // The shared agent composer (#721), laid out as Claude Code's: a box one line tall when empty that
@@ -96,15 +126,9 @@ export const Composer = forwardRef<ComposerHandle, {
   submitLabel: string
   submitBusyLabel: string
   placeholder?: string | undefined
-  /** Compact single-row form for the navbar quick-launch (#723): editor + submit, no control row
-   *  or save panel. The `/` `@` `#` triggers still work; agent/model + options come from the
-   *  shared prefs the launcher sets. */
-  compact?: boolean | undefined
-  /** Off inside a session (#831): a session is bound to the agent it started with, so the select
-   *  would only ever rewrite the *next* session's default. Chosen at the launcher instead. */
-  showDriverModel?: boolean | undefined
   /** Inside a session: the "Run on" pick is the launcher's, since a session already runs where it
-   *  was started. */
+   *  was started, and so is the agent/model select (#831): a session is bound to the agent it
+   *  started with, so the select would only ever rewrite the *next* session's default. */
   inAgent?: boolean | undefined
   /** Inside a session: the row above the box, which says what the launcher's row picks. */
   sessionRow?: ReactNode
@@ -117,13 +141,20 @@ export const Composer = forwardRef<ComposerHandle, {
   idleControl?: ReactNode
   /** The saved machine the project is on, when only another computer of the person's has it (elsewhere.ts). */
   home?: string | undefined
+  /** Which box this is, by project or session: what is typed in it is kept in this browser, across a navigation and a reload, until it is sent. */
+  draftKey?: string | undefined
+  /** The box takes the caret when it opens. */
+  autoFocus?: boolean | undefined
 }>(function Composer(
-  { files, addContext, removeContext, startsAt, controls, controlsEnd, sessionModel, sessionContext, onSubmit, onPromptChange, onPreset, busy, submitLabel, submitBusyLabel, placeholder, compact = false, showDriverModel = true, inAgent = false, sessionRow, canSubmit = true, idleControl, home },
+  { files, addContext, removeContext, startsAt, controls, controlsEnd, sessionModel, sessionContext, onSubmit, onPromptChange, onPreset, busy, submitLabel, submitBusyLabel, placeholder, inAgent = false, sessionRow, canSubmit = true, idleControl, home, draftKey, autoFocus = false },
   ref,
 ) {
+  const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
   const [prompt, setPrompt] = useState('')
   const [addingPreset, setAddingPreset] = useState(false)
   const editorRef = useRef<PromptEditorHandle>(null)
+  // The box's edge, which the tooltips of its last line's items open past.
+  const surface = useRef<HTMLDivElement>(null)
   // The machines saved on this dashboard's own machine (#1052).
   const machines = useMachines()
   const machineStatus = useMachineStatus(machines) // #1072: online/offline per saved machine
@@ -174,9 +205,9 @@ export const Composer = forwardRef<ComposerHandle, {
   // Each agent's accounts on that computer, in its part of the agent picker: the one picked is the
   // one its runs take first there, so the run goes with it. An agent not installed there has none
   // to pick, and Codex's accounts are there once it is installed or has some added, as on Settings.
-  const accountsOn = inAgent || !showDriverModel ? undefined : selectedMachine?.id
-  const claudeAccounts = useAccountsOn('claude', accountsOn, !inAgent && showDriverModel)
-  const codexAccounts = useAccountsOn('codex', accountsOn, !inAgent && showDriverModel)
+  const accountsOn = inAgent ? undefined : selectedMachine?.id
+  const claudeAccounts = useAccountsOn('claude', accountsOn, !inAgent)
+  const codexAccounts = useAccountsOn('codex', accountsOn, !inAgent)
   const accountsOf = (name: DriverName): Pick<DriverOption, 'account' | 'accounts'> => {
     const { view, pick } = name === 'codex' ? codexAccounts : claudeAccounts
     const answer = models?.[name]
@@ -185,7 +216,7 @@ export const Composer = forwardRef<ComposerHandle, {
     const on = selectedMachine ? machineName(selectedMachine) : undefined
     return {
       account: firstAccount(view),
-      accounts: <AgentAccountItems view={view} on={on} onPick={account => void pick(account)} onAdd={() => (selectedMachine ? openSettings('devices', selectedMachine.id) : openPermissions())} />,
+      accounts: <AgentAccountItems view={view} on={on} onPick={account => void pick(account)} onAdd={() => (selectedMachine ? services.openSettings('devices', selectedMachine.id) : services.openPage(PERMISSIONS_PAGE))} />,
     }
   }
   // #1073: block Start when the target machine is known-offline; an absent/unknown status must not block.
@@ -195,32 +226,50 @@ export const Composer = forwardRef<ComposerHandle, {
   const [toldNow, setToldNow] = useState<string | null>(null)
   const owner = selectedMachine?.owner
   const untold = !inAgent && !!selectedMachine && owner !== undefined && !selectedMachine.told && toldNow !== selectedMachine.id
+  // OpenAgent is not answering: nothing typed can be sent, and the box keeps it.
+  const down = useContext(DaemonDown)
 
   useImperativeHandle(ref, () => ({
     clear: () => {
-      editorRef.current?.clear()
+      const draft = editorRef.current?.clear()
       setPrompt('')
+      return draft
     },
+    restore: draft => editorRef.current?.restore(draft),
     focus: () => editorRef.current?.focus(),
     edit: text => {
-      editorRef.current?.loadTemplate(text)
-      setPrompt(text)
+      if (prompt.trim() !== '') editorRef.current?.append(text)
+      else {
+        editorRef.current?.loadTemplate(text)
+        setPrompt(text)
+      }
       editorRef.current?.focus()
     },
+    append: text => editorRef.current?.append(text),
   }))
 
-  // Rehydrate a draft carried in from the click that navigated here (#1139), launcher-only.
+  // Rehydrate a draft carried in from the click that navigated here (#1139), launcher-only, else the
+  // draft this box was left with before a navigation or a reload.
   //
   // Handed to the editor as `initialText` rather than pushed through the handle: the draft is taken
   // once and cleared, while `loadTemplate` silently does nothing until Tiptap has resolved
   // (`immediatelyRender: false`), so pushing it at mount dropped the draft and left an empty
   // composer. `prompt` then arrives the normal way, through the editor's own onChange.
-  const [carriedDraft, setCarriedDraft] = useState<string | undefined>(undefined)
+  // On a phone a kept draft comes back without the caret, which would raise the keyboard; one a press handed over takes it.
+  // A draft handed over to a box that kept one is loaded over it, as a saved prompt is: said, and one undo away.
+  const [carriedDraft, setCarriedDraft] = useState<{ text: string; handedOver: boolean; over?: string } | undefined>(() => {
+    const kept = draftKey !== undefined ? keptDraft(draftKey) : undefined
+    return kept === undefined ? undefined : { text: kept, handedOver: false }
+  })
   useEffect(() => {
-    if (compact || inAgent) return
+    if (inAgent) return
     const carried = takePendingDraft()
-    if (carried) setCarriedDraft(carried)
-  }, [compact, inAgent])
+    if (!carried) return
+    const over = carriedDraft?.text !== carried ? carriedDraft?.text : undefined
+    setCarriedDraft({ text: carried, handedOver: true, ...(over !== undefined ? { over } : {}) })
+    if (over !== undefined) onPreset?.('The prompt', true)
+  }, [inAgent])
+  const phone = useIsMobile()
 
   // A synchronous latch alongside the async `busy` prop (#948): two fast ⌘↵ presses both read
   // `busy === false` (React state lags), fired two starts, and the second surfaced a spurious
@@ -230,7 +279,7 @@ export const Composer = forwardRef<ComposerHandle, {
     e?.preventDefault()
     const text = prompt.trim()
     // #1073: a keyboard submit must be blocked too when the target machine is offline.
-    if (!text || busy || submittingRef.current || targetOffline || untold || !canSubmit) return
+    if (!text || busy || submittingRef.current || targetOffline || untold || down || !canSubmit) return
     submittingRef.current = true
     void Promise.resolve(onSubmit(text, { later })).finally(() => {
       submittingRef.current = false
@@ -246,13 +295,13 @@ export const Composer = forwardRef<ComposerHandle, {
 
   const onPromptEdit = (value: string) => {
     setPrompt(value)
+    if (draftKey !== undefined) keepDraft(draftKey, value)
     onPromptChange?.(value)
   }
 
   const editorEl = (
     <PromptEditor
       ref={editorRef}
-      compact={compact}
       onChange={onPromptEdit}
       onSubmit={later => submit(undefined, later)}
       {...(onPreset ? { onPreset } : {})}
@@ -263,20 +312,20 @@ export const Composer = forwardRef<ComposerHandle, {
       commands={readyCommands(commands)}
       customPresets={customPresets}
       projectPresets={projectPresets}
-      // The `/` menu offers "Save prompt…" only in the full composer, where the create panel renders;
-      // the compact navbar launch has no panel, so it gets no callback (and no item).
-      {...(compact ? {} : { onNewPreset: () => setAddingPreset(true) })}
-      disabled={busy}
+      // The `/` menu's "Save prompt…" opens the create panel under the box.
+      onNewPreset={() => setAddingPreset(true)}
+      // A session's box takes what is typed next while a message goes: the message has left it.
+      disabled={busy && !inAgent}
       {...(placeholder ? { placeholder } : {})}
-      {...(carriedDraft ? { initialText: carriedDraft } : {})}
+      label={inAgent ? 'Message' : 'Prompt'}
+      {...(carriedDraft ? { initialText: carriedDraft.text, initialFocus: carriedDraft.handedOver || !phone, replacedText: carriedDraft.over } : {})}
+      autoFocus={autoFocus}
     />
   )
 
-  // The agent/model select and the "Run on" pick, shared by both forms (#755). They were compact's
-  // one real omission: an agent started from the navbar used the stored agent, model and options with
-  // nothing on screen saying which. Every value is preferences-backed and global, so the same
-  // controls in either place read and write the same state.
-  const driverModelEl = showDriverModel && (
+  // The agent/model select. Every value is preferences-backed and global: what it picks is what the
+  // next start runs on, wherever that start is made.
+  const driverModelEl = !inAgent && (
     <DriverModelMenu
       drivers={driverOptions(models, theirs && selectedMachine ? machineName(selectedMachine) : undefined).map(d => ({ ...d, ...DRIVER_UI[d.value as DriverName], ...accountsOf(d.value as DriverName) }))}
       driver={driver}
@@ -287,10 +336,9 @@ export const Composer = forwardRef<ComposerHandle, {
       busy={busy}
     />
   )
-  {/* Commands and saved prompts get a visible surface (#948): load, save and delete in one menu,
-      instead of loading only behind typing `/`. Not in the compact row, which has no room and
-      no save panel. */}
-  const commandsEl = !compact && (
+  // Commands and saved prompts get a visible surface (#948): load, save and delete in one menu,
+  // instead of loading only behind typing `/`.
+  const commandsEl = (
     <CommandsMenu
       commands={commands}
       customPresets={customPresets}
@@ -307,7 +355,6 @@ export const Composer = forwardRef<ComposerHandle, {
   const runOnEl = inAgent ? null : (
     <RunOnMenu
       busy={busy}
-      inRow={!compact}
       connection={{
         machines,
         selectedMachineId,
@@ -319,7 +366,7 @@ export const Composer = forwardRef<ComposerHandle, {
         onSelect: (m: Machine) => selectMachine(m.id),
         onSelectLocal: () => selectMachine(null),
         // A machine is added where every device is: Settings › Devices.
-        onAddMachine: () => openSettings('devices'),
+        onAddMachine: () => services.openSettings('devices'),
         status: machineStatus,
       }}
     />
@@ -329,7 +376,7 @@ export const Composer = forwardRef<ComposerHandle, {
   // launcher has nothing to send, and the arrow reads as "send" in either place (Start session /
   // Send). It is always full size (never appears to grow): it fades in and slides into place, and
   // its layout footprint is animated with a negative margin (0 <- -w) rather than its width, so the
-  // control to its left (the agent/model select) is pushed over smoothly. `aria-hidden` while empty
+  // text to its left gives way smoothly. `aria-hidden` while empty
   // keeps it out of the a11y tree and role queries.
   const hasPrompt = !!prompt.trim()
   const submitButton = (
@@ -340,27 +387,26 @@ export const Composer = forwardRef<ComposerHandle, {
             type="submit"
             size="icon-sm"
             onClick={submit}
-            disabled={busy || !hasPrompt || targetOffline || untold || !canSubmit}
+            disabled={busy || !hasPrompt || targetOffline || untold || down || !canSubmit}
             aria-hidden={!hasPrompt}
             tabIndex={hasPrompt ? undefined : -1}
             aria-label={submitLabel}
             className={cn(
               // `disabled:opacity-*` overrides the base (the button is disabled while empty/busy), so the
               // hidden state must force it to 0 and the shown state back to full for the busy spinner.
-              'h-8 w-8 shrink-0 transition-[margin,opacity,transform] duration-150 ease-out',
+              'shrink-0 transition-[margin,opacity,transform]',
               hasPrompt
                 ? // Full while busy, for its spinner; faded while something else holds the start (the note's OK, a machine offline).
                   cn('ml-0 translate-x-0 opacity-100', busy ? 'disabled:opacity-100' : 'disabled:opacity-40')
-                // The hidden submit takes no room: its own w-8 (2rem) back, and in the compact row the
-                // row's gap-1.5 (0.375rem) too, so the control beside it sits flush.
-                : cn('pointer-events-none translate-x-2 opacity-0 disabled:opacity-0', compact ? '-ml-[2.375rem]' : '-ml-8'),
+                // The hidden submit takes no room: its own width (1.75rem) back.
+                : 'pointer-events-none translate-x-2 opacity-0 disabled:opacity-0 -ml-7',
             )}
           />
         }
       >
         {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
       </TooltipTrigger>
-      <TooltipContent>{busy ? submitBusyLabel : `${submitLabel}  (Enter · Shift+Enter for a new line)`}</TooltipContent>
+      <TooltipContent>{busy ? submitBusyLabel : down ? 'OpenAgent is not answering' : `${submitLabel}  (Enter · Shift+Enter for a new line)`}</TooltipContent>
     </Tooltip>
   )
 
@@ -376,7 +422,7 @@ export const Composer = forwardRef<ComposerHandle, {
   )
   // The saved pick, let go as the page opened: where the run goes instead, and why.
   const here = thisMachineName() === 'This machine' ? 'this machine' : thisMachineName()
-  const fallbackNote = !inAgent && !compact && fallback && !selectedMachine && (
+  const fallbackNote = !inAgent && fallback && !selectedMachine && (
     <p role="status" className="mt-2 text-xs text-muted-foreground">
       {fallback.why === 'gone'
         ? `The computer you last picked to run on is no longer saved, so runs start on ${here}.`
@@ -391,7 +437,7 @@ export const Composer = forwardRef<ComposerHandle, {
       </p>
       <Button
         type="button"
-        size="xs"
+        size="sm"
         variant="outline"
         onClick={() => {
           setToldNow(selectedMachine!.id)
@@ -403,60 +449,50 @@ export const Composer = forwardRef<ComposerHandle, {
     </div>
   )
 
-  // Compact (#723): a single row for the navbar — editor, then the same controls and submit. It
-  // stays one row on purpose (#755): the header must not grow taller to gain them.
-  if (compact) {
-    return (
-      <div className="flex items-start gap-1.5">
-        <div className="min-w-0 flex-1">{editorEl}</div>
-        {driverModelEl}
-        {runOnEl}
-        {slotEl}
-      </div>
-    )
-  }
-
   return (
     <>
-      {/* Where the agent starts, above the box (his pick): the machine, the project and the branch,
-          drawn as the row under the box draws its items. A session has its own words in the same place. */}
-      {inAgent ? (
-        sessionRow
-      ) : (
-        <RowAboveBox>
-          {runOnEl}
-          {startsAt}
-        </RowAboveBox>
-      )}
+      <div ref={surface} className={SURFACE}>
+        {/* Where the agent starts, the box's first line (his pick, above the text): the machine, the
+            project and the branch, drawn as the last line draws its items. A session has its own words
+            in the same place. */}
+        {inAgent ? (
+          sessionRow
+        ) : (
+          <RowAboveBox>
+            {runOnEl}
+            {startsAt}
+          </RowAboveBox>
+        )}
 
-      {loginsNote}
+        {loginsNote}
 
-      {/* The box, as Claude Code's: a fill a step above the page and rounder corners than the rest
-          of the app, the commands menu (+) at its left, the text, and the submit at its right,
-          the two kept at the last line. One line tall when empty, growing with what is typed. The
-          editor is borderless: the border is the box's. */}
-      <div className="flex items-end rounded-xl border border-border bg-card focus-within:border-muted-foreground/40">
-        {/* The editor's own inset sets the text off the box's edge; beside the + it pulls in, so the
-            text starts close to it, as in Claude Code's. */}
-        {commandsEl && <div className="-mr-2 flex shrink-0 items-center p-1">{commandsEl}</div>}
-        <div className="min-w-0 flex-1">{editorEl}</div>
-        <div className="flex shrink-0 items-center p-1">{slotEl}</div>
-      </div>
-
-      {/* How it runs, under the box: the caller's controls at the left, the model at the right. The
-          left side is the one that gives way: a longer label there never moves the model or the
-          page below. */}
-      <div className={cn('mt-1', rowClass)}>
-        <div className={rowLeftClass}>{controls}</div>
-        <div className="flex shrink-0 items-center gap-0.5">
-          {controlsEnd}
-          {driverModelEl || (
-            <span className="flex items-center">
-              {sessionModel !== undefined && <span className="px-2 text-[13px] text-muted-foreground">{sessionModel}</span>}
-              {sessionContext}
-            </span>
-          )}
+        {/* The text, as Claude Code's: the commands menu (+) at its left, the text, and the submit at
+            its right, the two kept at the text's last line. One line tall when empty, growing with
+            what is typed. The editor is borderless: the edge is the surface's. The +'s icon stands
+            on the rows' first icons' line, and the send's on their last ones'. */}
+        <div className="flex items-end">
+          <div className="-mr-2 flex shrink-0 items-center py-1 pl-0.5">{commandsEl}</div>
+          <div className="min-w-0 flex-1">{editorEl}</div>
+          <div className="flex shrink-0 items-center py-1 pr-0.5">{slotEl}</div>
         </div>
+
+        {/* How it runs, the box's last line: the caller's controls at the left, the model at the right. The
+            left side is the one that gives way: a longer label there never moves the model or the
+            page below. */}
+        <TooltipsPastBox value={surface}>
+          <div className={cn('mt-1', rowClass)}>
+            <div className={rowLeftClass}>{controls}</div>
+            <div className="flex shrink-0 items-center gap-0.5">
+              {controlsEnd}
+              {driverModelEl || (
+                <span className="flex items-center">
+                  {sessionModel !== undefined && <span className={rowItemClass}>{sessionModel}</span>}
+                  {sessionContext}
+                </span>
+              )}
+            </div>
+          </div>
+        </TooltipsPastBox>
       </div>
 
       {offlineNote}

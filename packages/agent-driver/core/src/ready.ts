@@ -104,7 +104,7 @@ export async function checkCliReady(spec: CliSpec, opts: DriverReadyOptions = {}
   if ((opts.isRoot ?? runningAsRoot)()) {
     const sudoUser = opts.sudoUser !== undefined ? opts.sudoUser : process.env['SUDO_USER']
     warnings.push(
-      `Running as root, so the coding agent looks for credentials under root's home and will not find yours. Run it as ${sudoUser ? `\`${sudoUser}\`` : 'your own user'}, without \`sudo\`.`,
+      `running as root, so the coding agent looks for credentials under root's home and will not find yours. Run it as ${sudoUser ? `\`${sudoUser}\`` : 'your own user'}, without \`sudo\`.`,
     )
   }
   return { problems, warnings, ...(fix ? { fix } : {}), ...(ownLoggedOut ? { ownLoggedOut: true as const } : {}) }

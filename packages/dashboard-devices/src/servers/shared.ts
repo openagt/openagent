@@ -1,8 +1,10 @@
 import { claudeAccountHere, mintClaude, type Mint } from '@openagt/agent-driver-claude'
+import { lineIn, type ListedLine } from './devices.js'
 import { ownGithubLogin } from './logins.js'
 import { ownDoor, type OwnDoor } from './own-door.js'
 import type { Exec } from './ssh.js'
 import { BEAT_MS, atWork, heartbeat, isMachineUrl, isThroughUrl, update, type Login, type Reach, type Shared, type Store } from './store.js'
+import { callOpenAgent } from '../openagent.js'
 
 /**
  * A computer several people use, from the side of one of them who is not its owner: the server
@@ -31,15 +33,7 @@ export async function askOpenAgent(env: NodeJS.ProcessEnv, fn: string, args: unk
   if (!said) throw new Error('This is run by OpenAgent: OPENAGENT_URL says where it is, and it is not set.')
   const origin = new URL(said).origin
   if (!/^http:\/\/(127\.0\.0\.1|localhost|\[::1\]):\d+$/.test(origin)) throw new Error('OpenAgent is asked on this computer only.')
-  const res = await fetch(`${origin}/_rpc/${fn}`, {
-    method: 'POST',
-    // Asked as OpenAgent's own page asks: from its own address.
-    headers: { 'content-type': 'application/json', origin, 'sec-fetch-site': 'same-origin' },
-    body: JSON.stringify(args),
-    signal: AbortSignal.timeout(ASK_TIMEOUT_MS),
-  })
-  if (!res.ok) throw new Error(`OpenAgent answered ${res.status} to ${fn}`)
-  return ((await res.json()) as { ret?: unknown }).ret
+  return callOpenAgent(origin, fn, args, ASK_TIMEOUT_MS)
 }
 
 type Answered = { ok: true; output: unknown } | { ok: false; error: string }
@@ -51,10 +45,10 @@ function sharedIn(store: Store, url: string): Shared {
   return kept
 }
 
-/** Hand a login made here to the person's own OpenAgent on another person's computer: no copy, so no server's copy takes its place. */
-async function toOther(env: NodeJS.ProcessEnv, machine: string, given: { github?: string; claude?: string; claudeAccount?: string }): Promise<Answered> {
+/** What the person's own OpenAgent on another person's computer says of their logins there, after this computer's OpenAgent was asked `fn`. */
+async function loginsThere(env: NodeJS.ProcessEnv, fn: string, args: unknown[]): Promise<Answered> {
   try {
-    const said = (await askOpenAgent(env, 'sendMachineLogins', [machine, given])) as { ok?: unknown; logins?: unknown; error?: unknown } | undefined
+    const said = (await askOpenAgent(env, fn, args)) as { ok?: unknown; logins?: unknown; error?: unknown } | undefined
     if (said?.ok === true) return { ok: true, output: said.logins }
     return { ok: false, error: typeof said?.error === 'string' ? said.error : 'OpenAgent answered something else than expected.' }
   } catch (err) {
@@ -62,16 +56,11 @@ async function toOther(env: NodeJS.ProcessEnv, machine: string, given: { github?
   }
 }
 
+/** Hand a login made here to the person's own OpenAgent on another person's computer: no copy, so no server's copy takes its place. */
+const toOther = (env: NodeJS.ProcessEnv, machine: string, given: { github?: string; claude?: string; claudeAccount?: string }): Promise<Answered> => loginsThere(env, 'sendMachineLogins', [machine, given])
+
 /** What the person's own OpenAgent on another person's computer says of their logins there, through OpenAgent. */
-export async function otherLogins(env: NodeJS.ProcessEnv, machine: string): Promise<Answered> {
-  try {
-    const said = (await askOpenAgent(env, 'onMachineLogins', [machine])) as { ok?: unknown; logins?: unknown; error?: unknown } | undefined
-    if (said?.ok === true) return { ok: true, output: said.logins }
-    return { ok: false, error: typeof said?.error === 'string' ? said.error : 'OpenAgent answered something else than expected.' }
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : String(err) }
-  }
-}
+export const otherLogins = (env: NodeJS.ProcessEnv, machine: string): Promise<Answered> => loginsThere(env, 'onMachineLogins', [machine])
 
 /** Copy this computer's GitHub login to the person's own OpenAgent on another person's computer; answers what it says of the logins there. */
 export async function copyGithubToOther(env: NodeJS.ProcessEnv, machine: string, run?: Exec): Promise<Answered> {
@@ -147,18 +136,14 @@ export async function startMint(env: NodeJS.ProcessEnv, machine: string, startWo
   }
 }
 
-/** The line this computer keeps open to a server, as its own door says: what the server may do, and whether it said no to the key. */
-export async function lineTo(env: NodeJS.ProcessEnv, machine: string, door: OwnDoor = ownDoor): Promise<{ mode: Reach; refused: boolean; id?: string } | undefined> {
+/**
+ * The line this computer keeps open to the server at `machine`, as its own door says: what the
+ * server may do, whether it said no to the key, and the line's id among its devices. Asked of the
+ * door whatever this package's own file says of a line: the door is the one that keeps it.
+ */
+export async function lineTo(env: NodeJS.ProcessEnv, machine: string, door: OwnDoor = ownDoor): Promise<ListedLine | undefined> {
   const answer = await door(['status'], env)
-  if (!answer.ok || answer.out === undefined) return undefined
-  try {
-    const { lines } = JSON.parse(answer.out) as { lines?: unknown }
-    const line = Array.isArray(lines) ? (lines as Record<string, unknown>[]).find(candidate => candidate?.url === machine) : undefined
-    if (!line || (line.mode !== 'full' && line.mode !== 'watch')) return undefined
-    return { mode: line.mode, refused: line.refused === true, ...(typeof line.id === 'string' ? { id: line.id } : {}) }
-  } catch {
-    return undefined
-  }
+  return answer.ok && answer.out !== undefined ? lineIn(answer.out, machine) : undefined
 }
 
 /**
@@ -184,6 +169,3 @@ export async function setSharedReach(env: NodeJS.ProcessEnv, machine: string, mo
 
 /** Whether `said` names another person's computer the way OpenAgent's machines do: through a server, at its line's address on one, or at its own door. */
 export const isOtherUrl = (said: string | undefined): said is string => said !== undefined && (isThroughUrl(said) || (isMachineUrl(said) && (said.startsWith('http://127.0.0.1:') || said.startsWith('https://'))))
-
-/** Whether `said` names a shared server the way OpenAgent's machines do. */
-export const isSharedUrl = (said: string | undefined): said is string => said !== undefined && isMachineUrl(said) && said.startsWith('https://')

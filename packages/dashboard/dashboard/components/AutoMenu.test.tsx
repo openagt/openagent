@@ -14,7 +14,7 @@ function renderMenu(over: Partial<Parameters<typeof AutoMenu>[0]> = {}) {
   return { onPublish, ...view }
 }
 
-const trigger = () => screen.getByRole('button', { name: 'Auto' })
+const trigger = () => screen.getByRole('button', { name: /^Auto: / })
 /** What the button reads with the menu shut. */
 const label = (over: Partial<Parameters<typeof AutoMenu>[0]>): string => {
   cleanup()
@@ -35,28 +35,28 @@ describe('AutoMenu', () => {
     renderMenu({ publish: 'pr' })
     await openMenu(trigger())
     expect(screen.getByText('When the agent finishes')).toBeTruthy()
-    expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toEqual([
+    expect(screen.getAllByRole('menuitemradio').map(item => item.textContent)).toEqual([
       'OffAdds nothing to your message. The agent decides, and usually commits.',
       'CommitIt commits its work on its branch.',
       'Publish branchIt commits and pushes its branch.',
       'Open PRIt commits, pushes its branch and opens a pull request.',
       'Merge on greenIt commits, pushes its branch and opens a pull request set to merge once its checks pass.',
     ])
-    expect(screen.getAllByRole('menuitem').map(item => item.getAttribute('aria-current'))).toEqual(['false', 'false', 'false', 'true', 'false'])
+    expect(screen.getAllByRole('menuitemradio').map(item => item.getAttribute('aria-checked'))).toEqual(['false', 'false', 'false', 'true', 'false'])
     // The drawn check follows the same pick: the tick at the row's end, on that row alone.
-    expect(screen.getAllByRole('menuitem').map(item => item.lastElementChild!.classList.contains('lucide-check'))).toEqual([false, false, false, true, false])
+    expect(screen.getAllByRole('menuitemradio').map(item => item.lastElementChild!.classList.contains('lucide-check'))).toEqual([false, false, false, true, false])
   })
 
   test('only the offered picks are listed', async () => {
     renderMenu({ publish: 'commit', picks: ['nothing', 'commit'] })
     await openMenu(trigger())
-    expect(screen.getAllByRole('menuitem').map(item => item.getAttribute('aria-current'))).toEqual(['false', 'true'])
+    expect(screen.getAllByRole('menuitemradio').map(item => item.getAttribute('aria-checked'))).toEqual(['false', 'true'])
   })
 
   test('picking an option reports it', async () => {
     const { onPublish } = renderMenu()
     await openMenu(trigger())
-    fireEvent.click(screen.getByRole('menuitem', { name: /^Merge on green/ }))
+    fireEvent.click(screen.getByRole('menuitemradio', { name: /^Merge on green/ }))
     expect(onPublish).toHaveBeenCalledWith('merge')
   })
 
@@ -70,9 +70,9 @@ describe('AutoMenu', () => {
     renderMenu({ publish: 'pr', target })
     await openMenu(trigger())
     expect(screen.getByText('The pull request goes into')).toBeTruthy()
-    const row = (name: string) => screen.getByRole('menuitem', { name })
-    expect(row('login-page').getAttribute('aria-current')).toBe('true')
-    expect(row('main').getAttribute('aria-current')).toBe('false')
+    const row = (name: string) => screen.getByRole('menuitemradio', { name })
+    expect(row('login-page').getAttribute('aria-checked')).toBe('true')
+    expect(row('main').getAttribute('aria-checked')).toBe('false')
     fireEvent.click(row('main'))
     expect(onPick).toHaveBeenCalledWith('main')
   })

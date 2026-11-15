@@ -1,6 +1,6 @@
 import { Children, cloneElement, createContext, Fragment, isValidElement, useContext, useRef, type ReactElement, type ReactNode } from 'react'
 import { wordShownAt } from '../lib/use-steady-text.js'
-import { languageOfFence, Pieces, useHighlightedIn } from '../lib/highlight.js'
+import { ColouredLines, languageOfFence, useHighlightedIn } from '../lib/highlight.js'
 import { cn } from '../lib/utils.js'
 import { ImageIcon } from 'lucide-react'
 import { CopyButton } from './ui/copy-button.js'
@@ -15,7 +15,7 @@ import { Checkbox } from './ui/checkbox.js'
 // reaches for one, and it rendered as raw pipes). Anything else falls through as a paragraph.
 // `compact` shrinks everything a notch (text-xs, smaller headings) so a reply reads at the density
 // of the surrounding event log rather than a full document. Otherwise it is set as Claude Code on
-// the web sets an answer: 15px text, lines 21px apart, paragraphs 8px further; code at 13px.
+// the web sets an answer, at the chat's sizes (`text-chat`, tailwind.css), paragraphs 8px apart.
 //
 // `document` is for a file read as a page (the Files pane's Markdown, a workspace doc), set as
 // Claude Code on the web's file preview sets one: the lines of a paragraph wrapped in its source
@@ -26,29 +26,37 @@ import { Checkbox } from './ui/checkbox.js'
 // `fade` is for the message being written: each word comes in out of nothing, once. A word drawn
 // again, in this box or in the one that takes its place, goes on from where its fade was: its time
 // is kept by its place among the message's words (`use-steady-text.ts`).
-export function Markdown({ text, compact = false, fade = false, document = false }: { text: string; compact?: boolean; fade?: boolean; document?: boolean }) {
+export function Markdown({
+  text,
+  compact = false,
+  fade = false,
+  document = false,
+  page = false,
+}: {
+  text: string
+  compact?: boolean
+  fade?: boolean
+  document?: boolean
+  /** Set as a document inside a dashboard page (a ticket, its plan): a document's headings, in the page's own font, its code wrapped to the page. */
+  page?: boolean
+}) {
   const drawnAt = useRef(performance.now()).current
-  const blocks = renderBlocks(text.replace(/\r\n/g, '\n').split('\n'), { compact, document })
+  const blocks = renderBlocks(text.replace(/\r\n/g, '\n').split('\n'), { compact, document: document || page, wrap: page })
   return (
-    <div data-markdown className={compact ? 'space-y-1.5 text-xs leading-relaxed' : document ? 'space-y-2.5 font-serif text-[15px] leading-6' : 'space-y-2 text-[15px] leading-[21px]'}>
+    <div
+      data-markdown
+      className={compact ? 'space-y-1.5 text-xs leading-relaxed' : page ? 'space-y-2.5 text-sm leading-[22px]' : document ? 'space-y-3 font-serif text-base' : 'space-y-2 text-chat'}
+    >
       {fade ? wordsIn(blocks, { at: 0 }, drawnAt, text) : blocks}
     </div>
   )
 }
 
-/**
- * One line said by a tool (a check's problem, a hook's refusal) with its inline marks drawn as the
- * chat draws them: what it puts in backticks is code, and an address is a link. For a sentence
- * that sits inside a box of its own rather than a block of text.
- */
-export function InlineMarkdown({ text }: { text: string }) {
-  return <>{inline(text)}</>
-}
-
-/** How the text is set: a notch smaller (`compact`), or as a page (`document`). */
+/** How the text is set: a notch smaller (`compact`), or as a page (`document`), its code wrapped rather than scrolled (`wrap`). */
 interface Look {
   compact: boolean
   document: boolean
+  wrap?: boolean
 }
 
 /**
@@ -91,36 +99,32 @@ function diffLineClass(line: string): string | undefined {
   return undefined
 }
 
-// A fenced-code block, rendered both when its closing fence arrives and when the doc ends
-// mid-fence; one place so the markup and classes can't drift between the two. A block fenced as
-// `diff` has its added and removed lines coloured, as the changed-lines counts are.
-//
-// A card, as Claude Code on the web sets one: a bordered box with the copy button in its corner,
-// its lines wrapped to the box rather than cut at its edge, and no strip naming the language. Code
-// is the one thing in an answer a reader takes somewhere else, and selecting it by hand is where
-// that went wrong.
-function codeBlock(lines: string[], language: string, key: number, look: Look): ReactNode {
-  return <CodeBlock key={key} lines={lines} language={language} document={look.document} />
-}
-
 /**
- * The card itself. A block of a language the dashboard knows is coloured in the chat's own colours
+ * A fenced-code block, drawn both when its closing fence arrives and when the doc ends mid-fence.
+ * A block fenced as `diff` has its added and removed lines coloured, as the changed-lines counts
+ * are; a block of a language the dashboard knows is coloured in the chat's own colours
  * (`highlight.tsx`), as Claude Code on the web colours one; until its grammar is loaded, and for a
  * language it does not know, the text is plain.
+ *
+ * A card, as Claude Code on the web sets one: a box a level above the page with the copy button in its corner,
+ * its lines wrapped to the box rather than cut at its edge, and no strip naming the language. Code
+ * is the one thing in an answer a reader takes somewhere else, and selecting it by hand is where
+ * that went wrong.
  */
-function CodeBlock({ lines, language, document }: { lines: string[]; language: string; document: boolean }) {
+function CodeBlock({ lines, language, document, wrap = false }: { lines: string[]; language: string; document: boolean; wrap?: boolean }) {
   const text = lines.join('\n')
   const known = language === 'diff' ? undefined : languageOfFence(language)
   const coloured = useHighlightedIn(text, known)
   // In a page, as Claude Code on the web's file preview sets one: as wide as the text, the language
   // it was fenced as beside the copy button, and its lines kept whole, the box scrolling sideways.
-  return (
-    <div className={cn('relative max-w-full rounded-lg border border-border', document ? 'w-full' : 'w-fit min-w-40')}>
-      <div className="absolute top-2.5 right-2.5 flex items-center gap-2">
+  const box = (
+    // A surface a level above the page; its copy press shows under the pointer and the keyboard, always on touch.
+    <div className={cn('group/code relative max-w-full rounded-md border border-hairline bg-card', document ? 'w-full' : 'w-fit min-w-40')}>
+      <div className="absolute top-2 right-2 flex items-center gap-2 transition-opacity focus-within:opacity-100 pointer-fine:opacity-0 pointer-fine:group-hover/code:opacity-100">
         {document && language !== '' && <span className="text-xs text-muted-foreground">{language}</span>}
         <CopyButton text={text} label="Copy the code" />
       </div>
-      <pre className={cn('py-3 pl-4 text-[13px] leading-[19px]', document ? 'overflow-x-auto pr-20 whitespace-pre' : 'pr-12 break-words whitespace-pre-wrap')}>
+      <pre className={cn('py-3 pl-4 text-chat-code', document && !wrap ? 'overflow-x-auto pr-20 whitespace-pre' : cn(document ? 'pr-20' : 'pr-12', 'break-words whitespace-pre-wrap'))}>
         <code>
           {language === 'diff'
             ? lines.map((line, i) => (
@@ -129,17 +133,14 @@ function CodeBlock({ lines, language, document }: { lines: string[]; language: s
                 </span>
               ))
             : coloured
-              ? coloured.map((pieces, i) => (
-                  <Fragment key={i}>
-                    <Pieces pieces={pieces} />
-                    {i < coloured.length - 1 ? '\n' : null}
-                  </Fragment>
-                ))
+              ? <ColouredLines lines={coloured} />
               : text}
         </code>
       </pre>
     </div>
   )
+  // In a page, room above and below: a block set between a list's lines does not run into them.
+  return wrap ? <div className="py-2">{box}</div> : box
 }
 
 /** A pipe-table row's cells, outer empties dropped (`| a | b |` -> ['a', 'b']). */
@@ -384,12 +385,12 @@ function inlineLines(text: string): ReactNode {
  */
 function PageTable({ header, body }: { header: string[]; body: string[][] }) {
   return (
-    <div className="overflow-x-auto rounded-lg border border-border">
+    <div className="overflow-x-auto rounded-lg border border-hairline">
       <table className="min-w-full border-separate border-spacing-0 text-sm">
         <thead>
           <tr>
             {header.map((cell, i) => (
-              <th key={i} className="border-b border-border bg-muted/50 px-3 py-[7px] text-left font-semibold">
+              <th key={i} className="border-b border-hairline bg-muted px-3 py-2 text-left font-semibold">
                 {inline(cell)}
               </th>
             ))}
@@ -399,7 +400,41 @@ function PageTable({ header, body }: { header: string[]; body: string[][] }) {
           {body.map((cells, r) => (
             <tr key={r}>
               {header.map((_, c) => (
-                <td key={c} className={cn('px-3 py-[7px] align-top', r > 0 && 'border-t border-border', c === 0 ? 'whitespace-nowrap' : 'min-w-40')}>
+                <td key={c} className={cn('px-3 py-2 align-top', r > 0 && 'border-t border-hairline', c === 0 ? 'whitespace-nowrap' : 'min-w-40')}>
+                  {inline(cells[c] ?? '')}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+/**
+ * A reply's table: rows ruled under, as wide as the reply, scrolling sideways when it is wider. Its
+ * elements, not a component of its own: the words of a message being written fade in through
+ * the elements they are in (`wordsIn`), which a component's would hide.
+ */
+function replyTable(header: string[], body: string[][], compact: boolean, key: number): ReactNode {
+  return (
+    <div key={key} className="overflow-x-auto">
+      <table className={cn('w-full border-collapse [&_tbody_tr:last-child_td]:border-b-0', compact ? 'text-xs' : 'text-sm')}>
+        <thead>
+          <tr>
+            {header.map((cell, i) => (
+              <th key={i} className={cn('border-b border-hairline text-left font-medium', compact ? 'py-1 pr-3' : 'py-2 pr-6')}>
+                {inline(cell)}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {body.map((cells, r) => (
+            <tr key={r}>
+              {header.map((_, c) => (
+                <td key={c} className={cn('border-b border-hairline align-top', compact ? 'py-1 pr-3' : 'py-2 pr-6')}>
                   {inline(cells[c] ?? '')}
                 </td>
               ))}
@@ -421,18 +456,21 @@ function slug(text: string): string {
 }
 
 /** A page's heading: larger the higher it is, with room above it, as Claude Code on the web's file preview sets one. */
-function Heading({ level, text }: { level: number; text: string }) {
+function Heading({ level, text, page = false }: { level: number; text: string; page?: boolean }) {
   const Tag = `h${Math.min(level, 6)}` as 'h1'
-  const size = ['text-[26px] leading-[30px] font-medium', 'text-xl leading-[25px] font-medium', 'text-lg font-semibold', 'font-semibold', 'font-semibold', 'font-semibold'][level - 1]
+  // Inside a dashboard page, under the page's own title: a step below it, and closer together.
+  const size = page
+    ? ['text-base font-semibold', 'text-base font-medium', 'text-sm font-semibold', 'text-sm font-medium', 'text-sm font-medium', 'text-sm font-medium'][level - 1]
+    : ['text-2xl font-medium', 'text-xl font-medium', 'text-base font-semibold', 'font-semibold', 'font-semibold', 'font-semibold'][level - 1]
   return (
-    <Tag data-heading={slug(text)} className={cn(size, level > 1 && 'pt-7 first:pt-0')}>
+    <Tag data-heading={slug(text)} className={cn(size, level > 1 && (page ? 'pt-5 first:pt-0' : 'pt-7 first:pt-0'))}>
       {inline(text)}
     </Tag>
   )
 }
 
 function renderBlocks(lines: string[], look: Look, depth = 0): ReactNode[] {
-  const { compact, document } = look
+  const { compact, document, wrap = false } = look
   const blocks: ReactNode[] = []
   let code: { lines: string[]; language: string } | null = null
   let table: string[] = []
@@ -447,32 +485,7 @@ function renderBlocks(lines: string[], look: Look, depth = 0): ReactNode[] {
     if (rows.length >= 2 && isTableSeparator(rows[1]!)) {
       const header = tableCells(rows[0]!)
       const body = rows.slice(2).map(tableCells)
-      blocks.push(document ? <PageTable key={key++} header={header} body={body} /> : (
-        <div key={key++} className="overflow-x-auto">
-          <table className={cn('w-full border-collapse [&_tbody_tr:last-child_td]:border-b-0', compact ? 'text-xs' : 'text-sm')}>
-            <thead>
-              <tr>
-                {header.map((cell, i) => (
-                  <th key={i} className={cn('border-b border-border text-left font-medium', compact ? 'py-1 pr-3' : 'py-2.5 pr-6')}>
-                    {inline(cell)}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {body.map((cells, r) => (
-                <tr key={r}>
-                  {header.map((_, c) => (
-                    <td key={c} className={cn('border-b border-border/60 align-top', compact ? 'py-1 pr-3' : 'py-2.5 pr-6')}>
-                      {inline(cells[c] ?? '')}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ))
+      blocks.push(document ? <PageTable key={key++} header={header} body={body} /> : replyTable(header, body, compact, key++))
     } else {
       for (const row of rows) blocks.push(<p key={key++}>{inline(row)}</p>)
     }
@@ -486,7 +499,7 @@ function renderBlocks(lines: string[], look: Look, depth = 0): ReactNode[] {
         flushTable()
         code = { lines: [], language: fence[1]!.toLowerCase() }
       } else {
-        blocks.push(codeBlock(code.lines, code.language, key++, look))
+        blocks.push(<CodeBlock key={key++} lines={code.lines} language={code.language} document={document} wrap={wrap} />)
         code = null
       }
       continue
@@ -511,14 +524,14 @@ function renderBlocks(lines: string[], look: Look, depth = 0): ReactNode[] {
     if (heading) {
       const level = heading[1]!.length
       if (document) {
-        blocks.push(<Heading key={key++} level={level} text={heading[2]!} />)
+        blocks.push(<Heading key={key++} level={level} text={heading[2]!} page={wrap} />)
         continue
       }
       // As Claude Code on the web sets a reply's headings: the first a little larger than the text,
       // the others its size, none heavier than medium, with room above them.
       const sizes = compact
         ? ['text-sm', 'text-sm', 'text-xs', 'text-xs', 'text-xs', 'text-xs']
-        : ['text-[17px] leading-6', 'text-[15px]', 'text-[15px]', 'text-[15px]', 'text-[15px]', 'text-[15px]']
+        : ['text-base', 'text-chat', 'text-chat', 'text-chat', 'text-chat', 'text-chat']
       blocks.push(
         <p key={key++} data-heading={slug(heading[2]!)} className={cn(sizes[level - 1], compact ? 'font-semibold' : 'font-medium [&:not(:first-child)]:pt-2')}>
           {inline(heading[2]!)}
@@ -539,7 +552,7 @@ function renderBlocks(lines: string[], look: Look, depth = 0): ReactNode[] {
       const quoted = lines.slice(i, end).map(l => l.replace(/^\s*>\s?/, ''))
       blocks.push(
         // In a page the quote keeps the text's colour, as Claude Code on the web's file preview sets one; in a reply it is dimmed.
-        <blockquote key={key++} className={cn('space-y-1.5 border-l-4 border-border pl-4', document ? 'text-foreground' : 'text-muted-foreground', !compact && 'my-3 ml-2')}>
+        <blockquote key={key++} className={cn('space-y-1.5 border-l-2 border-border pl-4', document ? 'text-foreground' : 'text-muted-foreground', !compact && 'my-3 ml-2')}>
           {renderBlocks(quoted, look, depth + 1)}
         </blockquote>,
       )
@@ -561,7 +574,7 @@ function renderBlocks(lines: string[], look: Look, depth = 0): ReactNode[] {
     blocks.push(<p key={key++}>{inlineLines(paragraph)}</p>)
   }
   flushTable()
-  if (code !== null) blocks.push(codeBlock(code.lines, code.language, key++, look))
+  if (code !== null) blocks.push(<CodeBlock key={key++} lines={code.lines} language={code.language} document={document} wrap={wrap} />)
   return blocks
 }
 
@@ -574,9 +587,9 @@ function renderBlocks(lines: string[], look: Look, depth = 0): ReactNode[] {
 const LINK_CLASS = 'text-primary underline underline-offset-2 break-all'
 // A name in the text (a file, a branch, a command) is on a faint fill, so it stands out from the
 // sentence around it, as Claude Code on the web sets one.
-const CODE_CLASS = 'rounded-[4px] bg-foreground/[0.075] px-1 py-px text-[0.9em]'
+const CODE_CLASS = 'rounded-sm bg-foreground/[0.075] px-1 py-px text-[0.9em]'
 // `#12` as a link: the issue or pull request of that number, on the project's GitHub page.
-const ISSUE_CLASS = 'whitespace-nowrap rounded bg-primary/10 px-1.5 text-primary hover:bg-primary/15'
+const ISSUE_CLASS = 'whitespace-nowrap rounded-sm bg-primary/10 px-1.5 text-primary hover:bg-primary/15'
 
 /**
  * Where `#12` in an answer leads: the project's page on GitHub, under which `issues/12` opens the

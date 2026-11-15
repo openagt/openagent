@@ -1,0 +1,69 @@
+import { MessageSquare } from 'lucide-react'
+import { Button, List, Row, Tooltip, TooltipContent, TooltipTrigger, formatAge, type ModuleAgent } from '@openagt/dashboard/module'
+import { holderAgent, planAgentFor, workAgentFor } from '../src/module.js'
+import { holdingRun } from './lib/holding-run.js'
+
+/** One kind of session on a ticket: the one that wrote its plan, or the one that worked it. */
+export interface TicketSession {
+  kind: 'plan' | 'work'
+  agent: ModuleAgent
+}
+
+/**
+ * The sessions behind a ticket, from the project's runs: the one whose ask named its plan wrote it
+ * (the plan file carries no marker), and the one that worked it — asked about its file, or holding
+ * its claim now.
+ */
+export function sessionsOf(agents: readonly ModuleAgent[], ticket: { file: string; lockedBy?: string | undefined }): TicketSession[] {
+  const plan = planAgentFor(agents, ticket.file)
+  const work = holderAgent(agents, ticket.lockedBy) ?? workAgentFor(agents, ticket.file)
+  return [...(plan ? [{ kind: 'plan' as const, agent: plan }] : []), ...(work && work.id !== plan?.id ? [{ kind: 'work' as const, agent: work }] : [])]
+}
+
+const WORDS = {
+  plan: { label: 'Plan', running: 'Being written in', ended: 'Written in' },
+  work: { label: 'Work', running: 'Being worked in', ended: 'Worked in' },
+} as const
+
+/**
+ * The sessions behind a ticket, each named as every list of runs names it and one press away: the
+ * one that wrote its plan and the one that worked it. A finished one is gone on with in its own
+ * chat — the same conversation, the ticket and the plan already in its context; one still running
+ * is watched.
+ */
+export function TicketSessions({ sessions, planned, onOpen }: { sessions: readonly TicketSession[]; planned: boolean; onOpen: (agentId: string) => void }) {
+  if (sessions.length === 0) return null
+  return (
+    <List>
+      {sessions.map(({ kind, agent }) => {
+        const running = agent.status === 'running'
+        const words = WORDS[kind]
+        return (
+          <Row
+            key={kind}
+            leading={<span className="w-9 text-xs font-medium">{words.label}</span>}
+            title={
+              <>
+                {/* A planning run that ended with no plan beside the ticket wrote none: it was asked for one. */}
+                <span className="font-normal text-muted-foreground">{running ? words.running : kind === 'plan' && !planned ? 'Asked for in' : words.ended}</span> {holdingRun(agent)?.name ?? agent.id}
+              </>
+            }
+            meta={<span className="tabular-nums">{`${running ? 'at work' : agent.status} · ${formatAge(agent.endedAt ?? agent.startedAt)}`}</span>}
+            actions={
+              <Tooltip>
+                <TooltipTrigger render={<Button variant="ghost" size="sm" onClick={() => onOpen(agent.id)} />}>
+                  <MessageSquare className="size-4" aria-hidden /> Open session
+                </TooltipTrigger>
+                <TooltipContent className="max-w-72">
+                  {running
+                    ? 'Opens the session, so you can watch it or step in.'
+                    : 'Opens the session. What you send there goes on with the same conversation: the ticket, the plan and the reasoning behind them are already in its context.'}
+                </TooltipContent>
+              </Tooltip>
+            }
+          />
+        )
+      })}
+    </List>
+  )
+}

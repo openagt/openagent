@@ -5,7 +5,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
-import { DEVICES, DEVICES_COMMAND, HELPER, SERVICE_UNIT, STEPS, STEP_IDS, linkScript, quoted } from './steps.js'
+import { DEVICES, DEVICES_COMMAND, HELPER, SERVICE_UNIT, STEPS, STEP_IDS, linkScript, nodeScript, quoted } from './steps.js'
 
 const run = promisify(execFile)
 const FACTS = { address: '203.0.113.5', version: '1.2.3' }
@@ -110,6 +110,59 @@ test('the server\'s user gets Claude Code and Codex by each one\'s own installer
     await assert.rejects(readFile(join(home, 'asked')), { code: 'ENOENT' })
   } finally {
     await rm(home, { recursive: true, force: true })
+  }
+})
+
+test('an update brings the newest Node of the line, a security release too; the same one is not fetched again; with nodejs.org unreachable a Node of the line stays, and none is said', async () => {
+  const base = await mkdtemp(join(tmpdir(), 'servers-node-'))
+  const root = join(base, 'opt')
+  const bin = join(base, 'bin')
+  // Stand-ins on the way to the programs: nodejs.org answers with the newest version, or not at all; tar unpacks a node that says that version.
+  const fakes = {
+    curl: `#!/bin/sh\necho "$2" >> "$BASE/asked"\n[ -z "$OFFLINE" ] || exit 22\ncase "$2" in\n  *SHASUMS256.txt) printf 'aa  node-%s-linux-x64.tar.xz\\nbb  node-%s-linux-arm64.tar.xz\\n' "$NEWEST" "$NEWEST" > "$4" ;;\n  *) echo tarball > "$4" ;;\nesac\n`,
+    sha256sum: '#!/bin/sh\ncat >/dev/null\n',
+    tar: `#!/bin/sh\nwhile [ "$1" != -C ]; do shift; done\nmkdir -p "$2/bin"\nprintf '#!/bin/sh\\necho %s\\n' "$NEWEST" > "$2/bin/node"\nchmod +x "$2/bin/node"\n`,
+  }
+  const node = async (version: string) => {
+    await mkdir(join(root, 'node/bin'), { recursive: true })
+    await writeFile(join(root, 'node/bin/node'), `#!/bin/sh\necho ${version}\n`, { mode: 0o755 })
+  }
+  const update = (env: { NEWEST?: string; OFFLINE?: string }) =>
+    sh(`set -euo pipefail\nfail() { echo "$1" >&2; exit 1; }\ndir=$(mktemp -d)\n${nodeScript(root)}\n`, [], {
+      env: { BASE: base, PATH: `${bin}:${process.env.PATH}`, ...env },
+      cwd: base,
+    })
+  const version = async () => (await run(join(root, 'node/bin/node'))).stdout.trim()
+  const asked = () => readFile(join(base, 'asked'), 'utf8').then(text => text.trim().split('\n'), () => [])
+  try {
+    await mkdir(bin)
+    for (const [name, text] of Object.entries(fakes)) await writeFile(join(bin, name), text, { mode: 0o755 })
+
+    // A server on 24.22.1 when 24.22.3 is out: the update brings 24.22.3, and OpenAgent restarts on it.
+    await node('v24.22.1')
+    await update({ NEWEST: 'v24.22.3' })
+    assert.equal(await version(), 'v24.22.3')
+    assert.equal((await asked()).at(-1), 'https://nodejs.org/dist/latest-v24.x/node-v24.22.3-linux-x64.tar.xz')
+    await rm(join(root, 'restart'))
+
+    // Already the newest: only the list is read, and nothing restarts.
+    await rm(join(base, 'asked'))
+    await update({ NEWEST: 'v24.22.3' })
+    assert.deepEqual(await asked(), ['https://nodejs.org/dist/latest-v24.x/SHASUMS256.txt'])
+    await assert.rejects(readFile(join(root, 'restart')), { code: 'ENOENT' })
+
+    // nodejs.org out of reach: the Node of the line stays, and the update goes on.
+    await update({ OFFLINE: '1' })
+    assert.equal(await version(), 'v24.22.3')
+
+    // Out of reach with no Node of the line: the step says so.
+    await node('v22.12.0')
+    await assert.rejects(update({ OFFLINE: '1' }), (error: { stderr: string }) => {
+      assert.equal(error.stderr, 'nodejs.org could not be reached to download Node 24.\n')
+      return true
+    })
+  } finally {
+    await rm(base, { recursive: true, force: true })
   }
 })
 

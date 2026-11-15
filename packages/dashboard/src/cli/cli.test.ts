@@ -48,6 +48,9 @@ test('parseArgs flags unknown options and bad values', () => {
   assert.match(parseArgs(['--nope']).error!, /unknown option/)
   assert.match(parseArgs(['--port', '-1']).error!, /--port/)
   assert.match(parseArgs(['--port']).error!, /--port/)
+  assert.match(parseArgs(['--port', '65536']).error!, /--port/)
+  assert.match(parseArgs(['--port', '']).error!, /--port/)
+  assert.equal(parseArgs(['--port', '65535']).port, 65535)
   assert.match(parseArgs(['--host', '0.0.0.0']).error!, /unknown option: --host/) // the first unreadable thing is the one told
   // Every flag that configured a run is gone: the command runs no agent, and what a run needs
   // is the project's start hook's business (#1774).
@@ -66,7 +69,7 @@ test('runCli --help prints usage and exits 0', async () => {
 test('runCli usage error exits 2', async () => {
   const { io, err } = capture()
   assert.equal(await runCli(['--bogus'], io), 2)
-  assert.ok(err.includes('Run `openagent --help` for usage.'))
+  assert.deepEqual(err, ['unknown option: --bogus\nRun `openagent --help` for usage.'])
 })
 
 // The CLI is foreground-only, so there is no `--daemon`, no `stop`, and no background dashboard
@@ -81,20 +84,17 @@ test('runCli rejects the retired flags and verbs as usage errors (D4/D4b)', asyn
   }
 })
 
-test('the startup footer prints the commands and the version (#312)', async () => {
+test('the startup footer prints the version, then that it is the latest (#312)', async () => {
   const { io, out } = capture()
   await printStartupFooter(io, { fetchLatest: async () => openagentVersion() })
-  assert.ok(out.includes('Type a prompt on the dashboard to start an agent, or use:'))
-  assert.ok(out.includes('  openagent --help              All options'))
-  assert.ok(out.includes(`OpenAgent v${openagentVersion()}`))
-  assert.ok(out.includes(`✅ Up to date (v${openagentVersion()})`))
+  assert.deepEqual(out, [`◆ OpenAgent v${openagentVersion()}`, '  Up to date.'])
 })
 
 test('the footer offers no `openagent stop`: Ctrl-C is how the foreground dashboard ends (#312)', async () => {
   const { io, out } = capture()
   await printStartupFooter(io, { fetchLatest: async () => undefined })
   assert.ok(!out.some(l => l.includes('openagent stop')))
-  assert.ok(out.includes(`OpenAgent v${openagentVersion()}`))
+  assert.ok(out.includes(`◆ OpenAgent v${openagentVersion()}`))
 })
 
 test('the footer offers no positional build command: D4 removed it, and following it exited 2', async () => {
@@ -109,18 +109,18 @@ test('the version prints before npm answers, and a newer release is announced af
   const pending = printStartupFooter(io, { fetchLatest: () => new Promise<string>(resolve => (release = resolve)) })
   // The static half is out while the registry call is still in flight — bare `openagent` blocks on
   // the server forever, so anything held back until after the await would never be printed there.
-  assert.ok(out.includes(`OpenAgent v${openagentVersion()}`))
-  assert.ok(!out.some(l => l.includes('Update available')))
+  assert.ok(out.includes(`◆ OpenAgent v${openagentVersion()}`))
+  assert.ok(!out.some(l => l.includes('is out')))
   release('999.0.0')
   await pending
-  assert.ok(out.some(l => l.includes('⬆️  Update available: v999.0.0')))
+  assert.ok(out.some(l => l.includes('v999.0.0 is out')))
 })
 
 test('an unreachable npm registry costs the footer nothing (#312)', async () => {
   const { io, out } = capture()
   await printStartupFooter(io, { fetchLatest: () => Promise.reject(new Error('offline')) })
-  assert.ok(out.includes(`OpenAgent v${openagentVersion()}`))
-  assert.ok(!out.some(l => l.includes('Up to date') || l.includes('Update available')))
+  assert.ok(out.includes(`◆ OpenAgent v${openagentVersion()}`))
+  assert.deepEqual(out, [`◆ OpenAgent v${openagentVersion()}`])
 })
 
 
@@ -162,9 +162,9 @@ test('a second run hands its repository to the dashboard on the port, prints the
       assert.equal(await runCli(['--port', String(running.port)], io), 0, err.join('\n'))
       const url = `http://127.0.0.1:${running.port}`
       assert.deepEqual(out, [`◆ dashboard already running: ${url}`, '◆ project added: /code/gemstack', `◆ project: ${url}/gemstack`])
-      // Run from inside this repository: that is the folder handed over.
-      assert.equal(asked.length, 1)
-      assert.match(JSON.stringify(asked[0]), /"path":"\/_rpc\/sendStartedAgain","args":\["\/[^"]+"\]/)
+      // Asked first whether a dashboard answers; then run from inside this repository: that is the folder handed over.
+      assert.equal(asked.length, 2)
+      assert.match(JSON.stringify(asked[1]), /"path":"\/_rpc\/sendStartedAgain","args":\["\/[^"]+"\]/)
     })
   } finally {
     await running.close()
@@ -199,6 +199,19 @@ test('on a server, the folder its service starts in is never handed over as a pr
   }
 })
 
+test('a port held by a program that never answers is said to be taken, within seconds', { timeout: 10_000 }, async () => {
+  const silent = await holdPort(() => {})
+  try {
+    await withConfig(async () => {
+      const { io, err } = capture()
+      assert.equal(await runCli(['--port', String(silent.port)], io), 1)
+      assert.deepEqual(err, [`could not start the dashboard: port ${silent.port} is taken by another program. Pass --port <n> to use another one.`])
+    })
+  } finally {
+    await silent.close()
+  }
+})
+
 test('a port another program holds is said to be taken, with what to do (#2141)', async () => {
   const other = await holdPort((_req, res) => res.writeHead(200, { 'content-type': 'text/html' }).end('<html>a dev server</html>'))
   try {
@@ -209,5 +222,36 @@ test('a port another program holds is said to be taken, with what to do (#2141)'
     })
   } finally {
     await other.close()
+  }
+})
+
+test('Ctrl+C ends the dashboard with a line that says it stopped', async () => {
+  // Outside a repository, so no project is added; npm is not asked whether a newer version is out.
+  const dir = await mkdtemp(join(tmpdir(), 'openagent-cli-'))
+  const cwd = process.cwd()
+  const fetchBefore = globalThis.fetch
+  globalThis.fetch = (input, init) => (String(input).startsWith('https://registry.npmjs.org/') ? Promise.reject(new Error('offline')) : fetchBefore(input, init))
+  process.chdir(dir)
+  try {
+    await withConfig(async () => {
+      const { io, out, err } = capture()
+      const listening = process.listenerCount('SIGINT')
+      // Pressed once the dashboard waits for it, which is after it has started its services.
+      const pressCtrlC = (line: string): void => {
+        io.out(line)
+        if (!line.startsWith('◆ dashboard running: ')) return
+        const press = setInterval(() => {
+          if (process.listenerCount('SIGINT') === listening) return
+          clearInterval(press)
+          process.emit('SIGINT')
+        }, 50)
+      }
+      assert.equal(await runCli(['--port', '0'], { ...io, out: pressCtrlC }), 0, err.join('\n'))
+      assert.equal(out.at(-1), '◆ dashboard stopped.')
+    })
+  } finally {
+    process.chdir(cwd)
+    globalThis.fetch = fetchBefore
+    await rm(dir, { recursive: true, force: true })
   }
 })

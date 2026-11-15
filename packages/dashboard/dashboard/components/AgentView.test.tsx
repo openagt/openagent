@@ -29,6 +29,7 @@ vi.mock('../rpc/control.js', () => ({
   withdrawMessage,
   sendNow,
   sendOpenPullRequest: vi.fn(async () => null),
+  sendMerge: vi.fn(async () => ({ ok: true, merge: 'auto' })),
   sendSetHandoff: vi.fn(async () => null),
   sendBridgeAnswer: vi.fn(async () => null),
   sendBridgeAnswerCancel: vi.fn(async () => null),
@@ -47,9 +48,11 @@ vi.mock('../lib/preferences.js', () => ({
 // The `actions` and `summary` slots of the bar above the message box ARE rendered, so the handoff
 // cluster and the modules' summaries stay reachable.
 vi.mock('./AgentActionBar.js', () => ({
-  AgentActionBar: ({ ready, checkout, onToggle, onProjectRemoved }: { ready?: boolean; checkout: unknown; onToggle?: () => void; onProjectRemoved?: () => void }) => (
+  AgentActionBar: ({ live, ready, checkout, onToggle, onProjectRemoved, onShowWorkBar }: { live?: boolean; ready?: boolean; checkout: unknown; onToggle?: () => void; onProjectRemoved?: () => void; onShowWorkBar?: () => void }) => (
     <>
       <span data-testid="bar-frame" />
+      <span data-testid="bar-live">{String(live)}</span>
+      {onShowWorkBar && <button type="button" onClick={onShowWorkBar}>Show the work bar</button>}
       <button type="button" onClick={onProjectRemoved}>project removed</button>
       <button type="button" onClick={onToggle}>details</button>
       <span data-testid="bar-ready">{String(ready)}</span>
@@ -58,8 +61,9 @@ vi.mock('./AgentActionBar.js', () => ({
   ),
 }))
 vi.mock('./AgentWorkBar.js', () => ({
-  AgentWorkBar: ({ actions, summary, checkout, show }: { actions?: ReactNode; summary?: ReactNode; checkout: unknown; show: boolean }) => (
-    <div data-testid="work-bar" data-show={String(show)}>
+  AgentWorkBar: ({ actions, summary, checkout, show, away, onHide }: { actions?: ReactNode; summary?: ReactNode; checkout: unknown; show: boolean; away: boolean; onHide: () => void }) => (
+    <div data-testid="work-bar" data-show={String(show)} data-away={String(away)}>
+      <button type="button" onClick={onHide}>Hide this bar</button>
       <span data-testid="work-checkout">{JSON.stringify(checkout)}</span>
       {summary}
       {actions}
@@ -81,14 +85,17 @@ vi.mock('./SessionRow.js', () => ({
 // The composer shows only what the view tells it about the run going: the one fact of it under test here.
 let queuedIds = 0
 const edited: string[] = []
+const givenBack: string[] = []
 vi.mock('./AgentComposer.js', () => ({
-  AgentComposer: ({ live, model, context, controls, onQueued, editInBox, row, publish, prBase, agent, gitAccount, projectSkills }: { publish?: string; prBase?: string; live: boolean; model?: string; context?: ReactNode; controls?: ReactNode; onQueued?: (message: { id: string; text: string; later: boolean }) => void; editInBox?: { current: ((text: string) => void) | null }; row?: ReactNode; agent?: string; gitAccount?: string; projectSkills?: 'none' | string[] }) => {
+  AgentComposer: ({ live, asked, model, context, controls, onSending, onQueued, editInBox, giveBack, row, publish, prBase, agent, gitAccount, projectSkills }: { publish?: string; prBase?: string; live: boolean; asked?: boolean; model?: string; context?: ReactNode; controls?: ReactNode; onSending?: (text: string | null) => void; onQueued?: (message: { id: string; text: string; later: boolean }) => void; editInBox?: { current: ((text: string) => void) | null }; giveBack?: { current: ((text: string) => void) | null }; row?: ReactNode; agent?: string; gitAccount?: string; projectSkills?: 'none' | string[] }) => {
     if (editInBox) editInBox.current = text => void edited.push(text)
+    if (giveBack) giveBack.current = text => void givenBack.push(text)
     return (
       <>
         {row}
         <span data-testid="composer-controls">{controls}</span>
         <button type="button" onClick={() => onQueued?.({ id: `m${++queuedIds}`, text: 'and then this', later: false })}>queue-one</button>
+        <button type="button" onClick={() => onSending?.('add a logout button')}>continue-it</button>
         <span data-testid="composer-model">{model ?? ''}</span>
         <span data-testid="composer-auto" data-publish={publish ?? ''} data-pr-base={prBase ?? ''} />
         <span data-testid="composer-agent" data-value={agent ?? ''} />
@@ -96,6 +103,7 @@ vi.mock('./AgentComposer.js', () => ({
         <span data-testid="composer-project-skills" data-value={projectSkills === undefined ? 'all' : projectSkills === 'none' ? 'none' : projectSkills.join('+')} />
         <span data-testid="composer-context">{context}</span>
         <span data-testid="composer-live">{String(live)}</span>
+        <span data-testid="composer-asked">{String(asked)}</span>
       </>
     )
   },
@@ -267,6 +275,37 @@ describe('AgentView: the bar above the message box', () => {
   })
 })
 
+describe("the bar's own state is one session's", () => {
+  const pr = (number: number) => ({ ...PUSHED, pr: { number, url: `https://example.test/${number}`, state: 'OPEN', title: 'T' } })
+  // Repo B's session seen first; then repo A's #42 set to merge once its checks pass, and B's session again, its PR numbered `other`.
+  const armA = async (other: number) => {
+    onAgent.mockResolvedValue(ARCHIVED)
+    onAgentHandoff.mockImplementation((async (project: string) => (project === 'p1' ? pr(42) : pr(other))) as never)
+    const page = render(view({ projectId: 'p2', agentId: 'run-2' }))
+    await screen.findByRole('button', { name: 'Merge PR' })
+    page.rerender(view())
+    await waitFor(() => expect(onAgentHandoff).toHaveBeenCalledWith('p1', 'run-1'))
+    await new Promise(resolve => setTimeout(resolve, 20))
+    fireEvent.click(await screen.findByRole('button', { name: 'Merge PR' }))
+    await waitFor(() => expect(document.querySelector('[aria-live="polite"]')!.textContent).toBe('PR #42 merges when its checks pass.'))
+    expect(screen.queryByRole('button', { name: 'Merge PR' })).toBeNull()
+    page.rerender(view({ projectId: 'p2', agentId: 'run-2' }))
+    await waitFor(() => expect(onAgentHandoff).toHaveBeenCalledWith('p2', 'run-2'))
+    await new Promise(resolve => setTimeout(resolve, 20))
+  }
+
+  test("another repository's session with a PR of the same number still offers its Merge", async () => {
+    await armA(42)
+    expect(await screen.findByRole('button', { name: 'Merge PR' })).toBeTruthy()
+  })
+
+  test("another repository's session is not told the first one's PR merges when its checks pass", async () => {
+    await armA(43)
+    expect(screen.getByRole('button', { name: 'Merge PR' })).toBeTruthy()
+    expect(document.querySelector('[aria-live="polite"]')!.textContent).toBe('')
+  })
+})
+
 describe('AgentView: when the bar above the message box is there', () => {
   const shown = () => screen.getByTestId('work-bar').dataset.show
 
@@ -297,6 +336,27 @@ describe('AgentView: when the bar above the message box is there', () => {
     onAgentWorktree.mockResolvedValue({ branch: 'agent-z', pr: { number: 3, url: 'https://x/pull/3', state: 'OPEN', title: 'T' } })
     render(view({ agentId: 'run-3' }))
     await waitFor(() => expect(shown()).toBe('true'))
+  })
+
+  test('a bar put away is offered back in Session actions, which brings it back, after a reload too', async () => {
+    onAgent.mockResolvedValue(ARCHIVED)
+    onAgentWorktree.mockResolvedValue({ branch: 'agent-w', pr: { number: 4, url: 'https://x/pull/4', state: 'OPEN', title: 'T' } })
+    render(view({ agentId: 'run-4' }))
+    await waitFor(() => expect(shown()).toBe('true'))
+    expect(screen.queryByRole('button', { name: 'Show the work bar' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Hide this bar' }))
+    expect(screen.getByTestId('work-bar').dataset.away).toBe('true')
+    cleanup()
+    render(view({ agentId: 'run-4' }))
+    await waitFor(() => expect(shown()).toBe('true'))
+    expect(screen.getByTestId('work-bar').dataset.away).toBe('true')
+    fireEvent.click(screen.getByRole('button', { name: 'Show the work bar' }))
+    expect(screen.getByTestId('work-bar').dataset.away).toBe('false')
+    expect(screen.queryByRole('button', { name: 'Show the work bar' })).toBeNull()
+    cleanup()
+    render(view({ agentId: 'run-4' }))
+    await waitFor(() => expect(shown()).toBe('true'))
+    expect(screen.getByTestId('work-bar').dataset.away).toBe('false')
   })
 
   test('on a first visit, a run whose pull request turns out merged never shows the bar while the request is read', async () => {
@@ -602,7 +662,7 @@ describe('a question the agent stopped on', () => {
     onAgent.mockResolvedValue(asked)
     render(view({ events: asked }))
     fireEvent.click(await screen.findByRole('radio', { name: 'Other' }))
-    fireEvent.change(screen.getByLabelText('Other'), { target: { value: 'MySQL' } })
+    fireEvent.change(screen.getByLabelText('Your own answer'), { target: { value: 'MySQL' } })
     fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
     await waitFor(() => expect(sendMessage).toHaveBeenCalledWith('p1', 'You paused to ask: "Which database?". The user chose: MySQL. Continue with that decision.', 'run-1'))
     await waitFor(() => expect(screen.getByRole('group', { name: 'Your answer' }).textContent).toBe('Which database?MySQL'))
@@ -667,6 +727,81 @@ describe('a message sent while the agent works', () => {
     expect(queuedBoxes()).toHaveLength(0)
   })
 
+  test('Send now, which sends every waiting message, is under the last of them, says it is on its way and says why the run refused it', async () => {
+    let answer: (outcome: unknown) => void = () => {}
+    sendNow.mockReturnValueOnce(new Promise(resolve => (answer = resolve)))
+    render(view({ live: true, events: [start('go'), text] }))
+    fireEvent.click(screen.getByText('queue-one'))
+    fireEvent.click(screen.getByText('queue-one'))
+    // Each box with what is said under it: the whole message.
+    const [first, last] = queuedBoxes().map(box => box.closest<HTMLElement>('.group\\/prompt')!)
+    expect(within(first!).queryByRole('button', { name: 'Send now' })).toBeNull()
+    expect(within(first!).getByText("Read at the agent's next step")).toBeTruthy()
+    fireEvent.click(within(last!).getByRole('button', { name: 'Send now' }))
+    expect((await within(last!).findByRole('button', { name: 'Sending…' })) as HTMLButtonElement).toHaveProperty('disabled', true)
+    act(() => answer({ ok: false, error: 'could not reach the machine' }))
+    expect((await screen.findByRole('alert')).textContent).toBe('could not reach the machine')
+  })
+
+  test('what Send now said is the session’s it was pressed in: another session picked shows its own, and an answer that comes back later shows in its session alone', async () => {
+    sendNow.mockResolvedValueOnce({ ok: false, error: 'session A could not be reached' })
+    const page = render(view({ live: true, events: [start('go'), text] }))
+    fireEvent.click(screen.getByText('queue-one'))
+    fireEvent.click(screen.getByRole('button', { name: 'Send now' }))
+    expect((await screen.findByRole('alert')).textContent).toBe('session A could not be reached')
+    page.rerender(view({ agentId: 'run-2', live: true, events: [start('go'), text] }))
+    fireEvent.click(screen.getByText('queue-one'))
+    expect(screen.queryByRole('alert')).toBeNull()
+    let answer: (outcome: unknown) => void = () => {}
+    sendNow.mockReturnValueOnce(new Promise(resolve => (answer = resolve)))
+    fireEvent.click(screen.getByRole('button', { name: 'Send now' }))
+    page.rerender(view({ live: true, events: [start('go'), text] }))
+    expect(screen.getByRole('button', { name: 'Send now' })).toBeTruthy()
+    await act(async () => answer({ ok: false, error: 'session B refused it late' }))
+    expect(screen.getByRole('alert').textContent).toBe('session A could not be reached')
+    page.rerender(view({ agentId: 'run-2', live: true, events: [start('go'), text] }))
+    expect(screen.getByRole('alert').textContent).toBe('session B refused it late')
+  })
+
+  test('it is still waiting after the page is left or reloaded, with Send now and Cancel and edit, until the agent reads it', () => {
+    const before = [start('go'), text]
+    render(view({ live: true, events: before }))
+    fireEvent.click(screen.getByText('queue-one'))
+    const first = `m${queuedIds}`
+    fireEvent.click(screen.getByText('queue-one'))
+    const second = `m${queuedIds}`
+    cleanup()
+    const { rerender } = render(view({ live: true, events: before }))
+    expect(queuedBoxes().map(n => n.textContent)).toEqual(['and then this', 'and then this'])
+    fireEvent.click(screen.getByRole('button', { name: 'Send now' }))
+    expect(sendNow).toHaveBeenCalledWith('p1', 'run-1')
+    fireEvent.click(screen.getAllByRole('button', { name: 'Cancel and edit message' })[0]!)
+    expect(withdrawMessage).toHaveBeenCalledWith('p1', 'run-1', first)
+    const read = [...before, { kind: 'driver', event: { type: 'steered', text: 'and then this', id: second } } as OpenAgentEvent]
+    rerender(view({ live: true, events: read }))
+    expect(queuedBoxes()).toHaveLength(0)
+    cleanup()
+    render(view({ live: true, events: before }))
+    expect(queuedBoxes()).toHaveLength(0)
+  })
+
+  test('two tabs open on the run each keep the message the other sent: both show both, and both are still waiting after a reload', () => {
+    const before = [start('go'), text]
+    const one = render(view({ live: true, events: before }))
+    const two = render(view({ live: true, events: before }))
+    // The browser tells every other tab of a write, never the one that wrote.
+    const sendIn = (tab: typeof one) => {
+      fireEvent.click(within(tab.container).getByText('queue-one'))
+      act(() => void window.dispatchEvent(new StorageEvent('storage', { key: 'oa.waiting:run-1' })))
+    }
+    sendIn(one)
+    sendIn(two)
+    for (const tab of [one, two]) expect(within(tab.container).queryAllByLabelText('Your message, waiting')).toHaveLength(2)
+    cleanup()
+    render(view({ live: true, events: before }))
+    expect(queuedBoxes()).toHaveLength(2)
+  })
+
   test('queued before the agent\'s first event, it is the chat\'s only row, not hidden behind the waiting words', () => {
     render(view({ live: true, events: [] }))
     fireEvent.click(screen.getByText('queue-one'))
@@ -681,17 +816,158 @@ describe('a message sent while the agent works', () => {
     expect(queuedBoxes()).toHaveLength(0)
   })
 
-  test('an agent that stopped working without reading it shows it for five seconds more, not for good', () => {
+  test('a run whose record says it was stopped gives its words back to the box at once', async () => {
     vi.useFakeTimers()
     try {
+      givenBack.length = 0
       const { rerender } = render(view({ live: true, events: [start('go'), text] }))
+      fireEvent.click(screen.getByText('queue-one'))
+      rerender(view({ live: false, card: { status: 'stopped' }, events: [start('go'), text, { kind: 'end', ok: false, stopped: true }] as OpenAgentEvent[] }))
+      await act(async () => {})
+      act(() => void vi.advanceTimersByTime(0))
+      expect(queuedBoxes()).toHaveLength(0)
+      expect(givenBack).toEqual(['and then this'])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  test('a tab in the background leaves the words for the tab that is shown, and takes them once it is shown and they still wait', async () => {
+    vi.useFakeTimers()
+    const setShown = (shown: boolean) => {
+      Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => (shown ? 'visible' : 'hidden') })
+      act(() => void document.dispatchEvent(new Event('visibilitychange')))
+    }
+    try {
+      givenBack.length = 0
+      const { rerender } = render(view({ live: true, events: [start('go'), text] }))
+      fireEvent.click(screen.getByText('queue-one'))
+      setShown(false)
+      rerender(view({ live: false, card: { status: 'stopped' }, events: [start('go'), text, { kind: 'end', ok: false, stopped: true }] as OpenAgentEvent[] }))
+      await act(async () => {})
+      act(() => void vi.advanceTimersByTime(10_000))
+      expect(queuedBoxes()).toHaveLength(1)
+      expect(givenBack).toEqual([])
+      setShown(true)
+      act(() => void vi.advanceTimersByTime(0))
+      expect(queuedBoxes()).toHaveLength(0)
+      expect(givenBack).toEqual(['and then this'])
+    } finally {
+      delete (document as { visibilityState?: unknown }).visibilityState
+      vi.useRealTimers()
+    }
+  })
+
+  test('a run whose feed shows its end is ended at once, its Stop gone with the end line, before the list of runs says so', () => {
+    const { rerender } = render(view({ live: true, events: [start('go'), text] }))
+    expect(screen.getByTestId('composer-live').textContent).toBe('true')
+    rerender(view({ live: true, events: [start('go'), text, { kind: 'end', ok: false, stopped: true, at: new Date().toISOString() }] as OpenAgentEvent[] }))
+    expect(screen.getByTestId('composer-live').textContent).toBe('false')
+    expect(screen.getByTestId('bar-live').textContent).toBe('false')
+  })
+
+  test('a run continued by a message is live from the list of runs on, its Stop in the box and the menu, before its new leg writes a line', () => {
+    const before = [start('go'), text, { kind: 'end', ok: true, at: '2026-01-01T10:00:00.000Z' }] as OpenAgentEvent[]
+    const { rerender } = render(view({ live: false, events: before }))
+    expect(screen.getByTestId('composer-live').textContent).toBe('false')
+    rerender(view({ live: true, events: before }))
+    expect(screen.getByTestId('composer-live').textContent).toBe('true')
+    expect(screen.getByTestId('bar-live').textContent).toBe('true')
+  })
+
+  test('a run that ended on a question tells the box so: a message is the answer', async () => {
+    const asking = [start('go'), { kind: 'end', ok: true, waiting: true }] as OpenAgentEvent[]
+    onAgent.mockResolvedValue(asking)
+    render(view({ live: false, events: asking }))
+    await waitFor(() => expect(screen.getByTestId('composer-asked').textContent).toBe('true'))
+  })
+
+  test('a continued run opened afresh is live while its feed replays the leg before, and ends with its own end', () => {
+    const before = [start('go'), text, { kind: 'end', ok: true, at: '2026-01-01T10:00:00.000Z' }] as OpenAgentEvent[]
+    const { rerender } = render(view({ live: true, events: [], replayed: false }))
+    rerender(view({ live: true, events: before.slice(0, 2), replayed: false }))
+    rerender(view({ live: true, events: before, replayed: false }))
+    expect(screen.getByTestId('composer-live').textContent).toBe('true')
+    rerender(view({ live: true, events: before }))
+    expect(screen.getByTestId('composer-live').textContent).toBe('true')
+    rerender(view({ live: true, events: [...before, { kind: 'end', ok: false, stopped: true, at: '2026-01-01T10:00:00.000Z' }] as OpenAgentEvent[] }))
+    expect(screen.getByTestId('composer-live').textContent).toBe('false')
+  })
+
+  // The browser may be another device, its clock its own: the daemon's times say nothing of this page's.
+  describe.each([
+    ['five minutes ahead of', 300_000],
+    ['five minutes behind', -300_000],
+    ['the same as', 0],
+  ])('with this browser\'s clock %s the daemon\'s', (_, skew) => {
+    const daemonNow = () => new Date(Date.now() - skew).toISOString()
+    afterEach(() => vi.restoreAllMocks())
+
+    test('a continued run is live from the list of runs on, before its new leg writes a line', () => {
+      const before = [start('go'), text, { kind: 'end', ok: true, at: new Date(Date.now() - 1000).toISOString() }] as OpenAgentEvent[]
+      const now = Date.now()
+      vi.spyOn(Date, 'now').mockReturnValue(now + skew)
+      const { rerender } = render(view({ live: false, events: before }))
+      rerender(view({ live: true, events: before }))
+      expect(screen.getByTestId('composer-live').textContent).toBe('true')
+    })
+
+    test('a continued run\'s own end ends it at once, its Stop gone with the end line', () => {
+      const before = [start('go'), text, { kind: 'end', ok: true, at: new Date(Date.now() - 1000).toISOString() }] as OpenAgentEvent[]
+      const now = Date.now()
+      vi.spyOn(Date, 'now').mockReturnValue(now + skew)
+      const { rerender } = render(view({ live: false, events: before }))
+      rerender(view({ live: true, events: before }))
+      rerender(view({ live: true, events: [...before, start('more'), { kind: 'end', ok: false, stopped: true, at: daemonNow() }] as OpenAgentEvent[] }))
+      expect(screen.getByTestId('composer-live').textContent).toBe('false')
+      expect(screen.getByTestId('bar-live').textContent).toBe('false')
+    })
+  })
+
+  test('a session whose run is not known yet has no message box, which would say an ended run\'s words; it comes once the record or the feed says', () => {
+    const { rerender } = render(view({ live: null, events: [] }))
+    expect(screen.queryByTestId('composer-live')).toBeNull()
+    // The feed says it works before any list has the run.
+    rerender(view({ live: null, events: [start('go'), text] }))
+    expect(screen.getByTestId('composer-live').textContent).toBe('true')
+    cleanup()
+    render(view({ live: false, events: [] }))
+    expect(screen.getByTestId('composer-live').textContent).toBe('false')
+  })
+
+  test('a page slow to learn that the run still works keeps showing it waiting', () => {
+    vi.useFakeTimers()
+    try {
+      render(view({ live: true, events: [start('go'), text] }))
+      fireEvent.click(screen.getByText('queue-one'))
+      cleanup()
+      // Reloaded: the list of runs is not read yet, and the run's feed has not come.
+      const { rerender } = render(view({ live: null, events: [] }))
+      act(() => void vi.advanceTimersByTime(10_000))
+      rerender(view({ live: true, events: [start('go'), text] }))
+      expect(queuedBoxes().map(n => n.textContent)).toEqual(['and then this'])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  test('an agent that stopped working without reading it shows it for five seconds more, then its words go back to the box', async () => {
+    vi.useFakeTimers()
+    try {
+      givenBack.length = 0
+      const { rerender } = render(view({ live: true, events: [start('go'), text] }))
+      fireEvent.click(screen.getByText('queue-one'))
       fireEvent.click(screen.getByText('queue-one'))
       const ended = [start('go'), text, { kind: 'end', ok: false, stopped: true }] as OpenAgentEvent[]
       rerender(view({ live: false, events: ended }))
+      // The ended run's feed is read.
+      await act(async () => {})
       act(() => void vi.advanceTimersByTime(4_000))
-      expect(queuedBoxes()).toHaveLength(1)
+      expect(queuedBoxes()).toHaveLength(2)
+      expect(givenBack).toEqual([])
       act(() => void vi.advanceTimersByTime(1_500))
       expect(queuedBoxes()).toHaveLength(0)
+      expect(givenBack).toEqual(['and then this\n\nand then this'])
     } finally {
       vi.useRealTimers()
     }
@@ -925,13 +1201,20 @@ describe('a run just started', () => {
     expect(screen.getByRole('status')).toBeTruthy()
   })
 
-  test('one stopped before its prompt line landed is over: its prompt stays, and no moving line says it is starting', async () => {
-    // Stop pressed while the run's checkout was made: its card says it ended, and its prompt line never comes.
-    render(view({ live: false, events: [], startedWith: 'Say hi', card: { status: 'stopped', workspace: '/repo/.branches/agent-1', branch: 'agent-1', driver: 'codex' } }))
-    expect(await screen.findByText('Say hi')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Initialized session' })).toBeTruthy()
+  test('a run stopped before its first turn keeps its prompt, stops counting, and says it stopped', async () => {
+    const { rerender } = render(view({ live: true, events: [], startedWith: 'Say hi' }))
+    expect(screen.getByText('Starting session')).toBeTruthy()
+    const stopped = [{ kind: 'end', ok: false, stopped: true }] as OpenAgentEvent[]
+    rerender(view({ live: false, events: stopped, startedWith: 'Say hi', card: { status: 'stopped', intent: 'Say hi', branch: 'agent-x' } }))
+    await waitFor(() => expect(screen.getByText('Stopped')).toBeTruthy())
+    expect(screen.getAllByText('Say hi')).toHaveLength(1)
     expect(screen.queryByRole('status')).toBeNull()
-    expect(screen.queryByText(/^Starting/)).toBeNull()
+  })
+
+  test('a run with no prompt line yet shows the prompt its card says, on a page that did not start it', () => {
+    render(view({ live: true, events: [], card: { status: 'running', intent: 'Move the cart', branch: 'agent-x', startedAt: new Date().toISOString() } }))
+    expect(screen.getByText('Move the cart')).toBeTruthy()
+    expect(screen.getByText('Starting the coding agent')).toBeTruthy()
   })
 
   test('an agent just started on a machine says nothing of a set-up before its card is listed: no checkout is made for it here', () => {
@@ -1102,6 +1385,110 @@ describe('AgentView: the bar when the work is landed', () => {
     render(view({ agentId: 'run-p', events: ENDED }))
     await waitFor(() => expect(screen.getByRole('button', { name: 'Commit' })).toBeTruthy())
     expect(screen.getByTestId('work-bar').dataset.show).toBe('true')
+  })
+})
+
+describe('AgentView: a message sent to continue an ended run', () => {
+  const start = (prompt: string) => ({ kind: 'driver', event: { type: 'start', prompt } }) as OpenAgentEvent
+  const ended = [start('Add a page'), { kind: 'end', ok: true, at: '2026-01-01T10:00:00.000Z' }] as OpenAgentEvent[]
+
+  test('is still shown after a reload, until the run writes it as its prompt', async () => {
+    onAgent.mockResolvedValue(ended)
+    const first = render(view({ events: ended }))
+    fireEvent.click(screen.getByRole('button', { name: 'continue-it' }))
+    expect(await screen.findByText('add a logout button')).toBeTruthy()
+    first.unmount()
+    // Reloaded before the list of runs has seen the run continued: its record still says the leg before ended.
+    const { rerender } = render(view({ events: ended, card: { status: 'done', endedAt: '2026-01-01T10:00:00.000Z' } as never }))
+    expect(await screen.findByText('add a logout button')).toBeTruthy()
+    rerender(view({ live: true, events: ended }))
+    expect(screen.getByText('add a logout button')).toBeTruthy()
+    rerender(view({ live: true, events: [...ended, start('add a logout button')] }))
+    await waitFor(() => expect(screen.getAllByText('add a logout button')).toHaveLength(1))
+    cleanup()
+    render(view({ live: true, events: [...ended, start('add a logout button')] }))
+    expect(screen.getAllByText('add a logout button')).toHaveLength(1)
+  })
+
+  test('stays out of the box when the run began on it, its record ending before its feed shows the prompt line', async () => {
+    onAgent.mockResolvedValue(ended)
+    givenBack.length = 0
+    const { rerender } = render(view({ events: ended }))
+    fireEvent.click(screen.getByRole('button', { name: 'continue-it' }))
+    // The list of runs says the new leg ended before this page read its lines.
+    const over = { status: 'done', endedAt: new Date(Date.now() + 1000).toISOString() } as never
+    rerender(view({ events: ended, card: over }))
+    await new Promise(resolve => setTimeout(resolve, 50))
+    rerender(view({ events: [...ended, start('add a logout button'), { kind: 'end', ok: true }] as OpenAgentEvent[], card: over }))
+    await waitFor(() => expect(screen.getAllByText('add a logout button')).toHaveLength(1))
+    expect(givenBack).toEqual([])
+  })
+
+  test('goes back to the box when the run ends after it without beginning on it, five seconds on', async () => {
+    onAgent.mockResolvedValue(ended)
+    givenBack.length = 0
+    const first = render(view({ events: ended }))
+    fireEvent.click(screen.getByRole('button', { name: 'continue-it' }))
+    first.unmount()
+    vi.useFakeTimers()
+    try {
+      render(view({ live: false, events: ended, card: { status: 'failed', endedAt: new Date(Date.now() + 1000).toISOString() } as never }))
+      // The ended run's feed is read.
+      await act(async () => {})
+      act(() => void vi.advanceTimersByTime(4_000))
+      expect(givenBack).toEqual([])
+      act(() => void vi.advanceTimersByTime(1_500))
+      expect(givenBack).toEqual(['add a logout button'])
+      expect(screen.queryByText('add a logout button')).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  // The browser may be another device, its clock its own: the daemon's times say nothing of this page's.
+  describe.each([
+    ['five minutes ahead of', 300_000],
+    ['five minutes behind', -300_000],
+  ])('with this browser\'s clock %s the daemon\'s', (_, skew) => {
+    const daemonAt = (ms: number) => new Date(Date.now() - skew + ms).toISOString()
+
+    test('goes back to the box when the run ends again without beginning on it, five seconds on', async () => {
+      const legBefore = { status: 'done', endedAt: daemonAt(-60_000) } as never
+      const endedThen = [start('Add a page'), { kind: 'end', ok: true, at: daemonAt(-60_000) }] as OpenAgentEvent[]
+      onAgent.mockResolvedValue(endedThen)
+      givenBack.length = 0
+      const first = render(view({ events: endedThen, card: legBefore }))
+      fireEvent.click(screen.getByRole('button', { name: 'continue-it' }))
+      first.unmount()
+      vi.useFakeTimers()
+      try {
+        render(view({ live: false, events: endedThen, card: { status: 'failed', endedAt: daemonAt(1000) } as never }))
+        await act(async () => {})
+        act(() => void vi.advanceTimersByTime(5_500))
+        expect(givenBack).toEqual(['add a logout button'])
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    test('stays on screen while the record still says the leg before ended, the run not yet continued', async () => {
+      const legBefore = { status: 'done', endedAt: daemonAt(-60_000) } as never
+      const endedThen = [start('Add a page'), { kind: 'end', ok: true, at: daemonAt(-60_000) }] as OpenAgentEvent[]
+      onAgent.mockResolvedValue(endedThen)
+      givenBack.length = 0
+      vi.useFakeTimers()
+      try {
+        render(view({ events: endedThen, card: legBefore }))
+        await act(async () => {})
+        fireEvent.click(screen.getByRole('button', { name: 'continue-it' }))
+        // Its checkout is being made again: the record is written running only once it is there.
+        act(() => void vi.advanceTimersByTime(10_000))
+        expect(givenBack).toEqual([])
+        expect(screen.getByText('add a logout button')).toBeTruthy()
+      } finally {
+        vi.useRealTimers()
+      }
+    })
   })
 })
 

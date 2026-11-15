@@ -6,6 +6,7 @@ import { handDownSkills } from './skills.js'
 import { repositoryOf } from './project.js'
 import { openInBrowser } from './browser.js'
 import { openagentVersion } from '../version.js'
+import { helpRows, helpText, unknownWord, usageError } from '@openagt/agent-data'
 
 /** Where the CLI writes. Injectable so tests capture output. */
 export interface CliIO {
@@ -18,24 +19,20 @@ const defaultIO: CliIO = {
   err: line => process.stderr.write(line + '\n'),
 }
 
-const HELP = `OpenAgent — turnkey AI orchestration that wraps a coding agent (Claude Code or Codex).
+const HELP = `OpenAgent — autonomous AI programming, with a coding agent (Claude Code or Codex).
 
-Usage:
-  openagent              Serve the dashboard in the foreground. Ctrl+C closes it; the server
-                         logs stream to this terminal. Typed inside a Git repository, it adds
-                         that repository to the dashboard's projects and opens its page. With
-                         the dashboard running already, it hands the repository to that one.
+${helpRows([
+  'Usage:',
+  ['openagent', "Serve the dashboard in the foreground. Ctrl+C stops it; the server logs stream to this terminal. Typed inside a Git repository, it adds that repository to the dashboard's projects and opens its page. With the dashboard running already, it hands the repository to that one."],
+  'Options:',
+  ['--port <n>', 'Dashboard port (default: 4200).'],
+  ['-h, --help', 'Show this help.'],
+  ['-v, --version', 'Print the version.'],
+])}
 
-Options:
-  --port <n>             Dashboard port (default: 4200).
-  -h, --help             Show this help.
-  -v, --version          Print the version.
+${helpText("The dashboard listens on this computer only. A phone, or another computer's OpenAgent, gets in from Settings › Devices.")}
 
-The dashboard listens on this computer only. A phone, or another computer's OpenAgent, gets in
-from Settings › Devices.
-
-Everything else is the dashboard: it shows a project's runs from their files, and starts one
-through the project's own start hook (.openagent/hooks.yml), which names the tool that runs it.`
+${helpText("Everything else is the dashboard: it shows a project's runs from their files, and starts one through the project's own start hook (.openagent/hooks.yml), which names the tool that runs it.")}`
 
 /** What the CLI itself accepts: three options, no verbs (D4). */
 export interface CliArgs {
@@ -68,24 +65,29 @@ export function parseArgs(argv: string[]): CliArgs {
         opts.version = true
         break
       case '--port': {
-        const n = Number(argv[++i])
-        if (Number.isInteger(n) && n >= 0) opts.port = n
-        else opts.error ??= 'invalid --port: must be a non-negative integer'
+        const port = portOf(argv[++i])
+        if (port !== undefined) opts.port = port
+        else opts.error ??= 'invalid --port: must be a port number from 0 to 65535'
         break
       }
       default:
         // The first thing that could not be read is the one told: what follows an unknown option is its value, not a command.
-        opts.error ??= arg.startsWith('-') ? `unknown option: ${arg}` : `unknown command: ${arg}`
+        opts.error ??= unknownWord(arg)
     }
   }
   return opts
 }
 
+/** `value` read as a port to bind, `0` for a free one; undefined when it names no port. */
+export function portOf(value: string | undefined): number | undefined {
+  const port = value?.trim() ? Number(value) : NaN
+  return Number.isInteger(port) && port >= 0 && port <= 65535 ? port : undefined
+}
+
 export async function runCli(argv: string[], io: CliIO = defaultIO): Promise<number> {
   const args = parseArgs(argv)
   if (args.error) {
-    io.err(args.error)
-    io.err('Run `openagent --help` for usage.')
+    io.err(usageError('openagent', args.error))
     return 2
   }
   if (args.help) {
@@ -138,6 +140,7 @@ async function runForegroundDaemonCmd(args: CliArgs, io: CliIO): Promise<number>
     io.err(`could not start the dashboard (${err instanceof Error ? err.message : String(err)}).`)
     return 1
   }
+  io.out('◆ dashboard stopped.')
   return 0
 }
 
@@ -179,8 +182,8 @@ async function joinRunning(port: number, project: string | undefined, io: CliIO)
 }
 
 /**
- * The startup footer every dashboard path prints (#312): where prompts come from, the version,
- * and then — once npm answers — whether that version is the latest.
+ * The startup footer every dashboard path prints (#312): the version, and then — once npm
+ * answers — whether that version is the latest.
  *
  * The update line is deliberately not awaited before the static lines. #312 asks for the static
  * info first, and the foreground path (bare `openagent`) blocks on the server forever, so a line
@@ -189,11 +192,7 @@ async function joinRunning(port: number, project: string | undefined, io: CliIO)
  */
 export function printStartupFooter(io: CliIO, opts: { fetchLatest?: VersionFetcher } = {}): Promise<void> {
   const version = openagentVersion()
-  io.out('')
-  io.out('Type a prompt on the dashboard to start an agent, or use:')
-  io.out('  openagent --help              All options')
-  io.out('')
-  io.out(`OpenAgent v${version}`)
+  io.out(`◆ OpenAgent v${version}`)
   return checkForUpdate(version, opts.fetchLatest ?? nodeVersionFetcher())
     .then(status => {
       const line = formatUpdateStatus(status)

@@ -3,8 +3,10 @@ import { isIP } from 'node:net'
 import type { Duplex } from 'node:stream'
 import { connect } from 'node:tls'
 import { keyFingerprint } from './der.js'
-import { DATA, END, HEAD, Link, RESET, carriedHeaders, carriedPath, carriedValue, readHead, sendBody, type Frame } from './frames.js'
-import { COMPUTER_HEADER, MAX_PERSONS, OWNERS_NAME_HEADER, PERSON_HEADER, nameFromWord, nameOf, nameWord } from './store.js'
+import { CARRIED_HEADERS, DATA, END, HEAD, LINE_PING_MS, LINE_QUIET_MS, Link, RESET, carriedHeaders, carriedPath, carriedValue, readHead, sendBody, type Frame } from './frames.js'
+import { LINE_PATH, ME_PATH } from './paths.js'
+import { COMPUTER_HEADER, MAX_PERSONS, OWNERS_NAME_HEADER, PERSON_HEADER } from './store.js'
+import { nameFromWord, nameOf, nameWord, shownName } from './names.js'
 
 /**
  * This computer's end of a line: it calls its server, says who it is with the key it has there,
@@ -22,8 +24,7 @@ import { COMPUTER_HEADER, MAX_PERSONS, OWNERS_NAME_HEADER, PERSON_HEADER, nameFr
  * The word is the server's, which this computer trusts with its line; it is not passed on.
  */
 
-/** Where a computer asks the door for a line, and what it asks to speak there. */
-export const LINE_PATH = '/_devices/line'
+/** What a computer asks to speak at the door's `LINE_PATH`. */
 export const LINE_PROTOCOL = 'openagent-line'
 /** Said to OpenAgent with a call that may only read. */
 export const WATCH_HEADER = 'x-openagent-watch'
@@ -43,13 +44,6 @@ export function namesIn(header: string | string[] | undefined): string[] {
   }
   return names
 }
-/** Where the door tells a device who it is there: the door's own `ME_PATH`. */
-const ME_PATH = '/_devices/me'
-const CARRIED_HEADERS: readonly string[] = ['content-type', 'accept']
-
-/** How often this computer asks whether the line still carries, and after how long with no answer it calls again. */
-export const LINE_PING_MS = 15_000
-export const LINE_QUIET_MS = 45_000
 /** How long the server gets to take the connection, show its key, and answer the first words. */
 const DIAL_MS = 15_000
 const MAX_ANSWER_HEAD = 8 * 1024
@@ -129,8 +123,11 @@ export function knock(socket: Duplex, url: string, key: string, computer?: strin
   })
 }
 
-/** Where one call down a line goes: an OpenAgent on this computer, or nowhere, with the answer the server is given instead (plain words, unless it says its type). */
-/** Where a call goes: an OpenAgent here, with this computer's name as its owner named it for a person's own one, or an answer given here. */
+/**
+ * Where one call down a line goes: an OpenAgent on this computer, with this computer's name as its
+ * owner named it for a person's own one; or nowhere, with the answer the server is given instead
+ * (plain words, unless it says its type).
+ */
 export type Route = { target: string; ownersName?: string } | { status: number; text: string; type?: string }
 
 export interface CarryOptions {
@@ -409,8 +406,7 @@ export async function askMe(line: { url: string; pin: string; key: string }): Pr
     const { person, persons, name } = JSON.parse(answer.body) as Record<string, unknown>
     const known = typeof person === 'string' ? nameOf(person) : undefined
     const theirs = Array.isArray(persons) ? persons.flatMap(other => (typeof other === 'string' && nameOf(other) === other ? [other] : [])) : undefined
-    // A computer's name is any words: shown as such, with nothing in it that moves a line.
-    const called = typeof name === 'string' ? name.replace(/[\x00-\x1f\x7f]/g, ' ').trim().slice(0, 60) : ''
+    const called = typeof name === 'string' ? shownName(name) : ''
     return { ...(known !== undefined ? { person: known } : {}), ...(theirs ? { persons: theirs } : {}), ...(called ? { name: called } : {}) }
   } catch {
     return undefined

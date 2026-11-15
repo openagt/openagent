@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { ADDRESS, LOOPBACK_ADDRESS, addHostsLine, quoted, removeHostsLine } from './address.js'
+import { ADDRESS, LOOPBACK_ADDRESS, addHostsLine, hasHostsLine, quoted, removeHostsLine } from './address.js'
 
 const sh = (script: string) => execFileSync('/bin/sh', ['-c', script], { encoding: 'utf8' })
 
@@ -18,8 +18,8 @@ test('the hosts line is added once, however often, and taken off with the rest l
   try {
     // A last line with no end: the install's must not be joined to it.
     await writeFile(hosts, '127.0.0.1 localhost\n255.255.255.255 broadcasthost')
-    sh(addHostsLine(hosts, ADDRESS))
-    sh(addHostsLine(hosts, ADDRESS))
+    sh(addHostsLine(hosts))
+    sh(addHostsLine(hosts))
     assert.equal(await readFile(hosts, 'utf8'), `127.0.0.1 localhost\n255.255.255.255 broadcasthost\n${LOOPBACK_ADDRESS} ${ADDRESS} # OpenAgent\n`)
     sh(removeHostsLine(hosts))
     assert.equal(await readFile(hosts, 'utf8'), '127.0.0.1 localhost\n255.255.255.255 broadcasthost\n')
@@ -39,11 +39,27 @@ test('a hosts file that is a link stays a link, and the file it points at gets t
   try {
     await writeFile(real, '127.0.0.1 localhost\n')
     await symlink(real, hosts)
-    sh(addHostsLine(hosts, ADDRESS))
+    sh(addHostsLine(hosts))
     assert.equal(await readFile(real, 'utf8'), `127.0.0.1 localhost\n${LOOPBACK_ADDRESS} ${ADDRESS} # OpenAgent\n`)
     sh(removeHostsLine(hosts))
     assert.equal(await readFile(real, 'utf8'), '127.0.0.1 localhost\n')
     assert.equal(sh(`[ -L ${quoted(hosts)} ] && echo link`), 'link\n')
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test("the uninstall knows whether the hosts file holds the install's line: once added, until it is taken out; a file that is not there holds none", async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'oa-hosts-'))
+  try {
+    const hosts = join(dir, 'hosts')
+    assert.equal(await hasHostsLine(hosts), false)
+    await writeFile(hosts, '127.0.0.1 localhost\n')
+    assert.equal(await hasHostsLine(hosts), false)
+    sh(addHostsLine(hosts))
+    assert.equal(await hasHostsLine(hosts), true)
+    sh(removeHostsLine(hosts))
+    assert.equal(await hasHostsLine(hosts), false)
   } finally {
     await rm(dir, { recursive: true, force: true })
   }

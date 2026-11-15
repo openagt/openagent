@@ -78,15 +78,16 @@ export async function onModules(): Promise<DashboardModule[]> {
  * queue package's queue): in a project that shares its records a package's command writes as a
  * remote writer, straight to origin, and the next read shows the change at once instead of at the
  * next sync. A read writes nothing, so what was read stays: the Members card reading the logs
- * package's people leaves the runs that package provides read.
+ * package's people leaves the runs that package provides read. `input` is what the command reads
+ * on standard input: a whole file an action writes, a ticket say.
  */
-export async function runModuleCommand(projectId: string, pkg: string, args: string[], command?: string, acts = false): Promise<ModuleCommandResult> {
+export async function runModuleCommand(projectId: string, pkg: string, args: string[], command?: string, acts = false, input?: string | null): Promise<ModuleCommandResult> {
   const root = await resolveProjectPath(projectId)
   if (!root) return { ok: false, error: 'unknown project' }
   if (!Array.isArray(args)) return { ok: false, error: 'arguments must be a list' }
   const module = await findProjectModule(root, pkg)
   if (!module) return { ok: false, error: `${pkg} brings no module to this project` }
-  const result = await runCommand(root, module, args, command)
+  const result = await runCommand(root, module, args, command, {}, typeof input === 'string' ? input : undefined)
   if (acts) {
     await pullProjectData(root, { log: () => {} }).catch(() => {})
     providedDataChanged(root, pkg)

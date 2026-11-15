@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import type { RecordsReader } from './people.js'
+import type { RecordsReader } from './records.js'
 import { skillUseOf } from './skill-use.js'
 
 const DAY = 86_400_000

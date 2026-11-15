@@ -12,7 +12,7 @@ const queueFor =
   async path => {
     const entries = queues[path]
     if (!entries) return undefined
-    return { package: 'queue-package', list: () => (typeof entries === 'function' ? entries() : Promise.resolve(entries)) }
+    return { list: () => (typeof entries === 'function' ? entries() : Promise.resolve(entries)) }
   }
 
 test('collectQueue lists every project with a queue provider, empty or not, most entries first, and leaves out the rest', async () => {
@@ -21,16 +21,16 @@ test('collectQueue lists every project with a queue provider, empty or not, most
     queueFor({ '/a': ['one'], '/b': ['[b one](tickets/b1.md) — a note', 'two'], '/d': [] }),
   )
   assert.deepEqual(queues, [
-    { projectId: 'b', projectName: 'b', package: 'queue-package', entries: ['[b one](tickets/b1.md) — a note', 'two'] },
-    { projectId: 'a', projectName: 'a', package: 'queue-package', entries: ['one'] },
-    { projectId: 'd', projectName: 'd', package: 'queue-package', entries: [] },
+    { projectId: 'b', projectName: 'b', entries: ['[b one](tickets/b1.md) — a note', 'two'] },
+    { projectId: 'a', projectName: 'a', entries: ['one'] },
+    { projectId: 'd', projectName: 'd', entries: [] },
   ])
 })
 
 test('collectQueue survives a provider lookup or a read that throws: that project has no entries', async () => {
   const boom: QueueFor = async path => {
     if (path === '/lookup') throw new Error('unreadable')
-    return { package: 'queue-package', list: () => (path === '/read' ? Promise.reject(new Error('boom')) : Promise.resolve(['fine'])) }
+    return { list: () => (path === '/read' ? Promise.reject(new Error('boom')) : Promise.resolve(['fine'])) }
   }
   const queues = await collectQueue([project('lookup', '/lookup'), project('read', '/read'), project('ok', '/ok')], boom)
   assert.deepEqual(

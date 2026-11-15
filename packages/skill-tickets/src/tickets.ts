@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { isSibling, isTicketFile, META_FILE, ticketLockName, ticketPlanName, ticketStem } from './names.js'
+import { isSibling, isTicketFile, META_FILE, onScale, ticketLockName, ticketPlanName, ticketStem } from './names.js'
 import { lockHolder } from './locks.js'
 
 /**
@@ -105,6 +105,20 @@ function titleFromFile(file: string): string {
   }
 }
 
+/** The value a preamble's `Key: value` line gives `key`, in any case, trimmed; `undefined` when no line names it. */
+function keyValue(preamble: readonly string[], key: string): string | undefined {
+  return preamble
+    .find(line => line.toLowerCase().startsWith(`${key}:`))
+    ?.slice(key.length + 1)
+    .trim()
+}
+
+/** The first markdown link in `text`, `[label](url)`, split into the two; `undefined` when there is none. */
+function linkIn(text: string): TicketLink | undefined {
+  const link = /\[([^\]]+)\]\(([^)]+)\)/.exec(text)
+  return link ? { label: link[1]!, url: link[2]! } : undefined
+}
+
 /**
  * Read the head of a ticket: the `key: value` block above the title (`Priority:`, `Topics:`,
  * `Issue:`, `PR:`, `Waiting:` — all optional), the `# ` heading, and the `## TLDR`. Deliberately tolerant: a ticket
@@ -116,30 +130,23 @@ function describe(md: string): { title?: string; summary: string; priority?: str
   const heading = headingAt === -1 ? undefined : lines[headingAt]!.slice(2).trim()
   // The key block is above the title, so stop there rather than reading keys out of the body.
   const preamble = headingAt === -1 ? [] : lines.slice(0, headingAt)
-  const priority = preamble
-    .find(line => line.toLowerCase().startsWith('priority:'))
-    ?.slice('priority:'.length)
-    .trim()
-    .toLowerCase()
+  const priority = keyValue(preamble, 'priority')?.toLowerCase()
   // `Topics: [dx, ui]` — the brackets are cosmetic, so they are stripped rather than required.
-  const topicsLine = preamble.find(line => line.toLowerCase().startsWith('topics:'))?.slice('topics:'.length).trim()
-  const topics = topicsLine
+  const topics = keyValue(preamble, 'topics')
     ?.replace(/^\[/, '')
     .replace(/\]$/, '')
     .split(',')
     .map(t => t.trim())
     .filter(Boolean)
   // `Issue: [#42](https://example.com/org/repo/issues/42)` — a bare markdown link to the tracker's issue.
-  const issueLine = preamble.find(line => line.toLowerCase().startsWith('issue:'))?.slice('issue:'.length).trim()
-  const issueMatch = issueLine ? /\[([^\]]+)\]\(([^)]+)\)/.exec(issueLine) : null
-  const issue = issueMatch ? { label: issueMatch[1]!, url: issueMatch[2]! } : undefined
+  const issueLine = keyValue(preamble, 'issue')
+  const issue = issueLine ? linkIn(issueLine) : undefined
   // `PR: [#1790](https://example.com/org/repo/pull/1790)` — the same link shape: the ticket is in review. A person may
   // write the pull request bare (`PR: #1790`); the ticket is in review all the same, so the text stands as the label.
-  const prLine = preamble.find(line => line.toLowerCase().startsWith('pr:'))?.slice('pr:'.length).trim()
-  const prMatch = prLine ? /\[([^\]]+)\]\(([^)]+)\)/.exec(prLine) : null
-  const pr = prMatch ? { label: prMatch[1]!, url: prMatch[2]! } : prLine ? { label: prLine } : undefined
+  const prLine = keyValue(preamble, 'pr')
+  const pr = prLine ? (linkIn(prLine) ?? { label: prLine }) : undefined
   // `Waiting: web runs to come back` — free text; an empty value waits on nothing.
-  const waiting = preamble.find(line => line.toLowerCase().startsWith('waiting:'))?.slice('waiting:'.length).trim()
+  const waiting = keyValue(preamble, 'waiting')
   // The TLDR is the ticket in one line, which is exactly what a list row wants.
   const tldrAt = lines.findIndex(line => line.trim().toLowerCase() === '## tldr')
   const body = tldrAt === -1 ? lines.slice(headingAt + 1) : lines.slice(tldrAt + 1)
@@ -170,29 +177,17 @@ async function ticketDate(dir: string, file: string, fs: TicketsFs): Promise<str
 }
 
 /**
- * A plan preamble's `0`-`10` value, or `undefined` when the key is missing or does not name one.
- * Out-of-range and fractional values are not clamped into something plausible: they are not a
- * value on this scale, and inventing one hides the typo.
+ * What a `.plan.md`'s preamble records: `Effort:`, `Uncertainty:` and `Outdated:`, the keys above
+ * the `# [Plan]` heading. A rating that is not on the 0-10 scale is no rating.
  */
-function planScale(preamble: readonly string[], key: string): number | undefined {
-  const written = preamble
-    .find(line => line.toLowerCase().startsWith(`${key}:`))
-    ?.slice(key.length + 1)
-    .trim()
-  if (written === undefined || !/^\d+$/.test(written)) return undefined
-  const value = Number(written)
-  return value >= 0 && value <= 10 ? value : undefined
-}
-
-/** What a `.plan.md`'s preamble records: `Effort:`, `Uncertainty:` and `Outdated:`, the keys above the `# [Plan]` heading. */
 function planMeta(md: string | undefined): { effort?: number; uncertainty?: number; outdated?: true } {
   if (md === undefined) return {}
   const lines = md.slice(0, MAX_TICKET_BYTES).split('\n')
   const headingAt = lines.findIndex(line => line.startsWith('# '))
   const preamble = headingAt === -1 ? lines : lines.slice(0, headingAt)
-  const effort = planScale(preamble, 'effort')
-  const uncertainty = planScale(preamble, 'uncertainty')
-  const outdated = preamble.find(line => line.toLowerCase().startsWith('outdated:'))?.slice('outdated:'.length).trim().toLowerCase() === 'yes'
+  const effort = onScale(keyValue(preamble, 'effort'))
+  const uncertainty = onScale(keyValue(preamble, 'uncertainty'))
+  const outdated = keyValue(preamble, 'outdated')?.toLowerCase() === 'yes'
   return { ...(effort === undefined ? {} : { effort }), ...(uncertainty === undefined ? {} : { uncertainty }), ...(outdated ? { outdated: true } : {}) }
 }
 

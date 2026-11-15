@@ -1,0 +1,77 @@
+// The website as it is published: every page prerendered to HTML that holds its words. A page that
+// renders nothing at build time, or is left out of it, fails here instead of on openagent.build.
+// Reads the build: `pnpm build` builds the website, as part of the dashboard's.
+import { strict as assert } from 'node:assert'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { test } from 'node:test'
+
+const client = new URL('../dist/client/', import.meta.url)
+
+/** The prerendered file of a page of `pages/`. */
+const built = page => new URL(page === 'index' ? 'index.html' : `${page}/index.html`, client)
+
+/** A built page's words, as a reader sees them: its HTML without its head, scripts, styles and tags. */
+function words(page) {
+  const file = built(page)
+  assert.ok(existsSync(file), `the page ${page} was not built: run \`pnpm build\` first`)
+  return readFileSync(file, 'utf8')
+    .replace(/<head[\s\S]*?<\/head>/, ' ')
+    .replace(/<(script|style)[\s\S]*?<\/\1>/g, ' ')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+}
+
+/** What each page says, at least. */
+const SAYS = {
+  index: ['Make the important decisions, let AI do the rest.', 'npx @openagt/install'],
+  banner: ['Make the important decisions, let AI do the rest.'],
+  'go-to-dashboard': ['Go to dashboard', 'The dashboard runs 100% locally'],
+  press: ['Press', 'Logos, banners, and naming'],
+}
+
+test('every page of pages/ is prerendered, and says what it is for', () => {
+  const pages = readdirSync(new URL('../pages/', import.meta.url), { withFileTypes: true })
+    .filter(entry => entry.isDirectory() && entry.name !== '_error')
+    .map(entry => entry.name)
+  assert.deepEqual(pages.sort(), Object.keys(SAYS).sort(), 'a new page gets its words here')
+  for (const page of pages) {
+    const text = words(page)
+    for (const said of SAYS[page]) assert.ok(text.includes(said), `the page ${page} says "${said}"`)
+  }
+})
+
+test("an address with no page gets the site's own not-found page", () => {
+  const file = new URL('404.html', client)
+  assert.ok(existsSync(file), 'the error page was not built: run `pnpm build` first')
+  assert.match(readFileSync(file, 'utf8'), /Page not found/)
+})
+
+/** The `<div>` of `html` whose opening tag holds `marker`, from that tag to its own closing one. */
+function divWith(html, marker) {
+  const start = html.lastIndexOf('<div', html.indexOf(marker))
+  assert.ok(html.includes(marker) && start !== -1, `no element with ${marker}`)
+  let depth = 0
+  for (const tag of html.slice(start).matchAll(/<(\/?)div\b/g)) {
+    depth += tag[1] ? -1 : 1
+    if (depth === 0) return html.slice(start, start + tag.index)
+  }
+  assert.fail(`the element with ${marker} is not closed`)
+}
+
+test("the toggle is one group, named for what it switches, with the landing page as the lit side", () => {
+  const toggle = divWith(readFileSync(built('index'), 'utf8'), 'class="view-toggle"')
+  assert.match(toggle, /^<div class="view-toggle" role="group" aria-label="View"/)
+  assert.match(toggle, /<span aria-current="page"[^>]*>Landing page<\/span>/)
+})
+
+test('on a computer with OpenAgent installed, the landing page offers no command that tries or installs it', () => {
+  const html = readFileSync(built('index'), 'utf8')
+  const body = html.replace(/<head[\s\S]*?<\/head>/, ' ')
+  // Every such command on the page is in the one block the installed copy's stylesheet hides, as it shows the Dashboard button.
+  const commands = divWith(body, 'class="try-commands"')
+  const command = /(npx|dlx|bunx) @openagt\/(dashboard|install)/
+  assert.match(commands, command)
+  assert.doesNotMatch(body.replace(commands, ' '), command)
+  const sheets = [...html.matchAll(/<link rel="stylesheet" type="text\/css" href="\/([^"]+)"/g)].map(([, href]) => readFileSync(new URL(href, client), 'utf8'))
+  assert.ok(sheets.some(css => /html\[data-installed\] \.try-commands\{display:none/.test(css)), 'the installed copy hides it')
+})

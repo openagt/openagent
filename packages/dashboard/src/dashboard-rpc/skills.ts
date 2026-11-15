@@ -1,4 +1,4 @@
-import { nodeGitRunner } from '@openagt/agent-data'
+import { originUrl } from '@openagt/agent-data'
 import { projectSkillNames } from '@openagt/agent-runner'
 import { skillsOn, uncommittedSkills } from '../project-skills/branch.js'
 import { carriedSkills, GROUPS } from '../project-skills/catalogue.js'
@@ -11,6 +11,7 @@ import { readProjectHooks, runProjectHooks } from '../project-hooks.js'
 import { providedDataChanged } from '../store/provided.js'
 import { resolveProjectPath } from './context.js'
 import { originAccountOf } from './send-as.js'
+import { remoteHostName } from '../repository-url.js'
 
 export type { SendSkillsResult } from '../dashboard/send-skills.js'
 
@@ -40,7 +41,7 @@ export interface ProjectSkills {
   uncommitted: string[]
   /** Whether the folder is a git repository: without one there is nothing to commit. */
   git: boolean
-  /** Where the skills are sent, for a person: the git host's name ("GitHub", "GitLab"), else the remote's host. Absent without a remote: a commit on this machine is all agents need. */
+  /** Where the skills are sent, for a person: the git host's name ("GitHub", "GitLab"), else the remote's host. Absent without a remote, or while it has no branch agents start from: a commit on this machine is all agents need. */
   remote?: string
   /** The open pull request the skills went to when the default branch took no push. */
   request?: { number: number; url: string }
@@ -65,7 +66,7 @@ export async function onProjectSkills(projectId: string): Promise<ProjectSkills 
   const open = request?.state === 'OPEN' ? { number: request.number, url: request.url } : undefined
   // With no request, the skills may still be on the remote: on the branch a send left where it could open none.
   const pushed = state.remote && !open && waiting.size > 0 ? await skillsOn(cwd, `refs/remotes/origin/${SKILLS_BRANCH}`) : undefined
-  const remote = state.remote ? await remoteName(cwd) : undefined
+  const remote = state.remote && start && start.ref !== 'HEAD' ? await remoteName(cwd) : undefined
   return {
     groups: GROUPS.map(group => ({
       title: group.title,
@@ -82,20 +83,8 @@ export async function onProjectSkills(projectId: string): Promise<ProjectSkills 
   }
 }
 
-/** The git hosts a person knows by name, by their address. */
-const HOSTS: Record<string, string> = { 'github.com': 'GitHub', 'gitlab.com': 'GitLab', 'bitbucket.org': 'Bitbucket', 'codeberg.org': 'Codeberg' }
-
-/** The remote's host for a person, out of its address in git's spellings (`https://host/…`, `ssh://git@host:22/…`, `git@host:…`); none for a folder on this machine. */
-export function hostName(address: string): string | undefined {
-  const trimmed = address.trim()
-  // With a scheme the host follows it, and `file://` has none; without one only `host:path` names a host.
-  const host = (trimmed.includes('://') ? trimmed.match(/^[a-z][a-z0-9+.-]*:\/\/(?:[^@/]+@)?([^/:]+)/i) : trimmed.match(/^(?:[^@/]+@)?([^/:]+):/))?.[1]?.toLowerCase()
-  return host ? (HOSTS[host] ?? host) : undefined
-}
-
 async function remoteName(cwd: string): Promise<string> {
-  const address = await nodeGitRunner()(['remote', 'get-url', 'origin'], cwd).catch(() => '')
-  return hostName(address) ?? 'the remote'
+  return remoteHostName((await originUrl(cwd)) ?? '') ?? 'the remote'
 }
 
 /** What a change of skills answered: what was written and deleted, what was left as it is, and the scheduler when the change switched it. */

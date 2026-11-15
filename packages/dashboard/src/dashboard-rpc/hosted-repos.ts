@@ -29,6 +29,8 @@ export const HOSTED_FIRST_WAIT_MS = 1500
 export interface HostedRead {
   repos: HostedRepo[]
   loading: boolean
+  /** A host did not answer the last time it was asked: its repositories are missing from the lists. */
+  unreached?: true
 }
 
 /** What a listing is asked through: the host's package, and OpenAgent's accounts and the person's owners. */
@@ -40,7 +42,7 @@ export const hostedWiring = {
 }
 
 /** Every repository the hosts list now: each account's own, then each named owner's; one address listed once. */
-async function listHosted(): Promise<HostedRepo[]> {
+async function listHosted(): Promise<Listed> {
   const [hosts, owners] = await Promise.all([hostedWiring.hosts(), hostedWiring.owners().catch((): string[] => [])])
   const asks: { host: string; args: string[]; from: string }[] = []
   for (const row of hosts) {
@@ -52,8 +54,12 @@ async function listHosted(): Promise<HostedRepo[]> {
   }
   const lists = await Promise.all(asks.map(async ask => ({ ask, said: await hostedWiring.run(ask.host, ask.args).catch(() => undefined) })))
   const repos = new Map<string, HostedRepo>()
+  let unreached = false
   for (const { ask, said } of lists) {
-    if (!said?.ok) continue
+    if (!said?.ok) {
+      unreached = true
+      continue
+    }
     const listed = ((said.output ?? {}) as { repos?: unknown }).repos
     for (const row of Array.isArray(listed) ? listed : []) {
       const { address, url, private: hidden, description } = (row ?? {}) as Record<string, unknown>
@@ -61,17 +67,19 @@ async function listHosted(): Promise<HostedRepo[]> {
       repos.set(address.toLowerCase(), { address, url, private: hidden === true, ...(typeof description === 'string' && description ? { description } : {}), from: ask.from })
     }
   }
-  return [...repos.values()]
+  return { repos: [...repos.values()], ...(unreached ? { unreached } : {}) }
 }
 
-let kept: { repos: HostedRepo[]; at: number } | undefined
-let running: Promise<HostedRepo[]> | undefined
+type Listed = Omit<HostedRead, 'loading'>
 
-function listOnce(): Promise<HostedRepo[]> {
+let kept: (Listed & { at: number }) | undefined
+let running: Promise<Listed> | undefined
+
+function listOnce(): Promise<Listed> {
   running ??= listHosted()
     .then(
-      repos => ((kept = { repos, at: hostedWiring.now() }), repos),
-      () => kept?.repos ?? [],
+      listed => ((kept = { ...listed, at: hostedWiring.now() }), listed),
+      () => kept ?? { repos: [] },
     )
     .finally(() => (running = undefined))
   return running
@@ -85,15 +93,17 @@ export async function readHosted(): Promise<HostedRead> {
   if (!kept) {
     const listing = listOnce()
     const first = await Promise.race([listing, new Promise<undefined>(done => setTimeout(() => done(undefined), HOSTED_FIRST_WAIT_MS))])
-    return first ? { repos: first, loading: false } : { repos: [], loading: true }
+    return first ? { ...first, loading: false } : { repos: [], loading: true }
   }
   if (hostedWiring.now() - kept.at > HOSTED_MAX_AGE_MS) void listOnce()
-  return { repos: kept.repos, loading: running !== undefined }
+  return { repos: kept.repos, loading: running !== undefined, ...(kept.unreached ? { unreached: kept.unreached } : {}) }
 }
 
 /** Ask the hosts again now, and answer what they listed: after the person named another owner. */
 export function refreshHosted(): Promise<HostedRepo[]> {
-  return (running ?? Promise.resolve()).then(listOnce)
+  return (running ?? Promise.resolve())
+    .then(listOnce)
+    .then(listed => listed.repos)
 }
 
 /** Forget the kept lists: for a test. */

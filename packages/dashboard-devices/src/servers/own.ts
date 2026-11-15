@@ -2,9 +2,9 @@ import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { giveGithubLogin, scrubbed, type Failed, type GithubGiven } from './logins.js'
 import { exec as ownExec, lastLines, type Exec, type Session } from './ssh.js'
-import { LOGIN_TIMEOUT_MS, SERVER_USER, githubLogoutScript, quoted, type LoginScript } from './steps.js'
+import { LOGIN_TIMEOUT_MS, SERVER_USER, githubLogoutScript, script, type LoginScript } from './steps.js'
 import { MARK_LENGTH, atWork, update, type Login, type LoginKind, type Store } from './store.js'
-import { nameFromWord } from '../door/store.js'
+import { nameFromWord } from '../door/names.js'
 
 /**
  * The logins of one person's own OpenAgent, on a computer several people use. There, each person
@@ -60,22 +60,6 @@ export function localSession(run: Exec = ownExec): Session {
   }
 }
 
-/** A whole script, as the server's own scripts are: nothing to read, the system's programs first after the user's own. */
-function script(vars: Record<string, string>, body: string): string {
-  return [
-    'set -euo pipefail',
-    'umask 022',
-    'export PATH="$HOME/.local/bin:/opt/openagent/node/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"',
-    ...Object.entries(vars).map(([name, value]) => `${name}=${quoted(value)}`),
-    'fail() { echo "$1" >&2; exit 1; }',
-    'main() {',
-    body.trim(),
-    '}',
-    'main </dev/null',
-    '',
-  ].join('\n')
-}
-
 /** The name Claude Code reads who such a login is under: without it, it offers only its four plain models. */
 const CLAUDE_ACCOUNT_NAME = 'CLAUDE_CODE_ACCOUNT_UUID'
 
@@ -90,7 +74,9 @@ export const isClaudeAccountId = (value: unknown): value is string => typeof val
 export function ownClaudeLoginScript(login: string, account?: string): LoginScript {
   return {
     as: SERVER_USER,
+    // A whole script, as the server's own user's are: this OpenAgent's user runs it here.
     script: script(
+      SERVER_USER,
       { LOGIN: login, ACCOUNT: account ?? '', FILE: OWN_CLAUDE_FILE },
       `
   # What is written where the service reads its settings is a login's letters and nothing else.
@@ -108,7 +94,7 @@ export function ownClaudeLoginScript(login: string, account?: string): LoginScri
 
 /** Take this OpenAgent's user's Claude login off: the file goes. */
 export function ownClaudeLogoutScript(): LoginScript {
-  return { as: SERVER_USER, script: script({ FILE: OWN_CLAUDE_FILE }, `\n  rm -f "$HOME/$FILE" "$HOME/$FILE.new"\n`) }
+  return { as: SERVER_USER, script: script(SERVER_USER, { FILE: OWN_CLAUDE_FILE }, `\n  rm -f "$HOME/$FILE" "$HOME/$FILE.new"\n`) }
 }
 
 /** Run a script on this computer; what comes back never holds the login. */

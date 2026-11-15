@@ -146,22 +146,28 @@ export function forgetPr(cwd: string, branch?: string): void {
 /** How a run's pull request stands, as its row in the list of runs shows it. */
 export type PrState = 'open' | 'draft' | 'merged' | 'closed'
 
+/** A pull request as the project's listing has it: how it stands, and its title. */
+export interface ListedPr {
+  state: PrState
+  title: string
+}
+
 /**
- * How each of a project's newest pull requests stands, by its address: what the list of runs marks
- * each run's PR with. One listing of the project's requests, whatever their state, rather than one
- * per run; a request older than what the git host lists has no state here. A listing the git host
- * cannot answer throws.
+ * How each of a project's newest pull requests stands, and its title, by its address: what the list
+ * of runs marks each run's PR with. One listing of the project's requests, whatever their state,
+ * rather than one per run; a request older than what the git host lists has no state here. A
+ * listing the git host cannot answer throws.
  */
-export async function prStates(cwd: string, gitHost: GitHostFor = projectGitHost): Promise<Map<string, PrState>> {
+export async function prStates(cwd: string, gitHost: GitHostFor = projectGitHost): Promise<Map<string, ListedPr>> {
   const source = await gitHost(cwd)
   if (!source) return new Map()
   const listed = await source.requests({ state: 'all' })
   if (!listed.ok) throw new Error(listed.error)
-  return new Map(listed.requests.map(request => [request.url, request.state === 'open' && request.draft ? 'draft' : request.state]))
+  return new Map(listed.requests.map(request => [request.url, { state: request.state === 'open' && request.draft ? 'draft' : request.state, title: request.title }]))
 }
 
 /** The states each project last read, so a read that fails or is on its way shows those rather than none. */
-const lastStates = new Map<string, Map<string, PrState>>()
+const lastStates = new Map<string, Map<string, ListedPr>>()
 
 /**
  * The cached form of {@link prStates} (#1028): the list of runs is polled every few seconds, and a
@@ -170,11 +176,11 @@ const lastStates = new Map<string, Map<string, PrState>>()
  * and while a read is on its way, after a request was opened or merged here, the rows keep the
  * states they had.
  */
-export async function cachedPrStates(cwd: string, read: (cwd: string) => Promise<Map<string, PrState>> = prStates): Promise<Map<string, PrState>> {
+export async function cachedPrStates(cwd: string, read: (cwd: string) => Promise<Map<string, ListedPr>> = prStates): Promise<Map<string, ListedPr>> {
   const cached = await cachedRead(prStatesCacheKey(cwd), () =>
     read(cwd).then(
       states => (lastStates.set(cwd, states), states),
-      () => lastStates.get(cwd) ?? new Map<string, PrState>(),
+      () => lastStates.get(cwd) ?? new Map<string, ListedPr>(),
     ),
   )
   return cached.value ?? lastStates.get(cwd) ?? new Map()

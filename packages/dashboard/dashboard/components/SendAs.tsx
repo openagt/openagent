@@ -1,5 +1,8 @@
+import { useContext } from 'react'
 import type { SendAsHost } from '../rpc/personal-folder.js'
-import { openPermissions } from '../lib/use-route.js'
+import { PERMISSIONS_PAGE } from '../lib/use-route.js'
+import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
+import { useAddGitAccount } from './AddGitAccount.js'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select.js'
 
 // The account OpenAgent sends a repository as (Rom's design: OpenAgent never uses the person's own
@@ -13,18 +16,21 @@ export function firstSendAs(host: SendAsHost | undefined, kept?: string): string
 }
 
 /**
- * "Send as": OpenAgent's accounts at `host`, by login. With none there, the line says so and opens
- * the Permissions page, where one is added: nothing is sent as the person's own login.
+ * "Send as": OpenAgent's accounts at `host`, by login. With none there, the line says so and its
+ * press adds one, in the dialog, which is then the one picked: nothing is sent as the person's own
+ * login. With no host known, the press opens the Permissions page.
  */
 export function SendAs({ host, value, onChange, disabled = false, label = 'Send as' }: { host: SendAsHost | undefined; value: string | undefined; onChange: (login: string) => void; disabled?: boolean; label?: string }) {
+  const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
+  const adding = useAddGitAccount(login => onChange(login))
   if (!host || host.logins.length === 0) {
     return (
       <p className="text-xs text-warning">
         OpenAgent has no account{host ? ` at ${host.host}` : ''} to send it as, and never uses your own login.{' '}
-        <button type="button" className="underline underline-offset-2" onClick={openPermissions}>
-          Add one in Permissions
+        <button type="button" className="underline underline-offset-2" onClick={host ? () => adding.add(host.host) : () => services.openPage(PERMISSIONS_PAGE)}>
+          {host ? 'Add one' : 'Add one in Permissions'}
         </button>
-        .
+        .{adding.dialog}
       </p>
     )
   }
@@ -33,7 +39,7 @@ export function SendAs({ host, value, onChange, disabled = false, label = 'Send 
     <div className="flex items-center gap-2 text-xs text-muted-foreground">
       <span>{label}</span>
       <Select items={items} value={value ?? null} onValueChange={next => next && onChange(String(next))} disabled={disabled}>
-        <SelectTrigger size="sm" aria-label={label} className="h-7 min-w-0">
+        <SelectTrigger aria-label={label} className="h-7 min-w-0">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>

@@ -1,22 +1,23 @@
-import { useMemo, useState, type ComponentProps } from 'react'
+import { useMemo, type ComponentProps } from 'react'
 import { Combobox } from '@base-ui/react/combobox'
-import { Check, ChevronDown, GitBranch, Search } from 'lucide-react'
+import { Check, GitBranch, Search } from 'lucide-react'
 import type { StartFromPick } from '../../src/index.js'
 import { publishedBase } from '../../src/client.js'
 import { onStartBranches, type StartBranches } from '../rpc/projects.js'
 import { useLoaded } from '../lib/use-async.js'
 import { cn } from '../lib/utils.js'
-import { rowButtonClass } from './ui/row-item.js'
+import { rowButtonClass, RowChevron } from './ui/row-item.js'
 import { OptionLabel } from './ui/option-label.js'
 import { ScrollArea } from './ui/scroll-area.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { MENU_ITEM_CLASS, MENU_POPUP_CLASS, MENU_TRIGGER_OPEN_CLASS } from './ui/dropdown-menu.js'
+import { usePickerSearch } from './ui/picker-search.js'
 
 /** The most rows the menu draws at once: the search reaches the rest. */
 const ROWS_DRAWN = 200
 
 /** What the button reads for a pick (none is the main branch): the branch's name, the local one marked as such. */
-export function startFromLabel(pick: StartFromPick | undefined, main: string, local: string): string {
+function startFromLabel(pick: StartFromPick | undefined, main: string, local: string): string {
   if (pick?.kind === 'local') return `${local} (local)`
   return pick?.kind === 'published' ? pick.branch : main
 }
@@ -48,12 +49,12 @@ export function prTargetBranch(pick: StartFromPick | undefined, main: string, lo
  * of a menu. Of a set width at most, important to hold on a phone too: a branch's name can run
  * past the row's, and would squeeze the words beside it to nothing.
  */
-export function BranchButton({ label, className, ...props }: { label: string } & ComponentProps<'button'>) {
+function BranchButton({ label, className, ...props }: { label: string } & ComponentProps<'button'>) {
   return (
     <button type="button" {...props} className={cn(rowButtonClass, 'max-w-[16rem]!', className)}>
-      <GitBranch className="h-3.5 w-3.5 shrink-0" aria-hidden />
+      <GitBranch className="size-4 shrink-0" aria-hidden />
       <span className="truncate">{label}</span>
-      <ChevronDown className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
+      <RowChevron />
     </button>
   )
 }
@@ -78,7 +79,8 @@ const samePick = (a: Row, b: Row): boolean => a.value === b.value
 // for its own typing-to-jump.
 export function StartFromMenu({ projectId, main, local, pick, onPick, busy }: { projectId: string; main: string; local: string; pick: StartFromPick | undefined; onPick: (pick: StartFromPick | undefined) => void; busy: boolean }) {
   const label = startFromLabel(pick, main, local)
-  const [open, setOpen] = useState(false)
+  const search = usePickerSearch()
+  const { open } = search
   // A project only another computer has is that computer's, and the read goes there by the project's id (`ELSEWHERE_FORWARDED`). A call that fails on the way is a list that could not be read.
   const read = useLoaded<StartBranches | null>(open ? () => onStartBranches(projectId).then(answer => answer ?? {}, () => ({})) : null, null, [open, projectId], { remember: `start-branches:${projectId}` })
   const others = read?.branches
@@ -97,19 +99,18 @@ export function StartFromMenu({ projectId, main, local, pick, onPick, busy }: { 
       limit={ROWS_DRAWN}
       value={picked}
       isItemEqualToValue={samePick}
-      open={open}
-      onOpenChange={setOpen}
+      {...search.root}
       onValueChange={row => {
         if (row) onPick(row.pick)
       }}
     >
       <Tooltip>
-        <TooltipTrigger render={<Combobox.Trigger disabled={busy} aria-label="The agent starts from" className={MENU_TRIGGER_OPEN_CLASS} render={<BranchButton label={label} />} />} />
+        <TooltipTrigger render={<Combobox.Trigger disabled={busy} aria-label="The agent starts from" className={MENU_TRIGGER_OPEN_CLASS} {...search.trigger} render={<BranchButton label={label} />} />} />
         <TooltipContent>{`The agent starts from ${label}`}</TooltipContent>
       </Tooltip>
       <Combobox.Portal>
         <Combobox.Positioner sideOffset={6} align="start" className="z-50 outline-none">
-          <Combobox.Popup aria-label="The agent starts from" className={cn(MENU_POPUP_CLASS, 'w-[22rem] max-w-[var(--available-width)]')}>
+          <Combobox.Popup data-overlay="picker" aria-label="The agent starts from" className={cn(MENU_POPUP_CLASS, 'w-[22rem] max-w-[var(--available-width)]')}>
             <div className="flex items-center gap-2 border-b border-border px-3">
               <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
               <Combobox.Input aria-label="Search branches" placeholder="Search branches" className="h-9 w-full min-w-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />

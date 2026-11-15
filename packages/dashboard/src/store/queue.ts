@@ -24,8 +24,6 @@ import { providedCommand } from '../built-in.js'
 
 /** A project's queue: what a provider answers, read by OpenAgent. */
 export interface QueueSource {
-  /** The package that provides it: its own pages are where the queue is read and written. */
-  package: string
   /** The open entries, in order of work; `[]` when none can be read. */
   list(): Promise<string[]>
 }
@@ -49,7 +47,6 @@ export function parseQueueEntries(output: unknown): string[] {
 function commandQueue(root: string, command: ProvidedCommand, now: () => number): QueueSource & { drop(): void } {
   let listed: { at: number; entries: Promise<string[]> } | undefined
   return {
-    package: command.package,
     drop() {
       listed = undefined
     },

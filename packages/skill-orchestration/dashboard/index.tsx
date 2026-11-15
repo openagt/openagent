@@ -5,9 +5,7 @@
 import { Network } from 'lucide-react'
 import { defineModule } from '@openagt/dashboard/module'
 import { SubagentsSettings } from './SubagentsSettings.js'
-import './dashboard.css'
 
 export default defineModule({
   settings: [{ id: 'orchestration', title: 'Orchestration', icon: Network, order: 10, Section: SubagentsSettings }],
-  stylesheet: 'dashboard.css',
 })

@@ -4,7 +4,7 @@ import { mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { nodeGitRunner } from '@openagt/agent-data'
-import { DEFAULT_STATE, readState, statePath, updateState, writeState, type State, type ListedCommand, agentInForce, modelInForce, withAgent, withModel, isSwitchedOn, switchedOnAt, withoutCommand, withSwitch, publishInForce, withPace, withPublish, capInForce, withAgents, namesGivenUp, withoutName, withoutListed } from './state.js'
+import { DEFAULT_STATE, readState, statePath, updateState, writeState, type State, type ListedCommand, agentInForce, modelInForce, withAgent, withPick, isSwitchedOn, switchedOnAt, withoutCommand, publishInForce, capInForce, namesGivenUp, withoutName, withoutListed } from './state.js'
 import { STATE_DIR } from './names.js'
 
 const git = nodeGitRunner()
@@ -61,16 +61,16 @@ test('every command starts switched off; only a command switched on is kept, so 
   assert.equal(isSwitchedOn(DEFAULT_STATE, 'work-queue'), false)
   const MORNING = '2026-10-09T07:00:00.000Z'
   const NOON = '2026-10-09T12:00:00.000Z'
-  const on = withSwitch(DEFAULT_STATE, 'post-merge-cleanup', MORNING)
+  const on = withPick(DEFAULT_STATE, 'switches', 'post-merge-cleanup', MORNING)
   assert.deepEqual(on.switches, { 'post-merge-cleanup': MORNING }, 'the switch holds when it was switched on')
   assert.equal(isSwitchedOn(on, 'post-merge-cleanup'), true)
   assert.equal(switchedOnAt(on, 'post-merge-cleanup'), MORNING)
   assert.equal(isSwitchedOn(on, 'work-queue'), false)
   assert.equal(switchedOnAt(on, 'work-queue'), undefined)
   // Switching off a command nobody switched on keeps nothing of it.
-  const both = withSwitch(withSwitch(on, 'triage quick', NOON), 'work-queue', undefined)
+  const both = withPick(withPick(on, 'switches', 'triage quick', NOON), 'switches', 'work-queue', undefined)
   assert.deepEqual(both.switches, { 'post-merge-cleanup': MORNING, 'triage quick': NOON })
-  const back = withSwitch(withSwitch(both, 'triage quick', undefined), 'post-merge-cleanup', undefined)
+  const back = withPick(withPick(both, 'switches', 'triage quick', undefined), 'switches', 'post-merge-cleanup', undefined)
   assert.equal('switches' in back, false)
   // A state edited by hand: anything but a time is off.
   assert.equal(isSwitchedOn({ ...DEFAULT_STATE, switches: { 'work-queue': 'on' } }, 'work-queue'), false)
@@ -91,7 +91,7 @@ test('a scheduler ending clears its own pid only: a pid another scheduler wrote 
 test('a run of a scheduled command commits its work until a person picks a level on this machine; nothing is a pick too', () => {
   assert.equal(publishInForce(DEFAULT_STATE, 'work-queue'), 'commit')
 
-  const picked = withPublish(withPublish(DEFAULT_STATE, 'work-queue', 'nothing'), 'triage quick', 'pr')
+  const picked = withPick(withPick(DEFAULT_STATE, 'publishes', 'work-queue', 'nothing'), 'publishes', 'triage quick', 'pr')
   assert.deepEqual(picked.publishes, { 'work-queue': 'nothing', 'triage quick': 'pr' })
   assert.equal(publishInForce(picked, 'work-queue'), undefined)
   assert.equal(publishInForce(picked, 'triage quick'), 'pr')
@@ -99,7 +99,7 @@ test('a run of a scheduled command commits its work until a person picks a level
   assert.equal(publishInForce(picked, 'post-merge-cleanup'), 'commit')
 
   // A pick of commit is kept like any other.
-  assert.deepEqual(withPublish(DEFAULT_STATE, 'work-queue', 'commit').publishes, { 'work-queue': 'commit' })
+  assert.deepEqual(withPick(DEFAULT_STATE, 'publishes', 'work-queue', 'commit').publishes, { 'work-queue': 'commit' })
 
   // A hand-edited state with a word that is no pick: as if nobody picked.
   assert.equal(publishInForce({ ...DEFAULT_STATE, publishes: { 'work-queue': 'push' as never } }, 'work-queue'), 'commit')
@@ -107,22 +107,22 @@ test('a run of a scheduled command commits its work until a person picks a level
 
 test("a pace is kept only where a person set one: taking it back leaves no trace, and the command runs at its skill's pace again", () => {
   const since = '2026-10-08T07:00:00.000Z'
-  const one = withPace(DEFAULT_STATE, 'update-tickets', { every: '1h', since })
-  const two = withPace(one, 'work-queue', { work: true })
+  const one = withPick(DEFAULT_STATE, 'paces', 'update-tickets', { every: '1h', since })
+  const two = withPick(one, 'paces', 'work-queue', { work: true })
   assert.deepEqual(two.paces, { 'update-tickets': { every: '1h', since }, 'work-queue': { work: true } })
   // A new pick replaces the old one.
-  assert.deepEqual(withPace(two, 'update-tickets', { every: '2d', at: '10:00', since }).paces!['update-tickets'], { every: '2d', at: '10:00', since })
-  const back = withPace(withPace(two, 'update-tickets', undefined), 'work-queue', undefined)
+  assert.deepEqual(withPick(two, 'paces', 'update-tickets', { every: '2d', at: '10:00', since }).paces!['update-tickets'], { every: '2d', at: '10:00', since })
+  const back = withPick(withPick(two, 'paces', 'update-tickets', undefined), 'paces', 'work-queue', undefined)
   assert.equal('paces' in back, false)
   // Taking back a pace nobody set changes nothing.
-  assert.deepEqual(withPace(one, 'triage quick', undefined), one)
+  assert.equal(withPick(one, 'paces', 'triage quick', undefined), one)
 })
 
 test("the cap in force is this machine's number of agents at once, else the skill's; it is kept only where a person set one", () => {
   const skill = { name: 'work-queue', cap: 1 }
   assert.equal(capInForce(DEFAULT_STATE, skill), 1)
   assert.equal(capInForce(DEFAULT_STATE, { name: 'plan-tickets', cap: 2 }), 2)
-  const mine = withAgents(withAgents(DEFAULT_STATE, 'work-queue', 3), 'triage quick', 1)
+  const mine = withPick(withPick(DEFAULT_STATE, 'agents', 'work-queue', 3), 'agents', 'triage quick', 1)
   assert.deepEqual(mine.agents, { 'work-queue': 3, 'triage quick': 1 })
   assert.equal(capInForce(mine, skill), 3)
   // 99 is the top, and a pick.
@@ -133,9 +133,9 @@ test("the cap in force is this machine's number of agents at once, else the skil
   assert.equal(capInForce(mine, { name: 'plan-tickets', cap: 2 }), 2)
   // A state edited by hand: a value that is no whole number above 0 is no number set.
   for (const odd of [0, -1, 1.5, 100, '3', null, Number.NaN]) assert.equal(capInForce({ ...DEFAULT_STATE, agents: { 'work-queue': odd as never } }, skill), 1, String(odd))
-  const back = withAgents(withAgents(mine, 'work-queue', undefined), 'triage quick', undefined)
+  const back = withPick(withPick(mine, 'agents', 'work-queue', undefined), 'agents', 'triage quick', undefined)
   assert.equal('agents' in back, false)
-  assert.deepEqual(withAgents(mine, 'plan-tickets', undefined), mine)
+  assert.equal(withPick(mine, 'agents', 'plan-tickets', undefined), mine)
 })
 
 test("the coding agent a run is on is this machine's pick, else the one the command is made for; its model is this machine's pick, else its skill's on the agent the skill is made for, else the scheduler's own on Claude Code, and none on any other agent", () => {
@@ -174,17 +174,17 @@ test("the coding agent a run is on is this machine's pick, else the one the comm
 test("a pick of a coding agent, and of a model, is kept only where a person made one; picking an agent, or taking the pick back, takes the command's model pick with it, since a model is one agent's", () => {
   const gpt = { agent: 'codex' as const, model: 'gpt-5.5' }
   const haiku = { agent: 'claude-code' as const, model: 'haiku' }
-  const picked = withModel(withAgent(DEFAULT_STATE, 'update-tickets', 'codex'), 'update-tickets', gpt)
+  const picked = withPick(withAgent(DEFAULT_STATE, 'update-tickets', 'codex'), 'models', 'update-tickets', gpt)
   assert.deepEqual(picked, { ...DEFAULT_STATE, runsOn: { 'update-tickets': 'codex' }, models: { 'update-tickets': gpt } })
   // Another agent: the model that was Codex's is no model of its own.
   assert.deepEqual(withAgent(picked, 'update-tickets', 'claude-code'), { ...DEFAULT_STATE, runsOn: { 'update-tickets': 'claude-code' } })
   // Taken back: no trace of either.
   assert.deepEqual(withAgent(picked, 'update-tickets', undefined), DEFAULT_STATE)
-  assert.deepEqual(withModel(picked, 'update-tickets', undefined), { ...DEFAULT_STATE, runsOn: { 'update-tickets': 'codex' } })
+  assert.deepEqual(withPick(picked, 'models', 'update-tickets', undefined), { ...DEFAULT_STATE, runsOn: { 'update-tickets': 'codex' } })
   // Another command's picks stay.
-  const two = withModel(withAgent(picked, 'triage', 'codex'), 'work-queue', haiku)
+  const two = withPick(withAgent(picked, 'triage', 'codex'), 'models', 'work-queue', haiku)
   assert.deepEqual(withAgent(two, 'update-tickets', undefined), { ...DEFAULT_STATE, runsOn: { triage: 'codex' }, models: { 'work-queue': haiku } })
-  assert.deepEqual(withModel(two, 'work-queue', { agent: 'claude-code', model: 'sonnet' }).models, { 'update-tickets': gpt, 'work-queue': { agent: 'claude-code', model: 'sonnet' } })
+  assert.deepEqual(withPick(two, 'models', 'work-queue', { agent: 'claude-code', model: 'sonnet' }).models, { 'update-tickets': gpt, 'work-queue': { agent: 'claude-code', model: 'sonnet' } })
 })
 
 test('nothing left of one command: its switch, publish pick, pace, number of agents, coding agent and model go, the others stay; a state that holds nothing of it is answered as it is', () => {

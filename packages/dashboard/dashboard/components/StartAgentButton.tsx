@@ -1,8 +1,10 @@
-import type { ReactNode } from 'react'
+import { useContext, type ReactNode } from 'react'
 import { ChevronDown, Loader2 } from 'lucide-react'
 import { stashPendingDraft } from '../lib/draft-handoff.js'
+import { DaemonDown } from '../lib/use-daemon-health.js'
 import { cn } from '../lib/utils.js'
 import { Button, buttonVariants } from './ui/button.js'
+import { ButtonGroup, ButtonGroupSeparator } from './ui/button-group.js'
 import { OptionLabel } from './ui/option-label.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import {
@@ -31,6 +33,15 @@ import {
 // A split button, not a control revealed on hover: what a hover reveals is reachable by neither
 // keyboard nor touch, and the row the pointer is on is not always the row that is meant.
 
+/** One more choice in a start button's menu. */
+export interface StartMenuItem {
+  label: string
+  /** The item's second line: what it does. */
+  description?: string | undefined
+  onSelect: () => void
+  disabled?: boolean | undefined
+}
+
 export function StartAgentButton({
   icon,
   label,
@@ -43,11 +54,13 @@ export function StartAgentButton({
   configureDescription,
   onStart,
   onConfigure,
+  moreItems = [],
+  leading,
   busy = false,
   starting = false,
   disabled = false,
   variant = 'outline',
-  size = 'xs',
+  size = 'sm',
   className,
 }: {
   /** The primary half's icon; swapped for a spinner while this button's own start is in flight. */
@@ -76,14 +89,22 @@ export function StartAgentButton({
    * rehydrated by the launcher of the project the reader lands on.
    */
   onConfigure: () => void
+  /**
+   * The menu's other choices, above "Configure first, then run": what else the surface offers on
+   * the same thing (queue it for later, say), so a dense row carries one control. Each is the
+   * caller's; an item that starts nothing stays live while a start is in flight, like the configure one.
+   */
+  moreItems?: readonly StartMenuItem[] | undefined
+  /** A control the start counts on, drawn as the group's first part: how many agents to start, say. */
+  leading?: ReactNode
   /** A start is in flight somewhere on this surface: the primary half is out until it settles. */
   busy?: boolean | undefined
   /** *This* button's start is the one in flight, so only it reads as busy. */
   starting?: boolean | undefined
   /** There is nothing to act on at all (no project picked): both halves are out. */
   disabled?: boolean | undefined
-  variant?: 'default' | 'outline' | 'ghost' | undefined
-  size?: 'xs' | 'sm' | 'icon-sm' | undefined
+  variant?: 'default' | 'secondary' | 'outline' | 'ghost' | undefined
+  size?: 'sm' | 'default' | 'icon-sm' | undefined
   /** Styling the two halves share, so the pair reads as one control rather than two buttons. */
   className?: string | undefined
 }) {
@@ -97,9 +118,12 @@ export function StartAgentButton({
     stashPendingDraft(prompt)
     onConfigure()
   }
+  // OpenAgent is not answering: a start cannot reach it.
+  const down = useContext(DaemonDown)
 
   return (
-    <div className="inline-flex shrink-0 items-center">
+    <ButtonGroup>
+      {leading}
       <Tooltip>
         <TooltipTrigger
           render={
@@ -107,10 +131,10 @@ export function StartAgentButton({
               type="button"
               variant={variant}
               size={size}
-              disabled={disabled || busy}
+              disabled={disabled || busy || down}
               onClick={onStart}
               {...(ariaLabel ? { 'aria-label': ariaLabel } : {})}
-              className={cn('rounded-r-none', variant === 'outline' && 'border-r-0', className)}
+              className={className}
             />
           }
         >
@@ -119,8 +143,12 @@ export function StartAgentButton({
         </TooltipTrigger>
         <TooltipContent {...(tooltipClassName ? { className: tooltipClassName } : {})}>{tooltip}</TooltipContent>
       </Tooltip>
-      {/* Never gated on `busy`, only on `disabled`: this starts nothing, and being unable to go
-          and look at the settings because a start is in flight would be the opposite of the point. */}
+      {/* A filled pair has no border to tell its halves apart: a hairline does. An outline pair shares
+          its border, and a ghost pair needs none — nothing is drawn between them until one is hovered. */}
+      {variant === 'default' && <ButtonGroupSeparator className="bg-[var(--color-primary-foreground)]" />}
+      {variant === 'secondary' && <ButtonGroupSeparator />}
+      {/* Never gated on `busy` or on OpenAgent not answering, only on `disabled`: this starts nothing, and
+          being unable to go and look at the settings because a start is in flight would be the opposite of the point. */}
       <DropdownMenu>
         <DropdownMenuTrigger
           type="button"
@@ -128,23 +156,23 @@ export function StartAgentButton({
           aria-label={menuAriaLabel}
           className={cn(
             buttonVariants({ variant, size }),
-            'w-auto rounded-l-none px-1.5',
-            // What separates the two halves. An outline button's own left border already does it
-            // (its sibling drops its right one); a filled button has no border to borrow, so it
-            // gets a hairline in its own foreground. A ghost pair needs none — there is nothing
-            // drawn between them until one is hovered, and a rule would only clutter a dense row.
-            variant === 'default' && 'border-l border-[var(--color-primary-foreground)]/25',
+            'w-auto px-1.5',
             className,
           )}
         >
           <ChevronDown className="h-3 w-3" aria-hidden />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="max-w-[20rem]">
+          {moreItems.map(item => (
+            <DropdownMenuItem key={item.label} onClick={item.onSelect} disabled={item.disabled} className="items-start">
+              <OptionLabel label={item.label} description={item.description} />
+            </DropdownMenuItem>
+          ))}
           <DropdownMenuItem onClick={configure} className="items-start">
             <OptionLabel label="Configure first, then run" description={configureDescription} />
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-    </div>
+    </ButtonGroup>
   )
 }

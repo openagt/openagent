@@ -212,7 +212,7 @@ export interface DriverPromptOptions {
    * conversation with full context. Best-effort — a driver that can't resume
    * (or has no prior turn yet) runs a fresh invocation, the normal case. Honored
    * by the Claude Code driver via `--resume <sessionId>` and by the Codex driver via
-   * `exec resume <sessionId>`.
+   * its app server's `thread/resume`.
    */
   resume?: boolean
   /**

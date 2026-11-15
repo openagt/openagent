@@ -18,36 +18,37 @@ type Succeeded<T> = Exclude<T, { ok: false }>
 // result or a thrown error into an error string, and reset busy in a finally. That is this
 // hook, once. `run` reports whether the action succeeded and carries its value when it did, so
 // the caller does only its success side. `fallback` names the error for a thrown failure that
-// carries no message of its own.
-export function useAction(): {
+// carries no message of its own. `scope` is whose the action is, in a panel that shows one
+// thing after another without remounting (a session page): each scope has its own busy beat and
+// error, and an action's answer goes to the scope it was run in, whichever is shown by then.
+export function useAction(scope = ''): {
   busy: boolean
   error: string | null
   reset: () => void
   run: <T>(fn: () => Promise<T>, fallback?: string) => Promise<ActionOutcome<T>>
 } {
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const reset = useCallback(() => setError(null), [])
+  const [states, setStates] = useState<Partial<Record<string, { busy: boolean; error: string | null }>>>({})
+  const reset = useCallback(() => setStates(was => ({ ...was, [scope]: { busy: was[scope]?.busy ?? false, error: null } })), [scope])
 
   const run = useCallback(async <T,>(fn: () => Promise<T>, fallback = 'Something went wrong.'): Promise<ActionOutcome<T>> => {
-    setBusy(true)
-    setError(null)
+    setStates(was => ({ ...was, [scope]: { busy: true, error: null } }))
+    let error: string | null = null
     try {
       const result = await fn()
       if (isFailure(result)) {
-        setError(result.error ?? fallback)
+        error = result.error ?? fallback
         return { ok: false }
       }
       return { ok: true, value: result as Succeeded<T> }
     } catch (err) {
-      setError(err instanceof Error ? err.message : fallback)
+      error = err instanceof Error ? err.message : fallback
       return { ok: false }
     } finally {
-      setBusy(false)
+      setStates(was => ({ ...was, [scope]: { busy: false, error } }))
     }
-  }, [])
+  }, [scope])
 
-  return { busy, error, reset, run }
+  return { busy: states[scope]?.busy ?? false, error: states[scope]?.error ?? null, reset, run }
 }
 
 /** A mutating RPC's failure branch: `{ ok: false, error }`. Void results are not failures. */

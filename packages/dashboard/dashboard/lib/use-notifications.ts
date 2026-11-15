@@ -21,19 +21,26 @@ interface NotificationSpec<T> {
   title: (first: T, count: number) => string
   /** How one item reads in the notification body. */
   label: (item: T) => string
-  /** An external URL a click opens; `undefined` brings this tab forward instead. */
-  clickUrl: (first: T) => string | undefined
+  /** Where a click goes: an external URL, opened in a new tab, else the run it is about, opened in this one; `undefined` only brings this tab forward. */
+  opens: (first: T) => { url: string } | { projectId: string; agentId: string } | undefined
 }
 
-function fire<T>(items: T[], spec: NotificationSpec<T>): void {
+/** Open a run of this dashboard in this tab. */
+type OpenAgent = (projectId: string, agentId: string) => void
+
+function fire<T>(items: T[], spec: NotificationSpec<T>, openAgent: OpenAgent): void {
   if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return
   const first = items[0]
   if (!first) return
-  const notification = new Notification(spec.title(first, items.length), { body: items.map(spec.label).join('\n') })
+  // Every open tab of the dashboard fires its own: one tag per item, so the system shows one.
+  const notification = new Notification(spec.title(first, items.length), { body: items.map(spec.label).join('\n'), tag: spec.keyOf(first) })
   notification.onclick = () => {
-    const url = spec.clickUrl(first)
-    if (url) window.open(url, '_blank', 'noopener')
-    else window.focus()
+    const opens = spec.opens(first)
+    if (opens && 'url' in opens) window.open(opens.url, '_blank', 'noopener')
+    else {
+      window.focus()
+      if (opens) openAgent(opens.projectId, opens.agentId)
+    }
     notification.close()
   }
 }
@@ -48,7 +55,11 @@ function useNewItemNotifications<T extends { projectId: string }>(
   read: ProjectionRead<T>,
   enabled: boolean,
   spec: NotificationSpec<T>,
+  openAgent: OpenAgent,
 ): void {
+  // A click comes long after the render that fired: it opens the run as the page navigates by then.
+  const open = useRef(openAgent)
+  open.current = openAgent
   const tracker = useRef<SeenTracker<T> | undefined>(undefined)
   tracker.current ??= new SeenTracker<T>(spec.keyOf, item => item.projectId)
   const lastRead = useRef<ProjectionRead<T> | undefined>(undefined)
@@ -61,7 +72,7 @@ function useNewItemNotifications<T extends { projectId: string }>(
     // Observed whether or not notifications are on, which is what keeps flipping the toggle from
     // replaying the backlog: what happened while it was off is still "already there".
     const fresh = tracker.current!.observe(read.items, read.whole)
-    if (enabled && fresh.length > 0) fire(fresh, spec)
+    if (enabled && fresh.length > 0) fire(fresh, spec, (projectId, agentId) => open.current(projectId, agentId))
     // The spec is a module const (stable identity), so the feed and the toggle are the deps.
   }, [read, enabled]) // eslint-disable-line react-hooks/exhaustive-deps
 }
@@ -80,9 +91,8 @@ const INTERVENTIONS: NotificationSpec<Intervention> = {
     }
     return `#${item.number} ${item.title}`
   },
-  // A PR opens on the git host; a paused agent and work left on this machine live in this dashboard, so
-  // those just bring the tab forward (project selection is client state, not a URL).
-  clickUrl: first => (first.kind === 'pr' ? first.url : undefined),
+  // A PR opens on the git host; a paused agent and work left on this machine open their run here.
+  opens: first => (first.kind === 'pr' && first.url ? { url: first.url } : first.agentId ? { projectId: first.projectId, agentId: first.agentId } : undefined),
 }
 
 const ACTIVITY: NotificationSpec<Activity> = {
@@ -90,16 +100,15 @@ const ACTIVITY: NotificationSpec<Activity> = {
   title: (first, count) =>
     count === 1 ? `${first.kind === 'started' ? 'Agent started' : 'Agent finished'} · ${first.projectName}` : `${count} agent updates`,
   label: item => `${item.kind === 'started' ? 'Started' : 'Finished'}: ${item.title ?? 'a session'}`,
-  // Activity lives in this dashboard (no external URL like a PR) — the agents rail takes it from there.
-  clickUrl: () => undefined,
+  opens: first => ({ projectId: first.projectId, agentId: first.agentId }),
 }
 
 /** Notify when a new "needs you" item appears (#627). */
-export function useInterventionNotifications(interventions: ProjectionRead<Intervention>, enabled: boolean): void {
-  useNewItemNotifications(interventions, enabled, INTERVENTIONS)
+export function useInterventionNotifications(interventions: ProjectionRead<Intervention>, enabled: boolean, openAgent: OpenAgent): void {
+  useNewItemNotifications(interventions, enabled, INTERVENTIONS, openAgent)
 }
 
 /** Notify when an agent starts or finishes (#627). */
-export function useActivityNotifications(activity: ProjectionRead<Activity>, enabled: boolean): void {
-  useNewItemNotifications(activity, enabled, ACTIVITY)
+export function useActivityNotifications(activity: ProjectionRead<Activity>, enabled: boolean, openAgent: OpenAgent): void {
+  useNewItemNotifications(activity, enabled, ACTIVITY, openAgent)
 }

@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { join } from 'node:path'
-import { findAgent, listAgents, loadAgentEvents, readAllAgents, readDoing, readFinishedDiary, readLiveMeta, readLiveMetas, type StoreFs } from './agent-store.js'
+import { findAgent, isPidAlive, listAgents, loadAgentEvents, readAllAgents, readDoing, readFinishedDiary, readLiveMeta, readLiveMetas, type StoreFs } from './agent-store.js'
 import { agentIdFromStartedAt, startedAtFromAgentId } from '../agent-id.js'
 import { noRuns } from './runs.js'
 import { testRuns } from './test-runs.js'
@@ -10,6 +10,11 @@ import type { Checkout } from './branches.js'
 
 // The store reads a project's runs from two places (#1774): a run's live card and diary in its own
 // checkout, written by the run's tool, and the finished runs the project's runs provider answers.
+
+test('isPidAlive is true for this process and false for a dead pid', () => {
+  assert.equal(isPidAlive(process.pid), true)
+  assert.equal(isPidAlive(2 ** 31 - 1), false) // an impossibly high, unused pid
+})
 
 /** An in-memory {@link StoreFs} so the store logic is tested without touching disk. */
 function memFs(seed: Record<string, string> = {}): StoreFs & { files: Map<string, string> } {
@@ -24,27 +29,11 @@ function memFs(seed: Record<string, string> = {}): StoreFs & { files: Map<string
     async write(path, contents) {
       files.set(path, contents)
     },
-    async append(path, contents) {
-      files.set(path, (files.get(path) ?? '') + contents)
-    },
     async exists(path) {
       return files.has(path)
     },
     async mkdir() {
       // no-op: the memory fs has no directories
-    },
-    async readdir(dir) {
-      // Derive children from the flat path map: file basenames whose dirname is `dir`, plus
-      // the first segment of anything deeper.
-      const prefix = dir.endsWith('/') ? dir : dir + '/'
-      const names = new Set<string>()
-      for (const p of files.keys()) {
-        if (!p.startsWith(prefix)) continue
-        const rest = p.slice(prefix.length)
-        const head = rest.split('/')[0]
-        if (head) names.add(head)
-      }
-      return [...names]
     },
   }
 }

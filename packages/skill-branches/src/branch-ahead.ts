@@ -1,7 +1,7 @@
 import { nodeGitRunner, type GitRunner } from '@openagt/agent-data'
 import { isAgentBranch } from './branch-names.js'
-import { checkoutsByBranch, commitOf, detectBase, parsePorcelain } from './branch-state.js'
-import { repoHasRemote } from './worktree.js'
+import { commitOf, detectBase, parsePorcelain, soft } from './branch-state.js'
+import { checkoutsByBranch, repoHasRemote } from './worktree.js'
 
 /**
  * How far each branch is past the base, and whether origin has it: the quick read beside
@@ -40,25 +40,26 @@ const SEP = String.fromCharCode(31)
  * it; one this machine does not have counts from the default branch alone.
  */
 export async function readBranchesAhead(repo: string, branches: readonly string[], git: GitRunner = nodeGitRunner(), from?: string): Promise<BranchAhead[]> {
-  const ask = (args: string[]): Promise<string> => git(args, repo).catch(() => '')
+  const ask = soft(git, repo)
   const [hasRemote, base, start] = await Promise.all([repoHasRemote(repo, git), detectBase(ask), from !== undefined ? commitOf(ask, from) : undefined])
   const bases = [base, start].flatMap(rev => (rev === undefined ? [] : [rev]))
-  const [refs, checkouts] = await Promise.all([readRefs(ask, bases), checkoutsByBranch(ask)])
+  const [refs, checkouts] = await Promise.all([readRefs(ask, bases), checkoutsByBranch(repo, git)])
+  const asked = [...new Set(branches)]
   // A git older than the `ahead-behind` atom (2.41) refuses it: the branches asked, and only those,
   // are then counted by a `rev-list` each, side by side.
   await Promise.all(
-    [...new Set(branches)].map(async branch => {
+    asked.map(async branch => {
       const local = refs.get(`refs/heads/${branch}`)
       if (local && !local.past) local.past = await Promise.all(bases.map(async rev => Number((await ask(['rev-list', '--count', `${rev}..${local.tip}`])).trim())))
     }),
   )
-  const uncommitted = new Map(
-    await Promise.all(
-      [...new Set(branches)].flatMap(branch => {
-        const checkout = checkouts.get(branch)
-        return checkout ? [(async () => [branch, parsePorcelain(await git(['status', '--porcelain'], checkout).catch(() => '')).length] as const)()] : []
-      }),
-    ),
+  // A `git status` only for a branch whose checkout is still there.
+  const uncommitted = new Map<string, number>()
+  await Promise.all(
+    asked.map(async branch => {
+      const checkout = checkouts.get(branch)
+      if (checkout !== undefined) uncommitted.set(branch, parsePorcelain(await git(['status', '--porcelain'], checkout).catch(() => '')).length)
+    }),
   )
   return branches.map(branch => {
     const local = refs.get(`refs/heads/${branch}`)

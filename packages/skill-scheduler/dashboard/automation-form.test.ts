@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { EMPTY_DRAFT, TEXT_MAX, addArgs, atRowsPace, draftProblem, draftRow, draftSentence, editArgs, editedWords, isUntouched, keptWhereHint, openedAutomation, ownPaceArgs, removeWarning, removedWords, savedFile, savedWords, saysTheSame, startsWhen, triedLine, whereHint, type AutomationDraft, type OwnPace } from './automation-form.js'
+import { EMPTY_DRAFT, TEXT_MAX, addArgs, atRowsPace, draftProblem, draftRow, draftSentence, editArgs, editedWords, isUntouched, keptWhereHint, nameProblem, openedAutomation, ownPaceArgs, removeWarning, removedWords, savedFile, savedWords, saysTheSame, startsWhen, triedLine, whereHint, type AutomationDraft, type OwnPace } from './automation-form.js'
 
 // The automation form as data: what keeps a draft from being saved, the command that saves it, the sentence its row would say, what a try answered, an automation opened from its row to be saved again, and what is said of one removed.
 
@@ -15,8 +15,11 @@ describe('a new automation', () => {
     expect(draftProblem(EMPTY_DRAFT)).toBe('Give it a name. It becomes the command, like /answer-comments.')
     // One kept on this machine is no command a person types.
     expect(draftProblem({ ...EMPTY_DRAFT, onThisMachine: true })).toBe('Give it a name, like answer-comments.')
-    expect(draftProblem(draft({ name: 'Answer comments' }))).toBe('A name is lower-case letters, digits and dashes, never three dashes in a row, like answer-comments.')
-    expect(draftProblem(draft({ name: 'a'.repeat(65) }))).toBe('A name is 64 characters at most.')
+    // A name it cannot have comes next, pointed at: its rule is said under its field.
+    expect(draftProblem(draft({ name: 'Answer comments', prompt: '' }))).toBe("Give it another name: the one above cannot be an automation's.")
+    expect([nameProblem('Answer comments'), nameProblem('a---b')]).toEqual(Array(2).fill('A name is lower-case letters, digits and dashes, never three dashes in a row, like answer-comments.'))
+    expect(draftProblem(draft({ name: 'a'.repeat(65) }))).toBe("Give it another name: the one above cannot be an automation's.")
+    expect(nameProblem('a'.repeat(65))).toBe('A name is 64 characters at most.')
     expect(draftProblem(draft({ name: 'a'.repeat(64) }))).toBeUndefined()
     expect(draftProblem(draft({ prompt: ' \n' }))).toBe('Write what the agent is told.')
     expect(draftProblem(draft({ pace: every('') }))).toBe('Type a whole number, from 1 to 9999.')
@@ -26,7 +29,7 @@ describe('a new automation', () => {
     expect(draftProblem(draft({ pace: WORK, when: CHECK }))).toBeUndefined()
     // A time of day goes with days or more, and one left half typed is no pace yet.
     expect(draftProblem(draft({ pace: every('2', 'd', '10:00') }))).toBeUndefined()
-    expect(draftProblem(draft({ pace: { ...every('2'), atHalfTyped: true } }))).toBe('Finish the time, like 10:00, or clear it.')
+    expect(draftProblem(draft({ pace: { ...every('2'), atHalfTyped: true } }))).toBe('Finish the time of day, like 10:00, or clear it.')
     expect(draftProblem(draft())).toBeUndefined()
     expect(draftProblem(draft({ name: '  answer-comments  ' }))).toBeUndefined()
     // A text longer than the dashboard hands a command is said before Save, not refused after it.
@@ -34,7 +37,6 @@ describe('a new automation', () => {
     expect(draftProblem(draft({ prompt: 'p'.repeat(TEXT_MAX + 1) }))).toBe('What the agent is told is 4001 characters, and this form takes 4000 at most. Save a shorter one, then write the rest into the file.')
     expect(draftProblem(draft({ when: 'w'.repeat(TEXT_MAX + 1) }))).toBe('The shell line is 4001 characters, and this form takes 4000 at most.')
     expect(draftProblem(draft({ when: CHECK, waitsFor: 'x'.repeat(TEXT_MAX + 1) }))).toBe('What the line waits for is 4001 characters, and this form takes 4000 at most.')
-    expect(draftProblem(draft({ name: 'a---b' }))).toBe('A name is lower-case letters, digits and dashes, never three dashes in a row, like answer-comments.')
     expect(addArgs(draft({ prompt: 'p'.repeat(TEXT_MAX) }))!.every(arg => arg.length <= 4096)).toBe(true)
   })
 
@@ -63,7 +65,7 @@ describe('a new automation', () => {
   })
 
   test('when it would run, as its row would say it; nothing while nothing says when', () => {
-    expect(draftSentence(draft())).toBe('Every 1 day')
+    expect(draftSentence(draft())).toBe('Every day')
     expect(draftSentence(draft({ pace: every('15', 'm'), when: CHECK }))).toBe('Every 15 minutes at most, when its shell line prints something')
     expect(draftSentence(draft({ pace: every('15', 'm'), when: CHECK, waitsFor: 'when someone commented' }))).toBe('Every 15 minutes at most, when someone commented')
     expect(draftSentence(draft({ pace: WORK, when: CHECK, waitsFor: 'when someone commented' }))).toBe('When someone commented')
@@ -72,11 +74,11 @@ describe('a new automation', () => {
     expect(draftSentence(draft({ pace: every(''), when: CHECK }))).toBeUndefined()
     // With a time of day, which this machine holds: at that time by time alone, from that time beside a shell line.
     expect(draftSentence(draft({ pace: every('2', 'd', '10:00') }))).toBe('Every 2 days at 10:00')
-    expect(draftSentence(draft({ pace: every('1', 'w', '09:30'), when: CHECK, waitsFor: 'when someone commented' }))).toBe('Every 1 week from 09:30, when someone commented')
+    expect(draftSentence(draft({ pace: every('1', 'w', '09:30'), when: CHECK, waitsFor: 'when someone commented' }))).toBe('Every week from 09:30, when someone commented')
     expect(draftRow(draft({ pace: every('2', 'd', '10:00') }))).toEqual({ command: 'answer-comments', on: false, publish: 'commit', every: '2d', pace: { every: '2d', at: '10:00', since: '' }, home: 'claude-code', able: ['claude-code', 'codex'] })
     expect(draftRow(draft({ pace: WORK }))).toBeUndefined()
     // Before a name is typed the sentence is already there: it does not name the command.
-    expect(draftSentence({ ...EMPTY_DRAFT })).toBe('Every 1 day')
+    expect(draftSentence({ ...EMPTY_DRAFT })).toBe('Every day')
   })
 
   test('what a try answered: an agent would start, nothing to do, or the line failed and why; an answer that is not what the command promises is a failed line', () => {
@@ -96,10 +98,13 @@ describe('a new automation', () => {
     expect(savedFile({ ok: true, file: 'f', startsFrom: 'HEAD', version: 7 })).toEqual({ file: 'f', startsFrom: 'HEAD', onThisMachine: false })
     expect(savedFile({ ok: true, file: '.scheduler/automations/x.md', startsFrom: 'origin/main', onThisMachine: true })).toEqual({ file: '.scheduler/automations/x.md', startsFrom: 'origin/main', onThisMachine: true })
     // What the person has to do with it: a shared one is theirs to commit and bring where a checkout starts; one kept here needs nothing.
-    expect(savedWords({ startsFrom: 'origin/main', onThisMachine: false })).toBe('It is a file of yours, in this project, and nothing was committed for you. Its row cannot start before the file is on origin/main: commit it and bring it there.')
-    expect(savedWords({ startsFrom: 'origin/main', onThisMachine: true })).toBe('It is kept on this machine alone: nothing to commit, and nobody else gets the row. Its row can start as soon as you switch it on. Its prompt is in the record of each run, which is shared where this project shares its records.')
-    expect(whereHint(draft())).toBe('Saved as a skill file in this project, which you commit. The row starts switched off.')
-    expect(whereHint(draft({ onThisMachine: true }))).toBe('Kept on this machine alone, outside git. The row starts switched off, and can start as soon as you switch it on.')
+    expect(savedWords({ startsFrom: 'origin/main', onThisMachine: false }, true)).toBe('It is a file of yours, in this project, and nothing was committed for you. Its row cannot start before the file is on origin/main: commit it and bring it there.')
+    expect(savedWords({ startsFrom: 'origin/main', onThisMachine: true }, true)).toBe('It is kept on this machine alone: nothing to commit, and nobody else gets the row. Its row can start as soon as you switch it on. Its prompt is in the record of each run, which is shared where this project shares its records.')
+    expect(whereHint(draft(), true)).toBe('Saved as a skill file in this project, which you commit. The row starts switched off.')
+    expect(whereHint(draft({ onThisMachine: true }), true)).toBe('Kept on this machine alone, outside git. The row starts switched off, and can start as soon as you switch it on.')
+    // While the scheduler does not run, switching it on is not enough.
+    expect(savedWords({ startsFrom: 'origin/main', onThisMachine: true }, false)).toContain('Its row can start once you switch it on and the scheduler runs.')
+    expect(whereHint(draft({ onThisMachine: true }), false)).toBe('Kept on this machine alone, outside git. The row starts switched off, and can start once you switch it on and the scheduler runs.')
     expect(startsWhen('origin/main')).toBe('Its row cannot start before the file is on origin/main: commit it and bring it there.')
     expect(startsWhen('HEAD')).toBe('Its row cannot start before you commit the file.')
   })
@@ -181,14 +186,16 @@ describe('an automation opened from its row', () => {
       'Its skill file is deleted from your files in this project, and nothing is committed for you. Git can bring back only what you committed of it: a file never committed, or your last changes to it, cannot be brought back. Everyone else who has the project keeps the row until your deletion reaches them. Its switch and your picks for it go with it. The records of its past runs stay.',
     )
     expect(removeWarning({ onThisMachine: true })).toBe('Its file is deleted. It is kept on this machine alone, outside git, so it cannot be brought back. Its switch and your picks for it go with it. The records of its past runs stay.')
+    // A shared one git never had: nobody else has the row, so nobody else keeps it.
+    expect(removeWarning({ untracked: true })).toBe('Its skill file is deleted from your files in this project. It was never committed, so nobody else has it, and it cannot be brought back. Its switch and your picks for it go with it. The records of its past runs stay.')
     // In a commit: the deletion is the person's to commit.
     expect(removedWords('/answer-comments', { ok: true, command: 'answer-comments', file: FILE, git: 'committed', startsFrom: 'origin/main' })).toBe(`Removed /answer-comments: ${FILE} is deleted, and nothing was committed for you. Commit the deletion and bring it to origin/main: until then everyone else who has the project keeps the row.`)
     expect(removedWords('/answer-comments', { ok: true, file: FILE, git: 'committed', startsFrom: 'HEAD' })).toBe(`Removed /answer-comments: ${FILE} is deleted, and nothing was committed for you. Commit the deletion.`)
     // Staged and never committed: "commit the deletion" would commit the file.
     expect(removedWords('/answer-comments', { ok: true, file: FILE, git: 'staged', startsFrom: 'origin/main' })).toBe(`Removed /answer-comments: ${FILE} is deleted. It was staged and never committed, so a commit made now would still add it: take it out of the next commit with "git rm --cached ${FILE}".`)
     // Git never had it.
-    expect(removedWords('/answer-comments', { ok: true, file: FILE, git: 'nothing', startsFrom: 'origin/main' })).toBe(`Removed /answer-comments: ${FILE} is deleted. Git never had the file, so nothing is to commit.`)
-    expect(removedWords('tidy', { ok: true, file: '.scheduler/automations/tidy.md', onThisMachine: true })).toBe('Removed tidy: .scheduler/automations/tidy.md is deleted. Nothing is to commit.')
+    expect(removedWords('/answer-comments', { ok: true, file: FILE, git: 'nothing', startsFrom: 'origin/main' })).toBe(`Removed /answer-comments: ${FILE} is deleted. Git never had the file, so there is nothing to commit.`)
+    expect(removedWords('tidy', { ok: true, file: '.scheduler/automations/tidy.md', onThisMachine: true })).toBe('Removed tidy: .scheduler/automations/tidy.md is deleted. Nothing to commit.')
     // Git could not be asked, or an answer that is not what the command promises: it is gone, and the person is sent to git to look.
     expect(removedWords('/answer-comments', { ok: true, file: FILE, git: 'unknown', startsFrom: 'origin/main' })).toBe(`Removed /answer-comments: ${FILE} is deleted. What git holds of it could not be read: look with "git status".`)
     expect(removedWords('tidy', null)).toBe('Removed tidy: its file is deleted. What git holds of it could not be read: look with "git status".')

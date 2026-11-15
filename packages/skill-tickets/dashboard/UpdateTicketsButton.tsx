@@ -10,32 +10,27 @@ import { UPDATE_TICKETS_PROMPT } from '../src/module.js'
  */
 export function UpdateTicketsButton({
   busy,
+  starting,
   onStart,
   onConfigure,
   lastImportedAt,
-  disabled,
-  variant,
-  size = 'sm',
-  className,
 }: {
   busy: boolean
+  /** This update is the start in flight: the button spins, not the one beside it that started something else. */
+  starting: boolean
   onStart: () => void
   /** Open the launcher with this prompt instead of spending a session on it. */
   onConfigure: () => void
   /** When tickets last came across, so the tooltip can promise the incremental update (#1265). */
   lastImportedAt?: string | undefined
-  disabled?: boolean | undefined
-  variant?: 'default' | 'outline' | undefined
-  size?: 'xs' | 'sm' | undefined
-  className?: string | undefined
 }) {
   return (
+    // A secondary press beside the list's primary: the start button's ghost pair on the secondary's soft fill.
     <StartAgentButton
-      {...(variant ? { variant } : {})}
-      size={size}
-      {...(disabled !== undefined ? { disabled } : {})}
-      {...(className ? { className } : {})}
-      icon={<RefreshCw className="h-3.5 w-3.5" aria-hidden />}
+      variant="ghost"
+      size="default"
+      className="bg-accent hover:bg-foreground/10 active:bg-foreground/15"
+      icon={<RefreshCw className="size-4" aria-hidden />}
       label="Update tickets"
       menuAriaLabel="Other ways to update the tickets"
       tooltip={
@@ -44,7 +39,7 @@ export function UpdateTicketsButton({
           : 'Bring tickets/ up to date with the issue tracker. With no import on record, everything open comes across.'
       }
       busy={busy}
-      starting={busy}
+      starting={starting}
       onStart={onStart}
       onConfigure={onConfigure}
       prompt={UPDATE_TICKETS_PROMPT}

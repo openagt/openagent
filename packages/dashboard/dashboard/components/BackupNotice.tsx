@@ -4,13 +4,14 @@ import { sendBackUpAs, type BackupGap } from '../rpc/backup.js'
 import type { GitHostRow } from '../rpc/logins.js'
 import type { SendAsHost } from '../rpc/personal-folder.js'
 import { backupChanged, useBackup } from '../lib/use-backup.js'
-import { HostFix, useGitHosts } from './Logins.js'
+import { HostFix } from './AddGitAccount.js'
+import { useGitHosts } from './Logins.js'
 import { SendAs, firstSendAs } from './SendAs.js'
 import { Button } from './ui/button.js'
 
-// Settings › Agent data, at its top: the agents' data that is not backed up, and the fix, here
+// Settings › Your agent data, at its top: the agents' data that is not backed up, and the fix, here
 // (his pick over a trip to the Permissions page): with no account of OpenAgent's at the host, the
-// press that adds one, its code shown in place; with one, "Back up as" and the press that sends
+// press that adds one, in its dialog; with one, "Back up as" and the press that sends
 // what waited. The person picks the account, even when there is only one: nothing is sent as an
 // account they did not name.
 
@@ -28,9 +29,10 @@ export function BackupNotice({ onChanged }: { onChanged?: () => void }) {
   const byHost = new Map<string, BackupGap[]>()
   for (const gap of view.gaps) byHost.set(gap.host, [...(byHost.get(gap.host) ?? []), gap])
   return (
-    <section aria-label="Not backed up" className="mb-4 space-y-3 rounded-lg border border-warning/40 bg-warning/5 p-3">
-      <p className="flex items-center gap-2 text-sm font-medium text-warning">
-        <CircleAlert className="h-4 w-4 shrink-0" aria-hidden />
+    // The banners' strip, on a tinted fill with no edge; its words in the text's colour, its mark in the warning's.
+    <section aria-label="Not backed up" className="mb-4 space-y-3 rounded-lg bg-warning/10 p-3">
+      <p className="flex items-center gap-2 text-sm font-medium">
+        <CircleAlert className="size-4 shrink-0 text-warning" aria-hidden />
         Not backed up
       </p>
       {[...byHost].map(([host, gaps]) => {
@@ -51,7 +53,7 @@ export function BackupNotice({ onChanged }: { onChanged?: () => void }) {
                     </li>
                   ))}
                 </ul>
-                {row ? <HostFix row={row} onChanged={reloadHosts} size="xs" /> : <p className="text-xs text-muted-foreground">{`No package answers for ${host} yet.`}</p>}
+                {row ? <HostFix row={row} onChanged={reloadHosts} size="sm" /> : <p className="text-xs text-muted-foreground">{`No package answers for ${host} yet.`}</p>}
               </>
             ) : (
               <ul className="space-y-2">
@@ -116,7 +118,7 @@ function GapRow({ gap, at, onChanged }: { gap: BackupGap; at: SendAsHost; onChan
       </p>
       <div className="flex flex-wrap items-center gap-2">
         <SendAs host={at} value={login} onChange={setPicked} disabled={busy} label="Back up as" />
-        <Button size="xs" disabled={busy || login === undefined} onClick={() => void backUp()}>
+        <Button size="sm" disabled={busy || login === undefined} onClick={() => void backUp()}>
           {busy && <Loader2 className="size-3 animate-spin" aria-hidden />}
           {busy ? 'Backing up…' : 'Back up'}
         </Button>

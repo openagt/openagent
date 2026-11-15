@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
-import { ModuleHostContext, type ModuleCommandResult, type ModuleHost } from '@openagt/dashboard/module'
+import { cleanup, screen, waitFor } from '@testing-library/react'
+import type { ModuleCommandResult, ModuleHost } from '@openagt/dashboard/module'
+import { fakeHost as hostFor, renderWithHost } from '@openagt/dashboard/module/testing'
 import { SubagentsSettings } from './SubagentsSettings.js'
 import { runnerChoices, runnerOf, runnerValue } from './choices.js'
 import { choices, offered, pick, showing } from '../../dashboard/dashboard/test-controls.js'
@@ -26,49 +27,12 @@ function fakeHost(saved: Record<string, unknown> = {}, refuse?: (projectId: stri
     if (args.length === 2) files[projectId] = JSON.parse(args[1]!)
     return { ok: true, output: { ok: true, ...(files[projectId] as object) } }
   })
-  const host: ModuleHost = {
-    package: '@openagt/skill-orchestration',
-    runCommand,
-    act: runCommand,
-    runComputerCommand: vi.fn(async () => ({ ok: false as const, error: 'not the computer\'s' })),
-    runComputerCommandOn: vi.fn(async () => ({ ok: false as const, error: 'not the computer\'s' })),
-    read: vi.fn(async () => ({ ok: false as const, error: 'no server part' })),
-    openAgent: vi.fn(),
-    openPage: vi.fn(),
-    pageHref: (segment: string) => `/${segment}`,
-    openSettings: vi.fn(),
-    gitHostPeople: vi.fn(async () => []),
-    startRun: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
-    configureRun: vi.fn(),
-    agents: vi.fn(async () => []),
-    machines: vi.fn(async () => ({ version: '0.0.0', machines: [] })),
-    addMachine: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
-    removeMachine: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
-    renameMachine: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
-    renameComputer: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
-    letMachineIn: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
-    machineCode: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
-    computersThrough: vi.fn(async () => ({ ok: true as const, computers: [] })),
-    machinePerson: vi.fn(async () => ({ ok: false as const, error: 'no person there', unknown: true as const })),
-    removeMachineDevice: vi.fn(async () => ({ ok: false as const, error: 'no person there' })),
-    machineAccounts: vi.fn(async () => null),
-    removeMachineAccount: vi.fn(async () => ({ ok: false as const, error: 'no server here' })),
-    useLoginsOn: vi.fn(async () => ({ ok: false as const, error: 'no server here' })),
-    syncDataOn: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
-    agentDataRemote: vi.fn(async () => undefined),
-    addComputerThrough: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
-    watchScreen: vi.fn(async () => undefined),
-    sendToScreen: vi.fn(async () => false),
-  }
+  const host = hostFor('@openagt/skill-orchestration', { runCommand, act: runCommand })
   return { host, runCommand, files }
 }
 
 function show(host: ModuleHost, projects = PROJECTS) {
-  return render(
-    <ModuleHostContext.Provider value={host}>
-      <SubagentsSettings projects={projects} />
-    </ModuleHostContext.Provider>,
-  )
+  return renderWithHost(<SubagentsSettings projects={projects} />, host)
 }
 
 /** A row's menu, by its label: the button that shows its pick, in the words the list has for it, and opens the list. */

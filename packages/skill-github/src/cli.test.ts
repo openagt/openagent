@@ -29,12 +29,14 @@ async function run(cwd: string, argv: string[], deps: CliDeps = {}): Promise<Ran
 
 const row = (over: Record<string, unknown> = {}) => ({ number: 7, url: 'https://github.com/o/r/pull/7', state: 'OPEN', title: 'T', isDraft: false, headRefName: 'agent-x', headRefOid: 'abc', createdAt: '2026-09-20T10:00:00Z', ...over })
 
-test('no command, an unknown command, a bad flag: the usage, exit 2', async () => {
-  assert.equal((await run('/r', [])).code, 2)
-  assert.match((await run('/r', ['frobnicate'])).err, /usage: github/)
+test('no command: the usage; an unknown command, a bad flag: what was wrong and where the usage is; exit 2', async () => {
+  const none = await run('/r', [])
+  assert.equal(none.code, 2)
+  assert.ok(none.err.startsWith(USAGE))
+  assert.match((await run('/r', ['frobnicate'])).err, /^unknown command: frobnicate\nRun `github --help` for usage\.$/m)
   const bad = await run('/r', ['requests', '--nope'])
   assert.equal(bad.code, 2)
-  assert.ok(bad.err.endsWith(USAGE))
+  assert.match(bad.err, /^unknown option: --nope\nRun `github --help` for usage\.$/m)
   assert.equal((await run('/r', ['merge', 'seven'])).code, 2)
   assert.equal((await run('/r', ['open'])).code, 2, '--title is required')
   assert.equal((await run('/r', ['open', '--title', 'x', '--base', ' '])).code, 2, '--base names a branch')
@@ -86,10 +88,11 @@ test('open: on the current branch or --branch, with the words given; --merge arm
       throw new Error(`unexpected ${args.join(' ')}`)
     }
     const watched: number[] = []
-    const first = await run(dir, ['open', '--title', 'Fix it', '--body', 'Fixed.', '--merge'], { gh, watch: async (_r, n) => void watched.push(n) })
+    const first = await run(dir, ['open', '--title', 'Fix it', '--body', 'Fixed.', '--merge'], { gh, env: {}, watch: async (_r, n) => void watched.push(n) })
     assert.equal(first.code, 0)
     assert.deepEqual(first.out, { ok: true, branch: 'agent-fix', request: { number: 42, url: 'https://github.com/o/r/pull/42' }, existing: false, merge: { outcome: 'watching' } })
-    assert.deepEqual(calls[1], ['pr', 'create', '--head', 'agent-fix', '--title', 'Fix it', '--body', 'Fixed.'])
+    // The body opens with the line a comment opens with: here no run record, so the 🤖 line.
+    assert.deepEqual(calls[1], ['pr', 'create', '--head', 'agent-fix', '--title', 'Fix it', '--body', '🤖 *automated*\n\nFixed.'])
     assert.deepEqual(watched, [42])
 
     const again = await run(dir, ['open', '--title', 'x', '--draft'], { gh })

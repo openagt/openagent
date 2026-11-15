@@ -16,6 +16,7 @@ import type { AgentStatus } from '../../src/index.js'
 import type { ModuleAgent, ModuleAgentsWanted } from '../../src/dashboard/module-agents.js'
 import { readModule, runComputerCommand, runComputerCommandOn, runModuleCommand } from '../rpc/modules.js'
 import type { ModuleCommandResult, ModuleReadResult } from '../rpc/modules.js'
+import { DaemonDown } from '../lib/use-daemon-health.js'
 
 export type { ModuleCommandResult, ModuleReadResult, AgentStatus, CardWidth, Health, ModuleAgent, ModuleAgentsWanted }
 
@@ -65,6 +66,8 @@ export interface ModuleCard {
   minWidth?: CardWidth
   /** Its place among every installed package's cards, lower first; 50 when unsaid, ties by package name. */
   order?: number
+  /** A part of the line under the Overview's title, a few words drawn with `LinePart`, not a card: it is not arranged. */
+  line?: boolean
   /** The card itself. */
   Card: ComponentType<ModuleCardProps>
 }
@@ -113,6 +116,12 @@ export interface ModuleFileName {
   title: string
   /** The path that is opened for it, when it is not the path asked about: a plan still to be written opens its ticket. */
   href?: string
+  /**
+   * The ask for what the path names, word for word, once it is there already: an entry saying just
+   * this is left over (`Create tickets/<stem>.plan.md`, a plan already written), and is called
+   * `title` ("Plan: Login page · already written"). Any other entry naming the path is still work.
+   */
+  done?: { ask: string; title: string }
 }
 
 /**
@@ -144,6 +153,8 @@ export type LinkActionResult = { ok: true } | { ok: false; error: string }
 export interface LinkAction {
   /** The button's label, a short verb phrase: "Add to queue". */
   label: string
+  /** What the button says while the action runs: "Adding…". The label with a spinner otherwise. */
+  busyLabel?: string
   /** What the button says once the action is done: "Queued". The label with a check mark otherwise. */
   doneLabel?: string
   /** The button's icon; none otherwise. */
@@ -153,6 +164,8 @@ export interface LinkAction {
    * own commands in that project. A batch stops at its first failure and says why.
    */
   run(host: ModuleHost, projectId: string, links: ModuleLink[]): Promise<LinkActionResult>
+  /** Which links of one project the action is done on already: a button whose links all are rests on its done label. */
+  done?(host: ModuleHost, projectId: string): Promise<(link: ModuleLink) => boolean>
 }
 
 /** What a Settings section is rendered with: the projects whose settings it shows and saves. */
@@ -317,8 +330,6 @@ export interface ModuleRunSlots {
 export interface ModuleDefinition {
   /** The cards the module adds to the Overview. */
   cards?: ModuleCard[]
-  /** A stylesheet to load with the module, relative to the module's browser part's own URL. */
-  stylesheet?: string
   /** The pages the module adds, each with a sidebar row. */
   pages?: ModulePage[]
   /** The actions the module offers on the links dashboard pages show, wherever the link's project has the module's package. */
@@ -365,8 +376,9 @@ export interface ModuleHost {
    * The same, for a command that changes the project's data (a claim released, an entry added):
    * the dashboard then syncs the project's data with origin and forgets what it had read, so the
    * change shows at once instead of at the next sync. A link action's host runs every command so.
+   * `input` is what the command reads on standard input: a whole file it writes, a ticket say.
    */
-  act(projectId: string, args: string[], command?: string): Promise<ModuleCommandResult>
+  act(projectId: string, args: string[], command?: string, input?: string): Promise<ModuleCommandResult>
   /**
    * Run one of the module package's own commands in no project, for a package that is this
    * computer's (the door to it, its servers, its accounts): what such a package keeps is the
@@ -389,16 +401,35 @@ export interface ModuleHost {
   read(projectId: string, name: string, input?: Record<string, unknown>): Promise<ModuleReadResult>
   /** Open one agent's page in the dashboard: its live feed while it runs, its record after. */
   openAgent(projectId: string, agentId: string): void
+  /** The address of one agent's page: a link's `href`, for a link that also opens in a new tab. */
+  agentHref(projectId: string, agentId: string): string
   /**
    * Open a page a module adds (this one's or another's), at a sub-path, in the project picked in
    * the dashboard, or in `projectId`, which is then the one picked: `openPage('tickets', [file], projectId)`.
-   * A page the picked project's packages do not add shows "No such page".
+   * A page the picked project's packages do not add shows "No such page". With `beside`, the page
+   * is one of the same thing as the page shown (a ticket's other tab): it is entered from where the
+   * page shown was, so `backToPage` from it goes there as it was left.
    */
-  openPage(segment: string, path?: string[], projectId?: string): void
-  /** The address of a page a module adds, with the project picked in the dashboard: a link's `href`, for a link that also opens in a new tab. */
-  pageHref(segment: string): string
-  /** Open an entry of Settings over the page, by its id: `openSettings('devices')`. */
-  openSettings(entry: string): void
+  openPage(segment: string, path?: string[], projectId?: string, options?: { beside?: boolean }): void
+  /**
+   * Write a pick the page shown keeps in its address, in place of the address it had, so Back
+   * steps over it: its sub-path, its query (without `?`), or both. The query left out stays.
+   */
+  adjustPage(path?: string[], query?: string): void
+  /** The address `openPage` with the same arguments goes to: a link's `href`, for a link that also opens in a new tab. */
+  pageHref(segment: string, path?: string[], projectId?: string): string
+  /**
+   * Go back to a page at a sub-path, in any project: by the browser's Back when the page shown was
+   * opened from it, or beside a page that was, so it is as it was left (its filters, its scroll);
+   * else `openPage` with the same arguments. A list's way back from one of its items: `backToPage('tickets')`.
+   */
+  backToPage(segment: string, path?: string[], projectId?: string): void
+  /**
+   * Open an entry of Settings over the page, by its id: `openSettings('devices')`; with `item`, at
+   * that page inside it. From inside Settings, it moves to that entry in place: Back and closing
+   * still go to the page under it.
+   */
+  openSettings(entry: string, item?: string): void
   /**
    * The accounts behind a project's commit emails at its git host, each with its login and picture:
    * an email the host knows nobody for, or a project with no git host, is left out. Kept a day.
@@ -590,7 +621,7 @@ export function moduleHost(base: ModuleHostBase, opts: { acts?: boolean } = {}):
   return {
     ...base,
     runCommand: (projectId, args, command) => runModuleCommand(projectId, base.package, args, command, opts.acts ?? false),
-    act: (projectId, args, command) => runModuleCommand(projectId, base.package, args, command, true),
+    act: (projectId, args, command, input) => runModuleCommand(projectId, base.package, args, command, true, input),
     runComputerCommand: (args, command, input) => runComputerCommand(base.package, args, command, input),
     runComputerCommandOn: (machineId, args, command) => runComputerCommandOn(base.package, machineId, args, command),
     read: (projectId, name, input = {}) => readModule(projectId, base.package, name, input),
@@ -607,15 +638,27 @@ export function useModuleHost(): ModuleHost {
   return host
 }
 
+/** Whether OpenAgent is not answering right now, as the page's banner says: a press that starts a run is off while it is true. */
+export function useOpenAgentDown(): boolean {
+  return useContext(DaemonDown)
+}
+
 // The dashboard's own building blocks, so a module looks like the rest of the page.
 export { Button, buttonVariants, type ButtonProps } from '../components/ui/button.js'
-export { Card, CardHeader, CardTitle, CardTitleLink, CardContent } from '../components/ui/card.js'
-export { Skeleton } from '../components/ui/skeleton.js'
+export { CopyButton } from '../components/ui/copy-button.js'
+export { Card, CardHeader, CardTitle, CardContent, PageLink } from '../components/ui/card.js'
+export { Skeleton, useSkeleton } from '../components/ui/skeleton.js'
+export { Slot, RowShapes, SentenceShape, type SlotRead } from '../components/ui/slot.js'
+export { PartDescription } from '../components/PartDescription.js'
 export { Input } from '../components/ui/input.js'
 export { GaugeFace } from '../components/ui/gauge.js'
 export { ClaudeLogo, CodexLogo } from '../components/driver-logos.js'
 export { cn } from '../lib/utils.js'
-export { usePolled, useLoaded, forgetRemembered } from '../lib/use-async.js'
+export { inPlace } from '../lib/in-place.js'
+export { STATUS_TONE, STATUS_DOT, STATUS_RING } from '../lib/status-tone.js'
+export { usePolled, useLoaded, useAskOn, forgetRemembered, type ReadState } from '../lib/use-async.js'
+export { useKeptDraft } from '../lib/draft-handoff.js'
+export { FadeWhileStale } from '../components/FadeWhileStale.js'
 export { Badge } from '../components/ui/badge.js'
 export { Checkbox } from '../components/ui/checkbox.js'
 export { Switch } from '../components/ui/switch.js'
@@ -633,19 +676,28 @@ export { Tooltip, TooltipTrigger, TooltipContent } from '../components/ui/toolti
 export { DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from '../components/ui/dropdown-menu.js'
 export { ContextMenu, ContextMenuTrigger } from '../components/ui/context-menu.js'
 export { PaneTitle, PaneActions } from '../components/PaneHeader.js'
-export { Page } from '../components/Page.js'
-export { StatTile } from '../components/StatTile.js'
+export { Page, PageColumn } from '../components/Page.js'
+export { Section } from '../components/ui/section.js'
+export { List, Row } from '../components/ui/list.js'
+export { ShowSidebarButton } from '../components/SidebarToggle.js'
+export { LinePart, counted } from '../components/LinePart.js'
 export { FilterChips, type FilterChip } from '../components/FilterChips.js'
 export { FileIcon } from '../components/FileIcon.js'
+export { MiddleCut, PathCut } from '../components/MiddleCut.js'
+export { treeRow } from '../components/tree-row.js'
+export { PaneNote } from '../components/PaneNote.js'
 export { Markdown, FileLinks } from '../components/Markdown.js'
-export { StartAgentButton } from '../components/StartAgentButton.js'
-export { LinkActions, type ProjectLinks, type LinkTargets } from '../components/LinkActions.js'
+export { StartAgentButton, type StartMenuItem } from '../components/StartAgentButton.js'
+export { ButtonGroup, ButtonGroupSeparator } from '../components/ui/button-group.js'
+export { LinkActions, useLinkActions, type LinkActionOffer, type ProjectLinks, type LinkTargets } from '../components/LinkActions.js'
 export { MachineMark } from '../components/MachineMark.js'
 export { PersonMark, personName } from '../components/PersonMark.js'
+export { needsWord } from '../components/HumanQueueList.js'
 export { useGitHostPeople, personSaid } from '../lib/use-git-host-people.js'
-export { machineKind, machineName, type MachineKind } from '../../src/client.js'
-export { SettingsSection, SettingsRow, SettingsSelectRow, type SettingsOption } from '../components/SettingsRows.js'
+export { machineKind, machineName, runName, type MachineKind } from '../../src/client.js'
+export { SettingsFoot, SettingsSection, SettingsRow, SettingsRowShapes, SettingsSelectRow, type SettingsOption } from '../components/SettingsRows.js'
 export { useSettingsCrumb, type SettingsCrumb } from '../lib/settings-crumb.js'
+export { useSettingsHold } from '../lib/settings-hold.js'
 export { QrCode } from '../components/QrCode.js'
 export { Dialog } from '../components/ui/dialog.js'
 export { reachedByLine } from '../../src/client.js'
@@ -659,3 +711,4 @@ export { useAction } from '../lib/use-action.js'
 export { useSchedule, type Schedule } from '../lib/use-schedule.js'
 export { useFileNames, pathsIn, type FileNames, type NamedFile } from '../lib/use-file-names.js'
 export { ConfirmDialog } from '../components/ui/confirm-dialog.js'
+export { overlayOpen } from '../lib/shortcut.js'

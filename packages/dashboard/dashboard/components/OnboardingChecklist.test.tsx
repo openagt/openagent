@@ -1,9 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { forgetRemembered } from '../lib/use-async.js'
 import type { DashboardData, ProjectSummary } from '../../src/index.js'
 import { configureFirst } from '../test-utils.js'
-import { ModulesContext, type MountedModules } from '../lib/use-modules.js'
 import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
 
 // The first steps read their state over several RPC stubs and hooks; stub them all so nothing
@@ -70,8 +69,8 @@ const WITH_PROJECT: DashboardData = {
 
 const SHOP: ProjectSummary = { id: 'p1', path: '/home/ada/shop', name: 'shop', activated: true, gitHost: true }
 
-const steps = ({ projects = [] as ProjectSummary[], onAgentStarted = vi.fn(), onSelectProject = vi.fn() } = {}) =>
-  render(<OnboardingChecklist projects={projects} onAgentStarted={onAgentStarted} onSelectProject={onSelectProject} onProjectAdded={vi.fn()} />)
+const steps = ({ projects = [] as ProjectSummary[], onAgentStarted = vi.fn(), onSelectProject = vi.fn(), onRead = vi.fn() } = {}) =>
+  render(<OnboardingChecklist projects={projects} onAgentStarted={onAgentStarted} onSelectProject={onSelectProject} onProjectAdded={vi.fn()} onRead={onRead} />)
 
 /** A step's row, by its title. */
 const row = (label: string) => screen.getByRole('listitem', { name: label })
@@ -81,7 +80,7 @@ const openStep = async (label: string) => fireEvent.click(await screen.findByRol
 
 /** Open the tickets step, press its import, and wait for the start to have been attempted. */
 const clickImport = async () => {
-  await openStep('Populate tickets/')
+  await openStep('Populate the tickets')
   fireEvent.click(await screen.findByRole('button', { name: 'Update tickets' }))
   await waitFor(() => expect(startAgent.start).toHaveBeenCalled())
 }
@@ -100,8 +99,49 @@ describe('the first steps on the Overview', () => {
     onDashboard.mockResolvedValue(EMPTY)
     logins.onGitHosts.mockResolvedValue(github([]))
     steps()
-    expect(await screen.findByRole('heading', { name: /^Good (morning|afternoon|evening), Ada$/ })).toBeTruthy()
+    // A part's heading like every other, the count beside it as every part's count stands.
+    const heading = await screen.findByRole('heading', { level: 2, name: /^Good (morning|afternoon|evening), Ada 0 of 3$/ })
+    expect(heading.className).toContain('text-base')
+    expect(within(heading).getByText('0 of 3').className).toContain('font-normal')
     expect(await screen.findByRole('list', { name: '0 of 3 done' })).toBeTruthy()
+  })
+
+  test.each(['dashboard', 'agent', 'hosts'])('says "Loading…" and no step until the projects, the coding agent and the git hosts are read, and tells the page only then: %s answers last', async last => {
+    const answers: Record<string, (value: unknown) => void> = {}
+    const held = (name: string) => () => new Promise(resolve => (answers[name] = resolve))
+    onDashboard.mockImplementation(held('dashboard'))
+    logins.onAgentState.mockImplementation(held('agent'))
+    logins.onGitHosts.mockImplementation(held('hosts'))
+    const values: Record<string, unknown> = { dashboard: WITH_PROJECT, agent: { driver: 'claude-code', ready: true }, hosts: CONNECTED }
+    const onRead = vi.fn()
+    steps({ onRead })
+    expect(await screen.findByText('Loading…')).toBeTruthy()
+    expect(screen.queryAllByRole('listitem')).toEqual([])
+    await act(async () => {
+      for (const name of Object.keys(values)) if (name !== last) answers[name]!(values[name])
+    })
+    expect(screen.getByText('Loading…')).toBeTruthy()
+    expect(screen.queryAllByRole('listitem')).toEqual([])
+    expect(onRead).not.toHaveBeenCalled()
+    await act(async () => answers[last]!(values[last]))
+    expect(within(row('Add your first project')).getByLabelText('Done')).toBeTruthy()
+    expect(onRead).toHaveBeenCalled()
+    expect(screen.queryByText('Loading…')).toBeNull()
+  })
+
+  test('while it reads, the card draws a row per step it knows of once the coding agent and the git hosts are read, so no row is pushed by a step they add', async () => {
+    onDashboard.mockImplementation(() => new Promise(() => {}))
+    let agent: (value: unknown) => void = () => {}
+    logins.onAgentState.mockImplementation(() => new Promise(resolve => (agent = resolve)))
+    steps()
+    await screen.findByText('Loading…')
+    expect(document.querySelector('ol')).toBeNull()
+    await act(async () => agent({ driver: 'claude-code', ready: false, installed: false }))
+    await screen.findByText('Loading…')
+    const frame = document.querySelector('ol[aria-hidden="true"]')
+    const rows = [...(frame?.children ?? [])].map(item => item.querySelector('span.text-sm')?.textContent)
+    expect(rows[0]).toBe('Set up Claude Code')
+    expect(rows).toContain('Add your first project')
   })
 
   test('what adding a project does is behind an ⓘ beside the open step, not in its way', async () => {
@@ -115,17 +155,21 @@ describe('the first steps on the Overview', () => {
     await waitFor(() => expect(document.body.textContent).toContain('makes no commit on your branch and pushes nothing'))
   })
 
-  test('a login started can be given up: Cancel stops it, and the press to add an account is back', async () => {
+  test('the account is added in a dialog: its code is shown there, and Cancel gives the login up', async () => {
     onDashboard.mockResolvedValue(EMPTY)
-    logins.onGitHosts.mockResolvedValue(github([]))
     logins.sendStopGitHostLogin.mockResolvedValue({ ok: true })
-    logins.onGitHosts.mockResolvedValue({ hosts: [{ ...github([]).hosts[0]!, provider: { ...github([]).hosts[0]!.provider, loggingIn: { code: 'ABCD-1234', url: 'https://github.com/login/device' } } }] })
-    steps()
-    expect(await screen.findByText('ABCD-1234')).toBeTruthy()
+    logins.sendGitHostLogin.mockResolvedValue({ ok: true, code: 'ABCD-1234', url: 'https://github.com/login/device' })
     logins.onGitHosts.mockResolvedValue(github([]))
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    steps()
+    fireEvent.click(await screen.findByRole('button', { name: 'Add a GitHub account' }))
+    logins.onGitHosts.mockResolvedValue({ hosts: [{ ...github([]).hosts[0]!, provider: { ...github([]).hosts[0]!.provider, loggingIn: { code: 'ABCD-1234', url: 'https://github.com/login/device' } } }] })
+    const dialog = await screen.findByRole('dialog', { name: 'Add a GitHub account' })
+    expect(await within(dialog).findByText('ABCD-1234')).toBeTruthy()
+    logins.onGitHosts.mockResolvedValue(github([]))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
     await waitFor(() => expect(logins.sendStopGitHostLogin).toHaveBeenCalledWith('github.com'))
-    expect(await screen.findByRole('button', { name: 'Add a GitHub account' })).toBeTruthy()
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(screen.getByRole('button', { name: 'Add a GitHub account' })).toBeTruthy()
   })
 
   test('one step open at a time, numbered: the next to do with its words and its press; the others only their titles, each a press from open', async () => {
@@ -163,31 +207,25 @@ describe('the first steps on the Overview', () => {
   })
 
   test('the steps nothing breaks without are marked optional, and the essentials are not', async () => {
-    onDashboard.mockResolvedValue({ ...WITH_PROJECT, queue: [{ projectId: 'p1', projectName: 'shop', package: '@acme/queue', entries: [] }] } as unknown as DashboardData)
+    onDashboard.mockResolvedValue({ ...WITH_PROJECT, queue: [{ projectId: 'p1', projectName: 'shop', entries: [] }] } as unknown as DashboardData)
     steps({ projects: [SHOP] })
-    await waitFor(() => expect(row('Populate tickets/')).toBeTruthy())
-    expect(within(row('Populate tickets/')).getByText('Optional')).toBeTruthy()
+    await waitFor(() => expect(row('Populate the tickets')).toBeTruthy())
+    expect(within(row('Populate the tickets')).getByText('Optional')).toBeTruthy()
     expect(within(row('Turn on notifications')).getByText('Optional')).toBeTruthy()
     expect(within(row('Populate the queue of AI tasks')).queryByText('Optional')).toBeNull()
   })
 
-  test("the queue step's press opens the page of the package that keeps the queue, where a task is added to it", async () => {
-    onDashboard.mockResolvedValue({ ...WITH_PROJECT, queue: [{ projectId: 'p1', projectName: 'shop', package: '@acme/queue', entries: [] }] } as unknown as DashboardData)
+  test('the queue step opens the Queue page, where its entries are added', async () => {
+    onDashboard.mockResolvedValue({ ...WITH_PROJECT, queue: [{ projectId: 'p1', projectName: 'shop', entries: [] }] } as unknown as DashboardData)
     const openPage = vi.fn()
-    const modules: MountedModules = { pages: [{ segment: 'todo', label: 'Queue', package: '@acme/queue', projects: ['p1'], Page: () => null }], cards: [], linkActions: [], panels: [], runSlots: [], settings: [], everyPage: [], loaded: true }
     render(
-      <ModulesContext.Provider value={modules}>
-        <HostServicesContext.Provider value={{ ...INERT_HOST_SERVICES, openPage, pageHref: segment => `/shop/${segment}` }}>
-          <OnboardingChecklist projects={[SHOP]} onAgentStarted={vi.fn()} onSelectProject={vi.fn()} onProjectAdded={vi.fn()} />
-        </HostServicesContext.Provider>
-      </ModulesContext.Provider>,
+      <HostServicesContext.Provider value={{ ...INERT_HOST_SERVICES, openPage }}>
+        <OnboardingChecklist projects={[SHOP]} onAgentStarted={vi.fn()} onSelectProject={vi.fn()} onProjectAdded={vi.fn()} onRead={vi.fn()} />
+      </HostServicesContext.Provider>,
     )
     await openStep('Populate the queue of AI tasks')
-    // A link, so it opens in a new tab too; a plain click goes through the dashboard's own navigation.
-    const open = within(row('Populate the queue of AI tasks')).getByRole('link', { name: 'Open Queue' })
-    expect(open.getAttribute('href')).toBe('/shop/todo')
-    fireEvent.click(open)
-    expect(openPage).toHaveBeenCalledWith('todo')
+    fireEvent.click(within(row('Populate the queue of AI tasks')).getByRole('button', { name: 'Open the Queue' }))
+    expect(openPage).toHaveBeenCalledWith('queue')
   })
 
   test('the queue step is there only while some project has a queue at all, the tickets step only while some project provides tickets (#1774)', async () => {
@@ -195,14 +233,14 @@ describe('the first steps on the Overview', () => {
     steps({ projects: [SHOP] })
     await waitFor(() => expect(row('Turn on notifications')).toBeTruthy())
     expect(screen.queryByRole('listitem', { name: 'Populate the queue of AI tasks' })).toBeNull()
-    expect(screen.queryByRole('listitem', { name: 'Populate tickets/' })).toBeNull()
+    expect(screen.queryByRole('listitem', { name: 'Populate the tickets' })).toBeNull()
   })
 
   test('every step a session needs done: it says so, and its press starts the first session, the steps put away', async () => {
     onDashboard.mockResolvedValue({ ...WITH_PROJECT, projects: [{ projectId: 'p1', hasTickets: false, providesTickets: false }] } as DashboardData)
     const onSelectProject = vi.fn()
     steps({ projects: [SHOP], onSelectProject })
-    expect(await screen.findByRole('heading', { name: "You're all set, Ada" })).toBeTruthy()
+    expect(await screen.findByRole('region', { name: "You're all set, Ada" })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Start your first session' }))
     expect(onSelectProject).toHaveBeenCalledWith('p1')
     expect(updatePreferences).toHaveBeenCalledWith({ onboardingDismissed: true })
@@ -256,7 +294,7 @@ describe('the tickets import lands on the session it starts (#1169)', () => {
     onDashboard.mockResolvedValue(WITH_PROJECT)
     const onSelectProject = vi.fn()
     steps({ projects: [SHOP], onSelectProject })
-    await openStep('Populate tickets/')
+    await openStep('Populate the tickets')
     await configureFirst('Other ways to update the tickets')
     // The launcher, not an agent — the model and where it runs are nowhere on these steps.
     await waitFor(() => expect(onSelectProject).toHaveBeenCalledWith('p1'))

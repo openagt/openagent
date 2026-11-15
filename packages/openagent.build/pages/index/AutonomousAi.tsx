@@ -1,10 +1,12 @@
 import type { ReactNode } from 'react'
-import { cardStyle, CodeChip, Note, SectionHead, sectionStyle } from './ui'
+import { Construction } from 'lucide-react'
+import { CheckIcon } from './icons'
+import { CodeChip, columnsStyle, columnStyle, Note, Screenshot, SectionHead, sectionStyle, text, WipBadge } from './ui'
 
-function Item({ children }: { children: ReactNode }) {
+function Item({ children, marker }: { children: ReactNode; marker?: ReactNode }) {
   return (
-    <li style={{ display: 'flex', gap: 10 }}>
-      <span style={{ color: '#a7c080' }}>✓</span>
+    <li style={{ display: 'flex', gap: 8 }}>
+      <span style={{ color: 'var(--muted-foreground)' }}>{marker ?? <CheckIcon />}</span>
       {children}
     </li>
   )
@@ -12,17 +14,9 @@ function Item({ children }: { children: ReactNode }) {
 
 function Card({ title, lead, children }: { title: string; lead: string; children: ReactNode }) {
   return (
-    <div
-      style={{
-        ...cardStyle,
-        padding: 'clamp(18px, 4.5vw, 28px)',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 16,
-      }}
-    >
-      <h3 style={{ margin: 0, fontSize: 20, fontWeight: 600 }}>{title}</h3>
-      <p style={{ margin: 0, fontSize: 14, color: '#859289' }}>{lead}</p>
+    <div style={columnStyle}>
+      <h3 style={{ margin: 0, ...text('lg'), fontWeight: 600 }}>{title}</h3>
+      <p style={{ margin: 0, ...text('sm'), color: 'var(--muted-foreground)' }}>{lead}</p>
       <ul
         style={{
           margin: 0,
@@ -30,9 +24,9 @@ function Card({ title, lead, children }: { title: string; lead: string; children
           listStyle: 'none',
           display: 'flex',
           flexDirection: 'column',
-          gap: 11,
-          fontSize: 15,
-          lineHeight: 1.55,
+          gap: 8,
+          marginTop: 8,
+          ...text('base'),
         }}
       >
         {children}
@@ -41,26 +35,18 @@ function Card({ title, lead, children }: { title: string; lead: string; children
   )
 }
 
-const noteFlexStyle = { flex: 1, minWidth: 'min(280px, 100%)', boxSizing: 'border-box' } as const
-
 export function AutonomousAi() {
   return (
     <section id="autonomous-ai" style={sectionStyle}>
       <SectionHead title="Autonomous AI" sub="Focus on what matters, let AI do the rest." />
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(min(300px, 100%), 1fr))',
-          gap: 18,
-        }}
-      >
+      <div style={columnsStyle(400)}>
         <Card title="Autonomous Product Management" lead="Let AI autonomously:">
           <Item>Test &amp; review</Item>
           <Item>Research, plan, and prioritize your tickets</Item>
           <Item>Turn your team conversations into tickets</Item>
-          <Item>
+          <Item marker={<Construction size={16} aria-hidden style={{ verticalAlign: '-0.125em' }} />}>
             <span>
-              Save your team conversations to <CodeChip fontSize={13}>{'conversations/<DATE>_<TOPICS_SLUG>.md'}</CodeChip>
+              <WipBadge /> Save your team conversations to <CodeChip>{'conversations/<DATE>_<TOPICS_SLUG>.md'}</CodeChip>
             </span>
           </Item>
           <Item>Market research</Item>
@@ -71,11 +57,15 @@ export function AutonomousAi() {
           <Item>UX improvements</Item>
           <Item>Consensual work</Item>
         </Card>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <Note>Agents still ask for your confirmation for non-obvious decisions.</Note>
+          <Note>You're still in control — only pick the autonomicity that works for you.</Note>
+        </div>
       </div>
-      <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap' }}>
-        <Note style={noteFlexStyle}>Agents still ask for your confirmation for non-obvious decisions.</Note>
-        <Note style={noteFlexStyle}>You're still in control — only pick the autonomicity that works for you.</Note>
-      </div>
+      <Screenshot
+        name="tickets"
+        alt="The dashboard's Tickets page: the project's two tickets, Dark mode and Login page, and its presses to add them to the queue."
+      />
     </section>
   )
 }

@@ -10,7 +10,10 @@ const sendProjectDataAs = vi.fn(async (_projectId: string, _login: string) => ({
 const openSettings = vi.hoisted(() => vi.fn())
 vi.mock('../rpc/project-agent-data.js', () => ({ onProjectAgentData, sendProjectDataAs }))
 vi.mock('../rpc/projects.js', () => ({ sendShareRecords }))
-vi.mock('../lib/use-route.js', async importOriginal => ({ ...(await importOriginal<object>()), openSettings }))
+vi.mock('../lib/host-services.js', async importOriginal => {
+  const actual = await importOriginal<typeof import('../lib/host-services.js')>()
+  return { ...actual, INERT_HOST_SERVICES: { ...actual.INERT_HOST_SERVICES, openSettings } }
+})
 
 const { ProjectAgentDataSettings } = await import('./ProjectAgentDataSettings.js')
 
@@ -36,16 +39,13 @@ beforeEach(() => {
 })
 afterEach(cleanup)
 
-describe('Settings › Project › Agent data', () => {
+describe('Settings › Project › Project agent data', () => {
   test('says where the project’s data is, links the folder and its repository, and what each skill keeps there', async () => {
     render(<ProjectAgentDataSettings projectId="p1" />)
     await waitFor(() => expect(showing(keptIn())).toBe('Your folder'))
     expect(screen.getByText(line('In your folder ~/.openagent, synced with github.com/me/agent.'))).toBeTruthy()
     expect(screen.getByRole('link', { name: 'github.com/me/agent' }).getAttribute('href')).toBe('https://github.com/me/agent')
-    // The folder opens its own Settings page: a link in the sentence, so it also opens in a new tab.
-    const folder = screen.getByRole('link', { name: '~/.openagent' })
-    expect(folder.getAttribute('href')).toBe('/?settings=agent-data')
-    fireEvent.click(folder)
+    fireEvent.click(screen.getByRole('button', { name: '~/.openagent' }))
     expect(openSettings).toHaveBeenCalledWith('agent-data')
     // A kind with nothing kept is left out.
     expect(screen.getByText('86 runs (logs) · 12 tickets (tickets)')).toBeTruthy()
@@ -59,7 +59,7 @@ describe('Settings › Project › Agent data', () => {
     expect(screen.getByText(/Everyone who can read the repository can read it/)).toBeTruthy()
     expect(sendShareRecords).not.toHaveBeenCalled()
     // Pushed as one of OpenAgent's accounts, never the person's own login: the one runs use, or another picked.
-    await pick(screen.getByRole('combobox', { name: 'Push as' }), '@reviewer-agent')
+    await pick(screen.getByRole('combobox', { name: 'Send as' }), '@reviewer-agent')
     data = { ...data!, place: 'repository', account: 'reviewer-agent' }
     fireEvent.click(screen.getByRole('button', { name: 'Move and push' }))
     await waitFor(() => expect(sendShareRecords).toHaveBeenCalledWith('p1', true, 'reviewer-agent'))

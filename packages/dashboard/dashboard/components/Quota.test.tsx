@@ -28,6 +28,9 @@ vi.mock('../lib/quota.js', () => ({ useQuota: () => view }))
 // The added accounts' rows have their own suite; here only whether there are some.
 let added: { id: string; name: string; own: boolean }[] = []
 vi.mock('./AgentAccounts.js', () => ({ AddedAccountsUsage: () => null, useAgentAccounts: () => ({ view: { accounts: added } }) }))
+// Claude Code's own login, as this computer has it.
+let agentState: unknown = { driver: 'claude-code', ready: true }
+vi.mock('../rpc/logins.js', () => ({ onAgentState: async () => agentState, onGitHosts: async () => ({ hosts: [] }) }))
 
 const { Quota } = await import('./Quota.js')
 
@@ -114,8 +117,15 @@ describe('Quota (#960)', () => {
   test('says it is reading rather than drawing an empty week', async () => {
     await show()
     // An empty track would read as "nothing used", which is the opposite of "we do not know yet".
-    expect(screen.getByText(/Reading your usage/)).toBeTruthy()
+    expect(screen.getByText('Loading…')).toBeTruthy()
     expect(screen.queryByRole('img')).toBeNull()
+  })
+
+  test('a read that failed with no reading before it says so, not that it is reading', async () => {
+    view = { windows: [], unavailable: 'fetch-failed' }
+    await show()
+    expect(screen.queryByText('Loading…')).toBeNull()
+    expect(screen.getByText(/could not read your usage/)).toBeTruthy()
   })
 
   test('draws the week as one track, labelled with where consumption stands', async () => {
@@ -166,6 +176,18 @@ describe('Quota (#960)', () => {
     expect(screen.queryByRole('img')).toBeNull()
     // And no slider: there is no line to move.
     expect(screen.queryByLabelText('Unattended work stops at')).toBeNull()
+  })
+
+  test('Claude Code logged out says so, not that its account has no subscription', async () => {
+    view = { windows: [], unavailable: 'no-subscription' }
+    agentState = { driver: 'claude-code', ready: false, problem: '`claude` is not logged in. Run `claude auth login`, then start again.' }
+    try {
+      await show()
+      expect(await screen.findByText('Claude Code is not logged in, so there is no usage to show.')).toBeTruthy()
+      expect(screen.queryByText(/no subscription usage to report/)).toBeNull()
+    } finally {
+      agentState = { driver: 'claude-code', ready: true }
+    }
   })
 
   test('why the own login has no reading is not said while runs use other accounts, as a server\'s use the person\'s own computer\'s', async () => {

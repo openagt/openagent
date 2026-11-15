@@ -1,5 +1,5 @@
 import { strict as assert } from 'node:assert'
-import { lstat, mkdir, mkdtemp, readFile, readdir, readlink, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readlink, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createInterface } from 'node:readline'
@@ -7,7 +7,8 @@ import { test } from 'node:test'
 import { PassThrough, Readable } from 'node:stream'
 import type { DriverEvent, SpawnLike, SpawnedProcess } from '@openagt/agent-driver'
 import { codexAccountsDir, CodexDriver } from '@openagt/agent-driver-codex'
-import { accountRotation, accountsPath, addAccount, goOn, nameOwnAccount, OWN_NAME, readAccounts, UsageLimitError, useFirst } from './accounts.js'
+import { accountsPath, addAccount, nameOwnAccount, OWN_NAME, readAccounts, useFirst } from './accounts.js'
+import { accountRotation, goOn, UsageLimitError } from './rotation.js'
 
 const HOUR = 60 * 60_000
 const NOW = Date.parse('2026-10-22T12:00:00Z')

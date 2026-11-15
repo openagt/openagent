@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { weekDays, quotaTone, limitPercent, projectedRange, paceDeviationMs, consumedQuotaMs, paceSharePercent } from './quota-bar.js'
+import { weekDays, quotaTone, projectedRange, paceDeviationMs, consumedQuotaMs, paceSharePercent } from './quota-bar.js'
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000
 

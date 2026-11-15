@@ -10,7 +10,7 @@ import type { AddressDeps } from './address.js'
 import { doorFingerprint } from './certificate.js'
 import { USAGE, runCli, type CliIO } from './cli.js'
 import { keyFingerprint } from './der.js'
-import { ENTER_PATH } from './door.js'
+import { ENTER_PATH } from './paths.js'
 import { readFile, writeFile } from 'node:fs/promises'
 import { readStore, storePath, update } from './store.js'
 import { fakeTailscale, quietAnnounce, testHome } from './test-home.js'
@@ -42,7 +42,7 @@ test('off until switched on; on without OpenAgent running says what is missing; 
     assert.deepEqual((await run(home.env, ['status'])).out, { on: false, listening: false, devices: [], lines: [], persons: [] })
     const refused = await run(home.env, ['add'])
     assert.equal(refused.code, 1)
-    assert.deepEqual(refused.err, ['On this Wi-Fi is off: turn it on first'])
+    assert.deepEqual(refused.err, ['On this Wi-Fi is off: turn it on first, with devices on'])
 
     assert.deepEqual((await run(home.env, ['on'])).out, { on: true, listening: false, problem: 'The door opens once OpenAgent runs on this computer.', devices: [], lines: [], persons: [] })
     const notOpen = await run(home.env, ['add'])
@@ -124,7 +124,7 @@ test('a file that cannot be read is said in one line, by every command that woul
   }
 })
 
-test('serve is refused without OpenAgent\'s address or with a port that is none, and ends; a command line that cannot be read prints the usage', async () => {
+test('serve is refused without OpenAgent\'s address or with a port that is none, and ends; a command line that cannot be read says what was wrong', async () => {
   const home = await testHome()
   try {
     // Run as OpenAgent runs it, with no signal of the test's: a refusal must leave nothing that keeps the process alive.
@@ -135,10 +135,23 @@ test('serve is refused without OpenAgent\'s address or with a port that is none,
     const badPort = await run({ ...home.env, OPENAGENT_URL: 'http://127.0.0.1:1', OPENAGENT_REMOTE_ACCESS_PORT: 'abc' }, ['serve'], asOpenAgentRunsIt)
     assert.equal(badPort.code, 1)
     assert.deepEqual(badPort.err, ['OPENAGENT_REMOTE_ACCESS_PORT is not a port'])
-    for (const args of [[], ['nope'], ['remove'], ['status', 'extra']]) {
-      const unread = await run(home.env, args)
-      assert.equal(unread.code, 2)
-      assert.deepEqual(unread.err, [USAGE])
+    assert.deepEqual(await run(home.env, []), { code: 2, out: undefined, err: [USAGE] })
+    assert.deepEqual(await run(home.env, ['nope']), { code: 2, out: undefined, err: ['unknown command: nope\nRun `devices --help` for usage.'] })
+    assert.deepEqual(await run(home.env, ['remove']), { code: 2, out: undefined, err: ['wrong arguments for remove: none\nRun `devices --help` for usage.'] })
+    assert.deepEqual(await run(home.env, ['status', 'extra']), { code: 2, out: undefined, err: ['wrong arguments for status: extra\nRun `devices --help` for usage.'] })
+  } finally {
+    await home.remove()
+  }
+})
+
+test('--help is the usage on stdout, exit 0', async () => {
+  const home = await testHome()
+  try {
+    for (const help of ['--help', '-h']) {
+      const out: string[] = []
+      const err: string[] = []
+      assert.equal(await runCli([help], { env: home.env, stdout: line => out.push(line), stderr: line => err.push(line) }), 0)
+      assert.deepEqual([out, err], [[USAGE], []])
     }
   } finally {
     await home.remove()
@@ -592,7 +605,7 @@ test('tailscale on is refused on a server, and where Tailscale is not signed in,
   try {
     const signedOut = await run(home.env, ['tailscale', 'on'], { tailscale: fakeTailscale('laptop.tail1234.ts.net', { state: 'NeedsLogin' }).run })
     assert.equal(signedOut.code, 1)
-    assert.deepEqual(signedOut.err, ['Tailscale is not signed in on this computer. Sign in to Tailscale, then turn this on again.'])
+    assert.deepEqual(signedOut.err, ['Tailscale is not signed in on this computer. Sign in to Tailscale, then try again.'])
     assert.equal((await readStore(home.env)).tailscale, undefined)
 
     await update(home.env, store => {

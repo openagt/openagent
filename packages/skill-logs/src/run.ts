@@ -108,6 +108,11 @@ export function runIdOfFile(name: string): string | undefined {
   return id !== undefined && isRunId(id) ? id : undefined
 }
 
+/** When a run started, from its id alone: `2026-10-25T00-36-42-115Z` is that time in UTC. */
+export function startOfId(id: string): number {
+  return Date.parse(id.replace(/T(\d\d)-(\d\d)-(\d\d)-(\d{3})Z$/, 'T$1:$2:$3.$4Z'))
+}
+
 /**
  * Longest directory name made from an email. Well past any real address, and short enough that
  * the paths under it stay inside the limits of every platform.

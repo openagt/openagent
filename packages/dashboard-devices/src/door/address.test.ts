@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import type { NetworkInterfaceInfo } from 'node:os'
-import { nameAddress, numberAddress, onOwnNetwork, plainAddress, urlHost, type AddressDeps } from './address.js'
+import { addressOf, nameAddress, numberAddress, onOwnNetwork, plainAddress, urlHost, type AddressDeps } from './address.js'
 
 const v4 = (address: string, cidr: string, internal = false): NetworkInterfaceInfo => ({ address, netmask: '', family: 'IPv4', mac: '', internal, cidr })
 const v6 = (address: string, cidr: string, internal = false): NetworkInterfaceInfo => ({ address, netmask: '', family: 'IPv6', mac: '', internal, cidr, scopeid: 0 })
@@ -56,4 +56,11 @@ test('addresses are read without their zone and unmapped, and written into a URL
   assert.equal(urlHost('fe80::1'), '[fe80::1]')
   assert.equal(urlHost('192.168.1.23'), '192.168.1.23')
   assert.equal(urlHost('adas-macbook.local'), 'adas-macbook.local')
+})
+
+test('an address is a number or a name, in one form, and never something a command reads as an option', () => {
+  assert.equal(addressOf('203.0.113.5'), '203.0.113.5')
+  assert.equal(addressOf('2001:DB8:0:0:0:0:0:1'), '2001:db8::1')
+  assert.equal(addressOf('Box.Example.com'), 'box.example.com')
+  for (const no of ['', '-oProxyCommand=sh', 'root@203.0.113.5', '203.0.113.5 -v', 'box', 'box.example.com;id', 'fe80::1%en0', '$(id).example.com', 'a'.repeat(254)]) assert.equal(addressOf(no), undefined, no)
 })

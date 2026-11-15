@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import type { KeyboardEvent } from 'react'
 
 const sendChoice = vi.hoisted(() => vi.fn())
 const sendMessage = vi.hoisted(() => vi.fn())
@@ -35,9 +36,17 @@ describe('QuestionPanel', () => {
     expect(option(/SQLite/).textContent).toBe('SQLite')
     expect(option(/Other/).textContent).toBe('Other')
     // Its field opens only once "Other" is picked.
-    expect(screen.queryByLabelText('Other')).toBeNull()
+    expect(screen.queryByLabelText('Your own answer')).toBeNull()
     expect(screen.getByRole('button', { name: 'Skip' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Submit' })).toBeTruthy()
+  })
+
+  test('Submit names its keys where there is a keyboard, never on a touch screen or at a phone\'s width, as the message box does', () => {
+    render(panel({ active: true }))
+    const keys = screen.getByRole('button', { name: 'Submit' }).querySelector('kbd')!.parentElement!
+    // Each pointer's display by name: a plain `flex` would be put back by a module's own `.flex`, loaded after it.
+    expect(keys.className.split(' ')).toEqual(expect.arrayContaining(['md:not-pointer-coarse:flex', 'pointer-coarse:hidden', 'max-md:hidden']))
+    expect(keys.className.split(' ')).not.toContain('flex')
   })
 
   test('the recommended option starts picked; picking a row sends nothing until Submit', async () => {
@@ -50,6 +59,14 @@ describe('QuestionPanel', () => {
     expect(sendChoice).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
     await waitFor(() => expect(sendChoice).toHaveBeenCalledWith('p1', 'await-choices', 'lite', 'r1'))
+  })
+
+  test('the question a session opens on has the focus on its picked option; one asked later leaves the focus where it is', () => {
+    render(panel({ choice: { ...choice, recommended: 'lite' }, focused: true }))
+    expect(document.activeElement).toBe(option(/SQLite/))
+    cleanup()
+    render(panel())
+    expect(document.activeElement).toBe(document.body)
   })
 
   test('the recommended option starts picked wherever it stands in the list', () => {
@@ -81,6 +98,37 @@ describe('QuestionPanel', () => {
     expect(sendChoice).toHaveBeenCalledTimes(1)
   })
 
+  test('answered from the card by the keyboard, the message box has the focus once the answer is taken', async () => {
+    sendChoice.mockResolvedValue({ ok: true })
+    const Box = () => <textarea aria-label="Message the agent" />
+    render(
+      <>
+        {panel({ active: true, focusNext: () => screen.getByLabelText('Message the agent').focus() })}
+        <Box />
+      </>,
+    )
+    option(/SQLite/).focus()
+    fireEvent.keyDown(option(/SQLite/), { key: 'Enter', ctrlKey: true })
+    await waitFor(() => expect(screen.queryByRole('region', { name: 'Which database?' })).toBeNull())
+    expect(document.activeElement).toBe(screen.getByLabelText('Message the agent'))
+  })
+
+  test('answered while the focus is elsewhere, the focus stays where it is', async () => {
+    sendChoice.mockResolvedValue({ ok: true })
+    const focusNext = vi.fn()
+    render(
+      <>
+        {panel({ active: true, focusNext })}
+        <button type="button">Elsewhere</button>
+      </>,
+    )
+    screen.getByRole('button', { name: 'Elsewhere' }).focus()
+    fireEvent.keyDown(window, { key: 'Enter', ctrlKey: true })
+    await waitFor(() => expect(screen.queryByRole('region', { name: 'Which database?' })).toBeNull())
+    expect(focusNext).not.toHaveBeenCalled()
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Elsewhere' }))
+  })
+
   test("a refused answer says why in the daemon's words, and the question stays answerable", async () => {
     sendChoice.mockResolvedValue({ ok: false, error: 'this project has no resume hook' })
     render(panel())
@@ -88,6 +136,22 @@ describe('QuestionPanel', () => {
     await waitFor(() => expect(screen.getByRole('alert').textContent).toBe('this project has no resume hook'))
     expect(screen.queryByRole('status')).toBeNull()
     expect((screen.getByRole('button', { name: 'Submit' }) as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  test('while OpenAgent is not answering, no answer is sent, by Submit, Skip or the keys, and the pick stays', async () => {
+    const { DaemonDown } = await import('../lib/use-daemon-health.js')
+    render(
+      <DaemonDown.Provider value>
+        {panel({ active: true })}
+      </DaemonDown.Provider>,
+    )
+    fireEvent.click(option(/SQLite/))
+    expect((screen.getByRole('button', { name: 'Submit' }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('button', { name: 'Skip' }) as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.keyDown(window, { key: 'Enter', ctrlKey: true })
+    expect(sendChoice).not.toHaveBeenCalled()
+    expect(sendMessage).not.toHaveBeenCalled()
+    expect(option(/SQLite/).getAttribute('aria-checked')).toBe('true')
   })
 
   test('the number keys pick, and Ctrl+Enter submits, on the active question only', async () => {
@@ -99,7 +163,7 @@ describe('QuestionPanel', () => {
     fireEvent.keyDown(window, { key: '2' })
     expect(option(/SQLite/).getAttribute('aria-checked')).toBe('true')
     fireEvent.keyDown(window, { key: '3' })
-    expect(document.activeElement).toBe(screen.getByLabelText('Other'))
+    expect(document.activeElement).toBe(screen.getByLabelText('Your own answer'))
     ;(document.activeElement as HTMLElement).blur()
     fireEvent.click(option(/SQLite/))
     fireEvent.keyDown(window, { key: 'Enter', ctrlKey: true })
@@ -120,12 +184,78 @@ describe('QuestionPanel', () => {
     expect(sendChoice).not.toHaveBeenCalled()
   })
 
+  test('a key the message box took is not the question\'s, though the box stops taking keys as it sends', () => {
+    // As the message box does: Ctrl+Enter sends, and the box is off while the message goes.
+    const sendFromBox = (e: KeyboardEvent<HTMLDivElement>) => {
+      if (!(e.ctrlKey && e.key === 'Enter')) return
+      e.preventDefault()
+      e.currentTarget.contentEditable = 'false'
+    }
+    render(
+      <>
+        <div role="textbox" aria-label="message box" contentEditable onKeyDown={sendFromBox} />
+        {panel({ active: true })}
+      </>,
+    )
+    fireEvent.keyDown(screen.getByLabelText('message box'), { key: 'Enter', ctrlKey: true })
+    expect(sendChoice).not.toHaveBeenCalled()
+  })
+
+  test('Submit draws its Ctrl+Enter only while that key is the card\'s, not while the message box has the focus', () => {
+    render(
+      <>
+        <textarea aria-label="message box" />
+        {panel({ active: true })}
+      </>,
+    )
+    const submit = screen.getByRole('button', { name: 'Submit' })
+    expect(submit.textContent).toContain('Enter')
+    act(() => screen.getByLabelText('message box').focus())
+    expect(submit.textContent).toBe('Submit')
+    act(() => screen.getByLabelText('message box').blur())
+    expect(submit.textContent).toContain('Enter')
+  })
+
+  test('one pick is a radio group: ArrowDown picks the next choice and takes the focus there, "Other" included', async () => {
+    render(panel())
+    expect(screen.getByRole('radiogroup', { name: 'Which database?' })).toBeTruthy()
+    option(/Postgres/).focus()
+    fireEvent.keyDown(option(/Postgres/), { key: 'ArrowDown' })
+    await waitFor(() => expect(document.activeElement).toBe(option(/SQLite/)))
+    expect(option(/SQLite/).getAttribute('aria-checked')).toBe('true')
+    expect(option(/Postgres/).getAttribute('aria-checked')).toBe('false')
+    fireEvent.keyDown(option(/SQLite/), { key: 'ArrowDown' })
+    await waitFor(() => expect(option(/Other/).getAttribute('aria-checked')).toBe('true'))
+  })
+
+  test('ArrowUp picks the previous choice and takes the focus there', async () => {
+    render(panel({ choice: { ...choice, recommended: 'lite' } }))
+    option(/SQLite/).focus()
+    fireEvent.keyDown(option(/SQLite/), { key: 'ArrowUp' })
+    await waitFor(() => expect(document.activeElement).toBe(option(/Postgres/)))
+    expect(option(/Postgres/).getAttribute('aria-checked')).toBe('true')
+    expect(option(/SQLite/).getAttribute('aria-checked')).toBe('false')
+  })
+
+  test('the choices are one Tab stop, the picked one: Tab leaves the group; several picks are a stop each', () => {
+    // Where Tab goes from an element: the next one the keyboard can reach, in the page's order.
+    const afterTab = (from: Element) => {
+      const stops = [...document.querySelectorAll<HTMLElement>('button, input, [tabindex]')].filter(e => e.tabIndex >= 0 && !(e as HTMLButtonElement).disabled && e.getAttribute('aria-hidden') !== 'true')
+      return stops[stops.indexOf(from as HTMLElement) + 1]
+    }
+    const { unmount } = render(panel())
+    expect(afterTab(option(/Postgres/))).toBe(screen.getByRole('button', { name: 'Skip' }))
+    unmount()
+    render(panel({ choice: several }))
+    expect(afterTab(screen.getByRole('checkbox', { name: 'Lint' }))).toBe(screen.getByRole('checkbox', { name: 'Tests' }))
+  })
+
   test('"Other" picked opens its field with the keys in it, cannot be sent empty, and goes as the person\'s own message', async () => {
     sendMessage.mockResolvedValue({ ok: true })
     const onSaid = vi.fn()
     render(panel({ onSaid }))
     fireEvent.click(option(/Other/))
-    const other = screen.getByLabelText('Other')
+    const other = screen.getByLabelText('Your own answer')
     expect(document.activeElement).toBe(other)
     expect(option(/Postgres/).getAttribute('aria-checked')).toBe('false')
     expect((screen.getByRole('button', { name: 'Submit' }) as HTMLButtonElement).disabled).toBe(true)
@@ -141,7 +271,7 @@ describe('QuestionPanel', () => {
     sendMessage.mockResolvedValue({ ok: true })
     render(panel())
     fireEvent.click(option(/Other/))
-    const other = screen.getByLabelText('Other')
+    const other = screen.getByLabelText('Your own answer')
     fireEvent.change(other, { target: { value: 'MySQL' } })
     fireEvent.keyDown(other, { key: 'Enter' })
     await waitFor(() => expect(sendMessage).toHaveBeenCalledWith('p1', answerPrompt('Which database?', 'MySQL'), 'r1'))
@@ -177,7 +307,7 @@ describe('QuestionPanel', () => {
     render(panel({ choice: several }))
     fireEvent.click(screen.getByRole('checkbox', { name: /Other/ }))
     expect((screen.getByRole('button', { name: 'Submit' }) as HTMLButtonElement).disabled).toBe(true)
-    fireEvent.change(screen.getByLabelText('Other'), { target: { value: 'and the type check' } })
+    fireEvent.change(screen.getByLabelText('Your own answer'), { target: { value: 'and the type check' } })
     fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
     await waitFor(() => expect(sendMessage).toHaveBeenCalledWith('p1', answerPrompt('Which checks?', 'Lint, and the type check'), 'r1'))
     expect(sendChoice).not.toHaveBeenCalled()
@@ -228,7 +358,7 @@ describe('QuestionPanel', () => {
     test('the key that submits is on the button, not written out under the options', () => {
       const { unmount } = render(panel({ active: true }))
       expect(screen.queryByText(/Number keys pick/)).toBeNull()
-      expect(screen.getByRole('button', { name: /Submit/ }).textContent).toMatch(/^Submit(⌘|Ctrl)↵$/)
+      expect(screen.getByRole('button', { name: /Submit/ }).textContent).toMatch(/^Submit(⌘|Ctrl)Enter$/)
       unmount()
       // Not the question the keys answer: no key is promised on it.
       render(panel())

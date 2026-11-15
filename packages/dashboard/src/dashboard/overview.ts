@@ -24,6 +24,12 @@ export interface ActiveAgent {
   status: AgentStatus
   /** What the user asked to build (the agent's `scope` event). */
   intent?: string
+  /** The run's short name, the branch it works on and when it started: what every list names a run by (`runName`). */
+  title?: string
+  /** Whether that name is being asked for ({@link AgentMeta.naming}). */
+  naming?: true
+  branch?: string
+  startedAt: string
   scope?: string
   /** ISO timestamp of the agent's last event. */
   updatedAt?: string
@@ -70,6 +76,13 @@ const RECENT_LIMIT = 5
 /** How many recent sessions the home rail pools across every project. */
 const RECENT_RUNS_LIMIT = 30
 
+/** A run as the jump finds it (`onAllAgents`): what it is named and found by, and where it is. */
+export interface FoundAgent {
+  projectId: string
+  projectName: string
+  agent: Pick<AgentMeta, 'id' | 'title' | 'intent' | 'branch' | 'pr' | 'prTitle' | 'startedAt'>
+}
+
 /** Injectable reader so {@link buildRecentAgents} is unit-testable off disk. */
 export interface RecentAgentsDeps {
   /** A project's runs: off its folder for one of this computer's, as its computer says them for another's. */
@@ -79,12 +92,12 @@ export interface RecentAgentsDeps {
 }
 
 /**
- * Every project's sessions, and the sessions with no project, pooled and sorted newest-first (capped), so the shared sidebar (#shared-
+ * Every project's sessions, and the sessions with no project, pooled and sorted newest-first (the first `limit`), so the shared sidebar (#shared-
  * shell) can show recents on the home/Overview where no single project is selected. Each row carries
  * the project it belongs to, so selecting it jumps into that project's session. Forgiving — a project
  * whose agents cannot be read simply contributes nothing.
  */
-export async function buildRecentAgents(projects: ProjectSummary[], deps: RecentAgentsDeps = {}): Promise<RecentAgent[]> {
+export async function buildRecentAgents(projects: ProjectSummary[], deps: RecentAgentsDeps = {}, limit = RECENT_RUNS_LIMIT): Promise<RecentAgent[]> {
   const readAgents = deps.agents ?? (project => readAllAgents(project.path))
   // Every project at once: each one's read is a git read of its branches too (the rows' marks), and
   // one after the other the list waited for all of them in turn. Kept in the projects' order, so
@@ -98,7 +111,7 @@ export async function buildRecentAgents(projects: ProjectSummary[], deps: Recent
   // One row per run (#1648): two checkouts of one repository share their archive, so every run
   // was listed once per checkout; the first project to list it keeps it.
   const seen = new Set<string>()
-  return all.filter(row => !seen.has(row.agent.id) && seen.add(row.agent.id)).slice(0, RECENT_RUNS_LIMIT)
+  return all.filter(row => !seen.has(row.agent.id) && seen.add(row.agent.id)).slice(0, limit)
 }
 
 /** Injectable readers so {@link buildOverview} is unit-testable off disk. */
@@ -147,6 +160,10 @@ export async function buildOverview(projects: ProjectSummary[], deps: OverviewDe
     cwd,
     status: meta.status,
     ...(meta.intent ? { intent: meta.intent } : {}),
+    ...(meta.title ? { title: meta.title } : {}),
+    ...(meta.naming ? { naming: meta.naming } : {}),
+    ...(meta.branch ? { branch: meta.branch } : {}),
+    startedAt: meta.startedAt,
     ...(meta.updatedAt ? { updatedAt: meta.updatedAt } : {}),
     // A saved machine's run by the machine's name; another computer's daemon started it otherwise
     // (#1648): the shared data branch shows its runs here too.

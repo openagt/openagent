@@ -1,8 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { OpenAgentEvent } from '../../src/index.js'
-import type { LiveFeedEvent } from '../../src/dashboard-rpc/index.js'
 import { onEvents, type EventChannel } from '../rpc/events.js'
-import { currentAgentEvents } from './live-state.js'
 
 // The live agent feed (#405), shared. The dashboard is a projection of the selected run's diary,
 // the file the run's own tool writes as the agent works, streamed over Server-Sent Events that
@@ -12,18 +10,18 @@ import { currentAgentEvents } from './live-state.js'
 //
 // The feed is per RUN, not per project (#749): each run has a diary of its own, so the selected
 // run's id picks the file to follow. Changing it resubscribes, which is what makes selecting run A
-// vs run B show different output. Without an id there is nothing to follow and the server closes
-// the channel at once.
+// vs run B show different output. Without an id there is nothing to follow (the daemon streams no
+// run for none), so nothing is subscribed.
 
 /** The live feed plus whether its channel is currently down (#948). */
 export interface LiveEvents {
   events: OpenAgentEvent[]
   /** True while the stream is lost and being retried — the feed may be behind reality. */
   lost: boolean
-  /** The server closed the channel on purpose (relay stream ended, unknown run) — final. */
-  done: boolean
   /** The message the agent is writing, as far as it has got; empty when it is writing none. Never in `events`. */
   writing: string
+  /** What the daemon held of the run when the feed was opened has all come: what comes after is new. */
+  replayed: boolean
 }
 
 /** Retry delays for a lost stream: quick first, then settle at a slow poll. */
@@ -35,34 +33,25 @@ function retryDelay(attempt: number): number {
 
 /**
  * How long a reconnect waits for the server's end-of-replay marker before swapping anyway
- * (#1383). The on-disk tail sends `stream-sync` the moment its replay is delivered, so this
- * deadline only fires for the in-memory sources (relay #426, relayed machine runs #1067),
- * which have no replay boundary to report — their buffered history streams in well under it.
+ * (#1383). Every source sends `stream-sync` the moment its replay is delivered, so this
+ * deadline fires only for a replay slower than it.
  */
 const SYNC_GRACE_MS = 1500
 
-export function useLiveEvents(projectId: string | null, agentId?: string | null, resetKey?: unknown): LiveEvents {
+export function useLiveEvents(projectId: string | null, agentId?: string | null): LiveEvents {
   const [events, setEvents] = useState<OpenAgentEvent[]>([])
   const [lost, setLost] = useState(false)
-  const [done, setDone] = useState(false)
   const [writing, setWriting] = useState('')
+  const [replayedFor, setReplayedFor] = useState<string | null>(null)
 
-  // Drop the accumulated feed at a run boundary the caller knows about (a fresh Start bumps
-  // `resetKey`), WITHOUT tearing down the subscription. The new run's diary appears a beat later,
-  // so until its first line streams the buffer would otherwise still hold the finished run —
-  // which the jump-to-live view (#705) would show. Clearing here means the pane waits empty for
-  // the new run instead, and the live tail streams it in as soon as its diary exists.
-  useEffect(() => {
-    setEvents([])
-    setWriting('')
-  }, [resetKey])
-
+  // Another run, or one just started, is a feed of its own: it starts empty, and the live tail
+  // streams the run in as soon as its diary exists.
   useEffect(() => {
     setEvents([])
     setLost(false)
-    setDone(false)
     setWriting('')
-    if (!projectId) return
+    setReplayedFor(null)
+    if (!projectId || !agentId) return
     let channel: EventChannel | undefined
     let cancelled = false
     let attempt = 0
@@ -87,11 +76,11 @@ export function useLiveEvents(projectId: string | null, agentId?: string | null,
       // feed on screen, and blanking it while history re-streamed was #1383's mid-run flicker:
       // the lost banner cleared on resubscribe, then the feed sat empty until the replay caught
       // up. So a reconnect buffers the replay and swaps atomically — on the server's stream-sync
-      // marker, or at a grace deadline for the in-memory sources that send none. The feed never
+      // marker, or at a grace deadline when the marker is slow. The feed never
       // shows less than it already showed (#1402's rule, applied to the live channel).
       const reconnect = !first
       first = false
-      void onEvents(projectId, agentId ?? undefined).then(ch => {
+      void onEvents(projectId, agentId).then(ch => {
         if (cancelled) {
           void ch.close()
           return
@@ -121,11 +110,11 @@ export function useLiveEvents(projectId: string | null, agentId?: string | null,
           else swap()
         }
         if (reconnect) graceTimer = setTimeout(atGrace, SYNC_GRACE_MS)
-        else setEvents([]) // fresh subscribe: start clean so the replay is not appended twice
         ch.listen(event => {
           if (event.kind === 'stream-sync') {
             if (graceTimer) clearTimeout(graceTimer)
             swap()
+            setReplayedFor(agentId)
             return
           }
           if (event.kind === 'partial') {
@@ -162,7 +151,6 @@ export function useLiveEvents(projectId: string | null, agentId?: string | null,
           buffer = undefined
           if (graceTimer) clearTimeout(graceTimer)
           if (err) retry()
-          else if (!cancelled) setDone(true)
         })
       }, retry)
     }
@@ -177,12 +165,8 @@ export function useLiveEvents(projectId: string | null, agentId?: string | null,
     // agentId is a dependency: selecting another agent must resubscribe to that agent's log (#749).
   }, [projectId, agentId])
 
-  // Scope the accumulated feed to the agent in progress — but only for the project-root fallback:
-  // that subscription lives across run boundaries (it only resets on a project switch), so
-  // without the slice a second agent would show the previous agent's log until it finished. An agent's
-  // own tail (#749) holds nothing but that agent — including the second `session` boundary a
-  // resumed session (#762) appends to the SAME journal, where slicing is exactly wrong: it hid
-  // everything before the resume for as long as the agent was live. See {@link currentAgentEvents}.
-  const scoped = useMemo(() => (agentId ? events : currentAgentEvents(events)), [events, agentId])
-  return { events: scoped, lost, done, writing }
+  // An agent's own tail (#749) holds nothing but that agent, so the feed is its whole log: also the
+  // second `session` boundary a resumed session (#762) appends to the SAME journal, where slicing
+  // at the last one hid everything before the resume for as long as the agent was live.
+  return { events, lost, writing, replayed: replayedFor === agentId }
 }

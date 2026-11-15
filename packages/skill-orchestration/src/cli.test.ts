@@ -13,7 +13,8 @@ import { findRun, formatRunCard, type AnyDiaryLine, type RunCard, type RunStatus
 import { liveDir, markerCard, recordRun, type RunnerMark } from '@openagt/agent-runner'
 import { runCli } from './cli.js'
 import { CHECK_MAX_OUTPUT } from './check.js'
-import { landedRef, retryText, SUBAGENT_LINES, type SubagentDeps } from './subagents.js'
+import { retryText, SUBAGENT_LINES, type SubagentDeps } from './subagents.js'
+import { landedRef } from './land.js'
 import { git, removeRepo, testRepo } from './test-repo.js'
 
 const HOST = 'this-machine'
@@ -636,7 +637,7 @@ test('plan: saved beside the run\'s record, read back, and no subagent starts un
     assert.deepEqual((await run(checkout, MAIN, ['plan'])).out, { ok: false, reason: 'no-plan' })
 
     const question = await savePlan(repo, checkout, MAIN, PLAN)
-    assert.match(question, /^Start the subagents on plan [0-9a-f]{8}\?$/)
+    assert.match(question, /^Start the subagents on the plan above, 3 tasks \(plan [0-9a-f]{8}\)\?$/)
     assert.equal(await git(['show', `${DATA_BRANCH}:agents/tester@example.com/${MAIN}.plan.md`], join(dirname(repo), 'origin.git')), PLAN, 'on origin, beside the run\'s card')
     // What the command read the plan as, beside the plan itself: the shared context once, and one
     // row per task with everything but the words the agent wrote.
@@ -664,7 +665,7 @@ test('plan: saved beside the run\'s record, read back, and no subagent starts un
     await prompted(repo, MAIN, continuationPrompt(question, 'Change the plan'))
     await prompted(repo, MAIN, 'Approve')
     await prompted(repo, MAIN, `The run ${FIRST}, started for this run, ended done. Its last reply: ${approval}`)
-    await prompted(repo, MAIN, continuationPrompt('Start the subagents on plan 00000000?', 'Approve'))
+    await prompted(repo, MAIN, continuationPrompt('Start the subagents on the plan above, 3 tasks (plan 00000000)?', 'Approve'))
     await prompted(repo, MAIN, approval, 'action')
     assert.equal((await run(checkout, MAIN, ['start', '--task', TESTS])).out.reason, 'not-approved')
 
@@ -1057,7 +1058,7 @@ test('retry: a new subagent on the same task, from the caller\'s branch, told wh
   }
 })
 
-test('a command line that cannot be read exits 2 with the usage and starts nothing; outside a repository is a refusal', async () => {
+test('a command line that cannot be read exits 2 with what was wrong and starts nothing; outside a repository is a refusal', async () => {
   const repo = await testRepo()
   const elsewhere = await mkdtemp(join(tmpdir(), 'not-a-repo-'))
   try {
@@ -1065,7 +1066,7 @@ test('a command line that cannot be read exits 2 with the usage and starts nothi
     for (const argv of [[], ['nope'], ['start'], ['start', ' '], ['start', '--task'], ['start', '--task', ' '], ['start', 'a', 'b'], ['start', 'a', '--driver', 'pi'], ['list', 'extra'], ['read'], ['stop'], ['stop', FIRST, '--force'], ['plan', 'a', 'b'], ['plan', '--nope'], ['land'], ['land', FIRST, SECOND], ['next', 'extra'], ['retry'], ['retry', FIRST], ['retry', FIRST, 'why', 'and'], ['retry', FIRST, ' '], ['retry', '--help'], ['start', '--level', 'simple', 'a', '--model', 'opus'], ['start', '--level', 'simple', 'a', '--driver', 'codex'], ['start', '--level'], ['settings', '{}', '{}']]) {
       const bad = await run(repo, MAIN, argv)
       assert.deepEqual([bad.code, bad.out, bad.started, bad.stopped], [2, undefined, [], []], argv.join(' '))
-      assert.match(bad.err, /usage: orchestration/)
+      assert.match(bad.err, argv.length ? /\nRun `orchestration --help` for usage\.$/ : /^usage: orchestration/)
     }
     const outside = await run(elsewhere, MAIN, ['list'])
     assert.deepEqual([outside.code, outside.out], [1, { ok: false, reason: 'not-a-repo' }])

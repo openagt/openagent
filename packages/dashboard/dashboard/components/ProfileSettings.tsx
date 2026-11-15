@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { sendRemovePersonPicture, sendSavePersonName, sendSyncPersonFromGitHub } from '../rpc/person.js'
 import { personChanged, usePerson } from '../lib/use-person.js'
 import { useAction } from '../lib/use-action.js'
+import { cn } from '../lib/utils.js'
 import { Button } from './ui/button.js'
 import { Input } from './ui/input.js'
 import { Avatar } from './PersonMenu.js'
@@ -26,6 +27,8 @@ export function ProfileSettings() {
   const removing = useAction()
   // What the last Sync did, said once it is done: a press that changed nothing still answers.
   const [synced, setSynced] = useState<string | undefined>()
+  // The name just saved, said until it is typed into again.
+  const [savedName, setSavedName] = useState(false)
   if (!person) return null
   const name = typedName ?? person.name
   const github = typedGithub ?? person.github ?? ''
@@ -37,7 +40,11 @@ export function ProfileSettings() {
     await reload()
     personChanged()
   }
-  const save = () => void saving.run(() => sendSavePersonName(name), 'Could not save your name.').then(done)
+  const save = () =>
+    void saving.run(() => sendSavePersonName(name), 'Could not save your name.').then(async outcome => {
+      await done(outcome)
+      setSavedName(outcome.ok)
+    })
   const sync = () => {
     setSynced(undefined)
     void syncing.run(() => sendSyncPersonFromGitHub(github), 'Could not read that GitHub profile.').then(async outcome => {
@@ -47,95 +54,101 @@ export function ProfileSettings() {
   }
   const remove = () => void removing.run(() => sendRemovePersonPicture(), 'Could not remove the picture.').then(done)
   const changedName = name.trim() !== '' && (name.trim() !== person.name || !person.own)
+  const nothingToSave = saving.busy || !changedName
 
   return (
     <SettingsSection description="Your name and picture in OpenAgent, the same on each of your computers.">
-      <div className="py-3 first:pt-0">
-        <form
-          className="flex items-start justify-between gap-4"
-          onSubmit={event => {
-            event.preventDefault()
-            if (changedName) save()
-          }}
-        >
-          <div className="min-w-0">
-            <label htmlFor="profile-name" className="text-sm">
-              Name
-            </label>
-            <p className="text-xs text-muted-foreground">{person.own ? 'At the foot of the sidebar, and what the servers you join call you.' : 'Your git name for now. Save it, or type another, to keep one of your own.'}</p>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <Input
-              id="profile-name"
-              value={name}
-              disabled={saving.busy}
-              onChange={event => {
-                setName(event.target.value)
-                saving.reset()
-              }}
-              className="h-8 w-48"
-            />
-            <Button type="submit" size="sm" disabled={saving.busy || !changedName}>
-              {saving.busy ? 'Saving…' : 'Save'}
-            </Button>
-          </div>
-        </form>
-        {saving.error && <p className="mt-2 text-xs text-danger">{saving.error}</p>}
-      </div>
-      <SettingsRow
-        label="Picture"
-        description={person.avatar ? (person.github ? `From @${person.github} on GitHub.` : 'Yours.') : 'None: your initials.'}
-        control={
-          <div className="flex items-center gap-2">
-            <Avatar person={person} className="size-8 text-xs" />
-            {person.avatar && (
-              <Button variant="outline" size="sm" disabled={removing.busy} onClick={remove}>
-                Remove
+      <form
+        onSubmit={event => {
+          event.preventDefault()
+          if (!nothingToSave) save()
+        }}
+      >
+        <SettingsRow
+          label="Name"
+          labelFor="profile-name"
+          description={person.own ? 'At the foot of the sidebar, and what the servers you join call you.' : 'Your git name for now. Save it, or type another, to keep one of your own.'}
+          control={
+            <div className="flex items-center gap-2">
+              <Input
+                id="profile-name"
+                value={name}
+                disabled={saving.busy}
+                onChange={event => {
+                  setName(event.target.value)
+                  saving.reset()
+                  setSavedName(false)
+                }}
+                className="w-60 max-md:flex-1"
+              />
+              {/* With nothing to save, it keeps the focus it was pressed with: a disabled press would drop it to the page. */}
+              <Button type="submit" aria-disabled={!changedName || undefined} loading={saving.busy} className={cn('min-w-16', !changedName && 'opacity-50')}>
+                {saving.busy ? 'Saving…' : 'Save'}
               </Button>
-            )}
-          </div>
-        }
-      />
-      {removing.error && <p className="pb-3 text-xs text-danger">{removing.error}</p>}
-      <div className="py-3 last:pb-0">
-        <form
-          className="flex items-start justify-between gap-4"
-          onSubmit={event => {
-            event.preventDefault()
-            if (github.trim()) sync()
-          }}
-        >
-          <div className="min-w-0">
-            <label htmlFor="profile-github" className="text-sm">
-              Sync from GitHub
-            </label>
-            <p className="text-xs text-muted-foreground">Copies a GitHub profile&rsquo;s name and picture, once. Read with no login; GitHub is not asked again after.</p>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <Input
-              id="profile-github"
-              placeholder="your GitHub login"
-              value={github}
-              disabled={syncing.busy}
-              onChange={event => {
-                setGithub(event.target.value)
-                syncing.reset()
-                setSynced(undefined)
-              }}
-              className="h-8 w-48"
-            />
-            <Button type="submit" size="sm" variant="outline" disabled={syncing.busy || !github.trim()}>
-              {syncing.busy ? 'Syncing…' : 'Sync'}
-            </Button>
-          </div>
-        </form>
+            </div>
+          }
+        />
+        {saving.error && <p className="mt-2 text-xs text-danger">{saving.error}</p>}
+        {savedName && (
+          <p role="status" className="mt-2 text-xs text-muted-foreground">
+            Saved.
+          </p>
+        )}
+      </form>
+      <div>
+        <SettingsRow
+          label="Picture"
+          description={person.avatar ? (person.github ? `From @${person.github} on GitHub.` : 'Yours.') : 'None: your initials.'}
+          control={
+            <div className="flex items-center gap-2">
+              <Avatar person={person} size="h-8 w-8 text-xs" />
+              {person.avatar && (
+                <Button variant="secondary" loading={removing.busy} onClick={remove}>
+                  Remove
+                </Button>
+              )}
+            </div>
+          }
+        />
+        {removing.error && <p className="mt-2 text-xs text-danger">{removing.error}</p>}
+      </div>
+      <form
+        onSubmit={event => {
+          event.preventDefault()
+          if (github.trim()) sync()
+        }}
+      >
+        <SettingsRow
+          label="Sync from GitHub"
+          labelFor="profile-github"
+          description="Copies a GitHub profile’s name and picture, once. Read with no login; GitHub is not asked again after."
+          control={
+            <div className="flex items-center gap-2">
+              <Input
+                id="profile-github"
+                placeholder="your GitHub login"
+                value={github}
+                disabled={syncing.busy}
+                onChange={event => {
+                  setGithub(event.target.value)
+                  syncing.reset()
+                  setSynced(undefined)
+                }}
+                className="w-60 max-md:flex-1"
+              />
+              <Button type="submit" variant="secondary" disabled={!github.trim()} loading={syncing.busy} className="min-w-16">
+                {syncing.busy ? 'Syncing…' : 'Sync'}
+              </Button>
+            </div>
+          }
+        />
         {syncing.error && <p className="mt-2 text-xs text-danger">{syncing.error}</p>}
         {synced && (
           <p role="status" className="mt-2 text-xs text-muted-foreground">
             {synced}
           </p>
         )}
-      </div>
+      </form>
     </SettingsSection>
   )
 }

@@ -41,7 +41,7 @@ describe('the saved machines', () => {
     await act(async () => {
       result = await addMachine('http://box.local:4201/_devices/enter#bbb', 'Box')
     })
-    expect(result).toEqual({ ok: true, machine: { id: 'http://box.local:4201', label: 'Box', url: 'http://box.local:4201' } })
+    expect(result).toEqual({ ok: true })
     expect(machinesRpc.sendAddMachine).toHaveBeenCalledWith('http://box.local:4201/_devices/enter#bbb', 'Box')
     expect(screen.getByText('Box')).toBeTruthy()
     expect(localStorage.length).toBe(0)

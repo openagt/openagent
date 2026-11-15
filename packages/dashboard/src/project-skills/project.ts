@@ -1,6 +1,6 @@
 import { lstat, readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
-import { nodeGitRunner, OPENAGENT_DIR, type GitRunner } from '@openagt/agent-data'
+import { nodeGitRunner, OPENAGENT_DIR, originUrl, type GitRunner } from '@openagt/agent-data'
 import { homeUrlFromRemote } from '@openagt/skill-github'
 import { carriedSkills, SKILL_NAMES, type CarriedSkill } from './catalogue.js'
 import { olderThan, unstamped } from './skill-file.js'
@@ -73,7 +73,7 @@ export async function readProject(root: string, git: GitRunner = nodeGitRunner()
     else skills.push({ name, standing: standingOf(await readFile(join(root, file), 'utf8'), carried.get(name)!), file })
   }
   const inRepo = await git(['rev-parse', '--is-inside-work-tree'], root).then(out => out.trim() === 'true', () => false)
-  const remote = inRepo ? await git(['remote', 'get-url', 'origin'], root).then(out => out.trim(), () => '') : ''
+  const remote = inRepo ? ((await originUrl(root, git)) ?? '') : ''
   return {
     skills,
     git: inRepo,

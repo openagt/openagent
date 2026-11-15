@@ -4,7 +4,8 @@ import { cn } from '../../lib/utils.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './tooltip.js'
 
 // A small copy-to-clipboard affordance (#948) for the strings users take to a terminal:
-// branch names, session ids, URLs. Flashes a check for a beat so the click visibly landed.
+// branch names, session ids, URLs. Flashes a check for a beat so the click visibly landed, and is
+// named "Copied" for it, as the session's own copy press is: a screen reader hears no check.
 export function CopyButton({ text, label, className }: { text: string; label: string; className?: string }) {
   const [copied, setCopied] = useState(false)
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
@@ -26,9 +27,9 @@ export function CopyButton({ text, label, className }: { text: string; label: st
           <button
             type="button"
             onClick={copy}
-            aria-label={label}
+            aria-label={copied ? 'Copied' : label}
             className={cn(
-              'inline-flex shrink-0 items-center rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground',
+              'relative inline-flex shrink-0 items-center rounded-sm p-0.5 text-muted-foreground after:absolute after:-inset-1 hover:bg-accent hover:text-foreground',
               copied && 'text-success',
               className,
             )}

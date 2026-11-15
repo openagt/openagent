@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { hoverTooltip, openMenu } from '../test-utils.js'
 import { forgetRemembered } from '../lib/use-async.js'
-import { startFromBase, BranchButton, StartFromMenu } from './StartFromMenu.js'
+import { startFromBase, StartFromMenu } from './StartFromMenu.js'
 
 const onStartBranches = vi.hoisted(() => vi.fn())
 vi.mock('../rpc/projects.js', () => ({ onStartBranches }))
@@ -165,14 +165,6 @@ describe('StartFromMenu', () => {
     cleanup()
     renderMenu({ busy: true })
     expect((trigger() as HTMLButtonElement).disabled).toBe(true)
-  })
-
-  test('the button can be drawn alone and off, with no menu and no read behind it', () => {
-    render(<BranchButton label="feature/x" disabled />)
-    const button = screen.getByRole('button') as HTMLButtonElement
-    expect(button.textContent).toBe('feature/x')
-    expect(button.disabled).toBe(true)
-    expect(onStartBranches).not.toHaveBeenCalled()
   })
 
   test('what a Start hands the daemon: nothing for the main branch, the local branch by its name, a published one as origin has it', () => {

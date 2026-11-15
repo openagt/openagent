@@ -2,13 +2,6 @@ import type { LiveFeedEvent } from '../../src/dashboard-rpc/index.js'
 
 // The dashboard's whole transport (F3): `POST /_rpc/<name>` for calls, `GET /_rpc/events` for the
 // live feed. Same-origin, so there is nothing to configure.
-//
-// This replaced Telefunc. What Telefunc gave was type-safety across a package boundary, which A7
-// removed — the signatures are now imported directly from the implementations, one package away
-// rather than one network away. What it cost was a build-time transform over every `.telefunc.ts`
-// file, a registration table pinning each RPC to the client-baked key of the dashboard source path
-// it was re-exported from (rename a file, break every call), a re-export shim per module to keep
-// those keys stable, and a dev-server plugin to undo a URL its own client wrote.
 
 const RPC_PREFIX = '/_rpc'
 
@@ -21,9 +14,12 @@ type RpcResponse = { ret?: unknown; error?: string }
  *
  * Arguments and return value go through JSON, which is what they always did — the wire has no
  * opinion about `Date` or `Map` here because none of these RPCs pass one.
+ *
+ * `signal` aborts its calls' requests: a caller that gives up on an answer lets its connection go.
  */
 export function rpc<F extends (...args: never[]) => unknown>(
   name: string,
+  { signal }: { signal?: AbortSignal } = {},
 ): (...args: Parameters<F>) => Promise<Awaited<ReturnType<F>>> {
   const call = async (...args: unknown[]): Promise<unknown> => {
     // An optional argument left out must arrive left out: JSON writes a trailing `undefined` as
@@ -34,6 +30,7 @@ export function rpc<F extends (...args: never[]) => unknown>(
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(args.slice(0, sent)),
+      signal: signal ?? null,
     })
     // A non-JSON body means something other than the mount answered (a proxy, an error page), and
     // reporting "unexpected token <" from deep in a component is how that used to surface.
@@ -73,7 +70,7 @@ export interface EventChannel {
  * it reports every end as an error and retries even the ones that meant "done".
  */
 export async function openEvents(projectId: string, agentId?: string): Promise<EventChannel> {
-  const params = new URLSearchParams({ projectId, ...(agentId ? { agentId: agentId } : {}) })
+  const params = new URLSearchParams({ projectId, ...(agentId ? { agentId } : {}) })
   const controller = new AbortController()
   const res = await fetch(`${RPC_PREFIX}/events?${params.toString()}`, { signal: controller.signal })
   if (!res.ok || !res.body) throw new Error(`could not subscribe to events (${res.status})`)

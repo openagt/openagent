@@ -1,16 +1,17 @@
-import { useEffect, useState, type ComponentType, type FormEvent, type ReactNode } from 'react'
-import { Check, CircleCheck, CircleX, Cloud, House, Loader2, PlugZap, Waypoints } from 'lucide-react'
-import { Button, Checkbox, Dialog, Input, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, cn, usePolled } from '@openagt/dashboard/module'
-import { testConnection, type Answer, type ServerRow, type Tested } from './servers.js'
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
+import { CircleCheck, CircleX, Loader2, PlugZap } from 'lucide-react'
+import { Button, Checkbox, Input, RadioGroup, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, cn, useOpenAgentDown, usePolled } from '@openagt/dashboard/module'
+import type { Answer } from './devices.js'
+import { installDone, installFailed, testConnection, type ServerRow, type Tested } from './servers.js'
 import { CopyButton } from './codes.js'
 import { hasDoor, labelOf } from './model.js'
-import { Problem, StepLine, StepMark } from './parts.js'
+import { Choice, Presses, Problem, StepLine, StepMark, useFlowHold } from './parts.js'
 import { RunsThrough } from './ServerPage.js'
 import type { Devices } from './use-devices.js'
 
 // "Set up a server", in steps: where the server is, a test that this computer gets in there,
 // whether it uses this computer's logins, the install, and who else uses it. The install is the
-// `devices server` command's own process: closing the dialog stops nothing, and the server's row
+// `devices server` command's own process: leaving the page stops nothing, and the server's row
 // shows how far it is. A computer at home, which nothing on the internet reaches, is set up the
 // same way, through a server this computer is in at.
 
@@ -27,6 +28,7 @@ const STAGES: readonly { id: Stage; title: string }[] = [
 type Kind = 'vps' | 'home' | 'tailscale'
 
 export function ConnectServer({ d, onClose, onInvite }: { d: Devices; onClose: () => void; /** Invite people to the server just set up: its page, inviting. */ onInvite: (address: string) => void }) {
+  const down = useOpenAgentDown()
   const doors = (d.machines?.machines ?? []).filter(hasDoor)
   const [stage, setStage] = useState<Stage>('where')
   const [kind, setKind] = useState<Kind>('vps')
@@ -49,6 +51,8 @@ export function ConnectServer({ d, onClose, onInvite }: { d: Devices; onClose: (
   const at = address.trim()
   const as = user.trim()
   const current = tested?.for === `${at} ${as}` ? tested.answer : undefined
+  // An address or a user typed is held until the install starts with them, or Cancel throws them away.
+  const leave = useFlowHold((stage === 'where' || stage === 'connect' || stage === 'logins') && (at !== '' || as !== (kind === 'vps' ? 'root' : '')))
   // A server this computer connected already is not set up anew another way: its own page updates it.
   const known = d.servers.find(server => server.address === at.toLowerCase())
   const knownWords = known !== undefined ? `${d.items.find(item => item.kind === 'server' && item.server.address === known.address)?.name ?? known.address} is connected already${known.through !== undefined ? `, through ${labelOf(d.machines?.machines ?? [], known.through)}` : known.tailscale ? ', on your Tailscale network' : ''}. Update it from its page.` : undefined
@@ -78,162 +82,113 @@ export function ConnectServer({ d, onClose, onInvite }: { d: Devices; onClose: (
 
   const server = installed !== undefined ? d.servers.find(row => row.address === installed) : undefined
   return (
-    <Dialog open onOpenChange={open => !open && onClose()} title="Set up a server">
-      <div className="max-h-[calc(100dvh-8rem)] space-y-4 overflow-y-auto">
-        <Stepper at={stage} />
-        {stage === 'where' && <Where kind={kind} onKind={pickKind} doors={doors.map(door => ({ value: door.url, label: door.label }))} through={through} onVia={setVia} onCancel={onClose} onNext={() => setStage('connect')} />}
-        {stage === 'connect' && (
-          <form onSubmit={event => void test(event)} className="space-y-3">
-            <div className="grid grid-cols-[1fr_8rem] gap-2">
-              <label className="space-y-1 text-xs text-muted-foreground">
-                <span>{kind === 'tailscale' ? 'Its name on Tailscale' : kind === 'home' ? 'Its address on its network' : 'Its address'}</span>
-                <Input autoFocus aria-label="The server's address" placeholder={kind === 'tailscale' ? 'homepc.tail1234.ts.net' : kind === 'home' ? '192.168.1.40' : '203.0.113.5'} value={address} onChange={event => setAddress(event.target.value)} />
-              </label>
-              <label className="space-y-1 text-xs text-muted-foreground">
-                <span>User</span>
-                <Input aria-label="User name" placeholder={pc ? 'yours on it' : 'root'} value={user} onChange={event => setUser(event.target.value)} />
-              </label>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {pc
-                ? 'Your own user on the PC, which becomes root without a password: only to install and to update. What runs there afterwards runs as a user of its own, openagent.'
-                : 'root, or a user that becomes root without a password: only to install and to update. What runs there afterwards runs as a user of its own, openagent.'}
-            </p>
-            <Button size="sm" type="submit" variant="outline" disabled={testing || !at || !as || knownWords !== undefined}>
-              {testing ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <PlugZap className="h-3.5 w-3.5" aria-hidden />}
-              Test connection
+    <div className="space-y-4">
+      <Stepper at={stage} />
+      {stage === 'where' && <Where kind={kind} onKind={pickKind} doors={doors.map(door => ({ value: door.url, label: door.label }))} through={through} onVia={setVia} onCancel={() => leave(onClose)} onNext={() => setStage('connect')} />}
+      {stage === 'connect' && (
+        <form onSubmit={event => void test(event)} className="space-y-3">
+          <div className="grid grid-cols-[1fr_8rem] gap-2">
+            <label className="space-y-1">
+              <span className="block text-sm font-medium">{kind === 'tailscale' ? 'Its name on Tailscale' : kind === 'home' ? 'Its address on its network' : 'Its address'}</span>
+              <Input name="server-address" autoFocus aria-label="The server's address" placeholder={kind === 'tailscale' ? 'homepc.tail1234.ts.net' : kind === 'home' ? '192.168.1.40' : '203.0.113.5'} value={address} onChange={event => setAddress(event.target.value)} />
+            </label>
+            <label className="space-y-1">
+              <span className="block text-sm font-medium">User</span>
+              <Input name="server-user" aria-label="User name" placeholder={pc ? 'yours on it' : 'root'} value={user} onChange={event => setUser(event.target.value)} />
+            </label>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {pc
+              ? 'Your own user on the PC, which becomes root without a password: only to install and to update. What runs there afterwards runs as a user of its own, openagent.'
+              : 'root, or a user that becomes root without a password: only to install and to update. What runs there afterwards runs as a user of its own, openagent.'}
+          </p>
+          <Button type="submit" variant="secondary" loading={testing} disabled={!at || !as || knownWords !== undefined || down}>
+            <PlugZap className="size-4" aria-hidden />
+            Test connection
+          </Button>
+          {knownWords !== undefined && <p role="status" className="text-xs">{knownWords}</p>}
+          {kind === 'tailscale' && at !== '' && !/\.ts\.net$/i.test(at) && <p className="text-xs text-muted-foreground">Its full name on Tailscale, as Tailscale shows it, like homepc.tail1234.ts.net: the door is at that name.</p>}
+          {current !== undefined && !testing && <TestResult answer={current} address={at} user={as} home={pc} />}
+          <Presses>
+            <Button type="button" variant="ghost" onClick={() => setStage('where')}>
+              Back
             </Button>
-            {knownWords !== undefined && <p role="status" className="text-xs">{knownWords}</p>}
-            {kind === 'tailscale' && at !== '' && !/\.ts\.net$/i.test(at) && <p className="text-xs text-muted-foreground">Its full name on Tailscale, as Tailscale shows it, like homepc.tail1234.ts.net: the door is at that name.</p>}
-            {current !== undefined && !testing && <TestResult answer={current} address={at} user={as} home={pc} />}
-            <Footer>
-              <Button size="sm" type="button" variant="ghost" onClick={() => setStage('where')}>
-                Back
-              </Button>
-              <Button size="sm" type="button" disabled={!current?.ok || !current.value.ok || knownWords !== undefined || (kind === 'tailscale' && !/\.ts\.net$/i.test(at))} onClick={() => setStage('logins')}>
-                Continue
-              </Button>
-            </Footer>
-          </form>
-        )}
-        {stage === 'logins' && (
-          <div className="space-y-4">
+            <Button type="button" disabled={!current?.ok || !current.value.ok || knownWords !== undefined || (kind === 'tailscale' && !/\.ts\.net$/i.test(at))} onClick={() => setStage('logins')}>
+              Continue
+            </Button>
+          </Presses>
+        </form>
+      )}
+      {stage === 'logins' && (
+        <div className="space-y-4">
+          <label className="flex items-start gap-2 text-sm">
+            <Checkbox className="mt-0.5" checked={useMine} onCheckedChange={checked => setUseMine(checked === true)} aria-label="Use my logins from this computer" />
+            <span>
+              Use my logins from this computer
+              <span className="block text-xs text-muted-foreground">Runs on the server use the accounts you're logged into here. Logging in or out here updates the server.</span>
+            </span>
+          </label>
+          <div className="space-y-1 pl-6 text-xs">
+            <p>The server gets logins of its own. Nothing here is logged out, now or later.</p>
+            <p className="text-muted-foreground">Unchecked: the server has no logins. You can turn it on later on the Permissions page.</p>
+          </div>
+          {remote !== undefined && (
             <label className="flex items-start gap-2 text-sm">
-              <Checkbox className="mt-0.5" checked={useMine} onCheckedChange={checked => setUseMine(checked === true)} aria-label="Use my logins from this computer" />
+              <Checkbox className="mt-0.5" checked={useMine && syncData} disabled={!useMine} onCheckedChange={checked => setSyncData(checked === true)} aria-label="Sync my agent data there too" />
               <span>
-                Use my logins from this computer
-                <span className="block text-xs text-muted-foreground">Runs on the server use the accounts you're logged into here. Logging in or out here updates the server.</span>
+                Sync my agent data there too
+                <span className="block text-xs text-muted-foreground">{`Its agent data syncs with ${remote}, as this computer's does: the same logs, tickets and agents on both. Sent as the GitHub login copied there${useMine ? '' : ', so it needs your logins'}.`}</span>
               </span>
             </label>
-            <div className="space-y-1 pl-6 text-xs">
-              <p>The server gets logins of its own. Nothing here is logged out, now or later.</p>
-              <p className="text-muted-foreground">Unchecked: the server has no logins. You can turn it on later on the Permissions page.</p>
-            </div>
-            {remote !== undefined && (
-              <label className="flex items-start gap-2 text-sm">
-                <Checkbox className="mt-0.5" checked={useMine && syncData} disabled={!useMine} onCheckedChange={checked => setSyncData(checked === true)} aria-label="Sync my agent data there too" />
-                <span>
-                  Sync my agent data there too
-                  <span className="block text-xs text-muted-foreground">{`Its agent data syncs with ${remote}, as this computer's does: the same logs, tickets and agents on both. Sent as the GitHub login copied there${useMine ? '' : ', so it needs your logins'}.`}</span>
-                </span>
-              </label>
-            )}
-            {d.error !== undefined && <Problem>{d.error}</Problem>}
-            <Footer>
-              <Button size="sm" variant="ghost" onClick={() => setStage('connect')}>
-                Back
-              </Button>
-              {/* Not before this computer has said which OpenAgent it runs: that is the one the server gets. */}
-              <Button size="sm" disabled={d.busy || !d.machines} onClick={() => void install()}>
-                {d.busy && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}
-                Install
-              </Button>
-            </Footer>
-          </div>
-        )}
-        {stage === 'install' && <Installing d={d} server={server} useMine={useMine} syncData={syncs} onReady={() => setStage('ready')} onClose={onClose} />}
-        {stage === 'ready' && server !== undefined && <Ready d={d} server={server} onInvite={() => onInvite(server.address)} onClose={onClose} />}
-      </div>
-    </Dialog>
+          )}
+          {d.error !== undefined && <Problem>{d.error}</Problem>}
+          <Presses>
+            <Button variant="ghost" onClick={() => setStage('connect')}>
+              Back
+            </Button>
+            {/* Not before this computer has said which OpenAgent it runs: that is the one the server gets. */}
+            <Button loading={d.busy} disabled={!d.machines || down} onClick={() => void install()}>
+              Install
+            </Button>
+          </Presses>
+        </div>
+      )}
+      {stage === 'install' && <Installing d={d} server={server} useMine={useMine} syncData={syncs} onReady={() => setStage('ready')} onClose={onClose} />}
+      {stage === 'ready' && server !== undefined && <Ready d={d} server={server} onInvite={() => onInvite(server.address)} onClose={onClose} />}
+    </div>
   )
 }
 
-/** The steps along the top: each one done ticked, the one at hand named; on a phone only that one's name. */
+/** Where the setup is: the step at hand, and how many there are; the others are said to a screen reader only. */
 function Stepper({ at }: { at: Stage }) {
   const index = STAGES.findIndex(stage => stage.id === at)
   return (
-    <ol aria-label="Steps" className="flex items-center gap-2 text-xs">
+    <ol aria-label="Steps" className="text-xs text-muted-foreground">
       {STAGES.map((stage, i) => (
-        <li key={stage.id} aria-current={i === index ? 'step' : undefined} aria-label={`${stage.title}: ${i < index ? 'done' : i === index ? 'now' : 'next'}`} className={cn('flex items-center gap-2', i > 0 && 'flex-1')}>
-          {i > 0 && <span aria-hidden className="h-px min-w-3 flex-1 bg-border" />}
-          <span className={cn('flex shrink-0 items-center gap-1.5', i === index ? 'font-medium text-foreground' : 'text-muted-foreground')}>
-            <span aria-hidden className={cn('flex h-5 w-5 items-center justify-center rounded-full text-[11px]', i <= index ? 'bg-[var(--color-primary)] text-[var(--color-primary-foreground)]' : 'bg-muted')}>
-              {i < index ? <Check className="h-3 w-3" /> : i + 1}
-            </span>
-            <span className={cn(i !== index && 'max-sm:hidden')}>{stage.title}</span>
-          </span>
+        <li key={stage.id} aria-current={i === index ? 'step' : undefined} aria-label={`${stage.title}: ${i < index ? 'done' : i === index ? 'now' : 'next'}`} className={cn(i !== index && 'sr-only')}>
+          {`Step ${i + 1} of ${STAGES.length} · `}
+          <span className="font-medium text-foreground">{stage.title}</span>
         </li>
       ))}
     </ol>
   )
 }
 
-function Footer({ children }: { children: ReactNode }) {
-  return <div className="flex justify-end gap-2 pt-1">{children}</div>
-}
-
-/** One of the two places a server is, as a card to pick. */
-function Choice({ picked, disabled, icon: Icon, title, words, onPick, children }: { picked: boolean; disabled?: boolean; icon: ComponentType<{ className?: string; 'aria-hidden'?: boolean }>; title: string; words: string; onPick: () => void; children?: ReactNode }) {
-  return (
-    <button
-      type="button"
-      role="radio"
-      aria-checked={picked}
-      disabled={disabled}
-      onClick={onPick}
-      className={cn('flex w-full gap-3 rounded-lg border p-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] disabled:opacity-60', picked ? 'border-[var(--color-primary)]' : 'border-border')}
-    >
-      <span aria-hidden className={cn('mt-0.5 h-3.5 w-3.5 shrink-0 rounded-full border', picked ? 'border-[5px] border-[var(--color-primary)]' : 'border-muted-foreground/50')} />
-      <span className="min-w-0">
-        <span className="flex items-center gap-2 text-sm font-medium">
-          <Icon aria-hidden className="h-4 w-4 text-muted-foreground" />
-          {title}
-        </span>
-        <span className="block text-xs text-muted-foreground">{words}</span>
-        {children}
-      </span>
-    </button>
-  )
-}
-
 function Where({ kind, onKind, doors, through, onVia, onCancel, onNext }: { kind: Kind; onKind: (kind: Kind) => void; doors: { value: string; label: string }[]; through: string | undefined; onVia: (url: string) => void; onCancel: () => void; onNext: () => void }) {
   return (
     <div className="space-y-2">
-      <div role="radiogroup" aria-label="Where the server is" className="space-y-2">
-        <Choice picked={kind === 'vps'} icon={Cloud} title="A cloud server (VPS)" words="DigitalOcean, Hetzner and the like, with Ubuntu or Debian. Reached from anywhere, with a lock." onPick={() => onKind('vps')} />
-        <Choice
-          picked={kind === 'tailscale'}
-          icon={Waypoints}
-          title="A PC on your Tailscale network"
-          words="Ubuntu or Debian, with Tailscale on it, signed in as you. Your devices on Tailscale reach it from anywhere, with a lock: no cloud server needed."
-          onPick={() => onKind('tailscale')}
-        />
-        <Choice
-          picked={kind === 'home'}
-          disabled={doors.length === 0}
-          icon={House}
-          title="A PC at home or in an office"
-          words="Ubuntu or Debian, on all the time. Nothing on the internet reaches it, so it is reached through one of your cloud servers."
-          onPick={() => onKind('home')}
-        >
-          {doors.length === 0 && <span className="mt-1 block text-xs text-foreground">Set up a cloud server first.</span>}
-        </Choice>
-      </div>
+      <RadioGroup aria-label="Where the server is" value={kind} onValueChange={next => onKind(next as Kind)} className="-mx-3 gap-0">
+        <Choice value="vps" title="A cloud server (VPS)" words="DigitalOcean, Hetzner and the like, with Ubuntu or Debian. Reached from anywhere, with a lock." />
+        <Choice value="tailscale" title="A PC on your Tailscale network" words="Ubuntu or Debian, with Tailscale on it, signed in as you. Your devices on Tailscale reach it from anywhere, with a lock: no cloud server needed." />
+        <Choice value="home" disabled={doors.length === 0} title="A PC at home or in an office" words="Ubuntu or Debian, on all the time. Nothing on the internet reaches it, so it is reached through one of your cloud servers." />
+        {/* Why it cannot be picked, outside the dimmed choice: read at full contrast. */}
+        {doors.length === 0 && <p className="-mt-1 pl-10 text-xs text-muted-foreground">Set up a cloud server first.</p>}
+      </RadioGroup>
       {kind === 'home' && through !== undefined && (
-        <div className="flex items-center gap-2 pl-9 text-xs text-muted-foreground">
+        <div className="flex items-center gap-2 pl-7 text-xs text-muted-foreground">
           Reached through
           <Select items={doors} value={through} onValueChange={next => onVia(next as string)}>
-            <SelectTrigger size="sm" aria-label="The server it is reached through" className="w-48">
+            <SelectTrigger aria-label="The server it is reached through" className="w-48">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -246,14 +201,14 @@ function Where({ kind, onKind, doors, through, onVia, onCancel, onNext }: { kind
           </Select>
         </div>
       )}
-      <Footer>
-        <Button size="sm" variant="ghost" onClick={onCancel}>
+      <Presses>
+        <Button variant="ghost" onClick={onCancel}>
           Cancel
         </Button>
-        <Button size="sm" onClick={onNext}>
+        <Button onClick={onNext}>
           Continue
         </Button>
-      </Footer>
+      </Presses>
     </div>
   )
 }
@@ -270,10 +225,10 @@ function Line({ ok, children }: { ok: boolean; children: ReactNode }) {
 /** A line to paste somewhere, with its Copy button and what it does. */
 function Paste({ lead, text, label, after }: { lead: string; text: string; label: string; after: string }) {
   return (
-    <div className="space-y-2 rounded-md border border-border bg-muted p-3 text-xs">
+    <div className="space-y-2 text-xs">
       <p>{lead}</p>
-      <div className="flex items-center gap-2">
-        <code title={text} className="min-w-0 flex-1 truncate rounded border border-border bg-background px-2 py-1 font-mono">
+      <div className="flex items-center gap-2 rounded-md bg-muted py-1 pr-1 pl-3">
+        <code title={text} className="min-w-0 flex-1 truncate font-mono text-sm">
           {text}
         </code>
         <CopyButton text={text} label={label}>
@@ -339,8 +294,9 @@ function TestResult({ answer, address, user, home }: { answer: Answer<Tested>; a
 }
 
 function Installing({ d, server, useMine, syncData, onReady, onClose }: { d: Devices; server: ServerRow | undefined; /** The server is to use this computer's logins. */ useMine: boolean; /** And to sync this computer's agent data. */ syncData: boolean; onReady: () => void; onClose: () => void }) {
-  const done = server !== undefined && !server.working && server.steps.every(step => step.state === 'done')
-  const failed = server !== undefined && !server.working && server.steps.some(step => step.state === 'failed')
+  const down = useOpenAgentDown()
+  const done = server !== undefined && installDone(server)
+  const failed = server !== undefined && installFailed(server)
   const item = d.items.find(candidate => candidate.kind === 'server' && candidate.server.address === server?.address)
   const saved = item?.kind === 'server' && item.machine !== undefined && server?.adding === false
   const reason = server !== undefined ? d.notAdded[server.address] : undefined
@@ -374,26 +330,26 @@ function Installing({ d, server, useMine, syncData, onReady, onClose }: { d: Dev
       </ol>
       {!failed && !done && <p className="text-xs text-muted-foreground">A few minutes. You can close this: it goes on, and its row shows how far it is.</p>}
       {d.error !== undefined && <Problem>{d.error}</Problem>}
-      <Footer>
+      <Presses>
+        <Button variant="ghost" onClick={onClose}>
+          Close
+        </Button>
         {failed && (
-          <Button size="sm" disabled={d.busy} onClick={() => void d.install(server.address, server.user)}>
+          <Button disabled={d.busy || down} onClick={() => void d.install(server.address, server.user)}>
             Try again
           </Button>
         )}
         {reason !== undefined && (
-          <Button size="sm" disabled={d.busy} onClick={() => void d.addToMachines(server)}>
+          <Button disabled={d.busy || down} onClick={() => void d.addToMachines(server)}>
             Try again
           </Button>
         )}
         {done && saved && (loginsFailed || dataFailed) && (
-          <Button size="sm" onClick={onReady}>
+          <Button onClick={onReady}>
             Continue
           </Button>
         )}
-        <Button size="sm" variant="outline" onClick={onClose}>
-          Close
-        </Button>
-      </Footer>
+      </Presses>
     </div>
   )
 }
@@ -403,7 +359,7 @@ function Ready({ d, server, onInvite, onClose }: { d: Devices; server: ServerRow
   const name = item?.name ?? server.address
   return (
     <div className="space-y-4">
-      <div className="flex flex-col items-center gap-1 py-1 text-center">
+      <div className="flex flex-col gap-1">
         <CircleCheck aria-hidden className="h-5 w-5 text-success" />
         <p className="text-sm font-medium">{`${name} is ready.`}</p>
         <p className="text-xs text-muted-foreground">
@@ -411,14 +367,14 @@ function Ready({ d, server, onInvite, onClose }: { d: Devices; server: ServerRow
         </p>
       </div>
       {server.through !== undefined && <RunsThrough host={d.host} server={{ ...server, through: server.through }} label={name} busy={d.busy} onChange={d.act} />}
-      <Footer>
-        <Button size="sm" variant="outline" onClick={onInvite}>
+      <Presses>
+        <Button variant="secondary" onClick={onInvite}>
           Add people
         </Button>
-        <Button size="sm" onClick={onClose}>
+        <Button onClick={onClose}>
           Done
         </Button>
-      </Footer>
+      </Presses>
     </div>
   )
 }

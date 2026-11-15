@@ -101,7 +101,7 @@ else setTimeout(() => {
     assert.equal(await gone(), true)
 
     assert.deepEqual(await mintClaude({ command: command('refuse') }), { ok: false, error: 'Claude Code ended without a login.\nThis command requires a Claude subscription.' })
-    assert.deepEqual(await mintClaude({ command: 'no-such-program-here setup-token' }), { ok: false, error: 'Claude Code ended without a login.\nClaude Code is not on this computer.' })
+    assert.deepEqual(await mintClaude({ command: 'no-such-program-here setup-token' }), { ok: false, error: 'Claude Code is not on this computer.' })
 
     const late = await mintClaude({ command: command('wait'), timeoutMs: 600 })
     assert.deepEqual(late, { ok: false, error: 'No yes came from the browser in 0 minutes.' })

@@ -30,6 +30,22 @@ describe('Settings › Profile', () => {
     expect(await screen.findByText(/what the servers you join call you/)).toBeTruthy()
   })
 
+  test('a name that was saved says so, until it is typed into again; Save, with nothing to save, keeps the focus and sends nothing', async () => {
+    render(<ProfileSettings />)
+    fireEvent.change(await screen.findByLabelText('Name'), { target: { value: 'Suleiman S' } })
+    person = { name: 'Suleiman S', own: true }
+    const save = screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement
+    save.focus()
+    fireEvent.click(save)
+    expect((await screen.findByRole('status')).textContent).toBe('Saved.')
+    await waitFor(() => expect(document.activeElement).toBe(save))
+    expect([save.disabled, save.getAttribute('aria-disabled')]).toEqual([false, 'true'])
+    fireEvent.click(save)
+    expect(sendSavePersonName).toHaveBeenCalledTimes(1)
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Suleiman' } })
+    expect(screen.queryByRole('status')).toBeNull()
+  })
+
   test('Sync from GitHub copies a profile once; the picture it gave can be removed', async () => {
     render(<ProfileSettings />)
     fireEvent.change(await screen.findByLabelText('Sync from GitHub'), { target: { value: 'suleimansh' } })

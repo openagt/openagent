@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { useModuleHost, usePolled, type ModuleHost, type ModuleMachines } from '@openagt/dashboard/module'
-import { loadStatus, type DoorStatus } from './devices.js'
-import { addThrough, askLink, connect, forget, loadDevices, loadServers, loadShared, markAdded, ownGithub, reach, readPersonThere, type Answer, type DevicesRead, type OwnGithub, type PersonThere, type ServerRow, type ServersRead, type SharedRow, type StepState } from './servers.js'
-import { hasDoor, itemsOf, onTailscale, type Item, type Sources } from './model.js'
+import { failed, loadStatus, readPersonThere, type Answer, type DoorStatus } from './devices.js'
+import { addThrough, askLink, connect, forget, installDone, loadDevices, loadServers, loadShared, markAdded, ownGithub, reach, type DevicesRead, type OwnGithub, type ServerRow, type ServersRead, type SharedRow, type StepState } from './servers.js'
+import { hasDoor, itemsOf, onTailscale, type Item, type PersonRead, type Sources } from './model.js'
+import { useChange } from './parts.js'
 
 // What Settings › Devices reads, read once for the list and every page of it: this computer's
 // door, the servers it installed and what each is doing, the saved machines, what each server's
@@ -41,7 +42,7 @@ export interface Devices {
   /** This computer is itself a server OpenAgent was installed on: it offers no server to set up. */
   isServer: boolean
   machines: ModuleMachines | undefined
-  people: Record<string, PersonThere | undefined>
+  people: Record<string, PersonRead>
   /** Who is in at each server this computer installed, by address; and why the last read failed. */
   devices: Record<string, DevicesRead | undefined>
   devicesError: Record<string, string | undefined>
@@ -79,11 +80,12 @@ export interface Devices {
   /** Run a change, and read the servers again; whether it went. */
   act: (change: () => Promise<Answer<unknown>>) => Promise<boolean>
   /**
-   * Install OpenAgent at a server, or update it there; whether the install started. With `logins`,
-   * whether the server uses this computer's logins once it is saved among the machines; unsaid, as
-   * the person last said for it.
+   * Install OpenAgent at a server, or update it there; whether the install started. `through`: the
+   * server a computer at home is reached through, or `tailscale` for one on the person's Tailscale
+   * network. With `logins`, whether the server uses this computer's logins once it is saved among
+   * the machines, and with `data`, whether it syncs this computer's agent data; unsaid, as the person
+   * last said for it.
    */
-  /** `through`: the server a computer at home is reached through, or `tailscale` for one on the person's Tailscale network. */
   install: (address: string, user: string, through?: string | 'tailscale', logins?: boolean, data?: boolean) => Promise<boolean>
   /** Save a server whose install ended among the machines. */
   addToMachines: (server: ServerRow) => Promise<void>
@@ -126,10 +128,10 @@ export function useDevices({ everyMs, devicesEveryMs, devicesAnswerMs = DEVICES_
   // What each server with a door of its own, set up elsewhere, says of this computer's person there; a computer on Tailscale says too.
   const doors = (machines?.machines ?? []).filter(machine => (hasDoor(machine) || onTailscale(machine)) && !installed(machine.url))
   const doorIds = doors.map(machine => machine.id).join(' ')
-  const { value: people } = usePolled<Record<string, PersonThere | undefined>>(
+  const { value: people } = usePolled<Record<string, PersonRead>>(
     doors.length
       ? async () => {
-          const said = await Promise.all(doors.map(async machine => [machine.id, await host.machinePerson(machine.id).then(asked => (asked.ok ? readPersonThere(asked.said) : undefined))] as const))
+          const said = await Promise.all(doors.map(async machine => [machine.id, await host.machinePerson(machine.id).then(asked => (asked.ok ? readPersonThere(asked.said) : asked.unknown ? undefined : null))] as const))
           return Object.fromEntries(said)
         }
       : null,
@@ -144,7 +146,7 @@ export function useDevices({ everyMs, devicesEveryMs, devicesAnswerMs = DEVICES_
 
   // Who is in at each server this computer installed, a computer at home too: asked over SSH, one read at a time each.
   const [awaited, setAwaited] = useState<string | undefined>()
-  const asked = servers.filter(server => !server.working && server.steps.every(step => step.state === 'done')).map(server => server.address)
+  const asked = servers.filter(installDone).map(server => server.address)
   const lastDevices = useRef<Record<string, DevicesRead | undefined>>({})
   const [devicesError, setDevicesError] = useState<Record<string, string | undefined>>({})
   const [, setDevicesTick] = useState(0)
@@ -183,27 +185,18 @@ export function useDevices({ everyMs, devicesEveryMs, devicesAnswerMs = DEVICES_
     'previous',
   )
 
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | undefined>()
+  const { busy, setBusy, error, setError, act } = useChange(reloadServers)
   const [notAdded, setNotAdded] = useState<Record<string, string>>({})
   const [pressed, setPressed] = useState<string | undefined>()
   const adding = useRef(new Set<string>())
+  // The servers the page started adding by itself, by address: a page drawn before the add ended still shows the server waiting, and would ask its door for a second link.
+  const addedByItself = useRef(new Set<string>())
   // The servers that are to use this computer's logins once they are saved, by address.
   const wantsLogins = useRef(new Set<string>())
   const [logins, setLogins] = useState<Devices['logins']>({})
   // The servers that are to sync this computer's agent data once they are saved, by address.
   const wantsData = useRef(new Set<string>())
   const [data, setData] = useState<Devices['data']>({})
-
-  const act = async (change: () => Promise<Answer<unknown>>): Promise<boolean> => {
-    setBusy(true)
-    setError(undefined)
-    const answer = await change()
-    if (!answer.ok) setError(answer.error)
-    await reloadServers().catch(() => {})
-    setBusy(false)
-    return answer.ok
-  }
 
   const install = async (at: string, as: string, through?: string | 'tailscale', useLogins?: boolean, syncData?: boolean): Promise<boolean> => {
     if (!machines || machines.version === 'unknown') {
@@ -223,12 +216,12 @@ export function useDevices({ everyMs, devicesEveryMs, devicesAnswerMs = DEVICES_
   const useLoginsOn = async (address: string, id: string): Promise<void> => {
     if (wantsLogins.current.delete(address)) {
       setLogins(states => ({ ...states, [address]: { state: 'running' } }))
-      const used = await host.useLoginsOn(id).catch((err: unknown) => ({ ok: false as const, error: err instanceof Error ? err.message : String(err) }))
+      const used = await host.useLoginsOn(id).catch(failed)
       setLogins(states => ({ ...states, [address]: used.ok ? { state: 'done' } : { state: 'failed', said: used.error } }))
     }
     if (!wantsData.current.delete(address)) return
     setData(states => ({ ...states, [address]: { state: 'running' } }))
-    const synced = await host.syncDataOn(id).catch((err: unknown) => ({ ok: false as const, error: err instanceof Error ? err.message : String(err) }))
+    const synced = await host.syncDataOn(id).catch(failed)
     setData(states => ({ ...states, [address]: synced.ok ? { state: 'done' } : { state: 'failed', said: synced.error } }))
   }
 
@@ -282,11 +275,17 @@ export function useDevices({ everyMs, devicesEveryMs, devicesAnswerMs = DEVICES_
   // A server whose install just ended is added by itself, once: a failure is told, and tried again on a press.
   useEffect(() => {
     if (!machines) return
-    for (const server of servers) if (server.adding && !server.working && server.steps.every(step => step.state === 'done') && notAdded[server.address] === undefined) void addToMachines(server)
+    for (const server of servers) {
+      if (!server.adding || !installDone(server)) addedByItself.current.delete(server.address)
+      else if (!addedByItself.current.has(server.address)) {
+        addedByItself.current.add(server.address)
+        void addToMachines(server)
+      }
+    }
   })
 
   const removeMachine = async (id: string): Promise<boolean> => {
-    const removed = await host.removeMachine(id).catch((err: unknown) => ({ ok: false as const, error: err instanceof Error ? err.message : String(err) }))
+    const removed = await host.removeMachine(id).catch(failed)
     if (!removed.ok) setError(removed.error)
     await reloadMachines().catch(() => {})
     return removed.ok

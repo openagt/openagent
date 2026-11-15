@@ -1,6 +1,6 @@
 import { basename } from 'node:path'
-import { nodeGitRunner, type GitRunner } from '@openagt/agent-data'
-import { errorMessage, type GhRunner } from './gh.js'
+import { errorMessage, nodeGitRunner, type GitRunner } from '@openagt/agent-data'
+import type { GhRunner } from './gh.js'
 
 /**
  * Creating the project's repository on GitHub: for a project that lives on one machine only, a

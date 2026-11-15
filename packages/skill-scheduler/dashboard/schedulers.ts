@@ -1,5 +1,6 @@
-import type { ModuleCommandResult, ModuleHost, ModuleProject } from '@openagt/dashboard/module'
+import { MAX_SPEND_OFFSET, type ModuleCommandResult, type ModuleHost, type ModuleProject } from '@openagt/dashboard/module'
 import type { PublishPick, TickDecision } from '../src/state.js'
+import { QUOTA_UNREAD } from '../src/quota-boundary.js'
 import { AGENTS, AGENT_LABELS, AGENT_SKILLS_DIR, DEFAULT_AGENT, DEFAULT_PUBLISH, isAgent, isAgents, isTime, type AgentName } from '../src/names.js'
 import { MAX_COUNT, dueFrom, paceInForce, parseInterval, parseTimeOfDay, takesTimeOfDay, type PacePick, type PaceUnit } from '../src/pace.js'
 
@@ -24,10 +25,6 @@ export function publishLabel(pick: PublishPick, own: boolean): string {
 }
 
 const PUBLISH_PICKS = Object.keys(PUBLISH_LABELS) as PublishPick[]
-
-/** How far the spend offset reaches either side of the quota boundary, in percentage points: the reach of the usage bar's handle. */
-import { MAX_SPEND_OFFSET } from '@openagt/dashboard/module'
-export { MAX_SPEND_OFFSET }
 
 /** One command the project's skills schedule, as its file says it now, with this machine's switch and publish pick. */
 export interface SchedulerCommand {
@@ -58,6 +55,10 @@ export interface SchedulerCommand {
   onThisMachine?: true
   /** Whether the command is a person's own automation as the tool wrote it: the page can open it to be saved again, and remove it. */
   editable?: true
+  /** A shared automation whose file git never had: removing it takes it from nobody else. */
+  untracked?: true
+  /** A shared automation whose file is not where a run's checkout starts, as this machine last saw it: that start point. A run of it would start nothing. */
+  notOn?: string
   /** The command's last run, when it has one: which run, when it started, and whether it failed. */
   lastRun?: LastRun
   /** What the scheduler's last tick decided for the command, when it decided anything. */
@@ -116,18 +117,19 @@ export function runsOnWords(command: SchedulerCommand, schedulerModel: string | 
   return model === undefined ? AGENT_LABELS[agent] : `${AGENT_LABELS[agent]}, ${modelLabel(agents, agent, model)}`
 }
 
-/** A command's last run as the scheduler lists it: the run's id, when it started (ISO), and whether it failed. */
+/** A command's last run as the scheduler lists it: the run's id, when it started (ISO), whether it failed, and whether it is still going. */
 export interface LastRun {
   id: string
   at: string
   failed?: true
+  running?: true
 }
 
 /** A row's last run out of what `status` printed; nothing when it is not what the command promises. */
 function lastRunOf(value: unknown): LastRun | undefined {
   const run = record(value)
   if (typeof run['id'] !== 'string' || run['id'] === '' || !isTime(run['at'])) return undefined
-  return { id: run['id'], at: run['at'], ...(run['failed'] === true ? { failed: true as const } : {}) }
+  return { id: run['id'], at: run['at'], ...(run['failed'] === true ? { failed: true as const } : {}), ...(run['running'] === true ? { running: true as const } : {}) }
 }
 
 /**
@@ -189,7 +191,8 @@ function isPace(value: unknown): boolean {
   return pick['work'] === true || (typeof pick['every'] === 'string' && parseInterval(pick['every']) !== undefined)
 }
 
-function record(value: unknown): Record<string, unknown> {
+/** A command's answer, or a value in it, read as its fields: anything but an object has none. */
+export function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {}
 }
 
@@ -247,6 +250,8 @@ export function schedulerRow(project: ModuleProject, output: unknown): Scheduler
       ...(row['each'] === true ? { each: true as const } : {}),
       ...(row['onThisMachine'] === true ? { onThisMachine: true as const } : {}),
       ...(row['editable'] === true ? { editable: true as const } : {}),
+      ...(row['untracked'] === true ? { untracked: true as const } : {}),
+      ...(typeof row['notOn'] === 'string' ? { notOn: row['notOn'] } : {}),
       ...(lastRunOf(row['lastRun']) ? { lastRun: lastRunOf(row['lastRun'])! } : {}),
       ...(decision ? { decision } : {}),
     })
@@ -307,6 +312,11 @@ export function typedOffset(raw: string): number | undefined {
 
 export type Saved = { ok: true } | { ok: false; error: string }
 
+/** A command, or a save, that could not even be asked, as its answer: a failure that says why, so the page says it and the next one still runs. */
+export function notAsked(err: unknown): { ok: false; error: string } {
+  return { ok: false, error: err instanceof Error ? err.message : String(err) }
+}
+
 /** Save the spend offset in every project: `scheduler offset -- <points>`, the `--` so a negative value is no flag. Each failing project is named. */
 export async function saveSpendOffset(host: ModuleHost, projects: readonly ModuleProject[], points: number): Promise<Saved> {
   const answers = await Promise.all(projects.map(async project => ({ project, answer: await host.runCommand(project.id, ['offset', '--', String(points)]) })))
@@ -329,7 +339,16 @@ export function spelled(every: string): string {
   return read ? `${read.count} ${UNIT_WORDS[read.unit]}${read.count === 1 ? '' : 's'}` : every
 }
 
+/** An interval as "Every" says it: one of a unit is the unit alone ("day"), any other as {@link spelled} spells it ("2 days"). */
+function everyWords(every: string): string {
+  const read = parseInterval(every)
+  return read?.count === 1 ? UNIT_WORDS[read.unit] : spelled(every)
+}
+
 const sentence = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1)
+
+/** A sentence with its full stop, added only when it has none. */
+export const stopped = (text: string): string => (/[.!?]$/.test(text.trim()) ? text.trim() : `${text.trim()}.`)
 
 /** What a row with a shell line waits for, when its words do not say: the line itself. */
 export const PRINTS_SOMETHING = 'when its shell line prints something'
@@ -347,7 +366,7 @@ export function pace(command: SchedulerCommand): string {
   const skills = command.every === undefined ? undefined : parseInterval(command.every)
   const inForce = paceInForce(command.pace, { ...(skills ? { every: skills } : {}), ...(command.when !== undefined ? { when: command.when } : {}) })
   // An interval of the skill's the tool would not have read is shown as written.
-  const every = inForce ? spelled(inForce.every.text) : command.pace === undefined && command.every !== undefined ? command.every : undefined
+  const every = inForce ? everyWords(inForce.every.text) : command.pace === undefined && command.every !== undefined ? command.every : undefined
   if (every === undefined) return sentence(waits)
   if (command.when === undefined) return inForce?.at ? `Every ${every} at ${inForce.at.text}` : `Every ${every}`
   return inForce?.at ? `Every ${every} from ${inForce.at.text}, ${waits}` : `Every ${every} at most, ${waits}`
@@ -374,7 +393,7 @@ export function draftOf(command: SchedulerCommand): PaceDraft {
   if ('work' in pick && pick.work === true) return command.when !== undefined && command.every !== undefined ? { kind: 'work' } : { kind: 'skill' }
   const every = 'every' in pick ? parseInterval(pick.every) : undefined
   if (!every || !('every' in pick)) return { kind: 'skill' }
-  const at = takesTimeOfDay(every) && pick.at !== undefined ? parseTimeOfDay(pick.at) : undefined
+  const at = takesTimeOfDay(every.unit) && pick.at !== undefined ? parseTimeOfDay(pick.at) : undefined
   return { kind: 'every', count: String(every.count), unit: every.unit, at: at?.text ?? '' }
 }
 
@@ -388,7 +407,7 @@ export function paceArgs(draft: PaceDraft): string[] | undefined {
   if (draft.kind !== 'every') return [draft.kind]
   const every = /^\d+$/.test(draft.count.trim()) ? parseInterval(`${draft.count.trim()}${draft.unit}`) : undefined
   if (!every) return undefined
-  if (!takesTimeOfDay(every)) return [every.text]
+  if (!takesTimeOfDay(every.unit)) return [every.text]
   if (draft.atHalfTyped) return undefined
   if (draft.at.trim() === '') return [every.text]
   const at = parseTimeOfDay(draft.at.trim())
@@ -399,7 +418,7 @@ export function paceArgs(draft: PaceDraft): string[] | undefined {
 export function paceProblem(draft: PaceDraft): string | undefined {
   if (paceArgs(draft)) return undefined
   if (draft.kind === 'every' && !(/^\d+$/.test(draft.count.trim()) && parseInterval(`${draft.count.trim()}${draft.unit}`))) return `Type a whole number, from 1 to ${MAX_COUNT}.`
-  return 'Finish the time, like 10:00, or clear it.'
+  return 'Finish the time of day, like 10:00, or clear it.'
 }
 
 /** A command as it would read with a draft saved: what the Edit box's sentence describes. The command as it is while the draft is no pace yet. */
@@ -441,14 +460,6 @@ export function agentsArgs(draft: AgentsDraft): string[] | undefined {
   return /^\d+$/.test(typed) && isAgents(Number(typed)) ? [String(Number(typed))] : undefined
 }
 
-/** A command as it would read with a number of agents draft saved; the command as it is while the draft is no number yet. */
-export function withAgentsDraft(command: SchedulerCommand, draft: AgentsDraft): SchedulerCommand {
-  const args = agentsArgs(draft)
-  if (!args) return command
-  const { agents: _agents, ...rest } = command
-  return args[0] === 'skill' ? rest : { ...rest, agents: Number(args[0]) }
-}
-
 /**
  * How far a scheduled command's runs may publish on this machine, as a sentence. It says a limit,
  * not what a run will do: a run with nothing to commit commits nothing. With no level picked the
@@ -467,9 +478,9 @@ export function publishes(command: SchedulerCommand): string {
  * agent cannot run says so whatever its switch: switching it on would start nothing. Then nothing
  * for a command switched off here, whose row says "Off", for one switched on that no tick has
  * decided yet, and for one the tick started, whose row says when it last ran. A decision is said in
- * plain words where the tool's own are a rule's shorthand ("No work", "One is already running"),
- * and in the tool's words with a capital where they carry a reason only the tool knows
- * (`Quota: …`, `Check failed: …`). A command whose wait is not over says when it starts next:
+ * plain words where the tool's own are a rule's shorthand ("No work", "One is already running",
+ * "Waits for quota: …"), and in the tool's words with a capital where they carry a reason only the
+ * tool knows (`Check failed: …`). A command whose wait is not over says when it starts next:
  * "Next start in 3h, if there is work", "Next start Saturday 10:00".
  */
 export function decided(command: SchedulerCommand, now: Date = new Date()): string | undefined {
@@ -495,13 +506,30 @@ function waitingWords(command: SchedulerCommand, now: Date): string | undefined 
   return nextStart(command, now)
 }
 
-/** That the coding agent a row's runs are on cannot run it at all, for a person: its skill is not in that agent's own skills folder. Nothing for a row it can run. */
-export function cannotRun(command: Pick<SchedulerCommand, 'home' | 'runsOn' | 'able'>): string | undefined {
+/** That a run of a row would start nothing, for a person: its skill is not in the own skills folder of the coding agent its runs are on, or, a shared automation, not yet where a run's checkout starts. Nothing for a row that can run. */
+export function cannotRun(command: Pick<SchedulerCommand, 'home' | 'runsOn' | 'able' | 'notOn'>): string | undefined {
   const agent = agentOf(command)
-  return command.able.includes(agent) ? undefined : notThere(AGENT_LABELS[agent], AGENT_SKILLS_DIR[agent])
+  if (!command.able.includes(agent)) return notThere(AGENT_LABELS[agent], AGENT_SKILLS_DIR[agent])
+  if (command.notOn !== undefined) return notYet(command.notOn, true)
+  return undefined
 }
 
+/** That a skill is not yet where a run's checkout starts: not committed, with no remote; else not on that branch, as this clone or this machine last saw it. */
+const notYet = (ref: string, lastSeen: boolean): string => (ref === 'HEAD' ? 'Cannot start yet: its skill is not committed' : `Cannot start yet: its skill is not on ${ref}${lastSeen ? ', as this machine last saw it' : ''}`)
+
 const notThere = (agent: string, dir: string): string => `Cannot start on ${agent}: its skill is not in ${dir}`
+
+/**
+ * What the scheduler's last look found holds a row back, whatever its pace: its skill is not where
+ * a run's checkout starts, or its coding agent is not ready, which hold back "Run now" too; or the
+ * quota, which holds back only the starts the scheduler makes by itself. Nothing for any other look,
+ * nor for one run of a row with each: its own agent and quota are asked for it, and hold it alone.
+ */
+export function heldBy(command: Pick<SchedulerCommand, 'decision'>): 'every start' | 'quota' | undefined {
+  const held = /^(not on \S+|not ready: |quota: )/.exec(command.decision?.outcome ?? '')
+  if (!held) return undefined
+  return held[1] === 'quota: ' ? 'quota' : 'every start'
+}
 
 /** One decision of the scheduler, a tick's or the answer to "Run now", for a person; nothing for one the row already says in another place: that it is switched off, that it started. A wait that is not over is said by {@link decided}, which knows the row. */
 export function outcomeWords(outcome: string | undefined): string | undefined {
@@ -513,9 +541,11 @@ export function outcomeWords(outcome: string | undefined): string | undefined {
   if (elsewhere) return notThere(elsewhere[1]!, elsewhere[2]!)
   if (outcome === 'not due') return 'No work'
   const unpublished = /^not on (\S+?)( as this clone last saw it)?: /.exec(outcome)
-  if (unpublished) return unpublished[1] === 'HEAD' ? 'Cannot start yet: its skill is not committed' : `Cannot start yet: its skill is not on ${unpublished[1]}${unpublished[2] ? ', as this machine last saw it' : ''}`
+  if (unpublished) return notYet(unpublished[1]!, unpublished[2] !== undefined)
   const capped = /^cap reached \((\d+) in flight/.exec(outcome)
   if (capped) return capped[1] === '1' ? 'One is already running' : `${capped[1]} are already running`
+  const quota = /^quota: (.*)$/.exec(outcome)
+  if (quota) return quota[1] === QUOTA_UNREAD ? "Waits until Claude Code's usage can be read: check it is logged in and online" : `Waits for quota: ${quota[1]}`
   return sentence(outcome)
 }
 
@@ -611,7 +641,7 @@ export interface Answered {
  */
 export function startedNow(answer: ModuleCommandResult): Answered {
   if (answer.ok) {
-    const output = typeof answer.output === 'object' && answer.output !== null ? (answer.output as Record<string, unknown>) : {}
+    const output = record(answer.output)
     return { started: typeof output['run'] === 'string' ? output['run'] : '', ...(output['resumed'] === true ? { resumed: true as const } : {}) }
   }
   if (answer.error === 'not due') return { note: 'Nothing started. No work: its shell line printed nothing.' }

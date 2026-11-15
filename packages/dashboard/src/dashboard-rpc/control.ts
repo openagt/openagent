@@ -1,13 +1,15 @@
 import { sayToRun, type SteerResult } from '../dashboard/run-inbox.js'
 export type { SteerResult }
 import { bridgeQuestions } from '../dashboard/bridge-store.js'
+import { isCloudSessionId } from '../dashboard/bridge-endpoints.js'
 import { openInApp, type OpenTarget, type OpenResult } from '../dashboard/open-in-app.js'
 import { contextBridgeBrowser, contextPreferences, contextStartAgent, resolveProjectPath, resolveAgentPath } from './context.js'
 import type { BridgeBrowserAction } from '../bridge-browser.js'
 import { isArrived, relayOr } from './relay-agent.js'
 import { hostname } from 'node:os'
-import { findAgent, isPidAlive, isRunId, loadAgentEvents, projectRuns, readLiveMetas, type AgentMeta } from '../store/index.js'
+import { findAgent, isPidAlive, isRunId, loadAgentEvents, projectRuns, type AgentMeta } from '../store/index.js'
 import { withAgentLock } from '../agent-locks.js'
+import { STARTING_AT_MOST_MS } from '../starting.js'
 import { removeProjectWorktree, deleteProjectAgent } from '../worktrees.js'
 import { mergeAgentPr, openAgentPullRequest, mergeAgentBranch, pushAgentBranch, type HandoffResult } from '../dashboard/agent-handoff.js'
 import { pendingChoices } from '../open-choices.js'
@@ -29,7 +31,7 @@ import { isPublishPick, type PublishPick } from '../publish-levels.js'
  * the path is the branches provider's to know, and an Open PR on a run whose checkout is gone
  * still locks the run.
  */
-export function agentLockKey(cwd: string, agentId: string): string {
+function agentLockKey(cwd: string, agentId: string): string {
   return `${cwd}\0${agentId}`
 }
 
@@ -43,14 +45,14 @@ export function agentLockKey(cwd: string, agentId: string): string {
  * Stop a live agent (the Stop button): SIGINT to the process the run's own card names, when it is
  * this machine's and alive. The run's tool asks its agent to end the turn where it is, as Esc does
  * in Claude Code; a message continues it. The card is the file the dashboard shows the run from, and its pid is
- * whoever runs the agent; OpenAgent names no tool. Nothing else: a run without a live pid
- * here has nothing to stop.
+ * whoever runs the agent; OpenAgent names no tool. A run still starting is stopped once its card
+ * names its pid. Nothing else: a run without a live pid here has nothing to stop.
  */
 export async function sendStop(projectId: string, agentId?: string): Promise<void> {
   return relayOr(agentId, 'sendStop', [projectId, agentId], async () => {
     const cwd = await resolveProjectPath(projectId)
     if (!cwd || !agentId) return
-    const meta = (await readLiveMetas(cwd).catch(() => [])).find(agent => agent.id === agentId)
+    const meta = await cardOnceUp(cwd, agentId)
     if (!meta || meta.status !== 'running' || meta.pid === undefined || meta.host !== hostname() || !isPidAlive(meta.pid)) return
     try {
       process.kill(meta.pid, 'SIGINT')
@@ -58,6 +60,20 @@ export async function sendStop(projectId: string, agentId?: string): Promise<voi
       // Gone between the probe and the signal.
     }
   }, undefined)
+}
+
+/**
+ * The run's card once it names the run's process, or its card or record says it ended. A run just
+ * started has neither yet: a Stop pressed then waits for it, as long as the page shows the run as
+ * starting, rather than being lost while the run goes on. A run whose card never comes is left as it is.
+ */
+async function cardOnceUp(cwd: string, agentId: string): Promise<AgentMeta | undefined> {
+  const deadline = Date.now() + STARTING_AT_MOST_MS
+  for (;;) {
+    const meta = await findAgent(cwd, agentId)
+    if ((meta && (meta.status !== 'running' || meta.pid !== undefined)) || Date.now() >= deadline) return meta
+    await new Promise(resolve => setTimeout(resolve, 250))
+  }
 }
 
 /**
@@ -104,7 +120,7 @@ export async function sendChoice(projectId: string, id: string, pick: string | s
  * relay: the bridge lives on the daemon the extension talks to.
  */
 export async function sendBridgeAnswer(sessionId: string, labels: string[]): Promise<{ ok: boolean; error?: string }> {
-  if (typeof sessionId !== 'string' || !/^session_[A-Za-z0-9]{1,128}$/.test(sessionId)) return { ok: false, error: 'unknown session' }
+  if (!isCloudSessionId(sessionId)) return { ok: false, error: 'unknown session' }
   if (!Array.isArray(labels) || !labels.every(label => typeof label === 'string' && label.trim())) return { ok: false, error: 'answer labels are required' }
   const queued = bridgeQuestions().queueAnswer(sessionId, labels)
   return typeof queued === 'string' ? { ok: false, error: queued } : { ok: true }
@@ -112,7 +128,7 @@ export async function sendBridgeAnswer(sessionId: string, labels: string[]): Pro
 
 /** Withdraw a queued bridge answer (#1237). A no-op once the extension has delivered it. */
 export async function sendBridgeAnswerCancel(sessionId: string): Promise<void> {
-  if (typeof sessionId !== 'string' || !/^session_[A-Za-z0-9]{1,128}$/.test(sessionId)) return
+  if (!isCloudSessionId(sessionId)) return
   bridgeQuestions().cancelAnswer(sessionId)
 }
 
@@ -219,8 +235,8 @@ export async function sendStart(projectId: string, prompt: string, options: Star
 
 /**
  * Open a project in the OS file manager or an editor (#490). Localhost-only: the daemon
- * spawns a local command against the project's own registered path. A public host has no
- * local path to resolve, so it returns an error rather than spawning anything.
+ * spawns a local command against the project's own registered path. A project with no folder
+ * here returns an error rather than spawning anything.
  *
  * With a `agentId` it opens that session's own checkout instead (#798) — the whole point of
  * opening it is to look at what the agent is doing, which is not in the project's tree.
@@ -230,7 +246,7 @@ export async function sendOpenInApp(projectId: string, target: OpenTarget, agent
   if (!cwd) return { ok: false, error: 'this project has no local path on this server' }
   // #727: honour the stored editor preference; absent falls back to $OPENAGENT_EDITOR, then `code`.
   const editor =
-    target === 'editor' ? (await contextPreferences()?.read().catch((): Preferences => ({})))?.editor : undefined
+    target === 'editor' ? (await contextPreferences().read().catch((): Preferences => ({}))).editor : undefined
   return openInApp(cwd, target, undefined, editor)
 }
 

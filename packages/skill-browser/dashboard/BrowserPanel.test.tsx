@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { ModuleHostContext, type ModuleHost } from '@openagt/dashboard/module'
+import { fakeHost } from '@openagt/dashboard/module/testing'
 import { ACTED, CONSOLE, CURSOR, FRAME, PULSE, SELECTED, STATE, streamPart, type ConsoleLine } from '../src/stream.js'
 import { BrowserPanel } from './BrowserPanel.js'
 
@@ -16,47 +17,17 @@ function dashboard() {
   const sent: unknown[] = []
   let open = true
   let cancelled = 0
-  const host: ModuleHost = {
-    package: '@openagt/skill-browser',
-    runCommand: vi.fn(async () => ({ ok: false as const, error: 'no commands' })),
-    act: vi.fn(async () => ({ ok: false as const, error: 'no commands' })),
-    runComputerCommand: vi.fn(async () => ({ ok: false as const, error: 'not the computer\'s' })),
-    runComputerCommandOn: vi.fn(async () => ({ ok: false as const, error: 'not the computer\'s' })),
-    read: vi.fn(async () => ({ ok: false as const, error: 'no reads' })),
-    openAgent: vi.fn(),
-    openPage: vi.fn(),
-    pageHref: (segment: string) => `/${segment}`,
-    openSettings: vi.fn(),
-    gitHostPeople: vi.fn(async () => []),
-    startRun: vi.fn(async () => ({ ok: false as const, error: 'no runs' })),
-    configureRun: vi.fn(),
-    agents: vi.fn(async () => []),
-    machines: vi.fn(async () => ({ version: '0.0.0', machines: [] })),
-    addMachine: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
-    removeMachine: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
-    renameMachine: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
-    renameComputer: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
-    letMachineIn: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
-    machineCode: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
-    computersThrough: vi.fn(async () => ({ ok: true as const, computers: [] })),
-    machinePerson: vi.fn(async () => ({ ok: false as const, error: 'no person there', unknown: true as const })),
-    removeMachineDevice: vi.fn(async () => ({ ok: false as const, error: 'no person there' })),
-    machineAccounts: vi.fn(async () => null),
-    removeMachineAccount: vi.fn(async () => ({ ok: false as const, error: 'no server here' })),
-    useLoginsOn: vi.fn(async () => ({ ok: false as const, error: 'no server here' })),
-    syncDataOn: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
-    agentDataRemote: vi.fn(async () => undefined),
-    addComputerThrough: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
-    watchScreen: vi.fn(async (_project: string, _agent: string, signal: AbortSignal) => {
+  const host = fakeHost('@openagt/skill-browser', {
+    watchScreen: async (_project: string, _agent: string, signal: AbortSignal) => {
       watched.push(signal)
       if (!open) return undefined
       return new ReadableStream<Uint8Array>({ start: controller => void (feed = controller), cancel: () => void cancelled++ })
-    }),
-    sendToScreen: vi.fn(async (_project: string, _agent: string, input: unknown) => {
+    },
+    sendToScreen: async (_project: string, _agent: string, input: unknown) => {
       sent.push(input)
       return true
-    }),
-  }
+    },
+  })
   return {
     host,
     watched,

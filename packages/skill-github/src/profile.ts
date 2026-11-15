@@ -1,3 +1,5 @@
+import { errorMessage } from '@openagt/agent-data'
+
 /**
  * A GitHub user's public profile: the name and picture a person copies into OpenAgent as their
  * own, once, when they press "Sync from GitHub". Read from GitHub's public API with no login, so
@@ -11,19 +13,12 @@ export type ProfileOutcome =
 /** What fetches the profile: `fetch` by default. */
 export type ProfileFetch = (url: string, init: { headers: Record<string, string>; signal: AbortSignal }) => Promise<{ ok: boolean; status: number; json(): Promise<unknown> }>
 
-/** A GitHub login, as GitHub allows one. */
-const LOGIN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/
-
-export function isGithubLogin(login: string): boolean {
-  return LOGIN.test(login)
-}
-
 export async function publicProfile(login: string, fetcher: ProfileFetch = fetch): Promise<ProfileOutcome> {
   let answer: { ok: boolean; status: number; json(): Promise<unknown> }
   try {
     answer = await fetcher(`https://api.github.com/users/${encodeURIComponent(login)}`, { headers: { accept: 'application/vnd.github+json', 'user-agent': 'openagent' }, signal: AbortSignal.timeout(10_000) })
   } catch (err) {
-    return { ok: false, reason: 'not-reached', detail: err instanceof Error ? err.message : String(err) }
+    return { ok: false, reason: 'not-reached', detail: errorMessage(err) }
   }
   if (answer.status === 404) return { ok: false, reason: 'no-user', detail: `GitHub has no user ${login}` }
   if (!answer.ok) return { ok: false, reason: 'not-reached', detail: `GitHub answered ${answer.status}` }

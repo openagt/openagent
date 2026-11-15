@@ -1,6 +1,6 @@
 import { useMemo, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react'
 import { Check, ChevronRight, Search } from 'lucide-react'
-import { ContextMenu, ContextMenuTrigger, DropdownMenuContent, FileIcon, DropdownMenuItem, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, Input, cn, type ModuleContext } from '@openagt/dashboard/module'
+import { ContextMenu, ContextMenuTrigger, DropdownMenuContent, FileIcon, MiddleCut, DropdownMenuItem, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, Input, cn, treeRow, type ModuleContext } from '@openagt/dashboard/module'
 
 // The Files pane's tree (#492): a lazy, collapsible tree built from the flat list of paths, with
 // "Filter files…" over it. As in Claude Code on the web: one click on a file opens it as a
@@ -39,7 +39,6 @@ function buildTree(paths: string[]): TreeNode {
 }
 
 const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name)
-const ROW = 'flex h-6 w-full items-center gap-1.5 rounded-md px-2 text-start text-[13px] leading-[19px] hover:bg-accent'
 
 /**
  * A folder row. Its contents are built only while it is open: a closed folder costs one row however
@@ -50,8 +49,8 @@ function Folder({ name, children }: { name: string; children: () => ReactNode })
   const [open, setOpen] = useState(false)
   return (
     <details className="group" onToggle={e => setOpen(e.currentTarget.open)}>
-      <summary className={cn(ROW, 'cursor-pointer list-none')}>
-        <ChevronRight aria-hidden className="size-3 shrink-0 text-muted-foreground group-open:rotate-90" />
+      <summary className={cn(treeRow, 'cursor-pointer list-none')}>
+        <ChevronRight aria-hidden className="size-4 shrink-0 text-muted-foreground group-open:rotate-90" />
         <span className="truncate">{name}</span>
       </summary>
       {open && <div className="ml-3">{children()}</div>}
@@ -92,15 +91,15 @@ function FileRow({ path, shown, attached, onOpen, onAttach }: {
             onClick={() => onOpen(path, false)}
             onDoubleClick={() => onOpen(path, true)}
             onKeyDown={openMenuByKey}
-            className={cn(ROW, shown && 'bg-accent')}
+            className={cn(treeRow, shown && 'bg-accent')}
           />
         }
       >
-        {/* The same width as a folder's chevron, so a file's name lines up with its folder's. */}
-        <span className="flex w-3 shrink-0 justify-center">
-          <FileIcon path={path} className="size-3" />
+        {/* As wide as a folder's chevron, so a file's name lines up with its folder's. */}
+        <FileIcon path={path} />
+        <span className="flex min-w-0 flex-1">
+          <MiddleCut text={name} />
         </span>
-        <span className="min-w-0 flex-1 truncate">{name}</span>
         {attached && <Check aria-label="In the Context" className="size-3.5 shrink-0 text-primary" />}
       </ContextMenuTrigger>
       <DropdownMenuContent className="min-w-[11rem]">
@@ -154,19 +153,22 @@ export function FileTree({ files, caption, shown, context, filter, onOpen }: {
 
   return (
     <div className="flex min-h-0 flex-auto flex-col px-2 pb-2">
-      {/* A filled box a step above the pane, as Claude Code's is, with room around it. */}
-      <div className="relative mt-2 mb-2">
-        <Search aria-hidden className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
-        <Input ref={filter} type="search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Filter files…" aria-label="Filter files" className="h-8 rounded-lg border-border/60 bg-card pr-2! pl-8! text-[13px] shadow-none" />
+      <div className="relative my-2">
+        <Search aria-hidden className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+        <Input ref={filter} type="search" value={query} onChange={e => setQuery(e.target.value)} name="filter-files" placeholder="Filter files…" aria-label="Filter files" className="h-8 pl-8 text-sm" />
       </div>
-      {caption && <p className="px-1 pb-1 text-[10px] text-muted-foreground">{caption}</p>}
+      {caption && (
+        <p className="flex px-2 pb-1 text-xs text-muted-foreground" title={caption}>
+          <MiddleCut text={caption} />
+        </p>
+      )}
       {/* A query with zero hits used to render an empty pane, which reads as broken (#948). */}
       {query.trim() && visible.length === 0 ? (
-        <p className="px-1 py-2 text-xs text-muted-foreground">No files match &ldquo;{query.trim()}&rdquo;.</p>
+        <p className="px-2 py-2 text-xs text-muted-foreground">No files match &ldquo;{query.trim()}&rdquo;.</p>
       ) : (
         <>
           {query.trim() && (
-            <p className="px-1 pb-1 text-[10px] text-muted-foreground">
+            <p className="px-2 pb-1 text-xs text-muted-foreground">
               {visible.length} of {files.length} files
             </p>
           )}

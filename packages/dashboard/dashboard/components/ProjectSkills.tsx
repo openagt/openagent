@@ -3,10 +3,14 @@ import { onProjectSkills, sendChangeSkills, sendProjectSkills, type ProjectSkill
 import { useAction } from '../lib/use-action.js'
 import { useLoaded, usePolled } from '../lib/use-async.js'
 import { onSkillsSaved, skillsSaved } from '../lib/skills-saved.js'
-import { cn } from '../lib/utils.js'
+import { useSettingsHold } from '../lib/settings-hold.js'
+import { takeLostFocus } from '../lib/lost-focus.js'
 import { Button, buttonVariants } from './ui/button.js'
 import { Checkbox } from './ui/checkbox.js'
 import { Skeleton } from './ui/skeleton.js'
+import { Slot } from './ui/slot.js'
+import { SettingsFoot } from './SettingsRows.js'
+import { cn } from '../lib/utils.js'
 
 // A project's skills (#2023). The "Skills" menu under the box (SkillsMenu.tsx) opens Settings on
 // the project's Skills page: a card with a tick for each skill a project picks beyond the ones
@@ -56,8 +60,8 @@ const NOTES: Partial<Record<ProjectSkill['standing'], string>> = {
 export const sendWord = (skills: ProjectSkills): string => (skills.remote ? `Send to ${skills.remote}` : 'Commit')
 
 export function ProjectSkillsLine({ projectId, onChanged }: { projectId: string; onChanged?: (() => void) | undefined }) {
-  // A read that fails answers like a project unknown here: no skills to show.
-  const { value: skills, reload } = usePolled<ProjectSkills | null>(() => onProjectSkills(projectId).catch(() => null), null, 15_000, [projectId], 'previous')
+  // Nothing to show until the skills are read, and a read that fails keeps what the last one said.
+  const { value: skills, reload } = usePolled<ProjectSkills | null>(() => onProjectSkills(projectId), null, 15_000, [projectId])
   const [pending, setPending] = useState<'update' | 'send' | null>(null)
   const { error, run } = useAction()
   // Saved on the Skills page, over this page: said here at once, not at the next read.
@@ -90,7 +94,7 @@ export function ProjectSkillsLine({ projectId, onChanged }: { projectId: string;
           <span>
             <Subject names={newer} /> {newer.length === 1 ? 'has a newer version' : 'have newer versions'}.
           </span>
-          <Button type="button" variant="outline" size="xs" className="shrink-0" disabled={pending !== null} onClick={() => void update()}>
+          <Button type="button" variant="outline" size="sm" className="shrink-0" disabled={pending !== null} onClick={() => void update()}>
             {pending === 'update' ? 'Updating…' : 'Update'}
           </Button>
         </span>
@@ -101,7 +105,7 @@ export function ProjectSkillsLine({ projectId, onChanged }: { projectId: string;
             <Subject names={here} /> {is(here)} {skills.remote ? 'on this computer only' : 'not committed'}, so your agents do not have {it(here)} yet.
             {skills.local && skills.remote && ' Or pick My local branch when you start an agent.'}
           </span>
-          <Button type="button" variant="outline" size="xs" className="shrink-0" disabled={pending !== null} onClick={() => void send()}>
+          <Button type="button" variant="outline" size="sm" className="shrink-0" disabled={pending !== null} onClick={() => void send()}>
             {pending === 'send' ? 'Sending…' : sendWord(skills)}
           </Button>
         </span>
@@ -111,7 +115,7 @@ export function ProjectSkillsLine({ projectId, onChanged }: { projectId: string;
           <span>
             <Subject names={waiting} /> {is(waiting)} in pull request #{skills.request!.number}. Your agents get {it(waiting)} once it is merged.
           </span>
-          <a href={skills.request!.url} target="_blank" rel="noreferrer" className={buttonVariants({ variant: 'outline', size: 'xs', className: 'shrink-0' })}>
+          <a href={skills.request!.url} target="_blank" rel="noreferrer" className={buttonVariants({ variant: 'outline', size: 'sm', className: 'shrink-0' })}>
             Open #{skills.request!.number}
           </a>
         </span>
@@ -170,23 +174,36 @@ export function SkillsSettings({ projectId }: { projectId: string }) {
   const [visit, setVisit] = useState(0)
   // `undefined` is not read yet; a read that fails answers like a project unknown here.
   const skills = useLoaded<ProjectSkills | null | undefined>(() => onProjectSkills(projectId).catch(() => null), undefined, [projectId, visit])
-  if (skills === undefined) {
-    return (
-      <div aria-label="Reading the skills" className="grid grid-cols-2 gap-3 max-sm:grid-cols-1">
-        {Array.from({ length: 6 }, (_, index) => (
-          <Skeleton key={index} className="h-20 rounded-lg" />
-        ))}
-      </div>
-    )
-  }
-  if (skills === null) {
-    return (
-      <p role="alert" className="rounded-lg border border-border px-3 py-2 text-sm text-danger">
-        This project&rsquo;s skills could not be read.
-      </p>
-    )
-  }
-  return <SkillCards key={visit} projectId={projectId} skills={skills} onDone={() => setVisit(next => next + 1)} />
+  return (
+    <Slot of={{ value: skills, state: skills === undefined ? 'unknown' : 'fresh' }} shape={<SkillShapes />}>
+      {skills =>
+        skills ? (
+          <SkillCards key={visit} projectId={projectId} skills={skills} onDone={() => setVisit(next => next + 1)} />
+        ) : (
+          <p role="alert" className="text-sm text-danger">
+            This project&rsquo;s skills could not be read.
+          </p>
+        )
+      }
+    </Slot>
+  )
+}
+
+/** Skills while they are read, in the shape of their ticks. */
+function SkillShapes() {
+  return (
+    <div className={SKILL_TICKS_CLASS}>
+      {Array.from({ length: 6 }, (_, at) => (
+        <div key={at} className="flex items-start gap-3">
+          <Skeleton className="mt-0.5 size-4 shrink-0 rounded-sm" />
+          <div className="min-w-0 flex-1 space-y-2 pt-0.5">
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="h-3 w-4/5" />
+          </div>
+        </div>
+      ))}
+    </div>
+  )
 }
 
 function SkillCards({ projectId, skills, onDone }: { projectId: string; skills: ProjectSkills; onDone: () => void }) {
@@ -205,6 +222,7 @@ function SkillCards({ projectId, skills, onDone }: { projectId: string; skills: 
   const write = all(skills).filter(skill => ticked.has(skill.name) && !held(skill)).map(skill => skill.name)
   const remove = all(skills).filter(skill => !ticked.has(skill.name) && held(skill)).map(skill => skill.name)
   const nothing = write.length === 0 && remove.length === 0
+  useSettingsHold(!nothing && !saved)
 
   // A change of skills goes on to where agents start from in the same press.
   const send = async (names: string[]): Promise<void> => {
@@ -230,11 +248,12 @@ function SkillCards({ projectId, skills, onDone }: { projectId: string; skills: 
 
   if (saved) {
     return (
-      <div className="space-y-2 text-sm text-muted-foreground">
+      // What the save did takes the focus its gone press had.
+      <div ref={takeLostFocus} tabIndex={-1} className="space-y-2 text-sm text-muted-foreground outline-none">
         {saved.written.length > 0 && (
           <p>
-            Wrote {count(saved.written.length, 'skill', 'skills')} in <code className="rounded bg-muted px-1">.agents/skills</code>, linked in{' '}
-            <code className="rounded bg-muted px-1">.claude/skills</code>: <span className="text-foreground">{saved.written.join(', ')}</span>.
+            Wrote {count(saved.written.length, 'skill', 'skills')} in <code className="rounded-sm bg-muted px-1">.agents/skills</code>, linked in{' '}
+            <code className="rounded-sm bg-muted px-1">.claude/skills</code>: <span className="text-foreground">{saved.written.join(', ')}</span>.
           </p>
         )}
         {saved.removed.length > 0 && (
@@ -246,12 +265,12 @@ function SkillCards({ projectId, skills, onDone }: { projectId: string; skills: 
         {saved.scheduler === 'off' && <p>The scheduler is off for this project on this machine, and stopped.</p>}
         {saved.left.map(({ path, reason }) => (
           <p key={path}>
-            Left as it is: <code className="rounded bg-muted px-1">{path}</code> ({reason}).
+            Left as it is: <code className="rounded-sm bg-muted px-1">{path}</code> ({reason}).
           </p>
         ))}
         {saved.schedulerError && <p className="text-danger">The scheduler was not switched: {saved.schedulerError}</p>}
         {saved.written.length + saved.removed.length > 0 && !skills.git && <p>This folder is not a git repository, so there is nothing to commit.</p>}
-        {sent?.ok && sent.sent === 'committed' && <p>Committed. Your agents get this change from their next start.</p>}
+        {sent?.ok && sent.sent === 'committed' && <p>Committed.{sent.unsent !== undefined && ` Nothing was sent: ${sent.unsent}.`} Your agents get this change from their next start.</p>}
         {sent?.ok && sent.sent === 'pushed' && (
           <p>
             Sent to {skills.remote}, on {sent.branch}. Your agents get this change from their next start.
@@ -268,17 +287,17 @@ function SkillCards({ projectId, skills, onDone }: { projectId: string; skills: 
         )}
         {sent?.ok && sent.sent === 'branch' && (
           <p>
-            {branch} took no push, so the change is on the branch <code className="rounded bg-muted px-1">{sent.branch}</code>. Merge it into {branch}, and your agents get it.
+            {branch} took no push, so the change is on the branch <code className="rounded-sm bg-muted px-1">{sent.branch}</code>. Merge it into {branch}, and your agents get it.
           </p>
         )}
         {error && <p className="text-danger">{saved.written.length + saved.removed.length > 0 ? `Saved in the project's folder, not sent: ${error}` : error}</p>}
         <div className="flex justify-end gap-2 pt-1">
           {error && saved.written.length + saved.removed.length > 0 && skills.git && (
-            <Button type="button" size="sm" disabled={busy} onClick={() => void send([...saved.written, ...saved.removed])}>
+            <Button type="button" loading={busy} onClick={() => void send([...saved.written, ...saved.removed])}>
               {busy ? 'Sending…' : 'Send again'}
             </Button>
           )}
-          <Button type="button" variant="outline" size="sm" disabled={busy} onClick={onDone}>
+          <Button type="button" variant="secondary" disabled={busy} onClick={onDone}>
             Done
           </Button>
         </div>
@@ -288,44 +307,88 @@ function SkillCards({ projectId, skills, onDone }: { projectId: string; skills: 
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">
-        A ticked skill is written into the project&rsquo;s folder and an unticked one is deleted{skills.remote ? `; Save sends the change to ${skills.remote}, where your agents start from` : skills.git ? '; Save commits the change' : ''}. The skills every agent gets by default come with every run and are not here.
-      </p>
+      <p className="text-sm text-muted-foreground">The skills every agent gets by default come with every run and are not here.</p>
       {skills.groups.map(group => (
         <fieldset key={group.title}>
-          <legend className="mb-2 text-sm font-medium">{group.title}</legend>
-          <div className="grid grid-cols-2 gap-3 max-sm:grid-cols-1">
+          <legend className="mb-3 text-xs font-medium text-muted-foreground">{group.title}</legend>
+          <div className={SKILL_TICKS_CLASS}>
             {group.skills.map(skill => {
               const notes = [NOTES[skill.standing], skill.waiting && skills.startBranch !== undefined ? `waiting to reach ${skills.startBranch}` : undefined].filter(Boolean)
               return (
-                <label key={skill.name} className={cn('flex cursor-pointer items-start gap-2.5 rounded-lg border bg-card p-3 transition-colors', ticked.has(skill.name) ? 'border-primary/60' : 'border-border hover:border-muted-foreground/40')}>
-                  <Checkbox checked={ticked.has(skill.name)} onCheckedChange={checked => tick(skill.name, checked === true)} disabled={busy} className="mt-0.5" aria-label={skill.name} />
-                  <span className="min-w-0">
-                    <span className="block text-sm font-medium">{skill.name}</span>
-                    {notes.length > 0 && <span className="block text-xs text-warning">{notes.join(' · ')}</span>}
-                    <span className="mt-0.5 block text-xs text-muted-foreground">{skill.description}</span>
-                  </span>
-                </label>
+                <SkillTick key={skill.name} name={skill.name} description={skill.description} note={notes.length > 0 ? notes.join(' · ') : undefined} checked={ticked.has(skill.name)} onChange={on => tick(skill.name, on)} disabled={busy} />
               )
             })}
           </div>
         </fieldset>
       ))}
-      {/* In sight while the cards scroll under it: a tick at the top of the page has its Save at hand. */}
-      <div className="sticky bottom-0 -mx-4 -mb-6 border-t border-border bg-background px-4 py-3">
+      {/* In sight while the skills scroll under it: a tick at the top of the page has its Save at hand. */}
+      <SettingsFoot>
         {error && <p role="alert" className="mb-2 text-xs text-danger">{error}</p>}
         <div className="flex flex-wrap items-center justify-end gap-2">
-          <span className="mr-auto text-xs text-muted-foreground">
-            {nothing ? 'Nothing to change.' : [write.length > 0 ? `${count(write.length, 'skill', 'skills')} to write` : '', remove.length > 0 ? `${count(remove.length, 'skill', 'skills')} to delete` : ''].filter(Boolean).join(', ') + '.'}
+          {/* What a Save does to the project's files, beside it, once there is something to save. */}
+          <span className="mr-auto min-w-0 flex-1 basis-60 text-xs text-muted-foreground">
+            {nothing ? (
+              'Nothing to change.'
+            ) : (
+              <>
+                <span className="font-medium text-foreground">
+                  {[write.length > 0 ? `${count(write.length, 'skill', 'skills')} to write` : '', remove.length > 0 ? `${count(remove.length, 'skill', 'skills')} to delete` : ''].filter(Boolean).join(', ') + '.'}
+                </span>{' '}
+                A ticked skill is written into the project&rsquo;s folder and an unticked one is deleted{skills.remote ? `; Save sends the change to ${skills.remote}, where your agents start from` : skills.git ? '; Save commits the change' : ''}.
+              </>
+            )}
           </span>
-          <Button type="button" variant="outline" size="sm" disabled={busy || nothing} onClick={cancel}>
+          <Button type="button" variant="secondary" disabled={busy || nothing} onClick={cancel}>
             Cancel
           </Button>
-          <Button type="button" size="sm" disabled={busy || nothing} onClick={() => void save()}>
+          <Button type="button" disabled={nothing} loading={busy} onClick={() => void save()}>
             {busy ? 'Saving…' : saveWord}
           </Button>
         </div>
-      </div>
+      </SettingsFoot>
     </div>
+  )
+}
+
+/** The skills' ticks laid out: a column, two from a tablet up, 12 between rows. */
+export const SKILL_TICKS_CLASS = 'grid gap-x-6 gap-y-3 md:grid-cols-2'
+
+/**
+ * One skill to tick: the box, its name, and its sentence under it; a note, a warning, between them. No box around it.
+ * `brief`: one line of the sentence, the whole of it on a press of that line.
+ */
+export function SkillTick({ name, description, note, checked, onChange, disabled, label = name, brief = false }: { name: string; description: string; note?: string | undefined; checked: boolean; onChange: (on: boolean) => void; disabled?: boolean | undefined; label?: string | undefined; brief?: boolean }) {
+  const [whole, setWhole] = useState(false)
+  if (brief)
+    return (
+      <div className="min-w-0">
+        <label className="flex cursor-pointer items-start gap-3">
+          <Checkbox checked={checked} onCheckedChange={next => onChange(next === true)} disabled={disabled} className="mt-0.5" aria-label={label} />
+          <span className="min-w-0 text-sm font-medium">{name}</span>
+        </label>
+        {/* Under the name, on the edge its words start at: the box's 16 and the gap's 12. */}
+        <div className="min-w-0 pl-7">
+          {note !== undefined && <span className="block text-xs text-warning">{note}</span>}
+          <button
+            type="button"
+            aria-expanded={whole}
+            onClick={() => setWhole(on => !on)}
+            // 24 high over a 16 line: its own box, since a cut line clips whatever reaches past it.
+            className={cn('focus-ring -my-1 block max-w-full rounded-sm py-1 text-left text-xs text-muted-foreground hover:text-foreground', !whole && 'truncate')}
+          >
+            {description}
+          </button>
+        </div>
+      </div>
+    )
+  return (
+    <label className="flex cursor-pointer items-start gap-3">
+      <Checkbox checked={checked} onCheckedChange={next => onChange(next === true)} disabled={disabled} className="mt-0.5" aria-label={label} />
+      <span className="min-w-0">
+        <span className="block text-sm font-medium">{name}</span>
+        {note !== undefined && <span className="block text-xs text-warning">{note}</span>}
+        <span className="block text-xs text-muted-foreground">{description}</span>
+      </span>
+    </label>
   )
 }

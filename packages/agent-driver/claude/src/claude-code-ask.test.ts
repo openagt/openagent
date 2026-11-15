@@ -1,7 +1,8 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { Readable, Writable } from 'node:stream'
-import { ClaudeCodeDriver, StreamJsonParser, askedQuestion } from './claude-code.js'
+import { ClaudeCodeDriver } from './claude-code.js'
+import { StreamJsonParser, askedQuestion } from './claude-code-stream.js'
 import type { CliIo, DriverEvent, SpawnLike, SpawnedProcess } from '@openagt/agent-driver'
 
 // The lines Claude Code 2.1.318 writes when its agent calls AskUserQuestion under

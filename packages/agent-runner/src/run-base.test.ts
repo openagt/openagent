@@ -7,15 +7,12 @@ import { FakeDriver, type Driver, type DriverSession, type DriverStartOptions } 
 import { findRun } from '@openagt/skill-logs'
 import { resumeRun, runCommand } from './run.js'
 import { runnerMark } from './records.js'
-import type { GitHost } from './git-host.js'
 import { git, handDownBasicSkills, removeRepo, testRepo } from './test-repo.js'
+import { NOW, noGitHost } from './run-test-support.js'
 
 // A run told to start from a branch as origin has it, end to end on a real repository and a real
 // bare origin, with the agent faked. Its own file: `run.test.ts` is at the runner's time limit.
 handDownBasicSkills()
-
-const NOW = new Date('2026-09-16T14:01:00.000Z')
-const noGitHost: GitHost = { requestOfBranch: async () => undefined }
 
 /** A fake agent that notes the commit its checkout is on. */
 function looking(seen: { head: string }): Driver {

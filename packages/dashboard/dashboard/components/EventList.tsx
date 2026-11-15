@@ -1,10 +1,11 @@
 import type { AgentDoing, AgentMeta, ChoiceRequest, OpenAgentEvent } from '../../src/index.js'
 import { foldScreenRows, formatOpenAgentEvent } from '../../src/client.js'
 import { parseQuestion, QUESTION_TAG } from '@openagt/agent-driver/question'
-import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
+import { Fragment, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { Check, ChevronRight, Copy, PencilLine } from 'lucide-react'
 import { pendingChoices } from '../lib/live-state.js'
-import { callRow, callSubagents, runRow, endMessage, subagentEnd, subagentEvents, subagentReport, subagentSteps, subagentWait, type SubagentEnd } from '../lib/subagents.js'
+import { DaemonDown } from '../lib/use-daemon-health.js'
+import { callRow, callSubagents, isAgentsOwn, runRow, endMessage, subagentEnd, subagentEvents, subagentReport, subagentSteps, subagentWait, type SubagentEnd } from '../lib/subagents.js'
 import { answeredQuestion } from '../lib/answered-question.js'
 import { rowWords, type RowWords } from '../lib/row-words.js'
 import { formatAge } from '../lib/format-date.js'
@@ -60,19 +61,13 @@ import {
 // the moment the reader scrolls up, replay renders static from the top, and the "Jump to latest"
 // chip is the scroller's own inert-when-not-scrollable button.
 
-// The conversation text — the user's prompt and the agent's reply (AGENT). Both are rendered
-// as Markdown: the agent writes in Markdown, and a prompt may too.
+// The conversation text — the user's prompt and the agent's reply. Both are rendered as Markdown:
+// the agent writes in Markdown, and a prompt may too.
 function messageText(e: OpenAgentEvent): string | null {
   if (e.kind !== 'driver') return null
   if (e.event.type === 'start') return e.event.prompt
   if (e.event.type === 'text') return e.event.text
   return null
-}
-
-// Long enough that an inline row truncates to one line and offers to expand. Mirrors terminal.ts's
-// `truncate`: collapse whitespace, trim, compare to 100.
-function isLong(text: string): boolean {
-  return text.replace(/\s+/g, ' ').trim().length > 100
 }
 
 /** Grouping key for a run of same-kind rows: the user's prompt stands apart from the agent's work. */
@@ -86,13 +81,13 @@ function steeredText(e: OpenAgentEvent): string | undefined {
   return e.kind === 'driver' && e.event.type === 'steered' ? e.event.text : undefined
 }
 
-// A driver `start` opens a fresh prompt turn.
 /** The later of two times, either one absent. */
 function later(a: string | undefined, b: string | undefined): string | undefined {
   if (a === undefined || b === undefined) return a ?? b
   return Date.parse(a) >= Date.parse(b) ? a : b
 }
 
+/** A driver `start` opens a fresh prompt turn. */
 function isTurnBoundary(e: OpenAgentEvent): boolean {
   return e.kind === 'driver' && e.event.type === 'start'
 }
@@ -140,11 +135,6 @@ function promptFirst(events: OpenAgentEvent[]): OpenAgentEvent[] {
   const at = events.findIndex(isTurnBoundary)
   if (at <= 0) return events
   return [events[at]!, ...events.slice(0, at), ...events.slice(at + 1)]
-}
-
-/** HH:MM:SS in the reader's locale, for the column that says when each line was written. */
-function formatTime(at: string): string {
-  return new Date(at).toLocaleTimeString()
 }
 
 /**
@@ -248,11 +238,14 @@ export function withEarlyQuestion(events: OpenAgentEvent[]): OpenAgentEvent[] {
  * The ends that are no row: a clean one, one waiting on an answer, and one the person stopped. The
  * agent's last message is how a clean turn ends, and the question's card is how a waiting one does;
  * a line under them said it twice. A stopped one just ends where the person stopped it, as Claude
- * Code's chat shows it, with nothing after. A failed end is a row where it happened: it says why
- * the agent is not going on, and why the next prompt was needed.
+ * Code's chat shows it, with nothing after; unless it is the first thing after the prompt: its
+ * coding agent never began, and nothing else in the chat says it ended. A failed end is a row where
+ * it happened: it says why the agent is not going on, and why the next prompt was needed.
  */
 export function quietEnds(events: readonly OpenAgentEvent[]): Set<OpenAgentEvent> {
-  return new Set(events.filter(e => e.kind === 'end' && (e.ok || e.waiting || e.stopped)))
+  const at = events.findIndex(e => !isTurnBoundary(e))
+  const first = at > 0 ? events[at] : undefined
+  return new Set(events.filter(e => e.kind === 'end' && (e.ok || e.waiting || (e.stopped && e !== first))))
 }
 
 /**
@@ -333,21 +326,26 @@ function CopyMessage({ text }: { text: string }) {
   )
 }
 
+/** How long ago a message was said, small and grey, the whole time on hover. */
+function Age({ at }: { at: string }) {
+  return (
+    <time dateTime={at} title={new Date(at).toLocaleString()} className="px-1 text-xs">
+      {formatAge(at)}
+    </time>
+  )
+}
+
 /**
  * Under the agent's last message of a turn it finished: a button that copies it, and how long ago
  * it was said, as Claude Code on the web puts them under its messages. Shown while the pointer is
- * anywhere on the turn (`.turn-footer` in tailwind.css), or a key is in the footer; its line is
- * always there, so nothing moves when it shows.
+ * anywhere on the turn (`.turn-footer` in tailwind.css), or a key is in the footer, and always on
+ * a touch screen, which has no pointer to rest; its line is always there, so nothing moves when it shows.
  */
 function ReplyFooter({ text, at }: { text: string; at?: string | undefined }) {
   return (
-    <div className="turn-footer flex h-6 items-center gap-1 font-sans text-muted-foreground opacity-0 transition-opacity focus-within:opacity-100">
+    <div className="turn-footer flex h-6 items-center gap-1 font-sans text-muted-foreground opacity-0 transition-opacity focus-within:opacity-100 pointer-coarse:opacity-100">
       <CopyMessage text={text} />
-      {at !== undefined && (
-        <time dateTime={at} title={new Date(at).toLocaleString()} className="px-1 text-[11px]">
-          {formatAge(at)}
-        </time>
-      )}
+      {at !== undefined && <Age at={at} />}
     </div>
   )
 }
@@ -386,56 +384,74 @@ function TurnFiles({ files, onOpen, footer }: { files: readonly ChangedFile[]; o
   )
 }
 
-// The user's own message: a grey box on the right, as Markdown in the page's font. No label says
+// The user's own message: a soft box on the right, as Markdown in the page's font. No label says
 // whose it is; the place and the box do. A long one is cut short with "Show more" under it. The
-// time it was sent sits under the box and shows while the pointer is on the message; its line is
-// always there, so nothing moves when it shows.
+// time it was sent sits beside the box's foot and shows while the pointer is on the message; its
+// room is always there, so nothing moves when it shows.
 // `waiting`: a message the working agent has not read yet, as Claude Code on the web shows one:
-// under it, Send now, or "Queued" for one sent for after the turn, and on hover the copy and
-// Cancel and edit, which takes it back into the box.
+// under it, when the agent reads it and Send now, or "Queued" for one sent for after the turn, and
+// on hover the copy and Cancel and edit, which takes it back into the box.
 // `attached`: what the run handed the agent with this message, folded under the box.
 // `fresh`: a message just sent, which slides in where it lands, as Claude Code on the web's does.
 function Prompt({ text, at, waiting, attached, fresh = false }: { text: string; at?: string | undefined; waiting?: Waiting | undefined; attached?: string | undefined; fresh?: boolean }) {
   const [open, setOpen] = useState(false)
   const tall = isTall(text)
+  // OpenAgent is not answering: a waiting message can be neither sent now nor taken back.
+  const down = useContext(DaemonDown)
   return (
     <div className={`group/prompt flex min-w-0 flex-1 flex-col items-end font-sans text-foreground ${fresh ? 'bubble-in' : ''}`}>
-      <div role="group" aria-label={waiting ? 'Your message, waiting' : 'Your message'} className="max-w-[85%] min-w-0 rounded-xl bg-muted px-3.5 py-2">
-        <div className={tall && !open ? 'max-h-40 overflow-hidden' : ''}>
-          <Markdown text={text} />
-        </div>
-        {tall && (
-          <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open} className="mt-1 text-xs text-muted-foreground hover:text-foreground">
-            {open ? 'Show less' : 'Show more'}
-          </button>
+      {/* When it was sent and a copy of it, beside the box's foot where they take no line of their
+          own, shown while the pointer is on the message, and always to a finger. A waiting one says so under the box instead. */}
+      <div className="flex w-full min-w-0 items-end justify-end gap-1">
+        {!waiting && (
+          <div className="flex h-6 shrink-0 items-center gap-1 text-muted-foreground opacity-0 transition-opacity focus-within:opacity-100 group-hover/prompt:opacity-100 pointer-coarse:opacity-100">
+            {at !== undefined && <Age at={at} />}
+            <CopyMessage text={text} />
+          </div>
         )}
+        <div role="group" aria-label={waiting ? 'Your message, waiting' : 'Your message'} className="max-w-[80%] min-w-0 rounded-lg bg-muted px-3 py-2">
+          <div className={tall && !open ? 'max-h-40 overflow-hidden' : ''}>
+            <Markdown text={text} />
+          </div>
+          {tall && (
+            <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open} className="mt-1 text-xs text-muted-foreground hover:text-foreground">
+              {open ? 'Show less' : 'Show more'}
+            </button>
+          )}
+        </div>
       </div>
       {attached !== undefined && <Attached text={attached} />}
-      {/* When it was sent and a copy of it, as Claude Code on the web shows under a message, 6px
-          below the box so a button's hover does not touch it. A waiting one says so instead of its time. */}
-      <div className="mt-1.5 flex h-6 items-center gap-1 text-muted-foreground">
-        <div className="flex items-center gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover/prompt:opacity-100">
-          {!waiting && at !== undefined && (
-            <time dateTime={at} title={new Date(at).toLocaleString()} className="px-1 text-[11px]">
-              {formatAge(at)}
-            </time>
-          )}
-          <CopyMessage text={text} />
-          {waiting?.onEdit && (
-            <button type="button" aria-label="Cancel and edit message" title="Cancel and edit message" onClick={waiting.onEdit} className="flex h-6 w-6 items-center justify-center rounded-md hover:bg-accent hover:text-accent-foreground">
-              <PencilLine className="h-3.5 w-3.5" aria-hidden />
-            </button>
+      {waiting && (
+        <div className="mt-1 flex h-6 items-center gap-1 text-muted-foreground">
+          <div className="flex items-center gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover/prompt:opacity-100 pointer-coarse:opacity-100">
+            <CopyMessage text={text} />
+            {waiting.onEdit && (
+              <button type="button" aria-label="Cancel and edit message" title="Cancel and edit message" onClick={waiting.onEdit} disabled={down} className="flex h-6 w-6 items-center justify-center rounded-md hover:bg-accent hover:text-accent-foreground disabled:opacity-50">
+                <PencilLine className="h-3.5 w-3.5" aria-hidden />
+              </button>
+            )}
+          </div>
+          {waiting.later ? (
+            <span className="pr-1 text-xs leading-6">Queued</span>
+          ) : (
+            <>
+              <span className="pl-1 text-xs leading-6">Read at the agent's next step</span>
+              {waiting.onSendNow && (
+                <button
+                  type="button"
+                  onClick={waiting.onSendNow}
+                  disabled={down || waiting.sendingNow}
+                  title="The agent reads the messages waiting now; what it runs goes on in the background"
+                  className="rounded-md px-1.5 text-xs leading-6 hover:bg-accent hover:text-accent-foreground disabled:opacity-50"
+                >
+                  {waiting.sendingNow ? 'Sending…' : 'Send now'}
+                </button>
+              )}
+            </>
           )}
         </div>
-        {waiting &&
-          (waiting.later || !waiting.onSendNow ? (
-            <span className="pr-1 text-[11px] leading-6">Queued</span>
-          ) : (
-            <button type="button" onClick={waiting.onSendNow} className="rounded-md px-1.5 text-[11px] leading-6 hover:bg-accent hover:text-accent-foreground">
-              Send now
-            </button>
-          ))}
-      </div>
+      )}
+      {waiting?.refused && <p role="alert" className="text-xs text-danger">{waiting.refused}</p>}
     </div>
   )
 }
@@ -444,8 +460,12 @@ function Prompt({ text, at, waiting, attached, fresh = false }: { text: string; 
 export interface Waiting {
   /** Sent for after the turn (⌘Enter): "Queued", no Send now. */
   later: boolean
-  /** Send now: the agent reads it at once. */
+  /** Send now: the agent reads it, and every message waiting with it, at once. */
   onSendNow?: (() => void) | undefined
+  /** Send now is on its way. */
+  sendingNow?: boolean | undefined
+  /** Why the run refused the last Send now. */
+  refused?: string | undefined
   /** Cancel and edit: it goes back into the box. */
   onEdit?: (() => void) | undefined
 }
@@ -461,7 +481,7 @@ export interface WaitingMessage extends Waiting {
 function Attached({ text }: { text: string }) {
   const [open, setOpen] = useState(false)
   return (
-    <div className="mt-1 flex max-w-[85%] min-w-0 flex-col items-end text-xs text-muted-foreground">
+    <div className="mt-1 flex max-w-[80%] min-w-0 flex-col items-end text-xs text-muted-foreground">
       <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open} className="flex items-center gap-1 hover:text-foreground">
         <span>Sent with this message</span>
         <ChevronRight className={`h-3.5 w-3.5 shrink-0 transition-transform ${open ? 'rotate-90' : ''}`} aria-hidden />
@@ -471,11 +491,17 @@ function Attached({ text }: { text: string }) {
   )
 }
 
-/** An event of the agent's own doing: no subagent's, no count, no turn's end. */
-function isAgentsOwn(e: OpenAgentEvent): boolean {
-  if (e.kind !== 'driver') return false
-  const event = e.event as { type: string; subagent?: string }
-  return ['action', 'output', 'text', 'thought', 'thinking', 'partial'].includes(event.type) && event.subagent === undefined
+/**
+ * How far the turn going on has got, what the live line says beside its seconds: the tokens it went
+ * through, said once it has answered something, as Claude Code on the web says them; before that,
+ * the line is the dots and the seconds.
+ */
+function turnTokens(told: readonly OpenAgentEvent[]): number | undefined {
+  let start = told.length
+  while (start > 0 && !isTurnBoundary(told[start - 1]!)) start--
+  const turn = told.slice(start)
+  const said = turn.some(e => e.kind === 'driver' && e.event.type === 'text' && e.event.subagent === undefined)
+  return said ? turn.flatMap(e => (e.kind === 'driver' && e.event.type === 'tokens' ? [e.event.tokens] : [])).at(-1) : undefined
 }
 
 /** A tool call or a thought of the coding agent: a step between two of its messages. */
@@ -496,7 +522,7 @@ function outputOf(e: OpenAgentEvent): (CallOutput & { id: string }) | undefined 
  * the last event is the call going on now (`current`): it is not in its run yet, the chat's last
  * line says it.
  */
-export function foldSteps(
+function foldSteps(
   events: readonly OpenAgentEvent[],
   live = false,
 ): { rows: OpenAgentEvent[]; steps: Map<OpenAgentEvent, ToolStep[]>; current?: Extract<ToolStep, { type: 'action' }> } {
@@ -581,10 +607,9 @@ function ScreenRow({ label, onOpen }: { label: string; onOpen?: (() => void) | u
 
 // A row's time: small, at the row's right edge, shown while the pointer is on the row. Its place
 // is always there, so nothing moves when it shows.
-const TIME = 'ml-auto shrink-0 pt-0.5 text-[10px] tabular-nums text-muted-foreground opacity-0 transition-opacity group-hover/row:opacity-100'
+const TIME = 'ml-auto shrink-0 pt-0.5 text-xs tabular-nums text-muted-foreground opacity-0 transition-opacity group-hover/row:opacity-100'
 
 /** The grouping key of a row about one of the run's subagents. */
-
 const SUBAGENT = 'subagent'
 /** How near its end a chat counts as being at it, in pixels: the scroller's own measure. */
 const AT_END = 8
@@ -647,10 +672,24 @@ function FollowSent({ sent }: { sent: number }) {
   return null
 }
 
+// Opens the chat at the top of a reply when the reply and what follows it are taller than the view.
+function OpenAtReply({ messageId, viewport }: { messageId: string; viewport: RefObject<HTMLDivElement | null> }) {
+  const { scrollToMessage } = useMessageScroller()
+  useLayoutEffect(() => {
+    const view = viewport.current
+    const row = [...(view?.querySelectorAll<HTMLElement>('[data-message-id]') ?? [])].find(el => el.dataset['messageId'] === messageId)
+    if (!view || !row) return
+    const top = row.getBoundingClientRect().top - view.getBoundingClientRect().top + view.scrollTop
+    if (view.scrollHeight - top > view.clientHeight) scrollToMessage(messageId, { align: 'start' })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  return null
+}
+
 export function EventList({
   events: given,
   writing = '',
   sending,
+  sendingAt,
   working = false,
   queued = NONE_QUEUED,
   waitingOn = 0,
@@ -661,6 +700,7 @@ export function EventList({
   projectId,
   agentId,
   onSaid,
+  focusNext,
   subagents = NO_SUBAGENTS,
   doing = NOTHING_DOING,
   setup,
@@ -669,12 +709,14 @@ export function EventList({
   onOpenScreen,
 }: {
   events: OpenAgentEvent[]
-  /** The message the agent is writing, as far as it has got: an AGENT row after the last, drawn
+  /** The message the agent is writing, as far as it has got: the agent's row after the last, drawn
    *  as a finished reply is. Never an event: its whole message's row replaces it. */
   writing?: string
   /** A message just sent to an ended agent: the last prompt row, until the prompt's own line
    *  arrives and takes the same row. Being a prompt, the scroller brings it into view. */
   sending?: string | undefined
+  /** When that message was sent, where this page did not see it go (a reload): its live line counts from then. */
+  sendingAt?: string | undefined
   /** The agent is working: while it writes nothing, a moving line closes the feed: the call going
    *  on now, else "Starting…" when the last row is a prompt and "Working…" after, so a quiet agent
    *  never looks stalled. */
@@ -700,6 +742,8 @@ export function EventList({
   agentId?: string | undefined
   /** Told what an answer said to the agent, so the chat can show it at once. */
   onSaid?: ((text: string) => void) | undefined
+  /** Given the focus once a question is answered from its card: the message box. */
+  focusNext?: (() => void) | undefined
   /** The runs started for this run, oldest first: each gets a row where it was started. */
   subagents?: readonly AgentMeta[]
   /** What each working subagent is doing now, by id. */
@@ -738,7 +782,7 @@ export function EventList({
   // The message just sent, as the prompt line its run is about to write: dated when it was sent, so
   // the live line comes and counts from then, as Claude Code on the web's does the moment a message
   // is sent, not seconds later when the run writes its first line.
-  const sentAt = useMemo(() => (sending !== undefined ? new Date().toISOString() : undefined), [sending])
+  const sentAt = useMemo(() => (sending !== undefined ? (sendingAt ?? new Date().toISOString()) : undefined), [sending, sendingAt])
   // Its row holds no time, as one being sent shows none.
   const sent: OpenAgentEvent | undefined = sending !== undefined ? { kind: 'driver', event: { type: 'start', prompt: sending } } : undefined
   const kept: OpenAgentEvent[] = sent === undefined || answeredInPlace ? logged : [...logged, sent]
@@ -803,15 +847,7 @@ export function EventList({
     const report = subagentReport(events, call.id)
     return report !== undefined ? [[`call:${call.id}`, report] as const] : []
   }))
-  // How far the turn going on has got: what the live line says beside its seconds.
-  let lastTurnAt = -1
-  told.forEach((e, at) => {
-    if (isTurnBoundary(e)) lastTurnAt = at
-  })
-  // The tokens the turn went through, said once it has answered something, as Claude Code on the
-  // web says them: before that, the line is the dots and the seconds.
-  const turnSaid = told.slice(lastTurnAt + 1).some(e => e.kind === 'driver' && e.event.type === 'text' && (e.event as { subagent?: string }).subagent === undefined)
-  const turnTokens = turnSaid ? told.slice(lastTurnAt + 1).flatMap(e => (e.kind === 'driver' && e.event.type === 'tokens' ? [e.event.tokens] : [])).at(-1) : undefined
+  const tokens = turnTokens(told)
   // Once the coding agent said its session began, it is set up: what goes on is its own thinking.
   const begun = events.some(e => e.kind === 'session-update')
   // The call going on now is its steps row's, as Claude Code on the web's is: the row it continues,
@@ -907,13 +943,18 @@ export function EventList({
   }
   // The open question the keys answer: the newest.
   const asking = [...shown].reverse().find(e => choiceRows?.rows.has(e) && choiceRows.rows.get(e)?.pick === undefined && !choiceRows.rows.get(e)?.passed)
+  // The question the chat opened on, which takes the focus from the message box; one asked later does not.
+  const openedOn = useRef<OpenAgentEvent | undefined | null>(null)
+  if (openedOn.current === null && shown.length > 0) openedOn.current = asking
+  // The reply that question is about: a chat opened on a plan for a yes shows the plan's top first.
+  const openedAt = openedOn.current ? shown.slice(0, shown.indexOf(openedOn.current)).reverse().find(e => asked.has(e)) : undefined
 
   return (
     <MessageScrollerProvider autoScroll={stick} defaultScrollPosition={openAt ?? (stick ? 'end' : 'start')}>
       <FollowSent sent={(sending === undefined || answeredInPlace ? 0 : 1) + queued.length} />
       {/* A layer of its own: "Jump to latest" stays under the message box's bar. */}
       <MessageScroller className="isolate flex-1">
-        <MessageScrollerViewport ref={viewport} aria-label="Agent output" className="scroll-pb-(--chat-bottom)">
+        <MessageScrollerViewport ref={viewport} aria-label="Agent output" className="chat-scroll scroll-pb-(--chat-bottom)">
           <MessageScrollerContent spacerClassName="order-last" className="mx-auto w-full max-w-3xl gap-3 px-4 pt-4 font-mono text-xs">
             {/* First in the page, so never the row the browser keeps in place when a row above
                 it grows: a steps line opened at the log's end opens under the line, the line
@@ -942,6 +983,8 @@ export function EventList({
               // The prompt the agent was resumed with after an answer in its card: a box, not a message.
               const answer = own && message !== null ? answeredQuestion(message) : undefined
               const inPlace = e === answeredInPlace
+              // The last row of a turn the agent finished: its copy and its time under it.
+              const footer = footers.has(e) ? <ReplyFooter text={footers.get(e)!} at={at} /> : undefined
               return (
                 <Fragment key={idOf(e)}>
                 {changes.ended.has(e) && (
@@ -960,7 +1003,7 @@ export function EventList({
                 {startedRows(i)}
                 {/* Every row carries the same -mx/px pair so a washed row's band and a plain row's
                     text share the exact same columns; only the background differs. */}
-                <MessageScrollerItem messageId={idOf(e)} data-prompt={(own && !answer) || undefined} className={`group/row relative -mx-1.5 flex items-start gap-2 rounded-sm px-1.5 ${answer || inPlace ? 'mt-1 mb-3.5' : own ? '-mb-2.5 mt-4 first:mt-0' : ''} ${end ? '' : rowWash(e)}`}>
+                <MessageScrollerItem messageId={idOf(e)} data-prompt={(own && !answer) || undefined} className={`group/row relative -mx-1.5 flex items-start gap-2 rounded-sm px-1.5 ${answer || inPlace ? 'mt-1 mb-3' : own ? 'mt-3 first:mt-0' : ''} ${end ? '' : rowWash(e)}`}>
                   {answer ? (
                     <Answer {...answer} />
                   ) : inPlace && sentAnswer ? (
@@ -972,10 +1015,10 @@ export function EventList({
                     <SubagentMessage name={runRow(end.agent, undefined).name} text={endMessage(end.rest)} status={end.status} detail={end.detail} />
                   ) : message !== null ? (
                     // The agent's reply, shown whole, and the last of a finished turn with its footer.
-                    footers.has(e) ? (
+                    footer ? (
                       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                         <Reply text={message} />
-                        <ReplyFooter text={footers.get(e)!} at={at} />
+                        {footer}
                       </div>
                     ) : (
                       <Reply text={message} />
@@ -983,18 +1026,18 @@ export function EventList({
                   ) : steps.has(e) ? (
                     <ToolCalls steps={steps.get(e)!} lead={setupInSteps && i === setupAt ? setupLead : undefined} live={e === liveHead && current !== undefined ? { call: current, since: turnStart } : undefined} />
                   ) : choiceRow?.passed ? (
-                    <PassedChoice choice={choiceRow.choice} footer={footers.has(e) ? <ReplyFooter text={footers.get(e)!} at={at} /> : undefined} />
+                    <PassedChoice choice={choiceRow.choice} footer={footer} />
                   ) : choiceRow && choiceRow.pick === undefined && projectId !== undefined && agentId !== undefined ? (
                     // The question the agent waits on, answered here, under what it said.
                     typing ? null : <div className="mt-1 flex min-w-0 flex-1 flex-col gap-1.5">
-                      <QuestionPanel key={`${agentId}:${choiceRow.choice.id}`} projectId={projectId} agentId={agentId} choice={choiceRow.choice} active={e === asking} onSaid={onSaid} />
-                      {footers.has(e) && <ReplyFooter text={footers.get(e)!} at={at} />}
+                      <QuestionPanel key={`${agentId}:${choiceRow.choice.id}`} projectId={projectId} agentId={agentId} choice={choiceRow.choice} active={e === asking} focused={e === openedOn.current} onSaid={onSaid} focusNext={focusNext} />
+                      {footer}
                     </div>
                   ) : choiceRow?.pick !== undefined ? (
                     // What was asked and what was picked. font-sans: a card, not log text.
                     <div className="flex min-w-0 flex-1 flex-col gap-1 font-sans">
                       <AnsweredChoice choice={choiceRow.choice} pick={choiceRow.pick} />
-                      {footers.has(e) && <ReplyFooter text={footers.get(e)!} at={at} />}
+                      {footer}
                     </div>
                   ) : words ? (
                     <RowLine words={words} tone={rowTone(e)} />
@@ -1007,10 +1050,10 @@ export function EventList({
                   )}
                   {/* A line of steps, a message or a subagent's message has no time at its end, as Claude
                       Code's has none: the column it takes would narrow a message being written as it lands. */}
-                  {!own && !end && message === null && chunkHead && at !== undefined && !footers.has(e) && !steps.has(e) && (
+                  {!own && !end && message === null && chunkHead && at !== undefined && footer === undefined && !steps.has(e) && (
                     <Tooltip>
                       <TooltipTrigger render={<span className={TIME} />}>
-                        {formatTime(at)}
+                        {formatAge(at)}
                       </TooltipTrigger>
                       <TooltipContent>{new Date(at).toLocaleString()}</TooltipContent>
                     </Tooltip>
@@ -1040,7 +1083,7 @@ export function EventList({
                 {/* Under the reply as it streams, too: the agent is still at it, and Claude Code on
                     the web keeps its dots and its count there. The line said a word before, which
                     under a streaming reply read as a second thing going on. */}
-                {working && !settingUp && !waitsOnItsOwn && current === undefined && <LiveLine since={turnStart} tokens={turnTokens} />}
+                {working && !settingUp && !waitsOnItsOwn && current === undefined && <LiveLine since={turnStart} tokens={tokens} />}
               </div>
             )}
             {!working && waitingOn > 0 && (
@@ -1058,6 +1101,8 @@ export function EventList({
         </MessageScrollerViewport>
         <MessageScrollerButton className="data-[direction=end]:bottom-[calc(var(--chat-bottom,0px)+1.25rem)]" />
       </MessageScroller>
+      {/* After the scroller, so the rows are measured and its own opening place is already applied. */}
+      {openedAt && <OpenAtReply messageId={idOf(openedAt)} viewport={viewport} />}
     </MessageScrollerProvider>
   )
 }

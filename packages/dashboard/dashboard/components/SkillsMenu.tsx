@@ -1,11 +1,15 @@
-import { Check, ChevronDown, Puzzle, Settings2 } from 'lucide-react'
+import { useContext } from 'react'
+import { Check, Puzzle, Settings2 } from 'lucide-react'
 import type { AgentRecord, AgentsView } from '../rpc/agents.js'
 import { onProjectSkills } from '../rpc/skills.js'
+import { skillsAgain } from '../lib/skills-saved.js'
 import { useLoaded } from '../lib/use-async.js'
-import { openSettings } from '../lib/use-route.js'
+import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
 import { cn } from '../lib/utils.js'
 import { SKILLS_ENTRY } from './ProjectSkills.js'
-import { RowOff, rowButtonClass } from './ui/row-item.js'
+import { RowChevron, RowSaid, rowButtonClass, rowWideClass } from './ui/row-item.js'
+import { useAgentsList } from './AgentsPage.js'
+import { DEFAULT_AGENT } from '../../src/client.js'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip.js'
 import {
   DropdownMenu,
@@ -14,6 +18,8 @@ import {
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubContent,
@@ -54,6 +60,11 @@ function projectKept(held: readonly string[], project: SkillPicks['project']): s
   return project === undefined ? [...held] : project === 'none' ? [] : held.filter(name => project.includes(name))
 }
 
+/** How many skills the session gets: a project skill of the same name takes the agent's one's place, so the session has it once. */
+function skillCount(ofAgent: readonly string[], kept: readonly string[]): number {
+  return new Set([...ofAgent, ...kept]).size
+}
+
 /** What the session's picks say, in a few words for a hover: what differs from its agent's list and from every project skill. */
 export function skillPicksSaid(picks: { skillsOn?: readonly string[] | undefined; skillsOff?: readonly string[] | undefined; projectSkills?: 'none' | readonly string[] | undefined }): string {
   const parts = [
@@ -63,6 +74,14 @@ export function skillPicksSaid(picks: { skillsOn?: readonly string[] | undefined
   const agents = `its agent's skills${parts.length > 0 ? ` ${parts.join(', ')}` : ''}`
   const project = picks.projectSkills === undefined ? 'every project skill' : picks.projectSkills === 'none' ? 'no project skill' : `the project skills ${picks.projectSkills.join(', ')}`
   return `${agents}, and ${project}`
+}
+
+/**
+ * The project's own skills, as a run's checkout has them, kept in this browser: the Skills item
+ * counts them, and counted from the last load it holds its place in the row from the first frame.
+ */
+function useProjectSkills(projectId: string | undefined) {
+  return useLoaded(projectId !== undefined ? () => onProjectSkills(projectId) : null, null, [projectId], projectId !== undefined ? { remember: `project-skills:${projectId}`, stored: true } : undefined, skillsAgain)
 }
 
 export function SkillsMenu({
@@ -83,15 +102,16 @@ export function SkillsMenu({
   onChange: (picks: SkillPicks) => void
   busy: boolean
 }) {
-  // The project's own skills, by name, as a run's checkout has them: the list's and the project's own.
-  const project = useLoaded(projectId !== undefined ? () => onProjectSkills(projectId) : null, null, [projectId])
+  const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
+  const project = useProjectSkills(projectId)
   const held = project?.held ?? []
-  if (!agent || !groups) return null
+  // Counted only once the project's skills are read: a count of the agent's alone would be drawn, then change.
+  if (!agent || !groups || (projectId !== undefined && project === null)) return null
   const own = agent.skills
   const ofAgent = sessionSkills(agent, picks)
   const listed = [...own, ...picks.on.filter(name => !own.includes(name))]
   const kept = projectKept(held, picks.project)
-  const count = ofAgent.length + (projectId !== undefined ? kept.length : 0)
+  const count = skillCount(ofAgent, projectId !== undefined ? kept : [])
   const toggleOfAgent = (name: string) => {
     if (own.includes(name)) onChange({ ...picks, off: picks.off.includes(name) ? picks.off.filter(one => one !== name) : [...picks.off, name] })
     else onChange({ ...picks, on: picks.on.filter(one => one !== name) })
@@ -107,9 +127,12 @@ export function SkillsMenu({
     <DropdownMenu>
       <Tooltip>
         <TooltipTrigger render={<DropdownMenuTrigger type="button" disabled={busy} aria-label={`Skills: ${count}`} className={rowButtonClass} />}>
-          <Puzzle className="h-3.5 w-3.5 shrink-0" aria-hidden />
-          <span className="truncate">{`Skills: ${count}`}</span>
-          <ChevronDown className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
+          <Puzzle className="size-4 shrink-0" aria-hidden />
+          <span className="truncate">
+            <span className={rowWideClass}>Skills: </span>
+            {count}
+          </span>
+          <RowChevron />
         </TooltipTrigger>
         <TooltipContent>{said}</TooltipContent>
       </Tooltip>
@@ -154,14 +177,19 @@ export function SkillsMenu({
                 </DropdownMenuItem>
               ) : (
                 <>
-                  <DropdownMenuItem closeOnClick={false} aria-current={picks.project === undefined} onClick={() => onChange({ on: picks.on, off: picks.off })}>
-                    <Check className={cn('h-3.5 w-3.5 shrink-0', picks.project === undefined ? 'opacity-100' : 'opacity-0')} aria-hidden />
-                    All
-                  </DropdownMenuItem>
-                  <DropdownMenuItem closeOnClick={false} aria-current={picks.project === 'none'} onClick={() => onChange({ ...picks, project: 'none' })}>
-                    <Check className={cn('h-3.5 w-3.5 shrink-0', picks.project === 'none' ? 'opacity-100' : 'opacity-0')} aria-hidden />
-                    None
-                  </DropdownMenuItem>
+                  <DropdownMenuRadioGroup
+                    value={picks.project === undefined ? 'all' : picks.project === 'none' ? 'none' : null}
+                    onValueChange={(pick: 'all' | 'none') => onChange(pick === 'all' ? { on: picks.on, off: picks.off } : { ...picks, project: 'none' })}
+                  >
+                    <DropdownMenuRadioItem value="all" closeOnClick={false}>
+                      <Check className={cn('h-3.5 w-3.5 shrink-0', picks.project === undefined ? 'opacity-100' : 'opacity-0')} aria-hidden />
+                      All
+                    </DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value="none" closeOnClick={false}>
+                      <Check className={cn('h-3.5 w-3.5 shrink-0', picks.project === 'none' ? 'opacity-100' : 'opacity-0')} aria-hidden />
+                      None
+                    </DropdownMenuRadioItem>
+                  </DropdownMenuRadioGroup>
                   {held.map(name => (
                     <DropdownMenuCheckboxItem key={name} checked={kept.includes(name)} onCheckedChange={() => toggleProject(name)}>
                       <span className="truncate">{name}</span>
@@ -171,7 +199,7 @@ export function SkillsMenu({
               )}
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => openSettings(SKILLS_ENTRY, projectId)}>
+            <DropdownMenuItem onClick={() => services.openSettings(SKILLS_ENTRY, projectId)}>
               <Settings2 className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
               Manage project skills…
             </DropdownMenuItem>
@@ -183,17 +211,23 @@ export function SkillsMenu({
 }
 
 /**
- * The session page's "Skills", in the launcher's place and look, off: a session keeps the skills
- * it started with, which its hover says as its record keeps them.
+ * The session page's "Skills", in the launcher's place, as words, not a press: a session keeps the
+ * skills it started with, counted as the launcher counts them, which their hover says as its record keeps them.
+ * Drawn once the agents and the project's skills are read, so the count lands whole.
  */
-export function SkillsOff({ skillsOn, skillsOff, projectSkills, noProject = false }: { skillsOn?: string[] | undefined; skillsOff?: string[] | undefined; projectSkills?: 'none' | string[] | undefined; noProject?: boolean }) {
+export function SkillsOff({ projectId, agent, skillsOn, skillsOff, projectSkills }: { projectId: string | undefined; agent: string | undefined; skillsOn?: string[] | undefined; skillsOff?: string[] | undefined; projectSkills?: 'none' | string[] | undefined }) {
+  const { view } = useAgentsList()
+  const project = useProjectSkills(projectId)
+  if (!view || (projectId !== undefined && project === null)) return null
+  const record = view.agents.find(one => one.id === (agent ?? DEFAULT_AGENT))
+  const count = skillCount(sessionSkills(record, { on: skillsOn ?? [], off: skillsOff ?? [] }), projectId !== undefined ? projectKept(project?.held ?? [], projectSkills) : [])
   return (
-    <RowOff tip={`This session got ${skillPicksSaid({ skillsOn, skillsOff, projectSkills: noProject ? 'none' : projectSkills })}`}>
-      <button type="button" disabled className={rowButtonClass}>
-        <Puzzle className="h-3.5 w-3.5 shrink-0" aria-hidden />
-        <span className="truncate">Skills</span>
-        <ChevronDown className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
-      </button>
-    </RowOff>
+    <RowSaid tip={`This session got ${skillPicksSaid({ skillsOn, skillsOff, projectSkills: projectId === undefined ? 'none' : projectSkills })}`}>
+      <Puzzle className="size-4 shrink-0" aria-hidden />
+      <span className="truncate">
+        <span className={rowWideClass}>Skills: </span>
+        {count}
+      </span>
+    </RowSaid>
   )
 }

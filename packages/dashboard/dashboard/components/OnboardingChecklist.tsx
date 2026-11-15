@@ -1,23 +1,24 @@
-import { useContext, useRef, useState, type ReactNode } from 'react'
+import { useContext, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import type { DashboardData, ProjectSummary } from '../../src/index.js'
 import { Check, Info, X } from 'lucide-react'
 import { onDashboard } from '../rpc/reads.js'
 import { usePolled } from '../lib/use-async.js'
 import { usePerson } from '../lib/use-person.js'
-import { useMountedModules } from '../lib/use-modules.js'
-import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
 import { cn } from '../lib/utils.js'
-import { Button, buttonVariants } from './ui/button.js'
-import { Card, CardContent, CardHeader } from './ui/card.js'
+import { Button } from './ui/button.js'
+import { Section } from './ui/section.js'
+import { Skeleton } from './ui/skeleton.js'
 import { usePreferences, updatePreferences, notificationsEnabled } from '../lib/preferences.js'
-import { useNotificationPermission } from '../lib/notification-permission.js'
+import { setBrowserNotifications, useNotificationPermission } from '../lib/notification-permission.js'
 import { startPicks, useStartAgent } from '../lib/use-start-agent.js'
 import { AddProjectEffects } from './AddProjectEffects.js'
 import { ProjectPicker } from './ProjectPicker.js'
 import { UpdateTicketsButton, UPDATE_TICKETS_PROMPT } from './UpdateTicketsButton.js'
-import { HostFix, hostLoginState, hostWords, useMissing } from './Logins.js'
+import { HostFix } from './AddGitAccount.js'
+import { hostLoginState, hostWords, useMissing } from './Logins.js'
 import { firstName } from './PersonMenu.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
+import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
 
 // The Overview's first steps (#958): what a new install needs, each with the state it is actually
 // in rather than a static list to read past.
@@ -32,7 +33,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 // each a press from open. A step stays once shown, done or not, so the count never moves under a
 // person: "Connect GitHub" turns into a ✓, it does not vanish.
 //
-// It renders at the top of the Overview, greeting the person by the time of day. Its ✕ hides it,
+// It renders on the Overview under what needs the person, greeting them by the time of day. Its ✕ hides it,
 // and the "Onboarding on the Overview" switch in Settings › Appearance brings it back: what the ✕
 // promises. With every step a session needs done, it says so, and its button starts the first one.
 
@@ -69,6 +70,7 @@ export function OnboardingChecklist({
   onAgentStarted,
   onSelectProject,
   onProjectAdded,
+  onRead,
 }: {
   /** The projects as the app read them: the picker sees one it added land, and closes on it. */
   projects: readonly ProjectSummary[]
@@ -81,25 +83,24 @@ export function OnboardingChecklist({
   onSelectProject: (id: string) => void
   /** A project was added here: the app reads its projects again. */
   onProjectAdded: () => void
+  /** Told once the steps stand where their reads say, before that frame is drawn: what the page holds back under them can come. */
+  onRead: () => void
 }) {
   // Slower than the Overview's own 5s poll: these change at human speed, and this read fans out
   // over every project to answer the tickets question.
-  const { value: data, reload } = usePolled<DashboardData | null>(onDashboard, null, 10_000, [])
+  // Kept for the next visit: the steps open where they stood, not as titles that then grow.
+  const { value: data, reload, state } = usePolled<DashboardData | null>(onDashboard, null, 10_000, [], { remember: 'onboarding:dashboard', stored: true })
   const preferences = usePreferences()
   const permission = useNotificationPermission()
   const { start, busy: starting, error: startError } = useStartAgent()
   const { person } = usePerson()
+  const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
   // What runs need on this computer: the coding agent's login, and an account at each git host.
-  const { missing, hosts, reload: reloadMissing } = useMissing()
+  const { missing, hosts, loaded: missingLoaded, reload: reloadMissing } = useMissing()
   // The steps shown once stay, done or not: the coding agent's is there only once it was missing.
   const seen = useRef(new Set<string>())
   // The step the person opened; by default, the first one not done.
   const [picked, setPicked] = useState<string | undefined>()
-  // The page of the package that keeps the queue, where a task is added to it: the queue step's
-  // press opens it, as every other step's does what the step asks. OpenAgent names no queue page.
-  const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
-  const { pages } = useMountedModules()
-  const queuePage = pages.find(page => data?.queue.some(queue => queue.package === page.package))
 
   // The project the steps act on: the only/most recent one. A first-session flow rarely has a second.
   const targetProjectId = data?.projects[0]?.projectId ?? null
@@ -108,11 +109,7 @@ export function OnboardingChecklist({
   const hasTickets = data?.projects.some(p => p.hasTickets) ?? false
   const browserGranted = permission === 'granted' && notificationsEnabled(preferences)
 
-  const enableBrowserNotifications = () => {
-    updatePreferences({ notifyBrowser: true })
-    // Asking for permission must ride this user gesture.
-    if (permission === 'default') void Notification.requestPermission()
-  }
+  const enableBrowserNotifications = () => setBrowserNotifications(true)
 
   const populateTickets = async () => {
     if (!targetProjectId) return
@@ -139,7 +136,7 @@ export function OnboardingChecklist({
         description: p.installed && p.accounts.length === 0 ? `OpenAgent pushes and opens ${p.requestWord}s with an account of its own, never your own login.` : hostWords(row),
         done,
         ...(runs ? { doneNote: `@${runs}` } : {}),
-        action: <HostFix row={row} onChanged={reloadMissing} size="sm" />,
+        action: <HostFix row={row} onChanged={reloadMissing} size="default" />,
       },
     ]
   })
@@ -178,24 +175,11 @@ export function OnboardingChecklist({
             label: 'Populate the queue of AI tasks',
             description: 'The agent queue: each entry is work the agent picks up on its own, so a filled queue is what lets it keep going without you.',
             done: (data?.totals.openTodos ?? 0) > 0,
-            ...(queuePage
-              ? {
-                  action: (
-                    <a
-                      href={services.pageHref(queuePage.segment)}
-                      onClick={event => {
-                        // A modified click is the browser's to handle: a new tab, a new window.
-                        if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return
-                        event.preventDefault()
-                        services.openPage(queuePage.segment)
-                      }}
-                      className={buttonVariants({ size: 'sm' })}
-                    >
-                      {`Open ${queuePage.label}`}
-                    </a>
-                  ),
-                }
-              : {}),
+            action: (
+              <Button variant="outline" onClick={() => services.openPage('queue')}>
+                Open the Queue
+              </Button>
+            ),
           },
         ]
       : []),
@@ -205,8 +189,12 @@ export function OnboardingChecklist({
       ? [
           {
             key: 'tickets',
-            label: 'Populate tickets/',
-            description: 'tickets/ holds the bigger things to work on, in the repo. The agent researches and plans them, and they are the input the queue is filled from.',
+            label: 'Populate the tickets',
+            description: (
+              <p className="text-xs text-muted-foreground">
+                <code className="rounded-sm bg-muted px-1">tickets/</code> holds the bigger things to work on, in the repo. The agent researches and plans them, and they are the input the queue is filled from.
+              </p>
+            ),
             done: hasTickets,
             optional: true,
             action: (
@@ -237,33 +225,32 @@ export function OnboardingChecklist({
         ) : permission === 'unsupported' ? (
           <span className="text-xs text-muted-foreground">Not supported by this browser</span>
         ) : (
-          <Button size="sm" variant="outline" onClick={enableBrowserNotifications}>
+          <Button variant="outline" onClick={enableBrowserNotifications}>
             Turn on
           </Button>
         ),
     },
   ]
 
+  // No step before its reads have said where it stands: an unread project count is not "no project".
+  const reading = state === 'unknown' || !missingLoaded
+  useLayoutEffect(() => {
+    if (!reading) onRead()
+  }, [reading, onRead])
   const open = picked !== undefined && steps.some(step => step.key === picked && !step.done) ? picked : steps.find(step => !step.done)?.key
-  const ready = data !== null && steps.every(step => step.done || step.optional)
+  const ready = !reading && steps.every(step => step.done || step.optional)
   const name = person ? `, ${firstName(person.name)}` : ''
 
+  const doneCount = steps.filter(step => step.done).length
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between gap-3">
-        <h2 className="min-w-0 text-lg font-semibold tracking-tight">{ready ? `You're all set${name}` : `${greeting(new Date().getHours())}${name}`}</h2>
-        <div className="flex shrink-0 items-center gap-3">
-          {/* Where the steps stand, one dash each: the numbers below say which is which. On a phone the
-              greeting has the row, and the dashes are said, not drawn: beside them it broke into
-              three lines of one word, and the numbers below say it already. */}
-          <ol aria-label={`${steps.filter(step => step.done).length} of ${steps.length} done`} className="flex items-center gap-1.5 max-sm:sr-only">
-            {steps.map(step => (
-              <li key={step.key} aria-hidden className={cn('h-1.5 w-6 rounded-full', step.done ? 'bg-[var(--color-primary)]' : step.key === open ? 'bg-[var(--color-primary)]/40' : 'bg-muted-foreground/20')} />
-            ))}
-          </ol>
+    <Section
+      title={ready ? `You're all set${name}` : `${greeting(new Date().getHours())}${name}`}
+      // Where the steps stand, in words: the numbers below say which is which.
+      count={reading ? undefined : `${doneCount} of ${steps.length}`}
+      action={
+        <>
           {ready && targetProjectId && (
             <Button
-              size="sm"
               onClick={() => {
                 updatePreferences({ onboardingDismissed: true })
                 onSelectProject(targetProjectId)
@@ -273,19 +260,47 @@ export function OnboardingChecklist({
             </Button>
           )}
           <Tooltip>
-            <TooltipTrigger render={<Button variant="ghost" size="sm" onClick={() => updatePreferences({ onboardingDismissed: true })} aria-label={HIDE} />}>
+            <TooltipTrigger render={<Button variant="ghost" size="icon" onClick={() => updatePreferences({ onboardingDismissed: true })} aria-label={HIDE} className="text-muted-foreground" />}>
               <X className="h-4 w-4" aria-hidden />
             </TooltipTrigger>
             <TooltipContent>{HIDE}</TooltipContent>
           </Tooltip>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <ol className="divide-y divide-border">
+        </>
+      }
+    >
+      {reading ? (
+        <>
+          <p className="sr-only">Loading…</p>
+          {/* The steps' rows, with no state yet, the first one as the open step is laid out (its words, then its press and its command beside them or under), so the steps are about their size before they are read. Only once the coding agent and the git hosts are read: each can add a step at the top, which would push the rows drawn. */}
+          {missingLoaded && <ol aria-hidden="true">
+            {steps.map((step, at) => (
+              <li key={step.key} className="flex items-start gap-3 py-2">
+                <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full border border-border text-xs font-medium text-muted-foreground tabular-nums">{at + 1}</span>
+                {at === 0 ? (
+                  <div className="flex min-w-0 flex-1 flex-wrap items-start gap-3">
+                    <div className="min-w-0 flex-[1_1_16rem] space-y-1">
+                      <span className="mt-1 block text-sm text-muted-foreground">{step.label}</span>
+                      <Skeleton className="h-4 w-full" />
+                      <Skeleton className="h-4 w-2/3" />
+                    </div>
+                    <div className="flex max-w-full shrink-0 flex-wrap items-center gap-3">
+                      <Skeleton className="h-8 w-40" />
+                      <Skeleton className="h-6 w-72 max-w-full" />
+                    </div>
+                  </div>
+                ) : (
+                  <span className="mt-1 text-sm text-muted-foreground">{step.label}</span>
+                )}
+              </li>
+            ))}
+          </ol>}
+        </>
+      ) : (
+        <ol aria-label={`${doneCount} of ${steps.length} done`}>
           {steps.map((step, at) => {
             const isOpen = step.key === open
             return (
-              <li key={step.key} aria-label={step.label} aria-current={isOpen ? 'step' : undefined} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
+              <li key={step.key} aria-label={step.label} aria-current={isOpen ? 'step' : undefined} className="flex items-start gap-3 py-2">
                 {step.done ? (
                   <span aria-label="Done" className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary)] text-[var(--color-primary-foreground)]">
                     <Check className="h-3.5 w-3.5" aria-hidden />
@@ -295,22 +310,23 @@ export function OnboardingChecklist({
                     {at + 1}
                   </span>
                 )}
-                <div className="flex min-w-0 flex-1 gap-3 max-sm:flex-col sm:items-start">
-                  <div className="min-w-0 flex-1 space-y-1">
+                {/* The action goes under the words until it fits beside them with the words 16rem wide or more; beside them, a command goes under its press where the two do not fit one line. */}
+                <div className="@container flex min-w-0 flex-1 flex-wrap items-start gap-3">
+                  <div className="min-w-0 flex-[1_1_16rem] space-y-1">
                     <div className="mt-1 flex flex-wrap items-center gap-x-2">
                       <button
                         type="button"
                         disabled={step.done || isOpen}
                         onClick={() => setPicked(step.key)}
-                        className={cn('flex flex-wrap items-center gap-x-2 text-left text-sm', step.done ? 'text-muted-foreground' : isOpen ? 'font-medium' : 'text-muted-foreground hover:text-foreground')}
+                        className={cn('relative flex flex-wrap items-center gap-x-2 text-left text-sm after:absolute after:-inset-y-0.5 after:inset-x-0', step.done ? 'text-muted-foreground' : isOpen ? 'font-medium' : 'text-muted-foreground hover:text-foreground')}
                       >
                         <span>{step.label}</span>
                         {step.done && step.doneNote && <span className="truncate text-xs text-muted-foreground">· {step.doneNote}</span>}
-                        {step.optional && !step.done && <span className="rounded-full border border-border px-1.5 py-0.5 text-[10px] font-normal uppercase tracking-wide text-muted-foreground">Optional</span>}
+                        {step.optional && !step.done && <span className="text-xs font-normal text-muted-foreground">Optional</span>}
                       </button>
                       {isOpen && step.info && (
                         <Tooltip>
-                          <TooltipTrigger render={<button type="button" aria-label={`More on ${step.label}`} className="text-muted-foreground hover:text-foreground" />}>
+                          <TooltipTrigger render={<button type="button" aria-label={`More on ${step.label}`} className="relative text-muted-foreground after:absolute after:-inset-1.5 hover:text-foreground" />}>
                             <Info className="h-3.5 w-3.5" aria-hidden />
                           </TooltipTrigger>
                           <TooltipContent className="max-w-sm">{step.info}</TooltipContent>
@@ -319,13 +335,13 @@ export function OnboardingChecklist({
                     </div>
                     {isOpen && step.description && (typeof step.description === 'string' ? <p className="text-xs text-muted-foreground">{step.description}</p> : step.description)}
                   </div>
-                  {isOpen && step.action && <div className="flex shrink-0 sm:justify-end">{step.action}</div>}
+                  {isOpen && step.action && <div className="flex max-w-full shrink-0 @xl:max-w-[calc(100%-16.75rem)]">{step.action}</div>}
                 </div>
               </li>
             )
           })}
         </ol>
-      </CardContent>
-    </Card>
+      )}
+    </Section>
   )
 }

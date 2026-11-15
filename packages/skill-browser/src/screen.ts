@@ -1,5 +1,5 @@
-import { KEYS } from './page.js'
-import type { CdpSession } from './cdp.js'
+import { keyPress } from './page.js'
+import type { CdpCall, CdpSession } from './cdp.js'
 
 /**
  * What a person watching the screen sends back (their mouse, a scroll, typing, the address bar's
@@ -29,11 +29,6 @@ export type ScreenInput =
   | { type: 'back' }
   | { type: 'forward' }
   | { type: 'reload' }
-
-export interface CdpCall {
-  method: string
-  params: Record<string, unknown>
-}
 
 /** Where a pointer says it is, when it says a place at all. */
 function place(input: { x: number; y: number }): { x: number; y: number } | undefined {
@@ -80,15 +75,8 @@ export function inputCalls(input: ScreenInput): CdpCall[] {
     case 'text':
       if (typeof input.text !== 'string' || input.text === '') return []
       return [{ method: 'Input.insertText', params: { text: input.text } }]
-    case 'key': {
-      const known = typeof input.key === 'string' && Object.hasOwn(KEYS, input.key) ? KEYS[input.key] : undefined
-      if (!known) return []
-      const event = { key: input.key === 'Space' ? ' ' : input.key, code: known.code, windowsVirtualKeyCode: known.keyCode, ...(known.text ? { text: known.text } : {}) }
-      return [
-        { method: 'Input.dispatchKeyEvent', params: { ...event, type: 'keyDown' } },
-        { method: 'Input.dispatchKeyEvent', params: { ...event, type: 'keyUp' } },
-      ]
-    }
+    case 'key':
+      return (typeof input.key === 'string' ? keyPress(input.key) : undefined) ?? []
     case 'navigate':
       if (typeof input.url !== 'string' || !/^https?:\/\//i.test(input.url)) return []
       return [{ method: 'Page.navigate', params: { url: input.url } }]

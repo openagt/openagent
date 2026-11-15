@@ -24,12 +24,15 @@ vi.mock('../rpc/projects.js', () => ({ onProjects: () => Promise.resolve([]), on
 vi.mock('../rpc/machines.js', async () => (await import('../test-machines.js')).machinesRpc)
 const accounts = vi.hoisted(() => ({ onAgentAccounts: vi.fn(), sendUseAgentAccountFirst: vi.fn() }))
 vi.mock('../rpc/accounts.js', () => accounts)
-const logins = vi.hoisted(() => ({ onGitHosts: vi.fn(), sendUseGitHostAccount: vi.fn(), onAgentState: vi.fn() }))
+const logins = vi.hoisted(() => ({ onGitHosts: vi.fn(), sendUseGitHostAccount: vi.fn(), onAgentState: vi.fn(), sendGitHostLogin: vi.fn(async () => ({ ok: true, code: 'ABCD-1234', url: 'https://github.com/login/device' })), sendStopGitHostLogin: vi.fn(async () => ({ ok: true })), sendGitHostInstall: vi.fn() }))
 vi.mock('../rpc/logins.js', () => logins)
 const models = vi.hoisted(() => ({ onModels: vi.fn() }))
 vi.mock('../rpc/models.js', () => models)
-const route = vi.hoisted(() => ({ openSettings: vi.fn(), openPermissions: vi.fn() }))
-vi.mock('../lib/use-route.js', () => route)
+const route = vi.hoisted(() => ({ openSettings: vi.fn(), openPage: vi.fn() }))
+vi.mock('../lib/host-services.js', async importOriginal => {
+  const actual = await importOriginal<typeof import('../lib/host-services.js')>()
+  return { ...actual, INERT_HOST_SERVICES: { ...actual.INERT_HOST_SERVICES, ...route } }
+})
 // The editor needs a real DOM; the pickers do not look at it.
 vi.mock('./PromptEditor.js', async () => {
   const { forwardRef } = await import('react')
@@ -59,7 +62,7 @@ const GITHUB = {
 }
 
 const renderComposer = () => render(<Composer files={[]} onSubmit={vi.fn()} busy={false} submitLabel="Send" submitBusyLabel="Sending…" />)
-const runOn = () => screen.getByRole('button', { name: 'Run on' })
+const runOn = () => screen.getByRole('button', { name: /^Run on: / })
 
 beforeEach(async () => {
   prefs = {}
@@ -148,7 +151,7 @@ describe('the computer a run goes to is saved for the next opening', () => {
 describe('the agent picker holds each agent\'s accounts, on the computer the run goes to', () => {
   test("an agent's row says the account its runs take first; its part lists its models, then its accounts, which put another first, or add one", async () => {
     renderComposer()
-    fireEvent.click(await screen.findByRole('button', { name: /^Driver: / }))
+    fireEvent.click(await screen.findByRole('button', { name: /^Coding agent: / }))
     const row = await screen.findByRole('menuitem', { name: /Claude Code/ })
     await waitFor(() => expect(row.textContent).toBe('Claude CodeAda · 22%'))
     fireEvent.click(row)
@@ -157,14 +160,14 @@ describe('the agent picker holds each agent\'s accounts, on the computer the run
     fireEvent.click(screen.getByRole('menuitem', { name: /Dani/ }))
     expect(accounts.sendUseAgentAccountFirst).toHaveBeenCalledWith('claude', 'Dani')
     fireEvent.click(screen.getByRole('menuitem', { name: 'Add account…' }))
-    expect(route.openPermissions).toHaveBeenCalled()
+    expect(route.openPage).toHaveBeenCalledWith('permissions')
   })
 
   test('an agent with no account read has no accounts part, and Codex none while it is not installed and has one account', async () => {
     accounts.onAgentAccounts.mockImplementation(async (agent: string) => (agent === 'codex' ? { now: 0, computer: 'mac', accounts: [{ id: 'This computer', name: 'Ada L', own: true, windows: [] }] } : { now: 0, computer: 'mac', accounts: [] }))
     models.onModels.mockResolvedValue({ ...MODELS, codex: { models: [], error: '`codex` not found', missing: true } })
     renderComposer()
-    fireEvent.click(await screen.findByRole('button', { name: /^Driver: / }))
+    fireEvent.click(await screen.findByRole('button', { name: /^Coding agent: / }))
     await waitFor(() => expect(accounts.onAgentAccounts).toHaveBeenCalledWith('codex'))
     await new Promise(resolve => setTimeout(resolve, 20))
     expect(screen.getByRole('menuitem', { name: /Codex/ }).textContent).toBe('Codex')
@@ -178,7 +181,7 @@ describe('the agent picker holds each agent\'s accounts, on the computer the run
     machinesRpc.onMachineAgentAccounts.mockImplementation(async (_id: string, agent: string) => (agent === 'claude' ? { ...CLAUDE, computer: 'studio' } : null))
     renderComposer()
     await waitFor(() => expect(machinesRpc.onMachineAgentAccounts).toHaveBeenCalledWith(STUDIO, 'claude'))
-    fireEvent.click(await screen.findByRole('button', { name: /^Driver: / }))
+    fireEvent.click(await screen.findByRole('button', { name: /^Coding agent: / }))
     fireEvent.click(await screen.findByRole('menuitem', { name: /Claude Code/ }))
     expect(await screen.findByText('Accounts on Studio')).toBeTruthy()
     fireEvent.click(screen.getByRole('menuitem', { name: /Dani/ }))
@@ -208,19 +211,19 @@ describe('each saved computer that answers is asked ahead what the pickers show 
     machinesRpc.onMachineAgentAccounts.mockImplementation(never)
     machinesRpc.onMachineGitHosts.mockImplementation(never)
     act(() => selectMachine(STUDIO))
-    expect(screen.getByRole('button', { name: /^Driver: / }).getAttribute('aria-label')).toBe('Driver: Claude Code · Model: Opus')
-    render(<GitAccountMenu address="github.com/acme/shop" machineId={STUDIO} on="Studio" busy={false} picked={undefined} onPick={vi.fn()} onAdd={vi.fn()} />)
+    expect(screen.getByRole('button', { name: /^Coding agent: / }).getAttribute('aria-label')).toBe('Coding agent: Claude Code · Model: Opus')
+    render(<GitAccountMenu address="github.com/acme/shop" machineId={STUDIO} on="Studio" busy={false} picked={undefined} onPick={vi.fn()} onAddThere={vi.fn()} />)
     expect(screen.getByRole('button', { name: 'GitHub account: @octo-vps' })).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: /^Driver: / }))
+    fireEvent.click(screen.getByRole('button', { name: /^Coding agent: / }))
     expect(screen.getByRole('menuitem', { name: /Claude Code/ }).textContent).toBe('Claude CodeAda · 22%')
   })
 })
 
 describe('the git host account a session pushes as', () => {
   test("the project's host's account its runs use, until one is picked for this session; the computer's pick is never changed; or adds one", async () => {
-    const onAdd = vi.fn()
+    const onAddThere = vi.fn()
     const onPick = vi.fn()
-    const { rerender } = render(<GitAccountMenu address="github.com/acme/shop" machineId={undefined} on={undefined} busy={false} picked={undefined} onPick={onPick} onAdd={onAdd} />)
+    const { rerender } = render(<GitAccountMenu address="github.com/acme/shop" machineId={undefined} on={undefined} busy={false} picked={undefined} onPick={onPick} onAddThere={onAddThere} />)
     const trigger = await screen.findByRole('button', { name: 'GitHub account: @octo' })
     expect(trigger.textContent).toBe('@octo')
     fireEvent.click(trigger)
@@ -228,41 +231,51 @@ describe('the git host account a session pushes as', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: '@octo-agent' }))
     expect(onPick).toHaveBeenCalledWith('octo-agent')
     expect(logins.sendUseGitHostAccount).not.toHaveBeenCalled()
-    rerender(<GitAccountMenu address="github.com/acme/shop" machineId={undefined} on={undefined} busy={false} picked="octo-agent" onPick={onPick} onAdd={onAdd} />)
+    rerender(<GitAccountMenu address="github.com/acme/shop" machineId={undefined} on={undefined} busy={false} picked="octo-agent" onPick={onPick} onAddThere={onAddThere} />)
     expect(screen.getByRole('button', { name: 'GitHub account: @octo-agent' })).toBeTruthy()
     // A pick the computer no longer has: the computer's again.
-    rerender(<GitAccountMenu address="github.com/acme/shop" machineId={undefined} on={undefined} busy={false} picked="gone" onPick={onPick} onAdd={onAdd} />)
+    rerender(<GitAccountMenu address="github.com/acme/shop" machineId={undefined} on={undefined} busy={false} picked="gone" onPick={onPick} onAddThere={onAddThere} />)
     expect(screen.getByRole('button', { name: 'GitHub account: @octo' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'GitHub account: @octo' }))
+    // One more is added here, in its dialog, and is then the one this session works as.
     fireEvent.click(screen.getByRole('menuitem', { name: 'Add account…' }))
-    expect(onAdd).toHaveBeenCalled()
+    expect(await screen.findByRole('dialog', { name: 'Add a GitHub account' })).toBeTruthy()
+    await waitFor(() => expect(logins.sendGitHostLogin).toHaveBeenCalledWith('github.com'))
+    expect(onAddThere).not.toHaveBeenCalled()
+    logins.onGitHosts.mockResolvedValue({ hosts: [{ ...GITHUB, provider: { ...GITHUB.provider, accounts: [...GITHUB.provider.accounts, { login: 'new-agent', runs: false, ok: true }] } }] })
+    await waitFor(() => expect(onPick).toHaveBeenCalledWith('new-agent'), { timeout: 5000 })
   })
 
   test("with a machine picked, the accounts are that machine's, asked of it; a pick is for this session there", async () => {
     machinesRpc.onMachineGitHosts.mockResolvedValue({ hosts: [{ ...GITHUB, provider: { ...GITHUB.provider, accounts: [{ login: 'octo-vps', runs: true, ok: true }, { login: 'octo', runs: false, ok: true }] } }] })
     const onPick = vi.fn()
-    render(<GitAccountMenu address="github.com/acme/shop" machineId={STUDIO} on="Studio" busy={false} picked={undefined} onPick={onPick} onAdd={vi.fn()} />)
+    const onAddThere = vi.fn()
+    render(<GitAccountMenu address="github.com/acme/shop" machineId={STUDIO} on="Studio" busy={false} picked={undefined} onPick={onPick} onAddThere={onAddThere} />)
     fireEvent.click(await screen.findByRole('button', { name: 'GitHub account: @octo-vps' }))
     expect(screen.getByText('GitHub account for this session, on Studio')).toBeTruthy()
     fireEvent.click(screen.getByRole('menuitem', { name: '@octo' }))
     expect(onPick).toHaveBeenCalledWith('octo')
     expect(machinesRpc.sendMachineGitHostAccount).not.toHaveBeenCalled()
     expect(logins.sendUseGitHostAccount).not.toHaveBeenCalled()
+    // Another computer's accounts are added on its own page.
+    fireEvent.click(screen.getByRole('button', { name: 'GitHub account: @octo-vps' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Add account…' }))
+    expect(onAddThere).toHaveBeenCalled()
+    expect(screen.queryByRole('dialog')).toBeNull()
   })
 
-  test('a host with no account logged in says so, and its press goes where one is added; another host, or none said, draws nothing', async () => {
+  test('a host with no account logged in says so, and its press opens the dialog that adds one; another host, or none said, draws nothing', async () => {
     logins.onGitHosts.mockResolvedValue({ hosts: [{ ...GITHUB, provider: { ...GITHUB.provider, accounts: [] } }] })
-    const onAdd = vi.fn()
-    const { unmount } = render(<GitAccountMenu address="github.com/acme/shop" machineId={undefined} on={undefined} busy={false} picked={undefined} onPick={vi.fn()} onAdd={onAdd} />)
+    const { unmount } = render(<GitAccountMenu address="github.com/acme/shop" machineId={undefined} on={undefined} busy={false} picked={undefined} onPick={vi.fn()} onAddThere={vi.fn()} />)
     fireEvent.click(await screen.findByRole('button', { name: 'Add a GitHub account' }))
-    expect(onAdd).toHaveBeenCalled()
+    expect(await screen.findByRole('dialog', { name: 'Add a GitHub account' })).toBeTruthy()
     unmount()
-    const other = render(<GitAccountMenu address="gitlab.com/acme/shop" machineId={undefined} on={undefined} busy={false} picked={undefined} onPick={vi.fn()} onAdd={vi.fn()} />)
+    const other = render(<GitAccountMenu address="gitlab.com/acme/shop" machineId={undefined} on={undefined} busy={false} picked={undefined} onPick={vi.fn()} onAddThere={vi.fn()} />)
     await waitFor(() => expect(logins.onGitHosts).toHaveBeenCalled())
     await new Promise(resolve => setTimeout(resolve, 20))
     expect(other.container.textContent).toBe('')
     other.unmount()
-    const silent = render(<GitAccountMenu address="github.com/acme/shop" machineId={STUDIO} on="Studio" busy={false} picked={undefined} onPick={vi.fn()} onAdd={vi.fn()} />)
+    const silent = render(<GitAccountMenu address="github.com/acme/shop" machineId={STUDIO} on="Studio" busy={false} picked={undefined} onPick={vi.fn()} onAddThere={vi.fn()} />)
     await waitFor(() => expect(machinesRpc.onMachineGitHosts).toHaveBeenCalledWith(STUDIO))
     expect(silent.container.textContent).toBe('')
   })

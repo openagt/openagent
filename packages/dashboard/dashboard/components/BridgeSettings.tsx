@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
-import { onBridgeStatus, onBridgeToken } from '../rpc/reads.js'
+import { onBridgeExtensionFolder, onBridgeStatus, onBridgeToken } from '../rpc/reads.js'
+import { INSTALLED_RESTARTS } from '../lib/use-daemon-health.js'
+import { useLoaded } from '../lib/use-async.js'
 import { Button } from './ui/button.js'
 import { CopyButton } from './ui/copy-button.js'
 
@@ -16,11 +18,12 @@ import { CopyButton } from './ui/copy-button.js'
  * because a secret sitting permanently on screen is a secret in every screen recording and
  * screenshot, and this dashboard is demoed.
  */
-export function BridgeSettings({ enabled, onChange }: { enabled: boolean; onChange: (next: boolean) => void }) {
+export function BridgeSettings() {
   const [token, setToken] = useState<string | null>(null)
   const [shown, setShown] = useState(false)
   const [blocked, setBlocked] = useState<{ got: string; expected: string } | null>(null)
   const [refused, setRefused] = useState(false)
+  const folder = useLoaded(onBridgeExtensionFolder, null, [])
 
   // The version gate's visible half (#1519): a refused extension would otherwise look merely
   // disconnected, and "the bridge stopped working" after a pull is exactly this. Polled, because
@@ -30,11 +33,6 @@ export function BridgeSettings({ enabled, onChange }: { enabled: boolean; onChan
   // store's refused-contact slot is the only trace, and without this line that failure is
   // silent everywhere.
   useEffect(() => {
-    if (!enabled) {
-      setBlocked(null)
-      setRefused(false)
-      return
-    }
     let live = true
     const read = () =>
       void onBridgeStatus()
@@ -50,14 +48,9 @@ export function BridgeSettings({ enabled, onChange }: { enabled: boolean; onChan
       live = false
       clearInterval(timer)
     }
-  }, [enabled])
+  }, [])
 
   useEffect(() => {
-    if (!enabled) {
-      setToken(null)
-      setShown(false)
-      return
-    }
     let live = true
     void onBridgeToken()
       .then(next => {
@@ -67,15 +60,23 @@ export function BridgeSettings({ enabled, onChange }: { enabled: boolean; onChan
     return () => {
       live = false
     }
-  }, [enabled])
+  }, [])
 
-  if (!enabled) return null
   return (
-    <div className="mt-2 space-y-2 rounded-md border border-border bg-muted/30 p-3 text-xs">
+    <div className="mt-3 space-y-2 text-xs">
       <p className="text-muted-foreground">
-        Install the browser extension, open its options, and paste this token. It reports the question a Claude web
-        session is parked on, so it shows up here instead of only on claude.ai.
+        The extension reports the question a Claude web session is parked on, so it shows up here instead of only on
+        claude.ai.
       </p>
+      {folder !== null && (
+        <div className="space-y-1">
+          <p className="text-muted-foreground">To install it: at chrome://extensions, turn on Developer mode, press Load unpacked and pick this folder.</p>
+          <div className="flex items-center gap-2">
+            <code className="min-w-0 flex-1 break-all rounded-md bg-muted px-2 py-1 font-mono">{folder}</code>
+            <CopyButton text={folder} label="Copy the folder" />
+          </div>
+        </div>
+      )}
       {blocked && (
         <p className="text-danger">
           The extension is blocked: it is v{blocked.got} and this dashboard expects v{blocked.expected}. Update it —
@@ -90,13 +91,15 @@ export function BridgeSettings({ enabled, onChange }: { enabled: boolean; onChan
       )}
       {token === null ? (
         // A restart is genuinely required: the token is read when the daemon starts.
-        <p className="text-muted-foreground">Restart the dashboard to generate the token.</p>
+        <p className="text-muted-foreground">
+          Restart the dashboard to generate the token: in its terminal, Ctrl+C and run <code className="font-mono">openagent</code> again; {INSTALLED_RESTARTS}.
+        </p>
       ) : (
         <div className="flex flex-wrap items-center gap-2">
-          <code className="min-w-0 flex-1 truncate rounded bg-muted px-2 py-1 font-mono">
+          <code className="min-w-0 flex-1 truncate rounded-sm bg-muted px-2 py-1.5 font-mono">
             {shown ? token : '•'.repeat(24)}
           </code>
-          <Button variant="outline" size="sm" onClick={() => setShown(v => !v)}>
+          <Button variant="secondary" onClick={() => setShown(v => !v)}>
             {shown ? 'Hide' : 'Reveal'}
           </Button>
           <CopyButton text={token} label="Copy the bridge token" />

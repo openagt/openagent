@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Button, Input, RadioGroup, RadioGroupOption, type ModuleCommandResult, type ModuleProject } from '@openagt/dashboard/module'
-import { EMPTY_DRAFT, addArgs, draftProblem, draftSentence, isUntouched, ownPaceArgs, savedFile, savedWords, whereHint, type AutomationDraft, type OwnPace } from './automation-form.js'
-import { PaceFields, SaidFields, Section } from './fields.js'
+import { Button, Input, RadioGroup, RadioGroupOption, useKeptDraft, useOpenAgentDown, type ModuleCommandResult, type ModuleProject } from '@openagt/dashboard/module'
+import { EMPTY_DRAFT, addArgs, draftProblem, draftSentence, isUntouched, nameProblem, ownPaceArgs, savedFile, savedWords, whereHint, type AutomationDraft, type OwnPace } from './automation-form.js'
+import { FormFoot, PaceFields, SaidFields, SaveWords, Section } from './fields.js'
 import { DEFAULT_AGENT } from '../src/names.js'
 
 // The "New automation" form of the Automations page: a person's own prompt, saved as a command of
@@ -17,12 +17,15 @@ import { DEFAULT_AGENT } from '../src/names.js'
 
 export function AutomationForm({
   project,
+  schedulerRuns,
   run,
   onDirty,
   onClose,
   onSaved,
 }: {
   project: ModuleProject
+  /** Whether the project's scheduler is on and running: else a row switched on does not start yet. */
+  schedulerRuns: boolean
   /** Run one command of the scheduler in the project, in turn with the page's other saves. */
   run: (args: string[]) => Promise<ModuleCommandResult>
   /** Whether something is typed and not saved: closing the form then would lose it. */
@@ -30,8 +33,10 @@ export function AutomationForm({
   onClose: () => void
   onSaved: () => void
 }) {
-  const [draft, setDraft] = useState<AutomationDraft>(EMPTY_DRAFT)
+  // What is typed is kept in this browser until it is saved or put away with Cancel: a reload, or a closed tab, loses none of it.
+  const [draft, setDraft, forget] = useKeptDraft<AutomationDraft>(`automation:${project.id}`, EMPTY_DRAFT)
   const [saving, setSaving] = useState(false)
+  const down = useOpenAgentDown()
   const [failed, setFailed] = useState<string | undefined>()
   const [saved, setSaved] = useState<{ command: string; file: string; startsFrom: string; onThisMachine: boolean; timeNotKept?: string } | undefined>()
   const set = (change: Partial<AutomationDraft>): void => {
@@ -39,6 +44,7 @@ export function AutomationForm({
     setFailed(undefined)
   }
   const problem = draftProblem(draft)
+  const badName = nameProblem(draft.name)
   const sentence = draftSentence(draft)
   const dirty = !isUntouched(draft) && !saved
   useEffect(() => onDirty(dirty), [dirty])
@@ -58,19 +64,18 @@ export function AutomationForm({
     // The time of day is this machine's: kept once the automation is there to keep it for.
     const kept = time[0] === 'skill' ? undefined : await run(['pace', draft.name.trim(), ...time])
     setSaving(false)
+    forget()
     setSaved({ command: draft.name.trim(), ...savedFile(answer.output), ...(kept && !kept.ok ? { timeNotKept: kept.error } : {}) })
     onSaved()
   }
 
-  const frame = 'mt-3 rounded-md border border-border bg-muted/40 p-4'
-
   if (saved) {
     return (
-      <div role="group" aria-label="New automation" className={`${frame} text-sm`}>
+      <div role="group" aria-label="New automation" className="mb-8 rounded-lg border border-hairline p-4 text-sm">
         <p>
           Saved <span className="font-mono">{saved.onThisMachine ? saved.command : `/${saved.command}`}</span> as <span className="font-mono">{saved.file}</span>.
         </p>
-        <p className="mt-2">{savedWords(saved)}</p>
+        <p className="mt-2">{savedWords(saved, schedulerRuns)}</p>
         {saved.timeNotKept !== undefined && (
           <p role="alert" className="mt-2 text-danger">
             Its time of day was not kept: {saved.timeNotKept}. Its row's Edit sets it.
@@ -78,7 +83,7 @@ export function AutomationForm({
         )}
         <p className="mt-2 text-muted-foreground">Its row is in the list now, switched off.</p>
         <div className="mt-3 flex justify-end">
-          <Button size="sm" autoFocus onClick={onClose}>
+          <Button autoFocus onClick={onClose}>
             Done
           </Button>
         </div>
@@ -94,15 +99,32 @@ export function AutomationForm({
         // Escape closes a form that has nothing to lose. Any other is closed with Cancel, so a slip of a key loses no prompt.
         if (e.key === 'Escape' && !saving && isUntouched(draft)) onClose()
       }}
-      className={`${frame} space-y-5`}
+      className="mb-8 max-w-180 space-y-6"
     >
-      <fieldset disabled={saving} className="space-y-5">
+      <h3 className="text-base font-semibold">New automation</h3>
+      <fieldset disabled={saving} className="space-y-6">
         <Section title="Name">
           <div className="flex items-center gap-1 text-sm">
             {/* A shared one is a command a person can type; one kept on this machine is no command, so it has no slash. */}
             {!draft.onThisMachine && <span className="font-mono text-muted-foreground">/</span>}
-            <Input type="text" autoFocus value={draft.name} onChange={e => set({ name: e.target.value })} placeholder="answer-comments" aria-label="Name" className="h-8 w-64 max-w-full bg-background px-2 font-mono" />
+            <Input
+              type="text"
+              id="automation-name"
+              autoFocus
+              value={draft.name}
+              onChange={e => set({ name: e.target.value })}
+              placeholder="answer-comments"
+              aria-label="Name"
+              aria-invalid={badName !== undefined}
+              {...(badName !== undefined ? { 'aria-describedby': 'automation-name-problem' } : {})}
+              className="w-64 max-w-full font-mono"
+            />
           </div>
+          {badName !== undefined && (
+            <p id="automation-name-problem" className="mt-1.5 text-xs text-danger">
+              {badName}
+            </p>
+          )}
         </Section>
         <Section title="What it does">
           <SaidFields project={project} said={draft} agent={DEFAULT_AGENT} autoFocus={false} onChange={set} />
@@ -124,32 +146,36 @@ export function AutomationForm({
           <RadioGroup aria-label="Who gets the automation" value={draft.onThisMachine ? 'machine' : 'project'} onValueChange={who => set({ onThisMachine: who === 'machine' })} disabled={saving}>
             <RadioGroupOption value="project">
               Shared with the project
-              <span className="text-xs text-muted-foreground">a file you commit; everyone who has the project gets the row, switched off</span>
+              <span className="text-xs text-muted-foreground">a file you commit, for everyone</span>
             </RadioGroupOption>
             <RadioGroupOption value="machine">
               Only on this machine
-              <span className="text-xs text-muted-foreground">nothing to commit; nobody else gets the row</span>
+              <span className="text-xs text-muted-foreground">nothing to commit, for you alone</span>
             </RadioGroupOption>
           </RadioGroup>
         </Section>
       </fieldset>
-      <p className="rounded-md border border-border bg-background px-3 py-2 text-sm">{problem ?? `${sentence}.`}</p>
+      <p className="text-sm">{problem ?? `${sentence}.`}</p>
       {failed !== undefined && (
         <p role="alert" className="text-xs text-danger">
           {failed}
         </p>
       )}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="min-w-0 flex-1 text-xs text-muted-foreground">{whereHint(draft)}</p>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" disabled={saving} onClick={onClose}>
-            Cancel
-          </Button>
-          <Button size="sm" disabled={saving || problem !== undefined} onClick={() => void save()}>
-            Save
-          </Button>
-        </div>
-      </div>
+      <FormFoot where={whereHint(draft, schedulerRuns)}>
+        <Button
+          variant="secondary"
+          disabled={saving}
+          onClick={() => {
+            forget()
+            onClose()
+          }}
+        >
+          Cancel
+        </Button>
+        <Button disabled={saving || down || problem !== undefined} onClick={() => void save()}>
+          <SaveWords saving={saving} />
+        </Button>
+      </FormFoot>
     </div>
   )
 }

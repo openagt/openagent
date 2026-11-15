@@ -4,8 +4,8 @@ import { fileURLToPath } from 'node:url'
 
 /**
  * Locate the built dashboard bundle (#405): `dist/dashboard-bundle`, where Vite
- * writes it. Returns the directory only when its `index.html` exists, else undefined (the caller
- * then serves the legacy page.ts). Shared by the daemon and the per-agent foreground dashboard (#427).
+ * writes it. Returns the directory only when its `index.html` exists, else undefined: the server
+ * then answers every page with a 503 that says the bundle is not installed.
  *
  * One path, because there is one layout. The dashboard used to be its own package, so a published
  * install read a copy of the bundle under this package's dist while the workspace read the original

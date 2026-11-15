@@ -1,3 +1,4 @@
+import { lstat, mkdir, readdir, stat, symlink } from 'node:fs/promises'
 import { join, relative } from 'node:path'
 
 /**
@@ -65,28 +66,13 @@ export interface LinkFs {
 /** The `node:fs/promises` implementation of {@link LinkFs}. */
 export function nodeLinkFs(): LinkFs {
   return {
-    async readdir(path) {
-      const { readdir } = await import('node:fs/promises')
-      return readdir(path).catch(() => [])
-    },
-    async isDirectory(path) {
-      const { stat } = await import('node:fs/promises')
-      return stat(path).then(s => s.isDirectory(), () => false)
-    },
-    async entryExists(path) {
-      const { lstat } = await import('node:fs/promises')
-      return lstat(path).then(() => true, () => false)
-    },
-    async mkdir(path) {
-      const { mkdir } = await import('node:fs/promises')
-      await mkdir(path, { recursive: true })
-    },
-    async symlinkDir(target, path) {
-      const { symlink } = await import('node:fs/promises')
-      // 'junction' is the only directory-link type Windows grants without elevation;
-      // it is ignored on POSIX.
-      await symlink(target, path, process.platform === 'win32' ? 'junction' : 'dir')
-    },
+    readdir: path => readdir(path).catch(() => []),
+    isDirectory: path => stat(path).then(s => s.isDirectory(), () => false),
+    entryExists: path => lstat(path).then(() => true, () => false),
+    mkdir: path => mkdir(path, { recursive: true }).then(() => {}),
+    // 'junction' is the only directory-link type Windows grants without elevation;
+    // it is ignored on POSIX.
+    symlinkDir: (target, path) => symlink(target, path, process.platform === 'win32' ? 'junction' : 'dir'),
   }
 }
 

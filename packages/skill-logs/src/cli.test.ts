@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { nodeGitRunner, personalFolder, sessionsHome, writeSharing, DATA_BRANCH, SESSIONS_DIR } from '@openagt/agent-data'
-import { runCli, USAGE, DEFAULT_LIMIT } from './cli.js'
+import { runCli, DEFAULT_LIMIT } from './cli.js'
 import { RUNS_DIR } from './names.js'
 
 const git = nodeGitRunner()
@@ -156,7 +156,7 @@ test('usage: an unknown command, a stray argument, a bad limit and an unsafe id'
     const unknown = await run(a!, ['dance'])
     assert.equal(unknown.code, 2)
     assert.equal(unknown.json, undefined)
-    assert.equal(unknown.stderr, USAGE)
+    assert.equal(unknown.stderr, 'unknown command: dance\nRun `logs --help` for usage.')
     assert.equal((await run(a!, ['--limit', '0'])).code, 2)
     assert.equal((await run(a!, ['--limit', 'many'])).code, 2)
     assert.equal((await run(a!, ['--nope'])).code, 2)
@@ -265,6 +265,43 @@ test('delete removes a run as one commit; patch sets the branch and the pull req
     assert.equal((await run(a!, ['patch', R1, '--pr', 'nine', '--pr-url', 'u'])).code, 2)
     assert.equal((await run(a!, ['delete'])).code, 2)
     assert.equal((await run(a!, ['delete', '../x'])).code, 2)
+  } finally {
+    await cleanup()
+  }
+})
+
+test('people and skills read the runs of the last days off origin, or with --local the checkout, alike; --days is a whole number above 0', async () => {
+  // A run started with a skill's command, whose agent loaded another skill.
+  const R5 = '2026-07-08T00-00-00-000Z'
+  const runs = { ...RUNS, [`a@a/${R5}.json`]: JSON.stringify(card(R5, { intent: '/work-queue now', cost: 0.5 })), [`a@a/${R5}.jsonl`]: '{"kind":"action","label":"Skill","detail":"tickets","at":"2026-07-08T00:01:00.000Z"}\n' }
+  const { agents, cleanup } = await rig(1, runs)
+  const [a] = agents
+  try {
+    const people = await run(a!, ['people', '--days', '3650'])
+    assert.equal(people.code, 0)
+    // The people who started runs, and the one who committed to the main branch.
+    assert.deepEqual(
+      people.json.map((p: { person: string; runs: number; commits: number; cost: number }) => [p.person, p.runs, p.commits, p.cost]),
+      [
+        ['a@a', 2, 0, 0.5],
+        ['b@b', 2, 0, 1.25],
+        ['s@s', 0, 1, 0],
+      ],
+    )
+    const skills = await run(a!, ['skills', '--days', '3650'])
+    assert.equal(skills.code, 0)
+    assert.deepEqual(skills.json, [
+      { skill: 'tickets', uses: 1, runs: 1, lastAt: '2026-07-08T00:01:00.000Z' },
+      { skill: 'work-queue', uses: 1, runs: 1, lastAt: '2026-07-08T00:00:00.000Z' },
+    ])
+    // This machine's copy, once a write made the checkout, says the same.
+    assert.equal((await run(a!, ['patch', R3, '--branch', 'agent-r3b'])).code, 0)
+    assert.deepEqual((await run(a!, ['people', '--days', '3650', '--local'])).json, people.json)
+    assert.deepEqual((await run(a!, ['skills', '--days', '3650', '--local'])).json, skills.json)
+    for (const days of ['0', 'many']) {
+      assert.equal((await run(a!, ['people', '--days', days])).code, 2, days)
+      assert.equal((await run(a!, ['skills', '--days', days])).code, 2, days)
+    }
   } finally {
     await cleanup()
   }

@@ -17,8 +17,9 @@ export function useProjectLauncher(projectId: string | null): ProjectLauncher | 
   const pick = usePreferences().startFrom?.[projectId ?? '']
   const read = usePolled<ProjectLauncher | null>(projectId ? () => (pick ? onCommands(projectId, pick) : onCommands(projectId)) : null, null, 15_000, [projectId, pick?.kind, pick?.kind === 'published' ? pick.branch : undefined])
   const last = useRef<{ projectId: string | null; launcher: ProjectLauncher | null }>({ projectId, launcher: null })
-  if (read.loaded) last.current = { projectId, launcher: read.value }
-  return read.loaded || last.current.projectId !== projectId ? read.value : last.current.launcher
+  const known = read.state !== 'unknown'
+  if (known) last.current = { projectId, launcher: read.value }
+  return known || last.current.projectId !== projectId ? read.value : last.current.launcher
 }
 
 /** The commands an agent started now has: the ones not waiting to reach the branch it starts from. */

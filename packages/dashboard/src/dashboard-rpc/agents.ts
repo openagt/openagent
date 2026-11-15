@@ -3,7 +3,7 @@ import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { agentIdOf, DEFAULT_AGENT, DEFAULT_AGENT_SKILLS, isAgentId, isAgentName, listAgents, readAgent, removeAgent, writeAgent, type AgentAccounts, type AgentRecord } from '@openagt/agent-data'
 import { carriedSkills, GROUPS } from '../project-skills/catalogue.js'
-import { onAgentAccounts, type AccountResult } from './accounts.js'
+import { onAgentAccounts, type AccountResult, type AccountRow } from './accounts.js'
 import { onGitHosts } from './logins.js'
 import { agentLoginsOn, syncLogins, type AgentLoginsOn } from '../dashboard/logins-sync.js'
 
@@ -12,7 +12,7 @@ export type { AgentLoginsOn } from '../dashboard/logins-sync.js'
 
 // The Agents page (Rom's design): an agent is a name, a set of skills and a set of accounts, kept
 // as one file each in the personal folder, so every computer that syncs it has the same agents.
-// The page lists them, edits them in place, makes new ones and removes them; the default agent is
+// The page lists them, edits them in a dialog, makes new ones and removes them; the default agent is
 // edited like the others and never removed. What an agent can be given is what this computer
 // knows: the skills the dashboard carries, OpenAgent's own GitHub accounts here, and the Claude
 // and Codex accounts of the Permissions page.
@@ -32,12 +32,20 @@ export interface AgentsView {
   agents: AgentRecord[]
   /** The skills to pick from, in groups: the default agent's first, then the catalogue's. */
   skills: { title: string; skills: AgentSkillChoice[] }[]
-  /** OpenAgent's GitHub accounts on this computer. */
-  github?: { accounts: string[] }
-  /** The Claude accounts of the Permissions page, by id and name. */
-  claude: { id: string; name: string }[]
+  /** OpenAgent's GitHub accounts on this computer, and the host one more is added at. */
+  github?: { host: string; accounts: string[] }
+  /** The Claude accounts of the Permissions page, by id and name; this computer's own login says when it is logged out. */
+  claude: AgentAccountChoice[]
   /** The Codex accounts, the same way. */
-  codex: { id: string; name: string }[]
+  codex: AgentAccountChoice[]
+}
+
+/** A coding agent's account an agent can be given. */
+export interface AgentAccountChoice {
+  id: string
+  name: string
+  /** This computer's own login, and the coding agent is not logged in: no run takes it while another account is there. */
+  loggedOut?: true
 }
 
 /** The group the default agent's skills are shown in. */
@@ -80,10 +88,14 @@ export async function onAgentsList(): Promise<AgentsView> {
   return {
     agents,
     skills,
-    ...(provider ? { github: { accounts: provider.accounts.filter(account => account.ok).map(account => account.login) } } : {}),
-    claude: claude.accounts.map(account => ({ id: account.id, name: account.name })),
-    codex: codex.accounts.map(account => ({ id: account.id, name: account.name })),
+    ...(provider ? { github: { host: GITHUB, accounts: provider.accounts.filter(account => account.ok).map(account => account.login) } } : {}),
+    claude: claude.accounts.map(accountChoice),
+    codex: codex.accounts.map(accountChoice),
   }
+}
+
+function accountChoice(account: AccountRow): AgentAccountChoice {
+  return { id: account.id, name: account.name, ...(account.loggedOut ? { loggedOut: true } : {}) }
 }
 
 /** What the page sends to save an agent: a new one has no id yet. */
@@ -99,17 +111,18 @@ export interface AgentChange {
 /**
  * Save an agent: a new one under the id its name gives, an existing one under its own. The name
  * must give an id, every skill must be one this computer carries, and every account one it knows;
- * else nothing is written and the reason is said.
+ * else nothing is written and the reason is said, with `field: 'name'` when it is the name's.
  */
-export async function sendSaveAgent(change: AgentChange): Promise<({ ok: true; id: string } | { ok: false; error: string }) & Partial<AccountResult>> {
+export async function sendSaveAgent(change: AgentChange): Promise<({ ok: true; id: string } | { ok: false; error: string; field?: 'name' }) & Partial<AccountResult>> {
   if (typeof change !== 'object' || change === null) return { ok: false, error: 'That is no agent.' }
-  if (!isAgentName(change.name)) return { ok: false, error: 'An agent needs a name of a few words: letters and digits, at most 40 characters.' }
+  if (!isAgentName(change.name)) return { ok: false, error: 'An agent needs a name of a few words: letters and digits, at most 40 characters.', field: 'name' }
   const name = change.name.trim()
   const id = change.id === undefined ? agentIdOf(name) : change.id
   if (!isAgentId(id)) return { ok: false, error: 'That is no agent id.' }
-  if (change.id === undefined && (await readAgent(id)) !== undefined) return { ok: false, error: `There is an agent ${name} already.` }
+  const taken = change.id === undefined ? await readAgent(id) : undefined
+  if (taken) return { ok: false, error: `There is an agent ${taken.name} already: pick another name.`, field: 'name' }
   if (change.id !== undefined && change.id !== DEFAULT_AGENT && (await readAgent(change.id)) === undefined) return { ok: false, error: 'That agent is gone: make it again.' }
-  if (id === DEFAULT_AGENT && name !== 'Default') return { ok: false, error: 'The default agent keeps its name.' }
+  if (id === DEFAULT_AGENT && name !== 'Default') return { ok: false, error: 'The default agent keeps its name.', field: 'name' }
   const known = new Set((await skillChoices()).flatMap(group => group.skills.map(skill => skill.name)))
   const skills = Array.isArray(change.skills) ? change.skills : undefined
   if (!skills || skills.some(skill => typeof skill !== 'string' || !known.has(skill))) return { ok: false, error: 'An agent is given skills from the list.' }

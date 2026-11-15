@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { DRIVER_LABELS, type DriverName } from '../../src/client.js'
-import { onAgentState, onGitHosts, sendAgentFix, sendGitHostInstall, sendGitHostLogin, sendStopGitHostLogin, type AgentState, type GitHostRow, type GitHostsView } from '../rpc/logins.js'
-import { usePolled } from '../lib/use-async.js'
+import { onAgentState, onGitHosts, sendAgentFix, sendStopAgentFix, type AgentState, type GitHostRow, type GitHostsView } from '../rpc/logins.js'
+import { useAskOn, usePolled, type ReadState } from '../lib/use-async.js'
 import { cn } from '../lib/utils.js'
 import { Button } from './ui/button.js'
 import { CopyButton } from './ui/copy-button.js'
@@ -9,6 +9,7 @@ import { CopyButton } from './ui/copy-button.js'
 // What runs log in with, and what is missing for them to (#2194's accounts, a step further): the
 // coding agent's CLI, installed and logged in, and the tool of each git host the projects are on.
 // Each is drawn from its own package's answers; a press runs the command that package declared.
+// An account at a git host is added in a dialog of its own (`AddGitAccount.tsx`).
 // Four places show it: the cards of the Permissions page, the Overview's "Get ready" step, the
 // start form's red line, and the dot on the person's picture.
 
@@ -19,18 +20,19 @@ const MISSING_MS = 8_000
 const SELDOM_MS = 30_000
 
 /**
- * A read asked again at the pace its last answer calls for. Its answer is kept under `key` for the
- * page's life: a place that opens later (the person's menu) shows it from its first frame, never
- * empty while the same question, asked a moment ago, is asked again.
+ * A read asked again at the pace its last answer calls for. Its answer is kept under `key`, in this
+ * browser too: a place that opens later (the person's menu, the next load's Permissions) shows it
+ * from its first frame, never empty while the same question is asked again.
  */
-function usePaced<T>(key: string, load: (() => Promise<T>) | null, pace: (value: T | undefined) => number, deps: unknown[]): { value: T | undefined; reload: () => Promise<void> } {
+function usePaced<T>(key: string, load: (() => Promise<T>) | null, pace: (value: T | undefined) => number, deps: unknown[]): { value: T | undefined; state: ReadState; reload: () => Promise<void> } {
   const [every, setEvery] = useState(SELDOM_MS)
-  const { value, reload } = usePolled<T | undefined>(load, undefined, every, [...deps, every], { remember: key })
+  const { value, state, reload, refresh } = usePolled<T | undefined>(load, undefined, every, deps, { remember: key, stored: true })
+  useAskOn(every, refresh)
   const next = pace(value)
   useEffect(() => {
     if (next !== every) setEvery(next)
   }, [next, every])
-  return { value, reload }
+  return { value, state, reload }
 }
 
 /** The coding agent's CLI as this computer has it: `driver`, else the one picked in Settings. Not asked while `on` is false. */
@@ -39,12 +41,12 @@ export function useAgentState(driver?: DriverName, on = true): { state: AgentSta
   return { state: value, reload }
 }
 
-export function useGitHosts(): { view: GitHostsView | undefined; reload: () => Promise<void> } {
-  const { value, reload } = usePaced('git-hosts', onGitHosts, view => (view?.hosts.some(h => h.provider?.installing || h.provider?.loggingIn) ? BUSY_MS : view?.hosts.some(h => hostLoginState(h) === 'step' || hostLoginState(h) === 'not-installed') ? MISSING_MS : SELDOM_MS), [])
-  return { view: value, reload }
+export function useGitHosts(): { view: GitHostsView | undefined; state: ReadState; reload: () => Promise<void> } {
+  const { value, state, reload } = usePaced('git-hosts', onGitHosts, view => (view?.hosts.some(h => h.provider?.installing || h.provider?.loggingIn) ? BUSY_MS : view?.hosts.some(h => hostLoginState(h) === 'step' || hostLoginState(h) === 'not-installed') ? MISSING_MS : SELDOM_MS), [])
+  return { view: value, state, reload }
 }
 
-/** A card's state: green when there is nothing to do, amber for a step to take, grey for a tool that is not here. */
+/** A login's state, said by its colour: green when there is nothing to do, amber for a step to take, grey for a tool that is not here. */
 export type LoginState = 'connected' | 'step' | 'not-installed'
 
 export function agentLoginState(state: AgentState | undefined): LoginState | undefined {
@@ -60,27 +62,6 @@ export function hostLoginState(row: GitHostRow): LoginState | undefined {
   return p.accounts.length > 0 && p.accounts.every(a => a.ok) ? 'connected' : 'step'
 }
 
-const PILL: Record<Exclude<LoginState, 'connected'>, { words: string; tone: string; dot: string }> = {
-  step: { words: 'Log in', tone: 'bg-warning/10 text-warning', dot: 'bg-warning' },
-  'not-installed': { words: 'Not installed', tone: 'bg-muted text-muted-foreground', dot: 'bg-muted-foreground' },
-}
-
-/** A state in a word or two, on a pill of its colour. */
-export function Pill({ words, tone, dot }: { words: string; tone: string; dot: string }) {
-  return (
-    <span className={cn('inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium', tone)}>
-      <span aria-hidden className={cn('size-1.5 rounded-full', dot)} />
-      {words}
-    </span>
-  )
-}
-
-/** A card's state beside its name; none when connected: each account's row says where it is used. */
-export function StatePill({ state }: { state: LoginState }) {
-  if (state === 'connected') return null
-  return <Pill {...PILL[state]} />
-}
-
 /** A package's logo, an SVG it gave: drawn as a mask in the text's colour, never put in the page as markup. */
 export function PackageLogo({ svg, className }: { svg: string | undefined; className?: string }) {
   if (!svg) return <span aria-hidden className={cn('size-4 shrink-0 rounded-sm bg-muted-foreground/30', className)} />
@@ -88,33 +69,25 @@ export function PackageLogo({ svg, className }: { svg: string | undefined; class
   return <span aria-hidden className={cn('size-4 shrink-0 bg-current', className)} style={{ maskImage: url, WebkitMaskImage: url, maskSize: 'contain', WebkitMaskSize: 'contain', maskRepeat: 'no-repeat', WebkitMaskRepeat: 'no-repeat' }} />
 }
 
-/** A command longer than this is one line until it is asked for whole. */
-const LONG = 72
-
-/** The command a press runs, under its button, so the person sees what is done on their computer. A long one is a line, whole on a press. */
+/** The command a press runs, under its button, so the person sees what is done on their computer: one line, which scrolls sideways when it is longer than its room. */
 export function CommandLine({ command }: { command: string }) {
-  const [whole, setWhole] = useState(false)
-  const long = command.length > LONG
   return (
-    <div className="flex min-w-0 items-start gap-1">
-      {/* Broken between its words where a line is too narrow for it, and inside one only when that
-          word alone is wider than the line: "| bash" never splits as "bas" / "h" on a phone. No wider
-          than itself, so its copy button stands beside it, not at the far end of a wide card. */}
-      <code className={cn('min-w-0 font-mono text-[11px] text-muted-foreground', long && !whole ? 'truncate' : '[overflow-wrap:anywhere]')}>{command}</code>
-      {long && (
-        <button type="button" className="shrink-0 text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline" onClick={() => setWhole(!whole)}>
-          {whole ? 'Less' : 'Show all'}
-        </button>
-      )}
-      <CopyButton text={command} label="Copy the command" />
+    <div className="flex min-w-0 items-center gap-1 rounded-md bg-muted py-0.5 pr-0.5 pl-2">
+      <code className="min-w-0 flex-1 overflow-x-auto py-1 font-mono text-xs whitespace-nowrap text-muted-foreground">{command}</code>
+      <CopyButton text={command} label="Copy the command" className="justify-center md:size-6 max-md:size-11" />
     </div>
   )
+}
+
+/** Whether what is in the way of the agent is its own login. */
+export function loggedOut(state: AgentState): boolean {
+  return / logged in/.test(state.problem ?? '')
 }
 
 /** What is in the way of the agent, in words. */
 export function agentWords(state: AgentState): string {
   const name = DRIVER_LABELS[state.driver]
-  return agentLoginState(state) === 'not-installed' ? `${name} is not installed.` : / logged in/.test(state.problem ?? '') ? `${name} is not logged in.` : (state.problem ?? `${name} cannot start.`)
+  return agentLoginState(state) === 'not-installed' ? `${name} is not installed.` : loggedOut(state) ? `${name} is not logged in.` : (state.problem ?? `${name} cannot start.`)
 }
 
 /** What is missing at a host, in words. */
@@ -123,26 +96,72 @@ export function hostWords(row: GitHostRow): string {
   return !p.installed ? `${p.tool}, the tool for ${p.name}, is not installed.` : p.accounts.length === 0 ? `OpenAgent has no ${p.name} account yet.` : `${p.name} no longer takes a login: add it again.`
 }
 
-/** A press that fixes one thing: its button, what it is doing while it does, the command it runs, why it failed. */
-export function FixAction({ label, busy, busyWords, command, failed, onPress, size = 'sm' }: { label: string; busy: boolean; busyWords: string; command?: string; failed?: string; onPress: () => void; size?: 'sm' | 'xs' | undefined }) {
+/** How a fix's press is drawn: the page's primary by default, or a quieter press beside another's. */
+export type FixVariant = 'secondary' | undefined
+
+/** A press that fixes one thing: its button, what it is doing while it does, the command it runs, why it failed. With `words`, what is missing stands on the press's line, the press at its right edge. While it is busy, `url` is the page it said to open, and `onCancel` stops it. */
+export function FixAction({ label, busy, busyWords, command, failed, onPress, words, url, onCancel, size = 'default', variant }: { label: string; busy: boolean; busyWords: string; command?: string; failed?: string; onPress: () => void; words?: ReactNode; url?: string | undefined; onCancel?: (() => void) | undefined; size?: 'default' | 'sm' | undefined; variant?: FixVariant }) {
+  // Busy, the press stays with the focus it was pressed with, and says it is waiting under it.
+  const press = (
+    <Button size={size} variant={variant} loading={busy} onClick={onPress}>
+      {label}
+    </Button>
+  )
   return (
-    <div className="min-w-0 space-y-1">
-      {busy ? (
-        <p role="status" className="text-xs text-muted-foreground">
-          {busyWords}
-        </p>
+    <div className="min-w-0 space-y-2">
+      {words === undefined ? (
+        // The command beside its press where both fit, so the two take one line.
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          {press}
+          {command && <CommandLine command={command} />}
+        </div>
       ) : (
-        <Button size={size} onClick={onPress}>
-          {label}
-        </Button>
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+          <p className="min-w-0 grow basis-60 text-sm text-muted-foreground">{words}</p>
+          {press}
+        </div>
       )}
-      {command && <CommandLine command={command} />}
+      {busy && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <p role="status" className="min-w-0 grow basis-60 text-sm text-muted-foreground">
+            {busyWords}
+            {url !== undefined && (
+              <>
+                {' No page? '}
+                <a href={url} target="_blank" rel="noreferrer" className="focus-ring rounded-sm text-primary underline-offset-2 hover:underline">
+                  Open the sign-in page
+                </a>
+                .
+              </>
+            )}
+          </p>
+          {onCancel && (
+            <Button variant="ghost" size="sm" onClick={onCancel}>
+              Cancel
+            </Button>
+          )}
+        </div>
+      )}
+      {command && words !== undefined && <CommandLine command={command} />}
       {failed && (
         <p role="alert" className="whitespace-pre-line text-xs text-danger">
-          {failed}
+          <Linked text={failed} />
         </p>
       )}
     </div>
+  )
+}
+
+/** A program's words, each address in them a link: a sign-in page it names is opened from here. */
+export function Linked({ text }: { text: string }) {
+  return text.split(/(https?:\/\/[^\s<>"]+)/).map((part, at) =>
+    at % 2 === 1 ? (
+      <a key={at} href={part} target="_blank" rel="noreferrer" className="underline underline-offset-2">
+        {part}
+      </a>
+    ) : (
+      part
+    ),
   )
 }
 
@@ -152,10 +171,18 @@ function agentBusyWords(state: AgentState): string {
   return state.fixing === 'install' ? `Installing ${name}…` : `Say yes in the page this computer's browser opened to log ${name} in.`
 }
 
-/** The agent's fix as one press: [Install Claude Code] or [Log in to Claude Code], with the command; nothing when no press fixes it. */
-export function AgentFix({ state, onChanged, size }: { state: AgentState; onChanged: () => void; size?: 'sm' | 'xs' | undefined }) {
+/** The agent's fix as one press: [Install Claude Code] or [Log this computer in to Claude Code], with the command; the command alone where it is typed; nothing when nothing fixes it. */
+export function AgentFix({ state, onChanged, words, size, variant }: { state: AgentState; onChanged: () => void; words?: ReactNode; size?: 'default' | 'sm' | undefined; variant?: FixVariant }) {
   const [error, setError] = useState<string | undefined>()
   if (state.ready || !state.fix) return null
+  if (state.typed)
+    return (
+      <div className="min-w-0 space-y-2">
+        {words !== undefined && <p className="text-sm text-muted-foreground">{words}</p>}
+        <p className="text-sm text-muted-foreground">This computer has no browser to log in with a press: type this in a terminal on it.</p>
+        <CommandLine command={state.fix.command} />
+      </div>
+    )
   const name = DRIVER_LABELS[state.driver]
   const press = async () => {
     setError(undefined)
@@ -166,7 +193,12 @@ export function AgentFix({ state, onChanged, size }: { state: AgentState; onChan
   return (
     <FixAction
       size={size}
-      label={state.fix.kind === 'install' ? `Install ${name}` : `Log in to ${name}`}
+      variant={variant}
+      words={words}
+      url={state.url}
+      // A login waits on the person's yes, up to ten minutes: they can stop waiting. An install runs to its end.
+      onCancel={state.fixing === 'log-in' ? () => void sendStopAgentFix(state.driver).then(onChanged) : undefined}
+      label={state.fix.kind === 'install' ? `Install ${name}` : `Log this computer in to ${name}`}
       busy={state.fixing !== undefined}
       busyWords={agentBusyWords(state)}
       command={state.fix.command}
@@ -176,77 +208,6 @@ export function AgentFix({ state, onChanged, size }: { state: AgentState; onChan
   )
 }
 
-/** A login at the git host under way, said as one sentence: the page to open, the code to enter (with a copy), and Cancel, which gives it up. */
-export function DeviceCode({ code, url, host, onChanged }: { code: string; url: string; host: string; onChanged: () => Promise<void> }) {
-  const [stopping, setStopping] = useState(false)
-  const cancel = async () => {
-    setStopping(true)
-    try {
-      await sendStopGitHostLogin(host).catch(() => undefined)
-      await onChanged()
-    } finally {
-      setStopping(false)
-    }
-  }
-  return (
-    <div role="status" className="space-y-1 text-xs">
-      {/* One sentence, as a person says it (his pick over a label above a row of parts). */}
-      <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm">
-        <span>Open</span>
-        <a href={url} target="_blank" rel="noreferrer" className="font-medium text-[var(--color-primary)] underline-offset-2 hover:underline">
-          {url.replace(/^https:\/\//, '')}
-        </a>
-        <span>and enter</span>
-        <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-sm font-medium tracking-wider">{code}</code>
-        <CopyButton text={code} label="Copy the code" />
-        <Button size="xs" variant="ghost" className="text-muted-foreground" disabled={stopping} onClick={() => void cancel()}>
-          {stopping ? 'Cancelling…' : 'Cancel'}
-        </Button>
-      </p>
-      <p className="text-muted-foreground">Sign in there as the account OpenAgent should use.</p>
-    </div>
-  )
-}
-
-/** The press that logs another account in at a host: it asks the package for a code, and the card shows it while the login waits. */
-export function useHostLogin(reload: () => Promise<void>): { start: (host: string) => Promise<void>; error: string | undefined; busy: boolean } {
-  const [error, setError] = useState<string | undefined>()
-  const [busy, setBusy] = useState(false)
-  const start = async (host: string) => {
-    setBusy(true)
-    setError(undefined)
-    try {
-      const done = await sendGitHostLogin(host)
-      if (!done.ok) setError(done.error)
-      await reload()
-    } finally {
-      setBusy(false)
-    }
-  }
-  return { start, error, busy }
-}
-
-/** The host's fix as one press, with no account or no tool: install it, else log in. */
-export function HostFix({ row, onChanged, size }: { row: GitHostRow; onChanged: () => Promise<void>; size?: 'sm' | 'xs' | undefined }) {
-  const [error, setError] = useState<string | undefined>()
-  const login = useHostLogin(onChanged)
-  const p = row.provider
-  if (!p) return null
-  if (!p.installed) {
-    if (!p.install) return <p className="text-xs text-muted-foreground">{`Install ${p.tool} by hand: ${p.name} makes none for this computer.`}</p>
-    const install = async () => {
-      setError(undefined)
-      const done = await sendGitHostInstall(row.host)
-      if (!done.ok) setError(done.error)
-      await onChanged()
-    }
-    return <FixAction size={size} label={`Install ${p.tool}`} busy={p.installing === true} busyWords={`Installing ${p.tool}…`} command={p.install} {...((error ?? p.installFailed) !== undefined ? { failed: (error ?? p.installFailed)! } : {})} onPress={() => void install()} />
-  }
-  if (p.loggingIn) return <DeviceCode code={p.loggingIn.code} url={p.loggingIn.url} host={row.host} onChanged={onChanged} />
-  if (p.accounts.length > 0) return null
-  return <FixAction size={size} label={`Add a ${p.name} account`} busy={login.busy} busyWords="Asking for a code…" {...(login.error !== undefined ? { failed: login.error } : {})} onPress={() => void login.start(row.host)} />
-}
-
 /** One thing missing before runs can start; the Permissions page shows it whole. */
 export interface Missing {
   key: string
@@ -254,12 +215,14 @@ export interface Missing {
   name: string
   /** What is missing, in words. */
   words: string
-  /** The press that fixes it. */
-  fix: ReactNode
+  /** What fixes it, as a menu item that leads there says it: "Install Claude Code…". */
+  action: string
+  /** The press that fixes it, for the coding agent: a git host's account is added in its dialog (`AddGitAccount.tsx`). */
+  fix?: ReactNode
 }
 
-/** What is missing, in the order a person sets things up: the coding agent first, then the git hosts. Nothing while it is not read yet. With it, the git hosts as read, for a place that shows them too. */
-export function useMissing(): { missing: Missing[]; reload: () => Promise<void>; hosts: GitHostsView | undefined } {
+/** What is missing, in the order a person sets things up: the coding agent first, then the git hosts. Nothing while it is not read yet, and `loaded` once both are read. With it, the git hosts as read, for a place that shows them too. */
+export function useMissing(): { missing: Missing[]; loaded: boolean; reload: () => Promise<void>; hosts: GitHostsView | undefined } {
   const { state, reload: reloadAgent } = useAgentState()
   const { view, reload: reloadHosts } = useGitHosts()
   const reload = async () => {
@@ -272,6 +235,7 @@ export function useMissing(): { missing: Missing[]; reload: () => Promise<void>;
       key: 'agent',
       name,
       words: agentWords(state),
+      action: agentLoginState(state) === 'not-installed' ? `Install ${name}…` : loggedOut(state) ? `Log ${name} in…` : `Set up ${name}…`,
       fix: <AgentFix state={state} onChanged={() => void reloadAgent()} />,
     })
   }
@@ -282,8 +246,8 @@ export function useMissing(): { missing: Missing[]; reload: () => Promise<void>;
       key: `host:${row.host}`,
       name: p.name,
       words: hostWords(row),
-      fix: <HostFix row={row} onChanged={reloadHosts} />,
+      action: !p.installed ? `Install ${p.tool}…` : p.accounts.length === 0 ? `Add a ${p.name} account…` : `Add your ${p.name} account again…`,
     })
   }
-  return { missing, reload, hosts: view }
+  return { missing, loaded: state !== undefined && view !== undefined, reload, hosts: view }
 }

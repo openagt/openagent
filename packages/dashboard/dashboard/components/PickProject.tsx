@@ -1,6 +1,7 @@
 import { ChevronRight, Folder } from 'lucide-react'
 import type { ProjectSummary } from '../../src/index.js'
 import { useProjectLabel } from '../lib/project-labels.js'
+import { List, Row } from './ui/list.js'
 
 /**
  * A project's own Settings page with every project picked: it is about one project at a time, so
@@ -11,17 +12,17 @@ export function PickProject({ words, projects, onPick }: { words: string; projec
   return (
     <div className="space-y-2">
       <p className="text-sm text-muted-foreground">{words}</p>
-      <ul className="divide-y divide-border">
+      <List boxed>
         {projects.map(project => (
-          <li key={project.id}>
-            <button type="button" onClick={() => onPick(project.id)} className="flex w-full min-w-0 items-center gap-3 rounded py-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]">
-              <Folder aria-hidden className="h-4 w-4 shrink-0 text-muted-foreground" />
-              <span className="min-w-0 flex-1 truncate text-sm">{label(project.id, project.name)}</span>
-              <ChevronRight aria-hidden className="h-4 w-4 shrink-0 text-muted-foreground" />
-            </button>
-          </li>
+          <Row
+            key={project.id}
+            leading={<Folder aria-hidden className="size-4" />}
+            title={label(project.id, project.name)}
+            meta={<ChevronRight aria-hidden className="size-4" />}
+            onClick={() => onPick(project.id)}
+          />
         ))}
-      </ul>
+      </List>
     </div>
   )
 }

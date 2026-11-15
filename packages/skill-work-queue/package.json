@@ -1,6 +1,6 @@
 {
   "name": "@openagt/skill-work-queue",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "The work-queue command for coding agents: work one queued task off the project's agent queue, unattended. A skill file only, no code.",
   "license": "MIT",
   "repository": {

@@ -59,6 +59,14 @@ export const SKILLS_ENV = 'OPENAGENT_SKILLS'
 export const SKILL_CATALOGUE_ENV = 'OPENAGENT_SKILL_CATALOGUE'
 
 /**
+ * The environment variable that names a running agent by its run's id, set by whoever starts the
+ * run (the runner) for the agent's whole life: a ticket's claim names the agent by it, and a main
+ * agent's subagents are found by it. Unlike its branch, which is renamed once the agent names its
+ * session, the id does not change.
+ */
+export const AGENT_ID_ENV = 'AGENT_ID'
+
+/**
  * The environment variable that names the agent a run is on, by its id (`agents/<id>.json` in the
  * personal folder): set by whoever starts the run, for that run; unset, the run is on the default
  * agent. A scheduler's runs name none.

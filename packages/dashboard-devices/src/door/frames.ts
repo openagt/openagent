@@ -28,6 +28,13 @@ export interface Frame {
   payload: Buffer
 }
 
+/**
+ * How often the computer asks whether its line still carries, and after how long with nothing
+ * heard either end takes the line for dead: the computer calls again, the server drops it.
+ */
+export const LINE_PING_MS = 15_000
+export const LINE_QUIET_MS = 45_000
+
 /** The most one frame carries: a body is cut into pieces of this size, so no call holds the line for long. */
 export const MAX_PAYLOAD = 64 * 1024
 const HEADER = 9
@@ -220,6 +227,9 @@ export function carriedHeaders(headers: unknown): Record<string, string | string
   }
   return carried
 }
+
+/** The headers of a call that go down the line: what its body is, and what answer is wanted. Never a key or a cookie. */
+export const CARRIED_HEADERS: readonly string[] = ['content-type', 'accept']
 
 /** One header of a request as a line carries it, or nothing for what is no header's value. */
 export function carriedValue(value: unknown): string | undefined {

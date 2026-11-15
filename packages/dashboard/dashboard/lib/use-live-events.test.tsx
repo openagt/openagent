@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
-import type { OpenAgentEvent } from '../../src/index.js'
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 
 // Record what the feed subscribes to. The channel never sends; we only care about addressing.
 const onEvents = vi.hoisted(() => vi.fn())
@@ -53,10 +52,9 @@ describe('useLiveEvents addressing (#770)', () => {
     await waitFor(() => expect(onEvents).toHaveBeenCalledWith('p1', 'run-b'))
   })
 
-  test('no run id still subscribes per project (the non-git fallback path)', async () => {
-    onEvents.mockResolvedValue(fakeChannel().channel)
+  test('no run id subscribes to nothing: the daemon streams no run for none', () => {
     render(<Probe projectId="p1" />)
-    await waitFor(() => expect(onEvents).toHaveBeenCalledWith('p1', undefined))
+    expect(onEvents).not.toHaveBeenCalled()
   })
 })
 
@@ -98,8 +96,7 @@ describe('useLiveEvents stream loss (#948)', () => {
 
 // A resumed session (#762) appends a second `session` boundary to the SAME journal. An agent's own
 // tail (#749) holds nothing but that agent, so its feed must keep everything — slicing at the last
-// `session` hid the whole pre-resume transcript for as long as the agent was live. The project-root
-// fallback still slices: that subscription genuinely spans run boundaries.
+// `session` hid the whole pre-resume transcript for as long as the agent was live.
 describe('useLiveEvents run scoping', () => {
   const log = (message: string) => ({ kind: 'log', message })
 
@@ -119,23 +116,12 @@ describe('useLiveEvents run scoping', () => {
     ch.push(log('b'))
     await waitFor(() => expect(feed()).toBe('a,session,b'))
   })
-
-  test('the project-root fallback still scopes to the newest session', async () => {
-    const ch = fakeChannel()
-    onEvents.mockResolvedValue(ch.channel)
-    render(<FeedProbe projectId="p1" />)
-    await waitFor(() => expect(onEvents).toHaveBeenCalledTimes(1))
-    ch.push(log('a'))
-    ch.push({ kind: 'session' })
-    ch.push(log('b'))
-    await waitFor(() => expect(feed()).toBe('session,b'))
-  })
 })
 
 // #1383: every subscribe replays the whole log before following live. Blanking the feed while
 // that replay re-streamed was the mid-run flicker — the lost banner cleared on resubscribe, then
 // the feed sat empty until the replay caught up. A reconnect now buffers the replay and swaps
-// atomically on the server's stream-sync marker (or a grace deadline for sources that send none).
+// atomically on the server's stream-sync marker (or a grace deadline when the marker is slow).
 describe('useLiveEvents reconnect keeps the feed (#1383)', () => {
   const log = (message: string) => ({ kind: 'log', message })
 
@@ -181,7 +167,7 @@ describe('useLiveEvents reconnect keeps the feed (#1383)', () => {
     await waitFor(() => expect(feed()).toBe('a,b,c,d'))
   })
 
-  test('a source that sends no marker still swaps at the grace deadline (relay/remote)', async () => {
+  test('a replay whose marker is slow still swaps at the grace deadline', async () => {
     const first = fakeChannel()
     const second = fakeChannel()
     onEvents.mockResolvedValueOnce(first.channel).mockResolvedValue(second.channel)
@@ -223,7 +209,7 @@ describe('useLiveEvents reconnect keeps the feed (#1383)', () => {
     await waitFor(() => expect(feed()).toBe('a,b,c'))
   }, 10_000)
 
-  test('a late replay from a source that sends no marker swaps a deadline after its first event', async () => {
+  test('a late replay whose marker is slow swaps a deadline after its first event', async () => {
     const first = fakeChannel()
     const second = fakeChannel()
     onEvents.mockResolvedValueOnce(first.channel).mockResolvedValue(second.channel)
@@ -265,6 +251,50 @@ describe('useLiveEvents reconnect keeps the feed (#1383)', () => {
     third.push(log('c'))
     third.push({ kind: 'stream-sync' })
     await waitFor(() => expect(feed()).toBe('a,b,c'))
+  })
+})
+
+// A run's page tells the lines the run had written when it was opened from the ones that come after:
+// a continued run's leg before ended among the first.
+describe('useLiveEvents replay', () => {
+  const log = (message: string) => ({ kind: 'log', message })
+
+  function ReplayProbe({ agentId }: { agentId: string }) {
+    const { events, replayed } = useLiveEvents('p1', agentId)
+    return <span data-testid="replay">{`${events.length} ${replayed ? 'replayed' : 'replaying'}`}</span>
+  }
+  const replay = () => screen.getByTestId('replay').textContent
+
+  test('is in once the daemon says so, and for another run not before its own', async () => {
+    const first = fakeChannel()
+    const second = fakeChannel()
+    onEvents.mockResolvedValueOnce(first.channel).mockResolvedValue(second.channel)
+    const { rerender } = render(<ReplayProbe agentId="run-a" />)
+    await waitFor(() => expect(onEvents).toHaveBeenCalledTimes(1))
+    first.push(log('a'))
+    await waitFor(() => expect(replay()).toBe('1 replaying'))
+    first.push({ kind: 'stream-sync' })
+    await waitFor(() => expect(replay()).toBe('1 replayed'))
+    rerender(<ReplayProbe agentId="run-b" />)
+    expect(replay()).toBe('0 replaying')
+    await waitFor(() => expect(onEvents).toHaveBeenCalledTimes(2))
+    second.push(log('b'))
+    second.push({ kind: 'stream-sync' })
+    await waitFor(() => expect(replay()).toBe('1 replayed'))
+  })
+
+  test('is not in before the daemon says so, however late its replay comes', async () => {
+    vi.useFakeTimers()
+    const ch = fakeChannel()
+    onEvents.mockResolvedValue(ch.channel)
+    render(<ReplayProbe agentId="run-a" />)
+    await act(async () => {})
+    act(() => void vi.advanceTimersByTime(3500))
+    expect(replay()).toBe('0 replaying')
+    act(() => ch.push(log('a')))
+    expect(replay()).toBe('1 replaying')
+    act(() => ch.push({ kind: 'stream-sync' }))
+    expect(replay()).toBe('1 replayed')
   })
 })
 

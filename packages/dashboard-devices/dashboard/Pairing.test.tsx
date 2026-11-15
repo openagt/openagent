@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { ModuleHostContext, type ModuleCommandResult, type ModuleHost } from '@openagt/dashboard/module'
+import { OpenAgentDown, fakeHost } from '@openagt/dashboard/module/testing'
 import { AskPopup } from './Pairing.js'
 
 // The popup over every page: a computer on this Wi-Fi asks to connect.
@@ -25,7 +26,7 @@ function host(first: object[]) {
   })
   return {
     // A whole host: one with no runCommand would be taken for the shell's services, and bound to the real calls.
-    host: { package: '@openagt/dashboard-devices', runCommand: vi.fn(), runComputerCommand } as unknown as ModuleHost,
+    host: fakeHost('@openagt/dashboard-devices', { runComputerCommand }),
     runComputerCommand,
     change(next: object[]) {
       asks = next
@@ -58,6 +59,13 @@ describe('A computer wants to connect', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
   })
 
+  test('the keyboard starts on Deny: Enter at once lets nothing in', async () => {
+    const h = host([ASK])
+    show(h.host)
+    const deny = await screen.findByRole('button', { name: 'Deny' })
+    await waitFor(() => expect(document.activeElement).toBe(deny))
+  })
+
   test('Deny says no; an ask answered elsewhere or run out goes from the page by itself', async () => {
     const h = host([ASK])
     show(h.host)
@@ -82,11 +90,31 @@ describe('A computer wants to connect', () => {
     expect(h.runComputerCommand).not.toHaveBeenCalledWith(['deny', ASK.id])
   })
 
+  test('while OpenAgent is not answering, Allow and Deny are off and send nothing; the popup still closes', async () => {
+    const h = host([ASK])
+    render(
+      <OpenAgentDown>
+        <ModuleHostContext.Provider value={h.host}>
+          <AskPopup />
+        </ModuleHostContext.Provider>
+      </OpenAgentDown>,
+    )
+    const deny = (await screen.findByRole('button', { name: 'Deny' })) as HTMLButtonElement
+    const allow = screen.getByRole('button', { name: 'Allow' }) as HTMLButtonElement
+    expect([deny.disabled, allow.disabled]).toEqual([true, true])
+    fireEvent.click(deny)
+    fireEvent.click(allow)
+    expect(h.runComputerCommand.mock.calls.map(([args]) => args[0])).not.toContain('deny')
+    expect(h.runComputerCommand.mock.calls.map(([args]) => args[0])).not.toContain('allow')
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  })
+
   test('a read that failed is tried again later, and draws nothing', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     try {
       const runComputerCommand = vi.fn(async (): Promise<ModuleCommandResult> => ({ ok: false, error: 'devices has no command asks' }))
-      show({ package: '@openagt/dashboard-devices', runCommand: vi.fn(), runComputerCommand } as unknown as ModuleHost)
+      show(fakeHost('@openagt/dashboard-devices', { runComputerCommand }))
       await waitFor(() => expect(runComputerCommand).toHaveBeenCalledTimes(1))
       await vi.advanceTimersByTimeAsync(29_000)
       expect(runComputerCommand).toHaveBeenCalledTimes(1)

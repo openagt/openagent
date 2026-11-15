@@ -4,9 +4,10 @@ import type { DriverEvent, DriverPromptOptions } from './types.js'
 
 // The pieces every driver session needs but that are not agent-specific: emitting events
 // without letting a listener throw into the agent, folding the session + per-call signals and
-// framing, and reading a workspace file. The agent-specific parts (argv, the output parser,
-// how framing is delivered) stay in each driver; these do not, so a second driver reuses
-// them rather than copying them.
+// framing, the prompt as the agent is sent it, reading a workspace file, and the words an event
+// gives a tool call (its argument, what it printed, the lines it changed). The agent-specific
+// parts (argv, the output parser, how framing is delivered) stay in each driver; these do not,
+// so a second driver reuses them rather than copying them.
 
 /**
  * A {@link DriverStartOptions.onEvent} caller that never lets a listener throw into the

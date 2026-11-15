@@ -1,3 +1,4 @@
+import type { CdpSession } from './cdp.js'
 import { MAX_CONSOLE_TEXT, MAX_CONSOLE_WHERE, type ConsoleLevel, type ConsoleLine } from './stream.js'
 
 /**
@@ -179,6 +180,9 @@ export function flooded(now = Date.now()): Said {
   return line('warning', 'The page logs too much: the console stopped listening, until the page goes to another address.', now)
 }
 
+/** The console's lines as a browser keeps them, from {@link consoleLog}. */
+export type ConsoleLog = ReturnType<typeof consoleLog>
+
 /**
  * The console's lines as a browser keeps them: the newest {@link KEPT_LINES}, each numbered as
  * it is added, so whoever follows them knows the next one it has not got.
@@ -208,12 +212,18 @@ export function consoleLog(kept = KEPT_LINES) {
   }
 }
 
+/** Which of one page's lines are new, as one listening to it hears them (from {@link heardOnce}). */
+export interface Hearing {
+  fresh: (at: number) => boolean
+  settled: () => void
+}
+
 /**
  * Which of a page's lines are new. DevTools says a page's kept lines again each time the page
  * is listened to anew (a tab the agent comes back to): until the listening has `settled`, a line
  * no newer than the newest one heard from that page before is one of those.
  */
-export function heardOnce(): (page: string) => { fresh: (at: number) => boolean; settled: () => void } {
+export function heardOnce(): (page: string) => Hearing {
   const newest = new Map<string, number>()
   return page => {
     let before = newest.get(page)
@@ -227,6 +237,75 @@ export function heardOnce(): (page: string) => { fresh: (at: number) => boolean;
         before = undefined
       },
     }
+  }
+}
+
+/**
+ * Listen to the console of the page `page` is connected to: each line it says goes to `say`,
+ * once, `hearing` telling a new line from one heard before. While the listening settles, the
+ * page's kept lines are said again: that is not the page saying much. A page that says more in a
+ * second than {@link FLOOD_LINES} lines or {@link FLOOD_BYTES} is no longer listened to, and
+ * `say` gets the line that says so, until the page goes to another address (`went`).
+ */
+export function listenToConsole(page: CdpSession, hearing: () => Hearing, say: (said: Said) => void): { listen: () => Promise<void>; went: () => void } {
+  let heard = hearing()
+  let settling = true
+  let deaf = false
+  let second = 0
+  let saidLines = 0
+  let saidBytes = 0
+  const listen = async (): Promise<void> => {
+    heard = hearing()
+    settling = true
+    second = 0
+    await Promise.all([page.send('Runtime.enable'), page.send('Log.enable')]).catch(() => {})
+    heard.settled()
+    settling = false
+  }
+  // The values a console call names are kept alive in the page for whoever asks for them:
+  // nobody here does, so they are let go, at most once a second.
+  let releasing = false
+  const release = (): void => {
+    if (releasing) return
+    releasing = true
+    setTimeout(() => {
+      releasing = false
+      if (page.open) void page.send('Runtime.releaseObjectGroup', { objectGroup: 'console' }).catch(() => {})
+    }, 1000).unref()
+  }
+  const hear = (said: Said | undefined, size: number): void => {
+    if (deaf) return
+    if (!settling) {
+      const now = Date.now()
+      if (now - second >= 1000) {
+        second = now
+        saidLines = 0
+        saidBytes = 0
+      }
+      saidBytes += size
+      if (++saidLines > FLOOD_LINES || saidBytes > FLOOD_BYTES) {
+        deaf = true
+        void Promise.all([page.send('Runtime.disable'), page.send('Log.disable')]).catch(() => {})
+        return say(flooded())
+      }
+    }
+    if (!said || !heard.fresh(said.at)) return
+    say(said)
+  }
+  page.on('Runtime.consoleAPICalled', (params, size) => {
+    hear(consoleCall(params), size)
+    release()
+  })
+  page.on('Runtime.exceptionThrown', (params, size) => hear(thrown(params), size))
+  page.on('Log.entryAdded', (params, size) => hear(logEntry(params), size))
+  return {
+    listen,
+    // Another address is another page: it is listened to, whatever the one before it said.
+    went: () => {
+      if (!deaf) return
+      deaf = false
+      void listen()
+    },
   }
 }
 

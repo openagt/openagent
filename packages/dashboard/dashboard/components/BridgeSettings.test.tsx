@@ -10,13 +10,23 @@ const onBridgeStatus = vi.hoisted(() =>
     version: { got: string; expected: string; blocked: boolean; at: string } | null
   }),
 )
-vi.mock('../rpc/reads.js', () => ({ onBridgeToken, onBridgeStatus }))
+const onBridgeExtensionFolder = vi.hoisted(() => vi.fn(async (): Promise<string | null> => '/home/me/openagent/packages/chrome-extension'))
+vi.mock('../rpc/reads.js', () => ({ onBridgeToken, onBridgeStatus, onBridgeExtensionFolder }))
 
 import { BridgeSettings } from './BridgeSettings.js'
 
 afterEach(() => {
   cleanup()
   vi.clearAllMocks()
+})
+
+describe('BridgeSettings: where the extension is', () => {
+  test('the folder it is loaded from, with how, and a press that copies it', async () => {
+    render(<BridgeSettings />)
+    expect(await screen.findByText('/home/me/openagent/packages/chrome-extension')).toBeTruthy()
+    expect(screen.getByText(/press Load unpacked and pick this folder/).textContent).toContain('chrome://extensions')
+    expect(screen.getByRole('button', { name: 'Copy the folder' })).toBeTruthy()
+  })
 })
 
 describe('BridgeSettings version gate (#1519)', () => {
@@ -29,7 +39,7 @@ describe('BridgeSettings version gate (#1519)', () => {
       page: null,
       version: { got: '0.7.3', expected: '0.8.0', blocked: true, at: '2026-08-17T12:00:00.000Z' },
     })
-    render(<BridgeSettings enabled onChange={() => {}} />)
+    render(<BridgeSettings />)
     const notice = await screen.findByText(/blocked/)
     expect(notice.textContent).toContain('0.7.3')
     expect(notice.textContent).toContain('0.8.0')
@@ -43,9 +53,9 @@ describe('BridgeSettings version gate (#1519)', () => {
       page: null,
       version: { got: '0.8.0', expected: '0.8.0', blocked: false, at: '2026-08-17T12:00:00.000Z' },
     })
-    render(<BridgeSettings enabled onChange={() => {}} />)
+    render(<BridgeSettings />)
     // The token row proves the panel rendered before asserting the absence.
-    await screen.findByText(/paste this token/)
+    await screen.findByText(/reports the question/)
     expect(screen.queryByText(/blocked/)).toBeNull()
   })
 })
@@ -60,7 +70,7 @@ describe('BridgeSettings refused contact (#1225)', () => {
       page: null,
       version: null,
     })
-    render(<BridgeSettings enabled onChange={() => {}} />)
+    render(<BridgeSettings />)
     const notice = await screen.findByText(/token this dashboard rejects/)
     expect(notice.textContent).toContain('save the token')
   })
@@ -72,8 +82,8 @@ describe('BridgeSettings refused contact (#1225)', () => {
       page: null,
       version: { got: '0.8.0', expected: '0.8.0', blocked: false, at: '2026-08-17T12:00:00.000Z' },
     })
-    render(<BridgeSettings enabled onChange={() => {}} />)
-    await screen.findByText(/paste this token/)
+    render(<BridgeSettings />)
+    await screen.findByText(/reports the question/)
     expect(screen.queryByText(/rejects/)).toBeNull()
   })
 
@@ -86,7 +96,7 @@ describe('BridgeSettings refused contact (#1225)', () => {
       page: null,
       version: { got: '0.7.3', expected: '0.8.0', blocked: true, at: '2026-08-17T12:00:00.000Z' },
     })
-    render(<BridgeSettings enabled onChange={() => {}} />)
+    render(<BridgeSettings />)
     await screen.findByText(/blocked/)
     expect(screen.queryByText(/token this dashboard rejects/)).toBeNull()
   })

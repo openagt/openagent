@@ -171,7 +171,7 @@ describe('an opened call', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Listed files' }))
     const command = screen.getByLabelText('Command')
     expect(command.textContent).toBe('$ sleep 1 && ls')
-    const card = command.closest('.rounded-xl')!
+    const card = command.closest('.py-3')!
     expect(card.firstElementChild?.textContent).toBe('Bash')
     expect(screen.getByRole('button', { name: 'Copy the command' })).toBeTruthy()
     const output = screen.getByLabelText('Output')
@@ -185,7 +185,7 @@ describe('an opened call', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Ran 2 commands' }))
     fireEvent.click(screen.getByRole('button', { name: 'Printed the folder' }))
     const command = screen.getByLabelText('Command')
-    expect(command.closest('.rounded-xl')).toBeNull()
+    expect(command.closest('.py-3')).toBeNull()
     expect(screen.queryByText('Bash')).toBeNull()
   })
 })

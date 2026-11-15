@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import { STATUS, hostAnswering } from './fixtures.js'
-import { agentOf, modelLabel, modelOf, runsOnWords, agentsArgs, agentsDraftOf, atOnce, atOnceWords, saysAtOnce, cannotRun, decided, draftOf, isOwn, outcomeWords, loosestSpendOffset, nextWords, offsetsThatDiffer, ownPace, pace, paceArgs, paceProblem, publishChoices, publishLabel, publishes, readSchedulers, saveSpendOffset, schedulerRow, schedulerStatus, schedulerStopped, nextStart, startsNext, spelled, typedOffset, withAgentsDraft, withDraft, rowTitle, unlistedWords } from './schedulers.js'
+import { agentOf, modelLabel, modelOf, runsOnWords, agentsArgs, agentsDraftOf, atOnce, atOnceWords, saysAtOnce, cannotRun, decided, draftOf, heldBy, isOwn, outcomeWords, loosestSpendOffset, nextWords, offsetsThatDiffer, ownPace, pace, paceArgs, paceProblem, publishChoices, publishLabel, publishes, readSchedulers, saveSpendOffset, schedulerRow, schedulerStatus, schedulerStopped, nextStart, startsNext, spelled, typedOffset, withDraft, rowTitle, unlistedWords } from './schedulers.js'
 
 const GEMSTACK = { id: 'p1', name: 'gemstack', gitHost: true }
 const OTHER = { id: 'p2', name: 'other', gitHost: false }
@@ -196,7 +196,7 @@ describe('in words', () => {
 
   test('the pace, as a sentence: an interval spelled out, what the check waits for, or both; a check with no plain line is "when its shell line prints something"', () => {
     const base = { command: 'a', on: true, publish: 'commit' as const, ...MADE }
-    expect(pace({ ...base, every: '1d' })).toBe('Every 1 day')
+    expect(pace({ ...base, every: '1d' })).toBe('Every day')
     expect(pace({ ...base, when: 'npx queue' })).toBe('When its shell line prints something')
     expect(pace({ ...base, when: 'npx queue', waitsFor: 'when the queue holds a task' })).toBe('When the queue holds a task')
     expect(pace({ ...base, every: '6h', when: 'x' })).toBe('Every 6 hours at most, when its shell line prints something')
@@ -214,9 +214,9 @@ describe('in words', () => {
     expect(pace({ ...skill, pace: { every: '2d', at: '10:00', since } })).toBe('Every 2 days from 10:00, when a ticket has no plan')
     expect(pace({ ...skill, pace: { every: '2w', since } })).toBe('Every 2 weeks at most, when a ticket has no plan')
     expect(pace({ ...skill, pace: { work: true } })).toBe('When a ticket has no plan')
-    expect(pace({ command: 'a', on: true, publish: 'commit', ...MADE, every: '1d', pace: { every: '1mo', at: '9:05', since } })).toBe('Every 1 month at 09:05')
+    expect(pace({ command: 'a', on: true, publish: 'commit', ...MADE, every: '1d', pace: { every: '1mo', at: '9:05', since } })).toBe('Every month at 09:05')
     // No check to ask: "whenever there is work" cannot be followed, the skill's interval stands.
-    expect(pace({ command: 'a', on: true, publish: 'commit', ...MADE, every: '1d', pace: { work: true } })).toBe('Every 1 day')
+    expect(pace({ command: 'a', on: true, publish: 'commit', ...MADE, every: '1d', pace: { work: true } })).toBe('Every day')
     expect(ownPace({ ...skill, pace: { every: '30m', since } })).toBe(true)
     expect(ownPace({ ...skill, pace: { work: true } })).toBe(true)
     expect(ownPace(skill)).toBe(false)
@@ -247,7 +247,7 @@ describe('in words', () => {
     expect(paceArgs({ kind: 'every', count: '2', unit: 'd', at: '25:00' })).toBeUndefined()
     // A time field left half typed has no text: the draft says so, and it is no pace until finished or cleared.
     expect(paceArgs({ kind: 'every', count: '2', unit: 'd', at: '', atHalfTyped: true })).toBeUndefined()
-    expect(paceProblem({ kind: 'every', count: '2', unit: 'd', at: '', atHalfTyped: true })).toBe('Finish the time, like 10:00, or clear it.')
+    expect(paceProblem({ kind: 'every', count: '2', unit: 'd', at: '', atHalfTyped: true })).toBe('Finish the time of day, like 10:00, or clear it.')
     // Beside minutes or hours there is no time field, so a half-typed time left behind does not count.
     expect(paceArgs({ kind: 'every', count: '2', unit: 'h', at: '', atHalfTyped: true })).toEqual(['2h'])
     expect(paceProblem({ kind: 'every', count: '2', unit: 'd', at: '10:00' })).toBeUndefined()
@@ -296,10 +296,6 @@ describe('in words', () => {
     expect(agentsArgs({ kind: 'own', count: ' 03 ' })).toEqual(['3'])
     for (const count of ['', '0', '1.5', '-2', 'two', '1e2', '100']) expect(agentsArgs({ kind: 'own', count }), count).toBeUndefined()
     expect(agentsArgs({ kind: 'own', count: '99' })).toEqual(['99'])
-    expect(atOnce(withAgentsDraft({ ...base, skillAgents: 2 }, { kind: 'own', count: '5' }))).toBe(5)
-    expect(atOnce(withAgentsDraft({ ...base, skillAgents: 2, agents: 5 }, { kind: 'skill' }))).toBe(2)
-    const half = { ...base, agents: 5 }
-    expect(withAgentsDraft(half, { kind: 'own', count: '' })).toBe(half)
   })
 
   test("a scheduled command carries its skill's number of agents at once when it is more than one, and the number a person set on this machine", () => {
@@ -385,8 +381,10 @@ describe('in words', () => {
     expect(said('not due (last start less than a minute ago, every 15m)', { every: '15m', lastRun: { id: 'r', at: new Date().toISOString() } })).toBe('Next start in 15 min')
     expect(said('cap reached (1 in flight: 2026-10-03T10-00-00-000Z on other-box)')).toBe('One is already running')
     expect(said('cap reached (3 in flight: a on x, b on y, c on z)')).toBe('3 are already running')
+    // The quota holds it back: that it waits, and why in the tool's words; a usage that could not be read, with what to check.
+    expect(said('quota: the week is 90% used')).toBe('Waits for quota: the week is 90% used')
+    expect(said('quota: the quota could not be read, so there is no way to tell what is spare')).toBe("Waits until Claude Code's usage can be read: check it is logged in and online")
     // A reason only the tool knows stays in the tool's words.
-    expect(said('quota: the week is 90% used')).toBe('Quota: the week is 90% used')
     expect(said('check failed: not found: queue')).toBe('Check failed: not found: queue')
     expect(said('not ready: `claude` is not logged in.')).toBe('Not ready: `claude` is not logged in.')
     // The row says when it last ran: a start is not said twice.
@@ -416,6 +414,16 @@ describe('in words', () => {
     expect(said("not on HEAD: a run's checkout starts from HEAD, and the command's skill is not there")).toBe('Cannot start yet: its skill is not committed')
     // The same words for what "Run now" answered, which is a decision with no row's switch to read.
     expect([outcomeWords('not due'), outcomeWords(unpublished), outcomeWords(elsewhere), outcomeWords('agent-data could not be pulled: offline'), outcomeWords(undefined)]).toEqual(['No work', 'Cannot start yet: its skill is not on origin/main', 'Cannot start on Codex: its skill is not in .agents/skills', 'Agent-data could not be pulled: offline', undefined])
+  })
+
+  test('what the last look held a row back by: a skill not where a run starts and an agent not ready hold every start, the quota only the scheduler\'s own; one run of a row with each holds that run alone', () => {
+    const by = (outcome: string) => heldBy({ decision: { command: 'a', outcome } })
+    expect(by("not on HEAD: a run's checkout starts from HEAD, and the command's skill is not there")).toBe('every start')
+    expect(by('not ready: `claude` not found')).toBe('every start')
+    expect(by('quota: Current week is 99% used')).toBe('quota')
+    expect(by('no run for https://github.com/o/r/issues/5: quota: Current week is 99% used')).toBeUndefined()
+    expect(by('run r2 not resumed: not ready: `claude` not found')).toBeUndefined()
+    expect([by('not due'), by('started r1'), by('cap reached (1 in flight: r1 on this-box)'), heldBy({})]).toEqual([undefined, undefined, undefined, undefined])
   })
 
   test('the publish menu: every pick with a git host package, no level, Commit and Publish branch without; the pick in force is listed even when not offered', () => {
@@ -470,7 +478,7 @@ describe('when a row that is on starts next', () => {
     expect(said('not due')).toBe('Next start in 3h, if there is work')
     expect(said('started 2026-10-08T09-00-00-000Z')).toBe('Next start in 3h, if there is work')
     expect(said('cap reached (1 in flight, cap 1)')).toBe('One is already running')
-    expect(said('quota: 96% of the week used')).toBe('Quota: 96% of the week used')
+    expect(said('quota: 96% of the week used')).toBe('Waits for quota: 96% of the week used')
     expect(said('check failed: jq: not found')).toBe('Check failed: jq: not found')
     // A row its coding agent cannot run says so whatever the pace says.
     expect(startsNext({ ...row, runsOn: 'codex', able: ['claude-code'] }, now)).toBe('Cannot start on Codex: its skill is not in .agents/skills')

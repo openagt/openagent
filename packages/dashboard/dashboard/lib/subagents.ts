@@ -6,9 +6,14 @@ import { agentLabel } from './agent-label.js'
 // parent. Everything the dashboard shows about subagents (the rail's tree, the rows in the main
 // agent's chat, the line above its message box) is read off that one field.
 
-/** A run's subagents, in the order they were started: an id sorts by start time. */
+/** Runs in the order they were started: an id sorts by start time. */
+function byStart(a: Pick<AgentMeta, 'id'>, b: Pick<AgentMeta, 'id'>): number {
+  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
+}
+
+/** A run's subagents, in the order they were started. */
 export function subagentsOf(agents: readonly AgentMeta[], id: string): AgentMeta[] {
-  return agents.filter(agent => agent.parent === id).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+  return agents.filter(agent => agent.parent === id).sort(byStart)
 }
 
 /** What a subagent's row calls it: the first line of what it was asked. */
@@ -56,7 +61,7 @@ export function nestRows<R extends TreeRow>(rows: readonly R[]): { row: R; subag
     .filter(row => !under(row))
     .map(row => ({
       row,
-      subagents: rows.filter(other => under(other) === row).sort((a, b) => (a.agent.id < b.agent.id ? -1 : a.agent.id > b.agent.id ? 1 : 0)),
+      subagents: rows.filter(other => under(other) === row).sort((a, b) => byStart(a.agent, b.agent)),
     }))
 }
 
@@ -112,6 +117,20 @@ export interface CallSubagent {
   tool?: string
 }
 
+/** An event of the agent's own doing: no subagent's, no count, no turn's end. */
+export function isAgentsOwn(e: OpenAgentEvent): boolean {
+  if (e.kind !== 'driver') return false
+  const event = e.event as { type: string; subagent?: string }
+  return ['action', 'output', 'text', 'thought', 'thinking', 'partial'].includes(event.type) && event.subagent === undefined
+}
+
+/** The subagent of the coding agent's own whose step this is (a call, its answer, its words, a thought); none for any other event. */
+function stepOfSubagent(e: OpenAgentEvent): string | undefined {
+  if (e.kind !== 'driver') return undefined
+  const event = e.event
+  return event.type === 'action' || event.type === 'output' || event.type === 'text' || event.type === 'thought' ? event.subagent : undefined
+}
+
 /** The run's own subagents of its coding agent, in the order they were started. */
 export function callSubagents(events: readonly OpenAgentEvent[]): CallSubagent[] {
   const byId = new Map<string, CallSubagent>()
@@ -157,8 +176,7 @@ export function subagentEvents(events: readonly OpenAgentEvent[]): Set<OpenAgent
   for (const e of events) {
     if (e.kind !== 'driver') continue
     const event = e.event
-    if (event.type === 'subagent') hidden.add(e)
-    else if ((event.type === 'action' || event.type === 'output' || event.type === 'text' || event.type === 'thought') && event.subagent !== undefined) hidden.add(e)
+    if (event.type === 'subagent' || stepOfSubagent(e) !== undefined) hidden.add(e)
     else if ((event.type === 'action' || event.type === 'output') && event.id !== undefined && (calls.has(event.id) || driving.has(event.id))) hidden.add(e)
   }
   return hidden
@@ -166,7 +184,7 @@ export function subagentEvents(events: readonly OpenAgentEvent[]): Set<OpenAgent
 
 /** What one subagent of the coding agent's own said and did: its transcript, as the run's events. */
 export function subagentTranscript(events: readonly OpenAgentEvent[], id: string): OpenAgentEvent[] {
-  return events.filter(e => e.kind === 'driver' && (e.event.type === 'action' || e.event.type === 'output' || e.event.type === 'text' || e.event.type === 'thought') && e.event.subagent === id)
+  return events.filter(e => stepOfSubagent(e) === id)
 }
 
 /**
@@ -358,10 +376,9 @@ export function subagentWait(events: readonly OpenAgentEvent[]): { waiting: bool
       }
       continue
     }
-    if (event.subagent !== undefined) continue
+    if (!isAgentsOwn(e)) continue
     // What starts a subagent, and what a subagent hands back, are no step of the main agent's own.
     if ((event.type === 'action' || event.type === 'output') && event.id !== undefined && subagents.has(event.id)) continue
-    if (!['action', 'output', 'text', 'thought', 'thinking', 'partial'].includes(event.type)) continue
     if (waiting && endedMeanwhile) wokeAt = e.at
     waiting = false
     endedMeanwhile = false

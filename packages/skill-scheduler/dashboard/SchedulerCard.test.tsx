@@ -52,6 +52,9 @@ describe('the Automations card of the Overview', () => {
     expect(other.getByText('Scheduler off')).toBeTruthy()
     expect(other.getByText('keep-alive')).toBeTruthy()
     expect(other.queryByText(/switched off/)).toBeNull()
+    // Nothing scheduled: the card leads to where one is made.
+    fireEvent.click(other.getByRole('link', { name: 'New automation' }))
+    expect(host.openPage).toHaveBeenCalledWith('automations')
   })
 
   test('Run now on a row starts one run of it at once (`scheduler now`), and the row says what it started, or why nothing did', async () => {
@@ -87,13 +90,38 @@ describe('the Automations card of the Overview', () => {
     expect(host.openPage).toHaveBeenCalledWith('automations')
   })
 
-  test('a scheduler whose process is gone: its rows are on and nothing starts, said once, with no next start on a row', async () => {
+  test('a scheduler whose process is gone: its rows are on and nothing starts, said once, with no next start on a row and no green dot', async () => {
     const { host } = hostAnswering(() => ({ ok: true, output: { ...RAN, running: false } }))
     show(host, [GEMSTACK])
     expect((await screen.findByText('Scheduler on, not running')).className).toMatch(/text-warning/)
-    expect(screen.getByText('The scheduler is on, but not running: nothing starts by itself.')).toBeTruthy()
-    expect(screen.getByText('/post-merge-cleanup')).toBeTruthy()
+    expect(screen.getByText(/^Nothing starts by itself/)).toBeTruthy()
+    // Said once: beside the name, not again in the line under it, which leads to the page that says how to start it.
+    expect(screen.getAllByText(/not running/)).toHaveLength(1)
+    fireEvent.click(screen.getByRole('link', { name: 'How to start it' }))
+    expect(host.openPage).toHaveBeenCalledWith('automations')
+    // Its dot is not the green of a row that starts.
+    expect(screen.getByText('/post-merge-cleanup').previousElementSibling!.className).not.toMatch(/bg-success/)
     expect(screen.queryByText(/Next start|Starts /)).toBeNull()
+  })
+
+  test('a row the last look held back has no green dot, and says why as a warning', async () => {
+    const { host } = hostAnswering(() => ({ ok: true, output: { ...RAN, lastTick: { at: STATUS.lastTick.at, decisions: [{ command: 'post-merge-cleanup', outcome: 'not ready: `claude` not found' }] } } }))
+    show(host, [GEMSTACK])
+    const reason = (await screen.findByText(/^Not ready:/)).closest('span')!
+    expect(reason.className).toMatch(/text-warning/)
+    // Its backticked words as code, as on the page.
+    expect(within(reason).getByText('claude').tagName).toBe('CODE')
+    expect(screen.getByText('/post-merge-cleanup').previousElementSibling!.className).not.toMatch(/bg-success/)
+  })
+
+  test('"Run now" is offered on a row only where the last look did not hold every start back; the quota holds back only the scheduler\'s own', async () => {
+    for (const [outcome, offered] of [['not ready: `claude` not found', false], ["not on HEAD: a run's checkout starts from HEAD, and the command's skill is not there", false], ['quota: Current week is 99% used', true]] as const) {
+      const { host } = hostAnswering(() => ({ ok: true, output: { ...RAN, lastTick: { at: STATUS.lastTick.at, decisions: [{ command: 'post-merge-cleanup', outcome }] } } }))
+      show(host, [GEMSTACK])
+      await screen.findByText('/post-merge-cleanup')
+      expect(screen.queryByRole('button', { name: 'Run /post-merge-cleanup now' }) !== null, outcome).toBe(offered)
+      cleanup()
+    }
   })
 
   test('a look that decided nothing says why', async () => {
@@ -145,11 +173,17 @@ describe('what the module tells the other pages starts by itself', () => {
     expect(answer[0]).toEqual({ command: 'post-merge-cleanup', on: false, note: 'Cannot start on Codex: its skill is not in .agents/skills' })
   })
 
+  test('a command the last look held back does not start by itself, and the note says why', async () => {
+    const answer = await read({ ...RAN, lastTick: { at: STATUS.lastTick.at, decisions: [{ command: 'post-merge-cleanup', outcome: 'quota: Current week is 99% used' }] } })
+    expect(answer[0]).toEqual({ command: 'post-merge-cleanup', on: false, note: 'Waits for quota: Current week is 99% used' })
+  })
+
   test('a scheduler that is off says so once, and not again as its last look\'s word', async () => {
     const { host } = hostAnswering(() => ({ ok: true, output: { ...RAN, on: false, running: false, lastTick: { at: STATUS.lastTick.at, decisions: [], note: 'off' } } }))
     show(host, [GEMSTACK])
     expect(await screen.findByText('Scheduler off')).toBeTruthy()
-    expect(screen.getByText('The scheduler is off: nothing starts by itself.')).toBeTruthy()
+    expect(screen.getByText(/^Nothing starts by itself/)).toBeTruthy()
+    expect(screen.queryByText(/scheduler is off/i)).toBeNull()
     expect(screen.queryByText(/last look/)).toBeNull()
   })
 })

@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promi
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { parse } from 'yaml'
-import { initHooks, removeHooks } from './init.js'
+import { initHooks, removeHooks, runsTool } from './init.js'
 
 // `init` against real files: the scheduler's lines written into a fresh file. The merge into a
 // person's file is the writer's, tested in agent-runner.
@@ -65,4 +65,26 @@ test('removeHooks takes out every line that runs the scheduler, and leaves the r
   } finally {
     await rm(repo, { recursive: true, force: true })
   }
+})
+
+test('a line runs a tool by its bare command, by a path, or by its package\'s name with or without a version', () => {
+  for (const line of [
+    'scheduler start',
+    'npx scheduler start',
+    'npx @openagt/skill-scheduler start',
+    'npx @openagt/skill-scheduler@0.1 start',
+    'npx @openagt/skill-scheduler@^0.1.2 start',
+    'FOO=1 scheduler start',
+    './node_modules/.bin/scheduler start',
+    'node /opt/tools/bin/scheduler start --foreground',
+    'cd sub&&scheduler start',
+    '"scheduler" stop --unless-keep-alive',
+    'echo `scheduler status`',
+  ])
+    assert.equal(runsTool(line), true, line)
+})
+
+test('a name inside another word, and a line that names nothing of the tool, do not run it', () => {
+  for (const line of ['npx my-scheduler-wrapper start', 'echo scheduler-is-not-here', 'agent-runner run --detach "$PROMPT"', 'npx @other/scheduler-plus start', ''])
+    assert.equal(runsTool(line), false, line)
 })

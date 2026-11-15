@@ -5,10 +5,13 @@ import { usePolled } from '../lib/use-async.js'
 import { useAction } from '../lib/use-action.js'
 import { Button } from './ui/button.js'
 import { Input } from './ui/input.js'
-import { SettingsRow, SettingsSection } from './SettingsRows.js'
+import { SettingsRow, SettingsRowShapes, SettingsSection } from './SettingsRows.js'
+import { Slot } from './ui/slot.js'
+import { PathStrip } from './PathStrip.js'
 import { SendAs, firstSendAs } from './SendAs.js'
 import { BackupNotice, accountsAt } from './BackupNotice.js'
-import { HostFix, useGitHosts } from './Logins.js'
+import { HostFix } from './AddGitAccount.js'
+import { useGitHosts } from './Logins.js'
 
 /** The Settings entry's id. */
 export const AGENT_DATA_ENTRY = 'agent-data'
@@ -17,21 +20,29 @@ export const AGENT_DATA_ENTRY = 'agent-data'
 const EVERY_MS = 10_000
 
 /**
- * Settings › Agent data: the person's own folder, where the agents keep everything of the projects
+ * Settings › Your agent data: the person's own folder, where the agents keep everything of the projects
  * not shared on their own repository, which may sync with a repository of theirs so each of their
  * computers has the same data. Where one project's data is, is that project's page. The folder
  * is sent as one of OpenAgent's own accounts at the repository's host, named here, never as the
  * person's own login.
  */
 export function AgentDataSettings() {
-  const { value: view, reload } = usePolled<PersonalFolderView | null>(onPersonalFolder, null, EVERY_MS, [])
+  const read = usePolled<PersonalFolderView | null>(onPersonalFolder, null, EVERY_MS, [])
+  return (
+    <Slot of={read} shape={<SettingsRowShapes rows={1} />}>
+      {view => view && <PersonalFolder view={view} reload={read.reload} />}
+    </Slot>
+  )
+}
+
+/** Where your agent data is, and the presses that move it. */
+function PersonalFolder({ view, reload }: { view: PersonalFolderView; reload: () => Promise<void> }) {
   const [asking, setAsking] = useState(false)
   const [address, setAddress] = useState('')
   const [picked, setPicked] = useState<string | undefined>()
   const { busy, error, reset, run } = useAction()
   // OpenAgent's accounts, read live: one added here is offered at once.
   const { view: gitHosts, reload: reloadGitHosts } = useGitHosts()
-  if (!view) return null
   const personal = view
 
   // The host the typed address is on, and OpenAgent's accounts there; a folder on this disk asks no login.
@@ -63,7 +74,7 @@ export function AgentDataSettings() {
   // At a git host with no account named: the notice above says so, with the fix.
   const unnamed = remoteHost !== undefined && !personal.account
   const remote = personal.remoteUrl ? (
-    <a href={personal.remoteUrl} target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-foreground">
+    <a href={personal.remoteUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline">
       {personal.remote}
     </a>
   ) : (
@@ -85,23 +96,23 @@ export function AgentDataSettings() {
   return (
     <SettingsSection description="Everything your agents keep: what each was asked and answered, the tickets, the queue and plans.">
       <BackupNotice onChanged={() => void reload()} />
-      <div className="py-3 first:pt-0 last:pb-0">
+      <div>
         <SettingsRow
           label="Your folder"
           description={
             <>
-              {personal.path}
+              <PathStrip path={personal.path} />
               {holds}. {where}
             </>
           }
           control={
             personal.remote ? (
-              <Button variant="outline" size="sm" disabled={busy} onClick={stop}>
+              <Button variant="secondary" loading={busy} onClick={stop}>
                 Stop syncing
               </Button>
             ) : (
               !asking && (
-                <Button variant="outline" size="sm" onClick={() => setAsking(true)}>
+                <Button variant="secondary" onClick={() => setAsking(true)}>
                   Sync with a repository
                 </Button>
               )
@@ -127,6 +138,7 @@ export function AgentDataSettings() {
             </p>
             <div className="flex items-center gap-2">
               <Input
+                name="repository-address"
                 aria-label="Repository address"
                 placeholder="github.com/you/agent"
                 value={address}
@@ -136,15 +148,14 @@ export function AgentDataSettings() {
                   setAddress(event.target.value)
                   reset()
                 }}
-                className="h-8"
+                className="min-w-0 flex-1"
               />
-              <Button type="submit" size="sm" disabled={busy || address.trim() === '' || (typedAt !== undefined && sendAs === undefined)}>
+              <Button type="submit" disabled={address.trim() === '' || (typedAt !== undefined && sendAs === undefined)} loading={busy}>
                 {busy ? 'Syncing…' : 'Sync'}
               </Button>
               <Button
                 type="button"
                 variant="ghost"
-                size="sm"
                 disabled={busy}
                 onClick={() => {
                   setAsking(false)
@@ -157,10 +168,10 @@ export function AgentDataSettings() {
             </div>
             {typedAt &&
               (typedAt.logins.length === 0 && typedRow ? (
-                // No account of OpenAgent's there: one is added here, its code shown in place.
+                // No account of OpenAgent's there: one is added here, in its dialog.
                 <div className="space-y-1.5">
                   <p className="text-xs text-muted-foreground">{`OpenAgent backs up to ${typedRow.provider?.name ?? typedAt.host} with an account of its own, never your own login. It has none there yet.`}</p>
-                  <HostFix row={typedRow} onChanged={reloadGitHosts} size="xs" />
+                  <HostFix row={typedRow} onChanged={reloadGitHosts} size="sm" />
                 </div>
               ) : (
                 <SendAs host={typedAt} value={sendAs} onChange={setPicked} disabled={busy} label="Back up as" />

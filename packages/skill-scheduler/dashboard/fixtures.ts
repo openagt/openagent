@@ -1,45 +1,13 @@
 import { vi } from 'vitest'
-import type { ModuleCommandResult, ModuleHost } from '@openagt/dashboard/module'
+import type { ModuleCommandResult } from '@openagt/dashboard/module'
+import { fakeHost } from '@openagt/dashboard/module/testing'
 
 // What the module's tests share: a fake dashboard host, and what the command prints.
 
 /** A host whose command answers what `answer` says per project and arguments. */
 export function hostAnswering(answer: (projectId: string, args: string[]) => ModuleCommandResult) {
   const runCommand = vi.fn(async (projectId: string, args: string[]) => answer(projectId, args))
-  const host: ModuleHost = {
-    package: '@openagt/skill-scheduler',
-    runCommand,
-    act: runCommand,
-    runComputerCommand: vi.fn(async () => ({ ok: false as const, error: 'not the computer\'s' })),
-    runComputerCommandOn: vi.fn(async () => ({ ok: false as const, error: 'not the computer\'s' })),
-    read: vi.fn(async () => ({ ok: false as const, error: 'no server part' })),
-    openAgent: vi.fn(),
-    openPage: vi.fn(),
-    pageHref: (segment: string) => `/${segment}`,
-    openSettings: vi.fn(),
-    gitHostPeople: vi.fn(async () => []),
-    startRun: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
-    configureRun: vi.fn(),
-    agents: vi.fn(async () => []),
-    machines: vi.fn(async () => ({ version: '0.0.0', machines: [] })),
-    addMachine: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
-    removeMachine: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
-    renameMachine: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
-    renameComputer: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
-    letMachineIn: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
-    machineCode: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
-    computersThrough: vi.fn(async () => ({ ok: true as const, computers: [] })),
-    machinePerson: vi.fn(async () => ({ ok: false as const, error: 'no person there', unknown: true as const })),
-    removeMachineDevice: vi.fn(async () => ({ ok: false as const, error: 'no person there' })),
-    machineAccounts: vi.fn(async () => null),
-    removeMachineAccount: vi.fn(async () => ({ ok: false as const, error: 'no server here' })),
-    useLoginsOn: vi.fn(async () => ({ ok: false as const, error: 'no server here' })),
-    syncDataOn: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
-    agentDataRemote: vi.fn(async () => undefined),
-    addComputerThrough: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
-    watchScreen: vi.fn(async () => undefined),
-    sendToScreen: vi.fn(async () => false),
-  }
+  const host = fakeHost('@openagt/skill-scheduler', { runCommand, act: runCommand })
   return { host, runCommand }
 }
 

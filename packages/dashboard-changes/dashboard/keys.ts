@@ -1,6 +1,6 @@
 // The keys the reads are remembered under (`usePolled`'s `remember`): a pane opened again shows
 // what was read last at once, while it is read again. Without them every opening of the pane
-// passed through "Looking for this run’s changes…".
+// passed through "Looking for this session’s changes…".
 
 /** What is changed in the project's own folder. */
 export const projectKey = (projectId: string) => `changes:project:${projectId}`

@@ -1,7 +1,8 @@
 import { createHash, createHmac, randomBytes, randomInt, timingSafeEqual } from 'node:crypto'
-import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { isIP } from 'node:net'
-import { dirname, join } from 'node:path'
+import { jsonFile } from '../home-file.js'
+import { isAddress, isLineUrl, isTailscaleName } from './address.js'
+import { nameOf, samePerson } from './names.js'
 
 /**
  * The door's own file, in the person's home folder: whether the door is open, the devices that
@@ -73,8 +74,8 @@ export interface Person {
   /** The process that makes their user right now. */
   worker?: number
   /**
-   * The server whose line made them here, by its door: a person there who started a run on this
-   * computer, which that server's line lets everyone there do. Absent for one invited here.
+   * The server whose line made them here, by its door: a person there whom that line names, who
+   * started a run on this computer. Absent for one invited here.
    */
   from?: string
   /** The owner keeps them, though the server they came from no longer has them: nobody is asked about them again. */
@@ -100,6 +101,12 @@ export function portsOf(device: Device): number[] {
   return device.line ? [device.line.port, ...Object.values(device.line.others ?? {})] : []
 }
 
+/** A port of `block` for an address: the one it `had` while that is in the block and nobody else's, else the first nobody has. */
+function portIn(block: { from: number; count: number }, taken: ReadonlySet<number>, had?: number): number | undefined {
+  if (had !== undefined && had >= block.from && had < block.from + block.count && !taken.has(had)) return had
+  return Array.from({ length: block.count }, (_, at) => block.from + at).find(candidate => !taken.has(candidate))
+}
+
 /**
  * Give a computer an address for each person its line names (`line.for`) who is here and is not
  * its own: one among the lines' ports of that person's own OpenAgent, the owner's in `ownerPorts`.
@@ -117,9 +124,7 @@ export function shareLine(store: Store, device: Device, ownerPorts: { from: numb
   const named = device.line.for ?? []
   for (const person of store.persons) {
     if (person.name === own || !named.includes(person.name) || (!person.owner && person.port === undefined)) continue
-    const block = person.owner ? ownerPorts : personLinePorts(person.port!)
-    const kept = had[person.name]
-    const port = kept !== undefined && kept >= block.from && kept < block.from + block.count && !taken.has(kept) ? kept : Array.from({ length: block.count }, (_, at) => block.from + at).find(candidate => !taken.has(candidate))
+    const port = portIn(person.owner ? ownerPorts : personLinePorts(person.port!), taken, had[person.name])
     if (port === undefined) continue
     taken.add(port)
     others[person.name] = port
@@ -138,36 +143,6 @@ export function shareLine(store: Store, device: Device, ownerPorts: { from: numb
 export function portOf(store: Store, name: string | undefined): number | undefined {
   return name === undefined ? undefined : store.persons.find(person => person.name === name && !person.owner)?.port
 }
-
-/**
- * A person's name as it is typed: letters of any language, digits, spaces, dots, apostrophes and
- * dashes, at most 40, starting with a letter or a digit, on one line. Spaces around it are
- * dropped, and two in a row are one.
- */
-export function nameOf(said: string): string | undefined {
-  // A name is one line: one that breaks a line, or hides a letter, is no name.
-  if (/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(said.trim().replace(/ +/g, ' '))) return undefined
-  const name = said.trim().replace(/ +/g, ' ')
-  return /^[\p{L}\p{N}][\p{L}\p{M}\p{N} .'’-]{0,39}$/u.test(name) ? name : undefined
-}
-
-/**
- * A name as it is written where only plain letters go: a header, the file a person's service
- * reads, the helper's word. Every letter that is not a plain one is `%` and its number.
- */
-export const nameWord = (name: string): string => encodeURIComponent(name).replace(/[!'()*]/g, c => `%${c.charCodeAt(0).toString(16).toUpperCase()}`)
-
-/** A name written as {@link nameWord} writes it, as it was; `undefined` for a word that is no name. */
-export function nameFromWord(word: string): string | undefined {
-  try {
-    return nameOf(decodeURIComponent(word))
-  } catch {
-    return undefined
-  }
-}
-
-/** Whether two names are one person's: their letters' case is not looked at. */
-export const samePerson = (a: string, b: string): boolean => a.toLocaleLowerCase() === b.toLocaleLowerCase()
 
 /**
  * How the door tells OpenAgent who a call is from: the person's name, as {@link nameWord} writes it. The door sets it
@@ -333,14 +308,6 @@ export const MAX_PERSONS = 50
 const MAX_NAME = 80
 const MAX_PROBLEM = 400
 
-const FILE = 'openagent-devices.json'
-
-/** The file's path: beside OpenAgent's own home file, by the same rule. */
-export function storePath(env: NodeJS.ProcessEnv): string {
-  if (env.XDG_CONFIG_HOME) return join(env.XDG_CONFIG_HOME, FILE)
-  return join(env.HOME ?? '', '.' + FILE)
-}
-
 export function sha256(text: string): string {
   return createHash('sha256').update(text).digest('hex')
 }
@@ -357,43 +324,10 @@ export function sameDigest(a: string, b: string): boolean {
   return ab.length === bb.length && timingSafeEqual(ab, bb)
 }
 
-/**
- * A server's number or name as the file keeps it: what a certificate can be for, written the one
- * way a certificate office and a link both read it. A name in small letters; an IPv6 number in
- * its short form, with no zone and no IPv4 tail.
- */
-export const isAddress = (value: unknown): value is string => typeof value === 'string' && addressOf(value) === value
-
-/** `said` as the file keeps an address, or `undefined` for what is no server's number or name. */
-export function addressOf(said: string): string | undefined {
-  if (said.length > 253) return undefined
-  if (isIP(said) === 4) return said
-  if (isIP(said) === 6) {
-    if (said.includes('%') || said.includes('.')) return undefined
-    return new URL(`http://[${said}]`).hostname.slice(1, -1)
-  }
-  return /^(?=.*[a-z])[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/i.test(said) ? said.toLowerCase() : undefined
-}
-
-/** Whether a name is one Tailscale gives a computer on a person's network: a name under `ts.net`. */
-export function isTailscaleName(said: string): boolean {
-  return /\.ts\.net$/.test(said) && addressOf(said) === said
-}
-
 const isIso = (value: unknown): value is string => typeof value === 'string' && !Number.isNaN(Date.parse(value))
 const isDigest = (value: unknown): value is string => typeof value === 'string' && /^[0-9a-f]{64}$/.test(value)
 const isName = (value: unknown): value is string => typeof value === 'string' && nameOf(value) === value
 const isPort = (value: unknown): value is number => typeof value === 'number' && Number.isInteger(value) && value > 0 && value < 65536
-/** A server's door as a line is kept under: an HTTPS origin, written the one way. */
-export function isLineUrl(value: unknown): value is string {
-  if (typeof value !== 'string') return false
-  try {
-    const url = new URL(value)
-    return url.protocol === 'https:' && url.origin === value
-  } catch {
-    return false
-  }
-}
 
 /** Read what a file holds, forgivingly: anything malformed is left out, never a reason to fail. */
 export function sanitize(value: unknown): Store {
@@ -449,8 +383,7 @@ export function sanitize(value: unknown): Store {
     const { url, pin, key, mode, refused, for: who, person, persons: theirs, name } = entry as Record<string, unknown>
     if (!isLineUrl(url) || typeof pin !== 'string' || !pin || typeof key !== 'string' || !key) continue
     if (lines.some(line => line.url === url)) continue
-    // A line that was for everyone there, from before people were named: for those it made here.
-    const named = who === 'everyone' ? persons.filter(candidate => candidate.from === url).map(candidate => candidate.name) : Array.isArray(who) ? [...new Set(who.filter(isName))].slice(0, MAX_PERSONS) : []
+    const named = Array.isArray(who) ? [...new Set(who.filter(isName))].slice(0, MAX_PERSONS) : []
     const heard = Array.isArray(theirs) ? [...new Set(theirs.filter(isName))].slice(0, MAX_PERSONS) : undefined
     const called = typeof name === 'string' ? name.trim().slice(0, 60) : ''
     lines.push({ url, pin, key, mode: mode === 'watch' ? 'watch' : 'full', ...(named.length ? { for: named } : {}), ...(isName(person) ? { person } : {}), ...(heard ? { persons: heard } : {}), ...(called ? { name: called } : {}), ...(refused === true ? { refused: true } : {}) })
@@ -490,28 +423,13 @@ export function sanitize(value: unknown): Store {
   }
 }
 
-/** The file is there and cannot be read as what it should hold: a typo made by hand, a disk that failed. */
-export class Unreadable extends Error {
-  constructor(path: string) {
-    super(`${path} cannot be read: correct it, or delete it to start with no device`)
-  }
-}
+const file = jsonFile('openagent-devices.json', 'device', sanitize)
+
+/** The file's path: beside OpenAgent's own home file, by the same rule. */
+export const storePath = file.path
 
 /** The file as it stands, or `'unreadable'`; no file reads as a closed door with nobody in. */
-export async function readStoreStrict(env: NodeJS.ProcessEnv): Promise<Store | 'unreadable'> {
-  let text: string
-  try {
-    text = await readFile(storePath(env), 'utf8')
-  } catch (err) {
-    return (err as NodeJS.ErrnoException).code === 'ENOENT' ? sanitize(undefined) : 'unreadable'
-  }
-  try {
-    const value: unknown = JSON.parse(text)
-    return value && typeof value === 'object' && !Array.isArray(value) ? sanitize(value) : 'unreadable'
-  } catch {
-    return 'unreadable'
-  }
-}
+export const readStoreStrict = file.read
 
 /** The same for a reader that lets nobody in on a doubt: an unreadable file reads as a closed door with nobody in. */
 export async function readStore(env: NodeJS.ProcessEnv): Promise<Store> {
@@ -519,73 +437,8 @@ export async function readStore(env: NodeJS.ProcessEnv): Promise<Store> {
   return store === 'unreadable' ? sanitize(undefined) : store
 }
 
-/** How long a writer waits for the lock, and how old a lock is taken over whoever holds it: a change takes milliseconds. */
-const LOCK_WAIT_MS = 5_000
-const LOCK_OLD_MS = 30_000
-
-/** Whether the lock is one left behind: its writer is gone, or it is far older than any change takes. */
-async function leftBehind(lock: string): Promise<boolean> {
-  const [held, age] = await Promise.all([readFile(lock, 'utf8').catch(() => undefined), stat(lock).then(s => Date.now() - s.mtimeMs, () => 0)])
-  if (held === undefined) return false
-  const pid = Number(held.split(':')[0])
-  return age > LOCK_OLD_MS || !Number.isInteger(pid) || !pidAlive(pid)
-}
-
-async function withLock<T>(path: string, run: () => Promise<T>): Promise<T> {
-  const lock = `${path}.lock`
-  // The writer's name on the lock: a writer never removes a lock that is not its own.
-  const mine = `${process.pid}:${randomBytes(8).toString('hex')}`
-  await mkdir(dirname(path), { recursive: true })
-  const deadline = Date.now() + LOCK_WAIT_MS
-  for (;;) {
-    try {
-      await writeFile(lock, mine, { flag: 'wx', mode: 0o600 })
-      break
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err
-      // A writer that died holding the lock must not shut every later one out. Looked at twice,
-      // so a lock another waiter just took over is not taken from it.
-      if ((await leftBehind(lock)) && (await leftBehind(lock))) await rm(lock, { force: true })
-      else if (Date.now() > deadline) throw new Error('the devices file is held by another writer')
-      else await new Promise(resolve => setTimeout(resolve, 20))
-    }
-  }
-  try {
-    return await run()
-  } finally {
-    if ((await readFile(lock, 'utf8').catch(() => undefined)) === mine) await rm(lock, { force: true })
-  }
-}
-
-/**
- * Change the file: read it, apply `change`, write it back, with no other writer in between.
- * Written to a temporary file and renamed, so a reader never sees half a file, owner-only.
- * `change` answers what the caller wants to know of the change. Throws {@link Unreadable} for a
- * file that is there and cannot be read.
- */
-export async function update<T>(env: NodeJS.ProcessEnv, change: (store: Store) => T): Promise<T> {
-  const path = storePath(env)
-  return withLock(path, async () => {
-    const store = await readStoreStrict(env)
-    // Never written over: what a person typed wrong is theirs to correct, with every device still in it.
-    if (store === 'unreadable') throw new Unreadable(path)
-    const answer = change(store)
-    const tmp = `${path}.${process.pid}.tmp`
-    await writeFile(tmp, JSON.stringify(sanitize(store), null, 2) + '\n', { mode: 0o600 })
-    await rename(tmp, path)
-    return answer
-  })
-}
-
-/** Whether a process with this id is running. */
-export function pidAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0)
-    return true
-  } catch (err) {
-    return (err as NodeJS.ErrnoException).code === 'EPERM'
-  }
-}
+/** Change the file: read it, apply `change`, write it back, with no other writer in between; one that cannot be read is never written over. */
+export const update = file.update
 
 /** The codes still good at `now`. */
 export function liveCodes(codes: readonly Code[], now: number): Code[] {
@@ -713,9 +566,7 @@ export async function enter(env: NodeJS.ProcessEnv, code: string, name: string, 
     // A computer that got in for a line gets the port it had, or the first of the lines' ports no other computer has.
     const own = portOf(store, match.person)
     const ports = line && (own !== undefined ? personLinePorts(own) : line)
-    const taken = new Set(others.flatMap(portsOf))
-    const had = before.find(device => device.line !== undefined)?.line?.port
-    const port = ports && (had !== undefined && had >= ports.from && had < ports.from + ports.count ? had : Array.from({ length: ports.count }, (_, at) => ports.from + at).find(candidate => !taken.has(candidate)))
+    const port = ports && portIn(ports, new Set(others.flatMap(portsOf)), before.find(device => device.line !== undefined)?.line?.port)
     if (ports && port === undefined) return undefined
     const entry: Entered = { id: randomBytes(6).toString('hex'), key: newSecret(), ...(match.person !== undefined ? { person: match.person } : {}) }
     store.devices = [...others, { id: entry.id, name, key: sha256(entry.key), added: new Date(now).toISOString(), ...(port !== undefined ? { line: { port } } : {}), ...(computer !== undefined ? { computer } : {}), ...(match.person !== undefined ? { person: match.person } : {}) }]
@@ -750,6 +601,11 @@ export async function removeComputer(env: NodeJS.ProcessEnv, id: string, whose?:
   })
 }
 
+/** The entries here of `entry`'s computer, of the same person: the entry itself, and the other one the same computer said it is. */
+function entriesOf(store: Store, entry: Device): Device[] {
+  return store.devices.filter(device => device === entry || (entry.computer !== undefined && device.computer === entry.computer && device.person === entry.person))
+}
+
 /** Give a device the name the person picked: a computer under both its entries. False when no device has that id, or the name is empty. */
 export async function renameComputer(env: NodeJS.ProcessEnv, id: string, name: string): Promise<boolean> {
   const picked = name.trim().slice(0, MAX_NAME)
@@ -757,7 +613,7 @@ export async function renameComputer(env: NodeJS.ProcessEnv, id: string, name: s
   return update(env, store => {
     const named = store.devices.find(device => device.id === id)
     if (!named) return false
-    for (const device of store.devices) if (device === named || (named.computer !== undefined && device.computer === named.computer && device.person === named.person)) device.name = picked
+    for (const device of entriesOf(store, named)) device.name = picked
     return true
   })
 }
@@ -771,8 +627,7 @@ export async function nameComputer(env: NodeJS.ProcessEnv, id: string, named: (d
   const renamed = (store: Store): [Device, string][] => {
     const entry = store.devices.find(device => device.id === id)
     if (!entry) return []
-    return store.devices
-      .filter(device => device === entry || (entry.computer !== undefined && device.computer === entry.computer && device.person === entry.person))
+    return entriesOf(store, entry)
       .map((device): [Device, string] => [device, named(device).slice(0, MAX_NAME)])
       .filter(([device, name]) => device.name !== name)
   }

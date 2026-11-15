@@ -64,18 +64,19 @@ export function formatAge(value: string | undefined, fallback = '—'): string {
 
 /**
  * A timestamp as freshness (#948): "just now" / "12m ago" / "3h ago" / "2d ago", falling back
- * to the local date past a week. An at-a-glance board wants "2m ago", not today's date.
+ * to the local date past a week. An at-a-glance board wants "2m ago", not today's date. Floored,
+ * as {@link formatAge} is: one moment reads the same age in both.
  */
 export function formatRelative(value: string | undefined, fallback = '—'): string {
   const date = parse(value)
   if (!date) return fallback
-  const seconds = Math.round((Date.now() - date.getTime()) / 1000)
+  const seconds = Math.floor((Date.now() - date.getTime()) / 1000)
   if (seconds < 60) return 'just now'
-  const minutes = Math.round(seconds / 60)
+  const minutes = Math.floor(seconds / 60)
   if (minutes < 60) return `${minutes}m ago`
-  const hours = Math.round(minutes / 60)
+  const hours = Math.floor(minutes / 60)
   if (hours < 24) return `${hours}h ago`
-  const days = Math.round(hours / 24)
+  const days = Math.floor(hours / 24)
   if (days <= 7) return `${days}d ago`
   return date.toLocaleDateString()
 }

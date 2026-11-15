@@ -35,11 +35,21 @@ export function publishChange(word: string | undefined): Publish | null | undefi
 }
 
 /** This tool's mark on a card, under `caller.runner`. */
-export interface RunnerMark {
+export interface RunnerMark extends Lasting {
   /** The machine that started it. */
   host: string
   /** The run's process on that machine, while it runs. */
   pid?: number
+  /** Who resumed the run last, and when (`run --resume --by`): a scheduler's row, which counts the run as its own from then on. Not kept past the next resume. */
+  resumed?: { by: string; at: string }
+}
+
+/**
+ * What a mark keeps for the run's whole life, a resume included: its publish level, its parent,
+ * where it started, where its pull request goes, the account it works as, what it was started for,
+ * the repos it has, its agent and the session's picks of skills.
+ */
+export interface Lasting {
   /** How far the run takes its work when its agent finishes (`run --publish`): a commit, the branch, its pull request, or the request set to merge; absent, only what its prompt asks. */
   publish?: Publish
   /** The run this one was started for, told when this one ends (`run --parent`). */
@@ -54,8 +64,6 @@ export interface RunnerMark {
   baseCommit?: string
   /** What the run was started for, as whoever started it names it (`run --for`): a thread on the git host, its address, so the next call there finds this run. */
   for?: string
-  /** Who resumed the run last, and when (`run --resume --by`): a scheduler's row, which counts the run as its own from then on. Not kept past the next resume. */
-  resumed?: { by: string; at: string }
   /** The repos a session with no project has as context (`run --repos`), each a copy in its folder. */
   repos?: SessionRepo[]
   /** The agent the run is on, by its id (`OPENAGENT_AGENT`): its skills and accounts; the default agent when absent. */
@@ -87,10 +95,10 @@ function reposOf(value: unknown): SessionRepo[] | undefined {
 export function runnerMark(card: RunCard): RunnerMark | undefined {
   const mark = card.caller?.['runner']
   if (!mark || typeof mark !== 'object') return undefined
-  const { host, pid, publish, parent, base, prBase, gitAccount, baseCommit, for: started, resumed, repos, agent, skillsOn, skillsOff, projectSkills } = mark as Record<string, unknown>
+  const { host, pid, resumed } = mark as Record<string, unknown>
   if (typeof host !== 'string') return undefined
   const by = resumed && typeof resumed === 'object' ? (resumed as Record<string, unknown>) : {}
-  return { host, ...(typeof pid === 'number' ? { pid } : {}), ...lasting({ publish, parent, base, prBase, gitAccount, baseCommit, for: started, repos, agent, skillsOn, skillsOff, projectSkills }), ...(typeof by['by'] === 'string' && typeof by['at'] === 'string' ? { resumed: { by: by['by'], at: by['at'] } } : {}) }
+  return { host, ...(typeof pid === 'number' ? { pid } : {}), ...lasting(mark as Record<string, unknown>), ...(typeof by['by'] === 'string' && typeof by['at'] === 'string' ? { resumed: { by: by['by'], at: by['at'] } } : {}) }
 }
 
 /**
@@ -107,8 +115,8 @@ export function earlierPrs(card: RunCard): { number: number; url: string }[] {
 /** A list of skill names, as a mark keeps one; nothing for anything else, or an empty list. */
 const skillNames = (value: unknown): string[] | undefined => (Array.isArray(value) && value.length > 0 && value.every(isSkillName) ? (value as string[]) : undefined)
 
-/** What a mark keeps for the run's whole life, a resume included: its publish level, its parent, where it started, where its pull request goes, what it was started for, the repos it has, its agent and the session's picks of skills. */
-export function lasting(mark: { publish?: unknown; parent?: unknown; base?: unknown; prBase?: unknown; gitAccount?: unknown; baseCommit?: unknown; for?: unknown; repos?: unknown; agent?: unknown; skillsOn?: unknown; skillsOff?: unknown; projectSkills?: unknown }): Pick<RunnerMark, 'publish' | 'parent' | 'base' | 'prBase' | 'gitAccount' | 'baseCommit' | 'for' | 'repos' | 'agent' | 'skillsOn' | 'skillsOff' | 'projectSkills'> {
+/** What `mark` keeps for the run's whole life ({@link Lasting}), as far as each is what it should be: anything else there is left out. */
+export function lasting(mark: { [K in keyof Lasting]?: unknown }): Lasting {
   const repos = reposOf(mark.repos)
   const skillsOn = skillNames(mark.skillsOn)
   const skillsOff = skillNames(mark.skillsOff)
@@ -150,7 +158,7 @@ export function markerCard(run: { id: string; startedAt: string; prompt: string;
  * change, and what it was started for, which a git host's check reads to find the run a thread has,
  * and the repos a session with no project has, which its page shows.
  */
-export function forReaders(mark: Pick<RunnerMark, 'parent' | 'base' | 'prBase' | 'gitAccount' | 'baseCommit' | 'publish' | 'for' | 'repos' | 'agent' | 'skillsOn' | 'skillsOff' | 'projectSkills'>): { parent?: string; base?: string; prBase?: string; gitAccount?: string; baseCommit?: string; publish?: Publish; for?: string; repos?: SessionRepo[]; agent?: string; skillsOn?: string[]; skillsOff?: string[]; projectSkills?: ProjectSkillsPick } {
+export function forReaders(mark: Lasting): Lasting {
   return {
     ...(mark.parent !== undefined ? { parent: mark.parent } : {}),
     ...(mark.base !== undefined ? { base: publishedBranch(mark.base) ?? mark.base } : {}),

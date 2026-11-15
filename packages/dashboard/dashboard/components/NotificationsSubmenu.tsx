@@ -1,6 +1,7 @@
 import { Bell, BellOff } from 'lucide-react'
-import { useNotificationPermission } from '../lib/notification-permission.js'
+import { setBrowserNotifications, useNotificationPermission } from '../lib/notification-permission.js'
 import { usePreferences, updatePreferences, notificationsEnabled, newActivityEnabled, humanInterventionEnabled } from '../lib/preferences.js'
+import { HUMAN_QUEUE_ABOUT, NEW_ACTIVITY_ABOUT, browserHint, kindHint } from '../lib/notification-words.js'
 import { OptionLabel } from './ui/option-label.js'
 import {
   DropdownMenuSub,
@@ -28,22 +29,10 @@ export function NotificationsSubmenu() {
   // Browser delivery only actually fires once the browser has granted permission: only then are they "On".
   const active = browser && permission === 'granted'
 
-  const toggleBrowser = (next: boolean) => {
-    updatePreferences({ notifyBrowser: next })
-    // Asking for permission must ride this user gesture (turning it on).
-    if (next && permission === 'default') void Notification.requestPermission()
-  }
-
-  const browserHint = blocked
-    ? 'Blocked in your browser settings'
-    : browser && permission === 'default'
-      ? 'Click to allow browser notifications'
-      : 'Desktop notifications while the dashboard is open'
-
   return (
     <DropdownMenuSub>
       <DropdownMenuSubTrigger>
-        {active ? <Bell className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden /> : <BellOff className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />}
+        {active ? <Bell className="size-4 shrink-0 text-muted-foreground" aria-hidden /> : <BellOff className="size-4 shrink-0 text-muted-foreground" aria-hidden />}
         <span className="flex-1">Notifications</span>
         <span className="text-muted-foreground">{active ? 'On' : 'Off'}</span>
       </DropdownMenuSubTrigger>
@@ -52,13 +41,14 @@ export function NotificationsSubmenu() {
           <>
             <DropdownMenuGroup>
               <DropdownMenuLabel>Deliver to</DropdownMenuLabel>
+              {/* Ticked once notifications reach the browser: on and not allowed yet, the click its hint invites ticks it, and asks. */}
               <DropdownMenuCheckboxItem
-                checked={browser}
+                checked={active}
                 disabled={blocked}
-                onCheckedChange={toggleBrowser}
+                onCheckedChange={setBrowserNotifications}
                 className="items-start"
               >
-                <OptionLabel label="Browser" description={browserHint} />
+                <OptionLabel label="Browser" description={browserHint(permission)} />
               </DropdownMenuCheckboxItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
@@ -73,14 +63,14 @@ export function NotificationsSubmenu() {
             onCheckedChange={next => updatePreferences({ notifyHumanIntervention: next })}
             className="items-start"
           >
-            <OptionLabel label="Human Queue" description="An agent awaiting you, or a PR to review" />
+            <OptionLabel label="Human Queue" description={kindHint(HUMAN_QUEUE_ABOUT, permission, browser)} />
           </DropdownMenuCheckboxItem>
           <DropdownMenuCheckboxItem
             checked={activity}
             onCheckedChange={next => updatePreferences({ notifyNewActivity: next })}
             className="items-start"
           >
-            <OptionLabel label="New activity" description="An agent started or finished" />
+            <OptionLabel label="New activity" description={kindHint(NEW_ACTIVITY_ABOUT, permission, browser)} />
           </DropdownMenuCheckboxItem>
         </DropdownMenuGroup>
       </DropdownMenuSubContent>

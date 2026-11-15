@@ -1,39 +1,49 @@
 import { cva, type VariantProps } from 'class-variance-authority'
-import type { ButtonHTMLAttributes } from 'react'
+import type { ComponentProps, MouseEvent } from 'react'
 import { cn } from '../../lib/utils.js'
 
-// A trimmed shadcn/ui Button — enough to judge the component model + tokens (#406).
+// The presses (module/theme.css's scale): `default` is the primary, solid, one a view at most;
+// `secondary` a soft fill, for every other press; `ghost` a toolbar's, a row's own, an icon's;
+// `outline` what holds a value; `destructive` solid, in a confirmation; `link` text that goes
+// somewhere. Hover raises the contrast a step, a press two.
 const buttonVariants = cva(
-  'inline-flex items-center justify-center gap-2 rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] disabled:pointer-events-none disabled:opacity-50',
+  'focus-ring inline-flex shrink-0 items-center justify-center gap-2 rounded-md text-sm font-medium whitespace-nowrap transition-colors disabled:pointer-events-none disabled:opacity-50',
   {
     variants: {
       variant: {
-        default: 'bg-[var(--color-primary)] text-[var(--color-primary-foreground)] hover:opacity-90',
-        outline:
-          'border border-[var(--color-border)] bg-transparent hover:bg-[var(--color-accent)] hover:text-[var(--color-accent-foreground)]',
-        ghost: 'hover:bg-[var(--color-accent)] hover:text-[var(--color-accent-foreground)]',
+        default: 'bg-primary text-primary-foreground hover:bg-primary-hover active:bg-primary-active',
+        secondary: 'bg-accent text-accent-foreground hover:bg-foreground/10 active:bg-foreground/15',
+        outline: 'border border-border bg-transparent hover:bg-accent hover:text-accent-foreground active:bg-foreground/10',
+        ghost: 'hover:bg-accent hover:text-accent-foreground active:bg-foreground/10',
         // A confirmed destructive action (#1032): --danger is a fill, so its label inverts the
         // opposite way (text-background).
-        destructive: 'bg-[var(--color-danger)] text-[var(--color-background)] hover:opacity-90',
+        destructive: 'bg-danger text-background hover:bg-danger-hover active:bg-danger-active',
+        link: 'h-auto px-0 text-primary underline-offset-4 hover:underline',
       },
       size: {
-        default: 'h-9 px-4 py-2',
-        sm: 'h-8 px-3',
-        xs: 'h-7 gap-1 px-2 text-xs',
-        icon: 'h-9 w-9',
-        'icon-sm': 'h-7 w-7',
+        sm: 'h-7 gap-1.5 px-2',
+        default: 'h-8 px-3',
+        lg: 'h-9 px-4',
+        icon: 'size-8',
+        'icon-sm': 'size-7',
+        // A bar's icon press: 28 square, and on a phone a finger's 44 around it.
+        'icon-bar': 'relative size-7 max-md:after:absolute max-md:after:-inset-2',
       },
     },
     defaultVariants: { variant: 'default', size: 'default' },
   },
 )
 
-export interface ButtonProps
-  extends ButtonHTMLAttributes<HTMLButtonElement>,
-    VariantProps<typeof buttonVariants> {}
+export interface ButtonProps extends ComponentProps<'button'>, VariantProps<typeof buttonVariants> {
+  /** Its press is under way: it keeps the keyboard, takes no second press and is drawn dimmed; its words are the caller's. Never `disabled`, which would drop the keyboard to the page. */
+  loading?: boolean | undefined
+}
 
-export function Button({ className, variant, size, ...props }: ButtonProps) {
-  return <button className={cn(buttonVariants({ variant, size }), className)} {...props} />
+/** A press under way: still the keyboard's, refusing presses. */
+const WAITING = { 'aria-disabled': true, 'aria-busy': true, onClick: (event: MouseEvent) => event.preventDefault() } as const
+
+export function Button({ className, variant, size, loading = false, ...props }: ButtonProps) {
+  return <button className={cn(buttonVariants({ variant, size }), loading && 'cursor-progress opacity-50', className)} {...props} {...(loading && WAITING)} />
 }
 
 export { buttonVariants }

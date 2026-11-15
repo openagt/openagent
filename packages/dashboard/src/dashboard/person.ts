@@ -53,6 +53,14 @@ export function callerAtPage(): string | undefined {
   return caller.getStore()
 }
 
+/**
+ * Whether the person asking is this computer's owner, who alone names it: not a person the owner
+ * invited, at the owner's OpenAgent (the door says who), nor on an OpenAgent of their own here.
+ */
+export function ownerAsks(): boolean {
+  return callerAtPage() === undefined && !process.env.OPENAGENT_PERSON
+}
+
 /** How a command of this computer's is told who asks, when a person the owner invited does: their name, `%`-encoded. */
 export const CALLER_ENV = 'OPENAGENT_CALLER'
 

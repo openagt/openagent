@@ -159,7 +159,7 @@ export function useSteadyText(text: string, fresh: boolean, final = true): { sho
     }
     frame = requestAnimationFrame(step)
     return () => cancelAnimationFrame(frame)
-  }, [text])
+  }, [text, final])
   const done = length >= text.length
   // Before the first paint, so what waits for the words never shows a frame ahead of them.
   useLayoutEffect(() => {

@@ -1,64 +1,43 @@
 import { createContext, useContext, useEffect, useState, type ComponentType } from 'react'
+import { flushSync } from 'react-dom'
 import { onModules, type DashboardModule } from '../rpc/modules.js'
 import type { LinkAction, ModuleCard, ModuleDefinition, ModulePage, ModulePanel, ModuleRunSlots, ModuleSchedule, ModuleSettings, ModuleUsageLimit } from '../module/index.js'
 import { usePolled } from './use-async.js'
 import { isPageSegment } from '../../src/project-address.js'
 
-/** A module page as the shell mounts it: the page, plus the package it came from and the projects that have it. */
-export interface MountedPage extends ModulePage {
+/** Where a thing a module brings came from: its package, and the projects that have it. */
+interface Of {
   package: string
   projects: string[]
 }
 
-/** A link action as the shell mounts it (#1774): the action, plus the package it came from and the projects that have it. */
-export interface MountedLinkAction extends LinkAction {
-  package: string
-  projects: string[]
-}
+/** A thing a module brings, as the shell mounts it: the thing, plus where it came from. */
+type Mounted<Brought> = Brought & Of
 
-/** A card as the shell mounts it (#1818): the card, plus the package it came from, the projects that have it, and whether it is the computer's. */
-export interface MountedCard extends ModuleCard {
-  package: string
-  projects: string[]
-  /** A package of this computer's (its devices): the card is on every Overview, whichever project is picked. */
-  computer: boolean
-}
+/** Whether it is of a package of this computer's (its devices) rather than of a project's. */
+type OfComputer = { computer: boolean }
 
-/** A pane as the shell mounts it: the pane, plus the package it came from and the projects that have it. */
-export interface MountedPanel extends ModulePanel {
-  package: string
-  projects: string[]
-}
-
-/** A module's run slots as the shell mounts them: the slots, plus the package they came from and the projects that have it. */
-export interface MountedRunSlots extends ModuleRunSlots {
-  package: string
-  projects: string[]
-}
-
-/** A Settings entry as the shell mounts it: the entry, plus the package it came from, the projects that have it, and whether it is the computer's. */
-export interface MountedSettings extends ModuleSettings {
-  package: string
-  projects: string[]
-  computer: boolean
-}
-
-/** A usage bar stop line as the shell mounts it: the line's read and save, plus the package it came from and the projects that have it. */
-export interface MountedUsageLimit extends ModuleUsageLimit {
-  package: string
-  projects: string[]
-}
+/** A module page as the shell mounts it. */
+export type MountedPage = Mounted<ModulePage>
+/** A link action as the shell mounts it (#1774). */
+export type MountedLinkAction = Mounted<LinkAction>
+/** A card as the shell mounts it (#1818): a card of this computer's is on every Overview, whichever project is picked. */
+export type MountedCard = Mounted<ModuleCard> & OfComputer
+/** A pane as the shell mounts it. */
+export type MountedPanel = Mounted<ModulePanel>
+/** A module's run slots as the shell mounts them. */
+export type MountedRunSlots = Mounted<ModuleRunSlots>
+/** A Settings entry as the shell mounts it: one of this computer's is listed with no project. */
+export type MountedSettings = Mounted<ModuleSettings> & OfComputer
+/** A usage bar stop line as the shell mounts it: the line's read and save. */
+export type MountedUsageLimit = Mounted<ModuleUsageLimit>
+/** The commands a module starts by itself, as the shell mounts them: the read. */
+export type MountedSchedule = Mounted<ModuleSchedule>
 
 /** What a module of this computer's draws over every page, as the shell mounts it: the part, and the package it came from. */
 export interface MountedEveryPage {
   EveryPage: ComponentType
   package: string
-}
-
-/** The commands a module starts by itself, as the shell mounts them: the read, plus the package it came from and the projects that have it. */
-export interface MountedSchedule extends ModuleSchedule {
-  package: string
-  projects: string[]
 }
 
 /** The place of a card that names none. */
@@ -100,13 +79,6 @@ function load(url: string): Promise<ModuleDefinition | undefined> {
       (loaded: { default?: ModuleDefinition }) => {
         const definition = loaded.default
         if (!definition || typeof definition !== 'object') return undefined
-        // The module's stylesheet sits beside its module; it is linked once, like the module.
-        if (definition.stylesheet) {
-          const link = document.createElement('link')
-          link.rel = 'stylesheet'
-          link.href = new URL(definition.stylesheet, new URL(url, window.location.href)).href
-          document.head.appendChild(link)
-        }
         return definition
       },
       (error: unknown) => {
@@ -118,6 +90,48 @@ function load(url: string): Promise<ModuleDefinition | undefined> {
     void loading.then(definition => void importedBy.set(url, definition))
   }
   return loading
+}
+
+/**
+ * Where the page's one sheet of classes is served for a set of modules: the dashboard's own and
+ * every listed module's, compiled together by the daemon (src/dashboard/page-styles.ts), so
+ * Tailwind alone orders every class on the page. The address names the dashboard's build and each
+ * module's version, so a browser keeps each set's sheet for good.
+ */
+function pageSheetUrl(modules: readonly DashboardModule[]): string {
+  const asked = new URLSearchParams({ v: String(import.meta.env.OPENAGENT_CLASSES ?? '') })
+  for (const module of modules) asked.append('m', module.url)
+  return `/_styles/page.css?${asked}`
+}
+
+/** The page sheets fetched this page load, by address; one that fails to load is left out, with a warning. */
+const sheets = new Map<string, Promise<CSSStyleSheet | undefined>>()
+/** The same, once fetched (or left out). */
+const sheetBy = new Map<string, CSSStyleSheet | undefined>()
+
+function pageSheet(url: string): Promise<CSSStyleSheet | undefined> {
+  let loading = sheets.get(url)
+  if (!loading) {
+    loading = fetch(url)
+      .then(async response => {
+        if (!response.ok) throw new Error(`${response.status} ${await response.text()}`)
+        return new CSSStyleSheet().replace(await response.text())
+      })
+      .catch((error: unknown) => {
+        console.warn(`[openagent] the page sheet at ${url} did not load:`, error)
+        return undefined
+      })
+    sheets.set(url, loading)
+    void loading.then(sheet => void sheetBy.set(url, sheet))
+  }
+  return loading
+}
+
+/** Adopts `sheet` as the page sheet, after the dashboard's own, in place of the one before. */
+function adopt(sheet: CSSStyleSheet | undefined): void {
+  if (!sheet || document.adoptedStyleSheets.includes(sheet)) return
+  const pageSheets = new Set(sheetBy.values())
+  document.adoptedStyleSheets = [...document.adoptedStyleSheets.filter(each => !pageSheets.has(each)), sheet]
 }
 
 const NO_MODULES: DashboardModule[] = []
@@ -138,24 +152,41 @@ export function byMountOrder(a: { order?: number; package: string }, b: { order?
  * opened again imports the modules at once.
  */
 export function useModules(reloadKey = 0): MountedModules {
-  const { value: modules, loaded: listed } = usePolled(onModules, NO_MODULES, 30_000, [reloadKey], { remember: 'modules', stored: true })
+  const { value: modules, state: listState } = usePolled(onModules, NO_MODULES, 30_000, [reloadKey], { remember: 'modules', stored: true })
+  const listed = listState !== 'unknown'
   const [state, setState] = useState<MountedModules>(NOTHING_MOUNTED)
   useEffect(() => {
     if (!listed) return
+    // No module, no sheet of theirs to wait for.
+    const sheetUrl = modules.length > 0 ? pageSheetUrl(modules) : undefined
     // Read again with every module imported already (the list is polled): mounted at once, in one go.
-    if (modules.every(module => importedBy.has(module.url))) {
+    if (modules.every(module => importedBy.has(module.url)) && (!sheetUrl || sheetBy.has(sheetUrl))) {
+      if (sheetUrl) adopt(sheetBy.get(sheetUrl))
       setState(mount(modules.map(module => ({ module, definition: importedBy.get(module.url) })), true))
       return
     }
     let live = true
+    let sheetIn = !sheetUrl
     const definitions = new Map<DashboardModule, ModuleDefinition | undefined>()
+    // A module is drawn once its code and the sheet with its classes are both in, never before its classes are.
+    const show = () => {
+      if (!live || !sheetIn || definitions.size === 0) return
+      // In the list's order, whichever came first: a package's place never depends on how fast its code came.
+      const imported = modules.filter(each => definitions.has(each)).map(each => ({ module: each, definition: definitions.get(each) }))
+      // In the task of the commit that draws the modules, so no frame shows them without it.
+      if (sheetUrl) adopt(sheetBy.get(sheetUrl))
+      flushSync(() => setState(mount(imported, imported.length === modules.length)))
+    }
+    if (sheetUrl)
+      void pageSheet(sheetUrl).then(() => {
+        sheetIn = true
+        show()
+      })
     for (const module of modules) {
       void load(module.url).then(definition => {
         if (!live) return
         definitions.set(module, definition)
-        // In the list's order, whichever came first: a package's place never depends on how fast its code came.
-        const imported = modules.filter(each => definitions.has(each)).map(each => ({ module: each, definition: definitions.get(each) }))
-        setState(mount(imported, imported.length === modules.length))
+        show()
       })
     }
     return () => {
@@ -177,28 +208,22 @@ function mount(loadedModules: { module: DashboardModule; definition: ModuleDefin
   let usageLimit: MountedUsageLimit | undefined
   let schedule: MountedSchedule | undefined
   for (const { module, definition } of loadedModules) {
+    const of: Of = { package: module.package, projects: module.projects }
+    const computer = module.computer === true
     for (const page of definition?.pages ?? []) {
       if (!isPageSegment(page.segment) || pages.some(p => p.segment === page.segment)) continue
-      pages.push({ ...page, package: module.package, projects: module.projects })
+      pages.push({ ...page, ...of })
     }
-    for (const card of definition?.cards ?? []) {
-      cards.push({ ...card, package: module.package, projects: module.projects, computer: module.computer === true })
-    }
-    for (const action of definition?.linkActions ?? []) {
-      linkActions.push({ ...action, package: module.package, projects: module.projects })
-    }
-    for (const panel of definition?.panels ?? []) {
-      panels.push({ ...panel, package: module.package, projects: module.projects })
-    }
-    for (const section of definition?.settings ?? []) {
-      settings.push({ ...section, package: module.package, projects: module.projects, computer: module.computer === true })
-    }
+    for (const card of definition?.cards ?? []) cards.push({ ...card, ...of, computer })
+    for (const action of definition?.linkActions ?? []) linkActions.push({ ...action, ...of })
+    for (const panel of definition?.panels ?? []) panels.push({ ...panel, ...of })
+    for (const section of definition?.settings ?? []) settings.push({ ...section, ...of, computer })
     // Only a module of this computer's: a project's package does not put things on every page.
-    if (definition?.everyPage && module.computer === true) everyPage.push({ EveryPage: definition.everyPage, package: module.package })
-    if (definition?.usageLimit) usageLimit ??= { ...definition.usageLimit, package: module.package, projects: module.projects }
-    if (definition?.schedule) schedule ??= { ...definition.schedule, package: module.package, projects: module.projects }
+    if (definition?.everyPage && computer) everyPage.push({ EveryPage: definition.everyPage, package: module.package })
+    if (definition?.usageLimit) usageLimit ??= { ...definition.usageLimit, ...of }
+    if (definition?.schedule) schedule ??= { ...definition.schedule, ...of }
     const run = definition?.run
-    if (run?.summary) runSlots.push({ ...run, package: module.package, projects: module.projects })
+    if (run?.summary) runSlots.push({ ...run, ...of })
   }
   // Numbers, not a list the shell keeps: a third package sits between two others without the shell knowing it exists.
   cards.sort(byMountOrder)
@@ -217,4 +242,38 @@ export const ModulesContext = createContext<MountedModules>(NOTHING_MOUNTED)
 /** The installed modules' pages and link actions, as the shell mounted them. */
 export function useMountedModules(): MountedModules {
   return useContext(ModulesContext)
+}
+
+/** Where the modules' pages the sidebar listed are kept in this browser, for the next load's first frame. */
+const LISTED_PAGES_KEY = 'openagent:listed-pages'
+
+/** A module's page as the sidebar lists it: before its module is imported, without its icon. */
+export type ListedPage = Pick<MountedPage, 'segment' | 'label' | 'projects'> & Partial<Pick<MountedPage, 'icon'>>
+
+/**
+ * The pages the sidebar lists: the imported ones, and until every module is, those of the last load;
+ * null until then in a browser that kept none, where the pages are not known yet.
+ */
+export function useListedPages({ pages, loaded }: MountedModules): readonly ListedPage[] | null {
+  const [last] = useState(readListedPages)
+  useEffect(() => {
+    if (!loaded) return
+    try {
+      globalThis.localStorage?.setItem(LISTED_PAGES_KEY, JSON.stringify(pages.map(({ segment, label, projects }) => ({ segment, label, projects }))))
+    } catch {
+      // No room, or no storage: the next load lists the pages once they are imported.
+    }
+  }, [pages, loaded])
+  return loaded ? pages : last
+}
+
+function readListedPages(): ListedPage[] | null {
+  try {
+    const kept = globalThis.localStorage?.getItem(LISTED_PAGES_KEY)
+    if (kept == null) return null
+    const listed: unknown = JSON.parse(kept)
+    return Array.isArray(listed) ? listed.filter((page): page is ListedPage => typeof page?.segment === 'string' && typeof page.label === 'string' && Array.isArray(page.projects)) : null
+  } catch {
+    return null
+  }
 }

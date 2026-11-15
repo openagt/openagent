@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import type { ProjectSummary } from '../../src/index.js'
 import { onSkillsSaved, skillsSaved } from '../lib/skills-saved.js'
 import type { ProjectSkills } from '../rpc/skills.js'
 
@@ -75,6 +74,16 @@ describe('ProjectSkillsLine', () => {
     await waitFor(() => expect(onProjectSkills).toHaveBeenCalled())
     await new Promise(resolve => setTimeout(resolve, 20))
     expect(container.textContent).toBe('')
+  })
+
+  test('a read that fails after one answered keeps the line it drew', async () => {
+    onProjectSkills.mockResolvedValueOnce(skills({ groups: [{ title: 'Subagents', skills: [skill('orchestration', 'newer')] }] })).mockRejectedValue(new Error('EACCES'))
+    render(<ProjectSkillsLine projectId="p1" />)
+    await screen.findByRole('button', { name: 'Update' })
+    skillsSaved()
+    await waitFor(() => expect(onProjectSkills).toHaveBeenCalledTimes(2))
+    await new Promise(resolve => setTimeout(resolve, 20))
+    expect(screen.getByRole('button', { name: 'Update' })).not.toBeNull()
   })
 
   test('a save on the Skills page, over the line, is read at once: the card says it before the next read', async () => {
@@ -188,9 +197,13 @@ describe('the Skills page', () => {
     tick('tickets', 'queue', 'scheduler')
     expect(screen.getByText('3 skills to write.')).toBeTruthy()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Save and send to GitHub' }))
+    const save = screen.getByRole('button', { name: 'Save and send to GitHub' })
+    save.focus()
+    fireEvent.click(save)
     await waitFor(() => expect(sendChangeSkills).toHaveBeenCalledWith('p1', { write: ['tickets', 'queue', 'scheduler'], remove: [] }))
     expect(await screen.findByText(/Wrote 3 skills in/)).toBeTruthy()
+    // The focus the gone press had is on what the save did.
+    expect(document.activeElement).toBe(screen.getByText(/Wrote 3 skills in/).parentElement)
     expect(document.body.textContent).toContain('tickets, queue, scheduler')
     // The same press sends what it wrote, and nothing else.
     await waitFor(() => expect(sendProjectSkills).toHaveBeenCalledWith('p1', ['tickets', 'queue', 'scheduler']))
@@ -347,8 +360,10 @@ describe('the Skills page, over time', () => {
     sendChangeSkills.mockResolvedValue({ ok: true, written: ['tickets', 'queue'], removed: [], left: [] })
     sendProjectSkills.mockResolvedValue({ ok: true, sent: 'committed' })
     render(<SkillsSettings projectId="p1" />)
-    expect((await screen.findByText(/Save commits the change\./)).textContent).toContain('Save commits the change.')
+    await screen.findByText('Tickets and queue')
+    expect(screen.queryByText(/Save commits the change\./)).toBeNull()
     tick('tickets', 'queue')
+    expect(screen.getByText(/Save commits the change\./).textContent).toContain('Save commits the change.')
     fireEvent.click(screen.getByRole('button', { name: 'Save and commit' }))
     expect(await screen.findByText('Committed. Your agents get this change from their next start.')).toBeTruthy()
   })

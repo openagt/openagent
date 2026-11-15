@@ -26,7 +26,7 @@ test('a time of day is hours and minutes on a 24-hour clock, and goes only with 
   assert.deepEqual(parseTimeOfDay('9:05'), { hour: 9, minute: 5, text: '09:05' })
   assert.deepEqual(parseTimeOfDay('23:59'), { hour: 23, minute: 59, text: '23:59' })
   for (const text of ['24:00', '10:60', '10', '10:0', '10am', '']) assert.equal(parseTimeOfDay(text), undefined, text)
-  assert.deepEqual(['15m', '6h', '2d', '2w', '1mo'].map(text => takesTimeOfDay(parseInterval(text)!)), [false, false, true, true, true])
+  assert.deepEqual(['15m', '6h', '2d', '2w', '1mo'].map(text => takesTimeOfDay(parseInterval(text)!.unit)), [false, false, true, true, true])
 })
 
 test("the pace in force is this machine's pick, else the skill's; a pick that cannot be read is no pick", () => {

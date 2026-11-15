@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { accountsWiring, onAgentAccounts, sendRemoveAgentAccount, sendUseAgentAccountFirst } from './accounts.js'
 import { provideTestContext } from './test-context.js'
 import type { QuotaView } from '../dashboard/quota.js'
-import { addAccount, markLimited, noteWindows, OWN_NAME, readAccounts, type AccountsAgent } from '@openagt/skill-account-rotation'
+import { addAccount, markLimited, noteWindows, OWN_NAME, readAccounts } from '@openagt/skill-account-rotation'
 
 const HOUR = 60 * 60_000
 const NOW = Date.parse('2026-10-22T12:00:00Z')

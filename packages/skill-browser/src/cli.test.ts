@@ -8,7 +8,8 @@ import { join } from 'node:path'
 import { resolveChromePath } from './chrome.js'
 import { runCli, stateFile } from './cli.js'
 import { AFTER_RUN_MS, shortAddress } from './host.js'
-import { absoluteUrl } from './page.js'
+import type { CdpSession } from './cdp.js'
+import { absoluteUrl, press } from './page.js'
 import { inputCalls } from './screen.js'
 import { CONSOLE, FRAME, jpegSize, readConsoleLine, readState, STATE, streamReader, type ConsoleLine } from './stream.js'
 
@@ -348,8 +349,8 @@ test('a command before open refuses, close has nothing to do; a wrong command li
   assert.match(read.err, /browser open <address>/)
   const close = await cli('close')
   assert.deepEqual([close.code, close.out], [0, 'No browser is open.'])
-  assert.equal((await cli('click')).code, 2)
-  assert.equal((await cli('fly', 'away')).code, 2)
+  assert.deepEqual(await cli('click'), { code: 2, out: '', err: 'wrong arguments for click: none\nRun `browser --help` for usage.' })
+  assert.deepEqual(await cli('fly', 'away'), { code: 2, out: '', err: 'unknown command: fly\nRun `browser --help` for usage.' })
 })
 
 test('the address a screen says it shows is one line of a chat, whatever the page did to it', () => {
@@ -367,6 +368,15 @@ test('the address a screen says it shows is one line of a chat, whatever the pag
   assert.match(shortAddress(deep), /^example\.test\/part\/.*….*end$/)
   // Not an address at all: its own text, cut the same way.
   assert.equal(shortAddress('about:blank'), 'about:blank')
+})
+
+test('press knows its keys and no other name, not even one every object has', async () => {
+  const sent: string[] = []
+  const page = { send: async (method: string) => void sent.push(method), on() {}, close() {}, open: true } as unknown as CdpSession
+  await assert.rejects(press(page, 'F13'), /^Error: unknown key F13; the keys are Enter, Tab/)
+  await assert.rejects(press(page, 'constructor'), /unknown key constructor/)
+  await assert.rejects(press(page, 'toString'), /unknown key toString/)
+  assert.deepEqual(sent, [], 'nothing reaches the page')
 })
 
 test('an address without a scheme is http; other schemes are refused', () => {

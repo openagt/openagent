@@ -55,19 +55,20 @@ export function readClaudeModels(opts: ReadClaudeModelsOptions = {}): Promise<Dr
     }
 
     let settled = false
-    const settle = (answer: { models: DriverModel[] } | { error: string }) => {
+    const settle = (answer: { models: DriverModel[] } | { error: string; code?: string }) => {
       if (settled) return
       settled = true
       clearTimeout(timer)
       opts.signal?.removeEventListener('abort', onAbort)
       child.kill('SIGTERM')
       if ('models' in answer) resolvePromise(answer.models)
-      else rejectPromise(new Error(answer.error))
+      else rejectPromise(Object.assign(new Error(answer.error), answer.code !== undefined ? { code: answer.code } : {}))
     }
     const onAbort = () => settle({ error: 'Claude Code was not asked for its models: the read was stopped' })
     opts.signal?.addEventListener('abort', onAbort)
     // Not unref'd: it is what guarantees the promise settles.
-    const timer = setTimeout(() => settle({ error: `Claude Code did not list its models within ${Math.round((opts.timeoutMs ?? MODELS_TIMEOUT_MS) / 1000)}s` }), opts.timeoutMs ?? MODELS_TIMEOUT_MS)
+    const timeoutMs = opts.timeoutMs ?? MODELS_TIMEOUT_MS
+    const timer = setTimeout(() => settle({ error: `Claude Code did not list its models within ${Math.round(timeoutMs / 1000)}s` }), timeoutMs)
 
     let pending = ''
     child.stdout?.on('data', (chunk: Buffer | string) => {
@@ -80,9 +81,11 @@ export function readClaudeModels(opts: ReadClaudeModelsOptions = {}): Promise<Dr
         if (answer) settle(answer)
       }
     })
+    // A CLI that is not on this computer, or cannot be run, says so by the code: the reader says it in its own words.
     child.on('error', err => {
       removeFolder()
-      settle({ error: `\`${opts.bin ?? 'claude'}\` could not start: ${err.message}` })
+      const { code } = err as NodeJS.ErrnoException
+      settle({ error: `\`${opts.bin ?? 'claude'}\` could not start: ${err.message}`, ...(code !== undefined ? { code } : {}) })
     })
     // Removed once the CLI is gone, not when it answered: until then it may still write there.
     child.on('close', code => {
@@ -126,16 +129,17 @@ export function parseInitializeLine(line: string): { models: DriverModel[] } | {
     const resolved = model?.['resolvedModel']
     if (typeof id !== 'string' || typeof name !== 'string' || id === 'default') continue
     // How hard the model may think, as the CLI lists it (`--effort`). It says nothing about how
-    // much conversation a model holds, so nothing here claims to know.
+    // much conversation a model holds: that is what this package knows of the model's family.
     const efforts = model?.['supportsEffort'] === true && Array.isArray(model['supportedEffortLevels'])
       ? (model['supportedEffortLevels'] as unknown[]).filter((level): level is string => typeof level === 'string')
       : []
+    const window = contextWindowOf(typeof resolved === 'string' ? resolved : id)
     models.push({
       id,
       name,
       ...(typeof resolved === 'string' && resolved !== id ? { resolvedId: resolved } : {}),
       ...(efforts.length > 0 ? { efforts } : {}),
-      ...(contextWindowOf(typeof resolved === 'string' ? resolved : id) !== undefined ? { contextWindow: contextWindowOf(typeof resolved === 'string' ? resolved : id)! } : {}),
+      ...(window !== undefined ? { contextWindow: window } : {}),
     })
   }
   return { models }

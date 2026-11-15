@@ -6,7 +6,8 @@ import { useQuota } from '../lib/quota.js'
 import { useModuleHost, type ModuleProject, type UsageLimitSaved } from '../module/index.js'
 import { useMountedModules, type MountedUsageLimit } from '../lib/use-modules.js'
 import { usePolled } from '../lib/use-async.js'
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card.js'
+import { Section } from './ui/section.js'
+import { SentenceShape, Slot } from './ui/slot.js'
 import { cn } from '../lib/utils.js'
 import { ModuleSlot, projectsHaving } from './ModulePageView.js'
 import { formatRelative, formatResetDay, formatResetTooltip, formatDuration, formatDurationLong } from '../lib/format-date.js'
@@ -23,6 +24,7 @@ import {
 } from '../lib/quota-bar.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { AddedAccountsUsage, useAgentAccounts } from './AgentAccounts.js'
+import { loggedOut, useAgentState } from './Logins.js'
 
 // The usage bar (#960): one week-long track, so "am I ahead or behind?" is a glance rather than a
 // calculation. It replaces the pair of flat meters that came before (#519/#879), which showed the
@@ -165,7 +167,7 @@ function WeekBar({
   return (
     <div className="space-y-1.5">
       {/* One label per day, centred in its own share of the bar. */}
-      <div className="relative h-4 text-[10px] font-medium tracking-wide text-muted-foreground">
+      <div className="relative h-4 text-xs text-muted-foreground">
         {days.map(
           (day, i) =>
             day.label && (
@@ -210,6 +212,7 @@ function WeekBar({
             in the change handler instead, on the offset it produces. Dragging it is what changes
             where the dimmed segment ends. */}
         {limited && <input
+          name="spend-offset"
           type="range"
           aria-label="Unattended work stops at"
           className={cn(
@@ -303,7 +306,7 @@ function WeekBar({
       {/* The legend, and — on the same row (#960 Edit) — whether the knob has left any room to
           project. Grouped on the right since both describe the same knob: the warning first, since
           it explains why the state beside it might be worth a second look. */}
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[11px] text-muted-foreground max-sm:text-xs">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs text-muted-foreground">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <LegendItem swatch={<span className={cn('h-2 w-2 rounded-sm', TONE_FILL[tone])} aria-hidden />}>Used</LegendItem>
           {limited && <LegendItem swatch={<span className={cn('h-2 w-2 rounded-sm opacity-35', TONE_FILL[tone])} aria-hidden />}>Budget for Autonomous AI</LegendItem>}
@@ -363,6 +366,11 @@ function WeekBar({
   )
 }
 
+/** How much of a window is used, and when it resets when that is known: "42% used — resets Mon 10:00". */
+function usedWords(window: DriverQuotaWindow): string {
+  return `${Math.round(window.percentUsed)}% used${window.resetsAtText ? `${SEP}resets ${window.resetsAtText}` : ''}`
+}
+
 /**
  * The windows the bar is not about (the session, and a model's own week), as one line each — for
  * the fallback that draws these directly when there is no bar to tuck them behind.
@@ -371,9 +379,7 @@ function OtherWindow({ window }: { window: DriverQuotaWindow }) {
   return (
     <div className="flex items-baseline justify-between gap-2 text-xs">
       <span className="text-muted-foreground">{window.label}</span>
-      <span className="text-muted-foreground">
-        {Math.round(window.percentUsed)}% used{window.resetsAtText ? `${SEP}resets ${window.resetsAtText}` : ''}
-      </span>
+      <span className="text-muted-foreground">{usedWords(window)}</span>
     </div>
   )
 }
@@ -383,20 +389,19 @@ function OtherWindowRow({ window }: { window: DriverQuotaWindow }) {
   return (
     <tr>
       <td className="pr-3 align-baseline text-muted-foreground">{window.label}</td>
-      <td className="whitespace-nowrap align-baseline text-muted-foreground">
-        {Math.round(window.percentUsed)}% used{window.resetsAtText ? `${SEP}resets ${window.resetsAtText}` : ''}
-      </td>
+      <td className="whitespace-nowrap align-baseline text-muted-foreground">{usedWords(window)}</td>
     </tr>
   )
 }
 
-/** Why there's no reading, in words a user can act on. */
-function unavailableNote(view: QuotaView): string | undefined {
+/** Why there's no reading, in words a user can act on; `signedOut` while Claude Code itself is not logged in. */
+function unavailableNote(view: QuotaView, signedOut: boolean): string | undefined {
   switch (view.unavailable) {
     case undefined:
       return undefined
     case 'no-subscription':
-      return 'This account has no subscription usage to report, so there is no boundary to measure against.'
+      // Claude Code logged out answers so too: it has no account at all.
+      return signedOut ? 'Claude Code is not logged in, so there is no usage to show.' : 'This account has no subscription usage to report, so there is no boundary to measure against.'
     case 'agent-not-found':
       return 'Claude Code was not found, so usage cannot be read.'
     case 'unrecognized':
@@ -408,7 +413,7 @@ function unavailableNote(view: QuotaView): string | undefined {
     default:
       return view.windows.length
         ? "Couldn't refresh just now, so these numbers may be a little behind."
-        : 'Reading your usage now.'
+        : 'Claude Code could not read your usage just now. Trying again in a few minutes.'
   }
 }
 
@@ -425,7 +430,7 @@ const OFFSET_WRITE_DELAY_MS = 500
  * module's read catches up with it, which is the point at which the two agree anyway. A save that
  * fails says why, and the handle follows the module's value again.
  */
-export function useSpendOffset(serverOffset: number | undefined, save: (offset: number) => Promise<UsageLimitSaved>): [number | undefined, (offset: number) => void, string | undefined] {
+function useSpendOffset(serverOffset: number | undefined, save: (offset: number) => Promise<UsageLimitSaved>): [number | undefined, (offset: number) => void, string | undefined] {
   const [local, setLocal] = useState(serverOffset)
   const [error, setError] = useState<string | undefined>()
   // What we last wrote, while the poll is still behind it. `null` means "follow the server".
@@ -483,7 +488,8 @@ export function Quota({ projects }: { projects: ProjectSummary[] }) {
   const { usageLimit } = useMountedModules()
   // Why the own login has no reading says nothing while runs use other accounts with readings of their own: a server's runs use the person's own computer's.
   const others = (useAgentAccounts('claude').view?.accounts ?? []).filter(account => !account.own)
-  const note = view && !(view.windows.length === 0 && others.length > 0) ? unavailableNote(view) : undefined
+  const { state: claude } = useAgentState('claude-code')
+  const note = view && !(view.windows.length === 0 && others.length > 0) ? unavailableNote(view, claude !== undefined && loggedOut(claude)) : undefined
   // When the newest attempt failed but earlier numbers are still on screen, say how old they are.
   // A retained reading can now outlive several failures (#960), and an undated bar claims to be now.
   const staleAt = view?.unavailable !== undefined && view.windows.length > 0 ? view.readAt : undefined
@@ -493,41 +499,42 @@ export function Quota({ projects }: { projects: ProjectSummary[] }) {
   const windows = view?.windows ?? []
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">Usage</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {!view && <p className="text-sm text-muted-foreground">Reading your usage…</p>}
+    <Section title="Usage">
+      <div className="space-y-4">
+        <Slot of={{ state: view ? 'fresh' : 'unknown', value: view }} shape={<SentenceShape />}>
+          {() => (
+            <div className="space-y-4">
+              {/* Without a placeable week there is no axis to draw. Say so, loudly — no fallback (Rom):
+                  this used to degrade to the week as a plain figure, which hid a real defect for weeks —
+                  a reset phrasing the parser didn't know just made the panel quietly plainer, and nothing
+                  anywhere said the boundary was gone. Quote the text that failed: it is the bug report. */}
+              {view?.boundary && week ? (
+                usageLimit ? (
+                  <ModuleSlot package={usageLimit.package} label="usage limit">
+                    <LimitedWeekBar limit={usageLimit} projects={projectsHaving(usageLimit.projects, projects)} boundary={view.boundary} percentUsed={week.percentUsed} others={windows} />
+                  </ModuleSlot>
+                ) : (
+                  <WeekBar boundary={view.boundary} percentUsed={week.percentUsed} others={windows} />
+                )
+              ) : view && view.windows.length ? (
+                <p role="alert" className="text-sm text-danger">
+                  {unplaceableWeek(week, windows)}
+                </p>
+              ) : null}
 
-        {/* Without a placeable week there is no axis to draw. Say so, loudly — no fallback (Rom):
-            this used to degrade to the week as a plain figure, which hid a real defect for weeks —
-            a reset phrasing the parser didn't know just made the panel quietly plainer, and nothing
-            anywhere said the boundary was gone. Quote the text that failed: it is the bug report. */}
-        {view?.boundary && week ? (
-          usageLimit ? (
-            <ModuleSlot package={usageLimit.package} label="usage limit">
-              <LimitedWeekBar limit={usageLimit} projects={projectsHaving(usageLimit.projects, projects)} boundary={view.boundary} percentUsed={week.percentUsed} others={windows} />
-            </ModuleSlot>
-          ) : (
-            <WeekBar boundary={view.boundary} percentUsed={week.percentUsed} others={windows} />
-          )
-        ) : view && view.windows.length ? (
-          <p role="alert" className="text-sm text-danger">
-            {unplaceableWeek(week, windows)}
-          </p>
-        ) : null}
-
-        {/* Normally these live behind the bar's own "show all limits" tooltip — but without a bar
-            to hide them in, they still have to show up somewhere; the windows Claude Code did
-            report are data, not a fallback, and stay regardless. */}
-        {!(view?.boundary && week) && windows.length ? (
-          <div className="space-y-1 border-t border-border pt-3">
-            {windows.map(w => (
-              <OtherWindow key={w.label} window={w} />
-            ))}
-          </div>
-        ) : null}
+              {/* Normally these live behind the bar's own "show all limits" tooltip — but without a bar
+                  to hide them in, they still have to show up somewhere; the windows Claude Code did
+                  report are data, not a fallback, and stay regardless. */}
+              {!(view?.boundary && week) && windows.length ? (
+                <div className="space-y-1 border-t border-border pt-3">
+                  {windows.map(w => (
+                    <OtherWindow key={w.label} window={w} />
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          )}
+        </Slot>
 
         <AddedAccountsUsage />
 
@@ -537,7 +544,7 @@ export function Quota({ projects }: { projects: ProjectSummary[] }) {
             {staleAt !== undefined ? ` Last read ${formatRelative(new Date(staleAt).toISOString())}.` : ''}
           </p>
         ) : null}
-      </CardContent>
-    </Card>
+      </div>
+    </Section>
   )
 }

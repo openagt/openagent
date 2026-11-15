@@ -10,7 +10,7 @@ const sendPersonalFolderAs = vi.fn(async (_login: string) => ({ ok: true as cons
 vi.mock('../rpc/personal-folder.js', () => ({ onPersonalFolder, sendSyncPersonalFolder, sendStopSyncingPersonalFolder, sendPersonalFolderAs }))
 // The notice of what is not backed up has its own tests (BackupNotice.test.tsx).
 vi.mock('./BackupNotice.js', async importOriginal => ({ ...(await importOriginal<object>()), BackupNotice: () => null }))
-const logins = vi.hoisted(() => ({ onGitHosts: vi.fn(), sendUseGitHostAccount: vi.fn(), sendForgetGitHostAccount: vi.fn(), sendGitHostLogin: vi.fn(), sendGitHostInstall: vi.fn(), onAgentState: vi.fn(), sendAgentFix: vi.fn() }))
+const logins = vi.hoisted(() => ({ onGitHosts: vi.fn(), sendUseGitHostAccount: vi.fn(), sendForgetGitHostAccount: vi.fn(), sendGitHostLogin: vi.fn(), sendStopGitHostLogin: vi.fn(async () => ({ ok: true })), sendGitHostInstall: vi.fn(), onAgentState: vi.fn(), sendAgentFix: vi.fn() }))
 vi.mock('../rpc/logins.js', () => logins)
 const github = (accounts: { login: string; runs: boolean; ok: boolean }[]) => ({
   hosts: [{ host: 'github.com', projects: [], provider: { name: 'GitHub', requestWord: 'pull request', logo: '<svg/>', tool: 'gh', installed: true, install: 'brew install gh', accounts } }],
@@ -24,14 +24,17 @@ beforeEach(() => {
   sendSyncPersonalFolder.mockClear()
   sendStopSyncingPersonalFolder.mockClear()
   logins.onGitHosts.mockResolvedValue(github([{ login: 'me-agent', runs: false, ok: true }, { login: 'reviewer-agent', runs: true, ok: true }]))
-  logins.sendGitHostLogin.mockResolvedValue({ ok: true })
+  logins.sendGitHostLogin.mockResolvedValue({ ok: true, code: 'ABCD-1234', url: 'https://github.com/login/device' })
 })
 afterEach(cleanup)
 
-describe('Settings › Agent data', () => {
+/** The paragraph whose whole text is this: a path in it is a strip of its own. */
+const line = (text: string) => (_: string, element: Element | null) => element?.tagName === 'P' && element.textContent === text
+
+describe('Settings › Your agent data', () => {
   test('says where the folder is, the projects that keep their data in it, and that it is on this computer only', async () => {
     render(<AgentDataSettings />)
-    expect(await screen.findByText('~/.openagent · test-project, oa-newuser. Only on this computer.')).toBeTruthy()
+    expect(await screen.findByText(line('~/.openagent · test-project, oa-newuser. Only on this computer.'))).toBeTruthy()
   })
 
   test('syncing asks for the repository, sends what was typed, and then says what it syncs with', async () => {
@@ -47,7 +50,6 @@ describe('Settings › Agent data', () => {
     expect(screen.getByRole('combobox', { name: 'Back up as' }).textContent).toContain('@reviewer-agent')
     await waitFor(() => expect(sendSyncPersonalFolder).toHaveBeenCalledWith('github.com/me/agent', 'reviewer-agent'))
     // The address is a link inside the line, so the line is read whole.
-    const line = (text: string) => (_: string, element: Element | null) => element?.tagName === 'P' && element.textContent === text
     expect(await screen.findByText(line('~/.openagent · test-project, oa-newuser. Backed up to github.com/me/agent as @reviewer-agent. 2 changes waiting to back up.'))).toBeTruthy()
     expect(screen.queryByLabelText('Repository address')).toBeNull()
     expect(screen.getByRole('link', { name: 'github.com/me/agent' }).getAttribute('href')).toBe('https://github.com/me/agent')
@@ -68,7 +70,6 @@ describe('Settings › Agent data', () => {
   test('a synced folder says the account it is backed up as', async () => {
     view = { ...view, remote: 'github.com/me/agent', remoteUrl: 'https://github.com/me/agent', account: 'me-agent' }
     render(<AgentDataSettings />)
-    const line = (text: string) => (_: string, element: Element | null) => element?.tagName === 'P' && element.textContent === text
     expect(await screen.findByText(line('~/.openagent · test-project, oa-newuser. Backed up to github.com/me/agent as @me-agent.'))).toBeTruthy()
     expect(screen.getByRole('combobox', { name: 'Back up as' }).textContent).toContain('@me-agent')
   })
@@ -76,7 +77,6 @@ describe('Settings › Agent data', () => {
   test('a synced folder at a git host with no account named says it is not backed up, and leaves the fix to the notice above', async () => {
     view = { ...view, remote: 'github.com/me/agent', remoteUrl: 'https://github.com/me/agent', unsent: 3 }
     render(<AgentDataSettings />)
-    const line = (text: string) => (_: string, element: Element | null) => element?.tagName === 'P' && element.textContent === text
     expect(await screen.findByText(line('~/.openagent · test-project, oa-newuser. Synced with github.com/me/agent, not backed up yet.'))).toBeTruthy()
     expect(screen.queryByRole('combobox', { name: 'Back up as' })).toBeNull()
   })

@@ -147,7 +147,7 @@ test('a project without a start hook cannot start a run, and a hook that fails s
     assert.equal((await rpc(onCommands)(project.id))?.gitHost, false, 'and whether a pull request can be opened here, for its publish menu')
 
     // The tool's own refusal: its last line on stderr is what the person reads.
-    assert.deepEqual(await rpc(sendStart)(project.id, 'refuse this one'), { ok: false, error: 'the start hook: the project has no such command' })
+    assert.deepEqual(await rpc(sendStart)(project.id, 'refuse this one'), { ok: false, error: "This project's start line, in .openagent/hooks.yml, failed. It said: “the project has no such command”" })
 
     await rm(join(project.cwd, PROJECT_HOOKS_FILE))
     assert.equal((await rpc(onCommands)(project.id))?.startHook, false)

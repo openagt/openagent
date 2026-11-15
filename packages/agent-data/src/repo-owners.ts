@@ -1,6 +1,6 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { personalFolder, withPersonalFolder, type ProjectDataDeps } from './project-data.js'
+import { personalFolder, withPersonalFolder, type PersonalFolderDeps } from './personal-folder.js'
 import type { FileBranchWrite } from './file-branch.js'
 
 /**
@@ -35,7 +35,7 @@ export async function readRepoOwners(folder: string = personalFolder()): Promise
 }
 
 /** Write the owners, committed in the personal folder, so they go to every computer that syncs it. */
-export async function writeRepoOwners(owners: readonly string[], deps: ProjectDataDeps = {}): Promise<FileBranchWrite> {
+export async function writeRepoOwners(owners: readonly string[], deps: PersonalFolderDeps = {}): Promise<FileBranchWrite> {
   const folder = deps.folder ?? personalFolder()
   const kept = [...new Set(owners.filter(isRepoOwner))].slice(0, MAX_OWNERS)
   return withPersonalFolder(

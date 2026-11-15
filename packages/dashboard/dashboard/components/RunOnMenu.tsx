@@ -1,12 +1,11 @@
-import { Check, ChevronDown, Laptop, Plus, type LucideIcon } from 'lucide-react'
+import { Check, Laptop, Plus, type LucideIcon } from 'lucide-react'
 import type { Machine } from '../lib/machines.js'
 import type { MachineStatus } from '../lib/use-machine-status.js'
 import { thisMachineName } from '../lib/this-machine.js'
 import { machineKind, machineName, reachedByLine } from '../../src/client.js'
 import { MACHINE_ICONS, MachineMark } from './MachineMark.js'
 import { cn } from '../lib/utils.js'
-import { buttonVariants } from './ui/button.js'
-import { rowButtonClass } from './ui/row-item.js'
+import { rowButtonClass, RowChevron } from './ui/row-item.js'
 import { OptionLabel } from './ui/option-label.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel } from './ui/dropdown-menu.js'
@@ -54,25 +53,23 @@ function wordsOf(machine: Machine): string {
   return kind === 'shared' ? `${place}. Runs use your own logins.` : place
 }
 
-/** The target in words, as the row above the box draws it: its icon, with a dot when it is not this machine, and its name. */
+/** The target in words, as the row above the box draws it: its icon, with a dot when it is not this machine, and its name. The menu adds its chevron. */
 export function RunOnWords({ icon: Icon, elsewhere, label }: { icon: LucideIcon; elsewhere: boolean; label: string }) {
   return (
     <>
       <span className="relative flex shrink-0">
-        <Icon className="h-3.5 w-3.5" aria-hidden />
+        <Icon className="size-4 shrink-0" aria-hidden />
         {elsewhere && <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-[var(--color-primary)]" />}
       </span>
       <span className="truncate">{label}</span>
-      <ChevronDown className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
     </>
   )
 }
 
 // One flat "Run on" list (#1067): this machine, then the saved machines and "Add a machine",
-// with a single checkmark.
-// Two looks for the one menu: an icon button for the compact single row, and the target in words,
-// drawn as the rows around the box draw their items, for the row above it (`inRow`).
-export function RunOnMenu({ connection, busy, inRow = false }: { connection: ConnectionControl; busy: boolean; inRow?: boolean | undefined }) {
+// with a single checkmark. Its button is the target in words, drawn as the rows around the box draw
+// their items, for the row above it.
+export function RunOnMenu({ connection, busy }: { connection: ConnectionControl; busy: boolean }) {
   // The selected machine (#1067). An id pointing at a removed machine reads as none, and so does
   // any pick on a project that runs here only.
   const selectedMachine =
@@ -88,31 +85,16 @@ export function RunOnMenu({ connection, busy, inRow = false }: { connection: Con
       <Tooltip>
         <TooltipTrigger
           render={
-            <DropdownMenuTrigger
-              type="button"
-              disabled={busy}
-              aria-label="Run on"
-              className={
-                inRow
-                  ? rowButtonClass
-                  : cn(buttonVariants({ variant: 'ghost', size: 'icon-sm' }), 'relative h-8 w-8')
-              }
-            />
+            <DropdownMenuTrigger type="button" disabled={busy} aria-label={`Run on: ${summary}`} className={rowButtonClass} />
           }
         >
-          {inRow ? (
-            <RunOnWords icon={Icon} elsewhere={!onThisMachine} label={summary} />
-          ) : (
-            <>
-              <Icon className="h-4 w-4" />
-              {!onThisMachine && <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-[var(--color-primary)]" />}
-            </>
-          )}
+          <RunOnWords icon={Icon} elsewhere={!onThisMachine} label={summary} />
+          <RowChevron />
         </TooltipTrigger>
         <TooltipContent>{`Run on — ${selectedMachine?.label ?? here}`}</TooltipContent>
       </Tooltip>
-      {/* The words are at the row's left, the icon button at the compact row's right: the menu opens inward. */}
-      <DropdownMenuContent align={inRow ? 'start' : 'end'} className="min-w-[19rem] max-w-[22rem]">
+      {/* The words are at the row's left: the menu opens inward. */}
+      <DropdownMenuContent align="start" className="min-w-[19rem] max-w-[22rem]">
         <DropdownMenuGroup>
           <DropdownMenuLabel>Run on</DropdownMenuLabel>
           {/* Each row leads with its machine's mark; the pick is the tick at the row's end. */}

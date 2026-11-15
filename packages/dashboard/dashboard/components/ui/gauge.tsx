@@ -11,11 +11,11 @@ export function GaugeFace({ label, share }: { label: string; share: number | und
       <span className="relative size-8">
         <svg viewBox="0 0 32 32" className="size-8" aria-hidden>
           <circle cx="16" cy="16" r={r} fill="none" strokeWidth="3" className="stroke-muted-foreground/15" />
-          {share !== undefined && <circle cx="16" cy="16" r={r} fill="none" strokeWidth="3" strokeLinecap="round" strokeDasharray={`${(around * Math.min(share, 100)) / 100} ${around}`} transform="rotate(-90 16 16)" className={cn('transition-[stroke-dasharray] duration-500', tone.ring)} />}
+          {share !== undefined && <circle cx="16" cy="16" r={r} fill="none" strokeWidth="3" strokeLinecap="round" strokeDasharray={`${(around * Math.min(share, 100)) / 100} ${around}`} transform="rotate(-90 16 16)" className={cn('transition-[stroke-dasharray] duration-180', tone.ring)} />}
         </svg>
-        <span className={cn('absolute inset-0 flex items-center justify-center text-[9px] font-medium tabular-nums', tone.text)}>{share ?? '–'}</span>
+        <span className={cn('absolute inset-0 flex items-center justify-center text-xs leading-none font-medium tracking-tight tabular-nums', tone.text)}>{share ?? '–'}</span>
       </span>
-      <span className="text-[9px] leading-tight text-muted-foreground">{label}</span>
+      <span className="text-xs text-muted-foreground">{label}</span>
     </>
   )
 }

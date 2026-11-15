@@ -17,14 +17,10 @@ import { Button } from './ui/button.js'
  * browser's tab is on — rather than from the bridge's last hello, which the user's own Chrome
  * may have written a second ago.
  */
-export function BridgeBrowserSettings({ enabled }: { enabled: boolean }) {
+export function BridgeBrowserSettings() {
   const [status, setStatus] = useState<BridgeBrowserStatus | null>(null)
 
   useEffect(() => {
-    if (!enabled) {
-      setStatus(null)
-      return
-    }
     let live = true
     const read = () =>
       void onBridgeBrowser()
@@ -38,18 +34,18 @@ export function BridgeBrowserSettings({ enabled }: { enabled: boolean }) {
       live = false
       clearInterval(timer)
     }
-  }, [enabled])
+  }, [])
 
-  if (!enabled || !status) return null
+  if (!status) return null
   const act = (action: 'show' | 'hide' | 'restart') => void sendBridgeBrowser(action).catch(() => {})
   return (
-    <div className="mt-2 space-y-2 rounded-md border border-border bg-muted/30 p-3 text-xs">
+    <div className="mt-3 space-y-2 text-xs">
       {status.state === 'off' && <p className="text-muted-foreground">The bridge browser is off.</p>}
       {status.state === 'starting' && <p className="text-muted-foreground">Starting the bridge browser: {status.detail}.</p>}
       {status.state === 'stopped' && (
         <p className="text-danger">
           The bridge browser is not running: {status.detail}.{' '}
-          <Button variant="outline" size="sm" onClick={() => act('restart')}>
+          <Button variant="secondary" onClick={() => act('restart')}>
             Restart
           </Button>
         </p>
@@ -62,15 +58,15 @@ export function BridgeBrowserSettings({ enabled }: { enabled: boolean }) {
           </p>
           <div className="flex flex-wrap items-center gap-2">
             {status.visible ? (
-              <Button variant="outline" size="sm" onClick={() => act('hide')}>
+              <Button variant="secondary" onClick={() => act('hide')}>
                 Hide the window
               </Button>
             ) : (
-              <Button variant="outline" size="sm" onClick={() => act('show')}>
+              <Button variant="secondary" onClick={() => act('show')}>
                 {status.signIn ? 'Show the window to sign in' : 'Show the window'}
               </Button>
             )}
-            <Button variant="outline" size="sm" onClick={() => act('restart')}>
+            <Button variant="secondary" onClick={() => act('restart')}>
               Restart
             </Button>
           </div>

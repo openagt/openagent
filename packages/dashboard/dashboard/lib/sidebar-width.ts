@@ -13,7 +13,7 @@ export const SIDEBAR_MAX = 448
 
 const listeners = new Set<() => void>()
 
-export const clampWidth = (width: number): number => Math.round(Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, width)))
+const clampWidth = (width: number): number => Math.round(Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, width)))
 
 function read(): number {
   try {

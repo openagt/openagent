@@ -1,6 +1,6 @@
 ---
 name: github
-description: "The project's git host is GitHub: how to open your pull request when you are asked to, how to land it, and how to read and close the project's issues."
+description: "The project's git host is GitHub: how to open your pull request when you are asked to, how to comment on an issue or a pull request, how to land a pull request, and how to read and close the project's issues."
 package: "@openagt/skill-github@0.1"
 ---
 
@@ -10,7 +10,7 @@ The project's pull requests and issues are on GitHub. This skill is how you reac
 
 ## The command
 
-Run the `github` command inside your checkout, always by its full name: `npx @openagt/skill-github@0.1`. It prints JSON; a refusal exits 1 with a line on stderr; a wrong command line exits 2 with the usage.
+Run the `github` command inside your checkout, always by its full name: `npx @openagt/skill-github@0.1`. It prints JSON; a refusal exits 1 with a line on stderr; a wrong command line exits 2 with what was wrong and a pointer to `--help`.
 
 ## Your pull request
 
@@ -20,7 +20,7 @@ Open a pull request only when your task or the person asks for one, or asks you 
 npx @openagt/skill-github@0.1 open --title "<one line naming what the change does>" --body "<what changed, and why>"
 ```
 
-It opens the pull request for the branch you are on and prints it in `request` (`number`, `url`). A branch that already has an open pull request gets no second one: that one is answered, with `existing` true. Add `--base <branch>` when you were told which branch the pull request goes into; without it, it goes into the project's default branch. Add `--merge` when the work may land on its own: the pull request then merges once its checks pass, also where the repository does not allow auto-merge (`merge` in the answer says `auto-armed`, `merged` or `watching`). Add `--draft` instead for a pull request a person should look at first; with `--merge` too, `--draft` is dropped.
+It opens the pull request for the branch you are on, its body opened with what you run on as a comment is, and prints it in `request` (`number`, `url`). A branch that already has an open pull request gets no second one: that one is answered, with `existing` true. Add `--base <branch>` when you were told which branch the pull request goes into; without it, it goes into the project's default branch. Add `--merge` when the work may land on its own: the pull request then merges once its checks pass, also where the repository does not allow auto-merge (`merge` in the answer says `auto-armed`, `merged` or `watching`). Add `--draft` instead for a pull request a person should look at first; with `--merge` too, `--draft` is dropped.
 
 A pull request whose body has a line `Closes #<number>` closes that issue when it merges.
 

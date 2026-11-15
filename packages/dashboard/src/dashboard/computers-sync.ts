@@ -134,8 +134,8 @@ export const computersWiring: {
   now: () => number
 } = {
   env: process.env,
-  machines: () => listMachines(undefined, computersWiring.env),
-  forgotten: () => listForgotten(undefined, computersWiring.env),
+  machines: () => listMachines(computersWiring.env),
+  forgotten: () => listForgotten(computersWiring.env),
   call: (machine, fn, args) => machineCall(machine, fn, args, 20_000),
   door: async () => (await import('../dashboard-rpc/computers.js')).ownDoor(),
   ownCode: async () => (await import('../dashboard-rpc/computers.js')).ownCode(),
@@ -143,13 +143,13 @@ export const computersWiring: {
     const asked = await (await import('../dashboard-rpc/machines.js')).sendMachineCode(machine.id)
     return asked.ok ? asked.value.url : undefined
   },
-  name: () => thisComputerName(undefined, computersWiring.env),
+  name: () => thisComputerName(computersWiring.env),
   forget: async gone => (await import('../dashboard-rpc/computers.js')).sendForgetComputers(gone).then(() => {}),
   lineComputers: async server => {
     const asked = await (await import('../dashboard-rpc/machines.js')).onComputersThrough(server.id)
     return asked.ok ? asked.computers : undefined
   },
-  saveThrough: async (server, id) => void (await (await import('../dashboard-rpc/machines.js')).saveComputerThrough(server.id, id)),
+  saveThrough: async (server, id) => void (await (await import('../dashboard-rpc/save-machine.js')).saveComputerThrough(server.id, id)),
   now: () => Date.now(),
 }
 
@@ -244,6 +244,6 @@ export async function forgetHere(gone: readonly ForgottenMachine[], remove: (mac
     const machine = saved.find(candidate => candidate.url === removal.url)
     if (machine && !removedSince(machine.added, removal.at)) continue
     if (machine && !(await remove(machine))) continue
-    await forgetMachine(removal.url, removal.at, undefined, computersWiring.env)
+    await forgetMachine(removal.url, removal.at, computersWiring.env)
   }
 }

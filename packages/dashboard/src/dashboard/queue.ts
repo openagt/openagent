@@ -10,8 +10,6 @@ import { projectQueue, type QueueFor } from '../store/queue.js'
 export interface ProjectQueue {
   projectId: string
   projectName: string
-  /** The package that provides it: the dashboard sends a person to that package's page to fill it. */
-  package: string
   /** The open entries, in order of work: each the task a future agent is started with. */
   entries: string[]
 }
@@ -28,7 +26,7 @@ export async function collectQueue(projects: ProjectSummary[], queueFor: QueueFo
     const source = await queueFor(project.path).catch(() => undefined)
     if (!source) continue
     const entries = await source.list().catch((): string[] => [])
-    queues.push({ projectId: project.id, projectName: project.name, package: source.package, entries })
+    queues.push({ projectId: project.id, projectName: project.name, entries })
   }
   return queues.sort((a, b) => b.entries.length - a.entries.length)
 }

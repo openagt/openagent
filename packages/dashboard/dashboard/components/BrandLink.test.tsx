@@ -52,6 +52,11 @@ describe('BrandLink', () => {
     expect(container.querySelector('svg')).not.toBeNull() // the mark is not hidden
   })
 
+  test('is named OpenAgent, whatever state the mark is in', () => {
+    render(<BrandLink working onNavigate={vi.fn()} />)
+    expect(screen.getByRole('link', { name: 'OpenAgent' })).toBeTruthy()
+  })
+
   test('carries the working state through to the mark', () => {
     const { container, rerender } = render(<BrandLink working onNavigate={vi.fn()} />)
     expect(container.querySelector('path')?.getAttribute('fill')).toBe('url(#hexknot-0)')

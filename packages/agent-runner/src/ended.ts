@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process'
 import { basename } from 'node:path'
+import { errorMessage } from '@openagt/agent-data'
 import { configFile, readConfig } from './config.js'
 
 /**
@@ -17,6 +18,22 @@ import { configFile, readConfig } from './config.js'
 /** How long the line may take before it is ended. */
 export const ENDED_TIMEOUT_MS = 60_000
 
+/** A run's end as the line is run for it: which run, what it was asked, and how it ended. */
+interface RunEnd {
+  id: string
+  prompt: string
+  status: string
+  question?: string
+  pr?: { url: string }
+  /** The pull request the run had when this session started. */
+  prBefore?: { url: string }
+}
+
+interface EndedDeps {
+  log: (line: string) => void
+  timeoutMs?: number
+}
+
 /** Why a run's end is worth a person's attention, or nothing when it is not. */
 export type EndedNews = { status: 'waiting'; question: string; pr?: { url: string } } | { status: 'done'; pr: { url: string } }
 
@@ -25,7 +42,7 @@ export type EndedNews = { status: 'waiting'; question: string; pr?: { url: strin
  * request it did not have when this session started. A failed or stopped run is left to whoever
  * is looking at the runs.
  */
-export function endedNews(end: { status: string; question?: string; pr?: { url: string }; prBefore?: { url: string } }): EndedNews | undefined {
+export function endedNews(end: Pick<RunEnd, 'status' | 'question' | 'pr' | 'prBefore'>): EndedNews | undefined {
   const newPr = end.pr && end.pr.url !== end.prBefore?.url ? { pr: { url: end.pr.url } } : {}
   if (end.status === 'waiting') return { status: 'waiting', question: end.question ?? 'a question', ...newPr }
   if (end.status === 'done' && newPr.pr) return { status: 'done', pr: newPr.pr }
@@ -57,23 +74,15 @@ export async function readEndedLine(repo: string, log: (line: string) => void): 
  * process should not exit while the line posts. Nothing when there is no line or no news. Never
  * throws: whatever goes wrong is one line on `log`, and the run ends as it ended.
  */
-export async function runEndedLine(
-  repo: string,
-  end: { id: string; prompt: string; status: string; question?: string; pr?: { url: string }; prBefore?: { url: string } },
-  deps: { log: (line: string) => void; timeoutMs?: number },
-): Promise<void> {
+export async function runEndedLine(repo: string, end: RunEnd, deps: EndedDeps): Promise<void> {
   try {
     await runLine(repo, end, deps)
   } catch (err) {
-    deps.log(`[agent-runner] the ended line could not run: ${err instanceof Error ? err.message : String(err)}`)
+    deps.log(`[agent-runner] the ended line could not run: ${errorMessage(err)}`)
   }
 }
 
-async function runLine(
-  repo: string,
-  end: { id: string; prompt: string; status: string; question?: string; pr?: { url: string }; prBefore?: { url: string } },
-  deps: { log: (line: string) => void; timeoutMs?: number },
-): Promise<void> {
+async function runLine(repo: string, end: RunEnd, deps: EndedDeps): Promise<void> {
   const news = endedNews(end)
   if (!news) return
   const line = await readEndedLine(repo, deps.log)

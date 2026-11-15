@@ -6,8 +6,7 @@
 import { defineModule } from '@openagt/dashboard/module'
 import { FileDiff } from 'lucide-react'
 import { ChangesPanel } from './ChangesPanel.js'
-import { ChangesSummary } from './AgentChanges.js'
-import './dashboard.css'
+import { ChangesSummary } from './ChangesSummary.js'
 
 export default defineModule({
   panels: [
@@ -20,5 +19,4 @@ export default defineModule({
     },
   ],
   run: { summary: ChangesSummary },
-  stylesheet: 'dashboard.css',
 })

@@ -1,6 +1,6 @@
 import { nodeGitRunner, type GitRunner } from '@openagt/agent-data'
 import type { FileGitStatus } from './status.js'
-import { cutToPreview, readConfinedFile, safeRepoPath } from './confined.js'
+import { CONTEXT_LINES, cutToPreview, readConfinedFile, safeRepoPath } from './confined.js'
 
 // One changed file's diff for the Changes pane (#816, #817). The list already says a file is new,
 // modified or deleted; this says what actually changed, without leaving the dashboard for
@@ -10,8 +10,6 @@ import { cutToPreview, readConfinedFile, safeRepoPath } from './confined.js'
 // The read takes a caller-supplied path, so the guard is here rather than at the call site:
 // `safeRepoPath` is the only way in, and every caller goes through it.
 
-/** The unchanged lines a diff shows around each change, as git does. */
-export const CONTEXT_LINES = 3
 /** Enough unchanged lines around a change to show the whole file: what "Show more lines" asks for. */
 export const WHOLE_FILE = 100_000
 
@@ -80,6 +78,12 @@ function asAllAdded(text: string): string {
   return lines.map(line => `+${line}`).join('\n')
 }
 
+/** How a diff is read: between two commits rather than against the checkout, and with how many unchanged lines around each change. */
+export interface DiffOptions {
+  range?: { from: string; to: string }
+  context?: number
+}
+
 /**
  * The diff for one changed file in the checkout at `cwd`, or, given a `range`, between two
  * commits of the repository at `cwd` (a run's committed change, `run.ts`).
@@ -95,9 +99,8 @@ export async function readFileDiff(
   cwd: string,
   path: string,
   status: FileGitStatus,
+  { range, context = CONTEXT_LINES }: DiffOptions = {},
   git: GitRunner = nodeGitRunner(),
-  range?: { from: string; to: string },
-  context: number = CONTEXT_LINES,
 ): Promise<FileDiff | null> {
   if (!safeRepoPath(path)) return null
 
@@ -130,7 +133,6 @@ export async function readFileDiff(
   return { path, status, patch, ...countChanges(patch), truncated, binary: false, ...(now !== undefined ? { lines: linesIn(now) } : {}) }
 }
 
-
 /** One `git diff --numstat` line, parsed. */
 export interface NumstatEntry {
   path: string
@@ -141,9 +143,7 @@ export interface NumstatEntry {
 
 /**
  * Parse `git diff --numstat` output: `added<TAB>removed<TAB>path`, with `-` for both counts
- * on a binary file. The one parser for the grammar — it was written here and in run-handoff,
- * and the copies had already drifted on a path containing a tab (this side rejoined it, the
- * other dropped the line).
+ * on a binary file. A path with a tab in it is joined back whole, not dropped.
  */
 export function parseNumstat(out: string): NumstatEntry[] {
   const entries: NumstatEntry[] = []
@@ -186,7 +186,7 @@ export async function readFileChanges(
       if (known) return { ...known, status }
       if (status !== 'untracked') return { path, status, added: 0, removed: 0, binary: false }
       // An untracked file is not in any diff, so its whole content is the addition.
-      const diff = await readFileDiff(cwd, path, status, git).catch(() => null)
+      const diff = await readFileDiff(cwd, path, status, {}, git).catch(() => null)
       return { path, status, added: diff?.added ?? 0, removed: 0, binary: diff?.binary ?? false }
     }),
   )

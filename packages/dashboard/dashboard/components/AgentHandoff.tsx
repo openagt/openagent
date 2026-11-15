@@ -1,10 +1,12 @@
-import type { ReactNode } from 'react'
+import { useContext, useState, type ReactNode } from 'react'
 import type { AgentHandoff } from '../../src/index.js'
 import { ChevronDown, GitPullRequestDraft, Upload } from 'lucide-react'
 import { sendMerge, sendMergeBranch, sendMessage, sendOpenPullRequest, sendPush } from '../rpc/control.js'
 import type { AgentHandoffState } from '../lib/use-agent-handoff.js'
+import { DaemonDown } from '../lib/use-daemon-health.js'
 import { cn } from '../lib/utils.js'
 import { Button, buttonVariants } from './ui/button.js'
+import { ButtonGroup, ButtonGroupSeparator } from './ui/button-group.js'
 import { DiffStat } from './DiffStat.js'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu.js'
 
@@ -54,7 +56,7 @@ export function HandoffSummary({ handoff, subagent = false }: { handoff: AgentHa
   const held = [commits, files, ...(!subagent && handoff.pushed && !handoff.pr ? ['pushed'] : [])].join(' · ')
   return (
     <span className="flex shrink-0 items-center whitespace-nowrap" title={held} aria-label={held}>
-      <DiffStat added={handoff.insertions} removed={handoff.deletions} zeros className="text-[11px] font-medium" />
+      <DiffStat added={handoff.insertions} removed={handoff.deletions} className="text-xs font-medium" />
     </span>
   )
 }
@@ -79,10 +81,10 @@ export function HandoffSummary({ handoff, subagent = false }: { handoff: AgentHa
  * lands that.
  */
 /** What the Commit button says to the agent: it commits its own work, in its own words. */
-export const COMMIT_MESSAGE = 'Commit your work.'
+const COMMIT_MESSAGE = 'Commit your work.'
 
-/** The next step's look: the one filled thing in the bar. */
-const NEXT_STEP = 'bg-background/60 hover:bg-background'
+/** The next step's look: the page's primary press, at the height of the box's Send. Busy, a press stays focusable (`aria-disabled`): a disabled one drops the focus to the page. */
+const NEXT_STEP = 'aria-disabled:pointer-events-none aria-disabled:opacity-50'
 
 /** The project's main branch by name, when the handoff was measured from it; a run measured from a commit only knows it as "the main branch". */
 function mainBranchName(base: string | undefined): string {
@@ -99,13 +101,7 @@ export function Committing() {
   return <Reason>Committing…</Reason>
 }
 
-export function HandoffActions({
-  projectId,
-  agentId: agentId,
-  state,
-  subagent = false,
-  onAsked,
-}: {
+export function HandoffActions(props: {
   projectId: string
   agentId: string
   state: AgentHandoffState
@@ -113,7 +109,79 @@ export function HandoffActions({
   /** The Commit button's ask is on its way to the agent (`null`: it did not go through), so the page shows it at once. */
   onAsked?: ((text: string | null) => void) | undefined
 }) {
-  const { handoff, busy, pending, act } = state
+  const { handoff, act } = props.state
+  // What the last press did, said until the work on the branch moves on or the bar is put away.
+  const [said, setSaid] = useState<{ text: string; work: string; title?: string; shown?: false } | null>(null)
+  // The pull request a merge pressed here left to merge once its checks pass.
+  const [armed, setArmed] = useState<number | null>(null)
+  const work = handoff ? [handoff.commits.length, handoff.pendingFiles?.length ?? 0, handoff.insertions, handoff.deletions].join('|') : ''
+  const saying = said?.work === work ? said : null
+  const press: Pressed = (which, fn, failed, answered, says) => {
+    if (props.state.busy) return
+    // The bar, not the split button around a press: that group is gone once its press is done.
+    const bar = document.activeElement instanceof HTMLElement ? document.activeElement.closest<HTMLElement>('[role="group"]:not([data-slot="button-group"])') : null
+    void act(which, fn, failed, answered).then(value => {
+      const told = value === undefined ? undefined : says?.(value)
+      if (told) setSaid({ ...told, work })
+      if (value !== undefined && which === 'merge' && (value as { merge?: string }).merge !== 'merged') setArmed(handoff?.pr?.number ?? null)
+      requestAnimationFrame(() => keepFocusIn(bar))
+    })
+  }
+  return (
+    <>
+      {saying && saying.shown !== false && (
+        <Reason {...(saying.title ? { title: saying.title } : {})} hidden>
+          {saying.text}
+        </Reason>
+      )}
+      <NextStep {...props} press={press} armed={armed !== null && armed === handoff?.pr?.number} />
+      <span aria-live="polite" className="sr-only">
+        {saying?.text}
+      </span>
+    </>
+  )
+}
+
+/** A press of the bar: `act`'s, and what to say once it went (`says`). */
+type Pressed = <T>(
+  which: Parameters<AgentHandoffState['act']>[0],
+  fn: () => Promise<T>,
+  failed: string,
+  answered?: (value: Exclude<T, { ok: false }>) => Partial<AgentHandoff> | undefined,
+  /** `shown: false`: what the bar already shows, said to a screen reader alone. */
+  says?: (value: Exclude<T, { ok: false }>) => { text: string; title?: string; shown?: false } | undefined,
+) => void
+
+/** After a press the focus stays in the bar, on its next press or else on the bar, unless the person has moved it. */
+function keepFocusIn(bar: HTMLElement | null): void {
+  const at = document.activeElement
+  if (!bar?.isConnected || (at !== null && at !== document.body && at !== bar)) return
+  ;(bar.querySelector<HTMLElement>('[data-next-step]:not(:disabled)') ?? bar).focus()
+}
+
+function NextStep({
+  projectId,
+  agentId,
+  state,
+  subagent = false,
+  onAsked,
+  press,
+  armed,
+}: {
+  projectId: string
+  agentId: string
+  state: AgentHandoffState
+  subagent?: boolean
+  onAsked?: ((text: string | null) => void) | undefined
+  press: Pressed
+  /** This PR's merge was pressed here, and waits for its checks. */
+  armed: boolean
+}) {
+  const { handoff, pending } = state
+  // OpenAgent is not answering: no step can be taken until it does.
+  const down = useContext(DaemonDown)
+  // Each press of the next step: marked so a press that went finds the next one, and off while one goes.
+  const step = { 'data-next-step': true, disabled: down, 'aria-disabled': state.busy || undefined }
   if (!handoff) return null
   if (subagent) {
     if (handoff.landed) return <Reason>landed</Reason>
@@ -136,11 +204,11 @@ export function HandoffActions({
       <>
         <Uncommitted paths={paths} committed={!handoff.empty} />
         <Button
-          size="xs"
-          variant="ghost"
+          size="sm"
           className={NEXT_STEP}
-          disabled={busy}
+          {...step}
           onClick={() => {
+            if (state.busy) return
             onAsked?.(COMMIT_MESSAGE)
             const ask = () =>
               sendMessage(projectId, COMMIT_MESSAGE, agentId).then(
@@ -153,15 +221,16 @@ export function HandoffActions({
                   throw err
                 },
               )
-            act('commit', ask, 'Could not ask the agent to commit.')
+            press('commit', ask, 'Could not ask the agent to commit.')
           }}
         >
-          {pending === 'commit' ? 'Asking…' : 'Commit'}
+          <Steady words={['Commit', 'Asking…']} now={pending === 'commit' ? 1 : 0} />
         </Button>
       </>
     )
   }
-  const push = () => act('push', () => sendPush(projectId, agentId), 'Could not push the branch.')
+  const pushed = handoff.gitHost ? { text: 'Pushed.' } : { text: 'Pushed. Pull requests need a remote on GitHub.', title: "Another git host needs a skill of its own, on the project's Skills page" }
+  const push = () => press('push', () => sendPush(projectId, agentId), 'Could not push the branch.', () => ({ pushed: true }), () => pushed)
   // Once a PR exists the bar links it and the needs-you queue (#632) has it: offering to open one
   // again is the single mistake this must not make. What is still worth offering is the Merge
   // (#1391): an open, unmerged PR takes one human click to land. An agent asked for more after its
@@ -172,27 +241,36 @@ export function HandoffActions({
   // An agent that kept committing after its PR merged or closed is past that PR: its newer work
   // is offered a pull request of its own, as work with no PR is, below.
   if (handoff.pr && !handoff.movedPastPr) {
-    if (handoff.pr.state !== 'OPEN' || handoff.merged) return null
-    const prHead = handoff.pr.headRefOid
+    if (handoff.pr.state !== 'OPEN' || handoff.merged || armed) return null
+    const pr = handoff.pr
+    const prHead = pr.headRefOid
     if (!handoff.pushed && handoff.commits.slice(1).some(commit => commit.sha === prHead)) {
       return (
         <>
           <Reason>not in the PR yet</Reason>
-          <Button size="xs" variant="ghost" className={NEXT_STEP} disabled={busy} onClick={push}>
-            {pending === 'push' ? 'Updating PR…' : 'Update PR'}
+          <Button size="sm" className={NEXT_STEP} {...step} onClick={push}>
+            <Steady words={['Update PR', 'Updating PR…']} now={pending === 'push' ? 1 : 0} />
           </Button>
         </>
       )
     }
     return (
       <Button
-        size="xs"
-        variant="ghost"
+        size="sm"
         className={NEXT_STEP}
-        disabled={busy}
-        onClick={() => act('merge', () => sendMerge(projectId, agentId), 'Could not merge the pull request.')}
+        {...step}
+        title={`Merges PR #${pr.number} now, or once its checks pass`}
+        onClick={() =>
+          press(
+            'merge',
+            () => sendMerge(projectId, agentId),
+            'Could not merge the pull request.',
+            done => (done.merge === 'merged' ? { pr: { ...pr, state: 'MERGED' } } : undefined),
+            done => ({ text: done.merge === 'merged' ? `Merged PR #${pr.number}.` : `PR #${pr.number} merges when its checks pass.` }),
+          )
+        }
       >
-        {pending === 'merge' ? 'Merging…' : 'Merge PR'}
+        <Steady words={['Merge PR', 'Merging…']} now={pending === 'merge' ? 1 : 0} />
       </Button>
     )
   }
@@ -216,13 +294,12 @@ export function HandoffActions({
       <>
         <Reason>Not in {mainBranchName(handoff.base)} yet.</Reason>
         <Button
-          size="xs"
-          variant="ghost"
+          size="sm"
           className={NEXT_STEP}
-          disabled={busy}
-          onClick={() => act('merge-branch', () => sendMergeBranch(projectId, agentId), 'Could not merge the branch.')}
+          {...step}
+          onClick={() => press('merge-branch', () => sendMergeBranch(projectId, agentId), 'Could not merge the branch.')}
         >
-          {pending === 'merge-branch' ? 'Merging…' : 'Merge'}
+          <Steady words={['Merge', 'Merging…']} now={pending === 'merge-branch' ? 1 : 0} />
         </Button>
       </>
     )
@@ -230,11 +307,11 @@ export function HandoffActions({
   // No git host package (#1820): nothing opens a pull request for this project, so the last step is
   // the push, and a pushed branch is where the handoff ends.
   if (!handoff.gitHost) {
-    if (handoff.pushed) return <Reason>Pushed — no git host package to open a pull request with.</Reason>
+    if (handoff.pushed) return null
     return (
       <>
-        <Button size="xs" variant="ghost" className={NEXT_STEP} disabled={busy} onClick={push}>
-          {pending === 'push' ? 'Publishing…' : 'Publish branch'}
+        <Button size="sm" className={NEXT_STEP} {...step} onClick={push}>
+          <Steady words={['Publish branch', 'Publishing…']} now={pending === 'push' ? 1 : 0} />
         </Button>
       </>
     )
@@ -242,29 +319,38 @@ export function HandoffActions({
   // A split button: "Open PR" names the outcome and pushes the branch on the way, and the arrow
   // beside it holds the other choices: a draft pull request, and the push alone, for work that
   // should reach the remote with no pull request yet (gone once the branch is pushed).
-  const openPr = (draft: boolean) => act('pr', () => sendOpenPullRequest(projectId, agentId, { draft }), 'Could not open the pull request.')
+  const openPr = (draft: boolean) =>
+    press(
+      'pr',
+      () => sendOpenPullRequest(projectId, agentId, { draft }),
+      'Could not open the pull request.',
+      opened => (opened.number !== undefined && opened.url !== undefined ? { pushed: true, pr: { number: opened.number, url: opened.url, state: 'OPEN', title: '' } } : undefined),
+      // The bar names the pull request from here on.
+      opened => (opened.number !== undefined ? { text: `Opened ${draft ? 'draft ' : ''}PR #${opened.number}.`, shown: false } : undefined),
+    )
   return (
     <>
       {handoff.carries && <Carries carries={handoff.carries} />}
-      <span className="inline-flex">
+      <ButtonGroup>
         <Button
-          size="xs"
-          variant="ghost"
-          className={cn(NEXT_STEP, 'rounded-r-none pr-1.5')}
-          disabled={busy}
+          size="sm"
+          className={cn(NEXT_STEP, 'pr-1.5!')}
+          {...step}
+          title={`${handoff.pushed ? 'Opens' : 'Pushes the branch and opens'} a pull request for ${handoff.branch}`}
           onClick={() => openPr(false)}
         >
-          {pending === 'pr' ? 'Opening PR…' : pending === 'push' ? 'Publishing…' : 'Open PR'}
+          <Steady words={['Open PR', 'Opening PR…', 'Publishing…']} now={pending === 'pr' ? 1 : pending === 'push' ? 2 : 0} />
         </Button>
+        <ButtonGroupSeparator className="bg-primary-foreground/30 opacity-100" />
         <DropdownMenu>
             <DropdownMenuTrigger
               type="button"
               aria-label="Other choices"
-              disabled={busy}
+              {...step}
               className={cn(
-                buttonVariants({ size: 'xs', variant: 'ghost' }),
+                buttonVariants({ size: 'sm' }),
                 NEXT_STEP,
-                'rounded-l-none px-1 text-muted-foreground data-[popup-open]:bg-[var(--color-accent)] data-[popup-open]:text-[var(--color-accent-foreground)]',
+                'px-1 data-[popup-open]:bg-primary-active',
               )}
             >
               <ChevronDown className="h-3.5 w-3.5" />
@@ -282,7 +368,7 @@ export function HandoffActions({
               )}
             </DropdownMenuContent>
           </DropdownMenu>
-      </span>
+      </ButtonGroup>
     </>
   )
 }
@@ -331,12 +417,30 @@ function namePending(paths: string[]): string {
   return rest > 0 ? `${shown} and ${rest} more` : shown
 }
 
-/** Why there is nothing to press. Reads as part of the bar, not as an error. */
-function Reason({ children, title }: { children: ReactNode; title?: string }) {
+/**
+ * A press's word (`words[now]`) in the room its widest word takes, so the bar does not move as the
+ * press turns into what it is doing. The other words stand invisible in the same place, as
+ * generated text the page's text and a screen reader leave out.
+ */
+function Steady({ words, now }: { words: readonly string[]; now: number }) {
+  const [first, second] = words.filter((_, at) => at !== now)
+  return (
+    <span
+      data-also={first}
+      data-also-too={second ?? ''}
+      className="inline-grid whitespace-nowrap *:col-start-1 *:row-start-1 before:invisible before:col-start-1 before:row-start-1 before:h-0 before:content-[attr(data-also)] after:invisible after:col-start-1 after:row-start-1 after:h-0 after:content-[attr(data-also-too)]"
+    >
+      <span>{words[now]}</span>
+    </span>
+  )
+}
+
+/** Why there is nothing to press. Reads as part of the bar, not as an error. `hidden`: said to a screen reader elsewhere. */
+function Reason({ children, title, hidden = false }: { children: ReactNode; title?: string; hidden?: boolean }) {
   // Capped and truncated: the bar's actions never shrink, so a long file name must ellipsize here
   // rather than push the row wide.
   return (
-    <span className="inline-block max-w-[24rem] truncate align-middle text-xs text-muted-foreground" {...(title ? { title } : {})}>
+    <span className="inline-block max-w-[24rem] truncate align-middle text-xs text-muted-foreground" {...(title ? { title } : {})} {...(hidden ? { 'aria-hidden': true } : {})}>
       {children}
     </span>
   )

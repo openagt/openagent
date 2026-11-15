@@ -8,9 +8,6 @@ import { PassThrough, Readable } from 'node:stream'
 import type { SpawnLike, SpawnedProcess } from '@openagt/agent-driver'
 import { accountHome, codexAccountsDir, codexWho, codexWindows, loginCodex, readCodexUsage } from './codex-accounts.js'
 
-const HOUR = 60 * 60_000
-const NOW = Date.parse('2026-10-22T12:00:00Z')
-
 async function inDir(body: (dir: string) => Promise<void>): Promise<void> {
   const dir = await mkdtemp(join(tmpdir(), 'codex-accounts-'))
   try {

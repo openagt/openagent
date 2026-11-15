@@ -1,18 +1,27 @@
 import { execFile, spawn } from 'node:child_process'
 import { access, constants } from 'node:fs/promises'
 import { delimiter, join } from 'node:path'
+import type { AdminStep, InstallIO } from './platform.js'
 
-/** Run a command to its end; rejects with what it said when it fails. `interactive` gives it this terminal, for a password. */
-export function run(command: string, args: string[], opts: { interactive?: boolean } = {}): Promise<void> {
-  if (opts.interactive) {
-    return new Promise((resolvePromise, rejectPromise) => {
-      spawn(command, args, { stdio: 'inherit' })
-        .on('error', rejectPromise)
-        .on('exit', code => (code === 0 ? resolvePromise() : rejectPromise(new Error(`${command} ended with ${code}`))))
-    })
-  }
+/** Run a command to its end; rejects with what it said when it fails. */
+export function run(command: string, args: string[]): Promise<void> {
   return new Promise((resolvePromise, rejectPromise) => {
     execFile(command, args, (error, _stdout, stderr) => (error ? rejectPromise(new Error(String(stderr).trim() || error.message)) : resolvePromise()))
+  })
+}
+
+/**
+ * Runs `step` as the administrator, in this terminal, which asks for the password. sudo ends with
+ * the same code for a refused password as for a step that failed, and has said which above.
+ */
+export function asAdmin(step: AdminStep, io: InstallIO): Promise<void> {
+  io.out(`◆ ${step.says}`)
+  return new Promise((resolvePromise, rejectPromise) => {
+    spawn('sudo', ['/bin/sh', '-c', step.script], { stdio: 'inherit' })
+      .on('error', rejectPromise)
+      .on('exit', code =>
+        code === 0 ? resolvePromise() : rejectPromise(new Error('sudo did not take the password, or a step it ran failed; it says which above. Run this again to try once more.')),
+      )
   })
 }
 

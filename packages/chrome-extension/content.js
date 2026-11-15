@@ -47,16 +47,41 @@ function sessionIdFromUrl() {
   return match ? match[1] : undefined
 }
 
+/** This extension's version, which tells a stale script from a current one; `?` with no extension runtime, as in check.mjs. */
+function extensionVersion() {
+  return typeof chrome !== 'undefined' && chrome.runtime?.getManifest ? chrome.runtime.getManifest().version : '?'
+}
+
+/** Whether there is a worker to send to: an extension runtime, which check.mjs's jsdom lacks. */
+function hasWorker() {
+  return typeof chrome !== 'undefined' && Boolean(chrome.runtime?.sendMessage)
+}
+
 /**
- * Hand a found question to the service worker, which owns the token and the fetch.
- *
- * Guarded on `chrome` existing so the offline harness (check.mjs) can run this file in jsdom,
- * where there is no extension runtime. Failures are swallowed: a page that cannot reach the
- * daemon must still show its panel rather than throw inside a DOM observer.
+ * Hand `message` to the service worker, the only part that talks to the daemon; `onReply(reply,
+ * error)` hears its answer, or why there is none. Nothing is sent where there is no worker, and a
+ * send that throws (the worker asleep, a context an extension reload invalidated) is an error
+ * handed to `onReply`: a page that cannot reach the daemon must still show its panel rather than
+ * throw inside a DOM observer.
  */
+function toWorker(message, onReply = () => {}) {
+  if (!hasWorker()) return
+  try {
+    chrome.runtime.sendMessage(message, reply => {
+      // Read in every reply, or Chrome logs the error as unchecked.
+      const failed = chrome.runtime.lastError
+      if (failed) onReply(undefined, failed.message ?? 'worker unreachable')
+      else onReply(reply, undefined)
+    })
+  } catch (err) {
+    onReply(undefined, String(err?.message ?? err))
+  }
+}
+
 /** What the daemon last said about our report, so the panel can say why nothing arrived. */
 let bridgeStatus = 'not sent yet'
 
+/** Hand a found question to the service worker, which owns the token and the fetch. */
 function reportToDaemon(parsed) {
   const sessionId = sessionIdFromUrl()
   if (!sessionId) return
@@ -85,23 +110,15 @@ function reportToDaemon(parsed) {
   if (!question.title || !question.options.length) return
   // Offline (check.mjs, no extension runtime): expose what would have been posted, so the
   // harness can pin the shape the daemon receives, not just the panel's summary of it.
-  if (typeof chrome === 'undefined') {
-    window.__oaBridgeQuestion = question
-    return
-  }
-  if (!chrome.runtime?.sendMessage) return
-  try {
-    chrome.runtime.sendMessage({ type: 'oa-question', question }, reply => {
-      // Silence here was the first thing to go wrong live: the worker answered "no token set"
-      // and nobody ever saw it, so a configured-looking extension simply did nothing.
-      if (chrome.runtime.lastError) bridgeStatus = chrome.runtime.lastError.message ?? 'worker unreachable'
-      else if (!reply) bridgeStatus = 'no reply from the worker'
-      else if (reply.ok) bridgeStatus = reply.skipped ? `sent (${reply.skipped})` : 'sent'
-      else bridgeStatus = reply.error ?? 'failed'
-    })
-  } catch (err) {
-    bridgeStatus = String(err?.message ?? err)
-  }
+  if (typeof chrome === 'undefined') window.__oaBridgeQuestion = question
+  toWorker({ type: 'oa-question', question }, (reply, error) => {
+    // Silence here was the first thing to go wrong live: the worker answered "no token set"
+    // and nobody ever saw it, so a configured-looking extension simply did nothing.
+    if (error !== undefined) bridgeStatus = error
+    else if (!reply) bridgeStatus = 'no reply from the worker'
+    else if (reply.ok) bridgeStatus = reply.skipped ? `sent (${reply.skipped})` : 'sent'
+    else bridgeStatus = reply.error ?? 'failed'
+  })
 }
 
 /**
@@ -175,17 +192,11 @@ function cleanText(text) {
  * last scrape found.
  */
 function sayHello(sessionId, note) {
-  if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return
-  const version = chrome.runtime.getManifest?.().version ?? '?'
-  try {
-    chrome.runtime.sendMessage({ type: 'oa-hello', sessionId, version, note }, reply => {
-      // The worker's reply says whether this tab is the Driver (#1332): the overlay goes up
-      // the moment the page loads, not when the first cycle reaches it.
-      if (!chrome.runtime.lastError && reply?.driver) setDriver(true)
-    })
-  } catch {
-    // Nothing to do; the next pass tries again.
-  }
+  toWorker({ type: 'oa-hello', sessionId, version: extensionVersion(), note }, reply => {
+    // The worker's reply says whether this tab is the Driver (#1332): the overlay goes up
+    // the moment the page loads, not when the first cycle reaches it.
+    if (reply?.driver) becomeDriver()
+  })
 }
 
 /**
@@ -209,29 +220,22 @@ function reportTranscript() {
   }
   const kinds = [...new Set(rows.map(row => row.getAttribute('data-perf-row') ?? '?'))].join(',')
   sayHello(sessionId, `rows ${rows.length} (${kinds}), turns ${blocks.length}, ${transcriptStatus}`)
-  if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return
+  if (!hasWorker()) return
   const events = blocks.filter(event => sentEvents.get(`${sessionId}#${event.seq}`) !== event.text)
   if (!events.length) {
     transcriptStatus = `${blocks.length} turn(s), unchanged`
     return
   }
-  try {
-    chrome.runtime.sendMessage({ type: 'oa-events', sessionId, events }, reply => {
-      if (chrome.runtime.lastError) {
-        transcriptStatus = chrome.runtime.lastError.message ?? 'worker unreachable'
-        return
-      }
-      // Only remember what the daemon actually took, so a rejected batch is retried.
-      if (reply?.ok) {
-        for (const event of events) sentEvents.set(`${sessionId}#${event.seq}`, event.text)
-        transcriptStatus = `sent ${events.length} of ${blocks.length} turn(s)`
-      } else {
-        transcriptStatus = reply?.error ?? 'failed'
-      }
-    })
-  } catch {
-    // Worker asleep or context invalidated; the next mutation retries.
-  }
+  toWorker({ type: 'oa-events', sessionId, events }, (reply, error) => {
+    // Only remember what the daemon actually took, so a rejected batch is retried by the next
+    // page change.
+    if (reply?.ok) {
+      for (const event of events) sentEvents.set(`${sessionId}#${event.seq}`, event.text)
+      transcriptStatus = `sent ${events.length} of ${blocks.length} turn(s)`
+    } else {
+      transcriptStatus = error ?? reply?.error ?? 'failed'
+    }
+  })
 }
 
 /** Every element matching a selector, including inside open shadow roots. */
@@ -263,6 +267,19 @@ function deepText() {
     if (host.shadowRoot) text += `\n${host.shadowRoot.textContent ?? ''}`
   }
   return text
+}
+
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
+
+/** Wait for `read` to return something truthy, or give up. */
+async function waitFor(read, timeoutMs, stepMs = 150) {
+  const deadline = Date.now() + timeoutMs
+  for (;;) {
+    const value = read()
+    if (value) return value
+    if (Date.now() >= deadline) return undefined
+    await sleep(stepMs)
+  }
 }
 
 /**
@@ -310,22 +327,18 @@ function inFirstMessage(el, first) {
   return false
 }
 
-/** Every JSON object carrying `options` in the text, in the order they appear. */
-function extractChoices(text, stats) {
-  const found = []
-  collectChoices(text, stats, found)
-  return found
-}
-
 /**
- * Brace-match every `options` object out of arbitrary surrounding text.
+ * Every JSON object carrying `options` in the text, in the order they appear, brace-matched out of
+ * whatever surrounds them. `stats`, when given, counts the candidates and those that did not
+ * parse, and keeps the last one's error.
  *
  * Round 2 reached the text but could not read it, because matching on the fixed prefixes
  * `{"title"` and `{\n  "title"` guesses at an indentation nobody promised, and the block
  * arrives with prose around it. Strings and escapes are tracked so a brace inside a label
  * cannot close the object early.
  */
-function collectChoices(text, stats, found) {
+function extractChoices(text, stats) {
+  const found = []
   if (!text.includes('"options"')) return found
   for (let i = 0; i < text.length; i++) {
     if (text[i] !== '{') continue
@@ -361,7 +374,7 @@ function collectChoices(text, stats, found) {
               // Keep scanning past this object: the spec comes first and the real question
               // after it, so the last one is the one that matters.
               i = j
-            } else if (stats) stats.parsedWithoutOptions++
+            }
           } catch (err) {
             // Not this one, or still streaming. Record why, so a failing report says whether
             // the block was never found or found and unparseable.
@@ -451,7 +464,7 @@ function findPendingChoice() {
   return found ?? undefined
 }
 
-/** The box an answer would be typed into, if this ever becomes two-way. */
+/** The box an answer is typed into. */
 function findComposer() {
   const editable = deepQueryAll('div[contenteditable="true"]')[0]
   if (editable) return { via: 'contenteditable', el: editable }
@@ -468,7 +481,7 @@ function fillComposer(composer, text) {
   if (composer.via === 'textarea') {
     composer.el.value = text
     composer.el.dispatchEvent(new Event('input', { bubbles: true }))
-    return true
+    return
   }
   composer.el.focus()
   let inserted = false
@@ -483,7 +496,6 @@ function fillComposer(composer, text) {
     composer.el.textContent = text
     composer.el.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text }))
   }
-  return true
 }
 
 /** The button that sends the composer, wherever the page keeps it this week. */
@@ -495,10 +507,26 @@ function findSendButton() {
   return labelled.at(-1) ?? deepQueryAll('button[type="submit"]').at(-1)
 }
 
+/** Type `text` into the composer and send it: with the send button, or Enter on a page that shows none. Says which. */
+async function submitComposer(composer, text) {
+  fillComposer(composer, text)
+  // Let the editor's own event handling settle before submitting, or the click sends nothing.
+  await sleep(400)
+  const button = findSendButton()
+  if (button) {
+    button.click()
+    return 'button'
+  }
+  for (const type of ['keydown', 'keyup']) {
+    composer.el.dispatchEvent(new KeyboardEvent(type, { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }))
+  }
+  return 'enter'
+}
+
 /**
  * Type the dashboard's pick into the composer and submit it (#1237).
  *
- * This is the one place the extension acts rather than observes, so it reports exactly what it
+ * Here the extension speaks for the user rather than observing, so it reports exactly what it
  * did: which fill path, and whether the send was a button click or an Enter fallback. The text
  * only ever comes from the daemon, which only accepts a label of the parked question, so what
  * can be typed here is bounded by what the session itself offered.
@@ -507,32 +535,14 @@ async function deliverAnswer(text) {
   // Wait for the composer rather than failing on its absence: the first live delivery landed
   // right after a tab revive, and claude.ai takes well over the naive 5 seconds to render, so
   // "no composer on the page" mostly means "not yet". The harness shortens the wait.
-  const deadline = Date.now() + (window.__oaComposerWaitMs ?? 20000)
-  let composer = findComposer()
-  while (!composer && Date.now() < deadline) {
-    await new Promise(resolve => setTimeout(resolve, 500))
-    composer = findComposer()
-  }
+  const composer = await waitFor(findComposer, window.__oaComposerWaitMs ?? 20000, 500)
   if (!composer) {
     answerStatus = 'failed: no composer on the page'
     return { ok: false, note: 'no composer on the page' }
   }
-  fillComposer(composer, text)
-  // Let the editor's own event handling settle before submitting, or the click sends nothing.
-  await new Promise(resolve => setTimeout(resolve, 400))
-  const button = findSendButton()
-  if (button) {
-    button.click()
-    answerStatus = `sent via ${composer.via} + button`
-    return { ok: true, note: `filled ${composer.via}, clicked send button` }
-  }
-  for (const type of ['keydown', 'keyup']) {
-    composer.el.dispatchEvent(
-      new KeyboardEvent(type, { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }),
-    )
-  }
-  answerStatus = `sent via ${composer.via} + enter`
-  return { ok: true, note: `filled ${composer.via}, no send button, sent Enter` }
+  const sent = await submitComposer(composer, text)
+  answerStatus = `sent via ${composer.via} + ${sent}`
+  return { ok: true, note: sent === 'button' ? `filled ${composer.via}, clicked send button` : `filled ${composer.via}, no send button, sent Enter` }
 }
 
 // ---------------------------------------------------------------------------
@@ -588,6 +598,9 @@ function chips() {
   return deepQueryAll('button[role="combobox"]').filter(usable).map(el => ({ el, via: 'combobox', text: controlText(el) }))
 }
 
+/** What the chips read, for a note that says what the page showed. */
+const chipTexts = () => JSON.stringify(chips().map(c => c.text))
+
 /** The entries an open picker currently offers — visible options only, the closed ones stay in the DOM. */
 function menuEntries() {
   return deepQueryAll('[role="option"]')
@@ -607,17 +620,6 @@ function typeInto(input, text) {
   if (setter) setter.call(input, text)
   else input.value = text
   input.dispatchEvent(new Event('input', { bubbles: true }))
-}
-
-/** Wait for `read` to return something truthy, or give up. */
-async function waitFor(read, timeoutMs, stepMs = 150) {
-  const deadline = Date.now() + timeoutMs
-  for (;;) {
-    const value = read()
-    if (value) return value
-    if (Date.now() >= deadline) return undefined
-    await new Promise(resolve => setTimeout(resolve, stepMs))
-  }
 }
 
 /** How long to wait for a picker to render its entries, and for the chips to settle. */
@@ -657,7 +659,7 @@ async function chooseFrom(trigger, wanted, hint) {
   }
   if (!hit) {
     const seen = entries()
-    const diag = `search ${search ? `"${search.placeholder}"` : 'none'}, ${seen.length} visible of ${deepQueryAll('[role="option"]').length} options${seen.length ? `: ${seen.slice(0, 5).map(e => JSON.stringify(e.text.slice(0, 40))).join(', ')}` : ''}; chips ${JSON.stringify(chips().map(c => c.text))}`
+    const diag = `search ${search ? `"${search.placeholder}"` : 'none'}, ${seen.length} visible of ${deepQueryAll('[role="option"]').length} options${seen.length ? `: ${seen.slice(0, 5).map(e => JSON.stringify(e.text.slice(0, 40))).join(', ')}` : ''}; chips ${chipTexts()}`
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
     return { ok: false, note: `${hint}: the list offered no "${wanted[0]}" (${diag})` }
   }
@@ -783,13 +785,14 @@ async function createSession({ repo, branch, prompt, model }) {
 
   const bare = String(repo).split('/').pop() ?? repo
   const repoWanted = [String(repo).toLowerCase(), bare.toLowerCase()]
+  const readsRepo = () => (repoWanted.includes(chips()[0]?.text.toLowerCase()) ? chips()[0] : undefined)
   const selectRepo = () => menuTriggers().find(t => /select repo|add repo|choose repo/i.test(t.text) || /select repo|choose repo/i.test(t.el.getAttribute('aria-label') ?? ''))
   // The chips render a beat after the composer: wait for either a chip or the bare picker.
   await waitFor(() => chips().some(c => c.text) || selectRepo(), MENU_WAIT_MS)
-  await new Promise(resolve => setTimeout(resolve, window.__oaMenuSettleMs ?? 800))
+  await sleep(window.__oaMenuSettleMs ?? 800)
 
   let repoNote
-  if (repoWanted.includes(chips()[0]?.text.toLowerCase())) {
+  if (readsRepo()) {
     repoNote = `repo already ${chips()[0].text}`
   } else {
     // A remembered other repository's chip is the picker; with nothing remembered, the page offers one.
@@ -798,20 +801,19 @@ async function createSession({ repo, branch, prompt, model }) {
     let pick = await chooseFrom(trigger, repoWanted, 'repo')
     if (!pick.ok) {
       // The page may have finished loading its remembered repository under us: read again once.
-      await new Promise(resolve => setTimeout(resolve, 1500))
-      if (repoWanted.includes(chips()[0]?.text.toLowerCase())) pick = { ok: true, note: `repo already ${chips()[0].text} (after a late render)` }
+      await sleep(1500)
+      if (readsRepo()) pick = { ok: true, note: `repo already ${chips()[0].text} (after a late render)` }
       else return pick
     }
     repoNote = pick.note
-    const chip = await waitFor(() => (repoWanted.includes(chips()[0]?.text.toLowerCase()) ? chips()[0] : undefined), MENU_WAIT_MS)
-    if (!chip) return { ok: false, note: `${repoNote}, but the repo chip does not read "${repo}" afterwards (chips: ${JSON.stringify(chips().map(c => c.text))})` }
+    if (!(await waitFor(readsRepo, MENU_WAIT_MS))) return { ok: false, note: `${repoNote}, but the repo chip does not read "${repo}" afterwards (chips: ${chipTexts()})` }
   }
 
   // The branch chip appears beside the repo chip once a repository is chosen, reading the default branch.
   const branchWanted = [String(branch).toLowerCase()]
   const readsBranch = () => (chips()[1]?.text.toLowerCase() === branchWanted[0] ? chips()[1] : undefined)
   let branchChip = await waitFor(() => (chips()[1]?.text ? chips()[1] : undefined), MENU_WAIT_MS)
-  if (!branchChip) return { ok: false, note: `${repoNote}; no branch chip appeared beside the repo (chips: ${JSON.stringify(chips().map(c => c.text))})` }
+  if (!branchChip) return { ok: false, note: `${repoNote}; no branch chip appeared beside the repo (chips: ${chipTexts()})` }
   let branchNote
   if (readsBranch()) {
     branchNote = `branch already ${branchChip.text}`
@@ -820,7 +822,7 @@ async function createSession({ repo, branch, prompt, model }) {
     if (!pick.ok) return { ok: false, note: `${repoNote}; ${pick.note}` }
     branchNote = pick.note
     branchChip = await waitFor(readsBranch, MENU_WAIT_MS)
-    if (!branchChip) return { ok: false, note: `${repoNote}; ${branchNote}, but the branch chip does not read "${branch}" — not sending (chips: ${JSON.stringify(chips().map(c => c.text))})` }
+    if (!branchChip) return { ok: false, note: `${repoNote}; ${branchNote}, but the branch chip does not read "${branch}" — not sending (chips: ${chipTexts()})` }
   }
 
   // The model picker remembers the last pick too, so it is read before it is opened.
@@ -845,20 +847,11 @@ async function createSession({ repo, branch, prompt, model }) {
     }
   }
 
-  fillComposer(composer, prompt)
-  await new Promise(resolve => setTimeout(resolve, 400))
-  const button = findSendButton()
-  if (button) button.click()
-  else {
-    for (const type of ['keydown', 'keyup']) {
-      composer.el.dispatchEvent(new KeyboardEvent(type, { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }))
-    }
-  }
-
+  const sent = await submitComposer(composer, prompt)
   const sessionId = await waitFor(sessionIdFromUrl, window.__oaSessionWaitMs ?? 60000, 500)
   const notes = [repoNote, branchNote, ...(modelNote ? [modelNote] : [])].join('; ')
   if (!sessionId) return { ok: false, note: `sent, but the page never became a session URL (${notes})` }
-  return { ok: true, sessionId, note: `${notes}; sent via ${button ? 'button' : 'enter'}` }
+  return { ok: true, sessionId, note: `${notes}; sent via ${sent}` }
 }
 
 
@@ -921,8 +914,9 @@ async function whileFree(work) {
   }
 }
 
-function setDriver(on) {
-  if (!on || isDriver) return
+/** This tab is the Driver from now on: its overlay goes up, once. */
+function becomeDriver() {
+  if (isDriver) return
   isDriver = true
   ensureOverlay()
   driverLog(`driver armed on ${location.pathname}`)
@@ -937,12 +931,7 @@ function driverLog(line) {
   driverLines.push(stamped)
   if (driverLines.length > LOG_LINES) driverLines.shift()
   renderOverlay()
-  if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return
-  try {
-    chrome.runtime.sendMessage({ type: 'oa-driver-log', line: stamped }, () => void chrome.runtime.lastError)
-  } catch {
-    // Dead context; the log still renders.
-  }
+  toWorker({ type: 'oa-driver-log', line: stamped })
 }
 
 /** What the list's status icon says about a session row. */
@@ -1059,7 +1048,7 @@ async function visitSession(visit) {
   // The address changes before the page does: wait for turn rows that are not the previous
   // session's, so what is surveyed and typed into is this session's page.
   await waitFor(() => turnRows().some(r => !stale.has(r)), ROWS_WAIT_MS)
-  await new Promise(resolve => setTimeout(resolve, window.__oaSettleMs ?? 1500))
+  await sleep(window.__oaSettleMs ?? 1500)
   const found = findPendingChoice()
   const result = { id: visit.id, ok: true, rows: turnRows().length, ...(found ? { question: String(found.parsed.title ?? '').slice(0, 100) } : {}) }
   if (visit.answer) {
@@ -1087,14 +1076,14 @@ async function visitSession(visit) {
  * new-session page is where a cycle starts — then the visits, then home.
  */
 async function drive({ visits = [], start }) {
-  setDriver(true)
+  becomeDriver()
   driverLog(`cycle: ${start ? 'one session to create, ' : ''}${visits.length} visit(s)`)
   let started
   if (start) {
     const wasHome = atHome()
     const there = wasHome || (await goHome())
     // A navigation home swaps the page under us a beat after the address changes.
-    if (there && !wasHome) await new Promise(resolve => setTimeout(resolve, window.__oaSettleMs ?? 1500))
+    if (there && !wasHome) await sleep(window.__oaSettleMs ?? 1500)
     started = there ? await createSession(start) : { ok: false, note: 'could not reach the new-session page' }
     driverLog(`create: ${started.ok ? started.sessionId : started.note}`)
   }
@@ -1118,10 +1107,10 @@ async function drive({ visits = [], start }) {
 }
 
 /**
- * The full-page overlay: this tab is not for people. Appended beside the app's root rather than
- * inside it, so an in-app navigation leaves it alone; the watcher re-appends it if anything does
- * remove it. Typing goes through the composer's own value and the send button's click, not
- * through the pointer, so covering the composer costs nothing.
+ * The full-page overlay, up and current in the Driver tab: this tab is not for people. Appended
+ * beside the app's root rather than inside it, so an in-app navigation leaves it alone; the
+ * watcher re-appends it if anything does remove it. Typing goes through the composer's own value
+ * and the send button's click, not through the pointer, so covering the composer costs nothing.
  */
 function ensureOverlay() {
   if (!isDriver) return
@@ -1129,7 +1118,12 @@ function ensureOverlay() {
   // browser is signed in exactly there, once), so the overlay stands aside on them and comes back
   // with the next page.
   if (signInPage()) return removeOverlay()
-  if (document.getElementById(OVERLAY_ID)) return
+  if (!document.getElementById(OVERLAY_ID)) ownWrites(() => document.documentElement.appendChild(overlayElement()))
+  renderOverlay()
+}
+
+/** The overlay's elements, with an empty status line and log for {@link renderOverlay} to fill. */
+function overlayElement() {
   const overlay = document.createElement('div')
   overlay.id = OVERLAY_ID
   overlay.style.cssText = [
@@ -1157,17 +1151,15 @@ function ensureOverlay() {
   log.style.cssText = 'max-height:50vh;overflow:auto;background:#1f2430;padding:12px;border-radius:8px;font:12px/1.45 ui-monospace,monospace;white-space:pre-wrap;margin:8px 0 0'
   details.append(summary, log)
   overlay.append(heading, phrase, status, details)
-  ownWrites(() => document.documentElement.appendChild(overlay))
-  renderOverlay()
+  return overlay
 }
 
 function renderOverlay() {
   if (signInPage()) return removeOverlay()
   const overlay = document.getElementById(OVERLAY_ID)
   if (!overlay) return
-  const version = typeof chrome !== 'undefined' && chrome.runtime?.getManifest ? chrome.runtime.getManifest().version : '?'
   ownWrites(() => {
-    overlay.querySelector('.oa-driver-status').textContent = `bridge v${version} · ${location.pathname} · ${turnRows().length} turn rows · question ${bridgeStatus} · transcript ${transcriptStatus}`
+    overlay.querySelector('.oa-driver-status').textContent = `bridge v${extensionVersion()} · ${location.pathname} · ${turnRows().length} turn rows · question ${bridgeStatus} · transcript ${transcriptStatus}`
     overlay.querySelector('.oa-driver-log').textContent = driverLines.join('\n')
   })
 }
@@ -1177,7 +1169,7 @@ function renderOverlay() {
 if (IS_TOP && typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message?.type === 'oa-read-list' && Array.isArray(message.ids)) {
-      setDriver(true)
+      becomeDriver()
       void whileFree(() => readSessionList(message.ids.filter(id => typeof id === 'string')))
         .then(sendResponse)
         .catch(err => sendResponse({ ok: false, note: String(err?.message ?? err) }))
@@ -1223,7 +1215,7 @@ function diagnostics() {
   const deep = deepText()
   // Did the brace matcher find object-shaped candidates, and did any fail to parse? This is
   // what separates "never found it" from "found it and could not read it".
-  const stats = { candidates: 0, parseErrors: 0, parsedWithoutOptions: 0, lastError: '' }
+  const stats = { candidates: 0, parseErrors: 0, lastError: '' }
   const all = extractChoices(deep, stats)
   return {
     frame: IS_TOP ? 'top' : 'child',
@@ -1333,7 +1325,6 @@ if (!IS_TOP) {
     if (isDriver) {
       panel.style.display = 'none'
       ensureOverlay()
-      renderOverlay()
       return
     }
     panel.style.display = ''
@@ -1345,8 +1336,7 @@ if (!IS_TOP) {
     const head = document.createElement('div')
     head.style.cssText = `display:flex;align-items:center;gap:8px${collapsed ? '' : ';margin-bottom:6px'}`
     const title = document.createElement('span')
-    const version = typeof chrome !== 'undefined' && chrome.runtime?.getManifest ? chrome.runtime.getManifest().version : '?'
-    const fullTitle = `OpenAgent bridge v${version}`
+    const fullTitle = `OpenAgent bridge v${extensionVersion()}`
     // Folded, the label shrinks to "OA": the fold exists to give the corner back, so the full
     // name and version retreat to the tooltip.
     title.textContent = collapsed ? 'OA' : fullTitle
@@ -1414,19 +1404,11 @@ if (!IS_TOP) {
     panel.appendChild(button('Copy report', () => {
       void navigator.clipboard.writeText(JSON.stringify(latest, null, 2))
     }))
-    // Fills without submitting, on purpose: it proves the write path exists without the
-    // extension ever speaking for the user.
+    // Fills without submitting, on purpose: it proves the write path an answer takes, without
+    // the extension ever speaking for the user.
     panel.appendChild(button('Fill composer (does not send)', () => {
       const composer = findComposer()
-      if (!composer) return
-      const text = winner.choiceOptions?.[0] ?? 'test'
-      if (composer.via === 'textarea') {
-        composer.el.value = text
-        composer.el.dispatchEvent(new Event('input', { bubbles: true }))
-      } else {
-        composer.el.focus()
-        document.execCommand('insertText', false, text)
-      }
+      if (composer) fillComposer(composer, winner.choiceOptions?.[0] ?? 'test')
     }))
   })
 

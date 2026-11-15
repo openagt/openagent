@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { forgetRemembered } from '../lib/use-async.js'
 import { openMenu } from '../test-utils.js'
 import { takePendingDraft } from '../lib/draft-handoff.js'
@@ -36,7 +36,7 @@ const onMachineLogins = vi.hoisted(() => vi.fn())
 vi.mock('../rpc/machines.js', () => ({ onMachineStartCheck, onMachineLogins }))
 // The agents as read, and the menu as a press that picks the second one.
 const agentsList = vi.hoisted(() => ({ agents: [{ id: 'default', name: 'Default', skills: ['ask', 'github'], accounts: {}, projectSkills: true }, { id: 'reviewer', name: 'Reviewer', skills: ['ask'], accounts: { github: 'octo-agent' }, projectSkills: false }] }))
-vi.mock('./AgentsPage.js', () => ({ useAgents: () => ({ view: agentsList, reload: async () => {} }) }))
+vi.mock('./AgentsPage.js', () => ({ useAgentsList: () => ({ view: agentsList, reload: async () => {} }) }))
 vi.mock('./AgentMenu.js', () => ({
   AgentMenu: ({ picked, onPick }: { picked: string | undefined; onPick: (id: string) => void }) => (
     <button type="button" onClick={() => onPick('reviewer')}>{`agent:${picked ?? ''}`}</button>
@@ -57,9 +57,14 @@ vi.mock('./GitHosts.js', () => ({
 }))
 const serverLogins = vi.hoisted(() => ({ onServerLogins: vi.fn(), sendUseLoginsOn: vi.fn(), sendAllowLogins: vi.fn(), sendSettleLogin: vi.fn() }))
 vi.mock('../rpc/server-logins.js', () => serverLogins)
+const sendOpenInApp = vi.hoisted(() => vi.fn())
+vi.mock('../rpc/control.js', () => ({ sendOpenInApp }))
 const openSettings = vi.hoisted(() => vi.fn())
-const openPermissions = vi.hoisted(() => vi.fn())
-vi.mock('../lib/use-route.js', async () => ({ ...(await vi.importActual<typeof import('../lib/use-route.js')>('../lib/use-route.js')), openSettings, openPermissions }))
+const openPage = vi.hoisted(() => vi.fn())
+vi.mock('../lib/host-services.js', async importOriginal => {
+  const actual = await importOriginal<typeof import('../lib/host-services.js')>()
+  return { ...actual, INERT_HOST_SERVICES: { ...actual.INERT_HOST_SERVICES, openSettings, openPage } }
+})
 
 const start = vi.hoisted(() => vi.fn())
 // What the start says of itself beside its answer: that the machine is cloning the project, or why there is no run.
@@ -73,13 +78,14 @@ vi.mock('../lib/use-start-agent.js', async () => ({
 // The Composer is exercised by its own tests; here it hands back a typed submit, shows whether
 // the form lets it submit at all, and renders the launcher's controls.
 const composerProps = vi.hoisted(() => ({ current: {} as Record<string, unknown> }))
+const composerFocus = vi.hoisted(() => vi.fn())
 vi.mock('./Composer.js', async () => {
   const { forwardRef, useImperativeHandle } = await import('react')
   const Composer = forwardRef((props: any, ref: any) => {
     composerProps.current = props
     useImperativeHandle(ref, () => ({
       clear: () => {},
-      focus: () => {},
+      focus: composerFocus,
     }))
     return (
       <>
@@ -114,6 +120,7 @@ afterEach(() => {
   cleanup()
   forgetRemembered()
   start.mockReset()
+  composerFocus.mockReset()
   startSays.cloning = false
   startSays.error = null
   onCommands.mockReset()
@@ -134,9 +141,9 @@ const COMMANDS = [{ name: 'work-queue', description: 'Work the agent queue' }]
 const noop = () => {}
 
 /** The launcher's "Auto" menu button; its text says the publish pick. */
-const autoMenu = () => screen.getByRole('button', { name: 'Auto' })
+const autoMenu = () => screen.getByRole('button', { name: /^Auto: / })
 /** The labels of the publish options the open "Auto" menu lists. */
-const publishOptions = () => screen.getAllByRole('menuitem').map(item => item.querySelector('span > span')!.textContent)
+const publishOptions = () => screen.getAllByRole('menuitemradio').map(item => item.querySelector('span > span')!.textContent)
 /** The launcher's "start from" chip, when there is one. */
 const LOCAL = { kind: 'local' } as const
 const startFromChip = () => screen.queryByRole('combobox', { name: 'The agent starts from' })
@@ -175,6 +182,64 @@ describe('StartAgentForm (#1774)', () => {
     await waitFor(() => expect(screen.queryByRole('status')).toBeNull())
   })
 
+  test('a loaded prompt is said above the box, over the page, so the box does not move', async () => {
+    onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: true })
+    render(<StartAgentForm {...props} />)
+    act(() => (composerProps.current.onPreset as (label: string, replaced: boolean) => void)('footer', false))
+    expect(screen.getByRole('status').textContent).toBe('footer loaded — review or edit, then Start')
+    expect(screen.getByRole('status').parentElement!.className).toContain('bottom-full')
+  })
+
+  test('a start refused in a moment is not preceded by a flash of "Starting session"', async () => {
+    onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: true })
+    let answer!: (result: undefined) => void
+    start.mockReturnValue(new Promise(resolve => (answer = resolve)))
+    render(<StartAgentForm {...props} />)
+    fireEvent.click(screen.getByText('submit-typed'))
+    await act(async () => {})
+    expect(screen.queryByText('Starting session')).toBeNull()
+    await act(async () => answer(undefined))
+    expect(screen.queryByText('Starting session')).toBeNull()
+  })
+
+  test('a refused start gives the prompt the focus, however Start was pressed: typing goes on in it', async () => {
+    onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: true })
+    start.mockResolvedValue(undefined)
+    render(<StartAgentForm {...props} />)
+    fireEvent.click(screen.getByText('submit-typed'))
+    await waitFor(() => expect(composerFocus).toHaveBeenCalledTimes(1))
+  })
+
+  test("a start this computer's start line refused offers to open the project in the editor, and says whether it opened", async () => {
+    onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: true })
+    startSays.error = "This project's start line, in .openagent/hooks.yml, failed. It said: “the project has no such command”"
+    sendOpenInApp.mockResolvedValueOnce({ ok: false, error: '"code" was not found on PATH' }).mockResolvedValueOnce({ ok: true })
+    render(<StartAgentForm {...props} />)
+    const refusal = screen.getByRole('alert')
+    fireEvent.click(within(refusal).getByRole('button', { name: 'Open in your editor' }))
+    await waitFor(() => expect(within(refusal).getByRole('status').textContent).toBe('Your editor did not open: "code" was not found on PATH'))
+    expect(sendOpenInApp).toHaveBeenCalledWith('p1', 'editor')
+    fireEvent.click(within(refusal).getByRole('button', { name: 'Open in your editor' }))
+    await waitFor(() => expect(within(refusal).getByRole('status').textContent).toBe('Opened in your editor.'))
+    cleanup()
+    // A refusal that is not about the project's hooks.yml offers no editor.
+    startSays.error = 'shop could not be cloned on Studio. Studio says: This computer has no login that can read github.com/acme/shop.'
+    render(<StartAgentForm {...props} />)
+    await screen.findByRole('alert')
+    expect(screen.queryByRole('button', { name: 'Open in your editor' })).toBeNull()
+  })
+
+  test('the prompt takes the caret when the launcher opens, except on a phone, where the keyboard would rise over the page', () => {
+    onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: true })
+    render(<StartAgentForm {...props} />)
+    expect(composerProps.current.autoFocus).toBe(true)
+    cleanup()
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: true, media: query, addEventListener: () => {}, removeEventListener: () => {} }))
+    render(<StartAgentForm {...props} />)
+    expect(composerProps.current.autoFocus).toBe(false)
+    vi.unstubAllGlobals()
+  })
+
   test("while this computer clones another computer's project for the run, the form says so, naming this computer", async () => {
     onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: true, address: 'github.com/acme/shop' })
     start.mockReturnValue(new Promise(() => {}))
@@ -209,10 +274,12 @@ describe('StartAgentForm (#1774)', () => {
     render(<StartAgentForm {...props} />)
     const alert = await screen.findByRole('alert')
     expect(alert.textContent).toBe(startSays.error)
-    for (const part of ['border-danger/30', 'var(--color-danger)_8%,var(--color-background)']) expect(alert.className).toContain(part)
+    // Said wrong by its tint and its mark; the words in the text's own colour, which reads on the tint.
+    expect(alert.className).toContain('var(--color-danger)_8%,var(--color-background)')
+    expect(alert.className).toContain('text-foreground')
+    expect(alert.querySelector('svg')!.getAttribute('class')).toContain('text-danger')
     const title = within(alert).getByText('shop could not be cloned on Studio.')
     expect(title.className).toContain('text-sm')
-    expect(title.className).toContain('text-danger')
     expect(within(alert).getByText('Studio says: This computer has no login that can read github.com/acme/shop.').className).toContain('text-xs')
     expect(alert.parentElement!.className).toContain('bottom-full')
   })
@@ -237,7 +304,7 @@ describe('StartAgentForm (#1774)', () => {
 
     await openMenu(autoMenu())
     expect(publishOptions()).toEqual(['Off', 'Commit', 'Publish branch', 'Open PR', 'Merge on green'])
-    fireEvent.click(screen.getByRole('menuitem', { name: /^Open PR/ }))
+    fireEvent.click(screen.getByRole('menuitemradio', { name: /^Open PR/ }))
     expect(updatePreferences).toHaveBeenCalledWith({ publish: 'pr' })
 
     cleanup()
@@ -306,7 +373,7 @@ describe('StartAgentForm (#1774)', () => {
       expect((await sent()).prBase).toBe('feature-x')
       start.mockClear()
       await openMenu(autoMenu())
-      fireEvent.click(screen.getByRole('menuitem', { name: 'main' }))
+      fireEvent.click(screen.getByRole('menuitemradio', { name: 'main' }))
       await waitFor(() => expect(autoMenu().textContent).toBe('Auto: Open PR → main'))
       expect((await sent()).prBase).toBeUndefined()
     })
@@ -467,13 +534,9 @@ describe('StartAgentForm (#1774)', () => {
     await waitFor(() => expect(screen.getAllByRole('alert')).toHaveLength(2))
     expect(onStartCheck).toHaveBeenCalledWith('p1', 'codex')
     const [problem, warning] = screen.getAllByRole('alert')
-    // What the line puts in backticks is code, as the chat draws it, not the backticks themselves.
-    expect(problem!.textContent).toBe('codex is not logged in. Run codex login, then start again.')
-    expect(within(problem!).getByText((_, element) => element?.tagName === 'P' && element.textContent === 'codex is not logged in.').className).toContain('text-danger')
-    expect(within(problem!).getByText('codex login').tagName).toBe('CODE')
-    expect(warning!.className).toContain('text-warning')
-    expect(warning!.textContent).toBe('gh is not logged in.')
-    expect(within(warning!).getByText('gh').tagName).toBe('CODE')
+    expect(problem!.textContent).toBe('`codex` is not logged in. Run `codex login`, then start again.')
+    expect(problem!.querySelector('svg')!.getAttribute('class')).toContain('text-danger')
+    expect(warning!.querySelector('svg')!.getAttribute('class')).toContain('text-warning')
     expect((screen.getByText('submit-typed') as HTMLButtonElement).disabled).toBe(false)
     // Above the box, over the page: the box does not move when they come.
     expect(problem!.parentElement!.className).toContain('bottom-full')
@@ -496,7 +559,7 @@ describe('StartAgentForm (#1774)', () => {
     expect(refusal!.contains(press)).toBe(true)
     expect(other!.textContent).toBe('something else')
     // This computer's own login press is no fix for the machine.
-    expect(screen.queryByRole('button', { name: 'Log in to Claude Code' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Log this computer in to Claude Code' })).toBeNull()
     fireEvent.click(press)
     await waitFor(() => expect(serverLogins.sendUseLoginsOn).toHaveBeenCalledWith('d1'))
   })
@@ -568,7 +631,7 @@ describe('StartAgentForm (#1774)', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Open Accounts' }))
     expect(screen.getByRole('alert').textContent).toContain('Codex is not logged in on Dani\'s PC.')
     expect(onMachineStartCheck).toHaveBeenCalledWith('p1', 'd2', 'codex')
-    expect(openPermissions).toHaveBeenCalled()
+    expect(openPage).toHaveBeenCalledWith('permissions')
   })
 
   test('a machine without the picked agent says so in words naming it, and the press opens its page, where an update brings it', async () => {
@@ -600,7 +663,7 @@ describe('StartAgentForm (#1774)', () => {
       return { ok: true }
     })
     render(<StartAgentForm {...props} />)
-    const press = await screen.findByRole('button', { name: 'Log in to Claude Code' })
+    const press = await screen.findByRole('button', { name: 'Log this computer in to Claude Code' })
     // The press is inside the red line, which says it in the agent's own words.
     const refusal = screen.getByRole('alert')
     expect(refusal.contains(press)).toBe(true)
@@ -739,6 +802,22 @@ describe('StartAgentForm (#1774)', () => {
     await waitFor(() => expect(start).toHaveBeenCalledWith('p1', 'do the thing', { base: 'refs/remotes/origin/feature-x' }))
     // The waiting commands are read for that pick.
     expect(onCommands).toHaveBeenCalledWith('p1', { kind: 'published', branch: 'feature-x' })
+  })
+
+  test('typing after a failed start drops the red line, unless it is about the project\'s start line, which no prompt changes', () => {
+    onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: true })
+    startReset.mockClear()
+    startSays.error = 'Could not start: the prompt is empty.'
+    const { unmount } = render(<StartAgentForm {...props} />)
+    act(() => (composerProps.current.onPromptChange as (value: string) => void)('a'))
+    expect(startReset).toHaveBeenCalledTimes(1)
+    unmount()
+    startReset.mockClear()
+    startSays.error = "This project's start line, in .openagent/hooks.yml, failed. It said: “the project has no such command”"
+    render(<StartAgentForm {...props} />)
+    act(() => (composerProps.current.onPromptChange as (value: string) => void)('a'))
+    expect(startReset).not.toHaveBeenCalled()
+    startSays.error = null
   })
 
   test('picking another branch drops the red line a Start left about the last one', async () => {

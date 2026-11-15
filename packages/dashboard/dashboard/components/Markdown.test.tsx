@@ -24,6 +24,11 @@ describe('Markdown tables (#869)', () => {
     render(<Markdown text={'| a | b |\n| --- | --- |\n| only |'} />)
     expect(screen.getAllByRole('cell')).toHaveLength(2)
   })
+
+  test("a reply's table being written fades its words in with the rest of the message", () => {
+    render(<Markdown text={'| col a | col b |\n| --- | --- |\n| one | two |'} fade />)
+    expect(screen.getByRole('cell', { name: 'two' }).querySelector('.word-in')?.textContent).toBe('two')
+  })
 })
 
 describe('Markdown links (#948)', () => {
@@ -74,7 +79,7 @@ describe('Markdown compact', () => {
     expect(screen.getByText('Section').className).toContain('text-sm')
     unmount()
     render(<Markdown text={'# Section'} />)
-    expect(screen.getByText('Section').className).toContain('text-[17px]')
+    expect(screen.getByText('Section').className).toContain('text-base')
   })
 
   test("in a reply, headings are medium, not bold, and a nested bullet list is circles; a done task is struck through", () => {
@@ -156,7 +161,7 @@ describe('Markdown lists', () => {
     expect(document.querySelector('pre')!.textContent).toBe(' same\n-old\n+new')
   })
 
-  test('a code block is a card with no strip naming its language, its lines wrapped, and a copy button that takes the code', async () => {
+  test('a code block is a card with no strip naming its language, its lines wrapped, and a copy button that takes the code and says so to a screen reader', async () => {
     const written: string[] = []
     Object.assign(navigator, { clipboard: { writeText: (text: string) => { written.push(text); return Promise.resolve() } } })
     render(<Markdown text={'```bash\nnpm test\n```'} />)
@@ -164,6 +169,19 @@ describe('Markdown lists', () => {
     expect(document.querySelector('pre')!.className).toContain('whitespace-pre-wrap')
     fireEvent.click(screen.getByRole('button', { name: 'Copy the code' }))
     await waitFor(() => expect(written).toEqual(['npm test']))
+    expect(screen.getByRole('button', { name: 'Copied' })).toBeTruthy()
+  })
+
+  test('in a dashboard page a document keeps the page\'s font, its headings under the page\'s title, its code wrapped; a file keeps its own look', () => {
+    render(<Markdown text={'## Plan\n\n```css\nfooter { position: fixed; }\n```'} page />)
+    expect(document.querySelector('[data-markdown]')!.className).not.toContain('font-serif')
+    expect(screen.getByRole('heading', { name: 'Plan' }).className).toContain('text-base')
+    expect(screen.getByText('css')).toBeTruthy()
+    expect(document.querySelector('pre')!.className).toContain('whitespace-pre-wrap')
+    cleanup()
+    render(<Markdown text={'## Plan\n\n```css\nfooter { position: fixed; }\n```'} document />)
+    expect(document.querySelector('[data-markdown]')!.className).toContain('font-serif')
+    expect(document.querySelector('pre')!.className).not.toContain('whitespace-pre-wrap')
   })
 
   test('a closing fence written at the left edge leaves the code as it is under a well-closed one', () => {

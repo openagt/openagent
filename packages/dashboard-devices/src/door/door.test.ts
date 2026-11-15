@@ -2,7 +2,8 @@ import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { DEVICE_COOKIE, ENTER_PATH, ME_CODE_PATH, ME_LINE_PATH, ME_PATH, ME_REMOVE_PATH, TOO_MANY_TRIES, openDoor, readBearer, readEntry, type Door, type DoorOptions } from './door.js'
+import { DEVICE_COOKIE, TOO_MANY_TRIES, openDoor, readBearer, readEntry, type Door, type DoorOptions } from './door.js'
+import { ENTER_PATH, ME_CODE_PATH, ME_LINE_PATH, ME_PATH, ME_REMOVE_PATH } from './paths.js'
 import { COMPUTER_HEADER, COMPUTER_NAME_HEADER, OWNERS_NAME_HEADER, PERSON_HEADER, addCode, addPerson, enter, nameOwner, readStore, removeDevice, sha256, update, type Entry } from './store.js'
 import { testHome } from './test-home.js'
 
@@ -75,7 +76,7 @@ test('a device that is not in gets the page that says how to get in, and nothing
   try {
     const page = await fetch(`${r.at}/settings`, { headers: { accept: 'text/html' } })
     assert.equal(page.status, 401)
-    assert.match(await page.text(), /This device is not in[\s\S]*On the computer that runs OpenAgent, open Settings › Devices › Add device › Phone or tablet, and scan the code/)
+    assert.match(await page.text(), /This device is not in[\s\S]*On the computer that runs OpenAgent, open Settings › Devices, press Add a phone \(or Add device › Phone or tablet\), and scan the code/)
     const call = await fetch(`${r.at}/_rpc/onProjects`, { method: 'POST', body: '[]' })
     assert.equal(call.status, 401)
     const wrongKey = await fetch(`${r.at}/`, { headers: { cookie: `${DEVICE_COOKIE}=nobody.nothing` } })

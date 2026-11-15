@@ -2,8 +2,9 @@ import { readFile, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { nodeGitRunner, type GitRunner, excludeFromGit } from '@openagt/agent-data'
-import { nodeLinkFs, type LinkFs } from './worktree-deps.js'
+import { nodeLinkFs } from './worktree-deps.js'
 import { entryExists, linkPackage, packageLinkPaths, type PackageLink } from './command-link.js'
+import { CLI_BIN_DIR } from './bin-dir.js'
 
 /**
  * The skill, where the agent's harness looks for one (#1739). A harness discovers skills under a
@@ -42,8 +43,11 @@ export interface SkillLink {
   package?: PackageLink
 }
 
-/** This package's own skill, as a {@link SkillLink}. */
-export const OWN_SKILL: SkillLink = { name: SKILL_NAME, dir: SKILL_DIR }
+/**
+ * This package's own skill, as a {@link SkillLink}, with its command: the skill's text runs
+ * `npx @openagt/skill-branches@0.1`, which finds this copy linked in the checkout (`command-link.ts`).
+ */
+export const OWN_SKILL: SkillLink = { name: SKILL_NAME, dir: SKILL_DIR, package: { name: '@openagt/skill-branches', dir: SKILL_DIR, bins: { branches: join(CLI_BIN_DIR, 'branches') } } }
 
 /**
  * Link the skill into `checkout` for every harness — this package's own, plus whatever `skills`
@@ -53,29 +57,8 @@ export const OWN_SKILL: SkillLink = { name: SKILL_NAME, dir: SKILL_DIR }
  * hidden, a link of this package's that points nowhere is made again, and a link that cannot be
  * made is a worse run, not a failed one.
  */
-export async function linkSkill(
-  repo: string,
-  checkout: string,
-  fs: LinkFs = nodeLinkFs(),
-  git: GitRunner = nodeGitRunner(),
-  skills: readonly SkillLink[] = [],
-): Promise<void> {
-  for (const skill of [OWN_SKILL, ...skills]) {
-    for (const dir of HARNESS_SKILL_DIRS) {
-      const rel = `${dir}/${skill.name}`
-      try {
-        const path = join(checkout, rel)
-        // The project's own copy, tracked or not, stays, and is not hidden: that would hide what a person adds there.
-        if (await entryExists(path)) continue
-        await fs.mkdir(join(checkout, dir))
-        await hideLink(repo, checkout, dir, skill.name, git).catch(() => {})
-        await fs.symlinkDir(skill.dir, path)
-      } catch {
-        // A filesystem that refuses the link: the agent still starts, without the skill.
-      }
-    }
-    if (skill.package) await linkPackage(repo, checkout, skill.package, git)
-  }
+export async function linkSkill(repo: string, checkout: string, skills: readonly SkillLink[] = [], git: GitRunner = nodeGitRunner()): Promise<void> {
+  await linkSkills(repo, checkout, [OWN_SKILL, ...skills], git, (dir, name) => hideLink(repo, checkout, dir, name, git))
 }
 
 /**
@@ -83,19 +66,27 @@ export async function linkSkill(
  * no git. The same links a checkout gets for each harness and each skill's package, without this
  * package's own skill, which is about branches, and with nothing to hide from a git that is not there.
  */
-export async function linkSkillsInFolder(folder: string, skills: readonly SkillLink[], fs: LinkFs = nodeLinkFs(), git: GitRunner = nodeGitRunner()): Promise<void> {
+export async function linkSkillsInFolder(folder: string, skills: readonly SkillLink[], git: GitRunner = nodeGitRunner()): Promise<void> {
+  await linkSkills(folder, folder, skills, git)
+}
+
+/** Each of `skills` linked under `root` for every harness, each link hidden by `hide` when there is one, then the skill's package. */
+async function linkSkills(repo: string, root: string, skills: readonly SkillLink[], git: GitRunner, hide?: (dir: string, name: string) => Promise<void>): Promise<void> {
+  const fs = nodeLinkFs()
   for (const skill of skills) {
     for (const dir of HARNESS_SKILL_DIRS) {
-      const path = join(folder, dir, skill.name)
       try {
+        const path = join(root, dir, skill.name)
+        // The project's own copy, tracked or not, stays, and is not hidden: that would hide what a person adds there.
         if (await entryExists(path)) continue
-        await fs.mkdir(join(folder, dir))
+        await fs.mkdir(join(root, dir))
+        await hide?.(dir, skill.name).catch(() => {})
         await fs.symlinkDir(skill.dir, path)
       } catch {
         // A filesystem that refuses the link: the agent still starts, without the skill.
       }
     }
-    if (skill.package) await linkPackage(folder, folder, skill.package, git)
+    if (skill.package) await linkPackage(repo, root, skill.package, git)
   }
 }
 

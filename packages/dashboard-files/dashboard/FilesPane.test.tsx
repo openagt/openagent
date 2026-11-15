@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { forgetRemembered } from '@openagt/dashboard/module'
-import { renderWithHost as render } from './test-host.js'
+import { fakeHost, renderWithHost } from '@openagt/dashboard/module/testing'
+
+/** Render `ui` as the dashboard draws the module, in a host whose every service is a spy; the module's own reads are mocked, so the host's `read` never answers. */
+const render = (ui: Parameters<typeof renderWithHost>[0]) => renderWithHost(ui, fakeHost('@openagt/dashboard-files'))
 
 const readProject = vi.fn(async () => [] as unknown)
 const readTree = vi.fn(async () => ({ source: 'checkout', files: [] }) as unknown)
@@ -72,7 +75,7 @@ describe('the Files pane’s reads (#815)', () => {
     first.unmount()
     readTree.mockReturnValue(new Promise(() => {}) as never)
     render(<FilesPane projectId="p1" agentId="run-1" context={context()} />)
-    expect(screen.queryByText('Looking for this run’s files…')).toBeNull()
+    expect(document.querySelector('[aria-busy]')).toBeNull()
     expect(screen.getByText('notes.md')).toBeTruthy()
   })
 
@@ -85,7 +88,7 @@ describe('the Files pane’s reads (#815)', () => {
 
   test('no file is marked changed, and a run’s tree says where it was read from', async () => {
     render(<FilesPane projectId="p1" agentId="run-1" context={context()} />)
-    await waitFor(() => expect(screen.getByText('From the run’s checkout')).toBeTruthy())
+    await waitFor(() => expect(screen.getByText('From the session’s checkout')).toBeTruthy())
     expect(fileRow('README.md').textContent).toBe('README.md')
   })
 
@@ -101,7 +104,7 @@ describe('the Files pane’s reads (#815)', () => {
   test('a run that changed nothing shows the project’s files, and says so in the caption', async () => {
     readTree.mockResolvedValue({ source: 'unchanged', files })
     render(<FilesPane projectId="p1" agentId="run-1" context={context()} />)
-    await waitFor(() => expect(screen.getByText('This run changed no files')).toBeTruthy())
+    await waitFor(() => expect(screen.getByText('This session changed no files')).toBeTruthy())
     expect(screen.getByText('README.md')).toBeTruthy()
     expect(screen.queryByText(/gone from this machine/)).toBeNull()
   })
@@ -109,7 +112,7 @@ describe('the Files pane’s reads (#815)', () => {
   test('a run that is starting says so, and is read again within seconds until its checkout is there', async () => {
     readTree.mockResolvedValue({ source: 'pending' })
     render(<FilesPane projectId="p1" agentId="run-1" context={context()} />)
-    await waitFor(() => expect(screen.getByText('Looking for this run’s files…')).toBeTruthy())
+    expect(await screen.findByText('Loading…')).toBeTruthy()
     readTree.mockResolvedValue({ source: 'checkout', files: ['made-by-run.ts'] })
     // Well before the 8s poll: the starting run's own, sooner read.
     await waitFor(() => expect(screen.getByText('made-by-run.ts')).toBeTruthy(), { timeout: 3_000 })
@@ -141,13 +144,13 @@ describe('the Files pane’s reads (#815)', () => {
     await waitFor(() => expect(readTree.mock.calls.length).toBeGreaterThan(1))
     await new Promise(resolve => setTimeout(resolve, 400))
     expect(screen.getByText('hello.txt')).toBeTruthy()
-    expect(screen.queryByText('Looking for this run’s files…')).toBeNull()
+    expect(document.querySelector('[aria-busy]')).toBeNull()
   })
 
   test('a run whose files are gone says so, instead of showing the project’s own', async () => {
     readTree.mockResolvedValue({ source: 'gone' })
     render(<FilesPane projectId="p1" agentId="run-1" context={context()} />)
-    await waitFor(() => expect(screen.getByText(/This run’s files are gone from this machine/)).toBeTruthy())
+    await waitFor(() => expect(screen.getByText(/This session’s files are gone from this machine/)).toBeTruthy())
     expect(screen.queryByText('README.md')).toBeNull()
   })
 
@@ -215,10 +218,12 @@ describe('opening files, as Claude Code on the web does', () => {
   test('the button in the header hides the tree, and the file fills the pane', async () => {
     render(<FilesPane projectId="p1" context={context()} />)
     fireEvent.click(await screen.findByTitle('README.md'))
-    fireEvent.click(screen.getByLabelText('Hide the file tree'))
+    // One name, pressed while the tree shows.
+    const toggle = screen.getByRole('button', { name: 'File tree', pressed: true })
+    fireEvent.click(toggle)
     await waitFor(() => expect(screen.queryByLabelText('Filter files')).toBeNull())
     expect(screen.getByText('the text of README.md')).toBeTruthy()
-    fireEvent.click(screen.getByLabelText('Show the file tree'))
+    fireEvent.click(screen.getByRole('button', { name: 'File tree', pressed: false }))
     await waitFor(() => expect(screen.getByLabelText('Filter files')).toBeTruthy())
   })
 
@@ -258,6 +263,19 @@ describe('opening files, as Claude Code on the web does', () => {
     expect(tabs()).toEqual([])
   })
 
+  test('an ask already taken is not taken again by a pane opened later', async () => {
+    readTree.mockResolvedValue({ source: 'checkout', files: ['index.html'] })
+    const taken = { path: '/home/user/project/index.html', at: 3 }
+    const first = render(<FilesPane projectId="p1" agentId="run-1" context={context()} show={taken} />)
+    await waitFor(() => expect(tabs()).toEqual([['index.html', 'true', 'preview']]))
+    fireEvent.click(screen.getByRole('button', { name: 'Close index.html' }))
+    first.unmount()
+    render(<FilesPane projectId="p1" agentId="run-1" context={context()} show={taken} />)
+    await waitFor(() => expect(within(treeOf()).getByTitle('index.html')).toBeTruthy())
+    await new Promise(resolve => setTimeout(resolve, 20))
+    expect(tabs()).toEqual([])
+  })
+
   test('a right click on a file attaches it to the Context, and a file in it is ticked', async () => {
     const toggle = vi.fn()
     const { rerender } = render(<FilesPane projectId="p1" context={context([], toggle)} />)
@@ -290,7 +308,7 @@ describe('opening files, as Claude Code on the web does', () => {
     readContent.mockResolvedValue({ path: 'README.md', text: 'hello world', truncated: false, binary: false })
     render(<FilesPane projectId="p1" context={context()} />)
     fireEvent.click(await screen.findByTitle('README.md'))
-    fireEvent.click(screen.getByLabelText('Hide the file tree'))
+    fireEvent.click(screen.getByRole('button', { name: 'File tree', pressed: true }))
     await waitFor(() => expect(screen.queryByLabelText('Filter files')).toBeNull())
     fireEvent.click(screen.getByLabelText('Search files'))
     await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('Filter files')))
@@ -304,7 +322,7 @@ describe('opening files, as Claude Code on the web does', () => {
     fireEvent.click(await screen.findByTitle('README.md'))
     await screen.findByText('hello world')
     expect(screen.queryByLabelText('Filter files')).toBeNull()
-    fireEvent.click(screen.getByLabelText('Show the file tree'))
+    fireEvent.click(screen.getByRole('button', { name: 'File tree', pressed: false }))
     expect(screen.getByLabelText('Filter files')).toBeTruthy()
     expect(screen.queryByText('hello world')).toBeNull()
     fireEvent.click(screen.getAllByTitle('README.md').find(row => !row.closest('[role=tablist]'))!)
@@ -328,7 +346,7 @@ describe('opening files, as Claude Code on the web does', () => {
     vi.unstubAllGlobals()
     render(<FilesPane projectId="p1" context={context()} />)
     fireEvent.click(await screen.findByTitle('README.md'))
-    fireEvent.click(screen.getByLabelText('Hide the file tree'))
+    fireEvent.click(screen.getByRole('button', { name: 'File tree', pressed: true }))
     await waitFor(() => expect(screen.queryByLabelText('Filter files')).toBeNull())
     fireEvent.click(screen.getByRole('button', { name: 'Close README.md' }))
     expect(screen.getByLabelText('Filter files')).toBeTruthy()
@@ -390,7 +408,7 @@ describe('opening files, as Claude Code on the web does', () => {
     render(<FilesPane projectId="p1" context={context()} />)
     fireEvent.click(await screen.findByTitle('README.md'))
     await waitFor(() => expect(readContent).toHaveBeenCalled())
-    expect(screen.getByText('Reading the file…')).toBeTruthy()
+    expect(await screen.findByText('Loading…')).toBeTruthy()
   })
 
   test('a tab shown again shows its file at once, and a Markdown file shown as its source stays so', async () => {
@@ -403,7 +421,7 @@ describe('opening files, as Claude Code on the web does', () => {
     await waitFor(() => expect(screen.getByText('const a = 1')).toBeTruthy())
     readContent.mockReturnValue(new Promise(() => {}) as never)
     fireEvent.click(within(screen.getAllByRole('tab')[0]!).getByTitle('README.md'))
-    expect(screen.queryByText('Reading the file…')).toBeNull()
+    expect(document.querySelector('[aria-busy]')).toBeNull()
     expect(screen.getByText('# Hello')).toBeTruthy()
   })
 

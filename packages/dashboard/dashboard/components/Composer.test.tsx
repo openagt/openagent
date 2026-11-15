@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { createRef } from 'react'
 import type { Preferences } from '../../src/index.js'
 import { selectMachine } from '../lib/remote-target.js'
 import { hoverTooltip, openMenu } from '../test-utils.js'
@@ -58,6 +59,7 @@ vi.mock('./PromptEditor.js', async () => {
         put(text)
         return false
       },
+      append: (text: string) => put(held.trim() ? `${held}\n\n${text}` : text),
     }))
     const seeded = useRef(false)
     useEffect(() => {
@@ -67,7 +69,7 @@ vi.mock('./PromptEditor.js', async () => {
     }, [ready, props.initialText])
     return (
       <div>
-        <input aria-label="prompt" value={held} onChange={e => put(e.target.value)} disabled={props.disabled} />
+        <input aria-label="prompt" value={held} onChange={e => put(e.target.value)} disabled={props.disabled} data-seed-focus={String(props.initialFocus ?? true)} data-replaced={props.replacedText} data-label={props.label} />
         <button type="button" onClick={() => props.onSubmit()}>
           editor-submit
         </button>
@@ -84,6 +86,7 @@ vi.mock('./PromptEditor.js', async () => {
 const editorText = (): string => (screen.getByLabelText('prompt') as HTMLInputElement).value
 
 const { Composer } = await import('./Composer.js')
+type ComposerHandle = import('./Composer.js').ComposerHandle
 
 function renderComposer(over: Partial<Parameters<typeof Composer>[0]> = {}) {
   const onSubmit = vi.fn()
@@ -117,7 +120,7 @@ const STUDIO_MACHINE = { id: STUDIO, label: 'Studio', url: STUDIO }
 
 // The driver/model trigger names both in its own label (#1143): with no model pinned it is a logo
 // and a chevron, so the name cannot come from the rendered text the way it used to.
-const agentTrigger = () => screen.getByRole('button', { name: /^Driver: / })
+const agentTrigger = () => screen.getByRole('button', { name: /^Coding agent: / })
 
 describe('Composer (#721)', () => {
   test('renders the commands menu, the agent/model select, "Run on", and the submit button', async () => {
@@ -125,34 +128,30 @@ describe('Composer (#721)', () => {
     // Commands have a visible surface (#948): the `/` menu stays the fast path, the button is
     // the discoverable one.
     expect(screen.getByRole('button', { name: 'Commands' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Run on' })).toBeTruthy()
-    expect((await hoverTooltip(agentTrigger())).textContent).toContain('Driver: Claude Code')
+    expect(screen.getByRole('button', { name: /^Run on: / })).toBeTruthy()
+    expect((await hoverTooltip(agentTrigger())).textContent).toContain('Coding agent: Claude Code')
     // The submit button appears only once the prompt has text (#721).
     fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'x' } })
     expect(screen.getByRole('button', { name: /Start session/ })).toBeTruthy()
   })
 
-  test('compact (#723) keeps the agent/model + "Run on" controls (#755)', async () => {
-    const { onSubmit } = renderComposer({ compact: true, submitLabel: 'Start' })
-    // They used to be dropped here, which meant a navbar agent silently used the stored agent
-    // and model with nothing on screen saying which.
-    expect(screen.queryByRole('button', { name: 'Run on' })).not.toBeNull()
-    expect((await hoverTooltip(agentTrigger())).textContent).toContain('Driver: Claude Code')
-    // The editor + submit still work (so `/` `@` `#` triggers remain live in the editor).
-    fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'quick run' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Start' }))
-    expect(onSubmit).toHaveBeenCalledWith('quick run', { later: false })
-  })
-
-  test('showDriverModel={false} (#831) drops the agent/model select, keeping the rest of the row', () => {
-    const { onSubmit } = renderComposer({ showDriverModel: false })
+  test('in a session (#831) there is no agent/model select, and the rest of the row stays', () => {
+    const { onSubmit } = renderComposer({ inAgent: true })
     // An in-session composer: the session is bound to the agent it started with, so offering the
     // select there would only ever rewrite the next session's default.
-    expect(screen.queryByRole('button', { name: /^Driver: / })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Coding agent: / })).toBeNull()
     expect(screen.getByRole('button', { name: 'Commands' })).toBeTruthy()
     fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'follow-up' } })
     fireEvent.click(screen.getByRole('button', { name: 'Send' }))
     expect(onSubmit).toHaveBeenCalledWith('follow-up', { later: false })
+  })
+
+  test("a session's box is called a message's, the launcher's a prompt's", () => {
+    renderComposer({ inAgent: true })
+    expect(screen.getByLabelText('prompt').dataset['label']).toBe('Message')
+    cleanup()
+    renderComposer()
+    expect(screen.getByLabelText('prompt').dataset['label']).toBe('Prompt')
   })
 
   test('the submit button is hidden until the editor has text, then appears and fires onSubmit', () => {
@@ -175,6 +174,21 @@ describe('Composer (#721)', () => {
     await new Promise(resolve => setTimeout(resolve, 0))
     fireEvent.click(screen.getByText('editor-submit-later'))
     expect(onSubmit).toHaveBeenLastCalledWith('go', { later: true })
+  })
+
+  test('while OpenAgent is not answering, nothing is sent, by the button or by the keyboard, and the text stays', async () => {
+    const { DaemonDown } = await import('../lib/use-daemon-health.js')
+    const onSubmit = vi.fn()
+    render(
+      <DaemonDown.Provider value>
+        <Composer files={[]} onSubmit={onSubmit} busy={false} submitLabel="Send" submitBusyLabel="Sending…" />
+      </DaemonDown.Provider>,
+    )
+    fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'ship it' } })
+    expect(screen.getByRole('button', { name: 'Send' }).hasAttribute('disabled')).toBe(true)
+    fireEvent.click(screen.getByText('editor-submit'))
+    expect(onSubmit).not.toHaveBeenCalled()
+    expect(editorText()).toBe('ship it')
   })
 
   test('mirrors prompt changes out via onPromptChange', () => {
@@ -228,6 +242,89 @@ describe('Composer (#721)', () => {
     expect(editorText()).toBe(draft)
   })
 
+  test('what is typed is back when the box is drawn again, after a navigation or a reload, for that box alone, until it is sent', () => {
+    renderComposer({ draftKey: 'launcher:p1' })
+    fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'a long draft I care about' } })
+    cleanup()
+    renderComposer({ draftKey: 'p1:run-2' })
+    expect(editorText()).toBe('')
+    cleanup()
+    renderComposer({ draftKey: 'launcher:p1' })
+    expect(editorText()).toBe('a long draft I care about')
+    // Sent: the caller empties the box, and nothing is kept.
+    fireEvent.change(screen.getByLabelText('prompt'), { target: { value: '' } })
+    cleanup()
+    renderComposer({ draftKey: 'launcher:p1' })
+    expect(editorText()).toBe('')
+  })
+
+  test('a draft handed over to a box that kept one is loaded over it, said as a load over a draft, and the kept one is under it for an undo', () => {
+    const onPreset = vi.fn()
+    localStorage.setItem('oa.draft:launcher:p1', 'my own long draft')
+    sessionStorage.setItem('oa.pending-draft', 'carried from a ticket')
+    renderComposer({ draftKey: 'launcher:p1', onPreset })
+    expect(editorText()).toBe('carried from a ticket')
+    expect(screen.getByLabelText('prompt').getAttribute('data-replaced')).toBe('my own long draft')
+    expect(onPreset).toHaveBeenCalledWith('The prompt', true)
+    cleanup()
+    onPreset.mockReset()
+    // The same words handed over again replace nothing.
+    sessionStorage.setItem('oa.pending-draft', 'carried from a ticket')
+    renderComposer({ draftKey: 'launcher:p1', onPreset })
+    expect(screen.getByLabelText('prompt').getAttribute('data-replaced')).toBeNull()
+    expect(onPreset).not.toHaveBeenCalled()
+  })
+
+  test('on a phone a kept draft comes back without the caret, and one a press handed over takes it; elsewhere a kept draft takes it', () => {
+    const seedFocus = () => screen.getByLabelText('prompt').getAttribute('data-seed-focus')
+    localStorage.setItem('oa.draft:launcher:p1', 'a long draft I care about')
+    renderComposer({ draftKey: 'launcher:p1' })
+    expect(seedFocus()).toBe('true')
+    cleanup()
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: true, media: query, addEventListener: () => {}, removeEventListener: () => {} }))
+    try {
+      renderComposer({ draftKey: 'launcher:p1' })
+      expect(editorText()).toBe('a long draft I care about')
+      expect(seedFocus()).toBe('false')
+      cleanup()
+      sessionStorage.setItem('oa.pending-draft', 'carried from a ticket')
+      renderComposer({ draftKey: 'launcher:p1' })
+      expect(editorText()).toBe('carried from a ticket')
+      expect(seedFocus()).toBe('true')
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  test('words handed back go after what is typed in the box, and are kept with it', () => {
+    const box = createRef<ComposerHandle>()
+    const onSubmit = vi.fn()
+    render(<Composer ref={box} files={[]} onSubmit={onSubmit} busy={false} submitLabel="Send" submitBusyLabel="Sending…" inAgent draftKey="p1:run-2" />)
+    fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'a new thought' } })
+    act(() => box.current!.append('the words it never read'))
+    expect(localStorage.getItem('oa.draft:p1:run-2')).toBe('a new thought\n\nthe words it never read')
+    fireEvent.click(screen.getByText('editor-submit'))
+    expect(onSubmit).toHaveBeenCalledWith('a new thought\n\nthe words it never read', { later: false })
+  })
+
+  test('a browser that keeps nothing still has the draft in the box, and it is sent', () => {
+    const refuse = () => {
+      throw new DOMException('The storage is off', 'SecurityError')
+    }
+    const refused = (['getItem', 'setItem', 'removeItem'] as const).map(method => vi.spyOn(Storage.prototype, method).mockImplementation(refuse))
+    try {
+      const onPromptChange = vi.fn()
+      const { onSubmit } = renderComposer({ inAgent: true, draftKey: 'p1:run-2', onPromptChange })
+      fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'a draft with nowhere to go' } })
+      expect(editorText()).toBe('a draft with nowhere to go')
+      expect(onPromptChange).toHaveBeenLastCalledWith('a draft with nowhere to go')
+      fireEvent.click(screen.getByText('editor-submit'))
+      expect(onSubmit).toHaveBeenCalledWith('a draft with nowhere to go', { later: false })
+    } finally {
+      for (const spy of refused) spy.mockRestore()
+    }
+  })
+
   test('an in-session composer does not rehydrate a carried draft (#1066)', () => {
     sessionStorage.setItem('oa.pending-draft', 'not for here')
     renderComposer({ inAgent: true })
@@ -237,14 +334,14 @@ describe('Composer (#721)', () => {
 
   test('the row above the box: the launcher\'s, led by "Run on"; inside a session, the one it is given, in the same place, and no "Run on" of its own', () => {
     renderComposer({ startsAt: <span>the launcher's place</span> })
-    const box = () => screen.getByRole('button', { name: 'Commands' }).closest('.rounded-xl')!
+    const box = () => screen.getByRole('button', { name: 'Commands' }).closest('.items-end')!
     const followedByBox = (el: Element) => el.closest('.h-8')!.nextElementSibling === box()
     expect(followedByBox(screen.getByText("the launcher's place"))).toBe(true)
-    expect(followedByBox(screen.getByRole('button', { name: 'Run on' }))).toBe(true)
+    expect(followedByBox(screen.getByRole('button', { name: /^Run on: / }))).toBe(true)
     cleanup()
     renderComposer({ inAgent: true, sessionRow: <div className="h-8"><span>where it started</span></div> })
     expect(followedByBox(screen.getByText('where it started'))).toBe(true)
-    expect(screen.queryByRole('button', { name: 'Run on' })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Run on: / })).toBeNull()
   })
 
   // #1073: pressing Start on an offline "Run on" machine would silently attempt the ~15s relay, so
@@ -267,7 +364,7 @@ describe('Composer (#721)', () => {
     machinesRpc.onMachineModels.mockResolvedValueOnce({ 'claude-code': { models: [{ id: 'opus', name: 'Opus 5.5' }] }, codex: { models: [], error: '`codex` could not start: spawn codex ENOENT', missing: true } })
     renderComposer()
     await waitFor(() => expect(machinesRpc.onMachineModels).toHaveBeenCalledWith(STUDIO))
-    fireEvent.click(await screen.findByRole('button', { name: /^Driver: / }))
+    fireEvent.click(await screen.findByRole('button', { name: /^Coding agent: / }))
     fireEvent.click(await screen.findByText('Codex'))
     expect(await screen.findByText('Codex is not installed on Studio.')).toBeTruthy()
     expect(screen.queryByText(/ENOENT/)).toBeNull()
@@ -330,8 +427,14 @@ describe('Composer (#721)', () => {
   })
 })
 
-// The bordered box: the nearest element around the editor that draws the border.
+// The text's line of the box: the nearest element around the editor that keeps its ends at the last line.
 const box = (): HTMLElement => {
+  let el: HTMLElement = screen.getByLabelText('prompt')
+  while (!el.className.split(' ').includes('items-end')) el = el.parentElement!
+  return el
+}
+// The box's surface: the nearest element around the editor that draws the edge.
+const surface = (): HTMLElement => {
   let el: HTMLElement = screen.getByLabelText('prompt')
   while (!el.className.split(' ').includes('border')) el = el.parentElement!
   return el
@@ -339,13 +442,16 @@ const box = (): HTMLElement => {
 const commands = () => screen.getByRole('button', { name: 'Commands' })
 
 describe('the box', () => {
-  test('it holds the commands menu, the text and the submit: the model and "Run on" are outside it', () => {
+  test('its text\'s line holds the commands menu, the text and the submit; the model and "Run on" are on lines of their own, in the same surface', () => {
     renderComposer()
     fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'x' } })
     expect(box().contains(screen.getByRole('button', { name: 'Send' }))).toBe(true)
     expect(box().contains(commands())).toBe(true)
     expect(box().contains(agentTrigger())).toBe(false)
-    expect(box().contains(screen.getByRole('button', { name: 'Run on' }))).toBe(false)
+    expect(box().contains(screen.getByRole('button', { name: /^Run on: / }))).toBe(false)
+    // One object with one edge: the surface holds the row above, the text and the row under.
+    expect(surface().contains(agentTrigger())).toBe(true)
+    expect(surface().contains(screen.getByRole('button', { name: /^Run on: / }))).toBe(true)
   })
 
   test('the commands menu is at the left of the text, the submit at its right, both kept at its last line', () => {
@@ -363,7 +469,7 @@ describe('the box', () => {
   })
 })
 
-const runOn = () => screen.getByRole('button', { name: 'Run on' })
+const runOn = () => screen.getByRole('button', { name: /^Run on: / })
 
 describe('the rows around the box', () => {
   test('where the agent starts is a row above the box: "Run on", then the caller\'s words; under it, the caller\'s controls, then the caller\'s end controls and the model at the right', () => {
@@ -383,7 +489,7 @@ describe('the rows around the box', () => {
     expect(under.contains(control)).toBe(true)
     expect(under.contains(select)).toBe(true)
     expect(control.compareDocumentPosition(select) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(screen.getAllByRole('button', { name: 'Run on' })).toHaveLength(1)
+    expect(screen.getAllByRole('button', { name: /^Run on: / })).toHaveLength(1)
     // Said in words, drawn as every item of the rows is: no border of its own.
     expect(runOn().textContent).toBe('This machine')
     expect(runOn().className).not.toContain('border')
@@ -403,16 +509,16 @@ describe('the rows around the box', () => {
   })
 
   test('in a session the model is said in words where the select would be, and is no button', () => {
-    renderComposer({ inAgent: true, showDriverModel: false, sessionModel: 'Opus 5.5' })
+    renderComposer({ inAgent: true, sessionModel: 'Opus 5.5' })
     const row = box().nextElementSibling!
     const said = screen.getByText('Opus 5.5')
     expect(row.contains(said)).toBe(true)
     expect(said.closest('button')).toBeNull()
-    expect(screen.queryByRole('button', { name: /^Driver: / })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Coding agent: / })).toBeNull()
   })
 
   test('a session whose model is not known says none', () => {
-    renderComposer({ inAgent: true, showDriverModel: false })
+    renderComposer({ inAgent: true })
     expect(box().nextElementSibling!.textContent).toBe('')
   })
 
@@ -450,24 +556,17 @@ describe('the rows around the box', () => {
     await waitFor(() => expect(screen.getByText(/Studio is offline/)).toBeTruthy())
     expect(runOn().textContent).toBe('Studio')
   })
-
-  test('the compact form has no row: the caller\'s controls are not drawn and "Run on" stays an icon button in its one row', () => {
-    renderComposer({ compact: true, startsAt: <span>a-place</span>, controls: <span>a-control</span> })
-    expect(screen.queryByText('a-place')).toBeNull()
-    expect(screen.queryByText('a-control')).toBeNull()
-    expect(runOn().textContent).toBe('')
-  })
 })
 
 describe('in a session', () => {
   test('there is no "Run on" pick: a session already runs where it was started', () => {
     renderComposer({ inAgent: true })
-    expect(screen.queryByRole('button', { name: 'Run on' })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Run on: / })).toBeNull()
     expect(screen.getByRole('button', { name: 'Commands' })).toBeTruthy()
   })
 
   test('there is no row above the box: the box is the first thing the composer draws', () => {
-    renderComposer({ inAgent: true, showDriverModel: false })
+    renderComposer({ inAgent: true })
     expect(box().previousElementSibling).toBeNull()
   })
 })

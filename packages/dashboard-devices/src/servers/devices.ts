@@ -1,7 +1,8 @@
-import { lastLines, openSession, withAdvice, type Exec } from './ssh.js'
-import { PERSON_TIMEOUT_MS, SERVER_USER, devicesScript, ownerScript, removeDeviceScript, removePersonScript } from './steps.js'
-import { addressOf, isMachineUrl, type Server } from './store.js'
-import { nameOf } from '../door/store.js'
+import { lastLines, runOnce, withAdvice, type Exec } from './ssh.js'
+import { PERSON_TIMEOUT_MS, devicesScript, ownerScript, removeDeviceScript, removePersonScript } from './steps.js'
+import type { Server } from './store.js'
+import { addressOf, isLineUrl } from '../door/address.js'
+import { nameOf, notAName } from '../door/names.js'
 
 /**
  * The devices that are in on a server, as its door lists them: asked over SSH, so a person sees
@@ -84,14 +85,37 @@ function doorAddress(value: unknown): string | undefined {
   return typeof said === 'string' ? addressOf(said) : undefined
 }
 
-/** The devices and persons in what a door's `status` printed, with where the door is open, or `undefined` for what is no such answer. */
-export function devicesIn(out: string): { devices: ServerDevice[]; persons: ServerPerson[]; door?: DoorAddresses } | undefined {
-  let answer: Record<string, unknown> | null
+/** What a door's `status` printed, last in a script's output, as the object it is; `undefined` for what is none. */
+function statusIn(out: string): Record<string, unknown> | undefined {
   try {
-    answer = JSON.parse(out.trim().split('\n').at(-1) ?? '') as Record<string, unknown> | null
+    const said: unknown = JSON.parse(out.trim().split('\n').at(-1) ?? '')
+    return said && typeof said === 'object' && !Array.isArray(said) ? (said as Record<string, unknown>) : undefined
   } catch {
     return undefined
   }
+}
+
+/** A line a door keeps open to a server, as its `status` lists it. */
+export interface ListedLine {
+  /** What the server may do through it. */
+  mode: 'full' | 'watch'
+  /** The server said no to the key the line is asked for with. */
+  refused: boolean
+  /** The id the line has among the server's devices. */
+  id?: string
+}
+
+/** The line to the server at `url` in what a door's `status` printed, or `undefined` when it lists none there. */
+export function lineIn(out: string, url: string): ListedLine | undefined {
+  const lines = statusIn(out)?.lines
+  const line = Array.isArray(lines) ? (lines as unknown[]).find((candidate): candidate is Record<string, unknown> => !!candidate && typeof candidate === 'object' && (candidate as Record<string, unknown>).url === url) : undefined
+  if (!line || (line.mode !== 'full' && line.mode !== 'watch')) return undefined
+  return { mode: line.mode, refused: line.refused === true, ...(typeof line.id === 'string' && isDeviceId(line.id) ? { id: line.id } : {}) }
+}
+
+/** The devices and persons in what a door's `status` printed, with where the door is open, or `undefined` for what is no such answer. */
+export function devicesIn(out: string): { devices: ServerDevice[]; persons: ServerPerson[]; door?: DoorAddresses } | undefined {
+  const answer = statusIn(out)
   const listed = answer?.devices
   if (!Array.isArray(listed)) return undefined
   // The owner first and once, then each other person once: a door that says otherwise is read as having none.
@@ -107,7 +131,7 @@ export function devicesIn(out: string): { devices: ServerDevice[]; persons: Serv
     const said = typeof problem === 'string' ? problem.replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, ' ').trim().slice(0, 400) : ''
     if (!persons.length) persons.push({ name: known, owner: true })
     else if (owner !== true) {
-      const via = typeof from === 'string' && isMachineUrl(from) && from.startsWith('https://') ? from : undefined
+      const via = isLineUrl(from) ? from : undefined
       persons.push({ name: known, ...(working === true ? { working: true as const } : {}), ...(said ? { problem: said } : {}), ...(via !== undefined ? { from: via, ...(removed === true && kept !== true ? { removed: true as const } : {}), ...(kept === true ? { kept: true as const } : {}) } : {}) })
     }
   }
@@ -133,15 +157,10 @@ export function devicesIn(out: string): { devices: ServerDevice[]; persons: Serv
 }
 
 async function ask(server: Pick<Server, 'address' | 'user'>, script: string, opts: { exec?: Exec }, timeoutMs = DEVICES_TIMEOUT_MS): Promise<Devices> {
-  const session = await openSession(server, opts)
-  try {
-    const said = await session.run(SERVER_USER, script, timeoutMs)
-    if (said.code !== 0) return { ok: false, error: withAdvice(server, lastLines(said).slice(-MAX_SAID) || 'The server did not answer.') }
-    const listed = devicesIn(said.out)
-    return listed ? { ok: true, ...listed } : { ok: false, error: 'The server answered something else than the devices that are in.' }
-  } finally {
-    await session.close()
-  }
+  const said = await runOnce(server, script, timeoutMs, opts)
+  if (said.code !== 0) return { ok: false, error: withAdvice(server, lastLines(said).slice(-MAX_SAID) || 'The server did not answer.') }
+  const listed = devicesIn(said.out)
+  return listed ? { ok: true, ...listed } : { ok: false, error: 'The server answered something else than the devices that are in.' }
 }
 
 /** Ask the server's door which devices are in. */
@@ -150,7 +169,7 @@ export const readDevices = (server: Pick<Server, 'address' | 'user'>, opts: { ex
 /** Name the server's owner at its door, by their name: the devices already in are theirs. */
 export function nameOwner(server: Pick<Server, 'address' | 'user'>, said: string, opts: { exec?: Exec } = {}): Promise<Devices> {
   const name = nameOf(said)
-  if (name === undefined) return Promise.resolve({ ok: false, error: `${said} is not a name: letters, digits, spaces, dots, apostrophes and dashes, at most 40` })
+  if (name === undefined) return Promise.resolve({ ok: false, error: notAName(said) })
   return ask(server, ownerScript(name), opts)
 }
 

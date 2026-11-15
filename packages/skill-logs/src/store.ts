@@ -5,23 +5,23 @@ import {
   type ListedRun,
   formatDiary,
   formatRunCard,
-  newestFirst,
   parseDiary,
   parseRunCard,
   personDir,
   runCardFile,
   runDiaryFile,
-  runIdOfFile,
   isRunId,
   type AnyDiaryLine,
   type RunCard,
   type RunPatch,
 } from './run.js'
+import { findEntry, readCard, runEntries, type RecordsReader } from './records.js'
 
 // Where the runs live: `agents/<who>/<id>.json` and `<id>.jsonl` in the project's data directory
 // (its directory in the personal folder, or the checkout of its `agent-data` branch when the
-// project is shared). This module is a long-lived process's side: it reads that directory and
-// writes through the caller's funnel. The command an agent runs reads through `cli` instead.
+// project is shared). This module is a long-lived process's side: it reads that directory,
+// walking it as `records` does, and writes through the caller's funnel. The command an agent runs
+// reads through `cli` instead.
 
 /** The plain-file seams an operation on the branch's files needs. */
 export type LogsFiles = BranchFileFs
@@ -36,14 +36,13 @@ export type LogsFunnel = (root: string, message: CommitMessage, op: (dir: string
 export interface LogsDeps extends Partial<LogsFiles> {
   funnel?: LogsFunnel
   git?: GitRunner
-  log?: (message: string) => void
 }
 
 /** The default funnel: the project's data write. */
 export const logsFunnel: LogsFunnel = (root, message, op) => withProjectData(root, message, op)
 
 /** Fill in whatever a caller left out, so an operation reads the same way in tests and out. */
-export function resolveLogsDeps(deps: LogsDeps): LogsFiles & { funnel: LogsFunnel; git: GitRunner; log: (message: string) => void } {
+export function resolveLogsDeps(deps: LogsDeps): LogsFiles & { funnel: LogsFunnel; git: GitRunner } {
   const fs = nodeBranchFileFs()
   return {
     read: deps.read ?? fs.read,
@@ -52,7 +51,6 @@ export function resolveLogsDeps(deps: LogsDeps): LogsFiles & { funnel: LogsFunne
     list: deps.list ?? fs.list,
     funnel: deps.funnel ?? logsFunnel,
     git: deps.git ?? nodeGitRunner(),
-    log: deps.log ?? (() => {}),
   }
 }
 
@@ -66,16 +64,17 @@ export async function runsPath(root: string, git: GitRunner = nodeGitRunner()): 
   return runsDir(await projectDataDir(root, { git }))
 }
 
+/** The checkout's files as a reader of the records: a file that cannot be read reads as absent. */
+function asRecords(r: LogsFiles): RecordsReader {
+  return { list: dir => r.list(dir), read: path => r.read(path).catch(() => undefined) }
+}
+
 /** The card and diary paths of one run inside a checkout, searched across every person's directory; `undefined` when it is nowhere. */
-async function locate(checkout: string, id: string, r: Pick<LogsFiles, 'list'>): Promise<{ card: string; diary: string } | undefined> {
+async function locate(checkout: string, id: string, r: LogsFiles): Promise<{ card: string; diary: string } | undefined> {
   if (!isRunId(id)) return undefined
   const dir = runsDir(checkout)
-  for (const person of await r.list(dir)) {
-    if ((await r.list(join(dir, person))).includes(runCardFile(id))) {
-      return { card: join(dir, person, runCardFile(id)), diary: join(dir, person, runDiaryFile(id)) }
-    }
-  }
-  return undefined
+  const run = await findEntry(asRecords(r), dir, id)
+  return run && { card: join(dir, run.person, runCardFile(id)), diary: join(dir, run.person, runDiaryFile(id)) }
 }
 
 /**
@@ -86,17 +85,15 @@ async function locate(checkout: string, id: string, r: Pick<LogsFiles, 'list'>):
 export async function listRuns(root: string, opts: { since?: number } = {}, deps: LogsDeps = {}): Promise<ListedRun[]> {
   const r = resolveLogsDeps(deps)
   const dir = await runsPath(root, r.git)
+  const records = asRecords(r)
   const cards: ListedRun[] = []
-  for (const person of await r.list(dir)) {
-    for (const name of await r.list(join(dir, person))) {
-      if (runIdOfFile(name) === undefined) continue
-      const card = parseRunCard(await r.read(join(dir, person, name)).catch(() => ''))
-      if (!card) continue
-      if (opts.since !== undefined && !(Date.parse(card.startedAt) >= opts.since)) continue
-      cards.push({ ...card, person })
-    }
+  for (const run of await runEntries(records, dir)) {
+    const card = await readCard(records, dir, run)
+    if (!card) continue
+    if (opts.since !== undefined && !(Date.parse(card.startedAt) >= opts.since)) continue
+    cards.push({ ...card, person: run.person })
   }
-  return newestFirst(cards)
+  return cards
 }
 
 /** Where one run's two files sit on the persistent checkout, or `undefined` when the run is not there. */

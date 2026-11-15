@@ -10,6 +10,11 @@ const logins = vi.hoisted(() => ({ onGitHosts: vi.fn(), sendUseGitHostAccount: v
 vi.mock('../rpc/logins.js', () => logins)
 const backup = vi.hoisted(() => ({ onBackup: vi.fn(), sendBackUpAs: vi.fn() }))
 vi.mock('../rpc/backup.js', () => backup)
+const openPage = vi.hoisted(() => vi.fn())
+vi.mock('../lib/host-services.js', async importOriginal => {
+  const actual = await importOriginal<typeof import('../lib/host-services.js')>()
+  return { ...actual, INERT_HOST_SERVICES: { ...actual.INERT_HOST_SERVICES, openPage } }
+})
 // The menu's theme and notifications rows have their own suites; here they are the rows' names.
 vi.mock('./ThemeSubmenu.js', () => ({ ThemeSubmenu: () => <div role="menuitem">Theme</div> }))
 vi.mock('./NotificationsSubmenu.js', () => ({ NotificationsSubmenu: () => <div role="menuitem">Notifications</div> }))
@@ -39,10 +44,8 @@ describe('PersonMenu', () => {
     const onSettings = vi.fn()
     const { container } = render(<PersonMenu onSettings={onSettings} />)
     const row = await screen.findByRole('button', { name: 'Ada Lovelace: settings' })
-    expect(container.querySelector('img')?.getAttribute('src')).toBe('https://avatars.githubusercontent.com/u/1')
-    // The letters hold the place until the picture has landed, as every person's mark does.
-    fireEvent.load(container.querySelector('img')!)
     expect(row.textContent).toBe('Ada')
+    expect(container.querySelector('img')?.getAttribute('src')).toBe('https://avatars.githubusercontent.com/u/1')
     fireEvent.click(row)
     expect(screen.getByText('Ada Lovelace')).toBeTruthy()
     expect(screen.getByText('@ada')).toBeTruthy()
@@ -87,11 +90,11 @@ describe('PersonMenu', () => {
     expect(firstName('suleimansh')).toBe('suleimansh')
   })
 
-  test("the letters are the ones the person's mark has in every list: a one-word name gives its first two", async () => {
-    onPerson.mockResolvedValue({ name: 'octo', email: 'octo@x.dev' })
+  test('with no picture, the two letters the person\u2019s runs are marked with: a one-word name is its first two', async () => {
+    onPerson.mockResolvedValue({ name: 'Demo' })
     render(<PersonMenu onSettings={() => {}} />)
-    await screen.findByRole('button', { name: 'octo: settings' })
-    expect(screen.getByText('OC')).toBeTruthy()
+    await screen.findByRole('button', { name: 'Demo: settings' })
+    expect(screen.getByText('DE')).toBeTruthy()
   })
 })
 
@@ -102,26 +105,28 @@ const GITHUB = {
 }
 
 describe('PersonMenu: what is missing', () => {
-  test('something runs need is missing: a dot on the picture, and the menu says what first, opening where it is fixed', async () => {
+  test('something runs need is missing: a dot on the picture, and the menu says first what fixes it, opening where it is fixed', async () => {
     onPerson.mockResolvedValue({ name: 'Ada Lovelace', github: 'ada' })
     logins.onAgentState.mockResolvedValue({ driver: 'claude-code', ready: false, problem: '`claude` is not logged in.', fix: { kind: 'log-in', command: 'claude auth login' } })
+    logins.onGitHosts.mockResolvedValue({ hosts: [{ ...GITHUB, provider: { ...GITHUB.provider, accounts: [{ login: 'octo', terminal: true, runs: true, ok: false }] } }] })
     const onSettings = vi.fn()
     const { container } = render(<PersonMenu onSettings={onSettings} />)
     fireEvent.click(await screen.findByRole('button', { name: 'Ada Lovelace: settings, something is missing' }))
     expect(container.ownerDocument.querySelector('[data-testid="missing-dot"]')).toBeTruthy()
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Claude Code is not logged in.' }))
-    expect(window.location.pathname).toBe('/permissions')
+    expect(await screen.findByRole('menuitem', { name: 'Add your GitHub account again…' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Log Claude Code in…' }))
+    expect(openPage).toHaveBeenCalledWith('permissions')
     expect(onSettings).not.toHaveBeenCalled()
   })
 
-  test('agent data not backed up: a dot on the picture, and an item that opens Settings › Agent data', async () => {
+  test('agent data not backed up: a dot on the picture, and an item that opens Settings › Your agent data to back it up', async () => {
     onPerson.mockResolvedValue({ name: 'Ada Lovelace' })
     backup.onBackup.mockResolvedValue({ gaps: [{ kind: 'personal', address: 'github.com/ada/agent', host: 'github.com', waiting: 2 }] })
     const onSettings = vi.fn()
     const { container } = render(<PersonMenu onSettings={onSettings} />)
     fireEvent.click(await screen.findByRole('button', { name: 'Ada Lovelace: settings, something is missing' }))
     expect(container.ownerDocument.querySelector('[data-testid="missing-dot"]')).toBeTruthy()
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Agent data not backed up' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Back up your agent data…' }))
     expect(onSettings).toHaveBeenCalledWith('agent-data')
   })
 })

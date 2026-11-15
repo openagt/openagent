@@ -69,6 +69,17 @@ describe('CommandsMenu', () => {
     expect(onLoad).not.toHaveBeenCalled()
   })
 
+  test('the Delete key on a highlighted saved prompt deletes it without loading it', () => {
+    const { onLoad, onDelete, onDeleteProject } = mount()
+    fireEvent.keyDown(screen.getByRole('menuitem', { name: /^My sweep/ }), { key: 'Delete' })
+    expect(onDelete).toHaveBeenCalledWith('c1')
+    fireEvent.keyDown(screen.getByRole('menuitem', { name: /^Team sweep/ }), { key: 'Backspace' })
+    expect(onDeleteProject).toHaveBeenCalledWith('p1')
+    fireEvent.keyDown(screen.getByRole('menuitem', { name: /^My sweep/ }), { key: 'a' })
+    expect(onDelete).toHaveBeenCalledTimes(1)
+    expect(onLoad).not.toHaveBeenCalled()
+  })
+
   test('a shared project saved prompt loads verbatim (#1025)', () => {
     const { onLoad } = mount()
     fireEvent.click(screen.getByText('Team sweep'))

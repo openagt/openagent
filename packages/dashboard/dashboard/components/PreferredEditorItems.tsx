@@ -4,7 +4,7 @@ import { useDetectedEditors } from '../lib/editors.js'
 import { cn } from '../lib/utils.js'
 import { Check } from 'lucide-react'
 import { OptionLabel } from './ui/option-label.js'
-import { DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel } from './ui/dropdown-menu.js'
+import { DropdownMenuGroup, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem } from './ui/dropdown-menu.js'
 
 // The "Preferred editor" picker (#727), as one group both menus that offer it render: the project
 // home's ⋮ menu and a session's own menu (AgentActionsMenu). They showed the
@@ -31,22 +31,18 @@ export function PreferredEditorItems({ busy }: { busy: boolean }) {
   return (
     <DropdownMenuGroup>
       <DropdownMenuLabel>Preferred editor</DropdownMenuLabel>
-      <DropdownMenuItem disabled={busy} closeOnClick={false} onClick={() => updatePreferences({ editor: '' })} className="items-start">
-        <Check className={cn('mt-0.5 h-3.5 w-3.5 shrink-0', editor ? 'opacity-0' : 'opacity-100')} />
-        <OptionLabel label="Default" description="$OPENAGENT_EDITOR, or code" />
-      </DropdownMenuItem>
-      {editorRows.map(e => (
-        <DropdownMenuItem
-          key={e.bin}
-          disabled={busy}
-          closeOnClick={false}
-          onClick={() => updatePreferences({ editor: e.bin })}
-          className="items-start"
-        >
-          <Check className={cn('mt-0.5 h-3.5 w-3.5 shrink-0', editor === e.bin ? 'opacity-100' : 'opacity-0')} />
-          <OptionLabel label={e.label} description={e.bin} />
-        </DropdownMenuItem>
-      ))}
+      <DropdownMenuRadioGroup value={editor ?? ''} onValueChange={(bin: string) => updatePreferences({ editor: bin })}>
+        <DropdownMenuRadioItem value="" disabled={busy} closeOnClick={false} className="items-start">
+          <Check className={cn('mt-0.5 h-3.5 w-3.5 shrink-0', editor ? 'opacity-0' : 'opacity-100')} aria-hidden />
+          <OptionLabel label="Default" description="$OPENAGENT_EDITOR, or code" />
+        </DropdownMenuRadioItem>
+        {editorRows.map(e => (
+          <DropdownMenuRadioItem key={e.bin} value={e.bin} disabled={busy} closeOnClick={false} className="items-start">
+            <Check className={cn('mt-0.5 h-3.5 w-3.5 shrink-0', editor === e.bin ? 'opacity-100' : 'opacity-0')} aria-hidden />
+            <OptionLabel label={e.label} description={e.bin} />
+          </DropdownMenuRadioItem>
+        ))}
+      </DropdownMenuRadioGroup>
     </DropdownMenuGroup>
   )
 }

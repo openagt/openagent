@@ -1,77 +1,18 @@
-import { vi } from 'vitest'
-import { render as rtlRender, type RenderResult } from '@testing-library/react'
-import type { ReactElement } from 'react'
-import { ModuleHostContext, type ModuleAgent, type ModuleCommandResult, type ModuleHost } from '@openagt/dashboard/module'
-import { ModulesContext, type MountedModules } from '../../dashboard/dashboard/lib/use-modules.js'
+import type { ModuleAgent } from '@openagt/dashboard/module'
+import { answering, fakeHost as hostFor, type Answers, type FakeHost } from '@openagt/dashboard/module/testing'
 
-// The dashboard as a module page sees it, faked: every service a spy, the module's commands
-// answered by a table of the tickets command's outputs. `useModuleHost` hands a host that carries
-// its own `runCommand` back as it is, so the pages under test never reach a real dashboard.
+export { NO_MODULES, renderWithHost, type Answers, type FakeHost } from '@openagt/dashboard/module/testing'
 
-/** The `tickets` command's answers, keyed by project then by the command line joined with spaces. */
-export type Answers = Record<string, Record<string, unknown>>
+// The dashboard as a tickets page sees it, faked: the module's commands answered by a table of
+// the tickets command's outputs, and each project's agents as `agents` lists them.
 
-export interface FakeHost extends ModuleHost {
-  runCommand: ReturnType<typeof vi.fn<ModuleHost['runCommand']>>
-  act: ReturnType<typeof vi.fn<ModuleHost['act']>>
-  openAgent: ReturnType<typeof vi.fn<ModuleHost['openAgent']>>
-  openPage: ReturnType<typeof vi.fn<ModuleHost['openPage']>>
-  startRun: ReturnType<typeof vi.fn<ModuleHost['startRun']>>
-  configureRun: ReturnType<typeof vi.fn<ModuleHost['configureRun']>>
-  agents: ReturnType<typeof vi.fn<ModuleHost['agents']>>
-}
-
-/** A host whose commands answer from `answers`; a command line with no answer fails, naming itself. */
+/** A host whose `tickets` command answers from `answers`; a command line with no answer fails, naming itself. */
 export function fakeHost(answers: Answers = {}, agents: Record<string, ModuleAgent[]> = {}): FakeHost {
-  const answer = async (projectId: string, args: string[]): Promise<ModuleCommandResult> => {
-    const line = args.join(' ')
-    const known = answers[projectId]?.[line]
-    return known === undefined ? { ok: false, error: `no answer for ${projectId}: tickets ${line}` } : { ok: true, output: known }
-  }
-  return {
-    package: '@openagt/skill-tickets',
-    runCommand: vi.fn(answer),
-    act: vi.fn(answer),
-    runComputerCommand: vi.fn(async () => ({ ok: false as const, error: 'not the computer\'s' })),
-    runComputerCommandOn: vi.fn(async () => ({ ok: false as const, error: 'not the computer\'s' })),
-    read: vi.fn(async () => ({ ok: false as const, error: 'this module has no server part' })),
-    openAgent: vi.fn(),
-    openPage: vi.fn(),
-    pageHref: (segment: string) => `/${segment}`,
-    openSettings: vi.fn(),
-    gitHostPeople: vi.fn(async () => []),
-    startRun: vi.fn(async (_projectId: string, _prompt: string) => ({ ok: true as const, agentId: 'started' })),
-    configureRun: vi.fn(),
-    agents: vi.fn(async (projectId: string) => agents[projectId] ?? []),
-    machines: vi.fn(async () => ({ version: '0.0.0', machines: [] })),
-    addMachine: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
-    removeMachine: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
-    renameMachine: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
-    renameComputer: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
-    letMachineIn: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
-    machineCode: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
-    computersThrough: vi.fn(async () => ({ ok: true as const, computers: [] })),
-    machinePerson: vi.fn(async () => ({ ok: false as const, error: 'no person there', unknown: true as const })),
-    removeMachineDevice: vi.fn(async () => ({ ok: false as const, error: 'no person there' })),
-    machineAccounts: vi.fn(async () => null),
-    removeMachineAccount: vi.fn(async () => ({ ok: false as const, error: 'no server here' })),
-    useLoginsOn: vi.fn(async () => ({ ok: false as const, error: 'no server here' })),
-    syncDataOn: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
-    agentDataRemote: vi.fn(async () => undefined),
-    addComputerThrough: vi.fn(async () => ({ ok: false as const, error: 'not here' })),
-    watchScreen: vi.fn(async () => undefined),
-    sendToScreen: vi.fn(async () => false),
-  }
-}
-
-/** No module offers anything on links: the default for pages whose tests are not about the slot. */
-export const NO_MODULES: MountedModules = { pages: [], cards: [], linkActions: [], panels: [], runSlots: [], settings: [], everyPage: [], loaded: true }
-
-/** Render a page inside the fake host, and inside whatever link actions installed modules offer. */
-export function renderWithHost(ui: ReactElement, host: ModuleHost, modules: MountedModules = NO_MODULES): RenderResult {
-  return rtlRender(
-    <ModulesContext.Provider value={modules}>
-      <ModuleHostContext.Provider value={host}>{ui}</ModuleHostContext.Provider>
-    </ModulesContext.Provider>,
-  )
+  const answer = answering('tickets', answers)
+  return hostFor('@openagt/skill-tickets', {
+    runCommand: answer,
+    act: answer,
+    startRun: async () => ({ ok: true as const, agentId: 'started' }),
+    agents: async projectId => agents[projectId] ?? [],
+  })
 }

@@ -36,6 +36,21 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe('StartAgentButton (#1507)', () => {
+  test('the two halves, and a control the start counts on, are one group: one control, not buttons side by side', () => {
+    renderButton({ leading: <input aria-label="How many" /> })
+    const group = screen.getByRole('group')
+    expect([...group.children].map(child => child.getAttribute('aria-label') ?? child.textContent)).toEqual(['How many', 'Run now', MENU])
+  })
+
+  test('a menu holds the surface\'s other choices above Configure first', async () => {
+    const onQueue = vi.fn()
+    renderButton({ moreItems: [{ label: 'Queue work', description: 'Later.', onSelect: onQueue }] })
+    await openMenu(screen.getByRole('button', { name: MENU }))
+    fireEvent.click(await screen.findByText('Queue work'))
+    expect(onQueue).toHaveBeenCalledOnce()
+    expect(onStart).not.toHaveBeenCalled()
+  })
+
   test('the primary half starts it, and hands the launcher nothing', () => {
     renderButton()
     fireEvent.click(screen.getByRole('button', { name: 'Run now' }))
@@ -62,6 +77,31 @@ describe('StartAgentButton (#1507)', () => {
     // flight would be the opposite of the point.
     const chevron = screen.getByRole('button', { name: MENU })
     expect((chevron as HTMLButtonElement).disabled).toBe(false)
+    await configureFirst(MENU)
+    expect(onConfigure).toHaveBeenCalledTimes(1)
+  })
+
+  test('while OpenAgent is not answering, the primary half is off and starts nothing, and the chevron still opens the launcher', async () => {
+    const { DaemonDown } = await import('../lib/use-daemon-health.js')
+    render(
+      <DaemonDown.Provider value>
+        <StartAgentButton
+          icon={<Play className="h-3 w-3" aria-hidden />}
+          label="Run now"
+          menuAriaLabel={MENU}
+          tooltip="Starts one agent."
+          prompt={PROMPT}
+          configureDescription="…"
+          onStart={onStart}
+          onConfigure={onConfigure}
+        />
+      </DaemonDown.Provider>,
+    )
+    const press = screen.getByRole('button', { name: 'Run now' }) as HTMLButtonElement
+    expect(press.disabled).toBe(true)
+    fireEvent.click(press)
+    expect(onStart).not.toHaveBeenCalled()
+    expect((screen.getByRole('button', { name: MENU }) as HTMLButtonElement).disabled).toBe(false)
     await configureFirst(MENU)
     expect(onConfigure).toHaveBeenCalledTimes(1)
   })

@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { lstat, mkdir, mkdtemp, readFile, readlink, realpath, rm, stat, writeFile } from 'node:fs/promises'
 import { nodeGitRunner } from '@openagt/agent-data'
-import { CLI_BIN_DIR, agentBranchName, reconcileBranchLinks, runCli, worktreePath } from './index.js'
+import { CLI_BIN_DIR, reconcileBranchLinks, runCli, worktreePath } from './index.js'
 
 // #1725: the command line is the package's functions for an agent in a shell, so every command
 // is checked against real git the way the functions are — and the contract on top of them: JSON
@@ -321,7 +321,7 @@ test('a command that cannot be read gets the usage and exit code 2, and no JSON'
       const ran = await run(repo, ...argv)
       assert.equal(ran.code, 2, argv.join(' '))
       assert.equal(ran.out, undefined, argv.join(' '))
-      assert.match(ran.err, /usage: branches/)
+      assert.match(ran.err, argv.length ? /\nRun `branches --help` for usage\.$/ : /^usage: branches/)
     }
   } finally {
     await rm(repo, { recursive: true, force: true })

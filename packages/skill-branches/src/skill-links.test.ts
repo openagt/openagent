@@ -5,10 +5,12 @@ import { mkdir, mkdtemp, readFile, readlink, realpath, rm, symlink, unlink, writ
 import { tmpdir } from 'node:os'
 import { nodeGitRunner } from '@openagt/agent-data'
 import { createCheckout, relinkCheckout } from './checkout.js'
-import { COMMAND_LINKS } from './command-link.js'
 import { HARNESS_SKILL_DIRS, linkSkill, SKILL_DIR, SKILL_NAME, skillLinkPaths } from './skill-links.js'
 
 const git = nodeGitRunner()
+
+/** The links that carry this package's command into a checkout: the command, and the package `npx` finds by its full name. */
+const COMMAND_LINKS = ['node_modules/.bin/branches', 'node_modules/@openagt/skill-branches']
 
 async function repoWithOneCommit(): Promise<string> {
   const repo = await realpath(await mkdtemp(join(tmpdir(), 'skill-links-')))

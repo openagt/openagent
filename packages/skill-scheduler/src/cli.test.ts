@@ -59,7 +59,7 @@ test('status reads the state; model and offset write it; stop turns it off; ever
   }
 })
 
-test('usage errors exit 2 with the usage on stderr and nothing on stdout; outside a repository is a refusal', async () => {
+test('usage errors exit 2 with what was wrong and where the usage is on stderr, nothing on stdout; outside a repository is a refusal', async () => {
   const repo = await testRepo()
   const elsewhere = await mkdtemp(join(tmpdir(), 'not-a-repo-'))
   try {
@@ -67,7 +67,7 @@ test('usage errors exit 2 with the usage on stderr and nothing on stdout; outsid
       const bad = await run(repo, ...argv)
       assert.equal(bad.code, 2, argv.join(' '))
       assert.equal(bad.out, undefined)
-      assert.match(bad.err, /usage: scheduler/)
+      assert.match(bad.err, argv.length ? /\nRun `scheduler --help` for usage\.$/ : /^usage: scheduler/)
     }
     const outside = await run(elsewhere, 'status')
     assert.equal(outside.code, 1)
@@ -600,7 +600,8 @@ test("status lists the schedule as the project's files say it at that moment, wi
     assert.deepEqual([added.running, added.lastTick], [false, undefined])
     assert.deepEqual(added.schedule, [
       // Each with the coding agent it is made for and the ones that can run it: a shared one's skill is in Claude Code's folder alone, one kept on this machine is handed to any.
-      { command: 'answer-comments', every: '15m', when: 'gh api comments', waitsFor: 'when someone commented', description: 'Answer each new comment below.', editable: true, agent: 'claude-code', able: ['claude-code'] },
+      // A shared one is not yet where a run's checkout starts, nor in git at all: nothing is committed for the person.
+      { command: 'answer-comments', every: '15m', when: 'gh api comments', waitsFor: 'when someone commented', description: 'Answer each new comment below.', editable: true, agent: 'claude-code', able: ['claude-code'], untracked: true, notOn: 'origin/main' },
       { command: 'tidy', every: '1d', description: 'Tidy up.', onThisMachine: true, editable: true, agent: 'claude-code', able: ['claude-code', 'codex'] },
     ])
     // Saved again: its new words and its new pace at once.

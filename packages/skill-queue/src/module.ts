@@ -1,7 +1,8 @@
 // The rules of the package's dashboard module (`../dashboard/`), kept apart from React so they
-// are unit-tested like the rest of the package: how a queue entry reads on screen, what the
-// "Add to queue" action runs for the links a dashboard page hands it, and how the Overview card
-// starts agents on entries.
+// are unit-tested like the rest of the package: how a queue entry reads on screen, how the
+// command's lists are read back, what the "Add to queue" action runs for the links a dashboard
+// page hands it, and how the Overview card starts agents on entries.
+import type { PlacedEntry } from './queue.js'
 
 /**
  * The command that works the queue by itself, as a person types it without its slash: the
@@ -43,6 +44,11 @@ export function doneArgs(entry: string): string[] {
  */
 export function isWorkingOn(ask: string | undefined, entry: string): boolean {
   return ask !== undefined && entry.trim() !== '' && ask.trim() === workOnEntryPrompt(entry.trim()).trim()
+}
+
+/** The entries none of `working` is on, in their order: the ones a start may put an agent on. */
+export function unclaimedEntries(entries: readonly string[], working: readonly { ask?: string | undefined }[]): string[] {
+  return entries.filter(entry => !working.some(agent => isWorkingOn(agent.ask, entry)))
 }
 
 /** How one queue entry reads on a dashboard: what to show, and where it points, if anywhere. */
@@ -91,6 +97,28 @@ export function addArgs(link: LinkToQueue): string[] {
 /** What running one command in a project answers: OpenAgent's `ModuleCommandResult`, by structure. */
 export type CommandResult = { ok: true; output: unknown } | { ok: false; error: string }
 
+/**
+ * The entries a read of the queue printed, each one `isEntry` takes, or why there are none: a
+ * command that could not run, or printed no list.
+ */
+export function readEntries<E>(result: CommandResult, isEntry: (value: unknown) => value is E): { entries: E[] } | { error: string } {
+  if (!result.ok) return { error: result.error }
+  if (!Array.isArray(result.output)) return { error: 'the queue command did not print a list' }
+  return { entries: result.output.filter(isEntry) }
+}
+
+/** Whether the bare command printed one entry: its line of text. */
+export function isEntryLine(value: unknown): value is string {
+  return typeof value === 'string'
+}
+
+/** Whether `--full` printed one entry: its line, with the priority of the section it sits in when it sits in one. */
+export function isPlacedEntry(value: unknown): value is PlacedEntry {
+  if (!value || typeof value !== 'object') return false
+  const { entry, priority } = value as Record<string, unknown>
+  return typeof entry === 'string' && (priority === undefined || typeof priority === 'number')
+}
+
 /** What the action did: every link queued, or stopped at the first that was not, with why. */
 export type AddOutcome = { ok: true } | { ok: false; error: string }
 
@@ -120,7 +148,7 @@ export async function addToQueue(run: (args: string[]) => Promise<CommandResult>
   if (links.length === 0) return { ok: true }
   const listed = await run([])
   if (!listed.ok) return { ok: false, error: listed.error }
-  const entries = Array.isArray(listed.output) ? listed.output.filter((entry): entry is string => typeof entry === 'string') : []
+  const entries = Array.isArray(listed.output) ? listed.output.filter(isEntryLine) : []
   for (const link of links) {
     if (alreadyQueued(entries, link)) continue
     const result = await run(addArgs(link))
@@ -150,9 +178,14 @@ export function topEntries(entries: readonly string[], count: number): string[] 
   return entries.slice(0, Math.max(1, count))
 }
 
+/** The fan-out button's words, on the Overview's card and the Queue page alike. */
+export function fanOutPress(count: number): string {
+  return count === 1 ? 'Start 1 agent' : `Start ${count} agents`
+}
+
 /** What the fan-out button promises, sized to what a click would actually start. */
 export function fanOutLabel(count: number): string {
-  return count === 1 ? 'Spin up an agent working on the top entry' : `Spin up ${count} agents working on the top ${count} entries`
+  return count === 1 ? 'Start an agent working on the top entry' : `Start ${count} agents working on the top ${count} entries`
 }
 
 /** What starting one run answered: OpenAgent's `StartRunResult`, by structure. */

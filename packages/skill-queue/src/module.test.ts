@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { DEFAULT_FAN_OUT_COUNT, DEFAULT_PRIORITY, PRIORITIES, QUEUE_COMMAND, addArgs, addTextArgs, doneArgs, isWorkingOn, priorityMeaning, addToQueue, alreadyQueued, entryLabel, fanOut, fanOutLabel, queueLine, topEntries, workOnEntryPrompt, type CommandResult } from './module.js'
+import { DEFAULT_FAN_OUT_COUNT, DEFAULT_PRIORITY, PRIORITIES, QUEUE_COMMAND, addArgs, addTextArgs, doneArgs, isEntryLine, isPlacedEntry, isWorkingOn, priorityMeaning, addToQueue, alreadyQueued, entryLabel, fanOut, fanOutLabel, queueLine, readEntries, topEntries, workOnEntryPrompt, type CommandResult } from './module.js'
 
 test('entryLabel shows a leading link\'s text, opens only an absolute http(s) target, and keeps anything else whole', () => {
   assert.deepEqual(entryLabel('[Login page](tickets/2026-08-01_login-page.md) — needs the cookie first'), { text: 'Login page' })
@@ -16,6 +16,13 @@ test('a link is queued as a markdown link in its priority\'s section; plain text
   assert.deepEqual(addArgs({ text: 'Login page', href: 'tickets/2026-08-01_login-page.md', priority: 8 }), ['add', '[Login page](tickets/2026-08-01_login-page.md)', '--priority', '8'])
   assert.deepEqual(addArgs({ text: 'Create tickets/x.plan.md', priority: 0 }), ['add', 'Create tickets/x.plan.md', '--priority', '0'])
   assert.deepEqual(addArgs({ text: 'Tidy the loader' }), ['add', 'Tidy the loader'])
+})
+
+test('a read of the queue is read back: its entries of the right shape, or why there are none', () => {
+  assert.deepEqual(readEntries({ ok: true, output: ['a', 7, 'b'] }, isEntryLine), { entries: ['a', 'b'] })
+  assert.deepEqual(readEntries({ ok: true, output: [{ entry: 'a', priority: 5 }, { entry: 'b' }, { entry: 'c', priority: '5' }, 'd'] }, isPlacedEntry), { entries: [{ entry: 'a', priority: 5 }, { entry: 'b' }] })
+  assert.deepEqual(readEntries({ ok: true, output: { ok: false, reason: 'not-a-repo' } }, isEntryLine), { error: 'the queue command did not print a list' })
+  assert.deepEqual(readEntries({ ok: false, error: 'queue took too long' }, isEntryLine), { error: 'queue took too long' })
 })
 
 /** A command stub: the bare command lists `open`, and every `add` is recorded and answers `ok`. */
@@ -87,8 +94,8 @@ test('a fan-out takes the top of the queue, at least one and never more than the
   assert.deepEqual(topEntries(['a', 'b'], 5), ['a', 'b'])
   assert.deepEqual(topEntries(['a', 'b'], 0), ['a'])
   assert.equal(DEFAULT_FAN_OUT_COUNT, 3)
-  assert.equal(fanOutLabel(1), 'Spin up an agent working on the top entry')
-  assert.equal(fanOutLabel(3), 'Spin up 3 agents working on the top 3 entries')
+  assert.equal(fanOutLabel(1), 'Start an agent working on the top entry')
+  assert.equal(fanOutLabel(3), 'Start 3 agents working on the top 3 entries')
 })
 
 test('fanOut starts one run per entry in order, each on its own entry, and stops at the first refusal with its reason', async () => {

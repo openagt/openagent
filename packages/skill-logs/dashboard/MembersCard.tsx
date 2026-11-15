@@ -1,12 +1,11 @@
-import { Users } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitleLink, PersonMark, Tooltip, TooltipContent, TooltipTrigger, formatAge, formatDateTime, personName, personSaid, useModuleHost, usePolled, type ModuleCardProps, type ModuleHostPerson } from '@openagt/dashboard/module'
+import { PageLink, PartDescription, PersonMark, Section, SentenceShape, Slot, STATUS_DOT, STATUS_TONE, Tooltip, TooltipContent, TooltipTrigger, cn, formatAge, formatDateTime, personName, personSaid, useModuleHost, usePolled, type ModuleCardProps, type ModuleHostPerson } from '@openagt/dashboard/module'
 import { membersOf, peopleWithRuns, type Member, type PersonActivity } from '../src/people.js'
 
 // The Overview's Members card: who worked in the projects shown in the last 30 days, from `logs
 // people --local` in each, the same person counted once, across projects and across the emails of
 // one account at the git host: whoever started agents or committed to the main branch. Each by the name git knows them by, with their runs and what
 // they cost (as the dashboard lists the runs, so another computer's are as it says them), their
-// commits, whether a run of theirs is going now, and when they last did either;
+// commits, whether a run of theirs is going now or waits on an answer, and when they last did either;
 // the person at this computer marked. Its title opens the Logs page, where each run is. Each with
 // their picture, where the project's git host knows the account behind their email (asked of the
 // shell, which keeps the answer a day); else two letters of their name.
@@ -28,10 +27,20 @@ function didWords(member: Member): string {
   return parts.length ? parts.join(' · ') : 'Nothing in the last 30 days'
 }
 
+/** How many runs of a member stand one way now, in the dashboard's colors: "working", "2 waiting". */
+function Going({ status, count, word }: { status: 'running' | 'waiting'; count: number; word: string }) {
+  return (
+    <span className={cn('flex items-center gap-1.5', STATUS_TONE[status])}>
+      <span aria-hidden className={cn('size-1.5 rounded-full', STATUS_DOT[status])} />
+      {count === 1 ? word : `${count} ${word}`}
+    </span>
+  )
+}
+
 export function MembersCard({ projects }: ModuleCardProps) {
   const host = useModuleHost()
   const key = projects.map(project => project.id).join(',')
-  const { value: members, loaded } = usePolled<Shown[]>(
+  const { value: members, state } = usePolled<Shown[]>(
     async () => {
       const reads = await Promise.all(
         projects.map(async project => {
@@ -53,29 +62,22 @@ export function MembersCard({ projects }: ModuleCardProps) {
       })
     },
     NONE,
-    // A local read of a week of records: a glance, not a feed.
+    // A local read of 30 days of records: a glance, not a feed.
     60_000,
     [key],
     // Kept for the next visit: the page opens with the last members, faded until they are read again.
     { remember: `skill-logs:members:${key}`, stored: true },
   )
   return (
-    <Card>
-      <CardHeader>
-        <CardTitleLink icon={<Users className="h-4 w-4 text-muted-foreground" aria-hidden />} segment="logs" onOpen={() => host.openPage('logs')}>
-          Members
-        </CardTitleLink>
-        <p className="text-xs text-muted-foreground">Who worked here in the last 30 days: agents started, commits</p>
-      </CardHeader>
-      <CardContent>
-        {!loaded ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
-        ) : members.length === 0 ? (
+    <Section title="Members" count={state !== 'unknown' && members.length > 0 ? members.length : undefined} action={<PageLink href={host.pageHref('logs')} onOpen={() => host.openPage('logs')}>Logs</PageLink>}>
+      <PartDescription>Who started agents or made commits here in the last 30 days</PartDescription>
+      <Slot of={{ state, value: members }} shape={<SentenceShape />}>
+        {() => members.length === 0 ? (
           <p className="text-sm text-muted-foreground">No one has started an agent here yet.</p>
         ) : (
-          <ul className="space-y-2.5">
+          <ul className="space-y-1">
             {members.map(member => (
-              <li key={member.person} aria-label={personName(member.person, member.name)} className="flex min-w-0 items-center gap-2.5">
+              <li key={member.person} aria-label={personName(member.person, member.name)} className="flex min-w-0 items-center gap-3 md:min-h-10 max-md:min-h-11">
                 <PersonMark email={member.person} name={member.name} picture={member.account?.avatar} you={member.you} />
                 <div className="min-w-0 flex-1">
                   <p className="flex min-w-0 items-center gap-1.5 text-sm">
@@ -88,10 +90,10 @@ export function MembersCard({ projects }: ModuleCardProps) {
                     {didWords(member)}
                   </p>
                 </div>
-                {member.running > 0 ? (
-                  <span className="flex shrink-0 items-center gap-1.5 text-xs text-success">
-                    <span aria-hidden className="size-1.5 rounded-full bg-success" />
-                    {member.running === 1 ? 'working' : `${member.running} working`}
+                {member.running > 0 || member.waiting > 0 ? (
+                  <span className="flex shrink-0 items-center gap-3 text-xs">
+                    {member.running > 0 && <Going status="running" count={member.running} word="working" />}
+                    {member.waiting > 0 && <Going status="waiting" count={member.waiting} word="waiting" />}
                   </span>
                 ) : (
                   <Tooltip>
@@ -103,7 +105,7 @@ export function MembersCard({ projects }: ModuleCardProps) {
             ))}
           </ul>
         )}
-      </CardContent>
-    </Card>
+      </Slot>
+    </Section>
   )
 }

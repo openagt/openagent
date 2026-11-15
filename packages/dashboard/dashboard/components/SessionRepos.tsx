@@ -5,12 +5,13 @@ import type { ProjectSummary } from '../../src/index.js'
 import { onRepos, type ReposRead } from '../rpc/projects.js'
 import { useLoaded } from '../lib/use-async.js'
 import { cn } from '../lib/utils.js'
-import { rowButtonClass, rowItemClass, RowOff } from './ui/row-item.js'
+import { rowButtonClass, rowItemClass, RowSaid } from './ui/row-item.js'
 import { ScrollArea } from './ui/scroll-area.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { MENU_ITEM_CLASS, MENU_POPUP_CLASS, MENU_TRIGGER_OPEN_CLASS } from './ui/dropdown-menu.js'
 import { usePopupPlacement } from './ui/popup-placement.js'
-import { ASK_AGAIN_MS, REPOS_SHOWN, shownAddress } from './ProjectPicker.js'
+import { usePickerSearch } from './ui/picker-search.js'
+import { ASK_AGAIN_MS, REPOS_SHOWN, repoDetail } from './ProjectPicker.js'
 
 /** The most rows a search lists. */
 const SEARCH_SHOWN = 200
@@ -76,8 +77,8 @@ export function SessionRepoPicks({
   busy: boolean
   onChange: (picked: PickedRepo[]) => void
 }) {
-  const [open, setOpen] = useState(false)
-  const [typed, setTyped] = useState('')
+  const search = usePickerSearch()
+  const { open, typed } = search
   const positionMethod = usePopupPlacement()
   // Asked again shortly while the look through this computer is still on its way, and the menu is open.
   const [again, setAgain] = useState(0)
@@ -92,7 +93,7 @@ export function SessionRepoPicks({
     [projects],
   )
   const repoRows = useMemo<Row[]>(
-    () => (repos?.repos ?? []).map(repo => ({ value: `repo:${repo.path}`, label: repo.name, detail: repo.url ? shownAddress(repo.url) : repo.path, path: repo.path, search: `${repo.path}\n${repo.url ?? ''}` })),
+    () => (repos?.repos ?? []).map(repo => ({ value: `repo:${repo.path}`, label: repo.name, detail: repoDetail(repo), path: repo.path, search: `${repo.path}\n${repo.url ?? ''}` })),
     [repos],
   )
   const groups = addRepoGroups(projectRows, repoRows, picked, typed)
@@ -107,13 +108,8 @@ export function SessionRepoPicks({
         filteredItems={groups}
         value={null}
         itemToStringLabel={row => row.label}
-        inputValue={typed}
-        onInputValueChange={setTyped}
-        open={open}
-        onOpenChange={next => {
-          setOpen(next)
-          if (!next) setTyped('')
-        }}
+        autoHighlight
+        {...search.root}
         onValueChange={row => {
           if (row) onChange([...picked, { path: row.path, name: folderName(row.path) }])
         }}
@@ -125,9 +121,10 @@ export function SessionRepoPicks({
                 disabled={busy}
                 aria-label="Add repo"
                 className={MENU_TRIGGER_OPEN_CLASS}
+                {...search.trigger}
                 render={
                   <button type="button" className={cn(rowButtonClass, 'shrink-0')}>
-                    <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                    <Plus className="size-4 shrink-0" aria-hidden />
                     <span className="truncate">Add repo</span>
                   </button>
                 }
@@ -138,7 +135,7 @@ export function SessionRepoPicks({
         </Tooltip>
         <Combobox.Portal>
           <Combobox.Positioner positionMethod={positionMethod} sideOffset={6} align="start" className="z-50 outline-none">
-            <Combobox.Popup aria-label="Add repo" className={cn(MENU_POPUP_CLASS, 'w-[24rem] max-w-[var(--available-width)]')}>
+            <Combobox.Popup data-overlay="picker" aria-label="Add repo" className={cn(MENU_POPUP_CLASS, 'w-[24rem] max-w-[var(--available-width)]')}>
               <div className="flex items-center gap-2 border-b border-border px-3">
                 <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
                 <Combobox.Input aria-label="Search repos" placeholder="Search repos" className="h-9 w-full min-w-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
@@ -187,18 +184,16 @@ export function SessionRepoPicks({
 export function RepoChip({ repo, tip, onRemove }: { repo: { name: string }; tip: string; onRemove?: (() => void) | undefined }) {
   if (!onRemove) {
     return (
-      <RowOff tip={tip}>
-        <span className={rowItemClass}>
-          <FolderGit2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
-          <span className="truncate">{repo.name}</span>
-        </span>
-      </RowOff>
+      <RowSaid tip={tip}>
+        <FolderGit2 className="size-4 shrink-0" aria-hidden />
+        <span className="truncate">{repo.name}</span>
+      </RowSaid>
     )
   }
   return (
     <Tooltip>
       <TooltipTrigger render={<span className={cn(rowItemClass, 'gap-1 pr-1')} />}>
-        <FolderGit2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
+        <FolderGit2 className="size-4 shrink-0" aria-hidden />
         <span className="truncate">{repo.name}</span>
         <button type="button" aria-label={`Remove ${repo.name}`} onClick={onRemove} className="rounded-sm p-0.5 hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
           <X className="h-3 w-3" aria-hidden />

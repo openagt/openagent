@@ -1,6 +1,6 @@
 import { pathToFileURL } from 'node:url'
 import { findAgent, findCheckout, isRunId, projectBranches, type BranchesFor } from '../store/index.js'
-import { agentBranchFor, leftNothing } from './agent-handoff.js'
+import { leftNothing } from './agent-handoff.js'
 import { cachedPrsForBranch, type LinkedPr } from './pull-requests.js'
 import type { Cached } from './cache.js'
 import type { MergeLookup, ModuleRead, ModuleReadInput, ModuleServer, ModuleServerHost, RunFacts } from '../module-server.js'
@@ -27,7 +27,6 @@ export function serverHost(root: string, deps: ServerHostDeps = {}): ModuleServe
       const checkout = await findCheckout(root, agentId, deps.branches ?? projectBranches)
       const agent = await (deps.agent ?? findAgent)(root, agentId).catch(() => undefined)
       if (!checkout && !agent) return undefined
-      const branch = agent && agentBranchFor(agent)
       return {
         ...(checkout ? { checkout: checkout.path } : {}),
         ...(agent
@@ -35,7 +34,7 @@ export function serverHost(root: string, deps: ServerHostDeps = {}): ModuleServe
               record: {
                 ...(agent.status !== undefined ? { status: agent.status } : {}),
                 ...(agent.host !== undefined ? { host: agent.host } : {}),
-                ...(branch !== undefined ? { branch } : {}),
+                ...(agent.branch !== undefined ? { branch: agent.branch } : {}),
                 ...(agent.pr ? { pr: { number: agent.pr.number } } : {}),
                 ...(agent.base !== undefined ? { base: agent.base } : {}),
                 ...(agent.baseCommit !== undefined ? { baseCommit: agent.baseCommit } : {}),

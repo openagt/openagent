@@ -1,9 +1,9 @@
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
-import { homedir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { readFileSync } from 'node:fs'
 import type { AgentAccount, DriverQuota, DriverRateWindow } from '@openagt/agent-driver'
 import { readAccounts, type AccountsAgent } from './accounts.js'
-import { ownLoginThere, type LoginWiring } from './login.js'
+import { configFile, writePrivate } from './files.js'
+import { ownLoginThere } from './login.js'
+import type { LoginWiring } from './wiring.js'
 
 // How full each account is, now where it can be known. The person's own Claude login says so
 // through Claude Code's `/usage`, every Codex login through Codex; an added Claude login only in
@@ -40,8 +40,7 @@ interface KeptReading {
 
 /** The file: `$XDG_CONFIG_HOME/openagent-claude-usage.json`, else dotted under the home. */
 export function claudeUsagePath(env: NodeJS.ProcessEnv = process.env): string {
-  if (env['XDG_CONFIG_HOME']) return join(env['XDG_CONFIG_HOME'], 'openagent-claude-usage.json')
-  return join(env['HOME'] ?? homedir(), '.openagent-claude-usage.json')
+  return configFile('openagent-claude-usage.json', env)
 }
 
 /** A `/usage` reading in the names a turn's own windows go by; undefined for one that said nothing. */
@@ -64,10 +63,7 @@ export function keepClaudeReading(quota: DriverQuota, path: string = claudeUsage
   const windows = readingWindows(quota)
   if (!windows) return
   try {
-    mkdirSync(dirname(path), { recursive: true })
-    const next = `${path}.${process.pid}.new`
-    writeFileSync(next, `${JSON.stringify({ at: now, windows } satisfies KeptReading)}\n`, { mode: 0o600 })
-    renameSync(next, path)
+    writePrivate(path, `${JSON.stringify({ at: now, windows } satisfies KeptReading)}\n`)
   } catch {
     // Read again next time.
   }

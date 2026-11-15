@@ -71,9 +71,9 @@ describe('a Settings row picked from a list', () => {
 
   test('a line that says something is greyed and cannot be picked: a click on it answers nothing and the pick stays', async () => {
     const onChange = vi.fn()
-    render(<Row start="" options={[{ value: '', label: "the CLI's own default" }, { value: 'not logged in', label: 'not logged in', disabled: true }]} onChange={onChange} />)
+    render(<Row start="" options={[{ value: '', label: "The coding agent's default" }, { value: 'not logged in', label: 'not logged in', disabled: true }]} onChange={onChange} />)
     expect(await offered(editor())).toEqual([
-      ["the CLI's own default", false],
+      ["The coding agent's default", false],
       ['not logged in', true],
     ])
     const line = within(await openList(editor())).getByRole('option', { name: 'not logged in' })
@@ -81,7 +81,7 @@ describe('a Settings row picked from a list', () => {
     fireEvent.click(line)
     expect(onChange).not.toHaveBeenCalled()
     await closeList(editor())
-    expect(showing(editor())).toBe("the CLI's own default")
+    expect(showing(editor())).toBe("The coding agent's default")
   })
 
   test('a row with nothing to pick renders nothing at all (#1172)', () => {
