@@ -355,6 +355,9 @@ export function App() {
   const showDashboard = () => {
     go({ projectId: null, agentId: null })
   }
+  // A phone's session page has no bar of pages: its top bar's back arrow goes to the page this app
+  // showed before it, and to the Overview when there is none (a link opened cold).
+  const backFromSession = () => back(() => true, showDashboard)
 
   // Settings (#958): a dialog over the page you are on, which stays under it, its own query too;
   // with `item`, at that page inside the entry. Moving between its entries, from its list or from a
@@ -575,6 +578,7 @@ export function App() {
       onAgentStarted,
       contextSet,
       onProjectRemoved: removableHere,
+      onBack: backFromSession,
     }
     if (!selectedAgent) {
       // Not in the list: either the run we just started (its card lands a beat later) or a
@@ -731,8 +735,9 @@ export function App() {
           </PaneLayout>
         </PanesProvider>
       </div>
-      {/* On a phone the sidebar is a sheet, opened from the bar of pages at the foot of every page. */}
-      {isMobile && (
+      {/* On a phone the sidebar is a sheet, opened from the bar of pages at the foot of every page
+          but a session's, whose message box is the page's foot (its top bar's arrow goes back). */}
+      {isMobile && agentId === null && (
         <PagesBar
           pages={sidebarPages ?? []}
           activePage={pageSegment}

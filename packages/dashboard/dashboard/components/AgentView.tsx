@@ -77,6 +77,7 @@ export function AgentView({
   onAgentStarted,
   contextSet,
   onDeleted,
+  onBack,
   onProjectRemoved,
   subagents = NO_SUBAGENTS,
 }: {
@@ -117,6 +118,8 @@ export function AgentView({
   contextSet?: ContextSet | undefined
   /** Leave this session after it is deleted (#1032) — back to the project home. */
   onDeleted?: (() => void) | undefined
+  /** A phone's back arrow in the top bar: to the page shown before. */
+  onBack?: (() => void) | undefined
   /** Told once the project is removed from the project's menu in the top bar, to leave its page; absent, no remove is offered. */
   onProjectRemoved?: (() => void) | undefined
   /** The runs started for this run, oldest first: rows in its chat, and a line above the message box while any works. */
@@ -345,6 +348,7 @@ export function AgentView({
             retainedWorktree={hasWorktree}
             onWorktreeRemoved={onWorktreeRemoved}
             onDeleted={onDeleted}
+            onBack={onBack}
             onProjectRemoved={onProjectRemoved}
             expanded={open}
             onToggle={toggle}

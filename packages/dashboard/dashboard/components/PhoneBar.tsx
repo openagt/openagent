@@ -26,7 +26,7 @@ const PAGES_IN_BAR = 2
 type BarPage = { segment: string; label: string; icon?: ComponentType<{ className?: string; 'aria-hidden'?: boolean }> | undefined }
 
 /**
- * A phone's bar of pages, at the foot of every page: the Overview, with how many things wait on the
+ * A phone's bar of pages, at the foot of every page but a session's (whose top bar has a back arrow): the Overview, with how many things wait on the
  * person in amber; the first two of the modules' pages; New, the "New agent session" page; and More,
  * the sidebar as a sheet, which holds the sessions, every page and the person. Each a 56-high press,
  * its icon over its name.

@@ -1,3 +1,4 @@
+import { ArrowLeft } from 'lucide-react'
 import type { AgentWorktree, OpenAgentEvent } from '../../src/index.js'
 import { formatBytes } from '../../src/client.js'
 import { AgentActionsMenu } from './AgentActionsMenu.js'
@@ -8,8 +9,9 @@ import { ProjectMenu } from './ProjectActions.js'
 import { SESSIONS_ID } from '../../src/project-address.js'
 import { runCell, runWord } from '../lib/run-words.js'
 import { StatePill } from './ui/state.js'
+import { Button } from './ui/button.js'
 
-// One agent's top bar: its name with a small ⌄, which is the session's menu (AgentActionsMenu), and
+// One agent's top bar: on a phone a back arrow first, which goes to the page shown before; its name with a small ⌄, which is the session's menu (AgentActionsMenu), and
 // its state in a word on the state's soft fill; and at the end the count of what it could not get
 // past, the project's ⋮, and the icons of the page's panes (Panes), the ⋮ and the icons where the "New
 // agent session" page has them. It says nothing of its tree: where it runs and its project are in
@@ -33,6 +35,7 @@ export function AgentActionBar({
   checkout,
   onShowWorkBar,
   status,
+  onBack,
 }: {
   projectId: string
   /** Which run Stop addresses (#749). */
@@ -67,6 +70,8 @@ export function AgentActionBar({
   onShowWorkBar?: (() => void) | undefined
   /** The run's state as the run table names it (`shownStatus`), once it is known. */
   status?: string | undefined
+  /** Given, a phone's bar starts with a back arrow that calls it: a phone's session page has no bar of pages. */
+  onBack?: (() => void) | undefined
 }) {
   // Only once nothing is writing to the worktree is there a size to say (#798).
   const size = ready ? formatBytes(checkout?.checkout?.sizeBytes, '') : ''
@@ -75,6 +80,12 @@ export function AgentActionBar({
     // open pane's header, so the three stand level; unlike a pane's, it has no line under it.
     <TopBar>
       <div className="flex h-11 shrink-0 items-center gap-2 overflow-hidden pr-2 pl-4">
+        {/* The arrow's glyph on the bar's 16 inset, the press pulled out by its padding (spacing.md 4). */}
+        {onBack && (
+          <Button variant="ghost" size="icon-bar" className="-ml-1.5 text-muted-foreground md:hidden" aria-label="Back" onClick={onBack}>
+            <ArrowLeft className="size-4" aria-hidden />
+          </Button>
+        )}
         <ShowSidebarButton />
         {/* Which session this is: its name, which is the button of its menu and the one part that
             gives up width. */}

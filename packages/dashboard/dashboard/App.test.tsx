@@ -1150,6 +1150,41 @@ describe('the shell on a phone', () => {
     }
   })
 
+  test("on a phone a session's page has no bar of pages; its top bar's back arrow goes to the page shown before, or to the Overview from a link opened cold", async () => {
+    const wide = phoneScreen()
+    const id = '2026-11-14T23-05-03-506Z'
+    try {
+      answerShell([])
+      answers.set('onQuota', () => null)
+      answers.set('onDashboard', () => null)
+      answers.set('onAgentChanges', () => [])
+      answers.set('onDocs', () => [])
+      answers.set('onProjectFiles', () => [])
+      answers.set('onRetainedWorktrees', () => [])
+      answers.set('onAgents', () => [{ id, status: 'done', startedAt: '2026-11-14T23:05:03.506Z', updatedAt: '2026-11-14T23:06:00.000Z', intent: 'pick a name' }])
+      answers.set('onInterventions', () => ({ items: [{ projectId: PROJECT.id, projectName: 'app', kind: 'awaiting', title: 'Pick a name', agentId: id }], whole: [PROJECT.id] }))
+
+      // Opened cold, from a link: nothing of this app's is behind it, so Back goes to the Overview.
+      window.history.replaceState(null, '', `/${PROJECT.name}/${id}`)
+      render(<App />)
+      const backButton = await screen.findByRole('button', { name: 'Back' })
+      expect(screen.queryByRole('navigation', { name: 'Pages' })).toBeNull()
+      fireEvent.click(backButton)
+      await waitFor(() => expect(window.location.pathname).toBe(`/${PROJECT.name}/overview`))
+      expect(await screen.findByRole('navigation', { name: 'Pages' })).toBeTruthy()
+
+      // Opened from the Overview: Back is the browser's, to the Overview's own entry.
+      fireEvent.click(await within(screen.getByRole('main')).findByRole('link', { name: /Pick a name/ }))
+      await waitFor(() => expect(window.location.pathname).toBe(`/${PROJECT.name}/${id}`))
+      const entries = window.history.length
+      fireEvent.click(await screen.findByRole('button', { name: 'Back' }))
+      await waitFor(() => expect(window.location.pathname).toBe(`/${PROJECT.name}/overview`))
+      expect(window.history.length).toBe(entries)
+    } finally {
+      wide()
+    }
+  })
+
   test('on a wide screen the sidebar hides by its button or Cmd+B, the page then offers it back, and it stays hidden on the next load', async () => {
     answerShell([])
     try {
