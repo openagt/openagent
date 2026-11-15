@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Skeleton, useSkeleton } from './ui/skeleton.js'
+import { Skeleton } from './ui/skeleton.js'
+import { SentenceShape, Slot } from './ui/slot.js'
 import type { DriverName } from '../../src/client.js'
 import { takeLostFocus } from '../lib/lost-focus.js'
 import { useMountedModules } from '../lib/use-modules.js'
@@ -48,21 +49,34 @@ export function AccountsList() {
   )
 }
 
-/** The skill's card, as the Overview draws it. */
+/** The skill's card, as the Overview draws it. While the modules load, it waits in the room of its emptiest answer: its heading and one sentence. */
 function RotationCard() {
   const { cards, loaded } = useMountedModules()
   const card = cards.find(each => each.package === ACCOUNT_ROTATION && each.id === 'accounts')
-  const reading = useSkeleton(!card && !loaded)
-  if (!card || reading)
-    return loaded && !reading ? (
-      <p className="text-sm text-muted-foreground">The accounts card did not load.</p>
-    ) : (
-      <Skeleton className="h-32 w-full" />
-    )
   return (
-    <ModuleSlot package={card.package} label="accounts card">
-      <card.Card projects={[]} accountWhere={account => <AccountWhere account={{ kind: account.agent, own: account.own, name: account.name }} />} />
-    </ModuleSlot>
+    <Slot of={{ value: card, state: card || loaded ? 'fresh' : 'unknown' }} shape={<CardShape />}>
+      {card =>
+        card ? (
+          <ModuleSlot package={card.package} label="accounts card">
+            <card.Card projects={[]} accountWhere={account => <AccountWhere account={{ kind: account.agent, own: account.own, name: account.name }} />} />
+          </ModuleSlot>
+        ) : (
+          <p className="text-sm text-danger">The accounts card did not load.</p>
+        )
+      }
+    </Slot>
+  )
+}
+
+/** A part's heading and its one sentence, while they are read. */
+function CardShape() {
+  return (
+    <>
+      <div className="mb-2 flex h-8 items-center">
+        <Skeleton className="h-5 w-48" />
+      </div>
+      <SentenceShape />
+    </>
   )
 }
 

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import { Check, ChevronDown, Copy, Info, MoreHorizontal, Plus } from 'lucide-react'
-import { Button, useAskOn, ClaudeLogo, CodexLogo, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, GaugeFace, Input, Section, Skeleton, Tooltip, TooltipContent, TooltipTrigger, cn, useModuleHost, useOpenAgentDown, usePolled, type ModuleCardProps, type ModuleHost } from '@openagt/dashboard/module'
+import { Button, useAskOn, ClaudeLogo, CodexLogo, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, GaugeFace, Input, Section, SentenceShape, Skeleton, Slot, Tooltip, TooltipContent, TooltipTrigger, cn, useModuleHost, useOpenAgentDown, usePolled, type ModuleCardProps, type ModuleHost } from '@openagt/dashboard/module'
 
 // The accounts each coding agent's runs try, in order: how full each one is, whether it is at a
 // limit, adding one: the command's own sign-in, which goes on by itself while the card follows it,
@@ -560,22 +560,45 @@ export function AccountsCard({ accountWhere }: ModuleCardProps) {
       }
     >
       <div className="flex flex-col gap-1">
-        {list === undefined && state === 'unknown' && <Skeleton className="h-16 w-full" />}
-        {list?.ok === false && <p className="text-sm text-danger">{list.error}</p>}
-        {list?.ok &&
-          AGENTS.map(agent => (
-            <AgentAccounts
-              key={agent.id}
-              agent={agent}
-              // A login that is not there has no row: the card says so below, with the press to add one, a server's first included.
-              accounts={shown(agent.id)}
-              usage={usage?.ok ? (usage.accounts[agent.id] ?? []) : []}
-              reading={usage === undefined}
-              where={accountWhere}
-              busy={busy || down}
-              onPress={press}
-            />
-          ))}
+        {/* Waits in the room of its emptiest answer, the sentence that says there is no account yet. */}
+        <Slot of={{ value: list, state }} shape={<SentenceShape />} className="flex flex-col gap-1">
+          {list =>
+            !list!.ok ? (
+              <p className="text-sm text-danger">{list!.error}</p>
+            ) : (
+              <>
+                {AGENTS.map(agent => (
+                  <AgentAccounts
+                    key={agent.id}
+                    agent={agent}
+                    // A login that is not there has no row: the card says so below, with the press to add one, a server's first included.
+                    accounts={shown(agent.id)}
+                    usage={usage?.ok ? (usage.accounts[agent.id] ?? []) : []}
+                    reading={usage === undefined}
+                    where={accountWhere}
+                    busy={busy || down}
+                    onPress={press}
+                  />
+                ))}
+                {/* No account at all: the press is said in the card too, where a newcomer looks, not only at its corner. */}
+                {none && (
+                  // The presses go beside the sentence together, else under it. `grow`, not `flex-1`: another module's stylesheet loaded later has a `.flex-1` that undoes `basis-48`.
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="min-w-0 grow basis-48 text-sm text-muted-foreground">No account yet. Runs need one to start.</p>
+                    <div className="flex flex-wrap gap-2">
+                      {AGENTS.map(agent => (
+                        <Button key={agent.id} variant="secondary" onClick={() => setNaming(agent.id)}>
+                          <agent.Logo className="size-3.5" />
+                          Add a {agent.account} account
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )
+          }
+        </Slot>
         {failed !== undefined && <p className="text-sm text-danger">{failed}</p>}
         {/* A sign-in that did not go through while nobody watched it, a page opened since: said here, as the dialog is closed. */}
         {AGENTS.map(agent => {
@@ -586,21 +609,6 @@ export function AccountsCard({ accountWhere }: ModuleCardProps) {
             </p>
           ) : null
         })}
-        {/* No account at all: the press is said in the card too, where a newcomer looks, not only at its corner. */}
-        {none && (
-          // The presses go beside the sentence together, else under it. `grow`, not `flex-1`: another module's stylesheet loaded later has a `.flex-1` that undoes `basis-48`.
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="min-w-0 grow basis-48 text-sm text-muted-foreground">No account yet. Runs need one to start.</p>
-            <div className="flex flex-wrap gap-2">
-              {AGENTS.map(agent => (
-                <Button key={agent.id} variant="secondary" onClick={() => setNaming(agent.id)}>
-                  <agent.Logo className="size-3.5" />
-                  Add a {agent.account} account
-                </Button>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
       <Dialog open={namingAgent !== undefined} onOpenChange={open => !open && close()} title={namingAgent ? `Add a ${namingAgent.account} account` : ''} initialFocus={nameField} finalFocus={addPress}>
         {namingAgent && (

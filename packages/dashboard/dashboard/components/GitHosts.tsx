@@ -9,6 +9,7 @@ import { FocusHome } from '../lib/focus-home.js'
 import { Button } from './ui/button.js'
 import { List } from './ui/list.js'
 import { Section } from './ui/section.js'
+import { SentenceShape, Slot } from './ui/slot.js'
 import { HostFix, useAddGitAccount } from './AddGitAccount.js'
 import { PackageLogo, hostWords, useGitHosts } from './Logins.js'
 import { AccountWhere, useServers } from './ServerLogins.js'
@@ -26,7 +27,7 @@ import { RowSaid, rowButtonClass, RowChevron } from './ui/row-item.js'
 
 /** The git hosts' card: a section for each host, by its package's name and logo, with its accounts. */
 export function GitHostsCard() {
-  const { view, reload } = useGitHosts()
+  const { view, state, reload } = useGitHosts()
   const adding = useAddGitAccount(reload)
   // The hosts an account can be added at: the ones a package answers for. With no account at any, the
   // press is the one in the host's own section, where what is missing is said: not a second one here.
@@ -65,13 +66,15 @@ export function GitHostsCard() {
       }
     >
       <p className="-mt-1 mb-4 text-sm text-muted-foreground">Runs push with the one in use at each host, never your own login.</p>
-      <div className="flex flex-col gap-6">
-        {view && view.hosts.length === 0 ? (
-          <p className="text-sm text-muted-foreground">None of your projects has a remote yet. A project pushed to a git host gets its accounts here.</p>
-        ) : (
-          (view?.hosts ?? []).map(row => (row.provider ? <HostAccounts key={row.host} row={row} onChanged={reload} /> : <NoPackage key={row.host} row={row} />))
-        )}
-      </div>
+      <Slot of={{ value: view, state }} shape={<SentenceShape />} className="flex flex-col gap-6">
+        {view =>
+          view && view.hosts.length === 0 ? (
+            <p className="text-sm text-muted-foreground">None of your projects has a remote yet. A project pushed to a git host gets its accounts here.</p>
+          ) : (
+            (view?.hosts ?? []).map(row => (row.provider ? <HostAccounts key={row.host} row={row} onChanged={reload} /> : <NoPackage key={row.host} row={row} />))
+          )
+        }
+      </Slot>
       {adding.dialog}
     </Section>
   )

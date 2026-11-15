@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { DRIVER_LABELS, type DriverName } from '../../src/client.js'
 import { onAgentState, onGitHosts, sendAgentFix, sendStopAgentFix, type AgentState, type GitHostRow, type GitHostsView } from '../rpc/logins.js'
-import { useAskOn, usePolled } from '../lib/use-async.js'
+import { useAskOn, usePolled, type ReadState } from '../lib/use-async.js'
 import { cn } from '../lib/utils.js'
 import { Button } from './ui/button.js'
 import { CopyButton } from './ui/copy-button.js'
@@ -24,15 +24,15 @@ const SELDOM_MS = 30_000
  * browser too: a place that opens later (the person's menu, the next load's Permissions) shows it
  * from its first frame, never empty while the same question is asked again.
  */
-function usePaced<T>(key: string, load: (() => Promise<T>) | null, pace: (value: T | undefined) => number, deps: unknown[]): { value: T | undefined; reload: () => Promise<void> } {
+function usePaced<T>(key: string, load: (() => Promise<T>) | null, pace: (value: T | undefined) => number, deps: unknown[]): { value: T | undefined; state: ReadState; reload: () => Promise<void> } {
   const [every, setEvery] = useState(SELDOM_MS)
-  const { value, reload, refresh } = usePolled<T | undefined>(load, undefined, every, deps, { remember: key, stored: true })
+  const { value, state, reload, refresh } = usePolled<T | undefined>(load, undefined, every, deps, { remember: key, stored: true })
   useAskOn(every, refresh)
   const next = pace(value)
   useEffect(() => {
     if (next !== every) setEvery(next)
   }, [next, every])
-  return { value, reload }
+  return { value, state, reload }
 }
 
 /** The coding agent's CLI as this computer has it: `driver`, else the one picked in Settings. Not asked while `on` is false. */
@@ -41,9 +41,9 @@ export function useAgentState(driver?: DriverName, on = true): { state: AgentSta
   return { state: value, reload }
 }
 
-export function useGitHosts(): { view: GitHostsView | undefined; reload: () => Promise<void> } {
-  const { value, reload } = usePaced('git-hosts', onGitHosts, view => (view?.hosts.some(h => h.provider?.installing || h.provider?.loggingIn) ? BUSY_MS : view?.hosts.some(h => hostLoginState(h) === 'step' || hostLoginState(h) === 'not-installed') ? MISSING_MS : SELDOM_MS), [])
-  return { view: value, reload }
+export function useGitHosts(): { view: GitHostsView | undefined; state: ReadState; reload: () => Promise<void> } {
+  const { value, state, reload } = usePaced('git-hosts', onGitHosts, view => (view?.hosts.some(h => h.provider?.installing || h.provider?.loggingIn) ? BUSY_MS : view?.hosts.some(h => hostLoginState(h) === 'step' || hostLoginState(h) === 'not-installed') ? MISSING_MS : SELDOM_MS), [])
+  return { view: value, state, reload }
 }
 
 /** A card's state: green when there is nothing to do, amber for a step to take, grey for a tool that is not here. */
