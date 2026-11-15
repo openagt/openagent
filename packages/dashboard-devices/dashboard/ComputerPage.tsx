@@ -4,7 +4,7 @@ import { Button, ConfirmDialog, Input, Switch, useOpenAgentDown } from '@openagt
 import { addDevice, removeDevice } from './devices.js'
 import { hasDoor, reachedAt, type ComputerItem } from './model.js'
 import { ComputersThrough } from './ServerPage.js'
-import { Head, Part, Problem, State, SwitchLine, useChange } from './parts.js'
+import { Head, Part, Problem, Removal, State, SwitchLine, useChange } from './parts.js'
 import type { Devices } from './use-devices.js'
 
 // A computer's own page in Settings › Devices: whether this computer's runs go there, whether it
@@ -102,7 +102,7 @@ export function ComputerPage({ d, item, onBack, onSetUp }: { d: Devices; item: C
           </Button>
         </Part>
       )}
-      <div className="space-y-1 pt-4">
+      <Removal said="Both computers forget each other. Nothing is deleted.">
         <ConfirmDialog
           trigger={
             <Button variant="secondary" className="text-danger" disabled={busy}>
@@ -121,8 +121,7 @@ export function ComputerPage({ d, item, onBack, onSetUp }: { d: Devices; item: C
             if (done) onBack()
           }}
         />
-        <p className="text-xs text-muted-foreground">Both computers forget each other. Nothing is deleted.</p>
-      </div>
+      </Removal>
       {error !== undefined && <Problem>{error}</Problem>}
     </div>
   )

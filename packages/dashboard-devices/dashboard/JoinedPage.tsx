@@ -5,7 +5,7 @@ import { idsOf, readPersonThere, type Answer, type DeviceRow } from './devices.j
 import { loadOther, otherLogin, sharedForget, type OtherLogin, type OtherRow } from './servers.js'
 import { hasDoor, throughOf, type JoinedItem, type OtherItem } from './model.js'
 import { ComputersThrough } from './ServerPage.js'
-import { Head, LoginLine, Part, Problem, Seen, State, Tabs, hostOf, useChange } from './parts.js'
+import { Head, LoginLine, Part, Problem, Removal, Seen, State, Tabs, hostOf, useChange } from './parts.js'
 import type { Devices } from './use-devices.js'
 
 // The page of a server this person is in at, set up from somewhere else: their own from another
@@ -57,7 +57,7 @@ export function JoinedPage({ d, item, onBack }: { d: Devices; item: JoinedItem; 
             {here?.lineRefused && <p className="text-xs text-warning">{`${item.name} no longer lets this computer in for its line: turn on "From anywhere, through ${item.name}" under This computer to set it up again.`}</p>}
           </Part>
           <ComputersThrough host={host} machine={machine} busy={busy} everyMs={30_000} />
-          <div className="pt-4">
+          <Removal said="Takes the server off this list, and this computer out of it.">
             <ConfirmDialog
               trigger={
                 <Button variant="secondary" className="text-danger" disabled={busy} aria-label={`Remove ${item.name}`}>
@@ -77,7 +77,7 @@ export function JoinedPage({ d, item, onBack }: { d: Devices; item: JoinedItem; 
                 if (done) onBack()
               }}
             />
-          </div>
+          </Removal>
         </>
       )}
       {tab === 'devices' && <DevicesThere d={d} machine={machine} name={item.name} devices={person.devices} line={here?.line} busy={busy} onBusy={setBusy} onError={setError} />}
@@ -196,7 +196,7 @@ export function OtherPage({ d, item, onBack }: { d: Devices; item: OtherItem; on
               </LoginLine>
             </ul>
           </Part>
-          <div className="pt-4">
+          <Removal said={`Takes ${name} off this list, and this computer out of it.`}>
             <Button
               variant="secondary"
               className="text-danger"
@@ -212,7 +212,7 @@ export function OtherPage({ d, item, onBack }: { d: Devices; item: OtherItem; on
             >
               {`Remove ${name}`}
             </Button>
-          </div>
+          </Removal>
         </>
       )}
       {tab === 'devices' && person && <DevicesThere d={d} machine={machine} name={name} devices={person.devices} line={here?.line} busy={busy} onBusy={setBusy} onError={setError} />}

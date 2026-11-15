@@ -109,6 +109,16 @@ export function Part({ title, children }: { title?: string; children: ReactNode 
   return <section className="space-y-3 pt-6">{children}</section>
 }
 
+/** The press that removes the device a page is about: a group of its own at the page's end, under a hairline, with what it does said under it. */
+export function Removal({ said, children }: { said: string; children: ReactNode }) {
+  return (
+    <section className="mt-6 space-y-1 border-t border-hairline pt-6">
+      {children}
+      <p className="max-w-[72ch] text-xs text-muted-foreground">{said}</p>
+    </section>
+  )
+}
+
 /** A switch row of a page: what it is, what it means now, and the switch. */
 export function SwitchLine({ label, words, children }: { label: string; words: string; children: ReactNode }) {
   return (

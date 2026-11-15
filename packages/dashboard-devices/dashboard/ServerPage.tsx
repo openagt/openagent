@@ -5,7 +5,7 @@ import { idsOf, myName, type Answer, type DeviceRow } from './devices.js'
 import { installDone, installFailed, nameOwner, removeDevice, removePerson, setPeople, setWho, askLink, type ServerRow } from './servers.js'
 import { labelOf, type ServerItem } from './model.js'
 import { Invite } from './codes.js'
-import { Head, Part, Problem, Said, Seen, State, StepLine, SwitchLine, Tabs, hostOf, olderThan } from './parts.js'
+import { Head, Part, Problem, Removal, Said, Seen, State, StepLine, SwitchLine, Tabs, hostOf, olderThan } from './parts.js'
 import type { Devices } from './use-devices.js'
 
 // A server's own page in Settings › Devices, for a server this computer installed OpenAgent on:
@@ -212,10 +212,10 @@ function Overview({ d, item }: { d: Devices; item: ServerItem }) {
       {/* A computer on Tailscale keeps no lines: no computer is reached through it. */}
       {done && machine && server.through === undefined && !server.tailscale && <ComputersThrough host={host} machine={machine} busy={busy} everyMs={30_000} />}
       {!server.working && (
-        <div className="pt-4">
+        <Removal said="Takes the server off this list, and this computer out of the server.">
           <ConfirmDialog
             trigger={
-              <Button variant="secondary" className="text-danger" disabled={busy} aria-label={`Remove ${server.address}`} title="Takes the server off this list, and this computer out of the server.">
+              <Button variant="secondary" className="text-danger" disabled={busy} aria-label={`Remove ${server.address}`}>
                 Remove server
               </Button>
             }
@@ -225,7 +225,7 @@ function Overview({ d, item }: { d: Devices; item: ServerItem }) {
             confirmBusyLabel="Removing…"
             onConfirm={() => d.removeServer(server)}
           />
-        </div>
+        </Removal>
       )}
     </>
   )
