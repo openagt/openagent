@@ -118,7 +118,7 @@ export function PanelRow({ state, title, titleHint, meta = [], fact, actions, hr
       {(fact !== undefined || actions !== undefined) && (
         <span className="grid shrink-0 items-center justify-items-end">
           {fact !== undefined && (
-            <span className={cn('col-start-1 row-start-1 text-xs text-faint-foreground', actions !== undefined && 'pointer-coarse:invisible pointer-fine:group-hover/row:invisible pointer-fine:group-focus-within/row:invisible pointer-fine:group-has-[[aria-expanded=true]]/row:invisible')}>{fact}</span>
+            <span className={cn('col-start-1 row-start-1 text-xs text-faint-foreground', actions !== undefined && 'not-pointer-fine:invisible pointer-fine:group-hover/row:invisible pointer-fine:group-focus-within/row:invisible pointer-fine:group-has-[[aria-expanded=true]]/row:invisible')}>{fact}</span>
           )}
           {actions !== undefined && (
             <span className="relative col-start-1 row-start-1 flex items-center gap-1 pointer-fine:opacity-0 pointer-fine:group-hover/row:opacity-100 pointer-fine:group-focus-within/row:opacity-100 pointer-fine:group-has-[[aria-expanded=true]]/row:opacity-100">
