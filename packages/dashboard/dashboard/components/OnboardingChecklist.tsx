@@ -105,7 +105,8 @@ export function OnboardingChecklist({
   // The project the steps act on: the only/most recent one. A first-session flow rarely has a second.
   const targetProjectId = data?.projects[0]?.projectId ?? null
 
-  const projectCount = data?.totals.projects ?? 0
+  // Before the projects are read, the app's own list says whether there is one.
+  const projectCount = data?.totals.projects ?? projects.length
   const hasTickets = data?.projects.some(p => p.hasTickets) ?? false
   const browserGranted = permission === 'granted' && notificationsEnabled(preferences)
 
@@ -242,11 +243,11 @@ export function OnboardingChecklist({
   const name = person ? `, ${firstName(person.name)}` : ''
 
   const doneCount = steps.filter(step => step.done).length
-  // While the projects are not read: whether a project is there is not known, and the queue's and the tickets'
-  // steps, which only some projects have, hold their places before the last step.
-  const frame: { key: string; label?: string; description?: ReactNode; known: boolean; done: boolean }[] = steps.flatMap(step => [
-    ...(data === null && step.key === 'browser-notification' ? [{ key: 'todos', known: false, done: false }, { key: 'tickets', known: false, done: false }] : []),
-    { key: step.key, label: step.label, description: step.description, known: data !== null || step.key !== 'project', done: step.done },
+  // While the projects are not read: the queue's and the tickets' steps, which some projects have and only their read
+  // says, hold their places before the last step. With no project (a new install) neither can be there.
+  const frame: { key: string; label?: string; description?: ReactNode; done: boolean }[] = steps.flatMap(step => [
+    ...(data === null && projects.length > 0 && step.key === 'browser-notification' ? [{ key: 'todos', done: false }, { key: 'tickets', done: false }] : []),
+    { key: step.key, label: step.label, description: step.description, done: step.done },
   ])
   return (
     <PanelGroup
@@ -286,17 +287,16 @@ export function OnboardingChecklist({
       {reading ? (
         <>
           <p className="sr-only">Loading…</p>
-          {/* The steps as they will stand once read, so nothing in them moves when the answer comes: the open step its
-              words under its name (read with the coding agent and the git hosts, or fixed) and its presses' shapes at the
-              row's end, centred on the row; a step whose state is not
-              read yet has a shape for its mark; the steps only the projects' read can add (the queue's, the tickets')
-              hold their places as shapes. Only once the coding agent and the git hosts are read: each can add a step at
-              the top, which would push the rows drawn. */}
+          {/* The steps as they will stand once read, so nothing in them moves when the answer comes: each its mark and its
+              title, the open step its words under its name (read with the coding agent and the git hosts, or fixed) and
+              its presses' shapes at the row's end, centred on the row; the steps only the projects' read can add (the
+              queue's, the tickets') hold their places as shapes. Only once the coding agent and the git hosts are read:
+              each can add a step at the top, which would push the rows drawn. */}
           {missingLoaded && (
             <Panel ordered aria-hidden>
               {frame.map((step, at) => (
                 <li key={step.key} className={STEP_ROW}>
-                  {step.label === undefined || !step.known ? <MarkShape /> : step.done ? <DoneMark /> : <StepMark at={at} open={step.key === open} />}
+                  {step.label === undefined ? <MarkShape /> : step.done ? <DoneMark /> : <StepMark at={at} open={step.key === open} />}
                   {step.label === undefined ? (
                     <span className="flex h-5 items-center">
                       <Skeleton className="h-4 w-48" />
@@ -392,7 +392,7 @@ function DoneMark() {
   )
 }
 
-/** A step whose state is not read yet: a shape in its mark's place. */
+/** A step the projects' read may add: a shape in its mark's place. */
 function MarkShape() {
   return (
     <span className="flex h-5 w-4 shrink-0 items-center">
