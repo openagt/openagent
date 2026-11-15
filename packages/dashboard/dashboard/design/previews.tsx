@@ -674,12 +674,11 @@ function Composing() {
 
 function Empties() {
   return (
-    <div className="grid gap-4 sm:grid-cols-2">
-      <Card>
-        <Empty title="No runs yet" action={<Button variant="secondary">New agent session</Button>}>
-          A run shows here from the moment an agent starts.
-        </Empty>
-      </Card>
+    <div className="max-w-xl space-y-8">
+      <Empty title="No runs yet." action={<Button variant="secondary">New agent session</Button>}>
+        A run shows here from the moment an agent starts.
+      </Empty>
+      <Empty title="Nothing queued." />
     </div>
   )
 }
@@ -860,7 +859,7 @@ export const PREVIEWS: Preview[] = [
     path: 'components/empty.html',
     group: 'Components',
     name: 'Empty',
-    subtitle: 'Nothing here yet: what is missing, what fills it, the press that does',
+    subtitle: 'Nothing here yet, said as the page: one plain sentence on the column\'s edge, what fills it, the press that does',
     width: 900,
     node: <Empties />,
   },
