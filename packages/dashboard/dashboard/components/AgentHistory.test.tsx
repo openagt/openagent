@@ -525,6 +525,8 @@ describe('whose run a row is', () => {
       renderRail(<AgentHistory projectId="session" scope="session" agents={[agent({ id: 'r1', title: 'Hi five', person: 'Ada@x.dev' }), agent({ id: 'r2', title: 'His', person: 'rom@y.dev' })]} selectedAgentId={null} onSelect={() => {}} />)
       await waitFor(() => expect(row(/^Hi five/).querySelector('img')?.getAttribute('src')).toBe('https://avatars.githubusercontent.com/u/9'))
       expect(row(/^His/).querySelector('img')).toBeNull()
+      // Until the picture lands, the letters are your name's, as the foot has them, not your email's.
+      expect(within(row(/^Hi five/)).getByRole('img', { name: /Ada@x\.dev/ }).textContent).toBe('AL')
     } finally {
       onPerson.mockResolvedValue({ name: 'Ada Lovelace' })
     }
