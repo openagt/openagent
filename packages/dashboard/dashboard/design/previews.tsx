@@ -585,6 +585,7 @@ function Panels() {
       </PanelGroup>
       <PanelGroup title="Nothing pressable" count="1">
         <PanelRow state={<StateCell state="done" />} title="Its name only" meta={['what is known of it']} fact="2h" />
+        <PanelRow before={<span className="w-6 text-right text-xs font-medium tabular-nums text-muted-foreground">P8</span>} title="A fact before its name, in a column of its own" meta={['what is known of it']} fact="1w" />
       </PanelGroup>
     </div>
   )

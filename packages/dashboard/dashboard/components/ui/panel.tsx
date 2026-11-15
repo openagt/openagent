@@ -67,8 +67,10 @@ const coverClass = 'outline-none after:absolute after:inset-0'
  * a fact stands on the title's line and the presses are centred on the row, both ending on the inset.
  * A press with no painted box is pulled out by its own padding by its caller, so its glyph ends there.
  */
-export function PanelRow({ state, title, titleHint, meta = [], fact, actions, href, external = false, onClick, className }: {
+export function PanelRow({ state, before, title, titleHint, meta = [], fact, actions, href, external = false, onClick, className }: {
   state?: ReactNode
+  /** On the name's line before it, 12 after `state`, its own column (a ticket's priority): `meta` starts under the name, not under it. */
+  before?: ReactNode
   title: ReactNode
   /** Said under the pointer over the name: the whole text where the name stands in for it. */
   titleHint?: string | undefined
@@ -111,6 +113,7 @@ export function PanelRow({ state, title, titleHint, meta = [], fact, actions, hr
       )}
     >
       {state !== undefined && <span className="flex h-5 w-4 shrink-0 items-center">{state}</span>}
+      {before !== undefined && <span className="flex h-5 shrink-0 items-center">{before}</span>}
       <span className="min-w-0 flex-1">
         {named}
         {/* Every part but the last is said whole; the last gives way, cut with "…". */}
