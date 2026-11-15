@@ -65,7 +65,7 @@ describe('EventList conversation rows', () => {
     expect(boxes[1]!.textContent).toBe('second')
   })
 
-  test('a prompt is a grey box on the right, and neither it nor the reply wears a label', () => {
+  test('a prompt is a card on the right, and neither it nor the reply wears a label', () => {
     const events: OpenAgentEvent[] = [
       { kind: 'driver', event: { type: 'start', prompt: 'what is your name?' } },
       { kind: 'driver', event: { type: 'text', text: 'I am **Claude**.' } },
@@ -73,7 +73,7 @@ describe('EventList conversation rows', () => {
     render(<EventList events={events} stick={false} />)
     const box = screen.getByLabelText('Your message')
     expect(box.textContent).toBe('what is your name?')
-    expect(box.className).toContain('bg-muted')
+    expect(box.className).toContain('bg-card')
     expect(box.parentElement!.className).toContain('items-end')
     expect(box.closest('.font-sans')).toBeTruthy()
     expect(screen.queryByText('you')).toBeNull()

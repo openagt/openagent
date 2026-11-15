@@ -420,7 +420,7 @@ function Prompt({ text, at, waiting, attached, fresh = false }: { text: string; 
             <CopyMessage text={text} />
           </div>
         )}
-        <div role="group" aria-label={waiting ? 'Your message, waiting' : 'Your message'} className="max-w-[80%] min-w-0 rounded-lg bg-muted px-3 py-2">
+        <div role="group" aria-label={waiting ? 'Your message, waiting' : 'Your message'} className="max-w-[80%] min-w-0 rounded-lg rounded-br-sm bg-card px-4 py-2 shadow-sm ring-1 ring-hairline">
           <div className={tall && !open ? 'max-h-40 overflow-hidden' : ''}>
             <Markdown text={text} />
           </div>
