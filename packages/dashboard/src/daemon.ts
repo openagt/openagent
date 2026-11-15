@@ -147,7 +147,7 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
   const websiteDir = await resolveWebsite()
   // A secure address that cannot be read is said, and the dashboard comes up on its plain one.
   const secure = await readSecureAddress(env).catch((err: unknown): SecureAddress | undefined => {
-    console.log(`the secure address could not be read (${err instanceof Error ? err.message : String(err)})`)
+    console.log(`[openagent] the secure address could not be read (${err instanceof Error ? err.message : String(err)})`)
     return undefined
   })
   const dashboard: Dashboard = await startDashboard({

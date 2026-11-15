@@ -4,7 +4,7 @@ import { forgetRemembered } from '../lib/use-async.js'
 
 const accounts = vi.hoisted(() => ({ onAgentAccounts: vi.fn(), sendUseAgentAccountFirst: vi.fn() }))
 vi.mock('../rpc/accounts.js', () => accounts)
-const logins = vi.hoisted(() => ({ onAgentState: vi.fn(), sendAgentFix: vi.fn(), onGitHosts: vi.fn(), sendGitHostInstall: vi.fn(), sendGitHostLogin: vi.fn(), sendUseGitHostAccount: vi.fn() }))
+const logins = vi.hoisted(() => ({ onAgentState: vi.fn(), sendAgentFix: vi.fn(), sendStopAgentFix: vi.fn(), onGitHosts: vi.fn(), sendGitHostInstall: vi.fn(), sendGitHostLogin: vi.fn(), sendUseGitHostAccount: vi.fn() }))
 vi.mock('../rpc/logins.js', () => logins)
 const servers = vi.hoisted(() => ({ onServerLogins: vi.fn(), sendUseLoginsOn: vi.fn(), sendAllowLogins: vi.fn(), sendSettleLogin: vi.fn() }))
 vi.mock('../rpc/server-logins.js', () => servers)
@@ -52,13 +52,13 @@ afterEach(() => {
 })
 
 describe('Agent accounts', () => {
-  test('a Claude Code that is not here says so in grey, with the press that installs it and the command it runs; logged out is amber, with the press that logs it in', async () => {
+  test('a Claude Code that is not here says so once, with the press that installs it and the command it runs; logged out says so, with the press that logs it in', async () => {
     views({ now: NOW, accounts: [{ id: 'This computer', name: 'This computer', own: true, windows: [] }] })
     states({ driver: 'claude-code', ready: false, problem: '`claude` not found', fix: { kind: 'install', command: 'curl -fsSL https://claude.ai/install.sh | bash' } })
     logins.sendAgentFix.mockResolvedValue({ ok: true })
     render(<AccountsList />)
     const card = await screen.findByRole('region', { name: 'Claude Code' })
-    expect(await within(card).findByText('Not installed')).toBeTruthy()
+    expect(await within(card).findByText('Claude Code is not installed.')).toBeTruthy()
     expect(within(card).getByText('curl -fsSL https://claude.ai/install.sh | bash')).toBeTruthy()
     fireEvent.click(within(card).getByRole('button', { name: 'Install Claude Code' }))
     await waitFor(() => expect(logins.sendAgentFix).toHaveBeenCalledWith('claude-code'))
@@ -67,7 +67,7 @@ describe('Agent accounts', () => {
     states({ driver: 'claude-code', ready: false, problem: '`claude` is not logged in.', fix: { kind: 'log-in', command: 'claude auth login' }, fixing: 'log-in' })
     render(<AccountsList />)
     const out = await screen.findByRole('region', { name: 'Claude Code' })
-    expect(await within(out).findByText('Not logged in')).toBeTruthy()
+    expect(await within(out).findByText('Claude Code is not logged in.')).toBeTruthy()
     expect(within(out).getByRole('status').textContent).toMatch(/Say yes in the page this computer's browser opened/)
   })
 
@@ -86,13 +86,27 @@ describe('Agent accounts', () => {
     expect(press.getAttribute('aria-disabled')).toBe('true')
   })
 
+  test('a login that waits on the browser says where to sign in, and Cancel stops it', async () => {
+    views({ now: NOW, accounts: [{ id: 'This computer', name: 'This computer', own: true, windows: [] }] })
+    const out = { driver: 'claude-code', ready: false, problem: '`claude` is not logged in.', fix: { kind: 'log-in', command: 'claude auth login' } }
+    states({ ...out, fixing: 'log-in', url: 'https://claude.ai/oauth/authorize?code=1' })
+    logins.sendStopAgentFix.mockImplementation(async () => (states(out), { ok: true }))
+    render(<AccountsList />)
+    const card = await screen.findByRole('region', { name: 'Claude Code' })
+    expect((await within(card).findByRole('link', { name: 'Open the sign-in page' })).getAttribute('href')).toBe('https://claude.ai/oauth/authorize?code=1')
+    fireEvent.click(within(card).getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(logins.sendStopAgentFix).toHaveBeenCalledWith('claude-code'))
+    await waitFor(() => expect(within(card).queryByRole('status')).toBeNull())
+    expect(within(card).getByRole('button', { name: 'Log this computer in to Claude Code' }).getAttribute('aria-disabled')).toBeNull()
+  })
+
   test('once the press worked, the card says Claude Code is ready instead of going away', async () => {
     views({ now: NOW, accounts: [{ id: 'This computer', name: 'This computer', own: true, windows: [] }] })
     states({ driver: 'claude-code', ready: false, problem: '`claude` is not logged in.', fix: { kind: 'log-in', command: 'claude auth login' } })
     logins.sendAgentFix.mockImplementation(async () => (states({ driver: 'claude-code', ready: true }), { ok: true }))
     render(<AccountsList />)
     const card = await screen.findByRole('region', { name: 'Claude Code' })
-    expect(await within(card).findByText('Not logged in')).toBeTruthy()
+    expect(await within(card).findByText('Claude Code is not logged in.')).toBeTruthy()
     fireEvent.click(within(card).getByRole('button', { name: 'Log this computer in to Claude Code' }))
     expect((await within(card).findByRole('status', {}, { timeout: 5000 })).textContent).toBe('Claude Code is ready: runs can start with it.')
   })
@@ -154,7 +168,7 @@ describe('Agent accounts', () => {
     states({ driver: 'claude-code', ready: true }, { driver: 'codex', ready: false, problem: '`codex` not found', fix: { kind: 'install', command: 'curl -fsSL https://chatgpt.com/codex/install.sh | sh' } })
     render(<AccountsList />)
     const card = await screen.findByRole('region', { name: 'Codex' })
-    expect(await within(card).findByText('Not installed')).toBeTruthy()
+    expect(await within(card).findByText('Codex is not installed.')).toBeTruthy()
     expect(within(card).getByRole('button', { name: 'Install Codex' })).toBeTruthy()
     // An agent that can run has nothing to set up: its accounts are the skill's card.
     expect(screen.queryByRole('region', { name: 'Claude Code' })).toBeNull()

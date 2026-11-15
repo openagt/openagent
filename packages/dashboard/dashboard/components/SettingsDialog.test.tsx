@@ -131,7 +131,7 @@ describe('Settings › Coding agent', () => {
     refreshPreferences()
     try {
       open('agent')
-      expect(await screen.findByText('Which coding agent runs the work. Claude Code is not installed on this computer.')).toBeTruthy()
+      expect(await screen.findByText('Claude Code is not installed on this computer.')).toBeTruthy()
     } finally {
       onModels.mockImplementation(answered)
     }
@@ -223,7 +223,7 @@ describe('Settings on and off rows', () => {
       ['New activity', false],
     ])
     fireEvent.click(screen.getByRole('button', { name: 'Claude web' }))
-    expect(switches()).toEqual([['Browser bridge', false]])
+    expect(switches()).toEqual([['Claude web bridge', false]])
     fireEvent.click(screen.getByRole('button', { name: 'Notifications' }))
     fireEvent.click(row('New activity'))
     expect(checked(row('New activity'))).toBe(true)
@@ -328,7 +328,7 @@ describe('Settings › Claude web (#1332)', () => {
     // The status of the daemon's browser goes with its option.
     expect(screen.queryByText(/The bridge browser is off/)).toBeNull()
     // The words are the radio's label: a click on them picks it too.
-    fireEvent.click(screen.getByText('A browser the daemon runs — recommended'))
+    fireEvent.click(screen.getByText('A browser the daemon runs'))
     expect(saves()).toEqual([{ bridgeBrowser: false }, { bridgeBrowser: true }])
     expect(checked(screen.getByRole('radio', { name: /A browser the daemon runs/ }))).toBe(true)
   })
@@ -337,7 +337,7 @@ describe('Settings › Claude web (#1332)', () => {
     prefsRead.mockResolvedValueOnce({ bridge: false })
     refreshPreferences()
     open('claude-web')
-    const bridge = await screen.findByRole('switch', { name: 'Browser bridge' })
+    const bridge = await screen.findByRole('switch', { name: 'Claude web bridge' })
     await waitFor(() => expect(checked(bridge)).toBe(false))
     expect(screen.queryByText(/Which browser does the work/)).toBeNull()
     expect(screen.queryByRole('radio')).toBeNull()
@@ -390,7 +390,7 @@ describe('the Settings list', () => {
 
   test("two groups: yours and this computer's, the computer's packages among them; then the picked project's packages", () => {
     show('', 'p1')
-    expect(entries('You and this computer')).toEqual(['Profile', 'Appearance', 'Notifications', 'Coding agent', 'Your agent data', 'Repos', 'Claude web', 'Devices'])
+    expect(entries('You and this computer')).toEqual(['Profile', 'Appearance', 'Notifications', 'Coding agent', 'Your agent data', 'Repos', 'Claude web', 'Keyboard shortcuts', 'Devices'])
     // gemstack has orchestration and no scheduler; every project has its skills.
     expect(entries('Project')).toEqual(['Skills', 'Project agent data', 'Orchestration'])
     expect(showing(select('Project'))).toBe('gemstack')
@@ -503,36 +503,38 @@ describe('the Settings list', () => {
     }
     await back()
     const asked = await screen.findByRole('alertdialog', { name: 'Leave without saving?' })
-    expect(window.location.search).toBe('?settings=skills')
+    await waitFor(() => expect(window.location.search).toBe('?settings=skills'))
     fireEvent.click(within(asked).getByRole('button', { name: 'Cancel' }))
     await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
     expect(screen.getByRole('checkbox', { name: 'skill-of-p1' }).getAttribute('aria-checked')).toBe('false')
     await back()
-    const popped = new Promise(resolve => window.addEventListener('popstate', resolve, { once: true }))
     fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Leave' }))
-    await act(async () => void (await popped))
-    expect(window.location.pathname + window.location.search).toBe('/page')
+    await waitFor(() => expect(window.location.pathname + window.location.search).toBe('/page'))
   })
 
-  test('Forward with a tick on Skills not saved asks as Back does, and the address stays on Settings: Leave goes on to the later page', async () => {
+  test("Forward with a tick on Skills not saved asks as Back does, and the tab's list stays as it was: Cancel keeps Settings, Leave goes on to the later page, and Back from there reaches Settings once", async () => {
     window.history.replaceState(null, '', '/page?settings=skills')
     window.history.pushState(null, '', '/later')
     const Routed = () => (useRoute(NO_PROJECTS), null)
     render(<Routed />)
-    const step = async (go: () => void) => {
-      const popped = new Promise(resolve => window.addEventListener('popstate', resolve, { once: true }))
-      go()
-      await act(async () => void (await popped))
-    }
-    await step(() => window.history.back())
-    expect(window.location.search).toBe('?settings=skills')
+    const entries = window.history.length
+    /** The tab is at `address`, its list as long as it was. */
+    const at = (address: string) => waitFor(() => expect([window.location.pathname + window.location.search, window.history.length]).toEqual([address, entries]))
+    window.history.back()
+    await at('/page?settings=skills')
     show('skills', 'p1')
     fireEvent.click(await screen.findByRole('checkbox', { name: 'skill-of-p1' }))
-    await step(() => window.history.forward())
+    window.history.forward()
     const asked = await screen.findByRole('alertdialog', { name: 'Leave without saving?' })
-    expect(window.location.pathname + window.location.search).toBe('/page?settings=skills')
-    await step(() => fireEvent.click(within(asked).getByRole('button', { name: 'Leave' })))
-    expect(window.location.pathname).toBe('/later')
+    await at('/page?settings=skills')
+    fireEvent.click(within(asked).getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
+    await at('/page?settings=skills')
+    window.history.forward()
+    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Leave' }))
+    await at('/later')
+    window.history.back()
+    await at('/page?settings=skills')
   })
 
   test('Skills with no project given follows the sidebar\'s pick', async () => {

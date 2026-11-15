@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { GIT_FAILED, Refused, UsageError, commandReader, commandWrite, nodeBranchFileFs, nodeGitRunner, parseCommandArgs, runCommandLine, type Command, type GitRunner } from '@openagt/agent-data'
+import { GIT_FAILED, Refused, UsageError, commandReader, commandWrite, nodeBranchFileFs, nodeGitRunner, parseCommandArgs, runCommandLine, helpRows, helpText, type Command, type GitRunner } from '@openagt/agent-data'
 import { QUEUE_FILE } from './names.js'
 import { appendQueueEntry, insertQueueEntry, parseQueueEntries, parseQueueSections, removeQueueEntry } from './queue.js'
 
@@ -25,17 +25,16 @@ import { appendQueueEntry, insertQueueEntry, parseQueueEntries, parseQueueSectio
 
 export const USAGE = `usage: queue [command]
 
-  (no command)                       the queue's open entries, in order of work
-  add <text> [--priority N]          put an entry on the queue, in its priority section
-  done <text>                        take an entry off the queue
+${helpRows([
+  ['(no command)', `the queue's open entries, in order of work`],
+  ['add <text> [--priority N]', 'put an entry on the queue, in its priority section'],
+  ['done <text>', 'take an entry off the queue'],
+  'For a dashboard that shows the queue, not for an agent:',
+  ['--local', `with the bare command: read this machine's copy, no fetch from origin`],
+  ['--full', 'with the bare command: each entry as {"entry", "priority"}, the priority of the section it sits in (absent outside any)'],
+])}
 
-  For a dashboard that shows the queue, not for an agent:
-  --local                            with the bare command: read this machine's copy, no fetch from
-                                     origin
-  --full                             with the bare command: each entry as {"entry", "priority"}, the
-                                     priority of the section it sits in (absent outside any)
-
-JSON on stdout. Exit code 1 for a refusal or a git failure (the reason on stderr), 2 for a usage error.`
+${helpText('JSON on stdout. Exit code 1 for a refusal or a git failure (the reason on stderr), 2 for a usage error.')}`
 
 /** The streams and the working directory a run of the CLI sees. */
 export interface CliIo {
@@ -46,7 +45,7 @@ export interface CliIo {
 
 /** Run the CLI: `argv` is everything after the program name. Resolves to the exit code. */
 export function runCli(argv: string[], io: CliIo, git: GitRunner = nodeGitRunner()): Promise<number> {
-  return runCommandLine(argv, io, { usage: USAGE, commands: COMMANDS, bare: list, failure: GIT_FAILED }, io, git)
+  return runCommandLine(argv, io, { program: 'queue', usage: USAGE, commands: COMMANDS, bare: list, failure: GIT_FAILED }, io, git)
 }
 
 /**

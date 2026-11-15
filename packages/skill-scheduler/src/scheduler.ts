@@ -13,7 +13,8 @@ import { CHECK_TIMEOUT_MS, GLANCE_MS, NOW_CHECK_TIMEOUT_MS, QUOTA_KEPT_MS, SCHED
 import { inFlight, lastRuns, lastStart, type LastRun } from './records.js'
 import { readSchedule, type Schedule, type ScheduledCommand, type Unlisted } from './schedule.js'
 import { isSwitchedOn, listed, namesGivenUp, readState, stateDir, updateState, withoutListed, withoutName, withoutPid, type ListedCommand, type State, type TickRecord } from './state.js'
-import { atStartOf } from './start-point.js'
+import { atStartOf, startRef } from './start-point.js'
+import { sharedInGit } from './automation.js'
 import { glance, startNow, tick, type StartedNow, type TickDeps } from './tick.js'
 import { runCheck } from './check.js'
 import { accountsPath, readAccounts } from '@openagt/skill-account-rotation'
@@ -271,8 +272,8 @@ export async function stopScheduler(repo: string, opts: { unlessKeepAlive?: bool
   return { ...stopped, kept: false }
 }
 
-/** A command as `status` lists it: what its file says, and its last run when it has one. */
-export type StatusCommand = ListedCommand & { lastRun?: LastRun }
+/** A command as `status` lists it: what its file says, its last run when it has one, and, for a shared automation, what git holds of its file ({@link sharedInGit}). */
+export type StatusCommand = ListedCommand & { lastRun?: LastRun; untracked?: true; notOn?: string }
 
 /** What `status` answers: the state, whether its process is alive, and the schedule as the project's files say it now. */
 export type Status = State & { running: boolean; schedule: StatusCommand[]; unreadable: Unlisted[] }
@@ -283,10 +284,20 @@ export type Status = State & { running: boolean; schedule: StatusCommand[]; unre
  * so a command saved, changed, removed or started a moment ago is listed as it stands, also where
  * no scheduler is running. Records that cannot be read list no last run and stop nothing.
  */
-export async function schedulerStatus(repo: string): Promise<Status> {
+export async function schedulerStatus(repo: string, git: GitRunner): Promise<Status> {
   const [state, schedule] = await Promise.all([readState(repo), readSchedule(repo)])
   const last = await lastRuns(repo, schedule, hostname()).catch((): Record<string, LastRun> => ({}))
-  return { ...state, running: state.pid !== undefined && isPidAlive(state.pid), schedule: schedule.commands.map((command): StatusCommand => ({ ...listed(command), ...(last[command.name] ? { lastRun: last[command.name]! } : {}) })), unreadable: schedule.unreadable }
+  const shared = (command: ScheduledCommand): boolean => command.editable === true && command.text === undefined
+  // Where a run's checkout starts is asked once, and only where a shared automation is listed.
+  const ref = schedule.commands.some(shared) ? await startRef(repo, git) : undefined
+  const commands = await Promise.all(
+    schedule.commands.map(async (command): Promise<StatusCommand> => ({
+      ...listed(command),
+      ...(last[command.name] ? { lastRun: last[command.name]! } : {}),
+      ...(ref !== undefined && shared(command) ? await sharedInGit(repo, command.name, ref, git) : {}),
+    })),
+  )
+  return { ...state, running: state.pid !== undefined && isPidAlive(state.pid), schedule: commands, unreadable: schedule.unreadable }
 }
 
 function describe(record: TickRecord): string[] {

@@ -28,7 +28,7 @@ describe('AddProjectPanel (#1150)', () => {
     // Picking is the form: the dialog is already open, the modal just says so.
     expect(sendPickProjectDirectory).toHaveBeenCalledTimes(1)
     // The picked path is shown back for the trust gate (#439); nothing is registered yet.
-    await screen.findByText('/Users/dev/my-repo')
+    await screen.findByTitle('/Users/dev/my-repo')
     expect(sendAddProject).not.toHaveBeenCalled()
     // The question is short: the warning and the button, no list and no other choice (Rom).
     const dialog = screen.getByRole('dialog', { name: 'Add project' })
@@ -45,7 +45,7 @@ describe('AddProjectPanel (#1150)', () => {
     const onClose = vi.fn()
     sendAddProject.mockResolvedValue({ ok: true, alreadyActivated: false })
     render(<AddProjectPanel opener={NO_OPENER} folder="/Users/dev/here" onAdded={() => {}} onClose={onClose} />)
-    expect(screen.getByText('/Users/dev/here')).toBeTruthy()
+    expect(screen.getByTitle('/Users/dev/here')).toBeTruthy()
     expect(sendPickProjectDirectory).not.toHaveBeenCalled()
     expect(screen.queryByRole('button', { name: 'Choose again' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
@@ -59,7 +59,7 @@ describe('AddProjectPanel (#1150)', () => {
   test('the trust question opens on the press that adds nothing: a second Enter trusts no repository unread', async () => {
     sendPickProjectDirectory.mockResolvedValue({ ok: true, path: '/Users/dev/my-repo' })
     render(<AddProjectPanel opener={NO_OPENER} onAdded={() => {}} onClose={() => {}} />)
-    await screen.findByText('/Users/dev/my-repo')
+    await screen.findByTitle('/Users/dev/my-repo')
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Choose again' }))
     cleanup()
     render(<AddProjectPanel opener={NO_OPENER} folder="/Users/dev/here" onAdded={() => {}} onClose={() => {}} />)
@@ -88,7 +88,7 @@ describe('AddProjectPanel (#1150)', () => {
     render(<AddProjectPanel opener={NO_OPENER} onAdded={() => {}} onClose={() => {}} />)
     await screen.findByText(/no desktop session/)
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
-    await screen.findByText('/Users/dev/my-repo')
+    await screen.findByTitle('/Users/dev/my-repo')
   })
 
   test('a failed add reports the daemon’s reason and stays on the trust step', async () => {
@@ -104,9 +104,9 @@ describe('AddProjectPanel (#1150)', () => {
     sendPickProjectDirectory.mockResolvedValueOnce({ ok: true, path: '/Users/dev/first' })
     sendPickProjectDirectory.mockResolvedValueOnce({ ok: true, path: '/Users/dev/second' })
     render(<AddProjectPanel opener={NO_OPENER} onAdded={() => {}} onClose={() => {}} />)
-    await screen.findByText('/Users/dev/first')
+    await screen.findByTitle('/Users/dev/first')
     fireEvent.click(screen.getByRole('button', { name: 'Choose again' }))
-    await screen.findByText('/Users/dev/second')
+    await screen.findByTitle('/Users/dev/second')
     expect(sendPickProjectDirectory).toHaveBeenCalledTimes(2)
   })
 

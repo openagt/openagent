@@ -119,8 +119,9 @@ export function LinkActions({
   label,
   tooltip,
   disabled = false,
-  size = 'sm',
+  size = 'default',
   variant = 'outline',
+  onDone,
 }: {
   /** The projects the links belong to: an action shows when its package is in at least one of them. */
   projects: readonly string[]
@@ -135,6 +136,8 @@ export function LinkActions({
   disabled?: boolean
   size?: ButtonProps['size']
   variant?: ButtonProps['variant']
+  /** An action pressed here did its work on every link. */
+  onDone?: ((action: LinkActionOffer) => void) | undefined
 }) {
   const { actions, run: runAction } = useLinkActions(projects, targets)
   const down = useContext(DaemonDown)
@@ -154,8 +157,9 @@ export function LinkActions({
     setError(null)
     const result = await runAction(action.key, targets)
     setRunning(null)
-    if (result.ok) setDone(prev => new Set(prev).add(action.key))
-    else setError(result.error)
+    if (!result.ok) return setError(result.error)
+    setDone(prev => new Set(prev).add(action.key))
+    onDone?.(action)
   }
 
   if (actions.length === 0) return null
@@ -179,13 +183,16 @@ export function LinkActions({
             <span className="max-md:min-w-0 max-md:truncate">{label ? label(action) : action.label}</span>
           </>
         )
+        // Working or done, it keeps the focus it was pressed with: a disabled press would drop it to the page.
+        const held = running !== null || rested
         const props: ButtonProps = {
           variant,
           size,
           // On a phone the button gives up width, and its words are cut with an ellipsis.
-          className: 'gap-1.5 md:shrink-0 max-md:min-w-0',
-          disabled: disabled || down || running !== null || rested,
-          onClick: () => void run(action),
+          className: 'gap-1.5 md:shrink-0 max-md:min-w-0 aria-disabled:pointer-events-none aria-disabled:opacity-50',
+          disabled: disabled || down,
+          'aria-disabled': held || undefined,
+          onClick: () => void (held || run(action)),
         }
         return tooltip ? (
           <Tooltip key={action.key}>

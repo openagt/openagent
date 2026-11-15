@@ -1,3 +1,5 @@
+import { useCallback, useState } from 'react'
+
 // The composer draft carried across a navigation inside the app, held in sessionStorage so the
 // typed prompt never sits in the address bar, history, or a Referer header. The launcher
 // rehydrates from it once. And the draft each box keeps in this browser, until it is sent, and the
@@ -38,6 +40,34 @@ export function takePendingDraft(): string | null {
 
 /** localStorage key prefix of the draft each box keeps: the launcher's by project, a session's by session. */
 const KEPT_DRAFT_KEY = 'oa.draft:'
+
+/**
+ * A form's draft, kept in this browser as `keptDraft` keeps a box's: what was typed comes back after
+ * a reload or a closed tab. `[draft, set, forget]`: `set` keeps each change, a draft that says what
+ * `empty` says keeps nothing, and `forget` lets it go once it is saved or put away.
+ */
+export function useKeptDraft<T>(key: string, empty: T): [T, (change: (current: T) => T) => void, () => void] {
+  const [draft, setDraft] = useState<T>(() => {
+    const text = keptDraft(key)
+    try {
+      return text === undefined ? empty : { ...empty, ...(JSON.parse(text) as Partial<T>) }
+    } catch {
+      return empty
+    }
+  })
+  const set = useCallback(
+    (change: (current: T) => T): void =>
+      setDraft(current => {
+        const next = change(current)
+        const text = JSON.stringify(next)
+        keep(KEPT_DRAFT_KEY + key, text === JSON.stringify(empty) ? undefined : text)
+        return next
+      }),
+    [key],
+  )
+  const forget = useCallback((): void => keep(KEPT_DRAFT_KEY + key, undefined), [key])
+  return [draft, set, forget]
+}
 
 /** localStorage key prefix of the messages each run has not read yet. */
 const KEPT_WAITING_KEY = 'oa.waiting:'

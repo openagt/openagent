@@ -1,14 +1,15 @@
+import { Plus } from 'lucide-react'
 import type { CSSProperties } from 'react'
-import { cardStyle, noteContainerStyle, NoteText } from './ui'
+import { noteContainerStyle, NoteText, text } from './ui'
 
 const PACKS = ['Security audit', 'Code quality', 'Research', 'Product Management']
 
 const chipStyle: CSSProperties = {
-  borderRadius: 8,
-  padding: '7px 14px',
-  fontSize: 14,
-  fontWeight: 600,
-  color: '#d3c6aa',
+  borderRadius: 'var(--radius-md)',
+  padding: '4px 12px',
+  ...text('sm'),
+  fontWeight: 500,
+  color: 'var(--foreground)',
 }
 
 // A demoted band, not a third pillar, in the site's Note dress — a <div> rather
@@ -19,17 +20,18 @@ export function Prompts() {
       <div style={{ ...noteContainerStyle, display: 'flex', flexDirection: 'column', gap: 12 }}>
         <p style={{ margin: 0, textWrap: 'pretty' }}>
           <NoteText>
-            Everything is powered by open source <b style={{ color: '#d3c6aa', fontWeight: 600 }}>state-of-the-art prompts</b> (you can also bring your own):
+            Everything is powered by open source <b style={{ color: 'var(--foreground)', fontWeight: 600 }}>state-of-the-art prompts</b> (you can also bring your own):
           </NoteText>
         </p>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           {PACKS.map((title) => (
-            <span key={title} style={{ ...cardStyle, ...chipStyle }}>
+            <span key={title} style={{ ...chipStyle, background: 'var(--muted)' }}>
               {title}
             </span>
           ))}
-          <span style={{ ...chipStyle, background: 'transparent', border: '1.5px dashed #4f585e', color: '#a7c080' }}>
-            ＋ Add yours
+          <span style={{ ...chipStyle, color: 'var(--muted-foreground)' }}>
+            <Plus size={14} aria-hidden style={{ verticalAlign: '-0.125em', marginRight: 4 }} />
+            Add yours
           </span>
         </div>
       </div>

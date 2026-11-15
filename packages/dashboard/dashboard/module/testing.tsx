@@ -31,7 +31,9 @@ export function fakeHost(pkg: string, services: Partial<Omit<ModuleHost, 'packag
     openAgent: () => {},
     agentHref: (projectId, agentId) => `/${projectId}/${agentId}`,
     openPage: () => {},
-    pageHref: segment => `/${segment}`,
+    pageHref: (segment, path = [], projectId) => `/${[projectId, segment, ...path].filter(Boolean).join('/')}`,
+    adjustPage: () => {},
+    backToPage: () => {},
     openSettings: () => {},
     gitHostPeople: async () => [],
     startRun: nothing,
@@ -57,7 +59,7 @@ export function fakeHost(pkg: string, services: Partial<Omit<ModuleHost, 'packag
     sendToScreen: async () => false,
     ...services,
   }
-  const spies = Object.entries(host).map(([name, service]) => [name, vi.isMockFunction(service) ? service : vi.fn(service)])
+  const spies = Object.entries(host).map(([name, service]) => [name, vi.isMockFunction(service) ? service : vi.fn(service as (...args: unknown[]) => unknown)])
   return { package: pkg, ...Object.fromEntries(spies) } as FakeHost
 }
 

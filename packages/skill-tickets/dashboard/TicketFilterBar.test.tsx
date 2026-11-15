@@ -79,19 +79,19 @@ describe('TicketFilterBar (#1144)', () => {
   test('picking a new sort key starts at its natural direction; the active key is a no-op', async () => {
     const { onChange } = renderBar([row('a.md')])
     fireEvent.click(screen.getByRole('button', { name: /sort: date/i }))
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Priority' }))
+    fireEvent.click(await screen.findByRole('menuitemcheckbox', { name: 'Priority' }))
     expect((onChange.mock.calls[0]![0] as TicketsView).sort).toEqual({ key: 'priority', dir: 'desc' })
     onChange.mockClear()
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Date' }))
+    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Date' }))
     expect(onChange).not.toHaveBeenCalled()
   })
 
-  test('the asc/desc pair sits in the menu, labeled by meaning, the applied one highlighted', async () => {
+  test('the asc/desc pair sits in the menu, labeled by meaning, the applied one checked', async () => {
     const { onChange } = renderBar([row('a.md')])
     fireEvent.click(screen.getByRole('button', { name: /sort: date/i }))
-    const desc = await screen.findByRole('button', { name: 'Newest first' })
-    expect(desc.getAttribute('aria-pressed')).toBe('true')
-    fireEvent.click(screen.getByRole('button', { name: 'Oldest first' }))
+    const desc = await screen.findByRole('menuitemcheckbox', { name: 'Newest first' })
+    expect(desc.getAttribute('aria-checked')).toBe('true')
+    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Oldest first' }))
     expect((onChange.mock.calls[0]![0] as TicketsView).sort).toEqual({ key: 'date', dir: 'asc' })
   })
 

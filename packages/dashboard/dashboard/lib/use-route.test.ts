@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { act, renderHook } from '@testing-library/react'
-import { holdEntry, openAgents, openPermissions, openSettings, useRoute } from './use-route.js'
+import { holdEntry, useRoute } from './use-route.js'
 import { projectAddresses } from '../../src/project-address.js'
 
 // F1: this used to mock Vike's `usePageContext` and `navigate`. There is nothing to mock now —
@@ -36,11 +36,11 @@ describe('useRoute', () => {
     expect(window.location.pathname).toBe('/my-repo/1-run')
   })
 
-  it('replaces the history entry when asked, rather than adding one', () => {
+  it('an adjust replaces the history entry, rather than adding one', () => {
     const { result } = renderHook(() => useRoute(projects))
     act(() => result.current.go({ projectId: 'my-repo-a1', agentId: '1-run', scope: 'my-repo-a1' }))
     const entries = window.history.length
-    act(() => result.current.go({ projectId: 'my-repo-a1', agentId: null, scope: 'my-repo-a1' }, { replace: true }))
+    act(() => result.current.adjust({ projectId: 'my-repo-a1', agentId: null, scope: 'my-repo-a1' }))
     expect(window.location.pathname).toBe('/my-repo')
     expect(window.history.length).toBe(entries)
   })
@@ -116,41 +116,6 @@ describe('useRoute', () => {
     expect(result.current.route).toEqual({ projectId: 'my-repo-a1', agentId: null })
     act(() => result.current.go({ projectId: 'my-repo-a1', agentId: '1-run', scope: 'my-repo-a1' }))
     expect(window.location.pathname + window.location.search).toBe('/my-repo/1-run')
-  })
-})
-
-// Opening Settings from a part of the page that has no route to hand: the "Run on" menu's "Add a machine…".
-describe('openSettings', () => {
-  beforeEach(() => {
-    at('/')
-  })
-
-  it('opens a Settings entry over the page you are on, its own query kept, as a step Back undoes', () => {
-    at('/my-repo/1-run?all')
-    const { result } = renderHook(() => useRoute(projects))
-    const entries = window.history.length
-    act(() => openSettings('devices'))
-    expect(window.location.pathname + window.location.search).toBe('/my-repo/1-run?all=&settings=devices')
-    expect(window.history.length).toBe(entries + 1)
-    expect(result.current.route.settings).toBe('devices')
-  })
-})
-
-describe('openPermissions and openAgents', () => {
-  it('keep the project the address picks, as the sidebar does, and every project where none is picked', () => {
-    at('/my-repo/overview')
-    const { result } = renderHook(() => useRoute(projects))
-    act(() => openPermissions())
-    expect(window.location.pathname).toBe('/my-repo/permissions')
-    expect(result.current.route).toEqual({ projectId: null, agentId: null, page: 'permissions', pagePath: [], scope: 'my-repo-a1' })
-    act(() => openAgents())
-    expect(window.location.pathname).toBe('/my-repo/agents')
-    at('/logs')
-    act(() => openPermissions())
-    expect(window.location.pathname).toBe('/permissions')
-    at('/my-repo/1-run?all')
-    act(() => openAgents())
-    expect(window.location.pathname).toBe('/agents')
   })
 })
 

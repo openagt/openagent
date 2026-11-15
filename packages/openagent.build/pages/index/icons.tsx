@@ -1,3 +1,5 @@
+import { Check } from 'lucide-react'
+
 export function DiscordIcon({ width, height }: { width: number; height: number }) {
   return (
     <svg width={width} height={height} viewBox="0 0 127 96" fill="currentColor" aria-hidden="true">
@@ -20,4 +22,9 @@ export function NpmIcon({ size }: { size: number }) {
       <path d="M0 0v16h16V0H0zm13 13h-2V5H8v8H3V3h10v10z" />
     </svg>
   )
+}
+
+/** A list's ✓, the dashboard's. */
+export function CheckIcon() {
+  return <Check size={16} aria-hidden style={{ verticalAlign: '-0.125em' }} />
 }

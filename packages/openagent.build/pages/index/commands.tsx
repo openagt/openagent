@@ -1,6 +1,7 @@
 import { useSyncExternalStore, type CSSProperties, type ReactNode } from 'react'
-import { CopiedStatus, copyPress, useCopy } from './copy'
-import { mono } from './ui'
+import { Check, Copy } from 'lucide-react'
+import { CopiedStatus, useCopy } from './copy'
+import { mono, text } from './ui'
 
 // Trying runs the dashboard once; installing starts it at every login, at openagent.build (#1919).
 const PMS = {
@@ -48,23 +49,23 @@ export const usePickedCommand = (command: Command): string => PMS[usePm()][comma
 export function PmTabs() {
   const pm = usePm()
   return (
-    <>
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
       {PM_NAMES.map((name) => (
         <button
           key={name}
           className={'pm-tab pm-tab-' + name}
           aria-pressed={name === pm}
           onClick={() => pickPm(name)}
-          style={{ borderRadius: 7, padding: '4px 13px', fontFamily: mono, fontSize: 12, cursor: 'pointer' }}
+          style={{ borderRadius: 'var(--radius-md)', padding: '4px 12px', fontFamily: mono, ...text('xs'), cursor: 'pointer' }}
         >
           {name}
         </button>
       ))}
-    </>
+    </div>
   )
 }
 
-const dollarStyle: CSSProperties = { userSelect: 'none', color: '#a7c080' }
+const dollarStyle: CSSProperties = { userSelect: 'none', color: 'var(--muted-foreground)' }
 /** A command with words after it: they follow the command, under it once the line is too narrow, and the `$` stays beside it. */
 const followedLineStyle: CSSProperties = { display: 'flex', alignItems: 'baseline' }
 const followedStyle: CSSProperties = { display: 'inline-flex', flexWrap: 'wrap', gap: '2px 16px' }
@@ -73,7 +74,7 @@ const followedStyle: CSSProperties = { display: 'inline-flex', flexWrap: 'wrap',
  * `$ command`, in every package manager, the picked one shown (all are pre-rendered, styles.css
  * shows one). They share one place, so the line is as wide as the longest and a pick moves nothing.
  */
-export function CommandLine({ command, after }: { command: Command; /** Said after each command, so it follows the picked one. */ after?: ReactNode }) {
+function CommandLine({ command, after }: { command: Command; /** Said after each command, so it follows the picked one. */ after?: ReactNode }) {
   return (
     <span style={after === undefined ? undefined : followedLineStyle}>
       <span style={{ ...dollarStyle, whiteSpace: 'pre' }}>$ </span>
@@ -89,52 +90,46 @@ export function CommandLine({ command, after }: { command: Command; /** Said aft
   )
 }
 
-const chipStyle: CSSProperties = {
-  position: 'relative',
-  cursor: 'pointer',
-  display: 'inline-flex',
-  alignItems: 'center',
-  background: '#232a2e',
-  border: '1px solid #475258',
-  borderRadius: 7,
-  padding: '4px 10px',
-  fontFamily: mono,
-  fontSize: 12.5,
-  wordBreak: 'break-all',
-}
+/** The two sizes of a command: the one a part of the page leads with, and a quieter one beside or under it. */
+const BOX = {
+  large: { ...text('sm'), minHeight: 44, padding: '8px 6px 8px 16px', gap: 16, icon: 16 },
+  small: { ...text('xs'), minHeight: 36, padding: '6px 4px 6px 12px', gap: 12, icon: 14 },
+} as const
 
-const copyTipStyle: CSSProperties = {
-  position: 'absolute',
-  left: 'calc(100% + 11px)',
-  top: '50%',
-  transform: 'translateY(-50%)',
-  background: '#14181b',
-  color: '#d3c6aa',
-  fontWeight: 600,
-  fontSize: 9.5,
-  letterSpacing: '0.1em',
-  textTransform: 'uppercase',
-  borderRadius: 4,
-  padding: '4px 8px',
-  whiteSpace: 'nowrap',
-  transition: 'opacity 0.15s',
-  pointerEvents: 'none',
-  userSelect: 'none',
-}
-
-/** A click-to-copy chip holding `command`, with its "copy" tip beside it; `style` sizes and places it where the hero's would not do. */
-export function CommandChip({ command, style }: { command: Command; style?: CSSProperties }) {
+/**
+ * `$ command` in a box that copies it: a press of the pointer anywhere on it, or of its copy press, which the
+ * keyboard reaches. The press shows a check once the command is copied. Not a button as a whole, so the command
+ * in it can still be selected by hand.
+ */
+export function CommandBox({ command, size, after }: { command: Command; size: keyof typeof BOX; /** Said after the command. */ after?: ReactNode }) {
   const { copied, copy } = useCopy()
-  const text = usePickedCommand(command)
+  const picked = usePickedCommand(command)
+  const { icon, ...box } = BOX[size]
+  const Icon = copied ? Check : Copy
   return (
-    <>
-      <span className="install-chip" {...copyPress(`Copy ${text}`, (e) => copy(text, e))} style={{ ...chipStyle, ...style }}>
-        <CommandLine command={command} />
-        <span className={'copy-tip-side' + (copied ? ' copied' : '')} style={copyTipStyle}>
-          {copied ? 'copied!' : 'copy'}
-        </span>
-      </span>
+    <span
+      className="command-box"
+      onClick={(e) => copy(picked, e)}
+      style={{
+        ...box,
+        boxSizing: 'border-box',
+        maxWidth: '100%',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        textAlign: 'left',
+        cursor: 'pointer',
+        background: 'var(--card)',
+        border: '1px solid var(--border)',
+        borderRadius: 'var(--radius-lg)',
+        fontFamily: mono,
+      }}
+    >
+      <CommandLine command={command} after={after} />
+      <button type="button" className={'copy-press' + (copied ? ' copied' : '')} aria-label={`Copy ${picked}`}>
+        <Icon size={icon} aria-hidden />
+      </button>
       <CopiedStatus copied={copied} />
-    </>
+    </span>
   )
 }

@@ -8,7 +8,7 @@ package: "@openagt/skill-scheduler@0.1"
 
 The scheduler starts agents on a schedule: the project's skills say which commands can run on one, and each machine switches them on for itself. It runs in its own process and needs no dashboard.
 
-Run the `scheduler` command at the project's root, always by its full name: `npx @openagt/skill-scheduler@0.1`. It prints one JSON document; a refusal exits 1 with why on stderr; a wrong command line exits 2 with the usage.
+Run the `scheduler` command at the project's root, always by its full name: `npx @openagt/skill-scheduler@0.1`. It prints one JSON document; a refusal exits 1 with why on stderr; a wrong command line exits 2 with what was wrong and a pointer to `--help`.
 
 Change it only when the person asks: every run it starts spends their quota.
 

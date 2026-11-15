@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process'
+import { unknownWord, usageError, wrongArguments, helpRows, helpText } from '@openagt/agent-data'
 import { devicesIn, idsOf, isDeviceId, lineIn, nameOwner, readDevices, removeDevice, removePerson, type Devices, type DoorAddresses, type ListedLine, type ServerDevice, type ServerPerson } from './devices.js'
 import { AlreadyWorking, askLink, install } from './install.js'
 import { testConnection } from './connection.js'
@@ -23,63 +24,30 @@ import { ownStdin, untilStopped } from '../process.js'
 
 export const USAGE = `usage: devices server <command>
 
-  status                               the servers this computer installed OpenAgent on and how far each install is; and
-                                       whether this computer is itself such a server
-  connect <address> <user> <version> [--through <url> | --tailscale]
-                                       install OpenAgent at this version on the server at this number or name, logging in
-                                       over SSH as this user (root, or one that becomes root without a password) with this
-                                       computer's own SSH keys; run again, it goes on where it failed, and brings a server
-                                       that fell behind to this version; with --through, the computer has no door of its
-                                       own on the internet (a computer at home): it keeps a line open to the server at that
-                                       address among OpenAgent's machines instead, as this computer's person's; with
-                                       --tailscale, the computer is on your Tailscale network, connected by its name there
-                                       (name.tail1234.ts.net): its door is there, behind Tailscale, not on the internet
-  test <address> <user>                log in to the server once over SSH as this user, with this computer's own SSH keys,
-                                       as the install's first step does, and change nothing there: what it runs, or what
-                                       failed (unreachable, no-ssh, key, no-key, sudo, host-key, system) with what ssh said
-                                       and, for one fixed on the computer itself, a line to paste there once
-  add-through <address>                save a computer reached through a server among OpenAgent's machines, through that
-                                       server, once its install is done
-  who <address> nobody|me              whether its server may start runs on a computer reached through it (me), or only
-                                       show them (nobody); the people named on it stay as they are
-  people <address> <name>...           the people on its server who may start runs on a computer reached through it too,
-                                       by their names there: each gets a user of their own on it at their first run
-  link <address> [--for <name>]        a code the server's door gives for a new device, once, for ten minutes, with its
-                                       link; with --for, for a person's device, by their name (the owner is named first)
-  owner <address> <name>               name the server's owner at its door, once
-  added <address>                      the server is among OpenAgent's machines: nothing is left to add
-  devices <address> [--last]           the devices that are in on the server, as its door lists them, asked over SSH; the
-                                       line this computer keeps open to the server is marked as its own; with --last, the
-                                       list as last told here, at once, without asking the server
-  remove-device <address> <id>         take one device out on the server, by its id as devices names it: it is out at once
-  remove-person <address> <name>       take a person out on the server, with every device of theirs; the owner stays
-  github                               the GitHub account gh is logged in to on this computer: whose login a copy would be,
-                                       or why there is none to copy
-  reach <address> full|watch           keep a line open from this computer to the server, so the server's page can start a
-                                       run here (full), or can only see this computer's runs (watch)
-  forget <address>                     take the server off this list, and the line this computer keeps to it; nothing else
-                                       is changed on the server
-  work <address> <version>             the install's own process, started by connect
+${helpRows([
+  ['status', 'the servers this computer installed OpenAgent on and how far each install is; and whether this computer is itself such a server'],
+  ['connect <address> <user> <version> [--through <url> | --tailscale]', `install OpenAgent at this version on the server at this number or name, logging in over SSH as this user (root, or one that becomes root without a password) with this computer's own SSH keys; run again, it goes on where it failed, and brings a server that fell behind to this version; with --through, the computer has no door of its own on the internet (a computer at home): it keeps a line open to the server at that address among OpenAgent's machines instead, as this computer's person's; with --tailscale, the computer is on your Tailscale network, connected by its name there (name.tail1234.ts.net): its door is there, behind Tailscale, not on the internet`],
+  ['test <address> <user>', `log in to the server once over SSH as this user, with this computer's own SSH keys, as the install's first step does, and change nothing there: what it runs, or what failed (unreachable, no-ssh, key, no-key, sudo, host-key, system) with what ssh said and, for one fixed on the computer itself, a line to paste there once`],
+  ['add-through <address>', `save a computer reached through a server among OpenAgent's machines, through that server, once its install is done`],
+  ['who <address> nobody|me', 'whether its server may start runs on a computer reached through it (me), or only show them (nobody); the people named on it stay as they are'],
+  ['people <address> <name>...', 'the people on its server who may start runs on a computer reached through it too, by their names there: each gets a user of their own on it at their first run'],
+  ['link <address> [--for <name>]', `a code the server's door gives for a new device, once, for ten minutes, with its link; with --for, for a person's device, by their name (the owner is named first)`],
+  ['owner <address> <name>', `name the server's owner at its door, once`],
+  ['added <address>', `the server is among OpenAgent's machines: nothing is left to add`],
+  ['devices <address> [--last]', 'the devices that are in on the server, as its door lists them, asked over SSH; the line this computer keeps open to the server is marked as its own; with --last, the list as last told here, at once, without asking the server'],
+  ['remove-device <address> <id>', 'take one device out on the server, by its id as devices names it: it is out at once'],
+  ['remove-person <address> <name>', 'take a person out on the server, with every device of theirs; the owner stays'],
+  ['github', 'the GitHub account gh is logged in to on this computer: whose login a copy would be, or why there is none to copy'],
+  ['reach <address> full|watch', `keep a line open from this computer to the server, so the server's page can start a run here (full), or can only see this computer's runs (watch)`],
+  ['forget <address>', 'take the server off this list, and the line this computer keeps to it; nothing else is changed on the server'],
+  ['work <address> <version>', `the install's own process, started by connect`],
+])}
 
-On a computer several people use, where this OpenAgent is one person's (OPENAGENT_PERSON names them):
-  own                                  this OpenAgent's own GitHub and Claude logins
-  own login github [--from <server>]   log in to GitHub with the login given on standard input;
-                                       --from names the server whose OpenAgent of the same person copied it
-  own login claude [--from <server>] [--account <id>]
-                                       log in to Claude with the login given on standard input; OpenAgent starts again with it;
-                                       --account is who the login is at Claude, which Claude Code needs to offer its models
-  own logout github|claude             delete that login here
+${helpText(`On a computer several people use, where this OpenAgent is one person's (OPENAGENT_PERSON names them): own                                  this OpenAgent's own GitHub and Claude logins own login github [--from <server>]   log in to GitHub with the login given on standard input; --from names the server whose OpenAgent of the same person copied it own login claude [--from <server>] [--account <id>] log in to Claude with the login given on standard input; OpenAgent starts again with it; --account is who the login is at Claude, which Claude Code needs to offer its models own logout github|claude             delete that login here`)}
 
-On this computer, for a server someone invited this computer's person to (by its address among the machines):
-  shared <url>...                      the line this computer keeps to each
-  shared-reach <url> full|watch|off    keep a line open to the server as this person's, and say what it may do; or none
-  shared-forget <url>                  forget the server here, and the line to it
+${helpText(`On this computer, for a server someone invited this computer's person to (by its address among the machines): shared <url>...                      the line this computer keeps to each shared-reach <url> full|watch|off    keep a line open to the server as this person's, and say what it may do; or none shared-forget <url>                  forget the server here, and the line to it`)}
 
-On this computer, for another person's computer shared with this computer's person on a server both are in at:
-  other <url>...                       the person's logins there, as it says, and the Claude login this computer makes for it
-  other-login <url> github             copy this computer's GitHub login there, in place of the server's copy
-  other-login <url> claude             make a Claude login for it in this computer's browser, and hand it over
-  other-work <url>                     the process that makes the Claude login, started by other-login`
+${helpText(`On this computer, for another person's computer shared with this computer's person on a server both are in at: other <url>...                       the person's logins there, as it says, and the Claude login this computer makes for it other-login <url> github             copy this computer's GitHub login there, in place of the server's copy other-login <url> claude             make a Claude login for it in this computer's browser, and hand it over other-work <url>                     the process that makes the Claude login, started by other-login`)}`
 
 export interface CliIO {
   env: NodeJS.ProcessEnv
@@ -494,6 +462,10 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
     return 0
   }
   const ssh = sshOf(io)
+  if ((command === '--help' || command === '-h') && !rest.length) {
+    io.stdout(USAGE)
+    return 0
+  }
   try {
     switch (command) {
       case 'status':
@@ -679,12 +651,14 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
         return 0
       }
       default:
+        io.stderr(command === undefined ? USAGE : usageError('devices server', unknownWord(command)))
+        return 2
     }
   } catch (err) {
     if (!(err instanceof Refused || err instanceof Unreadable || err instanceof AlreadyWorking || err instanceof OwnAtWork)) throw err
     io.stderr(err.message)
     return 1
   }
-  io.stderr(USAGE)
+  io.stderr(usageError('devices server', wrongArguments(command!, rest)))
   return 2
 }

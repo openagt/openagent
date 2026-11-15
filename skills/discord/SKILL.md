@@ -16,7 +16,7 @@ Quote the message as one argument. It is posted as a Discord message, so Discord
 
 The channel is the one whose webhook this machine was given, by a person: `npx @openagt/skill-discord@0.1 setup <webhook>` saves it for this user on this machine, `npx @openagt/skill-discord@0.1 setup --clear` forgets it, and `DISCORD_WEBHOOK` in the environment wins over the saved one. Never ask for the webhook, never print it, and never write it into the repository: anyone holding it can post to the channel.
 
-`send`, `setup` and `status` print one JSON line on stdout. A refusal exits 1 with the reason on stderr: `no-webhook` (none on this machine: say so and go on, a person sets it), `not-posted` (Discord or the network refused it; the detail says which, never the URL), `empty`, and for `setup`, `invalid`. A wrong command line exits 2 with the usage on stderr.
+`send`, `setup` and `status` print one JSON line on stdout. A refusal exits 1 with the reason on stderr: `no-webhook` (none on this machine: say so and go on, a person sets it), `not-posted` (Discord or the network refused it; the detail says which, never the URL), `empty`, and for `setup`, `invalid`. A wrong command line exits 2 with what was wrong and a pointer to `--help` on stderr.
 
 ## A message when a run needs you
 

@@ -59,13 +59,15 @@ test('the open PRs are asked by state; a git host that could not answer is a fai
   assert.deepEqual(await openPrs('/repo', noGitHost), [])
 })
 
-test('how a project\'s PRs stand is one listing of every state, by number; an open draft reads as a draft; a git host that could not answer is a failure, so the last states are kept; no git host, no states', async () => {
+test('how a project\'s PRs stand, with their titles, is one listing of every state, by number; an open draft reads as a draft; a git host that could not answer is a failure, so the last states are kept; no git host, no states', async () => {
   const { gitHost, asked } = fakeGitHost({
     ok: true,
-    requests: [REQUEST, { ...REQUEST, number: 3, url: 'https://github.com/o/r/pull/3', draft: true }, { ...REQUEST, number: 4, url: 'https://github.com/o/r/pull/4', state: 'merged' }, { ...REQUEST, number: 5, url: 'https://github.com/o/r/pull/5', state: 'closed', draft: true }],
+    requests: [REQUEST, { ...REQUEST, number: 3, url: 'https://github.com/o/r/pull/3', draft: true, title: 'Dark mode' }, { ...REQUEST, number: 4, url: 'https://github.com/o/r/pull/4', state: 'merged' }, { ...REQUEST, number: 5, url: 'https://github.com/o/r/pull/5', state: 'closed', draft: true }],
   })
   const url = (n: number) => `https://github.com/o/r/pull/${n}`
-  assert.deepEqual([...(await prStates('/repo', gitHost))], [[url(2), 'open'], [url(3), 'draft'], [url(4), 'merged'], [url(5), 'closed']])
+  const states = await prStates('/repo', gitHost)
+  assert.deepEqual([...states].map(([at, pr]) => [at, pr.state]), [[url(2), 'open'], [url(3), 'draft'], [url(4), 'merged'], [url(5), 'closed']])
+  assert.equal(states.get(url(3))!.title, 'Dark mode')
   assert.deepEqual(asked, [{ state: 'all' }])
   await assert.rejects(prStates('/repo', fakeGitHost({ ok: false, error: 'gh: not authenticated' }).gitHost), /not authenticated/)
   assert.equal((await prStates('/repo', noGitHost)).size, 0)
@@ -74,21 +76,23 @@ test('how a project\'s PRs stand is one listing of every state, by number; an op
 test('the cached states: a failed listing is kept as the states last read, so the git host is not asked at every poll; after a request was opened here, the rows keep their states while the next read is on its way', async () => {
   const cwd = '/repo-states'
   let calls = 0
-  let answer: () => Promise<Map<string, 'open' | 'merged'>> = async () => new Map([['u/1', 'open' as const]])
+  const listed = (state: 'open' | 'merged') => new Map([['u/1', { state, title: 'A fix' }]])
+  const said = async () => [...(await cachedPrStates(cwd, read))].map(([at, pr]) => [at, pr.state])
+  let answer: () => Promise<Map<string, { state: 'open' | 'merged'; title: string }>> = async () => listed('open')
   const read = () => (calls++, answer())
-  assert.deepEqual([...(await cachedPrStates(cwd, read))], [['u/1', 'open']])
+  assert.deepEqual(await said(), [['u/1', 'open']])
   // Opened or merged here: the states are forgotten, and the next read is slow. The rows keep what they had.
   forgetPr(cwd, 'agent-x')
-  answer = () => new Promise(resolve => setTimeout(() => resolve(new Map([['u/1', 'merged' as const]])), 400))
-  assert.deepEqual([...(await cachedPrStates(cwd, read))], [['u/1', 'open']])
+  answer = () => new Promise(resolve => setTimeout(() => resolve(listed('merged')), 400))
+  assert.deepEqual(await said(), [['u/1', 'open']])
   await new Promise(resolve => setTimeout(resolve, 450))
-  assert.deepEqual([...(await cachedPrStates(cwd, read))], [['u/1', 'merged']])
+  assert.deepEqual(await said(), [['u/1', 'merged']])
   // A git host that cannot answer: its failure is kept like an answer, as the last states, and not asked again at once.
   forgetPr(cwd, 'agent-x')
   answer = () => Promise.reject(new Error('gh: not authenticated'))
   const before = calls
   await new Promise(resolve => setTimeout(resolve, 10))
-  assert.deepEqual([...(await cachedPrStates(cwd, read))], [['u/1', 'merged']])
+  assert.deepEqual(await said(), [['u/1', 'merged']])
   await cachedPrStates(cwd, read)
   await cachedPrStates(cwd, read)
   assert.equal(calls, before + 1, 'one ask, then the kept answer')

@@ -20,16 +20,15 @@ export function SelectValue(props: ComponentProps<typeof SelectPrimitive.Value>)
   return <SelectPrimitive.Value data-slot="select-value" {...props} />
 }
 
-export function SelectTrigger({ className, size = 'default', children, ...props }: ComponentProps<typeof SelectPrimitive.Trigger> & { size?: 'default' | 'sm' }) {
+export function SelectTrigger({ className, children, ...props }: ComponentProps<typeof SelectPrimitive.Trigger>) {
   return (
     <SelectPrimitive.Trigger
       data-slot="select-trigger"
       className={cn(
-        'inline-flex min-w-0 max-w-full cursor-pointer items-center justify-between gap-2 rounded-md border border-border bg-background text-left text-sm shadow-sm outline-none transition-colors',
-        'hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]',
+        'focus-ring-field inline-flex h-8 min-w-0 max-w-full cursor-pointer items-center justify-between gap-2 rounded-md border border-input bg-background px-3 text-left text-sm transition-colors hover:border-input-hover',
+        'hover:bg-accent hover:text-accent-foreground active:bg-foreground/10',
         'data-[popup-open]:bg-accent data-[popup-open]:text-accent-foreground',
         'data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
-        size === 'sm' ? 'h-8 px-2' : 'h-9 px-3',
         typeof className === 'string' ? className : undefined,
       )}
       {...props}
@@ -40,6 +39,11 @@ export function SelectTrigger({ className, size = 'default', children, ...props 
       </SelectPrimitive.Icon>
     </SelectPrimitive.Trigger>
   )
+}
+
+/** The trigger with no look of its own: for a caller that draws it as one of its own rows (Settings' project row). */
+export function SelectTriggerBare(props: ComponentProps<typeof SelectPrimitive.Trigger>) {
+  return <SelectPrimitive.Trigger data-slot="select-trigger" {...props} />
 }
 
 export function SelectContent({
@@ -55,6 +59,7 @@ export function SelectContent({
       {/* Under the trigger like a menu, not laid over it: the picked item stays readable while the list is open. */}
       <SelectPrimitive.Positioner positionMethod={positionMethod} sideOffset={sideOffset} align={align} alignItemWithTrigger={false} className="z-50 outline-none">
         <SelectPrimitive.Popup
+          data-overlay="menu"
           data-slot="select-content"
           className={cn(
             'max-h-[min(var(--available-height),20rem)] min-w-[var(--anchor-width)] max-w-[var(--available-width)] overflow-y-auto p-1.5',

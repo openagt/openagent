@@ -1,12 +1,13 @@
-import { Check, ChevronDown, Puzzle, Settings2 } from 'lucide-react'
+import { useContext } from 'react'
+import { Check, Puzzle, Settings2 } from 'lucide-react'
 import type { AgentRecord, AgentsView } from '../rpc/agents.js'
 import { onProjectSkills } from '../rpc/skills.js'
 import { skillsAgain } from '../lib/skills-saved.js'
 import { useLoaded } from '../lib/use-async.js'
-import { openSettings } from '../lib/use-route.js'
+import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
 import { cn } from '../lib/utils.js'
 import { SKILLS_ENTRY } from './ProjectSkills.js'
-import { RowSaid, rowButtonClass } from './ui/row-item.js'
+import { RowChevron, RowSaid, rowButtonClass, rowWideClass } from './ui/row-item.js'
 import { useAgentsList } from './AgentsPage.js'
 import { DEFAULT_AGENT } from '../../src/client.js'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip.js'
@@ -75,6 +76,14 @@ export function skillPicksSaid(picks: { skillsOn?: readonly string[] | undefined
   return `${agents}, and ${project}`
 }
 
+/**
+ * The project's own skills, as a run's checkout has them, kept in this browser: the Skills item
+ * counts them, and counted from the last load it holds its place in the row from the first frame.
+ */
+function useProjectSkills(projectId: string | undefined) {
+  return useLoaded(projectId !== undefined ? () => onProjectSkills(projectId) : null, null, [projectId], projectId !== undefined ? { remember: `project-skills:${projectId}`, stored: true } : undefined, skillsAgain)
+}
+
 export function SkillsMenu({
   projectId,
   agent,
@@ -93,10 +102,11 @@ export function SkillsMenu({
   onChange: (picks: SkillPicks) => void
   busy: boolean
 }) {
-  // The project's own skills, by name, as a run's checkout has them: the list's and the project's own.
-  const project = useLoaded(projectId !== undefined ? () => onProjectSkills(projectId) : null, null, [projectId], undefined, skillsAgain)
+  const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
+  const project = useProjectSkills(projectId)
   const held = project?.held ?? []
-  if (!agent || !groups) return null
+  // Counted only once the project's skills are read: a count of the agent's alone would be drawn, then change.
+  if (!agent || !groups || (projectId !== undefined && project === null)) return null
   const own = agent.skills
   const ofAgent = sessionSkills(agent, picks)
   const listed = [...own, ...picks.on.filter(name => !own.includes(name))]
@@ -117,9 +127,12 @@ export function SkillsMenu({
     <DropdownMenu>
       <Tooltip>
         <TooltipTrigger render={<DropdownMenuTrigger type="button" disabled={busy} aria-label={`Skills: ${count}`} className={rowButtonClass} />}>
-          <Puzzle className="h-3.5 w-3.5 shrink-0" aria-hidden />
-          <span className="truncate">{`Skills: ${count}`}</span>
-          <ChevronDown className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
+          <Puzzle className="size-4 shrink-0" aria-hidden />
+          <span className="truncate">
+            <span className={rowWideClass}>Skills: </span>
+            {count}
+          </span>
+          <RowChevron />
         </TooltipTrigger>
         <TooltipContent>{said}</TooltipContent>
       </Tooltip>
@@ -186,7 +199,7 @@ export function SkillsMenu({
               )}
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => openSettings(SKILLS_ENTRY, projectId)}>
+            <DropdownMenuItem onClick={() => services.openSettings(SKILLS_ENTRY, projectId)}>
               <Settings2 className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
               Manage project skills…
             </DropdownMenuItem>
@@ -204,14 +217,17 @@ export function SkillsMenu({
  */
 export function SkillsOff({ projectId, agent, skillsOn, skillsOff, projectSkills }: { projectId: string | undefined; agent: string | undefined; skillsOn?: string[] | undefined; skillsOff?: string[] | undefined; projectSkills?: 'none' | string[] | undefined }) {
   const { view } = useAgentsList()
-  const project = useLoaded(projectId !== undefined ? () => onProjectSkills(projectId) : null, null, [projectId], undefined, skillsAgain)
+  const project = useProjectSkills(projectId)
   if (!view || (projectId !== undefined && project === null)) return null
   const record = view.agents.find(one => one.id === (agent ?? DEFAULT_AGENT))
   const count = skillCount(sessionSkills(record, { on: skillsOn ?? [], off: skillsOff ?? [] }), projectId !== undefined ? projectKept(project?.held ?? [], projectSkills) : [])
   return (
     <RowSaid tip={`This session got ${skillPicksSaid({ skillsOn, skillsOff, projectSkills: projectId === undefined ? 'none' : projectSkills })}`}>
-      <Puzzle className="h-3.5 w-3.5 shrink-0" aria-hidden />
-      <span className="truncate">{`Skills: ${count}`}</span>
+      <Puzzle className="size-4 shrink-0" aria-hidden />
+      <span className="truncate">
+        <span className={rowWideClass}>Skills: </span>
+        {count}
+      </span>
     </RowSaid>
   )
 }

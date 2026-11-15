@@ -66,6 +66,8 @@ export interface ModuleCard {
   minWidth?: CardWidth
   /** Its place among every installed package's cards, lower first; 50 when unsaid, ties by package name. */
   order?: number
+  /** A part of the line under the Overview's title, a few words drawn with `LinePart`, not a card: it is not arranged. */
+  line?: boolean
   /** The card itself. */
   Card: ComponentType<ModuleCardProps>
 }
@@ -322,8 +324,6 @@ export interface ModuleRunSlots {
 export interface ModuleDefinition {
   /** The cards the module adds to the Overview. */
   cards?: ModuleCard[]
-  /** A stylesheet to load with the module, relative to the module's browser part's own URL. */
-  stylesheet?: string
   /** The pages the module adds, each with a sidebar row. */
   pages?: ModulePage[]
   /** The actions the module offers on the links dashboard pages show, wherever the link's project has the module's package. */
@@ -400,14 +400,28 @@ export interface ModuleHost {
   /**
    * Open a page a module adds (this one's or another's), at a sub-path, in the project picked in
    * the dashboard, or in `projectId`, which is then the one picked: `openPage('tickets', [file], projectId)`.
-   * A page the picked project's packages do not add shows "No such page". With `replace`, the address
-   * takes the place of the current one, so Back steps over it: a pick the page keeps in its address.
+   * A page the picked project's packages do not add shows "No such page".
    */
-  openPage(segment: string, path?: string[], projectId?: string, options?: { replace?: boolean }): void
-  /** The address of a page a module adds, with the project picked in the dashboard: a link's `href`, for a link that also opens in a new tab. */
-  pageHref(segment: string): string
-  /** Open an entry of Settings over the page, by its id: `openSettings('devices')`. */
-  openSettings(entry: string): void
+  openPage(segment: string, path?: string[], projectId?: string): void
+  /**
+   * Write a pick the page shown keeps in its address, in place of the address it had, so Back
+   * steps over it: its sub-path, its query (without `?`), or both. The query left out stays.
+   */
+  adjustPage(path?: string[], query?: string): void
+  /** The address `openPage` with the same arguments goes to: a link's `href`, for a link that also opens in a new tab. */
+  pageHref(segment: string, path?: string[], projectId?: string): string
+  /**
+   * Go back to a page at a sub-path, in any project: by the browser's Back when the page shown was
+   * opened from it, so it is as it was left (its filters, its scroll); else `openPage` with the same
+   * arguments. A list's way back from one of its items: `backToPage('tickets')`.
+   */
+  backToPage(segment: string, path?: string[], projectId?: string): void
+  /**
+   * Open an entry of Settings over the page, by its id: `openSettings('devices')`; with `item`, at
+   * that page inside it. From inside Settings, it moves to that entry in place: Back and closing
+   * still go to the page under it.
+   */
+  openSettings(entry: string, item?: string): void
   /**
    * The accounts behind a project's commit emails at its git host, each with its login and picture:
    * an email the host knows nobody for, or a project with no git host, is left out. Kept a day.
@@ -624,15 +638,18 @@ export function useOpenAgentDown(): boolean {
 // The dashboard's own building blocks, so a module looks like the rest of the page.
 export { Button, buttonVariants, type ButtonProps } from '../components/ui/button.js'
 export { CopyButton } from '../components/ui/copy-button.js'
-export { Card, CardHeader, CardTitle, CardTitleLink, CardContent } from '../components/ui/card.js'
-export { Skeleton } from '../components/ui/skeleton.js'
+export { Card, CardHeader, CardTitle, CardContent, PageLink } from '../components/ui/card.js'
+export { Skeleton, useSkeleton } from '../components/ui/skeleton.js'
+export { Slot, RowShapes, SentenceShape, type SlotRead } from '../components/ui/slot.js'
+export { PartDescription } from '../components/PartDescription.js'
 export { Input } from '../components/ui/input.js'
 export { GaugeFace } from '../components/ui/gauge.js'
 export { ClaudeLogo, CodexLogo } from '../components/driver-logos.js'
 export { cn } from '../lib/utils.js'
 export { inPlace } from '../lib/in-place.js'
 export { STATUS_TONE, STATUS_DOT, STATUS_RING } from '../lib/status-tone.js'
-export { usePolled, useLoaded, forgetRemembered } from '../lib/use-async.js'
+export { usePolled, useLoaded, useAskOn, forgetRemembered, type ReadState } from '../lib/use-async.js'
+export { useKeptDraft } from '../lib/draft-handoff.js'
 export { FadeWhileStale } from '../components/FadeWhileStale.js'
 export { Badge } from '../components/ui/badge.js'
 export { Checkbox } from '../components/ui/checkbox.js'
@@ -651,11 +668,16 @@ export { Tooltip, TooltipTrigger, TooltipContent } from '../components/ui/toolti
 export { DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from '../components/ui/dropdown-menu.js'
 export { ContextMenu, ContextMenuTrigger } from '../components/ui/context-menu.js'
 export { PaneTitle, PaneActions } from '../components/PaneHeader.js'
-export { Page } from '../components/Page.js'
+export { Page, PageColumn } from '../components/Page.js'
+export { Section } from '../components/ui/section.js'
+export { List, Row } from '../components/ui/list.js'
 export { ShowSidebarButton } from '../components/SidebarToggle.js'
-export { StatTile } from '../components/StatTile.js'
+export { LinePart, counted } from '../components/LinePart.js'
 export { FilterChips, type FilterChip } from '../components/FilterChips.js'
 export { FileIcon } from '../components/FileIcon.js'
+export { MiddleCut, PathCut } from '../components/MiddleCut.js'
+export { treeRow } from '../components/tree-row.js'
+export { PaneNote } from '../components/PaneNote.js'
 export { Markdown, FileLinks } from '../components/Markdown.js'
 export { StartAgentButton, type StartMenuItem } from '../components/StartAgentButton.js'
 export { ButtonGroup, ButtonGroupSeparator } from '../components/ui/button-group.js'
@@ -664,8 +686,9 @@ export { MachineMark } from '../components/MachineMark.js'
 export { PersonMark, personName } from '../components/PersonMark.js'
 export { useGitHostPeople, personSaid } from '../lib/use-git-host-people.js'
 export { machineKind, machineName, runName, type MachineKind } from '../../src/client.js'
-export { SettingsSection, SettingsRow, SettingsSelectRow, type SettingsOption } from '../components/SettingsRows.js'
+export { SettingsFoot, SettingsSection, SettingsRow, SettingsRowShapes, SettingsSelectRow, type SettingsOption } from '../components/SettingsRows.js'
 export { useSettingsCrumb, type SettingsCrumb } from '../lib/settings-crumb.js'
+export { useSettingsHold } from '../lib/settings-hold.js'
 export { QrCode } from '../components/QrCode.js'
 export { Dialog } from '../components/ui/dialog.js'
 export { reachedByLine } from '../../src/client.js'
@@ -679,3 +702,4 @@ export { useAction } from '../lib/use-action.js'
 export { useSchedule, type Schedule } from '../lib/use-schedule.js'
 export { useFileNames, pathsIn, type FileNames, type NamedFile } from '../lib/use-file-names.js'
 export { ConfirmDialog } from '../components/ui/confirm-dialog.js'
+export { overlayOpen } from '../lib/shortcut.js'

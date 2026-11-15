@@ -3,6 +3,14 @@ import { onCloneTarget, sendAddProject, sendAddProjectFromAddress, sendPickProje
 import { useAction } from '../lib/use-action.js'
 import { Button } from './ui/button.js'
 import { Input } from './ui/input.js'
+import { BACKDROP_CLASS, DIALOG_POPUP_CLASS, DIALOG_PRESSES_CLASS } from './ui/dialog.js'
+import { cn } from '../lib/utils.js'
+import { PathStrip } from './PathStrip.js'
+
+/** The dialog's title, as every dialog's. */
+const TITLE = 'mb-3 text-base font-semibold'
+/** Its presses, under what it says, primary last. */
+const PRESSES = cn('mt-5 flex gap-2', DIALOG_PRESSES_CLASS)
 
 // Add a project (#396/#1150): the OS's own folder picker instead of a typed path — the daemon
 // opens the dialog (a browser page cannot learn an absolute path from a picker of its own) and
@@ -132,38 +140,39 @@ export function AddProjectPanel({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 pt-24" onKeyDown={onKeyDown}>
+    <div className="fixed inset-0 z-50" onKeyDown={onKeyDown}>
       {/* Click-away closes, same as dismissing the dropdown it was opened from. */}
-      <div className="absolute inset-0" onClick={onClose} />
+      <div className={BACKDROP_CLASS} onClick={onClose} />
       <div
         ref={panelRef}
         role="dialog"
+        data-overlay="dialog"
         aria-modal="true"
         aria-label="Add project"
-        className="relative w-96 max-w-[90vw] rounded-lg border border-border bg-background p-4 shadow-lg"
+        className={cn(DIALOG_POPUP_CLASS, 'md:w-[min(28rem,calc(100vw-2rem))]')}
       >
         {added ? (
           <>
-            <p role="status" className="mb-3 text-sm font-medium">
+            <p role="status" className={TITLE}>
               {added.alreadyActivated ? 'Already added' : 'Project added'}
             </p>
             {added.path && (
-              <p className="mb-3 break-all text-xs text-muted-foreground">
-                It is in <code className="rounded bg-muted px-1">{added.path}</code>.
+              <p className="text-sm text-muted-foreground">
+                It is in <PathStrip path={added.path} />.
               </p>
             )}
-            <div className="flex justify-end">
-              <Button type="button" size="sm" autoFocus onClick={onClose}>
+            <div className={cn(PRESSES, 'justify-end')}>
+              <Button type="button" autoFocus onClick={onClose}>
                 Done
               </Button>
             </div>
           </>
         ) : byAddress && !target ? (
           <form onSubmit={event => void readAddress(event)}>
-            <p className="mb-2 text-sm font-medium">Add project from a GitHub address</p>
+            <p className={TITLE}>Add project from a GitHub address</p>
             {/* Why the person is here when they asked for the folder dialog. */}
-            {pickError && <p className="mb-2 text-xs text-muted-foreground">{pickError}</p>}
-            <label className="mb-1 block text-xs text-muted-foreground" htmlFor="add-project-address">
+            {pickError && <p className="mb-3 text-sm text-muted-foreground">{pickError}</p>}
+            <label className="mb-2 block text-sm text-muted-foreground" htmlFor="add-project-address">
               The repository&rsquo;s address. Any git host works.
             </label>
             <Input
@@ -176,31 +185,31 @@ export function AddProjectPanel({
               spellCheck={false}
               autoCapitalize="none"
               autoCorrect="off"
-              className="mb-2 h-8 bg-background px-2 font-mono text-xs"
+              className="font-mono"
             />
-            <p className="mb-3 text-xs text-muted-foreground">It is cloned into the projects folder of this computer, with the logins this computer has.</p>
-            {error && <p className="mb-2 text-xs text-danger">{error}</p>}
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="ghost" size="sm" onClick={onClose}>
+            <p className="mt-2 text-sm text-muted-foreground">It is cloned into the projects folder of this computer, with the logins this computer has.</p>
+            {error && <p className="mt-3 text-sm text-danger">{error}</p>}
+            <div className={cn(PRESSES, 'justify-end')}>
+              <Button type="button" variant="secondary" onClick={onClose}>
                 Cancel
               </Button>
-              <Button type="submit" size="sm" disabled={busy || !typed.trim()}>
+              <Button type="submit" loading={busy} disabled={!typed.trim()}>
                 Next
               </Button>
             </div>
           </form>
         ) : pickError ? (
           <>
-            <p className="mb-2 text-sm font-medium">Add project</p>
-            <p className="mb-3 text-xs text-danger">{pickError}</p>
-            <div className="flex flex-wrap justify-end gap-2">
-              <Button type="button" variant="ghost" size="sm" onClick={onClose}>
+            <p className={TITLE}>Add project</p>
+            <p className="text-sm text-danger">{pickError}</p>
+            <div className={cn(PRESSES, 'flex-wrap justify-end')}>
+              <Button type="button" variant="secondary" onClick={onClose}>
                 Cancel
               </Button>
-              <Button type="button" variant="outline" size="sm" onClick={() => setByAddress(true)}>
+              <Button type="button" variant="secondary" onClick={() => setByAddress(true)}>
                 Add from a GitHub address
               </Button>
-              <Button type="button" size="sm" onClick={() => void pick()}>
+              <Button type="button" onClick={() => void pick()}>
                 Try again
               </Button>
             </div>
@@ -208,28 +217,27 @@ export function AddProjectPanel({
         ) : path || target ? (
           // The trust confirmation (#439): a plain-language prompt-injection warning before adding.
           <>
-            <p className="mb-2 text-sm font-medium">Do you trust this repository?</p>
-            <p className="mb-2 break-all text-xs text-muted-foreground">
-              <code className="rounded bg-muted px-1">{target ? target.address : path}</code>
+            <p className={TITLE}>Do you trust this repository?</p>
+            <p className="flex">
+              <PathStrip path={target ? target.address : path!} />
             </p>
             {target && (
-              <p className="mb-2 break-all text-xs text-muted-foreground">
-                It will be cloned to <code className="rounded bg-muted px-1">{target.path}</code>.
+              <p className="mt-2 text-sm text-muted-foreground">
+                It will be cloned to <PathStrip path={target.path} />.
               </p>
             )}
-            <p className="mb-3 text-xs text-muted-foreground">
+            <p className="mt-3 text-sm text-foreground">
               Agents will read its files. Hidden instructions in a repository can take over an agent, so add only the
               ones you trust.
             </p>
-            {error && <p className="mb-2 text-xs text-danger">{error}</p>}
-            <div className="flex justify-end gap-2">
+            {error && <p className="mt-3 text-sm text-danger">{error}</p>}
+            <div className={cn(PRESSES, 'justify-end')}>
               {/* A question about trust opens on the press that adds nothing: a second Enter, meant for the picker, trusts no repository unread. */}
               <Button
                 type="button"
-                variant="ghost"
-                size="sm"
+                variant="secondary"
                 autoFocus
-                disabled={busy}
+                loading={busy}
                 onClick={() => {
                   reset()
                   if (target) setTarget(null)
@@ -239,19 +247,19 @@ export function AddProjectPanel({
               >
                 {target ? 'Change the address' : folder ? 'Cancel' : 'Choose again'}
               </Button>
-              <Button type="button" size="sm" disabled={busy} onClick={() => void confirmAdd()}>
+              <Button type="button" loading={busy} onClick={() => void confirmAdd()}>
                 {busy ? (target ? 'Cloning…' : 'Adding…') : target ? 'I trust it, clone and add it' : 'I trust it, add it'}
               </Button>
             </div>
           </>
         ) : (
           <>
-            <p className="mb-2 text-sm font-medium">Add project</p>
-            <p role="status" className="mb-3 text-xs text-muted-foreground">
+            <p className={TITLE}>Add project</p>
+            <p role="status" className="text-sm text-muted-foreground">
               Choose the repository&apos;s folder in the system dialog…
             </p>
-            <div className="flex justify-end">
-              <Button type="button" variant="ghost" size="sm" onClick={onClose}>
+            <div className={cn(PRESSES, 'justify-end')}>
+              <Button type="button" variant="secondary" onClick={onClose}>
                 Cancel
               </Button>
             </div>

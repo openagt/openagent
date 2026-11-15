@@ -1058,7 +1058,7 @@ test('retry: a new subagent on the same task, from the caller\'s branch, told wh
   }
 })
 
-test('a command line that cannot be read exits 2 with the usage and starts nothing; outside a repository is a refusal', async () => {
+test('a command line that cannot be read exits 2 with what was wrong and starts nothing; outside a repository is a refusal', async () => {
   const repo = await testRepo()
   const elsewhere = await mkdtemp(join(tmpdir(), 'not-a-repo-'))
   try {
@@ -1066,7 +1066,7 @@ test('a command line that cannot be read exits 2 with the usage and starts nothi
     for (const argv of [[], ['nope'], ['start'], ['start', ' '], ['start', '--task'], ['start', '--task', ' '], ['start', 'a', 'b'], ['start', 'a', '--driver', 'pi'], ['list', 'extra'], ['read'], ['stop'], ['stop', FIRST, '--force'], ['plan', 'a', 'b'], ['plan', '--nope'], ['land'], ['land', FIRST, SECOND], ['next', 'extra'], ['retry'], ['retry', FIRST], ['retry', FIRST, 'why', 'and'], ['retry', FIRST, ' '], ['retry', '--help'], ['start', '--level', 'simple', 'a', '--model', 'opus'], ['start', '--level', 'simple', 'a', '--driver', 'codex'], ['start', '--level'], ['settings', '{}', '{}']]) {
       const bad = await run(repo, MAIN, argv)
       assert.deepEqual([bad.code, bad.out, bad.started, bad.stopped], [2, undefined, [], []], argv.join(' '))
-      assert.match(bad.err, /usage: orchestration/)
+      assert.match(bad.err, argv.length ? /\nRun `orchestration --help` for usage\.$/ : /^usage: orchestration/)
     }
     const outside = await run(elsewhere, MAIN, ['list'])
     assert.deepEqual([outside.code, outside.out], [1, { ok: false, reason: 'not-a-repo' }])

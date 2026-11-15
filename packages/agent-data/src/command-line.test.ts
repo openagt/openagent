@@ -11,6 +11,7 @@ async function run(argv: string[], line: CommandLine<[string]>): Promise<{ code:
 }
 
 const LINE: CommandLine<[string]> = {
+  program: 'tool',
   usage: 'usage: tool <command>',
   commands: {
     async echo(args, context) {
@@ -40,11 +41,11 @@ test('a refusal is the outcome on stdout and the line on stderr, exit 1; a failu
   assert.deepEqual((await run(['push'], failing)).stdout, [{ ok: false, reason: 'git-failed', detail: 'fatal: the remote hung up' }])
 })
 
-test('a line that cannot be read is the usage on stderr, exit 2: no command, an unknown one, or a misread argument', async () => {
+test('a line that cannot be read is told what was wrong and where the usage is, on stderr, exit 2; with no command at all, the usage', async () => {
   assert.deepEqual(await run([], LINE), { code: 2, stdout: [], stderr: ['usage: tool <command>'] })
-  assert.deepEqual(await run(['--local'], LINE), { code: 2, stdout: [], stderr: ['unknown option: --local\n\nusage: tool <command>'] })
-  assert.deepEqual(await run(['toString'], LINE), { code: 2, stdout: [], stderr: ['unknown command: toString\n\nusage: tool <command>'] })
-  assert.deepEqual(await run(['misread'], LINE), { code: 2, stdout: [], stderr: ['that is not a number\n\nusage: tool <command>'] })
+  assert.deepEqual(await run(['--local'], LINE), { code: 2, stdout: [], stderr: ['unknown option: --local\nRun `tool --help` for usage.'] })
+  assert.deepEqual(await run(['toString'], LINE), { code: 2, stdout: [], stderr: ['unknown command: toString\nRun `tool --help` for usage.'] })
+  assert.deepEqual(await run(['misread'], LINE), { code: 2, stdout: [], stderr: ['that is not a number\nRun `tool --help` for usage.'] })
 })
 
 test('--help is the usage on stdout, exit 0, also where a bare command takes flags', async () => {

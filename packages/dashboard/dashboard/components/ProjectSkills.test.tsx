@@ -76,6 +76,16 @@ describe('ProjectSkillsLine', () => {
     expect(container.textContent).toBe('')
   })
 
+  test('a read that fails after one answered keeps the line it drew', async () => {
+    onProjectSkills.mockResolvedValueOnce(skills({ groups: [{ title: 'Subagents', skills: [skill('orchestration', 'newer')] }] })).mockRejectedValue(new Error('EACCES'))
+    render(<ProjectSkillsLine projectId="p1" />)
+    await screen.findByRole('button', { name: 'Update' })
+    skillsSaved()
+    await waitFor(() => expect(onProjectSkills).toHaveBeenCalledTimes(2))
+    await new Promise(resolve => setTimeout(resolve, 20))
+    expect(screen.getByRole('button', { name: 'Update' })).not.toBeNull()
+  })
+
   test('a save on the Skills page, over the line, is read at once: the card says it before the next read', async () => {
     const tickets = { title: 'Tickets and queue', skills: [skill('tickets', 'current', true)] }
     onProjectSkills.mockResolvedValueOnce(skills()).mockResolvedValue(skills({ groups: [tickets], uncommitted: ['tickets'] }))
@@ -346,8 +356,10 @@ describe('the Skills page, over time', () => {
     sendChangeSkills.mockResolvedValue({ ok: true, written: ['tickets', 'queue'], removed: [], left: [] })
     sendProjectSkills.mockResolvedValue({ ok: true, sent: 'committed' })
     render(<SkillsSettings projectId="p1" />)
-    expect((await screen.findByText(/Save commits the change\./)).textContent).toContain('Save commits the change.')
+    await screen.findByText('Tickets and queue')
+    expect(screen.queryByText(/Save commits the change\./)).toBeNull()
     tick('tickets', 'queue')
+    expect(screen.getByText(/Save commits the change\./).textContent).toContain('Save commits the change.')
     fireEvent.click(screen.getByRole('button', { name: 'Save and commit' }))
     expect(await screen.findByText('Committed. Your agents get this change from their next start.')).toBeTruthy()
   })

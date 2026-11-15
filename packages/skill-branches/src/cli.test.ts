@@ -321,7 +321,7 @@ test('a command that cannot be read gets the usage and exit code 2, and no JSON'
       const ran = await run(repo, ...argv)
       assert.equal(ran.code, 2, argv.join(' '))
       assert.equal(ran.out, undefined, argv.join(' '))
-      assert.match(ran.err, /usage: branches/)
+      assert.match(ran.err, argv.length ? /\nRun `branches --help` for usage\.$/ : /^usage: branches/)
     }
   } finally {
     await rm(repo, { recursive: true, force: true })

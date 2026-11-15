@@ -25,7 +25,7 @@ export function RunPrLabels({ prs }: { prs: readonly { number: number; url: stri
             aria-label={`PR #${pr.number}${mark ? ` ${mark.word}` : ''}, on the git host`}
             className="inline-flex h-6 shrink-0 items-center gap-1 rounded-full border border-border px-2 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >
-            <Icon className={cn('h-3 w-3 shrink-0', mark?.tone)} aria-hidden />
+            <Icon className={cn('size-4 shrink-0', mark?.tone)} aria-hidden />
             <span className="tabular-nums text-foreground">#{pr.number}</span>
             {mark && <span>{mark.word}</span>}
           </a>

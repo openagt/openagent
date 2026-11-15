@@ -14,13 +14,31 @@ import { startDemo, type Demo } from './demo.js'
 
 const chrome = resolveChromePath()
 
+/**
+ * Run in every story's page: by the next press, and at the story's end, the keyboard is not left on
+ * the page's body because the control that had it was taken away or turned disabled.
+ * `window.lostFocus` names each one.
+ */
+const LOST_FOCUS = `(() => {
+  window.lostFocus = []
+  let last
+  const check = () => {
+    if (!last || document.activeElement !== document.body || (last.isConnected && !last.matches(':disabled'))) return
+    window.lostFocus.push((last.getAttribute('aria-label') ?? last.labels?.[0]?.textContent ?? last.textContent ?? last.tagName).trim().slice(0, 60))
+    last = undefined
+  }
+  window.checkLostFocus = check
+  addEventListener('focusin', event => (last = event.target), true)
+  for (const type of ['pointerdown', 'keydown']) addEventListener(type, check, true)
+})()`
+
 /** The options of a smoke story: skipped where the machine has no Chrome. */
 export const needsChrome = chrome ? {} : { skip: 'no Chrome on this machine' }
 
 export interface Smoke {
   /** The demo of this file's stories. */
   demo(): Demo
-  /** Go through one flow on a fresh page of the demo's project; a failure leaves a screenshot of the page. */
+  /** Go through one flow on a fresh page of the demo's project; a failure, or a press that left the keyboard on the page's body, leaves a screenshot of the page. */
   flow(name: string, steps: (page: Page) => Promise<void>): Promise<void>
   /** Start a run from the launcher, as a person does. */
   start(page: Page, prompt: string): Promise<void>
@@ -62,10 +80,13 @@ export function smoke(): Smoke {
       const page = await browser!.newPage({ viewport: { width: 1280, height: 800 } })
       const thrown: string[] = []
       page.on('pageerror', err => thrown.push(err.message))
+      await page.addInitScript(LOST_FOCUS)
       try {
         await page.goto(`${theDemo().url}/${theDemo().project.id}`)
         await steps(page)
         assert.deepEqual(thrown, [], 'the page threw')
+        await page.waitForTimeout(300)
+        assert.deepEqual(await page.evaluate('window.checkLostFocus(), window.lostFocus'), [], 'a press left the keyboard on the page')
       } catch (err) {
         await mkdir('test-results', { recursive: true })
         await page.screenshot({ path: `test-results/smoke-${name}.png`, fullPage: true }).catch(() => {})

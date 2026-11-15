@@ -68,7 +68,7 @@ describe('QueueCard', () => {
     await screen.findByText('Login page')
     // Three at first; one fewer is two.
     fireEvent.click(screen.getByRole('button', { name: 'One agent fewer' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Start 2' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Start 2 agents' }))
     await waitFor(() =>
       expect(started()).toEqual([
         ['p1', workOnEntryPrompt(LOGIN), { land: false }],
@@ -81,7 +81,7 @@ describe('QueueCard', () => {
     host = fakeHost({ p1: { '--local': [LOGIN, 'Tidy the loader', 'Third'] }, p2: { '--local': [] } })
     host.agents.mockImplementation(async (projectId: string) => (projectId === 'p1' ? [{ id: 'run-7', status: 'running', startedAt: '2026-10-01T10:00:00.000Z', ask: workOnEntryPrompt(LOGIN) }] : []))
     renderWithHost(<QueueCard projects={[alpha, beta]} />, host)
-    fireEvent.click(await screen.findByRole('button', { name: 'Start 2' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Start 2 agents' }))
     await waitFor(() =>
       expect(started()).toEqual([
         ['p1', workOnEntryPrompt('Tidy the loader'), { land: false }],
@@ -95,7 +95,7 @@ describe('QueueCard', () => {
     host.agents.mockImplementation(async (projectId: string) => (projectId === 'p1' ? [{ id: 'run-7', status: 'waiting', startedAt: '2026-10-01T10:00:00.000Z', ask: workOnEntryPrompt(LOGIN) }] : []))
     renderWithHost(<QueueCard projects={[alpha, beta]} />, host)
     await screen.findByRole('button', { name: 'An agent is on it' })
-    fireEvent.click(screen.getByRole('button', { name: 'Start 1' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Start 1 agent' }))
     await waitFor(() => expect(started()).toEqual([['p1', workOnEntryPrompt('Tidy the loader'), { land: false }]]))
   })
 
@@ -114,7 +114,7 @@ describe('QueueCard', () => {
     render({ p1: [LOGIN, 'Tidy the loader', 'Third', 'Fourth'] })
     await screen.findByText('Login page')
     fireEvent.change(screen.getByRole('spinbutton', { name: 'How many agents to start' }), { target: { value: '4' } })
-    expect(screen.getByRole('button', { name: 'Start 4' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Start 4 agents' })).toBeTruthy()
   })
 
   test('the fan-out is capped at the entries there are, and stops at the first refusal with its reason', async () => {
@@ -122,7 +122,7 @@ describe('QueueCard', () => {
     await screen.findByText('Login page')
     host.startRun.mockResolvedValueOnce({ ok: true, agentId: 'run-1' }).mockResolvedValueOnce({ ok: false, error: 'the daemon refused' })
     // Three asked for, two entries there: the button says two.
-    fireEvent.click(screen.getByRole('button', { name: 'Start 2' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Start 2 agents' }))
     expect((await screen.findByRole('alert')).textContent).toBe('the daemon refused')
     expect(started()).toHaveLength(2)
   })
@@ -135,11 +135,11 @@ describe('QueueCard', () => {
     expect(started()).toEqual([])
   })
 
-  test('the entries are numbered in the order agents take them, and the card\'s title opens the Queue page', async () => {
+  test('the entries are numbered in the order agents take them, and the link at its heading opens the Queue page', async () => {
     render({ p1: [LOGIN, 'Tidy the loader'] })
     await screen.findByText('Login page')
     expect([...document.querySelectorAll('ul ul > li')].map(row => row.querySelector('span')?.textContent)).toEqual(['1.', '2.'])
-    const title = screen.getByRole('link', { name: 'AI Queue' })
+    const title = screen.getByRole('link', { name: 'Queue' })
     expect(title.getAttribute('href')).toBe('/queue')
     fireEvent.click(title)
     expect(host.openPage).toHaveBeenCalledWith('queue')

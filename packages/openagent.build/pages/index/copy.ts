@@ -1,9 +1,9 @@
-import { createElement, useState, type KeyboardEvent, type MouseEvent } from 'react'
+import { createElement, useState } from 'react'
 
-// Copy-to-clipboard with the "copied!" badge timing of the original page:
-// instant copy on single click, but ignore the extra clicks of a double/triple-
-// click (text selection), and don't flip state back mid-selection (the badge
-// would distract while the user is selecting text).
+// Copy-to-clipboard with the check's timing: instant copy on single click, but
+// ignore the extra clicks of a double/triple-click (text selection), and don't
+// flip state back mid-selection (the check would distract while the user is
+// selecting text).
 export function useCopy() {
   const [copied, setCopied] = useState(false)
 
@@ -44,27 +44,9 @@ export function useCopy() {
   return { copied, copy }
 }
 
-/**
- * What makes an element a press that copies, from the pointer or the keyboard, named `label` as a
- * button is. Not a `<button>`, so the command in it can still be selected by hand.
- */
-export function copyPress(label: string, copy: (e?: { detail: number }) => void) {
-  return {
-    role: 'button',
-    tabIndex: 0,
-    'aria-label': label,
-    onClick: (e: MouseEvent) => copy(e),
-    onKeyDown: (e: KeyboardEvent) => {
-      if (e.key !== 'Enter' && e.key !== ' ') return
-      e.preventDefault()
-      copy()
-    },
-  }
-}
-
 const visuallyHidden = { position: 'absolute', width: 1, height: 1, overflow: 'hidden', clipPath: 'inset(50%)', whiteSpace: 'nowrap' } as const
 
-/** "Copied", said to a screen reader once a copy worked; the badge beside the press shows it. */
+/** "Copied", said to a screen reader once a copy worked; the press's check shows it. */
 export function CopiedStatus({ copied }: { copied: boolean }) {
   return createElement('span', { role: 'status', style: visuallyHidden }, copied ? 'Copied' : '')
 }

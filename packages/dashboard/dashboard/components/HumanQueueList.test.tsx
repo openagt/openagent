@@ -21,22 +21,24 @@ describe('the Human Queue\'s rows', () => {
         onOpenAgent={() => {}}
       />,
     )
-    const rows = screen.getAllByRole('listitem').map(row => row.textContent)
-    expect(rows).toEqual([
-      'Needs answerInteractive questionWhat kind of work?',
-      'Needs commitCreate test.md file1 file',
-      'Needs PRAI essay2 commits',
-      'Needs pushLocal only1 commit',
-      'Needs mergeAdd README sentence#2',
+    // Each row's link says what is needed first, as the row shows it, so the keyboard meets it there.
+    const links = screen.getAllByRole('link').map(link => link.textContent)
+    expect(links).toEqual([
+      'Needs answer: Interactive questionWhat kind of work?',
+      'Needs commit: Create test.md file1 file',
+      'Needs PR: AI essay2 commits',
+      'Needs push: Local only1 commit',
+      'Needs merge: Add README sentence#2',
     ])
+    expect(screen.getAllByRole('listitem').map(row => row.querySelector('[aria-hidden]')!.textContent)).toEqual(['Needs answer', 'Needs commit', 'Needs PR', 'Needs push', 'Needs merge'])
   })
 
-  test('a row ends with how long ago, and an arrow to where it goes', () => {
+  test('a row ends with how long ago, on the right edge: no arrow, its fill, cursor and focus say it opens', () => {
     const since = new Date(Date.now() - 2 * 86_400_000).toISOString()
     render(<HumanQueueList items={[item({ kind: 'awaiting', title: 'Asks', question: 'q?', agentId: 'r1', awaitId: 'q', createdAt: since })]} onOpenAgent={() => {}} />)
     const row = screen.getByRole('listitem')
-    expect(row.textContent).toBe('Needs answerAsksq?2d ago')
-    expect(row.querySelector('.lucide-arrow-right')).toBeTruthy()
+    expect(row.textContent).toBe('Needs answerNeeds answer: Asksq?2d ago')
+    expect(row.querySelector('.lucide-arrow-right')).toBeNull()
     expect(row.querySelector('.lucide-circle-help')).toBeTruthy()
   })
 
@@ -56,7 +58,7 @@ describe('the Human Queue\'s rows', () => {
       />,
     )
     const rows = screen.getAllByRole('listitem').map(row => row.textContent)
-    expect(rows).toEqual(['Needs answerAsks thereq?', 'Needs commitLeft here'])
+    expect(rows).toEqual(['Needs answerNeeds answer: Asks thereq?', 'Needs commitNeeds commit: Left here'])
     // The icon of the computer's kind, as the list of runs marks a run there, named to a screen reader.
     const [there, here] = screen.getAllByRole('listitem')
     expect(there!.querySelector('.lucide-laptop')).toBeTruthy()

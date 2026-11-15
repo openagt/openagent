@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Check, Loader2 } from 'lucide-react'
+import { CircleAlert, Check, Loader2 } from 'lucide-react'
 import { sendGitHostInstall, sendGitHostLogin, sendStopGitHostLogin, type GitHostRow } from '../rpc/logins.js'
+import { cn } from '../lib/utils.js'
 import { Button } from './ui/button.js'
 import { CopyButton } from './ui/copy-button.js'
-import { Dialog } from './ui/dialog.js'
-import { FixAction, hostWords, useGitHosts } from './Logins.js'
+import { DIALOG_PRESSES_CLASS, Dialog } from './ui/dialog.js'
+import { FixAction, hostWords, useGitHosts, type FixVariant } from './Logins.js'
 
 // Adding an account of OpenAgent's at a git host, the same dialog wherever one is added (his pick
 // over a code shown in each place's own layout): the Permissions page, the Overview's first steps,
@@ -121,8 +122,8 @@ function Adding({ host, onClose }: { host: string; onClose: (added?: string) => 
     return (
       <div className="space-y-3">
         <Install row={row} error={installError} onError={setInstallError} onChanged={reload} />
-        <div className="flex justify-end">
-          <Button size="sm" variant="ghost" onClick={() => onClose()}>
+        <div className={cn('flex justify-end', DIALOG_PRESSES_CLASS)}>
+          <Button variant="secondary" onClick={() => onClose()}>
             Cancel
           </Button>
         </div>
@@ -134,13 +135,13 @@ function Adding({ host, onClose }: { host: string; onClose: (added?: string) => 
         <div role="status" className="space-y-3">
           <p className="text-sm">
             {'Open '}
-            <a href={underWay.url} target="_blank" rel="noreferrer" className="font-medium text-[var(--color-primary)] underline-offset-2 hover:underline">
+            <a href={underWay.url} target="_blank" rel="noreferrer" className="focus-ring rounded-sm font-medium text-primary underline-offset-2 hover:underline">
               {underWay.url.replace(/^https:\/\//, '')}
             </a>
             {' and enter this code:'}
           </p>
           <div className="flex items-center gap-2">
-            <code className="rounded-md bg-muted px-3 py-1.5 font-mono text-lg font-medium tracking-widest">{underWay.code}</code>
+            <code className="rounded-md bg-muted px-3 py-1.5 font-mono text-xl font-medium tracking-widest">{underWay.code}</code>
             <CopyButton text={underWay.code} label="Copy the code" />
           </div>
           <Waiting words={`Waiting for you at ${p.name}…`} />
@@ -151,24 +152,26 @@ function Adding({ host, onClose }: { host: string; onClose: (added?: string) => 
         <Waiting words="Asking for a code…" />
       ) : null}
       {error !== undefined && (
-        <p role="alert" className="whitespace-pre-line text-xs text-danger">
-          {error}
+        <p role="alert" className="flex items-start gap-2 whitespace-pre-line text-sm text-danger">
+          <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
+          <span className="min-w-0">{error}</span>
         </p>
       )}
-      <div className="space-y-1 text-xs text-muted-foreground">
+      <div className="space-y-1 text-sm text-muted-foreground">
         <p>Sign in there as the account OpenAgent should use. Your own logins stay as they are.</p>
         {/* Rom's advice, where the account is chosen: an agent's own account limits what a run can reach. */}
         <p>An account of its own for your agents, with access to only what they need, is safer: name it like you-agent.</p>
       </div>
-      <div className="flex items-center justify-end gap-2">
+      {/* The presses at the right, the primary last, as every dialog has them. */}
+      <div className={cn('flex items-center justify-end gap-2', DIALOG_PRESSES_CLASS)}>
+        <Button variant="secondary" onClick={() => onClose()}>
+          Cancel
+        </Button>
         {(ended || error !== undefined) && (
-          <Button size="sm" disabled={asking} onClick={() => void start()}>
+          <Button disabled={asking} onClick={() => void start()}>
             Get a new code
           </Button>
         )}
-        <Button size="sm" variant="ghost" onClick={() => onClose()}>
-          Cancel
-        </Button>
       </div>
     </div>
   )
@@ -176,8 +179,8 @@ function Adding({ host, onClose }: { host: string; onClose: (added?: string) => 
 
 function Waiting({ words }: { words: string }) {
   return (
-    <p role="status" className="flex items-center gap-2 text-xs text-muted-foreground">
-      <Loader2 className="size-3.5 shrink-0 animate-spin" aria-hidden />
+    <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
+      <Loader2 className="size-4 shrink-0 animate-spin" aria-hidden />
       {words}
     </p>
   )
@@ -220,7 +223,7 @@ export function useAddGitAccount(onAdded?: (login: string, host: string) => void
 }
 
 /** The press for a host with no account, or no tool: it opens the dialog that adds one. Nothing for a host that has one. */
-export function HostFix({ row, onChanged, size = 'sm', variant }: { row: GitHostRow; onChanged: () => Promise<void>; size?: 'sm' | 'xs' | undefined; variant?: 'outline' | undefined }) {
+export function HostFix({ row, onChanged, size = 'default', variant }: { row: GitHostRow; onChanged: () => Promise<void>; size?: 'default' | 'sm' | undefined; variant?: FixVariant }) {
   const adding = useAddGitAccount(onChanged)
   const p = row.provider
   if (!p) return null

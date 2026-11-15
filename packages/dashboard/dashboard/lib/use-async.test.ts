@@ -89,18 +89,21 @@ describe('usePolled', () => {
     expect(load).toHaveBeenCalledTimes(1)
   })
 
-  test('a rejected read keeps the last value and polling survives it', async () => {
+  test('a rejected read keeps the last value and says it is failing, and polling survives it', async () => {
     const load = vi.fn().mockResolvedValue(1)
     const { result } = renderHook(() => usePolled(load, 0, 5000, []))
     await settle()
+    expect(result.current.failing).toBe(false)
 
     load.mockRejectedValue(new Error('daemon restarted'))
     await settle(5000)
     expect(result.current.value).toBe(1) // kept, not blanked
+    expect(result.current.failing).toBe(true)
 
     load.mockResolvedValue(3)
     await settle(5000)
     expect(result.current.value).toBe(3) // the next tick recovers
+    expect(result.current.failing).toBe(false)
   })
 
   test('reload reads immediately, without waiting for the next tick', async () => {
@@ -144,17 +147,17 @@ describe('remembering answers per key', () => {
       { initialProps: { id: 'a' } },
     )
     await settle()
-    expect(result.current).toMatchObject({ value: 'a-1', loaded: true })
+    expect(result.current).toMatchObject({ value: 'a-1', state: 'fresh' })
 
     rerender({ id: 'b' })
     // Never seen: nothing, and never a's answer.
-    expect(result.current).toMatchObject({ value: 'initial', loaded: false })
+    expect(result.current).toMatchObject({ value: 'initial', state: 'unknown' })
     await settle()
     expect(result.current.value).toBe('b-2')
 
     rerender({ id: 'a' })
     // Seen before: a's last answer from the first frame, while it is read again.
-    expect(result.current).toMatchObject({ value: 'a-1', loaded: true })
+    expect(result.current).toMatchObject({ value: 'a-1', state: 'fresh' })
     await settle()
     expect(result.current.value).toBe('a-3')
     expect(load).toHaveBeenCalledTimes(3)
@@ -210,13 +213,13 @@ describe('reading an answer ahead of its page', () => {
     const frames: string[] = []
     const { result } = renderHook(() => {
       const read = usePolled(() => Promise.resolve('fresh'), 'initial', 60_000, ['a'], { remember: 'thing:a' })
-      frames.push(`${read.value}:${read.loaded}`)
+      frames.push(`${read.value}:${read.state}`)
       return read
     })
-    expect(frames[0]).toBe('ahead:true')
+    expect(frames[0]).toBe('ahead:fresh')
     await settle()
     expect(result.current.value).toBe('fresh')
-    expect(frames).not.toContain('initial:false')
+    expect(frames).not.toContain('initial:unknown')
   })
 
   test('a key is asked for once while its read is out, and never once it holds an answer', async () => {
@@ -367,7 +370,7 @@ describe('a poll that changes its pace', () => {
     await settle()
     expect(result.current.value).toBe(1)
     rerender({ every: 2000 })
-    expect(result.current).toMatchObject({ value: 1, loaded: true }) // the rail does not blank
+    expect(result.current).toMatchObject({ value: 1, state: 'fresh' }) // the rail does not blank
     expect(load).toHaveBeenCalledTimes(1)
     await settle(2000)
     expect(load).toHaveBeenCalledTimes(2)
@@ -388,7 +391,7 @@ describe('an answer stored for the next visit', () => {
   test('a page opened again shows the stored answer from its first frame, stale, until the fresh one lands', async () => {
     const first = renderHook(() => usePolled(() => Promise.resolve(3), 0, 10_000, [], { remember: 'queue:p1', stored: true }))
     await settle()
-    expect(first.result.current).toMatchObject({ value: 3, stale: false })
+    expect(first.result.current).toMatchObject({ value: 3, state: 'fresh' })
     first.unmount()
     reopen()
 
@@ -396,15 +399,15 @@ describe('an answer stored for the next visit', () => {
     const frames: string[] = []
     const { result } = renderHook(() => {
       const read = usePolled(() => new Promise<number>(resolve => (answer = resolve)), 0, 10_000, [], { remember: 'queue:p1', stored: true })
-      frames.push(`${read.value}:${read.loaded}:${read.stale}`)
+      frames.push(`${read.value}:${read.state}`)
       return read
     })
-    expect(frames[0]).toBe('3:true:true')
+    expect(frames[0]).toBe('3:kept')
     await settle()
-    expect(result.current.stale).toBe(true)
+    expect(result.current.state).toBe('kept')
     answer(4)
     await settle()
-    expect(result.current).toMatchObject({ value: 4, loaded: true, stale: false })
+    expect(result.current).toMatchObject({ value: 4, state: 'fresh' })
   })
 
   test('only a read that asks for it is stored', async () => {
@@ -413,7 +416,7 @@ describe('an answer stored for the next visit', () => {
     plain.unmount()
     reopen()
     const { result } = renderHook(() => usePolled(() => new Promise<number>(() => {}), 0, 10_000, [], { remember: 'plain', stored: true }))
-    expect(result.current).toMatchObject({ value: 0, loaded: false, stale: false })
+    expect(result.current).toMatchObject({ value: 0, state: 'unknown' })
   })
 
   test('the part of the page around a stale read is told, and told again when it is fresh', async () => {

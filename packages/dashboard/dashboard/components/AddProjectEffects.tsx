@@ -1,7 +1,7 @@
 // What adding a project does to the folder, said before the person adds it: on the onboarding
 // checklist, beside its button. The dialog that asks says only the trust question.
 export function AddProjectEffects() {
-  const code = 'rounded bg-muted px-1'
+  const code = 'rounded-sm bg-muted px-1 font-mono'
   return (
     <div className="space-y-1 text-xs text-muted-foreground">
       <p>Adding a project lets agents work in its folder. Adding it:</p>

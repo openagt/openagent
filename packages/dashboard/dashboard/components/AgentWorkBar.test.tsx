@@ -17,9 +17,19 @@ describe('AgentWorkBar', () => {
   test('it says the branch, what the branch holds and the next step, in one row', () => {
     render(<AgentWorkBar checkout={{ branch: 'agent-fix-header' }} summary={<span>2 commits</span>} actions={<button type="button">Open PR</button>} show away={false} onHide={noop} />)
     const bar = screen.getByRole('group', { name: "This session's work" })
-    // The branch as it is named.
-    expect(bar.textContent).toBe('agent-fix-header2 commitsOpen PR')
+    // The branch as it is named, whole to a screen reader.
+    expect(screen.getByText('agent-fix-header').className).toBe('sr-only')
+    expect(bar.textContent!.endsWith('2 commitsOpen PR')).toBe(true)
     expect(screen.getByRole('button', { name: 'Open PR' })).toBeTruthy()
+  })
+
+  test('it leads with what the run did, in its own words, then the branch, whose end stays whole when it is cut', () => {
+    render(<AgentWorkBar checkout={{ branch: 'agent-2026-11-14T00-20-56-165Z' }} did="Add a login page" summary={<span>+1</span>} show away={false} onHide={noop} />)
+    const bar = screen.getByRole('group', { name: "This session's work" })
+    expect(bar.firstElementChild!.textContent!.startsWith('Add a login page')).toBe(true)
+    // The part that tells it from its siblings is never what is cut.
+    expect(screen.getByText('20-56-165Z').className).toContain('shrink-0')
+    expect(screen.getByText('agent-2026-11-14T00-').className).toContain('truncate')
   })
 
   test('the ✕ puts the bar away, and new work brings it back', () => {

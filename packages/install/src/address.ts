@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises'
+
 /**
  * The secure address, the same on every computer: its name, the address it points at, its hosts
  * line and its certificate. Each platform's own parts are in its module (mac.ts, linux.ts).
@@ -17,6 +19,12 @@ export const LOOPBACK_ADDRESS = '127.0.0.42'
 
 /** The end of the hosts line the install adds, which is how the uninstall finds it again. */
 export const HOSTS_MARK = '# OpenAgent'
+
+/** Whether the hosts file `file` holds the install's line: a file that cannot be read holds none. */
+export async function hasHostsLine(file: string): Promise<boolean> {
+  const text = await readFile(file, 'utf8').catch(() => '')
+  return text.split('\n').some(line => line.trimEnd().endsWith(` ${HOSTS_MARK}`))
+}
 
 /** `value` as one word of a shell script, whatever it holds. */
 export function quoted(value: string): string {

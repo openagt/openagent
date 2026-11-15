@@ -26,7 +26,7 @@ describe('a new automation', () => {
     expect(draftProblem(draft({ pace: WORK, when: CHECK }))).toBeUndefined()
     // A time of day goes with days or more, and one left half typed is no pace yet.
     expect(draftProblem(draft({ pace: every('2', 'd', '10:00') }))).toBeUndefined()
-    expect(draftProblem(draft({ pace: { ...every('2'), atHalfTyped: true } }))).toBe('Finish the time, like 10:00, or clear it.')
+    expect(draftProblem(draft({ pace: { ...every('2'), atHalfTyped: true } }))).toBe('Finish the time of day, like 10:00, or clear it.')
     expect(draftProblem(draft())).toBeUndefined()
     expect(draftProblem(draft({ name: '  answer-comments  ' }))).toBeUndefined()
     // A text longer than the dashboard hands a command is said before Save, not refused after it.
@@ -41,7 +41,7 @@ describe('a new automation', () => {
   test("what else keeps a draft from being saved, its name aside: said while the name typed cannot be one, which is said under its own field", () => {
     const badName = (over: Partial<AutomationDraft> = {}): AutomationDraft => draft({ name: 'Answer comments', ...over })
     expect(whatAndWhenProblem(badName({ pace: every('') }))).toBe('Type a whole number, from 1 to 9999.')
-    expect(whatAndWhenProblem(badName({ pace: { ...every('2'), atHalfTyped: true } }))).toBe('Finish the time, like 10:00, or clear it.')
+    expect(whatAndWhenProblem(badName({ pace: { ...every('2'), atHalfTyped: true } }))).toBe('Finish the time of day, like 10:00, or clear it.')
     expect(whatAndWhenProblem(badName({ pace: WORK }))).toBe('Say when it runs: on a pace, by a shell line, or both.')
     expect(whatAndWhenProblem(badName({ prompt: '' }))).toBe('Write what the agent is told.')
     expect(whatAndWhenProblem(badName())).toBeUndefined()
@@ -193,6 +193,8 @@ describe('an automation opened from its row', () => {
       'Its skill file is deleted from your files in this project, and nothing is committed for you. Git can bring back only what you committed of it: a file never committed, or your last changes to it, cannot be brought back. Everyone else who has the project keeps the row until your deletion reaches them. Its switch and your picks for it go with it. The records of its past runs stay.',
     )
     expect(removeWarning({ onThisMachine: true })).toBe('Its file is deleted. It is kept on this machine alone, outside git, so it cannot be brought back. Its switch and your picks for it go with it. The records of its past runs stay.')
+    // A shared one git never had: nobody else has the row, so nobody else keeps it.
+    expect(removeWarning({ untracked: true })).toBe('Its skill file is deleted from your files in this project. It was never committed, so nobody else has it, and it cannot be brought back. Its switch and your picks for it go with it. The records of its past runs stay.')
     // In a commit: the deletion is the person's to commit.
     expect(removedWords('/answer-comments', { ok: true, command: 'answer-comments', file: FILE, git: 'committed', startsFrom: 'origin/main' })).toBe(`Removed /answer-comments: ${FILE} is deleted, and nothing was committed for you. Commit the deletion and bring it to origin/main: until then everyone else who has the project keeps the row.`)
     expect(removedWords('/answer-comments', { ok: true, file: FILE, git: 'committed', startsFrom: 'HEAD' })).toBe(`Removed /answer-comments: ${FILE} is deleted, and nothing was committed for you. Commit the deletion.`)

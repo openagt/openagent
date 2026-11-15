@@ -1,7 +1,7 @@
 import { hostname } from 'node:os'
 import { nodeGitRunner } from '@openagt/agent-data'
 import { isPidAlive, readAllAgents, type AgentMeta, type BranchesFor } from '../store/index.js'
-import { cachedOpenPrs, cachedPrStates, type PrState } from './pull-requests.js'
+import { cachedOpenPrs, cachedPrStates, type ListedPr } from './pull-requests.js'
 import { projectGitHost } from '../store/git-host.js'
 import { unpublishedRuns, type Unpublished } from './unpublished.js'
 import { bridgeQuestions } from './bridge-store.js'
@@ -51,19 +51,20 @@ export async function withRowMarks(cwd: string, agents: AgentMeta[]): Promise<Ag
 }
 
 /**
- * Each run that has a pull request, marked with how the request stands, so its row can show it:
- * from one cached listing of the project's requests, read only when one of the runs has a request.
+ * Each run that has a pull request, marked with how the request stands, so its row can show it, and
+ * with its title, so the jump finds the run by it: from one cached listing of the project's
+ * requests, read only when one of the runs has a request.
  */
-export async function withPrStates(cwd: string, agents: AgentMeta[], states: (cwd: string) => Promise<Map<string, PrState>> = cachedPrStates): Promise<AgentMeta[]> {
+export async function withPrStates(cwd: string, agents: AgentMeta[], states: (cwd: string) => Promise<Map<string, ListedPr>> = cachedPrStates): Promise<AgentMeta[]> {
   if (!agents.some(agent => agent.pr !== undefined || agent.earlierPrs?.length)) return agents
   const known = await states(cwd)
   return agents.map(agent => {
-    const prState = agent.pr && known.get(agent.pr.url)
+    const listed = agent.pr && known.get(agent.pr.url)
     const earlierPrs = agent.earlierPrs?.map(pr => {
-      const state = known.get(pr.url)
+      const state = known.get(pr.url)?.state
       return state ? { ...pr, state } : pr
     })
-    return prState || earlierPrs ? { ...agent, ...(prState ? { prState } : {}), ...(earlierPrs ? { earlierPrs } : {}) } : agent
+    return listed || earlierPrs ? { ...agent, ...(listed ? { prState: listed.state, ...(listed.title ? { prTitle: listed.title } : {}) } : {}), ...(earlierPrs ? { earlierPrs } : {}) } : agent
   })
 }
 

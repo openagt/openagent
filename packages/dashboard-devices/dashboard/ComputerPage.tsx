@@ -1,17 +1,18 @@
 import { useState } from 'react'
 import { Monitor, Server } from 'lucide-react'
-import { Button, ConfirmDialog, Input, Switch } from '@openagt/dashboard/module'
+import { Button, ConfirmDialog, Input, Switch, useOpenAgentDown } from '@openagt/dashboard/module'
 import { addDevice, removeDevice } from './devices.js'
 import { hasDoor, reachedAt, type ComputerItem } from './model.js'
 import { ComputersThrough } from './ServerPage.js'
-import { Head, Part, Problem, State, SwitchLine, useChange } from './parts.js'
+import { Head, Part, Problem, Removal, State, SwitchLine, useChange } from './parts.js'
 import type { Devices } from './use-devices.js'
 
 // A computer's own page in Settings › Devices: whether this computer's runs go there, whether it
 // starts runs here, and who can use it. The two ways are two things OpenAgent keeps apart: a
 // machine saved here, and a device in at this computer's door; the page shows them as one computer.
 
-export function ComputerPage({ d, item, onBack, onSetUp }: { d: Devices; item: ComputerItem; onBack: () => void; /** Set this computer up as a server: the setup dialog. */ onSetUp: () => void }) {
+export function ComputerPage({ d, item, onBack, onSetUp }: { d: Devices; item: ComputerItem; onBack: () => void; /** Set this computer up as a server. */ onSetUp: () => void }) {
+  const down = useOpenAgentDown()
   const { host } = d
   const { machine, door, through } = item
   const status = d.door?.ok ? d.door.value : undefined
@@ -58,7 +59,7 @@ export function ComputerPage({ d, item, onBack, onSetUp }: { d: Devices; item: C
           <Switch
             aria-label={`Your runs can go to ${item.name}`}
             checked={machine !== undefined}
-            disabled={busy}
+            disabled={busy || down}
             onCheckedChange={on => {
               if (on) setPasting(true)
               else if (machine) void act(async () => ((await d.removeMachine(machine.id)) ? { ok: true } : { ok: false, error: `${item.name} could not be taken off.` }))
@@ -77,7 +78,7 @@ export function ComputerPage({ d, item, onBack, onSetUp }: { d: Devices; item: C
               <span>{`On ${item.name}, open Settings › Devices › Add device › Computer › Give it this computer's link, and paste that link here:`}</span>
               <Input name="computer-link" autoFocus aria-label={`${item.name}'s link`} value={link} onChange={event => setLink(event.target.value)} />
             </label>
-            <Button size="sm" type="submit" disabled={busy || !link.trim()}>
+            <Button type="submit" disabled={busy || !link.trim() || down}>
               Save
             </Button>
           </form>
@@ -85,7 +86,7 @@ export function ComputerPage({ d, item, onBack, onSetUp }: { d: Devices; item: C
         {/* A computer reached through a server is reached from that server: its runs come here that way. */}
         {!through && (
           <SwitchLine label={`${item.name} can start runs here`} words={door ? "They use this computer's logins." : machine ? `Off. Turn it on: ${item.name} is told this computer's link, and saves it.` : "They use this computer's logins."}>
-            <Switch aria-label={`${item.name} can start runs here`} checked={door !== undefined} disabled={busy} onCheckedChange={on => void act(on ? letIn : removeHere)} />
+            <Switch aria-label={`${item.name} can start runs here`} checked={door !== undefined} disabled={busy || down} onCheckedChange={on => void act(on ? letIn : removeHere)} />
           </SwitchLine>
         )}
       </Part>
@@ -95,16 +96,16 @@ export function ComputerPage({ d, item, onBack, onSetUp }: { d: Devices; item: C
         <Part title="Who can use it">
           <p className="text-sm">Only you.</p>
           <p className="text-xs text-muted-foreground">{`Other people cannot start runs on ${item.name}: on a personal computer they would run as you, with your logins. To share it, set it up as a server: each person then gets a user of their own on it. Linux for now.`}</p>
-          <Button size="sm" variant="outline" onClick={onSetUp}>
-            <Server className="h-3.5 w-3.5" aria-hidden />
+          <Button variant="secondary" onClick={onSetUp}>
+            <Server className="size-4" aria-hidden />
             Set it up as a server
           </Button>
         </Part>
       )}
-      <div className="space-y-1 pt-4">
+      <Removal said="Both computers forget each other. Nothing is deleted.">
         <ConfirmDialog
           trigger={
-            <Button size="sm" variant="outline" className="text-danger" disabled={busy}>
+            <Button variant="secondary" className="text-danger" disabled={busy}>
               {`Remove ${item.name}`}
             </Button>
           }
@@ -120,8 +121,7 @@ export function ComputerPage({ d, item, onBack, onSetUp }: { d: Devices; item: C
             if (done) onBack()
           }}
         />
-        <p className="text-xs text-muted-foreground">Both computers forget each other. Nothing is deleted.</p>
-      </div>
+      </Removal>
       {error !== undefined && <Problem>{error}</Problem>}
     </div>
   )

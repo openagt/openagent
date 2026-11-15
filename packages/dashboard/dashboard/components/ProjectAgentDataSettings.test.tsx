@@ -10,7 +10,10 @@ const sendProjectDataAs = vi.fn(async (_projectId: string, _login: string) => ({
 const openSettings = vi.hoisted(() => vi.fn())
 vi.mock('../rpc/project-agent-data.js', () => ({ onProjectAgentData, sendProjectDataAs }))
 vi.mock('../rpc/projects.js', () => ({ sendShareRecords }))
-vi.mock('../lib/use-route.js', async importOriginal => ({ ...(await importOriginal<object>()), openSettings }))
+vi.mock('../lib/host-services.js', async importOriginal => {
+  const actual = await importOriginal<typeof import('../lib/host-services.js')>()
+  return { ...actual, INERT_HOST_SERVICES: { ...actual.INERT_HOST_SERVICES, openSettings } }
+})
 
 const { ProjectAgentDataSettings } = await import('./ProjectAgentDataSettings.js')
 

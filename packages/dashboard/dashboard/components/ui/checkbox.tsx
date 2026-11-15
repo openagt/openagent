@@ -20,9 +20,9 @@ export function Checkbox({ className, disabled = false, ...props }: CheckboxProp
     <CheckboxPrimitive.Root
       disabled={disabled}
       className={cn(
-        'inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] border border-border bg-transparent hover:not-data-[checked]:border-foreground/40',
-        'transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]',
-        'data-[checked]:border-primary data-[checked]:bg-primary data-[checked]:text-primary-foreground data-[checked]:hover:opacity-90',
+        // A 16px mark in a 24px hit area.
+        'focus-ring relative inline-flex size-4 shrink-0 items-center justify-center rounded-sm border border-input bg-transparent after:absolute after:-inset-1 hover:not-data-[checked]:border-input-hover',
+        'transition-colors data-[checked]:border-primary data-[checked]:bg-primary data-[checked]:text-primary-foreground data-[checked]:hover:border-primary-hover data-[checked]:hover:bg-primary-hover',
         'data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[readonly]:pointer-events-none',
         className,
       )}

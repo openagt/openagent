@@ -186,6 +186,8 @@ export interface AgentMeta {
    * on the way to the dashboard like {@link saving}, since it changes on the git host, not here.
    */
   prState?: 'open' | 'draft' | 'merged' | 'closed'
+  /** The title of the run's pull request ({@link pr}), as the git host last said: the jump finds the run by it. Not stored, like {@link prState}. */
+  prTitle?: string
   /**
    * The pull requests the run opened before {@link pr}, oldest first: a run that moved its work to a
    * new branch opened one for each. Kept by the tool that ran it, under its `caller` key; each one

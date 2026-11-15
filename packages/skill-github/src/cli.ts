@@ -1,4 +1,4 @@
-import { Refused, UsageError, errorMessage, nodeGitRunner, parseCommandArgs, runCommandLine, type Command, type Failure, type GitRunner } from '@openagt/agent-data'
+import { Refused, UsageError, errorMessage, nodeGitRunner, parseCommandArgs, runCommandLine, helpRows, helpText, type Command, type Failure, type GitRunner } from '@openagt/agent-data'
 import { hasBrew, installCommand, nodeGhRunner, type GhRunner } from './gh.js'
 import { listRequests } from './requests.js'
 import { openRequest, type OpenOutcome } from './open.js'
@@ -32,51 +32,31 @@ import { accountNamed, factsOfToken, tokenOf, workingGh } from './working-accoun
 
 export const USAGE = `usage: github <command>
 
-  requests [--branch <b>] [--state open|merged|all] [--since <iso>]
-                               the project's pull requests, newest first: number, url, state, title, draft, branch, head, createdAt, mergedAt, mergeCommit
-  replies [--since <iso>]      what came on the open issues and pull requests this machine's agents worked on, since each agent ended: maintainers' words
-                               that call the agent with /agent, and on an agent's own pull request checks that turned red and a conflict once the base branch moved;
-                               [{ run, text }], one per run, read from the project's run records; with --since, also [{ for, text, branch? }] for each open issue or
-                               pull request no run was on, where a maintainer called the agent since then: the check of a scheduler's row with each
-  comment <number> --body <text>
-                               post a comment on issue or pull request <number>: its id and url. It opens with the coding agent's logo, the model and the effort, as the agent's
-                               run record says (found through AGENT_DIARY, which its runner sets), else the line 🤖 automated; a hidden mark after the text, so replies never counts it
-  open [--branch <b>] --title <t> [--body <text>] [--base <b>] [--draft] [--merge]
-                               open the pull request of branch <b> (default: the current branch; it must be on the remote already); an open one is answered as it is; --base names the branch it
-                               goes into (default: the repository's default branch); --merge lands it on green.
-                               An account that cannot write to the project pushes to its fork: git remote set-url --push origin <fork>; open and replies then take that fork's
-                               pull requests as this machine's
-  merge <number>               land pull request <number>: a draft is marked ready, then the merge is armed as --merge arms it
-  watch <number>               wait for pull request <number>'s checks and merge it once they pass; what --merge starts where the repository has no auto-merge
-  home                         the project's page on GitHub, from its origin remote
-  profile <login>              a GitHub user's public profile, read with no login: { login, name, avatar } (a picture's https address); what a person copies
-                               into OpenAgent as their own name and picture
-  repos [--user <login>] [--owner <name>]
-                               the repositories of <name>, a GitHub user or organization (default: the account itself), as the account <login> (default:
-                               the account runs use) sees them, its private ones too: { login, owner, repos: [{ address, url, private, pushedAt, description }] },
-                               the newest pushed first, at most 300
-  people <email>...            the GitHub accounts behind the project's commit emails: [{ email, login, avatar }], one per email a commit of the
-                               repository's is signed with by an account, or that is GitHub's own address for one (at most 20 asked at once); any other email is left out
-  accounts [--host <host>]     OpenAgent's own GitHub accounts and the one its runs use: { host, name, requestWord, logo, tool, installed,
-                               install, accounts: [{ login, runs, ok, avatar }], loggingIn? }; a host other than github.com is refused (not-mine)
-  use <login>                  OpenAgent's runs use <login> from now on, one of its accounts
-  login                        add an account to OpenAgent, logged in in the browser: { code, url }, the code typed at url; gh waits on for the yes.
-  stop-login                   give up the login under way: its gh stops waiting, nothing of it is kept.
-                               The account is OpenAgent's own: the person's gh, git and keychain stay as they are
-  install                      put gh on this computer with no admin: Homebrew where it is, else GitHub's build into ~/.local/bin; answers once it
-                               started, and accounts says installing until it ended, then installFailed if it did
-  env [--user <login>]         the environment a run gets to work as <login> (default: the account runs use): { env }, its gh folder, its token for gh and
-                               for git, its name on commits; refused (no-account) when OpenAgent has no account
-  git-config [--user <login>]  the git settings that make git push and fetch as <login> (default: the account runs use), asking gh for its login when git needs it:
-                               { login, host, config: [[key, value]] }; no secret in them, so they may be kept in a repository's own config
-  token --user <login>         <login>'s token as OpenAgent keeps it, checked with GitHub to be that account's: { login, token }; what OpenAgent copies to a
-                               server of the person's, which then uses the same login, never a new one
-  take                         add the login whose token is on standard input as one of OpenAgent's accounts: { login }
-  forget <login>               OpenAgent forgets <login>; the token is not ended, and goes on working wherever else it is
-  create [--check]             create a private repository for a project with no origin, named <account>/<folder>, set it as origin and push;
-                               --check only says which repository that would be
+${helpRows([
+  ['requests [--branch <b>] [--state open|merged|all] [--since <iso>]', `the project's pull requests, newest first: number, url, state, title, draft, branch, head, createdAt, mergedAt, mergeCommit`],
+  ['replies [--since <iso>]', `what came on the open issues and pull requests this machine's agents worked on, since each agent ended: maintainers' words that call the agent with /agent, and on an agent's own pull request checks that turned red and a conflict once the base branch moved; [{ run, text }], one per run, read from the project's run records; with --since, also [{ for, text, branch? }] for each open issue or pull request no run was on, where a maintainer called the agent since then: the check of a scheduler's row with each`],
+  ['comment <number> --body <text>', `post a comment on issue or pull request <number>: its id and url. It opens with the coding agent's logo, the model and the effort, as the agent's run record says (found through AGENT_DIARY, which its runner sets), else the line 🤖 automated; a hidden mark after the text, so replies never counts it`],
+  ['open [--branch <b>] --title <t> [--body <text>] [--base <b>] [--draft] [--merge]', `open the pull request of branch <b> (default: the current branch; it must be on the remote already); an open one is answered as it is; --base names the branch it goes into (default: the repository's default branch); --merge lands it on green. An account that cannot write to the project pushes to its fork: git remote set-url --push origin <fork>; open and replies then take that fork's pull requests as this machine's`],
+  ['merge <number>', 'land pull request <number>: a draft is marked ready, then the merge is armed as --merge arms it'],
+  ['watch <number>', `wait for pull request <number>'s checks and merge it once they pass; what --merge starts where the repository has no auto-merge`],
+  ['home', `the project's page on GitHub, from its origin remote`],
+  ['profile <login>', `a GitHub user's public profile, read with no login: { login, name, avatar } (a picture's https address); what a person copies into OpenAgent as their own name and picture`],
+  ['repos [--user <login>] [--owner <name>]', 'the repositories of <name>, a GitHub user or organization (default: the account itself), as the account <login> (default: the account runs use) sees them, its private ones too: { login, owner, repos: [{ address, url, private, pushedAt, description }] }, the newest pushed first, at most 300'],
+  ['people <email>...', `the GitHub accounts behind the project's commit emails: [{ email, login, avatar }], one per email a commit of the repository's is signed with by an account, or that is GitHub's own address for one (at most 20 asked at once); any other email is left out`],
+  ['accounts [--host <host>]', `OpenAgent's own GitHub accounts and the one its runs use: { host, name, requestWord, logo, tool, installed, install, accounts: [{ login, runs, ok, avatar }], loggingIn? }; a host other than github.com is refused (not-mine)`],
+  ['use <login>', `OpenAgent's runs use <login> from now on, one of its accounts`],
+  ['login', 'add an account to OpenAgent, logged in in the browser: { code, url }, the code typed at url; gh waits on for the yes.'],
+  ['stop-login', `give up the login under way: its gh stops waiting, nothing of it is kept. The account is OpenAgent's own: the person's gh, git and keychain stay as they are`],
+  ['install', `put gh on this computer with no admin: Homebrew where it is, else GitHub's build into ~/.local/bin; answers once it started, and accounts says installing until it ended, then installFailed if it did`],
+  ['env [--user <login>]', 'the environment a run gets to work as <login> (default: the account runs use): { env }, its gh folder, its token for gh and for git, its name on commits; refused (no-account) when OpenAgent has no account'],
+  ['git-config [--user <login>]', `the git settings that make git push and fetch as <login> (default: the account runs use), asking gh for its login when git needs it: { login, host, config: [[key, value]] }; no secret in them, so they may be kept in a repository's own config`],
+  ['token --user <login>', `<login>'s token as OpenAgent keeps it, checked with GitHub to be that account's: { login, token }; what OpenAgent copies to a server of the person's, which then uses the same login, never a new one`],
+  ['take', `add the login whose token is on standard input as one of OpenAgent's accounts: { login }`],
+  ['forget <login>', 'OpenAgent forgets <login>; the token is not ended, and goes on working wherever else it is'],
+  ['create [--check]', 'create a private repository for a project with no origin, named <account>/<folder>, set it as origin and push; --check only says which repository that would be'],
+])}
 
-JSON on stdout. Exit code 1 for a refusal or a failure (the reason on stderr), 2 for a usage error.`
+${helpText('JSON on stdout. Exit code 1 for a refusal or a failure (the reason on stderr), 2 for a usage error.')}`
 
 /** The streams and the working directory a run of the CLI sees. */
 export interface CliIo {
@@ -141,7 +121,7 @@ interface Context extends Services {
 /** Run the CLI: `argv` is everything after the program name. Resolves to the exit code. */
 export function runCli(argv: string[], io: CliIo, deps: CliDeps = {}): Promise<number> {
   const context: Context = { ...realServices(), ...deps, cwd: io.cwd, stderr: io.stderr }
-  return runCommandLine(argv, io, { usage: USAGE, commands: COMMANDS, failure: GIT_HOST_FAILED }, context)
+  return runCommandLine(argv, io, { program: 'github', usage: USAGE, commands: COMMANDS, failure: GIT_HOST_FAILED }, context)
 }
 
 /** A failure no command meant: the git host, or `gh` talking to it, said no in a way no rule names. */

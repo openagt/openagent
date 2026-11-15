@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { GIT_FAILED, Refused, commandReader, commandWrite, inRepo, nodeBranchFileFs, nodeGitRunner, parseCommandArgs, runCommandLine, type BranchFileFs, type Command, type GitRunner } from '@openagt/agent-data'
+import { GIT_FAILED, Refused, commandReader, commandWrite, inRepo, nodeBranchFileFs, nodeGitRunner, parseCommandArgs, runCommandLine, helpRows, helpText, type BranchFileFs, type Command, type GitRunner } from '@openagt/agent-data'
 import { isTicketFile, META_FILE, nameInTickets, TICKETS_DIR, ticketLockName, ticketOfPlan, ticketPlanName, ticketStem } from './names.js'
 import { readTicket, readTickets, readTicketsMeta } from './tickets.js'
 import { applyClaims, applyRelease, claimHistory, claimMessage, lockOn, releaseMessage } from './locks.js'
@@ -25,15 +25,17 @@ import { holderOf } from './holder.js'
 
 export const USAGE = `usage: tickets <command>
 
-  list [--local]                     every open ticket, as one JSON array
-  show <file> [--local]              one ticket: its text, its plan, who holds it
-  meta [--local]                     when the tickets last caught up with the issue tracker
-  put <file>                         write one file under tickets/ from stdin (a ticket, a plan, meta.json)
-  close <file>                       remove a ticket with its plan and lock (not while someone else holds it)
-  claim <file>                       claim a ticket before planning or working it; names who claimed it before
-  release <file> [--force]           lift your own claim; --force lifts anyone's (a person's act)
+${helpRows([
+  ['list [--local]', 'every open ticket, as one JSON array'],
+  ['show <file> [--local]', 'one ticket: its text, its plan, who holds it'],
+  ['meta [--local]', 'when the tickets last caught up with the issue tracker'],
+  ['put <file>', 'write one file under tickets/ from stdin (a ticket, a plan, meta.json)'],
+  ['close <file>', 'remove a ticket with its plan and lock (not while someone else holds it)'],
+  ['claim <file>', 'claim a ticket before planning or working it; names who claimed it before'],
+  ['release <file> [--force]', `lift your own claim; --force lifts anyone's (a person's act)`],
+])}
 
-JSON on stdout. Exit code 1 for a refusal or a git failure (the reason on stderr), 2 for a usage error.`
+${helpText('JSON on stdout. Exit code 1 for a refusal or a git failure (the reason on stderr), 2 for a usage error.')}`
 
 /** The streams and the working directory a run of the CLI sees. */
 export interface CliIo {
@@ -46,7 +48,7 @@ export interface CliIo {
 
 /** Run the CLI: `argv` is everything after the program name. Resolves to the exit code. */
 export function runCli(argv: string[], io: CliIo, git: GitRunner = nodeGitRunner()): Promise<number> {
-  return runCommandLine(argv, io, { usage: USAGE, commands: COMMANDS, failure: GIT_FAILED }, io, git)
+  return runCommandLine(argv, io, { program: 'tickets', usage: USAGE, commands: COMMANDS, failure: GIT_FAILED }, io, git)
 }
 
 const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {

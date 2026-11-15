@@ -334,7 +334,7 @@ describe('Composer (#721)', () => {
 
   test('the row above the box: the launcher\'s, led by "Run on"; inside a session, the one it is given, in the same place, and no "Run on" of its own', () => {
     renderComposer({ startsAt: <span>the launcher's place</span> })
-    const box = () => screen.getByRole('button', { name: 'Commands' }).closest('.rounded-xl')!
+    const box = () => screen.getByRole('button', { name: 'Commands' }).closest('.items-end')!
     const followedByBox = (el: Element) => el.closest('.h-8')!.nextElementSibling === box()
     expect(followedByBox(screen.getByText("the launcher's place"))).toBe(true)
     expect(followedByBox(screen.getByRole('button', { name: /^Run on: / }))).toBe(true)
@@ -427,8 +427,14 @@ describe('Composer (#721)', () => {
   })
 })
 
-// The bordered box: the nearest element around the editor that draws the border.
+// The text's line of the box: the nearest element around the editor that keeps its ends at the last line.
 const box = (): HTMLElement => {
+  let el: HTMLElement = screen.getByLabelText('prompt')
+  while (!el.className.split(' ').includes('items-end')) el = el.parentElement!
+  return el
+}
+// The box's surface: the nearest element around the editor that draws the edge.
+const surface = (): HTMLElement => {
   let el: HTMLElement = screen.getByLabelText('prompt')
   while (!el.className.split(' ').includes('border')) el = el.parentElement!
   return el
@@ -436,13 +442,16 @@ const box = (): HTMLElement => {
 const commands = () => screen.getByRole('button', { name: 'Commands' })
 
 describe('the box', () => {
-  test('it holds the commands menu, the text and the submit: the model and "Run on" are outside it', () => {
+  test('its text\'s line holds the commands menu, the text and the submit; the model and "Run on" are on lines of their own, in the same surface', () => {
     renderComposer()
     fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'x' } })
     expect(box().contains(screen.getByRole('button', { name: 'Send' }))).toBe(true)
     expect(box().contains(commands())).toBe(true)
     expect(box().contains(agentTrigger())).toBe(false)
     expect(box().contains(screen.getByRole('button', { name: /^Run on: / }))).toBe(false)
+    // One object with one edge: the surface holds the row above, the text and the row under.
+    expect(surface().contains(agentTrigger())).toBe(true)
+    expect(surface().contains(screen.getByRole('button', { name: /^Run on: / }))).toBe(true)
   })
 
   test('the commands menu is at the left of the text, the submit at its right, both kept at its last line', () => {

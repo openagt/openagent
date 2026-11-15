@@ -1221,9 +1221,9 @@ describe('EventList scroll anchor', () => {
     expect(anchors(container)).toEqual([])
     const mine = screen.getAllByLabelText('Your message')
     expect(mine.at(-1)!.textContent).toBe('third')
-    expect(mine.at(-1)!.parentElement!.className).toContain('bubble-in')
+    expect(mine.at(-1)!.closest('.group\\/prompt')!.className).toContain('bubble-in')
     // A message already in the log does not slide in again.
-    expect(mine[0]!.parentElement!.className).not.toContain('bubble-in')
+    expect(mine[0]!.closest('.group\\/prompt')!.className).not.toContain('bubble-in')
   })
 
   test('a row keeps its identity when a row above it stops being shown', () => {
