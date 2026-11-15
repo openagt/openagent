@@ -27,6 +27,8 @@ export interface ModuleAgent {
   machine?: string
   /** While its status is `unknown`: when its computer was last seen, ISO, if it was. */
   seenAt?: string
+  /** Its pull request, with how it stands as the git host last said (`merged`: the sidebar's merged run), once read. */
+  pr?: { number: number; url: string; state?: AgentMeta['prState'] }
 }
 
 /**
@@ -56,6 +58,7 @@ export function moduleAgentOf(agent: AgentMeta): ModuleAgent {
     ...(agent.model ? { model: agent.model } : {}),
     ...(agent.remoteLabel ? { machine: agent.remoteLabel } : {}),
     ...(agent.seenAt ? { seenAt: agent.seenAt } : {}),
+    ...(agent.pr ? { pr: { ...agent.pr, ...(agent.prState ? { state: agent.prState } : {}) } } : {}),
   }
 }
 

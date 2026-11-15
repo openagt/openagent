@@ -14,6 +14,8 @@ export interface RunRow {
     offline?: string
     /** Whose run it is, by the email its record is kept under; a very old card has none. */
     person?: string
+    /** Its pull request merged, as the git host last said, read where the sidebar reads it: the run reads as merged there and here. */
+    merged?: boolean
   }
 }
 
@@ -57,6 +59,7 @@ function cardOf(run: ModuleAgent): Omit<RunRow['card'], 'id' | 'startedAt'> {
     ...(run.cost !== undefined ? { cost: run.cost } : {}),
     ...(run.driver ? { driver: run.driver } : {}),
     ...(run.model ? { model: run.model } : {}),
+    ...(run.pr ? { pr: { number: run.pr.number, url: run.pr.url }, ...(run.pr.state === 'merged' ? { merged: true } : {}) } : {}),
     ...(run.status === 'unknown' ? { offline: `${run.machine ?? 'Its computer'} offline${run.seenAt ? ` · last seen ${formatDateTime(run.seenAt)}` : ''}` } : {}),
   }
 }
@@ -117,12 +120,17 @@ const asks = (card: RunRow['card']): boolean => card.status === 'waiting'
 /** A run's press: Answer where its question waits, else Review. */
 const pressOf = (card: RunRow['card']): string => (asks(card) ? 'Answer' : 'Review')
 
+/** How a run is drawn and said: as its status, but a done run whose pull request merged as merged, the sidebar's word for it. */
+function shownStatus(card: RunRow['card']): string {
+  return card.status === 'done' && card.merged ? 'merged' : card.status
+}
+
 /** How a run stands, as its row's line opens: its state's word, with how long it took once it is over ("Done in 11m"). */
 function standing(card: RunRow['card']): string {
-  const word = runWord(card.status)
+  const word = runWord(shownStatus(card))
   const said = word[0]!.toUpperCase() + word.slice(1)
   const length = took(card)
-  if (length === undefined) return said
+  if (length === undefined || card.merged) return said
   return card.status === 'done' ? `${said} in ${length}` : `${said} after ${length}`
 }
 
@@ -229,7 +237,7 @@ export function LogsPage({ projects, path }: ModulePageProps) {
                     className="items-start"
                     state={
                       <span className="flex h-5 items-center">
-                        <RunMark status={card.status} className="size-2" />
+                        <RunMark status={shownStatus(card)} className="size-2" />
                       </span>
                     }
                     // As every list names a run; a run with none of its names goes by its id. What it was asked, whole, under the pointer.
@@ -239,7 +247,7 @@ export function LogsPage({ projects, path }: ModulePageProps) {
                     onClick={() => host.openAgent(project.id, card.id)}
                     meta={[
                       <>
-                        <span className={runLineTone(card.status)} {...(card.offline ? { title: card.offline } : {})}>
+                        <span className={runLineTone(shownStatus(card))} {...(card.offline ? { title: card.offline } : {})}>
                           {standing(card)}
                         </span>
                         {/* The branch with its dot, so a phone, where it has no room, drops both. */}

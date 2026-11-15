@@ -99,6 +99,32 @@ test("each status in the dashboard's colors: a waiting run's dot is the sidebar'
   expect(dot('Ended')).toContain('border-muted-foreground/60')
 })
 
+test("a run whose pull request merged reads as the sidebar's merged run, its number a link to the request", async () => {
+  const pr = { number: 48, url: 'https://example.com/pull/48' }
+  const host = hostWith(
+    [
+      { id: 'r1', startedAt: at(now - 2000), endedAt: at(now - 1000), status: 'done', title: 'Landed', pr },
+      { id: 'r2', startedAt: at(now - 4000), endedAt: at(now - 3000), status: 'done', title: 'Open request', pr: { number: 49, url: 'https://example.com/pull/49' } },
+    ],
+    // The dashboard's word on the runs, as the sidebar has it: the git host says how each request stands.
+    [
+      { id: 'r1', startedAt: at(now - 2000), endedAt: at(now - 1000), status: 'done', title: 'Landed', pr: { ...pr, state: 'merged' } },
+      { id: 'r2', startedAt: at(now - 4000), endedAt: at(now - 3000), status: 'done', title: 'Open request', pr: { number: 49, url: 'https://example.com/pull/49', state: 'open' } },
+    ],
+  )
+  render(
+    <ModuleHostContext.Provider value={host}>
+      <LogsPage projects={[{ id: 'p1', name: 'alpha', gitHost: true }]} projectId={null} path={[]} />
+    </ModuleHostContext.Provider>,
+  )
+  const row = (title: string) => screen.getAllByText(title)[0]!.closest('li')!
+  await waitFor(() => expect(within(row('Landed')).getByText('Merged')).toBeTruthy())
+  expect(row('Landed').querySelector('[aria-hidden]')!.className).toContain('border-success/70')
+  expect(within(row('Landed')).getByRole('link', { name: '#48' }).getAttribute('href')).toBe(pr.url)
+  // A request still open: the run is done.
+  expect(within(row('Open request')).getByText(/^Done/)).toBeTruthy()
+})
+
 test("a row's press opens the run: Answer where its question waits, Review for any other", async () => {
   const host = hostWith([
     { id: 'r1', startedAt: at(now - 1000), status: 'waiting', title: 'Asks' },
