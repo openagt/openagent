@@ -28,5 +28,5 @@ export default defineModule({
       },
     },
   ],
-  cards: [{ id: 'hot', label: 'Hot tickets', order: 20, Card: HotTicketsCard }],
+  cards: [{ id: 'hot', label: 'Hot tickets', order: 7, width: '1/3', minWidth: '1/4', Card: HotTicketsCard }],
 })

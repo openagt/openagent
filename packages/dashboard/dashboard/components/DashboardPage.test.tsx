@@ -65,21 +65,24 @@ describe('the Overview', () => {
     working = []
     show()
     await screen.findByText('Needs you')
-    expect(drawn().map(card => card.id)).toEqual(['human-queue', 'usage', 'working', 'skills', '@x/tickets/hot'])
+    expect(drawn().map(card => card.id)).toEqual(['human-queue', 'working', 'usage', 'skills', '@x/tickets/hot'])
     expect(screen.getByText('No agent is at work.')).toBeTruthy()
-    // Full width is the whole row at every size; a half is a half once the column has the room, at
-    // every width past that; a row's cards fill it.
-    expect(drawn()[0]!.spans).toContain('basis-full')
-    expect(drawn()[0]!.spans).not.toMatch(/@\w+:basis-/)
-    expect(drawn()[3]!.spans).toContain('@2xl:basis-[calc(50%_-_1rem)]')
-    expect(drawn()[3]!.spans).not.toContain('@4xl:')
+    // Two columns once the page has the room: what needs the person and what is at work two thirds
+    // wide, the usage a third beside them; in a middling column each is a half, in a narrow one the
+    // whole row; a half is a half from a middling column on; a row's cards fill it.
+    expect(drawn()[0]!.spans).toContain('@max-2xl:basis-full')
+    expect(drawn()[0]!.spans).toContain('@2xl:basis-[calc(50%_-_1rem)]')
+    expect(drawn()[0]!.spans).toContain('@4xl:basis-[calc(66.667%_-_0.667rem)]')
+    expect(drawn()[1]!.spans).toContain('@4xl:basis-[calc(66.667%_-_0.667rem)]')
+    expect(drawn()[2]!.spans).toContain('@4xl:basis-[calc(33.333%_-_1.333rem)]')
     expect(drawn()[4]!.spans).toContain('@2xl:basis-[calc(50%_-_1rem)]')
+    expect(drawn()[4]!.spans).not.toContain('@4xl:')
     expect(drawn()[4]!.spans).toContain('grow-[6]')
     cleanup()
     working = [active('r1', 'p1')]
     show()
     expect(await screen.findByText('working on r1')).toBeTruthy()
-    expect(drawn().map(card => card.id)).toEqual(['human-queue', 'usage', 'working', 'skills', '@x/tickets/hot'])
+    expect(drawn().map(card => card.id)).toEqual(['human-queue', 'working', 'usage', 'skills', '@x/tickets/hot'])
     cleanup()
     // With a project picked, only that project's agents count.
     show('p2')
@@ -93,7 +96,7 @@ describe('the Overview', () => {
     show()
     const firstSteps = await screen.findByText('onboarding')
     expect(firstSteps.parentElement!.previousElementSibling!.getAttribute('data-card')).toBe('human-queue')
-    expect(firstSteps.parentElement!.nextElementSibling!.getAttribute('data-card')).toBe('usage')
+    expect(firstSteps.parentElement!.nextElementSibling!.getAttribute('data-card')).toBe('working')
     cleanup()
     prefs.value = { overviewLayouts: { '*': [{ id: 'usage' }, { id: 'human-queue', hidden: true }] } }
     show()
@@ -115,8 +118,8 @@ describe('the Overview', () => {
     expect(drawn().map(card => card.id)).toEqual(['@x/tickets/hot', 'human-queue', 'skills', 'working'])
     expect(screen.queryByText('usage')).toBeNull()
     expect(drawn()[0]!.spans).toContain('@4xl:basis-[calc(33.333%_-_1.333rem)]')
-    // What needs the person fits half at the narrowest: a quarter is passed over for its own width, the whole row.
-    expect(drawn()[1]!.spans).not.toMatch(/@\w+:basis-/)
+    // What needs the person fits half at the narrowest: a quarter is passed over for its own width, two thirds.
+    expect(drawn()[1]!.spans).toContain('@4xl:basis-[calc(66.667%_-_0.667rem)]')
     expect(drawn()[2]!.spans).toContain('@4xl:basis-[calc(25%_-_1.5rem)]')
   })
 
@@ -230,7 +233,7 @@ describe('the Overview', () => {
     window.removeEventListener('error', caught)
     expect(thrown).toEqual([])
     expect(prefs.updatePreferences).not.toHaveBeenCalled()
-    expect(drawn().map(card => card.id)).toEqual(['human-queue', 'usage', 'working', 'skills'])
+    expect(drawn().map(card => card.id)).toEqual(['human-queue', 'working', 'usage', 'skills'])
   })
 
   test('a card dragged on the page leaves the page still, shows where it lands, and moves only when dropped', async () => {
@@ -247,7 +250,7 @@ describe('the Overview', () => {
     expect(prefs.updatePreferences).not.toHaveBeenCalled()
     fireEvent.drop(document.querySelector('[data-card="human-queue"]')!, transfer)
     const order = (prefs.updatePreferences.mock.lastCall![0] as { overviewLayouts: Record<string, { id: string }[]> }).overviewLayouts['*']!.map(place => place.id)
-    expect(order).toEqual(['skills', 'human-queue', 'usage', 'working', '@x/tickets/hot'])
+    expect(order).toEqual(['skills', 'human-queue', 'working', 'usage', '@x/tickets/hot'])
   })
 
   test('the cards slide to their places after a drag, never after a key or a press, nor under reduced motion', async () => {
@@ -334,14 +337,14 @@ describe('the Overview', () => {
     expect(drawn().map(card => card.id)).toEqual(['human-queue'])
     firstSteps.read = true
     rerender(overview())
-    expect(drawn().map(card => card.id)).toEqual(['human-queue', 'usage', 'working', 'skills', '@x/tickets/hot'])
+    expect(drawn().map(card => card.id)).toEqual(['human-queue', 'working', 'usage', 'skills', '@x/tickets/hot'])
     cleanup()
     // With the first steps put away, only the Human Queue is waited for.
     prefs.value = { onboardingDismissed: true }
     firstSteps.read = false
     show()
     await screen.findByText('Needs you')
-    expect(drawn().map(card => card.id)).toEqual(['human-queue', 'usage', 'working', 'skills', '@x/tickets/hot'])
+    expect(drawn().map(card => card.id)).toEqual(['human-queue', 'working', 'usage', 'skills', '@x/tickets/hot'])
   })
 
   test('no card is drawn before the layout is read: a card taken off never reads anything', async () => {

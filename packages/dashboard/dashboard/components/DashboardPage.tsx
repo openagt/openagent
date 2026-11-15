@@ -125,7 +125,7 @@ export function DashboardPage({
       stale: interventionsState === 'kept',
       label: 'Needs you',
       order: 5,
-      width: '1',
+      width: '2/3',
       minWidth: '1/2',
       node: (
         <div id={NEEDS_YOU_ID} className="flex scroll-mt-6 flex-col *:flex-1">
@@ -133,24 +133,27 @@ export function DashboardPage({
         </div>
       ),
     },
-    // Usage (#1139): the one figure that governs everything the agent may do next.
-    { id: 'usage', label: 'Usage', order: 6, width: '1', minWidth: '1/2', node: <Quota projects={projects} /> },
+    // Under what needs the person, a column two thirds wide down the page's left and one a third wide
+    // beside it, the packages' cards taking their turns in both: each third comes after the card it
+    // stands beside (the hot tickets beside what is at work, the account's usage, the one figure that
+    // governs everything the agent may do next (#1139), beside the queue), so the first steps under
+    // what needs the person never move the thirds to the left.
     {
       id: 'working',
       stale: active.state === 'kept',
       label: 'At work',
-      order: 7,
-      width: '1/2',
-      minWidth: '1/3',
+      order: 6,
+      width: '2/3',
+      minWidth: '1/2',
       node: (
         <div id={WORKING_ID} className="flex scroll-mt-6 flex-col *:flex-1">
           <Agents working={working} state={active.state} namesRuns={namesRuns} doing={doing} projectsNamed={scope === null} onSelectAgent={onSelectAgent} />
         </div>
       ),
     },
-    // How each project's skills stand: a newer version to take, skills not yet where agents start from. A half beside
-    // the agents at work, so the two split on the halves' line: a half beside a third splits on no line of the rows below.
-    { id: 'skills', label: 'Skills', order: 8, width: '1/2', minWidth: '1/4', node: <SkillsCard projects={shownProjects} onSelectProject={onSelectProject} projectHref={projectHref} /> },
+    { id: 'usage', label: 'Usage', order: 9, width: '1/3', minWidth: '1/3', node: <Quota projects={projects} /> },
+    // How each project's skills stand: a newer version to take, skills not yet where agents start from.
+    { id: 'skills', label: 'Skills', order: 41, width: '1/3', minWidth: '1/4', node: <SkillsCard projects={shownProjects} onSelectProject={onSelectProject} projectHref={projectHref} /> },
     // The cards the installed packages declare (#1818): a package's own summary of its data, only
     // when one of the projects shown (every registered one, or the picked one alone) has the package.
     ...moduleCards,
