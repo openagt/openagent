@@ -246,7 +246,8 @@ export function AgentComposer({
   const surfacedError = error ?? stopError
 
   return (
-    // The chat's column and its side padding (EventList), so the box and what is in the chat share both edges.
+    // The box stands on the chat's 16 inset at every width, as the chat's cards do, so on a desktop its
+    // words, 16 inside it, stand on the chat's column (32 in, EventList).
     <div className="@container mx-auto w-full max-w-3xl px-4 pt-2 pb-4">
       <Composer
         // A box of its own per session, with the draft it was left with.

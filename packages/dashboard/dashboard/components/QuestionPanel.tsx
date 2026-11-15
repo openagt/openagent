@@ -203,7 +203,7 @@ export function QuestionPanel({
 
   if (sent) return null
   return (
-    <section ref={card} role="region" aria-label={choice.title} className="flex w-full flex-col gap-1 rounded-box bg-card p-2 font-sans text-sm shadow-sm ring-1 ring-warning/30">
+    <section ref={card} role="region" aria-label={choice.title} className="flex w-full flex-col gap-1 rounded-box bg-card p-2 font-sans text-sm shadow-sm md:-mx-4 md:w-auto ring-1 ring-warning/30">
       <div className="flex flex-col gap-0.5 px-2 pt-1.5 pb-1">
         <span className="flex items-center gap-2 text-xs font-semibold text-warning">
           <StateCell state="waiting" className="size-3" />
