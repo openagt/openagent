@@ -61,7 +61,7 @@ const DRIVER_UI: Record<DriverName, { icon: DriverOption['icon'] }> = {
  * it is on screen, so focus is its own edge in the primary colour and nothing more: the caret says the
  * rest. The edge stays while the keyboard is on one of its items or in a menu one of them opened.
  */
-const SURFACE = '[view-transition-name:composer] flex flex-col rounded-box border border-hairline bg-card p-1 shadow-lg transition-colors focus-within:border-primary has-[[aria-expanded=true]]:border-primary'
+const SURFACE = '[view-transition-name:composer] flex flex-col rounded-box border border-hairline bg-card p-2 shadow-lg transition-colors focus-within:border-primary has-[[aria-expanded=true]]:border-primary'
 
 /**
  * The box while the page it stands on is read: a {@link Slot}'s shape at the box's size and corner,
@@ -69,7 +69,7 @@ const SURFACE = '[view-transition-name:composer] flex flex-col rounded-box borde
  */
 export function ComposerShape() {
   return (
-    <Slot of={{ value: null, state: 'unknown' }} shape={<Skeleton className="rounded-box border border-transparent p-1"><div className="mb-1 h-8" /><div className="h-9" /><div className="mt-1 h-8" /></Skeleton>}>
+    <Slot of={{ value: null, state: 'unknown' }} shape={<Skeleton className="rounded-box border border-transparent p-2"><div className="mb-1 h-8" /><div className="h-9" /><div className="mt-1 h-8" /></Skeleton>}>
       {() => null}
     </Slot>
   )
@@ -486,7 +486,7 @@ export const Composer = forwardRef<ComposerHandle, {
               the edge is the surface's. The send's icon stands on the rows' last ones' line. */}
           <div className="flex items-end">
             <div className="min-w-0 flex-1">{editorEl}</div>
-            <div className="flex shrink-0 items-center py-1 pr-0.5">{slotEl}</div>
+            <div className="flex shrink-0 items-center py-1">{slotEl}</div>
           </div>
 
           {/* How it runs, the box's last line: the commands menu (+) and the caller's controls at the
@@ -500,12 +500,15 @@ export const Composer = forwardRef<ComposerHandle, {
               </div>
               <div className="flex shrink-0 items-center gap-0.5">
                 {controlsEnd}
-                {driverModelEl || (
-                  <span className="flex items-center">
-                    {sessionModel !== undefined && <span className={rowItemClass}>{sessionModel}</span>}
-                    {sessionContext}
-                  </span>
-                )}
+                {driverModelEl ||
+                  // Only with something in it: an empty one would still take the row's gap, and the
+                  // row's last item would end off the box's inset.
+                  ((sessionModel !== undefined || sessionContext) && (
+                    <span className="flex items-center">
+                      {sessionModel !== undefined && <span className={rowItemClass}>{sessionModel}</span>}
+                      {sessionContext}
+                    </span>
+                  ))}
               </div>
             </div>
           </TooltipsPastBox>
