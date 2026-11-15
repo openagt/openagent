@@ -314,14 +314,14 @@ function AddPersonWay({ label, at, codeWay, onWay, onClose }: { label: string; a
       <div className="space-y-3 text-sm">
         <p>Who is it?</p>
         <div className="-mx-3">
-        <button type="button" className={choice} onClick={() => onWay('pick')}>
-          <span className="block font-medium">{`Someone on ${at}`}</span>
-          <span className="block text-xs text-muted-foreground">{`Picked by name. No code: they reach ${label} through ${at}.`}</span>
-        </button>
-        <button type="button" className={choice} onClick={() => onWay('code')}>
-          <span className="block font-medium">{codeWay}</span>
-          <span className="block text-xs text-muted-foreground">You type their name and send them a code; they add it in their own OpenAgent.</span>
-        </button>
+          <button type="button" className={choice} onClick={() => onWay('pick')}>
+            <span className="block font-medium">{`Someone on ${at}`}</span>
+            <span className="block text-xs text-muted-foreground">{`Picked by name. No code: they reach ${label} through ${at}.`}</span>
+          </button>
+          <button type="button" className={choice} onClick={() => onWay('code')}>
+            <span className="block font-medium">{codeWay}</span>
+            <span className="block text-xs text-muted-foreground">You type their name and send them a code; they add it in their own OpenAgent.</span>
+          </button>
         </div>
         <div className="flex justify-end max-md:[&_button]:h-11">
           <Button variant="ghost" onClick={onClose}>
