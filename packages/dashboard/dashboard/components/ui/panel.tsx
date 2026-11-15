@@ -23,7 +23,9 @@ export function PanelGroup({ title, badge, count, action, bare = false, children
   const Heading = useHeadingTag()
   return (
     <section aria-labelledby={heading} className="min-w-0">
-      {/* Its name 8 over its card: the row is as tall as the name, unless a press at its right is taller. */}
+      {/* Its name 8 over its card, the row as tall as the name: a press or a link at its right stands out of it
+          above and below, so groups side by side have their names on one line and their cards at one height.
+          On a phone, where a link is 44 tall to touch and no group stands beside another, the row is the link's height. */}
       <div className="mb-2 flex items-center gap-2">
         <Heading className="flex min-w-0 flex-1 items-center gap-2 text-sm font-semibold">
           <span id={heading} className="min-w-0 truncate">
@@ -43,7 +45,7 @@ export function PanelGroup({ title, badge, count, action, bare = false, children
             </>
           )}
         </Heading>
-        {action !== undefined && <div className="flex shrink-0 items-center gap-2">{action}</div>}
+        {action !== undefined && <div className="flex shrink-0 items-center gap-2 md:h-5">{action}</div>}
       </div>
       {bare ? children : <Panel>{children}</Panel>}
     </section>
