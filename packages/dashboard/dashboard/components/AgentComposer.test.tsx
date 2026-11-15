@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { shortcut } from '../lib/shortcut.js'
 
 // The two writes this component makes: what the person says to the run, and the slot's Stop (#1455).
 const sendMessage = vi.hoisted(() => vi.fn())
@@ -111,7 +112,8 @@ describe('AgentComposer box', () => {
   test('the box says what sending does, live or ended, in one short line', () => {
     renderComposer()
     // A working agent: the keys, as Claude Code's box says them.
-    expect(props().placeholder).toBe('⏎ to send, ⌘⏎ to queue for later')
+    // The key it is held with is the platform's: ⌘ on a Mac, Ctrl elsewhere.
+    expect(props().placeholder).toBe(`⏎ to send, ${shortcut('⏎')} to queue for later`)
     cleanup()
     renderComposer({ live: false })
     expect(props().placeholder).toBe('Message the agent to continue it…')
