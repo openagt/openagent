@@ -27,8 +27,13 @@ export function PanelGroup({ title, badge, count, action, children }: { title: R
           <span id={heading} className="min-w-0 truncate">
             {title}
           </span>
-          {badge}
-          {/* A space, not only the gap, so a screen reader says the name and the count apart. */}
+          {/* A space, not only the gap, so a screen reader says the name, the badge and the count apart. */}
+          {badge !== undefined && (
+            <>
+              {' '}
+              {badge}
+            </>
+          )}
           {count !== undefined && (
             <>
               {' '}
