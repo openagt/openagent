@@ -50,6 +50,19 @@ describe('ProjectPicker', () => {
     expect(options()).toEqual(['vikegithub.com/vikejs/vike', 'notes/home/me/notes'])
   })
 
+  test('opened downward, from the sidebar, the list is only as tall as its rows; opened upward, from the box, it keeps its height', async () => {
+    const viewport = () => screen.getByRole('listbox').closest('[data-slot="scroll-area-viewport"]')!
+    const sidebar = renderPicker({ look: 'sidebar', none: { label: 'All projects' } })
+    await openMenu(screen.getByRole('combobox', { name: 'Project: All projects' }))
+    await screen.findByRole('option', { name: /vike/ })
+    expect(viewport().className).toMatch(/(^| )max-h-\[/)
+    sidebar.unmount()
+    renderPicker()
+    await openMenu(trigger())
+    await screen.findByRole('option', { name: /vike/ })
+    expect(viewport().className).toMatch(/(^| )h-\[/)
+  })
+
   test('a repo\'s address is said as its host and path, over https or ssh, and never with a login in it', () => {
     expect(shownAddress('https://github.com/vikejs/vike.git')).toBe('github.com/vikejs/vike')
     expect(shownAddress('git@github.com:vikejs/vike.git')).toBe('github.com/vikejs/vike')

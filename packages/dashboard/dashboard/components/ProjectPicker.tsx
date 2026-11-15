@@ -315,7 +315,11 @@ export function ProjectPicker({
                 <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
                 <Combobox.Input aria-label="Search projects and repos" placeholder="Search, or paste a GitHub address" className="h-9 w-full min-w-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
               </div>
-              <ScrollArea viewportClassName="h-[min(20rem,calc(var(--available-height)-5rem))]">
+              {/* Opened upward from the box's row, the list keeps a set height, so the search and the
+                  first rows stay where they are as the repos land and as the search narrows them.
+                  Opened downward (the sidebar's, the first steps'), it grows down from a search that
+                  stays put, and is only as tall as its rows: a set height left a blank under them. */}
+              <ScrollArea viewportClassName={look === 'row' ? 'h-[min(20rem,calc(var(--available-height)-5rem))]' : 'max-h-[min(20rem,calc(var(--available-height)-5rem))]'}>
                 <div className="p-1">
                   <Combobox.Empty className="px-2 py-1.5 text-xs text-muted-foreground empty:hidden">No project or repo by that name.</Combobox.Empty>
                   <Combobox.List>
