@@ -87,7 +87,7 @@ export function ProfileSettings() {
         description={person.avatar ? (person.github ? `From @${person.github} on GitHub.` : 'Yours.') : 'None: your initials.'}
         control={
           <div className="flex items-center gap-2">
-            <Avatar person={person} size="h-8 w-8 text-xs" />
+            <Avatar person={person} className="size-8 text-xs" />
             {person.avatar && (
               <Button variant="outline" size="sm" disabled={removing.busy} onClick={remove}>
                 Remove

@@ -14,7 +14,7 @@ vi.mock('../rpc/backup.js', () => backup)
 vi.mock('./ThemeSubmenu.js', () => ({ ThemeSubmenu: () => <div role="menuitem">Theme</div> }))
 vi.mock('./NotificationsSubmenu.js', () => ({ NotificationsSubmenu: () => <div role="menuitem">Notifications</div> }))
 
-const { PersonMenu, firstName, initials } = await import('./PersonMenu.js')
+const { PersonMenu, firstName } = await import('./PersonMenu.js')
 
 beforeEach(() => {
   accounts.onAgentAccounts.mockResolvedValue({ now: 0, accounts: [] })
@@ -39,8 +39,10 @@ describe('PersonMenu', () => {
     const onSettings = vi.fn()
     const { container } = render(<PersonMenu onSettings={onSettings} />)
     const row = await screen.findByRole('button', { name: 'Ada Lovelace: settings' })
-    expect(row.textContent).toBe('Ada')
     expect(container.querySelector('img')?.getAttribute('src')).toBe('https://avatars.githubusercontent.com/u/1')
+    // The letters hold the place until the picture has landed, as every person's mark does.
+    fireEvent.load(container.querySelector('img')!)
+    expect(row.textContent).toBe('Ada')
     fireEvent.click(row)
     expect(screen.getByText('Ada Lovelace')).toBeTruthy()
     expect(screen.getByText('@ada')).toBeTruthy()
@@ -85,11 +87,11 @@ describe('PersonMenu', () => {
     expect(firstName('suleimansh')).toBe('suleimansh')
   })
 
-  test('initials: the first and last word\'s, or one for one word', () => {
-    expect(initials('Suleiman Shahbari')).toBe('SS')
-    expect(initials('Ada King Lovelace')).toBe('AL')
-    expect(initials('octo')).toBe('O')
-    expect(initials('  ')).toBe('?')
+  test("the letters are the ones the person's mark has in every list: a one-word name gives its first two", async () => {
+    onPerson.mockResolvedValue({ name: 'octo', email: 'octo@x.dev' })
+    render(<PersonMenu onSettings={() => {}} />)
+    await screen.findByRole('button', { name: 'octo: settings' })
+    expect(screen.getByText('OC')).toBeTruthy()
   })
 })
 

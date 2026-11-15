@@ -32,9 +32,9 @@ export function personLetters(name: string): string {
 }
 
 /**
- * A person's mark. No email: an empty circle, for a row whose person is seconds away. `said` is
- * what it says when pointed at and to a reader that cannot see it; without it, it is decoration
- * and whatever is around it says who. `you` sets the person at this computer apart.
+ * A person's mark. Neither email nor name: an empty circle, for a row whose person is seconds away.
+ * `said` is what it says when pointed at and to a reader that cannot see it; without it, it is
+ * decoration and whatever is around it says who. `you` sets the person at this computer apart.
  */
 export function PersonMark({ email, name, picture, you = false, said, className }: { email?: string | undefined; name?: string | undefined; picture?: string | undefined; you?: boolean | undefined; said?: string | undefined; className?: string | undefined }) {
   // How the picture last went, by its address: a person's next picture gets its own chance.
@@ -45,7 +45,7 @@ export function PersonMark({ email, name, picture, you = false, said, className 
       {...(said ? { role: 'img', 'aria-label': said, title: said } : { 'aria-hidden': true })}
       className={cn('relative flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full text-[10px] font-semibold', you ? 'bg-primary/15 text-primary' : 'bg-muted-foreground/15 text-muted-foreground', you && went?.landed && 'ring-2 ring-primary/40', className)}
     >
-      {email && !went?.landed && personLetters(personName(email, name))}
+      {(email || name) && !went?.landed && personLetters(personName(email ?? '', name))}
       {picture && went?.landed !== false && <img src={picture} alt="" referrerPolicy="no-referrer" onLoad={() => setSettled({ picture, landed: true })} onError={() => setSettled({ picture, landed: false })} className="absolute inset-0 size-full object-cover" />}
     </span>
   )
