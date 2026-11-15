@@ -42,7 +42,10 @@ describe('Settings › Project › Agent data', () => {
     await waitFor(() => expect(showing(keptIn())).toBe('Your folder'))
     expect(screen.getByText(line('In your folder ~/.openagent, synced with github.com/me/agent.'))).toBeTruthy()
     expect(screen.getByRole('link', { name: 'github.com/me/agent' }).getAttribute('href')).toBe('https://github.com/me/agent')
-    fireEvent.click(screen.getByRole('button', { name: '~/.openagent' }))
+    // The folder opens its own Settings page: a link in the sentence, so it also opens in a new tab.
+    const folder = screen.getByRole('link', { name: '~/.openagent' })
+    expect(folder.getAttribute('href')).toBe('/?settings=agent-data')
+    fireEvent.click(folder)
     expect(openSettings).toHaveBeenCalledWith('agent-data')
     // A kind with nothing kept is left out.
     expect(screen.getByText('86 runs (logs) · 12 tickets (tickets)')).toBeTruthy()

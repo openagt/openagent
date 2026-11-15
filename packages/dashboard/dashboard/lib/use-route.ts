@@ -73,12 +73,17 @@ export function openPermissions(): void {
   notify()
 }
 
-/** Open Settings at `entry` over the page you are on, from a part of the page that has no route to hand; with `item`, at that page inside it. */
-export function openSettings(entry: string, item?: string): void {
+/** The address of Settings open at `entry` over the page you are on; with `item`, at that page inside it. */
+export function settingsHref(entry: string, item?: string): string {
   const url = new URL(window.location.href)
   url.searchParams.set(SETTINGS_PARAM, entry)
   if (item) url.searchParams.set(SETTINGS_ITEM_PARAM, item)
   else url.searchParams.delete(SETTINGS_ITEM_PARAM)
-  window.history.pushState(null, '', url.pathname + url.search)
+  return url.pathname + url.search
+}
+
+/** Open Settings at `entry` over the page you are on, from a part of the page that has no route to hand; with `item`, at that page inside it. */
+export function openSettings(entry: string, item?: string): void {
+  window.history.pushState(null, '', settingsHref(entry, item))
   notify()
 }

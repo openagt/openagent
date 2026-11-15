@@ -3,7 +3,7 @@ import { onProjectAgentData, sendProjectDataAs, type KeptData, type ProjectAgent
 import { sendShareRecords } from '../rpc/projects.js'
 import { usePolled } from '../lib/use-async.js'
 import { useAction } from '../lib/use-action.js'
-import { openSettings } from '../lib/use-route.js'
+import { openSettings, settingsHref } from '../lib/use-route.js'
 import { ConfirmDialog } from './ui/confirm-dialog.js'
 import { SettingsSection, SettingsSelectRow, SettingsRow } from './SettingsRows.js'
 import { AGENT_DATA_ENTRY } from './AgentDataSettings.js'
@@ -39,9 +39,20 @@ export function ProjectAgentDataSettings({ projectId }: { projectId: string }) {
   const folder = (
     <>
       your folder{' '}
-      <button type="button" className="underline underline-offset-2 hover:text-foreground" onClick={() => openSettings(AGENT_DATA_ENTRY)}>
+      {/* A link, not a button: a button is never inline, so a long path stood alone on lines of its
+          own, centred, and the sentence's end began its own line with a comma. */}
+      <a
+        href={settingsHref(AGENT_DATA_ENTRY)}
+        onClick={event => {
+          // A modified click is the browser's to handle: a new tab, a new window.
+          if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return
+          event.preventDefault()
+          openSettings(AGENT_DATA_ENTRY)
+        }}
+        className="underline underline-offset-2 [overflow-wrap:anywhere] hover:text-foreground"
+      >
         {data.folder.path}
-      </button>
+      </a>
       {data.folder.remote ? (
         <>
           , synced with{' '}
