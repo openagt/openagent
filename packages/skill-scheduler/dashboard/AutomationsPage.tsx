@@ -7,7 +7,7 @@ import { CodeWords, Command } from './CodeWords.js'
 import { EditPanel } from './EditPanel.js'
 import { openedAutomation, type OpenedAutomation } from './automation-form.js'
 import { DEFAULT_AGENT } from '../src/names.js'
-import { atOnce, atOnceWords, cannotRun, decided, notAsked, startedNow, type Answered, isOwn, modelLabel, ownPace, pace, publishes, readSchedulers, schedulersKey, rowTitle, runsOnWords, saysAtOnce, schedulerStatus, schedulerStopped, unlistedWords, type AgentModels, type SchedulerCommand, type SchedulerRow } from './schedulers.js'
+import { atOnce, atOnceWords, cannotRun, decided, heldBy, notAsked, startedNow, type Answered, isOwn, modelLabel, ownPace, pace, publishes, readSchedulers, schedulersKey, rowTitle, runsOnWords, saysAtOnce, schedulerStatus, schedulerStopped, unlistedWords, type AgentModels, type SchedulerCommand, type SchedulerRow } from './schedulers.js'
 
 // The Automations page: what starts by itself while nobody is at the keyboard. One part per
 // project the page is given (every project that has this package, or the one picked in the
@@ -259,6 +259,8 @@ export function AutomationsPage({ projects }: ModulePageProps) {
                             const saving = busy.includes(id)
                             const shown = panel?.id === id ? panel : undefined
                             const says = said?.id === id ? said : undefined
+                            // What held every start back at the scheduler's last look holds one asked for now too: it would start nothing.
+                            const unstartable = cannotRun(scheduled) !== undefined || (schedulerStopped(row) === undefined && heldBy(scheduled) === 'every start')
                             return (
                               // Two lines, as a list's row that says more than its name: the name with what it does, its
                               // presses and its switch at the right; then, quieter, its picks and where it stands. Its panel
@@ -272,7 +274,7 @@ export function AutomationsPage({ projects }: ModulePageProps) {
                                     {scheduled.description && <span className="text-muted-foreground"> {scheduled.description}</span>}
                                   </p>
                                   <div className="flex shrink-0 items-center gap-1 max-md:-ml-2">
-                                    <Button variant="ghost" size="sm" disabled={saving || down || cannotRun(scheduled) !== undefined} onClick={() => void startNow(id, row.project, scheduled.command)} aria-label={`Run ${title} now`} className="max-md:h-11">
+                                    <Button variant="ghost" size="sm" disabled={saving || down || unstartable} onClick={() => void startNow(id, row.project, scheduled.command)} aria-label={`Run ${title} now`} className="max-md:h-11">
                                       {starting.includes(id) ? 'Starting…' : 'Run now'}
                                     </Button>
                                     <Button
@@ -440,6 +442,8 @@ function Stands({ host, project, scheduled, stopped }: { host: ModuleHost; proje
   const last = scheduled.lastRun
   const idle = scheduled.on && stopped !== undefined && cannotRun(scheduled) === undefined
   const decision = idle ? `Does not start: ${stopped.charAt(0).toLowerCase()}${stopped.slice(1)}` : decided(scheduled)
+  // Switched on, and still not starting: its reason is said as a stopped scheduler's is.
+  const held = cannotRun(scheduled) !== undefined || (scheduled.on && heldBy(scheduled) !== undefined)
   return (
     <>
       <Next>
@@ -456,7 +460,9 @@ function Stands({ host, project, scheduled, stopped }: { host: ModuleHost; proje
       </Next>
       {decision !== undefined && (
         <Next>
-          <span className={cn(idle || cannotRun(scheduled) ? 'text-warning' : undefined)}>{decision}</span>
+          <span className={cn(idle || held ? 'text-warning' : undefined)}>
+            <CodeWords text={decision} />
+          </span>
         </Next>
       )}
     </>

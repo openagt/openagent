@@ -320,10 +320,12 @@ function endGroup(group: number, signal: NodeJS.Signals): void {
   }
 }
 
-/** A fix's command in a shell, to its end, its own group ended with it on a timeout or when `stop` aborts. */
+/** A fix's command in a shell, to its end, its own group ended with it on a timeout or when `stop` aborts. An installer is a download piped to a shell: `pipefail`, so a failed download fails the install, in bash where it is on the PATH (an `sh` may lack the option), else in an `sh` that has it. */
 function runFix(command: string, stop: AbortSignal, saidUrl: (url: string) => void): Promise<void> {
   return new Promise((resolve, reject) => {
-    const child = spawn('sh', ['-c', command], { stdio: ['ignore', 'pipe', 'pipe'], detached: true })
+    // `command` keeps an `sh` without `pipefail` running: a special built-in's error would end it.
+    const script = `command -v bash >/dev/null && exec bash -o pipefail -c "$1"\ncommand set -o pipefail 2>/dev/null\neval "$1"`
+    const child = spawn('sh', ['-c', script, 'sh', command], { stdio: ['ignore', 'pipe', 'pipe'], detached: true })
     const group = child.pid
     if (group !== undefined) fixGroups.add(group)
     const end = (): void => endGroup(group!, 'SIGTERM')

@@ -14,7 +14,7 @@ test("a Back or Forward refused by a change in Settings not saved leaves the tab
   await flow('history-hold', async page => {
     const dialog = page.getByRole('dialog')
     const tick = dialog.getByRole('checkbox').first()
-    const asked = page.getByRole('alertdialog', { name: 'Leave without saving?' })
+    const asked = page.getByRole('alertdialog', { name: 'Discard your changes to Skills?' })
     /** The page is at `address`, with `entries` in the tab's list, after `step`. */
     const at = async (step: string, address: string, entries: number) => {
       await page.waitForFunction(`location.pathname + location.search === ${JSON.stringify(address)} && history.length === ${entries}`, undefined, { timeout: 5000 }).catch(() => {})
@@ -22,7 +22,7 @@ test("a Back or Forward refused by a change in Settings not saved leaves the tab
       t.diagnostic(`${step}: ${now.address} (${now.entries} entries)`)
       assert.deepEqual(now, { address, entries }, step)
     }
-    const answer = async (button: 'Cancel' | 'Leave') => {
+    const answer = async (button: 'Cancel' | 'Discard') => {
       await asked.getByRole('button', { name: button }).click()
       await asked.waitFor({ state: 'detached' })
     }
@@ -53,8 +53,8 @@ test("a Back or Forward refused by a change in Settings not saved leaves the tab
 
     await step('back')
     await asked.waitFor({ timeout: 5000 })
-    await answer('Leave')
-    await at('Back, Leave', '/shop', length + 2)
+    await answer('Discard')
+    await at('Back, Discard', '/shop', length + 2)
     await step('forward')
     await tick.waitFor()
     await at('Forward still leads to Settings over the page', settings, length + 2)
@@ -71,8 +71,8 @@ test("a Back or Forward refused by a change in Settings not saved leaves the tab
     await at('Forward, Cancel', settings, length + 2)
     await step('forward')
     await asked.waitFor({ timeout: 5000 })
-    await answer('Leave')
-    await at('Forward, Leave', '/shop', length + 2)
+    await answer('Discard')
+    await at('Forward, Discard', '/shop', length + 2)
     await step('forward')
     await tick.waitFor()
     await at('Forward still leads to Settings over the page', settings, length + 2)

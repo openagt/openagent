@@ -9,7 +9,7 @@ import { defineModule } from '@openagt/dashboard/module'
 import { AutomationsPage } from './AutomationsPage.js'
 import { SchedulerCard } from './SchedulerCard.js'
 import { SchedulerSettings } from './SchedulerSettings.js'
-import { cannotRun, loosestSpendOffset, readSchedulers, saveSpendOffset, schedulerStopped, startsNext } from './schedulers.js'
+import { cannotRun, heldBy, loosestSpendOffset, readSchedulers, saveSpendOffset, schedulerStopped, startsNext } from './schedulers.js'
 
 export default defineModule({
   pages: [{ segment: 'automations', label: 'Automations', icon: CalendarClock, Page: AutomationsPage }],
@@ -27,7 +27,7 @@ export default defineModule({
       // A status that cannot be read says nothing of what starts: the asking page is told so, not "nothing".
       if (!row || row.error !== undefined) throw new Error(row?.error ?? 'the scheduler did not answer')
       const stopped = schedulerStopped(row)
-      return row.commands.map(command => ({ command: command.command, on: command.on && stopped === undefined && cannotRun(command) === undefined, ...(command.on ? { note: stopped ?? startsNext(command) } : {}) }))
+      return row.commands.map(command => ({ command: command.command, on: command.on && stopped === undefined && cannotRun(command) === undefined && heldBy(command) === undefined, ...(command.on ? { note: stopped ?? startsNext(command) } : {}) }))
     },
   },
 })

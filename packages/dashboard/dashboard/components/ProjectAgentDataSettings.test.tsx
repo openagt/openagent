@@ -59,7 +59,7 @@ describe('Settings › Project › Project agent data', () => {
     expect(screen.getByText(/Everyone who can read the repository can read it/)).toBeTruthy()
     expect(sendShareRecords).not.toHaveBeenCalled()
     // Pushed as one of OpenAgent's accounts, never the person's own login: the one runs use, or another picked.
-    await pick(screen.getByRole('combobox', { name: 'Push as' }), '@reviewer-agent')
+    await pick(screen.getByRole('combobox', { name: 'Send as' }), '@reviewer-agent')
     data = { ...data!, place: 'repository', account: 'reviewer-agent' }
     fireEvent.click(screen.getByRole('button', { name: 'Move and push' }))
     await waitFor(() => expect(sendShareRecords).toHaveBeenCalledWith('p1', true, 'reviewer-agent'))

@@ -120,6 +120,57 @@ test('against real git: a repository with no commit gets an empty first one, and
   })
 })
 
+/** `body` on a git that reads no name or email of this machine's: no global or system config, none of git's identity variables. */
+async function withoutMachineIdentity(body: () => Promise<void>): Promise<void> {
+  const saved = { ...process.env }
+  try {
+    process.env.GIT_CONFIG_GLOBAL = '/dev/null'
+    process.env.GIT_CONFIG_NOSYSTEM = '1'
+    for (const key of ['GIT_AUTHOR_NAME', 'GIT_AUTHOR_EMAIL', 'GIT_COMMITTER_NAME', 'GIT_COMMITTER_EMAIL', 'EMAIL']) delete process.env[key]
+    await body()
+  } finally {
+    // In place: git inherits the environment `process.env` was made from, not an object put in its place.
+    for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key]
+    Object.assign(process.env, saved)
+  }
+}
+
+test('against real git: a repository with no commit, on a git never given a name or email, gets its first commit as OpenAgent', async () => {
+  await withoutMachineIdentity(async () => {
+    // Nor a guess from the user and host names, which git makes on a host whose name has a domain.
+    Object.assign(process.env, { GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: 'user.useConfigOnly', GIT_CONFIG_VALUE_0: 'true' })
+    await withRealRepo(async (repo, git) => {
+      git('config', '--unset', 'user.name')
+      git('config', '--unset', 'user.email')
+
+      assert.deepEqual(await installProject(repo), { ok: true })
+
+      assert.equal(git('log', '--format=%an <%ae>|%s').trim(), `OpenAgent <openagent@localhost>|${FIRST_COMMIT_MESSAGE}`)
+      assert.doesNotMatch(git('config', '--local', '--list'), /^user\./m, 'the person’s git config is left as it was')
+    })
+  })
+})
+
+test('against real git: a git with a name, and an email from the EMAIL variable, makes the first commit with them', async () => {
+  await withoutMachineIdentity(async () => {
+    process.env.EMAIL = 'mail@example.com'
+    await withRealRepo(async (repo, git) => {
+      git('config', '--unset', 'user.email')
+
+      assert.deepEqual(await installProject(repo), { ok: true })
+
+      assert.equal(git('log', '--format=%an <%ae>|%cn <%ce>').trim(), 'Test <mail@example.com>|Test <mail@example.com>')
+    })
+  })
+})
+
+test('against real git: a git with a name and an email makes the first commit with them', async () => {
+  await withRealRepo(async (repo, git) => {
+    assert.deepEqual(await installProject(repo), { ok: true })
+    assert.equal(git('log', '--format=%an <%ae>').trim(), 'Test <git@example.com>')
+  })
+})
+
 test('installProject on an already-activated repo is a no-op that never calls git', async () => {
   const fs = memFs({ [gitignorePath(CWD)]: openagentGitignore() })
   const { git, calls } = fakeGit(() => '')
@@ -132,25 +183,26 @@ test('installProject surfaces a git failure as { ok: false }, never throws, and 
   const fs = memFs()
   const { git } = fakeGit(args => {
     if (args[0] === 'rev-parse') throw new Error('no')
-    if (args[0] === 'commit-tree') throw new Error('Author identity unknown')
+    if (args.includes('commit-tree')) throw new Error('fatal: unable to write commit')
     return ''
   })
 
-  assert.deepEqual(await installProject(CWD, { git, fs }), { ok: false, error: 'Author identity unknown' })
+  assert.deepEqual(await installProject(CWD, { git, fs }), { ok: false, error: 'fatal: unable to write commit' })
   assert.equal(fs.files.has(gitignorePath(CWD)), false)
 })
 
 test('installProject initializes a git repo when the folder is not one yet, and gives it an empty first commit for agents to start from', async () => {
   const fs = memFs()
-  // Both rev-parse questions fail on a non-repo folder; every other git call succeeds.
+  // Both rev-parse questions fail on a non-repo folder; git names an author and a committer; every other git call succeeds.
   const { git, calls } = fakeGit(args => {
     if (args[0] === 'rev-parse') throw new Error('not a git repository')
+    if (args[0] === 'var') return 'Test <git@example.com> 1700000000 +0000\n'
     return args[0] === 'commit-tree' ? 'abc123\n' : ''
   })
 
   assert.deepEqual(await installProject(CWD, { git, fs }), { ok: true, initialized: true })
   assert.deepEqual(
-    calls.filter(args => args[0] !== 'rev-parse'),
+    calls.filter(args => args[0] !== 'rev-parse' && args[0] !== 'var'),
     [['init'], ['commit-tree', '4b825dc642cb6eb9a060e54bf8d69288fbee4904', '-m', FIRST_COMMIT_MESSAGE], ['update-ref', 'HEAD', 'abc123']],
     'the commit is made from the empty tree, never from the index: nothing of the person’s is in it',
   )

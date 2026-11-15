@@ -17,7 +17,7 @@ import { Button } from './ui/button.js'
 import { cn } from '../lib/utils.js'
 import { ClaudeLogo, CodexLogo } from './driver-logos.js'
 import { onProjects } from '../rpc/projects.js'
-import { PromptEditor, type PromptEditorHandle } from './PromptEditor.js'
+import { PromptEditor, type PromptDraft, type PromptEditorHandle } from './PromptEditor.js'
 import { PresetCreatePanel } from './PresetCreatePanel.js'
 import { CommandsMenu } from './CommandsMenu.js'
 import { DriverModelMenu, type DriverOption } from './DriverModelMenu.js'
@@ -76,9 +76,12 @@ export function ComposerShape() {
 }
 
 export interface ComposerHandle {
-  clear: () => void
+  /** Empty the box. Returns what it held, chips and all, for `restore`. */
+  clear: () => PromptDraft | undefined
+  /** Put back a draft `clear` returned, after what is typed there, the caret left where it is. */
+  restore: (draft: PromptDraft) => void
   focus: () => void
-  /** Put `text` in the box to edit, in place of what is there, and focus it. */
+  /** Put `text` in the box to edit, after what is typed there, and focus it. */
   edit: (text: string) => void
   /** Put `text` in the box after what is typed there, the caret left where it is. */
   append: (text: string) => void
@@ -242,13 +245,18 @@ export const Composer = forwardRef<ComposerHandle, {
 
   useImperativeHandle(ref, () => ({
     clear: () => {
-      editorRef.current?.clear()
+      const draft = editorRef.current?.clear()
       setPrompt('')
+      return draft
     },
+    restore: draft => editorRef.current?.restore(draft),
     focus: () => editorRef.current?.focus(),
     edit: text => {
-      editorRef.current?.loadTemplate(text)
-      setPrompt(text)
+      if (prompt.trim() !== '') editorRef.current?.append(text)
+      else {
+        editorRef.current?.loadTemplate(text)
+        setPrompt(text)
+      }
       editorRef.current?.focus()
     },
     append: text => editorRef.current?.append(text),
@@ -319,7 +327,8 @@ export const Composer = forwardRef<ComposerHandle, {
       projectPresets={projectPresets}
       // The `/` menu's "Save prompt…" opens the create panel under the box.
       onNewPreset={() => setAddingPreset(true)}
-      disabled={busy}
+      // A session's box takes what is typed next while a message goes: the message has left it.
+      disabled={busy && !inAgent}
       {...(placeholder ? { placeholder } : {})}
       label={inAgent ? 'Message' : 'Prompt'}
       {...(carriedDraft ? { initialText: carriedDraft.text, initialFocus: carriedDraft.handedOver || !phone, replacedText: carriedDraft.over } : {})}

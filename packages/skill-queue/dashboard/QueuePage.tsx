@@ -1,4 +1,4 @@
-import { useId, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { Ellipsis, FastForward, Play } from 'lucide-react'
 import {
   Button,
@@ -112,7 +112,10 @@ export function QueuePage({ projects }: ModulePageProps) {
     runsAgain(undefined),
   )
   const schedule = useSchedule(projects)
-  const names = useFileNames(reads.map(read => ({ projectId: read.project.id, paths: (read.entries ?? []).flatMap(placed => pathsIn(placed.entry)) })))
+  const names = useFileNames(
+    reads.map(read => ({ projectId: read.project.id, paths: (read.entries ?? []).flatMap(placed => pathsIn(placed.entry)) })),
+    `skill-queue:page-names:${key}`,
+  )
   const starts = useQueueStarts(host)
 
   // One project's page: its start is the page's one primary press, and under its title one line says
@@ -130,7 +133,7 @@ export function QueuePage({ projects }: ModulePageProps) {
         ? {}
         : {
             description: only ? taker : 'What agents take next, from the top, one list per project.',
-            actions: only && <BatchStart read={only} primary starts={starts} />,
+            actions: only && <BatchStart read={only} primary names={names} starts={starts} />,
           })}
     >
       {phone && only && <p className="mb-6 text-sm text-muted-foreground">{taker}</p>}
@@ -143,13 +146,13 @@ export function QueuePage({ projects }: ModulePageProps) {
         {reads =>
           reads.map(read =>
             only ? (
-              <ProjectQueue key={read.project.id} read={read} names={names} starts={starts} reload={reload} batch={phone && <BatchStart read={read} primary fill starts={starts} />} />
+              <ProjectQueue key={read.project.id} read={read} names={names} starts={starts} reload={reload} batch={phone && <BatchStart read={read} primary fill names={names} starts={starts} />} />
             ) : (
               <Section
                 key={read.project.id}
                 title={read.project.name}
                 count={read.entries?.length || undefined}
-                action={<BatchStart read={read} primary={false} starts={starts} />}
+                action={<BatchStart read={read} primary={false} names={names} starts={starts} />}
               >
                 <p className="-mt-1 mb-3 text-sm text-muted-foreground">
                   <TakerLine projectId={read.project.id} schedule={schedule} />
@@ -168,11 +171,11 @@ export function QueuePage({ projects }: ModulePageProps) {
  * A project's batch act, as one control: how many, joined to the press the count qualifies. The
  * chevron sends the top entry alone: a launcher can only ever start one agent.
  */
-function BatchStart({ read, primary, fill = false, starts }: { read: ProjectRead; primary: boolean; fill?: boolean; starts: QueueStarts }) {
+function BatchStart({ read, primary, fill = false, names, starts }: { read: ProjectRead; primary: boolean; fill?: boolean; names: FileNames; starts: QueueStarts }) {
   const host = useModuleHost()
   const { project } = read
-  // An entry an agent is on gets no second one: the batch starts from the top of the others.
-  const free = unclaimedEntries((read.entries ?? []).map(placed => placed.entry), read.working)
+  // An entry an agent is on gets no second one, and one that is done already none at all: the batch starts from the top of the others.
+  const free = unclaimedEntries((read.entries ?? []).map(placed => placed.entry), read.working).filter(entry => !entryView(project.id, entry, names).done)
   if (free.length === 0) return null
   const count = starts.batchOf(project.id, free)
   const press = (
@@ -204,6 +207,14 @@ function BatchStart({ read, primary, fill = false, starts }: { read: ProjectRead
  */
 function ProjectQueue({ read, names, starts, reload, batch }: { read: ProjectRead; names: FileNames; starts: QueueStarts; reload: () => Promise<void>; batch?: ReactNode }) {
   const { project, entries, error, working } = read
+  const queue = useRef<HTMLDivElement>(null)
+  // A removed row takes the focus with it: it goes to the entry now in its place, else the one before it, else the field that adds one.
+  const [removed, setRemoved] = useState<{ place: number }>()
+  useEffect(() => {
+    if (!removed || !queue.current) return
+    const bins = queue.current.querySelectorAll<HTMLElement>('[data-remove-entry]')
+    ;(bins[removed.place - 1] ?? bins[bins.length - 1] ?? queue.current.querySelector<HTMLElement>('input[name="task"]'))?.focus()
+  }, [removed])
   if (error !== undefined)
     return (
       <p role="alert" className="text-sm text-danger">
@@ -212,7 +223,7 @@ function ProjectQueue({ read, names, starts, reload, batch }: { read: ProjectRea
     )
   const runs = sections(entries!, working)
   return (
-    <div className="space-y-8">
+    <div ref={queue} className="space-y-8">
       <AddEntry project={project} reload={reload} />
       {runs.length === 0 ? (
         <p className="text-sm text-muted-foreground">Nothing queued.</p>
@@ -223,7 +234,7 @@ function ProjectQueue({ read, names, starts, reload, batch }: { read: ProjectRea
             {runs.map((run, index) => (
               <PanelGroup key={index} title={run.priority === undefined ? 'No priority' : `Priority ${run.priority}`}>
                 {run.entries.map(placed => (
-                  <EntryRow key={`${placed.place}\n${placed.entry}`} project={project} placed={placed} names={names} starts={starts} reload={reload} />
+                  <EntryRow key={`${placed.place}\n${placed.entry}`} project={project} placed={placed} names={names} starts={starts} reload={reload} onRemoved={() => setRemoved({ place: placed.place })} />
                 ))}
               </PanelGroup>
             ))}
@@ -295,10 +306,10 @@ function origin(entry: string): string | undefined {
  * came from, or a typed entry's words after its name, or the line as written where a name stands in
  * for it, each part starting with a capital. Nothing at its right at rest: its presses come under the
  * pointer and the keyboard, and are always there on touch. Every entry has one menu ("⋯"): "Configure
- * first, then run" where nobody is on it, and its removal. A free entry has "Start now" before it, and
+ * first, then run" where it can be started, and its removal. A free entry has "Start now" before it, and
  * on a phone, where a row has one press, "Start now" is the menu's first item.
  */
-function EntryRow({ project, placed, names, starts, reload }: { project: ModuleProject; placed: Numbered; names: FileNames; starts: QueueStarts; reload: () => Promise<void> }) {
+function EntryRow({ project, placed, names, starts, reload, onRemoved }: { project: ModuleProject; placed: Numbered; names: FileNames; starts: QueueStarts; reload: () => Promise<void>; onRemoved: () => void }) {
   const host = useModuleHost()
   const phone = useIsMobile()
   const down = useOpenAgentDown()
@@ -313,9 +324,10 @@ function EntryRow({ project, placed, names, starts, reload }: { project: ModuleP
     const answer = await host.act(project.id, doneArgs(entry))
     if (!answer.ok) throw new Error(answer.error)
     await reload()
+    onRemoved()
   }
-  // Nobody is on it: it can be started, from its press beside its menu, or on a phone from its menu.
-  const free = agent === undefined
+  // Nobody is on it and it is not done already: it can be started, from its press beside its menu, or on a phone from its menu.
+  const free = agent === undefined && !view.done
   const start = (): void => void starts.startEntry(project.id, entry)
   return (
     <>
@@ -353,7 +365,7 @@ function EntryRow({ project, placed, names, starts, reload }: { project: ModuleP
               />
             )}
             <DropdownMenu>
-              <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label={`More for entry ${place}`} className="-mr-1.5" />}>
+              <DropdownMenuTrigger render={<Button data-remove-entry variant="ghost" size="icon-sm" aria-label={`More for entry ${place}`} className="-mr-1.5" />}>
                 <Ellipsis className="size-4" aria-hidden />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
@@ -376,6 +388,8 @@ function EntryRow({ project, placed, names, starts, reload }: { project: ModuleP
         body={
           <>
             <span className="break-words font-medium text-foreground">{name}</span> is deleted from the queue of {project.name}, for everyone who shares it. Nothing else changes: no ticket is closed, and an agent already working on it goes on.
+            {/* The line as written under a name that stands in for it, as on the row. */}
+            {view.renamed && <span className="mt-2 block break-words font-mono text-xs">{entry}</span>}
           </>
         }
         confirmLabel="Remove"

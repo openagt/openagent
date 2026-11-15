@@ -88,10 +88,11 @@ test('open: on the current branch or --branch, with the words given; --merge arm
       throw new Error(`unexpected ${args.join(' ')}`)
     }
     const watched: number[] = []
-    const first = await run(dir, ['open', '--title', 'Fix it', '--body', 'Fixed.', '--merge'], { gh, watch: async (_r, n) => void watched.push(n) })
+    const first = await run(dir, ['open', '--title', 'Fix it', '--body', 'Fixed.', '--merge'], { gh, env: {}, watch: async (_r, n) => void watched.push(n) })
     assert.equal(first.code, 0)
     assert.deepEqual(first.out, { ok: true, branch: 'agent-fix', request: { number: 42, url: 'https://github.com/o/r/pull/42' }, existing: false, merge: { outcome: 'watching' } })
-    assert.deepEqual(calls[1], ['pr', 'create', '--head', 'agent-fix', '--title', 'Fix it', '--body', 'Fixed.'])
+    // The body opens with the line a comment opens with: here no run record, so the 🤖 line.
+    assert.deepEqual(calls[1], ['pr', 'create', '--head', 'agent-fix', '--title', 'Fix it', '--body', '🤖 *automated*\n\nFixed.'])
     assert.deepEqual(watched, [42])
 
     const again = await run(dir, ['open', '--title', 'x', '--draft'], { gh })

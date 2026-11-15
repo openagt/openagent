@@ -22,6 +22,8 @@ function notify(): void {
 const STEP = 'openagent:step'
 /** Where an entry the dashboard writes keeps the address it was entered from: what a return goes back to. */
 const BEHIND = 'openagent:behind'
+/** Where an entry opened beside another keeps how many entries back that address is; one where it says none. */
+const BEHIND_BY = 'openagent:behind-by'
 
 /** The place in the tab's list of the entry shown. */
 let shown = 0
@@ -32,16 +34,26 @@ function stepOf(state: unknown): number {
   return typeof step === 'number' ? step : shown - 1
 }
 
-/** A new entry after the one shown, at `url`. */
-function push(url: string): void {
-  window.history.pushState({ [STEP]: shown + 1, [BEHIND]: currentUrl() }, '', url)
+/** How many entries back the address the entry whose state is `state` was entered from is. */
+function behindBy(state: Record<string, unknown> | null): number {
+  const by = state?.[BEHIND_BY]
+  return typeof by === 'number' ? by : 1
+}
+
+/** A new entry after the one shown, at `url`, entered from the entry shown; one `beside` it, a page of the same thing, from where the entry shown was, one entry further. */
+function push(url: string, beside: boolean): void {
+  const state = window.history.state as Record<string, unknown> | null
+  const behind = state?.[BEHIND]
+  const from = beside && typeof behind === 'string' ? { [BEHIND]: behind, [BEHIND_BY]: behindBy(state) + 1 } : { [BEHIND]: currentUrl() }
+  window.history.pushState({ [STEP]: shown + 1, ...from }, '', url)
   shown += 1
 }
 
-/** Go back to the place the entry shown was entered from: by Back when `isBehind` says the address it was entered from is that place, else by `otherwise`, a move. */
+/** Go back to the place the entry shown was entered from: by Back, as many entries as it is behind, when `isBehind` says the address it was entered from is that place, else by `otherwise`, a move. */
 export function back(isBehind: (address: string) => boolean, otherwise: () => void): void {
-  const behind: unknown = window.history.state?.[BEHIND]
-  if (typeof behind === 'string' && isBehind(behind)) leaving(() => window.history.back())
+  const state = window.history.state as Record<string, unknown> | null
+  const behind = state?.[BEHIND]
+  if (typeof behind === 'string' && isBehind(behind)) leaving(() => window.history.go(-behindBy(state)))
   else otherwise()
 }
 
@@ -107,6 +119,12 @@ function subscribe(listener: () => void): () => void {
   }
 }
 
+/** A new entry of another page opens at its top: only Back and Forward bring a page back to where it was scrolled. */
+function scrollToTop(): void {
+  stopRestore()
+  window.scrollTo(0, 0)
+}
+
 /** Where a history entry keeps how far its page was scrolled when it was left. */
 const SCROLL = 'openagent:scroll'
 
@@ -156,8 +174,9 @@ export function useRoute(projects: ProjectAddresses): {
   route: Route
   /** Navigate to `next`, a new history entry. Keeps what the page mirrored into the query when
    *  `keepQuery` is set — for a change of the picked project alone (#1513), or Settings opening or
-   *  closing over the page. */
-  go: (next: Route, options?: { keepQuery?: boolean }) => void
+   *  closing over the page. With `beside`, `next` is a page of the same thing as the one shown (a
+   *  ticket's other tab): it is entered from where the one shown was, so a return goes there. */
+  go: (next: Route, options?: { keepQuery?: boolean; beside?: boolean }) => void
   /** Write `next` in place of the current history entry, keeping what the page wrote to it: a
    *  correction or a pick the page keeps, not a step to go Back to. With `query`, that is the page's
    *  own query; without, the one it has stays. */
@@ -166,13 +185,16 @@ export function useRoute(projects: ProjectAddresses): {
   const current = useSyncExternalStore(subscribe, shownUrl, () => '/')
   const route = parseRoute(current, projects)
 
-  const go = (next: Route, options?: { keepQuery?: boolean }) => {
+  const go = (next: Route, options?: { keepQuery?: boolean; beside?: boolean }) => {
     const url = options?.keepQuery ? keepPageQuery(formatRoute(next, projects), window.location.search) : formatRoute(next, projects)
     // Going where you already are is not a history entry.
     if (url === current) return
     leaving(() => {
+      // A new page opens at its top; Settings over the page and a change of the query alone leave it where it was scrolled.
+      const otherPage = new URL(url, window.location.href).pathname !== window.location.pathname
       keepScroll()
-      push(url)
+      push(url, options?.beside ?? false)
+      if (otherPage) scrollToTop()
       notify()
     })
   }

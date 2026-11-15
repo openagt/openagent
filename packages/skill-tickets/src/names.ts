@@ -14,6 +14,11 @@
  */
 export const TICKETS_DIR = 'tickets'
 
+/** What the command says of a ticket it does not have, the line its refusal leaves: how a page that runs it tells a gone ticket from a failed read. */
+export function noTicketSaid(file: string): string {
+  return `no ticket ${TICKETS_DIR}/${file}`
+}
+
 /** The file inside `tickets/` that records when the tickets last caught up with an issue tracker. */
 export const META_FILE = 'meta.json'
 

@@ -1,7 +1,8 @@
-import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useId, useRef, useState, type FormEvent, type Ref } from 'react'
 import { Bot, Check, Loader2, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { onAgentLogins, onAgentsList, sendCopyAgentLogins, sendRemoveAgent, sendSaveAgent, type AgentAccountChoice, type AgentLoginsOn, type AgentRecord, type AgentsView } from '../rpc/agents.js'
 import { DEFAULT_AGENT } from '../../src/client.js'
+import { holdEntry } from '../lib/use-route.js'
 import { usePolled, type ReadState } from '../lib/use-async.js'
 import { useAddGitAccount } from './AddGitAccount.js'
 import { Button } from './ui/button.js'
@@ -82,7 +83,14 @@ export function AgentsPage() {
   const newAgent = useRef<HTMLButtonElement>(null)
   // The agent just removed: once the list is read without it, its Remove press is gone with its card, and the focus goes to "New agent".
   const removed = useRef<string | undefined>(undefined)
+  // The agent just made: once the list is read with it, the focus goes to its row's Edit.
+  const made = useRef<string | undefined>(undefined)
+  const madeEdit = useRef<HTMLButtonElement>(null)
   useEffect(() => {
+    if (made.current !== undefined && madeEdit.current) {
+      made.current = undefined
+      madeEdit.current.focus()
+    }
     if (removed.current === undefined || view?.agents.some(agent => agent.id === removed.current)) return
     removed.current = undefined
     newAgent.current?.focus()
@@ -108,26 +116,28 @@ export function AgentsPage() {
           view && (
             <List aria-label="Agents">
               {view.agents.map(agent => (
-                <AgentRow key={agent.id} agent={agent} view={view} devices={devices} onChanged={changed} onRemoved={() => void (removed.current = agent.id)} />
+                <AgentRow key={agent.id} agent={agent} view={view} devices={devices} onChanged={changed} onRemoved={() => void (removed.current = agent.id)} {...(agent.id === made.current ? { editRef: madeEdit } : {})} />
               ))}
             </List>
           )
         }
       </Slot>
       {/* Over the page, so it opens at the press even while the list's shape still holds. */}
-      {adding && view && <AgentEditor view={view} onAccounts={reload} onDone={async saved => (setAdding(false), saved ? changed() : undefined)} />}
+      {adding && view && <AgentEditor view={view} onAccounts={reload} onDone={async saved => (setAdding(false), saved ? ((made.current = saved), changed()) : undefined)} />}
     </Page>
   )
 }
 
 /**
  * One agent: its name over what it starts with (its skills and the accounts it works as), and the
- * presses that edit or remove it; where its GitHub account is, under it. `onRemoved` is told before
- * the list is read again without it.
+ * presses that edit or remove it; under it, what it goes without and where its GitHub account is.
+ * `onRemoved` is told before the list is read again without it.
  */
-function AgentRow({ agent, view, devices, onChanged, onRemoved }: { agent: AgentRecord; view: AgentsView; devices: AgentLoginsOn[] | undefined; onChanged: () => Promise<void>; onRemoved: () => void }) {
+function AgentRow({ agent, view, devices, onChanged, onRemoved, editRef }: { agent: AgentRecord; view: AgentsView; devices: AgentLoginsOn[] | undefined; onChanged: () => Promise<void>; onRemoved: () => void; editRef?: Ref<HTMLButtonElement> }) {
   const [editing, setEditing] = useState(false)
   const isDefault = agent.id === DEFAULT_AGENT
+  // What a skill every agent starts with does is what this one goes without: the skill's own line says it.
+  const without = (view.skills[0]?.skills ?? []).filter(skill => !agent.skills.includes(skill.name))
   const said = [
     `${agent.skills.length === 0 ? 'No skills' : agent.skills.join(', ')}${agent.projectSkills ? '' : ', no project skills'}`,
     agent.accounts.github !== undefined ? `@${agent.accounts.github} on GitHub` : 'GitHub: whatever the computer uses',
@@ -144,7 +154,7 @@ function AgentRow({ agent, view, devices, onChanged, onRemoved }: { agent: Agent
         {...(isDefault ? { meta: 'The agent a session is on unless you pick another.' } : {})}
         actions={
           <>
-            <Button size="sm" variant="ghost" aria-label={`Edit ${agent.name}`} onClick={() => setEditing(true)}>
+            <Button ref={editRef} size="sm" variant="ghost" aria-label={`Edit ${agent.name}`} onClick={() => setEditing(true)}>
               <Pencil className="size-4" aria-hidden />
               Edit
             </Button>
@@ -172,6 +182,14 @@ function AgentRow({ agent, view, devices, onChanged, onRemoved }: { agent: Agent
           </>
         }
       />
+      {without.length > 0 && (
+        // Under the agent's name, on the edge its words start at.
+        <li className="space-y-0.5 pb-2 pr-3 pl-10 text-xs text-muted-foreground">
+          {without.map(skill => (
+            <p key={skill.name}>{`Without ${skill.name}, which every agent starts with. ${skill.description}`}</p>
+          ))}
+        </li>
+      )}
       {agent.accounts.github !== undefined && devices && devices.length > 0 && (
         // Under the agent's name, on the edge its words start at.
         <li className="pb-2 pr-3 pl-10">
@@ -246,22 +264,33 @@ const COMPUTERS = ''
 
 /**
  * An agent edited, or a new one, in a dialog over the page: the name, the skills ticked, the
- * accounts picked; Save, or Enter in the name, writes it, Cancel leaves it, and Esc or the ✕ ask first
- * once something is changed. Its parts scroll under the title while Save
+ * accounts picked; Save, or Enter in the name, writes it, and Cancel, Esc, the ✕, Back or a reload
+ * ask first once something is changed. Its parts scroll under the title while Save
  * and Cancel stay in view, and a click beside it closes nothing: much is typed here. A GitHub
  * account OpenAgent does not have yet is added from here, in its own dialog over this one, and is
  * then the one picked; `onAccounts` reads the accounts again.
  */
-function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord; view: AgentsView; onAccounts: () => Promise<void>; onDone: (saved: boolean) => Promise<void> | void }) {
+function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord; view: AgentsView; onAccounts: () => Promise<void>; onDone: (savedId: string | undefined) => Promise<void> | void }) {
   // What is being typed is the editor's own from its first frame: the page reading the agents again changes nothing in it.
   const [draft, setDraft] = useState<Draft>(() => draftOf(agent))
   const opened = useRef(draft).current
-  const [leaving, setLeaving] = useState(false)
+  const changed = !sameDraft(draft, opened)
+  // Leaving what is changed asks first, and the step asked about waits here.
+  const [leaving, setLeaving] = useState<(() => void) | undefined>()
+  const release = useRef(() => {})
+  useEffect(() => {
+    if (!changed) return
+    release.current = holdEntry(step => setLeaving(() => step))
+    return release.current
+  }, [changed])
+  const close = () => (changed ? setLeaving(() => () => void onDone(undefined)) : void onDone(undefined))
   const nameField = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | undefined>()
   const formId = useId()
   const [nameMissing, setNameMissing] = useState(false)
+  // The refusal said is the name's: the field is marked, and says it.
+  const [nameRefused, setNameRefused] = useState(false)
   const addingAccount = useAddGitAccount(async login => {
     setDraft(d => ({ ...d, github: login }))
     await onAccounts()
@@ -277,6 +306,7 @@ function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord;
   const save = async () => {
     setBusy(true)
     setError(undefined)
+    setNameRefused(false)
     try {
       const done = await sendSaveAgent({
         ...(draft.id !== undefined ? { id: draft.id } : {}),
@@ -285,8 +315,10 @@ function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord;
         accounts: { ...(draft.github !== undefined ? { github: draft.github } : {}), ...(draft.claude.size > 0 ? { claude: [...draft.claude] } : {}), ...(draft.codex.size > 0 ? { codex: [...draft.codex] } : {}) },
         projectSkills: draft.projectSkills,
       })
-      if (!done.ok) setError(done.error)
-      else await onDone(true)
+      if (!done.ok) {
+        setError(done.error)
+        setNameRefused(done.field === 'name')
+      } else await onDone(done.id)
     } finally {
       setBusy(false)
     }
@@ -306,20 +338,18 @@ function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord;
       keepOnOutsidePress
       initialFocus={nameField}
       onOpenChange={open => {
-        if (open || busy) return
-        if (sameDraft(draft, opened)) void onDone(false)
-        else setLeaving(true)
+        if (!open && !busy) close()
       }}
       title={agent ? `Editing ${agent.name}` : 'New agent'}
       footer={
         <div className="space-y-2">
           {error !== undefined && (
-            <p role="alert" className="text-xs text-danger">
+            <p id="agent-refused" role="alert" className="text-xs text-danger">
               {error}
             </p>
           )}
           <div className="flex items-center justify-end gap-2">
-            <Button variant="secondary" disabled={busy} onClick={() => void onDone(false)}>
+            <Button variant="secondary" disabled={busy} onClick={close}>
               Cancel
             </Button>
             <Button type="submit" form={formId} loading={busy}>
@@ -328,12 +358,15 @@ function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord;
             </Button>
           </div>
           <ConfirmDialog
-            open={leaving}
-            onOpenChange={setLeaving}
+            open={leaving !== undefined}
+            onOpenChange={open => !open && setLeaving(undefined)}
             title={agent ? `Discard your changes to ${agent.name}?` : 'Discard the new agent?'}
             body="What you typed and ticked here is not saved."
             confirmLabel="Discard"
-            onSuccess={() => void onDone(false)}
+            onSuccess={() => {
+              release.current()
+              leaving?.()
+            }}
           />
         </div>
       }
@@ -345,12 +378,14 @@ function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord;
             id="agent-name"
             ref={nameField}
             value={draft.name}
-            disabled={busy || isDefault}
+            disabled={isDefault}
+            readOnly={busy}
             placeholder="Social media"
-            aria-invalid={nameMissing}
-            {...(nameMissing ? { 'aria-describedby': 'agent-name-missing' } : isDefault ? { 'aria-describedby': 'agent-name-kept' } : {})}
+            aria-invalid={nameMissing || nameRefused}
+            {...(nameMissing ? { 'aria-describedby': 'agent-name-missing' } : nameRefused ? { 'aria-describedby': 'agent-refused' } : isDefault ? { 'aria-describedby': 'agent-name-kept' } : {})}
             onChange={event => {
               setNameMissing(false)
+              setNameRefused(false)
               setDraft(d => ({ ...d, name: event.target.value }))
             }}
             className="max-w-sm"

@@ -305,7 +305,7 @@ describe('Settings › Claude web (#1332)', () => {
     prefsRead.mockResolvedValueOnce({ bridge: true, bridgeBrowser: true })
     refreshPreferences()
     open('claude-web')
-    const daemon = await screen.findByRole('radio', { name: /A browser the daemon runs/ })
+    const daemon = await screen.findByRole('radio', { name: /A browser the dashboard runs/ })
     const own = screen.getByRole('radio', { name: 'Your own Chrome' })
     // One choice: the two are the radios of one group, named by the question.
     const group = screen.getByRole('radiogroup', { name: 'Which browser does the work?' })
@@ -324,13 +324,13 @@ describe('Settings › Claude web (#1332)', () => {
     fireEvent.click(await screen.findByRole('radio', { name: 'Your own Chrome' }))
     expect(saves()).toEqual([{ bridgeBrowser: false }])
     expect(checked(screen.getByRole('radio', { name: 'Your own Chrome' }))).toBe(true)
-    expect(checked(screen.getByRole('radio', { name: /A browser the daemon runs/ }))).toBe(false)
+    expect(checked(screen.getByRole('radio', { name: /A browser the dashboard runs/ }))).toBe(false)
     // The status of the daemon's browser goes with its option.
     expect(screen.queryByText(/The bridge browser is off/)).toBeNull()
     // The words are the radio's label: a click on them picks it too.
-    fireEvent.click(screen.getByText('A browser the daemon runs'))
+    fireEvent.click(screen.getByText('A browser the dashboard runs'))
     expect(saves()).toEqual([{ bridgeBrowser: false }, { bridgeBrowser: true }])
-    expect(checked(screen.getByRole('radio', { name: /A browser the daemon runs/ }))).toBe(true)
+    expect(checked(screen.getByRole('radio', { name: /A browser the dashboard runs/ }))).toBe(true)
   })
 
   test('with the bridge off there is no browser to choose, and switching the bridge on asks which', async () => {
@@ -444,16 +444,16 @@ describe('the Settings list', () => {
     expect(title()).toBe('SettingsgemstackSkills')
   })
 
-  test('a tick on Skills not saved asks before another entry shows: Cancel keeps it, Leave goes', async () => {
+  test('a tick on Skills not saved asks before another entry shows: Cancel keeps it, Discard goes', async () => {
     show('skills', 'p1')
     fireEvent.click(await screen.findByRole('checkbox', { name: 'skill-of-p1' }))
     fireEvent.click(screen.getByRole('button', { name: 'Appearance' }))
-    const asked = await screen.findByRole('alertdialog', { name: 'Leave without saving?' })
+    const asked = await screen.findByRole('alertdialog', { name: 'Discard your changes to Skills?' })
     fireEvent.click(within(asked).getByRole('button', { name: 'Cancel' }))
     await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
     expect(screen.getByRole('checkbox', { name: 'skill-of-p1' }).getAttribute('aria-checked')).toBe('false')
     fireEvent.click(screen.getByRole('button', { name: 'Appearance' }))
-    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Leave' }))
+    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Discard' }))
     await waitFor(() => expect(title()).toBe('SettingsAppearance'))
     // Nothing held any more: the next step asks nothing.
     fireEvent.click(screen.getByRole('button', { name: 'Skills' }))
@@ -469,10 +469,10 @@ describe('the Settings list', () => {
     expect(screen.getByRole('checkbox', { name: 'skill-of-p1' }).getAttribute('aria-checked')).toBe('false')
     expect(title()).toBe('SettingsgemstackSkills')
     fireEvent.click(screen.getByRole('button', { name: 'Appearance' }))
-    expect(await screen.findByRole('alertdialog', { name: 'Leave without saving?' })).toBeTruthy()
+    expect(await screen.findByRole('alertdialog', { name: 'Discard your changes to Skills?' })).toBeTruthy()
   })
 
-  test('with OpenAgent not answering, Leave still goes: it sends nothing', async () => {
+  test('with OpenAgent not answering, Discard still goes: it sends nothing', async () => {
     render(
       <DaemonDown.Provider value={true}>
         <ModulesContext.Provider value={MODULES}>
@@ -482,13 +482,13 @@ describe('the Settings list', () => {
     )
     fireEvent.click(await screen.findByRole('checkbox', { name: 'skill-of-p1' }))
     fireEvent.click(screen.getByRole('button', { name: 'Appearance' }))
-    const leave = within(await screen.findByRole('alertdialog', { name: 'Leave without saving?' })).getByRole('button', { name: 'Leave' }) as HTMLButtonElement
+    const leave = within(await screen.findByRole('alertdialog', { name: 'Discard your changes to Skills?' })).getByRole('button', { name: 'Discard' }) as HTMLButtonElement
     expect(leave.disabled).toBe(false)
     fireEvent.click(leave)
     await waitFor(() => expect(title()).toBe('SettingsAppearance'))
   })
 
-  test('Back with a tick on Skills not saved asks first, and the address stays on Settings: Cancel keeps the tick, Leave goes back', async () => {
+  test('Back with a tick on Skills not saved asks first, and the address stays on Settings: Cancel keeps the tick, Discard goes back', async () => {
     window.history.replaceState(null, '', '/page')
     window.history.pushState(null, '', '/page?settings=skills')
     // The app's route, which follows Back.
@@ -502,17 +502,17 @@ describe('the Settings list', () => {
       await act(async () => void (await popped))
     }
     await back()
-    const asked = await screen.findByRole('alertdialog', { name: 'Leave without saving?' })
+    const asked = await screen.findByRole('alertdialog', { name: 'Discard your changes to Skills?' })
     await waitFor(() => expect(window.location.search).toBe('?settings=skills'))
     fireEvent.click(within(asked).getByRole('button', { name: 'Cancel' }))
     await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
     expect(screen.getByRole('checkbox', { name: 'skill-of-p1' }).getAttribute('aria-checked')).toBe('false')
     await back()
-    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Leave' }))
+    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Discard' }))
     await waitFor(() => expect(window.location.pathname + window.location.search).toBe('/page'))
   })
 
-  test("Forward with a tick on Skills not saved asks as Back does, and the tab's list stays as it was: Cancel keeps Settings, Leave goes on to the later page, and Back from there reaches Settings once", async () => {
+  test("Forward with a tick on Skills not saved asks as Back does, and the tab's list stays as it was: Cancel keeps Settings, Discard goes on to the later page, and Back from there reaches Settings once", async () => {
     window.history.replaceState(null, '', '/page?settings=skills')
     window.history.pushState(null, '', '/later')
     const Routed = () => (useRoute(NO_PROJECTS), null)
@@ -525,13 +525,13 @@ describe('the Settings list', () => {
     show('skills', 'p1')
     fireEvent.click(await screen.findByRole('checkbox', { name: 'skill-of-p1' }))
     window.history.forward()
-    const asked = await screen.findByRole('alertdialog', { name: 'Leave without saving?' })
+    const asked = await screen.findByRole('alertdialog', { name: 'Discard your changes to Skills?' })
     await at('/page?settings=skills')
     fireEvent.click(within(asked).getByRole('button', { name: 'Cancel' }))
     await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
     await at('/page?settings=skills')
     window.history.forward()
-    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Leave' }))
+    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Discard' }))
     await at('/later')
     window.history.back()
     await at('/page?settings=skills')
@@ -564,12 +564,40 @@ describe('the Settings list', () => {
     expect(screen.getByText('Nothing to set for your projects.')).toBeTruthy()
   })
 
+  test('opened with no entry, a computer shows Profile and its address says so; a phone shows the list, whose address is none', () => {
+    const onEntry = vi.fn()
+    const { unmount } = render(<SettingsDialog entry="" onEntry={onEntry} onClose={onClose} scope={null} projects={[]} />)
+    expect(onEntry).toHaveBeenCalledWith('profile')
+    unmount()
+    onEntry.mockClear()
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: true, media: query, addEventListener: () => {}, removeEventListener: () => {} }))
+    render(<SettingsDialog entry="" onEntry={onEntry} onClose={onClose} scope={null} projects={[]} />)
+    expect(screen.getByRole('navigation', { name: 'Settings' })).toBeTruthy()
+    expect(onEntry).not.toHaveBeenCalled()
+  })
+
   test('the ✕ and Escape close it', () => {
     show('')
     fireEvent.click(screen.getAllByRole('button', { name: 'Close settings' }).at(-1)!)
     expect(onClose).toHaveBeenCalledTimes(1)
     fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
     expect(onClose).toHaveBeenCalledTimes(2)
+  })
+
+  test('opened by its address and closed, the focus goes to the page\u2019s title, not to the page\u2019s body', async () => {
+    const Page = () => {
+      const [shown, setShown] = useState(true)
+      return (
+        <>
+          <h1>Agents</h1>
+          {shown && <SettingsDialog entry="" onEntry={() => {}} onClose={() => setShown(false)} scope={null} projects={[]} />}
+        </>
+      )
+    }
+    render(<Page />)
+    fireEvent.keyDown(await screen.findByRole('dialog'), { key: 'Escape' })
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Agents' })))
   })
 
   test('on a phone the list is the whole dialog until an entry is picked, and an entry has a way back to it', () => {

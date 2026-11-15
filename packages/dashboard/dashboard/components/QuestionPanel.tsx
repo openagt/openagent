@@ -17,7 +17,6 @@ import { isMobileScreen } from '../lib/use-mobile.js'
 /** The pick that is no option: the person's own words, typed in the "Other" row. */
 const OTHER = Symbol('other')
 
-
 // A pick's mark, drawn as the shared radio and checkbox are (ui/radio-group, ui/checkbox): the
 // whole row is the control here, so the mark is only its picture. Centred on the first line's 20.
 function Mark({ on, multi }: { on: boolean; multi: boolean | undefined }) {
@@ -173,6 +172,8 @@ export function QuestionPanel({
     if (!active || sent) return
     const onKey = (e: KeyboardEvent) => {
       // Keys typed into a text field are that field's, except this card's own "Other" row.
+      // So is one a field outside the card took: the message box sends on Ctrl+Enter, and is no field while it sends.
+      if (e.defaultPrevented && !card.current?.contains(e.target as Node | null)) return
       if (pressed(e, 'answer')) {
         if (typedInto(e.target) && e.target !== otherInput.current) return
         e.preventDefault()
@@ -190,6 +191,19 @@ export function QuestionPanel({
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [active, sent, choice.options, send])
+
+  // The focus is in a text field outside the card, which takes Ctrl+Enter for itself: the card's is dimmed then.
+  const [keysElsewhere, setKeysElsewhere] = useState(false)
+  useEffect(() => {
+    const onFocus = () => setKeysElsewhere(typedInto(document.activeElement) && !card.current?.contains(document.activeElement))
+    onFocus()
+    document.addEventListener('focusin', onFocus)
+    document.addEventListener('focusout', onFocus)
+    return () => {
+      document.removeEventListener('focusin', onFocus)
+      document.removeEventListener('focusout', onFocus)
+    }
+  }, [])
 
   useEffect(() => {
     if (focused && !isMobileScreen()) card.current?.querySelector<HTMLElement>('[role="radio"][aria-checked="true"], [role="checkbox"]')?.focus({ preventScroll: true })
@@ -266,8 +280,9 @@ export function QuestionPanel({
         <Button disabled={busy || down || !ready} onClick={submit}>
           Answer
           {active && (
-            // The message box's rule for naming keys: none on a touch screen, none at a phone's width.
-            <span className="gap-0.5 pointer-coarse:hidden max-md:hidden md:not-pointer-coarse:flex" aria-hidden>
+            // The message box's rule for naming keys: none on a touch screen, none at a phone's width. While a text field
+            // outside the card has Ctrl+Enter, the keys are dimmed and keep their place, so Answer and Skip stand still.
+            <span className={cn('gap-0.5 transition-opacity pointer-coarse:hidden max-md:hidden md:not-pointer-coarse:flex', keysElsewhere && 'opacity-40')} aria-hidden>
               <kbd className="flex h-5 min-w-5 items-center justify-center rounded-sm border border-primary-foreground/30 px-1 font-sans text-xs font-normal">{MOD_KEY}</kbd>
               <kbd className="flex h-5 min-w-5 items-center justify-center rounded-sm border border-primary-foreground/30 px-1 font-sans text-xs font-normal">Enter</kbd>
             </span>

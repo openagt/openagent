@@ -2,6 +2,7 @@ export {
   nodeStoreFs,
   listAgents,
   readAllAgents,
+  checkoutsFirst,
   findAgent,
   isPidAlive,
   readLiveMeta,

@@ -3,7 +3,7 @@ import type { ProjectSummary, CustomPreset } from '../../src/index.js'
 import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import { Markdown } from 'tiptap-markdown'
-import { createDocument, type Editor, type Range } from '@tiptap/core'
+import { createDocument, type Editor, type JSONContent, type Range } from '@tiptap/core'
 import { Token, type TokenSpec } from './prompt-editor/tokens.js'
 import { makeTrigger } from './prompt-editor/suggestion.js'
 import { ScrollArea } from './ui/scroll-area.js'
@@ -18,11 +18,17 @@ import { pressed } from '../lib/shortcut.js'
 // files. A project or a file is inserted as a chip that serializes back to plain text, so the
 // prompt over the wire is what it reads as, and it also adds the project's path or the file to
 // the Context (#439/#504); deleting the chip takes it out again. Markdown is live (StarterKit shortcuts) and
-// round-trips via tiptap-markdown. Text flows out via onChange, and the handle only clears,
-// focuses, loads and appends.
+// round-trips via tiptap-markdown. Text flows out via onChange, and the handle only clears (handing
+// back what it held), restores that, focuses, loads and appends.
+
+/** What a box held, chips and all, as `clear` hands it back for `restore`. */
+export type PromptDraft = JSONContent
 
 export interface PromptEditorHandle {
-  clear: () => void
+  /** Empty the box, its chips' Context going with them as at any deletion. Returns what it held, for `restore`. */
+  clear: () => PromptDraft
+  /** Put back a draft `clear` returned, after what is typed: its chips are chips again. The Context they added is the caller's to give back. */
+  restore: (draft: PromptDraft) => void
   focus: () => void
   /** Load a text (a command, a saved prompt) into the editor, with the caret unless `focus` is false. Returns whether it replaced a draft. */
   loadTemplate: (text: string, focus?: boolean) => boolean
@@ -310,10 +316,18 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
 
   useImperativeHandle(ref, () => ({
     clear: () => {
+      const draft = editor?.getJSON() ?? {}
       editor?.commands.clearContent()
       if (editor) syncMentions(editor)
       setIsEmpty(true)
       onChangeRef.current('')
+      return draft
+    },
+    restore: draft => {
+      if (!editor) return
+      // Over the empty paragraph of an empty box, else after the draft's last line, the caret left where it is.
+      const end = editor.state.doc.content.size
+      editor.commands.insertContentAt(editor.isEmpty ? { from: 0, to: end } : end, draft.content ?? [], { updateSelection: false })
     },
     focus: () => editor?.commands.focus('end'),
     loadTemplate: (text: string, focus?: boolean) => (editor ? loadTemplateInto(editor, text, focus) : false),

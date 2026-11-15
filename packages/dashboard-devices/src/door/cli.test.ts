@@ -605,7 +605,7 @@ test('tailscale on is refused on a server, and where Tailscale is not signed in,
   try {
     const signedOut = await run(home.env, ['tailscale', 'on'], { tailscale: fakeTailscale('laptop.tail1234.ts.net', { state: 'NeedsLogin' }).run })
     assert.equal(signedOut.code, 1)
-    assert.deepEqual(signedOut.err, ['Tailscale is not signed in on this computer. Sign in to Tailscale, then turn this on again.'])
+    assert.deepEqual(signedOut.err, ['Tailscale is not signed in on this computer. Sign in to Tailscale, then try again.'])
     assert.equal((await readStore(home.env)).tailscale, undefined)
 
     await update(home.env, store => {

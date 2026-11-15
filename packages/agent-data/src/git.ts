@@ -150,6 +150,18 @@ export function nodeGitRunner(env?: Record<string, string>): GitRunner {
 export const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904'
 
 /**
+ * OpenAgent's own name or email for each of git's `user.name` and `user.email` that `cwd` has none
+ * for: a commit OpenAgent makes on a git never given them still has an author.
+ */
+export async function missingIdentity(cwd: string, git: GitRunner = nodeGitRunner()): Promise<Array<[key: string, value: string]>> {
+  const missing: Array<[string, string]> = []
+  for (const [key, value] of [['user.name', 'OpenAgent'], ['user.email', 'openagent@localhost']] as const) {
+    if (!(await git(['config', '--get', key], cwd).then(out => out.trim() !== '', () => false))) missing.push([key, value])
+  }
+  return missing
+}
+
+/**
  * Whether `cwd` sits inside a git working tree (#997). Lets a caller tell "this project cannot
  * host a worktree at all" from "git was there and the operation failed", which are the same
  * rejection out of `git worktree add` but call for opposite handling.

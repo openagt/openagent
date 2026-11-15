@@ -9,19 +9,22 @@ import { fakeTailscale } from './test-home.js'
 test("this computer's name on the person's Tailscale network, or why there is none, in words the person acts on", async () => {
   assert.deepEqual(await tailscaleName(fakeTailscale('Laptop.tail1234.ts.net').run), { ok: true, value: 'laptop.tail1234.ts.net' })
   const signedOut = await tailscaleName(fakeTailscale('laptop.tail1234.ts.net', { state: 'NeedsLogin' }).run)
-  assert.deepEqual(signedOut, { ok: false, problem: 'Tailscale is not signed in on this computer. Sign in to Tailscale, then turn this on again.' })
+  assert.deepEqual(signedOut, { ok: false, problem: 'Tailscale is not signed in on this computer. Sign in to Tailscale, then try again.' })
+  const turnedOff = await tailscaleName(fakeTailscale('laptop.tail1234.ts.net', { state: 'Stopped' }).run)
+  assert.deepEqual(turnedOff, { ok: false, problem: 'Tailscale is turned off on this computer. Turn it on (the Tailscale app, or tailscale up), then try again.' })
   const noName = await tailscaleName(async () => ({ code: 0, out: JSON.stringify({ BackendState: 'Running', Self: { DNSName: '' } }) }))
   assert.equal(noName.ok, false)
   assert.match((noName as { problem: string }).problem, /MagicDNS/)
   // Tailscale not running at all answers no JSON.
-  assert.equal((await tailscaleName(async () => ({ code: 1, out: 'failed to connect to local tailscaled' }))).ok, false)
+  const notRunning = await tailscaleName(async () => ({ code: 1, out: "failed to connect to local tailscaled; it doesn't appear to be running (sudo systemctl start tailscaled ?)" }))
+  assert.deepEqual(notRunning, { ok: false, problem: 'Tailscale is not running on this computer. Start it (the Tailscale app, or sudo systemctl start tailscaled), then try again.' })
 })
 
 test('a computer with no tailscale command is told to install it; OPENAGENT_TAILSCALE names the command', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'devices-tailscale-'))
   try {
     const missing = await tailscaleName(tailscaleRun({ ...process.env, OPENAGENT_TAILSCALE: join(dir, 'none') }))
-    assert.deepEqual(missing, { ok: false, problem: 'Tailscale is not installed on this computer. Install it from tailscale.com and sign in, then turn this on again.' })
+    assert.deepEqual(missing, { ok: false, problem: 'Tailscale is not installed on this computer. Install it from tailscale.com and sign in, then try again.' })
     const named = join(dir, 'tailscale')
     await writeFile(named, `#!/bin/sh\necho '{"BackendState":"Running","Self":{"DNSName":"box.tail9.ts.net."}}'\n`)
     await chmod(named, 0o755)
@@ -52,7 +55,7 @@ test("a user that is not Tailscale's operator is told the line that makes it one
   const denied = async () => ({ code: 1, out: 'sending serve config: Access denied: serve config denied\nUse \'sudo tailscale serve --bg --https=443 http://127.0.0.1:4201\'' })
   assert.deepEqual(await serveDoor(denied, 4201, 'openagent'), {
     ok: false,
-    problem: 'Tailscale does not let the user openagent serve the door. Run sudo tailscale set --operator=openagent once on this computer, then turn this on again.',
+    problem: 'Tailscale does not let the user openagent serve the door. Run sudo tailscale set --operator=openagent once on this computer; the door opens by itself then.',
   })
 })
 

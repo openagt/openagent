@@ -266,6 +266,15 @@ test('a still-running run is not unpushed work (#860)', async () => {
   assert.deepEqual(items, [])
 })
 
+test('a finished run continued, working again in its checkout, is not unpushed work until its turn ends (#768)', async () => {
+  // Its record still says how its first leg ended; its checkout's card says it works again, as the list of runs shows it.
+  const recorded = doneMeta()
+  const read = (status: AgentMeta['status']) =>
+    buildInterventions([project('a', '/a')], { ...onlyUnpushed([recorded], counting(branch => waiting({ branch }))), liveAgents: async () => [{ ...recorded, status, cwd: '/a/.branches/agent-add-cart' }] })
+  assert.deepEqual((await read('running')).items, [])
+  assert.deepEqual((await read('done')).items.map(i => [i.kind, i.agentId]), [['unpushed', 'r1']], 'and listed once, ended again')
+})
+
 test('an unreadable branch state is skipped rather than throwing, and the project does not count as read whole (#860)', async () => {
   const failing: BranchesFor = async () => ({
     list: async () => [],

@@ -399,8 +399,8 @@ export function tokenWords(tokens: number): string {
 // counting the commands and naming the file the edits changed with how much ("Ran 2 commands,
 // edited README.md +12 −54"), opening to one bordered panel with a row per step, a line between
 // two rows, each row opening further. `lead` is a row the panel opens with: the session's
-// set-up, before the first turn's steps. A lone call with nothing to lead it is its own line
-// ("Read AGENTS.md"). A run with no call in it draws nothing.
+// set-up, before the first turn's steps. A lone call is its own line ("Read AGENTS.md"), opening
+// to its detail, or to the panel when a lead goes with it. A run with no call in it draws nothing.
 export function ToolCalls({ steps, lead, live }: { steps: readonly ToolStep[]; lead?: ReactNode; live?: { call: Call; since?: string | undefined } | undefined }) {
   const [open, setOpen] = useState(false)
   const openFile = useContext(OpenFile)
@@ -411,7 +411,7 @@ export function ToolCalls({ steps, lead, live }: { steps: readonly ToolStep[]; l
   const calls = steps.filter(step => step.type === 'action')
   if (calls.length === 0 && !live) return null
   const summary = callsSummary(calls.map(call => ({ ...toolCall(call.label, call.detail, call.output?.changed), ...(call.output?.failed ? { failed: true as const } : {}) })))
-  const only = !live && !lead && shown.length === 1 && shown[0]!.type === 'action' ? shown[0] : undefined
+  const only = !live && shown.length === 1 && shown[0]!.type === 'action' ? shown[0] : undefined
   // The row's words: the call going on now, as going on; once it is done, as Claude Code on the
   // web's row does, the same row says the steps it took ("Ran 2 commands"), the old words fading
   // out as the new come in. A row of one call says that call.
@@ -438,7 +438,7 @@ export function ToolCalls({ steps, lead, live }: { steps: readonly ToolStep[]; l
       {summary.size !== undefined && <LinesPill {...summary.size} />}
     </CrossFade>
   )
-  const opens = one ? one.opens : true
+  const opens = one ? one.opens || lead !== undefined : true
   return (
     <div className="min-w-0 flex-1 font-sans text-sm text-muted-foreground">
       {/* The pointer anywhere on the line, as wide as the chat, lights its words a step: the
@@ -459,7 +459,7 @@ export function ToolCalls({ steps, lead, live }: { steps: readonly ToolStep[]; l
       </div>
       {/* The cards: on a desktop pulled out by 16, so their words stand on the chat's column; on a phone on the page's 16 inset. */}
       {open &&
-        (one && only?.type === 'action' ? (
+        (one && only?.type === 'action' && !lead ? (
           <CallDetail {...only} card />
         ) : (
           <div role="group" aria-label="Steps" className="mt-2 flex flex-col rounded-lg bg-card p-1 shadow-sm ring-1 ring-hairline md:-mx-4">

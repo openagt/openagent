@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Button, LinkActions, Page, RowShapes, Section, Slot, cn, runsAgain, usePolled, useAction, useLinkActions, useModuleHost, type ProjectLinks, type ModuleLink, type ModuleProject } from '@openagt/dashboard/module'
+import { Button, LinkActions, Page, RowShapes, Section, Slot, cn, runsAgain, usePolled, useAction, useLinkActions, useModuleHost, type ProjectLinks, type ModuleLink, type ModuleProject, type LinkActionOffer } from '@openagt/dashboard/module'
 import { UPDATE_TICKETS_PROMPT, heldBack, holderAgent, planLink, ticketLink, withHolder } from '../src/module.js'
 import { holdingRun } from './lib/holding-run.js'
 import type { ProjectTickets, WorkspaceTicket } from './lib/types.js'
@@ -375,10 +375,13 @@ function QueueAdds({ rows, selection, disabled }: { rows: ReturnType<typeof flat
   const [addedHere, setAddedHere] = useState<string | null>(null)
   const ticketsQueued = addedHere === queueKey || (queuedAlready.length > 0 && queuedAlready.every(action => action.done))
   const which = selection ? 'selected' : 'shown'
+  // The labels count what the click adds, never a ticket it will skip or one already added, each
+  // the object of the module's own verb: "Add to queue: 5 tickets". Done, they say what it did to the whole set on its projects: "Queued: 5 tickets".
+  const queueLabel = (action: LinkActionOffer, done: boolean) => (done ? `${action.doneLabel ?? action.label}: ${counted(action.total, 'ticket')}` : `${action.label}: ${counted(action.left, 'ticket')}`)
+  const planLabel = (action: LinkActionOffer, done: boolean) => (done ? `${action.doneLabel ?? action.label}: ${counted(action.total, 'plan')}` : `${action.label}: ${counted(action.left, 'plan')}`)
   // Each renders only when it has something to add — "all 0 tickets" is not an offer, the list
   // already explains an empty set, and an all-claimed (or, for plans, all-planned) one has
-  // nothing left to ask for. The labels count what the click adds, never promising a ticket they
-  // will skip. Each is the object of the module's own verb: "Add to queue: 5 tickets".
+  // nothing left to ask for.
   return (
     <>
       {planTargets.length > 0 && !ticketsQueued && (
@@ -386,7 +389,7 @@ function QueueAdds({ rows, selection, disabled }: { rows: ReturnType<typeof flat
           projects={projectsShown}
           targets={linksByProject(planTargets, planLink)}
           resetKey={`plans\n${planKey}`}
-          label={action => `${action.label}: ${counted(planTargets.length, 'plan')}`}
+          label={planLabel}
           variant="ghost"
           disabled={disabled}
           tooltip={
@@ -405,7 +408,7 @@ function QueueAdds({ rows, selection, disabled }: { rows: ReturnType<typeof flat
           targets={ticketLinks}
           resetKey={`tickets\n${queueKey}`}
           onDone={() => setAddedHere(queueKey)}
-          label={action => `${action.label}: ${counted(targets.length, 'ticket')}`}
+          label={queueLabel}
           variant={selection ? 'default' : 'ghost'}
           disabled={disabled}
           tooltip={
@@ -440,10 +443,10 @@ function linksByProject(rows: readonly { projectId: string; ticket: WorkspaceTic
 }
 
 /**
- * What a page-wide add acts on, as the object of its verb: "5 tickets", "one plan". Short, so the
+ * What a page-wide add acts on, as the object of its verb: "5 tickets", "1 plan", in digits beside each other. Short, so the
  * heading stays one line: which tickets it takes — the shown or the selected ones, less the ones
  * it skips — is the tooltip's to say.
  */
 function counted(count: number, noun: string): string {
-  return count === 1 ? `one ${noun}` : `${count} ${noun}s`
+  return `${count} ${noun}${count === 1 ? '' : 's'}`
 }

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 
 // Record what the feed subscribes to. The channel never sends; we only care about addressing.
 const onEvents = vi.hoisted(() => vi.fn())
@@ -121,7 +121,7 @@ describe('useLiveEvents run scoping', () => {
 // #1383: every subscribe replays the whole log before following live. Blanking the feed while
 // that replay re-streamed was the mid-run flicker — the lost banner cleared on resubscribe, then
 // the feed sat empty until the replay caught up. A reconnect now buffers the replay and swaps
-// atomically on the server's stream-sync marker (or a grace deadline for sources that send none).
+// atomically on the server's stream-sync marker (or a grace deadline when the marker is slow).
 describe('useLiveEvents reconnect keeps the feed (#1383)', () => {
   const log = (message: string) => ({ kind: 'log', message })
 
@@ -167,7 +167,7 @@ describe('useLiveEvents reconnect keeps the feed (#1383)', () => {
     await waitFor(() => expect(feed()).toBe('a,b,c,d'))
   })
 
-  test('a source that sends no marker still swaps at the grace deadline (relay/remote)', async () => {
+  test('a replay whose marker is slow still swaps at the grace deadline', async () => {
     const first = fakeChannel()
     const second = fakeChannel()
     onEvents.mockResolvedValueOnce(first.channel).mockResolvedValue(second.channel)
@@ -209,7 +209,7 @@ describe('useLiveEvents reconnect keeps the feed (#1383)', () => {
     await waitFor(() => expect(feed()).toBe('a,b,c'))
   }, 10_000)
 
-  test('a late replay from a source that sends no marker swaps a deadline after its first event', async () => {
+  test('a late replay whose marker is slow swaps a deadline after its first event', async () => {
     const first = fakeChannel()
     const second = fakeChannel()
     onEvents.mockResolvedValueOnce(first.channel).mockResolvedValue(second.channel)
@@ -251,6 +251,50 @@ describe('useLiveEvents reconnect keeps the feed (#1383)', () => {
     third.push(log('c'))
     third.push({ kind: 'stream-sync' })
     await waitFor(() => expect(feed()).toBe('a,b,c'))
+  })
+})
+
+// A run's page tells the lines the run had written when it was opened from the ones that come after:
+// a continued run's leg before ended among the first.
+describe('useLiveEvents replay', () => {
+  const log = (message: string) => ({ kind: 'log', message })
+
+  function ReplayProbe({ agentId }: { agentId: string }) {
+    const { events, replayed } = useLiveEvents('p1', agentId)
+    return <span data-testid="replay">{`${events.length} ${replayed ? 'replayed' : 'replaying'}`}</span>
+  }
+  const replay = () => screen.getByTestId('replay').textContent
+
+  test('is in once the daemon says so, and for another run not before its own', async () => {
+    const first = fakeChannel()
+    const second = fakeChannel()
+    onEvents.mockResolvedValueOnce(first.channel).mockResolvedValue(second.channel)
+    const { rerender } = render(<ReplayProbe agentId="run-a" />)
+    await waitFor(() => expect(onEvents).toHaveBeenCalledTimes(1))
+    first.push(log('a'))
+    await waitFor(() => expect(replay()).toBe('1 replaying'))
+    first.push({ kind: 'stream-sync' })
+    await waitFor(() => expect(replay()).toBe('1 replayed'))
+    rerender(<ReplayProbe agentId="run-b" />)
+    expect(replay()).toBe('0 replaying')
+    await waitFor(() => expect(onEvents).toHaveBeenCalledTimes(2))
+    second.push(log('b'))
+    second.push({ kind: 'stream-sync' })
+    await waitFor(() => expect(replay()).toBe('1 replayed'))
+  })
+
+  test('is not in before the daemon says so, however late its replay comes', async () => {
+    vi.useFakeTimers()
+    const ch = fakeChannel()
+    onEvents.mockResolvedValue(ch.channel)
+    render(<ReplayProbe agentId="run-a" />)
+    await act(async () => {})
+    act(() => void vi.advanceTimersByTime(3500))
+    expect(replay()).toBe('0 replaying')
+    act(() => ch.push(log('a')))
+    expect(replay()).toBe('1 replaying')
+    act(() => ch.push({ kind: 'stream-sync' }))
+    expect(replay()).toBe('1 replayed')
   })
 })
 

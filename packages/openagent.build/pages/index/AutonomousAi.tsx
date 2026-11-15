@@ -1,13 +1,12 @@
 import type { ReactNode } from 'react'
+import { Construction } from 'lucide-react'
 import { CheckIcon } from './icons'
-import { CodeChip, columnsStyle, columnStyle, Note, Screenshot, SectionHead, sectionStyle, text } from './ui'
+import { CodeChip, columnsStyle, columnStyle, Note, Screenshot, SectionHead, sectionStyle, text, WipBadge } from './ui'
 
-function Item({ children }: { children: ReactNode }) {
+function Item({ children, marker }: { children: ReactNode; marker?: ReactNode }) {
   return (
     <li style={{ display: 'flex', gap: 8 }}>
-      <span style={{ color: 'var(--muted-foreground)' }}>
-        <CheckIcon />
-      </span>
+      <span style={{ color: 'var(--muted-foreground)' }}>{marker ?? <CheckIcon />}</span>
       {children}
     </li>
   )
@@ -45,9 +44,9 @@ export function AutonomousAi() {
           <Item>Test &amp; review</Item>
           <Item>Research, plan, and prioritize your tickets</Item>
           <Item>Turn your team conversations into tickets</Item>
-          <Item>
+          <Item marker={<Construction size={16} aria-hidden style={{ verticalAlign: '-0.125em' }} />}>
             <span>
-              Save your team conversations to <CodeChip>{'conversations/<DATE>_<TOPICS_SLUG>.md'}</CodeChip>
+              <WipBadge /> Save your team conversations to <CodeChip>{'conversations/<DATE>_<TOPICS_SLUG>.md'}</CodeChip>
             </span>
           </Item>
           <Item>Market research</Item>

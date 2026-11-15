@@ -25,6 +25,7 @@ import { usePolled } from './lib/use-async.js'
 import { useIsMobile } from './lib/use-mobile.js'
 import { usePinnedPage } from './lib/use-pinned-page.js'
 import { NotFound } from './components/NotFound.js'
+import { ProjectRemovedReport } from './components/RemoveProjectDialog.js'
 import { ModulePageView, ModuleSlot } from './components/ModulePageView.js'
 import { useListedPages, useModules, ModulesContext } from './lib/use-modules.js'
 import { HostServicesContext, useSteadyServices } from './lib/host-services.js'
@@ -173,7 +174,7 @@ export function App() {
   // Every navigation keeps the picked project, and one into another project's page, or into a
   // page in a named project, picks that project: the pages never show a project the select does not name.
   const scoped = (next: Route): Route => ({ ...next, ...(scope ? { scope: next.scope ?? next.projectId ?? scope } : {}) })
-  const go = (next: Route) => navigate(scoped(next))
+  const go = (next: Route, options?: { beside?: boolean }) => navigate(scoped(next), options)
   /** Where `go` would take the page: a link's address. */
   const hrefOf = (next: Route) => formatRoute(scoped(next), addresses)
   /** A module's page, at a sub-path, in `inProject` or the picked project. */
@@ -258,7 +259,6 @@ export function App() {
   const projectName = project ? (labels.get(project.id) ?? project.name) : null
   // The Human Queue as the pages show it: the picked project's items, or every project's.
   const interventions = scope ? interventionsRead.items.filter(item => item.projectId === scope) : interventionsRead.items
-  useDocumentTitle(interventions.length, projectName ?? (scope ? (labels.get(scope) ?? null) : null))
   // A URL naming a project that is not registered (renamed, removed, mistyped). Only this load's
   // read, and a non-empty one, is the answer: the list this browser kept from its last load may lack
   // a project added since. Until that read, a project the kept list has is drawn from the first
@@ -300,8 +300,9 @@ export function App() {
     // is not named again.
     const continued = startedId === agentId && inProject === projectId
     setAgentStart(prev => ({ tick: continued ? prev.tick : prev.tick + 1, intent, id: startedId, projectId: inProject, at: Date.now(), ...(runsOn ? { runsOn } : {}), ...(picks ? { picks } : {}) }))
-    // The picked Context went with that run; the next launch starts from a clean focus (#948).
-    resetContext()
+    // The picked Context went with that run; the next launch starts from a clean focus (#948). A continued run's went
+    // as its message did (AgentComposer): what is picked while it goes is the next message's, with its chips.
+    if (!continued) resetContext()
     // Go to the run we just started — a real history entry, so Back returns to where you launched
     // from. Its row does not exist yet; the main pane shows it live on the strength of the id.
     go({ projectId: inProject, agentId: startedId })
@@ -389,7 +390,7 @@ export function App() {
     ...DAEMON_SERVICES,
     openAgent: selectAgentInProject,
     agentHref: (inProject, id) => hrefOf({ projectId: inProject, agentId: id }),
-    openPage: (segment, path, inProject) => go(pageRoute(segment, path, inProject)),
+    openPage: (segment, path, inProject, options) => go(pageRoute(segment, path, inProject), options),
     adjustPage: (path, query) => adjust(path ? { ...route, pagePath: path } : route, query),
     pageHref: (segment, path, inProject) => hrefOf(pageRoute(segment, path, inProject)),
     backToPage: (segment, path = [], inProject) =>
@@ -421,7 +422,7 @@ export function App() {
   // shared event stream.
   // The agent whose feed and controls are in play is simply the one in the URL; with none there is
   // no feed.
-  const { events, lost, writing } = useLiveEvents(projectId, agentId)
+  const { events, lost, writing, replayed } = useLiveEvents(projectId, agentId)
   // The run's feed says it ended before the runs poll does: read the runs now, so its page stops
   // reading as running (and its handoff is read) without waiting up to a poll for it.
   const ends = events.filter(e => e.kind === 'end').length
@@ -465,11 +466,23 @@ export function App() {
   // The runs started for the selected one: rows in its chat.
   const subagents = useMemo(() => (agentId ? subagentsOf(agents, agentId) : []), [agents, agentId])
   // The project is off the list: read the list again and leave its page for the Overview of every
-  // project, since the one it was picked as is gone.
+  // project at once, since the one it was picked as is gone; "Project removed" is said over it.
   const leaveRemovedProject = () => {
     reloadProjects()
     navigate({ projectId: null, agentId: null })
   }
+  const justStarted = agentId === agentStart.id
+  // The name the daemon had for the run just started, before the run's record has one.
+  const startedTitle = justStarted ? agentStart.title : undefined
+  const namesRuns = preferences.nameRuns !== false
+  // What a listed session's page is called, in its heading and its tab: a subagent by its task, as its rows are.
+  const sessionLabel = selectedAgent
+    ? selectedAgent.parent !== undefined
+      ? taskLabel(selectedAgent)
+      : awaitingName(selectedAgent, namesRuns)
+        ? startedTitle
+        : agentLabel(selectedAgent)
+    : undefined
   // Another computer's project is removed there, not here.
   const removableHere = project?.machine === undefined ? leaveRemovedProject : undefined
   // Before the projects are read, a project's address reads as a page's word. A word no page this
@@ -560,10 +573,6 @@ export function App() {
         />
       )
     }
-    const justStarted = agentId === agentStart.id
-    // The name the daemon had for the run just started, before the run's record has one.
-    const startedTitle = justStarted ? agentStart.title : undefined
-    const namesRuns = preferences.nameRuns !== false
     // What an agent's page is given whether its run is listed yet or not.
     const agentPage = {
       projectId,
@@ -573,6 +582,7 @@ export function App() {
       files,
       lost: lost && healthy,
       writing,
+      replayed,
       startedWith: justStarted ? agentStart.intent : undefined,
       picks: justStarted ? agentStart.picks : undefined,
       onAgentStarted,
@@ -603,8 +613,7 @@ export function App() {
         {...agentPage}
         live={selectedAgent.status === 'running'}
         card={selectedAgent}
-        // A subagent's page is named as its rows are: by its task, not by its whole prompt.
-        label={selectedAgent.parent !== undefined ? taskLabel(selectedAgent) : awaitingName(selectedAgent, namesRuns) ? startedTitle : agentLabel(selectedAgent)}
+        label={sessionLabel}
         naming={selectedAgent.parent === undefined && awaitingName(selectedAgent, namesRuns) && startedTitle === undefined}
         target={selectedAgent.target}
         remoteLabel={selectedAgent.remoteLabel}
@@ -633,6 +642,22 @@ export function App() {
   // stays at the top; on a wider screen the sidebar stays beside it. A chat keeps its box at the
   // bottom, and only its own columns scroll.
   const pageScrolls = phoneTitle !== null
+  // The tab says the page first, as its heading or the sidebar names it, then the project the count is scoped to (#1923).
+  const pageName =
+    route.settings !== undefined
+      ? 'Settings'
+      : pageSegment
+        ? (OWN_PAGES.get(pageSegment) ?? modulePage?.label ?? (addressesRead ? 'No such page' : (listedPage?.label ?? null)))
+        : unknownProject
+          ? 'No such project'
+          : sessionGone
+            ? 'No such session'
+            : projectId === null
+              ? 'Overview'
+              : agentId === null
+                ? 'New agent session'
+                : (sessionLabel ?? startedTitle)
+  useDocumentTitle(interventions.length, projectName ?? (scope ? (labels.get(scope) ?? null) : null), pageName)
   // The phone bar's place for the page's count, once the bar is drawn.
   const [phoneCount, setPhoneCount] = useState<HTMLElement | null>(null)
   // Every other page is pinned: only its own columns scroll.
@@ -648,6 +673,7 @@ export function App() {
     <OpenProjectContext.Provider value={projectId}>
     <ProjectLabelsContext.Provider value={labels}>
     <DaemonDown.Provider value={!healthy}>
+    <ProjectRemovedReport>
     {/* As tall as what the screen shows, never taller: a phone's 100vh reaches under its browser's
         bars, and the page then scrolled around the column that scrolls. */}
     {/* `--top-banner`: the height of the daemon's banner while it shows, which a page that scrolls
@@ -771,6 +797,7 @@ export function App() {
       {/* Once what the address names is read: the project its "Project" group opens on, and the entries the projects and their packages add. */}
       {route.settings !== undefined && addressesRead && <SettingsDialog entry={route.settings} openItem={route.settingsItem} onEntry={showSettings} onClose={closeSettings} scope={scope} projects={projects} />}
     </SidebarProvider>
+    </ProjectRemovedReport>
     </DaemonDown.Provider>
     </ProjectLabelsContext.Provider>
     </OpenProjectContext.Provider>

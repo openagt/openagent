@@ -131,6 +131,35 @@ test('on the secure address, / is the dashboard until the toggle picks the landi
     assert.equal((await get(port, '/some-project-1x2y', cert, { cookie })).body, 'the dashboard')
     assert.equal((await get(port, '/_view/nothing', cert)).status, 404)
 
+    // Picked from a page of the dashboard, "Dashboard" opens that page again however often it is asked, until the landing
+    // page is picked again; a page of another site, or text that is no address at all, is never kept. The browser keeps the cookies each answer sets.
+    const jar = new Map<string, string>()
+    const browse = async (path: string) => {
+      const res = await get(port, path, cert, { cookie: [...jar].map(([name, value]) => `${name}=${value}`).join('; ') })
+      for (const line of [res.headers['set-cookie'] ?? []].flat()) {
+        const [name, value] = line.split(';')[0]!.split('=') as [string, string]
+        if (/; Max-Age=0;/.test(line)) jar.delete(name)
+        else jar.set(name, value)
+      }
+      return res
+    }
+    const fromPage = await browse(`/_view/landing?back=${encodeURIComponent('/shop/tickets?q=dark')}`)
+    assert.equal(fromPage.headers.location, '/')
+    const kept = (fromPage.headers['set-cookie'] as string[]).find(line => line.startsWith('openagent-back='))!
+    assert.match(kept, /; Path=\/_view; HttpOnly;/)
+    assert.equal((await browse('/_view/dashboard')).headers.location, '/shop/tickets?q=dark')
+    assert.equal((await browse('/_view/dashboard')).headers.location, '/shop/tickets?q=dark')
+    await browse('/_view/landing')
+    assert.equal((await browse('/_view/dashboard')).headers.location, '/')
+    await browse('/_view/landing?back=%2Fshop')
+    await browse(`/_view/landing?back=${encodeURIComponent('//evil.example/x')}`)
+    assert.equal((await browse('/_view/dashboard')).headers.location, '/')
+    assert.equal((await get(port, '/_view/dashboard', cert, { cookie: 'openagent-back=%2F%2Fevil.example%2Fx' })).headers.location, '/')
+    await browse('/_view/landing?back=%2Fshop')
+    assert.equal((await browse('/_view/landing?back=%2F%2F')).headers.location, '/')
+    assert.equal((await browse('/_view/dashboard')).headers.location, '/')
+    assert.equal((await get(port, '/_view/dashboard', cert, { cookie: 'openagent-back=%2F%2F' })).headers.location, '/')
+
     // The plain address has no website: there `/_view` is a page of the dashboard like any other.
     const plain = await fetch(`${dash.url}/_view`, { method: 'HEAD' })
     assert.equal(plain.status, 200)

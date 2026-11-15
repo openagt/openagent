@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { ModuleHostContext, forgetRemembered, type ModuleCommandResult, type ModuleHost, type ModuleProject } from '@openagt/dashboard/module'
 import { OpenAgentDown, fakeHost } from '@openagt/dashboard/module/testing'
 import { AutomationsPage } from './AutomationsPage.js'
+import { CodeWords } from './CodeWords.js'
 import { ANY_AGENT, ON_CLAUDE, STATUS, hostAnswering } from './fixtures.js'
 import { checked, choices, offered, openList, pick, queryRadio, radio, radioNames, showing } from '../../dashboard/dashboard/test-controls.js'
 
@@ -537,6 +538,56 @@ describe('the Automations page: its rows', () => {
     expect(within(notRunning).getByText('Does not start: the scheduler is on, but not running')).toBeTruthy()
     // A row switched off says nothing of it.
     expect(within(within(screen.getByRole('region', { name: 'gemstack' })).getByRole('listitem', { name: '/work-queue' })).queryByText(/Does not start/)).toBeNull()
+  })
+
+  test('"Run now" is held where the last look held every start back, a person\'s too, while the scheduler looks; not for the quota, which a run asked for now does not wait for', async () => {
+    const shown = async (outcome: string, over: object = {}): Promise<HTMLElement> => {
+      cleanup()
+      const { host } = hostAnswering(() => ({ ok: true, output: { ...STATUS, ...over, lastTick: { at: STATUS.lastTick.at, decisions: [{ command: 'post-merge-cleanup', outcome }] } } }))
+      show(host)
+      await screen.findByRole('region', { name: 'gemstack' })
+      return within(row('/post-merge-cleanup')).getByRole('button', { name: 'Run /post-merge-cleanup now' })
+    }
+    expect(disabled(await shown('not ready: `claude` not found'))).toBe(true)
+    expect(disabled(await shown("not on HEAD: a run's checkout starts from HEAD, and the command's skill is not there"))).toBe(true)
+    expect(disabled(await shown('quota: Current week is 99% used'))).toBe(false)
+    expect(disabled(await shown('not due'))).toBe(false)
+    // A stopped scheduler's last look is old: what it said may be fixed since.
+    expect(disabled(await shown('not ready: `claude` not found', { running: false }))).toBe(false)
+  })
+
+  test('what the last look said is set as the tool wrote it: its backticked words as code, its address a link that opens in a new tab, the sentence\'s full stop left out of it', async () => {
+    const notFound = 'not ready: `claude` not found — install Claude Code and make sure `claude` is on your PATH: https://claude.com/claude-code'
+    const { host } = hostAnswering(() => ({ ok: true, output: { ...STATUS, lastTick: { at: STATUS.lastTick.at, decisions: [{ command: 'post-merge-cleanup', outcome: notFound }] } } }))
+    show(host)
+    await screen.findByRole('region', { name: 'gemstack' })
+    const reason = within(row('/post-merge-cleanup'))
+    expect(reason.getAllByText('claude').map(code => code.tagName)).toEqual(['CODE', 'CODE'])
+    const link = reason.getByRole('link', { name: 'https://claude.com/claude-code' })
+    expect([link.getAttribute('href'), link.getAttribute('target')]).toEqual(['https://claude.com/claude-code', '_blank'])
+    expect(link.parentElement!.textContent).toBe('Not ready: claude not found — install Claude Code and make sure claude is on your PATH: https://claude.com/claude-code')
+    cleanup()
+    render(<CodeWords text="Read https://claude.com/claude-code." />)
+    expect(screen.getByRole('link').getAttribute('href')).toBe('https://claude.com/claude-code')
+  })
+
+  test('a row switched on that the last look held back says why as a warning', async () => {
+    for (const [outcome, words] of [
+      ['not on HEAD: .claude/skills/post-merge-cleanup/SKILL.md is not committed', 'Cannot start yet: its skill is not committed'],
+      ['not ready: Claude Code is not logged in.', 'Not ready: Claude Code is not logged in.'],
+      ['quota: Current week is 99% used', 'Waits for quota: Current week is 99% used'],
+    ] as const) {
+      const { host } = hostAnswering(() => ({ ok: true, output: { ...STATUS, lastTick: { at: STATUS.lastTick.at, decisions: [{ command: 'post-merge-cleanup', outcome }] } } }))
+      show(host)
+      await screen.findByRole('region', { name: 'gemstack' })
+      expect(within(row('/post-merge-cleanup')).getByText(words).className, outcome).toMatch(/text-warning/)
+      cleanup()
+    }
+    // A look that found no work holds nothing back.
+    const { host } = hostAnswering(() => ({ ok: true, output: { ...STATUS, lastTick: { at: STATUS.lastTick.at, decisions: [{ command: 'post-merge-cleanup', outcome: 'not due' }] } } }))
+    show(host)
+    await screen.findByRole('region', { name: 'gemstack' })
+    expect(row('/post-merge-cleanup').querySelector('.text-warning')).toBeNull()
   })
 
   test('a skill whose schedule cannot be read is named with the reason, and an automation kept on this machine that the scheduler does not list is said so in its own words', async () => {
@@ -1511,10 +1562,12 @@ describe('the Edit panel of a row a person made', () => {
     fireEvent.click(within(asked).getByRole('button', { name: 'Cancel' }))
     expect(screen.queryByRole('group', { name: 'Removing /answer-comments' })).toBeNull()
     expect((within(editing('/answer-comments')).getByLabelText('What the agent is told') as HTMLTextAreaElement).value).toBe('Typed before asking.')
+    // Back on Remove, which asked.
+    await waitFor(() => expect(document.activeElement).toBe(within(editing('/answer-comments')).getByRole('button', { name: 'Remove' })))
     fireEvent.click(within(editing('/answer-comments')).getByRole('button', { name: 'Remove' }))
     fireEvent.keyDown(within(own).getByRole('group', { name: 'Removing /answer-comments' }), { key: 'Escape' })
     expect(screen.queryByRole('group', { name: 'Removing /answer-comments' })).toBeNull()
-    expect(editing('/answer-comments')).toBeTruthy()
+    await waitFor(() => expect(document.activeElement).toBe(within(editing('/answer-comments')).getByRole('button', { name: 'Remove' })))
     expect(saves(runCommand)).toEqual([])
 
     fireEvent.click(within(editing('/answer-comments')).getByRole('button', { name: 'Remove' }))
@@ -1559,7 +1612,7 @@ describe('the Edit panel of a row a person made', () => {
     expect(within(within(kept).getByRole('group', { name: 'Removing tidy' })).queryByRole('alert')).toBeNull()
     // Removed, while a tick that was under way still lists it for a moment: the question is closed, so the row does not come back asking.
     fireEvent.click(within(within(kept).getByRole('group', { name: 'Removing tidy' })).getByRole('button', { name: 'Remove' }))
-    expect((await screen.findByRole('status', { name: 'Removed' })).textContent).toContain('Removed tidy: .scheduler/automations/tidy.md is deleted. Nothing is to commit.')
+    expect((await screen.findByRole('status', { name: 'Removed' })).textContent).toContain('Removed tidy: .scheduler/automations/tidy.md is deleted. Nothing to commit.')
     expect(screen.queryByRole('group', { name: 'Removing tidy' })).toBeNull()
     expect(screen.queryByRole('group', { name: 'Editing tidy' })).toBeNull()
     expect(within(row('tidy')).queryByRole('alert')).toBeNull()
@@ -2120,12 +2173,16 @@ describe('the "New automation" form', () => {
     expect(name.hasAttribute('aria-describedby')).toBe(false)
   })
 
-  test('while the name cannot be one, the line under the form says what else is missing, and when the row would run once nothing else is', async () => {
+  test('the line under the form says its first problem in the form\'s order: a name it cannot have before what else is missing, then when the row would run once nothing is', async () => {
     const { host } = scheduler()
     show(host)
     fireEvent.click(await screen.findByRole('button', { name: 'New automation in gemstack' }))
     const form = screen.getByRole('group', { name: 'New automation' })
-    fireEvent.change(within(form).getByRole('textbox', { name: 'Name' }), { target: { value: 'Answer comments' } })
+    const name = within(form).getByRole('textbox', { name: 'Name' })
+    fireEvent.change(name, { target: { value: 'Answer comments' } })
+    expect(within(form).getByText("Give it another name: the one above cannot be an automation's.")).toBeTruthy()
+    expect(within(form).queryByText('Write what the agent is told.')).toBeNull()
+    fireEvent.change(name, { target: { value: 'answer-comments' } })
     expect(within(form).getByText('Write what the agent is told.')).toBeTruthy()
     fireEvent.change(within(form).getByLabelText('What the agent is told'), { target: { value: 'Answer each new comment below.' } })
     expect(within(form).getByText('Every day.')).toBeTruthy()
@@ -2362,6 +2419,14 @@ describe('a row with each', () => {
     expect(within(reply).getByText('When a maintainer wrote /agent')).toBeTruthy()
   })
 
+  test('a run the last look could not continue, its coding agent not ready, holds back that run alone: the row still runs now, beside a run it continued', async () => {
+    const decisions = [{ command: 'reply', outcome: 'run on-codex not resumed: not ready: codex is not logged in.' }, { command: 'reply', outcome: 'resumed on-opus', run: 'on-opus' }]
+    const { host } = each({ schedule: [STATUS.schedule[1], { ...EACH.schedule[1], able: ['claude-code', 'codex'] }], lastTick: { at: STATUS.lastTick.at, decisions } })
+    show(host)
+    await screen.findByRole('region', { name: 'gemstack' })
+    expect(disabled(within(row('/reply')).getByRole('button', { name: 'Run /reply now' }))).toBe(false)
+  })
+
   test('its panel picks an agent, a model and a publish level, for the runs it starts, and says a run it continues keeps its own', async () => {
     const { host, runCommand } = each()
     show(host)
@@ -2387,7 +2452,7 @@ describe('a row with each', () => {
     const quota = each({ lastTick: { at: '2026-10-03T10:00:00.000Z', decisions: [{ command: 'reply', outcome: 'no run for https://github.com/o/r/issues/5: quota: Current week is 99% used' }] } })
     show(quota.host)
     await screen.findByRole('region', { name: 'gemstack' })
-    expect(within(row('/reply')).getByText('Quota: Current week is 99% used')).toBeTruthy()
+    expect(within(row('/reply')).getByText('Waits for quota: Current week is 99% used')).toBeTruthy()
     cleanup()
     for (const [answer, said] of [[{ run: 'r1', resumed: true }, 'Resumed a run. Open it'], [{ run: 'r2' }, 'Started a run. Open it']] as const) {
       const { host, runCommand } = each({ lastTick: { at: '2026-10-03T10:00:00.000Z', decisions: [{ command: 'reply', outcome: 'resumed r1', run: 'r1' }] } }, args => (args[0] === 'now' ? { ok: true, output: { ok: true, command: 'reply', ...answer } } : { ok: true, output: { ok: true } }))
