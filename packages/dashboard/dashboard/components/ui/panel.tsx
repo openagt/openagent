@@ -104,12 +104,13 @@ export function PanelRow({ state, title, titleHint, meta = [], fact, actions, hr
       {state !== undefined && <span className="flex w-4 shrink-0 justify-center">{state}</span>}
       <span className="min-w-0 flex-1">
         {named}
+        {/* Every part but the last is said whole; the last gives way, cut with "…". */}
         {parts.length > 0 && (
           <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-faint-foreground">
             {parts.map((part, index) => (
               <Fragment key={index}>
                 {index > 0 && <span aria-hidden>·</span>}
-                <span className="min-w-0 truncate last:shrink">{part}</span>
+                <span className="min-w-0 truncate not-last:shrink-0">{part}</span>
               </Fragment>
             ))}
           </span>
