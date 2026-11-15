@@ -241,7 +241,7 @@ describe('TicketDetailPage (#1144)', () => {
     agents = [{ id: 'run-1', name: 'login-page', status: 'running', startedAt: '2026-08-30T10:00:00.000Z' }]
     onTicket.mockResolvedValue(ticket({ locked: true, lockedBy: 'run-1' }))
     render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
-    await screen.findAllByText(/at work/)
+    await screen.findAllByText(/working/)
     await releaseFromMenu()
     expect(host.act).not.toHaveBeenCalled()
     fireEvent.click(await screen.findByRole('button', { name: 'Release' }))

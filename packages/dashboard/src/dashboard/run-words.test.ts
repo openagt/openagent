@@ -15,6 +15,9 @@ const STATES = 'running|waiting|saving|done|stopped|failed|merged|unknown'
 /** A state given a colour: a map from it to a class of a text, a fill or a border. */
 const COLOURED = new RegExp(`\\b(${STATES})\\s*:\\s*'(text|bg|border)-`, 'g')
 
+/** A word picked for a state by comparing it: a word of a state's own, where a state is mapped to another it may be. */
+const WORDED = new RegExp(`[sS]tatus\\s*===\\s*'(${STATES})'\\s*\\?\\s*'(?!(${STATES})')[^']*'`, 'g')
+
 /** The files that may, with the reason. */
 const ALLOWED: Record<string, string> = {
   'dashboard/dashboard/lib/run-words.ts': 'the one table',
@@ -37,6 +40,10 @@ function said(pattern: RegExp): Record<string, string[]> {
   }
   return found
 }
+
+test("a run's state is given its word in one table: no list picks one of its own", () => {
+  assert.deepEqual(said(WORDED), {})
+})
 
 test("a run's state is given its colour in one table: no list keeps a map of its own", () => {
   assert.deepEqual(said(COLOURED), {})

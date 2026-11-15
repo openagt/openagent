@@ -6,7 +6,7 @@
 interface RunState {
   /** The word a list prints. */
   word: string
-  /** How a sentence says the run stands, after its name: "… · at work". */
+  /** How a sentence says the run stands, after its name: "… · working". */
   said: string
   /** The mark's classes. */
   mark: string
@@ -17,7 +17,7 @@ interface RunState {
 const RING = 'border border-muted-foreground/60'
 
 const RUN_STATES: Record<string, RunState> = {
-  running: { word: 'running', said: 'at work', mark: 'bg-primary', tone: 'text-primary' },
+  running: { word: 'working', said: 'working', mark: 'bg-primary', tone: 'text-primary' },
   waiting: { word: 'waiting', said: 'waits on your answer', mark: 'bg-warning', tone: 'text-muted-foreground' },
   saving: { word: 'saving…', said: 'saving', mark: 'bg-success', tone: 'text-muted-foreground' },
   done: { word: 'done', said: 'done', mark: RING, tone: 'text-success' },
