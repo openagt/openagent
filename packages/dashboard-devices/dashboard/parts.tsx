@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useRef, useState, type ComponentType, type FormEvent, type ReactNode, type RefObject } from 'react'
 import { ChevronRight, Circle, CircleArrowUp, CircleCheck, CircleX, Loader2, Pencil } from 'lucide-react'
 import { Badge, Button, Input, RadioGroupOption, Row, Section, cn, formatDateTime, formatRelative, useOpenAgentDown } from '@openagt/dashboard/module'
-import type { DeviceRow as Listed } from './devices.js'
+import type { DeviceRow } from './devices.js'
 import type { StepState } from './servers.js'
 
 // The small pieces the pages of Settings › Devices share: a device's row, the tabs of a
@@ -285,7 +285,7 @@ export function LinkPress({ loading = false, disabled = false, onClick, children
 }
 
 /** When a device that is in got in and was last seen, and what it is when that needs saying. */
-export function Seen({ device, note }: { device: Listed; note?: string | undefined }) {
+export function Seen({ device, note }: { device: DeviceRow; note?: string | undefined }) {
   return (
     <>
       <span title={formatDateTime(device.seen ?? device.added)}>
