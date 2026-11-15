@@ -9,6 +9,11 @@ export function InSection({ children }: { children: ReactNode }) {
   return <Inside.Provider value>{children}</Inside.Provider>
 }
 
+/** The heading a part drawn here takes: a page's part is an `h2`, one inside another an `h3`. */
+export function useHeadingTag(): 'h2' | 'h3' {
+  return useContext(Inside) ? 'h3' : 'h2'
+}
+
 /**
  * A part of a page: its heading, how many it holds, a press or a link at the heading's right, then
  * what it holds. No box: the heading and the space before it set it apart. Inside another section
@@ -25,8 +30,8 @@ export function Section({ title, count, action, className, children }: {
 }) {
   // Named by its heading's words alone, not the count beside them.
   const heading = useId()
-  const inside = useContext(Inside)
-  const Heading = inside ? 'h3' : 'h2'
+  const Heading = useHeadingTag()
+  const inside = Heading === 'h3'
   return (
     <section aria-labelledby={heading} className={cn('min-w-0', className)}>
       <div className="mb-2 flex min-h-8 items-center gap-3">

@@ -14,9 +14,10 @@ import { OptionLabel } from '../components/ui/option-label.js'
 import { DisclosureToggle } from '../components/DisclosureToggle.js'
 import { Section } from '../components/ui/section.js'
 import { List, Row } from '../components/ui/list.js'
+import { PanelGroup, PanelRow } from '../components/ui/panel.js'
 import { PriorityBadge, StateCell, StatePill, type WorkState } from '../components/ui/state.js'
 import { RowShapes, Slot } from '../components/ui/slot.js'
-import { ChevronRight, Folder, Trash2 } from 'lucide-react'
+import { ChevronRight, Ellipsis, Folder, Play, Trash2 } from 'lucide-react'
 import { JumpPalette, openJump } from '../components/JumpPalette.js'
 import { ShortcutList } from '../components/ShortcutList.js'
 import type { AgentMeta } from '../../src/index.js'
@@ -559,6 +560,32 @@ function States() {
   )
 }
 
+function Panels() {
+  const start = (
+    <>
+      <Button variant="secondary" size="sm">
+        <Play className="size-3.5" aria-hidden />
+        Start now
+      </Button>
+      <Button variant="ghost" size="icon-sm" aria-label="More">
+        <Ellipsis className="size-4" aria-hidden />
+      </Button>
+    </>
+  )
+  return (
+    <div className="space-y-8">
+      <PanelGroup title="Urgent" badge={<PriorityBadge priority={8} />} count="3" action={<Button variant="link" size="sm">Queue</Button>}>
+        <PanelRow state={<StateCell state="working" />} title="Login page" meta={[<span className="font-medium text-info">Claude is on it · 4m</span>, 'from a ticket']} fact="Open run" />
+        <PanelRow state={<StateCell state="queued" />} title="A press: the whole row opens it, its presses come in under the pointer" meta={['Next up', 'typed here']} fact="2nd" actions={start} onClick={() => {}} />
+        <PanelRow state={<StateCell state="queued" />} title={LONG_TITLE} meta={['from a ticket', LONG_TITLE]} fact="3rd" actions={start} href="#long" onClick={() => {}} />
+      </PanelGroup>
+      <PanelGroup title="Nothing pressable" count="1">
+        <PanelRow state={<StateCell state="done" />} title="Its name only" meta={['what is known of it']} fact="2h" />
+      </PanelGroup>
+    </div>
+  )
+}
+
 // ---------------------------------------------------------------- registry
 
 const LONG_TITLE = 'Move the release notes for every package into one page the website renders, and link each version from the changelog of its own'
@@ -706,6 +733,14 @@ export const PREVIEWS: Preview[] = [
     subtitle: 'The logo\'s hexagon in each state, alone and as a pill; a priority as P8',
     width: 900,
     node: <States />,
+  },
+  {
+    path: 'components/panel.html',
+    group: 'Components',
+    name: 'Card + panel of rows',
+    subtitle: 'A group header (name, badge, count, link) over a card of two-line rows: a state, a name, what is known, one fact that gives way to the row\'s presses',
+    width: 900,
+    node: <Panels />,
   },
   {
     path: 'components/disclosure.html',
