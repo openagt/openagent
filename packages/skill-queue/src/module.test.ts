@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { DEFAULT_FAN_OUT_COUNT, DEFAULT_PRIORITY, PRIORITIES, QUEUE_COMMAND, addArgs, addTextArgs, doneArgs, isEntryLine, isPlacedEntry, isWorkingOn, priorityMeaning, addToQueue, alreadyQueued, entryLabel, fanOut, fanOutLabel, queueLine, readEntries, topEntries, workOnEntryPrompt, type CommandResult } from './module.js'
+import { DEFAULT_FAN_OUT_COUNT, DEFAULT_PRIORITY, PRIORITIES, QUEUE_COMMAND, addArgs, addTextArgs, doneArgs, isEntryLine, isPlacedEntry, isWorkingOn, ordinal, priorityMeaning, priorityName, addToQueue, alreadyQueued, entryLabel, fanOut, fanOutLabel, queueLine, readEntries, topEntries, workOnEntryPrompt, type CommandResult } from './module.js'
 
 test('entryLabel shows a leading link\'s text, opens only an absolute http(s) target, and keeps anything else whole', () => {
   assert.deepEqual(entryLabel('[Login page](tickets/2026-08-01_login-page.md) — needs the cookie first'), { text: 'Login page' })
@@ -145,4 +145,12 @@ test('an agent is on an entry when it was asked exactly what the page asks for t
   assert.equal(isWorkingOn(undefined, 'Tidy the loader'), false)
   // An empty line is in every prompt, and is no entry.
   assert.equal(isWorkingOn('/work-queue', '  '), false)
+})
+
+test('ordinal says a place as it is read: 1st, 2nd, 3rd, then th, and th again from 11 to 13 of every hundred', () => {
+  assert.deepEqual([1, 2, 3, 4, 10, 11, 12, 13, 21, 22, 23, 101, 111, 112].map(ordinal), ['1st', '2nd', '3rd', '4th', '10th', '11th', '12th', '13th', '21st', '22nd', '23rd', '101st', '111th', '112th'])
+})
+
+test('priorityName names a section by what it means: the two ends as the queue file says them, then three bands', () => {
+  assert.deepEqual([10, 9, 7, 6, 4, 3, 1, 0].map(priorityName), ['Most urgent', 'Urgent', 'Urgent', 'Normal', 'Normal', 'Low', 'Low', 'Only if there is capacity'])
 })

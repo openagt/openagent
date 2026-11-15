@@ -23,6 +23,23 @@ export function priorityMeaning(priority: number): string | undefined {
 }
 
 /**
+ * A priority section's name, by what its number means: the scale's two ends in the queue file's own
+ * words, and the steps between them in three bands.
+ */
+export function priorityName(priority: number): string {
+  if (priority === 10) return 'Most urgent'
+  if (priority === 0) return 'Only if there is capacity'
+  return priority >= 7 ? 'Urgent' : priority >= 4 ? 'Normal' : 'Low'
+}
+
+/** A place in the order of work as it is said: 1st, 2nd, 3rd, 4th, 11th, 21st. */
+export function ordinal(place: number): string {
+  const tens = place % 100
+  const suffix = tens >= 11 && tens <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][place % 10] ?? 'th'
+  return `${place}${suffix}`
+}
+
+/**
  * The `queue add` command line for a text typed on the page, at the priority picked. The text
  * comes after `--`: a person may type a task that opens with a dash, and it is still the task,
  * never a flag.

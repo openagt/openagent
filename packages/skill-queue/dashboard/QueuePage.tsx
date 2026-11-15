@@ -1,12 +1,21 @@
 import { useId, useRef, useState } from 'react'
-import { FastForward, Play, Plus, Trash2 } from 'lucide-react'
+import { CornerDownLeft, FastForward, Play, Trash2 } from 'lucide-react'
 import {
+  Badge,
   Button,
+  Card,
+  ComposedField,
+  ComposedFieldFoot,
+  ComposedFieldInput,
   ConfirmDialog,
-  Input,
-  List,
+  Empty,
   Page,
-  Row,
+  PanelGroup,
+  PanelRow,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  PriorityBadge,
   RowShapes,
   Section,
   Select,
@@ -16,7 +25,7 @@ import {
   SelectValue,
   Slot,
   StartAgentButton,
-  cn,
+  StateCell,
   inPlace,
   pathsIn,
   useFileNames,
@@ -32,8 +41,8 @@ import {
   type Schedule,
 } from '@openagt/dashboard/module'
 import type { PlacedEntry } from '../src/queue.js'
-import { DEFAULT_PRIORITY, PRIORITIES, QUEUE_COMMAND, addTextArgs, doneArgs, fanOutLabel, fanOutPress, isPlacedEntry, isWorkingOn, priorityMeaning, readEntries, unclaimedEntries, workOnEntryPrompt } from '../src/module.js'
-import { AgentOnEntry, EntryTitle, entryView } from './entry.js'
+import { DEFAULT_PRIORITY, PRIORITIES, QUEUE_COMMAND, addTextArgs, doneArgs, entryTarget, fanOutLabel, fanOutPress, isPlacedEntry, isWorkingOn, ordinal, priorityMeaning, priorityName, readEntries, unclaimedEntries, workOnEntryPrompt } from '../src/module.js'
+import { AgentOnEntry, entryView } from './entry.js'
 import { useQueueStarts, type QueueStarts } from './starts.js'
 import { BatchCount } from './batch-count.js'
 
@@ -48,9 +57,10 @@ interface ProjectRead {
 
 const NOTHING_READ: ProjectRead[] = []
 
-/** An entry with its place in the order of work, counted from 1 across the sections. */
+/** An entry with its place in the order of work, counted from 1 across the sections, and the agent on it. */
 interface Numbered extends PlacedEntry {
   place: number
+  agent: ModuleAgent | undefined
 }
 
 /**
@@ -58,11 +68,11 @@ interface Numbered extends PlacedEntry {
  * order is the order agents take them, so an entry above the first section shows first. Numbered
  * in that order, across the sections.
  */
-function sections(entries: PlacedEntry[]): { priority: number | undefined; entries: Numbered[] }[] {
+function sections(entries: PlacedEntry[], working: ModuleAgent[]): { priority: number | undefined; entries: Numbered[] }[] {
   const runs: { priority: number | undefined; entries: Numbered[] }[] = []
   entries.forEach((placed, index) => {
     const last = runs[runs.length - 1]
-    const numbered = { ...placed, place: index + 1 }
+    const numbered = { ...placed, place: index + 1, agent: working.find(agent => isWorkingOn(agent.ask, placed.entry)) }
     if (last && last.priority === placed.priority) last.entries.push(numbered)
     else runs.push({ priority: placed.priority, entries: [numbered] })
   })
@@ -70,13 +80,13 @@ function sections(entries: PlacedEntry[]): { priority: number | undefined; entri
 }
 
 /**
- * The Queue page: every project's open entries, in the order agents will take them, numbered,
- * under the priority section each sits in, from `queue --local --full` in each project. A place
- * to act: a line under them says whether anything takes from the queue by itself; an entry is started
- * here, alone or as a batch from the top, as on the Overview's card; an entry is removed, and a
- * new one added, through the same `queue done` and `queue add` an agent runs. An entry that names
- * a file another page opens reads as that page's name for it. A project whose command fails is
- * named with the command's own reason, and the other projects still show.
+ * The Queue page: every project's open entries, in the order agents will take them, under the
+ * priority section each sits in, from `queue --local --full` in each project. A place to act: the
+ * page's head says whether anything takes from the queue by itself; an entry is started here, alone
+ * or as a batch from the top, as on the Overview's card; an entry is removed, and a new one added,
+ * through the same `queue done` and `queue add` an agent runs. An entry that names a file another
+ * page opens reads as that page's name for it. A project whose command fails is named with the
+ * command's own reason, and the other projects still show.
  */
 export function QueuePage({ projects }: ModulePageProps) {
   const host = useModuleHost()
@@ -116,21 +126,38 @@ export function QueuePage({ projects }: ModulePageProps) {
       title="Queue"
       count={state !== 'unknown' && total > 0 ? total : undefined}
       description={`What agents will work on next, from the top${projects.length > 1 ? ', one list per project' : ''}. A higher priority is taken first: 10 is the most urgent, 0 is only if there is capacity.`}
-      actions={only && <BatchStart read={only} primary starts={starts} />}
+      actions={
+        only && (
+          <>
+            <TakerStatus read={only} schedule={schedule} />
+            <BatchStart read={only} primary starts={starts} />
+          </>
+        )
+      }
     >
       {starts.error && (
         <p role="alert" className="mb-4 text-sm text-danger">
           {starts.error}
         </p>
       )}
-      <Slot of={{ state, value: reads, failing }} shape={<RowShapes rows={3} />} className="space-y-8">
+      <Slot of={{ state, value: reads, failing }} shape={<RowShapes rows={3} />} className="space-y-10">
         {reads =>
           reads.map(read =>
             only ? (
-              <ProjectQueue key={read.project.id} read={read} schedule={schedule} names={names} starts={starts} reload={reload} />
+              <ProjectQueue key={read.project.id} read={read} names={names} starts={starts} reload={reload} />
             ) : (
-              <Section key={read.project.id} title={read.project.name} count={read.entries?.length || undefined} action={<BatchStart read={read} primary={false} starts={starts} />}>
-                <ProjectQueue read={read} schedule={schedule} names={names} starts={starts} reload={reload} />
+              <Section
+                key={read.project.id}
+                title={read.project.name}
+                count={read.entries?.length || undefined}
+                action={
+                  <>
+                    <TakerStatus read={read} schedule={schedule} />
+                    <BatchStart read={read} primary={false} starts={starts} />
+                  </>
+                }
+              >
+                <ProjectQueue read={read} names={names} starts={starts} reload={reload} />
               </Section>
             ),
           )
@@ -141,8 +168,8 @@ export function QueuePage({ projects }: ModulePageProps) {
 }
 
 /**
- * A project's batch act, as one control: how many, then the press the count qualifies. The chevron
- * sends the top entry alone: a launcher can only ever start one agent.
+ * A project's batch act, as one control: how many, joined to the press the count qualifies. The
+ * chevron sends the top entry alone: a launcher can only ever start one agent.
  */
 function BatchStart({ read, primary, starts }: { read: ProjectRead; primary: boolean; starts: QueueStarts }) {
   const host = useModuleHost()
@@ -155,7 +182,7 @@ function BatchStart({ read, primary, starts }: { read: ProjectRead; primary: boo
     <StartAgentButton
       variant={primary ? 'default' : 'secondary'}
       size="default"
-      leading={<BatchCount count={count} max={free.length} onChange={next => starts.setCount(project.id, next)} className="h-8" />}
+      leading={<BatchCount count={count} max={free.length} onChange={next => starts.setCount(project.id, next)} />}
       icon={<FastForward className="size-4" aria-hidden />}
       label={fanOutPress(count)}
       menuAriaLabel={`Other ways to start agents on ${project.name}'s queue`}
@@ -170,8 +197,8 @@ function BatchStart({ read, primary, starts }: { read: ProjectRead; primary: boo
   )
 }
 
-/** One project's queue: its entries by priority, the field that adds one, and who takes from it; an empty one says so in one line, over the field. */
-function ProjectQueue({ read, schedule, names, starts, reload }: { read: ProjectRead; schedule: Schedule; names: FileNames; starts: QueueStarts; reload: () => Promise<void> }) {
+/** One project's queue: the field that adds an entry, then its entries by priority, a card each, or a card saying it is empty. */
+function ProjectQueue({ read, names, starts, reload }: { read: ProjectRead; names: FileNames; starts: QueueStarts; reload: () => Promise<void> }) {
   const { project, entries, error, working } = read
   if (error !== undefined)
     return (
@@ -179,85 +206,96 @@ function ProjectQueue({ read, schedule, names, starts, reload }: { read: Project
         Could not read the queue of {project.name}: {error}
       </p>
     )
+  const runs = sections(entries!, working)
+  // The entry an agent takes next: the first nobody is on.
+  const next = runs.flatMap(run => run.entries).find(placed => placed.agent === undefined)
   return (
-    <div className="space-y-6">
-      {entries!.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Nothing queued.</p>
+    <div className="space-y-8">
+      <AddEntry project={project} reload={reload} />
+      {runs.length === 0 ? (
+        <Card>
+          <Empty title="Nothing queued">Add what an agent should do next. It waits here, the highest priority first, until an agent takes it.</Empty>
+        </Card>
       ) : (
-        sections(entries!).map((section, index) => (
-          <Section key={index} title={<PriorityTitle priority={section.priority} />} count={section.entries.length === 1 ? '1 entry' : `${section.entries.length} entries`}>
-            <List>
-              {section.entries.map(placed => (
-                <EntryRow key={`${placed.place}\n${placed.entry}`} project={project} placed={placed} agent={working.find(agent => isWorkingOn(agent.ask, placed.entry))} names={names} starts={starts} reload={reload} />
-              ))}
-            </List>
-          </Section>
+        runs.map((run, index) => (
+          <PanelGroup key={index} title={run.priority === undefined ? 'No priority' : priorityName(run.priority)} badge={run.priority === undefined ? undefined : <PriorityBadge priority={run.priority} />} count={run.entries.length}>
+            {run.entries.map(placed => (
+              <EntryRow key={`${placed.place}\n${placed.entry}`} project={project} placed={placed} next={placed === next} names={names} starts={starts} reload={reload} />
+            ))}
+          </PanelGroup>
         ))
       )}
-      <AddEntry project={project} among={entries!.length > 0} reload={reload} />
-      {/* Under the field, so that the line, read after the entries, moves nothing when it comes. */}
-      {entries!.length > 0 && <TakerLine schedule={schedule} projectId={project.id} />}
     </div>
   )
 }
 
-/** A run of entries' heading: the priority section they sit in, with what its number means at either end of the scale. */
-function PriorityTitle({ priority }: { priority: number | undefined }) {
-  if (priority === undefined) return 'No priority'
-  const meaning = priorityMeaning(priority)
-  return (
-    <>
-      Priority {priority}
-      {meaning !== undefined && (
-        <>
-          {' '}
-          <span className="font-normal text-muted-foreground">{meaning}</span>
-        </>
-      )}
-    </>
-  )
-}
-
 /**
- * Whether anything takes from the project's queue by itself: the command that works the queue,
- * among the commands the project starts by itself, as whichever installed package schedules them
- * says. On: when it starts next. Off, or not there: entries wait until a person starts them.
+ * Whether anything takes from the project's queue by itself, as a status at the page's head: the
+ * command that works the queue, among the commands the project starts by itself, as whichever
+ * installed package schedules them says. Pressed, it says so in a sentence, with the page that
+ * changes it.
  */
-function TakerLine({ schedule, projectId }: { schedule: Schedule; projectId: string }) {
-  const known = schedule.commands[projectId]
-  // Not read yet, or a read that failed: no line, since "nothing takes from it" would be a guess.
-  if (known === undefined) return null
+function TakerStatus({ read, schedule }: { read: ProjectRead; schedule: Schedule }) {
+  const known = schedule.commands[read.project.id]
+  // Not read yet, or a read that failed: no status, since "nothing takes from it" would be a guess. Nor on an empty queue, which nothing could take from.
+  if (known === undefined || !read.entries?.length) return null
   const taker = known.find(command => command.command === QUEUE_COMMAND)
   const page = schedule.page
   return (
-    <p role="status" aria-label="Who takes from the queue" className="flex items-baseline gap-2 text-sm text-muted-foreground">
-      <span aria-hidden className={cn('size-2 shrink-0 rounded-full', taker?.on ? 'bg-success' : 'bg-faint-foreground')} />
-      <span className="min-w-0">
-        {taker === undefined ? (
-          'Nothing takes from this queue by itself: entries wait until you start them.'
-        ) : (
-          <>
-            <span className="font-mono">/{QUEUE_COMMAND}</span> {taker.on ? 'is on: an agent takes the first entry nobody has claimed.' : 'is off: entries wait until you start them.'}
-            {taker.note !== undefined && ` ${taker.note}.`}
-          </>
-        )}
+    <Popover>
+      <div role="status" aria-label="Who takes from the queue">
+        <PopoverTrigger render={<Button variant="ghost" />}>
+          <Badge tone={taker?.on ? 'success' : 'neutral'} className="text-sm">
+            {taker === undefined ? (
+              'Started by hand'
+            ) : (
+              <>
+                <span className="font-mono text-xs">/{QUEUE_COMMAND}</span> {taker.on ? 'is on' : 'is off'}
+              </>
+            )}
+          </Badge>
+        </PopoverTrigger>
+      </div>
+      <PopoverContent align="end" className="w-72 text-sm">
+        <p>
+          {taker === undefined ? (
+            'Nothing takes from this queue by itself: entries wait until you start them.'
+          ) : (
+            <>
+              <span className="font-mono">/{QUEUE_COMMAND}</span> {taker.on ? 'is on: an agent takes the first entry nobody has claimed.' : 'is off: entries wait until you start them.'}
+              {taker.note !== undefined && ` ${taker.note}.`}
+            </>
+          )}
+        </p>
         {taker !== undefined && page && (
-          <span className="ml-2 whitespace-nowrap">
+          <p className="mt-2 text-muted-foreground">
             Change it in{' '}
-            <a href={page.href} onClick={inPlace(schedule.open)} className="text-primary hover:underline">
+            <a href={page.href} onClick={inPlace(schedule.open)} className="text-foreground underline underline-offset-2 hover:no-underline">
               {page.label}
             </a>
-          </span>
+          </p>
         )}
-      </span>
-    </p>
+      </PopoverContent>
+    </Popover>
   )
 }
 
-/** One entry: its place, what it reads as, the agent on it when one is, its start button, and its removal. */
-function EntryRow({ project, placed, agent, names, starts, reload }: { project: ModuleProject; placed: Numbered; agent: ModuleAgent | undefined; names: FileNames; starts: QueueStarts; reload: () => Promise<void> }) {
+/** Where an entry came from, as its row says it: a ticket's page, a web address, or typed as a task. */
+function origin(entry: string): string {
+  const target = entryTarget(entry) ?? pathsIn(entry)[0]
+  if (target === undefined) return 'typed'
+  if (URL.canParse(target)) return `from ${new URL(target).host || 'a link'}`
+  return target.startsWith('tickets/') ? 'from a ticket' : `from ${target}`
+}
+
+/**
+ * One entry: its state (an agent on it, or waiting its turn), what it reads as, who is on it or that
+ * it is next, where it came from, the line as written where a name stands in for it; its place at the
+ * right, which gives its room to its start and its removal.
+ */
+function EntryRow({ project, placed, next, names, starts, reload }: { project: ModuleProject; placed: Numbered; next: boolean; names: FileNames; starts: QueueStarts; reload: () => Promise<void> }) {
   const host = useModuleHost()
-  const { entry, place } = placed
+  const { entry, place, agent } = placed
   const view = entryView(project.id, entry, names)
   const remove = async (): Promise<void> => {
     const answer = await host.act(project.id, doneArgs(entry))
@@ -265,21 +303,29 @@ function EntryRow({ project, placed, agent, names, starts, reload }: { project: 
     await reload()
   }
   return (
-    <Row
-      stackOnPhone
-      leading={<span className="w-5 text-right text-xs tabular-nums">{place}.</span>}
-      title={<EntryTitle view={view} entry={entry} className={cn('block max-w-full truncate text-left max-md:line-clamp-2 max-md:whitespace-normal', (view.open ?? view.url) !== undefined && 'hover:underline')} />}
-      // The line as written, under a name that stands in for it: it is what an agent is handed.
-      detail={view.renamed ? <span className="font-mono">{entry}</span> : undefined}
-      meta={agent && <AgentOnEntry projectId={project.id} agent={agent} />}
+    <PanelRow
+      state={<StateCell state={agent === undefined ? 'queued' : agent.status === 'waiting' ? 'waiting' : 'working'} />}
+      title={view.title}
+      titleHint={entry}
+      href={view.url}
+      external={view.url !== undefined}
+      onClick={view.open}
+      meta={[
+        agent !== undefined ? <AgentOnEntry projectId={project.id} agent={agent} /> : next && 'Next up',
+        origin(entry),
+        // The line as written, under a name that stands in for it: it is what an agent is handed.
+        view.renamed && <span className="font-mono">{entry}</span>,
+      ]}
+      fact={ordinal(place)}
       actions={
         <>
-          {!agent && (
+          {agent === undefined && (
             <StartAgentButton
-              variant="ghost"
-              size="icon-sm"
-              icon={<Play className="size-4" aria-hidden />}
-              ariaLabel={`Start an agent on entry ${place}`}
+              variant="secondary"
+              size="sm"
+              icon={<Play className="size-3.5" aria-hidden />}
+              label="Start now"
+              ariaLabel={`Start now: entry ${place}`}
               menuAriaLabel={`Other ways to run ${view.title}`}
               tooltip="Start an agent working on this entry"
               busy={starts.inFlight}
@@ -288,7 +334,6 @@ function EntryRow({ project, placed, agent, names, starts, reload }: { project: 
               onConfigure={() => host.configureRun(project.id, workOnEntryPrompt(entry))}
               prompt={workOnEntryPrompt(entry)}
               configureDescription="Opens the launcher with this entry's prompt, so you can set the model and where it runs."
-              className="text-muted-foreground hover:text-foreground"
             />
           )}
           <ConfirmDialog
@@ -315,8 +360,12 @@ function EntryRow({ project, placed, agent, names, starts, reload }: { project: 
   )
 }
 
-/** The field that adds an entry: its text and the priority section it goes to the end of, through `queue add`. `among`: the queue has entries. */
-function AddEntry({ project, among, reload }: { project: ModuleProject; among: boolean; reload: () => Promise<void> }) {
+/**
+ * The field that adds an entry, as one control: the task, the priority section it goes to the end
+ * of, and the press, through `queue add`. Beside the pick, one line that stands from the first frame:
+ * why the last press did nothing, else where the task goes.
+ */
+function AddEntry({ project, reload }: { project: ModuleProject; reload: () => Promise<void> }) {
   const host = useModuleHost()
   const [text, setText] = useState('')
   const [priority, setPriority] = useState(DEFAULT_PRIORITY)
@@ -328,7 +377,7 @@ function AddEntry({ project, among, reload }: { project: ModuleProject; among: b
   const down = useOpenAgentDown()
   const items = PRIORITIES.map(p => ({ value: String(p), label: `Priority ${p}` }))
   const untyped = text.trim() === ''
-  const formId = useId()
+  const lineId = useId()
   const add = async (): Promise<void> => {
     if (adding) return
     if (untyped) {
@@ -346,6 +395,7 @@ function AddEntry({ project, among, reload }: { project: ModuleProject; among: b
     setAdding(false)
     field.current?.focus()
   }
+  const missing = asked && untyped
   return (
     <form
       aria-label={`Add to the queue of ${project.name}`}
@@ -354,51 +404,46 @@ function AddEntry({ project, among, reload }: { project: ModuleProject; among: b
         void add()
       }}
     >
-      <div className="flex flex-wrap items-center gap-2">
-        <Input
+      <ComposedField>
+        <ComposedFieldInput
           ref={field}
           name="task"
           value={text}
           onChange={event => (setText(event.target.value), setFailed(undefined), setAsked(false))}
           readOnly={adding}
-          placeholder="Add a task: what an agent should do"
+          placeholder="Add a task: what should an agent do?"
           aria-label="A task to add to the queue"
-          aria-invalid={asked && untyped}
-          aria-describedby={asked && untyped ? `${formId}-missing` : undefined}
-          className="min-w-48 flex-1 max-md:basis-full"
+          aria-invalid={missing}
+          aria-describedby={lineId}
         />
-        <Select items={items} value={String(priority)} disabled={adding} onValueChange={next => setPriority(Number(next))}>
-          <SelectTrigger aria-label="Priority of the new task" className="w-32">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {PRIORITIES.map(p => (
-              <SelectItem key={p} value={String(p)}>
-                Priority {p}
-                {priorityMeaning(p) !== undefined && <span className="ml-2 text-xs text-muted-foreground">{priorityMeaning(p)}</span>}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Button type="submit" variant="secondary" loading={adding} disabled={down}>
-          <Plus className="size-4" aria-hidden />
-          {adding ? 'Adding…' : 'Add to queue'}
-        </Button>
-      </div>
-      {/* One line under the field: what is missing, or what the press does with the task. Among entries it
-          stands from the start, so a keystroke moves nothing under it; an empty queue gets it with the task. */}
-      {asked && untyped ? (
-        <p id={`${formId}-missing`} className="mt-2 text-xs text-danger">
-          Write the task first.
-        </p>
-      ) : (
-        (among || !untyped) && <p className="mt-2 text-xs text-muted-foreground">It goes to the end of its priority. The text is what an agent is handed, so write the whole task.</p>
-      )}
-      {failed !== undefined && (
-        <p role="alert" className="mt-1 text-xs text-danger">
-          Not added: {failed}
-        </p>
-      )}
+        <ComposedFieldFoot>
+          <Select items={items} value={String(priority)} disabled={adding} onValueChange={next => setPriority(Number(next))}>
+            <SelectTrigger aria-label="Priority of the new task" className="h-7 w-auto gap-2 border-transparent bg-accent px-2 font-medium hover:border-transparent">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PRIORITIES.map(p => (
+                <SelectItem key={p} value={String(p)}>
+                  Priority {p}
+                  <span className="ml-2 text-xs text-muted-foreground">{priorityMeaning(p) ?? priorityName(p).toLowerCase()}</span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p id={lineId} role={failed !== undefined ? 'alert' : undefined} className={`min-w-0 flex-1 truncate text-xs ${failed !== undefined || missing ? 'text-danger' : 'text-faint-foreground'}`}>
+            {failed !== undefined ? `Not added: ${failed}` : missing ? 'Write the task first.' : `Goes to the end of priority ${priority}`}
+          </p>
+          <span className="inline-flex items-center gap-1 text-xs text-faint-foreground max-md:hidden" aria-hidden>
+            <kbd className="inline-flex h-5 items-center rounded-sm px-1 ring-1 ring-hairline ring-inset">
+              <CornerDownLeft className="size-3.5" />
+            </kbd>
+            to add
+          </span>
+          <Button type="submit" variant="secondary" size="sm" loading={adding} disabled={down} aria-label="Add to queue">
+            {adding ? 'Adding…' : 'Add'}
+          </Button>
+        </ComposedFieldFoot>
+      </ComposedField>
     </form>
   )
 }
