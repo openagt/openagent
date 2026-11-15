@@ -5,9 +5,10 @@ import { cn } from '../../lib/utils.js'
 // The presses (module/theme.css's scale): `default` is the primary, solid, one a view at most;
 // `secondary` a card's white under a hairline, for every other press; `ghost` a toolbar's, a row's own, an icon's;
 // `outline` what holds a value; `destructive` solid, in a confirmation; `link` text that goes
-// somewhere. Hover raises the contrast a step, a press two.
+// somewhere. Hover raises the contrast a step, a press two, and a pressed button gives way a little
+// (to 97%, quick and easing out), unless motion is turned down.
 const buttonVariants = cva(
-  'focus-ring inline-flex shrink-0 items-center justify-center gap-2 rounded-md text-sm font-medium whitespace-nowrap transition-colors disabled:pointer-events-none disabled:opacity-50',
+  'focus-ring inline-flex shrink-0 items-center justify-center gap-2 rounded-md text-sm font-medium whitespace-nowrap transition-[color,background-color,border-color,box-shadow,scale] ease-out motion-safe:active:not-disabled:scale-97 disabled:pointer-events-none disabled:opacity-50',
   {
     variants: {
       variant: {
