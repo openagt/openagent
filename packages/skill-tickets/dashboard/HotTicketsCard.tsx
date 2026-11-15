@@ -126,11 +126,11 @@ function HotList({ hot, errors, state, showProject, reload }: { hot: HotTicket[]
       <Slot of={{ state, value: hot }} shape={<SentenceShape />}>
         {() =>
           groups.length > 0 && (
-            // Every ticket, never a "+N more": the list is the shortlist. A kind after the first stands under a hairline.
+            // Every ticket, never a "+N more": the list is the shortlist. A kind after the first stands under a hairline, from inset to inset.
             <Card className="overflow-hidden">
               {groups.map(({ lane, tickets }) => (
-                <section key={lane.key} aria-label={lane.heading} className="pt-3 pb-1 not-first:border-t not-first:border-hairline">
-                  <h3 className="flex items-baseline gap-1.5 px-4 pb-1 text-xs font-medium text-faint-foreground">
+                <section key={lane.key} aria-label={lane.heading} className="relative pt-3 before:absolute before:top-0 before:right-4 before:left-4 before:h-px not-first:before:bg-hairline">
+                  <h3 className="flex items-baseline gap-1.5 px-4 text-xs font-medium text-faint-foreground">
                     {lane.heading}
                     <span className="tabular-nums">{tickets.length}</span>
                   </h3>
@@ -204,7 +204,7 @@ function Row({ hot, showProject, reload }: { hot: HotTicket; showProject: boolea
   const fact = lane === 'waiting' ? ticket.waiting : lane === 'high-priority' && ticket.priority ? `P${ticket.priority}` : undefined
   const mark = <Icon className="h-3.5 w-3.5" aria-hidden />
   return (
-    <li className="group/row relative flex items-center gap-3 bg-card px-4 text-sm transition-colors hover:bg-accent md:h-10 max-md:h-11">
+    <li className="group/row relative flex items-center gap-3 bg-card px-4 py-3 text-sm transition-colors hover:bg-accent">
       {lane === 'working' && holder ? (
         <button type="button" onClick={() => host.openAgent(project.id, holder.id)} title={says} aria-label={says} className={cn('flex size-4 shrink-0 items-center justify-center', tone)}>
           {mark}

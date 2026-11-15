@@ -66,7 +66,7 @@ export function MembersCard({ projects }: ModuleCardProps) {
           <Panel>
             {members.length === 0 && <PanelNote>No one has started an agent here yet.</PanelNote>}
             {members.map(member => (
-              <li key={member.person} aria-label={personName(member.person, member.name)} className="relative flex min-h-14 min-w-0 items-center gap-3 py-2 pr-3 pl-4 before:absolute before:top-0 before:right-0 before:left-13 before:h-px not-first:before:bg-hairline max-md:min-h-15">
+              <li key={member.person} aria-label={personName(member.person, member.name)} className="relative flex min-w-0 items-center gap-3 px-4 py-3 before:absolute before:top-0 before:right-4 before:left-4 before:h-px not-first:before:bg-hairline">
                 <PersonMark email={member.person} name={member.name} picture={member.account?.avatar} you={member.you} />
                 <div className="min-w-0 flex-1">
                   <p className="flex min-w-0 items-center gap-1.5 text-sm">
@@ -75,7 +75,7 @@ export function MembersCard({ projects }: ModuleCardProps) {
                     </span>
                     {member.you && <span className="shrink-0 text-xs text-faint-foreground">you</span>}
                   </p>
-                  <p className="mt-0.5 truncate text-xs text-faint-foreground tabular-nums" title={projects.length > 1 ? `In ${member.projects.join(', ')}` : undefined}>
+                  <p className="mt-1 truncate text-xs text-faint-foreground tabular-nums" title={projects.length > 1 ? `In ${member.projects.join(', ')}` : undefined}>
                     {didWords(member)}
                   </p>
                 </div>
