@@ -1,4 +1,4 @@
-import { Button, Card, Empty, FilterChips, Page, PanelGroup, PanelRow, PersonMark, RowShapes, RunMark, Slot, formatDateTime, formatDuration, needsWord, personSaid, runName, runLineTone, useCodingAgents, useGitHostPeople, useIsMobile, runsAgain, runWord, useModuleHost, usePolled, type CodingAgent, type ModuleAgent, type ModuleHostPerson, type ModulePageProps, type ModuleProject, type ReadState } from '@openagt/dashboard/module'
+import { Button, Card, Empty, FilterChips, MiddleCut, Page, PanelGroup, PanelRow, PersonMark, RowShapes, RunMark, Slot, formatDateTime, formatDuration, needsWord, personSaid, runName, runLineTone, useCodingAgents, useGitHostPeople, useIsMobile, runsAgain, runWord, useModuleHost, usePolled, type CodingAgent, type ModuleAgent, type ModuleHostPerson, type ModulePageProps, type ModuleProject, type ReadState } from '@openagt/dashboard/module'
 import type { RunCard } from '../src/run.js'
 
 /** How many runs each project lists: the command's own default page is 20; the page shows more. */
@@ -256,22 +256,20 @@ export function LogsPage({ projects, path }: ModulePageProps) {
                     href={host.agentHref(project.id, card.id)}
                     onClick={() => host.openAgent(project.id, card.id)}
                     meta={[
-                      <>
-                        <span className={runLineTone(shownStatus(card))} {...(card.offline ? { title: card.offline } : {})}>
-                          {standing(card)}
-                        </span>
-                        {/* The branch with its dot, so a phone, where it has no room, drops both. */}
-                        {card.branch && (
-                          <span className="max-md:hidden" title={card.branch}>
-                            <span aria-hidden className="mx-1.5">·</span>
-                            <span className="font-mono">{card.branch}</span>
-                          </span>
-                        )}
-                      </>,
+                      <span className={runLineTone(shownStatus(card))} {...(card.offline ? { title: card.offline } : {})}>
+                        {standing(card)}
+                      </span>,
                       // What its work still needs before it leaves this machine, in the sidebar's words.
                       leftWords(card, project.gitHost),
                       many && project.name,
                       card.cost !== undefined && dollars(card.cost),
+                      // Last, as the part that gives way, and cut in its middle: runs started the same minute differ only at
+                      // their branch's end. A phone, where it has no room, drops it with its dot.
+                      !phone && card.branch && (
+                        <span className="flex min-w-0 font-mono" title={card.branch}>
+                          <MiddleCut text={card.branch} />
+                        </span>
+                      ),
                     ]}
                     columns={
                       <>

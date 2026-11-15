@@ -22,7 +22,6 @@ import { ALL_PROJECTS, arrangeCards } from '../../src/client.js'
 import type { ProjectSummary } from '../../src/index.js'
 import type { ReadState } from '../lib/use-async.js'
 import { Page } from './Page.js'
-import { cn } from '../lib/utils.js'
 import { overlayOpen, pressed } from '../lib/shortcut.js'
 import { LinePart, NEEDS_YOU_ID, WORKING_ID, counted, scrollToPart } from './LinePart.js'
 import { YourAgentsPart } from './YourAgentsPart.js'
@@ -212,13 +211,21 @@ export function DashboardPage({
     <Page
       title="Overview"
       line={
-        line.map((part, at) => (
-          // A part after the first opens with its dot, drawn as the part's own (so the two stand as one) and not read aloud. On a phone the line
-          // wraps beside Customize: there a space parts them, never a dot, which would start a line.
-          <span key={part.id} className={cn('max-md:mr-3 max-md:inline-block', at > 0 && "md:before:mx-1.5 md:before:content-['·'_/_'']")}>
-            {part.node}
+        // Each part stands whole after its dot, and a part that starts a line (on a phone) shows no
+        // dot: the dots stand in the room the row is pulled left by, which the edge cuts off. The
+        // edge leaves a press's focus ring its room.
+        <span className="-m-1 block overflow-hidden p-1">
+          <span className="-ml-4 flex flex-wrap">
+            {line.map(part => (
+              <span key={part.id} className="whitespace-nowrap">
+                <span aria-hidden className="inline-block w-4 text-center">
+                  ·
+                </span>
+                {part.node}
+              </span>
+            ))}
           </span>
-        ))
+        </span>
       }
       actions={
         editing ? (
