@@ -255,8 +255,8 @@ export function OnboardingChecklist({
       // Where the steps stand, in words: the numbers below say which is which.
       count={
         reading ? (
-          // As wide as the words it stands for, drawn unseen before it (not text of the page, nor said).
-          <span aria-hidden data-shape="0 of 6" className="inline-block h-4 animate-skeleton rounded-md bg-accent align-middle leading-4 before:invisible before:content-[attr(data-shape)] motion-reduce:animate-skeleton-still" />
+          // As wide as the words it stands for (the steps drawn below, none done yet), drawn unseen before it (not text of the page, nor said).
+          <span aria-hidden data-shape={`0 of ${frame.length}`} className="inline-block h-4 animate-skeleton rounded-md bg-accent align-middle leading-4 before:invisible before:content-[attr(data-shape)] motion-reduce:animate-skeleton-still" />
         ) : (
           `${doneCount} of ${steps.length}`
         )
