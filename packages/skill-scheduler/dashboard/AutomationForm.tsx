@@ -163,8 +163,9 @@ export function AutomationForm({
       )}
       {/* The presses stay in view at the window's foot while the form is longer than the window. */}
       <div className="sticky bottom-0 -mx-3 flex flex-wrap items-center justify-between gap-3 bg-background px-3 py-3">
-        <p className="min-w-0 flex-1 text-xs text-muted-foreground">{whereHint(draft, schedulerRuns)}</p>
-        <div className="flex gap-2">
+        {/* Beside the presses where both fit, else over them, at the full width. */}
+        <p className="min-w-0 grow basis-60 text-xs text-muted-foreground">{whereHint(draft, schedulerRuns)}</p>
+        <div className="ml-auto flex gap-2">
           <Button
             variant="secondary"
             disabled={saving}
