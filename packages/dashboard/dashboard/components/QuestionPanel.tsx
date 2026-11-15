@@ -18,17 +18,16 @@ import { isMobileScreen } from '../lib/use-mobile.js'
 const OTHER = Symbol('other')
 
 
-// A pick's mark: one of several ticks as the shared checkbox is (ui/checkbox); one of a kind is its
-// number, the key that picks it, filled once picked. The whole row is the control, so the mark is only
-// its picture.
-function Mark({ on, multi, n }: { on: boolean; multi: boolean | undefined; n: number }) {
+// A pick's mark, drawn as the shared radio and checkbox are (ui/radio-group, ui/checkbox): the
+// whole row is the control here, so the mark is only its picture. Centred on the first line's 20.
+function Mark({ on, multi }: { on: boolean; multi: boolean | undefined }) {
   return multi ? (
     <span className={cn('mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-sm border transition-colors', on ? 'border-primary bg-primary text-primary-foreground' : 'border-input group-hover/choice:border-input-hover')} aria-hidden>
       {on && <Check className="size-3" strokeWidth={3} />}
     </span>
   ) : (
-    <span className={cn('mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-sm text-xs leading-none font-medium transition-colors', on ? 'bg-primary text-primary-foreground' : 'text-muted-foreground ring-1 ring-input ring-inset group-hover/choice:ring-input-hover')} aria-hidden>
-      {n}
+    <span className={cn('mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border transition-colors', on ? 'border-primary' : 'border-input group-hover/choice:border-input-hover')} aria-hidden>
+      {on && <span className="size-2 rounded-full bg-primary" />}
     </span>
   )
 }
@@ -64,9 +63,9 @@ function Choice({ multi, value, on, twoLines, disabled, onPick, children }: { mu
 }
 
 // The question an agent's turn ended on, in the chat under what the agent said, the way Claude
-// Code on the web asks: the one card in the chat, its title, one row per option (its number, its
+// Code on the web asks: the one card in the chat, its title, one row per option (a ring, its
 // label, its description), an "Other" row to answer in one's own words, and Skip / Answer. The
-// number keys pick, the number drawn on each row. An option's pick goes over the control RPC,
+// number keys pick, as before, with no number drawn. An option's pick goes over the control RPC,
 // which hands the chosen labels to the agent; "Other" and Skip go as a message in the same
 // sentence's shape, so the chat draws every answer, a skip too, as the question and what was said
 // to it. The card goes the moment the answer is taken, and the chat shows it then: the agent's own
@@ -212,12 +211,12 @@ export function QuestionPanel({
         <h2 id={titleId} className="text-base font-semibold">{choice.title}</h2>
       </div>
       <Choices multi={choice.multi} labelledBy={titleId} picked={picked} onPick={setPicked} disabled={busy}>
-        {choice.options.map((o, at) => {
+        {choice.options.map(o => {
           const on = choice.multi ? checked.has(o.id) : picked === o.id
           return (
             <li key={o.id}>
               <Choice multi={choice.multi} value={o.id} on={on} twoLines={Boolean(o.detail)} disabled={busy} onPick={() => pick(o.id)}>
-                <Mark on={on} multi={choice.multi} n={at + 1} />
+                <Mark on={on} multi={choice.multi} />
                 <span className="flex min-w-0 flex-1 flex-col gap-1">
                   <span className="font-medium">
                     {o.label}
@@ -233,7 +232,7 @@ export function QuestionPanel({
         {!send && (
           <li className="flex flex-col">
             <Choice multi={choice.multi} value={OTHER} on={otherPicked} twoLines={false} disabled={busy} onPick={pickOther}>
-              <Mark on={otherPicked} multi={choice.multi} n={choice.options.length + 1} />
+              <Mark on={otherPicked} multi={choice.multi} />
               <span className="min-w-0 flex-1 font-medium">Other</span>
             </Choice>
             {otherPicked && (

@@ -28,12 +28,12 @@ const panel = (over: Partial<Parameters<typeof QuestionPanel>[0]> = {}) => <Ques
 const option = (name: RegExp) => screen.getByRole('radio', { name })
 
 describe('QuestionPanel', () => {
-  test('it shows the title, a row per option with its number key and its description, an "Other" row, Skip and Answer', () => {
+  test('it shows the title, a row per option with its description, an "Other" row, Skip and Answer; no number is drawn', () => {
     render(panel())
     expect(screen.getByRole('region', { name: 'Which database?' })).toBeTruthy()
-    expect(option(/Postgres/).textContent).toBe('1PostgresRecommendedWhat production runs')
-    expect(option(/SQLite/).textContent).toBe('2SQLite')
-    expect(option(/Other/).textContent).toBe('3Other')
+    expect(option(/Postgres/).textContent).toBe('PostgresRecommendedWhat production runs')
+    expect(option(/SQLite/).textContent).toBe('SQLite')
+    expect(option(/Other/).textContent).toBe('Other')
     // Its field opens only once "Other" is picked.
     expect(screen.queryByLabelText('Your own answer')).toBeNull()
     expect(screen.getByRole('button', { name: 'Skip' })).toBeTruthy()
