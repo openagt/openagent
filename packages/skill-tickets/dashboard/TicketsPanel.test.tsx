@@ -293,6 +293,24 @@ describe('the tickets list', () => {
     expect(screen.queryByRole('button', { name: /^Plan/ })).toBeNull()
   })
 
+  test('on a phone, where a row offers no menu, every queued row says so on its second line, after its stage', async () => {
+    // jsdom has no matchMedia: a phone's width is the one query that matches.
+    const before = window.matchMedia
+    window.matchMedia = query => ({ matches: query === '(width < 48rem)', media: query, onchange: null, addEventListener: () => {}, removeEventListener: () => {}, addListener: () => {}, removeListener: () => {}, dispatchEvent: () => false }) as MediaQueryList
+    try {
+      const queuedPlan = { label: 'Add to queue', doneLabel: 'Queued', run: vi.fn(), done: async () => (link: { text: string }) => link.text !== planTicketPrompt('c.md'), package: '@x/queue', projects: ['p1'] }
+      const mounted: MountedModules = { pages: [], cards: [], linkActions: [queuedPlan], panels: [], runSlots: [], settings: [], everyPage: [], loaded: true }
+      render(<Rows tickets={[ticket({ locked: true, lockedBy: 'agent-1' }), ticket({ file: 'b.md', title: 'Offered' }), ticket({ file: 'c.md', title: 'Not queued' })]} />, mounted)
+      await waitFor(() => expect(screen.getAllByText('Queued')).toHaveLength(2))
+      const line = (title: string) => screen.getByText(title).closest('li')!.textContent
+      expect(line('Do the thing')).toMatch(/Claimed·\s*Queued$/)
+      expect(line('Offered')).toMatch(/Unplanned·\s*Queued$/)
+      expect(line('Not queued')).not.toContain('Queued')
+    } finally {
+      window.matchMedia = before
+    }
+  })
+
   test("Start work's Configure first opens the launcher with the ticket's own prompt", async () => {
     render(<Rows tickets={[ticket({ planned: true })]} />)
     await configureFirst('Other ways to work on Do the thing')

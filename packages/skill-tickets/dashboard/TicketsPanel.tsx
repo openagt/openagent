@@ -20,7 +20,7 @@ import {
   useModuleHost,
 } from '@openagt/dashboard/module'
 import { NEW_TICKET, UPDATE_TICKETS_PROMPT, heldBack, readMeta, type TicketsMeta } from '../src/module.js'
-import { TicketStartActions } from './TicketStartActions.js'
+import { QueuedMark, TicketStartActions, useQueuedAsk } from './TicketStartActions.js'
 import type { WorkspaceTicket } from './lib/types.js'
 import { parsePriority } from './lib/ticket-priority.js'
 import { STAGE_LABEL, STAGE_ORDER, claimWorking, ticketStage, type TicketStageId } from './lib/ticket-stage.js'
@@ -95,6 +95,8 @@ function TicketRow({ listed, priorities, showStage, busy, starting, isSelected, 
   const offered = !heldBack(ticket) && !ticket.locked
   const stage = <StageWord ticket={ticket} />
   const holder = ticket.lockedByAgent?.name ?? ticket.lockedBy
+  // Its next step on the queue: said beside a held row's stage, and on a phone, where no row offers its menu, on every row.
+  const queued = useQueuedAsk(projectId, ticket)
   // A claim by one of the project's runs opens that run (#1748); any other narrows the list to claimed (#1144).
   const run = ticket.lockedByAgent
   const claimPress = ticket.locked ? (run ? () => host.openAgent(projectId, run.id) : onClaimed) : undefined
@@ -123,7 +125,7 @@ function TicketRow({ listed, priorities, showStage, busy, starting, isSelected, 
       title={ticket.title}
       href={host.pageHref('tickets', [ticket.file], projectId)}
       onClick={() => onOpen(listed)}
-      meta={phone ? [...(projectName ? [projectName] : []), ...(showStage ? [stage] : [])] : []}
+      meta={phone ? [...(projectName ? [projectName] : []), ...(showStage ? [stage] : []), ...(queued ? [<QueuedMark />] : [])] : []}
       fact={
         phone ? undefined : (
           <span className="flex items-center gap-3">
@@ -142,7 +144,7 @@ function TicketRow({ listed, priorities, showStage, busy, starting, isSelected, 
               </span>
             )}
             {/* A ticket no agent is handed now offers no next step, only what is queued for it. */}
-            {!offered && <TicketStartActions compact startable={false} {...startProps} />}
+            {!offered && queued && <QueuedMark />}
             {showStage && (
               <span className="flex w-26">
                 {claimPress ? (
