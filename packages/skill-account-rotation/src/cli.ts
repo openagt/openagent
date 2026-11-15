@@ -90,8 +90,9 @@ export async function runCli(argv: readonly string[], io: CliIo): Promise<number
     return 0
   }
   if (command === 'list' && argv.length === 1) {
-    const [claude, codex, notInstalled] = await Promise.all([listed('claude', wiring), listed('codex', wiring), Promise.all((['claude', 'codex'] as const).map(async each => ((await wiring.installed(each)) ? [] : [each]))).then(each => each.flat())])
-    return answer({ claude, codex, notInstalled })
+    const agents = ['claude', 'codex'] as const
+    const [claude, codex, installed] = await Promise.all([listed('claude', wiring), listed('codex', wiring), Promise.all(agents.map(each => wiring.installed(each)))])
+    return answer({ claude, codex, notInstalled: agents.filter((_, at) => !installed[at]) })
   }
   if (command === 'usage' && argv.length === 1) return answer(await readUsage(wiring))
   if (command === 'adding' && argv.length === 1) return answer({ claude: addingNow('claude', wiring), codex: addingNow('codex', wiring) })

@@ -50,10 +50,8 @@ export interface LoginWiring {
   installed: (agent: AccountsAgent) => Promise<boolean>
 }
 
-/** The agents' own logouts. */
+/** The agents' own logouts: the agent's program, then what it is told. */
 const LOG_OUT: Record<AccountsAgent, readonly [string, ...string[]]> = { claude: ['claude', 'auth', 'logout'], codex: ['codex', 'logout'] }
-/** The agents' programs. */
-const BIN: Record<AccountsAgent, string> = { claude: 'claude', codex: 'codex' }
 /** How long an agent's logout gets: a page's call ends at 30 seconds. */
 const LOG_OUT_MS = 25_000
 
@@ -97,6 +95,6 @@ export function loginWiring(env: NodeJS.ProcessEnv = process.env): LoginWiring {
         const [bin, ...args] = LOG_OUT[agent]
         execFile(bin, args, { env, timeout: LOG_OUT_MS }, err => (err ? reject(err) : resolve()))
       }),
-    installed: async agent => (await probeCli(BIN[agent], ['--version'])).ok,
+    installed: async agent => (await probeCli(LOG_OUT[agent][0], ['--version'])).ok,
   }
 }
