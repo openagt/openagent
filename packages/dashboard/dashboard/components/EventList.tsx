@@ -123,18 +123,16 @@ function rowWash(e: OpenAgentEvent): string {
 }
 
 /**
- * Hoist the agent's first prompt to the top of the log (#1170).
- *
- * It is emitted after the `session` event, so the one line the reader wrote themselves opened
- * under a row they did not write.
- * Only the *first* prompt moves: a later turn is part of the conversation and belongs where it
- * happened. The rows it jumps keep their order, so the log reads as "what I asked, then
- * everything that followed".
+ * The log in its turns, each opened by its prompt (#1170): what a run writes before its first
+ * prompt is the first turn's, under it, so the log reads as "what I asked, then everything that
+ * followed". A later turn stays where it happened. A message being sent is its turn's prompt
+ * already, where its own line will stand: first in a run with no prompt yet, else last.
  */
-function promptFirst(events: OpenAgentEvent[]): OpenAgentEvent[] {
+function inTurns(events: OpenAgentEvent[], sent: OpenAgentEvent | undefined): OpenAgentEvent[] {
   const at = events.findIndex(isTurnBoundary)
-  if (at <= 0) return events
-  return [events[at]!, ...events.slice(0, at), ...events.slice(at + 1)]
+  if (at < 0) return sent === undefined ? events : [sent, ...events]
+  const turns = at === 0 ? events : [events[at]!, ...events.slice(0, at), ...events.slice(at + 1)]
+  return sent === undefined ? turns : [...turns, sent]
 }
 
 /** HH:MM:SS in the reader's locale, for the column that says when each line was written. */
@@ -709,8 +707,8 @@ export function EventList({
   /** The message the agent is writing, as far as it has got: the agent's row after the last, drawn
    *  as a finished reply is. Never an event: its whole message's row replaces it. */
   writing?: string
-  /** A message just sent to an ended agent: the last prompt row, until the prompt's own line
-   *  arrives and takes the same row. Being a prompt, the scroller brings it into view. */
+  /** A message just sent: its turn's prompt row, the first in a run with no prompt yet, until the
+   *  prompt's own line arrives and takes the same row. Being a prompt, the scroller brings it into view. */
   sending?: string | undefined
   /** The agent is working: while it writes nothing, a moving line closes the feed: the call going
    *  on now, else "Starting…" when the last row is a prompt and "Working…" after, so a quiet agent
@@ -762,13 +760,15 @@ export function EventList({
   // The files each turn's edits changed: a row for each at the end of the turn, once it has ended.
   const workspace = setup?.workspace
   const changes = useMemo(() => turnChanges(events, workspace), [events, workspace])
-  const rowIds = useMemo(() => new Map(events.map((e, at) => [e, String(at)])), [events])
+  // A prompt is known by its turn, so the message being sent is the row its own line becomes.
+  const { rowIds, turns } = useMemo(() => {
+    let turns = 0
+    return { rowIds: new Map(events.map((e, at) => [e, isTurnBoundary(e) ? `turn:${++turns}` : String(at)])), turns }
+  }, [events])
   const asked = useMemo(() => askedReplies(events), [events])
   // The coding agent's own subagents, and what of the log their rows say instead.
   const calls = useMemo(() => callSubagents(events), [events])
   const theirs = useMemo(() => subagentEvents(events), [events])
-  const logged = promptFirst(events).filter(e => shownAsRow(e) && !choiceRows?.hidden.has(e) && !screenRows.hidden.has(e) && !theirs.has(e))
-  // Every row and every passed end, in order, a message just sent last; `shown` is the rows alone.
   // An answer just given to the question the chat asks: it stands where the card was until the
   // agent's own line of it arrives in that same place, as Claude Code on the web answers in place.
   // It is no message at the end, which came and then went back up.
@@ -780,7 +780,8 @@ export function EventList({
   const sentAt = useMemo(() => (sending !== undefined ? new Date().toISOString() : undefined), [sending])
   // Its row holds no time, as one being sent shows none.
   const sent: OpenAgentEvent | undefined = sending !== undefined ? { kind: 'driver', event: { type: 'start', prompt: sending } } : undefined
-  const kept: OpenAgentEvent[] = sent === undefined || answeredInPlace ? logged : [...logged, sent]
+  // Every row and every passed end, in their turns; `shown` is the rows alone.
+  const kept = inTurns(events, answeredInPlace ? undefined : sent).filter(e => shownAsRow(e) && !choiceRows?.hidden.has(e) && !screenRows.hidden.has(e) && !theirs.has(e))
   // Every event and the message just sent: what the turn going on is read off.
   const told = sent === undefined ? events : [...events, sent]
   // The text of a row's message: the reply a question follows, without the question's block.
@@ -833,8 +834,8 @@ export function EventList({
   }
   // A row is known by its event's place in the whole log, not among the rows shown: a row that
   // stops being shown (an end the run went on after) then changes no other row's identity, and
-  // the scroller keeps its place. A message just sent has no place yet.
-  const idOf = (e: OpenAgentEvent): string => rowIds.get(e) ?? 'sending'
+  // the scroller keeps its place. A message just sent is the next turn's.
+  const idOf = (e: OpenAgentEvent): string => rowIds.get(e) ?? `turn:${turns + 1}`
   const groupOf = (e: OpenAgentEvent): string => (ends.has(e) ? SUBAGENT : rowGroup(e))
   const rows = [...subagents.map(agent => runRow(agent, doing[agent.id])), ...calls.map(call => callRow(call, working, events[0]?.at ?? new Date(0).toISOString()))]
   // A prompt or the agent's own words part them: what it started after saying something comes after those words.
@@ -989,7 +990,7 @@ export function EventList({
                 )}
                 {/* A message just sent ends the last turn as its own prompt line will: the turn's
                     files stay above it, where they were, and do not go and come back. */}
-                {idOf(e) === 'sending' && changes.last.length > 0 && (
+                {e === sent && changes.last.length > 0 && (
                   <MessageScrollerItem messageId="changes-last" className={FILES_ROW}>
                     <TurnFiles files={changes.last} onOpen={onOpenChange} />
                   </MessageScrollerItem>
@@ -1004,7 +1005,7 @@ export function EventList({
                   ) : inPlace && sentAnswer ? (
                     <Answer {...sentAnswer} />
                   ) : own && message !== null ? (
-                    <Prompt text={message} at={at} attached={e.kind === 'driver' && e.event.type === 'start' ? e.event.attached : undefined} fresh={idOf(e) === 'sending'} />
+                    <Prompt text={message} at={at} attached={e.kind === 'driver' && e.event.type === 'start' ? e.event.attached : undefined} fresh={e === sent} />
                   ) : end ? (
                     // A subagent ended: what the run was told about it, folded.
                     <SubagentMessage name={runRow(end.agent, undefined).name} text={endMessage(end.rest)} status={end.status} detail={end.detail} />

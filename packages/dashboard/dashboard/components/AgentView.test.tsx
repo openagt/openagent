@@ -1103,6 +1103,19 @@ describe('a run just started', () => {
     expect(screen.getByRole('status')).toBeTruthy()
   })
 
+  test('its prompt is the chat\'s first row from the first frame, and stays the same row as the run\'s lines land before and after its own line', () => {
+    const rows = () => [...document.querySelectorAll('[data-message-id]')]
+    const { rerender } = render(view({ live: true, events: [], startedWith: 'Say hi' }))
+    const prompt = rows()[0]!
+    expect(prompt.textContent).toContain('Say hi')
+    const session = { kind: 'session', driver: 'claude-code', workspace: '/repo', fake: false } as OpenAgentEvent
+    rerender(view({ live: true, events: [session], startedWith: 'Say hi' }))
+    expect(rows()[0]).toBe(prompt)
+    rerender(view({ live: true, events: [session, { kind: 'driver', event: { type: 'start', prompt: 'Say hi' } }], startedWith: 'Say hi' }))
+    expect(rows()[0]).toBe(prompt)
+    expect(screen.getAllByText('Say hi')).toHaveLength(1)
+  })
+
   test('a run stopped before its first turn keeps its prompt, stops counting, and says it stopped', async () => {
     const { rerender } = render(view({ live: true, events: [], startedWith: 'Say hi' }))
     expect(screen.getByText('Starting session')).toBeTruthy()
