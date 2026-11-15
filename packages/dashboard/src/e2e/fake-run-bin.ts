@@ -72,6 +72,12 @@ const MORE_SUBAGENTS = ['Order table contrast', 'Dark images for the avatars', '
 async function startSubagents(id: string, prompt: string, log: SessionLog, signal: AbortSignal): Promise<() => Promise<void>> {
   const write = (event: DriverEvent) => log.record(event)
   await write(startEvent(prompt, {}))
+  // A look of its own first: a thought and two reads, one steps line in the chat.
+  await write({ type: 'thought', text: 'Find the tokens first' })
+  await write({ type: 'action', label: 'Read', detail: 'src/theme/tokens.css', id: 'toolu_own_read' })
+  await write({ type: 'output', id: 'toolu_own_read', text: ':root { --bg: #fff; }' })
+  await write({ type: 'action', label: 'Read', detail: 'src/account/Orders.tsx', id: 'toolu_own_orders' })
+  await write({ type: 'output', id: 'toolu_own_orders', text: 'export function Orders() {}' })
   await write({ type: 'text', text: 'Three parts can go at once. I will start an agent on each and look for colours written by hand while they work.' })
   const calls = [...CALL_SUBAGENTS, ...(prompt.includes('many') ? MORE_SUBAGENTS.map(name => [name, 'ended'] as const) : [])]
   for (const [at, [name, end]] of calls.entries()) {
