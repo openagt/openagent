@@ -83,13 +83,16 @@ interface AddingNow {
   noBrowser?: true
 }
 
-/** What a command answered: its output for each agent, or why there is none. A browser keeps this between visits, so a new version reads what an old one kept. */
-type Read<T> = { ok: true; accounts: Record<AgentId, T[]> } | { ok: false; error: string }
+/** What a command answered: its output for each agent, and what it says beside them, or why there is none. A browser keeps this between visits, so a new version reads what an old one kept. */
+type Read<T, Beside = object> = { ok: true; accounts: Record<AgentId, T[]> & Beside } | { ok: false; error: string }
 
-async function read<T>(host: ModuleHost, word: string): Promise<Read<T>> {
+async function read<T, Beside = object>(host: ModuleHost, word: string): Promise<Read<T, Beside>> {
   const answer = await host.runComputerCommand([word])
-  return answer.ok ? { ok: true, accounts: answer.output as Record<AgentId, T[]> } : answer
+  return answer.ok ? { ok: true, accounts: answer.output as Record<AgentId, T[]> & Beside } : answer
 }
+
+/** What `list` says beside the accounts: the agents whose program this computer does not have, whose account cannot be added yet. */
+type Listed = { notInstalled?: AgentId[] }
 
 /** How long until `until`, in a few words. */
 function inWords(until: number, now: number): string {
@@ -447,7 +450,7 @@ function AccountRow({
 
 export function AccountsCard({ accountWhere }: ModuleCardProps) {
   const host = useModuleHost()
-  const { value: list, state, reload } = usePolled<Read<Account> | undefined>(() => read<Account>(host, 'list'), undefined, LIST_EVERY_MS, [], { remember: 'account-rotation:list', stored: true })
+  const { value: list, state, reload } = usePolled<Read<Account, Listed> | undefined>(() => read<Account, Listed>(host, 'list'), undefined, LIST_EVERY_MS, [], { remember: 'account-rotation:list', stored: true })
   const { value: usage, reload: reloadUsage } = usePolled<Read<Usage> | undefined>(() => read<Usage>(host, 'usage'), undefined, USAGE_EVERY_MS, [], { remember: 'account-rotation:usage', stored: true })
   // Followed closely from a press until the sign-in has ended, which the person may take minutes over.
   const [following, setFollowing] = useState(false)
@@ -520,6 +523,8 @@ export function AccountsCard({ accountWhere }: ModuleCardProps) {
   // Rotation does something only for an agent with two accounts or more.
   const shown = (agent: AgentId): Account[] => (list?.ok ? (list.accounts[agent] ?? []).filter(account => !account.signedOut) : [])
   const rotates = AGENTS.some(agent => shown(agent.id).length > 1)
+  // An account is added with its agent's program: one not installed is offered no Add.
+  const addable = AGENTS.filter(agent => !(list?.ok && list.accounts.notInstalled?.includes(agent.id)))
   const none = list?.ok === true && AGENTS.every(agent => shown(agent.id).length === 0)
   const namingAgent = AGENTS.find(agent => agent.id === naming)
   const namingNow = (naming !== undefined ? adding?.[naming] : undefined) ?? {}
@@ -539,7 +544,7 @@ export function AccountsCard({ accountWhere }: ModuleCardProps) {
             </Tooltip>
           )}
           {/* Another account, at the heading: whose agent it is for, then its sign-in in a dialog. With none yet, the presses are under it. */}
-          {list?.ok && !none && (
+          {list?.ok && !none && addable.length > 0 && (
             <DropdownMenu>
               <DropdownMenuTrigger ref={addPress} render={<Button variant="secondary" aria-label="Add an account" />}>
                 <Plus className="size-3.5" aria-hidden />
@@ -547,7 +552,7 @@ export function AccountsCard({ accountWhere }: ModuleCardProps) {
                 <ChevronDown className="size-3 opacity-70" aria-hidden />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="min-w-[10rem]">
-                {AGENTS.map(agent => (
+                {addable.map(agent => (
                   <DropdownMenuItem key={agent.id} aria-label={`Add a ${agent.account} account`} onClick={() => setNaming(agent.id)}>
                     <agent.Logo className="size-3.5" />
                     {`${agent.account} account`}
@@ -584,9 +589,11 @@ export function AccountsCard({ accountWhere }: ModuleCardProps) {
                 {none && (
                   // The presses go beside the sentence together, else under it. `grow`, not `flex-1`: another module's stylesheet loaded later has a `.flex-1` that undoes `basis-48`.
                   <div className="flex flex-wrap items-center gap-2">
-                    <p className="min-w-0 grow basis-48 text-sm text-muted-foreground">No account yet. Runs need one to start.</p>
-                    <div className="flex flex-wrap gap-2">
-                      {AGENTS.map(agent => (
+                    <p className="min-w-0 grow basis-48 text-sm text-muted-foreground">
+                      {addable.length > 0 ? 'No account yet. Runs need one to start.' : `No account yet: install ${AGENTS.map(agent => agent.name).join(' or ')} first, then add one here.`}
+                    </p>
+                    <div className="flex flex-wrap gap-2 empty:hidden">
+                      {addable.map(agent => (
                         <Button key={agent.id} variant="secondary" onClick={() => setNaming(agent.id)}>
                           <agent.Logo className="size-3.5" />
                           Add a {agent.account} account

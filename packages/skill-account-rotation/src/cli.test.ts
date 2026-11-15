@@ -133,6 +133,14 @@ test('on a server, the account on the list already is told apart in words a code
     assert.doesNotMatch(failed, /copy the link/)
   }))
 
+test('list names the agents whose program is not installed, and only those', () =>
+  inDir(async env => {
+    const said = (installed: string[]) => run(['list'], env, { installed: agent => Promise.resolve(installed.includes(agent)) }).then(answer => (JSON.parse(answer.out[0]!) as { notInstalled: string[] }).notInstalled)
+    assert.deepEqual(await said(['claude']), ['codex'])
+    assert.deepEqual(await said([]), ['claude', 'codex'])
+    assert.deepEqual(await said(['claude', 'codex']), [])
+  }))
+
 test('list says which computer handed an account over, only the agent it is of, and only on a row it has', () =>
   inDir(async env => {
     addAccount('Dani', 'login-dani', accountsPath('claude', env))

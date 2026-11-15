@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import type { AgentAccount, DriverQuota, DriverRateWindow } from '@openagt/agent-driver'
+import { probeCli, type AgentAccount, type DriverQuota, type DriverRateWindow } from '@openagt/agent-driver'
 import { ClaudeCodeDriver, mintClaude, type Mint } from '@openagt/agent-driver-claude'
 import { accountFolder, codexAccountsDir, codexWho, loginCodex, personalCodexHome, readCodexUsage, type CodexLogin, type CodexLoginOptions, type CodexWho } from '@openagt/agent-driver-codex'
 import { accountsPath, type AccountsAgent } from './accounts.js'
@@ -46,10 +46,14 @@ export interface LoginWiring {
   stopAdding: (pid: number) => void
   /** Run the agent's own logout, of the person's own login. */
   logOutAgent: (agent: AccountsAgent) => Promise<void>
+  /** Whether the agent's program answers on this computer, as a run's readiness check asks it. */
+  installed: (agent: AccountsAgent) => Promise<boolean>
 }
 
 /** The agents' own logouts. */
 const LOG_OUT: Record<AccountsAgent, readonly [string, ...string[]]> = { claude: ['claude', 'auth', 'logout'], codex: ['codex', 'logout'] }
+/** The agents' programs. */
+const BIN: Record<AccountsAgent, string> = { claude: 'claude', codex: 'codex' }
 /** How long an agent's logout gets: a page's call ends at 30 seconds. */
 const LOG_OUT_MS = 25_000
 
@@ -93,5 +97,6 @@ export function loginWiring(env: NodeJS.ProcessEnv = process.env): LoginWiring {
         const [bin, ...args] = LOG_OUT[agent]
         execFile(bin, args, { env, timeout: LOG_OUT_MS }, err => (err ? reject(err) : resolve()))
       }),
+    installed: async agent => (await probeCli(BIN[agent], ['--version'])).ok,
   }
 }

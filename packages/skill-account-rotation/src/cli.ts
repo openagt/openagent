@@ -15,7 +15,7 @@ import { unknownWord, usageError, wrongArguments, helpRows } from '@openagt/agen
 export const USAGE = `usage: account-rotation <command>
 
 ${helpRows([
-  ['list', 'the accounts of each agent in the order runs try them, never a login'],
+  ['list', 'the accounts of each agent in the order runs try them, never a login, and the agents not installed'],
   ['usage', 'how full each account is, read now where it can be'],
   ['add <claude|codex> <name>', 'start adding a new account under <name>: the person signs in, and this answers at once'],
   ['adding', 'how adding stands for each agent: where to sign in, and why the last one did not go through'],
@@ -90,7 +90,8 @@ export async function runCli(argv: readonly string[], io: CliIo): Promise<number
     return 0
   }
   if (command === 'list' && argv.length === 1) {
-    return answer({ claude: await listed('claude', wiring), codex: await listed('codex', wiring) })
+    const [claude, codex, notInstalled] = await Promise.all([listed('claude', wiring), listed('codex', wiring), Promise.all((['claude', 'codex'] as const).map(async each => ((await wiring.installed(each)) ? [] : [each]))).then(each => each.flat())])
+    return answer({ claude, codex, notInstalled })
   }
   if (command === 'usage' && argv.length === 1) return answer(await readUsage(wiring))
   if (command === 'adding' && argv.length === 1) return answer({ claude: addingNow('claude', wiring), codex: addingNow('codex', wiring) })

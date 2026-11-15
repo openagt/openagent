@@ -150,6 +150,23 @@ describe('AccountsCard', () => {
     expect(within(dialog).getByRole('textbox', { name: 'Whose account' })).toBeTruthy()
   })
 
+  test('an agent whose program is not installed is offered no Add: with none installed, the card says to install one first', async () => {
+    renderCard(() => ({ ok: true, output: { claude: [{ name: 'This computer', who: 'Ada', own: true }], codex: [{ name: 'This computer', signedOut: true, own: true }], notInstalled: ['codex'] } }))
+    const trigger = await screen.findByRole('button', { name: 'Add an account' })
+    await waitFor(() => {
+      if (trigger.getAttribute('aria-expanded') !== 'true') fireEvent.click(trigger)
+      if (trigger.getAttribute('aria-expanded') !== 'true') throw new Error('the menu did not open')
+    })
+    expect(await screen.findByRole('menuitem', { name: 'Add a Claude account' })).toBeTruthy()
+    expect(screen.queryByRole('menuitem', { name: 'Add a Codex account' })).toBeNull()
+    cleanup()
+    forgetRemembered()
+    localStorage.clear()
+    renderCard(() => ({ ok: true, output: { claude: [{ name: 'This computer', signedOut: true, own: true }], codex: [{ name: 'This computer', signedOut: true, own: true }], notInstalled: ['claude', 'codex'] } }))
+    expect(await screen.findByText('No account yet: install Claude Code or Codex first, then add one here.')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /^Add a/ })).toBeNull()
+  })
+
   test('closing the dialog gives the focus back to the press that opened it', async () => {
     renderCard(listed([{ name: 'This computer', signedOut: true, own: true }], []))
     const press = await screen.findByRole('button', { name: 'Add a Claude account' })
