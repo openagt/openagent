@@ -84,7 +84,7 @@ describe('the parked question the bridge reports (#1237)', () => {
     // The card a local agent's question gets (#1554), with the options only: the bridge types
     // nothing but the question's own labels, so there is no "Other" row and no Skip.
     expect(screen.getByRole('region', { name: QUESTION.title })).toBeTruthy()
-    expect(screen.getByRole('radio', { name: /One page, both routes/ }).textContent).toBe('One page, both routesRecommendedlists every project')
+    expect(screen.getByRole('radio', { name: /One page, both routes/ }).textContent).toBe('1One page, both routesRecommendedlists every project')
     expect(screen.getByRole('radio', { name: /Cross-project only/ }).getAttribute('aria-checked')).toBe('false')
     expect(screen.queryByRole('radio', { name: 'Other' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Skip' })).toBeNull()
