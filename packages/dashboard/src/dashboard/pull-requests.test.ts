@@ -32,6 +32,8 @@ test('a request is kept as OpenAgent\'s own shape: the state upper-cased, the he
   // "We do not know" must stay distinguishable from "it has none": the CI-age decision reads createdAt (#1334).
   const bare = linkedPrOf({ ...REQUEST, createdAt: '', head: '' })
   assert.ok(!('createdAt' in bare) && !('headRefOid' in bare))
+  assert.equal(linkedPrOf({ ...REQUEST, armed: true }).armed, true)
+  assert.ok(!('armed' in linkedPrOf(REQUEST)))
   assert.deepEqual(openPrOf({ ...REQUEST, draft: true }), { number: 2, title: 'Add a LICENSE file', url: 'https://github.com/o/r/pull/2', isDraft: true, headRefName: 'agent-thing', createdAt: '2026-08-21T10:47:50Z' })
 })
 

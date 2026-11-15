@@ -29,7 +29,7 @@ vi.mock('../rpc/control.js', () => ({
   withdrawMessage,
   sendNow,
   sendOpenPullRequest: vi.fn(async () => null),
-  sendMerge: vi.fn(async () => ({ ok: true, merge: 'auto' })),
+  sendMerge: vi.fn(async () => ({ ok: true, merge: 'auto-armed' })),
   sendSetHandoff: vi.fn(async () => null),
   sendBridgeAnswer: vi.fn(async () => null),
   sendBridgeAnswerCancel: vi.fn(async () => null),
@@ -277,12 +277,15 @@ describe("the bar's own state is one session's", () => {
   // Repo B's session seen first; then repo A's #42 set to merge once its checks pass, and B's session again, its PR numbered `other`.
   const armA = async (other: number) => {
     onAgent.mockResolvedValue(ARCHIVED)
-    onAgentHandoff.mockImplementation((async (project: string) => (project === 'p1' ? pr(42) : pr(other))) as never)
+    // Pressed, repo A's #42 is armed on its git host, and its reads say so.
+    let armed = false
+    onAgentHandoff.mockImplementation((async (project: string) => (project === 'p1' ? { ...pr(42), pr: { ...pr(42).pr, ...(armed ? { armed: true } : {}) } } : pr(other))) as never)
     const page = render(view({ projectId: 'p2', agentId: 'run-2' }))
     await screen.findByRole('button', { name: 'Merge PR' })
     page.rerender(view())
     await waitFor(() => expect(onAgentHandoff).toHaveBeenCalledWith('p1', 'run-1'))
     await new Promise(resolve => setTimeout(resolve, 20))
+    armed = true
     fireEvent.click(await screen.findByRole('button', { name: 'Merge PR' }))
     await waitFor(() => expect(document.querySelector('[aria-live="polite"]')!.textContent).toBe('PR #42 merges when its checks pass.'))
     expect(screen.queryByRole('button', { name: 'Merge PR' })).toBeNull()
