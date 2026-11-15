@@ -607,7 +607,7 @@ function Panels() {
           state={<StateCell state="waiting" />}
           title="A row whose press is what the person comes for"
           meta={['Needs answer', 'Where should the cart go?']}
-          columns={<span>2m</span>}
+          fact="2m"
           actions={<Button size="sm">Answer</Button>}
           actionsAtRest
           onClick={() => {}}

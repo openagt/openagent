@@ -298,7 +298,7 @@ function HumanQueue({
                 href={href}
                 external={external}
                 onClick={open}
-                {...(since ? { columns: <span className="max-md:hidden">{since}</span> } : {})}
+                fact={since}
                 // Every row carries the press that does what it needs, the same at rest as under the pointer; on a phone the age gives way to it.
                 actions={
                   <Button variant={item.kind === 'awaiting' ? 'default' : 'secondary'} size="sm" aria-label={`${PRESSES[item.kind]}: ${item.title}`} onClick={open} className="relative">

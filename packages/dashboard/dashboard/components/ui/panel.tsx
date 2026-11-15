@@ -88,7 +88,8 @@ const coverClass = 'outline-none after:absolute after:inset-0'
  * Before the fact, `columns`: facts a list lines up down its rows (who ran it, its pull request), on
  * the title's line too, which stay under the pointer: only the fact gives its room to the presses.
  * `actionsAtRest`: the presses show with no pointer on the row too, where the press is what a person
- * comes to the row for (Answer, Review).
+ * comes to the row for (Answer, Review); then the fact stands just before them, centred on the row with
+ * them, and is not said on a phone, where the room is the name's.
  */
 export function PanelRow({ state, title, titleHint, meta = [], metaLines = 1, columns, fact, actions, actionsAtRest = false, href, external = false, onClick, className }: {
   state?: ReactNode
@@ -153,16 +154,22 @@ export function PanelRow({ state, title, titleHint, meta = [], metaLines = 1, co
         )}
       </span>
       {columns !== undefined && <span className="flex h-5 shrink-0 items-center gap-4 text-xs text-faint-foreground">{columns}</span>}
-      {/* The fact and the presses share one cell at the right: the presses come in over the fact, and stay
-          reachable by Tab while unseen. The cell spans the row's whole height (its margins undo the row's
-          padding), so a press is centred on the row and makes it no taller; the fact stands on the title's line. */}
-      {(fact !== undefined || actions !== undefined) && (
+      {/* The fact and the presses take the row's whole height at its right (their margins undo the row's
+          padding), so a press is centred on the row and makes it no taller. Presses shown at rest have the
+          fact beside them, centred too. Otherwise the two share one cell: the presses come in over the
+          fact, and stay reachable by Tab while unseen; the fact stands on the title's line. */}
+      {actionsAtRest && (fact !== undefined || actions !== undefined) ? (
+        <span className="-my-3 flex shrink-0 items-center gap-2 self-stretch">
+          {fact !== undefined && <span className="text-xs leading-5 text-faint-foreground max-md:hidden">{fact}</span>}
+          {actions !== undefined && <span className="relative flex items-center gap-1">{actions}</span>}
+        </span>
+      ) : (fact !== undefined || actions !== undefined) && (
         <span className="-my-3 grid shrink-0 self-stretch justify-items-end">
           {fact !== undefined && (
             <span className={cn('col-start-1 row-start-1 mt-3 self-start text-xs leading-5 text-faint-foreground', actions !== undefined && 'not-pointer-fine:invisible max-md:invisible pointer-fine:group-hover/row:invisible pointer-fine:group-focus-within/row:invisible pointer-fine:group-has-[[aria-expanded=true]]/row:invisible')}>{fact}</span>
           )}
           {actions !== undefined && (
-            <span className={cn('relative col-start-1 row-start-1 flex items-center gap-1 self-center', !actionsAtRest && 'md:pointer-fine:opacity-0 md:pointer-fine:group-hover/row:opacity-100 md:pointer-fine:group-focus-within/row:opacity-100 md:pointer-fine:group-has-[[aria-expanded=true]]/row:opacity-100')}>
+            <span className="relative col-start-1 row-start-1 flex items-center gap-1 self-center md:pointer-fine:opacity-0 md:pointer-fine:group-hover/row:opacity-100 md:pointer-fine:group-focus-within/row:opacity-100 md:pointer-fine:group-has-[[aria-expanded=true]]/row:opacity-100">
               {actions}
             </span>
           )}
