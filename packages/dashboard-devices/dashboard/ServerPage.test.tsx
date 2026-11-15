@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { ModuleHostContext, type MachineAdded, type MachineRemoved, type ModuleCommandResult, type ModuleComputersThrough, type ModuleAccountsAgent, type ModuleHost, type ModuleMachineAccount, type ModuleMachinePerson, type ModuleMachines } from '@openagt/dashboard/module'
 import { fakeHost } from '@openagt/dashboard/module/testing'
 import { DevicesSettings } from './DevicesSettings.js'
+import { SettingsHoldContext } from '../../dashboard/dashboard/lib/settings-hold.js'
 import { olderThan } from './parts.js'
 import type { DeviceRow } from './devices.js'
 import type { ServerRow, StepState } from './servers.js'
@@ -102,15 +103,16 @@ function dashboard(
   return { host, runComputerCommand, runComputerCommandOn, doorCommand, machines, addMachine, removeMachine, computersThrough, addComputerThrough, machinePerson, removeMachineDevice, useLoginsOn, syncDataOn, agentDataRemote, machineAccounts, removeMachineAccount, ran }
 }
 
-/** The entry as Settings holds it: a page the entry opens is kept where Settings keeps it, in the address. */
-function Entry({ host, everyMs, devicesEveryMs }: { host: ModuleHost; everyMs: number; devicesEveryMs?: number }) {
+/** The entry as Settings holds it: a page the entry opens is kept where Settings keeps it, in the address; with `onHold`, told what the entry holds unsaved. */
+function Entry({ host, everyMs, devicesEveryMs, onHold }: { host: ModuleHost; everyMs: number; devicesEveryMs?: number; onHold?: (held: boolean) => void }) {
   const [item, setItem] = useState<string | undefined>()
-  const held = useMemo(() => ({ ...host, openSettings: (_entry: string, next?: string) => setItem(next) }), [host])
-  return (
-    <ModuleHostContext.Provider value={held}>
+  const inSettings = useMemo(() => ({ ...host, openSettings: (entry: string, next?: string) => (host.openSettings(entry, next), setItem(next)) }), [host])
+  const entry = (
+    <ModuleHostContext.Provider value={inSettings}>
       <DevicesSettings everyMs={everyMs} {...(devicesEveryMs !== undefined ? { devicesEveryMs } : {})} {...(item !== undefined ? { item } : {})} />
     </ModuleHostContext.Provider>
   )
+  return onHold ? <SettingsHoldContext.Provider value={onHold}>{entry}</SettingsHoldContext.Provider> : entry
 }
 
 function show(host: ModuleHost) {
@@ -1175,6 +1177,32 @@ describe('Settings › Devices: Set up a server, in steps', () => {
     if (user !== undefined) fireEvent.change(screen.getByLabelText('User name'), { target: { value: user } })
     fireEvent.click(button('Test connection'))
   }
+
+  test('an address typed is held until the install starts with it, or Cancel throws it away', async () => {
+    // What Settings was told, in order: what the entry holds, and where it went.
+    const said: string[] = []
+    const { host } = dashboard(() => ok({ servers: [] }))
+    vi.mocked(host.openSettings).mockImplementation((_entry, next) => void said.push(`open ${next}`))
+    render(<Entry host={host} everyMs={40} devicesEveryMs={60} onHold={held => said.push(`hold ${held}`)} />)
+    await toConnect()
+    fireEvent.change(screen.getByLabelText("The server's address"), { target: { value: '203.0.113.5' } })
+    await waitFor(() => expect(said.at(-1)).toBe('hold true'))
+    fireEvent.click(button('Back'))
+    // Cancel throws it away: let go of first, so Settings does not ask.
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(said).toContain('open undefined'))
+    expect(said[said.lastIndexOf('open undefined') - 1]).toBe('hold false')
+    // The install started with it: nothing is held any more.
+    said.length = 0
+    await toConnect()
+    testAs('203.0.113.5')
+    await waitFor(() => expect(button('Continue').disabled).toBe(false))
+    await waitFor(() => expect(said.at(-1)).toBe('hold true'))
+    fireEvent.click(button('Continue'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Install' }))
+    await waitFor(() => expect(now()).toBe('Install: now'))
+    expect(said.at(-1)).toBe('hold false')
+  })
 
   test('an address this computer connected already is not set up anew: the page says it is connected, and how, and goes no further', async () => {
     const { host, ran } = dashboard(

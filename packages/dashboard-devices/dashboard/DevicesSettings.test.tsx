@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { ModuleHostContext, type ModuleCommandResult, type ModuleComputerThrough, type ModuleHost, type ModuleMachine, type ModuleMachines } from '@openagt/dashboard/module'
 import { OpenAgentDown, fakeHost } from '@openagt/dashboard/module/testing'
 import { DevicesSettings } from './DevicesSettings.js'
+import { SettingsHoldContext } from '../../dashboard/dashboard/lib/settings-hold.js'
 import { WARNING } from './ThisComputer.js'
 
 // Settings › Devices, this computer's side: how devices reach it, the start page, and every
@@ -39,15 +40,16 @@ function door(answer: (args: string[], input?: string) => ModuleCommandResult | 
   return { host, runComputerCommand, serverCommand }
 }
 
-/** The entry as Settings holds it: a page the entry opens is kept where Settings keeps it, in the address. */
-function Entry({ host, everyMs, devicesEveryMs }: { host: ModuleHost; everyMs: number; devicesEveryMs?: number }) {
+/** The entry as Settings holds it: a page the entry opens is kept where Settings keeps it, in the address; with `onHold`, told what the entry holds unsaved. */
+function Entry({ host, everyMs, devicesEveryMs, onHold }: { host: ModuleHost; everyMs: number; devicesEveryMs?: number; onHold?: (held: boolean) => void }) {
   const [item, setItem] = useState<string | undefined>()
-  const held = useMemo(() => ({ ...host, openSettings: (_entry: string, next?: string) => setItem(next) }), [host])
-  return (
-    <ModuleHostContext.Provider value={held}>
+  const inSettings = useMemo(() => ({ ...host, openSettings: (entry: string, next?: string) => (host.openSettings(entry, next), setItem(next)) }), [host])
+  const entry = (
+    <ModuleHostContext.Provider value={inSettings}>
       <DevicesSettings everyMs={everyMs} {...(devicesEveryMs !== undefined ? { devicesEveryMs } : {})} {...(item !== undefined ? { item } : {})} />
     </ModuleHostContext.Provider>
   )
+  return onHold ? <SettingsHoldContext.Provider value={onHold}>{entry}</SettingsHoldContext.Provider> : entry
 }
 
 function show(host: ModuleHost) {
@@ -926,6 +928,32 @@ describe('Settings › Devices: a code typed on another computer', () => {
     expect(serverCommand).not.toHaveBeenCalledWith(['shared-reach', 'https://studio.tail1234.ts.net', 'full'])
     expect(host.computersThrough).not.toHaveBeenCalled()
     expect(await screen.findByText(/on your Tailscale network/)).toBeTruthy()
+  })
+
+  test('what is typed in Join with a code is held until it is sent or thrown away: Join and Cancel let go of it before they leave', async () => {
+    // What Settings was told, in order: what the entry holds, and where it went.
+    const said: string[] = []
+    const { host } = door(() => ok(OFF))
+    vi.mocked(host.openSettings).mockImplementation((_entry, next) => void said.push(`open ${next}`))
+    vi.mocked(host.addMachine).mockResolvedValue({ ok: true })
+    render(<Entry host={host} everyMs={40} onHold={held => said.push(`hold ${held}`)} />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Join with a code' }))
+    fireEvent.change(await screen.findByRole('textbox', { name: 'Where' }), { target: { value: '203.0.113.10' } })
+    await waitFor(() => expect(said.at(-1)).toBe('hold true'))
+    // Cancel throws it away: let go of first, so Settings does not ask.
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(said).toContain('open undefined'))
+    expect(said[said.lastIndexOf('open undefined') - 1]).toBe('hold false')
+    // Sent: let go of before the page leaves.
+    said.length = 0
+    fireEvent.click(await screen.findByRole('button', { name: 'Join with a code' }))
+    fireEvent.change(await screen.findByRole('textbox', { name: 'Where' }), { target: { value: '203.0.113.10' } })
+    fireEvent.change(screen.getByRole('textbox', { name: 'Code' }), { target: { value: 'K7P4-QX9M' } })
+    await waitFor(() => expect(said.at(-1)).toBe('hold true'))
+    fireEvent.click(screen.getByRole('button', { name: 'Join' }))
+    await waitFor(() => expect(said).toContain('open undefined'))
+    expect(said[said.lastIndexOf('open undefined') - 1]).toBe('hold false')
+    expect(host.addMachine).toHaveBeenCalledWith('https://203.0.113.10/_devices/enter#K7P4QX9M')
   })
 
   test('Join with a code: a link pasted whole is said by its address alone, never with the code it holds', async () => {

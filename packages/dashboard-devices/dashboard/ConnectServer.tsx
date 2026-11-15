@@ -5,7 +5,7 @@ import type { Answer } from './devices.js'
 import { installDone, installFailed, testConnection, type ServerRow, type Tested } from './servers.js'
 import { CopyButton } from './codes.js'
 import { hasDoor, labelOf } from './model.js'
-import { Choice, Problem, StepLine, StepMark } from './parts.js'
+import { Choice, Problem, StepLine, StepMark, useFlowHold } from './parts.js'
 import { RunsThrough } from './ServerPage.js'
 import type { Devices } from './use-devices.js'
 
@@ -51,6 +51,8 @@ export function ConnectServer({ d, onClose, onInvite }: { d: Devices; onClose: (
   const at = address.trim()
   const as = user.trim()
   const current = tested?.for === `${at} ${as}` ? tested.answer : undefined
+  // An address or a user typed is held until the install starts with them, or Cancel throws them away.
+  const leave = useFlowHold((stage === 'where' || stage === 'connect' || stage === 'logins') && (at !== '' || as !== (kind === 'vps' ? 'root' : '')))
   // A server this computer connected already is not set up anew another way: its own page updates it.
   const known = d.servers.find(server => server.address === at.toLowerCase())
   const knownWords = known !== undefined ? `${d.items.find(item => item.kind === 'server' && item.server.address === known.address)?.name ?? known.address} is connected already${known.through !== undefined ? `, through ${labelOf(d.machines?.machines ?? [], known.through)}` : known.tailscale ? ', on your Tailscale network' : ''}. Update it from its page.` : undefined
@@ -82,7 +84,7 @@ export function ConnectServer({ d, onClose, onInvite }: { d: Devices; onClose: (
   return (
     <div className="space-y-4">
       <Stepper at={stage} />
-      {stage === 'where' && <Where kind={kind} onKind={pickKind} doors={doors.map(door => ({ value: door.url, label: door.label }))} through={through} onVia={setVia} onCancel={onClose} onNext={() => setStage('connect')} />}
+      {stage === 'where' && <Where kind={kind} onKind={pickKind} doors={doors.map(door => ({ value: door.url, label: door.label }))} through={through} onVia={setVia} onCancel={() => leave(onClose)} onNext={() => setStage('connect')} />}
       {stage === 'connect' && (
         <form onSubmit={event => void test(event)} className="space-y-3">
           <div className="grid grid-cols-[1fr_8rem] gap-2">

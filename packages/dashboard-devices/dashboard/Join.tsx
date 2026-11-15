@@ -1,7 +1,7 @@
 import { useId, useState, type ClipboardEvent, type FormEvent } from 'react'
 import { Button, Checkbox, Input, SettingsFoot, useOpenAgentDown } from '@openagt/dashboard/module'
 import { hasDoor } from './model.js'
-import { Problem } from './parts.js'
+import { Problem, useFlowHold } from './parts.js'
 import { sharedReach } from './servers.js'
 import type { Devices } from './use-devices.js'
 
@@ -57,6 +57,8 @@ export function Join({ d, onClose, onJoined }: { d: Devices; onClose: () => void
   const [error, setError] = useState<string | undefined>()
   // Join stands in Settings' foot, outside the form's box: it is the form's own press by its id.
   const formId = useId()
+  // What was typed is held until it is sent: Join, or Cancel, which throws it away.
+  const leave = useFlowHold((where.trim() !== '' || code.trim() !== '') && !error?.startsWith('Joined.'))
   const link = linkOf(where, code)
   // Through a server: a link pasted whole may be a computer's on its Wi-Fi, or one on Tailscale, which keeps no line.
   const server = link !== undefined && hasDoor({ url: new URL(link).origin })
@@ -104,8 +106,8 @@ export function Join({ d, onClose, onJoined }: { d: Devices; onClose: () => void
     setJoining(false)
     if (problems.length) setError(`Joined. ${problems.join(' ')}`)
     // Someone else's computer: its page says whose it is, and takes this person's logins for it.
-    else if (machine?.owner !== undefined && onJoined) onJoined(machine.id)
-    else onClose()
+    else if (machine?.owner !== undefined && onJoined) leave(() => onJoined(machine.id))
+    else leave(onClose)
   }
 
   return (
@@ -134,7 +136,7 @@ export function Join({ d, onClose, onJoined }: { d: Devices; onClose: () => void
       {error !== undefined && <Problem>{error}</Problem>}
       <SettingsFoot>
         <div className="flex justify-end gap-2 max-md:[&_button]:h-11">
-          <Button type="button" variant="ghost" onClick={onClose}>
+          <Button type="button" variant="ghost" onClick={() => leave(onClose)}>
             {error?.startsWith('Joined.') ? 'Done' : 'Cancel'}
           </Button>
           {!error?.startsWith('Joined.') && (

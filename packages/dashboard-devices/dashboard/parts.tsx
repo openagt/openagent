@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useRef, useState, type ComponentType, type FormEvent, type ReactNode, type RefObject } from 'react'
 import { ChevronRight, Circle, CircleArrowUp, CircleCheck, CircleX, Loader2, Pencil } from 'lucide-react'
-import { Badge, Button, Input, RadioGroupOption, Row, Section, cn, formatDateTime, formatRelative, useOpenAgentDown } from '@openagt/dashboard/module'
+import { Badge, Button, Input, RadioGroupOption, Row, Section, cn, formatDateTime, formatRelative, useOpenAgentDown, useSettingsHold } from '@openagt/dashboard/module'
 import type { DeviceRow } from './devices.js'
 import type { StepState } from './servers.js'
 
@@ -174,6 +174,19 @@ export function Problem({ children }: { children: ReactNode }) {
       {children}
     </p>
   )
+}
+
+/**
+ * What a way of adding holds that was typed and not sent: while `held`, leaving it by another entry,
+ * Back or Close asks first, as Settings' own entries do. The step `leave` is given (the flow's own
+ * Cancel, or where it goes once it sent what was typed) lets go first, so it never asks.
+ */
+export function useFlowHold(held: boolean): (step: () => void) => void {
+  const [step, setStep] = useState<(() => void) | undefined>()
+  useSettingsHold(held && step === undefined)
+  // After the hold is let go: its effect runs before this one.
+  useEffect(() => step?.(), [step])
+  return next => setStep(() => next)
 }
 
 /**
