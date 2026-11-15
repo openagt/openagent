@@ -122,6 +122,15 @@ describe('QueuePage', () => {
       )
     })
 
+    test('the count says what the button will start: never more than the entries', async () => {
+      show([{ entry: 'Only one' }, { entry: 'And two' }])
+      await screen.findByText('And two')
+      const count = screen.getByRole('spinbutton', { name: 'How many agents to start' }) as HTMLInputElement
+      expect(count.value).toBe('2')
+      expect(count.max).toBe('2')
+      expect(screen.getByRole('button', { name: 'Start 2 agents' })).toBeTruthy()
+    })
+
     test('a start that is refused says why', async () => {
       show()
       await screen.findByText('Urgent')

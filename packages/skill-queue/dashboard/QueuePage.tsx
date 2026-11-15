@@ -139,8 +139,11 @@ function ProjectQueue({ read, titled, schedule, names, starts, reload }: { read:
                   <Input
                     type="number"
                     min={1}
+                    // Never more than the entries, as the Overview's card counts them: the box says the
+                    // number the button will start, not a 3 beside "Start 2 agents".
+                    max={raw.length}
                     step={1}
-                    value={starts.countOf(project.id)}
+                    value={count}
                     aria-label="How many agents to start"
                     onChange={event => {
                       // An emptied box is mid-edit rather than a count: `Number('')` is 0.
