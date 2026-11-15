@@ -298,15 +298,14 @@ function NeedsYou({
                 href={href}
                 external={external}
                 onClick={open}
-                fact={
-                  // Every row carries the press that does what it needs, the same at rest as under the pointer; on a phone the age gives way to it.
-                  <span className="flex items-center gap-3">
-                    {since && <span className="max-md:hidden">{since}</span>}
-                    <Button variant={item.kind === 'awaiting' ? 'default' : 'secondary'} size="sm" aria-label={`${PRESSES[item.kind]}: ${item.title}`} onClick={open} className="relative">
-                      {PRESSES[item.kind]}
-                    </Button>
-                  </span>
+                {...(since ? { columns: <span className="max-md:hidden">{since}</span> } : {})}
+                // Every row carries the press that does what it needs, the same at rest as under the pointer; on a phone the age gives way to it.
+                actions={
+                  <Button variant={item.kind === 'awaiting' ? 'default' : 'secondary'} size="sm" aria-label={`${PRESSES[item.kind]}: ${item.title}`} onClick={open} className="relative">
+                    {PRESSES[item.kind]}
+                  </Button>
                 }
+                actionsAtRest
               />
             ))}
             {more && <PanelMore onClick={more.toggle}>{more.words}</PanelMore>}

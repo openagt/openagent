@@ -1,4 +1,4 @@
-import { Button, Card, Empty, FilterChips, Page, PanelGroup, PanelRow, PersonMark, RowShapes, RunMark, Slot, formatDateTime, formatDuration, personSaid, runName, runLineTone, useCodingAgents, useGitHostPeople, runsAgain, runWord, useModuleHost, usePolled, type CodingAgent, type ModuleAgent, type ModuleHostPerson, type ModulePageProps, type ModuleProject, type ReadState } from '@openagt/dashboard/module'
+import { Button, Card, Empty, FilterChips, Page, PanelGroup, PanelRow, PersonMark, RowShapes, RunMark, Slot, formatDateTime, formatDuration, personSaid, runName, runLineTone, useCodingAgents, useGitHostPeople, useIsMobile, runsAgain, runWord, useModuleHost, usePolled, type CodingAgent, type ModuleAgent, type ModuleHostPerson, type ModulePageProps, type ModuleProject, type ReadState } from '@openagt/dashboard/module'
 import type { RunCard } from '../src/run.js'
 
 /** How many runs each project lists: the command's own default page is 20; the page shows more. */
@@ -203,6 +203,7 @@ export function LogsPage({ projects, path }: ModulePageProps) {
     pr: read.rows.some(row => row.card.pr !== undefined),
   }
   const agents = useCodingAgents()
+  const phone = useIsMobile()
   // A project that gave a whole page may have older runs the page does not list.
   const capped = projects.some(project => recorded.rows.filter(row => row.project.id === project.id).length >= LIMIT)
 
@@ -225,21 +226,16 @@ export function LogsPage({ projects, path }: ModulePageProps) {
                 <Empty title="No runs recorded yet">A run is listed here from the moment an agent starts on this project.</Empty>
               </Card>
             )}
-            {/* A day is a panel of its runs. A row: its mark, its name over how it stands, then at its right whose
-                it is, the agent that ran it, what it left and when it started, each in a column that stands in one
-                place down the page; a column no run has a value for is not drawn. On a phone the time alone stays. */}
+            {/* A day is a panel of its runs. A row: its mark, its name over how it stands, then on the name's line at
+                its right whose it is, the agent that ran it and its pull request, each in a column that stands in one
+                place down the page (a column no run has a value for is not drawn), and when it started. On a phone the
+                time alone stays. */}
             {days.map(({ day, rows, cost }) => (
               <PanelGroup key={day} title={day} {...(cost > 0 ? { count: dollars(cost) } : {})}>
                 {rows.map(({ project, card }) => (
                   <PanelRow
                     key={`${project.id}/${card.id}`}
-                    // The mark and the right's columns stand on the name's line.
-                    className="items-start"
-                    state={
-                      <span className="flex h-5 items-center">
-                        <RunMark status={shownStatus(card)} className="size-2" />
-                      </span>
-                    }
+                    state={<RunMark status={shownStatus(card)} className="size-2" />}
                     // As every list names a run; a run with none of its names goes by its id. What it was asked, whole, under the pointer.
                     title={runName(card) ?? card.id}
                     titleHint={card.intent?.trim() || undefined}
@@ -261,8 +257,8 @@ export function LogsPage({ projects, path }: ModulePageProps) {
                       many && project.name,
                       card.cost !== undefined && dollars(card.cost),
                     ]}
-                    fact={
-                      <span className="flex h-5 items-center gap-4">
+                    columns={
+                      <>
                         {columns.who && <RunPerson person={card.person} account={accountOf(project.id, card.person)} />}
                         {columns.agent && <span className="w-36 truncate max-md:hidden">{agentSaid(card, agents)}</span>}
                         {columns.pr && (
@@ -274,24 +270,24 @@ export function LogsPage({ projects, path }: ModulePageProps) {
                             )}
                           </span>
                         )}
-                        {/* Under the pointer and the keyboard, the run's press takes the time's place: Answer where its question waits,
-                            else Review. It opens the run, as the row does, so a touch screen, where the row is the press, keeps the time. */}
-                        <span className="grid w-16 items-center justify-items-end">
-                          <span className="col-start-1 row-start-1 tabular-nums whitespace-nowrap pointer-fine:group-hover/row:invisible pointer-fine:group-focus-within/row:invisible" title={formatDateTime(card.startedAt)}>
-                            {clock(card.startedAt)}
-                          </span>
-                          <Button
-                            variant={asks(card) ? 'default' : 'secondary'}
-                            size="sm"
-                            aria-label={`${pressOf(card)}: ${runName(card) ?? card.id}`}
-                            onClick={() => host.openAgent(project.id, card.id)}
-                            className="relative col-start-1 row-start-1 -my-1 pointer-coarse:hidden pointer-fine:opacity-0 pointer-fine:group-hover/row:opacity-100 pointer-fine:group-focus-within/row:opacity-100"
-                          >
-                            {pressOf(card)}
-                          </Button>
-                        </span>
+                      </>
+                    }
+                    fact={
+                      <span className="tabular-nums whitespace-nowrap" title={formatDateTime(card.startedAt)}>
+                        {clock(card.startedAt)}
                       </span>
                     }
+                    // The run's press, in the time's place under the pointer and the keyboard: Answer where its question waits, else Review.
+                    // It opens the run, as the row does, so a phone, where the row is the press, keeps the time.
+                    {...(phone
+                      ? {}
+                      : {
+                          actions: (
+                            <Button variant={asks(card) ? 'default' : 'secondary'} size="sm" className="relative" aria-label={`${pressOf(card)}: ${runName(card) ?? card.id}`} onClick={() => host.openAgent(project.id, card.id)}>
+                              {pressOf(card)}
+                            </Button>
+                          ),
+                        })}
                   />
                 ))}
               </PanelGroup>
