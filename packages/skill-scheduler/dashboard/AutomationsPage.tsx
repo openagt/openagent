@@ -354,16 +354,7 @@ export function AutomationsPage({ projects }: ModulePageProps) {
                       </Section>
                     ),
                 )}
-                {row.error === undefined && !row.on && (
-                  <div className="mt-4 max-w-180 text-sm text-muted-foreground">
-                    <p>The scheduler is off in this project, so nothing here starts by itself. To start it now, run in the project:</p>
-                    <Command text={START} />
-                    <p className="mt-3">
-                      It starts with the dashboard once it is ticked in <SkillsLink />, or once the project has run:
-                    </p>
-                    <Command text={INIT} />
-                  </div>
-                )}
+                {row.error === undefined && !row.on && <SchedulerOff />}
                 {row.error === undefined && row.on && !row.running && (
                   <div className="mt-4 max-w-180 text-sm text-warning">
                     <p>The scheduler is on but its process is not running, so nothing here starts by itself. To start it, run in the project:</p>
@@ -376,6 +367,39 @@ export function AutomationsPage({ projects }: ModulePageProps) {
         }
       </Slot>
     </Page>
+  )
+}
+
+/**
+ * A project whose scheduler is off: one sentence, and the press to where it is ticked, so it starts
+ * with the dashboard. The two commands that start it from a terminal are behind a press of their own.
+ */
+function SchedulerOff() {
+  const host = useModuleHost()
+  const [commands, setCommands] = useState(false)
+  return (
+    <div className="mt-4 max-w-180 space-y-2 text-sm text-muted-foreground">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <p className="min-w-0 grow basis-60">The scheduler is off in this project, so nothing here starts by itself.</p>
+        <div className="flex gap-2">
+          <Button variant="ghost" aria-expanded={commands} onClick={() => setCommands(shown => !shown)}>
+            In a terminal
+          </Button>
+          {/* Ticked in Skills, it starts with the dashboard. */}
+          <Button variant="secondary" onClick={() => host.openSettings('skills')}>
+            Turn it on in Skills
+          </Button>
+        </div>
+      </div>
+      {commands && (
+        <>
+          <p className="pt-2">To start it now, run in the project:</p>
+          <Command text={START} />
+          <p className="pt-2">To start it with the dashboard from now on:</p>
+          <Command text={INIT} />
+        </>
+      )}
+    </div>
   )
 }
 

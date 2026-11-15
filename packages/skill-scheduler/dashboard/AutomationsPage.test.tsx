@@ -509,9 +509,11 @@ describe('the Automations page: its rows', () => {
     expect(within(other).queryByText(/: off/)).toBeNull()
     expect(within(other).getByText(/^The scheduler is off in this project, so nothing here starts by itself/)).toBeTruthy()
     // How it starts with the dashboard: Settings › Skills, whose tick does it, or `init`.
-    fireEvent.click(within(other).getByRole('button', { name: 'Settings › Skills' }))
+    fireEvent.click(within(other).getByRole('button', { name: 'Turn it on in Skills' }))
     expect(host.openSettings).toHaveBeenCalledWith('skills')
-    // The two commands, `start` (now) and `init`, each set as code with a button that copies it, named by the command.
+    // The two commands, `start` (now) and `init`, behind a press of their own, each set as code with a button that copies it, named by the command.
+    expect(within(other).queryByText('npx @openagt/skill-scheduler@0.1 init')).toBeNull()
+    fireEvent.click(within(other).getByRole('button', { name: 'In a terminal' }))
     expect(within(other).getByText('npx @openagt/skill-scheduler@0.1 init').tagName).toBe('CODE')
     expect(within(other).getByText('npx @openagt/skill-scheduler@0.1 start').tagName).toBe('CODE')
     expect(within(other).getByRole('button', { name: 'Copy the start command' })).toBeTruthy()
