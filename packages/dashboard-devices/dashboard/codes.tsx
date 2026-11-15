@@ -5,8 +5,8 @@ import { failed, type Answer, type Given } from './devices.js'
 import { CodeStrip, LinkPress, Problem } from './parts.js'
 
 // A code a new device gets in with, the ways it is shown: as a QR code a phone's camera opens, and
-// as where and a code typed on another computer. It is asked for as its dialog opens, works once,
-// and runs out: the dialog says for how long still, and waits for the device that uses it.
+// as where and a code typed on another computer. It is asked for as it is shown, works once, and
+// runs out: what shows it says for how long still, and waits for the device that uses it.
 
 /** Minutes and seconds, as a clock shows them. */
 export const clock = (ms: number): string => {
@@ -201,7 +201,6 @@ const NOT_A_NAME = 'A name is letters and digits, with spaces, dots, apostrophes
  * own: someone else's device is added with Add person.
  */
 export function PhoneCode({
-  title,
   ask,
   steps = ["Open the phone's camera and point it at the code.", 'Tap the link it shows. OpenAgent opens, and stays in.'],
   camera = true,
@@ -211,7 +210,6 @@ export function PhoneCode({
   onCode,
   onClose,
 }: {
-  title: string
   ask: () => Promise<Answer<Given>>
   /** What the person does with the code, step by step. */
   steps?: readonly string[]
@@ -233,70 +231,68 @@ export function PhoneCode({
   const link = code && byWifi && code.wifiUrl ? code.wifiUrl : code && byNumber && code.numberUrl ? code.numberUrl : code?.url
 
   return (
-    <Dialog open onOpenChange={open => !open && onClose()} title={title}>
-      <div className="space-y-4">
-        {joined !== undefined ? (
-          <Joined>{`${joined} is in.`}</Joined>
-        ) : asking || error !== undefined || !code ? (
-          <NoCodeYet asking={asking} error={error} shape={QR_SHAPE} />
-        ) : expired ? (
-          <RanOut />
-        ) : (
-          <div className="flex gap-6 sm:items-start max-sm:flex-col max-sm:items-center">
-            <QrOnWhite text={link!} />
-            <div className="w-full min-w-0 space-y-3">
-              <ol className="list-decimal space-y-2 pl-5 text-sm marker:text-muted-foreground">
-                {steps.map(step => (
-                  <li key={step}>{step}</li>
-                ))}
-              </ol>
-              {hint !== undefined && <p className="text-xs text-muted-foreground">{hint}</p>}
-              {code.wifiUrl !== undefined && !byWifi && (
-                <p className="text-xs">
-                  <LinkPress onClick={() => setByWifi(true)}>Not on Tailscale? Use this Wi-Fi.</LinkPress>
-                </p>
-              )}
-              {code.numberUrl !== undefined && !byNumber && (
-                <p className="text-xs">
-                  <LinkPress onClick={() => setByNumber(true)}>Phone does not open it? Use the number.</LinkPress>
-                </p>
-              )}
-              <p className="text-xs text-muted-foreground">
-                {camera ? 'No camera? ' : ''}
-                <CopyLink text={link!} />
-                {camera ? ' and send it to the phone.' : ' to paste it there.'}
-                {openHere && (
-                  <>
-                    {' '}
-                    {/* The code is spent by the tab it opens: it leaves the page with the press. */}
-                    <a href={link} target="_blank" rel="noreferrer" className="focus-ring inline-flex items-center gap-1 rounded-sm text-primary hover:underline" onClick={onClose}>
-                      Let this browser in instead
-                      <ExternalLink className="size-3.5" aria-hidden />
-                    </a>
-                  </>
-                )}
+    <div className="space-y-4">
+      {joined !== undefined ? (
+        <Joined>{`${joined} is in.`}</Joined>
+      ) : asking || error !== undefined || !code ? (
+        <NoCodeYet asking={asking} error={error} shape={QR_SHAPE} />
+      ) : expired ? (
+        <RanOut />
+      ) : (
+        <div className="flex gap-6 sm:items-start max-sm:flex-col max-sm:items-center">
+          <QrOnWhite text={link!} />
+          <div className="w-full min-w-0 space-y-3">
+            <ol className="list-decimal space-y-2 pl-5 text-sm marker:text-muted-foreground">
+              {steps.map(step => (
+                <li key={step}>{step}</li>
+              ))}
+            </ol>
+            {hint !== undefined && <p className="text-xs text-muted-foreground">{hint}</p>}
+            {code.wifiUrl !== undefined && !byWifi && (
+              <p className="text-xs">
+                <LinkPress onClick={() => setByWifi(true)}>Not on Tailscale? Use this Wi-Fi.</LinkPress>
               </p>
-              <Waiting>{`Waiting for the ${camera ? 'phone' : 'other computer'}… works once, for ${clock(left)}.`}</Waiting>
-            </div>
+            )}
+            {code.numberUrl !== undefined && !byNumber && (
+              <p className="text-xs">
+                <LinkPress onClick={() => setByNumber(true)}>Phone does not open it? Use the number.</LinkPress>
+              </p>
+            )}
+            <p className="text-xs text-muted-foreground">
+              {camera ? 'No camera? ' : ''}
+              <CopyLink text={link!} />
+              {camera ? ' and send it to the phone.' : ' to paste it there.'}
+              {openHere && (
+                <>
+                  {' '}
+                  {/* The code is spent by the tab it opens: it leaves the page with the press. */}
+                  <a href={link} target="_blank" rel="noreferrer" className="focus-ring inline-flex items-center gap-1 rounded-sm text-primary hover:underline" onClick={onClose}>
+                    Let this browser in instead
+                    <ExternalLink className="size-3.5" aria-hidden />
+                  </a>
+                </>
+              )}
+            </p>
+            <Waiting>{`Waiting for the ${camera ? 'phone' : 'other computer'}… works once, for ${clock(left)}.`}</Waiting>
           </div>
-        )}
-        {/* Cancel before the other press; once joined, Done is the press the dialog ends on, last. */}
-        <div className="flex justify-end gap-2 max-md:[&_button]:h-11">
-          {joined === undefined && (
-            <Button variant="ghost" onClick={onClose}>
-              Cancel
-            </Button>
-          )}
-          {!asking && (joined !== undefined || expired || error !== undefined || !code) && (
-            <Button variant="secondary" disabled={down} onClick={() => void again()}>
-              <RotateCw className="size-4" aria-hidden />
-              {joined !== undefined ? 'Add another' : 'New code'}
-            </Button>
-          )}
-          {joined !== undefined && <Button onClick={onClose}>Done</Button>}
         </div>
+      )}
+      {/* Cancel before the other press; once joined, Done is the press the page ends on, last. */}
+      <div className="flex justify-end gap-2 max-md:[&_button]:h-11">
+        {joined === undefined && (
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+        )}
+        {!asking && (joined !== undefined || expired || error !== undefined || !code) && (
+          <Button variant="secondary" disabled={down} onClick={() => void again()}>
+            <RotateCw className="size-4" aria-hidden />
+            {joined !== undefined ? 'Add another' : 'New code'}
+          </Button>
+        )}
+        {joined !== undefined && <Button onClick={onClose}>Done</Button>}
       </div>
-    </Dialog>
+    </div>
   )
 }
 

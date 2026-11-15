@@ -26,9 +26,11 @@ export type Adding = 'add' | 'add-phone' | 'add-computer' | 'set-up-server' | 'j
 export const ADDING: Record<Adding, { title: string; page?: true }> = {
   add: {
     title: 'Add a device',
+    page: true,
   },
   'add-phone': {
     title: 'Add phone',
+    page: true,
   },
   'add-computer': {
     title: 'Add computer',
@@ -94,26 +96,24 @@ export function AddDevice({ d, adding, isServer, onAdd, onClose, onInvite, onJoi
 function Choose({ kinds, onPicked, onClose }: { kinds: typeof KINDS; onPicked: (adding: Adding) => void; onClose: () => void }) {
   const [picked, setPicked] = useState<Adding>('add-phone')
   return (
-    <Dialog open onOpenChange={open => !open && onClose()} title="Add a device">
-      <div className="space-y-4">
-        <p className="text-sm">What are you adding?</p>
-        <RadioGroup aria-label="What are you adding?" value={picked} onValueChange={next => setPicked(next as Adding)} className="-mx-3 gap-0">
-          {kinds.map(({ id, title, words }) => (
-            <div key={id} onDoubleClick={() => onPicked(id)}>
-              <Choice value={id} title={title} words={words} />
-            </div>
-          ))}
-        </RadioGroup>
-        <div className="flex justify-end gap-2 max-md:[&_button]:h-11">
-          <Button variant="ghost" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button onClick={() => onPicked(picked)}>
-            Continue
-          </Button>
-        </div>
+    <div className="space-y-4">
+      <p className="text-sm">What are you adding?</p>
+      <RadioGroup aria-label="What are you adding?" value={picked} onValueChange={next => setPicked(next as Adding)} className="-mx-3 gap-0">
+        {kinds.map(({ id, title, words }) => (
+          <div key={id} onDoubleClick={() => onPicked(id)}>
+            <Choice value={id} title={title} words={words} />
+          </div>
+        ))}
+      </RadioGroup>
+      <div className="flex justify-end gap-2 max-md:[&_button]:h-11">
+        <Button variant="ghost" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button onClick={() => onPicked(picked)}>
+          Continue
+        </Button>
       </div>
-    </Dialog>
+    </div>
   )
 }
 
@@ -174,91 +174,84 @@ function AddPhone({ d, onClose }: { d: Devices; onClose: () => void }) {
 
   if (where === undefined)
     return (
-      <Dialog open onOpenChange={open => !open && onClose()} title="Add phone">
-        <div className="space-y-4">
-          <p className="text-sm">Where should it work?</p>
-          <RadioGroup aria-label="Where should it work?" value={picked} onValueChange={next => setPicked(next as string)} className="-mx-3 gap-0">
-            {places.map(place =>
-              place.tailscale !== undefined ? (
-                <Choice key={place.id} value={place.id} title={`On your Tailscale network, through ${place.label}`} words={`It opens ${place.label} at https://${place.tailscale}, with a lock, wherever it is. Tailscale must run on it, signed in as on ${place.label}.`} />
-              ) : (
-                <Choice key={place.id} value={place.id} title={`Anywhere, through ${place.label}`} badge={place.id === places[0]!.id ? 'Recommended' : undefined} words={`It opens ${place.label}, with a lock. From there it starts runs on this computer and on all your devices that are on.`} />
-              ),
-            )}
-            {status?.tailscale ? (
-              <Choice value="" title="On your Tailscale network" words={`It opens this computer at https://${status.tailscale.address}, with a lock, wherever it is. Tailscale must run on it, signed in as on this computer.`} />
+      <div className="space-y-4">
+        <p className="text-sm">Where should it work?</p>
+        <RadioGroup aria-label="Where should it work?" value={picked} onValueChange={next => setPicked(next as string)} className="-mx-3 gap-0">
+          {places.map(place =>
+            place.tailscale !== undefined ? (
+              <Choice key={place.id} value={place.id} title={`On your Tailscale network, through ${place.label}`} words={`It opens ${place.label} at https://${place.tailscale}, with a lock, wherever it is. Tailscale must run on it, signed in as on ${place.label}.`} />
             ) : (
-              <Choice value="" title="Only on this Wi-Fi" words="It opens this computer directly. No lock on the link: someone on the same Wi-Fi could listen. Use it at home." />
-            )}
-          </RadioGroup>
-          <div className="flex justify-end gap-2 max-md:[&_button]:h-11">
-            <Button variant="ghost" onClick={onClose}>
-              Back
-            </Button>
-            <Button onClick={() => setWhere(picked)}>
-              Show the code
-            </Button>
-          </div>
+              <Choice key={place.id} value={place.id} title={`Anywhere, through ${place.label}`} badge={place.id === places[0]!.id ? 'Recommended' : undefined} words={`It opens ${place.label}, with a lock. From there it starts runs on this computer and on all your devices that are on.`} />
+            ),
+          )}
+          {status?.tailscale ? (
+            <Choice value="" title="On your Tailscale network" words={`It opens this computer at https://${status.tailscale.address}, with a lock, wherever it is. Tailscale must run on it, signed in as on this computer.`} />
+          ) : (
+            <Choice value="" title="Only on this Wi-Fi" words="It opens this computer directly. No lock on the link: someone on the same Wi-Fi could listen. Use it at home." />
+          )}
+        </RadioGroup>
+        <div className="flex justify-end gap-2 max-md:[&_button]:h-11">
+          <Button variant="ghost" onClick={onClose}>
+            Back
+          </Button>
+          <Button onClick={() => setWhere(picked)}>
+            Show the code
+          </Button>
         </div>
-      </Dialog>
+      </div>
     )
 
   // Behind Tailscale with the door not served yet: what is in the way, and where the person clears it.
   if (where === '' && status?.tailscale && !status.listening)
     return (
-      <Dialog open onOpenChange={open => !open && onClose()} title="Add phone">
-        <div className="space-y-4 text-sm">
-          <p>{status.problem ?? 'The door on your Tailscale network is opening. One moment.'}</p>
-          <div className="flex justify-end gap-2 max-md:[&_button]:h-11">
-            <Button variant="ghost" onClick={onClose}>
-              Cancel
-            </Button>
-            {status.fixAt !== undefined && (
-              <a href={status.fixAt} target="_blank" rel="noreferrer" className={buttonVariants()}>
-                Turn on Serve
-              </a>
-            )}
-          </div>
+      <div className="space-y-4 text-sm">
+        <p>{status.problem ?? 'The door on your Tailscale network is opening. One moment.'}</p>
+        <div className="flex justify-end gap-2 max-md:[&_button]:h-11">
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          {status.fixAt !== undefined && (
+            <a href={status.fixAt} target="_blank" rel="noreferrer" className={buttonVariants()}>
+              Turn on Serve
+            </a>
+          )}
         </div>
-      </Dialog>
+      </div>
     )
 
   // On this Wi-Fi with the door shut: turned on first, after its warning.
   if (where === '' && !status?.https && !status?.listening)
     return (
-      <Dialog open onOpenChange={open => !open && onClose()} title="Add phone">
-        <div className="space-y-4 text-sm">
-          <p>{status?.on ? 'The door on this Wi-Fi is opening. One moment.' : 'Turning this on opens this computer to the phones on this Wi-Fi.'}</p>
-          {!status?.on && <p className="text-xs text-muted-foreground">{WARNING}</p>}
-          {error !== undefined && <Problem>{error}</Problem>}
-          <div className="flex justify-end gap-2 max-md:[&_button]:h-11">
-            <Button variant="ghost" onClick={onClose}>
-              Cancel
+      <div className="space-y-4 text-sm">
+        <p>{status?.on ? 'The door on this Wi-Fi is opening. One moment.' : 'Turning this on opens this computer to the phones on this Wi-Fi.'}</p>
+        {!status?.on && <p className="text-xs text-muted-foreground">{WARNING}</p>}
+        {error !== undefined && <Problem>{error}</Problem>}
+        <div className="flex justify-end gap-2 max-md:[&_button]:h-11">
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          {!status?.on && (
+            <Button
+              loading={turning}
+              disabled={!status || down}
+              onClick={() => {
+                setTurning(true)
+                void setSwitch(host, true).then(async answer => {
+                  if (!answer.ok) setError(answer.error)
+                  await d.reloadDoor().catch(() => {})
+                  setTurning(false)
+                })
+              }}
+            >
+              Turn on and show the code
             </Button>
-            {!status?.on && (
-              <Button
-                loading={turning}
-                disabled={!status || down}
-                onClick={() => {
-                  setTurning(true)
-                  void setSwitch(host, true).then(async answer => {
-                    if (!answer.ok) setError(answer.error)
-                    await d.reloadDoor().catch(() => {})
-                    setTurning(false)
-                  })
-                }}
-              >
-                Turn on and show the code
-              </Button>
-            )}
-          </div>
+          )}
         </div>
-      </Dialog>
+      </div>
     )
 
   return (
     <PhoneCode
-      title="Add phone"
       // The person's own phone: at a server through its door, else at this computer's. Someone else's device is added with Add person.
       ask={server ? server.ask : () => addDevice(host)}
       {...(server ? { openHere: true } : {})}

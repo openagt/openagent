@@ -322,9 +322,9 @@ describe('Settings › Devices: this computer, and how devices reach it', () => 
     expect(screen.getByText('At https://laptop.tail1234.ts.net once Tailscale serves it.')).toBeTruthy()
     expect(screen.getByRole('link', { name: 'Turn on Serve' }).getAttribute('href')).toBe('https://login.tailscale.com/f/serve?node=n1')
     await addPhone()
-    const dialog = await screen.findByRole('dialog')
-    expect(within(dialog).getByText(OFF_THERE.problem)).toBeTruthy()
-    expect(within(dialog).getByRole('link', { name: 'Turn on Serve' }).getAttribute('href')).toBe('https://login.tailscale.com/f/serve?node=n1')
+    const page = await screen.findByRole('region', { name: 'Add phone' })
+    expect(within(page).getByText(OFF_THERE.problem)).toBeTruthy()
+    expect(within(page).getByRole('link', { name: 'Turn on Serve' }).getAttribute('href')).toBe('https://login.tailscale.com/f/serve?node=n1')
     cleanup()
     // Only Tailscale's own page is linked to.
     show(door(() => ok({ ...OFF_THERE, fixAt: 'https://evil.example/' })).host)
