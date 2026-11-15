@@ -51,6 +51,9 @@ test("the buttons stand in the name's row, at its right, and the line under that
   expect(buttons.className).not.toMatch(/shrink-0/)
   // The name and its count never do: the count stays beside the name.
   expect(heading.parentElement!.className.split(' ')).toContain('shrink-0')
+  // Buttons that take two rows leave the name beside the first, as high as it: not in the middle of both.
+  expect(row.className.split(' ')).toContain('md:items-start')
+  expect(heading.parentElement!.className.split(' ')).toEqual(expect.arrayContaining(['items-center', 'md:min-h-8']))
 })
 
 test("a page's line stands where its description does from a tablet up, and on a phone first in the buttons' row, wrapping as text beside them", () => {
