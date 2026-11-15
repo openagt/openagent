@@ -121,6 +121,14 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
       setStarting(null)
     },
     onConfigure: (row, prompt) => host.configureRun(row.projectId, prompt),
+    // Added to what is filtered, so a second topic widens the list; lowercased, the one casing the filters hold.
+    onTopic: raw => {
+      const topic = raw.toLowerCase()
+      if (!view.filters.topics.includes(topic)) setView({ ...view, filters: { ...view.filters, topics: [...view.filters.topics, topic] } })
+    },
+    onClaimed: () => {
+      if (!view.filters.stage.includes('claimed')) setView({ ...view, filters: { ...view.filters, stage: [...view.filters.stage, 'claimed'] } })
+    },
   }
   const listed = (r: TicketRow, named: boolean): ListedTicket => ({ projectId: r.projectId, ...(named ? { projectName: r.projectName } : {}), ticket: r.ticket })
 

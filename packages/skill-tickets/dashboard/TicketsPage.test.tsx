@@ -184,11 +184,12 @@ describe('TicketsPage (#1144)', () => {
     expect(within(screen.getByRole('region', { name: 'Beta' })).getByRole('alert').textContent).toMatch(/Could not read the tickets: no answer for p2/)
   })
 
-  test("a claim naming one of the project's runs reads as its session name (#1748)", async () => {
+  test("a claim naming one of the project's runs reads as its session name and opens the run (#1748)", async () => {
     const run = { id: '2026-08-30T10-00-00-000Z', name: 'login-page', status: 'running' as const, startedAt: '2026-08-30T10:00:00.000Z' }
     host = fakeHost({ p1: { 'list --local': [ticket({ locked: true, lockedBy: run.id })], 'meta --local': {} } }, { p1: [run] })
     renderWithHost(<TicketsPage projects={[{ id: 'p1', name: 'Alpha', gitHost: true }]} />, host, modules())
-    await waitFor(() => expect(screen.getByText('Claimed').closest('[title]')?.getAttribute('title')).toBe('Claimed by login-page'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Claimed by login-page' }))
+    expect(host.openAgent).toHaveBeenCalledWith('p1', run.id)
   })
 })
 
@@ -253,6 +254,32 @@ describe('TicketsPage filters (#1144)', () => {
       ticket({ file: 'other.md', title: 'Something else', locked: true, lockedBy: 'agent-1' }),
     ],
   ) => onAllTickets.mockResolvedValue([{ projectId: 'p1', projectName: 'Alpha', tickets }])
+
+  test("clicking a row's topic badge adds that topic filter (#1144)", async () => {
+    fixture()
+    render()
+    fireEvent.click(await screen.findByRole('button', { name: 'dx' }))
+    await waitFor(() => expect(screen.queryByText('Something else')).toBeNull())
+    expect(host.adjustPage).toHaveBeenLastCalledWith(undefined, 'topics=dx')
+  })
+
+  test('a badge whose topic is capitalised filters by it just the same', async () => {
+    fixture([ticket({ file: 'ux.md', title: 'Polish the rail', topics: ['UX'] }), ticket({ file: 'other.md', title: 'Something else' })])
+    render()
+    fireEvent.click(await screen.findByRole('button', { name: 'UX' }))
+    await waitFor(() => expect(screen.queryByText('Something else')).toBeNull())
+    expect(screen.getByText('Polish the rail')).toBeTruthy()
+    expect(host.adjustPage).toHaveBeenLastCalledWith(undefined, 'topics=ux')
+  })
+
+  test('clicking the claim marker narrows to claimed tickets', async () => {
+    fixture()
+    render()
+    fireEvent.click(await screen.findByRole('button', { name: 'Claimed by agent-1' }))
+    await waitFor(() => expect(screen.queryByText('Improve the lock')).toBeNull())
+    expect(screen.getByText('Something else')).toBeTruthy()
+    expect(host.adjustPage).toHaveBeenLastCalledWith(undefined, 'stage=claimed')
+  })
 
   test('searching narrows the rows and writes q= to the URL', async () => {
     fixture()
