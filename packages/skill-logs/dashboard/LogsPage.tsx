@@ -1,4 +1,4 @@
-import { Button, Card, Empty, FilterChips, MiddleCut, Page, PanelGroup, PanelRow, PersonMark, RowShapes, RunMark, Slot, formatDateTime, formatDuration, needsWord, personSaid, runName, runLineTone, useCodingAgents, useGitHostPeople, useIsMobile, runsAgain, runWord, useModuleHost, usePolled, type CodingAgent, type ModuleAgent, type ModuleHostPerson, type ModulePageProps, type ModuleProject, type ReadState } from '@openagt/dashboard/module'
+import { Button, Empty, FilterChips, MiddleCut, Page, PanelGroup, PanelRow, PersonMark, RowShapes, RunMark, Slot, formatDateTime, formatDuration, needsWord, personSaid, runName, runLineTone, useCodingAgents, useGitHostPeople, useIsMobile, runsAgain, runWord, useModuleHost, usePolled, type CodingAgent, type ModuleAgent, type ModuleHostPerson, type ModulePageProps, type ModuleProject, type ReadState } from '@openagt/dashboard/module'
 import type { RunCard } from '../src/run.js'
 
 /** How many runs each project lists: the command's own default page is 20; the page shows more. */
@@ -236,9 +236,7 @@ export function LogsPage({ projects, path }: ModulePageProps) {
               </p>
             ))}
             {read.rows.length === 0 && read.failed.length === 0 && (
-              <Card>
-                <Empty title="No runs recorded yet">A run is listed here from the moment an agent starts on this project.</Empty>
-              </Card>
+              <Empty title="No runs recorded yet">A run is listed here from the moment an agent starts on this project.</Empty>
             )}
             {/* A day is a panel of its runs. A row: its mark, its name over how it stands, then on the name's line at
                 its right whose it is, the agent that ran it and its pull request, each in a column that stands in one
