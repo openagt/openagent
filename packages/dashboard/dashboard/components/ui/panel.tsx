@@ -22,7 +22,7 @@ export function PanelGroup({ title, badge, count, action, children }: { title: R
   const Heading = useHeadingTag()
   return (
     <section aria-labelledby={heading} className="min-w-0">
-      <div className="mb-2 flex min-h-7 items-center gap-2 px-1">
+      <div className="mb-2 flex min-h-7 items-center gap-2">
         <Heading className="flex min-w-0 flex-1 items-center gap-2 text-sm font-semibold">
           <span id={heading} className="min-w-0 truncate">
             {title}
