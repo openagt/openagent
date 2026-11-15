@@ -116,6 +116,12 @@ describe('AgentHistory (#785)', () => {
     for (const row of screen.getAllByRole('link', { name: /· done ·/ })) expect(row.getAttribute('aria-label')).toMatch(/ada@x\.dev · Codex/)
   })
 
+  test('a row ends with how long ago its run started, in a word', () => {
+    const startedAt = new Date(Date.now() - 12 * 60_000 - 5_000).toISOString()
+    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent({ title: 'Login page', startedAt })]} selectedAgentId={null} onSelect={() => {}} />)
+    expect(screen.getByRole('link', { name: /^Login page/ }).textContent).toBe('Login page12m')
+  })
+
   test('a named run reads by its name, not by the words the person typed', () => {
     renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent({ title: 'Welcome message' })]} selectedAgentId={null} onSelect={() => {}} />)
     expect(screen.getByText('Welcome message')).toBeTruthy()
@@ -179,7 +185,8 @@ describe('AgentHistory (#785)', () => {
     // The run's own row will carry a name seconds from now, so this one holds the place: printing
     // the prompt here is what made the rail flicker, the prompt swapped for the name a beat later.
     // Alone in the list, its project tells it from no other row: the row's name says it.
-    expect(row.textContent).toBe('')
+    expect(row.querySelector('.rail-title')!.textContent).toBe('')
+    expect(row.textContent).toBe('now')
     expect(row.querySelector('.rail-title .animate-pulse')).toBeTruthy()
     expect(row.getAttribute('aria-label')).toBe('Naming this session · working · alpha · just now')
     expect(row.textContent).not.toContain('starting…')
@@ -196,7 +203,7 @@ describe('AgentHistory (#785)', () => {
       </SidebarProvider>,
     )
     const standInRow = [...container.querySelectorAll('a, button')].find(row => row.hasAttribute('data-stand-in'))!
-    expect(standInRow.textContent).toBe('')
+    expect(standInRow.querySelector('.rail-title')!.textContent).toBe('')
     expect(standInRow.getAttribute('aria-label')).toBe('Naming this session · working · just now')
   })
 
@@ -229,7 +236,7 @@ describe('AgentHistory (#785)', () => {
       </SidebarProvider>,
     )
     const row = [...container.querySelectorAll('a, button')].find(row => row.hasAttribute('data-stand-in'))!
-    expect(row.textContent).toBe('add a footer')
+    expect(row.querySelector('.rail-title')!.textContent).toBe('add a footer')
     expect(row.querySelector('.rail-title .animate-pulse')).toBeNull()
   })
 

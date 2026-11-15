@@ -14,7 +14,7 @@ import { inPlace } from '../lib/in-place.js'
 import { formatRoute, type Route } from '../lib/route.js'
 import { NO_PROJECTS } from '../../src/project-address.js'
 import { cn } from '../lib/utils.js'
-import { formatRelative } from '../lib/format-date.js'
+import { formatDuration, formatRelative } from '../lib/format-date.js'
 import { updatePreferences, usePreferences } from '../lib/preferences.js'
 import { RECENTS_SORT_LABELS, sortRuns, type RecentsSort } from '../lib/recents-sort.js'
 import { useProjectLabel } from '../lib/project-labels.js'
@@ -303,6 +303,7 @@ export function AgentHistory({
       // project's own rail already knows its project, and a subagent is in its main agent's.
       {...(row.project && !subagent ? { project: row.project } : {})}
       subtitle={formatRelative(row.agent.startedAt)}
+      age={shortAge(row.agent.startedAt)}
       active={row.active}
       remote={row.agent.target === 'remote'}
       cloud={row.agent.target === 'web'}
@@ -426,6 +427,7 @@ export function AgentHistory({
                             {...(preferences.nameRuns === false ? { intent: optimistic?.intent ?? undefined } : startTitle !== undefined ? { intent: startTitle } : { intent: undefined, naming: true })}
                             {...(crossProject && startProjectName ? { project: startProjectName } : {})}
                             subtitle="just now"
+                            age="now"
                             telling={telling}
                             driver={preferences.driver}
                             active={starting}
@@ -614,6 +616,14 @@ function RecentsSortMenu({ order }: { order: RecentsSort }) {
   )
 }
 
+/** How long ago a run started, in a word: "now", "2m", "3h", "5d". */
+function shortAge(startedAt: string | undefined): string {
+  const at = startedAt ? Date.parse(startedAt) : NaN
+  if (Number.isNaN(at)) return ''
+  const ms = Date.now() - at
+  return ms < 60_000 ? 'now' : formatDuration(ms)
+}
+
 /** A person's mark on a row, beside its smaller marks. */
 const PERSON_MARK = 'size-5 text-xs font-medium'
 
@@ -635,6 +645,7 @@ function AgentHistoryRow({
   naming = false,
   project,
   subtitle,
+  age,
   active,
   href,
   onClick,
@@ -670,6 +681,8 @@ function AgentHistoryRow({
   /** When the sessions come from several projects, which one this is: it is what tells the rows apart there. */
   project?: string | undefined
   subtitle: string
+  /** How long ago it started, in a word ("2m"), at the row's end: the order the list is in by default. */
+  age: string
   /** The agent that ran it, so the row can show whose session it was. */
   driver?: string | undefined
   /** The model it ran on, by the name its coding agent gives it: said when the agent's logo is pointed at. */
@@ -791,6 +804,8 @@ function AgentHistoryRow({
           <span className="block text-xs text-muted-foreground">{said}</span>
         </TooltipContent>
       </Tooltip>
+      {/* When it started, in a word: the list's own order, read down the rows' end. */}
+      <span aria-hidden className="shrink-0 text-xs text-muted-foreground">{age}</span>
       {/* What is unusual about where the run is, kept on the row as one small glyph: another
           machine, a person's own computer, a cloud session. Rare, so the row stays a circle and a
           name nearly always. */}
