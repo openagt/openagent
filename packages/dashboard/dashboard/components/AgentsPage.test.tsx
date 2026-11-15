@@ -96,14 +96,27 @@ describe('the Agents page', () => {
     const editor = screen.getByRole('dialog', { name: 'New agent' })
     // What is typed first goes to the name.
     await waitFor(() => expect(document.activeElement).toBe(within(editor).getByLabelText('Name')))
-    expect((within(editor).getByLabelText('ask') as HTMLInputElement).getAttribute('aria-checked') ?? (within(editor).getByLabelText('ask') as HTMLInputElement).checked.toString()).toMatch(/true/)
+    expect((within(editor).getByRole('checkbox', { name: 'ask' }) as HTMLInputElement).getAttribute('aria-checked') ?? (within(editor).getByRole('checkbox', { name: 'ask' }) as HTMLInputElement).checked.toString()).toMatch(/true/)
     fireEvent.change(within(editor).getByLabelText('Name'), { target: { value: 'Social Media' } })
-    fireEvent.click(within(editor).getByLabelText('ux'))
+    fireEvent.click(within(editor).getByRole('checkbox', { name: 'ux' }))
     fireEvent.click(within(editor).getByLabelText('Claude account Dani'))
     fireEvent.click(within(editor).getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(rpc.sendSaveAgent).toHaveBeenCalledWith({ name: 'Social Media', skills: ['ask', 'github', 'ux'], accounts: { claude: ['Dani'] }, projectSkills: true }))
     await waitFor(() => expect(rpc.onAgentsList).toHaveBeenCalledTimes(2))
     expect(screen.queryByRole('dialog', { name: 'New agent' })).toBeNull()
+  })
+
+  test("a skill's sentence is one line, the whole of it on a press of that line, which ticks nothing", async () => {
+    render(<AgentsPage />)
+    fireEvent.click(await newAgentPress())
+    const editor = screen.getByRole('dialog', { name: 'New agent' })
+    const sentence = within(editor).getByRole('button', { name: 'Read the code.' })
+    expect(sentence.getAttribute('aria-expanded')).toBe('false')
+    expect(sentence.className).toContain('truncate')
+    fireEvent.click(sentence)
+    expect(sentence.getAttribute('aria-expanded')).toBe('true')
+    expect(sentence.className).not.toContain('truncate')
+    expect(within(editor).getByRole('checkbox', { name: 'readability' }).getAttribute('aria-checked')).toBe('false')
   })
 
   test('the editor is a form: Enter in the name saves; with no name, Save says what it needs under the field and saves nothing', async () => {
@@ -159,10 +172,10 @@ describe('the Agents page', () => {
     render(<AgentsPage />)
     fireEvent.click(await screen.findByRole('button', { name: 'Edit Reviewer' }))
     const editor = screen.getByRole('dialog', { name: 'Editing Reviewer' })
-    fireEvent.click(within(editor).getByLabelText('readability'))
+    fireEvent.click(within(editor).getByRole('checkbox', { name: 'readability' }))
     // Its project-skills tick is off as its record says; ticked on, the save says so.
-    expect(within(editor).getByLabelText('Project skills').getAttribute('aria-checked')).toBe('false')
-    fireEvent.click(within(editor).getByLabelText('Project skills'))
+    expect(within(editor).getByRole('checkbox', { name: 'Project skills' }).getAttribute('aria-checked')).toBe('false')
+    fireEvent.click(within(editor).getByRole('checkbox', { name: 'Project skills' }))
     fireEvent.click(within(editor).getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(rpc.sendSaveAgent).toHaveBeenCalledWith({ id: 'reviewer', name: 'Reviewer', skills: ['ask'], accounts: { github: 'octo-agent', claude: ['Dani'] }, projectSkills: true }))
     expect((await within(editor).findByRole('alert')).textContent).toContain('no GitHub account stranger')

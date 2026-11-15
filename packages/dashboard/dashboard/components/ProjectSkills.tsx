@@ -9,6 +9,7 @@ import { Checkbox } from './ui/checkbox.js'
 import { Skeleton } from './ui/skeleton.js'
 import { Slot } from './ui/slot.js'
 import { SettingsFoot } from './SettingsRows.js'
+import { cn } from '../lib/utils.js'
 
 // A project's skills (#2023). The "Skills" menu under the box (SkillsMenu.tsx) opens Settings on
 // the project's Skills page: a card with a tick for each skill a project picks beyond the ones
@@ -350,8 +351,33 @@ function SkillCards({ projectId, skills, onDone }: { projectId: string; skills: 
 /** The skills' ticks laid out: a column, two from a tablet up, 12 between rows. */
 export const SKILL_TICKS_CLASS = 'grid gap-x-6 gap-y-3 md:grid-cols-2'
 
-/** One skill to tick: the box, its name, and its sentence under it; a note, a warning, between them. No box around it. */
-export function SkillTick({ name, description, note, checked, onChange, disabled, label = name }: { name: string; description: string; note?: string | undefined; checked: boolean; onChange: (on: boolean) => void; disabled?: boolean | undefined; label?: string | undefined }) {
+/**
+ * One skill to tick: the box, its name, and its sentence under it; a note, a warning, between them. No box around it.
+ * `brief`: one line of the sentence, the whole of it on a press of that line.
+ */
+export function SkillTick({ name, description, note, checked, onChange, disabled, label = name, brief = false }: { name: string; description: string; note?: string | undefined; checked: boolean; onChange: (on: boolean) => void; disabled?: boolean | undefined; label?: string | undefined; brief?: boolean }) {
+  const [whole, setWhole] = useState(false)
+  if (brief)
+    return (
+      <div className="min-w-0">
+        <label className="flex cursor-pointer items-start gap-3">
+          <Checkbox checked={checked} onCheckedChange={next => onChange(next === true)} disabled={disabled} className="mt-0.5" aria-label={label} />
+          <span className="min-w-0 text-sm font-medium">{name}</span>
+        </label>
+        {/* Under the name, on the edge its words start at: the box's 16 and the gap's 12. */}
+        <div className="min-w-0 pl-7">
+          {note !== undefined && <span className="block text-xs text-warning">{note}</span>}
+          <button
+            type="button"
+            aria-expanded={whole}
+            onClick={() => setWhole(on => !on)}
+            className={cn('focus-ring relative block max-w-full rounded-sm text-left text-xs text-muted-foreground after:absolute after:-inset-y-1 after:inset-x-0 hover:text-foreground', !whole && 'truncate')}
+          >
+            {description}
+          </button>
+        </div>
+      </div>
+    )
   return (
     <label className="flex cursor-pointer items-start gap-3">
       <Checkbox checked={checked} onCheckedChange={next => onChange(next === true)} disabled={disabled} className="mt-0.5" aria-label={label} />

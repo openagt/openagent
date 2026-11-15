@@ -375,13 +375,14 @@ function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord;
             <Section key={group.title} title={group.title}>
               <div className={SKILL_TICKS_CLASS}>
                 {group.skills.map(skill => (
-                  <SkillTick key={skill.name} name={skill.name} description={skill.description} checked={draft.skills.has(skill.name)} onChange={on => tick('skills', skill.name, on)} disabled={busy} />
+                  <SkillTick key={skill.name} brief name={skill.name} description={skill.description} checked={draft.skills.has(skill.name)} onChange={on => tick('skills', skill.name, on)} disabled={busy} />
                 ))}
               </div>
             </Section>
           ))}
           {/* Rom's first level: an agent set to never pick up the project's own skills. A session can still pick them. */}
           <SkillTick
+            brief
             name="Project skills"
             description="The skills a project keeps in its repo go to this agent’s sessions too. Off, a session starts without them and can still pick them under the box."
             checked={draft.projectSkills}
