@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Check, CircleCheck, Copy, ExternalLink, Loader2, RotateCw } from 'lucide-react'
-import { Button, Dialog, Input, QrCode, Skeleton, Slot, useOpenAgentDown } from '@openagt/dashboard/module'
+import { Button, Dialog, Input, QrCode, SettingsFoot, Skeleton, Slot, useOpenAgentDown } from '@openagt/dashboard/module'
 import { failed, type Answer, type Given } from './devices.js'
 import { CodeStrip, LinkPress, Problem } from './parts.js'
 
@@ -278,20 +278,22 @@ export function PhoneCode({
         </div>
       )}
       {/* Cancel before the other press; once joined, Done is the press the page ends on, last. */}
-      <div className="flex justify-end gap-2 max-md:[&_button]:h-11">
-        {joined === undefined && (
-          <Button variant="ghost" onClick={onClose}>
-            Cancel
-          </Button>
-        )}
-        {!asking && (joined !== undefined || expired || error !== undefined || !code) && (
-          <Button variant="secondary" disabled={down} onClick={() => void again()}>
-            <RotateCw className="size-4" aria-hidden />
-            {joined !== undefined ? 'Add another' : 'New code'}
-          </Button>
-        )}
-        {joined !== undefined && <Button onClick={onClose}>Done</Button>}
-      </div>
+      <SettingsFoot>
+        <div className="flex justify-end gap-2 max-md:[&_button]:h-11">
+          {joined === undefined && (
+            <Button variant="ghost" onClick={onClose}>
+              Cancel
+            </Button>
+          )}
+          {!asking && (joined !== undefined || expired || error !== undefined || !code) && (
+            <Button variant="secondary" disabled={down} onClick={() => void again()}>
+              <RotateCw className="size-4" aria-hidden />
+              {joined !== undefined ? 'Add another' : 'New code'}
+            </Button>
+          )}
+          {joined !== undefined && <Button onClick={onClose}>Done</Button>}
+        </div>
+      </SettingsFoot>
     </div>
   )
 }

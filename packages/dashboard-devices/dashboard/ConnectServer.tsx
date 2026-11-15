@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { CircleCheck, CircleX, Loader2, PlugZap } from 'lucide-react'
-import { Button, Checkbox, Input, RadioGroup, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, cn, useOpenAgentDown, usePolled } from '@openagt/dashboard/module'
+import { Button, Checkbox, Input, RadioGroup, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SettingsFoot, cn, useOpenAgentDown, usePolled } from '@openagt/dashboard/module'
 import type { Answer } from './devices.js'
 import { installDone, installFailed, testConnection, type ServerRow, type Tested } from './servers.js'
 import { CopyButton } from './codes.js'
@@ -172,8 +172,13 @@ function Stepper({ at }: { at: Stage }) {
   )
 }
 
+/** A step's presses, in Settings' foot: they hold their place from step to step. */
 function Footer({ children }: { children: ReactNode }) {
-  return <div className="flex justify-end gap-2 pt-1 max-md:[&_button]:h-11">{children}</div>
+  return (
+    <SettingsFoot>
+      <div className="flex justify-end gap-2 max-md:[&_button]:h-11">{children}</div>
+    </SettingsFoot>
+  )
 }
 
 function Where({ kind, onKind, doors, through, onVia, onCancel, onNext }: { kind: Kind; onKind: (kind: Kind) => void; doors: { value: string; label: string }[]; through: string | undefined; onVia: (url: string) => void; onCancel: () => void; onNext: () => void }) {

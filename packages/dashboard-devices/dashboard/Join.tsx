@@ -1,5 +1,5 @@
-import { useState, type ClipboardEvent, type FormEvent } from 'react'
-import { Button, Checkbox, Input, useOpenAgentDown } from '@openagt/dashboard/module'
+import { useId, useState, type ClipboardEvent, type FormEvent } from 'react'
+import { Button, Checkbox, Input, SettingsFoot, useOpenAgentDown } from '@openagt/dashboard/module'
 import { hasDoor } from './model.js'
 import { Problem } from './parts.js'
 import { sharedReach } from './servers.js'
@@ -55,6 +55,8 @@ export function Join({ d, onClose, onJoined }: { d: Devices; onClose: () => void
   const [both, setBoth] = useState(true)
   const [joining, setJoining] = useState(false)
   const [error, setError] = useState<string | undefined>()
+  // Join stands in Settings' foot, outside the form's box: it is the form's own press by its id.
+  const formId = useId()
   const link = linkOf(where, code)
   // Through a server: a link pasted whole may be a computer's on its Wi-Fi, or one on Tailscale, which keeps no line.
   const server = link !== undefined && hasDoor({ url: new URL(link).origin })
@@ -107,7 +109,7 @@ export function Join({ d, onClose, onJoined }: { d: Devices; onClose: () => void
   }
 
   return (
-    <form className="space-y-4" onSubmit={event => void join(event)}>
+    <form id={formId} className="space-y-4" onSubmit={event => void join(event)}>
       <p className="text-sm text-muted-foreground">Type what the other device shows.</p>
       <label className="block space-y-1">
         <span className="block text-sm font-medium">Where</span>
@@ -130,16 +132,18 @@ export function Join({ d, onClose, onJoined }: { d: Devices; onClose: () => void
         </label>
       )}
       {error !== undefined && <Problem>{error}</Problem>}
-      <div className="flex justify-end gap-2 max-md:[&_button]:h-11">
-        <Button type="button" variant="ghost" onClick={onClose}>
-          {error?.startsWith('Joined.') ? 'Done' : 'Cancel'}
-        </Button>
-        {!error?.startsWith('Joined.') && (
-          <Button type="submit" loading={joining} disabled={link === undefined || down}>
-            Join
+      <SettingsFoot>
+        <div className="flex justify-end gap-2 max-md:[&_button]:h-11">
+          <Button type="button" variant="ghost" onClick={onClose}>
+            {error?.startsWith('Joined.') ? 'Done' : 'Cancel'}
           </Button>
-        )}
-      </div>
+          {!error?.startsWith('Joined.') && (
+            <Button type="submit" form={formId} loading={joining} disabled={link === undefined || down}>
+              Join
+            </Button>
+          )}
+        </div>
+      </SettingsFoot>
     </form>
   )
 }

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Monitor, Ticket } from 'lucide-react'
-import { Button, List, RadioGroup, Row, buttonVariants, useOpenAgentDown, type ModuleMachine } from '@openagt/dashboard/module'
+import { Button, List, RadioGroup, Row, SettingsFoot, buttonVariants, useOpenAgentDown, type ModuleMachine } from '@openagt/dashboard/module'
 import { addDevice, findComputers, readPersonThere, setSwitch, type Answer, type FoundComputer, type Given } from './devices.js'
 import { askLink, installDone } from './servers.js'
 import { CodeCard, Joined, NoCodeYet, PhoneCode, RanOut, Waiting, clock, useCode } from './codes.js'
@@ -99,14 +99,16 @@ function Choose({ kinds, onPicked, onClose }: { kinds: typeof KINDS; onPicked: (
           </div>
         ))}
       </RadioGroup>
-      <div className="flex justify-end gap-2 max-md:[&_button]:h-11">
-        <Button variant="ghost" onClick={onClose}>
-          Cancel
-        </Button>
-        <Button onClick={() => onPicked(picked)}>
-          Continue
-        </Button>
-      </div>
+      <SettingsFoot>
+        <div className="flex justify-end gap-2 max-md:[&_button]:h-11">
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button onClick={() => onPicked(picked)}>
+            Continue
+          </Button>
+        </div>
+      </SettingsFoot>
     </div>
   )
 }
@@ -184,14 +186,16 @@ function AddPhone({ d, onClose }: { d: Devices; onClose: () => void }) {
             <Choice value="" title="Only on this Wi-Fi" words="It opens this computer directly. No lock on the link: someone on the same Wi-Fi could listen. Use it at home." />
           )}
         </RadioGroup>
-        <div className="flex justify-end gap-2 max-md:[&_button]:h-11">
-          <Button variant="ghost" onClick={onClose}>
-            Back
-          </Button>
-          <Button onClick={() => setWhere(picked)}>
-            Show the code
-          </Button>
-        </div>
+        <SettingsFoot>
+          <div className="flex justify-end gap-2 max-md:[&_button]:h-11">
+            <Button variant="ghost" onClick={onClose}>
+              Back
+            </Button>
+            <Button onClick={() => setWhere(picked)}>
+              Show the code
+            </Button>
+          </div>
+        </SettingsFoot>
       </div>
     )
 
@@ -200,16 +204,18 @@ function AddPhone({ d, onClose }: { d: Devices; onClose: () => void }) {
     return (
       <div className="space-y-4 text-sm">
         <p>{status.problem ?? 'The door on your Tailscale network is opening. One moment.'}</p>
-        <div className="flex justify-end gap-2 max-md:[&_button]:h-11">
-          <Button variant="ghost" onClick={onClose}>
-            Cancel
-          </Button>
-          {status.fixAt !== undefined && (
-            <a href={status.fixAt} target="_blank" rel="noreferrer" className={buttonVariants()}>
-              Turn on Serve
-            </a>
-          )}
-        </div>
+        <SettingsFoot>
+          <div className="flex justify-end gap-2 max-md:[&_button]:h-11">
+            <Button variant="ghost" onClick={onClose}>
+              Cancel
+            </Button>
+            {status.fixAt !== undefined && (
+              <a href={status.fixAt} target="_blank" rel="noreferrer" className={buttonVariants()}>
+                Turn on Serve
+              </a>
+            )}
+          </div>
+        </SettingsFoot>
       </div>
     )
 
@@ -220,27 +226,29 @@ function AddPhone({ d, onClose }: { d: Devices; onClose: () => void }) {
         <p>{status?.on ? 'The door on this Wi-Fi is opening. One moment.' : 'Turning this on opens this computer to the phones on this Wi-Fi.'}</p>
         {!status?.on && <p className="text-xs text-muted-foreground">{WARNING}</p>}
         {error !== undefined && <Problem>{error}</Problem>}
-        <div className="flex justify-end gap-2 max-md:[&_button]:h-11">
-          <Button variant="ghost" onClick={onClose}>
-            Cancel
-          </Button>
-          {!status?.on && (
-            <Button
-              loading={turning}
-              disabled={!status || down}
-              onClick={() => {
-                setTurning(true)
-                void setSwitch(host, true).then(async answer => {
-                  if (!answer.ok) setError(answer.error)
-                  await d.reloadDoor().catch(() => {})
-                  setTurning(false)
-                })
-              }}
-            >
-              Turn on and show the code
+        <SettingsFoot>
+          <div className="flex justify-end gap-2 max-md:[&_button]:h-11">
+            <Button variant="ghost" onClick={onClose}>
+              Cancel
             </Button>
-          )}
-        </div>
+            {!status?.on && (
+              <Button
+                loading={turning}
+                disabled={!status || down}
+                onClick={() => {
+                  setTurning(true)
+                  void setSwitch(host, true).then(async answer => {
+                    if (!answer.ok) setError(answer.error)
+                    await d.reloadDoor().catch(() => {})
+                    setTurning(false)
+                  })
+                }}
+              >
+                Turn on and show the code
+              </Button>
+            )}
+          </div>
+        </SettingsFoot>
       </div>
     )
 
@@ -412,16 +420,18 @@ export function GiveCode({ d, server, onClose }: { d: Devices; server: ModuleMac
           )}
         </>
       )}
-      <div className="flex justify-end gap-2 max-md:[&_button]:h-11">
-        <Button variant={done ? 'default' : 'ghost'} onClick={onClose}>
-          {done ? 'Done' : 'Cancel'}
-        </Button>
-        {!asking && !done && (expired || error !== undefined || !code) && joined === undefined && (
-          <Button variant="secondary" disabled={down} onClick={() => void again()}>
-            New code
+      <SettingsFoot>
+        <div className="flex justify-end gap-2 max-md:[&_button]:h-11">
+          <Button variant={done ? 'default' : 'ghost'} onClick={onClose}>
+            {done ? 'Done' : 'Cancel'}
           </Button>
-        )}
-      </div>
+          {!asking && !done && (expired || error !== undefined || !code) && joined === undefined && (
+            <Button variant="secondary" disabled={down} onClick={() => void again()}>
+              New code
+            </Button>
+          )}
+        </div>
+      </SettingsFoot>
     </div>
   )
 }
