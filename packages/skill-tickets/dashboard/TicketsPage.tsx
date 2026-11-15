@@ -199,7 +199,7 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
         }
       </Slot>
       {/* The selection bar's room at the list's end, 16 under it, kept whether or not a row is ticked, so ticking moves nothing. */}
-      <div aria-hidden className="h-13 max-md:h-45" />
+      <div aria-hidden className="h-13 max-md:h-43" />
       {barRows.length > 0 && (
         <SelectionBar
           leaving={!hasSelection}
@@ -235,7 +235,7 @@ function SelectionBar({ leaving, count, onSelectAll, onClear, children }: { leav
             Select all
           </Button>
         )}
-        <div className="contents max-md:order-last max-md:flex max-md:basis-full max-md:flex-col max-md:gap-2 max-md:pb-2 max-md:*:h-11">{children}</div>
+        <div className="contents max-md:order-last max-md:flex max-md:basis-full max-md:flex-col max-md:gap-2 max-md:*:h-11">{children}</div>
         <Button variant="ghost" size="icon-sm" aria-label="Clear the selection" title="Clear the selection (Esc)" onClick={onClear} className="text-muted-foreground max-md:-mr-3 max-md:ml-auto max-md:size-11">
           <X className="size-4" aria-hidden />
         </Button>
