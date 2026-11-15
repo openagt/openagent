@@ -54,8 +54,11 @@
 
   /* Motion: 100ms for colour and opacity on hover, the default; 140ms for a popover, a menu or a
      tooltip entering, 180ms for a dialog or a sheet; an exit at two thirds of its entrance (90ms,
-     120ms). Reduced motion makes each a cut (tailwind.css). */
-  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+     120ms). Reduced motion makes each a cut (tailwind.css). The curves are the design-engineering
+     standard's: an ease-out that starts fast and settles (what enters, what a press does), and an
+     ease-in-out for what moves across the screen; the built-in ones are too weak to read. */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
   --default-transition-duration: 100ms;
   --default-transition-timing-function: var(--ease-out);
   /* A skeleton is not drawn for the first 200ms of a wait, so a fast answer draws no flash; then it
