@@ -23,12 +23,12 @@ describe('TicketFilterBar (#1144)', () => {
     const { onChange } = renderBar([row('a.md', { priority: '9' }), row('b.md', { priority: '4' }), row('c.md')])
     fireEvent.click(screen.getByRole('button', { name: /priority/i }))
     // Counts ride each option, so a pick's yield is visible before it is made.
-    const critical = await screen.findByLabelText('Critical (8–10)')
-    expect(screen.getByText('Critical (8–10)').parentElement?.textContent).toContain('1')
-    fireEvent.click(critical)
+    const high = await screen.findByLabelText('High (7–10)')
+    expect(screen.getByText('High (7–10)').parentElement?.textContent).toContain('1')
+    fireEvent.click(high)
     expect(onChange).toHaveBeenCalled()
     const next = onChange.mock.calls[0]![0] as TicketsView
-    expect(next.filters.priority.buckets).toEqual(['critical'])
+    expect(next.filters.priority.buckets).toEqual(['high'])
     // The fine-grained slider sits under the buckets (#1144: bucket + slider + none).
     expect(screen.getByText(/range: any/i)).toBeTruthy()
     expect(screen.getByLabelText('No priority')).toBeTruthy()
@@ -97,21 +97,21 @@ describe('TicketFilterBar (#1144)', () => {
 
   test('a contiguous bucket selection mirrors onto the slider instead of dimming it', async () => {
     const view = defaultView()
-    view.filters.priority = { buckets: ['critical', 'medium'], range: null, none: false }
+    view.filters.priority = { buckets: ['high', 'medium'], range: null, none: false }
     renderBar([row('a.md', { priority: '9' })], view)
     fireEvent.click(screen.getByRole('button', { name: /priority/i }))
-    await screen.findByLabelText('Critical (8–10)')
+    await screen.findByLabelText('High (7–10)')
     expect(document.querySelector('[data-dimmed]')).toBeNull()
     // Adjacent buckets are one span, so the readout (and the thumbs) sit on the union.
-    expect(screen.getByText(/range: 5–10/i)).toBeTruthy()
+    expect(screen.getByText(/range: 4–10/i)).toBeTruthy()
   })
 
   test('only a selection no single range can express dims the slider', async () => {
     const view = defaultView()
-    view.filters.priority = { buckets: ['critical', 'low'], range: null, none: false }
+    view.filters.priority = { buckets: ['high', 'low'], range: null, none: false }
     renderBar([row('a.md', { priority: '9' })], view)
     fireEvent.click(screen.getByRole('button', { name: /priority/i }))
-    await screen.findByLabelText('Critical (8–10)')
+    await screen.findByLabelText('High (7–10)')
     expect(document.querySelector('[data-dimmed]')).toBeTruthy()
     expect(screen.getByText(/range: not one span/i)).toBeTruthy()
   })
