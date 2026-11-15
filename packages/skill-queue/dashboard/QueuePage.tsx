@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from 'react'
+import { useId, useRef, useState, type ReactNode } from 'react'
 import { Ellipsis, FastForward, Play } from 'lucide-react'
 import {
   Button,
@@ -114,10 +114,11 @@ export function QueuePage({ projects }: ModulePageProps) {
   const names = useFileNames(reads.map(read => ({ projectId: read.project.id, paths: (read.entries ?? []).flatMap(placed => pathsIn(placed.entry)) })))
   const starts = useQueueStarts(host)
 
-  // One project's page: its start is the page's one primary press.
+  // One project's page: its start is the page's one primary press, and under its title one line says
+  // who takes from the queue (the title and the places in line say the rest).
   const only = projects.length === 1 ? reads[0] : undefined
-  // A phone's bar names the page, and the head's row is too narrow for the line and the start: there
-  // the line takes the width, and the count and the start fill the row under it.
+  // A phone's bar names the page and hides a description: there the line stands first in the page, and
+  // the count and the start stand under the field, over the entries they start (ProjectQueue).
   const phone = useIsMobile()
   const taker = only && <TakerLine projectId={only.project.id} schedule={schedule} />
 
@@ -127,16 +128,11 @@ export function QueuePage({ projects }: ModulePageProps) {
       {...(phone && only
         ? {}
         : {
-            description: only ? <>What agents take next, from the top. {taker}</> : 'What agents take next, from the top, one list per project.',
+            description: only ? taker : 'What agents take next, from the top, one list per project.',
             actions: only && <BatchStart read={only} primary starts={starts} />,
           })}
     >
-      {phone && only && (
-        <div className="mb-6 space-y-3">
-          <p className="text-sm text-muted-foreground">What agents take next, from the top. {taker}</p>
-          <BatchStart read={only} primary fill starts={starts} />
-        </div>
-      )}
+      {phone && only && <p className="mb-6 text-sm text-muted-foreground">{taker}</p>}
       {starts.error && (
         <p role="alert" className="mb-4 text-sm text-danger">
           {starts.error}
@@ -146,7 +142,7 @@ export function QueuePage({ projects }: ModulePageProps) {
         {reads =>
           reads.map(read =>
             only ? (
-              <ProjectQueue key={read.project.id} read={read} names={names} starts={starts} reload={reload} />
+              <ProjectQueue key={read.project.id} read={read} names={names} starts={starts} reload={reload} batch={phone && <BatchStart read={read} primary fill starts={starts} />} />
             ) : (
               <Section
                 key={read.project.id}
@@ -178,7 +174,7 @@ function BatchStart({ read, primary, fill = false, starts }: { read: ProjectRead
   const free = unclaimedEntries((read.entries ?? []).map(placed => placed.entry), read.working)
   if (free.length === 0) return null
   const count = starts.batchOf(project.id, free)
-  return (
+  const press = (
     <StartAgentButton
       variant={primary ? 'default' : 'secondary'}
       size="default"
@@ -196,10 +192,16 @@ function BatchStart({ read, primary, fill = false, starts }: { read: ProjectRead
       fill={fill}
     />
   )
+  // A phone's, in the page: 16 over the first part's name.
+  return fill ? <div className="mb-4">{press}</div> : press
 }
 
-/** One project's queue: the field that adds an entry, then its entries by priority, a card each, or one line saying there are none, where they would start. */
-function ProjectQueue({ read, names, starts, reload }: { read: ProjectRead; names: FileNames; starts: QueueStarts; reload: () => Promise<void> }) {
+/**
+ * One project's queue: the field that adds an entry, then its entries by priority, a card each, or one
+ * line saying there are none, where they would start. `batch`, a phone's start, stands under the field
+ * over the entries it starts, so the field never moves when the first entry comes.
+ */
+function ProjectQueue({ read, names, starts, reload, batch }: { read: ProjectRead; names: FileNames; starts: QueueStarts; reload: () => Promise<void>; batch?: ReactNode }) {
   const { project, entries, error, working } = read
   if (error !== undefined)
     return (
@@ -208,74 +210,92 @@ function ProjectQueue({ read, names, starts, reload }: { read: ProjectRead; name
       </p>
     )
   const runs = sections(entries!, working)
-  // The entry an agent takes next: the first nobody is on.
-  const next = runs.flatMap(run => run.entries).find(placed => placed.agent === undefined)
   return (
     <div className="space-y-8">
       <AddEntry project={project} reload={reload} />
       {runs.length === 0 ? (
         <p className="text-sm text-muted-foreground">Nothing queued.</p>
       ) : (
-        runs.map((run, index) => (
-          <PanelGroup key={index} title={run.priority === undefined ? 'No priority' : `Priority ${run.priority}`}>
-            {run.entries.map(placed => (
-              <EntryRow key={`${placed.place}\n${placed.entry}`} project={project} placed={placed} next={placed === next} names={names} starts={starts} reload={reload} />
+        <div>
+          {batch}
+          <div className="space-y-8">
+            {runs.map((run, index) => (
+              <PanelGroup key={index} title={run.priority === undefined ? 'No priority' : `Priority ${run.priority}`}>
+                {run.entries.map(placed => (
+                  <EntryRow key={`${placed.place}\n${placed.entry}`} project={project} placed={placed} names={names} starts={starts} reload={reload} />
+                ))}
+              </PanelGroup>
             ))}
-          </PanelGroup>
-        ))
+          </div>
+        </div>
       )}
     </div>
   )
 }
 
 /**
- * Whether anything takes from the project's queue by itself, in a sentence under the page's title: read
- * from the command that works the queue, among the commands the project starts by itself, as whichever
- * installed package schedules them says, with the page that changes it.
+ * Whether anything takes from the project's queue by itself, in one sentence under the page's title:
+ * read from the command that works the queue, among the commands the project starts by itself, as
+ * whichever installed package schedules them says, with the page that changes it. Until that is read
+ * the sentence's room is held, unseen, so nothing under it moves when it comes.
  */
 function TakerLine({ projectId, schedule }: { projectId: string; schedule: Schedule }) {
   const known = schedule.commands[projectId]
-  // Not read yet, or a read that failed: nothing, since "nothing takes from it" would be a guess.
-  if (known === undefined) return null
-  const taker = known.find(command => command.command === QUEUE_COMMAND)
   const page = schedule.page
+  // The page where what starts by itself is changed, where a package holds one.
+  const change = page && (
+    <>
+      {' '}
+      Change it in{' '}
+      <a href={page.href} onClick={inPlace(schedule.open)} className="font-medium text-primary pointer-fine:hover:underline">
+        {page.label}
+      </a>
+    </>
+  )
+  // Not read yet, or a read that failed: what takes from it would be a guess, so its words are not said,
+  // only their room held.
+  if (known === undefined)
+    return (
+      <span aria-hidden className="invisible">
+        {WAITS}
+        {page && ` Change it in ${page.label}`}
+      </span>
+    )
+  const taker = known.find(command => command.command === QUEUE_COMMAND)
   // Said in plain words: the command's name is Automations' to say.
   return (
     <span role="status" aria-label="Who takes from the queue">
-      {taker?.on ? 'Agents take from it by themselves, the first entry nobody has claimed.' : 'Nothing takes from it by itself: an entry waits until you start it.'}
-      {taker !== undefined && (
-        <>
-          {taker.note !== undefined && ` ${taker.note}.`}
-          {page && (
-            <>
-              {' '}
-              <a href={page.href} onClick={inPlace(schedule.open)} className="text-foreground underline underline-offset-2 hover:no-underline">
-                Change it in {page.label}
-              </a>
-            </>
-          )}
-        </>
-      )}
+      {taker?.on ? 'Agents take entries from here by themselves.' : WAITS}
+      {taker?.note !== undefined && ` ${taker.note}.`}
+      {change}
     </span>
   )
 }
+
+/** A part of a row's second line as it starts: with a capital. */
+function capitalised(words: string): string {
+  return words.charAt(0).toUpperCase() + words.slice(1)
+}
+
+/** What the queue's line says while nothing takes from it by itself. */
+const WAITS = 'Entries wait here until you start them.'
 
 /** Where an entry came from, where it names something: a ticket, a web address, a file. A typed entry names nothing. */
 function origin(entry: string): string | undefined {
   const target = entryTarget(entry) ?? pathsIn(entry)[0]
   if (target === undefined) return undefined
-  if (URL.canParse(target)) return `from ${new URL(target).host || 'a link'}`
-  return target.startsWith('tickets/') ? 'from a ticket' : `from ${target}`
+  if (URL.canParse(target)) return `From ${new URL(target).host || 'a link'}`
+  return target.startsWith('tickets/') ? 'From a ticket' : `From ${target}`
 }
 
 /**
- * One entry: its place in line, what it reads as, then who is on it (the state's mark first) or that it is next, then
- * where it came from, or a typed entry's words after its name, or the line as written
- * where a name stands in for it. Nothing at its right at rest: its one press comes under the pointer
+ * One entry: its place in line, what it reads as, then who is on it (the state's mark first), where it
+ * came from, or a typed entry's words after its name, or the line as written where a name stands in
+ * for it, each part starting with a capital. Nothing at its right at rest: its one press comes under the pointer
  * and the keyboard, and is always there on touch. A free entry's is "Start now", with removing it in
  * its menu; one an agent is on, and every entry on a phone, has a menu alone, with all it offers.
  */
-function EntryRow({ project, placed, next, names, starts, reload }: { project: ModuleProject; placed: Numbered; next: boolean; names: FileNames; starts: QueueStarts; reload: () => Promise<void> }) {
+function EntryRow({ project, placed, names, starts, reload }: { project: ModuleProject; placed: Numbered; names: FileNames; starts: QueueStarts; reload: () => Promise<void> }) {
   const host = useModuleHost()
   const phone = useIsMobile()
   const down = useOpenAgentDown()
@@ -300,15 +320,13 @@ function EntryRow({ project, placed, next, names, starts, reload }: { project: M
         external={view.url !== undefined}
         onClick={view.open}
         meta={[
-          agent !== undefined ? (
+          agent !== undefined && (
             <span className="inline-flex h-4 items-center gap-1.5 align-top">
               <StateCell state={agent.status === 'waiting' ? 'waiting' : 'working'} />
               <AgentOnEntry projectId={project.id} agent={agent} />
             </span>
-          ) : (
-            next && 'Next up'
           ),
-          from ?? headline?.rest,
+          from ?? (headline?.rest !== undefined ? capitalised(headline.rest) : undefined),
           // The line as written, under a name that stands in for it: it is what an agent is handed.
           view.renamed && <span className="font-mono">{entry}</span>,
         ]}

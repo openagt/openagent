@@ -57,18 +57,16 @@ describe('QueuePage', () => {
     expect(shown()).toEqual(['No priority', 'Hand-written on top', 'Priority 8', 'Hot fix', 'Also urgent', 'Priority 3', 'Later'])
   })
 
-  test('the first entry nobody is on says it is next up; under a name, where the entry came from, or a typed entry\'s words after its name', async () => {
+  test('under a name, where the entry came from, or a typed entry\'s words after its name, starting with a capital', async () => {
     show([{ entry: 'Tidy the loader', priority: 5 }, { entry: '[Login page](tickets/2026-08-01_login-page.md)', priority: 5 }, { entry: '[Upstream bug](https://github.com/x/y/issues/1)', priority: 5 }, { entry: 'Search: forgive typos in product names', priority: 5 }])
     const first = (await screen.findByText('Tidy the loader')).closest('li')!
     // A typed line with nothing after its name is the name alone.
-    expect(first.textContent).toContain('Next up')
     expect(first.textContent).not.toContain('·')
     const typed = screen.getByText('Search').closest('li')!
-    expect(typed.textContent).toContain('forgive typos in product names')
+    expect(typed.textContent).toContain('Forgive typos in product names')
     expect(typed.querySelector('[title]')?.getAttribute('title')).toBe('Search: forgive typos in product names')
-    expect(screen.getByText('Login page').closest('li')!.textContent).toContain('from a ticket')
-    expect(screen.getByText('Login page').closest('li')!.textContent).not.toContain('Next up')
-    expect(screen.getByText('Upstream bug').closest('li')!.textContent).toContain('from github.com')
+    expect(screen.getByText('Login page').closest('li')!.textContent).toContain('From a ticket')
+    expect(screen.getByText('Upstream bug').closest('li')!.textContent).toContain('From github.com')
   })
 
   test("while the queue is first read, its rows' shapes stand where the entries will, and the entries take their place", async () => {
@@ -96,26 +94,26 @@ describe('QueuePage', () => {
     test('with no package that starts commands by itself, entries wait for a person, and nothing links anywhere', async () => {
       show()
       await screen.findByText('Hot fix')
-      expect(taker()).toBe('Nothing takes from it by itself: an entry waits until you start it.')
+      expect(taker()).toBe('Entries wait here until you start them.')
       expect(screen.queryByRole('link', { name: /Automations/ })).toBeNull()
     })
 
     test('the command that works the queue, switched off: entries wait, and the line opens the page that switches it', async () => {
       const openPage = vi.fn()
       show(FULL, scheduling([{ command: 'plan-tickets', on: true, note: 'Next start in 3h, if there is work' }, { command: 'work-queue', on: false }]), { ...INERT_HOST_SERVICES, openPage })
-      await waitFor(() => expect(taker()).toBe('Nothing takes from it by itself: an entry waits until you start it. Change it in Automations'))
-      fireEvent.click(screen.getByRole('link', { name: 'Change it in Automations' }))
+      await waitFor(() => expect(taker()).toBe('Entries wait here until you start them. Change it in Automations'))
+      fireEvent.click(screen.getByRole('link', { name: 'Automations' }))
       expect(openPage).toHaveBeenCalledWith('automations')
     })
 
     test('switched on: an agent takes the first entry nobody claimed, and when it starts next is said in the scheduling package\'s words', async () => {
       show(FULL, scheduling([{ command: 'work-queue', on: true, note: 'Starts when there is work' }]))
-      await waitFor(() => expect(taker()).toBe('Agents take from it by themselves, the first entry nobody has claimed. Starts when there is work. Change it in Automations'))
+      await waitFor(() => expect(taker()).toBe('Agents take entries from here by themselves. Starts when there is work. Change it in Automations'))
     })
 
     test('switched on while nothing starts by itself: the line says off, with why', async () => {
       show(FULL, scheduling([{ command: 'work-queue', on: false, note: 'The scheduler is off' }]))
-      await waitFor(() => expect(taker()).toBe('Nothing takes from it by itself: an entry waits until you start it. The scheduler is off. Change it in Automations'))
+      await waitFor(() => expect(taker()).toBe('Entries wait here until you start them. The scheduler is off. Change it in Automations'))
     })
 
     test('while what starts by itself is not known, the page says nothing of it: not read yet, or a read that failed', async () => {
@@ -133,18 +131,18 @@ describe('QueuePage', () => {
 
     test('coming back to the page, the line stands from the first frame: what was read last time, until the fresh read lands', async () => {
       show(FULL, scheduling([{ command: 'work-queue', on: true }]))
-      await waitFor(() => expect(taker()).toContain('Agents take from it by themselves'))
+      await waitFor(() => expect(taker()).toContain('Agents take entries from here by themselves'))
       cleanup()
       show(FULL, { ...scheduling([]), schedule: { page: 'automations', read: () => new Promise(() => {}), package: 'a-scheduler', projects: ['p1'] } })
       await screen.findByText('Hot fix')
-      expect(taker()).toContain('Agents take from it by themselves')
+      expect(taker()).toContain('Agents take entries from here by themselves')
     })
 
     test('a project whose scheduled commands hold none that works the queue has nothing taking from it', async () => {
       show(FULL, scheduling([{ command: 'plan-tickets', on: true }]))
       await screen.findByText('Hot fix')
       await waitFor(() => expect(host.runCommand).toHaveBeenCalled())
-      expect(taker()).toBe('Nothing takes from it by itself: an entry waits until you start it.')
+      expect(taker()).toBe('Entries wait here until you start them. Change it in Automations')
     })
   })
 
@@ -249,9 +247,13 @@ describe('QueuePage', () => {
         show()
         await screen.findByText('Hot fix')
         expect(screen.queryByRole('button', { name: /^Start now: entry/ })).toBeNull()
-        // The head: who takes from the queue said once, then the count and the batch's start.
+        // Who takes from the queue said once; the field, then the count and the batch's start, over the entries they start.
         expect(screen.getAllByRole('status', { name: 'Who takes from the queue' })).toHaveLength(1)
-        expect(screen.getByRole('button', { name: 'Start 3 agents' })).toBeTruthy()
+        const field = screen.getByRole('textbox', { name: 'A task to add to the queue' })
+        const start = screen.getByRole('button', { name: 'Start 3 agents' })
+        const first = screen.getByText('Hand-written on top')
+        expect(field.compareDocumentPosition(start) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+        expect(start.compareDocumentPosition(first) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
         await openMenu(screen.getByRole('button', { name: 'More for entry 2' }))
         expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toEqual(['Start now', 'Configure first, then run', 'Remove from the queue'])
         fireEvent.click(screen.getByRole('menuitem', { name: 'Start now' }))
