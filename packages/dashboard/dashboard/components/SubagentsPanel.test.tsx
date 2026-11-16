@@ -180,6 +180,13 @@ describe('the subagent a row opened', () => {
     expect(opened).toEqual([sub.id])
   })
 
+  test('one that has said nothing yet says so in its log, under its prompt, not beside the log', () => {
+    render(panel({ events: call('toolu_a', 'Find colours written by hand', 0) }))
+    act(() => revealSubagent('p1/main', 'call:toolu_a'))
+    const log = within(screen.getByRole('region', { name: 'Find colours written by hand' })).getByLabelText('Agent output')
+    expect(within(log).getByText('Nothing said or done yet.')).toBeTruthy()
+  })
+
   test('it says it has nothing to show only once the read answered, and a log read before is there from the first frame', async () => {
     const sub: AgentMeta = { status: 'done', id: '2026-10-01T10-05-00-000Z', startedAt: '2026-10-01T10:05:00.000Z', updatedAt: '2026-10-01T10:06:00.000Z', endedAt: '2026-10-01T10:06:00.000Z', parent: 'main', title: 'Fix the typo', intent: 'Fix it.' }
     let answer: (events: OpenAgentEvent[]) => void = () => {}

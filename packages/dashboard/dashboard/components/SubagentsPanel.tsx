@@ -17,7 +17,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip.js'
 import { EventList } from './EventList.js'
 import { RunMark } from './RunMark.js'
 import { Seconds, tokenWords } from './ToolCalls.js'
-import { PaneNote } from './PaneNote.js'
 
 // The pane of a run's subagents, beside its chat: a calm list of them, one line each (its state's
 // mark, its name, how long it worked), those at work first; and under the list the one a row opened,
@@ -272,9 +271,15 @@ function Shown({ row, projectId, events, onOpenAgent, onClose }: { row: Subagent
           stick={row.working}
           openAt="start"
           head={<PaneHead row={row} />}
-          tail={!row.working && transcript.length > 0 ? <PaneFoot row={row} calls={calls} /> : undefined}
+          tail={
+            transcript.length > 0 ? (
+              !row.working && <PaneFoot row={row} calls={calls} />
+            ) : (
+              // Under the prompt, in the log: a note beside it took half the room, and on a phone the prompt's top scrolled away.
+              !(runId && state === 'unknown') && <p className="py-1 font-sans text-sm text-muted-foreground">{row.working ? 'Nothing said or done yet.' : 'It left nothing to show.'}</p>
+            )
+          }
         />
-        {transcript.length === 0 && !(runId && state === 'unknown') && <PaneNote>{row.working ? 'Nothing said or done yet.' : 'It left nothing to show.'}</PaneNote>}
       </div>
     </section>
   )
