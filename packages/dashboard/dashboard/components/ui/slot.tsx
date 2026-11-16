@@ -1,6 +1,7 @@
 import { useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { StaleReads, type ReadState } from '../../lib/use-async.js'
 import { cn } from '../../lib/utils.js'
+import { cardSurface } from './card.js'
 import { FADE_AFTER_MS } from '../FadeWhileStale.js'
 import { Skeleton, useSkeleton } from './skeleton.js'
 
@@ -83,6 +84,37 @@ export function RowShapes({ rows = 2 }: { rows?: number }) {
       <Skeleton className={cn('h-4', at % 2 === 0 ? 'w-2/3' : 'w-1/2')} />
     </div>
   ))
+}
+
+/**
+ * The rows of a part drawn on a card while they are read, as tall as the card that comes: its card, with `rows` rows
+ * of a {@link PanelRow}'s height (`lines`: 1 for a row of one line, 44; 2 for a name over its facts, 64). A {@link Slot}'s
+ * `shape` for a part whose answer is a card of rows, so the answer moves nothing beside it or under it.
+ */
+export function PanelShape({ rows = 1, lines = 2 }: { rows?: number; lines?: 1 | 2 }) {
+  return (
+    <div className={cn(cardSurface, 'overflow-hidden')}>
+      {Array.from({ length: rows }, (_, at) => (
+        <div key={at} className={cn('relative flex items-start gap-3 px-4 py-3 before:absolute before:top-0 before:right-4 before:left-4 before:h-px not-first:before:bg-hairline', lines === 2 ? 'h-16' : 'h-11')}>
+          <span className="flex h-5 w-4 shrink-0 items-center">
+            <Skeleton className="size-4 rounded-full" />
+          </span>
+          <span className="flex min-w-0 flex-1 flex-col gap-2">
+            <Skeleton className={cn('my-0.5 h-4', at % 2 === 0 ? 'w-2/3' : 'w-1/2')} />
+            {lines === 2 && <Skeleton className="h-3 w-1/3" />}
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/**
+ * A sentence while it is read, as tall as it at every width: its likely words, drawn unseen (not text of the page,
+ * nor said), each of their lines a shape. A {@link Slot}'s `shape` in the place the sentence will stand.
+ */
+export function WordsShape({ words }: { words: string }) {
+  return <span data-shape={words} className="animate-skeleton rounded-md bg-accent box-decoration-clone text-transparent before:content-[attr(data-shape)] motion-reduce:animate-skeleton-still" />
 }
 
 /** The room of an answer that is one sentence ("Nothing queued."), while it is read: a {@link Slot}'s `shape` for a part whose emptiest answer is that sentence, so its answer moves nothing under it by more than it outgrows the sentence. */

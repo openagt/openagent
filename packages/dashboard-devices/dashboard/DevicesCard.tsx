@@ -1,4 +1,4 @@
-import { GaugeFace, PageLink, Panel, PanelGroup, PanelRow, RowShapes, Slot, MachineMark, Tooltip, TooltipContent, TooltipTrigger, formatAge, machineKind, machineName, usePolled, useModuleHost, type Health, type MachineKind, type ModuleCardProps, type ModuleMachines } from '@openagt/dashboard/module'
+import { GaugeFace, PageLink, Panel, PanelGroup, PanelRow, PanelShape, Slot, MachineMark, Tooltip, TooltipContent, TooltipTrigger, formatAge, machineKind, machineName, usePolled, useModuleHost, type Health, type MachineKind, type ModuleCardProps, type ModuleMachines } from '@openagt/dashboard/module'
 import { Smartphone } from 'lucide-react'
 import { loadStatus, type Answer, type DoorStatus } from './devices.js'
 import { isComputer } from './model.js'
@@ -29,7 +29,7 @@ export function DevicesCard(_props: ModuleCardProps) {
       // The address of Settings › Devices over the page that is open: its query alone.
       action={<PageLink href="?settings=devices" onOpen={() => host.openSettings('devices')}>Settings</PageLink>}
     >
-      <Slot of={{ state: machines === undefined ? 'unknown' : state, value: machines }} shape={<RowShapes rows={1} />}>
+      <Slot of={{ state: machines === undefined ? 'unknown' : state, value: machines }} shape={<PanelShape />}>
         {() =>
           machines && (
             <Panel>

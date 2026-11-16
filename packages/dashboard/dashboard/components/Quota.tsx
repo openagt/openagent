@@ -8,7 +8,8 @@ import { useMountedModules, type MountedUsageLimit } from '../lib/use-modules.js
 import { usePolled } from '../lib/use-async.js'
 import { PanelGroup } from './ui/panel.js'
 import { Card } from './ui/card.js'
-import { SentenceShape, Slot } from './ui/slot.js'
+import { Slot } from './ui/slot.js'
+import { Skeleton } from './ui/skeleton.js'
 import { cn } from '../lib/utils.js'
 import { ModuleSlot, projectsHaving } from './ModulePageView.js'
 import { formatRelative, formatResetDay, formatResetTooltip, formatDuration, formatDurationLong } from '../lib/format-date.js'
@@ -504,7 +505,19 @@ export function Quota({ projects }: { projects: ProjectSummary[] }) {
       <Card className="space-y-4 px-4 py-3">
         {/* The bar's place, drawn while it is read and when there is a bar or a window to show: an empty one would stand as a gap over the note. */}
         {(!view || (view.boundary && week) || windows.length > 0) && (
-          <Slot of={{ state: view ? 'fresh' : 'unknown', value: view }} shape={<SentenceShape />}>
+          <Slot
+            of={{ state: view ? 'fresh' : 'unknown', value: view }}
+            // While it is read, the week's bar as it stands: its days' line, the bar, the sentence under them.
+            shape={
+              <div className="space-y-1.5">
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-full" />
+                <div className="flex h-5 items-center">
+                  <Skeleton className="h-4 w-2/3" />
+                </div>
+              </div>
+            }
+          >
             {() => (
               <div className="space-y-4">
                 {/* Without a placeable week there is no axis to draw. Say so, loudly — no fallback (Rom):

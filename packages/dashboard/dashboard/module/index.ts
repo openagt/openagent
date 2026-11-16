@@ -648,7 +648,7 @@ export { Button, buttonVariants, type ButtonProps } from '../components/ui/butto
 export { CopyButton } from '../components/ui/copy-button.js'
 export { Card, CardHeader, CardTitle, CardContent, PageLink } from '../components/ui/card.js'
 export { Skeleton, useSkeleton } from '../components/ui/skeleton.js'
-export { Slot, RowShapes, SentenceShape, type SlotRead } from '../components/ui/slot.js'
+export { Slot, PanelShape, RowShapes, SentenceShape, WordsShape, type SlotRead } from '../components/ui/slot.js'
 export { PartDescription } from '../components/PartDescription.js'
 export { Input } from '../components/ui/input.js'
 export { GaugeFace } from '../components/ui/gauge.js'

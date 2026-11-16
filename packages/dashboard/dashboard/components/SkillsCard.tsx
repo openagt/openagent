@@ -117,7 +117,14 @@ export function SkillsCard({ projects, onSelectProject, projectHref }: { project
       }
     >
       <PartDescription>What each project adds to its agents, and what is new</PartDescription>
-      <Slot of={{ state, value: reads }} shape={<RowShapes rows={projects.length || 1} />}>
+      <Slot
+        of={{ state, value: reads }}
+        shape={
+          <Card className="px-4 py-2">
+            <RowShapes rows={projects.length || 1} />
+          </Card>
+        }
+      >
         {() => (
           <Card className="px-4 py-2">
             <ul>

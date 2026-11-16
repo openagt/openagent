@@ -2,7 +2,7 @@ import { useContext } from 'react'
 import type { ActiveAgent, AgentDoing } from '../../src/index.js'
 import { Panel, PanelGroup, PanelNote, PanelRow } from './ui/panel.js'
 import { Skeleton } from './ui/skeleton.js'
-import { SentenceShape, Slot } from './ui/slot.js'
+import { PanelShape, Slot } from './ui/slot.js'
 import { PartDescription } from './PartDescription.js'
 import type { ReadState } from '../lib/use-async.js'
 import { formatDateTime, formatDuration } from '../lib/format-date.js'
@@ -47,7 +47,7 @@ export function Agents({
   return (
     <PanelGroup bare title="At work">
       <PartDescription>Agents currently working</PartDescription>
-      <Slot of={{ state, value: working }} shape={<SentenceShape />}>
+      <Slot of={{ state, value: working }} shape={<PanelShape />}>
         {() => (
           <Panel>
             {working.length === 0 && <PanelNote>No agent is at work.</PanelNote>}
