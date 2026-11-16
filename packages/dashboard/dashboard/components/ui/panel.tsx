@@ -1,16 +1,33 @@
-import { isValidElement, useId, type ReactNode } from 'react'
+import { createContext, isValidElement, useContext, useId, type ReactNode } from 'react'
 import { cn } from '../../lib/utils.js'
 import { inPlace } from '../../lib/in-place.js'
 import { cardSurface } from './card.js'
 import { useHeadingTag } from './section.js'
 
-/** Rows held as one object: a card that is the list itself, its rows reaching its edges, a hairline between them. `ordered`: rows a person goes through in turn (numbered steps). */
+// Inside {@link PanelGroups}: a list's columns are the page's, so a row's fact stands in one place down every list.
+const PageColumns = createContext(false)
+
+/**
+ * Rows held as one object: a card that is the list itself, its rows reaching its edges, a hairline between them. `ordered`: rows a person goes through in turn (numbered steps).
+ * It lays out its rows' columns: a {@link PanelRow}'s fact, then its presses, each stand in one column at the right as wide as
+ * the widest row's, so what stands set apart at a row's right has one place in every row; every other child spans the list.
+ */
 export function Panel({ ordered = false, className, children, ...props }: { ordered?: boolean; className?: string; children: ReactNode; 'aria-label'?: string; 'aria-hidden'?: boolean }) {
   const List = ordered ? 'ol' : 'ul'
+  const inPage = useContext(PageColumns)
   return (
-    <List {...props} className={cn(cardSurface, 'overflow-hidden', className)}>
+    <List {...props} className={cn(cardSurface, 'grid overflow-hidden *:col-span-full', inPage ? 'col-span-full grid-cols-subgrid' : 'grid-cols-[minmax(0,1fr)_auto_auto]', className)}>
       {children}
     </List>
+  )
+}
+
+/** {@link PanelGroup}s one under another whose rows' columns stand in one place down all of them, as one list's do (a day's runs under another's). */
+export function PanelGroups({ className, children }: { className?: string; children: ReactNode }) {
+  return (
+    <div className={cn('grid grid-cols-[minmax(0,1fr)_auto_auto] *:col-span-full', className)}>
+      <PageColumns.Provider value={true}>{children}</PageColumns.Provider>
+    </div>
   )
 }
 
@@ -22,8 +39,9 @@ export function Panel({ ordered = false, className, children, ...props }: { orde
 export function PanelGroup({ title, badge, count, action, bare = false, children }: { title: ReactNode; badge?: ReactNode; count?: ReactNode; action?: ReactNode; bare?: boolean; children: ReactNode }) {
   const heading = useId()
   const Heading = useHeadingTag()
+  const inPage = useContext(PageColumns)
   return (
-    <section aria-labelledby={heading} className="min-w-0">
+    <section aria-labelledby={heading} className={cn('min-w-0', inPage && 'grid grid-cols-subgrid content-start *:col-span-full')}>
       {/* Its name 8 over its card, the row as tall as the name: a press or a link at its right stands out of it
           above and below, so groups side by side have their names on one line and their cards at one height.
           On a phone, where a link is 44 tall to touch and no group stands beside another, the row is the link's height. */}
@@ -161,7 +179,8 @@ export function PanelRow({ state, before, title, titleHint, meta = [], metaLines
   return (
     <li
       className={cn(
-        'group/row relative flex items-start gap-3 px-4 py-3 text-sm',
+        // The list's columns (see Panel): the row's own parts, its fact where its presses show at rest, its presses.
+        'group/row relative grid grid-cols-subgrid items-start px-4 py-3 text-sm',
         // The hairline over every row but the first, from inset to inset, gone beside a lit row. Every
         // row's line is placed out of the flow, so lighting the first (which draws none) moves nothing.
         'before:absolute before:top-0 before:right-4 before:left-4 before:h-px not-first:before:bg-hairline',
@@ -171,31 +190,34 @@ export function PanelRow({ state, before, title, titleHint, meta = [], metaLines
         className,
       )}
     >
-      {state !== undefined && <span className="flex h-5 w-4 shrink-0 items-center">{state}</span>}
-      {before !== undefined && <span className="flex h-5 shrink-0 items-center">{before}</span>}
-      <span className="min-w-0 flex-1">
-        {named}
-        {/* On one line every part but the last is said whole and the last gives way, cut with "…"; on two, the parts run on and the second line is cut. */}
-        {parts.length > 0 && (
-          <Facts
-            facts={parts}
-            className={cn('mt-1 text-xs text-faint-foreground', metaLines === 2 ? 'line-clamp-2' : 'flex min-w-0 items-center')}
-            {...(metaLines === 2 ? {} : { part: 'flex min-w-0 items-center not-last:shrink-0', words: 'min-w-0 truncate' })}
-          />
-        )}
-      </span>
-      {columns !== undefined && <span className="flex h-5 shrink-0 items-center gap-4 text-xs text-faint-foreground">{columns}</span>}
-      {/* The fact and the presses take the row's whole height at its right (their margins undo the row's
-          padding), so a press is centred on the row and makes it no taller. Presses shown at rest have the
-          fact beside them, centred too. Otherwise the two share one cell: the presses come in over the
-          fact, and stay reachable by Tab while unseen; the fact stands on the title's line. */}
-      {actionsAtRest && (fact !== undefined || actions !== undefined) ? (
-        <span className="-my-3 flex shrink-0 items-center gap-2 self-stretch">
-          {fact !== undefined && <span className="text-xs leading-5 text-faint-foreground max-md:hidden">{fact}</span>}
-          {actions !== undefined && <span className="relative flex items-center gap-1">{actions}</span>}
+      <span className="flex min-w-0 items-start gap-3">
+        {state !== undefined && <span className="flex h-5 w-4 shrink-0 items-center">{state}</span>}
+        {before !== undefined && <span className="flex h-5 shrink-0 items-center">{before}</span>}
+        <span className="min-w-0 flex-1">
+          {named}
+          {/* On one line every part but the last is said whole and the last gives way, cut with "…"; on two, the parts run on and the second line is cut. */}
+          {parts.length > 0 && (
+            <Facts
+              facts={parts}
+              className={cn('mt-1 text-xs text-faint-foreground', metaLines === 2 ? 'line-clamp-2' : 'flex min-w-0 items-center')}
+              {...(metaLines === 2 ? {} : { part: 'flex min-w-0 items-center not-last:shrink-0', words: 'min-w-0 truncate' })}
+            />
+          )}
         </span>
+        {columns !== undefined && <span className="flex h-5 shrink-0 items-center gap-4 text-xs text-faint-foreground">{columns}</span>}
+      </span>
+      {/* The fact and the presses stand in the list's columns, each as wide as its widest row's and its words at its
+          right, so each has one place in every row, and take the row's whole height (their margins undo the row's
+          padding), so a press is centred on the row and makes it no taller. Presses shown at rest have the fact in
+          the column before theirs, centred too. Otherwise the two share the last column: the presses come in over
+          the fact, and stay reachable by Tab while unseen; the fact stands on the title's line. */}
+      {actionsAtRest && (fact !== undefined || actions !== undefined) ? (
+        <>
+          {fact !== undefined && <span className="col-start-2 -my-3 mr-2 ml-3 flex items-center justify-end self-stretch text-xs leading-5 text-faint-foreground max-md:hidden">{fact}</span>}
+          {actions !== undefined && <span className={cn('relative col-start-3 -my-3 flex items-center justify-end gap-1 self-stretch', fact === undefined ? 'ml-3' : 'max-md:ml-3')}>{actions}</span>}
+        </>
       ) : (fact !== undefined || actions !== undefined) && (
-        <span className="-my-3 grid shrink-0 self-stretch justify-items-end">
+        <span className="col-start-3 -my-3 ml-3 grid self-stretch justify-items-end">
           {fact !== undefined && (
             <span className={cn('col-start-1 row-start-1 mt-3 self-start text-xs leading-5 text-faint-foreground', actions !== undefined && 'not-pointer-fine:invisible max-md:invisible pointer-fine:group-hover/row:invisible pointer-fine:group-focus-within/row:invisible pointer-fine:group-has-[[aria-expanded=true]]/row:invisible')}>{fact}</span>
           )}
