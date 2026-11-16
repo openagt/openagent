@@ -19,16 +19,22 @@ import { POPUP_MOTION_CLASS, usePopupPlacement } from './popup-placement.js'
 export const MENU_SURFACE_CLASS = 'menu-surface rounded-lg shadow-lg ring-1 ring-foreground/10 backdrop-blur-xl outline-none'
 export const MENU_POPUP_CLASS = cn('min-w-[13rem]', MENU_SURFACE_CLASS, POPUP_MOTION_CLASS)
 
+/**
+ * Around a menu's items: their fill 8 in from the menu's edges, so an item's icon (or its words, with
+ * none) stands 16 in, and its words 12 after the icon, as a list row's do (ui/look/spacing.md 3).
+ */
+export const MENU_BODY_CLASS = 'p-2'
+
 /** The scrolled body every popup shares: caps at the space the positioner allows, pads the items. */
 function PopupBody({ children }: { children: ReactNode }) {
   return (
     <ScrollArea viewportClassName="max-h-[var(--available-height)]">
-      <div className="p-1">{children}</div>
+      <div className={MENU_BODY_CLASS}>{children}</div>
     </ScrollArea>
   )
 }
 export const MENU_ITEM_CLASS =
-  'relative flex cursor-pointer select-none items-center gap-2 rounded-md px-2 py-1.5 text-sm font-normal outline-none md:min-h-8 max-md:min-h-11 data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50'
+  'relative flex cursor-pointer select-none items-center gap-3 rounded-md px-2 py-1.5 text-sm font-normal outline-none md:min-h-8 max-md:min-h-11 data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50'
 
 export const DropdownMenu = Menu.Root
 export const DropdownMenuGroup = Menu.Group
@@ -128,8 +134,9 @@ export function DropdownMenuSubContent({ className, children, ...props }: Compon
   )
 }
 
+/** A hairline between a menu's groups, from the items' inset to the other (ui/look/spacing.md 5). */
 export function DropdownMenuSeparator({ className, ...props }: ComponentProps<typeof Menu.Separator>) {
-  return <Menu.Separator className={cn('-mx-1 my-1 h-px bg-border', className)} {...props} />
+  return <Menu.Separator className={cn('mx-2 my-1 h-px bg-hairline', className)} {...props} />
 }
 
 export function DropdownMenuLabel({ className, ...props }: ComponentProps<typeof Menu.GroupLabel>) {
