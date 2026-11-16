@@ -180,12 +180,23 @@ describe('the Overview', () => {
     // The press that took Customize away hands the keyboard to Done, not to the page.
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Done' }))
     const asleep = screen.getByText("a package's card").closest<HTMLElement>('[inert]')!
-    // Its heading's link is not drawn, however long its words: the card's bar stands in its place, on every card.
+    // Its heading's link is not drawn, however long its words.
     const link = screen.getByRole('link', { name: 'Every ticket of the project' }).parentElement!
     expect([...asleep.querySelectorAll('section>div:first-child>h2~*')]).toEqual([link])
     expect(asleep.className.split(' ')).toContain('[&_section>div:first-child>h2~*]:invisible')
     fireEvent.click(screen.getByRole('button', { name: 'Done' }))
     expect(screen.getByText("a package's card").closest('[inert]')).toBeNull()
+  })
+
+  test("while the page is arranged, a card's bar stands above the card, on its frame: it covers none of the card, however narrow, and moves none of it", async () => {
+    show()
+    fireEvent.click(await screen.findByRole('button', { name: 'Customize' }))
+    const bar = screen.getByRole('toolbar', { name: 'Hot tickets' })
+    const card = screen.getByText("a package's card").closest<HTMLElement>('[inert]')!
+    // Beside the card, not in it, and laid out of the flow: the card's heading and rows stand where they stood.
+    expect(bar.parentElement).toBe(card.parentElement)
+    expect(card.contains(bar)).toBe(false)
+    expect(bar.className.split(' ')).toEqual(expect.arrayContaining(['absolute', 'bottom-full', 'right-0']))
   })
 
   test('Esc leaves Customize as Done does, and the keyboard is back on Customize', async () => {
