@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useId, useRef, useState, type ComponentType, type ReactNode } from 'react'
 import { Dialog as BaseDialog } from '@base-ui/react/dialog'
 import { ArrowLeft, Bell, Bot, ChevronRight, ChevronsUpDown, Database, FolderGit2, Globe, Keyboard, Layers, Palette, Puzzle, UserRound, X, FolderSearch } from 'lucide-react'
-import { ACCENTS, DEFAULT_ACCENT_LABELS, accentOf, CODE_FONTS, DOCUMENT_FONTS, DRIVERS, DRIVER_LABELS, isDriverName, FONTS, PALETTES, PALETTE_LABELS, type Accent, type CodeFont, type DocumentFont, type Font, type Palette as ColourPalette } from '../../src/client.js'
+import { DRIVERS, DRIVER_LABELS, isDriverName } from '../../src/client.js'
 import { driverOptions, useModels } from '../lib/models.js'
 import type { DriverOption } from './DriverModelMenu.js'
 import type { ProjectSummary } from '../../src/index.js'
@@ -10,10 +10,10 @@ import { SettingsCrumbContext, type SettingsCrumb } from '../lib/settings-crumb.
 import { SettingsHoldContext } from '../lib/settings-hold.js'
 import { holdEntry } from '../lib/use-route.js'
 import { useIsMobile } from '../lib/use-mobile.js'
-import { useDetectedEditors } from '../lib/editors.js'
-import { usePreferences, updatePreferences, themePreference, type ThemePreference } from '../lib/preferences.js'
+import { usePreferences, updatePreferences } from '../lib/preferences.js'
 import { setBrowserNotifications, useNotificationPermission } from '../lib/notification-permission.js'
 import { HUMAN_QUEUE_ABOUT, NEW_ACTIVITY_ABOUT, browserHint, kindHint } from '../lib/notification-words.js'
+import { AppearanceSettings } from './AppearanceSettings.js'
 import { BridgeSettings } from './BridgeSettings.js'
 import { AGENT_DATA_ENTRY, AgentDataSettings } from './AgentDataSettings.js'
 import { PROFILE_ENTRY, ProfileSettings } from './ProfileSettings.js'
@@ -334,8 +334,6 @@ function ProjectSelect({ projects, value, onChange }: { projects: ProjectSummary
 /** The dashboard's own entries, the first of the list: who you are, how it looks, what it tells you, which agent runs, on which accounts, Claude web, the keys. */
 function useOwnEntries(): Entry[] {
   const preferences = usePreferences()
-  const editors = useDetectedEditors()
-  const theme = themePreference(preferences)
   // The start menu's own list (#1874), so Settings offers exactly the picks the menu does.
   const models = useModels()
   const drivers = driverOptions(models)
@@ -351,8 +349,6 @@ function useOwnEntries(): Entry[] {
   // While the browser delivers nothing, the kinds wait on it: their rows are greyed, and still switch.
   const delivered = permission === 'unsupported' || ((preferences.notifyBrowser ?? true) && permission === 'granted')
 
-  const palette = preferences.palette ?? 'openagent'
-
   return [
     {
       id: PROFILE_ENTRY,
@@ -364,75 +360,7 @@ function useOwnEntries(): Entry[] {
       id: 'appearance',
       title: 'Appearance',
       icon: Palette,
-      body: (
-        <SettingsSection>
-          <SelectRow
-            label="Theme"
-            description="Follow the system, or pin light or dark."
-            value={theme}
-            options={[
-              { value: 'system', label: 'System' },
-              { value: 'light', label: 'Light' },
-              { value: 'dark', label: 'Dark' },
-            ]}
-            onChange={value => updatePreferences({ theme: value as ThemePreference })}
-          />
-          <SelectRow
-            label="Colours"
-            description="OpenAgent’s own Everforest colours, or neutral greys."
-            value={palette}
-            options={PALETTES.map(p => ({ value: p, label: PALETTE_LABELS[p] }))}
-            // A primary colour is one of the palette's own: the new palette starts on its default.
-            onChange={value => updatePreferences({ palette: value as ColourPalette, accent: '' as Accent })}
-          />
-          <SelectRow
-            label="Primary colour"
-            description="Buttons, links and what is picked, in the colours’ own hues."
-            value={accentOf(palette, preferences.accent) ?? ''}
-            options={[{ value: '', label: DEFAULT_ACCENT_LABELS[palette] }, ...ACCENTS[palette].map(accent => ({ value: accent, label: accent.charAt(0).toUpperCase() + accent.slice(1) }))]}
-            // None picked is stored as nothing: the daemon keeps only a colour of the palette's list.
-            onChange={value => updatePreferences({ accent: value as Accent })}
-          />
-          <SelectRow
-            label="Font"
-            description="The font of the page and the chat."
-            value={preferences.font ?? 'ibm-plex-sans'}
-            options={Object.entries(FONTS).map(([value, label]) => ({ value, label }))}
-            onChange={value => updatePreferences({ font: value as Font })}
-          />
-          <SelectRow
-            label="Code font"
-            description="Code blocks, the files an agent read, the Files pane."
-            value={preferences.codeFont ?? 'jetbrains-mono'}
-            options={Object.entries(CODE_FONTS).map(([value, label]) => ({ value, label }))}
-            onChange={value => updatePreferences({ codeFont: value as CodeFont })}
-          />
-          <SelectRow
-            label="File preview font"
-            description="A Markdown file read in the Files pane."
-            value={preferences.documentFont ?? 'source-serif-4'}
-            options={Object.entries(DOCUMENT_FONTS).map(([value, label]) => ({ value, label }))}
-            onChange={value => updatePreferences({ documentFont: value as DocumentFont })}
-          />
-          <SelectRow
-            label="Editor"
-            description="Which editor “Open in editor” launches."
-            value={preferences.editor ?? ''}
-            options={[
-              { value: '', label: 'Auto-detect' },
-              ...editors.map(e => ({ value: e.bin, label: e.label })),
-            ]}
-            onChange={value => updatePreferences({ editor: value })}
-          />
-          {/* The Overview's checklist hides with its own ✕, and comes back here. */}
-          <ToggleRow
-            label="Onboarding on the Overview"
-            description="The checklist of what a new install needs, on the Overview, under what needs you."
-            checked={!(preferences.onboardingDismissed ?? false)}
-            onChange={next => updatePreferences({ onboardingDismissed: !next })}
-          />
-        </SettingsSection>
-      ),
+      body: <AppearanceSettings />,
     },
     {
       id: 'notifications',

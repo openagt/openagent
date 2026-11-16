@@ -47,6 +47,7 @@ export function SettingsRow({
   control,
   dimmed = false,
   labelFor,
+  stacked = false,
 }: {
   label: string
   description: ReactNode
@@ -55,11 +56,13 @@ export function SettingsRow({
   dimmed?: boolean
   /** The control's `id`: a click on the label works the control. */
   labelFor?: string
+  /** A control too wide to stand beside the words (a long row of choices): under them on every screen. */
+  stacked?: boolean
 }) {
   const named = cn('text-sm font-medium', dimmed && 'text-muted-foreground')
   return (
     // A switch is narrow: it stays beside its label on a phone too.
-    <div className="flex items-center justify-between gap-x-6 gap-y-3 max-md:flex-col max-md:items-stretch max-md:has-[[role=switch]]:flex-row max-md:has-[[role=switch]]:items-center">
+    <div className={cn('flex justify-between gap-x-6 gap-y-3', stacked ? 'flex-col' : 'items-center max-md:flex-col max-md:items-stretch max-md:has-[[role=switch]]:flex-row max-md:has-[[role=switch]]:items-center')}>
       <div className="min-w-0 max-w-md">
         {labelFor === undefined ? (
           <p className={named}>{label}</p>

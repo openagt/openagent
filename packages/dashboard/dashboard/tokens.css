@@ -3,7 +3,9 @@
    the switch between them changes no colour. The light theme is Everforest Light, so the theme
    toggle still works rather than dropping to a single dark mode. Components read the `--color-*`
    tokens surfaced in `@theme inline` (module/theme.css), so this is a palette swap only. */
-:root {
+:root,
+[data-scheme='light'],
+[data-swatch=''] {
   /* Let the browser paint native theme-matched scrollbars + form controls (the shadcn way).
      `.dark` flips it below. */
   color-scheme: light;
@@ -78,7 +80,9 @@
   --logo-6: #737373;
 }
 
-.dark {
+.dark,
+[data-scheme='dark'],
+.dark [data-swatch=''] {
   color-scheme: dark;
   /* Everforest Dark's hue a step darker than its dimmest background (his pick: darker than
      Everforest's own steps, as dark as Claude Code's dark): the page near-black, the sidebar and

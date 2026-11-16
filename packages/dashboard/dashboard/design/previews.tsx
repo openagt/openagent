@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Button } from '../components/ui/button.js'
+import { Segmented } from '../components/ui/segmented.js'
 import { Card, CardContent, CardHeader, CardTitle, PageLink } from '../components/ui/card.js'
 import { Input } from '../components/ui/input.js'
 import { Badge } from '../components/ui/badge.js'
@@ -331,6 +332,7 @@ const UNITS = [
 
 /** The fields a form is made of. Every one is the shipped component; the select's list is portalled at runtime, so only its trigger shows here. */
 function FormControls() {
+  const [colours, setColours] = useState('openagent')
   return (
     <div className="space-y-5">
       <Labelled label="Focus: a field's ring is its edge; a press's ring stands 2px off it">
@@ -376,6 +378,9 @@ function FormControls() {
             <SelectValue />
           </SelectTrigger>
         </Select>
+      </Labelled>
+      <Labelled label="Segmented: one pick among two or three short words, the picked one a card on the track">
+        <Segmented label="Colours" value={colours} options={[{ value: 'openagent', label: 'OpenAgent' }, { value: 'neutral', label: 'Neutral' }]} onChange={setColours} />
       </Labelled>
       <Labelled label="Switch: on or off, at once. Checkbox: one line of a form or a list">
         <Switch aria-label="On" defaultChecked />
@@ -803,7 +808,7 @@ export const PREVIEWS: Preview[] = [
     path: 'components/form-controls.html',
     group: 'Components',
     name: 'Form controls',
-    subtitle: 'Radio group, select, switch, checkbox, label, input, textarea',
+    subtitle: 'Radio group, segmented, select, switch, checkbox, label, input, textarea',
     width: 900,
     node: <FormControls />,
   },
