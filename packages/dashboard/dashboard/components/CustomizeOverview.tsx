@@ -126,7 +126,7 @@ function DropBar({ side }: { side: 'before' | 'after' }) {
  * new places: this page's (the picked project's, or the one of every project, which also lays out a
  * project never arranged on its own).
  */
-export function EditOverview({ arranged, under, layouts, layoutKey, notice }: { arranged: Placed[]; /** Drawn where it stands on the page, so arranging moves nothing. */ under: Under; layouts: OverviewLayouts | undefined; layoutKey: string; /** What arranging does, said above the tray. */ notice: ReactNode }) {
+export function EditOverview({ arranged, under, layouts, layoutKey, notice, reset }: { arranged: Placed[]; /** Drawn where it stands on the page, so arranging moves nothing. */ under: Under; layouts: OverviewLayouts | undefined; layoutKey: string; /** What arranging does, said above the tray. */ notice: ReactNode; /** The press that gives up this page's own layout, when it is drawn here rather than in the page's head (on a phone). */ reset?: ReactNode }) {
   const [dragging, setDragging] = useState<Dragging | null>(null)
   // Where the card being dragged lands: beside one card (before or after it, by which half of it the
   // pointer is over), or at the end, over the page's empty room. It is drawn as a bar in the gap,
@@ -259,8 +259,8 @@ export function EditOverview({ arranged, under, layouts, layoutKey, notice }: { 
               onWidth={picked => write(changed(card.id, { width: picked }))}
               onHide={() => write(changed(card.id, { hidden: true }))}
             />
-            {/* The card as it stands, its own buttons asleep while it is being arranged, with the sentence that says what it is. Its heading's link to its page is not drawn, its room kept. */}
-            <div inert className="flex flex-1 select-none flex-col *:flex-1 [&_[data-part-description]]:not-sr-only [&_section>div:first-child>h2~*]:invisible">
+            {/* The card as it stands, its own buttons asleep while it is being arranged; its sentence still for a screen reader alone, so arranging moves nothing. Its heading's link to its page is not drawn, its room kept. */}
+            <div inert className="flex flex-1 select-none flex-col *:flex-1 [&_section>div:first-child>h2~*]:invisible">
               {card.node}
             </div>
           </div>
@@ -289,6 +289,7 @@ export function EditOverview({ arranged, under, layouts, layoutKey, notice }: { 
             'Not on the page: drag one onto a card to put it there, or press + to add it at the end.'
           )}
         </p>
+        {reset !== undefined && <div className={cn(tray.length > 0 && 'mb-3')}>{reset}</div>}
         {tray.length > 0 && (
           <ul className="flex flex-wrap gap-2">
             {tray.map(({ card }) => (

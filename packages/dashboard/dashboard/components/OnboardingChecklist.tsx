@@ -7,7 +7,7 @@ import { usePerson } from '../lib/use-person.js'
 import { cn } from '../lib/utils.js'
 import { Button, buttonVariants } from './ui/button.js'
 import { inPlace } from '../lib/in-place.js'
-import { Panel, PanelGroup } from './ui/panel.js'
+import { Facts, Panel, PanelGroup } from './ui/panel.js'
 import { Skeleton } from './ui/skeleton.js'
 import { usePreferences, updatePreferences, notificationsEnabled } from '../lib/preferences.js'
 import { setBrowserNotifications, useNotificationPermission } from '../lib/notification-permission.js'
@@ -354,8 +354,11 @@ export function OnboardingChecklist({
                 ) : (
                   <StepMark at={at} open={isOpen} />
                 )}
-                {/* The action goes under the words until it fits beside them with the words 16rem wide or more; beside them it is centred on the row, and a command goes under its press where the two do not fit one line. */}
-                <div className="@container flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-2">
+                {/* The action goes under the words until it fits whole beside them with the words 16rem wide or more, so a
+                    command is cut only where the row has no room for it. Beside them it is centred on the row and the title
+                    stays on the row's first line, with the step's number; a command goes under its press where the two do
+                    not fit one line. */}
+                <div className="flex min-w-0 flex-1 flex-wrap items-start gap-x-3 gap-y-2">
                   <div className="min-w-0 flex-[1_1_16rem] space-y-1">
                     <div className="flex flex-wrap items-center gap-x-2">
                       <button
@@ -365,8 +368,8 @@ export function OnboardingChecklist({
                         {...(press ? { 'data-cover': true } : {})}
                         className={cn('flex flex-wrap items-center gap-x-2 text-left text-sm', press && 'outline-none after:absolute after:inset-0', step.done ? 'text-muted-foreground' : isOpen ? 'font-medium' : 'text-muted-foreground hover:text-foreground')}
                       >
-                        <span>{step.label}</span>
-                        {step.done && step.doneNote && <span className="truncate text-xs text-muted-foreground">· {step.doneNote}</span>}
+                        {/* What was done after its name, as every line of facts joins them. */}
+                        <Facts facts={[step.label, step.done && step.doneNote && { fact: step.doneNote, className: 'truncate text-xs text-muted-foreground' }]} className="flex min-w-0 items-center" />
                         {step.optional && !step.done && <span className="text-xs font-normal text-muted-foreground">Optional</span>}
                       </button>
                       {isOpen && step.info && (
@@ -380,7 +383,7 @@ export function OnboardingChecklist({
                     </div>
                     {isOpen && step.description && (typeof step.description === 'string' ? <p className="text-xs text-muted-foreground">{step.description}</p> : step.description)}
                   </div>
-                  {isOpen && step.action && <div className="flex max-w-full shrink-0 @xl:max-w-[calc(100%-16.75rem)]">{step.action}</div>}
+                  {isOpen && step.action && <div className="flex max-w-full shrink-0 self-center">{step.action}</div>}
                 </div>
               </li>
             )

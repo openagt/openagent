@@ -29,8 +29,7 @@ test('a project with no run recorded says so where the runs would stand, and lis
       <LogsPage projects={[{ id: 'p1', name: 'alpha', gitHost: true }]} projectId={null} path={[]} />
     </ModuleHostContext.Provider>,
   )
-  expect(await screen.findByText('No runs recorded yet')).toBeTruthy()
-  expect(screen.getByText('A run is listed here from the moment an agent starts on this project.')).toBeTruthy()
+  expect(await screen.findByText('No runs recorded yet. A run is listed here from the moment an agent starts on this project.')).toBeTruthy()
   expect(screen.queryByRole('list')).toBeNull()
 })
 
