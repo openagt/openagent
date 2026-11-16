@@ -1,7 +1,7 @@
 import type { ReactElement } from 'react'
 import type { AgentMeta, ProjectSummary } from '../../src/index.js'
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { SidebarProvider } from './ui/sidebar.js'
 import { hoverTooltip, openMenu, phoneScreen } from '../test-utils.js'
 import { PagesBar } from './PhoneBar.js'
@@ -312,6 +312,54 @@ describe('AgentHistory (#785)', () => {
       </SidebarProvider>,
     )
     expect([...container.querySelectorAll('a, button')].some(row => row.hasAttribute('data-stand-in'))).toBe(true)
+  })
+
+  test('a start while another agent works has its starting row at once, marked as the page it opened, until its own row lands', () => {
+    // Any run at work used to count as the one just started: with another agent working, the usual
+    // day, the new run had no row until its own landed seconds later, and nothing in the list was marked.
+    const atWork = agent({ id: 'run-old', status: 'running', intent: 'earlier work' })
+    const { container, rerender } = renderRail(
+      <AgentHistory projectId="p1" scope="p1" agents={[atWork]} selectedAgentId={null} onSelect={() => {}} startTick={0} startIntent="" />,
+    )
+    const standIn = () => [...container.querySelectorAll('a, button')].find(row => row.hasAttribute('data-stand-in'))
+    rerender(
+      <SidebarProvider>
+        <AgentHistory projectId="p1" scope="p1" agents={[atWork]} selectedAgentId="run-new" onSelect={() => {}} startTick={1} startIntent="hi" startId="run-new" />
+      </SidebarProvider>,
+    )
+    expect(standIn()?.classList.contains('bg-foreground/8')).toBe(true)
+    expect(screen.getByRole('link', { name: /earlier work · running/ }).classList.contains('bg-foreground/8')).toBe(false)
+    rerender(
+      <SidebarProvider>
+        <AgentHistory projectId="p1" scope="p1" agents={[agent({ id: 'run-new', intent: 'hi' }), atWork]} selectedAgentId="run-new" onSelect={() => {}} startTick={1} startIntent="hi" startId="run-new" />
+      </SidebarProvider>,
+    )
+    expect(standIn()).toBeUndefined()
+    expect(screen.getByRole('link', { name: /hi · running/ }).classList.contains('bg-foreground/8')).toBe(true)
+  })
+
+  test('the starting row of a start that brought no run goes after twenty seconds, while another agent works too', () => {
+    vi.useFakeTimers()
+    try {
+      const atWork = agent({ id: 'run-old', status: 'running', intent: 'earlier work' })
+      const { container, rerender } = renderRail(
+        <AgentHistory projectId="p1" scope="p1" agents={[atWork]} selectedAgentId={null} onSelect={() => {}} startTick={0} startIntent="" />,
+      )
+      const standIn = () => [...container.querySelectorAll('a, button')].some(row => row.hasAttribute('data-stand-in'))
+      rerender(
+        <SidebarProvider>
+          <AgentHistory projectId="p1" scope="p1" agents={[atWork]} selectedAgentId={null} onSelect={() => {}} startTick={1} startIntent="hi" startId="run-gone" />
+        </SidebarProvider>,
+      )
+      expect(standIn()).toBe(true)
+      act(() => void vi.advanceTimersByTime(19_000))
+      expect(standIn()).toBe(true)
+      act(() => void vi.advanceTimersByTime(1_000))
+      // Not kept for the moment the other agent ends, to come up then for a run that never was.
+      expect(standIn()).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   test('a run the list already holds when its start comes back gets no starting row, running or ended', () => {

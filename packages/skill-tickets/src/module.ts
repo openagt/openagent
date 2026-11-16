@@ -296,8 +296,8 @@ export function heldBack(ticket: { pr?: unknown; waiting?: string | undefined })
 /** The three lanes of the Overview's hot-tickets card: what an agent holds, what is flagged to do soon, and what waits on a person. */
 export type HotLane = 'claimed' | 'high-priority' | 'waiting'
 
-/** Where the ticket format's 0-10 scale starts reading as high. */
-const HIGH_PRIORITY_FLOOR = 7
+/** Where the ticket format's 0-10 scale starts reading as high: the Overview's lane, and the list's "High" filter. */
+export const HIGH_PRIORITY_FLOOR = 7
 
 /**
  * Whether a `Priority:` value reads as "do this soon": the format's own scale (`10` acts

@@ -61,7 +61,16 @@ export function AddProjectPanel({
   const { busy, error, reset, run } = useAction()
   const panelRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => () => opener.current?.focus(), [opener])
+  // Closed, it hands the keyboard back to the control that opened it, unless the person has it
+  // elsewhere by then: a project just added opens on its message box, which takes the caret, and
+  // what is typed there while this still says "Project added" goes on there once this closes itself.
+  // The panel is off the page by now, so a keyboard that was in it is on the page's body.
+  useEffect(
+    () => () => {
+      if (document.activeElement === null || document.activeElement === document.body) opener.current?.focus()
+    },
+    [opener],
+  )
 
   // The system dialog opens with the modal: picking the folder IS the form. A dismissed dialog
   // closes the modal too — the user said "not now" once already.

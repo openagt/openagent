@@ -280,7 +280,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
           filesRef.current
             .filter(f => f.toLowerCase().includes(query.toLowerCase()))
             .slice(0, 8)
-            .map(f => ({ id: `file:${f}`, label: `#${f}`, hint: 'file', group: 'Files' })),
+            .map(f => ({ id: `file:${f}`, label: `#${f}`, path: f, hint: 'file', group: 'Files' })),
         onSelect: (item, { editor: ed, range }) => {
           const rel = item.id.slice('file:'.length)
           insertToken(ed, range, { kind: 'file', label: `#${rel}`, text: `#${rel}` })

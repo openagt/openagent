@@ -25,18 +25,16 @@ export function readTicketFile(content: string): TicketFields {
   const lines = content.replace(/\r\n/g, '\n').split('\n')
   const at = lines.findIndex(line => line.startsWith('# '))
   const head = at < 0 ? [] : lines.slice(0, at).filter(line => line.trim() !== '')
-  const fields: TicketFields = { priority: '', topics: [], waiting: '', title: at < 0 ? '' : lines[at]!.slice(2).trim(), body: '', kept: [] }
-  for (const line of head) {
-    const priority = PRIORITY.exec(line)
-    const topics = TOPICS.exec(line)
-    const waiting = WAITING.exec(line)
-    if (priority) fields.priority = priority[1]!.trim()
-    else if (topics) fields.topics = topicsIn(topics[1]!)
-    else if (waiting) fields.waiting = waiting[1]!.trim()
-    else fields.kept.push(line)
+  // The first line naming a field gives its value, as the ticket list reads it; a later one is dropped.
+  const first = (field: RegExp) => head.map(line => field.exec(line)?.[1]?.trim()).find(value => value !== undefined)
+  return {
+    priority: first(PRIORITY) ?? '',
+    topics: topicsIn(first(TOPICS) ?? ''),
+    waiting: first(WAITING) ?? '',
+    title: at < 0 ? '' : lines[at]!.slice(2).trim(),
+    body: (at < 0 ? lines : lines.slice(at + 1)).join('\n').trim(),
+    kept: head.filter(line => ![PRIORITY, TOPICS, WAITING].some(field => field.test(line))),
   }
-  fields.body = (at < 0 ? lines : lines.slice(at + 1)).join('\n').trim()
-  return fields
 }
 
 /** The file for `fields`: the lines above the title (priority, topics and the wait first, when set), the title, the text. */

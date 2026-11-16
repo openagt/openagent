@@ -1,11 +1,12 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
+import { git } from './fixture.js'
 import { needsChrome, smoke } from './smoke.js'
 
-// The project's pages, in a real browser (smoke.ts): a page a project's package brings, and adding
-// a project from the picker.
+// The project's pages, in a real browser (smoke.ts): a page a project's package brings, adding
+// a project from the picker, and the list of files the message box opens, on a phone.
 
-const { demo, flow } = smoke()
+const { demo, flow, start } = smoke()
 
 test("the Tickets page lists the project's tickets", needsChrome, async () => {
   await flow('tickets', async page => {
@@ -48,7 +49,36 @@ test("a ticket opened from every project's list goes back to that list from its 
   })
 })
 
-test('a repository on the computer is added as a project from the picker', needsChrome, async () => {
+test("the files a # lists stay on a phone's screen, each with its name whole", needsChrome, async () => {
+  await flow('files-on-a-phone', async page => {
+    await page.setViewportSize({ width: 390, height: 800 })
+    await page.getByLabel('Prompt').click()
+    // A few words first: the caret is then in the right half of the screen, where the list used to start.
+    await page.keyboard.type('please have a look at the file #skills')
+    const list = page.getByRole('listbox', { name: 'Suggestions' })
+    await list.getByRole('option').first().waitFor()
+    // Where the list is, and each row's name and hint: whole, the name before the hint.
+    const seen = (await page.evaluate(`(() => {
+      const listbox = document.querySelector('[role=listbox][aria-label=Suggestions]')
+      const cut = part => part.scrollWidth > part.clientWidth
+      return {
+        screen: document.documentElement.clientWidth,
+        left: listbox.getBoundingClientRect().left,
+        right: listbox.getBoundingClientRect().right,
+        rows: [...listbox.querySelectorAll('[role=option]')].map(row => {
+          const [name, hint] = [row.firstElementChild.lastElementChild, row.lastElementChild]
+          return { name: name.textContent, nameCut: cut(name) || name.getBoundingClientRect().right > hint.getBoundingClientRect().left, hint: hint.textContent, hintCut: cut(hint) }
+        }),
+      }
+    })()`)) as { screen: number; left: number; right: number; rows: Array<{ name: string; nameCut: boolean; hint: string; hintCut: boolean }> }
+    assert.ok(seen.left >= 0 && seen.right <= seen.screen, `the list is on the screen: ${seen.left} to ${seen.right} of ${seen.screen}`)
+    assert.ok(seen.rows.length > 1, 'the project has several files under skills')
+    for (const row of seen.rows) assert.deepEqual(row, { name: 'SKILL.md', nameCut: false, hint: 'file', hintCut: false })
+    await page.keyboard.press('Escape')
+  })
+})
+
+test('a repository on the computer is added as a project from the picker, and its runs are scripted as the demo\u2019s own', needsChrome, async () => {
   await flow('add-project', async page => {
     await page.getByLabel('Project: shop').click()
     await page.getByRole('option', { name: /blog/ }).click()
@@ -56,5 +86,20 @@ test('a repository on the computer is added as a project from the picker', needs
     await page.getByLabel('Project: blog').waitFor()
     const projects = await demo().call<Array<{ path: string }>>('onProjects')
     assert.ok(projects.some(project => project.path === demo().toAdd), 'the daemon has the project')
+    // The add kept the lines the demo gave the folder: nothing stands in the way of a start, as the
+    // real check would say of a coding agent that is not logged in, and a Start is the scripted agent's.
+    await start(page, 'add an about page')
+    await page.getByText(/done: .*add an about page/).waitFor()
+    assert.equal(await page.getByRole('alert').count(), 0, 'the check said nothing')
   })
+})
+
+test("the demo's project holds its own files alone, and its commits are its person's alone", needsChrome, async () => {
+  // Its origin stands outside its folder: listed among its files, a bare repository's own (HEAD, config, hooks/…) were offered by the message box's #.
+  const files = await demo().call<string[]>('onProjectFiles', demo().project.id)
+  assert.ok(files.includes('README.md'), 'its files are listed')
+  assert.deepEqual(files.filter(file => file !== 'README.md' && !file.startsWith('.claude/')), [])
+  // A commit by anyone else is one more member on the Overview's card.
+  const authors = (await git(demo().project.cwd, 'log', '--format=%an <%ae>', 'main')).trim().split('\n')
+  assert.deepEqual([...new Set(authors)], ['Demo <demo@example.invalid>'])
 })
