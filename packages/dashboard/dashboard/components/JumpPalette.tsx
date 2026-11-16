@@ -292,7 +292,8 @@ export function JumpPalette({ waiting, runs, pages, projects, scope, here, hrefO
             </Autocomplete.List>
             {/* On the rows' edge, where the first row's mark would be. */}
             <Autocomplete.Empty className="flex h-[min(26rem,60dvh)] items-start px-4 py-3 text-sm text-muted-foreground empty:hidden">Nothing matches “{query}”</Autocomplete.Empty>
-            <div className="flex h-11 shrink-0 items-center gap-4 border-t border-hairline px-4 text-xs text-muted-foreground pointer-coarse:hidden">
+            {/* Its keys 16 in from the band's every edge, as the field is in the band at the top. */}
+            <div className="flex h-13 shrink-0 items-center gap-4 border-t border-hairline px-4 text-xs text-muted-foreground pointer-coarse:hidden">
               <span className="flex items-center gap-1.5">
                 <KeyCaps keys={['Enter']} /> Go
               </span>
