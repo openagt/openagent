@@ -1,12 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Skeleton } from './ui/skeleton.js'
 import { SentenceShape, Slot } from './ui/slot.js'
 import { takeLostFocus } from '../lib/lost-focus.js'
 import { useMountedModules } from '../lib/use-modules.js'
 import { useAgentAccounts } from './AgentAccounts.js'
 import { GitHostsCard } from './GitHosts.js'
-import { AgentFix, agentLoginState, agentWords, useAgentState } from './Logins.js'
+import { AgentFix, agentLoginState, agentWords, useAgentState, type LoginState } from './Logins.js'
 import type { AgentState } from '../rpc/logins.js'
+import { Badge, type BadgeTone } from './ui/badge.js'
 import { ModuleSlot } from './ModulePageView.js'
 import { Page } from './Page.js'
 import { PanelGroup } from './ui/panel.js'
@@ -107,12 +108,23 @@ function AgentSetup({ state, reload, title, primary }: { state: AgentState; relo
     <PanelGroup bare title={title}>
       {state.ready ? (
         <p ref={takeLostFocus} role="status" tabIndex={-1} className="text-sm text-muted-foreground outline-none">
-          {`${title} is ready: runs can start with it.`}
+          <StateWords state={state}>{`${title} is ready: runs can start with it.`}</StateWords>
         </p>
       ) : (
-        <AgentFix state={state} words={agentWords(state)} variant={primary ? undefined : 'secondary'} onChanged={() => void reload()} />
+        <AgentFix state={state} words={<StateWords state={state}>{agentWords(state)}</StateWords>} variant={primary ? undefined : 'secondary'} onChanged={() => void reload()} />
       )}
     </PanelGroup>
+  )
+}
+
+/** A login's state by its colour, as a dot before the sentence that says it: green when there is nothing to do, amber for a step, grey for a tool not here. */
+const TONE: Record<LoginState, BadgeTone> = { connected: 'success', step: 'warning', 'not-installed': 'neutral' }
+
+function StateWords({ state, children }: { state: AgentState; children: ReactNode }) {
+  return (
+    <Badge tone={TONE[agentLoginState(state)!]} className="text-sm font-normal whitespace-normal text-muted-foreground">
+      {children}
+    </Badge>
   )
 }
 

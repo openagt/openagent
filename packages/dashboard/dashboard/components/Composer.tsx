@@ -388,9 +388,9 @@ export const Composer = forwardRef<ComposerHandle, {
   // A session's send is a single icon button that only shows once the box has text (#721): it fades
   // in and slides into place, its layout footprint animated with a negative margin (0 <- -w) rather
   // than its width, so the text to its left gives way smoothly; `aria-hidden` while empty keeps it out
-  // of the a11y tree. The launcher's is a press named for what it does ("Start agent"), at the end of
-  // the box's last row, there from the first frame and off while the box is empty: starting an agent
-  // is what the page is for, so its press is not a glyph that comes and goes.
+  // of the a11y tree. The launcher's is a press named for what it does ("Start agent"), at the text's
+  // right as a session's send is, there from the first frame and off while the box is empty: starting
+  // an agent is what the page is for, so its press is not a glyph that comes and goes.
   const hasPrompt = !!prompt.trim()
   const submitTip = busy ? submitBusyLabel : down ? 'OpenAgent is not answering' : `${submitLabel}  (Enter · Shift+Enter for a new line)`
   const submitButton = inAgent ? (
@@ -424,9 +424,9 @@ export const Composer = forwardRef<ComposerHandle, {
     </Tooltip>
   ) : (
     <Tooltip>
-      {/* 28 high in the row, as its other items; a finger's 44 around it on a phone. While the start is asked
-          for it keeps its words and the keyboard, dimmed: the note above the box says what is under way. */}
-      <TooltipTrigger render={<Button type="submit" size="sm" onClick={submit} disabled={(held && !busy) || !hasPrompt} loading={busy} className="relative ml-1.5 max-md:after:absolute max-md:after:-inset-2" />}>
+      {/* 28 high, as the rows' items; a finger's 44 around it on a phone. While the start is asked for it
+          keeps its words and the keyboard, dimmed: the note above the box says what is under way. */}
+      <TooltipTrigger render={<Button type="submit" size="sm" onClick={submit} disabled={(held && !busy) || !hasPrompt} loading={busy} className="relative ml-2 max-md:after:absolute max-md:after:-inset-2" />}>
         {submitLabel}
       </TooltipTrigger>
       <TooltipContent>{submitTip}</TooltipContent>
@@ -500,23 +500,21 @@ export const Composer = forwardRef<ComposerHandle, {
             </RowAboveBox>
           )}
 
-          {/* The text, starting at the box's own edge, and in a session the send at its right, kept at the
-              text's last line. One line tall when empty, growing with what is typed. The editor is borderless:
-              the edge is the surface's. The send's icon stands on the rows' last ones' line. */}
+          {/* The text, as Claude Code's: the commands menu (+) at its left, the text, and the send at its right
+              (the launcher's "Start agent"), the two kept at the text's last line. One line tall when empty,
+              growing with what is typed. The editor is borderless: the edge is the surface's. */}
           <div className="flex items-end">
+            <div className="-mr-2 flex shrink-0 items-center py-1">{commandsEl}</div>
             <div className="min-w-0 flex-1">{editorEl}</div>
-            {inAgent && <div className="flex shrink-0 items-center py-1">{slotEl}</div>}
+            <div className="flex shrink-0 items-center py-1">{slotEl}</div>
           </div>
 
-          {/* How it runs, the box's last line: the commands menu (+) and the caller's controls at the
-              left, the model at the right. The left side is the one that gives way: a longer label there
-              never moves the model or the page below. As high as its items, so the launcher's painted press
-              ends as far from the box's foot as from its right; the room it gives up is over it. */}
+          {/* How it runs, the box's last line: the caller's controls at the left, the model at the right. The left side is the one that gives way: a longer label there
+              never moves the model or the page below. As high as its items; the room it gives up is over it. */}
           <TooltipsPastBox value={surface}>
             <div className={cn('mt-2', rowClass, 'h-7')}>
               {/* In a narrow box, where its items say their icons only, each stays whole and the side scrolls, as the row above the box does. */}
               <div className={cn(rowLeftClass, '@max-xl:overflow-x-auto @max-xl:[scrollbar-width:none] @max-xl:[mask-image:linear-gradient(to_right,#000_85%,transparent)] @max-xl:*:shrink-0')}>
-                {commandsEl}
                 {controls}
               </div>
               <div className="flex shrink-0 items-center gap-0.5">
@@ -530,7 +528,6 @@ export const Composer = forwardRef<ComposerHandle, {
                       {sessionContext}
                     </span>
                   ))}
-                {!inAgent && submitButton}
               </div>
             </div>
           </TooltipsPastBox>

@@ -259,7 +259,7 @@ describe('the list of a run\'s subagents', () => {
     const ended = Array.from({ length: 37 }, (_, at) => run(at % 30, `Ended ${at}`, 'done', 0))
     const subagents = [...ended.map((sub, at) => ({ ...sub, id: `${sub.id}-${at}` })), run(20, 'Visual check in a browser', 'failed', 1), run(22, 'Pick a palette', 'waiting'), run(21, 'Map the pages', 'failed', 1)]
     render(panel({ subagents }))
-    expect(screen.getAllByRole('heading').map(h => h.textContent)).toEqual(['Needs you', 'Failed'])
+    expect(screen.getAllByRole('heading').map(h => h.textContent)).toEqual(['Waiting on you', 'Failed'])
     expect(rowNames().map(name => name?.split(' · ')[0])).toEqual(['Pick a palette', 'Visual check in a browser', 'Map the pages'])
     expect(screen.getByRole('button', { name: 'Ended · 37' }).getAttribute('aria-expanded')).toBe('false')
   })

@@ -226,7 +226,7 @@ export interface SubagentRow {
 }
 
 /** The parts of the pane's list, in their order: what waits on the person, what failed, what works, what ended. */
-export type ListPart = 'Needs you' | 'Failed' | 'Working' | 'Ended'
+export type ListPart = 'Waiting on you' | 'Failed' | 'Working' | 'Ended'
 
 /** How many rows the pane's list holds before its ended ones fold into one line. */
 export const FOLD_PAST = 8
@@ -238,12 +238,12 @@ export interface Arrangement {
 }
 
 /** The part of the pane's list each state stands in, a group's name and not the state's word: "Ended" holds done and stopped; any other state is at work. */
-const PART_OF: Readonly<Partial<Record<string, ListPart>>> = { waiting: 'Needs you', failed: 'Failed', done: 'Ended', stopped: 'Ended' }
+const PART_OF: Readonly<Partial<Record<string, ListPart>>> = { waiting: 'Waiting on you', failed: 'Failed', done: 'Ended', stopped: 'Ended' }
 
 /** Where a subagent's row stands. */
 const partOf = (row: SubagentRow): ListPart => PART_OF[row.status] ?? 'Working'
 
-const PARTS: readonly ListPart[] = ['Needs you', 'Failed', 'Working', 'Ended']
+const PARTS: readonly ListPart[] = ['Waiting on you', 'Failed', 'Working', 'Ended']
 
 /**
  * The pane's list of a run's subagents: each part that holds a row, in {@link PARTS}' order, its rows
