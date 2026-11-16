@@ -244,7 +244,12 @@ describe('the first steps on the Overview', () => {
       </HostServicesContext.Provider>,
     )
     await openStep('Populate the queue of AI tasks')
-    fireEvent.click(within(row('Populate the queue of AI tasks')).getByRole('button', { name: 'Open the Queue' }))
+    const press = within(row('Populate the queue of AI tasks')).getByRole('link', { name: 'Open the Queue' })
+    expect(press.getAttribute('href')).toBe('/queue')
+    // A click with a key held is the browser's: a new tab, a new window.
+    fireEvent.click(press, { ctrlKey: true })
+    expect(openPage).not.toHaveBeenCalled()
+    fireEvent.click(press)
     expect(openPage).toHaveBeenCalledWith('queue')
   })
 

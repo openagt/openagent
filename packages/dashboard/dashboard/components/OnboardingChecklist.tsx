@@ -5,7 +5,8 @@ import { onDashboard } from '../rpc/reads.js'
 import { usePolled } from '../lib/use-async.js'
 import { usePerson } from '../lib/use-person.js'
 import { cn } from '../lib/utils.js'
-import { Button } from './ui/button.js'
+import { Button, buttonVariants } from './ui/button.js'
+import { inPlace } from '../lib/in-place.js'
 import { Panel, PanelGroup } from './ui/panel.js'
 import { Skeleton } from './ui/skeleton.js'
 import { usePreferences, updatePreferences, notificationsEnabled } from '../lib/preferences.js'
@@ -180,10 +181,11 @@ export function OnboardingChecklist({
             label: 'Populate the queue of AI tasks',
             description: 'The agent queue: each entry is work the agent picks up on its own, so a filled queue is what lets it keep going without you.',
             done: (data?.totals.openTodos ?? 0) > 0,
+            // A press to a page, so a modified click opens it where the browser would.
             action: (
-              <Button variant="outline" onClick={() => services.openPage('queue')}>
+              <a href={services.pageHref('queue')} onClick={inPlace(() => services.openPage('queue'))} className={buttonVariants({ variant: 'outline' })}>
                 Open the Queue
-              </Button>
+              </a>
             ),
           },
         ]
