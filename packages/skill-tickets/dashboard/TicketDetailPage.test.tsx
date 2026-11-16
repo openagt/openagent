@@ -96,6 +96,8 @@ describe('TicketDetailPage (#1144)', () => {
     // The heading says the title; the breadcrumb's last step names the file, without its date.
     expect(screen.getAllByText('Do the thing')).toHaveLength(1)
     expect(screen.getByRole('navigation', { name: 'Breadcrumb' }).textContent).toBe('Ticketsdo-the-thing')
+    // On a phone the shell's top bar names the list and goes back to it: the crumb is said there, not drawn.
+    expect(screen.getByRole('navigation', { name: 'Breadcrumb' }).className).toContain('max-md:sr-only')
     expect(screen.getAllByText('The thing is not done.')).toHaveLength(1)
     expect(screen.queryByText('Priority: 8', { selector: 'p' })).toBeNull()
     // The fact named, its value the priority's key.

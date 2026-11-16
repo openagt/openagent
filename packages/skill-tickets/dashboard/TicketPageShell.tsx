@@ -56,8 +56,9 @@ export function TicketPageShell({
     <PageColumn>
       <div className={cn(aside !== undefined && 'lg:grid lg:grid-cols-[minmax(0,1fr)_15.5rem] lg:gap-12')}>
         <div className="min-w-0">
-          {/* While the sidebar is hidden, the button that shows it again stands first. */}
-          <nav aria-label="Breadcrumb" className="mb-4 flex min-h-7 items-center gap-1 text-sm text-faint-foreground">
+          {/* While the sidebar is hidden, the button that shows it again stands first. A phone's top bar
+              goes back to the list with its arrow and names it, so there the crumb is said, not drawn. */}
+          <nav aria-label="Breadcrumb" className="mb-4 flex min-h-7 items-center gap-1 text-sm text-faint-foreground max-md:sr-only">
             <ShowSidebarButton />
             <button type="button" className={`${step} shrink-0`} onClick={onBack}>
               Tickets

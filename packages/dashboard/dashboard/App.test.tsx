@@ -324,6 +324,35 @@ describe('module pages in the shell (#1774)', () => {
     }
   })
 
+  test("on a phone a page under a module's page has a back arrow in its bar, up to that page; the page itself has none", async () => {
+    function ListPage({ path }: ModulePageProps) {
+      const host = useModuleHost()
+      return path.length === 0 ? createElement('button', { onClick: () => host.openPage('list', ['a'], PROJECT.id) }, 'open item a') : createElement('p', null, `item ${path.join('/')}`)
+    }
+    answerShell([{ package: '@acme/list', url: moduleModule('__listPhoneBack', { pages: [{ segment: 'list', label: 'List', Page: ListPage }] }), projects: [PROJECT.id] }])
+    const wide = phoneScreen()
+    try {
+      // Opened cold: nothing behind it, so the arrow opens the list.
+      window.history.replaceState(null, '', '/list/a')
+      render(<App />)
+      expect(await screen.findByText('item a')).toBeTruthy()
+      fireEvent.click(within(document.querySelector<HTMLElement>('[data-phone-bar]')!).getByRole('button', { name: 'Back' }))
+      expect(await screen.findByRole('button', { name: 'open item a' })).toBeTruthy()
+      expect(window.location.pathname).toBe('/list')
+      expect(within(document.querySelector<HTMLElement>('[data-phone-bar]')!).queryByRole('button', { name: 'Back' })).toBeNull()
+
+      // Opened from the list: the arrow is the browser's Back, to the list's own entry.
+      fireEvent.click(screen.getByRole('button', { name: 'open item a' }))
+      expect(await screen.findByText('item a')).toBeTruthy()
+      const entries = window.history.length
+      fireEvent.click(within(document.querySelector<HTMLElement>('[data-phone-bar]')!).getByRole('button', { name: 'Back' }))
+      expect(await screen.findByRole('button', { name: 'open item a' })).toBeTruthy()
+      expect(window.history.length).toBe(entries)
+    } finally {
+      wide()
+    }
+  })
+
   test('on a phone the bar of a page that is not found says so', async () => {
     answerShell([])
     const wide = phoneScreen()
