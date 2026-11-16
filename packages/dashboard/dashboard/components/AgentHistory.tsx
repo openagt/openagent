@@ -377,9 +377,20 @@ export function AgentHistory({
             onNewAgentInProject={onNewAgentInProject && leave(onNewAgentInProject)}
             onSelect={leave(onSelect)}
           />
-          {/* Overview: the way home, its own nav item directly under New and above the session list,
-              more prominent than a menu row. Only this — the current view — carries the active fill. */}
-          <NavRow icon={LayoutDashboard} label="Overview" active={projectId === null && activePage === null} href={homeHref} onClick={leave(onDashboard)} />
+          {/* The Overview entry (Rom): the way home, pinned above the session list and more prominent than a
+              menu row. Carries the Human Queue count (#632) so the one cross-project signal stays visible, and
+              highlights while it is the current view: only this carries the active fill. The count is the
+              phone bar's waiting pill. */}
+          <NavRow icon={LayoutDashboard} label="Overview" active={projectId === null && activePage === null} href={homeHref} onClick={leave(onDashboard)}>
+            {waiting.length > 0 && (
+              <>
+                <span aria-hidden className="flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-warning/15 px-1 text-xs leading-none font-semibold text-warning tabular-nums">
+                  {waiting.length}
+                </span>
+                <span className="sr-only">{`, ${waiting.length} waiting on you`}</span>
+              </>
+            )}
+          </NavRow>
           {/* The modules' pages the shell hands over (#1774), the picked project's only when one is
               picked: destinations with no project selected, like the Overview, named by the module,
               never by the dashboard — the tickets' page among them, when a package brings one. */}
