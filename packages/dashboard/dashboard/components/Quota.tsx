@@ -518,11 +518,16 @@ export function Quota({ projects }: { projects: ProjectSummary[] }) {
                   <WordsShape words={NOT_FOUND} />
                 </p>
               ) : (
+                // Each a bar centred on its line, so the shapes stand 16 in from the card's edges.
                 <div className="space-y-1.5">
-                  <Skeleton className="h-4 w-full" />
-                  <Skeleton className="h-4 w-full" />
+                  <div className="flex h-4 items-center">
+                    <Skeleton className="h-2 w-full" />
+                  </div>
+                  <div className="flex h-4 items-center">
+                    <Skeleton className="h-2.5 w-full rounded-full" />
+                  </div>
                   <div className="flex h-5 items-center">
-                    <Skeleton className="h-4 w-2/3" />
+                    <Skeleton className="h-3 w-2/3" />
                   </div>
                 </div>
               )

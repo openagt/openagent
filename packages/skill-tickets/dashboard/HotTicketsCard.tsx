@@ -126,15 +126,16 @@ function HotList({ hot, errors, state, showProject, reload }: { hot: HotTicket[]
       ))}
       <Slot
         of={{ state, value: hot }}
-        // While they are read, the card as one kind of one ticket stands: its kind's line, then the ticket's row.
+        // While they are read, the card as one kind of one ticket stands: its kind's line, then the ticket's row, each a
+        // bar centred on its line, so the shapes stand 16 in from the card's edges.
         shape={
           <Card className="pt-3">
             <div className="flex h-4 items-center px-4">
-              <Skeleton className="h-3 w-24" />
+              <Skeleton className="h-2 w-24" />
             </div>
             <div className="flex h-11 items-center gap-3 px-4">
-              <Skeleton className="size-4 shrink-0 rounded-full" />
-              <Skeleton className="h-4 w-2/3" />
+              <Skeleton className="size-3 shrink-0 rounded-sm" />
+              <Skeleton className="h-2.5 w-2/3" />
             </div>
           </Card>
         }

@@ -11,7 +11,8 @@ import { cn } from '../lib/utils.js'
 import { Button } from './ui/button.js'
 import { PanelGroup } from './ui/panel.js'
 import { Card } from './ui/card.js'
-import { RowShapes, Slot } from './ui/slot.js'
+import { Slot } from './ui/slot.js'
+import { Skeleton } from './ui/skeleton.js'
 import { PartDescription } from './PartDescription.js'
 import { useAction } from '../lib/use-action.js'
 import { SKILLS_ENTRY, sendWord, skillsSay, updateSkills } from './ProjectSkills.js'
@@ -120,8 +121,14 @@ export function SkillsCard({ projects, onSelectProject, projectHref }: { project
       <Slot
         of={{ state, value: reads }}
         shape={
+          // A project's row as two bars, 16 in from the card's edges as its words are.
           <Card className="px-4 py-2">
-            <RowShapes rows={projects.length || 1} />
+            {Array.from({ length: projects.length || 1 }, (_, at) => (
+              <div key={at} className="flex flex-col justify-center gap-1 md:h-10 max-md:h-11 max-md:gap-2">
+                <Skeleton className="h-2.5 w-1/3" />
+                <Skeleton className="h-2.5 w-2/3" />
+              </div>
+            ))}
           </Card>
         }
       >

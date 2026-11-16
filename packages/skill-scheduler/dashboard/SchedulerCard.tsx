@@ -46,13 +46,18 @@ export function SchedulerCard({ projects }: ModuleCardProps) {
       <PartDescription>What starts by itself while nobody is at the keyboard</PartDescription>
       <Slot
         of={{ state, value: rows }}
-        // While they are read, a project's row as it stands with nothing switched on: its status over one sentence.
+        // While they are read, a project's row as it stands with nothing switched on: its status over one sentence, each a
+        // bar centred on its line, so the shapes stand 16 in from the card's edges.
         shape={
           <Panel>
             {Array.from({ length: projects.length || 1 }, (_, at) => (
               <li key={at} className="relative space-y-1 px-4 py-3 before:absolute before:top-0 before:right-4 before:left-4 before:h-px not-first:before:bg-hairline">
-                <Skeleton className="h-4 w-24" />
-                <Skeleton className="h-4 w-2/3" />
+                <div className="flex h-4 items-center">
+                  <Skeleton className="h-2 w-24" />
+                </div>
+                <div className="flex h-4 items-center">
+                  <Skeleton className="h-2 w-2/3" />
+                </div>
               </li>
             ))}
           </Panel>
