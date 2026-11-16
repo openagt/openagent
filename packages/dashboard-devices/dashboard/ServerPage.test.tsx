@@ -624,7 +624,7 @@ describe('Settings › Devices: a server this computer installed', () => {
     say({ version: '1.2.3', machines: [] })
     expect(await screen.findByText('Add your first device')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Join with a code' }))
-    expect(await screen.findByText('Type what the other device shows.')).toBeTruthy()
+    expect(await screen.findByText('Type what the other device shows: a server of yours, or a computer someone shared with you.')).toBeTruthy()
   })
 
   test('an installed server lists the devices that are in on it, with when each was last there; Remove takes one out there, and this computer is not taken out as a device is', async () => {
