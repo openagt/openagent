@@ -450,6 +450,21 @@ html[data-pinned] body {
 .morph-in {
   animation: morph-in 0.18s cubic-bezier(0.2, 0, 0, 1);
 }
+/* Words that leave as others come in their place: whole until those are readable (a third of
+   morph-in, by when its curve has them three quarters in), then gone by two thirds. */
+.morph-out {
+  animation: morph-out 0.18s linear forwards;
+}
+@keyframes morph-out {
+  0%,
+  33% {
+    opacity: 1;
+  }
+  67%,
+  100% {
+    opacity: 0;
+  }
+}
 @keyframes morph-in {
   from {
     opacity: 0;
@@ -522,7 +537,8 @@ html[data-pinned] body {
     transition-duration: 0s !important;
   }
   .cross-fade-out,
-  .dots-leave {
+  .dots-leave,
+  .morph-out {
     display: none;
   }
   .text-shimmer {
