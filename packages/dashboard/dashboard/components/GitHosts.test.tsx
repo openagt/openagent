@@ -98,7 +98,7 @@ describe('Git hosts', () => {
     expect(screen.getByText('Git host accounts')).toBeTruthy()
     expect(within(card).getByText('Used by site, gemskills')).toBeTruthy()
     const octo = within(card).getByRole('listitem', { name: '@octo' })
-    expect(octo.textContent).toContain('added to OpenAgent')
+    expect(octo.textContent).toContain('Added to OpenAgent')
     // One host an account can be added at: its press is at the card's title, and none at the host's own line.
     expect(screen.getByRole('button', { name: 'Add a GitHub account' }).textContent).toBe('Add')
     expect(within(card).queryByRole('button', { name: /Add/ })).toBeNull()

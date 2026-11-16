@@ -59,6 +59,21 @@ afterEach(() => {
   for (const group of [accounts, logins, servers]) for (const fn of Object.values(group)) fn.mockReset()
 })
 
+describe('the Permissions page as it arrives', () => {
+  test('nothing of its parts is drawn until both coding agents are read: what one still needs stands first, and landing later it would move the parts under it', async () => {
+    views([own])
+    let codex: (state: object) => void = () => {}
+    logins.onAgentState.mockImplementation((driver: string) => (driver === 'codex' ? new Promise(resolve => (codex = resolve)) : Promise.resolve({ driver, ready: true })))
+    const { container } = render(<AccountsList />)
+    await new Promise(resolve => setTimeout(resolve, 20))
+    expect(container.firstElementChild!.getAttribute('aria-busy')).toBe('true')
+    expect(screen.queryAllByRole('heading')).toEqual([])
+    codex({ driver: 'codex', ready: false, problem: '`codex` not found', fix: { kind: 'install', command: 'curl -fsSL https://chatgpt.com/codex/install.sh | sh' } })
+    expect(await screen.findByRole('heading', { name: 'Codex' })).toBeTruthy()
+    expect(container.firstElementChild!.getAttribute('aria-busy')).toBeNull()
+  })
+})
+
 describe('what a server asks, above the accounts', () => {
   const asks = () => screen.findByRole('region', { name: `Your logins on ${LABEL}` })
 

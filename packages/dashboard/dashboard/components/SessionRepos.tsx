@@ -8,7 +8,7 @@ import { cn } from '../lib/utils.js'
 import { rowButtonClass, rowItemClass, RowSaid } from './ui/row-item.js'
 import { ScrollArea } from './ui/scroll-area.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
-import { MENU_ITEM_CLASS, MENU_POPUP_CLASS, MENU_TRIGGER_OPEN_CLASS } from './ui/dropdown-menu.js'
+import { MENU_BODY_CLASS, MENU_ITEM_CLASS, MENU_POPUP_CLASS, MENU_TRIGGER_OPEN_CLASS, MenuMark } from './ui/dropdown-menu.js'
 import { usePopupPlacement } from './ui/popup-placement.js'
 import { usePickerSearch } from './ui/picker-search.js'
 import { ASK_AGAIN_MS, REPOS_SHOWN, repoDetail } from './ProjectPicker.js'
@@ -136,12 +136,13 @@ export function SessionRepoPicks({
         <Combobox.Portal>
           <Combobox.Positioner positionMethod={positionMethod} sideOffset={6} align="start" className="z-50 outline-none">
             <Combobox.Popup data-overlay="picker" aria-label="Add repo" className={cn(MENU_POPUP_CLASS, 'w-[24rem] max-w-[var(--available-width)]')}>
-              <div className="flex items-center gap-2 border-b border-border px-3">
-                <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
-                <Combobox.Input aria-label="Search repos" placeholder="Search repos" className="h-9 w-full min-w-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
+              {/* The field one line tall, 16 in from the band's every edge, as the jump's is. */}
+              <div className="flex h-13 items-center gap-3 border-b border-hairline px-4">
+                <Search className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                <Combobox.Input aria-label="Search repos" placeholder="Search repos" className="h-5 w-full min-w-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
               </div>
               <ScrollArea viewportClassName="h-[min(20rem,calc(var(--available-height)-5rem))]">
-                <div className="p-1">
+                <div className={MENU_BODY_CLASS}>
                   <Combobox.Empty className="px-2 py-1.5 text-xs text-muted-foreground empty:hidden">{repos === null ? '' : 'No repo by that name.'}</Combobox.Empty>
                   <Combobox.List>
                     {(group: Group) => (
@@ -149,11 +150,15 @@ export function SessionRepoPicks({
                         <Combobox.GroupLabel className="px-2 pt-2 pb-1 text-xs font-normal text-muted-foreground">{group.label}</Combobox.GroupLabel>
                         <Combobox.Collection>
                           {(row: Row) => (
-                            <Combobox.Item key={row.value} value={row} className={cn(MENU_ITEM_CLASS, 'items-start')}>
-                              <FolderGit2 className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
-                              <span className="min-w-0 leading-tight">
+                            <Combobox.Item key={row.value} value={row} className={MENU_ITEM_CLASS}>
+                              <MenuMark>
+                                <FolderGit2 className="size-3.5" aria-hidden />
+                              </MenuMark>
+                              <span className="min-w-0 leading-5">
                                 <span className="block truncate">{row.label}</span>
-                                <span className="block truncate text-xs text-muted-foreground">{row.detail}</span>
+                                <span data-line2 className="block truncate text-xs leading-4 text-muted-foreground">
+                                  {row.detail}
+                                </span>
                               </span>
                             </Combobox.Item>
                           )}

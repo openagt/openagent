@@ -14,9 +14,9 @@ export function ProjectMenu({ projectId, onProjectRemoved }: { projectId: string
 
 // The bar at the top of the "New agent session" page: the project's ⋮ menu and the icons of the page's
 // panes (Panes), at the end of the row. The row is laid out as an agent's top bar is
-// (AgentActionBar), so the ⋮ and the icons are in the same place on both pages. It names the page
-// where a session's bar has the session's name; it names no project and says nothing of the
-// project's checkout.
+// (AgentActionBar), so the ⋮ and the icons are in the same place on both pages. It holds no name:
+// the page's question over the box names it (ProjectHome), and the bar names no project and says
+// nothing of the project's checkout.
 export function ProjectActions({
   projectId,
   onProjectRemoved,
@@ -28,8 +28,6 @@ export function ProjectActions({
     <TopBar>
       <div className="flex h-11 shrink-0 items-center gap-2 overflow-hidden pr-2 pl-4">
         <ShowSidebarButton />
-        {/* The page's name, as the sidebar's row says it, where a session's page has its name. */}
-        <h1 className="min-w-0 truncate px-2 text-sm font-medium">New agent session</h1>
         <div className="grow shrink-0" />
         {/* No project, no menu of a project's. */}
         {/* The ⋮ and the panes' icons, one kind of button, 4px apart, the last glyph ending 16 from the

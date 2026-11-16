@@ -198,12 +198,10 @@ export function EditPanel({
     backFromAsking.current = true
   }
 
-  /** What stands in the panel's place after a save or before a removal: one thing said, in a box of its own. */
-  const frame = 'mt-3 rounded-lg border border-hairline p-4'
-
+  // What stands in the panel's place after a save or before a removal: one thing said, under the row's name.
   if (saved) {
     return (
-      <div role="group" aria-label={`Editing ${title}`} className={`${frame} text-sm`}>
+      <div role="group" aria-label={`Editing ${title}`} className="mt-3 text-sm">
         <p>
           Saved <span className="font-mono">{title}</span> again, in <span className="font-mono">{saved.file}</span>.
         </p>
@@ -225,7 +223,7 @@ export function EditPanel({
         onKeyDown={e => {
           if (e.key === 'Escape' && !saving) back()
         }}
-        className={`${frame} text-sm`}
+        className="mt-3 text-sm"
       >
         <p>
           Remove <span className="font-mono">{title}</span>?
@@ -260,11 +258,11 @@ export function EditPanel({
         // Escape closes a panel that has nothing to lose. Any other is closed with Cancel, so a slip of a key loses no prompt and no pick.
         if (e.key === 'Escape' && !saving && !dirty) onClose()
       }}
-      className="mt-4 max-w-180 space-y-6"
+      className="mt-4 space-y-6"
     >
       <Section title="What it does">
         {own ? (
-          <fieldset disabled={saving} className="space-y-2">
+          <fieldset disabled={saving} className="min-w-0 space-y-2">
             <SaidFields project={project} said={own} agent={runsOn.agent} autoFocus onChange={change => (setOwn({ ...own, ...change }), setFailed(undefined))} />
           </fieldset>
         ) : (
@@ -334,14 +332,14 @@ export function EditPanel({
           {failed}
         </p>
       )}
-      <FormFoot where={keptWhereHint(opened)}>
+      <FormFoot on="card" where={keptWhereHint(opened)}>
         {/* Only what the tool wrote is the tool's to delete. */}
         {scheduled.editable && opened && (
           <Button ref={removeButton} variant="ghost" disabled={saving} onClick={() => (setAsking(true), setFailed(undefined))} className="text-danger">
             Remove
           </Button>
         )}
-        <Button variant="secondary" disabled={saving} onClick={onClose}>
+        <Button variant="ghost" disabled={saving} onClick={onClose}>
           Cancel
         </Button>
         <Button disabled={saving || down || problem !== undefined || !dirty} onClick={() => void save()}>

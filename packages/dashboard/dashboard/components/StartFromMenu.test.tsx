@@ -72,7 +72,7 @@ describe('StartFromMenu', () => {
     expect(names()).toEqual(['main', 'My local branch my/work', 'agent-fix-it', 'feature/x', 'local'])
     expect(screen.queryByText('Reading the branches on origin…')).toBeNull()
     // The pick is the tick at the row's end; the other rows carry none.
-    const checked = () => items().map(item => item.lastElementChild!.classList.contains('lucide-check'))
+    const checked = () => items().map(item => item.lastElementChild!.querySelector('.lucide-check') !== null)
     expect(checked()).toEqual([true, false, false, false, false])
     cleanup()
 

@@ -5,9 +5,9 @@ import { ComposerShape } from './Composer.js'
 import { TopBar } from './Panes.js'
 import { ProjectErrorBanner } from './ProjectErrorBanner.js'
 import { ProjectSkillsLine } from './ProjectSkills.js'
-import { HumanQueueList } from './HumanQueueList.js'
+import { WaitingPanel, holdsBack } from './HumanQueueList.js'
 import { ScrollArea } from './ui/scroll-area.js'
-import { Section } from './ui/section.js'
+import { PanelGroup } from './ui/panel.js'
 import type { StartPicks } from '../lib/started-from.js'
 import { SESSIONS_ID } from '../../src/project-address.js'
 
@@ -16,7 +16,7 @@ import { SESSIONS_ID } from '../../src/project-address.js'
 // page stays put, so you can launch again.
 //
 // The box to start an agent is what the page is for: from 768px up it stands at the page's optical
-// centre with what waits on the person under it, in the chat's column (#1455 item 4), the Human
+// centre under the page's question, with what waits on the person under it, in the chat's column (#1455 item 4), the Human
 // Queue's own rows; on a phone it is at the bottom, where an agent's message box is, with the rows
 // above it. Starting a run carries the box to its place on the run's page (StartAgentForm). The
 // project's Docs are not here: they are the Docs pane (Panes), on this page as on an agent's.
@@ -78,13 +78,13 @@ export function ProjectHome({
       {/* Above everything, because an agent started on a project whose agent-data branch cannot
           reach origin (#1599) works from stale tickets and a queue nobody else will see. */}
       <ProjectErrorBanner errors={errors} />
-      {/* The page is for the box: from 768px up it stands where the eye lands, its top at about 38% of
-          the page, and what waits for the person is under it, scrolling under it and never pushing
+      {/* The page is for the box: from 768px up it stands where the eye lands, under the page's
+          question, and what waits for the person is under it, scrolling under it and never pushing
           it. On a phone the box stays at the bottom, in the thumb's reach, with what waits above it,
           as an agent's page has its chat. The column keeps a scroll bar's room at its right, as the
           chat's does (ChatPane), so the box stands on a session's box's edges and is carried without a sideways step. */}
       <div className="scrollbar-thin scrollbar-gutter-stable flex min-h-0 flex-1 flex-col overflow-y-auto">
-        <div className="shrink-0 max-md:hidden md:basis-[38%]" aria-hidden />
+        <Question />
         <div className="shrink-0 max-md:order-last">
           <StartAgentForm
             projectId={projectId}
@@ -102,16 +102,13 @@ export function ProjectHome({
           />
         </div>
         <ScrollArea className="min-h-0 flex-1" viewportClassName="chat-scroll h-full">
-          <div className="mx-auto w-full max-w-3xl">
-            {/* No section at all when nothing waits: an empty "Waiting on you" is noise on every launch. */}
+          <div className="mx-auto w-full max-w-3xl space-y-8 px-4 pt-6 pb-4 md:pt-4">
+            {/* No part at all when nothing waits: an empty "Waiting on you" is noise on every launch. On
+                the box's edges, as an agent's chat is: its name and its card start where the box does. */}
             {waiting.length > 0 && (
-              // On the box's edges, as an agent's chat is; the rows reach past them by their own padding, so
-              // their words start where the heading does.
-              <Section title="Waiting on you" count={waiting.length} className="px-4 pt-6">
-                <div className="-mx-3">
-                  <HumanQueueList key={projectId} items={waiting} onOpenAgent={onOpenAgent} />
-                </div>
-              </Section>
+              <PanelGroup bare title={<span className="text-warning">Waiting on you</span>} count={holdsBack(waiting) ? waiting.length : undefined}>
+                <WaitingPanel key={projectId} items={waiting} onOpenAgent={onOpenAgent} />
+              </PanelGroup>
             )}
             {/* What the project's skills need from the person, when they need something (#2023): a card
                 under the agents that wait, in the same column; with nothing to say there is no card,
@@ -125,8 +122,21 @@ export function ProjectHome({
 }
 
 /**
+ * The page's name, its question: from a tablet up over the box, the two standing where the eye lands
+ * (the question's top at about a quarter of the page); on a phone first under the bar, the box at the foot.
+ */
+function Question() {
+  return (
+    <>
+      <div className="shrink-0 max-md:hidden md:basis-[24%]" aria-hidden />
+      <h1 className="mx-auto w-full max-w-3xl shrink-0 px-4 text-xl font-semibold tracking-tight max-md:pt-4 md:pb-4 md:text-center md:text-2xl">What should an agent do?</h1>
+    </>
+  )
+}
+
+/**
  * The launcher while the projects are read, so the address cannot yet say which project it is: its
- * top bar's row, and its box's shape where the box will stand.
+ * top bar's row, its question, and its box's shape where the box will stand.
  */
 export function ProjectHomeShape() {
   return (
@@ -135,7 +145,7 @@ export function ProjectHomeShape() {
         <div className="h-11" />
       </TopBar>
       <div className="scrollbar-thin scrollbar-gutter-stable flex min-h-0 flex-1 flex-col overflow-y-auto">
-        <div className="shrink-0 max-md:hidden md:basis-[38%]" aria-hidden />
+        <Question />
         <div className="mx-auto w-full max-w-3xl shrink-0 px-4 pt-2 pb-4 max-md:order-last">
           <ComposerShape />
         </div>

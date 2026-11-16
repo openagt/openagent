@@ -7,9 +7,8 @@ import { readAhead, usePolled } from '../lib/use-async.js'
 import { cn } from '../lib/utils.js'
 import { FocusHome } from '../lib/focus-home.js'
 import { Button } from './ui/button.js'
-import { List } from './ui/list.js'
-import { Section } from './ui/section.js'
-import { SentenceShape, Slot } from './ui/slot.js'
+import { Panel, PanelGroup, PanelRow } from './ui/panel.js'
+import { Slot, WordsShape } from './ui/slot.js'
 import { HostFix, useAddGitAccount } from './AddGitAccount.js'
 import { PackageLogo, hostWords, useGitHosts } from './Logins.js'
 import { AccountWhere, useServers } from './ServerLogins.js'
@@ -25,6 +24,9 @@ import { RowSaid, rowButtonClass, RowChevron } from './ui/row-item.js'
 // OpenAgent's, added here: the person's own tool and its logins are never used. A host no package
 // answers for is one line; a project with no remote, none.
 
+/** What the card says while no project has a page on a git host, and the room it waits in. */
+const NO_REMOTE = 'None of your projects has a remote yet. A project pushed to a git host gets its accounts here.'
+
 /** The git hosts' card: a section for each host, by its package's name and logo, with its accounts. */
 export function GitHostsCard() {
   const { view, state, reload } = useGitHosts()
@@ -34,20 +36,22 @@ export function GitHostsCard() {
   const withPackage = (view?.hosts ?? []).filter(row => row.provider)
   const hosts = withPackage.some(row => row.provider!.installed && row.provider!.accounts.length > 0) ? withPackage : []
   return (
-    <Section
+    <PanelGroup
+      bare
       title="Git host accounts"
       action={
         <>
-          {/* Another account, at the heading as the coding agents' card has it: the one host's dialog at once, a menu of them with more. */}
+          {/* Another account, at the heading as the coding agents' card has it: the one host's dialog at once, a menu of them with more.
+              Unpainted, as a part's heading's presses are, pulled out by its own padding so its word ends on the cards' edge. */}
           {hosts.length === 1 && (
-            <Button variant="secondary" aria-label={`Add a ${hosts[0]!.provider!.name} account`} onClick={() => adding.add(hosts[0]!.host)}>
+            <Button variant="ghost" className="-mr-3" aria-label={`Add a ${hosts[0]!.provider!.name} account`} onClick={() => adding.add(hosts[0]!.host)}>
               <Plus className="size-4" aria-hidden />
               Add
             </Button>
           )}
           {hosts.length > 1 && (
             <DropdownMenu>
-              <DropdownMenuTrigger render={<Button variant="secondary" aria-label="Add a git host account" />}>
+              <DropdownMenuTrigger render={<Button variant="ghost" className="-mr-3" aria-label="Add a git host account" />}>
                 <Plus className="size-4" aria-hidden />
                 Add
                 <ChevronDown className="size-4 text-muted-foreground" aria-hidden />
@@ -65,18 +69,27 @@ export function GitHostsCard() {
         </>
       }
     >
-      <p className="-mt-1 mb-4 text-sm text-muted-foreground">Runs push with the one in use at each host, never your own login.</p>
-      <Slot of={{ value: view, state }} shape={<SentenceShape />} className="flex flex-col gap-6">
+      <p className="mb-2 text-sm text-muted-foreground">Runs push with the one in use at each host, never your own login.</p>
+      {/* Waits in the room of its emptiest answer, the sentence that says no project has a remote. */}
+      <Slot
+        of={{ value: view, state }}
+        shape={
+          <p className="text-sm">
+            <WordsShape words={NO_REMOTE} />
+          </p>
+        }
+        className="flex flex-col gap-4"
+      >
         {view =>
           view && view.hosts.length === 0 ? (
-            <p className="text-sm text-muted-foreground">None of your projects has a remote yet. A project pushed to a git host gets its accounts here.</p>
+            <p className="text-sm text-muted-foreground">{NO_REMOTE}</p>
           ) : (
             (view?.hosts ?? []).map(row => (row.provider ? <HostAccounts key={row.host} row={row} onChanged={reload} /> : <NoPackage key={row.host} row={row} />))
           )
         }
       </Slot>
       {adding.dialog}
-    </Section>
+    </PanelGroup>
   )
 }
 
@@ -115,76 +128,75 @@ function HostAccounts({ row, onChanged }: { row: GitHostRow; onChanged: () => Pr
   }
   const empty = !p.installed || p.accounts.length === 0
   return (
-    <FocusHome as="section" aria-label={p.name} className="space-y-2">
-      <header className="flex min-w-0 items-center gap-2">
+    <FocusHome as="section" aria-label={p.name}>
+      {/* The host by its logo and name, on the cards' edge, and what uses it; its accounts a card of rows under it. */}
+      <header className="mb-2 flex min-w-0 items-center gap-2">
         <PackageLogo svg={p.logo} />
         <h3 className="text-sm font-medium">{p.name}</h3>
-        <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{usedBy(row)}</span>
+        <span className="min-w-0 flex-1 truncate text-xs text-faint-foreground">{usedBy(row)}</span>
       </header>
       {p.accounts.length > 0 && (
-        <List>
+        <Panel>
           {p.accounts.map(account => {
             const busy = pending?.login === account.login
             return (
-              // Two lines, as a list's row that says more than its name: the login and how it was added, then where it works.
-              <li key={account.login} aria-label={`@${account.login}`} className="flex min-w-0 items-start gap-3 rounded-md px-3 py-2">
-                <Avatar src={account.avatar} login={account.login} />
-                <div className="min-w-0 flex-1 space-y-1">
-                  <div className="flex min-w-0 items-center gap-2">
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">@{account.login}</p>
-                      <p className={cn('truncate text-xs', account.ok ? 'text-muted-foreground' : 'text-warning')}>
-                        {!account.ok ? `${p.name} no longer takes this login: add it again` : account.from !== undefined ? `from ${account.from}` : 'added to OpenAgent'}
-                      </p>
-                    </div>
-                    {account.runs && (
-                      <span className="inline-flex shrink-0 items-center gap-1 text-xs text-success">
-                        <Check className="size-3.5" aria-hidden />
-                        Runs use this
+              <PanelRow
+                key={account.login}
+                aria-label={`@${account.login}`}
+                state={<Avatar src={account.avatar} login={account.login} />}
+                title={`@${account.login}`}
+                meta={[
+                  <span className={cn(!account.ok && 'text-warning')}>{!account.ok ? `${p.name} no longer takes this login: add it again` : account.from !== undefined ? `From ${account.from}` : 'Added to OpenAgent'}</span>,
+                  account.runs && <span className="text-success">Runs use this</span>,
+                ]}
+                under={
+                  <>
+                    {removing === account.login && (
+                      <span role="group" aria-label={`Remove @${account.login}`} className="mt-1 flex flex-wrap items-center gap-2">
+                        <span className="min-w-0 grow basis-60 text-muted-foreground">
+                          {account.runs
+                            ? `Runs use @${account.login}. Without it they have no ${p.name} account until you add one.`
+                            : `OpenAgent forgets @${account.login}. The login goes on working wherever else it is.`}
+                        </span>
+                        <Button size="sm" variant="destructive" loading={busy} onClick={() => void act(account.login, 'remove', () => sendForgetGitHostAccount(row.host, account.login))}>
+                          {busy ? 'Removing…' : 'Remove'}
+                        </Button>
+                        <Button size="sm" variant="ghost" disabled={busy} onClick={() => setRemoving(undefined)}>
+                          Cancel
+                        </Button>
                       </span>
                     )}
-                    <DropdownMenu>
-                      <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" className="text-muted-foreground" />} aria-label={`More for @${account.login}`} disabled={pending !== undefined}>
-                        {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <MoreHorizontal className="size-4" aria-hidden />}
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="min-w-44">
-                        {!account.runs && (
-                          <DropdownMenuItem disabled={!account.ok} onClick={() => void act(account.login, 'use', () => sendUseGitHostAccount(row.host, account.login))}>
-                            Use for runs
-                          </DropdownMenuItem>
-                        )}
-                        <DropdownMenuItem className="text-danger" onClick={() => setRemoving(account.login)}>
-                          Remove
+                    {/* Where it works: this computer, and the person's servers that use its logins. */}
+                    <AccountWhere account={{ kind: 'git', host: row.host, login: account.login }} />
+                  </>
+                }
+                // Its menu stands at rest, faint, on the inset: the row has no fact that could give way to it.
+                actionsAtRest
+                actions={
+                  <DropdownMenu>
+                    <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" className="-mr-1.5 text-faint-foreground hover:text-foreground" />} aria-label={`More for @${account.login}`} disabled={pending !== undefined}>
+                      {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <MoreHorizontal className="size-4" aria-hidden />}
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="min-w-44">
+                      {!account.runs && (
+                        <DropdownMenuItem disabled={!account.ok} onClick={() => void act(account.login, 'use', () => sendUseGitHostAccount(row.host, account.login))}>
+                          Use for runs
                         </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                  {removing === account.login && (
-                    <div role="group" aria-label={`Remove @${account.login}`} className="flex flex-wrap items-center gap-2 rounded-md bg-muted px-3 py-2 text-xs">
-                      <p className="min-w-0 grow basis-60">
-                        {account.runs
-                          ? `Runs use @${account.login}. Without it they have no ${p.name} account until you add one.`
-                          : `OpenAgent forgets @${account.login}. The login goes on working wherever else it is.`}
-                      </p>
-                      <Button size="sm" variant="destructive" loading={busy} onClick={() => void act(account.login, 'remove', () => sendForgetGitHostAccount(row.host, account.login))}>
-                        {busy ? 'Removing…' : 'Remove'}
-                      </Button>
-                      <Button size="sm" variant="ghost" disabled={busy} onClick={() => setRemoving(undefined)}>
-                        Cancel
-                      </Button>
-                    </div>
-                  )}
-                  {/* Where it works: this computer, and the person's servers that use its logins. */}
-                  <AccountWhere account={{ kind: 'git', host: row.host, login: account.login }} />
-                </div>
-              </li>
+                      )}
+                      <DropdownMenuItem className="text-danger" onClick={() => setRemoving(account.login)}>
+                        Remove
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                }
+              />
             )
           })}
-        </List>
+        </Panel>
       )}
       {empty && (
-        // The press beside what is missing, else under it. A wrap and `grow`: a module's stylesheet loaded later has its own `.flex-1` and `.items-center`.
-        <div className="flex flex-wrap items-center gap-3 pt-1">
+        // The sentence grows from the left, its press at the cards' right edge, under it on a phone.
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <p className="min-w-0 grow basis-60 text-sm text-muted-foreground">{hostWords(row)}</p>
           <div className="shrink-0">
             <HostFix row={row} variant="secondary" onChanged={onChanged} />
@@ -192,7 +204,7 @@ function HostAccounts({ row, onChanged }: { row: GitHostRow; onChanged: () => Pr
         </div>
       )}
       {error !== undefined && (
-        <p role="alert" className="text-xs text-danger">
+        <p role="alert" className="mt-2 text-xs text-danger">
           {error}
         </p>
       )}
@@ -204,7 +216,7 @@ function HostAccounts({ row, onChanged }: { row: GitHostRow; onChanged: () => Pr
 function Avatar({ src, login }: { src: string | undefined; login: string }) {
   const [broken, setBroken] = useState(false)
   return (
-    <span aria-hidden className="mt-0.5 flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted text-xs font-medium text-muted-foreground">
+    <span aria-hidden className="flex size-4 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted text-xs leading-none font-medium text-muted-foreground">
       {src && !broken ? <img src={src} alt="" referrerPolicy="no-referrer" className="size-full object-cover" onError={() => setBroken(true)} /> : login[0]?.toUpperCase()}
     </span>
   )

@@ -37,7 +37,8 @@ export const rowLeftClass = 'flex min-w-0 flex-1 items-center gap-0.5'
  */
 export function RowAboveBox({ children }: { children: ReactNode }) {
   return (
-    <div className={cn('mb-1', rowClass)}>
+    // As high as its items, so a painted one stands as far from the box's top as from its side; the room it gives up is under it.
+    <div className={cn('mb-2', rowClass, 'h-7')}>
       <div className={cn(rowLeftClass, '@max-xl:overflow-x-auto @max-xl:[scrollbar-width:none] @max-xl:[mask-image:linear-gradient(to_right,#000_85%,transparent)] @max-xl:*:shrink-0')}>{children}</div>
     </div>
   )

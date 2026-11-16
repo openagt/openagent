@@ -18,10 +18,10 @@ const { ProjectActions } = await import('./ProjectActions.js')
 afterEach(cleanup)
 
 describe('ProjectActions', () => {
-  test('the page\'s name and the ⋮ menu: no project name, no branch, no clean or dirty', () => {
+  test('the ⋮ menu alone: the page\'s question names it, and no project name, no branch, no clean or dirty', () => {
     const { container } = render(<ProjectActions projectId="p1" />)
-    expect(container.textContent).toBe('New agent sessionAgent actions')
-    expect(screen.getByRole('heading', { name: 'New agent session' })).toBeTruthy()
+    expect(container.textContent).toBe('Agent actions')
+    expect(screen.queryByRole('heading')).toBeNull()
     expect(screen.getByRole('button', { name: 'Agent actions' })).toBeTruthy()
     // The menu acts on the project: it is given the project and no agent.
     expect(menu).toHaveBeenCalledWith(expect.objectContaining({ projectId: 'p1', events: [] }))
@@ -43,9 +43,9 @@ describe('ProjectActions', () => {
     expect(row.className).not.toMatch(/border/)
     // It starts 16 in on every screen: a phone opens the sidebar from the bar of pages at its foot.
     for (const cls of ['flex', 'h-11', 'items-center', 'gap-2', 'overflow-hidden', 'pr-2', 'pl-4']) expect(row.className.split(' ')).toContain(cls)
-    // The page's name, a spacer that takes the row's width, then the menu, last.
-    expect(row.children).toHaveLength(3)
-    expect(row.children[1]!.className).toContain('grow')
+    // A spacer that takes the row's width, then the menu, last.
+    expect(row.children).toHaveLength(2)
+    expect(row.children[0]!.className).toContain('grow')
     expect(row.lastElementChild!.contains(screen.getByRole('button', { name: 'Agent actions' }))).toBe(true)
   })
 })

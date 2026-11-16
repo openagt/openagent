@@ -29,6 +29,7 @@ export function ShortcutList() {
   )
 }
 
+/** A place's shortcuts: its name 8 over its rows, which stand on the content's edge with no rule between them, one line each, 44 from one to the next. */
 function Place({ place, ids }: { place: string; ids: ShortcutId[] }) {
   const heading = useId()
   return (
@@ -36,7 +37,6 @@ function Place({ place, ids }: { place: string; ids: ShortcutId[] }) {
       <h3 id={heading} className="text-sm font-semibold">
         {place}
       </h3>
-      {/* Rows on the dialog's inset with no rule between them, 44 from one to the next. */}
       <ul className="flex flex-col gap-6">
         {ids.map(id => (
           <li key={id} className="flex items-center justify-between gap-4">

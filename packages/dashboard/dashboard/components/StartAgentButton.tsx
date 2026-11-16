@@ -1,4 +1,4 @@
-import { useContext, type ReactNode } from 'react'
+import { useContext, useState, type ReactNode } from 'react'
 import { ChevronDown, Loader2 } from 'lucide-react'
 import { stashPendingDraft } from '../lib/draft-handoff.js'
 import { DaemonDown } from '../lib/use-daemon-health.js'
@@ -190,8 +190,13 @@ export function StartAgentButton({
     onConfigure()
   }
 
+  // The menu hangs from the pair, not from its arrow, and stays in the page's column: its right edge on the pair's
+  // where the pair ends a row, its left edge on the pair's where the pair starts a line, never over the sidebar.
+  const [pair, setPair] = useState<HTMLDivElement | null>(null)
+  const column = pair?.closest('main') ?? undefined
+
   return (
-    <ButtonGroup {...(fill ? { className: 'w-full' } : {})}>
+    <ButtonGroup ref={setPair} {...(fill ? { className: 'w-full' } : {})}>
       {leading}
       <StartAgentPress
         icon={icon}
@@ -227,7 +232,7 @@ export function StartAgentButton({
         >
           <ChevronDown className="h-3 w-3" aria-hidden />
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="max-w-[20rem]">
+        <DropdownMenuContent align="end" anchor={pair} {...(column ? { collisionBoundary: column } : {})} className="max-w-[20rem]">
           {moreItems.map(item => (
             <DropdownMenuItem key={item.label} onClick={item.onSelect} disabled={item.disabled} className="items-start">
               <OptionLabel label={item.label} description={item.description} />

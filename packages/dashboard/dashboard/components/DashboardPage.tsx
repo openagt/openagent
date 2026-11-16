@@ -6,10 +6,8 @@ import { Quota } from './Quota.js'
 import { SentenceShape, Slot } from './ui/slot.js'
 import { PartDescription } from './PartDescription.js'
 import { Button } from './ui/button.js'
-import { useWaitingRows } from './HumanQueueList.js'
-import { Panel, PanelGroup, PanelMore, PanelNote, PanelRow } from './ui/panel.js'
-import { RunMark } from './RunMark.js'
-import { OnComputer } from './MachineMark.js'
+import { WaitingPanel, holdsBack } from './HumanQueueList.js'
+import { PanelGroup } from './ui/panel.js'
 import { updatePreferences, usePreferences, usePreferencesLoaded } from '../lib/preferences.js'
 import { OnboardingChecklist } from './OnboardingChecklist.js'
 import { AgentUpdates } from './AgentUpdates.js'
@@ -324,46 +322,15 @@ function HumanQueue({
   onSelectProject: (id: string) => void
   onSelectAgent: (projectId: string, agentId: string) => void
 }) {
-  const { rows, more, projects } = useWaitingRows(items, onSelectAgent, onSelectProject)
   return (
-    <PanelGroup bare title={<span className="text-warning">Human Queue</span>} count={more ? items.length : undefined}>
+    <PanelGroup bare title={<span className="text-warning">Human Queue</span>} count={holdsBack(items) ? items.length : undefined}>
       <PartDescription>Agents awaiting your approval, review, or input</PartDescription>
       <Slot of={{ state, value: items }} shape={<SentenceShape />}>
-        {() => (
-          <Panel>
-            {rows.length === 0 && <PanelNote>AI doesn&apos;t need you.</PanelNote>}
-            {rows.map(({ key, item, needs, detail, hint, since, href, external, open }) => (
-              <PanelRow
-                key={key}
-                state={<RunMark status="waiting" />}
-                title={item.title}
-                titleHint={hint}
-                // What is needed in the waiting colour, then what it is about; a question is read whole: two lines before it is cut.
-                meta={[<span className="font-medium text-warning">{needs}</span>, detail, projects && item.projectName, item.computer && <OnComputer computer={item.computer} />]}
-                metaLines={2}
-                href={href}
-                external={external}
-                onClick={open}
-                fact={since}
-                // Every row carries the press that does what it needs, the same at rest as under the pointer; on a phone the age gives way to it.
-                actions={
-                  <Button variant={item.kind === 'awaiting' ? 'default' : 'secondary'} size="sm" aria-label={`${PRESSES[item.kind]}: ${item.title}`} onClick={open} className="relative">
-                    {PRESSES[item.kind]}
-                  </Button>
-                }
-                actionsAtRest
-              />
-            ))}
-            {more && <PanelMore onClick={more.toggle}>{more.words}</PanelMore>}
-          </Panel>
-        )}
+        {() => <WaitingPanel items={items} onOpenAgent={onSelectAgent} onOpenProject={onSelectProject} empty="AI doesn't need you." />}
       </Slot>
     </PanelGroup>
   )
 }
-
-/** The press on a row that needs the person, by its kind: each opens where it is done, the session (its question, its changes and their Publish) or the request. */
-const PRESSES: Record<Intervention['kind'], string> = { awaiting: 'Answer', pr: 'Review', unpushed: 'Review', uncommitted: 'Review' }
 
 /** The kinds of what needs the person, in the order of how much they hold a run up (a question stops one), as the line under the title counts them. */
 const KINDS: { value: Intervention['kind']; counted: (count: number) => string }[] = [

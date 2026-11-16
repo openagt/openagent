@@ -5,6 +5,7 @@ import { OpenAgentDown, fakeHost } from '@openagt/dashboard/module/testing'
 import { AutomationsPage } from './AutomationsPage.js'
 import { CodeWords } from './CodeWords.js'
 import { ANY_AGENT, ON_CLAUDE, STATUS, hostAnswering } from './fixtures.js'
+import { openMenu, phoneScreen } from '../../dashboard/dashboard/test-utils.js'
 import { checked, choices, offered, openList, pick, queryRadio, radio, radioNames, showing } from '../../dashboard/dashboard/test-controls.js'
 
 // The coding agents' own lists, as the dashboard asked them: what a row's agent and model are picked from, and named by.
@@ -71,6 +72,21 @@ async function edit(name: string): Promise<HTMLElement> {
   fireEvent.click(within(row(name)).getByRole('button', { name: `Edit ${name}` }))
   return within(row(name)).findByRole('group', { name: `Editing ${name}` })
 }
+/**
+ * What a row's Edit panel says, with the part of it named open: the picks its line leaves to it (how many at once, what
+ * it runs on, what its runs publish) in its sentence of what is in force, and whether a pick is the person's own in
+ * its choices. The panel is closed again with Cancel.
+ */
+async function inForce(name: string, check: (panel: HTMLElement) => void = () => {}): Promise<string> {
+  const panel = await edit(name)
+  const said = panel.textContent ?? ''
+  check(panel)
+  fireEvent.click(within(panel).getByRole('button', { name: 'Cancel' }))
+  await gone(name)
+  return said
+}
+/** Whether a part of a panel opens on the person's own pick rather than on what the skill says. */
+const ownPick = (panel: HTMLElement, partName: string): boolean => !checked(radio(part(panel, partName), 'As the skill says'))
 const gone = (name: string): Promise<void> => waitFor(() => expect(screen.queryByRole('group', { name: `Editing ${name}` })).toBeNull())
 /** Wait for a row's panel to say its file was saved again, put the note away with Done, and answer what it said. */
 async function savedAgain(name: string): Promise<string> {
@@ -92,34 +108,56 @@ describe('the Automations page: its rows', () => {
     const { host } = scheduler()
     show(host)
     const gemstack = await screen.findByRole('region', { name: 'gemstack' })
-    expect(screen.getByText("What starts by itself while nobody is at the keyboard. Every row starts switched off: it runs on this machine only once you switch it on here.")).toBeTruthy()
-    expect(within(gemstack).getByText('Scheduler on').className).toMatch(/text-success/)
-    // The scheduler's model, named as the rows name it.
-    expect(await within(gemstack).findByText('Model: Opus 5.5')).toBeTruthy()
+    expect(screen.getByText('What starts by itself while nobody is at the keyboard.')).toBeTruthy()
+    // One project: its scheduler's line stands under the page's own.
+    expect(screen.getByText('Scheduler on').className).toMatch(/text-success/)
+    // The scheduler's model, on the coding agent it is a model of, named as the rows name it.
+    await waitFor(() => expect(screen.getByText('Scheduler on').parentElement!.parentElement!.textContent).toMatch(/^Scheduler on·Claude Code, Opus 5.5·/))
     // Nobody made a row of their own here: one group, the skills'.
     expect(within(gemstack).getAllByRole('region').map(g => document.getElementById(g.getAttribute('aria-labelledby')!)!.textContent)).toEqual(["From the project's skills"])
 
     const cleanupRow = row('/post-merge-cleanup')
     expect(within(cleanupRow).getByText('Write up merged pull requests.')).toBeTruthy()
-    expect(within(cleanupRow).getByText('Never ran')).toBeTruthy()
-    expect(within(cleanupRow).getByText('Every day')).toBeTruthy()
-    expect(within(cleanupRow).getByText('May commit, pushes nothing')).toBeTruthy()
+    // Its line: where it stands, then when it runs; its other picks are its panel's.
+    expect(within(cleanupRow).getByText('Never ran').parentElement!.textContent).toBe('Never ran·Every day')
+    expect(await inForce('/post-merge-cleanup')).toContain('Every day. Claude Code, Opus 5.5. May commit, pushes nothing.')
     expect(within(cleanupRow).getByRole('switch', { name: 'Run /post-merge-cleanup by itself' }).getAttribute('aria-checked')).toBe('true')
 
     // Nobody switched it on here: Off, whatever its skill says.
     const queueRow = row('/work-queue')
     expect(within(queueRow).getByText('Work one queued task.')).toBeTruthy()
-    expect(within(queueRow).getByText('When the queue holds a task')).toBeTruthy()
-    expect(within(queueRow).getByText('As its skill says')).toBeTruthy()
+    expect(within(queueRow).getByText('Never ran').parentElement!.textContent).toBe('Never ran·When the queue holds a task')
     expect(within(queueRow).getByRole('switch', { name: 'Run /work-queue by itself' }).getAttribute('aria-checked')).toBe('false')
     // The same three controls on every row.
     for (const name of ['/post-merge-cleanup', '/work-queue']) expect(within(row(name)).getAllByRole('button').map(b => b.textContent)).toEqual(['Run now', 'Edit'])
   })
 
-  test('a project\'s rows come in two groups, the automations a person made and the commands of the project\'s skills; a row a person made says who gets it, and one kept on this machine is named without a slash; only a row that could follow its skill marks a pick as "your pick"', async () => {
+  test('on a phone a row is its name, its line and its switch, with "Run now" and "Edit" in its "⋯"; the panel closed, the keyboard is back on the "⋯"', async () => {
+    const wide = phoneScreen()
+    try {
+      const { host } = scheduler()
+      show(host)
+      await screen.findByRole('region', { name: 'gemstack' })
+      const queue = row('/work-queue')
+      expect(within(queue).queryByRole('button', { name: 'Edit /work-queue' })).toBeNull()
+      expect(within(queue).getByRole('switch', { name: 'Run /work-queue by itself' })).toBeTruthy()
+      const more = within(queue).getByRole('button', { name: 'More for /work-queue' })
+      await openMenu(more)
+      expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toEqual(['Run now', 'Edit'])
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Edit' }))
+      const panel = await within(row('/work-queue')).findByRole('group', { name: 'Editing /work-queue' })
+      fireEvent.click(within(panel).getByRole('button', { name: 'Cancel' }))
+      await gone('/work-queue')
+      await waitFor(() => expect(document.activeElement).toBe(within(row('/work-queue')).getByRole('button', { name: 'More for /work-queue' })))
+    } finally {
+      wide()
+    }
+  })
+
+  test('a project\'s rows come in two groups, the automations a person made and the commands of the project\'s skills; a row a person made says in its panel who gets it, and one kept on this machine is named without a slash; only a row that could follow its skill has a pick of the person\'s own', async () => {
     const since = '2026-10-03T08:00:00.000Z'
     const picked = { ...MINE, paces: { tidy: { every: '1d', at: '10:00', since }, 'post-merge-cleanup': { every: '2d', since } }, agents: { 'answer-comments': 2, 'work-queue': 3 } }
-    const { host, runCommand } = hostAnswering((_, args) => (args[0] === 'status' ? { ok: true, output: picked } : { ok: true, output: { ok: true } }))
+    const { host, runCommand } = hostAnswering((_, args) => (args[0] === 'status' ? { ok: true, output: picked } : args[0] === 'show' ? { ok: true, output: args[1] === 'tidy' ? KEPT : SHOWN } : { ok: true, output: { ok: true } }))
     show(host)
     const gemstack = await screen.findByRole('region', { name: 'gemstack' })
     expect(within(gemstack).getAllByRole('region').map(g => document.getElementById(g.getAttribute('aria-labelledby')!)!.textContent)).toEqual(['Your automations', "From the project's skills"])
@@ -130,9 +168,10 @@ describe('the Automations page: its rows', () => {
     expect(within(yours).getAllByRole('listitem').map(li => li.getAttribute('aria-label'))).toEqual(['/answer-comments', 'tidy'])
     expect(within(skills).getAllByRole('listitem').map(li => li.getAttribute('aria-label'))).toEqual(['/post-merge-cleanup', '/work-queue'])
 
-    expect(within(row('/answer-comments')).getByText('shared with the project')).toBeTruthy()
+    // Who gets it is said where it is kept, at its panel's foot.
+    expect(await inForce('/answer-comments')).toContain('Its words and its pace are in a skill file of this project, .claude/skills/answer-comments/SKILL.md: a change to them is yours to commit.')
+    expect(await inForce('tidy')).toContain('Kept on this machine alone, outside git: .scheduler/automations/tidy.md.')
     const kept = row('tidy')
-    expect(within(kept).getByText('only on this machine')).toBeTruthy()
     // One kept on this machine is no command to type: no slash in its title, its buttons or its switch.
     expect(within(kept).getByText('tidy')).toBeTruthy()
     expect(within(kept).queryByText('/tidy')).toBeNull()
@@ -140,17 +179,15 @@ describe('the Automations page: its rows', () => {
     expect(within(kept).getByRole('button', { name: 'Edit tidy' })).toBeTruthy()
     fireEvent.click(within(kept).getByRole('switch', { name: 'Run tidy by itself' }))
     await waitFor(() => expect(runCommand).toHaveBeenCalledWith('p1', ['switch', 'tidy', 'on']))
-    // A skill's row keeps its slash and says neither.
-    for (const name of ['/post-merge-cleanup', '/work-queue']) expect(within(row(name)).queryByText(/only on this machine|shared with the project/)).toBeNull()
+    // A skill's row keeps its slash.
+    expect(within(row('/work-queue')).getByText('/work-queue')).toBeTruthy()
 
-    // Everything on a row a person made is their pick; on a skill's row a pick of theirs is said.
-    expect(within(kept).getByText('Every day at 10:00')).toBeTruthy()
-    expect(within(row('/answer-comments')).getByText('Up to 2 at once')).toBeTruthy()
-    for (const name of ['/answer-comments', 'tidy']) expect(within(row(name)).queryByText('your pick')).toBeNull()
-    expect(within(row('/post-merge-cleanup')).getByText('Every 2 days')).toBeTruthy()
-    expect(within(row('/post-merge-cleanup')).getAllByText('your pick').length).toBe(1)
-    expect(within(row('/work-queue')).getByText('Up to 3 at once')).toBeTruthy()
-    expect(within(row('/work-queue')).getAllByText('your pick').length).toBe(1)
+    // Everything on a row a person made is their pick, and its panel offers no skill's to go back to; on a skill's row a pick of theirs is the panel's own choice.
+    expect(within(kept).getByText('Never ran').parentElement!.textContent).toBe('Never ran·Every day at 10:00')
+    expect(await inForce('/answer-comments', panel => expect(queryRadio(panel, 'As the skill says')).toBeNull())).toContain('Up to 2 at once.')
+    expect(within(row('/post-merge-cleanup')).getByText('Never ran').parentElement!.textContent).toBe('Never ran·Every 2 days')
+    await inForce('/post-merge-cleanup', panel => expect([ownPick(panel, 'When it runs'), ownPick(panel, 'How many at once')]).toEqual([true, false]))
+    expect(await inForce('/work-queue', panel => expect([ownPick(panel, 'When it runs'), ownPick(panel, 'How many at once')]).toEqual([false, true]))).toContain('Up to 3 at once.')
   })
 
   test('a project with rows of one kind alone shows that group alone', async () => {
@@ -500,6 +537,15 @@ describe('the Automations page: its rows', () => {
     await waitFor(() => expect(within(gemstack).getByRole('listitem', { name: '/post-merge-cleanup' }).className).not.toMatch(/opacity-60/))
   })
 
+  test("a running scheduler's line says when it last looked only once that is two ticks late, in the warning colour", async () => {
+    const { host } = hostAnswering(projectId => ({ ok: true, output: { ...STATUS, lastTick: { ...STATUS.lastTick, at: projectId === 'p1' ? new Date(Date.now() - 10_000).toISOString() : '2026-10-03T10:00:00.000Z' } } }))
+    show(host, [GEMSTACK, OTHER])
+    const gemstack = await screen.findByRole('region', { name: 'gemstack' })
+    expect(within(gemstack).queryByText(/^Last looked/)).toBeNull()
+    const late = within(screen.getByRole('region', { name: 'other' })).getByText(/^Last looked/)
+    expect(late.className).toMatch(/text-warning/)
+  })
+
   test('a tick that decided nothing says why in the heading; a scheduler that is off, or on with no process, says what that means and how it starts', async () => {
     const { host } = hostAnswering(projectId => ({ ok: true, output: { ...STATUS, ...(projectId === 'p1' ? { lastTick: { ...STATUS.lastTick, decisions: [], note: 'agent-data could not be pulled: origin is unreachable' } } : { on: false, lastTick: { ...STATUS.lastTick, decisions: [], note: 'off' } }) } }))
     show(host, [GEMSTACK, OTHER])
@@ -663,7 +709,7 @@ describe("the Edit panel of a skill's row", () => {
     fireEvent.click(within(editor).getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(runCommand).toHaveBeenCalledWith('p1', ['publish', 'post-merge-cleanup', 'pr']))
     await gone('/post-merge-cleanup')
-    expect(within(row('/post-merge-cleanup')).getByText('May commit, pushes nothing')).toBeTruthy()
+    expect(await inForce('/post-merge-cleanup')).toContain('May commit, pushes nothing.')
 
     // A skill with a shell line shows it, greyed, with what it waits for.
     const second = await edit('/work-queue')
@@ -1001,11 +1047,9 @@ describe("the Edit panel of a skill's row", () => {
     )
     show(host)
     await screen.findByRole('region', { name: 'gemstack' })
-    // The skill lets two run at once; a person's own number shows on the row too.
-    expect(within(row('/post-merge-cleanup')).getByText('Up to 2 at once')).toBeTruthy()
-    expect(within(row('/post-merge-cleanup')).queryByText('your pick')).toBeNull()
-    expect(within(row('/work-queue')).getByText('Up to 3 at once')).toBeTruthy()
-    expect(within(row('/work-queue')).getByText('your pick')).toBeTruthy()
+    // The skill lets two run at once; a person's own number is said in the panel too, as their pick.
+    expect(await inForce('/post-merge-cleanup', panel => expect(ownPick(panel, 'How many at once')).toBe(false))).toContain('Up to 2 at once.')
+    expect(await inForce('/work-queue', panel => expect(ownPick(panel, 'How many at once')).toBe(true))).toContain('Up to 3 at once.')
 
     const editor = await edit('/post-merge-cleanup')
     const many = part(editor, 'How many at once')
@@ -1054,7 +1098,7 @@ describe("the Edit panel of a skill's row", () => {
     await waitFor(() => expect(runCommand).toHaveBeenCalledWith('p1', ['agents', 'work-queue', 'skill']))
   })
 
-  test("a person's own number of one is said on the row; a number of agents that is not taken stops there: the publish pick is not sent and the panel stays open; a pace that is no pace yet is the hint that shows first", async () => {
+  test("a person's own number of one is said in the panel; a number of agents that is not taken stops there: the publish pick is not sent and the panel stays open; a pace that is no pace yet is the hint that shows first", async () => {
     const { host, runCommand } = hostAnswering((projectId, args) => {
       if (args[0] === 'status') return { ok: true, output: { ...STATUS, agents: { 'work-queue': 1 } } }
       return args[0] === 'agents' ? { ok: false, error: 'no skill of this project schedules post-merge-cleanup' } : { ok: true, output: { ok: true } }
@@ -1062,9 +1106,8 @@ describe("the Edit panel of a skill's row", () => {
     show(host)
     await screen.findByRole('region', { name: 'gemstack' })
     // The skill says nothing, so one at a time, and so does this person: said because it is their pick.
-    expect(within(row('/work-queue')).getByText('One at a time')).toBeTruthy()
-    expect(within(row('/work-queue')).getByText('your pick')).toBeTruthy()
-    expect(within(row('/post-merge-cleanup')).queryByText('One at a time')).toBeNull()
+    expect(await inForce('/work-queue', panel => expect(ownPick(panel, 'How many at once')).toBe(true))).toContain('One at a time.')
+    expect(await inForce('/post-merge-cleanup')).not.toContain('One at a time')
 
     const editor = await edit('/post-merge-cleanup')
     const many = part(editor, 'How many at once')
@@ -1695,33 +1738,29 @@ describe('what a row runs on', () => {
     hostAnswering((_, args) => (args[0] === 'status' ? { ok: true, output: { ...RUNS, ...over } } : args[0] === 'show' ? { ok: true, output: KEPT } : saved()))
   const menu = (panel: HTMLElement, name: 'Agent' | 'Model'): HTMLElement => within(part(panel, 'What it runs on')).getByLabelText(name)
 
-  test("a row's line says the agent and the model its runs are on: the scheduler's model on Claude Code, the skill's own where it names one, the agent alone on Codex; a pick of the person's says so on a skill's row", async () => {
+  test("a row's panel says the agent and the model its runs are on: the scheduler's model on Claude Code, the skill's own where it names one, the agent alone on Codex; a pick of the person's is the panel's own choice on a skill's row", async () => {
     const { host } = runs({ models: { 'post-merge-cleanup': { agent: 'claude-code', model: 'haiku' } }, runsOn: { 'say-pear': 'claude-code' } })
     show(host)
     await screen.findByRole('region', { name: 'gemstack' })
     // Named as the agent lists them, once its list is in.
-    expect(await within(row('/update-tickets')).findByText('Claude Code, Haiku 5.5')).toBeTruthy()
-    expect(within(row('/update-tickets')).queryByText('your pick')).toBeNull()
-    expect(within(row('/post-merge-cleanup')).getByText('Claude Code, Haiku 5.5')).toBeTruthy()
-    expect(within(row('/post-merge-cleanup')).getByText('your pick')).toBeTruthy()
+    await waitFor(async () => expect(await inForce('/update-tickets', panel => expect(showing(menu(panel, 'Model'))).toBe('As the skill says (Haiku 5.5)'))).toContain('Claude Code, Haiku 5.5.'))
+    expect(await inForce('/post-merge-cleanup', panel => expect(showing(menu(panel, 'Model'))).toBe('Haiku 5.5'))).toContain('Claude Code, Haiku 5.5.')
     // Picked away from the agent its skill is made for: the scheduler's model, not one the skill named for the other agent.
-    expect(within(row('/say-pear')).getByText('Claude Code, Opus 5.5')).toBeTruthy()
-    expect(within(row('tidy')).getByText('Claude Code, Opus 5.5')).toBeTruthy()
+    expect(await inForce('/say-pear')).toContain('Claude Code, Opus 5.5.')
+    expect(await inForce('tidy')).toContain('Claude Code, Opus 5.5.')
     cleanup()
     // A model picked while the row ran on another agent is none: the row says what it starts on now.
     const moved = runs({ models: { 'post-merge-cleanup': { agent: 'codex', model: 'gpt-5.5' } }, lastTick: { ...STATUS.lastTick, decisions: [{ command: 'post-merge-cleanup', outcome: 'not a command of Codex: its skill is only under .claude/skills, not .agents/skills' }] } })
     show(moved.host)
     await screen.findByRole('region', { name: 'gemstack' })
-    expect(await within(row('/post-merge-cleanup')).findByText('Claude Code, Opus 5.5')).toBeTruthy()
-    expect(within(row('/post-merge-cleanup')).queryByText('your pick')).toBeNull()
     // What the last look said of an agent the row is no longer on is not said: the files say Claude Code can run it.
     expect(within(row('/post-merge-cleanup')).queryByText(/Cannot start/)).toBeNull()
+    await waitFor(async () => expect(await inForce('/post-merge-cleanup', panel => expect(showing(menu(panel, 'Model'))).toBe("The scheduler's model (Opus 5.5)"))).toContain('Claude Code, Opus 5.5.'))
     cleanup()
     const plain = runs()
     show(plain.host)
     await screen.findByRole('region', { name: 'gemstack' })
-    expect(within(row('/say-pear')).getByText('Codex')).toBeTruthy()
-    expect(within(row('/say-pear')).queryByText('your pick')).toBeNull()
+    expect(await inForce('/say-pear', panel => expect(showing(menu(panel, 'Agent'))).toBe('Codex'))).toContain('. Codex. ')
   })
 
   test('the panel offers the agent and the model: an agent that cannot read the row\'s skill is greyed with why; the first model is what follows when nobody picks; Save runs `model` alone for a model, and takes a pick back with `skill`', async () => {
@@ -1742,9 +1781,9 @@ describe('what a row runs on', () => {
     fireEvent.click(within(panel).getByRole('button', { name: 'Save' }))
     await gone('/update-tickets')
     expect(saves(runCommand)).toEqual([['model', 'update-tickets', 'opus']])
-    expect(within(row('/update-tickets')).getByText('Claude Code, Opus 5.5')).toBeTruthy()
-    // Opened on the pick; the first choice takes it back.
+    // Opened on the pick, as the panel's sentence says it; the first choice takes it back.
     const again = await edit('/update-tickets')
+    expect(within(again).getByText('Every 15 minutes. Claude Code, Opus 5.5. May commit, pushes nothing. Nothing is changed yet.')).toBeTruthy()
     expect(showing(menu(again, 'Model'))).toBe('Opus 5.5')
     await pick(menu(again, 'Model'), 'As the skill says (Haiku 5.5)')
     picks = {}
@@ -1800,7 +1839,7 @@ describe('what a row runs on', () => {
     fireEvent.click(within(again).getByRole('button', { name: 'Save' }))
     await gone('/say-pear')
     expect(saves(runCommand).slice(1)).toEqual([['agent', 'say-pear', 'skill'], ['model', 'say-pear', 'gpt-5.5']])
-    expect(within(row('/say-pear')).getByText('Codex, GPT-5.5')).toBeTruthy()
+    expect(await inForce('/say-pear')).toContain('Codex, GPT-5.5.')
   })
 
   test('the agent and the model are saved after the number of agents and before the publish pick; one that is not taken stops there and says why; a model the agent does not list stays the pick', async () => {
@@ -2325,7 +2364,7 @@ describe("the rows are the project's files as they stand", () => {
     failing = true
     fireEvent.click(within(row('/work-queue')).getByRole('switch'))
     expect((await within(gemstack).findByRole('alert')).textContent).toBe('The scheduler could not be read: the state file could not be read')
-    expect(within(gemstack).getByText('Scheduler not readable')).toBeTruthy()
+    expect(screen.getByText('Scheduler not readable')).toBeTruthy()
     expect(runCommand).toHaveBeenCalledWith('p1', ['switch', 'work-queue', 'on'])
     // The rows stay, in their groups, and so does the panel with what was typed in it.
     expect(within(screen.getByRole('region', { name: 'Your automations' })).getByRole('listitem', { name: 'tidy' })).toBeTruthy()
@@ -2336,7 +2375,7 @@ describe("the rows are the project's files as they stand", () => {
     failing = false
     fireEvent.click(within(row('/post-merge-cleanup')).getByRole('switch'))
     await waitFor(() => expect(within(gemstack).queryByRole('alert')).toBeNull())
-    expect(within(gemstack).getByText('Scheduler on')).toBeTruthy()
+    expect(screen.getByText('Scheduler on')).toBeTruthy()
     expect((within(editing('tidy')).getByLabelText('What the agent is told') as HTMLTextAreaElement).value).toBe('Tidy up, and say what moved.')
   })
 })
@@ -2408,15 +2447,13 @@ describe('a row with each', () => {
   const each = (over: object = {}, saved: (args: string[]) => ModuleCommandResult = () => ({ ok: true, output: { ok: true } })) =>
     hostAnswering((_, args) => (args[0] === 'status' ? { ok: true, output: { ...EACH, ...over } } : saved(args)))
 
-  test('its line says its agent, model and publish level as any row\'s, a pick of this machine marked as one', async () => {
+  test('its panel says its agent, model and publish level as any row\'s, a pick of this machine its own choice; its line, when it runs', async () => {
     const { host } = each({ models: { reply: { agent: 'claude-code', model: 'haiku' } }, publishes: { reply: 'pr' } })
     show(host)
     await screen.findByRole('region', { name: 'gemstack' })
-    const reply = row('/reply')
-    expect(within(reply).getByText(/^Claude Code, /)).toBeTruthy()
-    expect(within(reply).getByText('May open a pull request')).toBeTruthy()
-    expect(within(reply).getByText('your pick')).toBeTruthy()
-    expect(within(reply).getByText('When a maintainer wrote /agent')).toBeTruthy()
+    expect(within(row('/reply')).getByText('When a maintainer wrote /agent')).toBeTruthy()
+    const said = await inForce('/reply', panel => expect(showing(within(part(panel, 'What it runs on')).getByLabelText('Model'))).not.toMatch(/^As the skill says/))
+    expect(said).toContain('Claude Code, Haiku 5.5. May open a pull request.')
   })
 
   test('a run the last look could not continue, its coding agent not ready, holds back that run alone: the row still runs now, beside a run it continued', async () => {

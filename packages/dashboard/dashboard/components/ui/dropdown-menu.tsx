@@ -19,16 +19,28 @@ import { POPUP_MOTION_CLASS, usePopupPlacement } from './popup-placement.js'
 export const MENU_SURFACE_CLASS = 'menu-surface rounded-lg shadow-lg ring-1 ring-foreground/10 backdrop-blur-xl outline-none'
 export const MENU_POPUP_CLASS = cn('min-w-[13rem]', MENU_SURFACE_CLASS, POPUP_MOTION_CLASS)
 
+/**
+ * Around a menu's items: their fill 8 in from the menu's edges, so an item's icon (or its words, with
+ * none) stands 16 in, and its words 12 after the icon, as a list row's do (ui/look/spacing.md 3).
+ */
+export const MENU_BODY_CLASS = 'p-2'
+
 /** The scrolled body every popup shares: caps at the space the positioner allows, pads the items. */
 function PopupBody({ children }: { children: ReactNode }) {
   return (
     <ScrollArea viewportClassName="max-h-[var(--available-height)]">
-      <div className="p-1">{children}</div>
+      <div className={MENU_BODY_CLASS}>{children}</div>
     </ScrollArea>
   )
 }
+/** A menu's row: one line centred in it; a row with a second line (its part marked `data-line2`) stands from its top, its mark on its name's line. */
 export const MENU_ITEM_CLASS =
-  'relative flex cursor-pointer select-none items-center gap-2 rounded-md px-2 py-1.5 text-sm font-normal outline-none md:min-h-8 max-md:min-h-11 data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50'
+  'relative flex cursor-pointer select-none items-center has-[[data-line2]]:items-start gap-3 rounded-md px-2 py-1.5 text-sm font-normal outline-none md:min-h-8 max-md:min-h-11 data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50'
+
+/** A row's icon or tick, in a box one line of its name tall: on that line whether the row has one line or two. */
+export function MenuMark({ children, className }: { children: ReactNode; className?: string }) {
+  return <span className={cn('flex h-5 shrink-0 items-center', className)}>{children}</span>
+}
 
 export const DropdownMenu = Menu.Root
 export const DropdownMenuGroup = Menu.Group
@@ -53,13 +65,24 @@ export function DropdownMenuContent({
   side = 'bottom',
   sideOffset = 6,
   align = 'start',
+  anchor,
+  collisionBoundary,
   children,
   ...props
-}: ComponentProps<typeof Menu.Popup> & Pick<ComponentProps<typeof Menu.Positioner>, 'side'> & { sideOffset?: number; align?: 'start' | 'center' | 'end' }) {
+}: ComponentProps<typeof Menu.Popup> &
+  Partial<Pick<ComponentProps<typeof Menu.Positioner>, 'side' | 'anchor' | 'collisionBoundary'>> & { sideOffset?: number; align?: 'start' | 'center' | 'end' }) {
   const positionMethod = usePopupPlacement()
   return (
     <Menu.Portal>
-      <Menu.Positioner positionMethod={positionMethod} side={side} sideOffset={sideOffset} align={align} className="z-50 outline-none">
+      <Menu.Positioner
+        positionMethod={positionMethod}
+        side={side}
+        sideOffset={sideOffset}
+        align={align}
+        {...(anchor !== undefined ? { anchor } : {})}
+        {...(collisionBoundary !== undefined ? { collisionBoundary } : {})}
+        className="z-50 outline-none"
+      >
         <Menu.Popup data-overlay="menu" className={cn(MENU_POPUP_CLASS, className)} {...props}>
           <PopupBody>{children}</PopupBody>
         </Menu.Popup>
@@ -128,8 +151,9 @@ export function DropdownMenuSubContent({ className, children, ...props }: Compon
   )
 }
 
+/** A hairline between a menu's groups, from the items' inset to the other (ui/look/spacing.md 5). */
 export function DropdownMenuSeparator({ className, ...props }: ComponentProps<typeof Menu.Separator>) {
-  return <Menu.Separator className={cn('-mx-1 my-1 h-px bg-border', className)} {...props} />
+  return <Menu.Separator className={cn('mx-2 my-1 h-px bg-hairline', className)} {...props} />
 }
 
 export function DropdownMenuLabel({ className, ...props }: ComponentProps<typeof Menu.GroupLabel>) {
