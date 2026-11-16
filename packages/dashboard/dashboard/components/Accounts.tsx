@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Skeleton } from './ui/skeleton.js'
 import { SentenceShape, Slot } from './ui/slot.js'
-import type { DriverName } from '../../src/client.js'
 import { takeLostFocus } from '../lib/lost-focus.js'
 import { useMountedModules } from '../lib/use-modules.js'
 import { useAgentAccounts } from './AgentAccounts.js'
@@ -35,13 +34,23 @@ export function PermissionsPage() {
 
 /** Every account, as the page lists them. */
 export function AccountsList() {
+  const claude = useAgentState('claude-code')
+  const codex = useAgentState('codex')
+  // What each coding agent still needs stands first, so until both are read the list waits in one part's shape:
+  // drawn before them, the parts under them would move when they land.
+  if (claude.state === undefined || codex.state === undefined)
+    return (
+      <div aria-busy="true">
+        <CardShape />
+      </div>
+    )
   return (
     <ServersProvider>
       <div className="space-y-8">
         <FromLine />
         {/* Claude Code's press is the page's one primary, as the Overview draws it: the agent runs start on unless a person picks another. */}
-        <AgentSetup driver="claude-code" title="Claude Code" primary />
-        <AgentSetup driver="codex" title="Codex" primary={false} />
+        <AgentSetup state={claude.state} reload={claude.reload} title="Claude Code" primary />
+        <AgentSetup state={codex.state} reload={codex.reload} title="Codex" primary={false} />
         <ServerAsks />
         <RotationCard />
         <GitHostsCard />
@@ -73,23 +82,27 @@ function RotationCard() {
 function CardShape() {
   return (
     <>
-      <div className="mb-2 flex h-8 items-center">
-        <Skeleton className="h-5 w-48" />
+      {/* As high as a part's heading row (`PanelGroup`): the card that lands moves nothing under it. */}
+      <div className="mb-2 flex h-5 items-center">
+        <Skeleton className="h-4 w-48" />
       </div>
       <SentenceShape />
+      {/* The emptiest answer's sentence takes a second line on a phone. */}
+      <div className="md:hidden">
+        <SentenceShape />
+      </div>
     </>
   )
 }
 
 /** An agent that needs its press before it can run, as a part of the page: what is missing, and the press that installs it or logs it in. Once it can run, it says so while the page is open, then nothing. */
-function AgentSetup({ driver, title, primary }: { driver: DriverName; title: string; /** Whether its press is the page's primary. */ primary: boolean }) {
-  const { state, reload } = useAgentState(driver)
+function AgentSetup({ state, reload, title, primary }: { state: AgentState; reload: () => Promise<void>; title: string; /** Whether its press is the page's primary. */ primary: boolean }) {
   const missing = !!state && !state.ready && (state.fix !== undefined || agentLoginState(state) === 'not-installed')
   const [wasMissing, setWasMissing] = useState(false)
   useEffect(() => {
     if (missing) setWasMissing(true)
   }, [missing])
-  if (!state || (!missing && !(wasMissing && state.ready))) return null
+  if (!missing && !(wasMissing && state.ready)) return null
   return (
     <PanelGroup bare title={title}>
       {state.ready ? (
