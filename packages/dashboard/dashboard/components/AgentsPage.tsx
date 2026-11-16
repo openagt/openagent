@@ -1,12 +1,14 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type Ref } from 'react'
-import { Bot, Check, Loader2, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { Ellipsis, Loader2, Plus } from 'lucide-react'
 import { onAgentLogins, onAgentsList, sendCopyAgentLogins, sendRemoveAgent, sendSaveAgent, type AgentAccountChoice, type AgentLoginsOn, type AgentRecord, type AgentsView } from '../rpc/agents.js'
 import { DEFAULT_AGENT } from '../../src/client.js'
 import { holdEntry } from '../lib/use-route.js'
 import { usePolled, type ReadState } from '../lib/use-async.js'
 import { useAddGitAccount } from './AddGitAccount.js'
 import { Button } from './ui/button.js'
-import { List, Row } from './ui/list.js'
+import { Panel, PanelRow } from './ui/panel.js'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu.js'
+import { useIsMobile } from '../lib/use-mobile.js'
 import { Section } from './ui/section.js'
 import { Checkbox } from './ui/checkbox.js'
 import { SKILL_TICKS_CLASS, SkillTick } from './ProjectSkills.js'
@@ -83,7 +85,7 @@ export function AgentsPage() {
   const newAgent = useRef<HTMLButtonElement>(null)
   // The agent just removed: once the list is read without it, its Remove press is gone with its card, and the focus goes to "New agent".
   const removed = useRef<string | undefined>(undefined)
-  // The agent just made: once the list is read with it, the focus goes to its row's Edit.
+  // The agent just made: once the list is read with it, the focus goes to its row's Edit (on a phone its menu).
   const made = useRef<string | undefined>(undefined)
   const madeEdit = useRef<HTMLButtonElement>(null)
   useEffect(() => {
@@ -114,11 +116,11 @@ export function AgentsPage() {
       <Slot of={{ state, value: view, failing }} shape={<RowShapes />}>
         {view =>
           view && (
-            <List aria-label="Agents">
+            <Panel aria-label="Agents">
               {view.agents.map(agent => (
                 <AgentRow key={agent.id} agent={agent} view={view} devices={devices} onChanged={changed} onRemoved={() => void (removed.current = agent.id)} {...(agent.id === made.current ? { editRef: madeEdit } : {})} />
               ))}
-            </List>
+            </Panel>
           )
         }
       </Slot>
@@ -129,72 +131,108 @@ export function AgentsPage() {
 }
 
 /**
- * One agent: its name over what it starts with (its skills and the accounts it works as), and the
- * presses that edit or remove it; under it, what it goes without and where its GitHub account is.
+ * One agent, a row of the page's panel: its name (the default says it is used unless another is
+ * picked), under it what it starts with (its skills and the accounts it works as), then a line of its
+ * own for each skill every agent starts with that it goes without, and one that says where its GitHub
+ * account is, device by device, a device it could not be copied to in the warning colour with why.
+ * Edit and Remove come under the pointer and the keyboard, and "Copy again" beside them where a copy
+ * failed; on a phone the row's one press is a menu of them.
  * `onRemoved` is told before the list is read again without it.
  */
 function AgentRow({ agent, view, devices, onChanged, onRemoved, editRef }: { agent: AgentRecord; view: AgentsView; devices: AgentLoginsOn[] | undefined; onChanged: () => Promise<void>; onRemoved: () => void; editRef?: Ref<HTMLButtonElement> }) {
   const [editing, setEditing] = useState(false)
+  const [removing, setRemoving] = useState(false)
+  const phone = useIsMobile()
   const isDefault = agent.id === DEFAULT_AGENT
   // What a skill every agent starts with does is what this one goes without: the skill's own line says it.
   const without = (view.skills[0]?.skills ?? []).filter(skill => !agent.skills.includes(skill.name))
-  const said = [
+  const facts = [
     `${agent.skills.length === 0 ? 'No skills' : agent.skills.join(', ')}${agent.projectSkills ? '' : ', no project skills'}`,
     agent.accounts.github !== undefined ? `@${agent.accounts.github} on GitHub` : 'GitHub: whatever the computer uses',
     ...(agent.accounts.claude ? [`Claude: ${agent.accounts.claude.map(id => view.claude.find(account => account.id === id)?.name ?? id).join(', ')}`] : []),
     ...(agent.accounts.codex ? [`Codex: ${agent.accounts.codex.map(id => view.codex.find(account => account.id === id)?.name ?? id).join(', ')}`] : []),
-  ].join(' · ')
+  ]
+  const login = agent.accounts.github
+  const where = login !== undefined && devices && devices.length > 0 ? devices : undefined
+  const failed = where?.some(device => device.reachable && device.github[login!]?.state === 'failed') ?? false
+  const copy = useCopyAgain(onChanged)
+  const under = (without.length > 0 || where !== undefined) && (
+    <>
+      {without.map(skill => (
+        <span key={skill.name} className="block text-faint-foreground">{`Without ${skill.name}, which every agent starts with. ${skill.description}`}</span>
+      ))}
+      {where !== undefined && <OnDevices login={login!} devices={where} />}
+      {copy.error !== undefined && (
+        <span role="alert" className="block text-danger">
+          {copy.error}
+        </span>
+      )}
+    </>
+  )
   return (
     <>
-      <Row
-        stackOnPhone
-        leading={<Bot className="size-4" aria-hidden />}
-        title={agent.name}
-        detail={<span title={said}>{said}</span>}
-        {...(isDefault ? { meta: 'The agent a session is on unless you pick another.' } : {})}
-        actions={
+      <PanelRow
+        title={
           <>
-            <Button ref={editRef} size="sm" variant="ghost" aria-label={`Edit ${agent.name}`} onClick={() => setEditing(true)}>
-              <Pencil className="size-4" aria-hidden />
-              Edit
-            </Button>
-            {!isDefault && (
-              <ConfirmDialog
-                trigger={
-                  <Button size="sm" variant="ghost" className="hover:text-danger" aria-label={`Remove ${agent.name}`}>
-                    <Trash2 className="size-4" aria-hidden />
-                    Remove
-                  </Button>
-                }
-                title={`Remove ${agent.name}?`}
-                body="Sessions that ran on it keep their records. Nothing is removed from any account."
-                confirmLabel="Remove"
-                onConfirm={async () => {
-                  const done = await sendRemoveAgent(agent.id)
-                  if (!done.ok) throw new Error(done.error)
-                }}
-                onSuccess={() => {
-                  onRemoved()
-                  void onChanged()
-                }}
-              />
-            )}
+            {agent.name}
+            {isDefault && <span className="font-normal text-muted-foreground"> used unless you pick another</span>}
           </>
         }
+        titleHint={facts.join(' · ')}
+        meta={facts}
+        {...(under ? { under } : {})}
+        actions={
+          phone ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger render={<Button ref={editRef} variant="ghost" size="icon-sm" aria-label={`More for ${agent.name}`} className="-mr-1.5" />}>
+                <Ellipsis className="size-4" aria-hidden />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setEditing(true)}>Edit</DropdownMenuItem>
+                {failed && (
+                  <DropdownMenuItem disabled={copy.busy} onClick={copy.run}>
+                    Copy again
+                  </DropdownMenuItem>
+                )}
+                {!isDefault && <DropdownMenuItem onClick={() => setRemoving(true)}>Remove</DropdownMenuItem>}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <>
+              {failed && (
+                <Button size="sm" variant="ghost" loading={copy.busy} onClick={copy.run}>
+                  Copy again
+                </Button>
+              )}
+              <Button ref={editRef} size="sm" variant="secondary" aria-label={`Edit ${agent.name}`} onClick={() => setEditing(true)}>
+                Edit
+              </Button>
+              {/* Unpainted at the row's end: pulled out by its own padding, its word ends on the inset. */}
+              {!isDefault && (
+                <Button size="sm" variant="ghost" className="-mr-2 hover:text-danger" aria-label={`Remove ${agent.name}`} onClick={() => setRemoving(true)}>
+                  Remove
+                </Button>
+              )}
+            </>
+          )
+        }
       />
-      {without.length > 0 && (
-        // Under the agent's name, on the edge its words start at.
-        <li className="space-y-0.5 pb-2 pr-3 pl-10 text-xs text-muted-foreground">
-          {without.map(skill => (
-            <p key={skill.name}>{`Without ${skill.name}, which every agent starts with. ${skill.description}`}</p>
-          ))}
-        </li>
-      )}
-      {agent.accounts.github !== undefined && devices && devices.length > 0 && (
-        // Under the agent's name, on the edge its words start at.
-        <li className="pb-2 pr-3 pl-10">
-          <OnDevices login={agent.accounts.github} devices={devices} onCopied={onChanged} />
-        </li>
+      {!isDefault && (
+        <ConfirmDialog
+          open={removing}
+          onOpenChange={setRemoving}
+          title={`Remove ${agent.name}?`}
+          body="Sessions that ran on it keep their records. Nothing is removed from any account."
+          confirmLabel="Remove"
+          onConfirm={async () => {
+            const done = await sendRemoveAgent(agent.id)
+            if (!done.ok) throw new Error(done.error)
+          }}
+          onSuccess={() => {
+            onRemoved()
+            void onChanged()
+          }}
+        />
       )}
       {editing && <AgentEditor agent={agent} view={view} onAccounts={onChanged} onDone={async saved => (setEditing(false), saved ? onChanged() : undefined)} />}
     </>
@@ -202,61 +240,51 @@ function AgentRow({ agent, view, devices, onChanged, onRemoved, editRef }: { age
 }
 
 /**
- * Where an agent's GitHub account is: one line per device of the person's, as the last copy left
- * it. The account goes to every device by itself when the agent is saved and every minute after;
- * "Copy again" is for one that failed, with why.
+ * Where an agent's GitHub account is: one line, a device after another, as the last copy left it. The
+ * account goes to every device by itself when the agent is saved and every minute after, so a device
+ * it could not reach is the one said in the warning colour, with why.
  */
-function OnDevices({ login, devices, onCopied }: { login: string; devices: AgentLoginsOn[]; onCopied: () => Promise<void> }) {
-  const [copying, setCopying] = useState(false)
-  const [error, setError] = useState<string | undefined>()
-  const copy = async () => {
-    setCopying(true)
-    setError(undefined)
-    try {
-      const done = await sendCopyAgentLogins()
-      if (!done.ok) setError(done.error)
-      await onCopied()
-    } finally {
-      setCopying(false)
-    }
-  }
-  const failed = devices.some(device => device.reachable && device.github[login]?.state === 'failed')
+function OnDevices({ login, devices }: { login: string; devices: AgentLoginsOn[] }) {
   return (
-    <ul aria-label={`Where @${login} is`} className="space-y-0.5 text-xs">
+    <ul aria-label={`Where @${login} is`} className="flex flex-wrap gap-x-1.5 text-faint-foreground">
       {devices.map(device => {
         const on = device.github[login]
         return (
-          <li key={device.machineId} className="flex items-center gap-1.5">
+          <li key={device.machineId} className="not-first:before:mr-1.5 not-first:before:content-['·']">
             {!device.reachable ? (
-              <span className="text-muted-foreground">{device.label}: not reached</span>
+              `${device.label}: not reached`
             ) : on?.state === 'there' ? (
-              <>
-                <Check className="size-3.5 text-success" aria-hidden />
-                <span>on {device.label}</span>
-              </>
+              `On ${device.label}`
             ) : on?.state === 'failed' ? (
               <span className="text-warning">{`${device.label}: not copied — ${on.error ?? 'it did not take it'}`}</span>
             ) : (
-              <span className="text-muted-foreground">{device.label}: not copied yet</span>
+              `${device.label}: not copied yet`
             )}
           </li>
         )
       })}
-      {failed && (
-        <li>
-          <Button size="sm" variant="ghost" className="-ml-2 font-normal" disabled={copying} onClick={() => void copy()}>
-            {copying ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : <RefreshCw className="size-3.5" aria-hidden />}
-            {copying ? 'Copying…' : 'Copy again'}
-          </Button>
-          {error !== undefined && (
-            <span role="alert" className="ml-2 text-danger">
-              {error}
-            </span>
-          )}
-        </li>
-      )}
     </ul>
   )
+}
+
+/** "Copy again": the agents' GitHub accounts sent to every device once more, then the list read again; why it failed, when it did. */
+function useCopyAgain(onCopied: () => Promise<void>): { busy: boolean; error: string | undefined; run: () => void } {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | undefined>()
+  const run = (): void => {
+    setBusy(true)
+    setError(undefined)
+    void (async () => {
+      try {
+        const done = await sendCopyAgentLogins()
+        if (!done.ok) setError(done.error)
+        await onCopied()
+      } finally {
+        setBusy(false)
+      }
+    })()
+  }
+  return { busy, error, run }
 }
 
 /** No account of the agent's own, whatever the computer uses: the value of the select for an agent that names none. */

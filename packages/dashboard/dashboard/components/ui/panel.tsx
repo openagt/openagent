@@ -88,11 +88,12 @@ const coverClass = 'outline-none after:absolute after:inset-0'
  * A press with no painted box is pulled out by its own padding by its caller, so its glyph ends there.
  * Before the fact, `columns`: facts a list lines up down its rows (who ran it, its pull request), on
  * the title's line too, which stay under the pointer: only the fact gives its room to the presses.
+ * `under`: a line of its own under what is known, for what holds for this row alone (a warning).
  * `actionsAtRest`: the presses show with no pointer on the row too, where the press is what a person
  * comes to the row for (Answer, Review); then the fact stands just before them, centred on the row with
  * them, and is not said on a phone, where the room is the name's.
  */
-export function PanelRow({ state, before, title, titleHint, meta = [], metaLines = 1, columns, fact, actions, actionsAtRest = false, href, external = false, onClick, className }: {
+export function PanelRow({ state, before, title, titleHint, meta = [], metaLines = 1, under, columns, fact, actions, actionsAtRest = false, href, external = false, onClick, className }: {
   state?: ReactNode
   /** On the name's line before it, 12 after `state`, its own column (a ticket's priority): `meta` starts under the name, not under it. */
   before?: ReactNode
@@ -102,6 +103,7 @@ export function PanelRow({ state, before, title, titleHint, meta = [], metaLines
   meta?: ReactNode[]
   /** How many lines what is known of it may take before it is cut: 2 for a sentence a person must read whole (a question). */
   metaLines?: 1 | 2
+  under?: ReactNode
   columns?: ReactNode
   fact?: ReactNode
   actions?: ReactNode
@@ -156,6 +158,7 @@ export function PanelRow({ state, before, title, titleHint, meta = [], metaLines
             ))}
           </span>
         )}
+        {under !== undefined && <span className="mt-1 block text-xs">{under}</span>}
       </span>
       {columns !== undefined && <span className="flex h-5 shrink-0 items-center gap-4 text-xs text-faint-foreground">{columns}</span>}
       {/* The fact and the presses take the row's whole height at its right (their margins undo the row's

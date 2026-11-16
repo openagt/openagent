@@ -80,13 +80,15 @@ describe('the Agents page', () => {
   test('one row per agent, the default first and marked; each with its skills and the accounts it works as, the computer’s where it names none', async () => {
     render(<AgentsPage />)
     const rows = await agentRows()
-    expect(rows.map(row => row.querySelector('.flex-col')?.firstChild?.textContent)).toEqual(['Default', 'Reviewer'])
-    expect(within(rows[0]!).getByText(/The agent a session is on unless you pick another/)).toBeTruthy()
-    expect(within(rows[0]!).getByText('ask, github · GitHub: whatever the computer uses')).toBeTruthy()
+    expect(rows.map(row => row.querySelector('.font-medium')?.firstChild?.textContent)).toEqual(['Default', 'Reviewer'])
+    expect(within(rows[0]!).getByText(/used unless you pick another/)).toBeTruthy()
+    // Under the name, its facts with a dot between them.
+    const facts = (row: HTMLElement) => row.querySelector('.text-faint-foreground')?.textContent
+    expect(facts(rows[0]!)).toBe('ask, github·GitHub: whatever the computer uses')
     // An agent set to never pick up the project's own skills says so after its list; the default does not.
-    expect(within(rows[1]!).getByText('ask, readability, no project skills · @octo-agent on GitHub · Claude: Dani')).toBeTruthy()
-    // One without a skill every agent starts with says so under its row, in the skill's own words; the default has both.
-    expect(screen.getByText('Without github, which every agent starts with. Pull requests on GitHub.').closest('li')?.previousElementSibling).toBe(rows[1])
+    expect(facts(rows[1]!)).toBe('ask, readability, no project skills·@octo-agent on GitHub·Claude: Dani')
+    // One without a skill every agent starts with says so in its row, in the skill's own words; the default has both.
+    expect(screen.getByText('Without github, which every agent starts with. Pull requests on GitHub.').closest('li')).toBe(rows[1])
     expect(screen.getAllByText(/^Without /)).toHaveLength(1)
     // The default is never removed.
     expect(within(rows[0]!).queryByRole('button', { name: 'Remove Default' })).toBeNull()
@@ -346,8 +348,10 @@ describe('the Agents page', () => {
     ])
     render(<AgentsPage />)
     const where = await screen.findByRole('list', { name: 'Where @octo-agent is' })
-    expect([...where.querySelectorAll('li')].map(li => li.textContent).slice(0, 3)).toEqual(['on Droplet', 'Laptop: not copied — GitHub did not take the login', 'Studio: not reached'])
-    fireEvent.click(within(where).getByRole('button', { name: 'Copy again' }))
+    expect([...where.querySelectorAll('li')].map(li => li.textContent)).toEqual(['On Droplet', 'Laptop: not copied — GitHub did not take the login', 'Studio: not reached'])
+    // The failure alone in the warning colour.
+    expect(where.querySelectorAll('.text-warning')).toHaveLength(1)
+    fireEvent.click(within(where.closest('li')!).getByRole('button', { name: 'Copy again' }))
     await waitFor(() => expect(rpc.sendCopyAgentLogins).toHaveBeenCalled())
     await waitFor(() => expect(rpc.onAgentLogins).toHaveBeenCalledTimes(2))
     expect(screen.queryByRole('list', { name: /Where @/ })).toBe(where)
