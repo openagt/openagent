@@ -328,14 +328,14 @@ describe('AgentHistory (#785)', () => {
       </SidebarProvider>,
     )
     expect(standIn()?.classList.contains('bg-foreground/8')).toBe(true)
-    expect(screen.getByRole('link', { name: /earlier work · running/ }).classList.contains('bg-foreground/8')).toBe(false)
+    expect(screen.getByRole('link', { name: /earlier work · working/ }).classList.contains('bg-foreground/8')).toBe(false)
     rerender(
       <SidebarProvider>
         <AgentHistory projectId="p1" scope="p1" agents={[agent({ id: 'run-new', intent: 'hi' }), atWork]} selectedAgentId="run-new" onSelect={() => {}} startTick={1} startIntent="hi" startId="run-new" />
       </SidebarProvider>,
     )
     expect(standIn()).toBeUndefined()
-    expect(screen.getByRole('link', { name: /hi · running/ }).classList.contains('bg-foreground/8')).toBe(true)
+    expect(screen.getByRole('link', { name: /hi · working/ }).classList.contains('bg-foreground/8')).toBe(true)
   })
 
   test('the starting row of a start that brought no run goes after twenty seconds, while another agent works too', () => {

@@ -22,6 +22,15 @@ export function Panel({ ordered = false, className, children, ...props }: { orde
   )
 }
 
+/** A step's number in a list of steps a person takes in turn (a `Panel ordered`, a dialog's steps): a quiet disc on the step's first line, 16 across as a row's mark is, in the press's colour on the step at hand. */
+export function StepNumber({ at, current = false }: { at: number; current?: boolean }) {
+  return (
+    <span aria-hidden className="flex h-5 w-4 shrink-0 items-center">
+      <span className={cn('flex size-4 items-center justify-center rounded-full bg-accent text-xs font-medium tabular-nums', current ? 'text-primary' : 'text-muted-foreground')}>{at + 1}</span>
+    </span>
+  )
+}
+
 /** {@link PanelGroup}s one under another whose rows' columns stand in one place down all of them, as one list's do (a day's runs under another's). */
 export function PanelGroups({ className, children }: { className?: string; children: ReactNode }) {
   return (
@@ -139,7 +148,7 @@ export function Facts({ facts, className, part, words }: { facts: Fact[]; classN
  * `under`: a line of its own under what is known, for what holds for this row alone (a warning).
  * `actionsAtRest`: the presses show with no pointer on the row too, where the press is what a person
  * comes to the row for (Answer, Review); then the fact stands just before them, centred on the row with
- * them, and is not said on a phone, where the room is the name's.
+ * them, and is left to a screen reader on a phone, where the room is the name's.
  */
 export function PanelRow({ state, before, title, titleHint, meta = [], metaLines = 1, under, columns, fact, actions, actionsAtRest = false, href, external = false, onClick, className, 'aria-label': label }: {
   state?: ReactNode
@@ -219,7 +228,7 @@ export function PanelRow({ state, before, title, titleHint, meta = [], metaLines
           the fact, and stay reachable by Tab while unseen; the fact stands on the title's line. */}
       {actionsAtRest && (fact !== undefined || actions !== undefined) ? (
         <>
-          {fact !== undefined && <span className="col-start-2 -my-3 mr-2 ml-3 flex items-center justify-end self-stretch text-xs leading-5 text-faint-foreground max-md:hidden">{fact}</span>}
+          {fact !== undefined && <span className="col-start-2 -my-3 mr-2 ml-3 flex items-center justify-end self-stretch text-xs leading-5 text-faint-foreground max-md:sr-only">{fact}</span>}
           {actions !== undefined && <span className={cn('relative col-start-3 -my-3 flex items-center justify-end gap-1 self-stretch', fact === undefined ? 'ml-3' : 'max-md:ml-3')}>{actions}</span>}
         </>
       ) : (fact !== undefined || actions !== undefined) && (

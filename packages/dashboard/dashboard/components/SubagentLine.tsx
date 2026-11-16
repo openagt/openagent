@@ -7,6 +7,7 @@ import { anyModelName, useModels } from '../lib/models.js'
 import { stepWords, type SubagentRow, type SubagentStep } from '../lib/subagents.js'
 import { Markdown } from './Markdown.js'
 import { Seconds } from './ToolCalls.js'
+import { Facts } from './ui/panel.js'
 
 // A main agent's subagents in its chat, as Claude Code on the web draws them, in the look of the
 // agent's other steps: one grey line that says what is going on and opens to one bordered panel. While
@@ -31,13 +32,12 @@ function AgentRow({ row, onOpen }: { row: SubagentRow; onOpen?: ((key: string) =
         ? row.calls !== undefined && (
             // What it is on now and how many calls it made; its last step whole on a hover.
             <span className="min-w-0 shrink-0 truncate" title={row.doing}>
-              {[row.tool, `${row.calls} ${row.calls === 1 ? 'call' : 'calls'}`].filter(Boolean).join(' · ')}
+              <Facts facts={[row.tool, `${row.calls} ${row.calls === 1 ? 'call' : 'calls'}`]} />
             </span>
           )
         : row.status !== 'done' && <span className={cn('shrink-0', runTone(row.status))}>{runWord(row.status)}</span>}
       <span className="ml-auto shrink-0 tabular-nums" title={`Started ${new Date(row.startedAt).toLocaleString()}`}>
-        {row.working ? <Seconds since={row.startedAt} /> : row.endedAt !== undefined ? formatElapsed(Date.parse(row.endedAt) - Date.parse(row.startedAt)) : null}
-        {row.cost !== undefined && ` · $${row.cost.toFixed(2)}`}
+        <Facts facts={[row.working ? <Seconds since={row.startedAt} /> : row.endedAt !== undefined && formatElapsed(Date.parse(row.endedAt) - Date.parse(row.startedAt)), row.cost !== undefined && `$${row.cost.toFixed(2)}`]} />
       </span>
     </button>
   )

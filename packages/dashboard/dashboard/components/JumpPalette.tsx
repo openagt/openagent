@@ -17,6 +17,7 @@ import { KeyCaps } from './ShortcutList.js'
 import { BACKDROP_CLASS } from './ui/dialog.js'
 import { Button } from './ui/button.js'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip.js'
+import { Facts } from './ui/panel.js'
 
 // The jump: ⌘K or Ctrl+K from anywhere, a few letters, and Enter is on the run, the page or the
 // project meant. What this page has read already is searched in the frame of the key; every run
@@ -28,7 +29,7 @@ interface Place extends JumpRow {
   /** Before the name, in a 16 square: a run's state, a page's icon, a project's folder. */
   mark: ReactNode
   /** Quieter, at the right: the project, what the run waits on, its pull request. */
-  meta?: string
+  meta?: (string | undefined)[]
   to: Route
 }
 
@@ -138,7 +139,7 @@ export function JumpPalette({ waiting, runs, pages, projects, scope, here, hrefO
       mark: <RunMark status={agent.status} />,
       name: agentLabel(agent),
       also: [agent.branch, pr, agent.prTitle].filter((text): text is string => text !== undefined),
-      meta: [scope === null && projectName ? label(projectId, projectName) : undefined, pr].filter(Boolean).join(' · '),
+      meta: [scope === null && projectName ? label(projectId, projectName) : undefined, pr],
       to: { projectId, agentId: agent.id },
     }
   }
@@ -155,7 +156,7 @@ export function JumpPalette({ waiting, runs, pages, projects, scope, here, hrefO
         mark: <RunMark status="waiting" />,
         name: item.title,
         also: [item.branch, pr].filter((text): text is string => text !== undefined),
-        meta: [scope === null ? label(item.projectId, item.projectName) : undefined, needsWord(item.kind, item.gitHost)].filter(Boolean).join(' · '),
+        meta: [scope === null ? label(item.projectId, item.projectName) : undefined, needsWord(item.kind, item.gitHost)],
         to: { projectId: item.projectId, agentId: item.agentId },
       }]
     })
@@ -282,7 +283,7 @@ export function JumpPalette({ waiting, runs, pages, projects, scope, here, hrefO
                         <span data-name className="min-w-0 flex-1 truncate">
                           {foundParts(place.name, query).map((part, index) => (part.found ? <strong key={index} className="font-semibold">{part.text}</strong> : part.text))}
                         </span>
-                        {place.meta && <span className="max-w-[45%] shrink-0 truncate text-xs text-muted-foreground">{place.meta}</span>}
+                        {place.meta?.some(Boolean) && <Facts facts={place.meta} className="max-w-[45%] shrink-0 truncate text-xs text-muted-foreground" />}
                       </Autocomplete.Item>
                     )}
                   </Autocomplete.Collection>

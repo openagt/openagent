@@ -43,7 +43,7 @@ describe('QuestionPanel', () => {
 
   test('the card says it waits for the answer, and for how long', () => {
     render(<QuestionPanel projectId="p1" agentId="r1" choice={{ id: 'c1', title: 'Which database?', options: [{ id: 'pg', label: 'Postgres' }], recommended: 'pg' }} askedAt={new Date(Date.now() - 2 * 60_000 - 5_000).toISOString()} />)
-    expect(screen.getByText(/^Waiting for your answer/).textContent).toBe('Waiting for your answer · 2m')
+    expect(screen.getByText('Waiting for your answer').parentElement!.textContent).toBe('Waiting for your answer·2m')
   })
 
   test('Answer names its keys where there is a keyboard, never on a touch screen or at a phone\'s width, as the message box does', () => {

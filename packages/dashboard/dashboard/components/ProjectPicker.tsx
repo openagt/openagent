@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Combobox } from '@base-ui/react/combobox'
 import { addressOfRemote } from '@openagt/agent-data/repository-address'
 import { Cloud, Check, ChevronsUpDown, Folder, FolderGit2, FolderPlus, FolderSearch, Layers, Plus, Search } from 'lucide-react'
@@ -21,6 +21,7 @@ import { PROJECT_ROW_CLASS } from './ui/nav-row.js'
 import { usePopupPlacement } from './ui/popup-placement.js'
 import { usePickerSearch } from './ui/picker-search.js'
 import { AddProjectPanel } from './AddProjectPanel.js'
+import { Facts } from './ui/panel.js'
 
 /** How many repos the menu lists before a search: the search reaches the rest. */
 export const REPOS_SHOWN = 20
@@ -36,7 +37,7 @@ interface Row {
   value: string
   label: string
   /** Under the label, muted: a repo's address, or its folder when it has none. */
-  detail?: string
+  detail?: ReactNode
   pick: { kind: 'none' } | { kind: 'project'; project: ProjectSummary } | { kind: 'repo'; path: string } | { kind: 'hosted'; address: string } | { kind: 'address'; typed: string }
   /** What the search matches besides the label. */
   search: string
@@ -231,7 +232,7 @@ export function ProjectPicker({
       ...(repos?.hosted ?? []).map((repo): Row => ({
         value: `hosted:${repo.address}`,
         label: repo.address.split('/').slice(1).join('/'),
-        detail: `${repo.private ? 'Private · ' : ''}Not on this computer · ${repo.from}`,
+        detail: <Facts facts={[repo.private && 'Private', 'Not on this computer', repo.from]} />,
         pick: { kind: 'hosted', address: repo.address },
         search: `${repo.address}\n${repo.description ?? ''}`,
       })),

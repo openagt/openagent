@@ -107,8 +107,8 @@ export function AgentActionBar({
           showWorkBar={onShowWorkBar}
         />
         {/* The run's state after its name on a desktop; a phone's bar keeps its width for the name, and
-            the first screenful says the state (the failed end, the commits and their press, the question). */}
-        {status !== undefined && <StatePill state={runCell(status)} className="max-md:hidden">{capitalized(runWord(status))}</StatePill>}
+            the first screenful shows the state (the failed end, the commits and their press, the question): a screen reader still hears it here. */}
+        {status !== undefined && <StatePill state={runCell(status)} className="max-md:sr-only">{capitalized(runWord(status))}</StatePill>}
         {/* The spacer grows but never shrinks (#1030), so a tight row takes its width from the name. */}
         <div className="grow shrink-0" />
         {/* What the agent could not get past (#1500): the log scrolls, this row does not. It sits

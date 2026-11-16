@@ -48,7 +48,7 @@ describe('Settings › Project › Project agent data', () => {
     fireEvent.click(screen.getByRole('button', { name: '~/.openagent' }))
     expect(openSettings).toHaveBeenCalledWith('agent-data')
     // A kind with nothing kept is left out.
-    expect(screen.getByText('86 runs (logs) · 12 tickets (tickets)')).toBeTruthy()
+    expect(screen.getByText('86 runs (logs)').parentElement!.textContent).toBe('86 runs (logs)·12 tickets (tickets)')
   })
 
   test('moving the data to the repository asks first, says who can read it, then moves it', async () => {

@@ -7,7 +7,7 @@ import { usePerson } from '../lib/use-person.js'
 import { cn } from '../lib/utils.js'
 import { Button, buttonVariants } from './ui/button.js'
 import { inPlace } from '../lib/in-place.js'
-import { Facts, Panel, PanelGroup } from './ui/panel.js'
+import { Facts, Panel, PanelGroup, StepNumber } from './ui/panel.js'
 import { Skeleton } from './ui/skeleton.js'
 import { usePreferences, updatePreferences, notificationsEnabled } from '../lib/preferences.js'
 import { setBrowserNotifications, useNotificationPermission } from '../lib/notification-permission.js'
@@ -307,7 +307,7 @@ export function OnboardingChecklist({
             <Panel ordered aria-hidden>
               {frame.map((step, at) => (
                 <li key={step.key} className={STEP_ROW}>
-                  {step.label === undefined ? <MarkShape /> : step.done ? <DoneMark /> : <StepMark at={at} open={step.key === open} />}
+                  {step.label === undefined ? <MarkShape /> : step.done ? <DoneMark /> : <StepNumber at={at} current={step.key === open} />}
                   {step.label === undefined ? (
                     <span className="flex h-5 items-center">
                       <Skeleton className="h-4 w-48" />
@@ -352,7 +352,7 @@ export function OnboardingChecklist({
                 {step.done ? (
                   <DoneMark />
                 ) : (
-                  <StepMark at={at} open={isOpen} />
+                  <StepNumber at={at} current={isOpen} />
                 )}
                 {/* The action goes under the words until it fits whole beside them with the words 16rem wide or more, so a
                     command is cut only where the row has no room for it. Beside them it is centred on the row and the title
@@ -411,15 +411,6 @@ function MarkShape() {
   return (
     <span className="flex h-5 w-4 shrink-0 items-center">
       <Skeleton className="size-4 rounded-full" />
-    </span>
-  )
-}
-
-/** A step not done: its number, in the press's colour while it is the open one. */
-function StepMark({ at, open = false }: { at: number; open?: boolean }) {
-  return (
-    <span aria-hidden className={cn('flex h-5 w-4 shrink-0 items-center text-xs tabular-nums', open ? 'font-medium text-primary' : 'text-faint-foreground')}>
-      {at + 1}
     </span>
   )
 }

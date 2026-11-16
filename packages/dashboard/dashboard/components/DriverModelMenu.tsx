@@ -17,6 +17,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuSubContent,
 } from './ui/dropdown-menu.js'
+import { Facts } from './ui/panel.js'
 
 // The agent's driver + model as one tree (#650/#656/#658): the top level is the coding drivers, and
 // each driver's submenu holds only its own models. Picking a model sets both the driver and the
@@ -41,8 +42,8 @@ export interface DriverOption {
   models: ModelOption[]
   /** Why {@link models} is empty, said in its place: the agent is still being asked, or could not say. */
   modelsNote?: string
-  /** The account its runs take first on the computer the run goes to, said on its row: a name and how full it is (" · 16%"). */
-  account?: { name: string; percent: string } | undefined
+  /** The account its runs take first on the computer the run goes to, said on its row: a name and how full it is ("16%"). */
+  account?: { name: string; percent: string | undefined } | undefined
   /** Its accounts, under its models in its part: which one is first, and adding one. */
   accounts?: ReactNode
 }
@@ -138,10 +139,7 @@ export function DriverModelMenu({
                 <span className="flex-1">{a.label}</span>
                 {/* A long name gives way, never how full the account is. */}
                 {a.account && (
-                  <span className="flex max-w-48 min-w-0 text-muted-foreground">
-                    <span className="truncate">{a.account.name}</span>
-                    <span className="shrink-0 whitespace-pre">{a.account.percent}</span>
-                  </span>
+                  <Facts facts={[{ fact: a.account.name, className: 'min-w-0 truncate' }, a.account.percent !== undefined && { fact: a.account.percent, className: 'shrink-0' }]} className="flex max-w-48 min-w-0 text-muted-foreground" />
                 )}
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent className="min-w-[15rem]">

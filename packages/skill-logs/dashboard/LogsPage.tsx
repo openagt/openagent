@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Button, Empty, FilterChips, MiddleCut, Page, PanelGroup, PanelGroups, PanelRow, PersonMark, RowShapes, RunMark, Slot, formatDateTime, formatDuration, needsWord, personSaid, runName, runLineTone, useCodingAgents, useGitHostPeople, useIsMobile, runsAgain, runWord, useModuleHost, usePolled, type CodingAgent, type ModuleAgent, type ModuleHostPerson, type ModulePageProps, type ModuleProject, type ReadState } from '@openagt/dashboard/module'
+import { useState, type ReactNode } from 'react'
+import { Button, Empty, Facts, FilterChips, MiddleCut, Page, PanelGroup, PanelGroups, PanelRow, PersonMark, RowShapes, RunMark, Slot, formatDateTime, formatDuration, needsWord, personSaid, runName, runLineTone, useCodingAgents, useGitHostPeople, useIsMobile, runsAgain, runWord, useModuleHost, usePolled, type CodingAgent, type ModuleAgent, type ModuleHostPerson, type ModulePageProps, type ModuleProject, type ReadState } from '@openagt/dashboard/module'
 import type { RunCard } from '../src/run.js'
 
 /** How many runs each project lists: the command's own default page is 20; the page shows more. */
@@ -148,10 +148,10 @@ function standing(card: RunRow['card']): string {
 }
 
 /** The coding agent that ran it and its model, by the names the agent gives them ("Claude Code · Opus 5.5"). */
-function agentSaid(card: RunRow['card'], agents: CodingAgent[]): string | undefined {
+function agentSaid(card: RunRow['card'], agents: CodingAgent[]): ReactNode {
   const agent = agents.find(option => option.value === card.driver)
   const model = card.model && (agent?.models.find(option => option.value === card.model)?.label ?? card.model)
-  return [agent?.label ?? card.driver, model].filter(Boolean).join(' · ') || undefined
+  return <Facts facts={[agent?.label ?? card.driver, model]} />
 }
 
 /** The query's name for the status the list shows. */
