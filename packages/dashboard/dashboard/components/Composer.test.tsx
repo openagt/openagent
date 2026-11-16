@@ -130,9 +130,10 @@ describe('Composer (#721)', () => {
     expect(screen.getByRole('button', { name: 'Commands' })).toBeTruthy()
     expect(screen.getByRole('button', { name: /^Run on: / })).toBeTruthy()
     expect((await hoverTooltip(agentTrigger())).textContent).toContain('Coding agent: Claude Code')
-    // The submit button appears only once the prompt has text (#721).
+    // The launcher's press is named and there from the start, off until the prompt has text.
+    expect((screen.getByRole('button', { name: /Start session/ }) as HTMLButtonElement).disabled).toBe(true)
     fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'x' } })
-    expect(screen.getByRole('button', { name: /Start session/ })).toBeTruthy()
+    expect((screen.getByRole('button', { name: /Start session/ }) as HTMLButtonElement).disabled).toBe(false)
   })
 
   test('in a session (#831) there is no agent/model select, and the rest of the row stays', () => {
@@ -154,8 +155,8 @@ describe('Composer (#721)', () => {
     expect(screen.getByLabelText('prompt').dataset['label']).toBe('Prompt')
   })
 
-  test('the submit button is hidden until the editor has text, then appears and fires onSubmit', () => {
-    const { onSubmit } = renderComposer()
+  test('a session\'s send is hidden until the editor has text, then appears and fires onSubmit', () => {
+    const { onSubmit } = renderComposer({ inAgent: true })
     // Empty prompt: nothing to send, so the button is not in the DOM (#721).
     expect(screen.queryByRole('button', { name: 'Send' })).toBeNull()
     fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'ship it' } })
@@ -396,7 +397,7 @@ describe('Composer (#721)', () => {
     const submit = screen.getByRole('button', { name: 'Send' })
     expect(submit.hasAttribute('disabled')).toBe(true)
     // Held, it looks held: faded, not the full colour of a press that would start.
-    expect(submit.className).toContain('disabled:opacity-40')
+    expect(submit.className).toContain('disabled:opacity-50')
     fireEvent.click(submit)
     fireEvent.click(screen.getByText('editor-submit'))
     expect(onSubmit).not.toHaveBeenCalled()
@@ -437,7 +438,8 @@ describe('Composer (#721)', () => {
   test('a box whose send is on its way sends nothing more, by the arrow or the keyboard, and keeps what is typed', () => {
     const { onSubmit } = renderComposer({ busy: true })
     fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'ship it' } })
-    expect(screen.getByRole('button', { name: 'Send' }).hasAttribute('disabled')).toBe(true)
+    // The launcher's press waits with the keyboard on it, refusing presses.
+    expect(screen.getByRole('button', { name: 'Send' }).getAttribute('aria-disabled')).toBe('true')
     fireEvent.click(screen.getByRole('button', { name: 'Send' }))
     fireEvent.click(screen.getByText('editor-submit'))
     expect(onSubmit).not.toHaveBeenCalled()
@@ -474,10 +476,13 @@ const surface = (): HTMLElement => {
 const commands = () => screen.getByRole('button', { name: 'Commands' })
 
 describe('the box', () => {
-  test('its text\'s line holds the text and the submit; the commands menu, the model and "Run on" are on lines of their own, in the same surface', () => {
+  test('its text\'s line holds the text and, in a session, the send; the launcher\'s start ends the row under it; the commands menu, the model and "Run on" are on lines of their own, in the same surface', () => {
     renderComposer()
     fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'x' } })
-    expect(box().contains(screen.getByRole('button', { name: 'Send' }))).toBe(true)
+    const start = screen.getByRole('button', { name: 'Send' })
+    expect(box().contains(start)).toBe(false)
+    expect(box().nextElementSibling!.contains(start)).toBe(true)
+    expect(agentTrigger().compareDocumentPosition(start) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(box().contains(commands())).toBe(false)
     expect(surface().contains(commands())).toBe(true)
     expect(box().contains(agentTrigger())).toBe(false)
@@ -485,10 +490,14 @@ describe('the box', () => {
     // One object with one edge: the surface holds the row above, the text and the row under.
     expect(surface().contains(agentTrigger())).toBe(true)
     expect(surface().contains(screen.getByRole('button', { name: /^Run on: / }))).toBe(true)
+    cleanup()
+    renderComposer({ inAgent: true })
+    fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'x' } })
+    expect(box().contains(screen.getByRole('button', { name: 'Send' }))).toBe(true)
   })
 
-  test('the text starts at the box\'s edge and the submit is at its right, kept at its last line; the commands menu leads the row under it', () => {
-    renderComposer()
+  test('the text starts at the box\'s edge and a session\'s send is at its right, kept at its last line; the commands menu leads the row under it', () => {
+    renderComposer({ inAgent: true })
     const editor = screen.getByLabelText('prompt')
     const submit = box().querySelector('button[aria-label="Send"]')!
     expect(box().firstElementChild!.contains(editor)).toBe(true)

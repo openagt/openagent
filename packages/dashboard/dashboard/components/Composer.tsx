@@ -385,14 +385,15 @@ export const Composer = forwardRef<ComposerHandle, {
     />
   )
 
-  // The submit is a single icon button that only shows once the prompt has text (#721): an empty
-  // launcher has nothing to send, and the arrow reads as "send" in either place (Start session /
-  // Send). It is always full size (never appears to grow): it fades in and slides into place, and
-  // its layout footprint is animated with a negative margin (0 <- -w) rather than its width, so the
-  // text to its left gives way smoothly. `aria-hidden` while empty
-  // keeps it out of the a11y tree and role queries.
+  // A session's send is a single icon button that only shows once the box has text (#721): it fades
+  // in and slides into place, its layout footprint animated with a negative margin (0 <- -w) rather
+  // than its width, so the text to its left gives way smoothly; `aria-hidden` while empty keeps it out
+  // of the a11y tree. The launcher's is a press named for what it does ("Start agent"), at the end of
+  // the box's last row, there from the first frame and off while the box is empty: starting an agent
+  // is what the page is for, so its press is not a glyph that comes and goes.
   const hasPrompt = !!prompt.trim()
-  const submitButton = (
+  const submitTip = busy ? submitBusyLabel : down ? 'OpenAgent is not answering' : `${submitLabel}  (Enter · Shift+Enter for a new line)`
+  const submitButton = inAgent ? (
     <Tooltip>
       <TooltipTrigger
         render={
@@ -419,7 +420,16 @@ export const Composer = forwardRef<ComposerHandle, {
       >
         {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
       </TooltipTrigger>
-      <TooltipContent>{busy ? submitBusyLabel : down ? 'OpenAgent is not answering' : `${submitLabel}  (Enter · Shift+Enter for a new line)`}</TooltipContent>
+      <TooltipContent>{submitTip}</TooltipContent>
+    </Tooltip>
+  ) : (
+    <Tooltip>
+      {/* 28 high in the row, as its other items; a finger's 44 around it on a phone. While the start is asked
+          for it keeps its words and the keyboard, dimmed: the note above the box says what is under way. */}
+      <TooltipTrigger render={<Button type="submit" size="sm" onClick={submit} disabled={(held && !busy) || !hasPrompt} loading={busy} className="relative ml-1.5 max-md:after:absolute max-md:after:-inset-2" />}>
+        {submitLabel}
+      </TooltipTrigger>
+      <TooltipContent>{submitTip}</TooltipContent>
     </Tooltip>
   )
 
@@ -490,12 +500,12 @@ export const Composer = forwardRef<ComposerHandle, {
             </RowAboveBox>
           )}
 
-          {/* The text, starting at the box's own edge, and the submit at its right, kept at the text's
-              last line. One line tall when empty, growing with what is typed. The editor is borderless:
+          {/* The text, starting at the box's own edge, and in a session the send at its right, kept at the
+              text's last line. One line tall when empty, growing with what is typed. The editor is borderless:
               the edge is the surface's. The send's icon stands on the rows' last ones' line. */}
           <div className="flex items-end">
             <div className="min-w-0 flex-1">{editorEl}</div>
-            <div className="flex shrink-0 items-center py-1">{slotEl}</div>
+            {inAgent && <div className="flex shrink-0 items-center py-1">{slotEl}</div>}
           </div>
 
           {/* How it runs, the box's last line: the commands menu (+) and the caller's controls at the
@@ -518,6 +528,7 @@ export const Composer = forwardRef<ComposerHandle, {
                       {sessionContext}
                     </span>
                   ))}
+                {!inAgent && submitButton}
               </div>
             </div>
           </TooltipsPastBox>
