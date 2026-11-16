@@ -31,7 +31,6 @@ import { atOnce, atOnceWords, cannotRun, decided, heldBy, notAsked, startedNow, 
 const EMPTY: SchedulerRow[] = []
 
 /** The commands that start the scheduler, run in the project: with the dashboard from then on, or once, now. */
-const INIT = 'npx @openagt/skill-scheduler@0.1 init'
 const START = 'npx @openagt/skill-scheduler@0.1 start'
 
 /** The tick's note that says the project schedules nothing: the page says it in its own words under the heading. */
@@ -280,8 +279,9 @@ export function AutomationsPage({ projects }: ModulePageProps) {
                                     <div className="min-w-0 flex-1">
                                       <p className="truncate leading-5 max-md:line-clamp-2 max-md:whitespace-normal">
                                         <span className="font-medium">{title}</span>
-                                        {/* What it says it does, after its name and quieter: cut with it at the row's end, and whole in its panel. */}
-                                        {scheduled.description && <span className="text-muted-foreground"> {scheduled.description}</span>}
+                                        {/* What it says it does, after its name and quieter, apart from it as a list's row sets its
+                                            detail: cut with it at the row's end, and whole in its panel. */}
+                                        {scheduled.description && <span className="ml-3 text-muted-foreground">{scheduled.description}</span>}
                                       </p>
                                       <Stands host={host} project={row.project} scheduled={scheduled} stopped={schedulerStopped(row)} picks={shown === undefined} />
                                     </div>
@@ -400,7 +400,6 @@ export function AutomationsPage({ projects }: ModulePageProps) {
                       </div>
                     ),
                 )}
-                {row.error === undefined && !row.on && <SchedulerOff />}
                 {row.error === undefined && row.on && !row.running && (
                   <div className="mt-4 max-w-180 text-sm text-warning">
                     <p>The scheduler is on but its process is not running, so nothing here starts by itself. To start it, run in the project:</p>
@@ -418,8 +417,9 @@ export function AutomationsPage({ projects }: ModulePageProps) {
 
 /**
  * A project's scheduler in one line: whether it runs, and the model rows on Claude Code start on where
- * nothing else names one; then, in the warning colour, a look that is late or that failed. Under the
- * page's line when the page shows one project, else under the project's name.
+ * nothing else names one; then, in the warning colour, a look that is late or that failed; while it is
+ * off, the one way to turn it on, where it is ticked so it starts with the dashboard. The page says it is
+ * off here alone. Under the page's line when the page shows one project, else under the project's name.
  */
 function StatusLine({ row, agents, className }: { row: SchedulerRow; agents: readonly AgentModels[]; className?: string }) {
   const status = schedulerStatus(row)
@@ -444,42 +444,19 @@ function StatusLine({ row, agents, className }: { row: SchedulerRow; agents: rea
         ),
         // Why its last look decided nothing, when it says: a pull that failed. "off" is the status, and a project that schedules nothing says so below.
         note !== undefined && note !== 'off' && note !== NOTHING_SCHEDULED && <span className="text-warning">{`Its last look: ${note}`}</span>,
+        row.error === undefined && !row.on && <TurnOn />,
       ]}
     />
   )
 }
 
-/**
- * A project whose scheduler is off: one sentence, and the press to where it is ticked, so it starts
- * with the dashboard. The two commands that start it from a terminal are behind a press of their own.
- */
-function SchedulerOff() {
+/** Where a scheduler that is off is turned on: Settings › Skills, whose tick starts it with the dashboard. */
+function TurnOn() {
   const host = useModuleHost()
-  const [commands, setCommands] = useState(false)
   return (
-    <div className="mt-4 space-y-2 text-sm text-muted-foreground">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <p className="min-w-0 grow basis-60">The scheduler is off in this project, so nothing here starts by itself.</p>
-        {/* At the page's right edge, as its other presses; under the sentence on a phone, where the first one's words stand on the page's left edge. */}
-        <div className="flex gap-2 max-md:-ml-3">
-          <Button variant="ghost" aria-expanded={commands} onClick={() => setCommands(shown => !shown)}>
-            In a terminal
-          </Button>
-          {/* Ticked in Skills, it starts with the dashboard. */}
-          <Button variant="secondary" onClick={() => host.openSettings('skills')}>
-            Turn it on in Skills
-          </Button>
-        </div>
-      </div>
-      {commands && (
-        <div className="max-w-180 space-y-2">
-          <p className="pt-2">To start it now, run in the project:</p>
-          <Command text={START} />
-          <p className="pt-2">To start it with the dashboard from now on:</p>
-          <Command text={INIT} />
-        </div>
-      )}
-    </div>
+    <button type="button" onClick={() => host.openSettings('skills')} className="focus-ring relative rounded-sm font-medium text-primary hover:underline after:absolute after:-inset-y-3 after:-inset-x-1 md:after:-inset-y-1.5">
+      Turn it on in Skills
+    </button>
   )
 }
 
@@ -500,7 +477,7 @@ function SkillsLink() {
  * scheduler is stopped, that it does not start; a command the coding agent cannot run says so whatever its
  * switch); then its picks: its pace, how many agents at once when that is worth saying, and how far its runs
  * publish, left to the panel while it is open, which says them as they would be. Its other picks are its Edit
- * panel's. One line, cut, under a mouse; two on a phone.
+ * panel's. One line, cut, under a mouse; wrapped whole on a phone.
  */
 function Stands({ host, project, scheduled, stopped, picks }: { host: ModuleHost; project: ModuleProject; scheduled: SchedulerCommand; /** Why nothing starts by itself in its project, while that is so ({@link schedulerStopped}). */ stopped: string | undefined; /** Whether its picks are said: not while its panel is open. */ picks: boolean }) {
   const last = scheduled.lastRun
@@ -510,7 +487,7 @@ function Stands({ host, project, scheduled, stopped, picks }: { host: ModuleHost
   const held = cannotRun(scheduled) !== undefined || (scheduled.on && heldBy(scheduled) !== undefined)
   return (
     <Facts
-      className="mt-1 line-clamp-2 text-xs text-faint-foreground md:line-clamp-1"
+      className="mt-1 text-xs text-faint-foreground md:line-clamp-1"
       facts={[
         last === undefined ? (
           'Never ran'
