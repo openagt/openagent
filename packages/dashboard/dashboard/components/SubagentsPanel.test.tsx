@@ -12,6 +12,7 @@ const { SubagentsPanel } = await import('./SubagentsPanel.js')
 const { forgetRevealedChanges, revealSubagent } = await import('../lib/reveal-change.js')
 const { forgetRemembered } = await import('../lib/use-async.js')
 const { hoverTooltip } = await import('../test-utils.js')
+const { FocusHome } = await import('../lib/focus-home.js')
 
 beforeEach(() => {
   forgetRevealedChanges()
@@ -108,15 +109,24 @@ describe('the list of a run\'s subagents', () => {
     expect(screen.queryByRole('button', { name: /Stop/ })).toBeNull()
   })
 
-  test('its Stop gone once the run stopped, the keyboard stays: on its row, or in its open part on its next press', async () => {
+  test('its Stop gone once the run stopped, the keyboard stays: on its row, moved under Ended, or in its open part on its next press', async () => {
     const working = run(26, 'Visual check in a browser', 'running')
     const stopped = (meta: AgentMeta): AgentMeta => ({ ...meta, status: 'stopped', endedAt: '2026-10-01T10:29:00.000Z' })
-    const list = render(panel({ subagents: [working] }))
+    // The page's chat is a home of its own before the pane, as it is beside it.
+    const withChat = (props: Parameters<typeof panel>[0]) => (
+      <>
+        <FocusHome>
+          <button type="button">The chat</button>
+        </FocusHome>
+        {panel(props)}
+      </>
+    )
+    const list = render(withChat({ subagents: [working] }))
     const stop = screen.getByRole('button', { name: 'Stop Visual check in a browser' })
     stop.focus()
     fireEvent.click(stop)
     await waitFor(() => expect(sendStop).toHaveBeenCalledWith('p1', working.id))
-    list.rerender(panel({ subagents: [stopped(working)] }))
+    list.rerender(withChat({ subagents: [stopped(working)] }))
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: /^Visual check in a browser/ })))
     cleanup()
     const other = run(27, 'Print styles', 'running')

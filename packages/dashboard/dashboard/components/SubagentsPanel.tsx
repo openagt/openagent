@@ -67,10 +67,14 @@ export function SubagentsPanel({
   // Closed, the keyboard goes back to the row that opened it.
   const close = (key: string) => {
     revealSubagent(page)
-    ;[...(list.current?.querySelectorAll<HTMLElement>('[data-key]') ?? [])].find(row => row.dataset['key'] === key)?.focus()
+    rowOf(list.current, key)?.focus()
   }
+  // A run stopped from its row: its Stop goes with its work and its row moves under Ended, drawn
+  // anew, so the keyboard goes to the row there; else, the pane being its home, to the pane's first press.
+  const stopped = useRef<string | undefined>(undefined)
+  const landing = useMemo<RefObject<HTMLElement | null>>(() => ({ get current() { return rowOf(list.current, stopped.current) } }), [])
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <FocusHome className="flex min-h-0 flex-1 flex-col" landing={landing}>
       <SubagentList
         ref={list}
         rows={rows}
@@ -78,11 +82,17 @@ export function SubagentsPanel({
         shown={shown?.key}
         projectId={projectId}
         onPick={key => revealSubagent(page, key === shown?.key ? undefined : key)}
+        onStop={key => (stopped.current = key)}
         className={shown ? 'max-h-1/2 shrink-0' : 'flex-1'}
       />
       {shown && <Shown key={shown.key} row={shown} projectId={projectId} events={events} onOpenAgent={onOpenAgent} onClose={() => close(shown.key)} />}
-    </div>
+    </FocusHome>
   )
+}
+
+/** The row of `key` in `list`, wherever it stands now. */
+function rowOf(list: HTMLElement | null, key: string | undefined): HTMLElement | null {
+  return [...(list?.querySelectorAll<HTMLElement>('[data-key]') ?? [])].find(row => row.dataset['key'] === key) ?? null
 }
 
 /** Draws again now and then while `on`, so a working row's time goes on. */
@@ -114,20 +124,22 @@ function useCut(ref: RefObject<HTMLElement | null>, text: string): boolean {
 const byStart = (a: SubagentRow, b: SubagentRow): number => (a.startedAt < b.startedAt ? -1 : a.startedAt > b.startedAt ? 1 : 0)
 
 /** The run's subagents, those at work over those that ended; past {@link FOLD_PAST} rows in all, the ended ones fold into one. */
-function SubagentList({ ref, rows, reasons, shown, projectId, onPick, className }: {
+function SubagentList({ ref, rows, reasons, shown, projectId, onPick, onStop, className }: {
   ref: Ref<HTMLDivElement>
   rows: readonly SubagentRow[]
   reasons: ReadonlyMap<string, string>
   shown: string | undefined
   projectId: string
   onPick: (key: string) => void
+  /** A row's Stop was pressed. */
+  onStop: (key: string) => void
   className: string
 }) {
   useTicking(rows.some(row => row.working))
   const [endedOpen, setEndedOpen] = useState(false)
   const working = rows.filter(row => row.working).sort(byStart)
   const ended = rows.filter(row => !row.working).sort(byStart)
-  const item = (row: SubagentRow) => <SubagentItem key={row.key} row={row} reason={reasons.get(row.key)} open={row.key === shown} projectId={projectId} onPick={onPick} />
+  const item = (row: SubagentRow) => <SubagentItem key={row.key} row={row} reason={reasons.get(row.key)} open={row.key === shown} projectId={projectId} onPick={onPick} onStop={() => onStop(row.key)} />
   return (
     <div ref={ref} className={cn('min-h-0 overflow-y-auto px-2 pt-2', className)}>
       {working.length > 0 && <Part name="Working">{working.map(item)}</Part>}
@@ -177,7 +189,7 @@ const capital = (words: string): string => words.charAt(0).toUpperCase() + words
  * pane's lists (ui/look/spacing.md 3). One that failed says why under its name, where that is known.
  * Under a fine pointer a working run's time gives way to its Stop; on a phone its Stop is in its open part.
  */
-function SubagentItem({ row, reason, open, projectId, onPick }: { row: SubagentRow; reason: string | undefined; open: boolean; projectId: string; onPick: (key: string) => void }) {
+function SubagentItem({ row, reason, open, projectId, onPick, onStop }: { row: SubagentRow; reason: string | undefined; open: boolean; projectId: string; onPick: (key: string) => void; onStop: () => void }) {
   const models = useModels()
   const runId = row.agent?.id
   const { stopping, error, stop } = useStop(projectId, runId, row.working)
@@ -190,60 +202,60 @@ function SubagentItem({ row, reason, open, projectId, onPick }: { row: SubagentR
   // The card says what the row does not: the whole name where the row cuts it, or what it runs on.
   const tells = useCut(name, row.name) || model !== undefined
   return (
-    <li>
-      {/* Its Stop gone once the run stopped, the keyboard stays on the row, not on the page's body. */}
-      <FocusHome className="group/row relative">
-        <Tooltip disabled={!tells}>
-          <TooltipTrigger
-            render={
-              <button
-                type="button"
-                data-key={row.key}
-                aria-expanded={open}
-                aria-label={[row.name, runWord(row.status), time, second].filter(Boolean).join(' · ')}
-                onClick={() => onPick(row.key)}
-                className={cn(navRowClass(open), second !== undefined && 'items-start md:h-12 md:py-1.5 max-md:h-16 max-md:py-3')}
-              />
-            }
-          >
-            <span className="flex h-5 w-4 shrink-0 items-center justify-center">
-              <RunMark status={row.status} />
+    <li className="group/row relative">
+      <Tooltip disabled={!tells}>
+        <TooltipTrigger
+          render={
+            <button
+              type="button"
+              data-key={row.key}
+              aria-expanded={open}
+              aria-label={[row.name, runWord(row.status), time, second].filter(Boolean).join(' · ')}
+              onClick={() => onPick(row.key)}
+              className={cn(navRowClass(open), second !== undefined && 'items-start md:h-12 md:py-1.5 max-md:h-16 max-md:py-3')}
+            />
+          }
+        >
+          <span className="flex h-5 w-4 shrink-0 items-center justify-center">
+            <RunMark status={row.status} />
+          </span>
+          <span className="min-w-0 flex-1 text-start">
+            <span ref={name} className="block truncate">
+              {row.name}
             </span>
-            <span className="min-w-0 flex-1 text-start">
-              <span ref={name} className="block truncate">
-                {row.name}
-              </span>
-              {second !== undefined && <span className={cn('block truncate text-xs max-md:leading-5', runTone('failed'))}>{second}</span>}
+            {second !== undefined && <span className={cn('block truncate text-xs max-md:leading-5', runTone('failed'))}>{second}</span>}
+          </span>
+          {time !== undefined && (
+            <span className={cn('shrink-0 text-xs leading-5 text-faint-foreground tabular-nums', stoppable && 'pointer-fine:group-hover/row:invisible pointer-fine:group-has-focus-visible/row:invisible')}>{time}</span>
+          )}
+        </TooltipTrigger>
+        {/* The whole name, what it runs on, and how it stands, as T3 Code's card says them; with no model known, its state at the card's left. */}
+        <TooltipContent side="left" align="start" className="grid max-w-72 gap-1 px-4 py-3 text-sm">
+          <span className="font-medium break-words">{row.name}</span>
+          <span className="flex items-center justify-between gap-4 text-xs text-muted-foreground">
+            {model !== undefined && <span className="min-w-0 truncate">{model}</span>}
+            <span className="flex shrink-0 items-center gap-1.5">
+              <RunMark status={row.status} className="size-3" />
+              {state}
             </span>
-            {time !== undefined && (
-              <span className={cn('shrink-0 text-xs leading-5 text-faint-foreground tabular-nums', stoppable && 'pointer-fine:group-hover/row:invisible pointer-fine:group-has-focus-visible/row:invisible')}>{time}</span>
-            )}
-          </TooltipTrigger>
-          {/* The whole name, what it runs on, and how it stands, as T3 Code's card says them; with no model known, its state at the card's left. */}
-          <TooltipContent side="left" align="start" className="grid max-w-72 gap-1 px-4 py-3 text-sm">
-            <span className="font-medium break-words">{row.name}</span>
-            <span className="flex items-center justify-between gap-4 text-xs text-muted-foreground">
-              {model !== undefined && <span className="min-w-0 truncate">{model}</span>}
-              <span className="flex shrink-0 items-center gap-1.5">
-                <RunMark status={row.status} className="size-3" />
-                {state}
-              </span>
-            </span>
-          </TooltipContent>
-        </Tooltip>
-        {stoppable && (
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label={`Stop ${row.name}`}
-            loading={stopping}
-            onClick={stop}
-            className="absolute top-1/2 right-0 -translate-y-1/2 text-danger not-pointer-fine:hidden pointer-fine:opacity-0 pointer-fine:group-hover/row:opacity-100 pointer-fine:group-has-focus-visible/row:opacity-100"
-          >
-            <Square className="size-3 fill-current" />
-          </Button>
-        )}
-      </FocusHome>
+          </span>
+        </TooltipContent>
+      </Tooltip>
+      {stoppable && (
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label={`Stop ${row.name}`}
+          loading={stopping}
+          onClick={() => {
+            onStop()
+            stop()
+          }}
+          className="absolute top-1/2 right-0 -translate-y-1/2 text-danger not-pointer-fine:hidden pointer-fine:opacity-0 pointer-fine:group-hover/row:opacity-100 pointer-fine:group-has-focus-visible/row:opacity-100"
+        >
+          <Square className="size-3 fill-current" />
+        </Button>
+      )}
     </li>
   )
 }
