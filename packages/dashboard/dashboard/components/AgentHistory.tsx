@@ -620,7 +620,9 @@ function WaitingOnYou({
                         <StateCell state="waiting" />
                       </span>
                       <span className="min-w-0 flex-1 truncate">{item.title}</span>
-                      <span aria-hidden className="shrink-0 text-xs text-muted-foreground">{formatSince(item.createdAt)}</span>
+                      <span aria-hidden className={AGE}>
+                        {formatSince(item.createdAt)}
+                      </span>
                     </span>
                     {/* Under the name, 16 for the mark and 12 after it: the words start where the name does. */}
                     <span aria-hidden className="truncate pl-7 text-xs text-muted-foreground">{need}</span>
@@ -685,6 +687,9 @@ function RecentsSortMenu({ order }: { order: RecentsSort }) {
 
 /** A person's mark on a row, beside its smaller marks. */
 const PERSON_MARK = 'size-5 text-xs font-medium'
+
+/** A row's time, in a box as wide as its longest word ("59m", "23h", "now") and set to its right, so it stands on one x down a list. */
+const AGE = 'w-7 shrink-0 text-right text-xs text-muted-foreground tabular-nums'
 
 /** Which of the marks that tell runs apart a list draws: one only where its rows differ in it, else it would say the same on every row. */
 type Telling = { person: boolean; driver: boolean; project: boolean }
@@ -866,8 +871,6 @@ function AgentHistoryRow({
           <span className="block text-xs text-muted-foreground">{said}</span>
         </TooltipContent>
       </Tooltip>
-      {/* When it started, in a word: the list's own order, read down the rows' end. */}
-      <span aria-hidden className="shrink-0 text-xs text-muted-foreground">{age}</span>
       {/* What is unusual about where the run is, kept on the row as one small glyph: another
           machine, a person's own computer, a cloud session. Rare, so the row stays a circle and a
           name nearly always. */}
@@ -931,6 +934,11 @@ function AgentHistoryRow({
           <left.Icon className="size-3.5 text-muted-foreground" />
         </RowMark>
       )}
+      {/* When it started, in a word: the list's own order, read down the rows' end. After the marks a
+          row may have and before the person and the logo every row of a list has, so it stands on one x. */}
+      <span aria-hidden className={AGE}>
+        {age}
+      </span>
       {/* Whose run it is, beside which coding agent ran it. The row of a run just started holds its
           place with an empty circle, so its title has the same room when the run's own row lands. */}
       {telling.person &&
