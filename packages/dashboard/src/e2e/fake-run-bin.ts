@@ -33,7 +33,7 @@ import { nodeGitRunner } from '@openagt/agent-data'
 import { NAME_FILE_ENV, childEndedLine, givenName, isPublish, type Publish } from '@openagt/agent-runner'
 import { agentBranchName, attachCheckout, createCheckout, reclaimWorktree, worktreeBranch, worktreePath } from '@openagt/skill-branches'
 import { findRun, parseRunCard, readDiary, writeRun, type AnyDiaryLine, type RunCard } from '@openagt/skill-logs'
-import { agentIdFromStartedAt, startedAtFromAgentId } from '../agent-id.js'
+import { agentIdFromStartedAt } from '../agent-id.js'
 import { OPENAGENT_DIR } from '../openagent-dir.js'
 
 const QUESTION = { title: 'Which way?', options: [{ label: 'Left', detail: 'the short way' }, { label: 'Right' }], recommended: 'Left' }
@@ -54,14 +54,13 @@ function detach(args: string[], env: NodeJS.ProcessEnv = process.env): void {
 
 /**
  * The runs an `agents` run starts for itself: the prompt (the task on the first line, the word that
- * scripts it after), how many seconds one that fails works first, and how long one that ends at once
- * ran (it was started that long ago), so a picture shows the times real runs take.
+ * scripts it after), and how many seconds one that ends or fails works first, as real runs take a while.
  */
-const RUN_SUBAGENTS: Array<{ task: string; failsAfter?: number; ranFor?: number }> = [
+const RUN_SUBAGENTS: Array<{ task: string; worksFor?: number }> = [
   { task: 'Account page tests\n\nhold' },
   { task: 'Theme switch in the header\n\nhold' },
-  { task: 'Read the theme tokens', ranFor: 200 },
-  { task: 'Visual check in a browser\n\nfails', failsAfter: 9 },
+  { task: 'Read the theme tokens', worksFor: 12 },
+  { task: 'Visual check in a browser\n\nfails', worksFor: 9 },
   { task: 'Pick the dark palette\n\nask' },
 ]
 /** What the runs of its own run on, on their cards. */
@@ -100,12 +99,11 @@ async function startSubagents(id: string, prompt: string, log: SessionLog, signa
     await write({ type: 'subagent', id: call, status: 'working', name, role: 'general-purpose', model: 'claude-haiku-4-5', prompt: `${name}.\nSay what you found in one paragraph.` })
     await write({ type: 'action', label: 'Read', detail: 'src/theme/tokens.css', id: `${call}_read`, subagent: call })
   }
-  // One that is to say it ran a while was started that long ago: its id is made from that moment, as a row's start is read off it.
-  const runs = RUN_SUBAGENTS.map(({ task, failsAfter, ranFor = 0 }, at) => ({ task, failsAfter, id: agentIdFromStartedAt(new Date(Date.now() - ranFor * 1000 + at).toISOString()) }))
+  const runs = RUN_SUBAGENTS.map(({ task, worksFor }, at) => ({ task, worksFor, id: agentIdFromStartedAt(new Date(Date.now() + at).toISOString()) }))
   // Not the name file of the run that starts them, or each would take that run's name: each is named by its task.
   const { [NAME_FILE_ENV]: _named, ...env } = process.env
-  for (const { task, failsAfter, id: child } of runs) {
-    detach(['run', child], { ...env, PROMPT: task, MODEL: RUN_MODEL, E2E_PARENT: id, ...(failsAfter ? { E2E_FAILS_AFTER: String(failsAfter) } : {}) })
+  for (const { task, worksFor, id: child } of runs) {
+    detach(['run', child], { ...env, PROMPT: task, MODEL: RUN_MODEL, E2E_PARENT: id, ...(worksFor ? { E2E_WORKS_FOR: String(worksFor) } : {}) })
   }
   // Each of its own that ends, after the seconds it works; and told of each run that ends on its own, once it has.
   return async () => {
@@ -184,8 +182,8 @@ async function session(id: string, checkout: string, prompt: string, card: Omit<
   const told = fansOut ? await startSubagents(id, prompt, log, stop.signal) : undefined
   const ended = told?.()
   try {
+    await sleep(Number(process.env['E2E_WORKS_FOR'] ?? 0) * 1000)
     if (prompt.includes('fails')) {
-      await sleep(Number(process.env['E2E_FAILS_AFTER'] ?? 0) * 1000)
       await log.record({ type: 'error', message: FAILURE })
       throw new Error(FAILURE)
     }
@@ -250,9 +248,7 @@ async function main(): Promise<void> {
     const parent = process.env['E2E_PARENT']
     const caller = { pid: process.pid, host: hostname(), workspace: checkout.path, ...publishOf(process.env['PUBLISH'], undefined), ...(parent ? { parent } : {}) }
     // The coding agent named as agent-runner names it, its default when the start named none.
-    // A subagent run started when its id says: one made from an earlier moment says on its card that it ran since then.
-    const startedAt = (parent ? startedAtFromAgentId(runId) : undefined) ?? new Date().toISOString()
-    await session(runId, checkout.path, prompt, { id: runId, startedAt, intent: prompt, driver: process.env['DRIVER'] ?? 'claude-code', ...(process.env['MODEL'] ? { model: process.env['MODEL'] } : {}), branch: checkout.branch, caller }, false)
+    await session(runId, checkout.path, prompt, { id: runId, startedAt: new Date().toISOString(), intent: prompt, driver: process.env['DRIVER'] ?? 'claude-code', ...(process.env['MODEL'] ? { model: process.env['MODEL'] } : {}), branch: checkout.branch, caller }, false)
     return
   }
   if (mode === 'continue' && runId) {
