@@ -36,6 +36,7 @@ import { useAgentsList } from './AgentsPage.js'
 import { SESSIONS_ID } from '../../src/project-address.js'
 import { shortcut } from '../lib/shortcut.js'
 import { useIsMobile } from '../lib/use-mobile.js'
+import { InlineMarkdown } from './Markdown.js'
 
 /** The note while the start is asked for: what the chat's first line says next. */
 const STARTING = 'Starting session'
@@ -412,7 +413,10 @@ export function StartAgentForm({
         {readiness?.warnings.map(warning => (
           <p key={warning} role="alert" className="flex items-start gap-2 rounded-lg bg-[color-mix(in_oklab,var(--color-warning)_8%,var(--color-background))] px-3 py-2 text-sm text-foreground">
             <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden />
-            {warning}
+            {/* One flex item: the sentence's code marks flow in it as words do. */}
+            <span className="min-w-0">
+              <InlineMarkdown text={warning} />
+            </span>
           </p>
         ))}
         {noStartHook && (
@@ -501,10 +505,11 @@ function Refusal({ title, detail, actions }: { title: ReactNode; detail?: ReactN
 
 /**
  * A line said whole, as a title and what follows it: split after its first sentence, when that
- * sentence is short enough to read as one. A daemon's or a machine's words come as one line.
+ * sentence is short enough to read as one. A daemon's or a machine's words come as one line, with
+ * the names and commands in it in backticks: drawn as code, as the chat draws them.
  */
-function said(line: string): { title: string; detail?: string } {
+function said(line: string): { title: ReactNode; detail?: ReactNode } {
   const end = line.search(/\.\s+(?=[A-Z`@])/)
-  if (end <= 0 || end > 140) return { title: line }
-  return { title: line.slice(0, end + 1), detail: line.slice(end + 1).trim() }
+  if (end <= 0 || end > 140) return { title: <InlineMarkdown text={line} /> }
+  return { title: <InlineMarkdown text={line.slice(0, end + 1)} />, detail: <InlineMarkdown text={line.slice(end + 1).trim()} /> }
 }

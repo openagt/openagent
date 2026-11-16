@@ -184,7 +184,7 @@ export function QuestionPanel({
     return () => window.removeEventListener('keydown', onKey)
   }, [active, sent, choice.options, send])
 
-  // The focus is in a text field outside the card, which takes Ctrl+Enter for itself: the card's is not drawn then.
+  // The focus is in a text field outside the card, which takes Ctrl+Enter for itself: the card's is dimmed then.
   const [keysElsewhere, setKeysElsewhere] = useState(false)
   useEffect(() => {
     const onFocus = () => setKeysElsewhere(typedInto(document.activeElement) && !card.current?.contains(document.activeElement))
@@ -265,9 +265,10 @@ export function QuestionPanel({
         )}
         <Button disabled={busy || down || !ready} onClick={submit}>
           Submit
-          {active && !keysElsewhere && (
-            // The message box's rule for naming keys: none on a touch screen, none at a phone's width.
-            <span className="gap-0.5 pointer-coarse:hidden max-md:hidden md:not-pointer-coarse:flex" aria-hidden>
+          {active && (
+            // The message box's rule for naming keys: none on a touch screen, none at a phone's width. While a text field
+            // outside the card has Ctrl+Enter, the keys are dimmed and keep their place, so Submit and Skip stand still.
+            <span className={cn('gap-0.5 transition-opacity pointer-coarse:hidden max-md:hidden md:not-pointer-coarse:flex', keysElsewhere && 'opacity-40')} aria-hidden>
               <kbd className="flex h-5 min-w-5 items-center justify-center rounded-sm border border-primary-foreground/30 px-1 font-sans text-xs font-normal">{MOD_KEY}</kbd>
               <kbd className="flex h-5 min-w-5 items-center justify-center rounded-sm border border-primary-foreground/30 px-1 font-sans text-xs font-normal">Enter</kbd>
             </span>

@@ -201,19 +201,20 @@ describe('QuestionPanel', () => {
     expect(sendChoice).not.toHaveBeenCalled()
   })
 
-  test('Submit draws its Ctrl+Enter only while that key is the card\'s, not while the message box has the focus', () => {
+  test('Submit\'s Ctrl+Enter is dimmed while the message box has that key, and keeps its place, so Submit and Skip stand still', () => {
     render(
       <>
         <textarea aria-label="message box" />
         {panel({ active: true })}
       </>,
     )
-    const submit = screen.getByRole('button', { name: 'Submit' })
-    expect(submit.textContent).toContain('Enter')
+    const keys = screen.getByRole('button', { name: 'Submit' }).querySelector('kbd')!.parentElement!
+    expect(keys.className.split(' ')).not.toContain('opacity-40')
     act(() => screen.getByLabelText('message box').focus())
-    expect(submit.textContent).toBe('Submit')
+    expect(keys.isConnected).toBe(true)
+    expect(keys.className.split(' ')).toContain('opacity-40')
     act(() => screen.getByLabelText('message box').blur())
-    expect(submit.textContent).toContain('Enter')
+    expect(keys.className.split(' ')).not.toContain('opacity-40')
   })
 
   test('one pick is a radio group: ArrowDown picks the next choice and takes the focus there, "Other" included', async () => {
