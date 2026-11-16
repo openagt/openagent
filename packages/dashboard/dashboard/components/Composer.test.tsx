@@ -480,13 +480,10 @@ const surface = (): HTMLElement => {
 const commands = () => screen.getByRole('button', { name: 'Commands' })
 
 describe('the box', () => {
-  test('its text\'s line holds the commands menu, the text and, in a session, the send; the launcher\'s start ends the row under it; the model and "Run on" are on lines of their own, in the same surface', () => {
+  test('its text\'s line holds the commands menu, the text and the send (the launcher\'s start); the model and "Run on" are on lines of their own, in the same surface', () => {
     renderComposer()
     fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'x' } })
-    const start = screen.getByRole('button', { name: 'Send' })
-    expect(box().contains(start)).toBe(false)
-    expect(box().nextElementSibling!.contains(start)).toBe(true)
-    expect(agentTrigger().compareDocumentPosition(start) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(box().contains(screen.getByRole('button', { name: 'Send' }))).toBe(true)
     expect(box().contains(commands())).toBe(true)
     expect(box().contains(agentTrigger())).toBe(false)
     expect(box().contains(screen.getByRole('button', { name: /^Run on: / }))).toBe(false)
