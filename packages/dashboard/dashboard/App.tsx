@@ -757,8 +757,8 @@ export function App() {
           projectId={projectId}
           agentId={agentId}
           // A session with no project has no files or changes of a project's to show beside it, and
-          // one that is gone has none at all.
-          enabled={!pageSegment && !noProject && !sessionGone}
+          // one that is gone, or a project that is not registered, has none at all.
+          enabled={!pageSegment && !noProject && !sessionGone && !unknownProject}
           files={files}
           context={context}
           toggleContext={toggleContext}
