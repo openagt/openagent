@@ -1029,7 +1029,7 @@ describe('Settings › Devices: a server this computer installed', () => {
     expect((await findRow('rom-desktop (through 203.0.113.5)')).textContent).toContain("rom's, shared with you")
     await open('203.0.113.5')
     const list = await screen.findByRole('list', { name: 'The computers on 203.0.113.5' })
-    expect(list.textContent).toContain("rom-desktop· rom's · shared with you")
+    expect(list.textContent).toContain("rom-desktoprom's, shared with you")
     fireEvent.click(screen.getByRole('button', { name: 'Back to Devices' }))
 
     await open('rom-desktop (through 203.0.113.5)')

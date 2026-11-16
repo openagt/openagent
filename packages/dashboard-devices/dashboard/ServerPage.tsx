@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 import { ChevronRight, CircleCheck, House, Laptop, Loader2, Server, UserPlus, UserRound } from 'lucide-react'
-import { Button, Checkbox, ConfirmDialog, Dialog, List, Row, RowShapes, Slot, Switch, useOpenAgentDown, usePolled, type ModuleAccountsAgent, type ModuleComputersThrough, type ModuleHost, type ModuleMachine, type ModuleMachineAccount } from '@openagt/dashboard/module'
+import { Button, Checkbox, ConfirmDialog, Dialog, RowShapes, SettingsItem, SettingsItems, SettingsRow, Slot, Switch, useOpenAgentDown, usePolled, type ModuleAccountsAgent, type ModuleComputersThrough, type ModuleHost, type ModuleMachine, type ModuleMachineAccount } from '@openagt/dashboard/module'
 import { idsOf, myName, type Answer, type DeviceRow } from './devices.js'
 import { installDone, installFailed, nameOwner, removeDevice, removePerson, setPeople, setWho, askLink, type ServerRow } from './servers.js'
 import { labelOf, type ServerItem } from './model.js'
 import { Invite } from './codes.js'
-import { Head, Part, PressRow, Problem, Removal, Said, Seen, State, StepLine, SwitchLine, Tabs, hostOf, olderThan } from './parts.js'
+import { Facts, Head, Part, PressRow, Problem, Removal, Said, Seen, State, StepLine, Tabs, hostOf, olderThan } from './parts.js'
 import type { Devices } from './use-devices.js'
 
 // A server's own page in Settings › Devices, for a server this computer installed OpenAgent on:
@@ -87,7 +87,7 @@ export function ServerPage({ d, item, onBack, invite = false }: { d: Devices; it
         } } : {})}
       />
       {(behind || unfinished || failed) && !server.working && (
-        <div role="status" className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-muted py-2 pr-2 pl-3">
+        <div role="status" className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-muted py-2 pr-2 pl-4">
           <p className="text-sm">{failed ? `${machine ? 'The update' : 'The install'} stopped at a step: see Overview.` : behind ? `OpenAgent ${machine!.version} runs there: behind this computer, which runs ${d.machines!.version}.` : 'A step of the install never ran there.'}</p>
           <Button loading={spins} disabled={!d.machines || (busy && !spins) || down} aria-label={failed ? `Try ${server.address} again` : `Update ${server.address}`} onClick={() => void d.install(server.address, server.user)}>
             {failed ? 'Try again' : 'Update'}
@@ -97,16 +97,16 @@ export function ServerPage({ d, item, onBack, invite = false }: { d: Devices; it
       {tabs.length > 1 && <Tabs label={`${item.name}`} tabs={tabs} value={tab} onChange={setTab} />}
       {tab === 'overview' && <Overview d={d} item={item} />}
       {tab === 'people' && (
-        <Part>
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-sm font-semibold">
-              Who is in {read && <span className="font-normal tabular-nums text-muted-foreground">{read.devices.length}</span>}
-            </p>
-            <Button variant="secondary" disabled={busy} aria-label={`Add person to ${server.address}`} title={firstWay === 'code' ? 'Someone else, by their name: they add this server to their own OpenAgent with the code, and get a user of their own here.' : `Someone on ${hostOf(server.through!)}, by their name: they get a user of their own here, and reach it through ${hostOf(server.through!)}.${firstWay === 'ask' ? ' Or someone with a code at its own door.' : ''}`} onClick={() => (setJoined(undefined), setInviting(firstWay))}>
+        <Part
+          title="Who is in"
+          action={
+            // Pulled out by its own padding: its words end on the page's right edge.
+            <Button variant="ghost" size="sm" className="-my-1 -mr-2 max-md:h-11" disabled={busy} aria-label={`Add person to ${server.address}`} title={firstWay === 'code' ? 'Someone else, by their name: they add this server to their own OpenAgent with the code, and get a user of their own here.' : `Someone on ${hostOf(server.through!)}, by their name: they get a user of their own here, and reach it through ${hostOf(server.through!)}.${firstWay === 'ask' ? ' Or someone with a code at its own door.' : ''}`} onClick={() => (setJoined(undefined), setInviting(firstWay))}>
               <UserPlus className="size-4" aria-hidden />
               Add person
             </Button>
-          </div>
+          }
+        >
           <People d={d} address={server.address} ownDevice={machine?.device} {...(server.through !== undefined ? { through: labelOf(d.machines?.machines ?? [], server.through), picks: true } : {})} />
         </Part>
       )}
@@ -212,11 +212,11 @@ function Overview({ d, item }: { d: Devices; item: ServerItem }) {
       {/* A computer on Tailscale keeps no lines: no computer is reached through it. */}
       {done && machine && server.through === undefined && !server.tailscale && <ComputersThrough host={host} machine={machine} busy={busy} everyMs={30_000} />}
       {!server.working && (
-        <Removal said="Takes the server off this list, and this computer out of the server.">
+        <Removal label="Remove server" said="Takes the server off this list, and this computer out of the server.">
           <ConfirmDialog
             trigger={
               <Button variant="secondary" className="text-danger" disabled={busy} aria-label={`Remove ${server.address}`}>
-                Remove server
+                Remove
               </Button>
             }
             title={`Remove ${item.name}?`}
@@ -259,24 +259,24 @@ function Accounts({ host, machine, name, busy }: { host: ModuleHost; machine: Mo
   return (
     <Part title="Accounts">
       {shown.map(({ agent, title, accounts }) => (
-        <div key={agent} className="space-y-1.5">
-          <p className="text-xs text-muted-foreground">{title}</p>
-          <ul aria-label={`${title} accounts on ${name}`} className="space-y-1.5">
+        <div key={agent}>
+          <p className="mb-2 text-xs font-medium text-faint-foreground">{title}</p>
+          <SettingsItems aria-label={`${title} accounts on ${name}`}>
             {accounts.map(account => (
-              <li key={account.id} className="flex items-center justify-between gap-3 text-sm">
-                <span className="min-w-0 truncate">
-                  {account.name}
-                  <span className="ml-2 text-xs text-muted-foreground">{[account.from !== undefined ? `from ${account.from}` : account.own ? `${name}'s own login` : undefined, account.first ? 'runs take it first' : undefined].filter(Boolean).join(' · ')}</span>
-                </span>
-                {!account.own && (
-                  <Button size="sm" variant="ghost" disabled={busy || removing !== undefined || down} aria-label={`Remove ${account.name}'s ${title} account on ${name}`} title={account.from !== undefined ? `Runs on ${name} no longer use it. ${account.from} offers it again on the Permissions page.` : `Runs on ${name} no longer use it.`} onClick={() => void remove(agent, account)}>
+              <SettingsItem
+                key={account.id}
+                title={account.name}
+                detail={<Facts>{[account.from !== undefined ? `from ${account.from}` : account.own ? `${name}'s own login` : undefined, account.first ? 'runs take it first' : undefined]}</Facts>}
+                {...(account.own ? {} : { actions: (
+                  // Pulled out by its own padding: its words end on the page's right edge.
+                  <Button size="sm" variant="ghost" className="-mr-2" disabled={busy || removing !== undefined || down} aria-label={`Remove ${account.name}'s ${title} account on ${name}`} title={account.from !== undefined ? `Runs on ${name} no longer use it. ${account.from} offers it again on the Permissions page.` : `Runs on ${name} no longer use it.`} onClick={() => void remove(agent, account)}>
                     {removing === `${agent} ${account.id}` && <Loader2 className="h-3 w-3 animate-spin" aria-hidden />}
                     Remove
                   </Button>
-                )}
-              </li>
+                ) })}
+              />
             ))}
-          </ul>
+          </SettingsItems>
         </div>
       ))}
       {error !== undefined && <Problem>{error}</Problem>}
@@ -294,9 +294,13 @@ export function RunsThrough({ host, server, label = server.address, busy, onChan
   const at = hostOf(server.through)
   const on = server.who !== 'nobody'
   return (
-    <SwitchLine label={`Your runs can go here from ${at}`} words={on ? `Pick ${label} under "Run on" on ${at}. The people on its People run here too, each as themselves.` : `Off: its runs only show on ${at}.`}>
-      <Switch aria-label={`Your runs can go here from ${at}`} checked={on} disabled={busy || down} onCheckedChange={next => void onChange(() => setWho(host, server.address, next ? 'me' : 'nobody'))} />
-    </SwitchLine>
+    <SettingsRow
+      label={`Your runs can go here from ${at}`}
+      description={on ? `Pick ${label} under "Run on" on ${at}. The people on its People run here too, each as themselves.` : `Off: its runs only show on ${at}.`}
+      control={
+        <Switch aria-label={`Your runs can go here from ${at}`} checked={on} disabled={busy || down} onCheckedChange={next => void onChange(() => setWho(host, server.address, next ? 'me' : 'nobody'))} />
+      }
+    />
   )
 }
 
@@ -424,27 +428,24 @@ export function ComputersThrough({ host, machine, busy, everyMs }: { host: Modul
   return (
     <Part title="Computers on this server">
       {read.ok ? (
-        <ul aria-label={`The computers on ${machine.label}`} className="space-y-2 text-xs">
+        <SettingsItems aria-label={`The computers on ${machine.label}`}>
           {read.computers.map(computer => (
-            <li key={computer.id} className="flex items-center justify-between gap-4">
-              <div className="flex min-w-0 items-center gap-2">
-                {computer.owner !== undefined ? <Server aria-hidden className="h-3.5 w-3.5 shrink-0 text-muted-foreground" /> : <Laptop aria-hidden className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
-                <span className="truncate text-sm">{computer.name}</span>
-                {/* Another person's, set up as a server and shared with this person on this one. */}
-                {computer.owner !== undefined && <span className="shrink-0 text-muted-foreground">{`· ${computer.owner}'s · shared with you`}</span>}
-                <State tone={computer.online ? 'good' : 'quiet'}>{computer.online ? 'Online' : 'Away'}</State>
-              </div>
-              {computer.added ? (
-                <span className="shrink-0 text-muted-foreground">In "Run on"</span>
-              ) : (
-                <Button variant="secondary" className="shrink-0" disabled={busy || adding !== undefined || down} aria-label={`Add ${computer.name} through ${machine.label}`} onClick={() => void add(computer.id)}>
+            <SettingsItem
+              key={computer.id}
+              icon={computer.owner !== undefined ? Server : Laptop}
+              title={computer.name}
+              // Another person's, set up as a server and shared with this person on this one.
+              detail={<Facts>{[computer.owner !== undefined ? `${computer.owner}'s, shared with you` : undefined, computer.added ? 'In "Run on"' : 'Not in "Run on"']}</Facts>}
+              end={<State tone={computer.online ? 'good' : 'quiet'}>{computer.online ? 'Online' : 'Away'}</State>}
+              {...(computer.added ? {} : { actions: (
+                <Button variant="secondary" disabled={busy || adding !== undefined || down} aria-label={`Add ${computer.name} through ${machine.label}`} onClick={() => void add(computer.id)}>
                   {adding === computer.id && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}
                   Add
                 </Button>
-              )}
-            </li>
+              ) })}
+            />
           ))}
-        </ul>
+        </SettingsItems>
       ) : (
         <p className="text-xs text-muted-foreground">{`Its computers could not be read: ${read.error}`}</p>
       )}
@@ -461,10 +462,11 @@ function DeviceLine({ device, address, busy, ownKey, onRemove }: { device: Devic
   const own = device.own === true || ownKey
   const note = own ? 'This computer. To take it out, remove the server.' : device.line ? `A computer that keeps a line open to the server: runs can be started on it from the server's page. Remove it and it is no longer in "Run on" there.` : undefined
   return (
-    <Row
+    <SettingsItem
       title={device.name}
       detail={<Seen device={device} note={note} />}
-      {...(own ? {} : { actions: <Button variant="ghost" size="sm" disabled={busy || down} aria-label={`Remove ${device.name} from ${address}`} onClick={onRemove}>Remove</Button> })}
+      // Pulled out by its own padding: its words end on the page's right edge.
+      {...(own ? {} : { actions: <Button variant="ghost" size="sm" className="-mr-2" disabled={busy || down} aria-label={`Remove ${device.name} from ${address}`} onClick={onRemove}>Remove</Button> })}
     />
   )
 }
@@ -492,7 +494,7 @@ function People({ d, address, ownDevice, through, picks = false }: { d: Devices;
   }
 
   return (
-    <div className="space-y-2 text-xs">
+    <div className="flex flex-col gap-6 text-xs">
       {devices === undefined && error === undefined && (
         <Slot of={{ state: 'unknown', value: undefined }} shape={<RowShapes />}>
           {() => null}
@@ -507,7 +509,7 @@ function People({ d, address, ownDevice, through, picks = false }: { d: Devices;
         groups.map(({ person, devices: theirs }) => (
           <div key={person?.name ?? ''} className="space-y-2">
             {person !== undefined && (
-              <div className="flex items-center justify-between gap-4 pt-1">
+              <div className="flex min-h-7 items-center justify-between gap-4">
                 <p className="flex min-w-0 items-center gap-2 font-medium text-muted-foreground">
                   <UserRound className="h-3.5 w-3.5 shrink-0" aria-hidden />
                   <span className="truncate">{person.owner ? `${person.name}, the owner` : person.name}</span>
@@ -518,7 +520,7 @@ function People({ d, address, ownDevice, through, picks = false }: { d: Devices;
                 {!person.owner && (
                   <ConfirmDialog
                     trigger={
-                      <Button variant="ghost" disabled={busy || removing} aria-label={`Remove ${person.name} from ${address}`}>
+                      <Button variant="ghost" size="sm" className="-my-1 -mr-2 max-md:h-11" disabled={busy || removing} aria-label={`Remove ${person.name} from ${address}`}>
                         Remove person
                       </Button>
                     }
@@ -535,11 +537,11 @@ function People({ d, address, ownDevice, through, picks = false }: { d: Devices;
             {person?.problem !== undefined && !person.working && <p role="alert" className="text-danger">{`${person.name}'s own user on the server could not be made: ${person.problem.replace(/\.?$/, '.')} Add them again to try again.`}</p>}
             {person !== undefined && theirs.length === 0 && (person.owner || person.from === undefined) && <p className="text-muted-foreground">No device yet.</p>}
             {theirs.length > 0 && (
-              <List aria-label={person !== undefined ? `Devices of ${person.name} on ${address}` : `The devices that are in on ${address}`}>
+              <SettingsItems aria-label={person !== undefined ? `Devices of ${person.name} on ${address}` : `The devices that are in on ${address}`}>
                 {theirs.map(device => (
                   <DeviceLine key={device.id} device={device} address={address} busy={busy || removing} ownKey={ownDevice !== undefined && idsOf(device).includes(ownDevice)} onRemove={() => void remove(() => removeDevice(host, address, device.id))} />
                 ))}
-              </List>
+              </SettingsItems>
             )}
           </div>
         ))}

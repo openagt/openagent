@@ -1,6 +1,6 @@
 import { Fragment, createContext, useContext, useEffect, useRef, useState, type ComponentType, type FormEvent, type ReactNode, type RefObject } from 'react'
 import { ChevronRight, Circle, CircleArrowUp, CircleCheck, CircleX, Loader2, Pencil } from 'lucide-react'
-import { Badge, Button, Input, RadioGroupOption, Section, SettingsFoot, SettingsItem, cn, formatDateTime, formatRelative, useOpenAgentDown, useSettingsHold } from '@openagt/dashboard/module'
+import { Badge, Button, Input, RadioGroupOption, Section, SettingsFoot, SettingsItem, SettingsRow, cn, formatDateTime, formatRelative, useOpenAgentDown, useSettingsHold } from '@openagt/dashboard/module'
 import type { DeviceRow } from './devices.js'
 import type { StepState } from './servers.js'
 
@@ -84,7 +84,8 @@ export function Tabs<T extends string>({ tabs, value, onChange, label }: { tabs:
   // One tab is no choice: the page is its overview alone.
   if (tabs.length < 2) return null
   return (
-    <div role="tablist" aria-label={label} className="mt-4 flex gap-1 border-b border-hairline">
+    // The first tab's words stand on the page's left edge, 24 under its head; the next part 24 under the tabs.
+    <div role="tablist" aria-label={label} className="mt-6 flex gap-6 border-b border-hairline">
       {tabs.map(tab => (
         <button
           key={tab.id}
@@ -92,7 +93,7 @@ export function Tabs<T extends string>({ tabs, value, onChange, label }: { tabs:
           role="tab"
           aria-selected={tab.id === value}
           onClick={() => onChange(tab.id)}
-          className={cn('focus-ring -mb-px rounded-t-md border-b-2 px-3 py-2 text-sm font-medium transition-colors', tab.id === value ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground')}
+          className={cn('focus-ring -mb-px rounded-t-sm border-b-2 pt-1 pb-2.5 text-sm font-medium transition-colors max-md:pt-3 max-md:pb-3', tab.id === value ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground pointer-fine:hover:text-foreground')}
         >
           {tab.title}
         </button>
@@ -101,47 +102,41 @@ export function Tabs<T extends string>({ tabs, value, onChange, label }: { tabs:
   )
 }
 
-/** A part of a device's page, with its heading. */
-export function Part({ title, children }: { title?: string; children: ReactNode }) {
+/**
+ * A part of a device's page, with its heading and the press at its right: 32 under the part before
+ * it, 24 under the page's head or its tabs; its rows 24 apart, as Settings' own.
+ */
+export function Part({ title, action, children }: { title?: string; action?: ReactNode; children: ReactNode }) {
+  const place = 'pt-8 [[data-head]+&]:pt-6 [[role=tablist]+&]:pt-6'
   // A part's own paragraphs keep the spec's measure, 72 characters a line, however wide Settings is.
+  const rows = 'flex flex-col gap-6 [&>p]:max-w-[72ch] [&>button]:self-start'
   if (title !== undefined)
     return (
-      <Section title={title} className="pt-6">
-        <div className="space-y-3 [&>p]:max-w-[72ch]">{children}</div>
+      <Section title={title} action={action} className={place}>
+        <div className={rows}>{children}</div>
       </Section>
     )
-  return <section className="space-y-3 pt-6 [&>p]:max-w-[72ch]">{children}</section>
+  return <section className={cn(place, rows)}>{children}</section>
 }
 
-/** The press that removes the device a page is about: a group of its own at the page's end, under a hairline, with what it does said under it. */
-export function Removal({ said, children }: { said: string; children: ReactNode }) {
+/** The press that removes the device a page is about: the page's last part, a setting's row with what it does and its press. */
+export function Removal({ label, said, children }: { label: string; said: string; children: ReactNode }) {
   return (
-    <section className="mt-6 space-y-1 border-t border-hairline pt-6">
-      {children}
-      <p className="max-w-[72ch] text-xs text-muted-foreground">{said}</p>
-    </section>
-  )
-}
-
-/** A switch row of a page: what it is, what it means now, and the switch. */
-export function SwitchLine({ label, words, children }: { label: string; words: string; children: ReactNode }) {
-  return (
-    <div className="flex items-start justify-between gap-4">
-      <span className="min-w-0">
-        <span className="block text-sm">{label}</span>
-        <span className="block text-xs text-muted-foreground">{words}</span>
-      </span>
-      {children}
-    </div>
+    <Part>
+      <SettingsRow label={label} description={said} control={children} />
+    </Part>
   )
 }
 
 /** One login's line: what is there, what a person can do about it, and why the last try failed. */
 export function LoginLine({ label, words, said, children }: { label: string; words: string; said: string | undefined; children: ReactNode }) {
   return (
-    <li aria-label={label} className="space-y-1.5">
-      <p>{words}</p>
-      <div className="flex flex-wrap items-center gap-2">{children}</div>
+    <li aria-label={label} className="space-y-2">
+      {/* A setting's row: what is there, and its presses at the right; on a phone under the words. */}
+      <div className="flex items-center justify-between gap-x-6 gap-y-3 max-md:flex-col max-md:items-stretch">
+        <p className="min-w-0 max-w-md text-sm">{words}</p>
+        <div className="flex shrink-0 flex-wrap items-center gap-2 max-md:[&_button]:h-11">{children}</div>
+      </div>
       {said !== undefined && <Said>{said}</Said>}
     </li>
   )
@@ -295,8 +290,9 @@ export function Head({ icon: Icon, name, badge, facts, rename }: { icon: Compone
   const { renaming, open, close, press } = useRenaming()
   const namedAbove = useContext(NamedAbove)
   return (
-    <div className={cn('flex items-center gap-3', namedAbove ? 'min-h-8' : 'min-h-12')}>
-        <Icon aria-hidden className="size-5 shrink-0 text-muted-foreground" />
+    // Under Settings' header, which names the page, the facts stand on the page's left edge: they say its kind in words, so no icon says it again.
+    <div data-head className={cn('flex items-center gap-3', namedAbove ? 'min-h-8' : 'min-h-12')}>
+        {!namedAbove && <Icon aria-hidden className="size-5 shrink-0 text-muted-foreground" />}
         <div className="min-w-0 flex-1">
           {renaming && rename ? (
             <RenameForm name={name} rename={rename} onClose={close} />
@@ -315,7 +311,8 @@ export function Head({ icon: Icon, name, badge, facts, rename }: { icon: Compone
           </p>
         </div>
         {rename && !renaming && (
-          <Button ref={press} variant="ghost" size="sm" className="max-md:h-11" onClick={open}>
+          // Pulled out by its own padding: its words end on the page's right edge.
+          <Button ref={press} variant="ghost" size="sm" className="-mr-2 max-md:h-11" onClick={open}>
             <Pencil className="size-4" aria-hidden />
             Rename
           </Button>
