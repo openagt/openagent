@@ -156,6 +156,21 @@ describe('the list of a run\'s subagents', () => {
     expect(screen.getByRole('button', { name: 'Read the theme tokens · done', description: '3m 0s' })).toBeTruthy()
   })
 
+  test('a run that fails while the pointer is in the list keeps its one line where it stands; under "Failed" once the pointer left, it says why', () => {
+    const failing = run(22, 'Visual check in a browser', 'running')
+    const told: OpenAgentEvent[] = [{ kind: 'driver', event: { type: 'start', prompt: `The run ${failing.id}, started for this run, ended failed: Chrome did not start.` }, at: '2026-10-01T10:29:00.000Z' }]
+    const list = render(panel({ subagents: [failing, run(24, 'Print styles', 'running')] }))
+    const under = screen.getByRole('button', { name: /^Print styles/ })
+    pointTo(under)
+    list.rerender(panel({ subagents: [run(22, 'Visual check in a browser', 'failed', 7), run(24, 'Print styles', 'running')], events: told }))
+    const failed = screen.getByRole('button', { name: /^Visual check in a browser/ })
+    expect([failed.getAttribute('aria-label'), failed.className.includes('md:h-12')]).toEqual(['Visual check in a browser · failed', false])
+    expect(rowButtons()[1]).toBe(under)
+    pointAway(under)
+    expect(screen.getAllByRole('heading').map(h => h.textContent)).toEqual(['Failed', 'Working'])
+    expect(screen.getByRole('button', { name: /^Visual check in a browser/ }).getAttribute('aria-label')).toBe('Visual check in a browser · failed · Chrome did not start')
+  })
+
   test('a run at work is stopped from its row or from its open part; a subagent of the coding agent\'s own, or one that ended, has no Stop', async () => {
     const working = run(24, 'Account page tests', 'running')
     render(panel({ subagents: [working, run(1, 'Read the theme tokens', 'done', 3)], events: call('toolu_a', 'Find colours written by hand', 28) }))

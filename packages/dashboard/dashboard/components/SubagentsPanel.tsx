@@ -4,7 +4,7 @@ import type { AgentMeta, OpenAgentEvent } from '../../src/index.js'
 import { onAgent } from '../rpc/reads.js'
 import { panesPage } from '../lib/panes.js'
 import { revealSubagent, useRevealedSubagent } from '../lib/reveal-change.js'
-import { arrange, failureReasons, subagentRows, subagentTranscript, type SubagentRow } from '../lib/subagents.js'
+import { arrange, failureReasons, subagentRows, subagentTranscript, type ListPart, type SubagentRow } from '../lib/subagents.js'
 import { formatElapsed } from '../lib/format-date.js'
 import { anyModelName, useModels } from '../lib/models.js'
 import { runTone, runWord } from '../lib/run-words.js'
@@ -160,7 +160,10 @@ function SubagentList({ ref, fold, page, rows, reasons, shown, projectId, onPick
   // Which rows stand in which part, held while the person is in the list; each row drawn from its newest state.
   const held = useHold(ref, useMemo(() => arrange(rows), [rows]))
   const byKey = new Map(rows.map(row => [row.key, row]))
-  const item = (row: SubagentRow) => <SubagentItem key={row.key} row={row} reason={reasons.get(row.key)} open={row.key === shown} projectId={projectId} onPick={onPick} onStop={() => onStop(row.key)} />
+  // Why one failed is said in "Failed" alone: held in another part, a row that failed keeps its one line, so nothing under the hand moves.
+  const item = (part: ListPart) => (row: SubagentRow) => (
+    <SubagentItem key={row.key} row={row} failed={part === 'Failed'} reason={part === 'Failed' ? reasons.get(row.key) : undefined} open={row.key === shown} projectId={projectId} onPick={onPick} onStop={() => onStop(row.key)} />
+  )
   return (
     <div ref={ref} className={cn('min-h-0 overflow-y-auto px-2 pt-2', className)}>
       {held.parts.map(({ name, keys }) => {
@@ -174,11 +177,11 @@ function SubagentList({ ref, fold, page, rows, reasons, shown, projectId, onPick
               <span className="min-w-0 flex-1 text-start">Ended · {drawn.length}</span>
               <ChevronRight aria-hidden className={cn('transition-transform', endedOpen && 'rotate-90')} />
             </button>
-            {endedOpen && <ul>{drawn.map(item)}</ul>}
+            {endedOpen && <ul>{drawn.map(item(name))}</ul>}
           </section>
         ) : (
           <Part key={name} name={name}>
-            {drawn.map(item)}
+            {drawn.map(item(name))}
           </Part>
         )
       })}
@@ -218,7 +221,16 @@ const capital = (words: string): string => words.charAt(0).toUpperCase() + words
  * first frame so it does not grow when it is told; a failed call is one line, since nothing says why.
  * Under a fine pointer a working run's time gives way to its Stop; on a phone its Stop is in its open part.
  */
-function SubagentItem({ row, reason, open, projectId, onPick, onStop }: { row: SubagentRow; reason: string | undefined; open: boolean; projectId: string; onPick: (key: string) => void; onStop: () => void }) {
+function SubagentItem({ row, failed, reason, open, projectId, onPick, onStop }: {
+  row: SubagentRow
+  /** Drawn under "Failed". */
+  failed: boolean
+  reason: string | undefined
+  open: boolean
+  projectId: string
+  onPick: (key: string) => void
+  onStop: () => void
+}) {
   const models = useModels()
   const runId = row.agent?.id
   const { stopping, error, stop } = useStop(projectId, runId, row.working)
@@ -229,7 +241,7 @@ function SubagentItem({ row, reason, open, projectId, onPick, onStop }: { row: S
   // words and not in a failure's colour: a refusal says nothing of how the subagent stands.
   const second = reason ?? error ?? undefined
   // A run's failure is told it by a line its end sends: its row keeps the room for it from its first frame.
-  const twoLines = second !== undefined || (runId !== undefined && row.status === 'failed')
+  const twoLines = second !== undefined || (runId !== undefined && failed)
   const model = row.model !== undefined ? <Facts facts={[anyModelName(models, row.model), row.agent?.effort]} className="min-w-0 truncate" /> : undefined
   const name = useRef<HTMLSpanElement>(null)
   // The card says what the row does not: the whole name where the row cuts it, or what it runs on.
