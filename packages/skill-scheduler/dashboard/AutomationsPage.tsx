@@ -7,7 +7,7 @@ import { CodeWords, Command } from './CodeWords.js'
 import { EditPanel } from './EditPanel.js'
 import { openedAutomation, type OpenedAutomation } from './automation-form.js'
 import { AGENT_LABELS, DEFAULT_AGENT, TICK_MS } from '../src/names.js'
-import { atOnce, atOnceWords, cannotRun, decided, heldBy, notAsked, startedNow, type Answered, isOwn, modelLabel, ownPace, pace, publishes, readSchedulers, schedulersKey, rowTitle, runsOnWords, saysAtOnce, schedulerStatus, schedulerStopped, unlistedWords, type AgentModels, type SchedulerCommand, type SchedulerRow } from './schedulers.js'
+import { cannotRun, decided, heldBy, notAsked, startedNow, type Answered, isOwn, modelLabel, pace, readSchedulers, schedulersKey, rowTitle, schedulerStatus, schedulerStopped, unlistedWords, type AgentModels, type SchedulerCommand, type SchedulerRow } from './schedulers.js'
 
 // The Automations page: what starts by itself while nobody is at the keyboard. One part per
 // project the page is given (every project that has this package, or the one picked in the
@@ -154,8 +154,6 @@ export function AutomationsPage({ projects }: ModulePageProps) {
     setPanel({ id, ...(opened ? { opened } : { refused: answer.ok ? 'its file holds something this panel cannot show' : answer.error }) })
   }
 
-  const known = state !== 'unknown'
-  const count = rows.reduce((sum, row) => sum + row.commands.length, 0)
   /** A project's "New automation": the page's one primary when it shows one project, a quieter press beside each project's name when it shows several. */
   const newButton = (row: SchedulerRow, primary: boolean): ReactNode =>
     row.error === undefined &&
@@ -183,7 +181,6 @@ export function AutomationsPage({ projects }: ModulePageProps) {
   return (
     <Page
       title="Automations"
-      count={known && count > 0 ? count : undefined}
       description="What starts by itself while nobody is at the keyboard."
       actions={single && newButton(single, true)}
       // One project's status under the page's line, its height held from the first paint.
@@ -277,21 +274,16 @@ export function AutomationsPage({ projects }: ModulePageProps) {
                                 >
                                   <div className="flex items-start gap-3">
                                     <span className="flex h-5 w-4 shrink-0 items-center">
-                                      {scheduled.lastRun && <RunMark status={scheduled.lastRun.failed ? 'failed' : scheduled.lastRun.running ? 'running' : 'done'} />}
+                                      {/* Its last run's state; an empty outline for one that never ran, as its line says. */}
+                                      <RunMark status={scheduled.lastRun === undefined ? 'unknown' : scheduled.lastRun.failed ? 'failed' : scheduled.lastRun.running ? 'running' : 'done'} />
                                     </span>
                                     <div className="min-w-0 flex-1">
                                       <p className="truncate leading-5 max-md:line-clamp-2 max-md:whitespace-normal">
                                         <span className="font-medium">{title}</span>
-                                        {isOwn(scheduled) && <span className="text-xs text-muted-foreground"> {scheduled.onThisMachine ? 'only on this machine' : 'shared with the project'}</span>}
                                         {/* What it says it does, after its name and quieter: cut with it at the row's end, and whole in its panel. */}
                                         {scheduled.description && <span className="text-muted-foreground"> {scheduled.description}</span>}
                                       </p>
-                                      {!shown && (
-                                        <p className={cn(LINE, 'mt-1 text-xs text-faint-foreground')}>
-                                          <Picks scheduled={scheduled} schedulerModel={row.model} agents={agents} />
-                                          <Stands host={host} project={row.project} scheduled={scheduled} stopped={schedulerStopped(row)} />
-                                        </p>
-                                      )}
+                                      <Stands host={host} project={row.project} scheduled={scheduled} stopped={schedulerStopped(row)} />
                                     </div>
                                     {/* Centred on the name and its line. Under a mouse the presses take room only while the
                                         pointer or the keyboard is on the row, or while what they did is open; the switch is
@@ -357,7 +349,7 @@ export function AutomationsPage({ projects }: ModulePageProps) {
                                       )}
                                     </div>
                                   </div>
-                                  <div className="pl-7">
+                                  <div className="px-7">
                                     {shown && (
                                       <EditPanel
                                         project={row.project}
@@ -512,26 +504,13 @@ function SkillsLink() {
   )
 }
 
-/** An item of a row's line, with the "·" before it: the two wrap together, so no line ends in a "·", and {@link LINE} hides the one each line starts with. Its own later lines start where its words do, past that cut. */
-function Next({ children }: { children: ReactNode }) {
-  return (
-    <span className="relative pl-3">
-      <span aria-hidden className="absolute left-0 w-1 text-center text-muted-foreground">
-        ·
-      </span>
-      {children}
-    </span>
-  )
-}
-
-/** A row's line of {@link Next} items: moved left by one "·" and its space, and cut there, so no line starts with a "·". */
-const LINE = 'flex flex-wrap gap-x-2 -ml-3 [clip-path:inset(-0.5rem_-0.25rem_-0.5rem_0.25rem)]'
-
 /**
- * Where a row stands, after its picks in its line: when it last ran, that its last run failed, or that
- * it is still going, on or off, which opens that run; and what the scheduler last decided for it
- * while it is on, or, while the scheduler is stopped, that it does not start. A command the coding
- * agent cannot run says so whatever its switch.
+ * A row's second line, two facts at most, joined as a card's row joins its facts: where it stands (when it
+ * last ran, that its last run failed, or that it is still going, which opens that run), then what holds
+ * it or when it starts next. That is what the scheduler last decided for it while it is on, or, while
+ * the scheduler is stopped, that it does not start; a command the coding agent cannot run says so
+ * whatever its switch; else its pace. Its other picks are its Edit panel's. One line, cut, under a
+ * mouse; two on a phone.
  */
 function Stands({ host, project, scheduled, stopped }: { host: ModuleHost; project: ModuleProject; scheduled: SchedulerCommand; /** Why nothing starts by itself in its project, while that is so ({@link schedulerStopped}). */ stopped: string | undefined }) {
   const last = scheduled.lastRun
@@ -540,58 +519,27 @@ function Stands({ host, project, scheduled, stopped }: { host: ModuleHost; proje
   // Switched on, and still not starting: its reason is said as a stopped scheduler's is.
   const held = cannotRun(scheduled) !== undefined || (scheduled.on && heldBy(scheduled) !== undefined)
   return (
-    <>
-      <Next>
-        {last === undefined ? (
-          <span className="text-muted-foreground">Never ran</span>
-        ) : (
-          <Tooltip>
-            <TooltipTrigger render={<a href={host.agentHref(project.id, last.id)} onClick={inPlace(() => host.openAgent(project.id, last.id))} className={cn('focus-ring relative rounded-sm underline-offset-2 hover:underline after:absolute after:-inset-y-1.5 after:inset-x-0', last.failed ? 'text-danger' : 'hover:text-foreground')} />}>
-              {last.failed ? 'Last run failed' : last.running ? 'Running, started' : 'Last ran'} <span className="tabular-nums">{formatAge(last.at)}</span>
-            </TooltipTrigger>
-            <TooltipContent>{formatDateTime(last.at)}</TooltipContent>
-          </Tooltip>
-        )}
-      </Next>
-      {decision !== undefined && (
-        <Next>
-          <span className={cn(idle || held ? 'text-warning' : undefined)}>
-            <CodeWords text={decision} />
-          </span>
-        </Next>
+    <p className="mt-1 line-clamp-2 text-xs text-faint-foreground md:line-clamp-1">
+      {last === undefined ? (
+        <span>Never ran</span>
+      ) : (
+        <Tooltip>
+          <TooltipTrigger render={<a href={host.agentHref(project.id, last.id)} onClick={inPlace(() => host.openAgent(project.id, last.id))} className={cn('focus-ring relative rounded-sm underline-offset-2 hover:underline after:absolute after:-inset-y-1.5 after:inset-x-0', last.failed ? 'text-danger' : last.running ? 'text-info' : 'hover:text-foreground')} />}>
+            {last.failed ? 'Last run failed' : last.running ? 'Running, started' : 'Last ran'} <span className="tabular-nums">{formatAge(last.at)}</span>
+          </TooltipTrigger>
+          <TooltipContent>{formatDateTime(last.at)}</TooltipContent>
+        </Tooltip>
       )}
-    </>
-  )
-}
-
-/** A row's picks, first in its line: when it runs, how many agents at once when that is worth saying, which coding agent and model its runs are on, and how far they publish. A pick of the person's own, on a row that could follow its skill, says so. */
-function Picks({ scheduled, schedulerModel, agents }: { scheduled: SchedulerCommand; schedulerModel: string | undefined; agents: readonly AgentModels[] }) {
-  const follows = !isOwn(scheduled)
-  return (
-    <>
-      <Next>{pace(scheduled)}</Next>
-      {follows && ownPace(scheduled) && (
-        <Next>
-          <span className="text-info">your pick</span>
-        </Next>
+      <span aria-hidden className="mx-1.5">
+        ·
+      </span>
+      {decision !== undefined ? (
+        <span className={cn(idle || held ? 'text-warning' : undefined)}>
+          <CodeWords text={decision} />
+        </span>
+      ) : (
+        <span>{pace(scheduled)}</span>
       )}
-      {saysAtOnce(scheduled) && (
-        <>
-          <Next>{atOnceWords(atOnce(scheduled))}</Next>
-          {follows && scheduled.agents !== undefined && (
-            <Next>
-              <span className="text-info">your pick</span>
-            </Next>
-          )}
-        </>
-      )}
-      <Next>{runsOnWords(scheduled, schedulerModel, agents)}</Next>
-      {follows && (scheduled.runsOn !== undefined || scheduled.model !== undefined) && (
-        <Next>
-          <span className="text-info">your pick</span>
-        </Next>
-      )}
-      <Next>{publishes(scheduled)}</Next>
-    </>
+    </p>
   )
 }
