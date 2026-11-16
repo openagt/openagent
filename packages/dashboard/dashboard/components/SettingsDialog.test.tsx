@@ -141,7 +141,7 @@ describe('Settings › Appearance, its pictures and swatches', () => {
 })
 
 describe('Settings › Coding agent', () => {
-  test('a coding agent that is not installed says so in its row', async () => {
+  test('a coding agent that is not installed says so in its row, with the way to Permissions, where it is installed', async () => {
     const answered = onModels.getMockImplementation()!
     onModels.mockResolvedValue({ 'claude-code': { models: [], error: 'not found', missing: true }, codex: { models: [], error: 'not logged in' } } as never)
     prefsRead.mockResolvedValueOnce({})
@@ -149,6 +149,7 @@ describe('Settings › Coding agent', () => {
     try {
       open('agent')
       expect(await screen.findByText('Claude Code is not installed on this computer.')).toBeTruthy()
+      expect(screen.getByRole('link', { name: 'Install it on Permissions' }).getAttribute('href')).toBe('/permissions')
     } finally {
       onModels.mockImplementation(answered)
     }
