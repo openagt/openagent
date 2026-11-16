@@ -1,7 +1,7 @@
 import { Check } from 'lucide-react'
 import { PUBLISH_LABELS, type PublishPick } from '../../src/client.js'
 import { cn } from '../lib/utils.js'
-import { rowButtonClass, RowChevron } from './ui/row-item.js'
+import { rowButtonClass, RowChevron, rowWideClass } from './ui/row-item.js'
 import { OptionLabel } from './ui/option-label.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import {
@@ -62,11 +62,15 @@ export function AutoMenu({
               type="button"
               disabled={busy}
               // A branch's name can run long: of a set width at most, as the branch button is, phone too.
-              className={cn(rowButtonClass, 'max-w-[20rem]!')}
+              // In a narrow box it is the item of the foot's right that gives way: its pick first, then cut.
+              className={cn(rowButtonClass, 'max-w-[20rem]! @max-xl:shrink!')}
             />
           }
         >
-          <span className="truncate">{`Auto: ${PUBLISH_LABELS[publish]}${into ? ` → ${into.into}` : ''}`}</span>
+          <span className="truncate">
+            <span className={rowWideClass}>Auto:</span>
+            {` ${PUBLISH_LABELS[publish]}${into ? ` → ${into.into}` : ''}`}
+          </span>
           <RowChevron />
         </TooltipTrigger>
         <TooltipContent>{`What the agent does by itself when it finishes.${into ? ` The pull request goes into ${into.into}.` : ''}`}</TooltipContent>

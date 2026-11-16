@@ -5,7 +5,7 @@ import { DEFAULT_AGENT } from '../../src/client.js'
 import { AGENTS_PAGE } from '../lib/use-route.js'
 import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
 import { cn } from '../lib/utils.js'
-import { RowSaid, rowButtonClass, RowChevron } from './ui/row-item.js'
+import { RowSaid, rowButtonClass, RowChevron, rowWideClass } from './ui/row-item.js'
 import { useAgentName } from './AgentsPage.js'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip.js'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu.js'
@@ -27,7 +27,7 @@ export function AgentMenu({ agents, picked, busy, onPick }: { agents: readonly A
       <Tooltip>
         <TooltipTrigger render={<DropdownMenuTrigger type="button" disabled={busy} aria-label={`Agent: ${on.name}`} className={rowButtonClass} />}>
           <Bot className="size-4 shrink-0" aria-hidden />
-          <span className="max-w-32 truncate">{on.name}</span>
+          <span className={cn('max-w-32 truncate', rowWideClass)}>{on.name}</span>
           <RowChevron />
         </TooltipTrigger>
         <TooltipContent>{said}</TooltipContent>
@@ -65,7 +65,7 @@ export function AgentOff({ agent }: { agent: string | undefined }) {
     <RowSaid tip={`This session is on the agent ${name}: its skills and accounts`}>
       <Bot className="size-4 shrink-0" aria-hidden />
       <span className="sr-only">Agent: </span>
-      <span className="max-w-32 truncate">{name}</span>
+      <span className={cn('max-w-32 truncate', rowWideClass)}>{name}</span>
     </RowSaid>
   )
 }
