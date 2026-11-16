@@ -82,7 +82,7 @@ export function Tabs<T extends string>({ tabs, value, onChange, label }: { tabs:
           role="tab"
           aria-selected={tab.id === value}
           onClick={() => onChange(tab.id)}
-          className={cn('focus-ring -mb-px rounded-t-sm border-b-2 pt-1 pb-2.5 text-sm font-medium transition-colors max-md:pt-3 max-md:pb-3', tab.id === value ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground pointer-fine:hover:text-foreground')}
+          className={cn('focus-ring -mb-px rounded-t-sm border-b-2 pt-1 pb-2 text-sm font-medium transition-colors max-md:pt-3 max-md:pb-3', tab.id === value ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground pointer-fine:hover:text-foreground')}
         >
           {tab.title}
         </button>
