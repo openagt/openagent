@@ -25,8 +25,8 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-const panel = (props: { events?: OpenAgentEvent[]; subagents?: AgentMeta[]; live?: boolean; onOpenAgent?: (id: string) => void }) => (
-  <SubagentsPanel projectId="p1" agentId="main" events={props.events ?? []} subagents={props.subagents ?? []} live={props.live ?? true} onOpenAgent={props.onOpenAgent} />
+const panel = (props: { events?: OpenAgentEvent[]; subagents?: AgentMeta[]; live?: boolean; onOpenAgent?: (id: string) => void; agentId?: string }) => (
+  <SubagentsPanel projectId="p1" agentId={props.agentId ?? 'main'} events={props.events ?? []} subagents={props.subagents ?? []} live={props.live ?? true} onOpenAgent={props.onOpenAgent} />
 )
 
 /** A subagent that is a run of its own, started at `at` (10:00 plus minutes) and, unless working, ended `ran` minutes later. */
@@ -71,7 +71,7 @@ describe('the list of a run\'s subagents', () => {
     vi.setSystemTime(new Date('2026-10-01T10:30:00.000Z'))
   })
 
-  test('those at work first, then those that ended, each in the order it started: its name, its state and how long it worked, a failed run with why', () => {
+  test('those that failed first, then those at work, then those that ended, each in the order it started: its name, its state and how long it worked, a failed run with why', () => {
     const subagents = [run(1, 'Read the theme tokens', 'done', 3), run(24, 'Account page tests', 'running'), run(5, 'Visual check in a browser', 'failed', 2)]
     const events: OpenAgentEvent[] = [
       ...call('toolu_a', 'Find colours written by hand', 28),
@@ -79,13 +79,13 @@ describe('the list of a run\'s subagents', () => {
       { kind: 'driver', event: { type: 'start', prompt: `The run ${subagents[2]!.id}, started for this run, ended failed: Chrome did not start.` }, at: '2026-10-01T10:08:00.000Z' },
     ]
     render(panel({ events, subagents }))
-    expect(screen.getAllByRole('heading').map(h => h.textContent)).toEqual(['Working', 'Ended'])
+    expect(screen.getAllByRole('heading').map(h => h.textContent)).toEqual(['Failed', 'Working', 'Ended'])
     expect(rowNames()).toEqual([
+      'Map the order table · failed · 2m',
+      'Visual check in a browser · failed · 2m · Chrome did not start',
       'Account page tests · working · 6m',
       'Find colours written by hand · working · 2m',
       'Read the theme tokens · done · 3m',
-      'Map the order table · failed · 2m',
-      'Visual check in a browser · failed · 2m · Chrome did not start',
     ])
     expect(screen.getByText('Chrome did not start')).toBeTruthy()
     // Nothing is open until a row is pressed.
@@ -191,19 +191,44 @@ describe('the list of a run\'s subagents', () => {
     await waitFor(() => expect(document.activeElement).toBe(within(screen.getByRole('region', { name: 'Print styles' })).getByRole('button', { name: 'Open its page' })))
   })
 
-  test('past eight rows in all, the ended ones fold into one row that says how many and opens them', () => {
+  test('past eight rows in all, the ended ones fold into one row that says how many and opens them; once pressed the fold is the person\'s, for the page', () => {
     const events = Array.from({ length: 8 }, (_, at) => call(`toolu_${at}`, `Ended ${at}`, at, 'ended')).flat()
-    render(panel({ subagents: [run(24, 'Account page tests', 'running')], events }))
+    // A page of its own: the person's fold is kept for the page.
+    render(panel({ subagents: [run(24, 'Account page tests', 'running')], events, agentId: 'folds' }))
     const fold = screen.getByRole('button', { name: 'Ended · 8' })
     expect(fold.getAttribute('aria-expanded')).toBe('false')
     expect(rowNames()).toEqual(['Account page tests · working · 6m'])
     fireEvent.click(fold)
     expect(rowNames()).toHaveLength(9)
     cleanup()
+    render(panel({ subagents: [run(24, 'Account page tests', 'running')], events, agentId: 'folds' }))
+    expect(screen.getByRole('button', { name: 'Ended · 8' }).getAttribute('aria-expanded')).toBe('true')
+    cleanup()
     // Eight in all stay open.
     render(panel({ events: events.slice(0, 14) }))
     expect(screen.queryByRole('button', { name: /^Ended ·/ })).toBeNull()
     expect(rowNames()).toHaveLength(7)
+  })
+
+  test('forty, two failed and one asking: those three are the first rows, and the ended ones are folded', () => {
+    const ended = Array.from({ length: 37 }, (_, at) => run(at % 30, `Ended ${at}`, 'done', 0))
+    const subagents = [...ended.map((sub, at) => ({ ...sub, id: `${sub.id}-${at}` })), run(20, 'Visual check in a browser', 'failed', 1), run(22, 'Pick a palette', 'waiting'), run(21, 'Map the pages', 'failed', 1)]
+    render(panel({ subagents }))
+    expect(screen.getAllByRole('heading').map(h => h.textContent)).toEqual(['Needs you', 'Failed'])
+    expect(rowNames().map(name => name?.split(' · ')[0])).toEqual(['Pick a palette', 'Visual check in a browser', 'Map the pages'])
+    expect(screen.getByRole('button', { name: 'Ended · 37' }).getAttribute('aria-expanded')).toBe('false')
+  })
+
+  test('a ninth row arriving while the pointer is in the list folds nothing until the pointer leaves', () => {
+    const ended = Array.from({ length: 7 }, (_, at) => run(at, `Ended ${at}`, 'done', 1))
+    const list = render(panel({ subagents: [run(24, 'Account page tests', 'running'), ...ended] }))
+    const under = screen.getByRole('button', { name: /^Ended 3/ })
+    pointTo(under)
+    list.rerender(panel({ subagents: [run(24, 'Account page tests', 'running'), ...ended, run(26, 'Print styles', 'running')] }))
+    expect(screen.queryByRole('button', { name: /^Ended ·/ })).toBeNull()
+    expect(rowButtons()[4]).toBe(under)
+    pointAway(under)
+    expect(screen.getByRole('button', { name: 'Ended · 7' }).getAttribute('aria-expanded')).toBe('false')
   })
 
   test('under the pointer a card says the row whole: its name, what it runs on, and how it stands', async () => {

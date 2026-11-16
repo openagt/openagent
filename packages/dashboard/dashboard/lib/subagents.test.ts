@@ -1,6 +1,6 @@
 import type { AgentMeta, OpenAgentEvent } from '../../src/index.js'
 import { describe, expect, test } from 'vitest'
-import { callSubagents, holdsMainAgent, subagentWait, isOpenSubagent, nestRows, runRow, subagentEnd, subagentEvents, drivesSubagents, stepWords, subagentSteps, subagentStartedAt, subagentsOf, taskLabel, type SubagentStep } from './subagents.js'
+import { arrange, callSubagents, holdsMainAgent, subagentWait, isOpenSubagent, nestRows, runRow, subagentEnd, subagentEvents, drivesSubagents, stepWords, subagentSteps, subagentStartedAt, subagentsOf, taskLabel, type SubagentRow, type SubagentStep } from './subagents.js'
 
 function agent(id: string, over: Partial<AgentMeta> = {}): AgentMeta {
   return { status: 'done', id, startedAt: '2026-10-01T10:00:00.000Z', updatedAt: '2026-10-01T10:00:00.000Z', ...over }
@@ -254,5 +254,34 @@ describe('subagentWait', () => {
     const start = ev({ type: 'subagent', id: 'item_1:t1', status: 'working' }, '00:03')
     const back = ev({ type: 'output', id: 'item_1', text: 'done' }, '00:09')
     expect(subagentWait([prompt, start, call, back]).waiting).toBe(true)
+  })
+})
+
+describe('arrange', () => {
+  /** A row of `status` that started `at` minutes into the hour. */
+  const row = (key: string, status: string, at: number): SubagentRow => ({ key, name: key, status, working: status === 'running', startedAt: `2026-10-01T10:${String(at).padStart(2, '0')}:00.000Z` })
+
+  test('forty rows, two failed and one asking: those three lead, the asking one first, and the ended ones fold', () => {
+    const rows = Array.from({ length: 37 }, (_, at) => row(`ended ${at}`, at % 2 ? 'done' : 'stopped', at))
+    rows.push(row('late failure', 'failed', 50), row('asks', 'waiting', 45), row('early failure', 'failed', 40))
+    const { parts, folds } = arrange(rows)
+    expect(parts.map(part => [part.name, part.keys.slice(0, 2)])).toEqual([
+      ['Needs you', ['asks']],
+      ['Failed', ['early failure', 'late failure']],
+      ['Ended', ['ended 0', 'ended 1']],
+    ])
+    expect(folds).toBe(true)
+  })
+
+  test('each part only when it holds a row, its rows by start; those at work and one whose computer does not answer work; eight in all fold nothing', () => {
+    const { parts, folds } = arrange([row('b', 'running', 5), row('a', 'unknown', 2), row('c', 'done', 1)])
+    expect(parts).toEqual([
+      { name: 'Working', keys: ['a', 'b'] },
+      { name: 'Ended', keys: ['c'] },
+    ])
+    expect(folds).toBe(false)
+    expect(arrange(Array.from({ length: 8 }, (_, at) => row(`${at}`, 'done', at))).folds).toBe(false)
+    // Nine with none ended: nothing to fold.
+    expect(arrange(Array.from({ length: 9 }, (_, at) => row(`${at}`, 'failed', at))).folds).toBe(false)
   })
 })

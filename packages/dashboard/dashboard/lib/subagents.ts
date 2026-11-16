@@ -215,6 +215,38 @@ export interface SubagentRow {
   call?: CallSubagent
 }
 
+/** The parts of the pane's list, in their order: what waits on the person, what failed, what works, what ended. */
+export type ListPart = 'Needs you' | 'Failed' | 'Working' | 'Ended'
+
+/** How many rows the pane's list holds before its ended ones fold into one line. */
+export const FOLD_PAST = 8
+
+/** Which rows stand in which part of the pane's list, by key, and whether its ended ones fold. */
+export interface Arrangement {
+  parts: { name: ListPart; keys: string[] }[]
+  folds: boolean
+}
+
+/** Where a subagent's row stands: "Ended" only for one that ended done or stopped. */
+function partOf(row: SubagentRow): ListPart {
+  if (row.status === 'waiting') return 'Needs you'
+  if (row.status === 'failed') return 'Failed'
+  return row.status === 'done' || row.status === 'stopped' ? 'Ended' : 'Working'
+}
+
+const PARTS: readonly ListPart[] = ['Needs you', 'Failed', 'Working', 'Ended']
+
+/**
+ * The pane's list of a run's subagents: each part that holds a row, in {@link PARTS}' order, its rows
+ * in the order they started; past {@link FOLD_PAST} rows in all, the ended ones fold. A failed one
+ * is never folded: its main agent was told and goes on, but the person was not.
+ */
+export function arrange(rows: readonly SubagentRow[]): Arrangement {
+  const started = [...rows].sort((a, b) => (a.startedAt < b.startedAt ? -1 : a.startedAt > b.startedAt ? 1 : 0))
+  const parts = PARTS.map(name => ({ name, keys: started.filter(row => partOf(row) === name).map(row => row.key) })).filter(part => part.keys.length > 0)
+  return { parts, folds: rows.length > FOLD_PAST && parts.some(part => part.name === 'Ended') }
+}
+
 /** A subagent run as its row. */
 export function runRow(agent: AgentMeta, doing: AgentDoing | undefined): SubagentRow {
   const working = agent.status === 'running'

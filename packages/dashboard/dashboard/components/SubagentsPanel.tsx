@@ -4,7 +4,7 @@ import type { AgentMeta, OpenAgentEvent } from '../../src/index.js'
 import { onAgent } from '../rpc/reads.js'
 import { panesPage } from '../lib/panes.js'
 import { revealSubagent, useRevealedSubagent } from '../lib/reveal-change.js'
-import { failureReasons, subagentRows, subagentTranscript, type SubagentRow } from '../lib/subagents.js'
+import { arrange, failureReasons, subagentRows, subagentTranscript, type SubagentRow } from '../lib/subagents.js'
 import { formatDuration, formatElapsed, formatSince } from '../lib/format-date.js'
 import { anyModelName, useModels } from '../lib/models.js'
 import { runTone, runWord } from '../lib/run-words.js'
@@ -21,13 +21,13 @@ import { RunMark } from './RunMark.js'
 import { tokenWords } from './ToolCalls.js'
 
 // The pane of a run's subagents, beside its chat: a calm list of them, one line each (its state's
-// mark, its name, how long it worked), those at work first; and under the list the one a row opened,
-// here or in the chat, as Claude Code on the web shows a subagent: the whole prompt it was given,
-// what it runs on, what it said and did, and what that came to. Under the pointer a working row's
-// time gives way to its Stop, and a card says it whole. A subagent that is a run of its own is read
-// from its own log, can be stopped, and its page is one click away; one the coding agent started
-// inside its session is read out of the main agent's log, where its events are, and has no page,
-// no branch and no Stop of its own.
+// mark, its name, how long it worked), what waits on the person and what failed first; and under
+// the list the one a row opened, here or in the chat, as Claude Code on the web shows a subagent:
+// the whole prompt it was given, what it runs on, what it said and did, and what that came to. Under
+// the pointer a working row's time gives way to its Stop, and a card says it whole. A subagent that
+// is a run of its own is read from its own log, can be stopped, and its page is one click away; one
+// the coding agent started inside its session is read out of the main agent's log, where its events
+// are, and has no page, no branch and no Stop of its own.
 
 /** How often a working subagent's own log is read again: the runs poll's own pace. */
 const TRANSCRIPT_EVERY_MS = 2_000
@@ -35,8 +35,6 @@ const TRANSCRIPT_EVERY_MS = 2_000
 const ENDED_EVERY_MS = 60_000
 /** How often a working row's time is said again: it counts in minutes. */
 const TICK_MS = 15_000
-/** How many rows the list holds before the ended ones fold into one. */
-const FOLD_PAST = 8
 const NO_EVENTS: OpenAgentEvent[] = []
 
 export function SubagentsPanel({
@@ -92,6 +90,7 @@ export function SubagentsPanel({
       <SubagentList
         ref={list}
         fold={fold}
+        page={page}
         rows={rows}
         reasons={reasons}
         shown={shown?.key}
@@ -139,17 +138,21 @@ function useCut(ref: RefObject<HTMLElement | null>, text: string): boolean {
   return cut
 }
 
-const byStart = (a: SubagentRow, b: SubagentRow): number => (a.startedAt < b.startedAt ? -1 : a.startedAt > b.startedAt ? 1 : 0)
+/** Whether the person opened the ended ones' fold, by the run's page: theirs once pressed, for the page's life. */
+const foldsOpened = new Map<string, boolean>()
 
 /**
- * The run's subagents, those at work over those that ended; past {@link FOLD_PAST} rows in all, the
- * ended ones fold into one. While the person is in it, it holds still (`useHold`): a row that ends
- * keeps its place and loses its Stop, so the Stop under the pointer stays its own row's.
+ * The run's subagents, by {@link arrange}: what waits on the person, what failed, what works, what
+ * ended, those past eight rows folded. While the person is in it, it holds still (`useHold`): a row
+ * that ends keeps its place and loses its Stop, so the Stop under the pointer stays its own row's,
+ * and the fold neither closes nor opens under the hand; the person's own press on it applies at once.
  */
-function SubagentList({ ref, fold, rows, reasons, shown, projectId, onPick, onStop, className }: {
+function SubagentList({ ref, fold, page, rows, reasons, shown, projectId, onPick, onStop, className }: {
   ref: RefObject<HTMLDivElement | null>
   /** The fold's line, while it is drawn. */
   fold: Ref<HTMLButtonElement>
+  /** The run's page, which keeps the person's fold. */
+  page: string
   rows: readonly SubagentRow[]
   reasons: ReadonlyMap<string, string>
   shown: string | undefined
@@ -160,38 +163,36 @@ function SubagentList({ ref, fold, rows, reasons, shown, projectId, onPick, onSt
   className: string
 }) {
   useTicking(rows.some(row => row.working))
-  const [endedOpen, setEndedOpen] = useState(false)
-  // Which rows stand where, held while the person is in the list; each row drawn from its newest state.
-  const arrangement = useMemo(
-    () => ({
-      working: rows.filter(row => row.working).sort(byStart).map(row => row.key),
-      ended: rows.filter(row => !row.working).sort(byStart).map(row => row.key),
-      folds: rows.length > FOLD_PAST,
-    }),
-    [rows],
-  )
-  const held = useHold(ref, arrangement)
+  const [endedOpen, setEndedOpen] = useState(() => foldsOpened.get(page) ?? false)
+  const pressFold = () => {
+    foldsOpened.set(page, !endedOpen)
+    setEndedOpen(!endedOpen)
+  }
+  // Which rows stand in which part, held while the person is in the list; each row drawn from its newest state.
+  const held = useHold(ref, useMemo(() => arrange(rows), [rows]))
   const byKey = new Map(rows.map(row => [row.key, row]))
-  const working = held.working.flatMap(key => byKey.get(key) ?? [])
-  const ended = held.ended.flatMap(key => byKey.get(key) ?? [])
   const item = (row: SubagentRow) => <SubagentItem key={row.key} row={row} reason={reasons.get(row.key)} open={row.key === shown} projectId={projectId} onPick={onPick} onStop={() => onStop(row.key)} />
   return (
     <div ref={ref} className={cn('min-h-0 overflow-y-auto px-2 pt-2', className)}>
-      {working.length > 0 && <Part name="Working">{working.map(item)}</Part>}
-      {ended.length > 0 &&
-        (held.folds ? (
-          <section aria-label="Ended">
+      {held.parts.map(({ name, keys }) => {
+        const drawn = keys.flatMap(key => byKey.get(key) ?? [])
+        if (drawn.length === 0) return null
+        return name === 'Ended' && held.folds ? (
+          <section key={name} aria-label="Ended">
             {/* A row in the list's place: its words on the names' edge. */}
-            <button ref={fold} type="button" aria-expanded={endedOpen} onClick={() => setEndedOpen(open => !open)} className={cn(navRowClass(false), 'text-muted-foreground')}>
+            <button ref={fold} type="button" aria-expanded={endedOpen} onClick={pressFold} className={cn(navRowClass(false), 'text-muted-foreground')}>
               <span aria-hidden className="w-4 shrink-0" />
-              <span className="min-w-0 flex-1 text-start">Ended · {ended.length}</span>
+              <span className="min-w-0 flex-1 text-start">Ended · {drawn.length}</span>
               <ChevronRight aria-hidden className={cn('transition-transform', endedOpen && 'rotate-90')} />
             </button>
-            {endedOpen && <ul>{ended.map(item)}</ul>}
+            {endedOpen && <ul>{drawn.map(item)}</ul>}
           </section>
         ) : (
-          <Part name="Ended">{ended.map(item)}</Part>
-        ))}
+          <Part key={name} name={name}>
+            {drawn.map(item)}
+          </Part>
+        )
+      })}
       {/* The list's foot, 16 under its last row: while more is under it, what is cut there fades out rather than ending on a line. */}
       <div aria-hidden className="pointer-events-none sticky bottom-0 h-4 bg-gradient-to-t from-card to-transparent" />
     </div>
@@ -221,7 +222,8 @@ const capital = (words: string): string => words.charAt(0).toUpperCase() + words
 
 /**
  * One subagent, one line: its state's mark, its name and how long it worked, the compact row of the
- * pane's lists (ui/look/spacing.md 3). One that failed says why under its name, where that is known.
+ * pane's lists (ui/look/spacing.md 3). A run that failed says why under its name, two lines from its
+ * first frame so it does not grow when it is told; a failed call is one line, since nothing says why.
  * Under a fine pointer a working run's time gives way to its Stop; on a phone its Stop is in its open part.
  */
 function SubagentItem({ row, reason, open, projectId, onPick, onStop }: { row: SubagentRow; reason: string | undefined; open: boolean; projectId: string; onPick: (key: string) => void; onStop: () => void }) {
@@ -231,6 +233,8 @@ function SubagentItem({ row, reason, open, projectId, onPick, onStop }: { row: S
   const stoppable = row.working && runId !== undefined
   const time = ranFor(row)
   const second = error ?? reason
+  // A run's failure is told it by a line its end sends: its row keeps the room for it from its first frame.
+  const twoLines = second !== undefined || (runId !== undefined && row.status === 'failed')
   const model = row.model !== undefined ? [anyModelName(models, row.model), row.agent?.effort].filter(Boolean).join(' · ') : undefined
   const state = row.working ? `${capital(runWord(row.status))} · ${time}` : time !== undefined ? `${capital(runWord(row.status))} · ran ${time}` : capital(runWord(row.status))
   const name = useRef<HTMLSpanElement>(null)
@@ -247,7 +251,7 @@ function SubagentItem({ row, reason, open, projectId, onPick, onStop }: { row: S
               aria-expanded={open}
               aria-label={[row.name, runWord(row.status), time, second].filter(Boolean).join(' · ')}
               onClick={() => onPick(row.key)}
-              className={cn(navRowClass(open), second !== undefined && 'items-start md:h-12 md:py-1.5 max-md:h-16 max-md:py-3')}
+              className={cn(navRowClass(open), twoLines && 'items-start md:h-12 md:py-1.5 max-md:h-16 max-md:py-3')}
             />
           }
         >
