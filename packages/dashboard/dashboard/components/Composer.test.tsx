@@ -536,11 +536,11 @@ describe('the rows around the box', () => {
     // Said in words, drawn as every item of the rows is: no border of its own.
     expect(runOn().textContent).toBe('This machine')
     expect(runOn().className).not.toContain('border')
-    // Each one line of a fixed height: a longer label at the left cannot move the select or the page.
-    for (const row of [above, under]) {
-      expect(row.className).toContain('h-8')
-      expect(row.className).not.toContain('flex-wrap')
-    }
+    // Each one line of a fixed height: a longer label at the left cannot move the select or the page. The box's last
+    // row is as high as its items, so what stands at its end is as far from the box's foot as from its right.
+    expect(above.className).toContain('h-8')
+    expect(under.className).toContain('h-7')
+    for (const row of [above, under]) expect(row.className).not.toContain('flex-wrap')
     expect(place.parentElement!.className).toContain('min-w-0')
     expect(select.parentElement!.className).toContain('shrink-0')
   })

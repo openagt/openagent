@@ -510,9 +510,10 @@ export const Composer = forwardRef<ComposerHandle, {
 
           {/* How it runs, the box's last line: the commands menu (+) and the caller's controls at the
               left, the model at the right. The left side is the one that gives way: a longer label there
-              never moves the model or the page below. */}
+              never moves the model or the page below. As high as its items, so the launcher's painted press
+              ends as far from the box's foot as from its right; the room it gives up is over it. */}
           <TooltipsPastBox value={surface}>
-            <div className={cn('mt-1', rowClass)}>
+            <div className={cn('mt-2', rowClass, 'h-7')}>
               <div className={rowLeftClass}>
                 {commandsEl}
                 {controls}
