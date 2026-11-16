@@ -33,7 +33,7 @@ export function UpdateTicketsButton({
   /** When tickets last came across, so the tooltip can promise the incremental update (#1265). */
   lastImportedAt?: string | undefined
   disabled?: boolean | undefined
-  variant?: 'default' | 'outline' | undefined
+  variant?: 'default' | 'secondary' | 'outline' | undefined
   size?: 'sm' | 'default' | undefined
   className?: string | undefined
 }) {
