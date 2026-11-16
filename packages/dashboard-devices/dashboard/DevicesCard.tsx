@@ -32,7 +32,8 @@ export function DevicesCard(_props: ModuleCardProps) {
       <Slot of={{ state: machines === undefined ? 'unknown' : state, value: machines }} shape={<PanelShape />}>
         {() =>
           machines && (
-            <Panel>
+            // The card's own width lays out a computer's row (Row), not the window's: a quarter of the Overview is narrower than its default third.
+            <Panel className="@container/devices">
               <Row kind="computer" name={machines.name ?? 'This computer'} note="this computer" online health={machines.health} />
               {machines.machines.map(machine => (
                 <Row
@@ -66,24 +67,26 @@ export function DevicesCard(_props: ModuleCardProps) {
  * One computer, a row of the panel: its mark, with whether it answers on it, its name over where it
  * is, and at the end, when it answers and says, three small rings, how much of its memory and disk is
  * in use and how busy it is, each with its share inside and its name under; when it does not answer,
- * that it is offline. Laid out to fit a quarter of the Overview: the name gives up its width, the rings never.
+ * that it is offline. In a card under 16.5rem (a quarter of the Overview), where the name and where it is would be cut
+ * beside the rings, the rings stand on a line of their own under them, so neither is cut.
  */
 function Row({ kind, name, note, online, health, behind }: { kind: MachineKind; name: string; note?: string | undefined; online: boolean; health: Health | undefined; behind?: string | undefined }) {
+  const rings = online && health && (
+    <span className="flex gap-1.5">
+      <Gauge label="RAM" share={share(health.memory)} said={`${size(health.memory.used)} of ${size(health.memory.total)} in use`} />
+      {health.disk && <Gauge label="Disk" share={share(health.disk)} said={`${size(health.disk.used)} of ${size(health.disk.total)} in use`} />}
+      {health.load !== undefined && <Gauge label="CPU" share={Math.min(100, health.load)} said={`its processors ${health.load}% busy, lately`} />}
+    </span>
+  )
   return (
     <PanelRow
+      // The rings are the row's last cell: in a narrow card it takes a grid row of its own across the card, starting where the name does.
+      className={rings ? '@max-[16.5rem]/devices:[&>span:last-child]:col-span-full @max-[16.5rem]/devices:[&>span:last-child]:row-start-2 @max-[16.5rem]/devices:[&>span:last-child]:mx-0 @max-[16.5rem]/devices:[&>span:last-child]:mt-3 @max-[16.5rem]/devices:[&>span:last-child]:mb-0 @max-[16.5rem]/devices:[&>span:last-child]:pl-7 @max-[16.5rem]/devices:[&>span:last-child]:justify-items-start @max-[16.5rem]/devices:[&>span:last-child>span]:mt-0' : ''}
       state={<MachineMark kind={kind} online={online} labelled />}
       title={name}
       titleHint={name}
       meta={[behind !== undefined ? <span className="text-warning">OpenAgent {behind}: update it</span> : !online ? 'offline' : note]}
-      fact={
-        online && health ? (
-          <span className="flex gap-1.5">
-            <Gauge label="RAM" share={share(health.memory)} said={`${size(health.memory.used)} of ${size(health.memory.total)} in use`} />
-            {health.disk && <Gauge label="Disk" share={share(health.disk)} said={`${size(health.disk.used)} of ${size(health.disk.total)} in use`} />}
-            {health.load !== undefined && <Gauge label="CPU" share={Math.min(100, health.load)} said={`its processors ${health.load}% busy, lately`} />}
-          </span>
-        ) : undefined
-      }
+      fact={rings || undefined}
     />
   )
 }

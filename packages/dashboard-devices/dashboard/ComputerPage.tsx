@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { Monitor, Server } from 'lucide-react'
-import { Button, ConfirmDialog, Input, Switch, useOpenAgentDown } from '@openagt/dashboard/module'
+import { Button, ConfirmDialog, Input, SettingsRow, Switch, useOpenAgentDown } from '@openagt/dashboard/module'
 import { addDevice, removeDevice } from './devices.js'
 import { hasDoor, reachedAt, type ComputerItem } from './model.js'
 import { ComputersThrough } from './ServerPage.js'
-import { Head, Part, Problem, Removal, State, SwitchLine, useChange } from './parts.js'
+import { Head, Part, Problem, Removal, State, useChange } from './parts.js'
 import type { Devices } from './use-devices.js'
 
 // A computer's own page in Settings › Devices: whether this computer's runs go there, whether it
@@ -51,21 +51,25 @@ export function ComputerPage({ d, item, onBack, onSetUp }: { d: Devices; item: C
       />
       {item.line ? (
         <Part>
-          <p className="text-xs text-muted-foreground">Your computer. It keeps a line open to this server. Removed here, it is back when it calls again: to take it out, remove its device from the people's devices.</p>
+          <p className="text-sm text-muted-foreground">Your computer. It keeps a line open to this server. Removed here, it is back when it calls again: to take it out, remove its device from the people's devices.</p>
         </Part>
       ) : (
       <Part title="Runs">
-        <SwitchLine label={`Your runs can go to ${item.name}`} words={`Pick it under "Run on". They use ${item.name}'s logins.`}>
-          <Switch
-            aria-label={`Your runs can go to ${item.name}`}
-            checked={machine !== undefined}
-            disabled={busy || down}
-            onCheckedChange={on => {
-              if (on) setPasting(true)
-              else if (machine) void act(async () => ((await d.removeMachine(machine.id)) ? { ok: true } : { ok: false, error: `${item.name} could not be taken off.` }))
-            }}
-          />
-        </SwitchLine>
+        <SettingsRow
+          label={`Your runs can go to ${item.name}`}
+          description={`Pick it under "Run on". They use ${item.name}'s logins.`}
+          control={
+            <Switch
+              aria-label={`Your runs can go to ${item.name}`}
+              checked={machine !== undefined}
+              disabled={busy || down}
+              onCheckedChange={on => {
+                if (on) setPasting(true)
+                else if (machine) void act(async () => ((await d.removeMachine(machine.id)) ? { ok: true } : { ok: false, error: `${item.name} could not be taken off.` }))
+              }}
+            />
+          }
+        />
         {pasting && !machine && (
           <form
             className="flex flex-wrap items-end gap-2 pl-0"
@@ -85,28 +89,36 @@ export function ComputerPage({ d, item, onBack, onSetUp }: { d: Devices; item: C
         )}
         {/* A computer reached through a server is reached from that server: its runs come here that way. */}
         {!through && (
-          <SwitchLine label={`${item.name} can start runs here`} words={door ? "They use this computer's logins." : machine ? `Off. Turn it on: ${item.name} is told this computer's link, and saves it.` : "They use this computer's logins."}>
-            <Switch aria-label={`${item.name} can start runs here`} checked={door !== undefined} disabled={busy || down} onCheckedChange={on => void act(on ? letIn : removeHere)} />
-          </SwitchLine>
+          <SettingsRow
+            label={`${item.name} can start runs here`}
+            description={door ? "They use this computer's logins." : machine ? `Off. Turn it on: ${item.name} is told this computer's link, and saves it.` : "They use this computer's logins."}
+            control={
+              <Switch aria-label={`${item.name} can start runs here`} checked={door !== undefined} disabled={busy || down} onCheckedChange={on => void act(on ? letIn : removeHere)} />
+            }
+          />
         )}
       </Part>
       )}
       {machine && hasDoor(machine) && <ComputersThrough host={host} machine={machine} busy={busy} everyMs={30_000} />}
       {!through && !item.line && (
         <Part title="Who can use it">
-          <p className="text-sm">Only you.</p>
-          <p className="text-xs text-muted-foreground">{`Other people cannot start runs on ${item.name}: on a personal computer they would run as you, with your logins. To share it, set it up as a server: each person then gets a user of their own on it. Linux for now.`}</p>
-          <Button variant="secondary" onClick={onSetUp}>
-            <Server className="size-4" aria-hidden />
-            Set it up as a server
-          </Button>
+          <SettingsRow
+            label="Only you"
+            description={`Other people cannot start runs on ${item.name}: on a personal computer they would run as you, with your logins. To share it, set it up as a server: each person then gets a user of their own on it. Linux for now.`}
+            control={
+                <Button variant="secondary" onClick={onSetUp}>
+                  <Server className="size-4" aria-hidden />
+                  Set it up as a server
+                </Button>
+            }
+          />
         </Part>
       )}
-      <Removal said="Both computers forget each other. Nothing is deleted.">
+      <Removal label="Remove computer" said="Both computers forget each other. Nothing is deleted.">
         <ConfirmDialog
           trigger={
-            <Button variant="secondary" className="text-danger" disabled={busy}>
-              {`Remove ${item.name}`}
+            <Button variant="secondary" className="text-danger" disabled={busy} aria-label={`Remove ${item.name}`}>
+              Remove
             </Button>
           }
           title={`Remove ${item.name}?`}

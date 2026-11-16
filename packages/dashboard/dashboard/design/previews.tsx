@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Button } from '../components/ui/button.js'
+import { Segmented } from '../components/ui/segmented.js'
 import { Card, CardContent, CardHeader, CardTitle, PageLink } from '../components/ui/card.js'
 import { Input } from '../components/ui/input.js'
 import { Badge } from '../components/ui/badge.js'
@@ -22,7 +23,8 @@ import { ComposedField, ComposedFieldFoot, ComposedFieldInput } from '../compone
 import { Empty } from '../components/ui/empty.js'
 import { FilterChips } from '../components/FilterChips.js'
 import { RowShapes, Slot } from '../components/ui/slot.js'
-import { ChevronRight, CornerDownLeft, Ellipsis, Folder, Play, Trash2 } from 'lucide-react'
+import { ChevronRight, CornerDownLeft, Ellipsis, Folder, Monitor, Play, Smartphone, Trash2 } from 'lucide-react'
+import { SettingsItem, SettingsItems, SettingsRow, SettingsSection } from '../components/SettingsRows.js'
 import { JumpPalette, openJump } from '../components/JumpPalette.js'
 import { ShortcutList } from '../components/ShortcutList.js'
 import type { AgentMeta } from '../../src/index.js'
@@ -331,6 +333,7 @@ const UNITS = [
 
 /** The fields a form is made of. Every one is the shipped component; the select's list is portalled at runtime, so only its trigger shows here. */
 function FormControls() {
+  const [colours, setColours] = useState('openagent')
   return (
     <div className="space-y-5">
       <Labelled label="Focus: a field's ring is its edge; a press's ring stands 2px off it">
@@ -376,6 +379,9 @@ function FormControls() {
             <SelectValue />
           </SelectTrigger>
         </Select>
+      </Labelled>
+      <Labelled label="Segmented: one pick among two or three short words, the picked one a card on the track">
+        <Segmented label="Colours" value={colours} options={[{ value: 'openagent', label: 'OpenAgent' }, { value: 'neutral', label: 'Neutral' }]} onChange={setColours} />
       </Labelled>
       <Labelled label="Switch: on or off, at once. Checkbox: one line of a form or a list">
         <Switch aria-label="On" defaultChecked />
@@ -726,6 +732,24 @@ function Lists() {
   )
 }
 
+/** An entry of Settings: its rows on the dialog's inset, then things listed in it, one lit as under the pointer. */
+function SettingsRows() {
+  return (
+    <div className="max-w-2xl space-y-8 rounded-lg bg-card p-6 ring-1 ring-hairline">
+      <SettingsSection>
+        <SettingsRow label="Name each run" description="A small model is asked for the two to five words a run's row shows." control={<Switch aria-label="Name each run" defaultChecked />} />
+        <SettingsRow label="Show what the coding agent thought" description="Inside a run of steps, a row for each thought between them." control={<Switch aria-label="Show what the coding agent thought" />} />
+      </SettingsSection>
+      <Section title="Your devices">
+        <SettingsItems aria-label="Your devices">
+          <SettingsItem icon={Smartphone} title="iPhone, Safari" detail="Phone · on this Wi-Fi · last seen 2m ago" actions={<Button variant="ghost" size="icon-sm" className="-mr-1.5" aria-label="iPhone, Safari: more"><Ellipsis className="size-4" aria-hidden /></Button>} />
+          <SettingsItem icon={Monitor} title="Studio Mac" detail="Computer · runs go both ways" end={<><Badge tone="success">Online</Badge><ChevronRight aria-hidden /></>} onClick={() => {}} />
+        </SettingsItems>
+      </Section>
+    </div>
+  )
+}
+
 export const PREVIEWS: Preview[] = [
   {
     path: 'foundations/color-tokens.html',
@@ -800,10 +824,18 @@ export const PREVIEWS: Preview[] = [
     node: <StatTiles />,
   },
   {
+    path: 'components/settings-rows.html',
+    group: 'Components',
+    name: 'Settings rows',
+    subtitle: 'A setting on the dialog\'s inset, its control centred; things listed 24 apart, a fill pulled out by its own padding',
+    width: 900,
+    node: <SettingsRows />,
+  },
+  {
     path: 'components/form-controls.html',
     group: 'Components',
     name: 'Form controls',
-    subtitle: 'Radio group, select, switch, checkbox, label, input, textarea',
+    subtitle: 'Radio group, segmented, select, switch, checkbox, label, input, textarea',
     width: 900,
     node: <FormControls />,
   },

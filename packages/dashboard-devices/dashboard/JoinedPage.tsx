@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Server } from 'lucide-react'
-import { Button, ConfirmDialog, List, Row, useAskOn, useOpenAgentDown, usePolled } from '@openagt/dashboard/module'
+import { Button, ConfirmDialog, SettingsItem, SettingsItems, useAskOn, useOpenAgentDown, usePolled } from '@openagt/dashboard/module'
 import { idsOf, readPersonThere, type Answer, type DeviceRow } from './devices.js'
 import { loadOther, otherLogin, sharedForget, type OtherLogin, type OtherRow } from './servers.js'
 import { hasDoor, throughOf, type JoinedItem, type OtherItem } from './model.js'
 import { ComputersThrough } from './ServerPage.js'
-import { Head, LoginLine, Part, Problem, Removal, Seen, State, Tabs, hostOf, useChange } from './parts.js'
+import { Head, LoginLine, PHONE_LEAVES, Part, Problem, Removal, Seen, State, Tabs, hostOf, useChange } from './parts.js'
 import type { Devices } from './use-devices.js'
 
 // The page of a server this person is in at, set up from somewhere else: their own from another
@@ -38,7 +38,7 @@ export function JoinedPage({ d, item, onBack }: { d: Devices; item: JoinedItem; 
         icon={Server}
         name={item.name}
         badge="Server"
-        facts={[machine.version !== undefined ? <State tone="good">Online</State> : <State tone="quiet">Does not answer right now</State>, hostOf(machine.url), machine.version !== undefined ? `OpenAgent ${machine.version}` : undefined]}
+        facts={[machine.version !== undefined ? <State tone="good">Online</State> : <State tone="quiet">Does not answer right now</State>, hostOf(machine.url), machine.version !== undefined && PHONE_LEAVES(`OpenAgent ${machine.version}`)]}
         rename={async name => {
           const renamed = await host.renameMachine(machine.id, name)
           await d.reloadMachines().catch(() => {})
@@ -49,20 +49,23 @@ export function JoinedPage({ d, item, onBack }: { d: Devices; item: JoinedItem; 
       {tab === 'overview' && (
         <>
           <Part>
-            <p className="text-sm">{owner ? 'Yours, set up from another computer.' : person?.person !== undefined ? `You are in as ${person.person}.` : 'You are in.'}</p>
-            <p className="text-xs text-muted-foreground">
-              {owner
-                ? 'Its install, its updates and its invites are done from the computer that set it up, its logins on the Permissions page. From here, your phone and this computer reach it, and runs go there.'
-                : 'Your runs there are yours: they use your own GitHub and Claude logins.'}
-            </p>
+            {/* Each sentence keeps the spec's measure, 72 characters of its own size a line. */}
+            <div>
+              <p className="max-w-[72ch] text-sm">{owner ? 'Yours, set up from another computer.' : person?.person !== undefined ? `You are in as ${person.person}.` : 'You are in.'}</p>
+              <p className="mt-0.5 max-w-[72ch] text-xs text-faint-foreground">
+                {owner
+                  ? 'Its install, its updates and its invites are done from the computer that set it up, its logins on the Permissions page. From here, your phone and this computer reach it, and runs go there.'
+                  : 'Your runs there are yours: they use your own GitHub and Claude logins.'}
+              </p>
+            </div>
             {here?.lineRefused && <p className="text-xs text-warning">{`${item.name} no longer lets this computer in for its line: turn on "From anywhere, through ${item.name}" under This computer to set it up again.`}</p>}
           </Part>
           <ComputersThrough host={host} machine={machine} busy={busy} everyMs={30_000} />
-          <Removal said="Takes the server off this list, and this computer out of it.">
+          <Removal label="Remove server" said="Takes the server off this list, and this computer out of it.">
             <ConfirmDialog
               trigger={
                 <Button variant="secondary" className="text-danger" disabled={busy} aria-label={`Remove ${item.name}`}>
-                  Remove server
+                  Remove
                 </Button>
               }
               title={`Remove ${item.name}?`}
@@ -110,24 +113,22 @@ function DevicesThere({ d, machine, name, devices, line, busy, onBusy, onError }
     onBusy(false)
   }
   return (
+    // Named by its tab: no heading over it says "Your devices" again.
     <Part>
-      <p className="text-sm font-semibold">
-        {`Your devices on ${name} `}
-        <span className="font-normal tabular-nums text-muted-foreground">{listed.length}</span>
-      </p>
-      <List aria-label={`Your devices on ${name}`}>
+      <SettingsItems aria-label={`Your devices on ${name}`}>
         {listed.map(device => {
           const own = (line !== undefined && idsOf(device).includes(line)) || (machine.device !== undefined && idsOf(device).includes(machine.device))
           return (
-            <Row
+            <SettingsItem
               key={device.id}
               title={device.name}
               detail={<Seen device={device} note={own ? 'This computer. To take it out, remove the server.' : undefined} />}
-              {...(own ? {} : { actions: <Button variant="ghost" size="sm" disabled={busy || down} aria-label={`Remove ${device.name} from ${name}`} onClick={() => void remove(device)}>Remove</Button> })}
+              // Pulled out by its own padding: its words end on the page's right edge.
+              {...(own ? {} : { actions: <Button variant="ghost" size="sm" className="-mr-2" disabled={busy || down} aria-label={`Remove ${device.name} from ${name}`} onClick={() => void remove(device)}>Remove</Button> })}
             />
           )
         })}
-      </List>
+      </SettingsItems>
     </Part>
   )
 }
@@ -175,16 +176,16 @@ export function OtherPage({ d, item, onBack }: { d: Devices; item: OtherItem; on
       {tab === 'overview' && (
         <>
           <Part>
-            <p className="text-xs text-muted-foreground">{via ? `${owner}'s server, shared with you on ${server}. Your runs there use your own logins.` : `${owner}'s computer, shared with you. A run there runs as you, in your own OpenAgent on it, with your own logins.`}</p>
+            <p className="text-sm text-muted-foreground">{via ? `${owner}'s server, shared with you on ${server}. Your runs there use your own logins.` : `${owner}'s computer, shared with you. A run there runs as you, in your own OpenAgent on it, with your own logins.`}</p>
           </Part>
           <Part title="Logins">
             {/* What a run from this computer needs first: from here, nothing is copied by itself. */}
             {read?.ok && (row?.github === undefined || row?.claude === undefined) && (
-              <p className="mb-3 text-xs text-muted-foreground">{via ? `Log them in here before your first run there. A run you start from your page on ${server} copies yours from there instead.` : 'Log them in here before your first run there.'}</p>
+              <p className="text-xs text-faint-foreground">{via ? `Log them in here before your first run there. A run you start from your page on ${server} copies yours from there instead.` : 'Log them in here before your first run there.'}</p>
             )}
             {row?.error !== undefined && <p className="text-xs text-muted-foreground">{`${name} did not say: ${row.error}`}</p>}
             {read !== undefined && !read.ok && <p className="text-xs text-muted-foreground">{`${name} did not say: ${read.error}`}</p>}
-            <ul aria-label={`Your logins on ${name}`} className="space-y-3 text-xs">
+            <ul aria-label={`Your logins on ${name}`} className="flex flex-col gap-6">
               <LoginLine label="GitHub" words={otherWords('GitHub', row?.github, name)} said={undefined}>
                 <Button variant="secondary" disabled={busy || account === undefined || down} aria-label={`Log in to GitHub on ${name} instead`} title={account !== undefined ? `Copies the login of ${account} from this computer to your own OpenAgent on ${name}.${copies}` : noLogin} onClick={() => void act(() => otherLogin(host, machine.url, 'github'))}>
                   {row?.github === undefined ? 'Log in here' : 'Log in here instead'}
@@ -197,11 +198,11 @@ export function OtherPage({ d, item, onBack }: { d: Devices; item: OtherItem; on
               </LoginLine>
             </ul>
           </Part>
-          <Removal said={`Takes ${name} off this list, and this computer out of it.`}>
+          <Removal label="Remove computer" said={`Takes ${name} off this list, and this computer out of it.`}>
             <ConfirmDialog
               trigger={
                 <Button variant="secondary" className="text-danger" disabled={busy || down} aria-label={`Remove ${name}`}>
-                  {`Remove ${name}`}
+                  Remove
                 </Button>
               }
               title={`Remove ${name}?`}
