@@ -29,16 +29,17 @@ export function ShortcutList() {
   )
 }
 
+/** A place's shortcuts: its name 8 over its rows, which stand on the content's edge, one line each, 44 high, with no rule between them. */
 function Place({ place, ids }: { place: string; ids: ShortcutId[] }) {
   const heading = useId()
   return (
-    <section aria-labelledby={heading} className="space-y-2">
-      <h3 id={heading} className="text-xs font-semibold text-muted-foreground">
+    <section aria-labelledby={heading}>
+      <h3 id={heading} className="mb-2 text-sm font-semibold">
         {place}
       </h3>
-      <ul className="divide-y divide-border">
+      <ul>
         {ids.map(id => (
-          <li key={id} className="flex min-h-9 items-center justify-between gap-4 py-2 first:pt-0 last:pb-0">
+          <li key={id} className="flex min-h-11 items-center justify-between gap-4">
             <span className="text-sm">{SHORTCUTS[id].does}</span>
             <KeyCaps keys={shortcutKeys(id)} />
           </li>
