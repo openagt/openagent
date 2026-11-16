@@ -14,6 +14,7 @@ import { FocusHome } from '../lib/focus-home.js'
 import { useHold } from '../lib/hold.js'
 import { cn } from '../lib/utils.js'
 import { Button } from './ui/button.js'
+import { Facts } from './ui/panel.js'
 import { SentenceShape, Slot } from './ui/slot.js'
 import { navRowClass } from './ui/nav-row.js'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip.js'
@@ -229,7 +230,7 @@ function SubagentItem({ row, reason, open, projectId, onPick, onStop }: { row: S
   const second = reason ?? error ?? undefined
   // A run's failure is told it by a line its end sends: its row keeps the room for it from its first frame.
   const twoLines = second !== undefined || (runId !== undefined && row.status === 'failed')
-  const model = row.model !== undefined ? [anyModelName(models, row.model), row.agent?.effort].filter(Boolean).join(' · ') : undefined
+  const model = row.model !== undefined ? <Facts facts={[anyModelName(models, row.model), row.agent?.effort]} className="min-w-0 truncate" /> : undefined
   const name = useRef<HTMLSpanElement>(null)
   // The card says what the row does not: the whole name where the row cuts it, or what it runs on.
   const tells = useCut(name, row.name) || model !== undefined
@@ -269,7 +270,7 @@ function SubagentItem({ row, reason, open, projectId, onPick, onStop }: { row: S
         <TooltipContent side="left" align="start" className="grid max-w-72 gap-1 px-4 py-3 text-sm">
           <span className="font-medium break-words">{row.name}</span>
           <span className="flex items-center justify-between gap-4 text-xs text-muted-foreground">
-            {model !== undefined && <span className="min-w-0 truncate">{model}</span>}
+            {model}
             <span className="flex shrink-0 items-center gap-1.5">
               <RunMark status={row.status} className="size-3" />
               {capital(runWord(row.status))}
@@ -390,10 +391,7 @@ function PaneHead({ row }: { row: SubagentRow }) {
         </section>
       )}
       {(row.model !== undefined || ended) && (
-        <div className="flex flex-wrap items-baseline gap-x-2 text-muted-foreground">
-          {row.model !== undefined && <span>{[anyModelName(models, row.model), row.agent?.effort].filter(Boolean).join(' · ')}</span>}
-          {ended && <span className={runTone(row.status)}>{runWord(row.status)}</span>}
-        </div>
+        <Facts facts={[row.model !== undefined && anyModelName(models, row.model), row.model !== undefined && row.agent?.effort, ended && <span className={runTone(row.status)}>{runWord(row.status)}</span>]} className="text-muted-foreground" />
       )}
     </div>
   )
@@ -408,8 +406,12 @@ function PaneFoot({ row, calls }: { row: SubagentRow; calls: number }) {
     row.endedAt !== undefined ? formatElapsed(Date.parse(row.endedAt) - Date.parse(row.startedAt)) : undefined,
     row.cost !== undefined ? `$${row.cost.toFixed(2)}` : undefined,
     row.agent?.branch ? `on ${row.agent.branch}` : row.agent?.landed ? 'landed' : undefined,
-  ].filter(Boolean)
-  return <p className="py-1 font-sans text-sm text-muted-foreground">{parts.join(' · ')}</p>
+  ]
+  return (
+    <p className="py-1 font-sans text-sm text-muted-foreground">
+      <Facts facts={parts} />
+    </p>
+  )
 }
 
 /** A run's log without its first prompt when that is the prompt the pane already shows above it. */

@@ -62,6 +62,9 @@ function pointAway(element: Element): void {
   for (let node: Element | null = element; node; node = node.parentElement) fireEvent.pointerLeave(node)
 }
 
+/** A line of facts, as it reads: its dots are drawn between its facts, not in their words. */
+const factsLine = (words: string) => screen.getByText((_, element) => element?.tagName === 'SPAN' && element.textContent?.replaceAll('·', ' · ') === words)
+
 const rowButtons = () => screen.queryAllByRole('listitem').map(item => within(item).getAllByRole('button')[0]!)
 const rowNames = () => screen.queryAllByRole('listitem').map(item => within(item).getAllByRole('button')[0]!.getAttribute('aria-label'))
 
@@ -330,9 +333,10 @@ describe('the subagent a row opened', () => {
     expect(within(screen.getByRole('region', { name: 'Write the docs' })).getByRole('heading').textContent).toBe('Write the docs')
     expect(screen.getByRole('region', { name: 'Its prompt' }).textContent).toContain('You are a subagent.')
     // What it runs on, as its card says it.
-    expect(screen.getByText('claude-sonnet-5-5 · high')).toBeTruthy()
+    expect(factsLine('claude-sonnet-5-5 · high')).toBeTruthy()
     await waitFor(() => expect(screen.getByText('I wrote the docs.')).toBeTruthy())
-    expect(screen.getByText(`1m 7s · $0.36 · on ${sub.branch}`)).toBeTruthy()
+    // Under the log once its read answered: a slow read's shape is held a moment longer, so it does not flash.
+    await waitFor(() => expect(factsLine(`1m 7s · $0.36 · on ${sub.branch}`)).toBeTruthy())
     expect(onAgent).toHaveBeenCalledWith('p1', sub.id)
     fireEvent.click(screen.getByRole('button', { name: 'Open its page' }))
     expect(opened).toEqual([sub.id])
