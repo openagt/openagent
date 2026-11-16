@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Button, Empty, FilterChips, MiddleCut, Page, PanelGroup, PanelGroups, PanelRow, PersonMark, RowShapes, RunMark, Slot, formatDateTime, formatDuration, needsWord, personSaid, runName, runLineTone, useCodingAgents, useGitHostPeople, useIsMobile, runsAgain, runWord, useModuleHost, usePolled, type CodingAgent, type ModuleAgent, type ModuleHostPerson, type ModulePageProps, type ModuleProject, type ReadState } from '@openagt/dashboard/module'
 import type { RunCard } from '../src/run.js'
 
@@ -153,6 +154,9 @@ function agentSaid(card: RunRow['card'], agents: CodingAgent[]): string | undefi
   return [agent?.label ?? card.driver, model].filter(Boolean).join(' · ') || undefined
 }
 
+/** The query's name for the status the list shows. */
+const STATUS_PARAM = 'status'
+
 /** What cost a sum of runs: "$1.23", nothing for none. */
 function dollars(cost: number): string {
   return `$${cost.toFixed(2)}`
@@ -161,10 +165,11 @@ function dollars(cost: number): string {
 /**
  * The Logs page: every project's recorded runs, newest first, from `logs --limit 50` in each
  * project, each as the dashboard says it stands right now ({@link withLiveRuns}). A chip shows one
- * status, at `/logs/<status>`. A row opens the run's own page in the dashboard. A project whose
- * command fails is named with the command's own reason, and the other projects still show.
+ * status, kept in the query (`/logs?status=waiting`). A row opens the run's own page in the
+ * dashboard. A project whose command fails is named with the command's own reason, and the other
+ * projects still show.
  */
-export function LogsPage({ projects, path }: ModulePageProps) {
+export function LogsPage({ projects }: ModulePageProps) {
   const host = useModuleHost()
   const key = projects.map(p => p.id).join(',')
   const { value: live, state: liveState } = usePolled<LiveRuns[]>(
@@ -200,9 +205,17 @@ export function LogsPage({ projects, path }: ModulePageProps) {
   const state: ReadState = recordedState === 'unknown' ? (read.rows.length > 0 ? liveState : 'unknown') : liveState === 'kept' ? 'kept' : recordedState
   const accountOf = useGitHostPeople(read.rows.map(({ project, card }) => ({ projectId: project.id, person: card.person })), host.gitHostPeople, 'skill-logs:people')
 
-  // Which status the list shows: every one, until a chip picks one, kept in the address (`/logs/waiting`) so a
-  // reload or Back from a run shows the list the person left. One no run has any more goes back to all.
-  const picked = path[0] ?? null
+  // Which status the list shows: every one, until a chip picks one, kept in the query (`?status=waiting`) as a list's view
+  // is, not in the path, which names a page below this one: a reload or Back from a run shows the list the person left.
+  // One no run has any more goes back to all.
+  const [picked, setPicked] = useState(() => (typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get(STATUS_PARAM)))
+  const pick = (value: string | null) => {
+    setPicked(value)
+    const query = new URLSearchParams(window.location.search)
+    if (value === null) query.delete(STATUS_PARAM)
+    else query.set(STATUS_PARAM, value)
+    host.adjustPage(undefined, query.toString())
+  }
   const counts = STATUSES.map(value => ({ value, label: chipWord(value)[0]!.toUpperCase() + chipWord(value).slice(1), count: read.rows.filter(row => row.card.status === value).length })).filter(c => c.count > 0)
   const status = counts.some(c => c.value === picked) ? picked : null
   const shown = status === null ? read.rows : read.rows.filter(row => row.card.status === status)
@@ -225,7 +238,7 @@ export function LogsPage({ projects, path }: ModulePageProps) {
     <Page
       title="Logs"
       description={capped ? `The last ${LIMIT} runs recorded in ${many ? 'each of these projects' : only}, newest first.` : `Every run recorded in ${many ? 'these projects' : only}, newest first.`}
-      bar={state === 'unknown' ? undefined : <FilterChips chips={counts} total={read.rows.length} picked={status} onPick={value => host.adjustPage(value === null ? [] : [value])} />}
+      bar={state === 'unknown' ? undefined : <FilterChips chips={counts} total={read.rows.length} picked={status} onPick={pick} />}
     >
       <Slot of={{ state, value: read, failing }} shape={<RowShapes rows={3} />} className="space-y-8">
         {() => (

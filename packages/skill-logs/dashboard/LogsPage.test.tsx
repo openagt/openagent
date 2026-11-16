@@ -21,6 +21,8 @@ afterEach(() => {
   cleanup()
   forgetRemembered()
   localStorage.clear()
+  // A test that opened the page at a pick's query leaves the next one at none.
+  window.history.replaceState(null, '', '/')
 })
 
 test('a project with no run recorded says so where the runs would stand, and lists none', async () => {
@@ -47,12 +49,12 @@ test('the runs cut by day, each day with what its runs cost; a run by its name, 
     { id: 'r2', startedAt: at(now - 2000), status: 'failed', intent: 'break it', cost: 0.25 },
     { id: 'r3', startedAt: at(noon - 24 * HOUR), endedAt: at(noon - 24 * HOUR + 120_000), status: 'done', intent: 'yesterday work', cost: 1 },
   ])
-  const page = (path: string[]) => (
+  const page = (
     <ModuleHostContext.Provider value={host}>
-      <LogsPage projects={[{ id: 'p1', name: 'alpha', gitHost: true }]} projectId={null} path={path} />
+      <LogsPage projects={[{ id: 'p1', name: 'alpha', gitHost: true }]} projectId={null} path={[]} />
     </ModuleHostContext.Provider>
   )
-  const { rerender } = render(page([]))
+  const { unmount } = render(page)
   const today = (await screen.findAllByText('Today'))[0]!.closest('h2')!
   expect(today.textContent).toBe('Today $0.75')
   expect(screen.getAllByText('Yesterday')[0]!.closest('h2')!.textContent).toBe('Yesterday $1.00')
@@ -60,21 +62,28 @@ test('the runs cut by day, each day with what its runs cost; a run by its name, 
   const login = screen.getAllByText('Login page')[0]!.closest('li')!
   expect(within(login).getByRole('link', { name: 'Login page' }).getAttribute('title')).toBe('make the login page')
   expect(screen.getAllByText('yesterday work')[0]!.closest('li')!.textContent).toContain('2m')
-  // A word per status the runs have, each with its count; its pick is kept in the page's address, in the place of the last one, so Back leaves the page.
+  // A word per status the runs have, each with its count; its pick is kept in the page's query, in the place of the last
+  // one, so Back leaves the page, and the page's path names no page below it.
   // A status is one word on its chip and beside a run's dot.
   expect(within(screen.getAllByText('break it')[0]!.closest('li')!).getByText(/^Failed/)).toBeTruthy()
   fireEvent.click(screen.getByRole('button', { name: /^Failed/ }))
-  expect(host.adjustPage).toHaveBeenLastCalledWith(['failed'])
-  rerender(page(['failed']))
+  expect(host.adjustPage).toHaveBeenLastCalledWith(undefined, 'status=failed')
   expect(screen.queryAllByText('Login page')).toHaveLength(0)
   expect(screen.getAllByText('break it').length).toBeGreaterThan(0)
   fireEvent.click(screen.getByRole('button', { name: /^All/ }))
-  expect(host.adjustPage).toHaveBeenLastCalledWith([])
-  rerender(page([]))
+  expect(host.adjustPage).toHaveBeenLastCalledWith(undefined, '')
   expect(screen.getAllByText('Login page').length).toBeGreaterThan(0)
+  // Opened at the query of a pick (a reload, Back from a run), the page shows the list the person left.
+  unmount()
+  window.history.replaceState(null, '', '/logs?status=failed')
+  render(page)
+  await screen.findAllByText('break it')
+  expect(screen.queryAllByText('Login page')).toHaveLength(0)
+  cleanup()
   // A status no run has any more shows them all.
-  rerender(page(['stopped']))
-  expect(screen.getAllByText('Login page').length).toBeGreaterThan(0)
+  window.history.replaceState(null, '', '/logs?status=stopped')
+  render(page)
+  expect((await screen.findAllByText('Login page')).length).toBeGreaterThan(0)
   // A row opens its run.
   fireEvent.click(screen.getAllByText('Login page')[0]!.closest('a')!)
   expect(host.openAgent).toHaveBeenCalledWith('p1', 'r1')
