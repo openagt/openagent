@@ -79,8 +79,11 @@ interface PanesValue {
   docsLoaded: boolean
   /** What the Subagents pane shows. */
   subagents: ReactNode
-  /** How many icons to hold room for until the modules and the docs are read: as many as this project had when they last were. */
-  held: number
+  /**
+   * How many icons to hold room for until the modules and the docs are read: as many as this project
+   * had when they last were. Null while they are not read in a browser that kept none for it.
+   */
+  held: number | null
 }
 
 const NO_PANES: PanesValue = { page: '', enabled: false, panes: [], open: [], expanded: undefined, panelProps: undefined, reveal: undefined, show: undefined, docs: [], docsLoaded: false, subagents: null, held: 0 }
@@ -88,11 +91,12 @@ const NO_PANES: PanesValue = { page: '', enabled: false, panes: [], open: [], ex
 /** localStorage key prefix of how many pane icons each project's top bar had once its panes were all known. */
 const ICONS_KEY = 'oa.pane-icons:'
 
-function keptIcons(projectId: string): number {
+function keptIcons(projectId: string): number | null {
   try {
-    return Number(globalThis.localStorage?.getItem(ICONS_KEY + projectId)) || 0
+    const kept = globalThis.localStorage?.getItem(ICONS_KEY + projectId)
+    return kept == null ? null : Number(kept) || 0
   } catch {
-    return 0
+    return null
   }
 }
 
@@ -184,11 +188,12 @@ export function PanesProvider({
 
   // A module's icon is its own component, so it cannot be drawn before the module is loaded: until
   // then the bar holds the room the icons took last time, and the ⋮ before them stays where it is.
+  // With nothing kept, the ⋮ and the icons are drawn once, together, when they are known.
   const settled = modulesLoaded && docsLoaded
   useEffect(() => {
     if (shown && settled) keepIcons(shown, panes.length)
   }, [shown, settled, panes.length])
-  const held = shown && !settled ? keptIcons(shown) : 0
+  const held = shown !== null && !settled ? keptIcons(shown) : 0
 
   const openIds = useOpenPanes(page)
   const open = useMemo(() => openIds.flatMap(id => panes.find(pane => pane.id === id) ?? []), [openIds, panes])
@@ -245,38 +250,48 @@ export function TopBar({ children }: { children: ReactNode }) {
   return row ? createPortal(bar, row) : bar
 }
 
-/** The panes' icons, for the end of a page's top bar: one per pane, lit while its pane is open. */
-export function PaneToggles() {
+/**
+ * The end of a page's top bar: what stands before the panes' icons (`before`: the project's ⋮), then
+ * one icon per pane, lit while its pane is open. The ⋮ and the icons are one kind of button, 4px
+ * apart, the last glyph ending 16 from the bar's edge as the title starts 16 from the other
+ * (ui/look/spacing.md 4).
+ */
+export function PaneToggles({ before }: { before?: ReactNode }) {
   const { page, panes, open, held } = useContext(PanesContext)
-  if (panes.length === 0 && held === 0) return null
+  const room = Math.max(held ?? 0, panes.length)
   return (
-    <div role="group" aria-label="Panes" className="flex shrink-0 items-center gap-1">
-      {Array.from({ length: held - panes.length }, (_, at) => (
-        <span key={`held-${at}`} className="size-7 shrink-0" aria-hidden />
-      ))}
-      {panes.map(pane => {
-        const isOpen = open.includes(pane)
-        return (
-          <Tooltip key={pane.id}>
-            <TooltipTrigger
-              render={
-                <Button
-                  variant="ghost"
-                  size="icon-bar"
-                  className={cn('text-muted-foreground', isOpen && 'bg-accent text-accent-foreground')}
-                  aria-label={pane.label}
-                  aria-pressed={isOpen}
-                  onClick={() => setPaneOpen(page, pane.id, !isOpen)}
-                />
-              }
-            >
-              <pane.icon className="h-4 w-4" />
-            </TooltipTrigger>
-            {/* Its name only, as Claude Code's icons say "Files" and "Changes". */}
-            <TooltipContent>{pane.label}</TooltipContent>
-          </Tooltip>
-        )
-      })}
+    <div className={cn('flex shrink-0 items-center gap-1 pr-0.5', held === null && 'invisible')}>
+      {before}
+      {room > 0 && (
+        <div role="group" aria-label="Panes" className="flex shrink-0 items-center gap-1">
+          {Array.from({ length: room - panes.length }, (_, at) => (
+            <span key={`held-${at}`} className="size-7 shrink-0" aria-hidden />
+          ))}
+          {panes.map(pane => {
+            const isOpen = open.includes(pane)
+            return (
+              <Tooltip key={pane.id}>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      variant="ghost"
+                      size="icon-bar"
+                      className={cn('text-muted-foreground', isOpen && 'bg-accent text-accent-foreground')}
+                      aria-label={pane.label}
+                      aria-pressed={isOpen}
+                      onClick={() => setPaneOpen(page, pane.id, !isOpen)}
+                    />
+                  }
+                >
+                  <pane.icon className="h-4 w-4" />
+                </TooltipTrigger>
+                {/* Its name only, as Claude Code's icons say "Files" and "Changes". */}
+                <TooltipContent>{pane.label}</TooltipContent>
+              </Tooltip>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
