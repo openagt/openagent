@@ -221,7 +221,7 @@ describe('the Skills page', () => {
     render(<SkillsSettings projectId="p1" />)
     await screen.findByText('Tickets and queue')
     expect(card('tickets').textContent).toBe('ticketsa newer version is thereWhat tickets does.')
-    expect(card('queue').textContent).toBe('queuechanged by hand · waiting to reach mainWhat queue does.')
+    expect(card('queue').textContent).toBe('queuechanged by hand·waiting to reach mainWhat queue does.')
     expect(card('plan').textContent).toBe('planyour own textWhat plan does.')
     expect(card('triage').textContent).toBe('triageWhat triage does.')
     expect(isTicked('triage')).toBe(false)

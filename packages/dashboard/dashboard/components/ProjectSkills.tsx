@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { onProjectSkills, sendChangeSkills, sendProjectSkills, type ProjectSkills, type ProjectSkill, type SendSkillsResult } from '../rpc/skills.js'
 import { useAction } from '../lib/use-action.js'
 import { useLoaded, usePolled } from '../lib/use-async.js'
@@ -9,6 +9,7 @@ import { Button, buttonVariants } from './ui/button.js'
 import { Checkbox } from './ui/checkbox.js'
 import { Skeleton } from './ui/skeleton.js'
 import { Slot } from './ui/slot.js'
+import { Facts } from './ui/panel.js'
 import { SettingsFoot } from './SettingsRows.js'
 import { cn } from '../lib/utils.js'
 
@@ -322,7 +323,7 @@ function SkillCards({ projectId, skills, onDone }: { projectId: string; skills: 
             {group.skills.map(skill => {
               const notes = [NOTES[skill.standing], skill.waiting && skills.startBranch !== undefined ? `waiting to reach ${skills.startBranch}` : undefined].filter(Boolean)
               return (
-                <SkillTick key={skill.name} name={skill.name} description={skill.description} note={notes.length > 0 ? notes.join(' · ') : undefined} checked={ticked.has(skill.name)} onChange={on => tick(skill.name, on)} disabled={busy} />
+                <SkillTick key={skill.name} name={skill.name} description={skill.description} note={notes.length > 0 ? <Facts facts={notes} /> : undefined} checked={ticked.has(skill.name)} onChange={on => tick(skill.name, on)} disabled={busy} />
               )
             })}
           </div>
@@ -365,7 +366,7 @@ export const SKILL_TICKS_CLASS = 'grid gap-x-6 gap-y-3 md:grid-cols-2'
  * One skill to tick: the box, its name, and its sentence under it; a note, a warning, between them. No box around it.
  * `brief`: one line of the sentence, the whole of it on a press of that line.
  */
-export function SkillTick({ name, description, note, checked, onChange, disabled, label = name, brief = false }: { name: string; description: string; note?: string | undefined; checked: boolean; onChange: (on: boolean) => void; disabled?: boolean | undefined; label?: string | undefined; brief?: boolean }) {
+export function SkillTick({ name, description, note, checked, onChange, disabled, label = name, brief = false }: { name: string; description: string; note?: ReactNode; checked: boolean; onChange: (on: boolean) => void; disabled?: boolean | undefined; label?: string | undefined; brief?: boolean }) {
   const [whole, setWhole] = useState(false)
   if (brief)
     return (
