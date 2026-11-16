@@ -145,23 +145,25 @@ describe('the tickets list', () => {
     expect(screen.queryByRole('button', { name: /other ways to (work on|plan) do the thing/i })).toBeNull()
   })
 
-  test("a claim says how it stands, beside its run's own mark: working, pulsing and in colour; waiting on you; the run ended; any other holder by name, its mark still", async () => {
+  test("a claim says how it stands, beside its run's own mark: working, its ring turning and in colour; waiting on you; the run ended; any other holder by name, its mark still", async () => {
     const run = (holderStatus: string) => ticket({ locked: true, lockedBy: 'r1', lockedByAgent: { id: 'r1', name: 'login-page' }, holderStatus })
     render(<Rows tickets={[run('running')]} />)
     const working = (await screen.findByText('Working')).closest('[title]')!
     expect(working.getAttribute('title')).toBe('Claimed by login-page')
-    expect(working.querySelector('.bg-info')?.className).toContain('animate-pulse')
+    expect(working.querySelector('svg')?.getAttribute('class')).toContain('text-info')
+    expect(working.querySelector('[class*="animate-spin"]')).not.toBeNull()
     expect(working.className).toContain('text-info')
     cleanup()
     render(<Rows tickets={[run('waiting')]} />)
     const asking = (await screen.findByText('Waits on your answer')).closest('[title]')!
-    expect(asking.querySelector('.bg-warning')?.className).not.toContain('animate')
+    expect(asking.querySelector('svg')?.getAttribute('class')).toContain('text-warning')
+    expect(asking.querySelector('[class*="animate"]')).toBeNull()
     expect(asking.className).not.toContain('text-info')
     cleanup()
     render(<Rows tickets={[run('done')]} />)
     const ended = (await screen.findByText('Run done')).closest('[title]')!
     expect(ended.querySelector('[class*="animate"]')).toBeNull()
-    expect(ended.querySelector('.bg-info')).toBeNull()
+    expect(ended.querySelector('svg')?.getAttribute('class')).not.toContain('text-info')
     cleanup()
     render(<Rows tickets={[ticket({ locked: true, lockedBy: 'alice-laptop' })]} onClaimed={() => {}} />)
     const other = (await screen.findByText('alice-laptop')).closest('[title]')!

@@ -226,14 +226,13 @@ function claimSaid(ticket: WorkspaceTicket): string {
   return said.charAt(0).toUpperCase() + said.slice(1)
 }
 
-/** A claim's mark: the holding run's own while one of the project's runs holds it, a still one for any other holder. */
+/**
+ * A claim's mark, of the stage marks' one size: the holding run's own while one of the project's
+ * runs holds it (its ring turning while it works), a still one for any other holder.
+ */
 function ClaimMark({ ticket }: { ticket: WorkspaceTicket }) {
   if (!ticket.lockedByAgent || ticket.holderStatus === undefined) return <StateCell state="stopped" className="size-3" />
-  return (
-    <span className="flex size-3 shrink-0 items-center justify-center">
-      <RunMark status={ticket.holderStatus} className={cn('size-2', claimWorking(ticket) && 'motion-safe:animate-pulse')} />
-    </span>
-  )
+  return <RunMark status={ticket.holderStatus} className="size-3" />
 }
 
 /** One project's tickets on the list: its rows, or why there are none. */
