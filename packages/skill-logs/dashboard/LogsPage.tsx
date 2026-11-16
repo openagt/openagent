@@ -236,7 +236,7 @@ export function LogsPage({ projects, path }: ModulePageProps) {
               </p>
             ))}
             {read.rows.length === 0 && read.failed.length === 0 && (
-              <Empty title="No runs recorded yet">A run is listed here from the moment an agent starts on this project.</Empty>
+              <Empty title="No runs recorded yet.">A run is listed here from the moment an agent starts on this project.</Empty>
             )}
             {/* A day is a panel of its runs. A row: its mark, its name over how it stands, then on the name's line at
                 its right whose it is, the agent that ran it and its pull request, each in a column that stands in one
