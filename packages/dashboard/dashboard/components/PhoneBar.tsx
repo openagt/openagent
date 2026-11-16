@@ -71,12 +71,13 @@ export function PagesBar({
 }) {
   const { openMobile, setOpenMobile } = useSidebar()
   const item = (active: boolean) =>
-    cn('focus-ring-inset relative flex h-14 min-w-0 flex-1 flex-col items-center justify-center gap-1 text-xs font-medium transition-colors', active ? 'text-foreground' : 'text-muted-foreground active:text-foreground')
+    cn('focus-ring-inset relative flex h-full min-w-0 flex-1 flex-col items-center justify-center gap-1 text-xs font-medium transition-colors', active ? 'text-foreground' : 'text-muted-foreground active:text-foreground')
   // 44 by 26 behind every icon, filled only on the page that is open.
   const pill = (active: boolean) => cn('relative flex h-6.5 w-11 items-center justify-center rounded-full transition-colors', active && 'bg-foreground/8')
   return (
-    // Its height is the page's `--foot` (tailwind.css), which a page's part kept to the window's foot stands on.
-    <nav aria-label="Pages" data-pages-bar="" className="sticky bottom-0 z-20 flex shrink-0 border-t border-hairline bg-background">
+    // As high as `--pages-bar` (tailwind.css), its rule inside it and its presses filling the rest: the height `--foot`
+    // is set from, which a page's part kept to the window's foot stands on.
+    <nav aria-label="Pages" data-pages-bar="" className="sticky bottom-0 z-20 flex h-(--pages-bar) shrink-0 border-t border-hairline bg-background">
       <a href={overviewHref} onClick={inPlace(onOverview)} aria-current={overviewActive ? 'page' : undefined} aria-label={waiting > 0 ? `Overview, ${waiting} waiting on you` : 'Overview'} className={item(overviewActive)}>
         <span className={pill(overviewActive)}>
           <LayoutDashboard className="size-5" aria-hidden />
