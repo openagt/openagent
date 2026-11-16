@@ -486,13 +486,13 @@ describe('the Overview', () => {
       item({ number: 8, title: 'Condense README', url: 'https://x/pull/8' }),
     ]
     render(<DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} projectHref={id => `/${id}`} onSelectAgent={onSelectAgent} onAgentStarted={() => {}} interventions={interventions} interventionsState="fresh" active={{ active: [], state: 'fresh' }} projects={[]} scope={null} listedPages={null} />)
-    // One panel, in the order the queue gives them: a row says what it needs in the line under its name, so no kind has a heading.
+    // One list, in the order the queue gives them: a row says what it needs first in its line, so no kind has a heading.
     const part = within(screen.getByRole('region', { name: 'Human Queue' }))
     expect(part.queryAllByRole('region')).toEqual([])
-    expect(part.getAllByRole('listitem').map(row => row.textContent)).toEqual(['Create test.mdNeeds commit·1 fileReview', 'Add DESCRIPTION.mdNeeds merge·#6Review', 'Condense READMENeeds merge·#8Review'])
-    // Each row carries its press, which opens where it is done, as the row does.
+    expect(part.getAllByRole('listitem').map(row => row.textContent)).toEqual(['Needs commitNeeds commit: Create test.md1 file', 'Needs mergeNeeds merge: Add DESCRIPTION.md#6', 'Needs mergeNeeds merge: Condense README#8'])
+    // The row is the press: it opens where what it needs is done.
     fireEvent.click(screen.getByText('Create test.md'))
-    fireEvent.click(screen.getByRole('button', { name: 'Review: Add DESCRIPTION.md' }))
+    fireEvent.click(screen.getByText('Add DESCRIPTION.md'))
     expect(onSelectAgent.mock.calls).toEqual([['p1', 'r1'], ['p1', 'r6']])
     expect(screen.getByText('Condense README').closest('a')?.getAttribute('href')).toBe('https://x/pull/8')
     expect(screen.getByText('Add DESCRIPTION.md').closest('a')?.getAttribute('href')).toBe('/p1/r6')

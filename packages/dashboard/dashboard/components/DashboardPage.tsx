@@ -6,7 +6,7 @@ import { Quota } from './Quota.js'
 import { SentenceShape, Slot } from './ui/slot.js'
 import { PartDescription } from './PartDescription.js'
 import { Button } from './ui/button.js'
-import { WaitingPanel, holdsBack } from './HumanQueueList.js'
+import { HumanQueueList, holdsBack } from './HumanQueueList.js'
 import { PanelGroup } from './ui/panel.js'
 import { updatePreferences, usePreferences, usePreferencesLoaded } from '../lib/preferences.js'
 import { OnboardingChecklist } from './OnboardingChecklist.js'
@@ -308,8 +308,8 @@ export function DashboardPage({
 // confirm, close to reject — which open the session that made them, or the PR itself when no run here
 // did; runs paused mid-flight on a question (#636), which jump into that project's live view to
 // answer; and work a finished session left uncommitted or unpushed. #627 notifications fire off the
-// same set. One panel, newest first as the queue gives them: a row says what is needed in its line
-// under the run's name, so the kinds need no heading of their own.
+// same set. One list, newest first as the queue gives them: a row says what is needed first in its
+// line, so the kinds need no heading of their own.
 function HumanQueue({
   items,
   state,
@@ -326,7 +326,7 @@ function HumanQueue({
     <PanelGroup bare title={<span className="text-warning">Human Queue</span>} count={holdsBack(items) ? items.length : undefined}>
       <PartDescription>Agents awaiting your approval, review, or input</PartDescription>
       <Slot of={{ state, value: items }} shape={<SentenceShape />}>
-        {() => <WaitingPanel items={items} onOpenAgent={onSelectAgent} onOpenProject={onSelectProject} empty="AI doesn't need you." />}
+        {() => <HumanQueueList items={items} onOpenAgent={onSelectAgent} onOpenProject={onSelectProject} empty="AI doesn't need you." />}
       </Slot>
     </PanelGroup>
   )
