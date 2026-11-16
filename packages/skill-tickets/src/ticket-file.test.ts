@@ -40,6 +40,12 @@ test('a priority or topics line written in lowercase reads as the field, and is 
   assert.equal(writeTicketFile({ ...fields, priority: '3' }), 'Priority: 3\nTopics: [ui]\n\n# Login page\n')
 })
 
+test('of two lines naming one field, the first gives its value, as the ticket list reads it, and the later one is not written back', () => {
+  const fields = readTicketFile('Priority: 8\nTopics: [security]\nWaiting: approval\npriority: 4\ntopics: [ui]\nwaiting:\n\n# Imported ticket\n\nDo the work.\n')
+  assert.deepEqual([fields.priority, fields.topics, fields.waiting, fields.kept], ['8', ['security'], 'approval', []])
+  assert.equal(writeTicketFile({ ...fields, title: 'Imported ticket updated' }), 'Priority: 8\nTopics: [security]\nWaiting: approval\n\n# Imported ticket updated\n\nDo the work.\n')
+})
+
 test('what a ticket waits on is a field: read in any case, written back after the topics, and cleared when emptied', () => {
   const fields = readTicketFile('Priority: 9\nIssue: [#4](https://example.com/issues/4)\nwaiting: the design review\n\n# Checkout\n')
   assert.equal(fields.waiting, 'the design review')
