@@ -70,7 +70,7 @@ const WITH_PROJECT: DashboardData = {
 
 const SHOP: ProjectSummary = { id: 'p1', path: '/home/ada/shop', name: 'shop', activated: true, gitHost: true }
 
-const steps = ({ projects = [] as ProjectSummary[], onAgentStarted = vi.fn(), onSelectProject = vi.fn(), onRead = vi.fn(), listedPages = null as readonly ListedPage[] | null } = {}) =>
+const steps = ({ projects = [] as ProjectSummary[], onAgentStarted = vi.fn(), onSelectProject = vi.fn(), onRead = vi.fn(), listedPages = [] as readonly ListedPage[] | null } = {}) =>
   render(<OnboardingChecklist projects={projects} onAgentStarted={onAgentStarted} onSelectProject={onSelectProject} onProjectAdded={vi.fn()} onRead={onRead} listedPages={listedPages} />)
 
 /** A step's row, by its title. */
@@ -145,7 +145,7 @@ describe('the first steps on the Overview', () => {
     expect(rows).toContain('Add your first project')
   })
 
-  test("while it reads, the queue's and the tickets' steps hold a place each exactly where the sidebar's pages say a project has the Queue or the Tickets, and none where no page is known yet", async () => {
+  test("while it reads, the queue's and the tickets' steps hold a place each exactly where the sidebar's pages say a project has the Queue or the Tickets, and no frame is drawn before the pages are known", async () => {
     onDashboard.mockImplementation(() => new Promise(() => {}))
     logins.onAgentState.mockResolvedValue({ driver: 'claude-code', ready: false, installed: false })
     const frame = async (listedPages: readonly ListedPage[] | null) => {
@@ -155,7 +155,13 @@ describe('the first steps on the Overview', () => {
       cleanup()
       return rows
     }
-    const none = await frame(null)
+    // No page known yet: the frame waits for them, as nothing under it is drawn before it.
+    steps({ projects: [SHOP], listedPages: null })
+    await screen.findByText('Loading…')
+    await act(async () => {})
+    expect(document.querySelector('ol')).toBeNull()
+    cleanup()
+    const none = await frame([{ segment: 'logs', label: 'Logs', projects: ['p1'] }])
     expect(none).not.toContain('a place')
     expect(none.at(-1)).toBe('Turn on notifications')
     const queue = await frame([{ segment: 'queue', label: 'Queue', projects: ['p1'] }, { segment: 'logs', label: 'Logs', projects: ['p1'] }])

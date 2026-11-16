@@ -251,7 +251,7 @@ export function OnboardingChecklist({
   const doneCount = steps.filter(step => step.done).length
   // While the projects are not read: the queue's and the tickets' steps hold their places before the last step exactly
   // where the sidebar's pages say a project has the Queue or the Tickets, as the same packages bring the page and the
-  // step. Where no page is known yet (a browser's first visit), none is held.
+  // step. Until those pages are known (a browser's first visit) the frame is not drawn.
   const listed = (segment: string) => listedPages?.some(page => page.segment === segment && page.projects.length > 0) === true
   const coming = [...(listed('queue') ? [{ key: 'todos', done: false }] : []), ...(listed('tickets') ? [{ key: 'tickets', done: false }] : [])]
   const frame: { key: string; label?: string; description?: ReactNode; done: boolean }[] = steps.flatMap(step => [
@@ -299,9 +299,11 @@ export function OnboardingChecklist({
           {/* The steps as they will stand once read, so nothing in them moves when the answer comes: each its mark and its
               title, the open step its words under its name (read with the coding agent and the git hosts, or fixed) and
               its presses' shapes at the row's end, centred on the row; the steps only the projects' read can add (the
-              queue's, the tickets') hold their places as shapes. Only once the coding agent and the git hosts are read:
-              each can add a step at the top, which would push the rows drawn. */}
-          {missingLoaded && (
+              queue's, the tickets') hold their places as shapes. Only once the coding agent and the git hosts are read
+              (each can add a step at the top, which would push the rows drawn), and the sidebar's pages are known where
+              the projects' read is not in (they say which places to hold): nothing under the steps is drawn before they
+              are, so the frame coming late pushes nothing. */}
+          {missingLoaded && (data !== null || listedPages !== null) && (
             <Panel ordered aria-hidden>
               {frame.map((step, at) => (
                 <li key={step.key} className={STEP_ROW}>
