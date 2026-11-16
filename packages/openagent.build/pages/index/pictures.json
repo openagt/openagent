@@ -3,71 +3,71 @@
     {
       "window": 1120,
       "width": 1120,
-      "height": 443,
+      "height": 518,
       "media": "(min-width: 1184px)"
     },
     {
       "window": 960,
       "width": 960,
-      "height": 443,
+      "height": 518,
       "media": "(min-width: 1024px)"
     },
     {
-      "window": 704,
-      "width": 662,
-      "height": 232,
+      "window": 746,
+      "width": 704,
+      "height": 272,
       "media": "(min-width: 768px)"
     },
     {
-      "window": 390,
-      "width": 348,
-      "height": 232,
+      "window": 400,
+      "width": 358,
+      "height": 272,
       "media": ""
     }
   ],
   "waiting": [
     {
-      "window": 970,
+      "window": 1002,
       "width": 714,
-      "height": 155,
+      "height": 219,
       "media": "(min-width: 1184px)"
     },
     {
       "window": 499,
       "width": 499,
-      "height": 160,
+      "height": 191,
       "media": "(min-width: 861px)"
     },
     {
-      "window": 960,
+      "window": 992,
       "width": 704,
-      "height": 155,
+      "height": 219,
       "media": "(min-width: 768px)"
     },
     {
       "window": 358,
       "width": 358,
-      "height": 160,
+      "height": 231,
       "media": ""
     }
   ],
   "tickets": [
     {
-      "window": 1024,
+      "window": 1056,
       "width": 768,
-      "height": 318,
+      "height": 249,
       "media": "(min-width: 832px)"
     },
     {
-      "window": 960,
+      "window": 992,
       "width": 704,
-      "height": 318,
+      "height": 249,
       "media": "(min-width: 768px)"
     },
     {
       "window": 358,
       "width": 358,
-      "height": 246,
+      "height": 257,
       "media": ""
     }
   ]
