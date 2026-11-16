@@ -278,9 +278,11 @@ export function AgentHistory({
 
   // Each row's person, in its own project.
   const accountOf = useGitHostPeople(rows.map(row => ({ projectId: row.projectId, person: row.agent.person })), onGitHostPeople, 'sidebar:people')
-  // Your own runs with no git host to ask, a session with no project say: your own picture, as the sidebar's foot shows it.
+  // Your own runs are marked as the sidebar's foot marks you: the letters of your own name, not of
+  // your email, and with no git host to ask (a session with no project), your own picture.
   const { person: me } = usePerson()
-  const ownPicture = (person: string | undefined): string | undefined => (person !== undefined && me?.avatar !== undefined && me.email !== undefined && person.toLowerCase() === me.email ? me.avatar : undefined)
+  const yours = (person: string | undefined): boolean => person !== undefined && me?.email !== undefined && person.toLowerCase() === me.email
+  const ownMark = (person: string | undefined): { name?: string; picture?: string } => (yours(person) && me ? { name: me.name, ...(me.avatar !== undefined ? { picture: me.avatar } : {}) } : {})
 
   const models = useModels()
   const pageHref = (segment: string) => hrefOf({ projectId: null, agentId: null, page: segment, ...(scope ? { scope } : {}) })
@@ -298,7 +300,7 @@ export function AgentHistory({
       naming={!subagent && awaitingName(row.agent, preferences.nameRuns !== false)}
       driver={row.agent.driver}
       // A subagent is its main agent's, whose row says whose.
-      {...(row.agent.person && !subagent ? { person: row.agent.person, account: accountOf(row.projectId, row.agent.person), picture: ownPicture(row.agent.person) } : {})}
+      {...(row.agent.person && !subagent ? { person: row.agent.person, account: accountOf(row.projectId, row.agent.person), ...ownMark(row.agent.person) } : {})}
       {...(row.agent.model ? { model: modelName(models?.[driverFromImpl(row.agent.driver) ?? 'claude-code'], row.agent.model) } : {})}
       // On the Overview the project is what tells the rows apart, so the row still names it; a
       // project's own rail already knows its project, and a subagent is in its main agent's.
@@ -722,6 +724,7 @@ function AgentHistoryRow({
   gitHost = true,
   person,
   account,
+  name,
   picture,
 }: {
   status: AgentStatus
@@ -778,6 +781,8 @@ function AgentHistoryRow({
   person?: string | undefined
   /** Their account at the project's git host, when it said: their picture. */
   account?: ModuleHostPerson | undefined
+  /** Their name, for their mark's letters: the person's own, for their own runs. */
+  name?: string | undefined
   /** Their picture when the git host has none to give: the person's own, for their own runs. */
   picture?: string | undefined
 }) {
@@ -928,7 +933,7 @@ function AgentHistoryRow({
       {telling.person &&
         (personWords ? (
           <RowMark said={personWords}>
-            <PersonMark email={person} picture={account?.avatar ?? picture} className={PERSON_MARK} />
+            <PersonMark email={person} name={name} picture={account?.avatar ?? picture} className={PERSON_MARK} />
           </RowMark>
         ) : (
           standIn && <PersonMark className={PERSON_MARK} />

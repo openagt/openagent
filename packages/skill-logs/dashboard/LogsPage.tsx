@@ -1,4 +1,4 @@
-import { Button, Card, Empty, FilterChips, Page, PanelGroup, PanelRow, PersonMark, RowShapes, RunMark, Slot, formatDateTime, formatDuration, needsWord, personSaid, runName, runLineTone, useCodingAgents, useGitHostPeople, useIsMobile, runsAgain, runWord, useModuleHost, usePolled, type CodingAgent, type ModuleAgent, type ModuleHostPerson, type ModulePageProps, type ModuleProject, type ReadState } from '@openagt/dashboard/module'
+import { Button, Empty, FilterChips, MiddleCut, Page, PanelGroup, PanelRow, PersonMark, RowShapes, RunMark, Slot, formatDateTime, formatDuration, needsWord, personSaid, runName, runLineTone, useCodingAgents, useGitHostPeople, useIsMobile, runsAgain, runWord, useModuleHost, usePolled, type CodingAgent, type ModuleAgent, type ModuleHostPerson, type ModulePageProps, type ModuleProject, type ReadState } from '@openagt/dashboard/module'
 import type { RunCard } from '../src/run.js'
 
 /** How many runs each project lists: the command's own default page is 20; the page shows more. */
@@ -83,11 +83,11 @@ const STATUSES = ['running', 'waiting', 'done', 'stopped', 'failed', 'unknown']
 /** A status as its chip says it: the word every place says, and a computer that does not answer in one. */
 const chipWord = (value: string): string => (value === 'unknown' ? 'unknown' : runWord(value))
 
-/** What a run's work still needs before it leaves this machine, as its row in the sidebar says it: "Needs commit · 2 files", "Needs push · 1 commit". */
-export function leftWords(card: Pick<RunRow['card'], 'uncommitted' | 'unpublished'>, gitHost: boolean): string | undefined {
-  if (card.uncommitted) return `${needsWord('uncommitted')} · ${card.uncommitted} file${card.uncommitted === 1 ? '' : 's'}`
-  if (card.unpublished) return `${needsWord('unpushed', gitHost)} · ${card.unpublished} commit${card.unpublished === 1 ? '' : 's'}`
-  return undefined
+/** What a run's work still needs before it leaves this machine, in the sidebar's words, as two facts of its line: "Needs commit", "2 files". */
+export function leftParts(card: Pick<RunRow['card'], 'uncommitted' | 'unpublished'>, gitHost: boolean): string[] {
+  if (card.uncommitted) return [needsWord('uncommitted'), `${card.uncommitted} file${card.uncommitted === 1 ? '' : 's'}`]
+  if (card.unpublished) return [needsWord('unpushed', gitHost), `${card.unpublished} commit${card.unpublished === 1 ? '' : 's'}`]
+  return []
 }
 
 /** The day a run started, as a heading says it: "Today", "Yesterday", else the weekday and the date. */
@@ -236,9 +236,7 @@ export function LogsPage({ projects, path }: ModulePageProps) {
               </p>
             ))}
             {read.rows.length === 0 && read.failed.length === 0 && (
-              <Card>
-                <Empty title="No runs recorded yet">A run is listed here from the moment an agent starts on this project.</Empty>
-              </Card>
+              <Empty title="No runs recorded yet">A run is listed here from the moment an agent starts on this project.</Empty>
             )}
             {/* A day is a panel of its runs. A row: its mark, its name over how it stands, then on the name's line at
                 its right whose it is, the agent that ran it and its pull request, each in a column that stands in one
@@ -256,22 +254,20 @@ export function LogsPage({ projects, path }: ModulePageProps) {
                     href={host.agentHref(project.id, card.id)}
                     onClick={() => host.openAgent(project.id, card.id)}
                     meta={[
-                      <>
-                        <span className={runLineTone(shownStatus(card))} {...(card.offline ? { title: card.offline } : {})}>
-                          {standing(card)}
-                        </span>
-                        {/* The branch with its dot, so a phone, where it has no room, drops both. */}
-                        {card.branch && (
-                          <span className="max-md:hidden" title={card.branch}>
-                            <span aria-hidden className="mx-1.5">·</span>
-                            <span className="font-mono">{card.branch}</span>
-                          </span>
-                        )}
-                      </>,
+                      <span className={runLineTone(shownStatus(card))} {...(card.offline ? { title: card.offline } : {})}>
+                        {standing(card)}
+                      </span>,
                       // What its work still needs before it leaves this machine, in the sidebar's words.
-                      leftWords(card, project.gitHost),
+                      ...leftParts(card, project.gitHost),
                       many && project.name,
                       card.cost !== undefined && dollars(card.cost),
+                      // Last, as the part that gives way, and cut in its middle: runs started the same minute differ only at
+                      // their branch's end. A phone, where it has no room, drops it with its dot.
+                      !phone && card.branch && (
+                        <span className="flex min-w-0 font-mono" title={card.branch}>
+                          <MiddleCut text={card.branch} />
+                        </span>
+                      ),
                     ]}
                     columns={
                       <>

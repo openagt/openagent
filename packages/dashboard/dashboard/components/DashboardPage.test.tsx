@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import type { ActiveAgent, Intervention } from '../../src/index.js'
+import type { ListedPage } from '../lib/use-modules.js'
 
 // The Overview's own layout: its cards on a grid, ordered, sized and hidden by the person's layout
 // for the page (#overview layouts). The cards are tested on their own; here they are stand-ins, the
@@ -41,8 +42,10 @@ const active = (agentId: string, projectId = 'p1'): ActiveAgent => ({ projectId,
 const projects = [{ id: 'p1', name: 'alpha' }, { id: 'p2', name: 'beta' }] as never[]
 /** The agents at work, as the shell read them. */
 let working: ActiveAgent[] = []
+/** The modules' pages as the sidebar lists them: none known until a test says. */
+let listed: readonly ListedPage[] | null = null
 const overview = (scope: string | null = null, kept = { interventions: false, active: false }, read = true) => (
-  <DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} projectHref={id => `/${id}`} onSelectAgent={() => {}} onAgentStarted={() => {}} interventions={[]} interventionsState={!read ? 'unknown' : kept.interventions ? 'kept' : 'fresh'} active={{ active: working, state: !read ? 'unknown' : kept.active ? 'kept' : 'fresh' }} projects={projects} scope={scope} />
+  <DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} projectHref={id => `/${id}`} onSelectAgent={() => {}} onAgentStarted={() => {}} interventions={[]} interventionsState={!read ? 'unknown' : kept.interventions ? 'kept' : 'fresh'} active={{ active: working, state: !read ? 'unknown' : kept.active ? 'kept' : 'fresh' }} projects={projects} scope={scope} listedPages={listed} />
 )
 const show = (...args: Parameters<typeof overview>) => render(overview(...args))
 /** The cards drawn, in order, each with its grid classes. */
@@ -50,6 +53,7 @@ const drawn = () => [...document.querySelectorAll<HTMLElement>('[data-card]')].m
 
 beforeEach(() => {
   working = []
+  listed = null
   prefs.value = { onboardingDismissed: true }
   prefs.loaded = true
   prefs.updatePreferences.mockReset()
@@ -176,12 +180,23 @@ describe('the Overview', () => {
     // The press that took Customize away hands the keyboard to Done, not to the page.
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Done' }))
     const asleep = screen.getByText("a package's card").closest<HTMLElement>('[inert]')!
-    // Its heading's link is not drawn, however long its words: the card's bar stands in its place, on every card.
+    // Its heading's link is not drawn, however long its words.
     const link = screen.getByRole('link', { name: 'Every ticket of the project' }).parentElement!
     expect([...asleep.querySelectorAll('section>div:first-child>h2~*')]).toEqual([link])
     expect(asleep.className.split(' ')).toContain('[&_section>div:first-child>h2~*]:invisible')
     fireEvent.click(screen.getByRole('button', { name: 'Done' }))
     expect(screen.getByText("a package's card").closest('[inert]')).toBeNull()
+  })
+
+  test("while the page is arranged, a card's bar stands above the card, on its frame: it covers none of the card, however narrow, and moves none of it", async () => {
+    show()
+    fireEvent.click(await screen.findByRole('button', { name: 'Customize' }))
+    const bar = screen.getByRole('toolbar', { name: 'Hot tickets' })
+    const card = screen.getByText("a package's card").closest<HTMLElement>('[inert]')!
+    // Beside the card, not in it, and laid out of the flow: the card's heading and rows stand where they stood.
+    expect(bar.parentElement).toBe(card.parentElement)
+    expect(card.contains(bar)).toBe(false)
+    expect(bar.className.split(' ')).toEqual(expect.arrayContaining(['absolute', 'bottom-full', 'right-0']))
   })
 
   test('Esc leaves Customize as Done does, and the keyboard is back on Customize', async () => {
@@ -378,21 +393,38 @@ describe('the Overview', () => {
 
   test("before the packages' code is in, their part of the line waits in its place, and the part that comes takes it", async () => {
     modules.loaded = false
+    // The sidebar's pages say a shown project has the Queue: its part will stand there.
+    listed = [{ segment: 'queue', label: 'Queue', projects: ['p2'] }]
     const { rerender } = show()
     const line = (await screen.findByText('no agent working')).closest('p')!
-    // The parts in their order, each after the first opening with its dot (drawn, not said).
-    const parts = () => [...line.children].map(part => part.textContent)
-    expect(parts()).toEqual(['nothing needs you', 'no agent working', 'Loading…', 'your agents'])
+    expect(line.textContent).toBe('·nothing needs you·no agent working·Loading…·your agents')
     // A phone shows it too, beside Customize.
     expect(line.className).not.toContain('sr-only')
     modules.line = [{ id: '@x/queue/queued', order: 3, node: <span>nothing queued</span> }]
     rerender(overview())
-    expect(parts()).toEqual(['nothing needs you', 'no agent working', 'nothing queued', 'your agents'])
+    expect(line.textContent).toBe('·nothing needs you·no agent working·nothing queued·your agents')
     // Every package in, none with a part: the line is its own parts only.
     modules.loaded = true
     modules.line = []
     rerender(overview())
-    expect(parts()).toEqual(['nothing needs you', 'no agent working', 'your agents'])
+    expect(line.textContent).toBe('·nothing needs you·no agent working·your agents')
+  })
+
+  test("before the packages' code is in, no place waits for the queue's part where the sidebar's pages say no shown project has the Queue; while they say nothing yet, the parts after its place wait", async () => {
+    modules.loaded = false
+    listed = [{ segment: 'queue', label: 'Queue', projects: ['p2'] }, { segment: 'logs', label: 'Logs', projects: ['p1'] }]
+    show('p1')
+    const line = (await screen.findByText('no agent working')).closest('p')!
+    expect(line.textContent).toBe('·nothing needs you·no agent working·your agents')
+    cleanup()
+    // A browser's first visit: no page known, no place held, and what stands after it waits until a part or the pages come.
+    listed = null
+    const { rerender } = show()
+    const firstVisit = (await screen.findByText('no agent working')).closest('p')!
+    expect(firstVisit.textContent).toBe('·nothing needs you·no agent working')
+    modules.line = [{ id: '@x/queue/queued', order: 3, node: <span>nothing queued</span> }]
+    rerender(overview())
+    expect(firstVisit.textContent).toBe('·nothing needs you·no agent working·nothing queued·your agents')
   })
 
   test('the Human Queue says it is loading before its read, not that nothing waits', async () => {
@@ -407,7 +439,7 @@ describe('the Overview', () => {
     const item = (kind: Intervention['kind'], n: number): Intervention => ({ projectId: 'p1', projectName: 'alpha', kind, title: `t${n}`, agentId: `r${n}` })
     const scrolled = vi.fn()
     Element.prototype.scrollIntoView = scrolled
-    render(<DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} projectHref={id => `/${id}`} onSelectAgent={() => {}} onAgentStarted={() => {}} interventions={[item('awaiting', 1), item('awaiting', 2), item('pr', 3)]} interventionsState="fresh" active={{ active: [], state: 'fresh' }} projects={projects} scope={null} />)
+    render(<DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} projectHref={id => `/${id}`} onSelectAgent={() => {}} onAgentStarted={() => {}} interventions={[item('awaiting', 1), item('awaiting', 2), item('pr', 3)]} interventionsState="fresh" active={{ active: [], state: 'fresh' }} projects={projects} scope={null} listedPages={null} />)
     const part = await screen.findByRole('button', { name: '3 need you' })
     expect(part.getAttribute('title')).toBe('2 questions, 1 pull request')
     fireEvent.click(part)
@@ -424,7 +456,7 @@ describe('the Overview', () => {
       item({ number: 6, title: 'Add DESCRIPTION.md', url: 'https://x/pull/6', agentId: 'r6' }),
       item({ number: 8, title: 'Condense README', url: 'https://x/pull/8' }),
     ]
-    render(<DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} projectHref={id => `/${id}`} onSelectAgent={onSelectAgent} onAgentStarted={() => {}} interventions={interventions} interventionsState="fresh" active={{ active: [], state: 'fresh' }} projects={[]} scope={null} />)
+    render(<DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} projectHref={id => `/${id}`} onSelectAgent={onSelectAgent} onAgentStarted={() => {}} interventions={interventions} interventionsState="fresh" active={{ active: [], state: 'fresh' }} projects={[]} scope={null} listedPages={null} />)
     // One panel, in the order the queue gives them: a row says what it needs in the line under its name, so no kind has a heading.
     const part = within(screen.getByRole('region', { name: 'Human Queue' }))
     expect(part.queryAllByRole('region')).toEqual([])
