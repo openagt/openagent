@@ -24,14 +24,19 @@ vi.mock('./YourAgentsPart.js', () => ({ YourAgentsPart: () => <span>your agents<
 const modules = vi.hoisted(() => ({ loaded: true, gone: false, line: [] as { id: string; order: number; node: unknown }[] }))
 vi.mock('./ModuleCards.js', async () => {
   const { Section } = await import('./ui/section.js')
-  // A package's card as packages draw them: a part with a link to its page at its heading's right.
+  const { PartDescription } = await import('./PartDescription.js')
+  // A package's card as packages draw them: a part with a link to its page at its heading's right, and the sentence that says what it is.
   const node = (
     <Section title="Hot" action={<a href="/tickets">Every ticket of the project</a>}>
+      <PartDescription>The tickets to do first</PartDescription>
       <div>a package's card</div>
     </Section>
   )
   return { useModuleCards: () => ({ cards: modules.gone ? [] : [{ id: '@x/tickets/hot', label: 'Hot tickets', width: '1/2', minWidth: '1/3', present: true, node }], line: modules.line, loaded: modules.loaded }) }
 })
+// The screen's size, as the page reads it: a desktop's unless a test says a phone's.
+const screenSize = vi.hoisted(() => ({ phone: false }))
+vi.mock('../lib/use-mobile.js', async original => ({ ...(await original<typeof import('../lib/use-mobile.js')>()), useIsMobile: () => screenSize.phone }))
 const prefs = vi.hoisted(() => ({ value: { onboardingDismissed: true } as Record<string, unknown>, loaded: true, updatePreferences: vi.fn() }))
 vi.mock('../lib/preferences.js', () => ({ usePreferences: () => prefs.value, usePreferencesLoaded: () => prefs.loaded, updatePreferences: prefs.updatePreferences }))
 
@@ -53,6 +58,7 @@ const drawn = () => [...document.querySelectorAll<HTMLElement>('[data-card]')].m
 
 beforeEach(() => {
   working = []
+  screenSize.phone = false
   listed = null
   prefs.value = { onboardingDismissed: true }
   prefs.loaded = true
@@ -197,6 +203,29 @@ describe('the Overview', () => {
     expect(bar.parentElement).toBe(card.parentElement)
     expect(card.contains(bar)).toBe(false)
     expect(bar.className.split(' ')).toEqual(expect.arrayContaining(['absolute', 'bottom-full', 'right-0']))
+  })
+
+  test("while the page is arranged, a part's sentence is still for a screen reader alone, so arranging moves nothing", async () => {
+    show()
+    fireEvent.click(await screen.findByRole('button', { name: 'Customize' }))
+    const sentence = screen.getByText('The tickets to do first')
+    expect(sentence.className).toBe('sr-only')
+    expect(sentence.closest('[inert]')!.className).not.toMatch(/sr-only/)
+  })
+
+  test("on a phone the press that gives up the page's own layout stands in the tray at the page's foot, under its words, and Done stands alone in the head", async () => {
+    screenSize.phone = true
+    prefs.value = { onboardingDismissed: true, overviewLayouts: { '*': [{ id: 'skills', hidden: true }] } }
+    show()
+    fireEvent.click(await screen.findByRole('button', { name: 'Customize' }))
+    const tray = screen.getByRole('region', { name: 'Cards not on the page' })
+    const reset = within(tray).getByRole('button', { name: 'Reset to the default layout' })
+    // Under the tray's two sentences, in its full words.
+    const [, words] = tray.querySelectorAll('p')
+    expect(words!.compareDocumentPosition(reset) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(screen.getAllByRole('button', { name: 'Reset to the default layout' })).toEqual([reset])
+    fireEvent.click(reset)
+    expect(prefs.updatePreferences).toHaveBeenCalledWith({ overviewLayouts: {} })
   })
 
   test('Esc leaves Customize as Done does, and the keyboard is back on Customize', async () => {
