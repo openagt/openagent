@@ -29,13 +29,12 @@ import { ConfirmDialog } from './ui/confirm-dialog.js'
 import { buttonVariants } from './ui/button.js'
 import { BACKDROP_CLASS, DIALOG_PRESSES_CLASS } from './ui/dialog.js'
 import { Switch } from './ui/switch.js'
-import { Separator } from './ui/separator.js'
 import { RadioGroup, RadioGroupItem } from './ui/radio-group.js'
 import { ScrollArea } from './ui/scroll-area.js'
 import { InSection, Section } from './ui/section.js'
 import { Select, SelectContent, SelectItem, SelectTriggerBare, SelectValue } from './ui/select.js'
 import { MENU_TRIGGER_OPEN_CLASS } from './ui/dropdown-menu.js'
-import { navRowClass, PROJECT_ROW_CLASS } from './ui/nav-row.js'
+import { navRowClass } from './ui/nav-row.js'
 import { cn } from '../lib/utils.js'
 import { useProjectLabel } from '../lib/project-labels.js'
 import { SettingsFootContext, SettingsRow as Row, SettingsSection, SettingsSelectRow as SelectRow, type SettingsOption as SelectOption } from './SettingsRows.js'
@@ -178,7 +177,8 @@ export function SettingsDialog({
       </li>
     )
   }
-  const iconPress = cn(buttonVariants({ variant: 'ghost', size: 'icon-sm' }), 'text-muted-foreground hover:text-foreground max-md:size-11')
+  // A bar's icon press, pulled out by its own padding so its glyph stands on the dialog's inset; a finger's 44 on a phone.
+  const iconPress = cn(buttonVariants({ variant: 'ghost', size: 'icon-bar' }), 'text-muted-foreground hover:text-foreground')
 
   return (
     <BaseDialog.Root open onOpenChange={open => !open && leave(onClose)}>
@@ -190,7 +190,7 @@ export function SettingsDialog({
           initialFocus={popup}
           finalFocus={finalFocus}
           className={cn(
-            'fixed z-50 flex overflow-hidden bg-background text-foreground outline-none',
+            'fixed z-50 flex overflow-hidden bg-card text-card-foreground outline-none',
             // It arrives as every dialog does: grown in over 180ms, gone in 120ms; on a phone, up from below.
             'transition-[opacity,scale,translate] duration-180 data-[ending-style]:duration-120 data-[starting-style]:opacity-0 data-[ending-style]:opacity-0',
             phone
@@ -200,61 +200,57 @@ export function SettingsDialog({
         >
           {/* On a phone the list is the whole dialog until an entry is picked, and an entry the whole dialog after. */}
           {(!phone || listOnly) && (
-            <nav aria-label="Settings" className={cn('flex shrink-0 flex-col gap-4 overflow-y-auto bg-sidebar p-2', phone ? 'w-full' : 'w-56 border-r border-hairline')}>
+            <nav aria-label="Settings" className={cn('flex shrink-0 flex-col gap-4 overflow-y-auto bg-sidebar px-2 pb-2', phone ? 'w-full' : 'w-56 border-r border-hairline pt-2')}>
+              {/* The phone's top bar: its words and its close glyph on the screen's 16 inset. */}
               {phone && (
-                <div className="flex h-11 items-center justify-between pl-1.5">
+                <div className="flex h-12 shrink-0 items-center justify-between pl-2">
                   <BaseDialog.Title className="text-base font-semibold">Settings</BaseDialog.Title>
-                  <BaseDialog.Close aria-label="Close settings" className={iconPress}>
+                  <BaseDialog.Close aria-label="Close settings" className={cn(iconPress, 'mr-0.5')}>
                     <X className="size-4" aria-hidden />
                   </BaseDialog.Close>
                 </div>
               )}
               {/* Named for a screen reader only: the list starts with them, and needs no title over it. */}
               <section aria-label="You and this computer">
-                <ul className="flex flex-col gap-px">{yours.map(item)}</ul>
+                <ul className="flex flex-col gap-0.5">{yours.map(item)}</ul>
               </section>
               <section aria-label="Project">
-                <p className="flex h-8 items-center px-1.5 text-xs font-medium text-muted-foreground">Project</p>
+                <p className="flex h-8 items-center px-2 text-xs font-medium text-faint-foreground">Project</p>
                 <ProjectSelect projects={projects} value={project?.id ?? ALL_PROJECTS} onChange={id => leave(() => setPicked(id))} />
                 {projectEntries.length > 0 ? (
-                  <ul className="mt-px flex flex-col gap-px">{projectEntries.map(item)}</ul>
+                  <ul className="mt-0.5 flex flex-col gap-0.5">{projectEntries.map(item)}</ul>
                 ) : (
-                  <p className="px-1.5 pt-2 text-xs text-muted-foreground">Nothing to set for your projects.</p>
+                  <p className="px-2 pt-2 text-xs text-muted-foreground">Nothing to set for your projects.</p>
                 )}
               </section>
             </nav>
           )}
           {!listOnly && (
             <div className="flex min-w-0 flex-1 flex-col">
-              <div className="flex h-14 shrink-0 items-center gap-2 px-6 max-md:px-2">
-                {crumb ? (
-                  <button type="button" aria-label={`Back to ${current.title}`} onClick={crumb.back} className={iconPress}>
+              {/* The dialog's head on its one inset, as every dialog's (ui/dialog.tsx): 24 on a computer, a phone's top bar on a phone. */}
+              <div className={cn('flex shrink-0 items-center gap-2', phone ? 'h-12 px-4' : 'h-6 box-content px-6 pt-4.5 pb-4')}>
+                {phone && (
+                  <button type="button" aria-label={crumb ? `Back to ${current.title}` : 'All settings'} onClick={crumb ? crumb.back : () => leave(() => onEntry(''))} className={cn(iconPress, '-ml-1.5')}>
                     <ArrowLeft className="size-4" aria-hidden />
                   </button>
-                ) : (
-                  phone && (
-                    <button type="button" aria-label="All settings" onClick={() => leave(() => onEntry(''))} className={iconPress}>
-                      <ArrowLeft className="size-4" aria-hidden />
-                    </button>
-                  )
                 )}
-                {/* The entry's title leads; where it is (the project, the entry a page is in) quieter before it. */}
-                <BaseDialog.Title className="flex min-w-0 flex-1 items-center gap-1.5 text-base font-semibold">
+                {/* The entry's title leads; where it is (the project, the entry a page is in) quieter before it, the entry its way back. */}
+                <BaseDialog.Title className="flex min-w-0 flex-1 items-center gap-2 text-base font-semibold">
                   <span className="sr-only">Settings</span>
-                  {inProject && (
+                  {inProject && !(phone && crumb) && (
                     <>
-                      <span className="truncate font-normal text-muted-foreground">{project ? label(project.id, project.name) : 'All projects'}</span>
-                      <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                      <span className="truncate font-medium text-faint-foreground">{project ? label(project.id, project.name) : 'All projects'}</span>
+                      <ChevronRight className="size-3.5 shrink-0 text-faint-foreground" aria-hidden />
                     </>
                   )}
                   {crumb ? (
                     <>
                       {!phone && (
                         <>
-                          <button type="button" onClick={crumb.back} className="focus-ring truncate rounded-sm font-normal text-muted-foreground hover:text-foreground">
+                          <button type="button" onClick={crumb.back} className="focus-ring -mx-1 truncate rounded-sm px-1 font-medium text-faint-foreground transition-colors hover:text-foreground">
                             {current.title}
                           </button>
-                          <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                          <ChevronRight className="size-3.5 shrink-0 text-faint-foreground" aria-hidden />
                         </>
                       )}
                       <span className="truncate">{crumb.title}</span>
@@ -263,13 +259,13 @@ export function SettingsDialog({
                     <span className="truncate">{current.title}</span>
                   )}
                 </BaseDialog.Title>
-                <BaseDialog.Close aria-label="Close settings" className={iconPress}>
+                <BaseDialog.Close aria-label="Close settings" className={cn(iconPress, '-my-1 -mr-1.5')}>
                   <X className="size-4" aria-hidden />
                 </BaseDialog.Close>
               </div>
-              {/* `peer/entry`: the foot under it shows its line only while the entry scrolls on under it. */}
-              <ScrollArea className="peer/entry min-h-0 flex-1">
-                <div className="space-y-4 px-6 pb-6 max-md:px-4">
+              {/* `peer/entry`: what goes on under the foot fades out at the body's visible end, as under the chat's bar. */}
+              <ScrollArea className="peer/entry min-h-0 flex-1 after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-4 after:bg-gradient-to-t after:from-card after:opacity-0 data-[overflow-y-end]:after:opacity-100">
+                <div className={cn('space-y-4', phone ? 'px-4 pt-2 pb-4' : 'px-6 pb-6')}>
                   {savedTo.length > 0 && (
                     <p className="text-xs text-muted-foreground">
                       Saved to {savedTo.length === 1 ? 'one project' : `${savedTo.length} projects`}: {savedTo.map(p => label(p.id, p.name)).join(', ')}.
@@ -288,10 +284,8 @@ export function SettingsDialog({
                   </div>
                 </div>
               </ScrollArea>
-              <div
-                ref={setFoot}
-                className={cn('shrink-0 border-t border-transparent px-6 py-3 empty:hidden max-md:px-4 max-md:pb-[max(0.75rem,env(safe-area-inset-bottom))]', 'peer-data-[overflow-y-end]/entry:border-hairline', DIALOG_PRESSES_CLASS)}
-              />
+              {/* The entry's presses on the dialog's inset, under a hairline, as every dialog's foot. */}
+              <div ref={setFoot} className={cn('shrink-0 border-t border-hairline empty:hidden', phone ? 'px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))]' : 'px-6 pt-4 pb-6', DIALOG_PRESSES_CLASS)} />
             </div>
           )}
           <ConfirmDialog
@@ -311,14 +305,14 @@ export function SettingsDialog({
   )
 }
 
-/** The "Project" group's select, drawn as the sidebar's: every project, or one. */
+/** The "Project" group's select, a row of the list that opens: every project, or one. */
 function ProjectSelect({ projects, value, onChange }: { projects: ProjectSummary[]; value: string; onChange: (id: string) => void }) {
   const label = useProjectLabel()
   const items = [{ value: ALL_PROJECTS, label: 'All projects' }, ...projects.map(p => ({ value: p.id, label: label(p.id, p.name) }))]
   const picked = projects.find(p => p.id === value)
   return (
     <Select items={items} value={value} onValueChange={next => onChange(String(next ?? ALL_PROJECTS))}>
-      <SelectTriggerBare aria-label="Project" className={cn(PROJECT_ROW_CLASS, MENU_TRIGGER_OPEN_CLASS)}>
+      <SelectTriggerBare aria-label="Project" className={cn(navRowClass(false), 'font-medium', MENU_TRIGGER_OPEN_CLASS)}>
         <span className="flex size-4 shrink-0 items-center justify-center">
           {picked ? <ProjectDot project={picked} /> : <Layers className="size-4 text-muted-foreground" aria-hidden />}
         </span>
@@ -446,7 +440,7 @@ function useOwnEntries(): Entry[] {
       title: 'Notifications',
       icon: Bell,
       body: (
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-8">
           <HeadedSection heading="Deliver to">
             <ToggleRow
               label="Browser"
@@ -456,7 +450,6 @@ function useOwnEntries(): Entry[] {
               onChange={setBrowserNotifications}
             />
           </HeadedSection>
-          <Separator className="bg-hairline" />
           <HeadedSection heading="Notify me about">
             <ToggleRow
               label="Human Queue"
