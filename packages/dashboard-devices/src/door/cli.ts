@@ -7,7 +7,7 @@ import { ENTER_PATH } from './paths.js'
 import { askMe, enterForLine, leaveLine, readLineLink } from './line-out.js'
 import { askAt, cancelAt, doorOrigin, hearAt, mayAnswerAsks, waitingAsks } from './pair.js'
 import { makeUser } from './persons.js'
-import { serve } from './serve.js'
+import { ASKING_TAILSCALE, serve } from './serve.js'
 import { announce, find } from './wifi.js'
 import { tailscaleName, tailscaleRun, type TailscaleRun } from './tailscale.js'
 import { renderUnicodeCompact } from 'uqr'
@@ -230,9 +230,11 @@ async function followed(io: CliIO, settled: (store: Store) => boolean): Promise<
 /**
  * Whether the door's process followed the door's moving to another place: once it is to be open
  * there (`open`), it listens there or says why not; once it is not, it listens no more, unless On
- * this Wi-Fi keeps it open.
+ * this Wi-Fi keeps it open. "Tailscale is being asked" is no why-not: it is what the file says while
+ * the door waits on Tailscale's answer, and the answer comes next; read as one, `tailscale on`
+ * answered "not listening" whenever it looked in that moment.
  */
-const moved = (open: boolean) => (store: Store): boolean => (open ? isListening(store) || store.problem !== undefined : !isListening(store) || store.on)
+const moved = (open: boolean) => (store: Store): boolean => (open ? isListening(store) || (store.problem !== undefined && store.problem !== ASKING_TAILSCALE) : !isListening(store) || store.on)
 
 async function setSwitch(io: CliIO, on: boolean): Promise<Status> {
   await update(io.env, store => {

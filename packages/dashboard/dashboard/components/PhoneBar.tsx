@@ -10,12 +10,13 @@ export const PhoneBarCount = createContext<HTMLElement | null>(null)
 
 /**
  * The top row of a page that has none of its own: the page's name and the page's count, which the
- * page draws into `countSlot`. It stays at the top as the page scrolls. Given `onBack` (a page under
- * a module's page: a ticket of the Tickets), a back arrow stands first, as a session's bar has one.
+ * page draws into `countSlot`. It stays at the top as the page scrolls, under the daemon's banner
+ * while that shows. Given `onBack` (a page under a module's page: a ticket of the Tickets), a back
+ * arrow stands first, as a session's bar has one.
  */
 export function PhoneBar({ title, countSlot, onBack }: { title: string; countSlot: (slot: HTMLElement | null) => void; onBack?: (() => void) | undefined }) {
   return (
-    <div data-phone-bar="" className="sticky top-0 z-20 flex h-12 shrink-0 items-center gap-2 border-b border-border bg-background px-4 text-sm font-medium">
+    <div data-phone-bar="" className="sticky top-(--top-banner,0px) z-20 flex h-12 shrink-0 items-center gap-2 border-b border-border bg-background px-4 text-sm font-medium">
       {/* The arrow's glyph on the bar's 16 inset, the press pulled out by its padding (spacing.md 4). */}
       {onBack && (
         <Button variant="ghost" size="icon-bar" className="-ml-1.5 text-muted-foreground" aria-label="Back" onClick={onBack}>
@@ -71,12 +72,13 @@ export function PagesBar({
 }) {
   const { openMobile, setOpenMobile } = useSidebar()
   const item = (active: boolean) =>
-    cn('focus-ring-inset relative flex h-14 min-w-0 flex-1 flex-col items-center justify-center gap-1 text-xs font-medium transition-colors', active ? 'text-foreground' : 'text-muted-foreground active:text-foreground')
+    cn('focus-ring-inset relative flex h-full min-w-0 flex-1 flex-col items-center justify-center gap-1 text-xs font-medium transition-colors', active ? 'text-foreground' : 'text-muted-foreground active:text-foreground')
   // 44 by 26 behind every icon, filled only on the page that is open.
   const pill = (active: boolean) => cn('relative flex h-6.5 w-11 items-center justify-center rounded-full transition-colors', active && 'bg-foreground/8')
   return (
-    // Its height is the page's `--foot` (tailwind.css), which a page's part kept to the window's foot stands on.
-    <nav aria-label="Pages" data-pages-bar="" className="sticky bottom-0 z-20 flex shrink-0 border-t border-hairline bg-background">
+    // As high as `--pages-bar` (tailwind.css), its rule inside it and its presses filling the rest: the height `--foot`
+    // is set from, which a page's part kept to the window's foot stands on.
+    <nav aria-label="Pages" data-pages-bar="" className="sticky bottom-0 z-20 flex h-(--pages-bar) shrink-0 border-t border-hairline bg-background">
       <a href={overviewHref} onClick={inPlace(onOverview)} aria-current={overviewActive ? 'page' : undefined} aria-label={waiting > 0 ? `Overview, ${waiting} waiting on you` : 'Overview'} className={item(overviewActive)}>
         <span className={pill(overviewActive)}>
           <LayoutDashboard className="size-5" aria-hidden />

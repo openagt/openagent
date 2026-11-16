@@ -23,6 +23,17 @@ afterEach(() => {
   localStorage.clear()
 })
 
+test('a project with no run recorded says so where the runs would stand, and lists none', async () => {
+  render(
+    <ModuleHostContext.Provider value={hostWith([])}>
+      <LogsPage projects={[{ id: 'p1', name: 'alpha', gitHost: true }]} projectId={null} path={[]} />
+    </ModuleHostContext.Provider>,
+  )
+  expect(await screen.findByText('No runs recorded yet')).toBeTruthy()
+  expect(screen.getByText('A run is listed here from the moment an agent starts on this project.')).toBeTruthy()
+  expect(screen.queryByRole('list')).toBeNull()
+})
+
 test('a day is said as Today, Yesterday, else its weekday and date', () => {
   const today = new Date('2026-10-25T15:00:00')
   expect(dayOf('2026-10-25T01:00:00', today)).toBe('Today')
@@ -169,6 +180,21 @@ test('a run goes by the name every list gives it: with no short name and no prom
   expect(screen.getAllByRole('link', { name: 'r2' }).length).toBeGreaterThan(0)
 })
 
+test("a run's branch keeps its ending where its column is too narrow: runs started the same minute differ only there", async () => {
+  const branches = ['agent-2026-11-15T18-12-13-950Z', 'agent-2026-11-15T18-12-19-219Z']
+  render(
+    <ModuleHostContext.Provider value={hostWith(branches.map((branch, i) => ({ id: `r${i}`, startedAt: at(now - i * 1000), status: 'done', title: `Run ${i}`, branch })))}>
+      <LogsPage projects={[{ id: 'p1', name: 'alpha', gitHost: true }]} projectId={null} path={[]} />
+    </ModuleHostContext.Provider>,
+  )
+  for (const branch of branches) {
+    const column = await screen.findByTitle(branch)
+    // Said whole to a screen reader; drawn as a start that gives way and an ending that stays.
+    expect(within(column).getByText(branch).className).toContain('sr-only')
+    expect(within(column).getByText(branch.slice(-10)).className).toContain('shrink-0')
+  }
+})
+
 test('a second visit opens with the last list at once, while the runs are read again, faded once that read has been out a second', async () => {
   const page = (host: FakeHost) => (
     <ModuleHostContext.Provider value={host}>
@@ -284,11 +310,12 @@ test("a run whose work never left this machine says what it needs in the sidebar
   )
   render(page(false))
   const row = async (name: string) => (await screen.findAllByText(name))[0]!.closest('li')!
-  expect((await row('Committed a login page')).textContent).toContain('Needs push · 1 commit')
-  expect((await row('Left files')).textContent).toContain('Needs commit · 2 files')
+  // Two facts of the line, joined by its one dot as its others are.
+  expect((await row('Committed a login page')).textContent).toContain('Needs push·1 commit')
+  expect((await row('Left files')).textContent).toContain('Needs commit·2 files')
   expect((await row('Pushed')).textContent).not.toMatch(/Needs/)
   cleanup()
   forgetRemembered()
   render(page(true))
-  expect((await row('Committed a login page')).textContent).toContain('Needs PR · 1 commit')
+  expect((await row('Committed a login page')).textContent).toContain('Needs PR·1 commit')
 })

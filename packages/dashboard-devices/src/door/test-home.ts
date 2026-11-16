@@ -14,9 +14,10 @@ export const quietAnnounce = async (): Promise<{ stop: () => Promise<void> }> =>
 /**
  * A `tailscale` command as a test has it: this computer signed in as `name`, and Serve, which is
  * off for the network until `enable()` (then it says where it is turned on), keeping what it
- * serves. Each call is noted in `calls`.
+ * serves. Each call is noted in `calls`. `serveMs` is how long Serve takes to answer, as a real
+ * one takes a while when it is asked to serve.
  */
-export function fakeTailscale(name = 'laptop.tail1234.ts.net', opts: { serveOff?: boolean; state?: string } = {}) {
+export function fakeTailscale(name = 'laptop.tail1234.ts.net', opts: { serveOff?: boolean; state?: string; serveMs?: number } = {}) {
   const calls: string[][] = []
   let off = opts.serveOff === true
   let served: string | undefined
@@ -30,6 +31,7 @@ export function fakeTailscale(name = 'laptop.tail1234.ts.net', opts: { serveOff?
       return { code: 0, out: '' }
     }
     if (first === 'serve' && second === '--bg') {
+      if (opts.serveMs) await new Promise(resolve => setTimeout(resolve, opts.serveMs))
       if (off) return { code: null, out: 'Serve is not enabled on your tailnet.\nTo enable, visit:\n\n         https://login.tailscale.com/f/serve?node=n1234CNTRL\n' }
       served = args.at(-1)
       return { code: 0, out: `Available within your tailnet:\n\nhttps://${name}/\n|-- proxy ${served}\n` }
