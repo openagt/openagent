@@ -1,17 +1,18 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from 'react'
 import { Dialog as BaseDialog } from '@base-ui/react/dialog'
 import { Autocomplete } from '@base-ui/react/autocomplete'
-import { Search } from 'lucide-react'
+import { Blocks, Folder, LayoutDashboard, Search } from 'lucide-react'
 import type { AgentMeta, FoundAgent, Intervention, ProjectSummary } from '../../src/index.js'
 import { onAllAgents } from '../rpc/reads.js'
 import type { Route } from '../lib/route.js'
-import { jumpGroups, type JumpRow } from '../lib/jump.js'
+import { foundParts, jumpGroups, type JumpRow } from '../lib/jump.js'
 import { agentLabel } from '../lib/agent-label.js'
 import { inPlace } from '../lib/in-place.js'
 import { pressed, shortcut, shortcutKeys, useShortcut } from '../lib/shortcut.js'
 import { useProjectLabel } from '../lib/project-labels.js'
 import { cn } from '../lib/utils.js'
 import { needsWord } from './HumanQueueList.js'
+import { RunMark } from './RunMark.js'
 import { KeyCaps } from './ShortcutList.js'
 import { BACKDROP_CLASS } from './ui/dialog.js'
 import { Button } from './ui/button.js'
@@ -24,10 +25,15 @@ import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip.js'
 
 /** A place to jump to, with where it takes the page. */
 interface Place extends JumpRow {
+  /** Before the name, in a 16 square: a run's state, a page's icon, a project's folder. */
+  mark: ReactNode
   /** Quieter, at the right: the project, what the run waits on, its pull request. */
   meta?: string
   to: Route
 }
+
+/** A page's or a project's icon, as the sidebar draws it, in a row's mark. */
+const iconMark = (Icon: ComponentType<{ className?: string; 'aria-hidden'?: boolean }>): ReactNode => <Icon className="size-4 text-muted-foreground" aria-hidden />
 
 /** Where the runs last opened are kept, newest first, in this browser. */
 const OPENED_KEY = 'oa.jump-opened'
@@ -83,8 +89,8 @@ export function JumpPalette({ waiting, runs, pages, projects, scope, here, hrefO
   waiting: readonly Intervention[]
   /** The runs this page has read: the picked project's and every project's newest, newest first. */
   runs: readonly { projectId: string; projectName: string; agent: AgentMeta }[]
-  /** The pages of the dashboard and its modules that the sidebar lists. */
-  pages: readonly { segment: string; label: string }[]
+  /** The pages of the dashboard and its modules that the sidebar lists, with the icon it gives each. */
+  pages: readonly { segment: string; label: string; icon?: ComponentType<{ className?: string; 'aria-hidden'?: boolean }> | undefined }[]
   projects: readonly ProjectSummary[]
   /** The project picked in the sidebar, or none. */
   scope: string | null
@@ -129,6 +135,7 @@ export function JumpPalette({ waiting, runs, pages, projects, scope, here, hrefO
     const pr = agent.pr && `#${agent.pr.number}`
     return {
       key: runKey(projectId, agent.id),
+      mark: <RunMark status={agent.status} />,
       name: agentLabel(agent),
       also: [agent.branch, pr, agent.prTitle].filter((text): text is string => text !== undefined),
       meta: [scope === null && projectName ? label(projectId, projectName) : undefined, pr].filter(Boolean).join(' · '),
@@ -145,6 +152,7 @@ export function JumpPalette({ waiting, runs, pages, projects, scope, here, hrefO
       const pr = item.number !== undefined ? `#${item.number}` : undefined
       return [{
         key: runKey(item.projectId, item.agentId),
+        mark: <RunMark status="waiting" />,
         name: item.title,
         also: [item.branch, pr].filter((text): text is string => text !== undefined),
         meta: [scope === null ? label(item.projectId, item.projectName) : undefined, needsWord(item.kind, item.gitHost)].filter(Boolean).join(' · '),
@@ -155,14 +163,15 @@ export function JumpPalette({ waiting, runs, pages, projects, scope, here, hrefO
     // Not the run on the page, nor one listed as waiting.
     const taken = new Set([hereKey, ...waitingRows.map(place => place.key)])
     const recent = [...new Map([...opened, ...pageRuns].filter(place => !taken.has(place.key)).map(place => [place.key, place])).values()].slice(0, RECENT_SHOWN)
-    const pageRows: Place[] = [{ segment: '', label: 'Overview' }, ...pages].map(page => ({
+    const pageRows: Place[] = [{ segment: '', label: 'Overview', icon: LayoutDashboard }, ...pages].map(page => ({
       key: `page:${page.segment}`,
+      mark: iconMark(page.icon ?? Blocks),
       name: page.label,
       to: page.segment ? { projectId: null, agentId: null, page: page.segment } : { projectId: null, agentId: null },
     }))
     const projectRows: Place[] = projects
       .filter(project => project.id !== scope)
-      .map(project => ({ key: `project:${project.id}`, name: label(project.id, project.name), to: { projectId: project.id, agentId: null } }))
+      .map(project => ({ key: `project:${project.id}`, mark: iconMark(Folder), name: label(project.id, project.name), to: { projectId: project.id, agentId: null } }))
     const readRows = (read?.runs ?? []).filter(run => scope === null || run.projectId === scope).map(run => runPlace(run.projectId, run.projectName, run.agent))
     // What the read added while this was typed comes under what was shown; typed after it came, it is among the rest.
     const cameNow = read !== null && read.for === query
@@ -232,7 +241,8 @@ export function JumpPalette({ waiting, runs, pages, projects, scope, here, hrefO
               marked.current = place
             }}
           >
-            <div className="flex h-12 shrink-0 items-center gap-2 border-b border-hairline px-4">
+            {/* The field's words 16 in and 16 over and under, its glyph on the rows' marks' edge, 12 before the words as before a row's name. */}
+            <div className="flex h-13 shrink-0 items-center gap-3 border-b border-hairline px-4">
               <Search className="size-4 shrink-0 text-muted-foreground" aria-hidden />
               <Autocomplete.Input
                 ref={input}
@@ -250,10 +260,11 @@ export function JumpPalette({ waiting, runs, pages, projects, scope, here, hrefO
             {/* What a screen reader hears of the list; with nothing in it, the empty line says so. */}
             <Autocomplete.Status className="sr-only">{count === 0 ? '' : count === 1 ? '1 place' : `${count} places`}</Autocomplete.Status>
             {/* One height whatever it holds: the box keeps its size and its foot its place as a person types. */}
-            <Autocomplete.List className="h-[min(26rem,60dvh)] scroll-py-1 overflow-y-auto overscroll-contain p-1 empty:hidden">
+            {/* The rows' fill 8 in from the box's edges, their marks and the groups' names 16 in, as the field's glyph. */}
+            <Autocomplete.List className="h-[min(26rem,60dvh)] scroll-py-2 overflow-y-auto overscroll-contain p-2 empty:hidden">
               {(group: (typeof groups)[number]) => (
-                <Autocomplete.Group key={group.label} items={group.items} className="pb-1">
-                  <Autocomplete.GroupLabel className="flex h-7 items-center px-2 text-xs font-medium text-muted-foreground">{group.label}</Autocomplete.GroupLabel>
+                <Autocomplete.Group key={group.label} items={group.items} className="not-last:pb-2">
+                  <Autocomplete.GroupLabel className="flex h-8 items-center px-2 text-xs font-medium text-muted-foreground">{group.label}</Autocomplete.GroupLabel>
                   <Autocomplete.Collection>
                     {(place: Place) => (
                       <Autocomplete.Item
@@ -262,17 +273,24 @@ export function JumpPalette({ waiting, runs, pages, projects, scope, here, hrefO
                         render={<a href={hrefOf(place.to)} onClick={inPlace(() => pick(place))} />}
                         className="flex cursor-pointer items-center gap-3 rounded-md px-2 text-sm outline-none select-none md:h-9 max-md:h-11 data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground"
                       >
-                        <span className="min-w-0 flex-1 truncate">{place.name}</span>
+                        <span aria-hidden className="flex size-4 shrink-0 items-center justify-center">
+                          {place.mark}
+                        </span>
+                        {/* What was typed stands out in the name, so a person sees why the row is there. */}
+                        <span data-name className="min-w-0 flex-1 truncate">
+                          {foundParts(place.name, query).map((part, index) => (part.found ? <strong key={index} className="font-semibold">{part.text}</strong> : part.text))}
+                        </span>
                         {place.meta && <span className="max-w-[45%] shrink-0 truncate text-xs text-muted-foreground">{place.meta}</span>}
                       </Autocomplete.Item>
                     )}
                   </Autocomplete.Collection>
-                  {group.more > 0 && <p className="flex h-7 items-center px-2 text-xs text-muted-foreground">{group.more} more: keep typing</p>}
+                  {group.more > 0 && <p className="flex h-8 items-center px-2 text-xs text-muted-foreground">{group.more} more: keep typing</p>}
                 </Autocomplete.Group>
               )}
             </Autocomplete.List>
-            <Autocomplete.Empty className="flex h-[min(26rem,60dvh)] items-start justify-center px-4 py-6 text-sm text-muted-foreground empty:hidden">Nothing matches “{query}”</Autocomplete.Empty>
-            <div className="flex h-9 shrink-0 items-center gap-4 border-t border-hairline px-4 text-xs text-muted-foreground pointer-coarse:hidden">
+            {/* On the rows' edge, where the first row's mark would be. */}
+            <Autocomplete.Empty className="flex h-[min(26rem,60dvh)] items-start px-4 py-3 text-sm text-muted-foreground empty:hidden">Nothing matches “{query}”</Autocomplete.Empty>
+            <div className="flex h-11 shrink-0 items-center gap-4 border-t border-hairline px-4 text-xs text-muted-foreground pointer-coarse:hidden">
               <span className="flex items-center gap-1.5">
                 <KeyCaps keys={['Enter']} /> Go
               </span>

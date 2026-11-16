@@ -13,7 +13,7 @@ const { JumpPalette, openJump } = await import('./JumpPalette.js')
 const { Dialog } = await import('./ui/dialog.js')
 
 const run = (id: string, fields: Partial<AgentMeta> = {}): AgentMeta => ({ id, status: 'done', startedAt: '2026-11-01T10:00:00Z', updatedAt: '2026-11-01T10:00:00Z', ...fields }) as AgentMeta
-const found = (projectId: string, id: string, title: string): FoundAgent => ({ projectId, projectName: projectId, agent: { id, title, startedAt: '2026-01-01T10:00:00Z' } })
+const found = (projectId: string, id: string, title: string): FoundAgent => ({ projectId, projectName: projectId, agent: { id, status: 'done', title, startedAt: '2026-01-01T10:00:00Z' } })
 
 const SHOP = { id: 'shop', path: '/shop', name: 'shop', activated: true, gitHost: true }
 const BLOG = { id: 'blog', path: '/blog', name: 'blog', activated: true, gitHost: true }
@@ -48,7 +48,7 @@ function shown(): Record<string, string[]> {
   return Object.fromEntries(
     within(listbox)
       .getAllByRole('group')
-      .map(group => [group.getAttribute('aria-labelledby') && document.getElementById(group.getAttribute('aria-labelledby')!)?.textContent, within(group).queryAllByRole('option').map(option => option.querySelector('span')?.textContent)]),
+      .map(group => [group.getAttribute('aria-labelledby') && document.getElementById(group.getAttribute('aria-labelledby')!)?.textContent, within(group).queryAllByRole('option').map(option => option.querySelector('[data-name]')?.textContent)]),
   )
 }
 
@@ -113,6 +113,21 @@ describe('the jump', () => {
     expect(shown()).toEqual({ 'Waiting on you': ['Pick a colour'], Recent: ['Cart page', 'First post'], Projects: ['shop'] })
     fireEvent.change(input, { target: { value: 'nothing like it' } })
     expect(screen.getByText('Nothing matches “nothing like it”')).toBeTruthy()
+  })
+
+  test('each row leads with its mark, a run its state and a page its icon, and what was typed stands out in its name', async () => {
+    draw()
+    act(() => openJump())
+    const input = await screen.findByRole('combobox')
+    fireEvent.change(input, { target: { value: 'pa ca' } })
+    const cart = screen.getByRole('option', { name: /Cart page/ })
+    expect([...cart.querySelectorAll('strong')].map(found => found.textContent)).toEqual(['Ca', 'pa'])
+    // A run's hexagon, not an icon.
+    expect(cart.querySelector('svg')).toBeTruthy()
+    expect(cart.querySelector('svg.lucide')).toBeNull()
+    fireEvent.change(input, { target: { value: 'tick' } })
+    const tickets = screen.getByRole('option', { name: /Tickets/ })
+    expect(tickets.querySelector('svg.lucide')).toBeTruthy()
   })
 
   test('every other run is read as it opens, and what it adds comes under what is shown, never among it', async () => {

@@ -47,7 +47,7 @@ import { useActiveAgents } from './lib/use-working.js'
 import { useFavicon } from './lib/favicon.js'
 import { DaemonDown, INSTALLED_RESTARTS, useDaemonHealth } from './lib/use-daemon-health.js'
 import { useContextSet } from './lib/use-context-set.js'
-import { TriangleAlert } from 'lucide-react'
+import { Bot, KeyRound, TriangleAlert } from 'lucide-react'
 import type { StartPicks } from './lib/started-from.js'
 import { useShortcut } from './lib/shortcut.js'
 import { FocusHome } from './lib/focus-home.js'
@@ -66,10 +66,10 @@ const EMPTY_INTERVENTIONS: ProjectionRead<Intervention> = { items: [], whole: []
 /** Stable initial for the activity poll (#627), so it does not churn on every render. */
 const EMPTY_ACTIVITY: ProjectionRead<Activity> = { items: [], whole: [] }
 
-/** The dashboard's own pages, by the name a phone's bar gives each, as it gives a module's page its label. */
+/** The dashboard's own pages, by the name a phone's bar gives each, as it gives a module's page its label, and the icon the sidebar and the jump draw for it. */
 const OWN_PAGES = new Map([
-  [AGENTS_PAGE, 'Agents'],
-  [PERMISSIONS_PAGE, 'Permissions'],
+  [AGENTS_PAGE, { label: 'Agents', icon: Bot }],
+  [PERMISSIONS_PAGE, { label: 'Permissions', icon: KeyRound }],
 ])
 
 /** The run this page started last: what the page says of it until the run's own record does. */
@@ -637,7 +637,7 @@ export function App() {
   // An address that shows a "No such …" page: its own words are further down.
   const notFound = unknownProject || sessionGone || (pageSegment !== null && addressesRead && !OWN_PAGES.has(pageSegment) && !modulePage)
   // The name a phone's top bar gives the page; null on a project's own pages, which have a top row.
-  const phoneTitle = notFound ? 'Not found' : projectShape ? null : pageSegment ? (OWN_PAGES.get(pageSegment) ?? modulePage?.label ?? listedPage?.label ?? '') : projectId === null ? 'Overview' : null
+  const phoneTitle = notFound ? 'Not found' : projectShape ? null : pageSegment ? (OWN_PAGES.get(pageSegment)?.label ?? modulePage?.label ?? listedPage?.label ?? '') : projectId === null ? 'Overview' : null
   // A page with no chat (the Overview, a module's page) scrolls as a page: the browser's own
   // scrolling, which bounces at either end, and its header goes up with the rest. On a phone its bar
   // stays at the top; on a wider screen the sidebar stays beside it. A chat keeps its box at the
@@ -650,7 +650,7 @@ export function App() {
     route.settings !== undefined
       ? 'Settings'
       : pageSegment
-        ? (OWN_PAGES.get(pageSegment) ?? modulePage?.label ?? (addressesRead ? 'No such page' : (listedPage?.label ?? null)))
+        ? (OWN_PAGES.get(pageSegment)?.label ?? modulePage?.label ?? (addressesRead ? 'No such page' : (listedPage?.label ?? null)))
         : unknownProject
           ? 'No such project'
           : sessionGone
@@ -800,7 +800,7 @@ export function App() {
       <JumpPalette
         waiting={interventions}
         runs={pageRuns}
-        pages={[...shownPages, ...[...OWN_PAGES].map(([segment, label]) => ({ segment, label }))]}
+        pages={[...shownPages, ...[...OWN_PAGES].map(([segment, page]) => ({ segment, ...page }))]}
         projects={projects}
         scope={scope}
         here={route}

@@ -73,3 +73,24 @@ export function jumpGroups<R extends JumpRow>(candidates: readonly JumpCandidate
   }
   return groups
 }
+
+/** A name cut into what the typed words found in it and the rest, in order: each word's first place, the places never overlapping. */
+export function foundParts(name: string, query: string): { text: string; found: boolean }[] {
+  const lower = name.toLowerCase()
+  const spans: [number, number][] = []
+  for (const word of query.toLowerCase().split(/\s+/).filter(Boolean)) {
+    let at = lower.indexOf(word)
+    while (at >= 0 && spans.some(([from, to]) => at < to && at + word.length > from)) at = lower.indexOf(word, at + 1)
+    if (at >= 0) spans.push([at, at + word.length])
+  }
+  spans.sort((a, b) => a[0] - b[0])
+  const parts: { text: string; found: boolean }[] = []
+  let from = 0
+  for (const [start, end] of spans) {
+    if (start > from) parts.push({ text: name.slice(from, start), found: false })
+    parts.push({ text: name.slice(start, end), found: true })
+    from = end
+  }
+  if (from < name.length) parts.push({ text: name.slice(from), found: false })
+  return parts
+}
