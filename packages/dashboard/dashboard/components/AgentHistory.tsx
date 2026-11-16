@@ -896,7 +896,7 @@ function AgentHistoryRow({
           role="button"
           tabIndex={0}
           aria-expanded={fold.open}
-          aria-label={`${fold.count} agent${fold.count === 1 ? '' : 's'}${fold.working > 0 ? ` · ${fold.working} running` : ''}`}
+          aria-label={`${fold.count} subagent${fold.count === 1 ? '' : 's'}${fold.working > 0 ? ` · ${fold.working} running` : ''}`}
           title={`${fold.count} subagent${fold.count === 1 ? '' : 's'}${fold.working > 0 ? `, ${fold.working} running` : ''}`}
           onClick={e => {
             e.preventDefault()
