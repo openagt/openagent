@@ -22,6 +22,15 @@ export function Panel({ ordered = false, className, children, ...props }: { orde
   )
 }
 
+/** A step's number in a list of steps a person takes in turn (a `Panel ordered`, a dialog's steps): a quiet disc on the step's first line, 16 across as a row's mark is, in the press's colour on the step at hand. */
+export function StepNumber({ at, current = false }: { at: number; current?: boolean }) {
+  return (
+    <span aria-hidden className="flex h-5 w-4 shrink-0 items-center">
+      <span className={cn('flex size-4 items-center justify-center rounded-full bg-accent text-xs font-medium tabular-nums', current ? 'text-primary' : 'text-muted-foreground')}>{at + 1}</span>
+    </span>
+  )
+}
+
 /** {@link PanelGroup}s one under another whose rows' columns stand in one place down all of them, as one list's do (a day's runs under another's). */
 export function PanelGroups({ className, children }: { className?: string; children: ReactNode }) {
   return (

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Check, CircleCheck, Copy, ExternalLink, Loader2, RotateCw } from 'lucide-react'
-import { Button, Dialog, Input, QrCode, Skeleton, Slot, useOpenAgentDown } from '@openagt/dashboard/module'
+import { Button, Dialog, Input, QrCode, Skeleton, Slot, StepNumber, useOpenAgentDown } from '@openagt/dashboard/module'
 import { failed, type Answer, type Given } from './devices.js'
 import { CodeStrip, LinkPress, Presses, PressRow, Problem } from './parts.js'
 
@@ -245,10 +245,7 @@ export function PhoneCode({
             <ol className="space-y-3 text-sm">
               {steps.map((step, at) => (
                 <li key={step} className="flex gap-3">
-                  {/* Its number on the step's first line, in a quiet disc. */}
-                  <span aria-hidden className="flex size-5 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-medium tabular-nums text-muted-foreground">
-                    {at + 1}
-                  </span>
+                  <StepNumber at={at} />
                   <span className="min-w-0">{step}</span>
                 </li>
               ))}
