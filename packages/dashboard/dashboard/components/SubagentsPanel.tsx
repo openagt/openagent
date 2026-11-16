@@ -36,6 +36,11 @@ const TRANSCRIPT_EVERY_MS = 2_000
 /** How often an ended one's is: it should change no more, and each read is its whole log. */
 const ENDED_EVERY_MS = 60_000
 const NO_EVENTS: OpenAgentEvent[] = []
+/**
+ * How far a row's card stands from the row: 6 from the pane's edge, as every card stands from what
+ * it points at, the row being 9 inside that edge (the pane's 1 of border and the list's 8).
+ */
+const CARD_OFFSET = 6 + 1 + 8
 
 export function SubagentsPanel({
   projectId,
@@ -170,7 +175,7 @@ function SubagentList({ ref, fold, page, rows, reasons, shown, projectId, onPick
         const drawn = keys.flatMap(key => byKey.get(key) ?? [])
         if (drawn.length === 0) return null
         return name === 'Ended' && held.folds ? (
-          <section key={name} aria-label="Ended">
+          <section key={name} aria-label="Ended" className={PART_CLASS}>
             {/* A row in the list's place: its words on the names' edge. */}
             <button ref={fold} type="button" aria-expanded={endedOpen} onClick={pressFold} className={cn(navRowClass(false), 'text-muted-foreground')}>
               <span aria-hidden className="w-4 shrink-0" />
@@ -191,11 +196,18 @@ function SubagentList({ ref, fold, page, rows, reasons, shown, projectId, onPick
   )
 }
 
+/**
+ * A part after another stands 32 from the rows above it to its name, which stands 8 over its own
+ * rows (ui/look/spacing.md 8: a part's name to its card 8, a card to the next part's name 32): the
+ * name's line is 32 high, its words in its middle, 8 from either side.
+ */
+const PART_CLASS = 'not-first:mt-6'
+
 /** A part of the list: its name in the quiet part-name text, over its rows. */
 function Part({ name, children }: { name: string; children: ReactNode }) {
   const heading = useId()
   return (
-    <section aria-labelledby={heading}>
+    <section aria-labelledby={heading} className={PART_CLASS}>
       <h3 id={heading} className="flex h-8 items-center px-2 text-xs font-medium text-muted-foreground">
         {name}
       </h3>
@@ -279,7 +291,7 @@ function SubagentItem({ row, failed, reason, open, projectId, onPick, onStop }: 
           )}
         </TooltipTrigger>
         {/* The whole name, what it runs on, and how it stands, as T3 Code's card says them; with no model known, its state at the card's left. */}
-        <TooltipContent side="left" align="start" className="grid max-w-72 gap-1 px-4 py-3 text-sm">
+        <TooltipContent side="left" align="start" sideOffset={CARD_OFFSET} className="grid max-w-72 gap-1 px-4 py-3 text-sm">
           <span className="font-medium break-words">{row.name}</span>
           <span className="flex items-center justify-between gap-4 text-xs text-muted-foreground">
             {model}

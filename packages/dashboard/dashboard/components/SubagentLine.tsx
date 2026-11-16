@@ -77,6 +77,36 @@ export function SubagentMessage({ name, text, status, detail }: { name: string; 
   )
 }
 
+/** What the folded line says: a working subagent's name, or what came of them. */
+interface Said {
+  text: string
+  working: boolean
+}
+
+/**
+ * The folded line's words, changing in place. The words that leave stay under the ones that come
+ * until those are readable (`morph-out`), so the line is never its chevron alone; the first words
+ * of a line come with it, at once. The arrival is the words' box, its shimmer the words in it: one
+ * element cannot run both animations.
+ */
+function LineWords({ said }: { said: Said }) {
+  const [shown, setShown] = useState<{ now: Said; before?: Said }>({ now: said })
+  if (shown.now.text !== said.text || shown.now.working !== said.working) setShown({ now: said, before: shown.now })
+  const words = (each: Said) => <span className={each.working ? 'text-shimmer' : 'group-hover/status:text-foreground group-has-focus-visible/status:text-foreground'}>{each.text}</span>
+  return (
+    <span className="grid min-w-0 text-left">
+      {shown.before && (
+        <span key={`left:${shown.before.text}`} aria-hidden className="morph-out min-w-0 truncate [grid-area:1/1]" onAnimationEnd={e => e.target === e.currentTarget && setShown(was => ({ now: was.now }))}>
+          {words(shown.before)}
+        </span>
+      )}
+      <span key={shown.now.text} className={cn('min-w-0 truncate [grid-area:1/1]', shown.before && 'morph-in')}>
+        {words(shown.now)}
+      </span>
+    </span>
+  )
+}
+
 /** The subagents and messages of one stretch of the chat, as one line. `lead` is a row the panel opens with: the session's set-up. */
 export function SubagentSteps({ steps, lead, onOpen }: { steps: readonly SubagentStep[]; lead?: ReactNode; onOpen?: ((key: string) => void) | undefined }) {
   const [open, setOpen] = useState(false)
@@ -102,17 +132,7 @@ export function SubagentSteps({ steps, lead, onOpen }: { steps: readonly Subagen
     <div className="min-w-0 flex-1 font-sans text-sm text-muted-foreground">
       <div className="group/status flex">
         <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open} aria-label={current ? `Working: ${current.name}` : words} className="flex min-w-0 items-center gap-1.5 py-0.5">
-          {current ? (
-            <>
-              <span key={current.key} className="morph-in min-w-0 truncate text-left text-shimmer">
-                {current.name}
-              </span>
-            </>
-          ) : (
-            <span key={words} className="morph-in min-w-0 truncate text-left group-hover/status:text-foreground group-has-focus-visible/status:text-foreground">
-              {words}
-            </span>
-          )}
+          <LineWords said={current ? { text: current.name, working: true } : { text: words, working: false }} />
           <ChevronRight className={cn('h-3.5 w-3.5 shrink-0 transition-transform', open && 'rotate-90')} aria-hidden />
         </button>
       </div>
