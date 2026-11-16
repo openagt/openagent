@@ -37,12 +37,14 @@ function renderMenu(over: Partial<Parameters<typeof SkillsMenu>[0]> = {}) {
 const checked = (name: string) => screen.getByRole('menuitemcheckbox', { name }).getAttribute('aria-checked')
 
 describe('the Skills menu under the launcher\'s box', () => {
-  test('the button waits for the project\'s skills: it never draws the agent\'s count alone and then changes it', async () => {
+  test('the button holds its place while the project\'s skills are read, with no count: it never draws the agent\'s count alone and then changes it', async () => {
     let read: (v: unknown) => void = () => {}
     onProjectSkills.mockReturnValue(new Promise(resolve => (read = resolve)))
     renderMenu()
     await new Promise(resolve => setTimeout(resolve, 20))
-    expect(screen.queryByRole('button', { name: /^Skills/ })).toBeNull()
+    const held = screen.getByRole('button', { name: 'Skills' })
+    expect(held.hasAttribute('disabled') || held.getAttribute('aria-disabled') === 'true' || held.hasAttribute('data-disabled')).toBe(true)
+    expect(held.textContent).not.toMatch(/\d/)
     read(PROJECT)
     expect(await screen.findByRole('button', { name: 'Skills: 4' })).toBeTruthy()
   })

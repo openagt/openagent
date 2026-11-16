@@ -335,12 +335,15 @@ export function StartAgentForm({
           </>
         }
         // Who runs, under the box at the left (his order): the agent, the skills this session gets, then the Context picker.
+        // All three land together once the agents are read, so the agent's and the skills' landing moves no Context.
         controls={
+          agentsView !== undefined && (
           <>
             <AgentMenu agents={agentsView?.agents} picked={onAgent?.id} busy={busy} onPick={id => updatePreferences({ agent: id === DEFAULT_AGENT ? '' : id })} />
             <SkillsMenu projectId={noProject ? undefined : projectId} agent={onAgent} groups={agentsView?.skills} picks={skillPicks} onChange={setSkillPicks} busy={busy} />
             {!noProject && <ProjectContextMenu projectId={projectId} context={context} busy={busy} onToggle={toggleContext} />}
           </>
+          )
         }
         // What becomes of the work, at that row's right, before the model: who it pushes as (the
         // project's git host account on the computer the run goes to, picked for this session), then

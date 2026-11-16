@@ -105,8 +105,10 @@ export function SkillsMenu({
   const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
   const project = useProjectSkills(projectId)
   const held = project?.held ?? []
-  // Counted only once the project's skills are read: a count of the agent's alone would be drawn, then change.
-  if (!agent || !groups || (projectId !== undefined && project === null)) return null
+  if (!agent || !groups) return null
+  // Counted only once the project's skills are read: a count of the agent's alone would be drawn, then change. Till
+  // then the item holds its place, a digit's room kept for the count, so nothing after it moves when it lands.
+  const reading = projectId !== undefined && project === null
   const own = agent.skills
   const ofAgent = sessionSkills(agent, picks)
   const listed = [...own, ...picks.on.filter(name => !own.includes(name))]
@@ -126,11 +128,11 @@ export function SkillsMenu({
   return (
     <DropdownMenu>
       <Tooltip>
-        <TooltipTrigger render={<DropdownMenuTrigger type="button" disabled={busy} aria-label={`Skills: ${count}`} className={rowButtonClass} />}>
+        <TooltipTrigger render={<DropdownMenuTrigger type="button" disabled={busy || reading} aria-label={reading ? 'Skills' : `Skills: ${count}`} className={rowButtonClass} />}>
           <Puzzle className="size-4 shrink-0" aria-hidden />
-          <span className="truncate">
+          <span className="truncate tabular-nums">
             <span className={rowWideClass}>Skills: </span>
-            {count}
+            {reading ? <span className="before:invisible before:content-['0']" /> : count}
           </span>
           <RowChevron />
         </TooltipTrigger>
