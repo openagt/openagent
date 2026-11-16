@@ -11,7 +11,7 @@ import type { AgentState } from '../rpc/logins.js'
 import { Badge, type BadgeTone } from './ui/badge.js'
 import { ModuleSlot } from './ModulePageView.js'
 import { Page } from './Page.js'
-import { Section } from './ui/section.js'
+import { PanelGroup } from './ui/panel.js'
 import { AccountWhere, ServerAsks, ServersProvider } from './ServerLogins.js'
 
 // The Permissions page: every account OpenAgent's agents work with, in one place. An agent can
@@ -92,7 +92,7 @@ function AgentSetup({ driver, title, primary }: { driver: DriverName; title: str
   }, [missing])
   if (!state || (!missing && !(wasMissing && state.ready))) return null
   return (
-    <Section title={title}>
+    <PanelGroup bare title={title}>
       {state.ready ? (
         <p ref={takeLostFocus} role="status" tabIndex={-1} className="text-sm text-muted-foreground outline-none">
           <StateWords state={state}>{`${title} is ready: runs can start with it.`}</StateWords>
@@ -100,7 +100,7 @@ function AgentSetup({ driver, title, primary }: { driver: DriverName; title: str
       ) : (
         <AgentFix state={state} words={<StateWords state={state}>{agentWords(state)}</StateWords>} variant={primary ? undefined : 'secondary'} onChanged={() => void reload()} />
       )}
-    </Section>
+    </PanelGroup>
   )
 }
 

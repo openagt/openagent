@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import { Check, ChevronDown, Copy, Info, MoreHorizontal, Plus } from 'lucide-react'
-import { Button, useAskOn, ClaudeLogo, CodexLogo, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, GaugeFace, Input, Panel, PanelGroup, PanelNote, SentenceShape, Skeleton, Slot, Tooltip, TooltipContent, TooltipTrigger, cn, useModuleHost, useOpenAgentDown, usePolled, type ModuleCardProps, type ModuleHost } from '@openagt/dashboard/module'
+import { Button, useAskOn, ClaudeLogo, CodexLogo, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, GaugeFace, Input, Panel, PanelGroup, SentenceShape, Skeleton, Slot, Tooltip, TooltipContent, TooltipTrigger, cn, useModuleHost, useOpenAgentDown, usePolled, type ModuleCardProps, type ModuleHost } from '@openagt/dashboard/module'
 
 // The accounts each coding agent's runs try, in order: how full each one is, whether it is at a
 // limit, adding one: the command's own sign-in, which goes on by itself while the card follows it,
@@ -563,10 +563,11 @@ export function AccountsCard({ accountWhere }: ModuleCardProps) {
           {/* Another account, at the heading: whose agent it is for, then its sign-in in a dialog. With none yet, the presses are under it. */}
           {list?.ok && !none && addable.length > 0 && (
             <DropdownMenu>
-              <DropdownMenuTrigger ref={addPress} render={<Button variant="secondary" aria-label="Add an account" />}>
-                <Plus className="size-3.5" aria-hidden />
+              {/* Unpainted, as a part's heading's presses are, pulled out by its own padding so its last mark ends on the card's edge. */}
+              <DropdownMenuTrigger ref={addPress} render={<Button variant="ghost" className="-mr-3" aria-label="Add an account" />}>
+                <Plus className="size-4" aria-hidden />
                 Add
-                <ChevronDown className="size-3 opacity-70" aria-hidden />
+                <ChevronDown className="size-4 text-muted-foreground" aria-hidden />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="min-w-[10rem]">
                 {addable.map(agent => (
@@ -583,50 +584,46 @@ export function AccountsCard({ accountWhere }: ModuleCardProps) {
     >
       {/* Waits in the room of its emptiest answer, the sentence that says there is no account yet. */}
       <Slot of={{ value: list, state }} shape={<SentenceShape />}>
-        {list => (
-          <Panel>
-            {!list!.ok ? (
-              <PanelNote>
-                <span className="text-danger">{list!.error}</span>
-              </PanelNote>
-            ) : (
-              <>
-                {AGENTS.map(agent => (
-                  <AgentAccounts
-                    key={agent.id}
-                    agent={agent}
-                    // A login that is not there has no row: the card says so below, with the press to add one, a server's first included.
-                    accounts={shown(agent.id)}
-                    usage={usage?.ok ? (usage.accounts[agent.id] ?? []) : []}
-                    reading={usage === undefined}
-                    where={accountWhere}
-                    busy={busy || down}
-                    onPress={press}
-                  />
-                ))}
-                {/* No account at all: the press is said in the card too, where a newcomer looks, not only at its corner. */}
-                {none && (
-                  <PanelNote>
-                    {/* The presses go beside the sentence together, else under it. `grow`, not `flex-1`: another module's stylesheet loaded later has a `.flex-1` that undoes `basis-48`. */}
-                    <span className="flex flex-wrap items-center gap-2">
-                      <span className="min-w-0 grow basis-48">
-                        {addable.length > 0 ? 'No account yet. Runs need one to start.' : `No account yet: install ${AGENTS.map(agent => agent.name).join(' or ')} first, then add one here.`}
-                      </span>
-                      <span className="flex flex-wrap gap-2 empty:hidden">
-                        {addable.map(agent => (
-                          <Button key={agent.id} variant="secondary" onClick={() => setNaming(agent.id)}>
-                            <agent.Logo className="size-3.5" />
-                            Add a {agent.account} account
-                          </Button>
-                        ))}
-                      </span>
-                    </span>
-                  </PanelNote>
-                )}
-              </>
-            )}
-          </Panel>
-        )}
+        {list =>
+          !list!.ok ? (
+            <p className="text-sm text-danger">{list!.error}</p>
+          ) : none ? (
+            // No account at all: one sentence on the column's edge, no card around it, and the press said beside it,
+            // where a newcomer looks, not only at the heading. The presses go beside the sentence together, else under it.
+            // `grow`, not `flex-1`: another module's stylesheet loaded later has a `.flex-1` that undoes `basis-48`.
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <p className="min-w-0 grow basis-48 text-sm text-muted-foreground">
+                {addable.length > 0 ? 'No account yet. Runs need one to start.' : `No account yet: install ${AGENTS.map(agent => agent.name).join(' or ')} first, then add one here.`}
+              </p>
+              {addable.length > 0 && (
+                <span className="flex flex-wrap gap-2">
+                  {addable.map(agent => (
+                    <Button key={agent.id} variant="secondary" onClick={() => setNaming(agent.id)}>
+                      <agent.Logo className="size-3.5" />
+                      Add a {agent.account} account
+                    </Button>
+                  ))}
+                </span>
+              )}
+            </div>
+          ) : (
+            <Panel>
+              {AGENTS.map(agent => (
+                <AgentAccounts
+                  key={agent.id}
+                  agent={agent}
+                  // A login that is not there has no row. With none at all the part says so in place of the card, with the press to add one, a server's first included.
+                  accounts={shown(agent.id)}
+                  usage={usage?.ok ? (usage.accounts[agent.id] ?? []) : []}
+                  reading={usage === undefined}
+                  where={accountWhere}
+                  busy={busy || down}
+                  onPress={press}
+                />
+              ))}
+            </Panel>
+          )
+        }
       </Slot>
       {failed !== undefined && <p className="mt-2 text-sm text-danger">{failed}</p>}
       {/* A sign-in that did not go through while nobody watched it, a page opened since: said here, under the card, as the dialog is closed. */}

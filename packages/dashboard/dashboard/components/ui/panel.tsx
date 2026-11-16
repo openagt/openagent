@@ -93,7 +93,7 @@ const coverClass = 'outline-none after:absolute after:inset-0'
  * comes to the row for (Answer, Review); then the fact stands just before them, centred on the row with
  * them, and is not said on a phone, where the room is the name's.
  */
-export function PanelRow({ state, before, title, titleHint, meta = [], metaLines = 1, under, columns, fact, actions, actionsAtRest = false, href, external = false, onClick, className }: {
+export function PanelRow({ state, before, title, titleHint, meta = [], metaLines = 1, under, columns, fact, actions, actionsAtRest = false, href, external = false, onClick, className, 'aria-label': label }: {
   state?: ReactNode
   /** On the name's line before it, 12 after `state`, its own column (a ticket's priority): `meta` starts under the name, not under it. */
   before?: ReactNode
@@ -112,6 +112,8 @@ export function PanelRow({ state, before, title, titleHint, meta = [], metaLines
   external?: boolean
   onClick?: (() => void) | undefined
   className?: string
+  /** The row's name, where its title alone does not say it (an account's login). */
+  'aria-label'?: string
 }) {
   // On a phone a name takes two lines before it is cut.
   const nameClass = 'block min-w-0 truncate text-left font-medium max-md:line-clamp-2 max-md:whitespace-normal'
@@ -132,6 +134,7 @@ export function PanelRow({ state, before, title, titleHint, meta = [], metaLines
   const parts = meta.filter(part => part !== undefined && part !== null && part !== false && part !== '')
   return (
     <li
+      aria-label={label}
       className={cn(
         'group/row relative flex items-start gap-3 px-4 py-3 text-sm',
         // The hairline over every row but the first, from inset to inset, gone beside a lit row. Every
