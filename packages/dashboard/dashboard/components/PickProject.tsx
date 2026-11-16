@@ -1,7 +1,7 @@
 import { ChevronRight, Folder } from 'lucide-react'
 import type { ProjectSummary } from '../../src/index.js'
 import { useProjectLabel } from '../lib/project-labels.js'
-import { List, Row } from './ui/list.js'
+import { SettingsItem, SettingsItems } from './SettingsRows.js'
 
 /**
  * A project's own Settings page with every project picked: it is about one project at a time, so
@@ -10,19 +10,13 @@ import { List, Row } from './ui/list.js'
 export function PickProject({ words, projects, onPick }: { words: string; projects: ProjectSummary[]; onPick: (id: string) => void }) {
   const label = useProjectLabel()
   return (
-    <div className="space-y-2">
-      <p className="text-sm text-muted-foreground">{words}</p>
-      <List boxed>
+    <div className="space-y-6">
+      <p className="max-w-md text-sm text-muted-foreground">{words}</p>
+      <SettingsItems>
         {projects.map(project => (
-          <Row
-            key={project.id}
-            leading={<Folder aria-hidden className="size-4" />}
-            title={label(project.id, project.name)}
-            meta={<ChevronRight aria-hidden className="size-4" />}
-            onClick={() => onPick(project.id)}
-          />
+          <SettingsItem key={project.id} icon={Folder} title={label(project.id, project.name)} end={<ChevronRight aria-hidden />} onClick={() => onPick(project.id)} />
         ))}
-      </List>
+      </SettingsItems>
     </div>
   )
 }
