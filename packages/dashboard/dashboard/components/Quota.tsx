@@ -8,7 +8,7 @@ import { useMountedModules, type MountedUsageLimit } from '../lib/use-modules.js
 import { usePolled } from '../lib/use-async.js'
 import { PanelGroup } from './ui/panel.js'
 import { Card } from './ui/card.js'
-import { Slot } from './ui/slot.js'
+import { Slot, WordsShape } from './ui/slot.js'
 import { Skeleton } from './ui/skeleton.js'
 import { cn } from '../lib/utils.js'
 import { ModuleSlot, projectsHaving } from './ModulePageView.js'
@@ -26,7 +26,7 @@ import {
 } from '../lib/quota-bar.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { AddedAccountsUsage, useAgentAccounts } from './AgentAccounts.js'
-import { loggedOut, useAgentState } from './Logins.js'
+import { agentLoginState, loggedOut, useAgentState } from './Logins.js'
 
 // The usage bar (#960): one week-long track, so "am I ahead or behind?" is a glance rather than a
 // calculation. It replaces the pair of flat meters that came before (#519/#879), which showed the
@@ -396,6 +396,9 @@ function OtherWindowRow({ window }: { window: DriverQuotaWindow }) {
   )
 }
 
+/** What the card says where Claude Code is not installed: no usage to read. */
+const NOT_FOUND = 'Claude Code was not found, so usage cannot be read.'
+
 /** Why there's no reading, in words a user can act on; `signedOut` while Claude Code itself is not logged in. */
 function unavailableNote(view: QuotaView, signedOut: boolean): string | undefined {
   switch (view.unavailable) {
@@ -405,7 +408,7 @@ function unavailableNote(view: QuotaView, signedOut: boolean): string | undefine
       // Claude Code logged out answers so too: it has no account at all.
       return signedOut ? 'Claude Code is not logged in, so there is no usage to show.' : 'This account has no subscription usage to report, so there is no boundary to measure against.'
     case 'agent-not-found':
-      return 'Claude Code was not found, so usage cannot be read.'
+      return NOT_FOUND
     case 'unrecognized':
       // The poller no longer gives up on this (#960), so where a reading survives, say it is
       // behind rather than that the boundary is off, which read as terminal.
@@ -507,15 +510,22 @@ export function Quota({ projects }: { projects: ProjectSummary[] }) {
         {(!view || (view.boundary && week) || windows.length > 0) && (
           <Slot
             of={{ state: view ? 'fresh' : 'unknown', value: view }}
-            // While it is read, the week's bar as it stands: its days' line, the bar, the sentence under them.
+            // While it is read, what it will say: where Claude Code is known not to be installed, the sentence that says
+            // so; else the week's bar as it stands, its days' line, the bar, the sentence under them.
             shape={
-              <div className="space-y-1.5">
-                <Skeleton className="h-4 w-full" />
-                <Skeleton className="h-4 w-full" />
-                <div className="flex h-5 items-center">
-                  <Skeleton className="h-4 w-2/3" />
+              agentLoginState(claude) === 'not-installed' ? (
+                <p className="text-sm">
+                  <WordsShape words={NOT_FOUND} />
+                </p>
+              ) : (
+                <div className="space-y-1.5">
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-full" />
+                  <div className="flex h-5 items-center">
+                    <Skeleton className="h-4 w-2/3" />
+                  </div>
                 </div>
-              </div>
+              )
             }
           >
             {() => (
