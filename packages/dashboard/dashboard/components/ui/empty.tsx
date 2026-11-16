@@ -1,12 +1,19 @@
 import type { ReactNode } from 'react'
 
-/** A part with nothing in it, said where its rows would stand: what is missing, why it fills, and what fills it. */
+/**
+ * A part with nothing in it, said where its first row would stand: one plain paragraph on the column's
+ * left edge in the muted body size, what is missing (`title`, a sentence) and then what fills it
+ * (`children`, a second sentence in the same paragraph), with the press that fills it under them.
+ * The caller draws no card around it: an empty part is the page's own words, not a box.
+ */
 export function Empty({ title, children, action }: { title: ReactNode; children?: ReactNode; action?: ReactNode }) {
   return (
-    <div className="px-4 py-12 text-center">
-      <p className="text-base font-semibold">{title}</p>
-      {children !== undefined && <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">{children}</p>}
-      {action !== undefined && <div className="mt-5 flex justify-center">{action}</div>}
+    <div>
+      <p className="text-sm text-muted-foreground">
+        {title}
+        {children !== undefined && <> {children}</>}
+      </p>
+      {action !== undefined && <div className="mt-3 flex">{action}</div>}
     </div>
   )
 }

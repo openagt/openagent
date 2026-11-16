@@ -324,6 +324,35 @@ describe('module pages in the shell (#1774)', () => {
     }
   })
 
+  test("on a phone a page under a module's page has a back arrow in its bar, up to that page; the page itself has none", async () => {
+    function ListPage({ path }: ModulePageProps) {
+      const host = useModuleHost()
+      return path.length === 0 ? createElement('button', { onClick: () => host.openPage('list', ['a'], PROJECT.id) }, 'open item a') : createElement('p', null, `item ${path.join('/')}`)
+    }
+    answerShell([{ package: '@acme/list', url: moduleModule('__listPhoneBack', { pages: [{ segment: 'list', label: 'List', Page: ListPage }] }), projects: [PROJECT.id] }])
+    const wide = phoneScreen()
+    try {
+      // Opened cold: nothing behind it, so the arrow opens the list.
+      window.history.replaceState(null, '', '/list/a')
+      render(<App />)
+      expect(await screen.findByText('item a')).toBeTruthy()
+      fireEvent.click(within(document.querySelector<HTMLElement>('[data-phone-bar]')!).getByRole('button', { name: 'Back' }))
+      expect(await screen.findByRole('button', { name: 'open item a' })).toBeTruthy()
+      expect(window.location.pathname).toBe('/list')
+      expect(within(document.querySelector<HTMLElement>('[data-phone-bar]')!).queryByRole('button', { name: 'Back' })).toBeNull()
+
+      // Opened from the list: the arrow is the browser's Back, to the list's own entry.
+      fireEvent.click(screen.getByRole('button', { name: 'open item a' }))
+      expect(await screen.findByText('item a')).toBeTruthy()
+      const entries = window.history.length
+      fireEvent.click(within(document.querySelector<HTMLElement>('[data-phone-bar]')!).getByRole('button', { name: 'Back' }))
+      expect(await screen.findByRole('button', { name: 'open item a' })).toBeTruthy()
+      expect(window.history.length).toBe(entries)
+    } finally {
+      wide()
+    }
+  })
+
   test('on a phone the bar of a page that is not found says so', async () => {
     answerShell([])
     const wide = phoneScreen()
@@ -584,6 +613,29 @@ describe('module cards on the Overview (#1818)', () => {
       const banner = (await screen.findByRole('alert')).textContent
       expect(banner).toBe('OpenAgent has stopped. Start it again with openagent in a terminal; an installed one restarts with the computer or with its installer\u2019s command.')
     } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  test("on a phone the banner draws its first sentence on its one line and says the rest to a screen reader; the page's top bar stands under it", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const wide = phoneScreen()
+    try {
+      answerShell([])
+      render(<App />)
+      await waitFor(() => expect(document.querySelector('[data-phone-bar]')!.textContent).toBe('Overview'))
+      answers.set('onProjects', () => { throw new TypeError('Failed to fetch') })
+      await act(async () => void (await vi.advanceTimersByTimeAsync(5000 + 1000)))
+      const banner = await screen.findByRole('alert')
+      // The whole of it is said; what a phone's line has no room for is said only.
+      expect(banner.textContent).toBe('OpenAgent has stopped. Start it again with openagent in a terminal; an installed one restarts with the computer or with its installer’s command.')
+      const said = banner.querySelector('.max-md\\:sr-only')!
+      expect(said.textContent).toBe(' Start it again with openagent in a terminal; an installed one restarts with the computer or with its installer’s command.')
+      expect(said.parentElement!.className).toContain('max-md:truncate')
+      // The banner keeps to the window's top as the page scrolls; the top bar keeps to the banner's foot.
+      expect(document.querySelector('[data-phone-bar]')!.className.split(' ')).toContain('top-(--top-banner,0px)')
+    } finally {
+      wide()
       vi.useRealTimers()
     }
   })

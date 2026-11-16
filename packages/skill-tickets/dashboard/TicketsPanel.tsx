@@ -1,382 +1,281 @@
-import { createContext, useContext, useState, type ReactNode } from 'react'
-import { ExternalLink, ClipboardList, Hammer, Plus } from 'lucide-react'
-import { Badge, Button, Checkbox, List, Tooltip, TooltipTrigger, TooltipContent, cn, formatRelative, inPlace, useAction, useLoaded, useModuleHost } from '@openagt/dashboard/module'
+import { useState } from 'react'
+import { Plus, RefreshCw } from 'lucide-react'
+import {
+  Badge,
+  Button,
+  Checkbox,
+  Empty,
+  Panel,
+  PanelGroup,
+  PanelRow,
+  RunMark,
+  StartAgentPress,
+  StateCell,
+  cn,
+  formatDateTime,
+  formatRelative,
+  useAction,
+  useIsMobile,
+  useLoaded,
+  useModuleHost,
+} from '@openagt/dashboard/module'
 import { NEW_TICKET, UPDATE_TICKETS_PROMPT, heldBack, readMeta, type TicketsMeta } from '../src/module.js'
-import { TicketStartActions } from './TicketStartActions.js'
+import { QueuedMark, TicketStartActions, useQueuedAsk } from './TicketStartActions.js'
 import type { WorkspaceTicket } from './lib/types.js'
-import { UpdateTicketsButton } from './UpdateTicketsButton.js'
-import { priorityTone } from './lib/ticket-priority.js'
+import { parsePriority } from './lib/ticket-priority.js'
+import { STAGE_LABEL, STAGE_ORDER, claimStanding, claimWorking, ticketStage, type TicketStageId } from './lib/ticket-stage.js'
 import { ticketAge, ticketDay } from './lib/ticket-date.js'
 
 /** Captured once: `useLoaded` treats a fresh `{}` literal as a new value on every render. */
 const NO_META: TicketsMeta = {}
 
-/** The fact columns some row of the list fills; a row draws only those. A row outside a {@link TicketList} draws them all. */
-const FilledColumns = createContext({ priority: true, plan: true, issue: true })
+/** From how many shown tickets a list is grouped by stage, when they stand in more than one. */
+export const GROUP_BY_STAGE_FROM = 13
 
-/**
- * The rows of a tickets list, on the page with no line around them. Laid out by the list's own
- * width (#1144 follow-up): a narrow list puts a row's facts on a second line under its title, so a
- * title is never cut to a word to make room for them. A fact column no ticket of the list fills
- * gives up its room in every row, so the others still line up.
- */
-export function TicketList({ tickets, children }: { tickets: readonly WorkspaceTicket[]; children: ReactNode }) {
-  const filled = { priority: tickets.some(t => t.priority), plan: tickets.some(t => t.planned), issue: tickets.some(t => t.issue) }
-  return (
-    <FilledColumns.Provider value={filled}>
-      <List className="@container">{children}</List>
-    </FilledColumns.Provider>
-  )
-}
+/** The stages whose word carries a mark: inside their own group the row keeps both, the mark never without its word. */
+const MARKED: readonly TicketStageId[] = ['claimed', 'waiting']
 
-/**
- * One ticket as a row (#697/#1144): the checkbox, the title, its next step, then its facts in
- * columns that hold their place from row to row (project in the flat list, topics, claim, effort
- * and uncertainty, priority, age, the plan, the issue), the last at the row's right edge.
- *
- * The facts are *siblings* of the title's link, not children: the topic badges and the claim
- * marker filter on click (#1144), and an interactive control nested in a link is invalid HTML.
- */
-export function TicketRow({
-  projectId,
-  ticket,
-  projectName,
-  busy,
-  starting,
-  selected,
-  onToggleSelect,
-  onOpen,
-  onStart,
-  onConfigure,
-  onOpenPlan,
-  onTopicClick,
-  onClaimedClick,
-  onOpenAgent,
-}: {
-  /** The ticket's project: where its next step starts or is queued. */
+/** A ticket of a list, with the project it is in: where its next step starts and where it opens. */
+export interface ListedTicket {
   projectId: string
-  ticket: WorkspaceTicket
-  /** Shown on the row in the flat cross-project list, where the section heading no longer says it. */
+  /** Said on its row where the list spans projects. */
   projectName?: string | undefined
-  /** Disables the session-starting buttons while a session start is in flight. */
+  ticket: WorkspaceTicket
+}
+
+/** What every row of a list shares: the selection, the start in flight, and where a row goes. */
+export interface RowsProps {
   busy: boolean
-  /** The prompt of the start in flight, if any: the button that asks it spins. */
-  starting: string | null
-  /** Whether the row is picked for the surrounding page's bulk actions — the page owns the
-   *  selection, the row only shows and toggles it. Without a toggle handler no checkbox
-   *  renders, like the click-to-filter handlers: selection is a page feature, not the row's. */
-  selected?: boolean | undefined
-  onToggleSelect?: (() => void) | undefined
-  onOpen: () => void
-  /** Spin up an agent with the row's next step — write the ticket's plan, or with one, work on
-   *  the ticket — in the ticket's project; `failure` is what to say when it cannot start and says no more. */
-  onStart: (prompt: string, failure: string) => void
-  /** The start button's chevron (#1507): the ticket's project launcher, prefilled with its ask. */
-  onConfigure: (prompt: string) => void
-  onOpenPlan?: (() => void) | undefined
-  /** Click-to-filter (#1144): a topic badge adds its topic to the page's filter. Without a
-   *  handler the topics render as plain badges. */
-  onTopicClick?: ((topic: string) => void) | undefined
-  /** Click-to-filter for the claim marker: narrows the page to claimed tickets. */
-  onClaimedClick?: (() => void) | undefined
-  /** Open the page of the agent holding the claim (#1748), when the lock names one of this project's. */
-  onOpenAgent?: ((agentId: string) => void) | undefined
-}) {
-  // The holder as a person reads it: the agent's session name once it has one, else the id the
-  // lock names as written (#1748).
-  const holder = ticket.lockedByAgent?.name ?? ticket.lockedBy
-  const host = useModuleHost()
-  // In review or waiting: no agent is started on it nor on its plan, the tickets skill's own rule;
-  // claimed: an agent holds it. Either way the row offers no next step, only what is queued for it.
-  const held = heldBack(ticket)
-  const offered = !held && !ticket.locked
-  const filled = useContext(FilledColumns)
+  /** The start in flight, by its project and prompt: only that row's press spins. */
+  starting: { projectId: string; prompt: string } | null
+  /** Whether a row is ticked; none where the page has no selection. */
+  isSelected?: ((row: ListedTicket) => boolean) | undefined
+  onToggleSelect?: ((row: ListedTicket) => void) | undefined
+  onOpen: (row: ListedTicket) => void
+  onStart: (row: ListedTicket, prompt: string, failure: string) => void
+  onConfigure: (row: ListedTicket, prompt: string) => void
+  /** Adds a row's topic to the filters (#1144). */
+  onTopic?: ((topic: string) => void) | undefined
+  /** Narrows the list to claimed tickets: a claim by none of the project's runs (#1144). */
+  onClaimed?: (() => void) | undefined
+}
+
+/** Tickets as one card, or once the list is long and spans stages, a card per stage in the order agents take them. */
+export function TicketRows({ rows, ...props }: RowsProps & { rows: readonly ListedTicket[] }) {
+  const priorities = rows.some(row => row.ticket.priority !== undefined)
+  const stages = STAGE_ORDER.map(stage => ({ stage, rows: rows.filter(row => ticketStage(row.ticket) === stage) })).filter(part => part.rows.length > 0)
+  const row = (listed: ListedTicket, showStage: boolean) => (
+    <TicketRow key={`${listed.projectId}/${listed.ticket.file}`} listed={listed} priorities={priorities} showStage={showStage} {...props} />
+  )
+  if (rows.length < GROUP_BY_STAGE_FROM || stages.length < 2) return <Panel aria-label="Tickets">{rows.map(listed => row(listed, true))}</Panel>
   return (
-    <li
-      className={cn(
-        'group/row relative flex flex-wrap items-center gap-x-3 rounded-md px-3 text-sm transition-colors hover:bg-accent has-[:focus-visible]:bg-accent has-[[data-popup-open]]:bg-accent has-[[data-cover]:active]:bg-foreground/10',
-        'py-1.5 @2xl:h-10 @2xl:flex-nowrap @2xl:py-0',
-        selected && 'bg-accent',
-      )}
-    >
-      {/* The selection checkbox, the row's left edge — the list idiom of issue trackers: pick some rows and the
-          page's bulk actions narrow to them. Never disabled: selecting is page state, not an
-          action, so it costs nothing and can be changed any time. Above the title's cover. */}
-      {onToggleSelect && <Checkbox checked={selected ?? false} onCheckedChange={() => onToggleSelect()} aria-label={`Select ${ticket.title}`} className="z-10" />}
-      {/* The title's link covers the row, so a click anywhere on it opens the ticket; the row's
-          other presses stand above that cover. It takes the row's slack and is cut only by it. */}
-      <a
-        data-cover
-        href={host.pageHref('tickets', [ticket.file], projectId)}
-        onClick={inPlace(onOpen)}
-        className="min-h-8 min-w-0 flex-1 content-center truncate outline-none after:absolute after:inset-0 after:rounded-md focus-visible:after:outline-2 focus-visible:after:-outline-offset-2 focus-visible:after:outline-focus"
-      >
-        {ticket.title}
-      </a>
-      {/* The next step (TicketStartActions): Plan with no plan, Start with one; queueing it and
-          setting it up first are in its menu. Shown under the pointer and the keyboard (and while
-          its menu is open), always on touch. In a narrow list it ends the title's line, in a room of
-          its own; in a wide one it takes none: it shows beside the facts, over the title's end, so
-          the facts stand at the row's right edge and nothing moves. */}
-      <span className="relative flex shrink-0 items-center justify-end @max-2xl:w-28 @2xl:w-0 pointer-fine:opacity-0 pointer-fine:group-hover/row:opacity-100 pointer-fine:group-focus-within/row:opacity-100 pointer-fine:has-[[data-popup-open]]:opacity-100">
-        <span className="flex items-center gap-1.5 @2xl:absolute @2xl:right-0 @2xl:rounded-md @2xl:bg-accent">
-          <TicketStartActions compact startable={offered} projectId={projectId} ticket={ticket} busy={busy} starting={starting} onStart={onStart} onConfigure={onConfigure} />
-        </span>
-      </span>
-      {/* The facts: under the title in a narrow list, in columns beside it in a wide one. */}
-      <span className={cn('relative order-last flex min-h-6 basis-full items-center gap-x-3 text-xs text-muted-foreground @2xl:order-none @2xl:basis-auto', onToggleSelect && 'pl-7 @2xl:pl-0')}>
-        {projectName && <span className="shrink-0">{projectName}</span>}
-        {/* The tags, content-sized and packed against the priority column (#1265): their right edge
-            is the aligned one, so rows with one tag and rows with four read as one column. */}
-        <span className="flex min-w-0 items-center gap-1.5 @max-2xl:empty:hidden @2xl:flex-1 @2xl:justify-end">
-          {ticket.topics?.map(topic =>
-            onTopicClick ? (
-              <button key={topic} type="button" onClick={() => onTopicClick(topic)} title={`Filter by ${topic}`} className="focus-ring shrink-0 rounded-full">
-                <Badge className="transition-colors hover:text-foreground">{topic}</Badge>
-              </button>
-            ) : (
-              <Badge key={topic}>{topic}</Badge>
-            ),
-          )}
-          {/* An agent holds this ticket's `.lock.md` (#1420) — it is planning the ticket or
-              implementing it directly; the hammer says "being worked" either way. The holder is
-              named inline, not only in the tooltip. When the lock names one of this project's
-              agents (#1748) the name is the agent's session name and opens its page; any other
-              holder is shown as written. Cut to keep the row aligned; the tooltip keeps the whole name. */}
-          {ticket.locked && (
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  ticket.lockedByAgent && onOpenAgent ? (
-                    <button type="button" onClick={() => onOpenAgent(ticket.lockedByAgent!.id)} className={CLAIM_CLASS} />
-                  ) : onClaimedClick ? (
-                    <button type="button" onClick={onClaimedClick} className={CLAIM_CLASS} />
-                  ) : (
-                    <span className={CLAIM_CLASS} />
-                  )
-                }
-              >
-                <Hammer className="size-3.5 shrink-0 text-warning" aria-hidden />
-                {holder && <span className="min-w-0 max-w-32 truncate">{holder}</span>}
-              </TooltipTrigger>
-              <TooltipContent>
-                {`Claimed${holder ? ` by ${holder}` : ''} — an agent is working on this ticket (planning it or implementing it).`}
-                {ticket.lockedByAgent && onOpenAgent ? " Click to open the agent's page." : onClaimedClick ? ' Click to see all claimed tickets.' : ''}
-              </TooltipContent>
-            </Tooltip>
-          )}
-          {/* In review: the pull request that closes it, one click away. Waiting: what it waits on,
-              in the tooltip. Either one is why the row offers no start and no plan. */}
-          {held === 'in-review' && ticket.pr && (
-            <a href={ticket.pr.url} target="_blank" rel="noreferrer" title="In review: this pull request closes the ticket once merged" className="focus-ring shrink-0 rounded-sm hover:underline">
-              <Badge tone="info">In review {ticket.pr.label}</Badge>
-            </a>
-          )}
-          {held === 'waiting' && (
-            <Badge tone="warning" title={`Waiting: ${ticket.waiting}`}>
-              Waiting
-            </Badge>
-          )}
-          {ticket.effort !== undefined && <Badge>Effort {ticket.effort}/10</Badge>}
-          {ticket.uncertainty !== undefined && <Badge>Uncertainty {ticket.uncertainty}/10</Badge>}
-        </span>
-        {/* Priority and age: fixed widths, kept (and drawn even when empty) so the columns line up
-            row to row; the priority's is given up when no ticket of the list has one. The priority
-            is in the text's colour; only a critical one is red, its words saying it too. */}
-        {filled.priority && (
-          <span className={cn('shrink-0 tabular-nums @max-2xl:empty:hidden @2xl:w-16 @2xl:text-right', priorityTone(ticket.priority))}>
-            {ticket.priority ? `Priority ${ticket.priority}` : ''}
-          </span>
-        )}
-        <span className="shrink-0 tabular-nums @2xl:w-14 @2xl:text-right" title={ticketDay(ticket)}>
-          {ticketAge(ticket)}
-        </span>
-        {/* The plan, when there is one to read, then the issue: each the same width when empty, so the
-            columns line up, and given up when no ticket of the list has one. */}
-        {filled.plan && (
-          <span className="flex shrink-0 justify-center @max-2xl:empty:hidden @2xl:w-7">
-            {ticket.planned && (
-              <Tooltip>
-                <TooltipTrigger
-                  render={<Button variant="ghost" size="icon-sm" onClick={() => onOpenPlan?.()} disabled={!onOpenPlan} aria-label={`View the plan for ${ticket.title}`} className="text-info" />}
-                >
-                  <ClipboardList className="size-4" aria-hidden />
-                </TooltipTrigger>
-                <TooltipContent>View the plan</TooltipContent>
-              </Tooltip>
-            )}
-          </span>
-        )}
-        {filled.issue && (
-          <span className="flex shrink-0 justify-end @max-2xl:empty:hidden @2xl:w-16">
-            {ticket.issue && (
-              <a href={ticket.issue.url} target="_blank" rel="noreferrer" className="focus-ring inline-flex items-center gap-1 rounded-sm hover:text-foreground hover:underline">
-                <ExternalLink className="size-3.5" aria-hidden />
-                {ticket.issue.label}
-              </a>
-            )}
-          </span>
-        )}
-      </span>
-    </li>
+    <div className="space-y-8">
+      {stages.map(part => (
+        <PanelGroup key={part.stage} title={STAGE_LABEL[part.stage]}>
+          {part.rows.map(listed => row(listed, MARKED.includes(part.stage)))}
+        </PanelGroup>
+      ))}
+    </div>
   )
 }
 
-/** The claim marker: a quiet fact, its hammer the one colour on it. */
-const CLAIM_CLASS = 'focus-ring flex min-w-0 shrink-0 items-center gap-1 rounded-sm hover:text-foreground'
+/** One ticket as a row; under the pointer its next step takes its facts' place. */
+function TicketRow({ listed, priorities, showStage, busy, starting, isSelected, onToggleSelect, onOpen, onStart, onConfigure, onTopic, onClaimed }: RowsProps & {
+  listed: ListedTicket
+  /** Whether some ticket of the list has a priority: the column is kept on every row, or on none. */
+  priorities: boolean
+  /** Said on the row: not where the row's part is named by its stage, unless its word carries a mark. */
+  showStage: boolean
+}) {
+  const host = useModuleHost()
+  const phone = useIsMobile()
+  const { projectId, projectName, ticket } = listed
+  const selected = isSelected?.(listed) ?? false
+  // A ticket in review, waiting or claimed is not handed to an agent: its row offers no next step, only what is queued for it.
+  const offered = !heldBack(ticket) && !ticket.locked
+  const stage = <StageWord ticket={ticket} standing />
+  const holder = ticket.lockedByAgent?.name ?? ticket.lockedBy
+  // Its next step on the queue: said beside a held row's stage, and on a phone, where no row offers its menu, on every row.
+  const queued = useQueuedAsk(projectId, ticket)
+  const said = claimSaid(ticket)
+  // A claim by one of the project's runs opens that run (#1748); any other narrows the list to claimed (#1144).
+  const run = ticket.lockedByAgent
+  const claimPress = ticket.locked ? (run ? () => host.openAgent(projectId, run.id) : onClaimed) : undefined
+  const startProps = {
+    projectId,
+    ticket,
+    busy,
+    starting: starting?.projectId === projectId ? starting.prompt : null,
+    onStart: (prompt: string, failure: string) => onStart(listed, prompt, failure),
+    onConfigure: (prompt: string) => onConfigure(listed, prompt),
+  }
+  return (
+    <PanelRow
+      className={cn(selected && 'bg-foreground/6 before:opacity-0 [&+li]:before:opacity-0')}
+      state={
+        onToggleSelect && (
+          <Checkbox
+            checked={selected}
+            onCheckedChange={() => onToggleSelect(listed)}
+            aria-label={`Select ${ticket.title}`}
+            className="z-10"
+          />
+        )
+      }
+      before={priorities ? <Priority value={ticket.priority} /> : undefined}
+      title={ticket.title}
+      href={host.pageHref('tickets', [ticket.file], projectId)}
+      onClick={() => onOpen(listed)}
+      meta={phone ? [...(projectName ? [projectName] : []), ...(showStage ? [stage] : []), ...(queued ? [<QueuedMark />] : [])] : []}
+      fact={
+        phone ? undefined : (
+          <span className="flex items-center gap-3">
+            {projectName && <span className="max-w-32 truncate">{projectName}</span>}
+            {ticket.topics && ticket.topics.length > 0 && (
+              <span className="flex items-center gap-2 max-lg:hidden">
+                {ticket.topics.map(topic =>
+                  onTopic ? (
+                    <button key={topic} type="button" title={`Filter by ${topic}`} onClick={() => onTopic(topic)} className={cn(QUIET_PRESS, 'rounded-full')}>
+                      <Badge className="transition-colors">{topic}</Badge>
+                    </button>
+                  ) : (
+                    <Badge key={topic}>{topic}</Badge>
+                  ),
+                )}
+              </span>
+            )}
+            {/* A ticket no agent is handed now offers no next step, only what is queued for it. */}
+            {!offered && queued && <QueuedMark />}
+            {showStage && (
+              <span className="flex w-36">
+                {claimPress ? (
+                  <button
+                    type="button"
+                    aria-label={holder ? `Claimed by ${holder}${said !== holder ? `: ${said.toLowerCase()}` : ''}` : 'Claimed'}
+                    title={run ? `Claimed by ${holder}: open its run` : `Claimed${holder ? ` by ${holder}` : ''}: show the claimed tickets`}
+                    onClick={claimPress}
+                    className={cn(QUIET_PRESS, '-mx-1 px-1')}
+                  >
+                    {stage}
+                  </button>
+                ) : (
+                  stage
+                )}
+              </span>
+            )}
+            <span className="w-16 text-right tabular-nums" title={ticketDay(ticket)}>
+              {ticketAge(ticket).replace(/ ago$/, '')}
+            </span>
+          </span>
+        )
+      }
+      actions={
+        offered && !phone ? (
+          <span className="-mr-1.5 flex items-center gap-2">
+            <TicketStartActions compact {...startProps} />
+          </span>
+        ) : undefined
+      }
+    />
+  )
+}
 
-// The tickets list (#697/#1144): the project's `tickets/*.md` as one-liners — priority, topics,
-// what the agent already did to it, and how recently, all on the row — so the backlog is scannable
-// without opening one. A row opens its detail page (#1144), which is where Queue and the summary
-// live, and carries the ticket's next step, now or queued: its plan, or with one, its work (#685). An empty `tickets/` offers to import the project's
-// issues instead of just saying "nothing here"; a filled one offers to update it (#1208)
-// instead of a re-import re-walking the whole backlog.
+/** A ticket's priority as a list says it, "P8": stronger from 7, red at 10, the act-now end of the scale. */
+function Priority({ value }: { value: string | undefined }) {
+  const priority = parsePriority(value)
+  return (
+    <span
+      title={priority === undefined ? undefined : `Priority ${priority}`}
+      className={cn('w-6 text-right text-xs font-medium tabular-nums', priority === 10 ? 'text-danger' : priority !== undefined && priority >= 7 ? 'text-muted-foreground' : 'text-faint-foreground')}
+    >
+      {priority === undefined ? '' : `P${priority}`}
+    </span>
+  )
+}
+
+/** A press inside a row: above its link, quiet until a fine pointer is on it. */
+const QUIET_PRESS = 'focus-ring relative z-10 rounded-sm pointer-fine:hover:*:text-foreground'
+
+/**
+ * Where a ticket stands, in a word of one size, what it waits on in a tooltip. A claim's mark is
+ * its run's, and with `standing` (a list's row, where "Claimed" is the group's name or the filter's)
+ * its word says how the claim stands too, never by the mark's colour alone ({@link claimSaid}).
+ */
+export function StageWord({ ticket, standing = false }: { ticket: WorkspaceTicket; standing?: boolean }) {
+  const stage: TicketStageId = ticketStage(ticket)
+  const holder = ticket.lockedByAgent?.name ?? ticket.lockedBy
+  const title = stage === 'claimed' ? (holder ? `Claimed by ${holder}` : undefined) : stage === 'waiting' ? `Waiting: ${ticket.waiting}` : stage === 'in-review' && ticket.pr ? `In review: ${ticket.pr.label}` : undefined
+  return (
+    <span className={cn('flex min-w-0 items-center gap-1', stage === 'claimed' && claimWorking(ticket) && 'text-info')} title={title}>
+      {stage === 'claimed' && <ClaimMark ticket={ticket} />}
+      {stage === 'waiting' && <StateCell state="waiting" className="size-3" />}
+      <span className="min-w-0 truncate">{stage === 'claimed' && standing ? claimSaid(ticket) : STAGE_LABEL[stage]}</span>
+    </span>
+  )
+}
+
+/**
+ * How a claim stands, as the ticket's page says it: its run at work or waiting on the person, its
+ * computer offline, or the run ended ("Run done"); a claim held by anything but one of the
+ * project's runs, a person or another machine, by its holder's name.
+ */
+function claimSaid(ticket: WorkspaceTicket): string {
+  const holder = ticket.lockedByAgent?.name ?? ticket.lockedBy
+  if (!ticket.lockedByAgent || ticket.holderStatus === undefined) return holder ?? STAGE_LABEL.claimed
+  const said = claimStanding(ticket.holderStatus)
+  return said.charAt(0).toUpperCase() + said.slice(1)
+}
+
+/**
+ * A claim's mark, of the stage marks' one size: the holding run's own while one of the project's
+ * runs holds it (its ring turning while it works), a still one for any other holder.
+ */
+function ClaimMark({ ticket }: { ticket: WorkspaceTicket }) {
+  if (!ticket.lockedByAgent || ticket.holderStatus === undefined) return <StateCell state="stopped" className="size-3" />
+  return <RunMark status={ticket.holderStatus} className="size-3" />
+}
+
+/** One project's tickets on the list: its rows, or why there are none. */
 export function TicketsPanel({
   projectId,
-  tickets,
+  rows,
+  error,
   hiddenByFilter = 0,
-  isSelected,
-  onToggleSelect,
-  onOpen,
-  onOpenPlan,
-  onTopicClick,
-  onClaimedClick,
-  onOpenAgent,
   onClearFilters,
-  pressesInHead = false,
-}: {
-  projectId: string | null
-  tickets: WorkspaceTicket[]
-  /** Whether a row's ticket is picked for the surrounding page's bulk actions — the selection
-   *  lives on the page (it spans projects), the panel only threads it to its rows by file.
-   *  Absent on a page with nothing to scope to a selection, and the rows then carry no
-   *  checkbox, like the click-to-filter handlers. */
-  isSelected?: ((file: string) => boolean) | undefined
-  onToggleSelect?: ((file: string) => void) | undefined
-  /** How many of this project's tickets the caller's filters hid (#1144/#1230). An empty
-   *  `tickets` with some hidden reads as "filtered", not as "nothing here" — the import prompt
-   *  offers work that has already been done. */
+  ...props
+}: RowsProps & {
+  projectId: string
+  rows: readonly ListedTicket[]
+  /** Why the project's tickets could not be read. */
+  error?: string | undefined
+  /** How many of the project's tickets the filters hide: none shown then reads as filtered, not as an empty backlog. */
   hiddenByFilter?: number
-  /** Open one ticket's detail page (#1144), by its file — the same slug the route uses. */
-  onOpen: (file: string) => void
-  /** Open one ticket's plan view (#685), by its file — the plan column's link when a `.plan.md`
-   *  already exists. Absent when the caller has no plan route to send the reader to. */
-  onOpenPlan?: ((file: string) => void) | undefined
-  /** Click-to-filter (#1144), threaded to every row; absent on a page with no filters. */
-  onTopicClick?: ((topic: string) => void) | undefined
-  onClaimedClick?: (() => void) | undefined
-  /** Open the page of the agent holding a ticket's claim (#1748), when the lock names one of this project's. */
-  onOpenAgent?: ((agentId: string) => void) | undefined
-  /** Lets the "N hidden by filters" state clear them right there instead of pointing back up
-   *  at the toolbar. */
   onClearFilters?: (() => void) | undefined
-  /** The page shows this project alone: its update and its New ticket stand in the page's head ({@link ProjectTicketsPresses}), not here. */
-  pressesInHead?: boolean | undefined
 }) {
-  const { busy, error, run } = useAction()
-  // Which start is in flight, by its prompt: one `busy` holds every start back, and only this one spins.
-  const [starting, setStarting] = useState<string | null>(null)
-  const host = useModuleHost()
-  // When `tickets/` last caught up with the issue tracker, from `tickets meta --local`. Read here rather than
-  // passed down: the cross-project page reads one ticket list per project, and this is the one
-  // extra read a section adds.
-  const meta = useTicketsMeta(pressesInHead ? null : projectId)
-
-  if (!projectId) return null
-
-  // Every "Configure first, then run" on the panel lands in the same place: this project's own
-  // launcher, with the button's prompt drafted in, where the model, the run target and the prompt
-  // itself can all be changed.
-  const configure = (prompt: string) => host.configureRun(projectId, prompt)
-
-  // The dashboard starts the run with the person's own picks and lands on it, so its progress
-  // is watchable instead of the panel sitting on stale rows until files land.
-  const startSession = async (prompt: string, failure: string) => {
-    setStarting(prompt)
-    await run(() => host.startRun(projectId, prompt), failure)
-    setStarting(null)
-  }
-
-  const updateTickets = () => startSession(UPDATE_TICKETS_PROMPT, 'The update could not be started.')
-  const newTicket = () => host.openPage('tickets', [NEW_TICKET], projectId)
-
-  if (tickets.length === 0 && hiddenByFilter > 0) {
-    // Filtered to nothing, not genuinely empty (#1144/#1230): offering an import here would ask
-    // for work already done.
+  if (error !== undefined)
+    return (
+      <p role="alert" className="text-sm text-danger">
+        Could not read the tickets: {error}
+      </p>
+    )
+  if (rows.length === 0 && hiddenByFilter > 0)
     return (
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
         <p className="text-muted-foreground">
-          {hiddenByFilter} ticket{hiddenByFilter === 1 ? '' : 's'} hidden by the current filters.
+          {hiddenByFilter} ticket{hiddenByFilter === 1 ? '' : 's'} hidden by the filters.
         </p>
         {onClearFilters && (
-          <Button variant="secondary" onClick={onClearFilters}>
+          <Button variant="ghost" className="-ml-3" onClick={onClearFilters}>
             Clear filters
           </Button>
         )}
       </div>
     )
-  }
-
-  if (tickets.length === 0) {
+  if (rows.length === 0)
     return (
-      <div className="space-y-3 text-sm">
-        <p className="text-muted-foreground">
-          No tickets yet. Tickets live in <code className="rounded-sm bg-muted px-1 font-mono text-xs">tickets/</code> and are what the agent
-          plans from.
-        </p>
-        {!pressesInHead && (
-          <div className="flex flex-wrap items-center gap-2">
-            <UpdateTicketsButton busy={busy} starting={starting === UPDATE_TICKETS_PROMPT} onStart={() => void updateTickets()} onConfigure={() => configure(UPDATE_TICKETS_PROMPT)} />
-            <NewTicketButton onClick={newTicket} />
-          </div>
-        )}
-        {error && <p role="alert" className="text-xs text-danger">{error}</p>}
-      </div>
+      <Empty title="No tickets yet.">Update them from the tracker, or write one.</Empty>
     )
-  }
-
-  return (
-    <div className="space-y-2">
-      {/* The same update as the empty state's button (#1501): one command covers both, its empty
-          branch being the first import. Here it sits beside the stamp it acts on (#1265). */}
-      {pressesInHead ? (
-        error && <p role="alert" className="text-xs text-danger">{error}</p>
-      ) : (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="min-w-0 basis-full text-xs text-muted-foreground sm:flex-1 sm:basis-0 sm:truncate">{importSaid(meta.lastImportedAt)}</span>
-          <UpdateTicketsButton
-            busy={busy}
-            starting={starting === UPDATE_TICKETS_PROMPT}
-            onStart={() => void updateTickets()}
-            onConfigure={() => configure(UPDATE_TICKETS_PROMPT)}
-            lastImportedAt={meta.lastImportedAt}
-          />
-          <NewTicketButton onClick={newTicket} />
-          {error && <p role="alert" className="basis-full text-xs text-danger">{error}</p>}
-        </div>
-      )}
-      <TicketList tickets={tickets}>
-        {tickets.map(ticket => (
-          <TicketRow
-            key={ticket.file}
-            projectId={projectId}
-            ticket={ticket}
-            busy={busy}
-            starting={starting}
-            selected={isSelected?.(ticket.file) ?? false}
-            onToggleSelect={onToggleSelect ? () => onToggleSelect(ticket.file) : undefined}
-            onOpen={() => onOpen(ticket.file)}
-            onStart={(prompt, failure) => void startSession(prompt, failure)}
-            onConfigure={configure}
-            onOpenPlan={onOpenPlan ? () => onOpenPlan(ticket.file) : undefined}
-            onTopicClick={onTopicClick}
-            onClaimedClick={onClaimedClick}
-            onOpenAgent={onOpenAgent}
-          />
-        ))}
-      </TicketList>
-    </div>
-  )
+  return <TicketRows rows={rows} {...props} />
 }
 
 /** When `tickets/` last caught up with the issue tracker, from `tickets meta --local`; nothing is read for no project. */
@@ -385,37 +284,47 @@ export function useTicketsMeta(projectId: string | null): TicketsMeta {
   return useLoaded<TicketsMeta>(projectId ? async () => readMeta(await host.runCommand(projectId, ['meta', '--local'])) : null, NO_META, [projectId])
 }
 
-/** The import stamp in words: "Updated from the tracker 3h ago". */
-export function importSaid(lastImportedAt: string | undefined): string {
-  return lastImportedAt ? `Updated from the tracker ${formatRelative(lastImportedAt)}` : 'No record of an import yet'
-}
-
-/**
- * A project's own presses, at the right of a page's head that shows it alone: its tickets brought
- * up to date with the tracker, then one written by hand, the page's primary.
- */
-export function ProjectTicketsPresses({ projectId, busy, starting, onStart, lastImportedAt }: {
-  projectId: string
-  busy: boolean
-  /** The update is the start in flight. */
-  starting: boolean
-  onStart: () => void
-  lastImportedAt: string | undefined
-}) {
+/** A project's presses at a head's right: when its tickets were last updated, the update, and a new ticket. */
+export function ProjectTicketsPresses({ projectId, primary = true }: { projectId: string; /** New ticket is the head's primary. */ primary?: boolean }) {
   const host = useModuleHost()
+  const meta = useTicketsMeta(projectId)
+  const { busy, error, run } = useAction()
+  const [starting, setStarting] = useState(false)
+  const update = async () => {
+    setStarting(true)
+    await run(() => host.startRun(projectId, UPDATE_TICKETS_PROMPT), 'The update could not be started.')
+    setStarting(false)
+  }
   return (
     <>
-      <UpdateTicketsButton busy={busy} starting={starting} onStart={onStart} onConfigure={() => host.configureRun(projectId, UPDATE_TICKETS_PROMPT)} lastImportedAt={lastImportedAt} />
-      <NewTicketButton onClick={() => host.openPage('tickets', [NEW_TICKET], projectId)} primary />
+      {error && (
+        <span role="alert" className="text-xs text-danger">
+          {error}
+        </span>
+      )}
+      <span className="flex items-center gap-1 text-sm text-faint-foreground">
+        <span title={meta.lastImportedAt ? `Updated from the tracker ${formatDateTime(meta.lastImportedAt)}` : 'No import from the tracker on record'}>
+          {meta.lastImportedAt ? `Updated ${formatRelative(meta.lastImportedAt)}` : 'Never updated'}
+        </span>
+        <StartAgentPress
+          variant="ghost"
+          size="icon-sm"
+          icon={<RefreshCw className="size-3.5" aria-hidden />}
+          ariaLabel="Update tickets"
+          tooltip={
+            meta.lastImportedAt
+              ? 'An agent brings tickets/ up to date with the issues and comments changed since the last update.'
+              : 'An agent brings tickets/ up to date with the issue tracker. With none on record, everything open comes across.'
+          }
+          busy={busy}
+          starting={starting}
+          onStart={() => void update()}
+          className="text-muted-foreground"
+        />
+      </span>
+      <Button variant={primary ? 'default' : 'ghost'} className={cn(!primary && '-mr-3')} onClick={() => host.openPage('tickets', [NEW_TICKET], projectId)}>
+        <Plus className="size-4" aria-hidden /> New ticket
+      </Button>
     </>
-  )
-}
-
-/** A ticket written by hand, beside the ones imported from the tracker. */
-function NewTicketButton({ onClick, primary = false }: { onClick: () => void; primary?: boolean }) {
-  return (
-    <Button variant={primary ? 'default' : 'secondary'} onClick={onClick}>
-      <Plus className="size-4" aria-hidden /> New ticket
-    </Button>
   )
 }

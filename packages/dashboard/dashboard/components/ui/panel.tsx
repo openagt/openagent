@@ -92,8 +92,10 @@ const coverClass = 'outline-none after:absolute after:inset-0'
  * comes to the row for (Answer, Review); then the fact stands just before them, centred on the row with
  * them, and is not said on a phone, where the room is the name's.
  */
-export function PanelRow({ state, title, titleHint, meta = [], metaLines = 1, columns, fact, actions, actionsAtRest = false, href, external = false, onClick, className }: {
+export function PanelRow({ state, before, title, titleHint, meta = [], metaLines = 1, columns, fact, actions, actionsAtRest = false, href, external = false, onClick, className }: {
   state?: ReactNode
+  /** On the name's line before it, 12 after `state`, its own column (a ticket's priority): `meta` starts under the name, not under it. */
+  before?: ReactNode
   title: ReactNode
   /** Said under the pointer over the name: the whole text where the name stands in for it. */
   titleHint?: string | undefined
@@ -140,6 +142,7 @@ export function PanelRow({ state, title, titleHint, meta = [], metaLines = 1, co
       )}
     >
       {state !== undefined && <span className="flex h-5 w-4 shrink-0 items-center">{state}</span>}
+      {before !== undefined && <span className="flex h-5 shrink-0 items-center">{before}</span>}
       <span className="min-w-0 flex-1">
         {named}
         {/* On one line every part but the last is said whole and the last gives way, cut with "…"; on two, the parts run on and the second line is cut. */}

@@ -643,6 +643,8 @@ export function App() {
   // stays at the top; on a wider screen the sidebar stays beside it. A chat keeps its box at the
   // bottom, and only its own columns scroll.
   const pageScrolls = phoneTitle !== null
+  // A module's page opened below its own top (a ticket of the Tickets) goes back up to it from the phone's bar.
+  const backUp = modulePage && pageSegment && route.pagePath?.length ? () => hostServices.backToPage(pageSegment, [], scope ?? undefined) : undefined
   // The tab says the page first, as its heading or the sidebar names it, then the project the count is scoped to (#1923).
   const pageName =
     route.settings !== undefined
@@ -685,13 +687,23 @@ export function App() {
       {!healthy && (
         // Kept at the top of a page that scrolls, over an opaque ground, as the pinned sidebar is under it.
         <div role="alert" className={cn('h-(--top-banner) shrink-0 bg-background', pageScrolls && 'sticky top-0 z-30')}>
-          {/* The banners' strip: a tinted fill with no edge, its mark in the warning's colour, its words in the text's. */}
+          {/* The banners' strip: a tinted fill with no edge, its mark in the warning's colour, its words in the text's. One
+              line high on every screen (`--top-banner`): a phone draws its first sentence and says the rest to a screen reader. */}
           <div className="flex h-full items-center gap-2 bg-warning/10 px-4 text-sm">
             <TriangleAlert className="size-4 shrink-0 text-warning" aria-hidden />
             {daemon === 'stopped' ? (
-              <span>OpenAgent has stopped. Start it again with <code className="font-mono">openagent</code> in a terminal; {INSTALLED_RESTARTS}.</span>
+              <span className="min-w-0 max-md:truncate">
+                OpenAgent has stopped.
+                <span className="max-md:sr-only">
+                  {' '}
+                  Start it again with <code className="font-mono">openagent</code> in a terminal; {INSTALLED_RESTARTS}.
+                </span>
+              </span>
             ) : (
-              'OpenAgent is not answering — retrying. Nothing can be sent, started, stopped, answered or published until it is back.'
+              <span className="min-w-0 max-md:truncate">
+                OpenAgent is not answering — retrying.
+                <span className="max-md:sr-only"> Nothing can be sent, started, stopped, answered or published until it is back.</span>
+              </span>
             )}
           </div>
         </div>
@@ -756,7 +768,7 @@ export function App() {
         >
           <PaneLayout>
             <FocusHome as="main" className="flex min-h-0 min-w-0 flex-1 flex-col">
-              {isMobile && phoneTitle !== null && <PhoneBar title={phoneTitle} countSlot={setPhoneCount} />}
+              {isMobile && phoneTitle !== null && <PhoneBar title={phoneTitle} countSlot={setPhoneCount} onBack={backUp} />}
               <PhoneBarCount.Provider value={phoneCount}>{renderMain()}</PhoneBarCount.Provider>
             </FocusHome>
           </PaneLayout>
