@@ -1,10 +1,8 @@
-import { ClipboardPlus } from 'lucide-react'
-import { Button, Markdown, Slot, useAction, useModuleHost } from '@openagt/dashboard/module'
-import { heldBack, planBody, planTicketPrompt } from '../src/module.js'
+import { Markdown, Slot, useModuleHost } from '@openagt/dashboard/module'
+import { planBody } from '../src/module.js'
 import { TicketPageShell, TicketPageNote, TicketPageShape } from './TicketPageShell.js'
-import { TicketHeader } from './TicketHeader.js'
+import { TicketFacts, TicketHeader } from './TicketHeader.js'
 import { openToEdit } from './TicketDetailPage.js'
-import type { WorkspaceTicketDetail } from './lib/types.js'
 import { useTicket } from './lib/use-ticket.js'
 
 // One ticket's plan, its second tab: under the head it shares with the ticket's page, the plan set
@@ -20,12 +18,17 @@ export function TicketPlanPage({
   slug: string
 }) {
   const host = useModuleHost()
-  const { read, state, reload } = useTicket(projectId, slug)
+  const { read, state, released } = useTicket(projectId, slug)
   const ticket = read && 'ticket' in read ? read.ticket : null
   const onBack = () => host.backToPage('tickets')
 
   return (
-    <TicketPageShell onBack={onBack} crumbs={ticket ? [{ label: ticket.title, onOpen: () => host.openPage('tickets', [ticket.file], projectId, { beside: true }) }, { label: 'Plan' }] : []}>
+    <TicketPageShell
+      onBack={onBack}
+      // The ticket, by its title, opens it beside the plan, as its Ticket tab does.
+      crumbs={ticket ? [{ label: ticket.title, onOpen: () => host.openPage('tickets', [ticket.file], projectId, { beside: true }) }, { label: 'Plan' }] : []}
+      aside={ticket && read && 'ticket' in read ? <TicketFacts projectId={projectId} ticket={ticket} holderStatus={read.holderStatus} sessions={read.sessions} /> : undefined}
+    >
       <Slot of={{ state, value: read }} shape={<TicketPageShape />}>
         {read =>
           read && 'error' in read ? (
@@ -36,19 +39,11 @@ export function TicketPlanPage({
             <TicketPageNote>This ticket does not exist.</TicketPageNote>
           ) : (
             <>
-              <TicketHeader
-                projectId={projectId}
-                ticket={ticket}
-                holderStatus={read.holderStatus}
-                sessions={read.sessions}
-                tab="plan"
-                onEdit={() => openToEdit(host, projectId, ticket.file)}
-                onChanged={() => void reload()}
-              />
-              <div className="mt-6 max-w-180">
+              <TicketHeader projectId={projectId} ticket={ticket} holderStatus={read.holderStatus} tab="plan" onEdit={() => openToEdit(host, projectId, ticket.file)} onReleased={released} />
+              <div className="max-w-180">
                 {read.plan === null ? (
                   // No `.plan.md` beside the ticket: never written, or removed since.
-                  <NoPlan projectId={projectId} ticket={ticket} />
+                  <TicketPageNote>No plan yet.</TicketPageNote>
                 ) : (
                   <Markdown text={planBody(read.plan)} page />
                 )}
@@ -58,23 +53,5 @@ export function TicketPlanPage({
         }
       </Slot>
     </TicketPageShell>
-  )
-}
-
-/** The tab of a ticket with no plan: one line, and the press that has an agent write it, where an agent may be handed the ticket. */
-function NoPlan({ projectId, ticket }: { projectId: string; ticket: WorkspaceTicketDetail }) {
-  const host = useModuleHost()
-  const { busy, error, run } = useAction()
-  const offered = !heldBack(ticket) && !ticket.locked
-  return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-      <TicketPageNote>No plan yet.</TicketPageNote>
-      {offered && (
-        <Button variant="secondary" loading={busy} onClick={() => void run(() => host.startRun(projectId, planTicketPrompt(ticket.file)), 'The planning agent could not be started.')}>
-          <ClipboardPlus className="size-4" aria-hidden /> Plan now
-        </Button>
-      )}
-      {error && <p role="alert" className="basis-full text-xs text-danger">{error}</p>}
-    </div>
   )
 }

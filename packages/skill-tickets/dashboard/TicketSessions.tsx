@@ -1,5 +1,4 @@
-import { MessageSquare } from 'lucide-react'
-import { Button, List, Row, Tooltip, TooltipContent, TooltipTrigger, formatAge, runSaid, type ModuleAgent } from '@openagt/dashboard/module'
+import { List, Row, StateCell, formatAge, runSaid, type ModuleAgent, type WorkState } from '@openagt/dashboard/module'
 import { holderAgent, planAgentFor, workAgentFor } from '../src/module.js'
 import { holdingRun } from './lib/holding-run.js'
 
@@ -20,47 +19,29 @@ export function sessionsOf(agents: readonly ModuleAgent[], ticket: { file: strin
   return [...(plan ? [{ kind: 'plan' as const, agent: plan }] : []), ...(work && work.id !== plan?.id ? [{ kind: 'work' as const, agent: work }] : [])]
 }
 
-const WORDS = {
-  plan: { label: 'Plan', running: 'Being written in', ended: 'Written in' },
-  work: { label: 'Work', running: 'Being worked in', ended: 'Worked in' },
-} as const
+/** What each kind of run did to the ticket, said under the pointer. */
+const DID = { plan: { running: 'Writing its plan', ended: 'Wrote its plan' }, work: { running: 'Working on it', ended: 'Worked on it' } } as const
+/** A planning run that ended with no plan beside the ticket wrote none: it was asked for one. */
+const ASKED = 'Asked for its plan'
 
-/**
- * The sessions behind a ticket, each named as every list of runs names it and one press away: the
- * one that wrote its plan and the one that worked it. A finished one is gone on with in its own
- * chat — the same conversation, the ticket and the plan already in its context; one still running
- * is watched.
- */
+/** A run's status as its mark draws it. */
+const STATE: Record<string, WorkState> = { running: 'working', waiting: 'waiting', done: 'done', failed: 'failed', stopped: 'stopped' }
+
+/** The runs that planned and worked a ticket, each named as the claim names its run and opened by a press on its row. */
 export function TicketSessions({ sessions, planned, onOpen }: { sessions: readonly TicketSession[]; planned: boolean; onOpen: (agentId: string) => void }) {
   if (sessions.length === 0) return null
   return (
     <List>
       {sessions.map(({ kind, agent }) => {
-        const running = agent.status === 'running'
-        const words = WORDS[kind]
+        const running = agent.status === 'running' || agent.status === 'waiting'
+        const did = running ? DID[kind].running : kind === 'plan' && !planned ? ASKED : DID[kind].ended
         return (
           <Row
             key={kind}
-            leading={<span className="w-9 text-xs font-medium">{words.label}</span>}
-            title={
-              <>
-                {/* A planning run that ended with no plan beside the ticket wrote none: it was asked for one. */}
-                <span className="font-normal text-muted-foreground">{running ? words.running : kind === 'plan' && !planned ? 'Asked for in' : words.ended}</span> {holdingRun(agent)?.name ?? agent.id}
-              </>
-            }
-            meta={<span className="tabular-nums">{`${running ? runSaid(agent.status) : agent.status} · ${formatAge(agent.endedAt ?? agent.startedAt)}`}</span>}
-            actions={
-              <Tooltip>
-                <TooltipTrigger render={<Button variant="ghost" size="sm" onClick={() => onOpen(agent.id)} />}>
-                  <MessageSquare className="size-4" aria-hidden /> Open session
-                </TooltipTrigger>
-                <TooltipContent className="max-w-72">
-                  {running
-                    ? 'Opens the session, so you can watch it or step in.'
-                    : 'Opens the session. What you send there goes on with the same conversation: the ticket, the plan and the reasoning behind them are already in its context.'}
-                </TooltipContent>
-              </Tooltip>
-            }
+            leading={<StateCell state={STATE[agent.status] ?? 'idle'} />}
+            title={<span title={`${did}: ${runSaid(agent.status)}`}>{holdingRun(agent)?.name ?? agent.id}</span>}
+            meta={<span className="tabular-nums">{formatAge(agent.endedAt ?? agent.startedAt).replace(/ ago$/, '')}</span>}
+            onClick={() => onOpen(agent.id)}
           />
         )
       })}

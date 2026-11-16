@@ -613,8 +613,9 @@ function Panels() {
           onClick={() => {}}
         />
       </PanelGroup>
-      <PanelGroup title="Nothing pressable" count="1">
+      <PanelGroup title="Nothing pressable" count="2">
         <PanelRow state={<StateCell state="done" />} title="Its name only" meta={['what is known of it']} fact="2h" />
+        <PanelRow before={<span className="w-6 text-right text-xs font-medium tabular-nums text-muted-foreground">P8</span>} title="A fact before its name, in a column of its own" meta={['what is known of it']} fact="1w" />
         <PanelMore onClick={() => {}}>Show 4 more</PanelMore>
       </PanelGroup>
       <PanelGroup title="Bare: its own panel, a sentence where the rows would be" bare>
@@ -673,12 +674,11 @@ function Composing() {
 
 function Empties() {
   return (
-    <div className="grid gap-4 sm:grid-cols-2">
-      <Card>
-        <Empty title="No runs yet" action={<Button variant="secondary">New agent session</Button>}>
-          A run shows here from the moment an agent starts.
-        </Empty>
-      </Card>
+    <div className="max-w-xl space-y-8">
+      <Empty title="No runs yet." action={<Button variant="secondary">New agent session</Button>}>
+        A run shows here from the moment an agent starts.
+      </Empty>
+      <Empty title="Nothing queued." />
     </div>
   )
 }
@@ -859,7 +859,7 @@ export const PREVIEWS: Preview[] = [
     path: 'components/empty.html',
     group: 'Components',
     name: 'Empty',
-    subtitle: 'Nothing here yet: what is missing, what fills it, the press that does',
+    subtitle: 'Nothing here yet, said as the page: one plain sentence on the column\'s edge, what fills it, the press that does',
     width: 900,
     node: <Empties />,
   },

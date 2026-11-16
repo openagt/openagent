@@ -1,7 +1,8 @@
 import { createContext, type ComponentType } from 'react'
-import { Blocks, Ellipsis, LayoutDashboard, Plus } from 'lucide-react'
+import { ArrowLeft, Blocks, Ellipsis, LayoutDashboard, Plus } from 'lucide-react'
 import { cn } from '../lib/utils.js'
 import { inPlace } from '../lib/in-place.js'
+import { Button } from './ui/button.js'
 import { useSidebar } from './ui/sidebar.js'
 
 /** Where a page's count is drawn while a {@link PhoneBar} names the page: beside that name. None where no bar is drawn. */
@@ -9,11 +10,18 @@ export const PhoneBarCount = createContext<HTMLElement | null>(null)
 
 /**
  * The top row of a page that has none of its own: the page's name and the page's count, which the
- * page draws into `countSlot`. It stays at the top as the page scrolls.
+ * page draws into `countSlot`. It stays at the top as the page scrolls. Given `onBack` (a page under
+ * a module's page: a ticket of the Tickets), a back arrow stands first, as a session's bar has one.
  */
-export function PhoneBar({ title, countSlot }: { title: string; countSlot: (slot: HTMLElement | null) => void }) {
+export function PhoneBar({ title, countSlot, onBack }: { title: string; countSlot: (slot: HTMLElement | null) => void; onBack?: (() => void) | undefined }) {
   return (
     <div data-phone-bar="" className="sticky top-0 z-20 flex h-12 shrink-0 items-center gap-2 border-b border-border bg-background px-4 text-sm font-medium">
+      {/* The arrow's glyph on the bar's 16 inset, the press pulled out by its padding (spacing.md 4). */}
+      {onBack && (
+        <Button variant="ghost" size="icon-bar" className="-ml-1.5 text-muted-foreground" aria-label="Back" onClick={onBack}>
+          <ArrowLeft className="size-4" aria-hidden />
+        </Button>
+      )}
       <span className="truncate">{title}</span>
       <span ref={countSlot} className="shrink-0 font-normal tabular-nums text-muted-foreground empty:hidden" />
     </div>
@@ -67,7 +75,8 @@ export function PagesBar({
   // 44 by 26 behind every icon, filled only on the page that is open.
   const pill = (active: boolean) => cn('relative flex h-6.5 w-11 items-center justify-center rounded-full transition-colors', active && 'bg-foreground/8')
   return (
-    <nav aria-label="Pages" className="sticky bottom-0 z-20 flex shrink-0 border-t border-hairline bg-background">
+    // Its height is the page's `--foot` (tailwind.css), which a page's part kept to the window's foot stands on.
+    <nav aria-label="Pages" data-pages-bar="" className="sticky bottom-0 z-20 flex shrink-0 border-t border-hairline bg-background">
       <a href={overviewHref} onClick={inPlace(onOverview)} aria-current={overviewActive ? 'page' : undefined} aria-label={waiting > 0 ? `Overview, ${waiting} waiting on you` : 'Overview'} className={item(overviewActive)}>
         <span className={pill(overviewActive)}>
           <LayoutDashboard className="size-5" aria-hidden />

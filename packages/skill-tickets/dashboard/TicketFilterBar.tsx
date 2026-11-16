@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowDown, ArrowUp, ChevronDown, Search, X } from 'lucide-react'
+import { ArrowDownWideNarrow, ArrowUpNarrowWide, ChevronDown, Search, X } from 'lucide-react'
 import {
   EFFORT_BUCKETS,
   PRIORITY_BUCKETS,
@@ -40,6 +40,7 @@ import {
   DropdownMenuCheckboxItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  useIsMobile,
 } from '@openagt/dashboard/module'
 
 // The /tickets toolbar (#1144): search, faceted filters, sort, grouping — the page's whole viewing
@@ -62,7 +63,7 @@ function OptionRow({
 }) {
   return (
     // The whole row is the target: 32 high, 44 on a phone, as a menu's items are.
-    <label className="flex min-h-8 cursor-pointer items-center gap-2 rounded-md px-2 text-sm select-none transition-colors hover:bg-accent max-md:min-h-11">
+    <label className="flex min-h-8 cursor-pointer items-center gap-2 rounded-md px-2 text-sm select-none transition-colors pointer-fine:hover:bg-accent max-md:min-h-11">
       <Checkbox checked={checked} onCheckedChange={next => onChange(next === true)} aria-label={label} />
       <span className={cn('min-w-0 flex-1 truncate', tone)}>{label}</span>
       <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{count}</span>
@@ -77,10 +78,10 @@ const CHIP_ON = 'bg-accent text-accent-foreground'
  *  this with its own handlers via `render`, so everything unknown is forwarded to the Button. */
 function FacetTrigger({ label, value, ...props }: { label: string; value: string | undefined } & React.ComponentProps<typeof Button>) {
   return (
-    <Button variant="ghost" {...props} className={cn('gap-1.5', value !== undefined && CHIP_ON)}>
+    <Button variant="ghost" size="sm" {...props} className={cn('gap-1 text-muted-foreground', value !== undefined && CHIP_ON)}>
       {label}
       {value !== undefined && <span className="max-w-40 truncate font-normal">{value}</span>}
-      <ChevronDown className="size-3.5 text-muted-foreground" aria-hidden />
+      <ChevronDown className="size-3.5 text-faint-foreground" aria-hidden />
     </Button>
   )
 }
@@ -215,7 +216,7 @@ function CheckFacet({
   )
 }
 
-const SORT_LABELS: Record<SortKey, string> = { date: 'Date', priority: 'Priority', title: 'Title', effort: 'Effort' }
+const SORT_LABELS: Record<SortKey, string> = { priority: 'Priority', date: 'Date', title: 'Title', effort: 'Effort' }
 
 /** What each direction *means* per key — "descending" says nothing until you know the key. */
 const DIR_LABELS: Record<SortKey, Record<'asc' | 'desc', string>> = {
@@ -228,12 +229,15 @@ const DIR_LABELS: Record<SortKey, Record<'asc' | 'desc', string>> = {
 export function TicketFilterBar({
   view,
   rows,
+  spansProjects,
   onChange,
 }: {
   /** The page's viewing state; every control edits a copy and hands it back. */
   view: TicketsView
   /** The full unfiltered pool, for the option counts. */
   rows: TicketRow[]
+  /** The page shows more than one project: it can be grouped by them. */
+  spansProjects: boolean
   onChange: (next: TicketsView) => void
 }) {
   const f = view.filters
@@ -263,31 +267,45 @@ export function TicketFilterBar({
   const anyUncertainty = rows.some(r => r.ticket.uncertainty !== undefined)
   const filtered = hasAnyFilter(f)
 
-  return (
-    // On a phone the search, the filters and the sort are one row, scrolled sideways, so the list starts near the top:
-    // its right end fades, which says there is more, and the room after the sort lets it come clear of the fade.
-    <div className="flex items-center gap-1 sm:flex-wrap max-sm:-m-0.5 max-sm:overflow-x-auto max-sm:p-0.5 max-sm:pe-12 max-sm:[scrollbar-width:none] max-sm:[mask-image:linear-gradient(to_right,#000_calc(100%_-_3rem),transparent)]">
-      <div className="relative mr-1 shrink-0 max-sm:w-44">
-        <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-        <Input
-          name="search-tickets"
-          ref={searchRef}
-          value={f.q}
-          onChange={e => set({ q: e.target.value })}
-          onFocus={() => setSearchFocused(true)}
-          onBlur={() => setSearchFocused(false)}
-          placeholder="Search tickets…"
-          aria-label="Search tickets"
-          className="pr-8 pl-8 sm:w-56"
-        />
-        {!searchFocused && f.q === '' && (
-          // The key that focuses the search: not said where there is no keyboard.
-          <kbd className="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 rounded-sm border border-hairline px-1.5 font-mono text-xs text-muted-foreground pointer-coarse:hidden">
-            /
-          </kbd>
-        )}
+  const phone = useIsMobile()
+  // On a phone the search is a press at the strip's end that opens the field over the strip.
+  const [searchOpen, setSearchOpen] = useState(false)
+  const searching = phone && (searchOpen || f.q !== '')
+  const field = (
+    <div className="relative min-w-0 max-md:flex-1">
+      <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-faint-foreground" aria-hidden />
+      <Input
+        name="search-tickets"
+        ref={searchRef}
+        value={f.q}
+        autoFocus={searching && f.q === ''}
+        onChange={e => set({ q: e.target.value })}
+        onFocus={() => setSearchFocused(true)}
+        onBlur={() => setSearchFocused(false)}
+        placeholder="Search tickets"
+        aria-label="Search tickets"
+        className="border-transparent bg-accent pr-8 pl-9 hover:border-transparent md:w-55"
+      />
+      {!searchFocused && f.q === '' && (
+        // The key that focuses the search: not said where there is no keyboard.
+        <kbd className="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 rounded-sm px-1.5 text-xs text-faint-foreground ring-1 ring-hairline pointer-coarse:hidden">/</kbd>
+      )}
+    </div>
+  )
+  if (searching)
+    return (
+      <div className="flex items-center gap-2">
+        {field}
+        <Button variant="ghost" size="icon" aria-label="Close the search" className="-mr-2 text-muted-foreground" onClick={() => (set({ q: '' }), setSearchOpen(false))}>
+          <X className="size-4" aria-hidden />
+        </Button>
       </div>
+    )
 
+  return (
+    <div className="flex items-center gap-2">
+      {/* The filters, then the sort; where the page is narrow a strip scrolled sideways, its end faded to say there is more. */}
+      <div className="-ml-2 flex min-w-0 items-center gap-1 lg:flex-wrap max-lg:flex-1 max-lg:overflow-x-auto max-lg:pe-8 max-lg:[scrollbar-width:none] max-lg:[mask-image:linear-gradient(to_right,#000_calc(100%_-_2rem),transparent)]">
       <RangeFacet
         label="Priority"
         noneLabel="No priority"
@@ -297,8 +315,20 @@ export function TicketFilterBar({
         onChange={priority => set({ priority })}
       />
 
+      <CheckFacet label="Stage" value={picked(STAGES.filter(stage => f.stage.includes(stage.id)).map(stage => stage.label))}>
+        {STAGES.map(stage => (
+          <OptionRow
+            key={stage.id}
+            label={stage.label}
+            count={stageCounts[stage.id]}
+            checked={f.stage.includes(stage.id)}
+            onChange={() => set({ stage: toggled(f.stage, stage.id) as typeof f.stage })}
+          />
+        ))}
+      </CheckFacet>
+
       {(topicFacet.topics.length > 0 || topicFacet.none > 0) && (
-        <CheckFacet label="Topics" value={picked(f.topicsNone ? [...f.topics, 'No topics'] : f.topics)}>
+        <CheckFacet label="Topic" value={picked(f.topicsNone ? [...f.topics, 'No topics'] : f.topics)}>
           {topicFacet.topics.map(([topic, count]) => (
             <OptionRow
               key={topic}
@@ -316,18 +346,6 @@ export function TicketFilterBar({
           )}
         </CheckFacet>
       )}
-
-      <CheckFacet label="Stage" value={picked(STAGES.filter(stage => f.stage.includes(stage.id)).map(stage => stage.label))}>
-        {STAGES.map(stage => (
-          <OptionRow
-            key={stage.id}
-            label={stage.label}
-            count={stageCounts[stage.id]}
-            checked={f.stage.includes(stage.id)}
-            onChange={() => set({ stage: toggled(f.stage, stage.id) as typeof f.stage })}
-          />
-        ))}
-      </CheckFacet>
 
       {(anyEffort || rangeClauses(f.effort) > 0) && (
         <RangeFacet
@@ -354,8 +372,9 @@ export function TicketFilterBar({
       {(notLinked > 0 || f.unlinked) && (
         <Button
           variant="ghost"
+          size="sm"
           onClick={() => set({ unlinked: !f.unlinked })}
-          className={cn(f.unlinked && CHIP_ON)}
+          className={cn('text-muted-foreground', f.unlinked && CHIP_ON)}
           aria-pressed={f.unlinked}
           title={`${notLinked} not linked to an issue`}
         >
@@ -364,20 +383,18 @@ export function TicketFilterBar({
       )}
 
       {filtered && (
-        <Button variant="ghost" className="text-muted-foreground" onClick={() => onChange({ ...view, filters: defaultView().filters })}>
-          <X className="size-4" aria-hidden /> Clear
+        <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => onChange({ ...view, filters: defaultView().filters })}>
+          <X className="size-3.5" aria-hidden /> Clear
         </Button>
       )}
 
-      {/* Right side: how the list is ordered (the x/n tally lives beside the page title). */}
-      <div className="ml-auto flex items-center gap-2">
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
-              <Button variant="ghost" className="gap-1.5">
-                Sort: {SORT_LABELS[view.sort.key]}
-                {view.sort.dir === 'desc' ? <ArrowDown className="size-3.5" aria-hidden /> : <ArrowUp className="size-3.5" aria-hidden />}
-                <ChevronDown className="size-3.5 text-muted-foreground" aria-hidden />
+              <Button variant="ghost" size="sm" aria-label={`Sorted by ${SORT_LABELS[view.sort.key].toLowerCase()}, ${DIR_LABELS[view.sort.key][view.sort.dir].toLowerCase()}`} className="shrink-0 gap-1 text-muted-foreground">
+                {view.sort.dir === 'desc' ? <ArrowDownWideNarrow className="size-3.5" aria-hidden /> : <ArrowUpNarrowWide className="size-3.5" aria-hidden />}
+                {/* On a phone the glyph alone, so the strip ends whole. */}
+                <span className="max-md:sr-only">Sorted by {SORT_LABELS[view.sort.key].toLowerCase()}</span>
               </Button>
             }
           />
@@ -407,16 +424,27 @@ export function TicketFilterBar({
                 {DIR_LABELS[view.sort.key][dir]}
               </DropdownMenuCheckboxItem>
             ))}
-            <DropdownMenuSeparator />
-            <DropdownMenuCheckboxItem
-              checked={view.group === 'project'}
-              onCheckedChange={() => onChange({ ...view, group: view.group === 'project' ? 'none' : 'project' })}
-            >
-              Group by project
-            </DropdownMenuCheckboxItem>
+            {spansProjects && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuCheckboxItem
+                  checked={view.group === 'project'}
+                  onCheckedChange={() => onChange({ ...view, group: view.group === 'project' ? 'none' : 'project' })}
+                >
+                  Group by project
+                </DropdownMenuCheckboxItem>
+              </>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+      {phone ? (
+        <Button variant="ghost" size="icon" aria-label="Search tickets" className="-mr-2 text-muted-foreground" onClick={() => setSearchOpen(true)}>
+          <Search className="size-4" aria-hidden />
+        </Button>
+      ) : (
+        <div className="ml-auto">{field}</div>
+      )}
     </div>
   )
 }

@@ -644,6 +644,8 @@ export function App() {
   // stays at the top; on a wider screen the sidebar stays beside it. A chat keeps its box at the
   // bottom, and only its own columns scroll.
   const pageScrolls = phoneTitle !== null
+  // A module's page opened below its own top (a ticket of the Tickets) goes back up to it from the phone's bar.
+  const backUp = modulePage && pageSegment && route.pagePath?.length ? () => hostServices.backToPage(pageSegment, [], scope ?? undefined) : undefined
   // The tab says the page first, as its heading or the sidebar names it, then the project the count is scoped to (#1923).
   const pageName =
     route.settings !== undefined
@@ -757,7 +759,7 @@ export function App() {
         >
           <PaneLayout>
             <FocusHome as="main" className="flex min-h-0 min-w-0 flex-1 flex-col">
-              {isMobile && phoneTitle !== null && <PhoneBar title={phoneTitle} countSlot={setPhoneCount} />}
+              {isMobile && phoneTitle !== null && <PhoneBar title={phoneTitle} countSlot={setPhoneCount} onBack={backUp} />}
               <PhoneBarCount.Provider value={phoneCount}>{renderMain()}</PhoneBarCount.Provider>
             </FocusHome>
           </PaneLayout>

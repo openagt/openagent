@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Check, ClipboardPlus, Play } from 'lucide-react'
-import { StartAgentButton, useLinkActions, type StartMenuItem } from '@openagt/dashboard/module'
+import { Check, ClipboardPlus, ListPlus, Play } from 'lucide-react'
+import { Button, StartAgentButton, Tooltip, TooltipContent, TooltipTrigger, cn, useLinkActions, type StartMenuItem } from '@openagt/dashboard/module'
 import { planLink, planTicketPrompt, ticketLink, workOnTicketPrompt } from '../src/module.js'
 
 /**
@@ -9,8 +9,8 @@ import { planLink, planTicketPrompt, ticketLink, workOnTicketPrompt } from '../s
  * "later" hands the same ask to the installed modules' link actions — "Add to queue" when the
  * project has a queue package — and offers nothing without one. One button, the step now, the rest
  * in its menu, so a ticket's actions never crowd it; shorter words on the list's dense rows
- * (`compact`). A ticket no agent is handed now (in review, waiting, claimed) is not `startable`: it
- * shows only what is queued for it.
+ * (`compact`). A ticket no agent is handed now (in review, waiting, claimed) is not offered this: its
+ * row says what is queued for it with {@link QueuedMark}.
  */
 export function TicketStartActions({
   projectId,
@@ -20,7 +20,6 @@ export function TicketStartActions({
   onStart,
   onConfigure,
   compact = false,
-  startable = true,
 }: {
   projectId: string
   ticket: { file: string; title: string; planned?: boolean | undefined; priority?: string | undefined }
@@ -34,8 +33,6 @@ export function TicketStartActions({
   onConfigure: (prompt: string) => void
   /** The list's rows: a smaller button, shorter words. */
   compact?: boolean | undefined
-  /** Whether an agent may be handed the ticket now; without, only the Queued mark shows. */
-  startable?: boolean | undefined
 }) {
   const step = ticket.planned
     ? {
@@ -47,7 +44,6 @@ export function TicketStartActions({
         menu: `Other ways to work on ${ticket.title}`,
         configure: "Opens the launcher with this ticket's prompt, so you can set the model and where it runs.",
         failure: 'The work agent could not be started.',
-        link: ticketLink(ticket),
       }
     : {
         prompt: planTicketPrompt(ticket.file),
@@ -58,9 +54,8 @@ export function TicketStartActions({
         menu: `Other ways to plan ${ticket.title}`,
         configure: 'Opens the launcher with the plan prompt, so you can set the model and where it runs.',
         failure: 'The planning agent could not be started.',
-        link: planLink(ticket),
       }
-  const targets = [{ projectId, links: [step.link] }]
+  const targets = [{ projectId, links: [nextAsk(ticket)] }]
   const { actions, run } = useLinkActions([projectId], targets)
   // What the menu's queue item did, until the ask changes (a plan queued, then written, is a new ask).
   const [queued, setQueued] = useState<'running' | 'done' | { error: string } | null>(null)
@@ -72,44 +67,80 @@ export function TicketStartActions({
   }
   // Queued here, or read as queued already (an entry on the queue for this ask).
   const isQueued = queued === 'done' || actions.some(action => action.done)
-  const moreItems: StartMenuItem[] = actions.map(action => ({
-    // The module's own name for the act, as the list's header says it: the menu it is in says plan or work.
-    label: queued === 'done' || action.done ? (action.doneLabel ?? action.label) : action.label,
-    description: step.laterSays,
-    disabled: queued === 'running' || queued === 'done' || action.done,
-    onSelect: () => void queue(action.key),
-  }))
-  const size = compact ? 'sm' : 'default'
+  const failed = queued !== null && typeof queued === 'object' ? queued.error : null
+  // On a row the queue is in the start's menu; on the page it is a press of its own beside it.
+  const moreItems: StartMenuItem[] = compact
+    ? actions.map(action => ({
+        // The module's own name for the act: the menu it is in says plan or work.
+        label: queued === 'done' || action.done ? (action.doneLabel ?? action.label) : action.label,
+        description: step.laterSays,
+        disabled: queued === 'running' || queued === 'done' || action.done,
+        onSelect: () => void queue(action.key),
+      }))
+    : []
   return (
     <>
-      {isQueued && (
-        <span className="flex items-center gap-1 text-xs text-muted-foreground">
-          <Check className="size-3.5" aria-hidden /> Queued
-        </span>
-      )}
-      {queued !== null && typeof queued === 'object' && (
-        <span role="alert" title={queued.error} className="text-xs text-danger">
-          {compact ? 'Not queued' : `Not queued: ${queued.error}`}
+      {compact && isQueued && <QueuedMark />}
+      {compact && failed !== null && (
+        <span role="alert" title={failed} className="text-xs text-danger">
+          Not queued
         </span>
       )}
       {/* The page's one primary press; on a list's row, a ghost press among many rows. */}
-      {startable && (
-        <StartAgentButton
-          variant={compact ? 'ghost' : 'default'}
-          size={size}
-          icon={<step.Icon className="size-4" aria-hidden />}
-          label={step.now}
-          menuAriaLabel={step.menu}
-          tooltip={step.tooltip}
-          busy={busy}
-          starting={starting === step.prompt}
-          prompt={step.prompt}
-          configureDescription={step.configure}
-          onStart={() => onStart(step.prompt, step.failure)}
-          onConfigure={() => onConfigure(step.prompt)}
-          moreItems={moreItems}
-        />
+      <StartAgentButton
+        variant={compact ? 'ghost' : 'default'}
+        size={compact ? 'sm' : 'default'}
+        icon={<step.Icon className="size-4" aria-hidden />}
+        label={step.now}
+        menuAriaLabel={step.menu}
+        tooltip={step.tooltip}
+        busy={busy}
+        starting={starting === step.prompt}
+        prompt={step.prompt}
+        configureDescription={step.configure}
+        onStart={() => onStart(step.prompt, step.failure)}
+        onConfigure={() => onConfigure(step.prompt)}
+        moreItems={moreItems}
+      />
+      {!compact &&
+        actions.map(action => {
+          const done = queued === 'done' || action.done
+          return (
+            <Tooltip key={action.key}>
+              <TooltipTrigger
+                render={<Button variant="secondary" loading={queued === 'running'} aria-disabled={done || undefined} onClick={() => !done && void queue(action.key)} className={cn(done && 'text-muted-foreground')} />}
+              >
+                {done ? <Check className="size-4" aria-hidden /> : <ListPlus className="size-4" aria-hidden />}
+                {done ? (action.doneLabel ?? 'Queued') : action.label}
+              </TooltipTrigger>
+              <TooltipContent>{done ? 'It is on the queue.' : step.laterSays}</TooltipContent>
+            </Tooltip>
+          )
+        })}
+      {!compact && failed !== null && (
+        <span role="alert" className="text-xs text-danger">
+          Not queued: {failed}
+        </span>
       )}
     </>
+  )
+}
+
+/** A ticket's next step on the queue: its plan's ask with no plan, the ticket itself with one. */
+function nextAsk(ticket: { file: string; title: string; planned?: boolean | undefined; priority?: string | undefined }) {
+  return ticket.planned ? ticketLink(ticket) : planLink(ticket)
+}
+
+/** Whether the module that queues reads a ticket's next step as on the queue already. */
+export function useQueuedAsk(projectId: string, ticket: { file: string; title: string; planned?: boolean | undefined; priority?: string | undefined }): boolean {
+  return useLinkActions([projectId], [{ projectId, links: [nextAsk(ticket)] }]).actions.some(action => action.done)
+}
+
+/** "✓ Queued": a ticket's next step is on the queue. */
+export function QueuedMark() {
+  return (
+    <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
+      <Check className="size-3.5" aria-hidden /> Queued
+    </span>
   )
 }
