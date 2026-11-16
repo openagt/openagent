@@ -302,6 +302,59 @@ export function TicketFilterBar({
       </div>
     )
 
+  // The sort ends the filters; on a phone it stands outside the strip's faded end, beside the search, so its glyph reads whole.
+  const sort = (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button variant="ghost" size={phone ? 'icon' : 'sm'} aria-label={`Sorted by ${SORT_LABELS[view.sort.key].toLowerCase()}, ${DIR_LABELS[view.sort.key][view.sort.dir].toLowerCase()}`} className="shrink-0 gap-1 text-muted-foreground">
+            {view.sort.dir === 'desc' ? <ArrowDownWideNarrow className="size-3.5 max-md:size-4" aria-hidden /> : <ArrowUpNarrowWide className="size-3.5 max-md:size-4" aria-hidden />}
+            {/* On a phone the glyph alone, the search press's size, its words to a screen reader. */}
+            <span className="max-md:sr-only">Sorted by {SORT_LABELS[view.sort.key].toLowerCase()}</span>
+          </Button>
+        }
+      />
+      <DropdownMenuContent>
+        {/* A key starts at its natural direction; the direction is the pair under the keys, each
+            saying what it means for the key ("descending" says nothing until you know the key). */}
+        {(Object.keys(SORT_LABELS) as SortKey[]).map(key => (
+          <DropdownMenuCheckboxItem
+            key={key}
+            closeOnClick={false}
+            checked={view.sort.key === key}
+            onCheckedChange={() => {
+              if (view.sort.key !== key) onChange({ ...view, sort: sortByKey(key) })
+            }}
+          >
+            {SORT_LABELS[key]}
+          </DropdownMenuCheckboxItem>
+        ))}
+        <DropdownMenuSeparator />
+        {(['desc', 'asc'] as const).map(dir => (
+          <DropdownMenuCheckboxItem
+            key={dir}
+            closeOnClick={false}
+            checked={view.sort.dir === dir}
+            onCheckedChange={() => onChange({ ...view, sort: { ...view.sort, dir } })}
+          >
+            {DIR_LABELS[view.sort.key][dir]}
+          </DropdownMenuCheckboxItem>
+        ))}
+        {spansProjects && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuCheckboxItem
+              checked={view.group === 'project'}
+              onCheckedChange={() => onChange({ ...view, group: view.group === 'project' ? 'none' : 'project' })}
+            >
+              Group by project
+            </DropdownMenuCheckboxItem>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+
   return (
     <div className="flex items-center gap-2 md:items-start">
       {/* The filters, then the sort, wrapping where they meet the search; on a phone a strip scrolled sideways, its end faded to say there is more. */}
@@ -388,56 +441,9 @@ export function TicketFilterBar({
         </Button>
       )}
 
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <Button variant="ghost" size="sm" aria-label={`Sorted by ${SORT_LABELS[view.sort.key].toLowerCase()}, ${DIR_LABELS[view.sort.key][view.sort.dir].toLowerCase()}`} className="shrink-0 gap-1 text-muted-foreground">
-                {view.sort.dir === 'desc' ? <ArrowDownWideNarrow className="size-3.5" aria-hidden /> : <ArrowUpNarrowWide className="size-3.5" aria-hidden />}
-                {/* On a phone the glyph alone, so the strip ends whole. */}
-                <span className="max-md:sr-only">Sorted by {SORT_LABELS[view.sort.key].toLowerCase()}</span>
-              </Button>
-            }
-          />
-          <DropdownMenuContent>
-            {/* A key starts at its natural direction; the direction is the pair under the keys, each
-                saying what it means for the key ("descending" says nothing until you know the key). */}
-            {(Object.keys(SORT_LABELS) as SortKey[]).map(key => (
-              <DropdownMenuCheckboxItem
-                key={key}
-                closeOnClick={false}
-                checked={view.sort.key === key}
-                onCheckedChange={() => {
-                  if (view.sort.key !== key) onChange({ ...view, sort: sortByKey(key) })
-                }}
-              >
-                {SORT_LABELS[key]}
-              </DropdownMenuCheckboxItem>
-            ))}
-            <DropdownMenuSeparator />
-            {(['desc', 'asc'] as const).map(dir => (
-              <DropdownMenuCheckboxItem
-                key={dir}
-                closeOnClick={false}
-                checked={view.sort.dir === dir}
-                onCheckedChange={() => onChange({ ...view, sort: { ...view.sort, dir } })}
-              >
-                {DIR_LABELS[view.sort.key][dir]}
-              </DropdownMenuCheckboxItem>
-            ))}
-            {spansProjects && (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuCheckboxItem
-                  checked={view.group === 'project'}
-                  onCheckedChange={() => onChange({ ...view, group: view.group === 'project' ? 'none' : 'project' })}
-                >
-                  Group by project
-                </DropdownMenuCheckboxItem>
-              </>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {!phone && sort}
       </div>
+      {phone && sort}
       {phone ? (
         <Button variant="ghost" size="icon" aria-label="Search tickets" className="-mr-2 text-muted-foreground" onClick={() => setSearchOpen(true)}>
           <Search className="size-4" aria-hidden />
