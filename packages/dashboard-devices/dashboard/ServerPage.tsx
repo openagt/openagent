@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 import { ChevronRight, CircleCheck, House, Laptop, Loader2, Server, UserPlus, UserRound } from 'lucide-react'
-import { Button, Checkbox, ConfirmDialog, Dialog, RowShapes, SettingsItem, SettingsItems, SettingsRow, Slot, Switch, useOpenAgentDown, usePolled, type ModuleAccountsAgent, type ModuleComputersThrough, type ModuleHost, type ModuleMachine, type ModuleMachineAccount } from '@openagt/dashboard/module'
+import { Button, Checkbox, ConfirmDialog, Dialog, Facts, RowShapes, SettingsItem, SettingsItems, SettingsRow, Slot, Switch, useOpenAgentDown, usePolled, type ModuleAccountsAgent, type ModuleComputersThrough, type ModuleHost, type ModuleMachine, type ModuleMachineAccount } from '@openagt/dashboard/module'
 import { idsOf, myName, type Answer, type DeviceRow } from './devices.js'
 import { installDone, installFailed, nameOwner, removeDevice, removePerson, setPeople, setWho, askLink, type ServerRow } from './servers.js'
 import { labelOf, type ServerItem } from './model.js'
 import { Invite } from './codes.js'
-import { Facts, Head, Part, PressRow, Problem, Removal, Said, Seen, State, StepLine, Tabs, hostOf, olderThan } from './parts.js'
+import { Head, Part, PressRow, Problem, Removal, Said, Seen, State, StepLine, Tabs, hostOf, olderThan } from './parts.js'
 import type { Devices } from './use-devices.js'
 
 // A server's own page in Settings › Devices, for a server this computer installed OpenAgent on:
@@ -266,7 +266,7 @@ function Accounts({ host, machine, name, busy }: { host: ModuleHost; machine: Mo
               <SettingsItem
                 key={account.id}
                 title={account.name}
-                detail={<Facts>{[account.from !== undefined ? `from ${account.from}` : account.own ? `${name}'s own login` : undefined, account.first ? 'runs take it first' : undefined]}</Facts>}
+                detail={<Facts facts={[account.from !== undefined ? `from ${account.from}` : account.own ? `${name}'s own login` : undefined, account.first ? 'runs take it first' : undefined]} />}
                 {...(account.own ? {} : { actions: (
                   // Pulled out by its own padding: its words end on the page's right edge.
                   <Button size="sm" variant="ghost" className="-mr-2" disabled={busy || removing !== undefined || down} aria-label={`Remove ${account.name}'s ${title} account on ${name}`} title={account.from !== undefined ? `Runs on ${name} no longer use it. ${account.from} offers it again on the Permissions page.` : `Runs on ${name} no longer use it.`} onClick={() => void remove(agent, account)}>
@@ -435,8 +435,8 @@ export function ComputersThrough({ host, machine, busy, everyMs }: { host: Modul
               icon={computer.owner !== undefined ? Server : Laptop}
               title={computer.name}
               // Another person's, set up as a server and shared with this person on this one.
-              detail={<Facts>{[computer.owner !== undefined ? `${computer.owner}'s, shared with you` : undefined, computer.added ? 'In "Run on"' : 'Not in "Run on"']}</Facts>}
-              end={<State tone={computer.online ? 'good' : 'quiet'}>{computer.online ? 'Online' : 'Away'}</State>}
+              // What it is now stays on the line under its name: on a phone its Add stands where an end would.
+              detail={<Facts facts={[computer.online ? 'Online' : 'Away', computer.owner !== undefined ? `${computer.owner}'s, shared with you` : undefined, computer.added ? 'In "Run on"' : 'Not in "Run on"']} />}
               {...(computer.added ? {} : { actions: (
                 <Button variant="secondary" disabled={busy || adding !== undefined || down} aria-label={`Add ${computer.name} through ${machine.label}`} onClick={() => void add(computer.id)}>
                   {adding === computer.id && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}

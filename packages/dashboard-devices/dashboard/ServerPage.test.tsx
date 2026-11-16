@@ -469,7 +469,7 @@ describe('Settings › Devices: a server this computer installed', () => {
     show(page.host)
     await open('203.0.113.5')
     const list = await screen.findByRole('list', { name: 'Claude Code accounts on 203.0.113.5' })
-    expect([...list.querySelectorAll('li')].map(row => row.textContent)).toEqual(['Suleimanfrom Suleimans-MacBook-Pro · runs take it firstRemove', "Claude login on droplet203.0.113.5's own login"])
+    expect([...list.querySelectorAll('li')].map(row => row.textContent)).toEqual(['Suleimanfrom Suleimans-MacBook-Pro·runs take it firstRemove', "Claude login on droplet203.0.113.5's own login"])
     expect(screen.queryByRole('list', { name: 'Codex accounts on 203.0.113.5' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: "Remove Suleiman's Claude Code account on 203.0.113.5" }))
     await waitFor(() => expect(page.removeMachineAccount).toHaveBeenCalledWith('https://203.0.113.5', 'claude', 'Suleiman'))
@@ -1029,7 +1029,7 @@ describe('Settings › Devices: a server this computer installed', () => {
     expect((await findRow('rom-desktop (through 203.0.113.5)')).textContent).toContain("rom's, shared with you")
     await open('203.0.113.5')
     const list = await screen.findByRole('list', { name: 'The computers on 203.0.113.5' })
-    expect(list.textContent).toContain("rom-desktoprom's, shared with you")
+    expect(list.textContent).toContain("rom-desktopOnline·rom's, shared with you")
     fireEvent.click(screen.getByRole('button', { name: 'Back to Devices' }))
 
     await open('rom-desktop (through 203.0.113.5)')

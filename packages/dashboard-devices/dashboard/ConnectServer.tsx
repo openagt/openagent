@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { CircleCheck, CircleX, Loader2, PlugZap } from 'lucide-react'
-import { Button, Checkbox, Input, RadioGroup, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, cn, useOpenAgentDown, usePolled } from '@openagt/dashboard/module'
+import { Button, Checkbox, Facts, Input, RadioGroup, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, cn, useOpenAgentDown, usePolled } from '@openagt/dashboard/module'
 import type { Answer } from './devices.js'
 import { installDone, installFailed, testConnection, type ServerRow, type Tested } from './servers.js'
 import { CopyButton } from './codes.js'
@@ -166,8 +166,7 @@ function Stepper({ at }: { at: Stage }) {
     <ol aria-label="Steps" className="text-xs text-muted-foreground">
       {STAGES.map((stage, i) => (
         <li key={stage.id} aria-current={i === index ? 'step' : undefined} aria-label={`${stage.title}: ${i < index ? 'done' : i === index ? 'now' : 'next'}`} className={cn(i !== index && 'sr-only')}>
-          {`Step ${i + 1} of ${STAGES.length} · `}
-          <span className="font-medium text-foreground">{stage.title}</span>
+          <Facts facts={[`Step ${i + 1} of ${STAGES.length}`, <span className="font-medium text-foreground">{stage.title}</span>]} />
         </li>
       ))}
     </ol>
