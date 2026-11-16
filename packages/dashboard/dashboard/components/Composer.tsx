@@ -500,23 +500,22 @@ export const Composer = forwardRef<ComposerHandle, {
             </RowAboveBox>
           )}
 
-          {/* The text, starting at the box's own edge, and in a session the send at its right, kept at the
-              text's last line. One line tall when empty, growing with what is typed. The editor is borderless:
-              the edge is the surface's. The send's icon stands on the rows' last ones' line. */}
+          {/* The text, as Claude Code's: the commands menu (+) at its left, the text, and in a session the send
+              at its right, the two kept at the text's last line. One line tall when empty, growing with what
+              is typed. The editor is borderless: the edge is the surface's. */}
           <div className="flex items-end">
+            <div className="-mr-2 flex shrink-0 items-center py-1">{commandsEl}</div>
             <div className="min-w-0 flex-1">{editorEl}</div>
             {inAgent && <div className="flex shrink-0 items-center py-1">{slotEl}</div>}
           </div>
 
-          {/* How it runs, the box's last line: the commands menu (+) and the caller's controls at the
-              left, the model at the right. The left side is the one that gives way: a longer label there
+          {/* How it runs, the box's last line: the caller's controls at the left, the model at the right. The left side is the one that gives way: a longer label there
               never moves the model or the page below. As high as its items, so the launcher's painted press
               ends as far from the box's foot as from its right; the room it gives up is over it. */}
           <TooltipsPastBox value={surface}>
             <div className={cn('mt-2', rowClass, 'h-7')}>
               {/* In a narrow box, where its items say their icons only, each stays whole and the side scrolls, as the row above the box does. */}
               <div className={cn(rowLeftClass, '@max-xl:overflow-x-auto @max-xl:[scrollbar-width:none] @max-xl:[mask-image:linear-gradient(to_right,#000_85%,transparent)] @max-xl:*:shrink-0')}>
-                {commandsEl}
                 {controls}
               </div>
               <div className="flex shrink-0 items-center gap-0.5">

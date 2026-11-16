@@ -480,15 +480,14 @@ const surface = (): HTMLElement => {
 const commands = () => screen.getByRole('button', { name: 'Commands' })
 
 describe('the box', () => {
-  test('its text\'s line holds the text and, in a session, the send; the launcher\'s start ends the row under it; the commands menu, the model and "Run on" are on lines of their own, in the same surface', () => {
+  test('its text\'s line holds the commands menu, the text and, in a session, the send; the launcher\'s start ends the row under it; the model and "Run on" are on lines of their own, in the same surface', () => {
     renderComposer()
     fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'x' } })
     const start = screen.getByRole('button', { name: 'Send' })
     expect(box().contains(start)).toBe(false)
     expect(box().nextElementSibling!.contains(start)).toBe(true)
     expect(agentTrigger().compareDocumentPosition(start) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(box().contains(commands())).toBe(false)
-    expect(surface().contains(commands())).toBe(true)
+    expect(box().contains(commands())).toBe(true)
     expect(box().contains(agentTrigger())).toBe(false)
     expect(box().contains(screen.getByRole('button', { name: /^Run on: / }))).toBe(false)
     // One object with one edge: the surface holds the row above, the text and the row under.
@@ -500,12 +499,12 @@ describe('the box', () => {
     expect(box().contains(screen.getByRole('button', { name: 'Send' }))).toBe(true)
   })
 
-  test('the text starts at the box\'s edge and a session\'s send is at its right, kept at its last line; the commands menu leads the row under it', () => {
+  test('the commands menu is at the left of the text and a session\'s send at its right, both kept at its last line', () => {
     renderComposer({ inAgent: true })
     const editor = screen.getByLabelText('prompt')
     const submit = box().querySelector('button[aria-label="Send"]')!
-    expect(box().firstElementChild!.contains(editor)).toBe(true)
-    expect(box().nextElementSibling!.querySelector('button')).toBe(commands())
+    expect(box().firstElementChild!.contains(commands())).toBe(true)
+    expect(commands().compareDocumentPosition(editor) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(editor.compareDocumentPosition(submit) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(box().className).toContain('items-end')
   })
