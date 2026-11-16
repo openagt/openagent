@@ -27,12 +27,12 @@ function didFacts(member: Member): string[] {
   ].filter(fact => fact !== false)
 }
 
-/** How many runs of a member stand one way now, by their state's mark and word: "working", "2 waiting". */
+/** How many runs of a member stand one way now, by their state's mark and word: "working", "needs answer", and counted "2 working", "2 need an answer". */
 function Going({ status, count }: { status: 'running' | 'waiting'; count: number }) {
   return (
     <span className="flex items-center gap-1.5">
       <RunMark status={status} className="size-3" />
-      {count === 1 ? runWord(status) : `${count} ${runWord(status)}`}
+      {count === 1 ? runWord(status) : status === 'waiting' ? `${count} need an answer` : `${count} ${runWord(status)}`}
     </span>
   )
 }

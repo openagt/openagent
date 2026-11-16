@@ -121,5 +121,5 @@ test('a member with runs that wait on an answer says so beside the ones working'
   const member = await screen.findByRole('listitem', { name: 'Suleiman Shahbari' })
   expect(within(member).getByText('working')).toBeTruthy()
   // In the sidebar's amber for a run that waits: its mark, the hexagon (RunMark).
-  expect(within(member).getByText('2 waiting').querySelector('svg')!.getAttribute('class')).toMatch(/text-warning/)
+  expect(within(member).getByText('2 need an answer').querySelector('svg')!.getAttribute('class')).toMatch(/text-warning/)
 })

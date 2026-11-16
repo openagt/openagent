@@ -154,15 +154,15 @@ describe('AgentHistory (#785)', () => {
     expect(screen.queryByText("replace 'Hello, world!' with 'Welcome!'")).toBeNull()
   })
 
-  test('a run that ended on its question reads as waiting, with the still mark', () => {
+  test('a run that ended on its question reads as needing an answer, with the still mark', () => {
     // It asked and waits for the answer: its mark stays still, where a working run's turns.
     const { container } = renderRail(
       <AgentHistory projectId="p1" scope="p1" agents={[agent({ status: 'waiting' })]} selectedAgentId={null} onSelect={() => {}} />,
     )
-    expect(screen.getByLabelText('waiting')).toBeTruthy()
+    expect(screen.getByLabelText('needs answer')).toBeTruthy()
     expect(screen.queryByLabelText('working')).toBeNull()
     expect(container.querySelector('.motion-safe\\:animate-spin')).toBeNull()
-    expect(screen.getByLabelText('waiting').getAttribute('data-state')).toBe('waiting')
+    expect(screen.getByLabelText('needs answer').getAttribute('data-state')).toBe('waiting')
   })
 
   test('an ended run the daemon marks saving reads as saving… (#1455)', () => {
@@ -827,7 +827,7 @@ describe('cloud sessions on the rail (#1263/#1264)', () => {
     expect(screen.queryByLabelText('in cloud')).toBeNull()
   })
 
-  test('a web run parked on a question the bridge reported reads as waiting (#1668)', () => {
+  test('a web run parked on a question the bridge reported reads as needing an answer (#1668)', () => {
     renderRail(
       <AgentHistory
         projectId="p1" scope="p1"
@@ -836,7 +836,7 @@ describe('cloud sessions on the rail (#1263/#1264)', () => {
         onSelect={() => {}}
       />,
     )
-    expect(screen.getByLabelText('waiting')).toBeTruthy()
+    expect(screen.getByLabelText('needs answer')).toBeTruthy()
     expect(screen.queryByLabelText('in cloud')).toBeNull()
   })
 
