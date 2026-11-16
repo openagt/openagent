@@ -95,12 +95,12 @@ describe('AutoMenu', () => {
   test('a name too long for the button is whole in the tooltip', async () => {
     renderMenu({ publish: 'pr', target: { into: 'feature/a-long-name' } })
     expect(trigger().className).toContain('max-w-[20rem]!')
-    expect((await hoverTooltip(trigger())).textContent).toBe('Open PR: what the agent does by itself when it finishes. The pull request goes into feature/a-long-name.')
+    expect((await hoverTooltip(trigger())).textContent).toBe('What the agent does by itself when it finishes. The pull request goes into feature/a-long-name.')
   })
 
   test('the tooltip says what the menu is for, and the button is off while busy', async () => {
     renderMenu()
-    expect((await hoverTooltip(trigger())).textContent).toBe('Off: what the agent does by itself when it finishes.')
+    expect((await hoverTooltip(trigger())).textContent).toBe('What the agent does by itself when it finishes.')
     cleanup()
     renderMenu({ busy: true })
     expect((trigger() as HTMLButtonElement).disabled).toBe(true)
