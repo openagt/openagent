@@ -23,7 +23,8 @@ import { ComposedField, ComposedFieldFoot, ComposedFieldInput } from '../compone
 import { Empty } from '../components/ui/empty.js'
 import { FilterChips } from '../components/FilterChips.js'
 import { RowShapes, Slot } from '../components/ui/slot.js'
-import { ChevronRight, CornerDownLeft, Ellipsis, Folder, Play, Trash2 } from 'lucide-react'
+import { ChevronRight, CornerDownLeft, Ellipsis, Folder, Monitor, Play, Smartphone, Trash2 } from 'lucide-react'
+import { SettingsItem, SettingsItems, SettingsRow, SettingsSection } from '../components/SettingsRows.js'
 import { JumpPalette, openJump } from '../components/JumpPalette.js'
 import { ShortcutList } from '../components/ShortcutList.js'
 import type { AgentMeta } from '../../src/index.js'
@@ -731,6 +732,24 @@ function Lists() {
   )
 }
 
+/** An entry of Settings: its rows on the dialog's inset, then things listed in it, one lit as under the pointer. */
+function SettingsRows() {
+  return (
+    <div className="max-w-2xl space-y-8 rounded-lg bg-card p-6 ring-1 ring-hairline">
+      <SettingsSection>
+        <SettingsRow label="Name each run" description="A small model is asked for the two to five words a run's row shows." control={<Switch aria-label="Name each run" defaultChecked />} />
+        <SettingsRow label="Show what the coding agent thought" description="Inside a run of steps, a row for each thought between them." control={<Switch aria-label="Show what the coding agent thought" />} />
+      </SettingsSection>
+      <Section title="Your devices">
+        <SettingsItems aria-label="Your devices">
+          <SettingsItem icon={Smartphone} title="iPhone, Safari" detail="Phone · on this Wi-Fi · last seen 2m ago" actions={<Button variant="ghost" size="icon-sm" className="-mr-1.5" aria-label="iPhone, Safari: more"><Ellipsis className="size-4" aria-hidden /></Button>} />
+          <SettingsItem icon={Monitor} title="Studio Mac" detail="Computer · runs go both ways" end={<><Badge tone="success">Online</Badge><ChevronRight aria-hidden /></>} onClick={() => {}} />
+        </SettingsItems>
+      </Section>
+    </div>
+  )
+}
+
 export const PREVIEWS: Preview[] = [
   {
     path: 'foundations/color-tokens.html',
@@ -803,6 +822,14 @@ export const PREVIEWS: Preview[] = [
     subtitle: 'The Overview KPI row, accent on active',
     width: 900,
     node: <StatTiles />,
+  },
+  {
+    path: 'components/settings-rows.html',
+    group: 'Components',
+    name: 'Settings rows',
+    subtitle: 'A setting on the dialog\'s inset, its control centred; things listed 24 apart, a fill pulled out by its own padding',
+    width: 900,
+    node: <SettingsRows />,
   },
   {
     path: 'components/form-controls.html',

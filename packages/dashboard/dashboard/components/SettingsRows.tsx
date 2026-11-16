@@ -1,7 +1,8 @@
-import { createContext, useContext, useId, type ReactNode } from 'react'
+import { createContext, useContext, useId, type ComponentType, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select.js'
 import { cn } from '../lib/utils.js'
+import { inPlace } from '../lib/in-place.js'
 import { DaemonDown } from '../lib/use-daemon-health.js'
 import { Skeleton } from './ui/skeleton.js'
 import { Switch } from './ui/switch.js'
@@ -76,6 +77,70 @@ export function SettingsRow({
       {/* On a phone a press or a field in it is 44 high, under the thumb. */}
       <div className="shrink-0 max-md:[&_button]:h-11 max-md:[&_input]:h-11">{control}</div>
     </div>
+  )
+}
+
+/**
+ * Things listed in an entry (devices, folders): rows on the dialog's inset with no card and no rule,
+ * 24 apart (44 from row to row with one line, 64 with two), each lit by a fill its own padding
+ * pulls out past the inset, so lighting one moves nothing.
+ */
+export function SettingsItems({ className, ...props }: { className?: string; children: ReactNode; 'aria-label'?: string }) {
+  return <ul className={cn('-mx-4 -my-3 flex flex-col', className)} {...props} />
+}
+
+/**
+ * One row of {@link SettingsItems}: its icon (16, on the name's line) on the inset, its name 12 after,
+ * what is known of it under the name; at its right what it is now (`end`, with a chevron when the row
+ * opens a page) centred on the row, and its own presses (`actions`), which a desktop shows under the
+ * pointer and the keyboard and a phone always. With `onClick` or `href` the whole row is the press.
+ */
+export function SettingsItem({ icon: Icon, title, detail, end, actions, onClick, href }: {
+  icon?: ComponentType<{ className?: string; 'aria-hidden'?: boolean }>
+  title: ReactNode
+  detail?: ReactNode
+  end?: ReactNode
+  actions?: ReactNode
+  onClick?: () => void
+  href?: string
+}) {
+  const nameClass = 'block min-w-0 truncate text-left font-medium outline-none after:absolute after:inset-0 after:rounded-md focus-visible:after:outline-2 focus-visible:after:-outline-offset-2 focus-visible:after:outline-focus'
+  const named =
+    href !== undefined ? (
+      <a data-cover href={href} onClick={onClick && inPlace(onClick)} className={nameClass}>
+        {title}
+      </a>
+    ) : onClick !== undefined ? (
+      <button data-cover type="button" onClick={onClick} className={nameClass}>
+        {title}
+      </button>
+    ) : (
+      <span className="block min-w-0 truncate font-medium">{title}</span>
+    )
+  return (
+    <li
+      className={cn(
+        'group/item relative flex items-start gap-3 rounded-md px-4 py-3 text-sm',
+        (onClick !== undefined || href !== undefined || actions !== undefined) && 'transition-colors pointer-fine:hover:bg-foreground/4 has-[[aria-expanded=true]]:bg-foreground/4 has-[[data-cover]:active]:bg-foreground/8',
+      )}
+    >
+      {Icon && (
+        <span className="flex h-5 w-4 shrink-0 items-center text-faint-foreground">
+          <Icon aria-hidden className="size-4" />
+        </span>
+      )}
+      <span className="min-w-0 flex-1">
+        {named}
+        {detail !== undefined && <span className="mt-0.5 block truncate text-xs text-faint-foreground">{detail}</span>}
+      </span>
+      {(end !== undefined || actions !== undefined) && (
+        <span className="-my-3 flex shrink-0 items-center gap-2 self-stretch">
+          {end !== undefined && <span className="flex items-center gap-1 text-xs text-muted-foreground [&>svg]:size-4 [&>svg]:text-faint-foreground">{end}</span>}
+          {/* A press with no painted box is pulled out by its own padding by its caller, so its glyph ends on the inset. */}
+          {actions !== undefined && <span className="relative flex items-center gap-1 pointer-fine:opacity-0 pointer-fine:group-hover/item:opacity-100 pointer-fine:group-focus-within/item:opacity-100 pointer-fine:has-[[aria-expanded=true]]:opacity-100">{actions}</span>}
+        </span>
+      )}
+    </li>
   )
 }
 
