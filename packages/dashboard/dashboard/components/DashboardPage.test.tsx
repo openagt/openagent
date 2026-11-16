@@ -410,17 +410,21 @@ describe('the Overview', () => {
     expect(line.textContent).toBe('·nothing needs you·no agent working·your agents')
   })
 
-  test("before the packages' code is in, no place waits for the queue's part where the sidebar's pages say no shown project has the Queue, or say nothing yet", async () => {
+  test("before the packages' code is in, no place waits for the queue's part where the sidebar's pages say no shown project has the Queue; while they say nothing yet, the parts after its place wait", async () => {
     modules.loaded = false
     listed = [{ segment: 'queue', label: 'Queue', projects: ['p2'] }, { segment: 'logs', label: 'Logs', projects: ['p1'] }]
     show('p1')
     const line = (await screen.findByText('no agent working')).closest('p')!
     expect(line.textContent).toBe('·nothing needs you·no agent working·your agents')
     cleanup()
-    // A browser's first visit: no page known, none waited for.
+    // A browser's first visit: no page known, no place held, and what stands after it waits until a part or the pages come.
     listed = null
-    show()
-    expect((await screen.findByText('no agent working')).closest('p')!.textContent).toBe('·nothing needs you·no agent working·your agents')
+    const { rerender } = show()
+    const firstVisit = (await screen.findByText('no agent working')).closest('p')!
+    expect(firstVisit.textContent).toBe('·nothing needs you·no agent working')
+    modules.line = [{ id: '@x/queue/queued', order: 3, node: <span>nothing queued</span> }]
+    rerender(overview())
+    expect(firstVisit.textContent).toBe('·nothing needs you·no agent working·nothing queued·your agents')
   })
 
   test('the Human Queue says it is loading before its read, not that nothing waits', async () => {

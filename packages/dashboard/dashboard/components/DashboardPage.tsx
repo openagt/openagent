@@ -93,6 +93,9 @@ export function DashboardPage({
   // for this page (the picked project's, else all projects') orders them, sizes them, and hides some.
   const { cards: moduleCards, line: moduleLine, loaded: modulesLoaded } = useModuleCards(shownProjects)
   const queueComing = !modulesLoaded && moduleLine.length === 0 && listedPages?.some(page => page.segment === 'queue' && shownProjects.some(project => page.projects.includes(project.id))) === true
+  // Until the pages are known (a browser's first visit) nor any package's part is in, whether the queue's part comes is
+  // not known: the parts after its place wait, so a part coming in before them pushes nothing.
+  const placeKnown = modulesLoaded || moduleLine.length > 0 || listedPages !== null
   // What the number counts, kind by kind: "1 question, 1 to publish".
   const waiting = KINDS.map(kind => ({ kind, count: interventions.filter(item => item.kind === kind.value).length })).filter(({ count }) => count > 0)
   // How things stand, in one line under the title, each part a link to where it is: what needs the
@@ -126,7 +129,7 @@ export function DashboardPage({
     // Customize press and the page under it), and a place no part takes would shorten it.
     ...(queueComing ? [{ id: 'packages', order: PACKAGES_PLACE, node: <LinePart reading shape="4 queued">{null}</LinePart> }] : moduleLine),
     // The person's agents (Rom's design: an agent is a name, skills and accounts): how many, by name, a press from their page.
-    { id: 'your-agents', order: 4, node: <YourAgentsPart /> },
+    ...(placeKnown ? [{ id: 'your-agents', order: 4, node: <YourAgentsPart /> }] : []),
   ].sort((one, other) => one.order - other.order)
   const cards: OverviewCard[] = [
     {
