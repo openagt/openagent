@@ -25,7 +25,7 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe('ProjectHome', () => {
-  test('it shows the launcher and what waits on you, and no Docs section', async () => {
+  test('it is named by its question, and shows the launcher and what waits on you, and no Docs section', async () => {
     render(
       <ProjectHome
         projectId="p1"
@@ -47,6 +47,7 @@ describe('ProjectHome', () => {
     })
     // The box to start an agent first and the waiting rows under it; on a phone the box is drawn last, at the bottom.
     expect(screen.getByRole('region', { name: 'Waiting on you' })).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 1, name: 'What should an agent do?' })).toBeTruthy()
     // How many in all is said only where rows are held back: one row says it by being there.
     expect(screen.getByRole('heading', { name: 'Waiting on you' })).toBeTruthy()
     const questions = screen.getByText('1 rows')
