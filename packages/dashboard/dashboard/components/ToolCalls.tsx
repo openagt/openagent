@@ -327,7 +327,8 @@ function ThoughtLine({ text }: { text: string }) {
   return (
     <div className="min-w-0">
       <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open} aria-label="Thought" className="flex min-w-0 max-w-full items-center gap-1.5 hover:text-foreground">
-        <span className="truncate italic">{firstWords(text)}</span>
+        {/* Room for the slant of its last letter, which `truncate` would clip. */}
+        <span className="truncate pr-0.5 italic">{firstWords(text)}</span>
         <Caret open={open} />
       </button>
       {open && (

@@ -402,7 +402,7 @@ describe('AgentHistory rows', () => {
     const marks = [...row.querySelectorAll('[aria-label]')].map(mark => mark.getAttribute('aria-label'))
     expect(marks.at(-1)).toBe('Codex')
     expect(marks.indexOf('Runs on my-laptop')).toBeLessThan(marks.indexOf('Codex'))
-    const fold = marks.findIndex(label => label?.startsWith('1 agent'))
+    const fold = marks.findIndex(label => label?.startsWith('1 subagent'))
     expect(fold).toBeGreaterThanOrEqual(0)
     expect(fold).toBeLessThan(marks.indexOf('Codex'))
   })
@@ -642,7 +642,7 @@ describe('subagents on the rail', () => {
 
   test('while a subagent works the list is open under its main agent, each row named by its task', () => {
     renderRail(<AgentHistory projectId="p1" scope="p1" agents={[sub('c2', { status: 'running' }), sub('c1'), main]} selectedAgentId={null} onSelect={() => {}} />)
-    const fold = screen.getByRole('button', { name: /2 agents · 1 running/ })
+    const fold = screen.getByRole('button', { name: /2 subagents · 1 running/ })
     expect(fold.getAttribute('aria-expanded')).toBe('true')
     expect(screen.getByText('task c1')).toBeTruthy()
     expect(screen.getByText('task c2')).toBeTruthy()
@@ -675,7 +675,7 @@ describe('subagents on the rail', () => {
   test("the count of subagents is on the main agent's own row, and a click on it folds the list without opening the agent", () => {
     let picked: string | null = null
     renderRail(<AgentHistory projectId="p1" scope="p1" agents={[sub('c2'), sub('c1'), main]} selectedAgentId={null} onSelect={id => (picked = id)} />)
-    const fold = screen.getByRole('button', { name: '2 agents' })
+    const fold = screen.getByRole('button', { name: '2 subagents' })
     expect(fold.closest('a')?.textContent).toContain('split the login work')
     fireEvent.click(fold)
     expect(screen.getByText('task c1')).toBeTruthy()
@@ -693,12 +693,12 @@ describe('subagents on the rail', () => {
 
   test('a subagent stopped on a question keeps the list open too', () => {
     renderRail(<AgentHistory projectId="p1" scope="p1" agents={[sub('c1', { status: 'waiting' }), main]} selectedAgentId={null} onSelect={() => {}} />)
-    expect(screen.getByRole('button', { name: '1 agent' }).getAttribute('aria-expanded')).toBe('true')
+    expect(screen.getByRole('button', { name: '1 subagent' }).getAttribute('aria-expanded')).toBe('true')
   })
 
   test('once every subagent has ended the list folds to its count, and a click opens it and folds it again', () => {
     renderRail(<AgentHistory projectId="p1" scope="p1" agents={[sub('c2'), sub('c1'), main]} selectedAgentId={null} onSelect={() => {}} />)
-    const fold = screen.getByRole('button', { name: '2 agents' })
+    const fold = screen.getByRole('button', { name: '2 subagents' })
     expect(fold.getAttribute('aria-expanded')).toBe('false')
     expect(screen.queryByText('task c1')).toBeNull()
     fireEvent.click(fold)
@@ -709,14 +709,14 @@ describe('subagents on the rail', () => {
 
   test('the reader folding the list of a working subagent wins over it being open by itself', () => {
     renderRail(<AgentHistory projectId="p1" scope="p1" agents={[sub('c1', { status: 'running' }), main]} selectedAgentId={null} onSelect={() => {}} />)
-    fireEvent.click(screen.getByRole('button', { name: /1 agent · 1 running/ }))
+    fireEvent.click(screen.getByRole('button', { name: /1 subagent · 1 running/ }))
     expect(screen.queryByText('task c1')).toBeNull()
   })
 
   test('the list of an ended subagent whose page is open is open, and a click on a subagent selects it', () => {
     let picked: string | null = null
     renderRail(<AgentHistory projectId="p1" scope="p1" agents={[sub('c2'), sub('c1'), main]} selectedAgentId="c1" onSelect={id => (picked = id)} />)
-    expect(screen.getByRole('button', { name: '2 agents' }).getAttribute('aria-expanded')).toBe('true')
+    expect(screen.getByRole('button', { name: '2 subagents' }).getAttribute('aria-expanded')).toBe('true')
     fireEvent.click(screen.getByText('task c2'))
     expect(picked).toBe('c2')
   })
@@ -734,7 +734,7 @@ describe('subagents on the rail', () => {
       { projectId: 'proj-a', projectName: 'alpha', agent: main },
     ]
     renderRail(<AgentHistory projectId={null} agents={[]} recentAgents={recentAgents} selectedAgentId={null} onSelect={() => {}} />)
-    expect(screen.getAllByRole('button', { name: /1 agent/ })).toHaveLength(1)
+    expect(screen.getAllByRole('button', { name: /1 subagent/ })).toHaveLength(1)
     // The subagent's row does not name the project again: it is its main agent's.
     expect(screen.getAllByRole('link', { name: /alpha/ })).toHaveLength(1)
     const titles = screen.getAllByText(/^(split the login work|task c1|other project)$/).map(el => el.textContent)

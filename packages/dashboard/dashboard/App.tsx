@@ -15,9 +15,9 @@ import { AgentView } from './components/AgentView.js'
 import { ChatShape } from './components/ChatPane.js'
 import { PageShape } from './components/Page.js'
 import { agentLabel, awaitingName } from './lib/agent-label.js'
-import { subagentsOf, taskLabel } from './lib/subagents.js'
+import { callSubagents, subagentsOf, taskLabel } from './lib/subagents.js'
 import { PaneLayout, PanesProvider } from './components/Panes.js'
-import { SubagentPanel } from './components/SubagentPanel.js'
+import { SubagentsPanel } from './components/SubagentsPanel.js'
 import { PagesBar, PhoneBar, PhoneBarCount } from './components/PhoneBar.js'
 import { cn } from './lib/utils.js'
 import { onSkillsSaved } from './lib/skills-saved.js'
@@ -465,6 +465,8 @@ export function App() {
   const sessionGone = agentId !== null && !selectedAgent && agentsState === 'fresh' && (agentId !== agentStart.id || agentStart.listed === true)
   // The runs started for the selected one: rows in its chat.
   const subagents = useMemo(() => (agentId ? subagentsOf(agents, agentId) : []), [agents, agentId])
+  // Its coding agent's own count too: a run may start no run of its own and still have subagents.
+  const hasSubagents = useMemo(() => subagents.length > 0 || callSubagents(events).length > 0, [subagents, events])
   // The project is off the list: read the list again and leave its page for the Overview of every
   // project at once, since the one it was picked as is gone; "Project removed" is said over it.
   const leaveRemovedProject = () => {
@@ -763,8 +765,8 @@ export function App() {
           context={context}
           toggleContext={toggleContext}
           activity={events.length}
-          // A subagent a row of the agent's chat opened, beside the chat.
-          subagent={projectId && agentId ? <SubagentPanel projectId={projectId} agentId={agentId} events={events} subagents={subagents} live={selectedAgent?.status === 'running'} onOpenAgent={selectAgent} /> : undefined}
+          // The run's subagents, when it started any, beside the chat.
+          subagents={projectId && agentId && hasSubagents ? <SubagentsPanel projectId={projectId} agentId={agentId} events={events} subagents={subagents} live={selectedAgent?.status === 'running'} onOpenAgent={selectAgent} /> : undefined}
         >
           <PaneLayout>
             <FocusHome as="main" className="flex min-h-0 min-w-0 flex-1 flex-col">

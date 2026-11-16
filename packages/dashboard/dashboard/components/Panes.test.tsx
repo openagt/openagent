@@ -469,24 +469,35 @@ describe('a live screen asked for from the chat', () => {
   })
 })
 
-describe('a subagent asked for from the chat', () => {
-  test('opens the Subagent pane beside the chat, which has no icon of its own; closed, it opens again on the next ask', async () => {
-    render(<Page subagent={<div>the subagent</div>} />)
-    await waitFor(() => expect(icons()).toContain('Docs'))
+describe("a run's subagents", () => {
+  test('a run that started some has their pane, with an icon after the modules\' and Docs; it opens and closes as the others do', async () => {
+    render(<Page subagents={<div>the subagents</div>} />)
+    await waitFor(() => expect(icons()).toEqual(['Changes', 'Files', 'Browser', 'Docs', 'Subagents']))
+    fireEvent.click(icon('Subagents'))
+    expect(cards()).toEqual(['Subagents'])
+    expect(within(card('Subagents')).getByText('the subagents')).toBeTruthy()
+    fireEvent.click(within(card('Subagents')).getByRole('button', { name: 'Close Subagents' }))
+    expect(cards()).toEqual([])
+  })
+
+  test('a subagent asked for from the chat opens their pane; closed, it opens again on the next ask, and an ask for none opens nothing', () => {
+    render(<Page subagents={<div>the subagents</div>} />)
     act(() => revealSubagent('p1/other', 'run:x'))
     expect(cards()).toEqual([])
     act(() => revealSubagent('p1/r1', 'run:x'))
-    expect(cards()).toEqual(['Subagent'])
-    expect(within(card('Subagent')).getByText('the subagent')).toBeTruthy()
-    expect(icons()).not.toContain('Subagent')
-    fireEvent.click(within(card('Subagent')).getByRole('button', { name: 'Close Subagent' }))
+    expect(cards()).toEqual(['Subagents'])
+    expect(icon('Subagents').getAttribute('aria-pressed')).toBe('true')
+    fireEvent.click(within(card('Subagents')).getByRole('button', { name: 'Close Subagents' }))
+    expect(cards()).toEqual([])
+    act(() => revealSubagent('p1/r1'))
     expect(cards()).toEqual([])
     act(() => revealSubagent('p1/r1', 'call:y'))
-    expect(cards()).toEqual(['Subagent'])
+    expect(cards()).toEqual(['Subagents'])
   })
 
-  test('a page with nothing to show for a subagent offers no Subagent pane', () => {
+  test('a run with no subagents has no such pane, and an ask from the chat opens nothing', async () => {
     render(<Page />)
+    await waitFor(() => expect(icons()).toEqual(['Changes', 'Files', 'Browser', 'Docs']))
     act(() => revealSubagent('p1/r1', 'run:x'))
     expect(cards()).toEqual([])
   })

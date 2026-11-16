@@ -5,10 +5,11 @@ import { Fragment, useContext, useEffect, useLayoutEffect, useMemo, useRef, useS
 import { Check, ChevronRight, Copy, PencilLine } from 'lucide-react'
 import { pendingChoices } from '../lib/live-state.js'
 import { DaemonDown } from '../lib/use-daemon-health.js'
-import { callRow, callSubagents, isAgentsOwn, runRow, endMessage, subagentEnd, subagentEvents, subagentReport, subagentSteps, subagentWait, type SubagentEnd } from '../lib/subagents.js'
+import { callSubagents, isAgentsOwn, runRow, endMessage, subagentEnd, subagentEvents, subagentReport, subagentRows, subagentSteps, subagentWait, type SubagentEnd } from '../lib/subagents.js'
 import { answeredQuestion } from '../lib/answered-question.js'
 import { rowWords, type RowWords } from '../lib/row-words.js'
 import { formatAge } from '../lib/format-date.js'
+import { cn } from '../lib/utils.js'
 import { AnsweredChoice } from './AnsweredChoice.js'
 import { QuestionPanel } from './QuestionPanel.js'
 import { Markdown } from './Markdown.js'
@@ -639,6 +640,22 @@ function shownAsRow(e: OpenAgentEvent): boolean {
   return true
 }
 
+// The room the log's scroller keeps for a scroll bar on its right, written on it as `--log-gutter`:
+// none where the scroll bar lies over the content (a phone's, a Mac's), its width where it takes
+// room of its own, shown or not. Read again as the scroller changes its size.
+function useGutterRead(viewport: RefObject<HTMLDivElement | null>, on: boolean): void {
+  useLayoutEffect(() => {
+    const view = viewport.current
+    if (!on || !view) return
+    const read = () => view.style.setProperty('--log-gutter', `${view.offsetWidth - view.clientWidth}px`)
+    read()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(read)
+    observer.observe(view)
+    return () => observer.disconnect()
+  }, [viewport, on])
+}
+
 // The room the log's rows have got smaller: the message box's bar grew over the log's end (a
 // question opened over it, the agent's work came in), or the view itself got shorter (the top
 // bar's details opened, a notice came under it). A log that was at its end stays at it. The
@@ -704,6 +721,8 @@ export function EventList({
   openAt,
   head,
   tail,
+  startedAt,
+  evenEdges = false,
   projectId,
   agentId,
   onSaid,
@@ -741,6 +760,14 @@ export function EventList({
   /** Pinned after the last row, inside the scroller (#1265): the log's "and then…" — a web agent's
    *  live mirror box — that must scroll (and stick) with the log rather than float over it. */
   tail?: ReactNode
+  /** When a log whose first prompt is in its head, not among its rows (a subagent's), began: its
+   *  live line counts from there. */
+  startedAt?: string | undefined
+  /** The log fills a pane: its column is as wide as the pane, and its words and painted blocks stand
+   *  as far from the pane's right edge as from its left, the room its scroller keeps for a scroll bar
+   *  taken off its right padding. The page's chat is a column of a reading width, centred in the room
+   *  left of that bar, and the message box under it stops short of the bar too (ChatPane). */
+  evenEdges?: boolean
   /** The log's own project: with it, a resolved gate is the collapsed ✓ card, and an open one is
    *  the question's card when the log knows its agent too. Without it, every `choice` row keeps the
    *  formatter's text. */
@@ -839,7 +866,7 @@ export function EventList({
   if (sentAt !== undefined) lastSent.current = sentAt
   const turnBoundary = [...unfolded].reverse().find(isTurnBoundary)
   const sentTurn = lastSent.current !== undefined && turnBoundary !== undefined && turnBoundary !== sent && told.find(e => isTurnBoundary(e) && e !== sent && e.at !== undefined && e.at > lastSent.current!) === turnBoundary
-  const turnStart = later(wokeAt, blocked.wokeAt) ?? (sentTurn || (sent !== undefined && turnBoundary === sent) ? lastSent.current : turnBoundary?.at) ?? unfolded[unfolded.length - 1]?.at
+  const turnStart = later(wokeAt, blocked.wokeAt) ?? (sentTurn || (sent !== undefined && turnBoundary === sent) ? lastSent.current : turnBoundary?.at) ?? startedAt ?? unfolded[unfolded.length - 1]?.at
   // The prompts that told this run one of its subagents ended: SUBAGENT rows, not the reader's own.
   const ends = new Map<OpenAgentEvent, SubagentEnd>()
   for (const e of shown) {
@@ -851,7 +878,7 @@ export function EventList({
   // the scroller keeps its place. A message just sent is the next turn's.
   const idOf = (e: OpenAgentEvent): string => rowIds.get(e) ?? `turn:${turns + 1}`
   const groupOf = (e: OpenAgentEvent): string => (ends.has(e) ? SUBAGENT : rowGroup(e))
-  const rows = [...subagents.map(agent => runRow(agent, doing[agent.id])), ...calls.map(call => callRow(call, working, events[0]?.at ?? new Date(0).toISOString()))]
+  const rows = subagentRows(subagents, events, working, doing)
   // A prompt or the agent's own words part them: what it started after saying something comes after those words.
   const reports = new Map(calls.flatMap(call => {
     const report = subagentReport(events, call.id)
@@ -919,6 +946,7 @@ export function EventList({
   const viewport = useRef<HTMLDivElement>(null)
   const endRoom = useRef<HTMLDivElement>(null)
   useEndKept(viewport, endRoom)
+  useGutterRead(viewport, evenEdges)
   // The last row of each turn the agent finished, with what its footer copies: everything the
   // agent said since the person's last message, its messages one paragraph apart, as Claude Code on
   // the web's copy takes them; a turn that said nothing but a question, the question. Claude Code
@@ -967,7 +995,12 @@ export function EventList({
         <MessageScrollerViewport ref={viewport} aria-label="Agent output" className="chat-scroll scroll-pb-(--chat-bottom)">
           {/* The chat's column: 16 in on a phone, 32 on a desktop, where the painted blocks are pulled
               out by 16 to stand 16 in with the message box, their words on the column. */}
-          <MessageScrollerContent spacerClassName="order-last" className="mx-auto w-full max-w-3xl gap-3 px-4 pt-4 font-mono text-xs md:px-8">
+          {/* In a pane the column fills the pane, at any width it is given, and its right padding is
+              less by the scroll bar's room (`--log-gutter`), so it stands as far from both of its edges. */}
+          <MessageScrollerContent
+            spacerClassName="order-last"
+            className={cn('w-full gap-3 pt-4 font-mono text-xs', evenEdges ? 'pr-[calc(--spacing(4)-var(--log-gutter,0px))] pl-4 md:pr-[calc(--spacing(8)-var(--log-gutter,0px))] md:pl-8' : 'mx-auto max-w-3xl px-4 md:px-8')}
+          >
             {/* First in the page, so never the row the browser keeps in place when a row above
                 it grows: a steps line opened at the log's end opens under the line, the line
                 where it was, as Claude Code's does, not pushed up by the room held still. */}
@@ -1088,7 +1121,7 @@ export function EventList({
             )}
             {/* The live line's place is kept when it has nothing to say (a message being written,
                 the agent's turn over): nothing under it moves up when it goes, nor down when it comes. */}
-            {shown.length > 0 && (
+            {(shown.length > 0 || head !== undefined) && (
               <div data-testid="live-line" className="-mx-1.5 flex min-h-5 shrink-0 items-center gap-2 rounded-sm px-1.5">
                 {/* Under the reply as it streams, too: the agent is still at it, and Claude Code on
                     the web keeps its dots and its count there. The line said a word before, which
