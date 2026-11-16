@@ -175,7 +175,7 @@ function SubagentList({ ref, fold, page, rows, reasons, shown, projectId, onPick
         const drawn = keys.flatMap(key => byKey.get(key) ?? [])
         if (drawn.length === 0) return null
         return name === 'Ended' && held.folds ? (
-          <section key={name} aria-label="Ended">
+          <section key={name} aria-label="Ended" className={PART_CLASS}>
             {/* A row in the list's place: its words on the names' edge. */}
             <button ref={fold} type="button" aria-expanded={endedOpen} onClick={pressFold} className={cn(navRowClass(false), 'text-muted-foreground')}>
               <span aria-hidden className="w-4 shrink-0" />
@@ -196,11 +196,18 @@ function SubagentList({ ref, fold, page, rows, reasons, shown, projectId, onPick
   )
 }
 
+/**
+ * A part after another stands 32 from the rows above it to its name, which stands 8 over its own
+ * rows (ui/look/spacing.md 8: a part's name to its card 8, a card to the next part's name 32): the
+ * name's line is 32 high, its words in its middle, 8 from either side.
+ */
+const PART_CLASS = 'not-first:mt-6'
+
 /** A part of the list: its name in the quiet part-name text, over its rows. */
 function Part({ name, children }: { name: string; children: ReactNode }) {
   const heading = useId()
   return (
-    <section aria-labelledby={heading}>
+    <section aria-labelledby={heading} className={PART_CLASS}>
       <h3 id={heading} className="flex h-8 items-center px-2 text-xs font-medium text-muted-foreground">
         {name}
       </h3>
