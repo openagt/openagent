@@ -400,35 +400,65 @@ function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord;
       }
     >
       <form id={formId} noValidate onSubmit={submit} className="space-y-6 pb-1">
-        <div className="space-y-1.5">
-          <Label htmlFor="agent-name">Name</Label>
-          <Input
-            id="agent-name"
-            ref={nameField}
-            value={draft.name}
-            disabled={isDefault}
-            readOnly={busy}
-            placeholder="Social media"
-            aria-invalid={nameMissing || nameRefused}
-            {...(nameMissing ? { 'aria-describedby': 'agent-name-missing' } : nameRefused ? { 'aria-describedby': 'agent-refused' } : isDefault ? { 'aria-describedby': 'agent-name-kept' } : {})}
-            onChange={event => {
-              setNameMissing(false)
-              setNameRefused(false)
-              setDraft(d => ({ ...d, name: event.target.value }))
-            }}
-            className="max-w-sm"
-          />
-          {nameMissing && (
-            <p id="agent-name-missing" className="text-xs text-danger">
-              Give the agent a name.
-            </p>
-          )}
-          {isDefault && (
-            <p id="agent-name-kept" className="text-xs text-muted-foreground">
-              The default agent keeps its name: it is the one a session is on unless you pick another.
-            </p>
-          )}
+        {/* Who it is first, its name and the account it pushes as side by side from a tablet up, then the
+            coding agents' accounts it works with, then what it knows: its skills. */}
+        <div className="grid gap-x-4 gap-y-6 md:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="agent-name">Name</Label>
+            <Input
+              id="agent-name"
+              ref={nameField}
+              value={draft.name}
+              disabled={isDefault}
+              readOnly={busy}
+              placeholder="Social media"
+              aria-invalid={nameMissing || nameRefused}
+              {...(nameMissing ? { 'aria-describedby': 'agent-name-missing' } : nameRefused ? { 'aria-describedby': 'agent-refused' } : isDefault ? { 'aria-describedby': 'agent-name-kept' } : {})}
+              onChange={event => {
+                setNameMissing(false)
+                setNameRefused(false)
+                setDraft(d => ({ ...d, name: event.target.value }))
+              }}
+            />
+            {nameMissing && (
+              <p id="agent-name-missing" className="text-xs text-danger">
+                Give the agent a name.
+              </p>
+            )}
+            {isDefault && (
+              <p id="agent-name-kept" className="text-xs text-muted-foreground">
+                The default agent keeps its name: it is the one a session is on unless you pick another.
+              </p>
+            )}
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="agent-github">On GitHub as</Label>
+            <div className="flex flex-wrap items-center gap-2">
+              <Select items={githubItems} value={draft.github ?? COMPUTERS} onValueChange={next => setDraft(d => ({ ...d, ...(next ? { github: String(next) } : {}), ...(next ? {} : { github: undefined }) }))} disabled={busy}>
+                <SelectTrigger id="agent-github" aria-label="GitHub account" className="min-w-0 grow basis-48">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {githubItems.map(item => (
+                    <SelectItem key={item.value} value={item.value}>
+                      {item.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {view.github && (
+                <Button type="button" variant="secondary" disabled={busy} onClick={() => addingAccount.add(view.github!.host)}>
+                  <Plus className="size-4" aria-hidden />
+                  Add account
+                </Button>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">Runs push and open pull requests as this account. An account this computer does not have refuses the start.</p>
+            {addingAccount.dialog}
+          </div>
         </div>
+        <AccountPicks label="Claude" accounts={view.claude} picked={draft.claude} busy={busy} onTick={(id, on) => tick('claude', id, on)} onAll={() => setDraft(d => ({ ...d, claude: new Set() }))} />
+        <AccountPicks label="Codex" accounts={view.codex} picked={draft.codex} busy={busy} onTick={(id, on) => tick('codex', id, on)} onAll={() => setDraft(d => ({ ...d, codex: new Set() }))} />
         <div className="space-y-4">
           <div>
             <p className="text-sm font-semibold">Skills</p>
@@ -453,36 +483,6 @@ function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord;
             disabled={busy}
           />
         </div>
-        <div className="space-y-3">
-          <p className="text-sm font-semibold">Accounts</p>
-          <div className="space-y-1.5">
-            <Label htmlFor="agent-github">GitHub</Label>
-            <div className="flex flex-wrap items-center gap-2">
-              <Select items={githubItems} value={draft.github ?? COMPUTERS} onValueChange={next => setDraft(d => ({ ...d, ...(next ? { github: String(next) } : {}), ...(next ? {} : { github: undefined }) }))} disabled={busy}>
-                <SelectTrigger id="agent-github" aria-label="GitHub account" className="min-w-0 max-w-sm grow basis-48">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {githubItems.map(item => (
-                    <SelectItem key={item.value} value={item.value}>
-                      {item.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {view.github && (
-                <Button type="button" variant="secondary" disabled={busy} onClick={() => addingAccount.add(view.github!.host)}>
-                  <Plus className="size-4" aria-hidden />
-                  Add account
-                </Button>
-              )}
-            </div>
-            <p className="text-xs text-muted-foreground">Runs push and open pull requests as this account. An account this computer does not have refuses the start.</p>
-            {addingAccount.dialog}
-          </div>
-          <AccountPicks label="Claude" accounts={view.claude} picked={draft.claude} busy={busy} onTick={(id, on) => tick('claude', id, on)} onAll={() => setDraft(d => ({ ...d, claude: new Set() }))} />
-          <AccountPicks label="Codex" accounts={view.codex} picked={draft.codex} busy={busy} onTick={(id, on) => tick('codex', id, on)} onAll={() => setDraft(d => ({ ...d, codex: new Set() }))} />
-        </div>
         {/* At the scroll's foot while more is under it: what is cut there fades out rather than ending on a line. */}
         <div aria-hidden className="pointer-events-none sticky bottom-0 -mt-6 h-4 bg-gradient-to-t from-card to-transparent" />
       </form>
@@ -499,7 +499,7 @@ function AccountPicks({ label, accounts: all, picked, busy, onTick, onAll }: { l
   if (accounts.length === 0) return null
   return (
     <fieldset className="space-y-1.5">
-      <legend className="text-sm">{label}</legend>
+      <legend className="text-sm font-medium">{`${label} accounts`}</legend>
       <div className="flex flex-wrap gap-3">
         {/* Left by ticking an account, as a radio is left by picking another. */}
         <label className="flex cursor-pointer items-center gap-2 text-sm">
