@@ -112,7 +112,7 @@ describe('the Automations page: its rows', () => {
     // One project: its scheduler's line stands under the page's own.
     expect(screen.getByText('Scheduler on').className).toMatch(/text-success/)
     // The scheduler's model, on the coding agent it is a model of, named as the rows name it.
-    await waitFor(() => expect(screen.getByText('Scheduler on').parentElement!.textContent).toMatch(/^Scheduler on·Claude Code, Opus 5.5·/))
+    await waitFor(() => expect(screen.getByText('Scheduler on').parentElement!.parentElement!.textContent).toMatch(/^Scheduler on·Claude Code, Opus 5.5·/))
     // Nobody made a row of their own here: one group, the skills'.
     expect(within(gemstack).getAllByRole('region').map(g => document.getElementById(g.getAttribute('aria-labelledby')!)!.textContent)).toEqual(["From the project's skills"])
 

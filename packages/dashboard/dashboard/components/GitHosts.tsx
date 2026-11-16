@@ -8,7 +8,7 @@ import { cn } from '../lib/utils.js'
 import { FocusHome } from '../lib/focus-home.js'
 import { Button } from './ui/button.js'
 import { Panel, PanelGroup, PanelRow } from './ui/panel.js'
-import { SentenceShape, Slot } from './ui/slot.js'
+import { Slot, WordsShape } from './ui/slot.js'
 import { HostFix, useAddGitAccount } from './AddGitAccount.js'
 import { PackageLogo, hostWords, useGitHosts } from './Logins.js'
 import { AccountWhere, useServers } from './ServerLogins.js'
@@ -23,6 +23,9 @@ import { RowSaid, rowButtonClass, RowChevron } from './ui/row-item.js'
 // agents' accounts are, each with where it works under it. The accounts are
 // OpenAgent's, added here: the person's own tool and its logins are never used. A host no package
 // answers for is one line; a project with no remote, none.
+
+/** What the card says while no project has a page on a git host, and the room it waits in. */
+const NO_REMOTE = 'None of your projects has a remote yet. A project pushed to a git host gets its accounts here.'
 
 /** The git hosts' card: a section for each host, by its package's name and logo, with its accounts. */
 export function GitHostsCard() {
@@ -67,10 +70,19 @@ export function GitHostsCard() {
       }
     >
       <p className="mb-2 text-sm text-muted-foreground">Runs push with the one in use at each host, never your own login.</p>
-      <Slot of={{ value: view, state }} shape={<SentenceShape />} className="flex flex-col gap-4">
+      {/* Waits in the room of its emptiest answer, the sentence that says no project has a remote. */}
+      <Slot
+        of={{ value: view, state }}
+        shape={
+          <p className="text-sm">
+            <WordsShape words={NO_REMOTE} />
+          </p>
+        }
+        className="flex flex-col gap-4"
+      >
         {view =>
           view && view.hosts.length === 0 ? (
-            <p className="text-sm text-muted-foreground">None of your projects has a remote yet. A project pushed to a git host gets its accounts here.</p>
+            <p className="text-sm text-muted-foreground">{NO_REMOTE}</p>
           ) : (
             (view?.hosts ?? []).map(row => (row.provider ? <HostAccounts key={row.host} row={row} onChanged={reload} /> : <NoPackage key={row.host} row={row} />))
           )

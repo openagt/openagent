@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Page, Panel, PanelGroup, RowShapes, RunMark, Slot, Switch, Tooltip, TooltipContent, TooltipTrigger, Button, cn, formatAge, formatDateTime, inPlace, useCodingAgents, useIsMobile, useModuleHost, useOpenAgentDown, usePolled, type ModuleCommandResult, type ModuleHost, type ModuleProject } from '@openagt/dashboard/module'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Facts, Page, Panel, PanelGroup, PanelShape, RunMark, Slot, Switch, Tooltip, TooltipContent, TooltipTrigger, Button, cn, formatAge, formatDateTime, inPlace, useCodingAgents, useIsMobile, useModuleHost, useOpenAgentDown, usePolled, type ModuleCommandResult, type ModuleHost, type ModuleProject } from '@openagt/dashboard/module'
 import type { ModulePageProps } from '@openagt/dashboard/module'
 import { MoreHorizontal, Play, Plus } from 'lucide-react'
 import { AutomationForm } from './AutomationForm.js'
@@ -186,7 +186,7 @@ export function AutomationsPage({ projects }: ModulePageProps) {
       // One project's status under the page's line, its height held from the first paint.
       bar={projects.length === 1 ? single ? <StatusLine row={single} agents={agents} /> : <p aria-hidden className="h-4" /> : undefined}
     >
-      <Slot of={{ value: rows, state }} shape={<RowShapes />} className="space-y-8">
+      <Slot of={{ value: rows, state }} shape={<PanelShape rows={2} />} className="space-y-8">
         {rows =>
           rows.map(row => {
             const groups: [title: string, commands: SchedulerCommand[]][] = [
@@ -425,38 +425,27 @@ function StatusLine({ row, agents, className }: { row: SchedulerRow; agents: rea
   const status = schedulerStatus(row)
   const note = row.lastTick?.note
   return (
-    <p className={cn('flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground', className)}>
-      <span className={cn('inline-flex items-center gap-1.5 font-medium', status.tone)}>
-        <span aria-hidden className="size-1.5 rounded-full bg-current" />
-        Scheduler {status.label}
-      </span>
-      {row.model && (
-        <>
-          <span aria-hidden>·</span>
-          <span>
-            {AGENT_LABELS[DEFAULT_AGENT]}, {modelLabel(agents, DEFAULT_AGENT, row.model)}
-          </span>
-        </>
-      )}
-      {row.lastTick && row.running && Date.now() - Date.parse(row.lastTick.at) > LATE && (
-        <>
-          <span aria-hidden>·</span>
+    // Joined as every line of facts is; in the flow of its words, so a line it wraps to never starts with a dot.
+    <Facts
+      className={cn('block text-xs text-muted-foreground', className)}
+      facts={[
+        <span className={cn('inline-flex items-center gap-1.5 font-medium', status.tone)}>
+          <span aria-hidden className="size-1.5 rounded-full bg-current" />
+          Scheduler {status.label}
+        </span>,
+        row.model && `${AGENT_LABELS[DEFAULT_AGENT]}, ${modelLabel(agents, DEFAULT_AGENT, row.model)}`,
+        row.lastTick && row.running && Date.now() - Date.parse(row.lastTick.at) > LATE && (
           <Tooltip>
             <TooltipTrigger render={<span className="text-warning" />}>
               Last looked <span className="tabular-nums">{formatAge(row.lastTick.at)}</span>
             </TooltipTrigger>
             <TooltipContent>The scheduler last looked {formatDateTime(row.lastTick.at)}</TooltipContent>
           </Tooltip>
-        </>
-      )}
-      {/* Why its last look decided nothing, when it says: a pull that failed. "off" is the status, and a project that schedules nothing says so below. */}
-      {note !== undefined && note !== 'off' && note !== NOTHING_SCHEDULED && (
-        <>
-          <span aria-hidden>·</span>
-          <span className="text-warning">{`Its last look: ${note}`}</span>
-        </>
-      )}
-    </p>
+        ),
+        // Why its last look decided nothing, when it says: a pull that failed. "off" is the status, and a project that schedules nothing says so below.
+        note !== undefined && note !== 'off' && note !== NOTHING_SCHEDULED && <span className="text-warning">{`Its last look: ${note}`}</span>,
+      ]}
+    />
   )
 }
 
@@ -519,27 +508,27 @@ function Stands({ host, project, scheduled, stopped }: { host: ModuleHost; proje
   // Switched on, and still not starting: its reason is said as a stopped scheduler's is.
   const held = cannotRun(scheduled) !== undefined || (scheduled.on && heldBy(scheduled) !== undefined)
   return (
-    <p className="mt-1 line-clamp-2 text-xs text-faint-foreground md:line-clamp-1">
-      {last === undefined ? (
-        <span>Never ran</span>
-      ) : (
-        <Tooltip>
-          <TooltipTrigger render={<a href={host.agentHref(project.id, last.id)} onClick={inPlace(() => host.openAgent(project.id, last.id))} className={cn('focus-ring relative rounded-sm underline-offset-2 hover:underline after:absolute after:-inset-y-1.5 after:inset-x-0', last.failed ? 'text-danger' : last.running ? 'text-info' : 'hover:text-foreground')} />}>
-            {last.failed ? 'Last run failed' : last.running ? 'Running, started' : 'Last ran'} <span className="tabular-nums">{formatAge(last.at)}</span>
-          </TooltipTrigger>
-          <TooltipContent>{formatDateTime(last.at)}</TooltipContent>
-        </Tooltip>
-      )}
-      <span aria-hidden className="mx-1.5">
-        ·
-      </span>
-      {decision !== undefined ? (
-        <span className={cn(idle || held ? 'text-warning' : undefined)}>
-          <CodeWords text={decision} />
-        </span>
-      ) : (
-        <span>{pace(scheduled)}</span>
-      )}
-    </p>
+    <Facts
+      className="mt-1 line-clamp-2 text-xs text-faint-foreground md:line-clamp-1"
+      facts={[
+        last === undefined ? (
+          'Never ran'
+        ) : (
+          <Tooltip>
+            <TooltipTrigger render={<a href={host.agentHref(project.id, last.id)} onClick={inPlace(() => host.openAgent(project.id, last.id))} className={cn('focus-ring relative rounded-sm underline-offset-2 hover:underline after:absolute after:-inset-y-1.5 after:inset-x-0', last.failed ? 'text-danger' : last.running ? 'text-info' : 'hover:text-foreground')} />}>
+              {last.failed ? 'Last run failed' : last.running ? 'Running, started' : 'Last ran'} <span className="tabular-nums">{formatAge(last.at)}</span>
+            </TooltipTrigger>
+            <TooltipContent>{formatDateTime(last.at)}</TooltipContent>
+          </Tooltip>
+        ),
+        decision !== undefined ? (
+          <span className={cn(idle || held ? 'text-warning' : undefined)}>
+            <CodeWords text={decision} />
+          </span>
+        ) : (
+          pace(scheduled)
+        ),
+      ]}
+    />
   )
 }

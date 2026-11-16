@@ -18,7 +18,7 @@ import { Input } from './ui/input.js'
 import { Label } from './ui/label.js'
 import { Page } from './Page.js'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select.js'
-import { RowShapes, Slot } from './ui/slot.js'
+import { PanelShape, Slot } from './ui/slot.js'
 
 // The Agents page (Rom's design): an agent is a name, a set of skills and a set of accounts, made
 // once and used in any project or none. One row per agent, the default first, each edited in a
@@ -112,7 +112,7 @@ export function AgentsPage() {
         </Button>
       }
     >
-      <Slot of={{ state, value: view, failing }} shape={<RowShapes />}>
+      <Slot of={{ state, value: view, failing }} shape={<PanelShape />}>
         {view =>
           view && (
             <Panel aria-label="Agents">
