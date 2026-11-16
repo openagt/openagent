@@ -14,6 +14,7 @@ import { FocusHome } from '../lib/focus-home.js'
 import { useHold } from '../lib/hold.js'
 import { cn } from '../lib/utils.js'
 import { Button } from './ui/button.js'
+import { SentenceShape, Slot } from './ui/slot.js'
 import { navRowClass } from './ui/nav-row.js'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip.js'
 import { EventList } from './EventList.js'
@@ -307,7 +308,7 @@ function Shown({ row, projectId, events, onOpenAgent, onClose }: { row: Subagent
   // A run's own log, read often while it works. Remembered by the run, so the pane opened again,
   // and the read that goes on when the subagent ends, show what was read from the first frame:
   // without that the pane said it had nothing to show until the read answered.
-  const { value: ownLog, state } = usePolled<OpenAgentEvent[]>(
+  const read = usePolled<OpenAgentEvent[]>(
     runId ? () => onAgent(projectId, runId) : null,
     NO_EVENTS,
     row.working ? TRANSCRIPT_EVERY_MS : ENDED_EVERY_MS,
@@ -316,8 +317,11 @@ function Shown({ row, projectId, events, onOpenAgent, onClose }: { row: Subagent
   )
   // A call's transcript is the main agent's events that are its own, shown as plain steps here.
   const callId = row.call?.id
+  const ownLog = read.value
   const transcript = useMemo(() => (callId !== undefined ? subagentTranscript(events, callId).map(untagged) : withoutPrompt(ownLog, row.prompt)), [callId, events, ownLog, row.prompt])
   const calls = transcript.filter(e => e.kind === 'driver' && e.event.type === 'action').length
+  // Under the prompt, in the log: a note beside it took half the room, and on a phone the prompt's top scrolled away.
+  const ending = row.working ? null : transcript.length > 0 ? <PaneFoot row={row} calls={calls} /> : <p className="py-1 font-sans text-sm text-muted-foreground">It left nothing to show.</p>
   return (
     // Its Stop gone once the run stopped, the keyboard stays in it, on its next press.
     <FocusHome as="section" aria-label={row.name} className="flex min-h-0 flex-1 flex-col border-t border-hairline">
@@ -351,14 +355,14 @@ function Shown({ row, projectId, events, onOpenAgent, onClose }: { row: Subagent
           startedAt={row.startedAt}
           evenEdges
           head={<PaneHead row={row} />}
-          tail={
-            row.working ? undefined : transcript.length > 0 ? (
-              <PaneFoot row={row} calls={calls} />
-            ) : (
-              // Under the prompt, in the log: a note beside it took half the room, and on a phone the prompt's top scrolled away.
-              !(runId && state === 'unknown') && <p className="py-1 font-sans text-sm text-muted-foreground">It left nothing to show.</p>
-            )
-          }
+          tail={runId ? (
+            // A run's own log is a read: its room held while unknown, and said to be behind when a read fails.
+            <Slot of={read} shape={<SentenceShape />}>
+              {() => ending}
+            </Slot>
+          ) : (
+            ending
+          )}
         />
       </div>
     </FocusHome>

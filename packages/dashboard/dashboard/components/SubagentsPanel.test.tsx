@@ -359,6 +359,28 @@ describe('the subagent a row opened', () => {
     expect(screen.getByText('Fixed it.')).toBeTruthy()
   })
 
+  test('a read of its log that failed is said: what was read stays, not up to date; and with nothing read yet, it never says it has nothing to show', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] })
+    vi.setSystemTime(new Date('2026-10-01T10:30:00.000Z'))
+    onAgent.mockResolvedValueOnce([{ kind: 'driver', event: { type: 'text', text: 'Checked the header.' }, at: '2026-10-01T10:27:00.000Z' }] satisfies OpenAgentEvent[]).mockRejectedValue(new Error('The daemon did not answer'))
+    const working = run(26, 'Visual check in a browser', 'running')
+    render(panel({ subagents: [working] }))
+    act(() => revealSubagent('p1/main', `run:${working.id}`))
+    await act(() => vi.advanceTimersByTimeAsync(0))
+    expect(screen.getByText('Checked the header.')).toBeTruthy()
+    expect(screen.queryByText('Not up to date')).toBeNull()
+    await act(() => vi.advanceTimersByTimeAsync(2_000))
+    expect(screen.getByText('Not up to date')).toBeTruthy()
+    expect(screen.getByText('Checked the header.')).toBeTruthy()
+    cleanup()
+    const ended = run(1, 'Fix the typo', 'done', 1)
+    render(panel({ subagents: [ended] }))
+    act(() => revealSubagent('p1/main', `run:${ended.id}`))
+    await act(() => vi.advanceTimersByTimeAsync(1_000))
+    expect(screen.queryByText('It left nothing to show.')).toBeNull()
+    expect(within(screen.getByRole('region', { name: 'Fix the typo' })).getByRole('status').textContent).toBe('Loading…')
+  })
+
   test('an ask for a subagent that is not one of this run’s opens none of them', () => {
     render(panel({ subagents: [run(1, 'Write the docs', 'done', 1)] }))
     act(() => revealSubagent('p1/main', 'run:gone'))
