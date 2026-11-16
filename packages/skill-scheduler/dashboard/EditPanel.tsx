@@ -236,7 +236,7 @@ export function EditPanel({
         )}
         <div className="mt-3 flex justify-end gap-2">
           {/* The keyboard lands on the way out, not on the deletion. */}
-          <Button variant="secondary" autoFocus disabled={saving} onClick={back}>
+          <Button variant="ghost" autoFocus disabled={saving} onClick={back}>
             Cancel
           </Button>
           <Button variant="destructive" disabled={saving || down} onClick={() => void remove()}>

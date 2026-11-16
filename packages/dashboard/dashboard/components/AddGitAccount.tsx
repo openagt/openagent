@@ -130,7 +130,7 @@ function Adding({ host, onClose }: { host: string; onClose: (added?: string) => 
       <div className="space-y-3">
         <Install row={row} error={installError} onError={setInstallError} onChanged={reload} />
         <div className={cn('flex justify-end', DIALOG_PRESSES_CLASS)}>
-          <Button variant="secondary" onClick={() => onClose()}>
+          <Button variant="ghost" onClick={() => onClose()}>
             Cancel
           </Button>
         </div>
@@ -179,7 +179,7 @@ function Adding({ host, onClose }: { host: string; onClose: (added?: string) => 
       )}
       {/* The presses at the right, the primary last, as every dialog has them. */}
       <div className={cn('flex items-center justify-end gap-2', DIALOG_PRESSES_CLASS)}>
-        <Button variant="secondary" onClick={() => onClose()}>
+        <Button variant="ghost" onClick={() => onClose()}>
           Cancel
         </Button>
         {(ended || error !== undefined) && (
