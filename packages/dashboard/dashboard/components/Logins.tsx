@@ -76,7 +76,8 @@ export function PackageLogo({ svg, className }: { svg: string | undefined; class
 export function CommandLine({ command }: { command: string }) {
   return (
     <div className="flex min-w-0 items-center gap-1 rounded-md bg-muted py-0.5 pr-0.5 pl-2 max-md:pl-4">
-      <code className="min-w-0 flex-1 overflow-x-auto py-1 font-mono text-xs whitespace-nowrap text-muted-foreground">{command}</code>
+      {/* Where it has no room it ends with "…" on a whole character, and scrolls to its end. */}
+      <code className="min-w-0 flex-1 overflow-x-auto py-1 font-mono text-xs text-ellipsis whitespace-nowrap text-muted-foreground">{command}</code>
       <CopyButton text={command} label="Copy the command" className="justify-center md:size-6 max-md:size-11" />
     </div>
   )
