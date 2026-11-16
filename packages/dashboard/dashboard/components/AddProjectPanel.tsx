@@ -190,7 +190,7 @@ export function AddProjectPanel({
             <p className="mt-2 text-sm text-muted-foreground">It is cloned into the projects folder of this computer, with the logins this computer has.</p>
             {error && <p className="mt-3 text-sm text-danger">{error}</p>}
             <div className={cn(PRESSES, 'justify-end')}>
-              <Button type="button" variant="secondary" onClick={onClose}>
+              <Button type="button" variant="ghost" onClick={onClose}>
                 Cancel
               </Button>
               <Button type="submit" loading={busy} disabled={!typed.trim()}>
@@ -203,7 +203,7 @@ export function AddProjectPanel({
             <p className={TITLE}>Add project</p>
             <p className="text-sm text-danger">{pickError}</p>
             <div className={cn(PRESSES, 'flex-wrap justify-end')}>
-              <Button type="button" variant="secondary" onClick={onClose}>
+              <Button type="button" variant="ghost" onClick={onClose}>
                 Cancel
               </Button>
               <Button type="button" variant="secondary" onClick={() => setByAddress(true)}>
@@ -259,7 +259,7 @@ export function AddProjectPanel({
               Choose the repository&apos;s folder in the system dialog…
             </p>
             <div className={cn(PRESSES, 'justify-end')}>
-              <Button type="button" variant="secondary" onClick={onClose}>
+              <Button type="button" variant="ghost" onClick={onClose}>
                 Cancel
               </Button>
             </div>

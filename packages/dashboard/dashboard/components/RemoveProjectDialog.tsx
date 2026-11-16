@@ -118,7 +118,7 @@ export function RemoveProjectDialog({
             <AlertDialog.Close
               ref={cancel}
               render={
-                <Button variant="secondary" disabled={busy}>
+                <Button variant="ghost" disabled={busy}>
                   Cancel
                 </Button>
               }

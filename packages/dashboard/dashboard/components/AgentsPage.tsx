@@ -377,7 +377,7 @@ function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord;
             </p>
           )}
           <div className="flex items-center justify-end gap-2">
-            <Button variant="secondary" disabled={busy} onClick={close}>
+            <Button variant="ghost" disabled={busy} onClick={close}>
               Cancel
             </Button>
             <Button type="submit" form={formId} loading={busy}>

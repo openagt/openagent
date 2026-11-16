@@ -93,7 +93,7 @@ export function ConfirmDialog({
           <div className={cn('mt-6 flex justify-end gap-2', DIALOG_PRESSES_CLASS)}>
             <AlertDialog.Close
               render={
-                <Button variant="secondary" disabled={busy}>
+                <Button variant="ghost" disabled={busy}>
                   Cancel
                 </Button>
               }
