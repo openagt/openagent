@@ -36,6 +36,11 @@ const TRANSCRIPT_EVERY_MS = 2_000
 /** How often an ended one's is: it should change no more, and each read is its whole log. */
 const ENDED_EVERY_MS = 60_000
 const NO_EVENTS: OpenAgentEvent[] = []
+/**
+ * How far a row's card stands from the row: 6 from the pane's edge, as every card stands from what
+ * it points at, the row being 9 inside that edge (the pane's 1 of border and the list's 8).
+ */
+const CARD_OFFSET = 6 + 1 + 8
 
 export function SubagentsPanel({
   projectId,
@@ -279,7 +284,7 @@ function SubagentItem({ row, failed, reason, open, projectId, onPick, onStop }: 
           )}
         </TooltipTrigger>
         {/* The whole name, what it runs on, and how it stands, as T3 Code's card says them; with no model known, its state at the card's left. */}
-        <TooltipContent side="left" align="start" className="grid max-w-72 gap-1 px-4 py-3 text-sm">
+        <TooltipContent side="left" align="start" sideOffset={CARD_OFFSET} className="grid max-w-72 gap-1 px-4 py-3 text-sm">
           <span className="font-medium break-words">{row.name}</span>
           <span className="flex items-center justify-between gap-4 text-xs text-muted-foreground">
             {model}
