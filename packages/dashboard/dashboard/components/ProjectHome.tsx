@@ -5,9 +5,9 @@ import { ComposerShape } from './Composer.js'
 import { TopBar } from './Panes.js'
 import { ProjectErrorBanner } from './ProjectErrorBanner.js'
 import { ProjectSkillsLine } from './ProjectSkills.js'
-import { HumanQueueList } from './HumanQueueList.js'
+import { WaitingPanel, holdsBack } from './HumanQueueList.js'
 import { ScrollArea } from './ui/scroll-area.js'
-import { Section } from './ui/section.js'
+import { PanelGroup } from './ui/panel.js'
 import type { StartPicks } from '../lib/started-from.js'
 import { SESSIONS_ID } from '../../src/project-address.js'
 
@@ -102,16 +102,13 @@ export function ProjectHome({
           />
         </div>
         <ScrollArea className="min-h-0 flex-1" viewportClassName="chat-scroll h-full">
-          <div className="mx-auto w-full max-w-3xl">
-            {/* No section at all when nothing waits: an empty "Waiting on you" is noise on every launch. */}
+          <div className="mx-auto w-full max-w-3xl space-y-8 px-4 pt-6 pb-4 md:pt-4">
+            {/* No part at all when nothing waits: an empty "Waiting on you" is noise on every launch. On
+                the box's edges, as an agent's chat is: its name and its card start where the box does. */}
             {waiting.length > 0 && (
-              // On the box's edges, as an agent's chat is; the rows reach past them by their own padding, so
-              // their words start where the heading does.
-              <Section title="Waiting on you" count={waiting.length} className="px-4 pt-6">
-                <div className="-mx-3">
-                  <HumanQueueList key={projectId} items={waiting} onOpenAgent={onOpenAgent} />
-                </div>
-              </Section>
+              <PanelGroup bare title={<span className="text-warning">Waiting on you</span>} count={holdsBack(waiting) ? waiting.length : undefined}>
+                <WaitingPanel key={projectId} items={waiting} onOpenAgent={onOpenAgent} />
+              </PanelGroup>
             )}
             {/* What the project's skills need from the person, when they need something (#2023): a card
                 under the agents that wait, in the same column; with nothing to say there is no card,

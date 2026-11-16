@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { Intervention } from '../../src/index.js'
-import { HumanQueueList, needsWord } from './HumanQueueList.js'
+import { WaitingPanel, holdsBack, needsWord } from './HumanQueueList.js'
 
 afterEach(cleanup)
 
@@ -10,7 +10,7 @@ const item = (over: Partial<Intervention>): Intervention => ({ projectId: 'p1', 
 describe('the Human Queue\'s rows', () => {
   test('each row says what it needs, the run\'s name, then what it is about', () => {
     render(
-      <HumanQueueList
+      <WaitingPanel
         items={[
           item({ kind: 'awaiting', title: 'Interactive question', question: 'What kind of work?', agentId: 'r1', awaitId: 'q' }),
           item({ kind: 'uncommitted', title: 'Create test.md file', files: 1, agentId: 'r2' }),
@@ -21,48 +21,54 @@ describe('the Human Queue\'s rows', () => {
         onOpenAgent={() => {}}
       />,
     )
-    // Each row's link says what is needed first, as the row shows it, so the keyboard meets it there.
-    const links = screen.getAllByRole('link').map(link => link.textContent)
-    expect(links).toEqual([
-      'Needs answer: Interactive questionWhat kind of work?',
-      'Needs commit: Create test.md file1 file',
-      'Needs PR: AI essay2 commits',
-      'Needs push: Local only1 commit',
-      'Needs merge: Add README sentence#2',
+    // Each row is the run's name, under it what is needed and what it is about, then its press.
+    expect(screen.getAllByRole('listitem').map(row => row.textContent)).toEqual([
+      'Interactive questionNeeds answer·What kind of work?Answer',
+      'Create test.md fileNeeds commit·1 fileReview',
+      'AI essayNeeds PR·2 commitsReview',
+      'Local onlyNeeds push·1 commitReview',
+      'Add README sentenceNeeds merge·#2Review',
     ])
-    expect(screen.getAllByRole('listitem').map(row => row.querySelector('[aria-hidden]')!.textContent)).toEqual(['Needs answer', 'Needs commit', 'Needs PR', 'Needs push', 'Needs merge'])
   })
 
-  test('a row ends with how long ago, on the right edge: no arrow, its fill, cursor and focus say it opens', () => {
+  test('a row ends with how long ago and its press, the same at rest as under the pointer: no arrow', () => {
     const since = new Date(Date.now() - 2 * 86_400_000).toISOString()
-    render(<HumanQueueList items={[item({ kind: 'awaiting', title: 'Asks', question: 'q?', agentId: 'r1', awaitId: 'q', createdAt: since })]} onOpenAgent={() => {}} />)
+    const onOpenAgent = vi.fn()
+    render(<WaitingPanel items={[item({ kind: 'awaiting', title: 'Asks', question: 'q?', agentId: 'r1', awaitId: 'q', createdAt: since })]} onOpenAgent={onOpenAgent} />)
     const row = screen.getByRole('listitem')
-    expect(row.textContent).toBe('Needs answerNeeds answer: Asksq?2d ago')
+    expect(row.textContent).toBe('AsksNeeds answer·q?2d agoAnswer')
     expect(row.querySelector('.lucide-arrow-right')).toBeNull()
-    expect(row.querySelector('.lucide-circle-help')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Answer: Asks' }))
+    expect(onOpenAgent).toHaveBeenCalledWith('p1', 'r1')
+  })
+
+  test('nothing waits: no panel, unless the place says so in a sentence', () => {
+    const { container, rerender } = render(<WaitingPanel items={[]} onOpenAgent={() => {}} />)
+    expect(container.innerHTML).toBe('')
+    rerender(<WaitingPanel items={[]} onOpenAgent={() => {}} empty="Nothing waits." />)
+    expect(screen.getByRole('listitem').textContent).toBe('Nothing waits.')
   })
 
   test('the project is named only when the rows are of several projects', () => {
-    const { rerender } = render(<HumanQueueList items={[item({ kind: 'uncommitted', agentId: 'r1' }), item({ kind: 'uncommitted', agentId: 'r2' })]} onOpenAgent={() => {}} />)
+    const { rerender } = render(<WaitingPanel items={[item({ kind: 'uncommitted', agentId: 'r1' }), item({ kind: 'uncommitted', agentId: 'r2' })]} onOpenAgent={() => {}} />)
     expect(screen.queryByText('test-project')).toBeNull()
-    rerender(<HumanQueueList items={[item({ kind: 'uncommitted', agentId: 'r1' }), item({ kind: 'uncommitted', agentId: 'r2', projectId: 'p2', projectName: 'shop' })]} onOpenAgent={() => {}} />)
+    rerender(<WaitingPanel items={[item({ kind: 'uncommitted', agentId: 'r1' }), item({ kind: 'uncommitted', agentId: 'r2', projectId: 'p2', projectName: 'shop' })]} onOpenAgent={() => {}} />)
     expect(screen.getByText('test-project')).toBeTruthy()
     expect(screen.getByText('shop')).toBeTruthy()
   })
 
   test('a run on another of the person\'s computers says which; one of this computer\'s says nothing more', () => {
     render(
-      <HumanQueueList
+      <WaitingPanel
         items={[item({ kind: 'awaiting', title: 'Asks there', question: 'q?', agentId: 'r1', awaitId: 'q', computer: { name: 'Suleimans-MacBook-Pro', kind: 'computer' } }), item({ kind: 'uncommitted', title: 'Left here', agentId: 'r2' })]}
         onOpenAgent={() => {}}
       />,
     )
     const rows = screen.getAllByRole('listitem').map(row => row.textContent)
-    expect(rows).toEqual(['Needs answerNeeds answer: Asks thereq?', 'Needs commitNeeds commit: Left here'])
+    expect(rows).toEqual(['Asks thereNeeds answer·q?·on Suleimans-MacBook-ProAnswer', 'Left hereNeeds commitReview'])
     // The icon of the computer's kind, as the list of runs marks a run there, named to a screen reader.
     const [there, here] = screen.getAllByRole('listitem')
     expect(there!.querySelector('.lucide-laptop')).toBeTruthy()
-    expect(screen.getByRole('img', { name: 'Runs on Suleimans-MacBook-Pro' })).toBeTruthy()
     expect(here!.querySelector('.lucide-laptop')).toBeNull()
   })
 
@@ -73,30 +79,33 @@ describe('the Human Queue\'s rows', () => {
 
   test('the first five show, and a line offers the rest, and then fewer again', () => {
     const items = Array.from({ length: 8 }, (_, i) => item({ kind: 'uncommitted', title: `run ${i}`, agentId: `r${i}` }))
-    render(<HumanQueueList items={items} onOpenAgent={() => {}} />)
-    expect(screen.getAllByRole('listitem')).toHaveLength(5)
+    render(<WaitingPanel items={items} onOpenAgent={() => {}} />)
+    expect(holdsBack(items)).toBe(true)
+    // Five rows and the line under them.
+    expect(screen.getAllByRole('listitem')).toHaveLength(6)
     fireEvent.click(screen.getByRole('button', { name: 'Show 3 more' }))
-    expect(screen.getAllByRole('listitem')).toHaveLength(8)
+    expect(screen.getAllByRole('listitem')).toHaveLength(9)
     fireEvent.click(screen.getByRole('button', { name: 'Show fewer' }))
-    expect(screen.getAllByRole('listitem')).toHaveLength(5)
+    expect(screen.getAllByRole('listitem')).toHaveLength(6)
   })
 
   test('six: the sixth shows too, since a line offering one more is as tall as the row it hides', () => {
     const items = Array.from({ length: 6 }, (_, i) => item({ kind: 'uncommitted', title: `run ${i}`, agentId: `r${i}` }))
-    render(<HumanQueueList items={items} onOpenAgent={() => {}} />)
+    render(<WaitingPanel items={items} onOpenAgent={() => {}} />)
+    expect(holdsBack(items)).toBe(false)
     expect(screen.getAllByRole('listitem')).toHaveLength(6)
     expect(screen.queryByRole('button', { name: /more|fewer/ })).toBeNull()
   })
 
   test('five or fewer: no line offers more', () => {
-    render(<HumanQueueList items={[item({ kind: 'uncommitted', agentId: 'r1' })]} onOpenAgent={() => {}} />)
+    render(<WaitingPanel items={[item({ kind: 'uncommitted', agentId: 'r1' })]} onOpenAgent={() => {}} />)
     expect(screen.queryByRole('button', { name: /more|fewer/ })).toBeNull()
   })
 
   test('a row opens the session it is about; a request opened elsewhere opens on the git host', () => {
     const onOpenAgent = vi.fn()
     render(
-      <HumanQueueList
+      <WaitingPanel
         items={[
           item({ kind: 'awaiting', title: 'Asks', question: 'q?', agentId: 'r1', awaitId: 'q' }),
           item({ number: 6, title: 'Opened by a run', url: 'https://x/pull/6', agentId: 'r6' }),
@@ -113,7 +122,7 @@ describe('the Human Queue\'s rows', () => {
 
   test('a row is a link to its session: a Ctrl+click or a middle click is the browser\'s, for a new tab', () => {
     const onOpenAgent = vi.fn()
-    render(<HumanQueueList items={[item({ kind: 'awaiting', title: 'Asks', question: 'q?', agentId: 'r1', awaitId: 'q' })]} onOpenAgent={onOpenAgent} />)
+    render(<WaitingPanel items={[item({ kind: 'awaiting', title: 'Asks', question: 'q?', agentId: 'r1', awaitId: 'q' })]} onOpenAgent={onOpenAgent} />)
     const row = screen.getByText('Asks').closest('a')!
     expect(row.getAttribute('href')).toBe('/p1/r1')
     expect(fireEvent.click(row, { ctrlKey: true })).toBe(true)

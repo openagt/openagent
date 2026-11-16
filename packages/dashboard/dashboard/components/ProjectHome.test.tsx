@@ -12,7 +12,7 @@ vi.mock('./ProjectActions.js', () => ({ ProjectActions: () => null }))
 vi.mock('./ProjectErrorBanner.js', () => ({ ProjectErrorBanner: () => null }))
 vi.mock('./ProjectSkills.js', () => ({ ProjectSkillsLine: () => <div>skills line</div> }))
 vi.mock('./StartAgentForm.js', () => ({ StartAgentForm: () => <div>start form</div> }))
-vi.mock('./HumanQueueList.js', () => ({ HumanQueueList: ({ items }: { items: unknown[] }) => <div>{items.length} rows</div> }))
+vi.mock('./HumanQueueList.js', () => ({ WaitingPanel: ({ items }: { items: unknown[] }) => <div>{items.length} rows</div>, holdsBack: (items: unknown[]) => items.length > 6 }))
 
 const { ProjectHome } = await import('./ProjectHome.js')
 
@@ -47,7 +47,8 @@ describe('ProjectHome', () => {
     })
     // The box to start an agent first and the waiting rows under it; on a phone the box is drawn last, at the bottom.
     expect(screen.getByRole('region', { name: 'Waiting on you' })).toBeTruthy()
-    expect(screen.getByRole('heading', { name: 'Waiting on you 1' })).toBeTruthy()
+    // How many in all is said only where rows are held back: one row says it by being there.
+    expect(screen.getByRole('heading', { name: 'Waiting on you' })).toBeTruthy()
     const questions = screen.getByText('1 rows')
     const form = screen.getByText('start form')
     expect(form.compareDocumentPosition(questions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
