@@ -142,9 +142,8 @@ export function WaitingPanel({
           external={external}
           onClick={open}
           fact={since}
-          // The presses are one column of one width, Answer or Review, so the ages before them end on one x down the rows.
           actions={
-            <Button variant={item.kind === 'awaiting' ? 'default' : 'secondary'} size="sm" aria-label={`${PRESSES[item.kind]}: ${item.title}`} onClick={open} className="relative min-w-18">
+            <Button variant={item.kind === 'awaiting' ? 'default' : 'secondary'} size="sm" aria-label={`${PRESSES[item.kind]}: ${item.title}`} onClick={open} className="relative">
               {PRESSES[item.kind]}
             </Button>
           }
