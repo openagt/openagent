@@ -1,4 +1,4 @@
-import { Button, Card, Empty, FilterChips, Page, PanelGroup, PanelRow, PersonMark, RowShapes, RunMark, Slot, formatDateTime, formatDuration, needsWord, personSaid, runName, runLineTone, useCodingAgents, useGitHostPeople, useIsMobile, runsAgain, runWord, useModuleHost, usePolled, type CodingAgent, type ModuleAgent, type ModuleHostPerson, type ModulePageProps, type ModuleProject, type ReadState } from '@openagt/dashboard/module'
+import { Button, Empty, FilterChips, MiddleCut, Page, PanelGroup, PanelGroups, PanelRow, PersonMark, RowShapes, RunMark, Slot, formatDateTime, formatDuration, needsWord, personSaid, runName, runLineTone, useCodingAgents, useGitHostPeople, useIsMobile, runsAgain, runWord, useModuleHost, usePolled, type CodingAgent, type ModuleAgent, type ModuleHostPerson, type ModulePageProps, type ModuleProject, type ReadState } from '@openagt/dashboard/module'
 import type { RunCard } from '../src/run.js'
 
 /** How many runs each project lists: the command's own default page is 20; the page shows more. */
@@ -83,11 +83,11 @@ const STATUSES = ['running', 'waiting', 'done', 'stopped', 'failed', 'unknown']
 /** A status as its chip says it: the word every place says, and a computer that does not answer in one. */
 const chipWord = (value: string): string => (value === 'unknown' ? 'unknown' : runWord(value))
 
-/** What a run's work still needs before it leaves this machine, as its row in the sidebar says it: "Needs commit · 2 files", "Needs push · 1 commit". */
-export function leftWords(card: Pick<RunRow['card'], 'uncommitted' | 'unpublished'>, gitHost: boolean): string | undefined {
-  if (card.uncommitted) return `${needsWord('uncommitted')} · ${card.uncommitted} file${card.uncommitted === 1 ? '' : 's'}`
-  if (card.unpublished) return `${needsWord('unpushed', gitHost)} · ${card.unpublished} commit${card.unpublished === 1 ? '' : 's'}`
-  return undefined
+/** What a run's work still needs before it leaves this machine, in the sidebar's words, as two facts of its line: "Needs commit", "2 files". */
+export function leftParts(card: Pick<RunRow['card'], 'uncommitted' | 'unpublished'>, gitHost: boolean): string[] {
+  if (card.uncommitted) return [needsWord('uncommitted'), `${card.uncommitted} file${card.uncommitted === 1 ? '' : 's'}`]
+  if (card.unpublished) return [needsWord('unpushed', gitHost), `${card.unpublished} commit${card.unpublished === 1 ? '' : 's'}`]
+  return []
 }
 
 /** The day a run started, as a heading says it: "Today", "Yesterday", else the weekday and the date. */
@@ -236,78 +236,81 @@ export function LogsPage({ projects, path }: ModulePageProps) {
               </p>
             ))}
             {read.rows.length === 0 && read.failed.length === 0 && (
-              <Card>
-                <Empty title="No runs recorded yet">A run is listed here from the moment an agent starts on this project.</Empty>
-              </Card>
+              <Empty title="No runs recorded yet.">A run is listed here from the moment an agent starts on this project.</Empty>
             )}
             {/* A day is a panel of its runs. A row: its mark, its name over how it stands, then on the name's line at
                 its right whose it is, the agent that ran it and its pull request, each in a column that stands in one
                 place down the page (a column no run has a value for is not drawn), and when it started. On a phone the
                 time alone stays. */}
-            {days.map(({ day, rows, cost }) => (
-              <PanelGroup key={day} title={day} {...(cost > 0 ? { count: dollars(cost) } : {})}>
-                {rows.map(({ project, card }) => (
-                  <PanelRow
-                    key={`${project.id}/${card.id}`}
-                    state={<RunMark status={shownStatus(card)} />}
-                    // As every list names a run; a run with none of its names goes by its id. What it was asked, whole, under the pointer.
-                    title={runName(card) ?? card.id}
-                    titleHint={card.intent?.trim() || undefined}
-                    href={host.agentHref(project.id, card.id)}
-                    onClick={() => host.openAgent(project.id, card.id)}
-                    meta={[
-                      <>
-                        <span className={runLineTone(shownStatus(card))} {...(card.offline ? { title: card.offline } : {})}>
-                          {standing(card)}
-                        </span>
-                        {/* The branch with its dot, so a phone, where it has no room, drops both. */}
-                        {card.branch && (
-                          <span className="max-md:hidden" title={card.branch}>
-                            <span aria-hidden className="mx-1.5">·</span>
-                            <span className="font-mono">{card.branch}</span>
-                          </span>
-                        )}
-                      </>,
-                      // What its work still needs before it leaves this machine, in the sidebar's words.
-                      leftWords(card, project.gitHost),
-                      many && project.name,
-                      card.cost !== undefined && dollars(card.cost),
-                    ]}
-                    columns={
-                      <>
-                        {columns.who && <RunPerson person={card.person} account={accountOf(project.id, card.person)} />}
-                        {columns.agent && <span className="w-36 truncate max-md:hidden">{agentSaid(card, agents)}</span>}
-                        {columns.pr && (
-                          <span className="w-12 text-right max-md:hidden">
-                            {card.pr && (
-                              <a href={card.pr.url} target="_blank" rel="noreferrer" title={`Pull request #${card.pr.number}`} className="focus-ring relative rounded-sm text-primary hover:underline">
-                                #{card.pr.number}
-                              </a>
+            {days.length > 0 && (
+              <PanelGroups className="gap-y-8">
+                {days.map(({ day, rows, cost }) => (
+                  <PanelGroup key={day} title={day} {...(cost > 0 ? { count: dollars(cost) } : {})}>
+                    {rows.map(({ project, card }) => (
+                      <PanelRow
+                        key={`${project.id}/${card.id}`}
+                        state={<RunMark status={shownStatus(card)} />}
+                        // As every list names a run; a run with none of its names goes by its id. What it was asked, whole, under the pointer.
+                        title={runName(card) ?? card.id}
+                        titleHint={card.intent?.trim() || undefined}
+                        href={host.agentHref(project.id, card.id)}
+                        onClick={() => host.openAgent(project.id, card.id)}
+                        meta={[
+                          <span className={runLineTone(shownStatus(card))} {...(card.offline ? { title: card.offline } : {})}>
+                            {standing(card)}
+                          </span>,
+                          // What its work still needs before it leaves this machine, in the sidebar's words.
+                          ...leftParts(card, project.gitHost),
+                          many && project.name,
+                          card.cost !== undefined && dollars(card.cost),
+                          // Last, as the part that gives way, and cut in its middle: runs started the same minute differ only at
+                          // their branch's end. A phone, where it has no room, leaves it with its dot to a screen reader.
+                          card.branch && {
+                            fact: (
+                              <span className="flex min-w-0 font-mono" title={card.branch}>
+                                <MiddleCut text={card.branch} />
+                              </span>
+                            ),
+                            className: 'max-md:sr-only',
+                          },
+                        ]}
+                        columns={
+                          <>
+                            {columns.who && <RunPerson person={card.person} account={accountOf(project.id, card.person)} />}
+                            {columns.agent && <span className="w-36 truncate max-md:sr-only">{agentSaid(card, agents)}</span>}
+                            {columns.pr && (
+                              <span className="w-12 text-right max-md:sr-only">
+                                {card.pr && (
+                                  <a href={card.pr.url} target="_blank" rel="noreferrer" title={`Pull request #${card.pr.number}`} className="focus-ring relative rounded-sm text-primary hover:underline">
+                                    #{card.pr.number}
+                                  </a>
+                                )}
+                              </span>
                             )}
+                          </>
+                        }
+                        fact={
+                          <span className="tabular-nums whitespace-nowrap" title={formatDateTime(card.startedAt)}>
+                            {clock(card.startedAt)}
                           </span>
-                        )}
-                      </>
-                    }
-                    fact={
-                      <span className="tabular-nums whitespace-nowrap" title={formatDateTime(card.startedAt)}>
-                        {clock(card.startedAt)}
-                      </span>
-                    }
-                    // The run's press, in the time's place under the pointer and the keyboard: Answer where its question waits, else Review.
-                    // It opens the run, as the row does, so a phone, where the row is the press, keeps the time.
-                    {...(phone
-                      ? {}
-                      : {
-                          actions: (
-                            <Button variant={asks(card) ? 'default' : 'secondary'} size="sm" className="relative" aria-label={`${pressOf(card)}: ${runName(card) ?? card.id}`} onClick={() => host.openAgent(project.id, card.id)}>
-                              {pressOf(card)}
-                            </Button>
-                          ),
-                        })}
-                  />
+                        }
+                        // The run's press, in the time's place under the pointer and the keyboard: Answer where its question waits, else Review.
+                        // It opens the run, as the row does, so a phone, where the row is the press, keeps the time.
+                        {...(phone
+                          ? {}
+                          : {
+                              actions: (
+                                <Button variant={asks(card) ? 'default' : 'secondary'} size="sm" className="relative" aria-label={`${pressOf(card)}: ${runName(card) ?? card.id}`} onClick={() => host.openAgent(project.id, card.id)}>
+                                  {pressOf(card)}
+                                </Button>
+                              ),
+                            })}
+                      />
+                    ))}
+                  </PanelGroup>
                 ))}
-              </PanelGroup>
-            ))}
+              </PanelGroups>
+            )}
           </>
         )}
       </Slot>

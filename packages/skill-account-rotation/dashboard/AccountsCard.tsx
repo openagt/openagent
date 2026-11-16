@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import { Check, ChevronDown, Copy, Info, MoreHorizontal, Plus } from 'lucide-react'
-import { Button, useAskOn, ClaudeLogo, CodexLogo, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, GaugeFace, Input, Panel, PanelGroup, PanelNote, SentenceShape, Skeleton, Slot, Tooltip, TooltipContent, TooltipTrigger, cn, useModuleHost, useOpenAgentDown, usePolled, type ModuleCardProps, type ModuleHost } from '@openagt/dashboard/module'
+import { Button, useAskOn, ClaudeLogo, CodexLogo, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, GaugeFace, Input, Panel, PanelGroup, PanelNote, Skeleton, Slot, Tooltip, TooltipContent, TooltipTrigger, cn, useModuleHost, useOpenAgentDown, usePolled, WordsShape, type ModuleCardProps, type ModuleHost } from '@openagt/dashboard/module'
 
 // The accounts each coding agent's runs try, in order: how full each one is, whether it is at a
 // limit, adding one: the command's own sign-in, which goes on by itself while the card follows it,
@@ -43,6 +43,9 @@ const AGENTS = [
     adding: (name: string) => `Adding ${name}'s account: sign in to ${name}'s ChatGPT account in the page this computer's browser opened.`,
   },
 ] as const
+
+/** The card with no account and no agent installed to add one from: its emptiest answer. */
+const NO_ACCOUNT_TO_ADD = `No account yet: install ${AGENTS.map(agent => agent.name).join(' or ')} first, then add one here.`
 
 type AgentId = (typeof AGENTS)[number]['id']
 
@@ -582,7 +585,16 @@ export function AccountsCard({ accountWhere }: ModuleCardProps) {
       }
     >
       {/* Waits in the room of its emptiest answer, the sentence that says there is no account yet. */}
-      <Slot of={{ value: list, state }} shape={<SentenceShape />}>
+      <Slot
+        of={{ value: list, state }}
+        shape={
+          <Panel>
+            <PanelNote>
+              <WordsShape words={NO_ACCOUNT_TO_ADD} />
+            </PanelNote>
+          </Panel>
+        }
+      >
         {list => (
           <Panel>
             {!list!.ok ? (
@@ -610,7 +622,7 @@ export function AccountsCard({ accountWhere }: ModuleCardProps) {
                     {/* The presses go beside the sentence together, else under it. `grow`, not `flex-1`: another module's stylesheet loaded later has a `.flex-1` that undoes `basis-48`. */}
                     <span className="flex flex-wrap items-center gap-2">
                       <span className="min-w-0 grow basis-48">
-                        {addable.length > 0 ? 'No account yet. Runs need one to start.' : `No account yet: install ${AGENTS.map(agent => agent.name).join(' or ')} first, then add one here.`}
+                        {addable.length > 0 ? 'No account yet. Runs need one to start.' : NO_ACCOUNT_TO_ADD}
                       </span>
                       <span className="flex flex-wrap gap-2 empty:hidden">
                         {addable.map(agent => (

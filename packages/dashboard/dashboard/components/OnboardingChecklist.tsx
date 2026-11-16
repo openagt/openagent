@@ -5,8 +5,9 @@ import { onDashboard } from '../rpc/reads.js'
 import { usePolled } from '../lib/use-async.js'
 import { usePerson } from '../lib/use-person.js'
 import { cn } from '../lib/utils.js'
-import { Button } from './ui/button.js'
-import { Panel, PanelGroup } from './ui/panel.js'
+import { Button, buttonVariants } from './ui/button.js'
+import { inPlace } from '../lib/in-place.js'
+import { Facts, Panel, PanelGroup } from './ui/panel.js'
 import { Skeleton } from './ui/skeleton.js'
 import { usePreferences, updatePreferences, notificationsEnabled } from '../lib/preferences.js'
 import { setBrowserNotifications, useNotificationPermission } from '../lib/notification-permission.js'
@@ -19,6 +20,7 @@ import { hostLoginState, hostWords, useMissing } from './Logins.js'
 import { firstName } from './PersonMenu.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
+import type { ListedPage } from '../lib/use-modules.js'
 
 // The Overview's first steps (#958): what a new install needs, each with the state it is actually
 // in rather than a static list to read past.
@@ -71,6 +73,7 @@ export function OnboardingChecklist({
   onSelectProject,
   onProjectAdded,
   onRead,
+  listedPages,
 }: {
   /** The projects as the app read them: the picker sees one it added land, and closes on it. */
   projects: readonly ProjectSummary[]
@@ -85,6 +88,8 @@ export function OnboardingChecklist({
   onProjectAdded: () => void
   /** Told once the steps stand where their reads say, before that frame is drawn: what the page holds back under them can come. */
   onRead: () => void
+  /** The modules' pages as the sidebar lists them, null where none is known yet: which projects have the Queue and the Tickets. */
+  listedPages: readonly ListedPage[] | null
 }) {
   // Slower than the Overview's own 5s poll: these change at human speed, and this read fans out
   // over every project to answer the tickets question.
@@ -105,7 +110,8 @@ export function OnboardingChecklist({
   // The project the steps act on: the only/most recent one. A first-session flow rarely has a second.
   const targetProjectId = data?.projects[0]?.projectId ?? null
 
-  const projectCount = data?.totals.projects ?? 0
+  // Before the projects are read, the app's own list says whether there is one.
+  const projectCount = data?.totals.projects ?? projects.length
   const hasTickets = data?.projects.some(p => p.hasTickets) ?? false
   const browserGranted = permission === 'granted' && notificationsEnabled(preferences)
 
@@ -175,10 +181,11 @@ export function OnboardingChecklist({
             label: 'Populate the queue of AI tasks',
             description: 'The agent queue: each entry is work the agent picks up on its own, so a filled queue is what lets it keep going without you.',
             done: (data?.totals.openTodos ?? 0) > 0,
+            // A press to a page, so a modified click opens it where the browser would.
             action: (
-              <Button variant="outline" onClick={() => services.openPage('queue')}>
+              <a href={services.pageHref('queue')} onClick={inPlace(() => services.openPage('queue'))} className={buttonVariants({ variant: 'outline' })}>
                 Open the Queue
-              </Button>
+              </a>
             ),
           },
         ]
@@ -242,12 +249,28 @@ export function OnboardingChecklist({
   const name = person ? `, ${firstName(person.name)}` : ''
 
   const doneCount = steps.filter(step => step.done).length
+  // While the projects are not read: the queue's and the tickets' steps hold their places before the last step exactly
+  // where the sidebar's pages say a project has the Queue or the Tickets, as the same packages bring the page and the
+  // step. Until those pages are known (a browser's first visit) the frame is not drawn.
+  const listed = (segment: string) => listedPages?.some(page => page.segment === segment && page.projects.length > 0) === true
+  const coming = [...(listed('queue') ? [{ key: 'todos', done: false }] : []), ...(listed('tickets') ? [{ key: 'tickets', done: false }] : [])]
+  const frame: { key: string; label?: string; description?: ReactNode; done: boolean }[] = steps.flatMap(step => [
+    ...(data === null && step.key === 'browser-notification' ? coming : []),
+    { key: step.key, label: step.label, description: step.description, done: step.done },
+  ])
   return (
     <PanelGroup
       bare
       title={ready ? `You're all set${name}` : `${greeting(new Date().getHours())}${name}`}
       // Where the steps stand, in words: the numbers below say which is which.
-      count={reading ? undefined : `${doneCount} of ${steps.length}`}
+      count={
+        reading ? (
+          // As wide as the words it stands for (the steps drawn below, none done yet), drawn unseen before it (not text of the page, nor said).
+          <span aria-hidden data-shape={`0 of ${frame.length}`} className="inline-block h-4 animate-skeleton rounded-md bg-accent align-middle leading-4 before:invisible before:content-[attr(data-shape)] motion-reduce:animate-skeleton-still" />
+        ) : (
+          `${doneCount} of ${steps.length}`
+        )
+      }
       action={
         <>
           {ready && targetProjectId && (
@@ -273,22 +296,32 @@ export function OnboardingChecklist({
       {reading ? (
         <>
           <p className="sr-only">Loading…</p>
-          {/* The steps' rows, with no state yet, the first one as the open step is laid out (its words, then its press and its command beside them or under), so the steps are about their size before they are read. Only once the coding agent and the git hosts are read: each can add a step at the top, which would push the rows drawn. */}
-          {missingLoaded && (
+          {/* The steps as they will stand once read, so nothing in them moves when the answer comes: each its mark and its
+              title, the open step its words under its name (read with the coding agent and the git hosts, or fixed) and
+              its presses' shapes at the row's end, centred on the row; the steps only the projects' read can add (the
+              queue's, the tickets') hold their places as shapes. Only once the coding agent and the git hosts are read
+              (each can add a step at the top, which would push the rows drawn), and the sidebar's pages are known where
+              the projects' read is not in (they say which places to hold): nothing under the steps is drawn before they
+              are, so the frame coming late pushes nothing. */}
+          {missingLoaded && (data !== null || listedPages !== null) && (
             <Panel ordered aria-hidden>
-              {steps.map((step, at) => (
+              {frame.map((step, at) => (
                 <li key={step.key} className={STEP_ROW}>
-                  <StepMark at={at} />
-                  {at === 0 ? (
+                  {step.label === undefined ? <MarkShape /> : step.done ? <DoneMark /> : <StepMark at={at} open={step.key === open} />}
+                  {step.label === undefined ? (
+                    <span className="flex h-5 items-center">
+                      <Skeleton className="h-4 w-48" />
+                    </span>
+                  ) : step.key === open ? (
                     <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-2">
                       <div className="min-w-0 flex-[1_1_16rem] space-y-1">
-                        <span className="block text-sm text-muted-foreground">{step.label}</span>
-                        <Skeleton className="h-4 w-full" />
-                        <Skeleton className="h-4 w-2/3" />
+                        <span className="block text-sm font-medium">{step.label}</span>
+                        {typeof step.description === 'string' ? <p className="text-xs text-muted-foreground">{step.description}</p> : step.description}
                       </div>
                       <div className="flex max-w-full shrink-0 flex-wrap items-center gap-3">
-                        <Skeleton className="h-8 w-40" />
-                        <Skeleton className="h-6 w-72 max-w-full" />
+                        <Skeleton className="h-8 w-36" />
+                        {/* The coding agent's press comes with the command that does the same in a terminal. */}
+                        {step.key === 'agent' && <Skeleton className="h-7 w-92 max-w-full max-md:h-11" />}
                       </div>
                     </div>
                   ) : (
@@ -317,14 +350,15 @@ export function OnboardingChecklist({
                 )}
               >
                 {step.done ? (
-                  <span aria-label="Done" className="flex h-5 w-4 shrink-0 items-center text-primary">
-                    <Check className="size-4" aria-hidden />
-                  </span>
+                  <DoneMark />
                 ) : (
                   <StepMark at={at} open={isOpen} />
                 )}
-                {/* The action goes under the words until it fits beside them with the words 16rem wide or more; beside them it is centred on the row, and a command goes under its press where the two do not fit one line. */}
-                <div className="@container flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-2">
+                {/* The action goes under the words until it fits whole beside them with the words 16rem wide or more, so a
+                    command is cut only where the row has no room for it. Beside them it is centred on the row and the title
+                    stays on the row's first line, with the step's number; a command goes under its press where the two do
+                    not fit one line. */}
+                <div className="flex min-w-0 flex-1 flex-wrap items-start gap-x-3 gap-y-2">
                   <div className="min-w-0 flex-[1_1_16rem] space-y-1">
                     <div className="flex flex-wrap items-center gap-x-2">
                       <button
@@ -334,8 +368,8 @@ export function OnboardingChecklist({
                         {...(press ? { 'data-cover': true } : {})}
                         className={cn('flex flex-wrap items-center gap-x-2 text-left text-sm', press && 'outline-none after:absolute after:inset-0', step.done ? 'text-muted-foreground' : isOpen ? 'font-medium' : 'text-muted-foreground hover:text-foreground')}
                       >
-                        <span>{step.label}</span>
-                        {step.done && step.doneNote && <span className="truncate text-xs text-muted-foreground">· {step.doneNote}</span>}
+                        {/* What was done after its name, as every line of facts joins them. */}
+                        <Facts facts={[step.label, step.done && step.doneNote && { fact: step.doneNote, className: 'truncate text-xs text-muted-foreground' }]} className="flex min-w-0 items-center" />
                         {step.optional && !step.done && <span className="text-xs font-normal text-muted-foreground">Optional</span>}
                       </button>
                       {isOpen && step.info && (
@@ -349,7 +383,7 @@ export function OnboardingChecklist({
                     </div>
                     {isOpen && step.description && (typeof step.description === 'string' ? <p className="text-xs text-muted-foreground">{step.description}</p> : step.description)}
                   </div>
-                  {isOpen && step.action && <div className="flex max-w-full shrink-0 @xl:max-w-[calc(100%-16.75rem)]">{step.action}</div>}
+                  {isOpen && step.action && <div className="flex max-w-full shrink-0 self-center">{step.action}</div>}
                 </div>
               </li>
             )
@@ -362,6 +396,24 @@ export function OnboardingChecklist({
 
 /** A step's row, as a panel's: 16 in from every edge, its mark on the title's line, a hairline from inset to inset over every row but the first. */
 const STEP_ROW = 'relative flex items-start gap-3 px-4 py-3 before:absolute before:top-0 before:right-4 before:left-4 before:h-px not-first:before:bg-hairline'
+
+/** A step done: a ✓ in the press's colour. */
+function DoneMark() {
+  return (
+    <span aria-label="Done" className="flex h-5 w-4 shrink-0 items-center text-primary">
+      <Check className="size-4" aria-hidden />
+    </span>
+  )
+}
+
+/** A step the projects' read may add: a shape in its mark's place. */
+function MarkShape() {
+  return (
+    <span className="flex h-5 w-4 shrink-0 items-center">
+      <Skeleton className="size-4 rounded-full" />
+    </span>
+  )
+}
 
 /** A step not done: its number, in the press's colour while it is the open one. */
 function StepMark({ at, open = false }: { at: number; open?: boolean }) {

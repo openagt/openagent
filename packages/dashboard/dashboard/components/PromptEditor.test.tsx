@@ -33,6 +33,21 @@ test('with autoFocus the box takes the caret as soon as it exists; without, it l
   await waitFor(() => expect(document.activeElement?.getAttribute('role')).toBe('textbox'))
 })
 
+test('a box opened with autoFocus leaves the keyboard to a control that took it before the box was ready: the question a page opens on', async () => {
+  render(
+    <>
+      <button type="button">Left</button>
+      <PromptEditor onChange={vi.fn()} onSubmit={vi.fn()} projects={[]} commands={[]} autoFocus />
+    </>,
+  )
+  const question = document.querySelector('button')!
+  question.focus()
+  await waitFor(() => expect(document.querySelector('[role="textbox"]')).toBeTruthy())
+  // Long past the moment the box would take the caret.
+  await act(() => new Promise(resolve => setTimeout(resolve, 100)))
+  expect(document.activeElement).toBe(question)
+})
+
 test('a text the box opens with takes the caret, unless it is told not to', async () => {
   const editor = (initialFocus: boolean) => <PromptEditor key={String(initialFocus)} onChange={vi.fn()} onSubmit={vi.fn()} projects={[]} commands={[]} initialText="a kept draft" initialFocus={initialFocus} />
   const { rerender } = render(editor(false))

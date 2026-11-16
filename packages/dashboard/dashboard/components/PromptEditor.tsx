@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react'
 import type { ProjectSummary, CustomPreset } from '../../src/index.js'
 import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
@@ -112,6 +112,15 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
 ) {
   const [isEmpty, setIsEmpty] = useState(true)
 
+  // The box takes the keyboard as it opens (`autoFocus`, the text it opens with) only while nobody
+  // took it since the box was drawn. Its editor comes a moment later, and a control that took the
+  // keyboard meanwhile keeps it: the question a session's page opens on, which the keys answer.
+  const keysAtDraw = useRef<Element | null>(null)
+  useLayoutEffect(() => {
+    keysAtDraw.current = document.activeElement
+  }, [])
+  const keysUntaken = (): boolean => document.activeElement === null || document.activeElement === document.body || document.activeElement === keysAtDraw.current
+
   // Refs so the once-built suggestion closures always see the latest props/editor.
   const projectsRef = useRef(projects)
   const filesRef = useRef(files)
@@ -192,7 +201,9 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
 
   const editor = useEditor({
     immediatelyRender: false,
-    autofocus: autoFocus && 'end',
+    onCreate: ({ editor: created }) => {
+      if (autoFocus && keysUntaken()) created.commands.focus('end')
+    },
     extensions: [
       StarterKit,
       // breaks:true keeps a single newline as a hard break, so a saved prompt's line-per-line
@@ -355,7 +366,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
     seeded.current = true
     // The draft beneath is no step of its own, so the undo of the load ends on it, not on an empty box.
     if (replacedText) editor.chain().setMeta('addToHistory', false).setContent(replacedText).run()
-    loadTemplateInto(editor, initialText, initialFocus)
+    loadTemplateInto(editor, initialText, initialFocus && keysUntaken())
   }, [editor, initialText])
 
   // The placeholder is absolutely positioned, so it must share the editor's padding (`px-2 py-2`)

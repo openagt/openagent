@@ -105,6 +105,18 @@ export async function startDemo(options: DemoOptions = {}): Promise<Demo> {
     }
   }
   const killCli = (): void => signalGroup('SIGKILL')
+  /**
+   * End what the dashboard started and left behind in its group, then remove the home. Retried: what
+   * the dashboard started on its own (a coding agent's CLI asked for its usage) can still be writing
+   * into the home for a moment after the dashboard is gone. A home left behind is said, not thrown,
+   * so it never hides why the demo stopped.
+   */
+  const removeHome = async (): Promise<void> => {
+    signalGroup('SIGTERM')
+    await rm(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 }).catch((err: unknown) => {
+      process.stderr.write(`the demo could not remove ${home}: ${err instanceof Error ? err.message : String(err)}\n`)
+    })
+  }
   process.once('exit', killCli)
   const said: string[] = []
   const exited = new Promise<number | NodeJS.Signals | null>(resolvePromise => cli.once('exit', (code, signal) => resolvePromise(code ?? signal)))
@@ -121,7 +133,7 @@ export async function startDemo(options: DemoOptions = {}): Promise<Demo> {
     void exited.then(code => rejectPromise(new Error(`the dashboard exited (${code}) before it served:\n${said.join('\n')}`)))
   }).catch(async (err: unknown) => {
     process.removeListener('exit', killCli)
-    await rm(home, { recursive: true, force: true })
+    await removeHome()
     throw err
   })
 
@@ -168,13 +180,7 @@ export async function startDemo(options: DemoOptions = {}): Promise<Demo> {
       await exited
       clearTimeout(timer)
     }
-    // What the dashboard started and left behind in its group goes too: it writes into the home.
-    signalGroup('SIGTERM')
-    // Retried: what the dashboard started on its own (a coding agent's CLI asked for its usage)
-    // can still be writing into the home for a moment after the dashboard is gone.
-    await rm(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 }).catch((err: unknown) => {
-      process.stderr.write(`the demo could not remove ${home}: ${err instanceof Error ? err.message : String(err)}\n`)
-    })
+    await removeHome()
   }
 
   try {

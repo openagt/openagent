@@ -21,11 +21,12 @@ import { CardGrid, EditOverview, TakeOffMark, UNDER, UnderCards, type Under } fr
 import { ALL_PROJECTS, arrangeCards } from '../../src/client.js'
 import type { ProjectSummary } from '../../src/index.js'
 import type { ReadState } from '../lib/use-async.js'
+import type { ListedPage } from '../lib/use-modules.js'
 import { Page } from './Page.js'
-import { cn } from '../lib/utils.js'
 import { overlayOpen, pressed } from '../lib/shortcut.js'
 import { LinePart, NEEDS_YOU_ID, WORKING_ID, counted, scrollToPart } from './LinePart.js'
 import { YourAgentsPart } from './YourAgentsPart.js'
+import { useIsMobile } from '../lib/use-mobile.js'
 
 /**
  * The place in the line under the title that the Overview leaves for the packages' parts: its own
@@ -59,6 +60,7 @@ export function DashboardPage({
   projects,
   scope,
   onProjectAdded,
+  listedPages,
 }: {
   onSelectProject: (id: string) => void
   /** The address `onSelectProject` goes to: a link's `href`. */
@@ -79,6 +81,8 @@ export function DashboardPage({
   scope: string | null
   /** A project was added from the first steps: the app reads its projects again. */
   onProjectAdded: () => void
+  /** The modules' pages as the sidebar lists them, null where none is known yet: which projects have the Queue and the Tickets, before the packages' code is in. */
+  listedPages: readonly ListedPage[] | null
 }) {
   // Its ✕ hides it (#958), and a switch in Settings › Appearance shows it again.
   const onboardingDismissed = usePreferences().onboardingDismissed ?? false
@@ -89,6 +93,10 @@ export function DashboardPage({
   // Every card the Overview can show here, each with the widths it stands at; the person's layout
   // for this page (the picked project's, else all projects') orders them, sizes them, and hides some.
   const { cards: moduleCards, line: moduleLine, loaded: modulesLoaded } = useModuleCards(shownProjects)
+  const queueComing = !modulesLoaded && moduleLine.length === 0 && listedPages?.some(page => page.segment === 'queue' && shownProjects.some(project => page.projects.includes(project.id))) === true
+  // Until the pages are known (a browser's first visit) nor any package's part is in, whether the queue's part comes is
+  // not known: the parts after its place wait, so a part coming in before them pushes nothing.
+  const placeKnown = modulesLoaded || moduleLine.length > 0 || listedPages !== null
   // What the number counts, kind by kind: "1 question, 1 to publish".
   const waiting = KINDS.map(kind => ({ kind, count: interventions.filter(item => item.kind === kind.value).length })).filter(({ count }) => count > 0)
   // How things stand, in one line under the title, each part a link to where it is: what needs the
@@ -100,6 +108,7 @@ export function DashboardPage({
       node: (
         <LinePart
           reading={interventionsState === 'unknown'}
+          shape="2 need you"
           note={waiting.length === 0 ? 'Nothing waits on you' : waiting.map(({ kind, count }) => kind.counted(count)).join(', ')}
           onClick={() => scrollToPart(NEEDS_YOU_ID)}
         >
@@ -111,16 +120,17 @@ export function DashboardPage({
       id: 'working-now',
       order: 2,
       node: (
-        <LinePart reading={active.state === 'unknown'} live={working.length > 0} note={counted(working.length, 'agent at work', 'agents at work', 'No agent is at work')} {...(working.length > 0 ? { onClick: () => scrollToPart(WORKING_ID) } : {})}>
+        <LinePart reading={active.state === 'unknown'} shape="1 working" live={working.length > 0} note={counted(working.length, 'agent at work', 'agents at work', 'No agent is at work')} {...(working.length > 0 ? { onClick: () => scrollToPart(WORKING_ID) } : {})}>
           {working.length === 0 ? 'no agent working' : `${working.length} working`}
         </LinePart>
       ),
     },
-    // Until the packages' code is in, one part waits in their place: a part that came after the line
-    // was drawn would lengthen it, and on a phone push the Customize press and the page under it.
-    ...(modulesLoaded || moduleLine.length > 0 ? moduleLine : [{ id: 'packages', order: PACKAGES_PLACE, node: <LinePart reading>{null}</LinePart> }]),
+    // Until the packages' code is in, the queue's part waits in its place, as wide as it, where the sidebar's pages say a
+    // shown project has the Queue: a part that came after the line was drawn would lengthen it (on a phone pushing the
+    // Customize press and the page under it), and a place no part takes would shorten it.
+    ...(queueComing ? [{ id: 'packages', order: PACKAGES_PLACE, node: <LinePart reading shape="4 queued">{null}</LinePart> }] : moduleLine),
     // The person's agents (Rom's design: an agent is a name, skills and accounts): how many, by name, a press from their page.
-    { id: 'your-agents', order: 4, node: <YourAgentsPart /> },
+    ...(placeKnown ? [{ id: 'your-agents', order: 4, node: <YourAgentsPart /> }] : []),
   ].sort((one, other) => one.order - other.order)
   const cards: OverviewCard[] = [
     {
@@ -189,6 +199,8 @@ export function DashboardPage({
   }, [editing])
   const scopeName = scope === null ? undefined : projects.find(project => project.id === scope)?.name
   const own = layouts?.[layoutKey] !== undefined
+  const resetWords = layoutKey === ALL_PROJECTS ? 'Reset to the default layout' : 'Use the all-projects layout'
+  const phone = useIsMobile()
   const reset = (): void => {
     const { [layoutKey]: _dropped, ...rest } = layouts ?? {}
     updatePreferences({ overviewLayouts: rest })
@@ -201,7 +213,7 @@ export function DashboardPage({
     card: 'human-queue',
     node: (
       <>
-        {!onboardingDismissed && <OnboardingChecklist projects={projects} onAgentStarted={onAgentStarted} onSelectProject={onSelectProject} onProjectAdded={onProjectAdded} onRead={firstStepsHaveRead} />}
+        {!onboardingDismissed && <OnboardingChecklist projects={projects} onAgentStarted={onAgentStarted} onSelectProject={onSelectProject} onProjectAdded={onProjectAdded} onRead={firstStepsHaveRead} listedPages={listedPages} />}
         <AgentUpdates />
       </>
     ),
@@ -211,20 +223,28 @@ export function DashboardPage({
     <Page
       title="Overview"
       line={
-        line.map((part, at) => (
-          // A part after the first opens with its dot, drawn as the part's own (so the two stand as one) and not read aloud. On a phone the line
-          // wraps beside Customize: there a space parts them, never a dot, which would start a line.
-          <span key={part.id} className={cn('max-md:mr-3 max-md:inline-block', at > 0 && "md:before:mx-1.5 md:before:content-['·'_/_'']")}>
-            {part.node}
+        // Each part stands whole after its dot, and a part that starts a line (on a phone) shows no
+        // dot: the dots stand in the room the row is pulled left by, which the edge cuts off. The
+        // edge leaves a press's focus ring its room.
+        <span className="-m-1 block overflow-hidden p-1">
+          <span className="-ml-4 flex flex-wrap">
+            {line.map(part => (
+              <span key={part.id} className="whitespace-nowrap">
+                <span aria-hidden className="inline-block w-4 text-center">
+                  ·
+                </span>
+                {part.node}
+              </span>
+            ))}
           </span>
-        ))
+        </span>
       }
       actions={
         editing ? (
           <>
-            {own && (
+            {own && !phone && (
               <Button variant="ghost" onClick={reset}>
-                {layoutKey === ALL_PROJECTS ? 'Reset to the default layout' : 'Use the all-projects layout'}
+                {resetWords}
               </Button>
             )}
             {/* Focused as it takes Customize's place, which the press took away from the keyboard. */}
@@ -241,7 +261,7 @@ export function DashboardPage({
         )
       }
     >
-      {/* Arranging keeps the parts in their order: the first steps and the updates stay, each part gains the sentence that says what it is, and what arranging adds comes after the parts. */}
+      {/* Arranging keeps the parts in their order and where they stand: the first steps and the updates stay, and what arranging adds comes after the parts. */}
       <div className="space-y-10">
         {!layoutRead ? null : editing ? (
           <EditOverview
@@ -255,6 +275,16 @@ export function DashboardPage({
                 {scopeName !== undefined ? 'Each project keeps its own; a project you never arranged uses the all-projects one.' : 'A project you never arranged on its own uses it too.'} Drag a card by its handle, pick its width, or take it off with <TakeOffMark />. On a phone every card is full width.
               </>
             }
+            // On a phone the head has room for Done alone beside the line under the title: the reset stands here, under the tray's words.
+            {...(own && phone
+              ? {
+                  reset: (
+                    <Button variant="secondary" className="h-11" onClick={reset}>
+                      {resetWords}
+                    </Button>
+                  ),
+                }
+              : {})}
           />
         ) : arranged.some(({ hidden }) => !hidden) ? (
           // On a first visit the parts come in from the top: none is drawn under the Human Queue or the first steps until they have answered, as either grows from its waiting room by more than a line.

@@ -573,6 +573,23 @@ test('tailscale on: the door opens at this computer\'s name on Tailscale, add an
   }
 })
 
+test('tailscale on waits while Tailscale is being asked to serve the door: a slow answer still ends listening, not on the note that it is asked', async () => {
+  const home = await testHome()
+  // Serve answers after a while, as a real Tailscale does: the door's file says it is being asked meanwhile.
+  const tailscale = fakeTailscale('laptop.tail1234.ts.net', { serveMs: 800 })
+  const stop = new AbortController()
+  const env = { ...home.env, OPENAGENT_URL: 'http://127.0.0.1:1', OPENAGENT_REMOTE_ACCESS_PORT: '0' }
+  const serving = run(env, ['serve'], { signal: stop.signal, tailscale: tailscale.run })
+  try {
+    const on = await run(home.env, ['tailscale', 'on'], { followMs: 5_000, tailscale: tailscale.run })
+    assert.deepEqual(on.out, { on: false, listening: true, tailscale: { address: 'laptop.tail1234.ts.net' }, devices: [], lines: [], persons: [] })
+  } finally {
+    stop.abort()
+    await serving
+    await home.remove()
+  }
+})
+
 test("behind Tailscale the Wi-Fi switch still works: status says its door apart, add gives the Wi-Fi's link beside Tailscale's for the same code, and off closes it alone", async () => {
   const home = await testHome()
   const tailscale = fakeTailscale()

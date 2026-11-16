@@ -534,6 +534,7 @@ export function App() {
           projects={projects}
           scope={scope}
           onProjectAdded={reloadProjects}
+          listedPages={listedPages}
         />
       )
     }

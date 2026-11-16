@@ -1,5 +1,5 @@
 import { FastForward, Play } from 'lucide-react'
-import { PageLink, Panel, PanelGroup, PanelNote, PanelRow, PartDescription, SentenceShape, Slot, StartAgentButton, useIsMobile, useModuleHost, type FileNames, type ModuleCardProps } from '@openagt/dashboard/module'
+import { PageLink, Panel, PanelGroup, PanelNote, PanelRow, PartDescription, Slot, StartAgentButton, useIsMobile, useModuleHost, WordsShape, type FileNames, type ModuleCardProps } from '@openagt/dashboard/module'
 import { fanOutLabel, fanOutPress, unclaimedEntries, workOnEntryPrompt } from '../src/module.js'
 import { EntryTitle, entryView } from './entry.js'
 import { useQueueStarts, type QueueStarts } from './starts.js'
@@ -51,7 +51,16 @@ export function QueueCard({ projects }: ModuleCardProps) {
       }
     >
       <PartDescription>Tasks AI will work on next</PartDescription>
-      <Slot of={{ state, value: shown }} shape={<SentenceShape />}>
+      <Slot
+        of={{ state, value: shown }}
+        shape={
+          <Panel>
+            <PanelNote>
+              <WordsShape words="Nothing queued." />
+            </PanelNote>
+          </Panel>
+        }
+      >
         {() =>
           shown.length === 0 ? (
             <Panel>
