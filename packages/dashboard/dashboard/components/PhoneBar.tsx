@@ -10,12 +10,13 @@ export const PhoneBarCount = createContext<HTMLElement | null>(null)
 
 /**
  * The top row of a page that has none of its own: the page's name and the page's count, which the
- * page draws into `countSlot`. It stays at the top as the page scrolls. Given `onBack` (a page under
- * a module's page: a ticket of the Tickets), a back arrow stands first, as a session's bar has one.
+ * page draws into `countSlot`. It stays at the top as the page scrolls, under the daemon's banner
+ * while that shows. Given `onBack` (a page under a module's page: a ticket of the Tickets), a back
+ * arrow stands first, as a session's bar has one.
  */
 export function PhoneBar({ title, countSlot, onBack }: { title: string; countSlot: (slot: HTMLElement | null) => void; onBack?: (() => void) | undefined }) {
   return (
-    <div data-phone-bar="" className="sticky top-0 z-20 flex h-12 shrink-0 items-center gap-2 border-b border-border bg-background px-4 text-sm font-medium">
+    <div data-phone-bar="" className="sticky top-(--top-banner,0px) z-20 flex h-12 shrink-0 items-center gap-2 border-b border-border bg-background px-4 text-sm font-medium">
       {/* The arrow's glyph on the bar's 16 inset, the press pulled out by its padding (spacing.md 4). */}
       {onBack && (
         <Button variant="ghost" size="icon-bar" className="-ml-1.5 text-muted-foreground" aria-label="Back" onClick={onBack}>
