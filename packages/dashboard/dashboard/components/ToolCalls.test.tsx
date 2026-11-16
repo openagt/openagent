@@ -125,15 +125,15 @@ describe('ToolCalls', () => {
     expect(screen.queryByText('pnpm build')).toBeNull()
   })
 
-  test('the line opens to a bordered box with one line per call, in order, each opening further', () => {
+  test('the line opens to a card with one line per call, in order, each opening further', () => {
     const { container } = render(<ToolCalls steps={[bash('pnpm build'), { type: 'action', label: 'Edit', detail: '/repo/src/app.ts' }]} />)
     fireEvent.click(screen.getByRole('button', { name: 'Ran a command, edited a file' }))
-    const box = container.querySelector('.border')!
+    const box = screen.getByRole('group', { name: 'Steps' })
     expect(Array.from(box.querySelectorAll('[aria-expanded]')).map(b => b.parentElement!.textContent)).toEqual(['Ranpnpm build', 'Editedapp.ts'])
     fireEvent.click(screen.getByRole('button', { name: 'Edited app.ts' }))
     expect(screen.getByText('/repo/src/app.ts')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Ran a command, edited a file' }))
-    expect(container.querySelector('.border')).toBeNull()
+    expect(screen.queryByRole('group', { name: 'Steps' })).toBeNull()
   })
 
   test("Codex's calls read the same: its item kinds have their own verbs", () => {
@@ -149,7 +149,7 @@ describe('ToolCalls', () => {
     // Thinking is no step, and Claude Code on the web's panel has none of it. A person who wants to
     // read it turns it on in Settings, which is what `showThinking` does.
     fireEvent.click(screen.getByRole('button', { name: 'Ran 2 commands' }))
-    expect(Array.from(container.querySelectorAll('.border [aria-expanded]')).map(b => b.parentElement!.textContent)).toEqual(['Ranls', 'Ranpwd'])
+    expect(Array.from(screen.getByRole('group', { name: 'Steps' }).querySelectorAll('[aria-expanded]')).map(b => b.parentElement!.textContent)).toEqual(['Ranls', 'Ranpwd'])
     expect(screen.queryByText(/look at the docs/)).toBeNull()
   })
 

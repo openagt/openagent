@@ -85,7 +85,7 @@ test("a run's name is a link to the run: the keyboard reaches it, it opens the r
   expect(host.openAgent.mock.calls).toEqual([['p1', 'r1']])
 })
 
-test("each status in the dashboard's colors: a waiting run's dot is the sidebar's amber, and one that ended is a ring", async () => {
+test("each status is the sidebar's mark: a waiting run's hexagon waits, and one that ended is done", async () => {
   const host = hostWith([
     { id: 'r1', startedAt: at(now - 1000), status: 'waiting', title: 'Asks' },
     { id: 'r2', startedAt: at(now - 2000), endedAt: at(now - 1000), status: 'done', title: 'Ended' },
@@ -95,10 +95,10 @@ test("each status in the dashboard's colors: a waiting run's dot is the sidebar'
       <LogsPage projects={[{ id: 'p1', name: 'alpha', gitHost: true }]} projectId={null} path={[]} />
     </ModuleHostContext.Provider>,
   )
-  const dot = (title: string) => screen.getAllByText(title)[0]!.closest('li')!.querySelector('[aria-hidden]')!.className
+  const mark = (title: string) => screen.getAllByText(title)[0]!.closest('li')!.querySelector('svg')!.getAttribute('class')
   await screen.findAllByText('Asks')
-  expect(dot('Asks')).toContain('bg-warning')
-  expect(dot('Ended')).toContain('border-muted-foreground/60')
+  expect(mark('Asks')).toContain('text-warning')
+  expect(mark('Ended')).toContain('text-success')
 })
 
 test("a run whose pull request merged reads as the sidebar's merged run, its number a link to the request", async () => {
@@ -121,7 +121,8 @@ test("a run whose pull request merged reads as the sidebar's merged run, its num
   )
   const row = (title: string) => screen.getAllByText(title)[0]!.closest('li')!
   await waitFor(() => expect(within(row('Landed')).getByText('Merged')).toBeTruthy())
-  expect(row('Landed').querySelector('[aria-hidden]')!.className).toContain('border-success/70')
+  // The merged run's mark is the merge glyph, as the sidebar draws it (RunMark).
+  expect(row('Landed').querySelector('svg.lucide-git-merge')).toBeTruthy()
   expect(within(row('Landed')).getByRole('link', { name: '#48' }).getAttribute('href')).toBe(pr.url)
   // A request still open: the run is done.
   expect(within(row('Open request')).getByText(/^Done/)).toBeTruthy()

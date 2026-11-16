@@ -112,14 +112,14 @@ function rowTone(e: OpenAgentEvent): string {
 }
 
 /**
- * The row's BACKGROUND wash (#1508): a tint across the whole line, findable from the scrollbar's
- * distance.
- * Only the rows the eye actually hunts for get one — failures (the reader's own turns are boxes
- * already) — and at a whisper of alpha, so the
- * text keeps the contrast and the bulk of the log stays plain canvas.
+ * The row's box. A failure is a painted block (#1508), findable from the scrollbar's distance, at a
+ * whisper of alpha so the text keeps its contrast: on a phone it stands on the page's 16 inset with its
+ * words 16 inside, as the chat's cards do; on a desktop it is pulled out by 16, so its words stand on the
+ * chat's column. Every other row carries the same -mx/px pair, so its hover band and its words keep
+ * the column.
  */
-function rowWash(e: OpenAgentEvent): string {
-  return isFailure(e) ? 'bg-danger/10' : ''
+function rowBox(e: OpenAgentEvent): string {
+  return isFailure(e) ? 'rounded-lg bg-danger/10 px-4 py-2 md:-mx-4' : '-mx-1.5 rounded-sm px-1.5'
 }
 
 /**
@@ -349,7 +349,8 @@ function Age({ at }: { at: string }) {
  */
 function ReplyFooter({ text, at }: { text: string; at?: string | undefined }) {
   return (
-    <div className="turn-footer flex h-6 items-center gap-1 font-sans text-muted-foreground opacity-0 transition-opacity focus-within:opacity-100 pointer-coarse:opacity-100">
+    // Pulled out by the copy press's own padding, so its glyph stands on the chat's one left edge (ui/look/spacing.md 4).
+    <div className="turn-footer -ml-1.5 flex h-6 items-center gap-1 font-sans text-muted-foreground opacity-0 transition-opacity focus-within:opacity-100 pointer-coarse:opacity-100">
       <CopyMessage text={text} />
       {at !== undefined && <Age at={at} />}
     </div>
@@ -370,7 +371,7 @@ function isTall(text: string): boolean {
 // Claude Code on the web keeps an answered question. A skipped one says so where the answer would be.
 function Answer({ question, answer }: { question: string; answer?: string | undefined }) {
   return (
-    <div role="group" aria-label="Your answer" className="flex w-full max-w-[480px] flex-col gap-0.5 rounded-lg px-3 py-2 font-sans text-sm ring-1 ring-border">
+    <div role="group" aria-label="Your answer" className="flex w-full max-w-[480px] flex-col gap-0.5 rounded-lg px-4 py-2 font-sans text-sm ring-1 ring-border md:-mx-4">
       <div className="font-medium text-foreground">{question}</div>
       {answer !== undefined ? <div className="text-muted-foreground">{answer}</div> : <div className="italic text-muted-foreground">Skipped</div>}
     </div>
@@ -383,7 +384,7 @@ const FILES_ROW = 'group/row -mx-1.5 mt-2 flex items-start gap-2 rounded-sm px-1
 // A turn's files, and under them the turn's copy and time when the turn ended on them.
 function TurnFiles({ files, onOpen, footer }: { files: readonly ChangedFile[]; onOpen?: ((path?: string) => void) | undefined; footer?: { text: string; at: string | undefined } | undefined }) {
   return (
-    <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+    <div className="flex min-w-0 flex-1 flex-col gap-2">
       <ChangedFiles files={files} onOpen={onOpen} />
       {footer && <ReplyFooter text={footer.text} at={footer.at} />}
     </div>
@@ -415,7 +416,7 @@ function Prompt({ text, at, waiting, attached, fresh = false }: { text: string; 
             <CopyMessage text={text} />
           </div>
         )}
-        <div role="group" aria-label={waiting ? 'Your message, waiting' : 'Your message'} className="max-w-[80%] min-w-0 rounded-lg bg-muted px-3 py-2">
+        <div role="group" aria-label={waiting ? 'Your message, waiting' : 'Your message'} className="max-w-[80%] min-w-0 rounded-lg rounded-br-sm bg-card px-4 py-2 shadow-sm ring-1 ring-hairline">
           <div className={tall && !open ? 'max-h-40 overflow-hidden' : ''}>
             <Markdown text={text} />
           </div>
@@ -964,7 +965,9 @@ export function EventList({
       {/* A layer of its own: "Jump to latest" stays under the message box's bar. */}
       <MessageScroller className="isolate flex-1">
         <MessageScrollerViewport ref={viewport} aria-label="Agent output" className="chat-scroll scroll-pb-(--chat-bottom)">
-          <MessageScrollerContent spacerClassName="order-last" className="mx-auto w-full max-w-3xl gap-3 px-4 pt-4 font-mono text-xs">
+          {/* The chat's column: 16 in on a phone, 32 on a desktop, where the painted blocks are pulled
+              out by 16 to stand 16 in with the message box, their words on the column. */}
+          <MessageScrollerContent spacerClassName="order-last" className="mx-auto w-full max-w-3xl gap-3 px-4 pt-4 font-mono text-xs md:px-8">
             {/* First in the page, so never the row the browser keeps in place when a row above
                 it grows: a steps line opened at the log's end opens under the line, the line
                 where it was, as Claude Code's does, not pushed up by the room held still. */}
@@ -1010,9 +1013,7 @@ export function EventList({
                 )}
                 {i === setupAt && setupRow}
                 {startedRows(i)}
-                {/* Every row carries the same -mx/px pair so a washed row's band and a plain row's
-                    text share the exact same columns; only the background differs. */}
-                <MessageScrollerItem messageId={idOf(e)} data-prompt={(own && !answer) || undefined} className={`group/row relative -mx-1.5 flex items-start gap-2 rounded-sm px-1.5 ${answer || inPlace ? 'mt-1 mb-3' : own ? 'mt-3 first:mt-0' : ''} ${end ? '' : rowWash(e)}`}>
+                <MessageScrollerItem messageId={idOf(e)} data-prompt={(own && !answer) || undefined} className={`group/row relative flex items-start gap-2 ${end ? '-mx-1.5 rounded-sm px-1.5' : rowBox(e)} ${answer || inPlace ? 'mt-1 mb-3' : own ? 'mt-3 first:mt-0' : ''}`}>
                   {answer ? (
                     <Answer {...answer} />
                   ) : inPlace && sentAnswer ? (
@@ -1025,7 +1026,7 @@ export function EventList({
                   ) : message !== null ? (
                     // The agent's reply, shown whole, and the last of a finished turn with its footer.
                     footer ? (
-                      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                      <div className="flex min-w-0 flex-1 flex-col gap-2">
                         <Reply text={message} />
                         {footer}
                       </div>
@@ -1038,8 +1039,8 @@ export function EventList({
                     <PassedChoice choice={choiceRow.choice} footer={footer} />
                   ) : choiceRow && choiceRow.pick === undefined && projectId !== undefined && agentId !== undefined ? (
                     // The question the agent waits on, answered here, under what it said.
-                    typing ? null : <div className="mt-1 flex min-w-0 flex-1 flex-col gap-1.5">
-                      <QuestionPanel key={`${agentId}:${chatGate(choiceRow.choice)}`} projectId={projectId} agentId={agentId} choice={choiceRow.choice} active={e === asking} focused={e === openedOn.current} onSaid={onSaid} focusNext={focusNext} />
+                    typing ? null : <div className="mt-1 flex min-w-0 flex-1 flex-col gap-2">
+                      <QuestionPanel key={`${agentId}:${chatGate(choiceRow.choice)}`} projectId={projectId} agentId={agentId} choice={choiceRow.choice} askedAt={e.at} active={e === asking} focused={e === openedOn.current} onSaid={onSaid} focusNext={focusNext} />
                       {footer}
                     </div>
                   ) : choiceRow?.pick !== undefined ? (

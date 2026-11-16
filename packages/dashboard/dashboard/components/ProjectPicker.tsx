@@ -262,8 +262,7 @@ export function ProjectPicker({
         {none.label}
       </button>
     ) : look === 'sidebar' ? (
-      // A ghost row of the sidebar's, 32 high (44 on a phone) whatever it shows, so the rows under it never move: the
-      // chevrons say it opens, the soft fill under the pointer that it is pressed.
+      // A card on the sidebar, as high whatever it shows, so the rows under it never move: the chevrons say it opens.
       <button type="button" className={PROJECT_ROW_CLASS}>
         <span className="flex size-4 shrink-0 items-center justify-center">
           {pending ? null : project ? <ProjectDot project={project} /> : <Layers className="size-4 text-muted-foreground" aria-hidden />}

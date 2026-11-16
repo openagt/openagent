@@ -29,7 +29,7 @@ const panel = (over: Partial<Parameters<typeof QuestionPanel>[0]> = {}) => <Ques
 const option = (name: RegExp) => screen.getByRole('radio', { name })
 
 describe('QuestionPanel', () => {
-  test('it shows the title, a row per option with its description, an "Other" row, Skip and Submit; no number is drawn', () => {
+  test('it shows the title, a row per option with its description, an "Other" row, Skip and Answer; no number is drawn', () => {
     render(panel())
     expect(screen.getByRole('region', { name: 'Which database?' })).toBeTruthy()
     expect(option(/Postgres/).textContent).toBe('PostgresRecommendedWhat production runs')
@@ -38,18 +38,23 @@ describe('QuestionPanel', () => {
     // Its field opens only once "Other" is picked.
     expect(screen.queryByLabelText('Your own answer')).toBeNull()
     expect(screen.getByRole('button', { name: 'Skip' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Submit' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Answer' })).toBeTruthy()
   })
 
-  test('Submit names its keys where there is a keyboard, never on a touch screen or at a phone\'s width, as the message box does', () => {
+  test('the card says it waits for the answer, and for how long', () => {
+    render(<QuestionPanel projectId="p1" agentId="r1" choice={{ id: 'c1', title: 'Which database?', options: [{ id: 'pg', label: 'Postgres' }], recommended: 'pg' }} askedAt={new Date(Date.now() - 2 * 60_000 - 5_000).toISOString()} />)
+    expect(screen.getByText(/^Waiting for your answer/).textContent).toBe('Waiting for your answer · 2m')
+  })
+
+  test('Answer names its keys where there is a keyboard, never on a touch screen or at a phone\'s width, as the message box does', () => {
     render(panel({ active: true }))
-    const keys = screen.getByRole('button', { name: 'Submit' }).querySelector('kbd')!.parentElement!
+    const keys = screen.getByRole('button', { name: 'Answer' }).querySelector('kbd')!.parentElement!
     // Each pointer's display by name: a plain `flex` would be put back by a module's own `.flex`, loaded after it.
     expect(keys.className.split(' ')).toEqual(expect.arrayContaining(['md:not-pointer-coarse:flex', 'pointer-coarse:hidden', 'max-md:hidden']))
     expect(keys.className.split(' ')).not.toContain('flex')
   })
 
-  test('the recommended option starts picked; picking a row sends nothing until Submit', async () => {
+  test('the recommended option starts picked; picking a row sends nothing until Answer', async () => {
     sendChoice.mockResolvedValue({ ok: true })
     render(panel())
     expect(option(/Postgres/).getAttribute('aria-checked')).toBe('true')
@@ -57,7 +62,7 @@ describe('QuestionPanel', () => {
     expect(option(/SQLite/).getAttribute('aria-checked')).toBe('true')
     expect(option(/Postgres/).getAttribute('aria-checked')).toBe('false')
     expect(sendChoice).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Answer' }))
     await waitFor(() => expect(sendChoice).toHaveBeenCalledWith('p1', 'await-choices', 'lite', 'r1'))
   })
 
@@ -86,9 +91,9 @@ describe('QuestionPanel', () => {
     const onSaid = vi.fn()
     render(panel({ onSaid, active: true }))
     fireEvent.click(option(/SQLite/))
-    fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Answer' }))
     await waitFor(() => expect(screen.getByRole('status').textContent).toBe('Sending your answer…'))
-    for (const name of ['Submit', 'Skip']) expect((screen.getByRole('button', { name }) as HTMLButtonElement).disabled).toBe(true)
+    for (const name of ['Answer', 'Skip']) expect((screen.getByRole('button', { name }) as HTMLButtonElement).disabled).toBe(true)
     for (const name of [/Postgres/, /Other/]) expect((option(name) as HTMLButtonElement).disabled).toBe(true)
     taken({ ok: true })
     await waitFor(() => expect(screen.queryByRole('region')).toBeNull())
@@ -132,13 +137,13 @@ describe('QuestionPanel', () => {
   test("a refused answer says why in the daemon's words, and the question stays answerable", async () => {
     sendChoice.mockResolvedValue({ ok: false, error: 'this project has no resume hook' })
     render(panel())
-    fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Answer' }))
     await waitFor(() => expect(screen.getByRole('alert').textContent).toBe('this project has no resume hook'))
     expect(screen.queryByRole('status')).toBeNull()
-    expect((screen.getByRole('button', { name: 'Submit' }) as HTMLButtonElement).disabled).toBe(false)
+    expect((screen.getByRole('button', { name: 'Answer' }) as HTMLButtonElement).disabled).toBe(false)
   })
 
-  test('while OpenAgent is not answering, no answer is sent, by Submit, Skip or the keys, and the pick stays', async () => {
+  test('while OpenAgent is not answering, no answer is sent, by Answer, Skip or the keys, and the pick stays', async () => {
     const { DaemonDown } = await import('../lib/use-daemon-health.js')
     render(
       <DaemonDown.Provider value>
@@ -146,7 +151,7 @@ describe('QuestionPanel', () => {
       </DaemonDown.Provider>,
     )
     fireEvent.click(option(/SQLite/))
-    expect((screen.getByRole('button', { name: 'Submit' }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('button', { name: 'Answer' }) as HTMLButtonElement).disabled).toBe(true)
     expect((screen.getByRole('button', { name: 'Skip' }) as HTMLButtonElement).disabled).toBe(true)
     fireEvent.keyDown(window, { key: 'Enter', ctrlKey: true })
     expect(sendChoice).not.toHaveBeenCalled()
@@ -201,14 +206,14 @@ describe('QuestionPanel', () => {
     expect(sendChoice).not.toHaveBeenCalled()
   })
 
-  test('Submit\'s Ctrl+Enter is dimmed while the message box has that key, and keeps its place, so Submit and Skip stand still', () => {
+  test('Answer\'s Ctrl+Enter is dimmed while the message box has that key, and keeps its place, so Answer and Skip stand still', () => {
     render(
       <>
         <textarea aria-label="message box" />
         {panel({ active: true })}
       </>,
     )
-    const keys = screen.getByRole('button', { name: 'Submit' }).querySelector('kbd')!.parentElement!
+    const keys = screen.getByRole('button', { name: 'Answer' }).querySelector('kbd')!.parentElement!
     expect(keys.className.split(' ')).not.toContain('opacity-40')
     act(() => screen.getByLabelText('message box').focus())
     expect(keys.isConnected).toBe(true)
@@ -259,9 +264,9 @@ describe('QuestionPanel', () => {
     const other = screen.getByLabelText('Your own answer')
     expect(document.activeElement).toBe(other)
     expect(option(/Postgres/).getAttribute('aria-checked')).toBe('false')
-    expect((screen.getByRole('button', { name: 'Submit' }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('button', { name: 'Answer' }) as HTMLButtonElement).disabled).toBe(true)
     fireEvent.change(other, { target: { value: '  MySQL, we already pay for it  ' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Answer' }))
     await waitFor(() => expect(sendMessage).toHaveBeenCalledWith('p1', answerPrompt('Which database?', 'MySQL, we already pay for it'), 'r1'))
     expect(sendChoice).not.toHaveBeenCalled()
     await waitFor(() => expect(onSaid).toHaveBeenCalledWith(answerPrompt('Which database?', 'MySQL, we already pay for it')))
@@ -291,7 +296,7 @@ describe('QuestionPanel', () => {
     await waitFor(() => expect(onSaid).toHaveBeenCalledWith(skipPrompt('Which database?')))
   })
 
-  test('a question with several answers: rows are checked on and off, starting from its defaults, and Submit sends the checked ones', async () => {
+  test('a question with several answers: rows are checked on and off, starting from its defaults, and Answer sends the checked ones', async () => {
     sendChoice.mockResolvedValue({ ok: true })
     render(panel({ choice: several }))
     const box = (name: RegExp) => screen.getByRole('checkbox', { name })
@@ -299,7 +304,7 @@ describe('QuestionPanel', () => {
     expect(box(/Tests/).getAttribute('aria-checked')).toBe('false')
     fireEvent.click(box(/Tests/))
     fireEvent.click(box(/Lint/))
-    fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Answer' }))
     await waitFor(() => expect(sendChoice).toHaveBeenCalledWith('p1', 'q2', ['tests'], 'r1'))
   })
 
@@ -307,9 +312,9 @@ describe('QuestionPanel', () => {
     sendMessage.mockResolvedValue({ ok: true })
     render(panel({ choice: several }))
     fireEvent.click(screen.getByRole('checkbox', { name: /Other/ }))
-    expect((screen.getByRole('button', { name: 'Submit' }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('button', { name: 'Answer' }) as HTMLButtonElement).disabled).toBe(true)
     fireEvent.change(screen.getByLabelText('Your own answer'), { target: { value: 'and the type check' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Answer' }))
     await waitFor(() => expect(sendMessage).toHaveBeenCalledWith('p1', answerPrompt('Which checks?', 'Lint, and the type check'), 'r1'))
     expect(sendChoice).not.toHaveBeenCalled()
   })
@@ -325,7 +330,7 @@ describe('QuestionPanel', () => {
       render(panel({ send }))
       fireEvent.click(option(/SQLite/))
       expect(send).not.toHaveBeenCalled()
-      fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Answer' }))
       await waitFor(() => expect(screen.queryByRole('region')).toBeNull())
       expect(send.mock.calls).toEqual([['lite']])
       usualCallsNotMade()
@@ -335,7 +340,7 @@ describe('QuestionPanel', () => {
       const send = vi.fn(async () => undefined)
       render(panel({ choice: several, send }))
       fireEvent.click(screen.getByRole('checkbox', { name: /Tests/ }))
-      fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Answer' }))
       await waitFor(() => expect(screen.queryByRole('region')).toBeNull())
       expect(send.mock.calls).toEqual([[['lint', 'tests']]])
       usualCallsNotMade()
@@ -346,7 +351,7 @@ describe('QuestionPanel', () => {
       expect(screen.getAllByRole('listitem')).toHaveLength(2)
       expect(screen.queryByRole('radio', { name: /Other/ })).toBeNull()
       expect(screen.queryByRole('button', { name: 'Skip' })).toBeNull()
-      expect(screen.getByRole('button', { name: 'Submit' })).toBeTruthy()
+      expect(screen.getByRole('button', { name: 'Answer' })).toBeTruthy()
       // The key that would reach "Other" is no key of this panel.
       expect(fireEvent.keyDown(window, { key: '3' })).toBe(true)
       unmount()
@@ -359,11 +364,11 @@ describe('QuestionPanel', () => {
     test('the key that submits is on the button, not written out under the options', () => {
       const { unmount } = render(panel({ active: true }))
       expect(screen.queryByText(/Number keys pick/)).toBeNull()
-      expect(screen.getByRole('button', { name: /Submit/ }).textContent).toMatch(/^Submit(⌘|Ctrl)Enter$/)
+      expect(screen.getByRole('button', { name: /Answer/ }).textContent).toMatch(/^Answer(⌘|Ctrl)Enter$/)
       unmount()
       // Not the question the keys answer: no key is promised on it.
       render(panel())
-      expect(screen.getByRole('button', { name: 'Submit' }).textContent).toBe('Submit')
+      expect(screen.getByRole('button', { name: 'Answer' }).textContent).toBe('Answer')
     })
 
     test('a send that fails says why, and the question stays answerable', async () => {
@@ -371,10 +376,10 @@ describe('QuestionPanel', () => {
         throw new Error('that session has no parked question')
       })
       render(panel({ send }))
-      fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Answer' }))
       await waitFor(() => expect(screen.getByRole('alert').textContent).toBe('that session has no parked question'))
       expect(screen.queryByRole('status')).toBeNull()
-      expect((screen.getByRole('button', { name: 'Submit' }) as HTMLButtonElement).disabled).toBe(false)
+      expect((screen.getByRole('button', { name: 'Answer' }) as HTMLButtonElement).disabled).toBe(false)
     })
   })
 })

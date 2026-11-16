@@ -85,8 +85,9 @@ function RunRow({ agent, naming, doing, projectNamed, href, onOpen }: {
   // A web run's cloud side (#1668): no local process backs the row, so it says where it is, and when it waits on the person.
   const status = agent.cloud === 'waiting' ? 'waiting' : 'running'
   return (
+    // The run's mark is the hexagon, 14 in the row's 16 place (rulings-5: at least 12 of ink).
     <PanelRow
-      state={<RunMark status={status} className="size-2" />}
+      state={<RunMark status={status} />}
       title={
         naming ? (
           <>

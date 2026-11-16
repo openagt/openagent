@@ -7,7 +7,7 @@ import { shortcut } from '../lib/shortcut.js'
 // The sidebar hidden and shown again, as Claude Code's is: its button in the sidebar's own top row
 // hides it, and while it is hidden the same button stands at the start of the page's top row (an
 // agent's bar, the "New agent session" page's, a page's header) to show it. Cmd/Ctrl+B does both. A phone's
-// sidebar is a sheet, opened by its own button (MenuButton): there the button in its top row closes it.
+// sidebar is a sheet, opened from the bar of pages (PagesBar): there the button in its top row closes it.
 
 const SHORTCUT = shortcut('B')
 

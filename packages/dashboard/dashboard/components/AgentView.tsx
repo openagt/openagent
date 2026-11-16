@@ -5,7 +5,7 @@ import { useLoaded, usePolled } from '../lib/use-async.js'
 import { DOING_EVERY_MS, NOTHING_DOING } from '../lib/use-doing.js'
 import { handoffSays, useAgentHandoff } from '../lib/use-agent-handoff.js'
 import { useCheckoutStatus } from '../lib/use-checkout-status.js'
-import { agentOutcome, cardOutcome } from '../lib/live-state.js'
+import { agentOutcome, cardOutcome, pendingChoices, shownStatus } from '../lib/live-state.js'
 import { useAgentFeed } from '../lib/use-agent-feed.js'
 import { AgentActionBar } from './AgentActionBar.js'
 import { SessionRow } from './SessionRow.js'
@@ -77,6 +77,7 @@ export function AgentView({
   onAgentStarted,
   contextSet,
   onDeleted,
+  onBack,
   onProjectRemoved,
   subagents = NO_SUBAGENTS,
 }: {
@@ -119,6 +120,8 @@ export function AgentView({
   contextSet?: ContextSet | undefined
   /** Leave this session after it is deleted (#1032) — back to the project home. */
   onDeleted?: (() => void) | undefined
+  /** A phone's back arrow in the top bar: to the page shown before. */
+  onBack?: (() => void) | undefined
   /** Told once the project is removed from the project's menu in the top bar, to leave its page; absent, no remove is offered. */
   onProjectRemoved?: (() => void) | undefined
   /** The runs started for this run, oldest first: rows in its chat, and a line above the message box while any works. */
@@ -348,11 +351,13 @@ export function AgentView({
             retainedWorktree={hasWorktree}
             onWorktreeRemoved={onWorktreeRemoved}
             onDeleted={onDeleted}
+            onBack={onBack}
             onProjectRemoved={onProjectRemoved}
             expanded={open}
             onToggle={toggle}
             ready={ready}
             checkout={checkout}
+            status={ready ? shownStatus(live === null && !feedLive ? null : feedLive, feedLive && pendingChoices(shown).length > 0, outcome, pr?.state === 'MERGED') : undefined}
             {...(workBar.away && say ? { onShowWorkBar: workBar.show } : {})}
           />
           {/* The always-available session-details strip: agent + spend (#322). What the run changed is
@@ -406,7 +411,7 @@ export function AgentView({
             // logins and none of its conversation.
             <div className="@container mx-auto w-full max-w-3xl px-4 pt-2 pb-4">
               {row}
-              <p role="note" className="rounded-lg border border-border bg-muted/40 px-3 py-2.5 text-sm text-muted-foreground">
+              <p role="note" className="rounded-lg border border-border bg-muted/40 px-4 py-2.5 text-sm text-muted-foreground">
                 {`This run is on ${card.host}. Continue it there.`}
               </p>
             </div>

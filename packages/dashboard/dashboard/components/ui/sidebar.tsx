@@ -13,7 +13,7 @@ import { pressed, useShortcut } from '../../lib/shortcut.js'
 // branch does not forward the wrapper's div props onto the Sheet's Dialog root. `--sidebar-*` tokens
 // live in tailwind.css.
 
-const SIDEBAR_WIDTH = '16rem'
+const SIDEBAR_WIDTH = '18rem'
 const SIDEBAR_WIDTH_MOBILE = '18rem'
 
 type SidebarContextProps = {

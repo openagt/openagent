@@ -31,7 +31,7 @@ function didWords(member: Member): string {
 function Going({ status, count }: { status: 'running' | 'waiting'; count: number }) {
   return (
     <span className="flex items-center gap-1.5">
-      <RunMark status={status} className="size-2" />
+      <RunMark status={status} className="size-3" />
       {count === 1 ? runWord(status) : `${count} ${runWord(status)}`}
     </span>
   )
