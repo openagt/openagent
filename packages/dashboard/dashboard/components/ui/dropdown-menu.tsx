@@ -33,8 +33,14 @@ function PopupBody({ children }: { children: ReactNode }) {
     </ScrollArea>
   )
 }
+/** A menu's row: one line centred in it; a row with a second line (its part marked `data-line2`) stands from its top, its mark on its name's line. */
 export const MENU_ITEM_CLASS =
-  'relative flex cursor-pointer select-none items-center gap-3 rounded-md px-2 py-1.5 text-sm font-normal outline-none md:min-h-8 max-md:min-h-11 data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50'
+  'relative flex cursor-pointer select-none items-center has-[[data-line2]]:items-start gap-3 rounded-md px-2 py-1.5 text-sm font-normal outline-none md:min-h-8 max-md:min-h-11 data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50'
+
+/** A row's icon or tick, in a box one line of its name tall: on that line whether the row has one line or two. */
+export function MenuMark({ children, className }: { children: ReactNode; className?: string }) {
+  return <span className={cn('flex h-5 shrink-0 items-center', className)}>{children}</span>
+}
 
 export const DropdownMenu = Menu.Root
 export const DropdownMenuGroup = Menu.Group

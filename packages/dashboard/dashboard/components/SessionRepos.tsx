@@ -8,7 +8,7 @@ import { cn } from '../lib/utils.js'
 import { rowButtonClass, rowItemClass, RowSaid } from './ui/row-item.js'
 import { ScrollArea } from './ui/scroll-area.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
-import { MENU_BODY_CLASS, MENU_ITEM_CLASS, MENU_POPUP_CLASS, MENU_TRIGGER_OPEN_CLASS } from './ui/dropdown-menu.js'
+import { MENU_BODY_CLASS, MENU_ITEM_CLASS, MENU_POPUP_CLASS, MENU_TRIGGER_OPEN_CLASS, MenuMark } from './ui/dropdown-menu.js'
 import { usePopupPlacement } from './ui/popup-placement.js'
 import { usePickerSearch } from './ui/picker-search.js'
 import { ASK_AGAIN_MS, REPOS_SHOWN, repoDetail } from './ProjectPicker.js'
@@ -149,11 +149,15 @@ export function SessionRepoPicks({
                         <Combobox.GroupLabel className="px-2 pt-2 pb-1 text-xs font-normal text-muted-foreground">{group.label}</Combobox.GroupLabel>
                         <Combobox.Collection>
                           {(row: Row) => (
-                            <Combobox.Item key={row.value} value={row} className={cn(MENU_ITEM_CLASS, 'items-start')}>
-                              <FolderGit2 className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
-                              <span className="min-w-0 leading-tight">
+                            <Combobox.Item key={row.value} value={row} className={MENU_ITEM_CLASS}>
+                              <MenuMark>
+                                <FolderGit2 className="size-3.5" aria-hidden />
+                              </MenuMark>
+                              <span className="min-w-0 leading-5">
                                 <span className="block truncate">{row.label}</span>
-                                <span className="block truncate text-xs text-muted-foreground">{row.detail}</span>
+                                <span data-line2 className="block truncate text-xs leading-4 text-muted-foreground">
+                                  {row.detail}
+                                </span>
                               </span>
                             </Combobox.Item>
                           )}

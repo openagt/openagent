@@ -10,7 +10,7 @@ import { rowButtonClass, RowChevron } from './ui/row-item.js'
 import { OptionLabel } from './ui/option-label.js'
 import { ScrollArea } from './ui/scroll-area.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
-import { MENU_BODY_CLASS, MENU_ITEM_CLASS, MENU_POPUP_CLASS, MENU_TRIGGER_OPEN_CLASS } from './ui/dropdown-menu.js'
+import { MENU_BODY_CLASS, MENU_ITEM_CLASS, MENU_POPUP_CLASS, MENU_TRIGGER_OPEN_CLASS, MenuMark } from './ui/dropdown-menu.js'
 import { usePickerSearch } from './ui/picker-search.js'
 
 /** The most rows the menu draws at once: the search reaches the rest. */
@@ -122,10 +122,14 @@ export function StartFromMenu({ projectId, main, local, pick, onPick, busy }: { 
                 <Combobox.Empty className="px-2 py-1.5 text-xs text-muted-foreground empty:hidden">No branch by that name.</Combobox.Empty>
                 <Combobox.List>
                   {(row: Row) => (
-                    <Combobox.Item key={row.value} value={row} className={cn(MENU_ITEM_CLASS, 'items-start')}>
-                      {row.description !== undefined ? <OptionLabel label={row.label} description={row.description} /> : <span className="min-w-0 flex-1 leading-tight [overflow-wrap:anywhere]">{row.label}</span>}
+                    <Combobox.Item key={row.value} value={row} className={MENU_ITEM_CLASS}>
+                      {row.description !== undefined ? <OptionLabel label={row.label} description={row.description} /> : <span className="min-w-0 flex-1 leading-5 [overflow-wrap:anywhere]">{row.label}</span>}
                       {/* The pick is the tick at the row's end. */}
-                      {row.value === picked.value && <Check className="ml-auto mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />}
+                      {row.value === picked.value && (
+                        <MenuMark className="ml-auto">
+                          <Check className="size-3.5" aria-hidden />
+                        </MenuMark>
+                      )}
                     </Combobox.Item>
                   )}
                 </Combobox.List>

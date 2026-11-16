@@ -246,8 +246,8 @@ describe('ProjectPicker', () => {
     const { onPick } = renderPicker({ picked: 'alpha-1', pickedName: 'alpha' })
     await openMenu(trigger())
     // The pick is the tick at the row's end; the other rows carry none.
-    expect(screen.getByRole('option', { name: 'alpha' }).lastElementChild!.classList.contains('lucide-check')).toBe(true)
-    expect(screen.getByRole('option', { name: 'No project' }).lastElementChild!.classList.contains('lucide-check')).toBe(false)
+    expect(screen.getByRole('option', { name: 'alpha' }).lastElementChild!.querySelector('.lucide-check') !== null).toBe(true)
+    expect(screen.getByRole('option', { name: 'No project' }).lastElementChild!.querySelector('.lucide-check') !== null).toBe(false)
     fireEvent.click(await screen.findByRole('option', { name: 'No project' }))
     expect(onPick).toHaveBeenLastCalledWith(null)
     cleanup()

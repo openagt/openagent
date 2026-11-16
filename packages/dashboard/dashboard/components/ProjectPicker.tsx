@@ -16,7 +16,7 @@ import { buttonVariants } from './ui/button.js'
 import { ScrollArea } from './ui/scroll-area.js'
 import { Skeleton, useSkeleton } from './ui/skeleton.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
-import { MENU_BODY_CLASS, MENU_ITEM_CLASS, MENU_POPUP_CLASS, MENU_TRIGGER_OPEN_CLASS } from './ui/dropdown-menu.js'
+import { MENU_BODY_CLASS, MENU_ITEM_CLASS, MENU_POPUP_CLASS, MENU_TRIGGER_OPEN_CLASS, MenuMark } from './ui/dropdown-menu.js'
 import { PROJECT_ROW_CLASS } from './ui/nav-row.js'
 import { usePopupPlacement } from './ui/popup-placement.js'
 import { usePickerSearch } from './ui/picker-search.js'
@@ -115,7 +115,7 @@ function ElsewhereLine({ machineId }: { machineId: string }) {
   if (!machine) return null
   const Icon = MACHINE_ICONS[machineKind(machine).kind]
   return (
-    <span className="flex items-center gap-1 text-xs text-muted-foreground">
+    <span data-line2 className="flex items-center gap-1 text-xs leading-4 text-muted-foreground">
       <Icon className="h-3 w-3 shrink-0" aria-hidden />
       <span className="truncate">on {machineName(machine)}</span>
     </span>
@@ -127,22 +127,22 @@ function ProjectLine({ project, label }: { project: ProjectSummary; label: strin
   return (
     <>
       {/* The dot in a box the size of the other rows' icons, so every row's name starts at one edge. */}
-      <span className="mt-0.5 flex h-3.5 w-3.5 shrink-0 items-center justify-center">
+      <MenuMark className="w-3.5 justify-center">
         <ProjectDot project={project} />
-      </span>
-      <span className="min-w-0 flex-1 leading-tight">
+      </MenuMark>
+      <span className="min-w-0 flex-1 leading-5">
         <ProjectName name={project.name} label={label} />
         {project.machine !== undefined && <ElsewhereLine machineId={project.machine} />}
         {/* What the daemon finds wrong with it, in words: the project's own page carries the detail. */}
         {project.errors?.map(e => (
-          <span key={e.code} title={e.message} className="block truncate text-xs text-danger">
+          <span key={e.code} data-line2 title={e.message} className="block truncate text-xs leading-4 text-danger">
             {projectErrorTitle(e.code)}
           </span>
         ))}
-        {!project.errors?.length && !project.activated && <span className="block text-xs text-muted-foreground">Not activated</span>}
+        {!project.errors?.length && !project.activated && <span data-line2 className="block text-xs leading-4 text-muted-foreground">Not activated</span>}
         {/* Nothing wrong: the repository has no remote, or the person keeps the agents' records here. */}
         {!project.errors?.length && project.activated && project.local && (
-          <span className="block text-xs text-muted-foreground">{project.local === 'no-remote' ? 'Local only, no remote' : 'Records kept on this machine'}</span>
+          <span data-line2 className="block text-xs leading-4 text-muted-foreground">{project.local === 'no-remote' ? 'Local only, no remote' : 'Records kept on this machine'}</span>
         )}
       </span>
     </>
@@ -325,26 +325,42 @@ export function ProjectPicker({
                         {group.label && <Combobox.GroupLabel className="px-2 pt-2 pb-1 text-xs font-normal text-muted-foreground">{group.label}</Combobox.GroupLabel>}
                         <Combobox.Collection>
                           {(row: Row) => (
-                            <Combobox.Item key={row.value} value={row} className={cn(MENU_ITEM_CLASS, 'items-start')}>
+                            <Combobox.Item key={row.value} value={row} className={MENU_ITEM_CLASS}>
                               {/* Each row leads with its own mark; the pick is the tick at the row's end. */}
                               {row.pick.kind === 'address' ? (
-                                <Plus className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                                <MenuMark>
+                                  <Plus className="size-3.5 text-muted-foreground" aria-hidden />
+                                </MenuMark>
                               ) : row.pick.kind === 'none' ? (
-                                <Layers className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                                <MenuMark>
+                                  <Layers className="size-3.5 text-muted-foreground" aria-hidden />
+                                </MenuMark>
                               ) : row.pick.kind === 'repo' ? (
-                                <FolderGit2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                                <MenuMark>
+                                  <FolderGit2 className="size-3.5 text-muted-foreground" aria-hidden />
+                                </MenuMark>
                               ) : row.pick.kind === 'hosted' ? (
-                                <Cloud className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                                <MenuMark>
+                                  <Cloud className="size-3.5 text-muted-foreground" aria-hidden />
+                                </MenuMark>
                               ) : null}
                               {row.pick.kind === 'project' ? (
                                 <ProjectLine project={row.pick.project} label={row.label} />
                               ) : (
-                                <span className="min-w-0 flex-1 leading-tight">
+                                <span className="min-w-0 flex-1 leading-5">
                                   <span className="block truncate">{row.label}</span>
-                                  {row.detail && <span className="block truncate text-xs text-muted-foreground">{row.detail}</span>}
+                                  {row.detail && (
+                                    <span data-line2 className="block truncate text-xs leading-4 text-muted-foreground">
+                                      {row.detail}
+                                    </span>
+                                  )}
                                 </span>
                               )}
-                              {row.value === current.value && <Check className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />}
+                              {row.value === current.value && (
+                                <MenuMark>
+                                  <Check className="size-3.5" aria-hidden />
+                                </MenuMark>
+                              )}
                             </Combobox.Item>
                           )}
                         </Combobox.Collection>
