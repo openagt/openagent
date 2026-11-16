@@ -33,6 +33,7 @@ import {
   usePolled,
   Waiting,
   type ModulePanelProps,
+  Facts,
 } from '@openagt/dashboard/module'
 import type { AgentCommit, FileMark } from '../src/run.js'
 import type { RunChanges } from '../src/server.js'
@@ -132,7 +133,7 @@ function foldersOf(paths: string[]): Folder {
 }
 
 /** A row of the commits list: "All changes", or one commit. */
-function CommitRow({ label, detail, title, picked, onPick }: { label: string; detail?: string; title?: string; picked: boolean; onPick: () => void }) {
+function CommitRow({ label, detail, title, picked, onPick }: { label: string; detail?: ReactNode; title?: string; picked: boolean; onPick: () => void }) {
   return (
     <li>
       <button type="button" onClick={onPick} aria-pressed={picked} title={title} className={cn('flex w-full flex-col rounded-md px-2 py-1.5 text-left hover:bg-accent active:bg-foreground/10 focus-ring-inset', picked && 'bg-accent')}>
@@ -411,7 +412,7 @@ function CommitList({ commits, picked, open, onOpen, onPick }: { commits: AgentC
         <ul className="min-h-0 space-y-0.5 overflow-y-auto p-2 pt-0">
           <CommitRow label="All changes" picked={picked === undefined} onPick={() => onPick(undefined)} />
           {commits.map(c => (
-            <CommitRow key={c.sha} label={c.subject} detail={`${c.short} · ${c.author} · ${formatRelative(c.date)}`} title={c.subject} picked={c.sha === picked} onPick={() => onPick(c.sha)} />
+            <CommitRow key={c.sha} label={c.subject} detail={<Facts facts={[c.short, c.author, formatRelative(c.date)]} />} title={c.subject} picked={c.sha === picked} onPick={() => onPick(c.sha)} />
           ))}
         </ul>
       )}

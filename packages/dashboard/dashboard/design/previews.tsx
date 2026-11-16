@@ -15,7 +15,7 @@ import { OptionLabel } from '../components/ui/option-label.js'
 import { DisclosureToggle } from '../components/DisclosureToggle.js'
 import { Section } from '../components/ui/section.js'
 import { List, Row } from '../components/ui/list.js'
-import { Panel, PanelGroup, PanelMore, PanelNote, PanelRow } from '../components/ui/panel.js'
+import { Facts, Panel, PanelGroup, PanelMore, PanelNote, PanelRow } from '../components/ui/panel.js'
 import { PriorityBadge, StateCell, StatePill, type WorkState } from '../components/ui/state.js'
 import { Stepper } from '../components/ui/stepper.js'
 import { ButtonGroup } from '../components/ui/button-group.js'
@@ -595,7 +595,7 @@ function Panels() {
           meta={['Done in 11m']}
           columns={
             <>
-              <span className="w-24">Claude · Opus</span>
+              <Facts facts={['Claude', 'Opus']} className="w-24" />
               <span className="w-12 text-right">#48</span>
             </>
           }
@@ -707,7 +707,7 @@ function Lists() {
           <Row leading={<Folder className="size-4" aria-hidden />} title="A press: the whole row does it" meta={<ChevronRight className="size-4" aria-hidden />} onClick={() => {}} />
           <Row title="Neither: only its own action, shown under the pointer" meta="12 files" actions={remove} />
           <Row leading={<Folder className="size-4" aria-hidden />} title="Two lines: its name" detail="and, under it, what it was asked: the row is 48 high" meta="2d ago" href="#two" onClick={() => {}} actions={remove} />
-          <Row leading={<Folder className="size-4" aria-hidden />} title={LONG_TITLE} meta="$0.15 · 2d ago" href="#long" actions={remove} />
+          <Row leading={<Folder className="size-4" aria-hidden />} title={LONG_TITLE} meta={<Facts facts={['$0.15', '2d ago']} />} href="#long" actions={remove} />
         </List>
       </Section>
       <Section title="Boxed: in something with no edge of its own" count="2">
@@ -718,7 +718,7 @@ function Lists() {
       </Section>
       <Section title="Two lines on a phone" count="2">
         <List aria-label="Stacked on a phone">
-          <Row stackOnPhone title={LONG_TITLE} meta="shop · done · $0.15 · 12:04" href="#stacked" onClick={() => {}} />
+          <Row stackOnPhone title={LONG_TITLE} meta={<Facts facts={['shop', 'done', '$0.15', '12:04']} />} href="#stacked" onClick={() => {}} />
           <Row stackOnPhone title="A short one stays one line, 44 high" meta="12:01" href="#short" onClick={() => {}} />
         </List>
       </Section>
@@ -742,8 +742,8 @@ function SettingsRows() {
       </SettingsSection>
       <Section title="Your devices">
         <SettingsItems aria-label="Your devices">
-          <SettingsItem icon={Smartphone} title="iPhone, Safari" detail="Phone · on this Wi-Fi · last seen 2m ago" actions={<Button variant="ghost" size="icon-sm" className="-mr-1.5" aria-label="iPhone, Safari: more"><Ellipsis className="size-4" aria-hidden /></Button>} />
-          <SettingsItem icon={Monitor} title="Studio Mac" detail="Computer · runs go both ways" end={<><Badge tone="success">Online</Badge><ChevronRight aria-hidden /></>} onClick={() => {}} />
+          <SettingsItem icon={Smartphone} title="iPhone, Safari" detail={<Facts facts={['Phone', 'on this Wi-Fi', 'last seen 2m ago']} />} actions={<Button variant="ghost" size="icon-sm" className="-mr-1.5" aria-label="iPhone, Safari: more"><Ellipsis className="size-4" aria-hidden /></Button>} />
+          <SettingsItem icon={Monitor} title="Studio Mac" detail={<Facts facts={['Computer', 'runs go both ways']} />} end={<><Badge tone="success">Online</Badge><ChevronRight aria-hidden /></>} onClick={() => {}} />
         </SettingsItems>
       </Section>
     </div>

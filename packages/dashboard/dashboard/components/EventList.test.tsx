@@ -938,7 +938,8 @@ describe('EventList subagent rows', () => {
     expect(screen.getByText(/Validate the form/)).toBeTruthy()
     expect(screen.getByText('claude-sonnet-5-5')).toBeTruthy()
     // Its last step whole on a hover; a run of its own has a branch, and says nothing of it here.
-    expect(screen.getByText('Edit · 3 calls').getAttribute('title')).toBe('Edit login.ts')
+    const doing = screen.getByText('3 calls').closest('[title]')!
+    expect([doing.textContent, doing.getAttribute('title')]).toEqual(['Edit·3 calls', 'Edit login.ts'])
     expect(screen.queryByText('no branch')).toBeNull()
     expect(screen.queryByText(/You are a subagent/)).toBeNull()
     // Between the command that started it and what the agent said next.
@@ -975,7 +976,7 @@ describe('EventList subagent rows', () => {
     const third = sub({ id: '2026-10-01T10-03-00-000Z', startedAt: '2026-10-01T10:03:00.000Z', status: 'done', endedAt: '2026-10-01T10:04:00.000Z', intent: 'Fix the typo' })
     const { container } = render(<EventList events={later} subagents={[first, second, afterWords, third]} stick={false} />)
     fireEvent.click(screen.getByRole('button', { name: 'Ran 2 agents' }))
-    expect(screen.getByText('50s · $0.25')).toBeTruthy()
+    expect(screen.getByText('$0.25').parentElement!.textContent).toBe('50s·$0.25')
     const text = container.textContent ?? ''
     // Both where the first was started, ahead of what the agent said after them.
     expect(text.indexOf('Ran 2 agents')).toBeLessThan(text.indexOf('Validate the form'))
@@ -1007,7 +1008,7 @@ describe('EventList subagent rows', () => {
     const { container } = render(<EventList events={agentCall} working onOpenSubagent={key => opened.push(key)} stick={false} />)
     expect(screen.getByText('Map the pages')).toBeTruthy()
     expect(screen.getByText('claude-haiku-5-5')).toBeTruthy()
-    expect(screen.getByText('Read · 1 call')).toBeTruthy()
+    expect(screen.getByText('1 call').parentElement!.textContent).toBe('Read·1 call')
     // Nothing of the subagent's in the run's own rows: not the call, not its steps, not its words.
     const text = container.textContent ?? ''
     expect(text).not.toMatch(/server\.ts|Agent/)

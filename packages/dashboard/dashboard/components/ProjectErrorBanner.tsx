@@ -1,6 +1,7 @@
 import { TriangleAlert } from 'lucide-react'
 import type { ProjectError, ProjectErrorCode } from '../../src/index.js'
 import { formatAge } from '../lib/format-date.js'
+import { Facts } from './ui/panel.js'
 
 // What the daemon currently finds wrong with the project (#1500), at the top of its page. The
 // daemon records the state and clears it when the condition is gone (#1599: an agent-data branch that
@@ -27,9 +28,8 @@ export function ProjectErrorBanner({ errors }: { errors: ProjectError[] | undefi
           <TriangleAlert className="mt-0.5 size-4 shrink-0 text-danger" aria-hidden />
           <div className="min-w-0">
             <p className="font-medium">
-              {projectErrorTitle(error.code)}
               {/* Since when, so a week-old failure does not read like a blip that will pass. */}
-              <span className="font-normal text-muted-foreground"> · since {formatAge(error.since)}</span>
+              <Facts facts={[projectErrorTitle(error.code), { fact: `since ${formatAge(error.since)}`, className: 'font-normal text-muted-foreground' }]} />
             </p>
             <p className="break-words text-muted-foreground">{error.message}</p>
           </div>

@@ -9,6 +9,7 @@ import { Button, buttonVariants } from './ui/button.js'
 import { ButtonGroup, ButtonGroupSeparator } from './ui/button-group.js'
 import { DiffStat } from './DiffStat.js'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu.js'
+import { Facts } from './ui/panel.js'
 
 // The end-of-session handoff (#799): what this session produced, and the next step offered rather
 // than described. Before this, a finished session showed no branch, no commits and no diff, so
@@ -43,7 +44,7 @@ export function HandoffSummary({ handoff, subagent = false }: { handoff: AgentHa
   const commits = `${handoff.commits.length} commit${handoff.commits.length === 1 ? '' : 's'}`
   // Commits that undo each other leave the files as the base has them. The commits are still what
   // the agent did, so they are counted, and that nothing is left of them is said beside the count.
-  if (handoff.empty && handoff.commits.length > 0) return <span className="text-muted-foreground">{commits} · no change left</span>
+  if (handoff.empty && handoff.commits.length > 0) return <Facts facts={[commits, 'no change left']} className="text-muted-foreground" />
   // Nothing committed and files left on disk: neither "merged" nor "no changes" is true of that,
   // and the words beside the Commit button name the files. So the verdict says nothing.
   if (handoff.empty && handoff.pendingFiles?.length) return null

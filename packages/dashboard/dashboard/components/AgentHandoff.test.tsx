@@ -193,7 +193,7 @@ describe('run handoff (#799)', () => {
     const cancelled = { ...worked, hasRemote: false, base: 'main', commits: [{ sha: 'a'.repeat(40), short: 'aaaaaaa', subject: 'Change to welcome' }, { sha: 'b'.repeat(40), short: 'bbbbbbb', subject: 'Change back to hello' }], files: [], insertions: 0, deletions: 0, empty: true }
     onAgentHandoff.mockResolvedValue(cancelled)
     render(<Harness />)
-    await waitFor(() => expect(screen.getByText('2 commits · no change left')).toBeTruthy())
+    await waitFor(() => expect(screen.getByText('no change left').parentElement!.textContent).toBe('2 commits·no change left'))
     expect(screen.getByText('Nothing to merge: the commits cancel out.')).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Merge' })).toBeNull()
     cleanup()

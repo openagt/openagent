@@ -171,7 +171,7 @@ describe('ChangesPanel commits', () => {
     render(<ChangesPanel projectId="p1" agentId="run-1" context={context} />)
     await waitFor(() => expect(commitRows()).toHaveLength(3))
     expect(readCommits).toHaveBeenCalledWith(expect.anything(), 'p1', 'run-1')
-    expect(commitRows().map(row => row.textContent)).toEqual(['All changes', 'Change the appbbbbbbb · Agent · 2h ago', 'Add old.txtaaaaaaa · Agent · 3h ago'])
+    expect(commitRows().map(row => row.textContent)).toEqual(['All changes', 'Change the appbbbbbbb·Agent·2h ago', 'Add old.txtaaaaaaa·Agent·3h ago'])
     expect(commitRows().map(row => row.getAttribute('aria-pressed'))).toEqual(['true', 'false', 'false'])
     expect(screen.getByRole('region', { name: 'Commits' }).textContent).toContain('Commits2')
     expect(readCommit).not.toHaveBeenCalled()

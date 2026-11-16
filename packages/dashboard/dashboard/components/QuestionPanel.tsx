@@ -13,6 +13,7 @@ import { Button } from './ui/button.js'
 import { answerPrompt, skipPrompt } from '../lib/answered-question.js'
 import { MOD_KEY, pressed, typedInto } from '../lib/shortcut.js'
 import { isMobileScreen } from '../lib/use-mobile.js'
+import { Facts } from './ui/panel.js'
 
 /** The pick that is no option: the person's own words, typed in the "Other" row. */
 const OTHER = Symbol('other')
@@ -220,7 +221,7 @@ export function QuestionPanel({
       <div className="flex flex-col gap-0.5 px-2 pt-1.5 pb-1">
         <span className="flex items-center gap-2 text-xs font-semibold text-warning">
           <StateCell state="waiting" className="size-3" />
-          Waiting for your answer{askedAt !== undefined && ` · ${formatSince(askedAt)}`}
+          <Facts facts={['Waiting for your answer', askedAt !== undefined && formatSince(askedAt)]} />
         </span>
         <h2 id={titleId} className="text-base font-semibold">{choice.title}</h2>
       </div>
