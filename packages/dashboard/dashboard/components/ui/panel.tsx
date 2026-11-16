@@ -190,7 +190,7 @@ export function PanelRow({ state, before, title, titleHint, meta = [], metaLines
         className,
       )}
     >
-      <span className="flex min-w-0 items-start gap-3">
+      <div className="flex min-w-0 items-start gap-3">
         {state !== undefined && <span className="flex h-5 w-4 shrink-0 items-center">{state}</span>}
         {before !== undefined && <span className="flex h-5 shrink-0 items-center">{before}</span>}
         <span className="min-w-0 flex-1">
@@ -205,7 +205,7 @@ export function PanelRow({ state, before, title, titleHint, meta = [], metaLines
           )}
         </span>
         {columns !== undefined && <span className="flex h-5 shrink-0 items-center gap-4 text-xs text-faint-foreground">{columns}</span>}
-      </span>
+      </div>
       {/* The fact and the presses stand in the list's columns, each as wide as its widest row's and its words at its
           right, so each has one place in every row, and take the row's whole height (their margins undo the row's
           padding), so a press is centred on the row and makes it no taller. Presses shown at rest have the fact in
