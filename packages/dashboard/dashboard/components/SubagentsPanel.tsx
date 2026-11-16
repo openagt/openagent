@@ -16,7 +16,7 @@ import { navRowClass } from './ui/nav-row.js'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip.js'
 import { EventList } from './EventList.js'
 import { RunMark } from './RunMark.js'
-import { Seconds, tokenWords } from './ToolCalls.js'
+import { tokenWords } from './ToolCalls.js'
 
 // The pane of a run's subagents, beside its chat: a calm list of them, one line each (its state's
 // mark, its name, how long it worked), those at work first; and under the list the one a row opened,
@@ -270,13 +270,15 @@ function Shown({ row, projectId, events, onOpenAgent, onClose }: { row: Subagent
           working={row.working}
           stick={row.working}
           openAt="start"
+          startedAt={row.startedAt}
+          evenEdges
           head={<PaneHead row={row} />}
           tail={
-            transcript.length > 0 ? (
-              !row.working && <PaneFoot row={row} calls={calls} />
+            row.working ? undefined : transcript.length > 0 ? (
+              <PaneFoot row={row} calls={calls} />
             ) : (
               // Under the prompt, in the log: a note beside it took half the room, and on a phone the prompt's top scrolled away.
-              !(runId && state === 'unknown') && <p className="py-1 font-sans text-sm text-muted-foreground">{row.working ? 'Nothing said or done yet.' : 'It left nothing to show.'}</p>
+              !(runId && state === 'unknown') && <p className="py-1 font-sans text-sm text-muted-foreground">It left nothing to show.</p>
             )
           }
         />
@@ -285,9 +287,13 @@ function Shown({ row, projectId, events, onOpenAgent, onClose }: { row: Subagent
   )
 }
 
-/** What the subagent was told, as a message, and what it runs on. One that did not end well says how. */
+/**
+ * What the subagent was told, as a message, and what it runs on. One that did not end well says how.
+ * How long it has worked is the log's own moving line at its end, as the chat says it.
+ */
 function PaneHead({ row }: { row: SubagentRow }) {
   const models = useModels()
+  const ended = !row.working && row.status !== 'done'
   return (
     <div className="flex flex-col gap-4 pb-3 font-sans text-sm">
       {row.prompt && (
@@ -296,11 +302,12 @@ function PaneHead({ row }: { row: SubagentRow }) {
           {row.prompt}
         </section>
       )}
-      <div className="flex flex-wrap items-baseline gap-x-2 text-muted-foreground">
-        {row.model !== undefined && <span>Model {anyModelName(models, row.model)}</span>}
-        {!row.working && row.status !== 'done' && <span className={runTone(row.status)}>{runWord(row.status)}</span>}
-        {row.working && <Seconds since={row.startedAt} />}
-      </div>
+      {(row.model !== undefined || ended) && (
+        <div className="flex flex-wrap items-baseline gap-x-2 text-muted-foreground">
+          {row.model !== undefined && <span>Model {anyModelName(models, row.model)}</span>}
+          {ended && <span className={runTone(row.status)}>{runWord(row.status)}</span>}
+        </div>
+      )}
     </div>
   )
 }

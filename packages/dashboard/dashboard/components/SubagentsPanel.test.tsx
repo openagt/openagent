@@ -130,6 +130,7 @@ describe('the list of a run\'s subagents', () => {
     const tip = await hoverTooltip(screen.getByRole('button', { name: /^Read the theme tokens/ }))
     expect(tip.textContent).toBe('Read the theme tokensclaude-sonnet-5-5Done · ran 7m')
   })
+
 })
 
 describe('the subagent a row opened', () => {
@@ -180,11 +181,27 @@ describe('the subagent a row opened', () => {
     expect(opened).toEqual([sub.id])
   })
 
-  test('one that has said nothing yet says so in its log, under its prompt, not beside the log', () => {
+  test("one at work that has said nothing yet: its log ends on the chat's moving line under its prompt, counting from its start, and no note", () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-10-01T10:08:43.000Z'))
     render(panel({ events: call('toolu_a', 'Find colours written by hand', 0) }))
     act(() => revealSubagent('p1/main', 'call:toolu_a'))
     const log = within(screen.getByRole('region', { name: 'Find colours written by hand' })).getByLabelText('Agent output')
-    expect(within(log).getByText('Nothing said or done yet.')).toBeTruthy()
+    expect(within(log).getByRole('status').textContent).toBe('8m 43s')
+    // The time is said once, on that line, and nothing says it has said nothing.
+    expect(within(log).getAllByText(/\d+m \d+s/)).toHaveLength(1)
+    expect(within(log).queryByText('Nothing said or done yet.')).toBeNull()
+  })
+
+  test("its log takes the room its scroller keeps for a scroll bar off its right padding: it reads that room's width", () => {
+    const outer = vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(564)
+    const inner = vi.spyOn(Element.prototype, 'clientWidth', 'get').mockReturnValue(554)
+    render(panel({ events: call('toolu_a', 'Find colours written by hand', 0) }))
+    act(() => revealSubagent('p1/main', 'call:toolu_a'))
+    const log = within(screen.getByRole('region', { name: 'Find colours written by hand' })).getByLabelText('Agent output')
+    expect(log.style.getPropertyValue('--log-gutter')).toBe('10px')
+    outer.mockRestore()
+    inner.mockRestore()
   })
 
   test('it says it has nothing to show only once the read answered, and a log read before is there from the first frame', async () => {
