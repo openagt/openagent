@@ -276,7 +276,7 @@ describe('arrange', () => {
     rows.push(row('late failure', 'failed', 50), row('asks', 'waiting', 45), row('early failure', 'failed', 40))
     const { parts, folds } = arrange(rows)
     expect(parts.map(part => [part.name, part.keys.slice(0, 2)])).toEqual([
-      ['Needs you', ['asks']],
+      ['Waiting on you', ['asks']],
       ['Failed', ['early failure', 'late failure']],
       ['Ended', ['ended 0', 'ended 1']],
     ])
