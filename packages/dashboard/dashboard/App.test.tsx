@@ -1279,6 +1279,22 @@ describe('the shell on a phone', () => {
     }
   })
 
+  test('on a phone the bar of pages is drawn complete once its pages are known: none of its presses moves as they come', async () => {
+    const wide = phoneScreen()
+    let answerModules = (_modules: unknown[]) => {}
+    answerShell([])
+    answers.set('onModules', () => new Promise(resolve => (answerModules = resolve)))
+    try {
+      render(<App />)
+      const pages = await screen.findByRole('navigation', { name: 'Pages' })
+      expect(within(pages).queryAllByRole('link')).toEqual([])
+      await act(async () => answerModules([{ package: '@acme/logs', url: moduleModule('__firstBarLogs', { pages: [{ segment: 'logs', label: 'Logs', Page: () => null }] }), projects: [PROJECT.id] }]))
+      await waitFor(() => expect(within(pages).getAllByRole('link').map(link => link.textContent)).toEqual(['Overview', 'Logs', 'New']))
+    } finally {
+      wide()
+    }
+  })
+
   test("on a phone a session's page has no bar of pages; its top bar's back arrow goes to the page shown before, or to the Overview from a link opened cold", async () => {
     const wide = phoneScreen()
     const id = '2026-11-14T23-05-03-506Z'

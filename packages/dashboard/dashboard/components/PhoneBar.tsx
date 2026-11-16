@@ -54,8 +54,8 @@ export function PagesBar({
   onNew,
   waiting,
 }: {
-  /** The modules' pages, in the sidebar's order. */
-  pages: readonly BarPage[]
+  /** The modules' pages, in the sidebar's order; null while they are not known, when the bar is drawn empty, so no press moves as they come. */
+  pages: readonly BarPage[] | null
   /** The page shown, by its segment, or null. */
   activePage: string | null
   overviewActive: boolean
@@ -79,42 +79,46 @@ export function PagesBar({
     // As high as `--pages-bar` (tailwind.css), its rule inside it and its presses filling the rest: the height `--foot`
     // is set from, which a page's part kept to the window's foot stands on.
     <nav aria-label="Pages" data-pages-bar="" className="sticky bottom-0 z-20 flex h-(--pages-bar) shrink-0 border-t border-hairline bg-background">
-      <a href={overviewHref} onClick={inPlace(onOverview)} aria-current={overviewActive ? 'page' : undefined} aria-label={waiting > 0 ? `Overview, ${waiting} waiting on you` : 'Overview'} className={item(overviewActive)}>
-        <span className={pill(overviewActive)}>
-          <LayoutDashboard className="size-5" aria-hidden />
-          {/* The waiting pill's soft amber, on the page's colour so the icon under it does not show through, and ringed by it. */}
-          {waiting > 0 && (
-            <span aria-hidden className="absolute -top-1 -right-1 rounded-full bg-background ring-2 ring-background">
-              <span className="flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-warning/15 px-1 text-xs leading-none font-semibold text-warning tabular-nums">{waiting}</span>
+      {pages && (
+        <>
+          <a href={overviewHref} onClick={inPlace(onOverview)} aria-current={overviewActive ? 'page' : undefined} aria-label={waiting > 0 ? `Overview, ${waiting} waiting on you` : 'Overview'} className={item(overviewActive)}>
+            <span className={pill(overviewActive)}>
+              <LayoutDashboard className="size-5" aria-hidden />
+              {/* The waiting pill's soft amber, on the page's colour so the icon under it does not show through, and ringed by it. */}
+              {waiting > 0 && (
+                <span aria-hidden className="absolute -top-1 -right-1 rounded-full bg-background ring-2 ring-background">
+                  <span className="flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-warning/15 px-1 text-xs leading-none font-semibold text-warning tabular-nums">{waiting}</span>
+                </span>
+              )}
             </span>
-          )}
-        </span>
-        <span aria-hidden className="max-w-full truncate px-1">Overview</span>
-      </a>
-      {pages.slice(0, PAGES_IN_BAR).map(page => {
-        const Icon = page.icon ?? Blocks
-        const active = activePage === page.segment
-        return (
-          <a key={page.segment} href={pageHref(page.segment)} onClick={inPlace(() => onPage(page.segment))} aria-current={active ? 'page' : undefined} className={item(active)}>
-            <span className={pill(active)}>
-              <Icon className="size-5" aria-hidden />
-            </span>
-            <span className="max-w-full truncate px-1">{page.label}</span>
+            <span aria-hidden className="max-w-full truncate px-1">Overview</span>
           </a>
-        )
-      })}
-      <a href={newHref} onClick={inPlace(onNew)} aria-current={newActive ? 'page' : undefined} className={item(newActive)}>
-        <span className={pill(newActive)}>
-          <Plus className="size-5" aria-hidden />
-        </span>
-        <span className="max-w-full truncate px-1">New</span>
-      </a>
-      <button type="button" aria-expanded={openMobile} onClick={() => setOpenMobile(!openMobile)} className={item(openMobile)}>
-        <span className={pill(openMobile)}>
-          <Ellipsis className="size-5" aria-hidden />
-        </span>
-        <span className="max-w-full truncate px-1">More</span>
-      </button>
+          {pages.slice(0, PAGES_IN_BAR).map(page => {
+            const Icon = page.icon ?? Blocks
+            const active = activePage === page.segment
+            return (
+              <a key={page.segment} href={pageHref(page.segment)} onClick={inPlace(() => onPage(page.segment))} aria-current={active ? 'page' : undefined} className={item(active)}>
+                <span className={pill(active)}>
+                  <Icon className="size-5" aria-hidden />
+                </span>
+                <span className="max-w-full truncate px-1">{page.label}</span>
+              </a>
+            )
+          })}
+          <a href={newHref} onClick={inPlace(onNew)} aria-current={newActive ? 'page' : undefined} className={item(newActive)}>
+            <span className={pill(newActive)}>
+              <Plus className="size-5" aria-hidden />
+            </span>
+            <span className="max-w-full truncate px-1">New</span>
+          </a>
+          <button type="button" aria-expanded={openMobile} onClick={() => setOpenMobile(!openMobile)} className={item(openMobile)}>
+            <span className={pill(openMobile)}>
+              <Ellipsis className="size-5" aria-hidden />
+            </span>
+            <span className="max-w-full truncate px-1">More</span>
+          </button>
+        </>
+      )}
     </nav>
   )
 }

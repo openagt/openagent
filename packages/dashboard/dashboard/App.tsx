@@ -780,7 +780,7 @@ export function App() {
           but a session's, whose message box is the page's foot (its top bar's arrow goes back). */}
       {isMobile && agentId === null && (
         <PagesBar
-          pages={sidebarPages ?? []}
+          pages={sidebarPages}
           activePage={pageSegment}
           overviewActive={projectId === null && pageSegment === null}
           overviewHref={hrefOf({ projectId: null, agentId: null })}
