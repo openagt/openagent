@@ -10,6 +10,7 @@ import { anyModelName, useModels } from '../lib/models.js'
 import { runTone, runWord } from '../lib/run-words.js'
 import { usePolled } from '../lib/use-async.js'
 import { useStop } from '../lib/use-stop.js'
+import { FocusHome } from '../lib/focus-home.js'
 import { cn } from '../lib/utils.js'
 import { Button } from './ui/button.js'
 import { navRowClass } from './ui/nav-row.js'
@@ -189,57 +190,60 @@ function SubagentItem({ row, reason, open, projectId, onPick }: { row: SubagentR
   // The card says what the row does not: the whole name where the row cuts it, or what it runs on.
   const tells = useCut(name, row.name) || model !== undefined
   return (
-    <li className="group/row relative">
-      <Tooltip disabled={!tells}>
-        <TooltipTrigger
-          render={
-            <button
-              type="button"
-              data-key={row.key}
-              aria-expanded={open}
-              aria-label={[row.name, runWord(row.status), time, second].filter(Boolean).join(' · ')}
-              onClick={() => onPick(row.key)}
-              className={cn(navRowClass(open), second !== undefined && 'items-start md:h-12 md:py-1.5 max-md:h-16 max-md:py-3')}
-            />
-          }
-        >
-          <span className="flex h-5 w-4 shrink-0 items-center justify-center">
-            <RunMark status={row.status} />
-          </span>
-          <span className="min-w-0 flex-1 text-start">
-            <span ref={name} className="block truncate">
-              {row.name}
+    <li>
+      {/* Its Stop gone once the run stopped, the keyboard stays on the row, not on the page's body. */}
+      <FocusHome className="group/row relative">
+        <Tooltip disabled={!tells}>
+          <TooltipTrigger
+            render={
+              <button
+                type="button"
+                data-key={row.key}
+                aria-expanded={open}
+                aria-label={[row.name, runWord(row.status), time, second].filter(Boolean).join(' · ')}
+                onClick={() => onPick(row.key)}
+                className={cn(navRowClass(open), second !== undefined && 'items-start md:h-12 md:py-1.5 max-md:h-16 max-md:py-3')}
+              />
+            }
+          >
+            <span className="flex h-5 w-4 shrink-0 items-center justify-center">
+              <RunMark status={row.status} />
             </span>
-            {second !== undefined && <span className={cn('block truncate text-xs max-md:leading-5', runTone('failed'))}>{second}</span>}
-          </span>
-          {time !== undefined && (
-            <span className={cn('shrink-0 text-xs leading-5 text-faint-foreground tabular-nums', stoppable && 'pointer-fine:group-hover/row:invisible pointer-fine:group-has-focus-visible/row:invisible')}>{time}</span>
-          )}
-        </TooltipTrigger>
-        {/* The whole name, what it runs on, and how it stands, as T3 Code's card says them; with no model known, its state at the card's left. */}
-        <TooltipContent side="left" align="start" className="grid max-w-72 gap-1 px-4 py-3 text-sm">
-          <span className="font-medium break-words">{row.name}</span>
-          <span className="flex items-center justify-between gap-4 text-xs text-muted-foreground">
-            {model !== undefined && <span className="min-w-0 truncate">{model}</span>}
-            <span className="flex shrink-0 items-center gap-1.5">
-              <RunMark status={row.status} className="size-3" />
-              {state}
+            <span className="min-w-0 flex-1 text-start">
+              <span ref={name} className="block truncate">
+                {row.name}
+              </span>
+              {second !== undefined && <span className={cn('block truncate text-xs max-md:leading-5', runTone('failed'))}>{second}</span>}
             </span>
-          </span>
-        </TooltipContent>
-      </Tooltip>
-      {stoppable && (
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label={`Stop ${row.name}`}
-          loading={stopping}
-          onClick={stop}
-          className="absolute top-1/2 right-0 -translate-y-1/2 text-danger not-pointer-fine:hidden pointer-fine:opacity-0 pointer-fine:group-hover/row:opacity-100 pointer-fine:group-has-focus-visible/row:opacity-100"
-        >
-          <Square className="size-3 fill-current" />
-        </Button>
-      )}
+            {time !== undefined && (
+              <span className={cn('shrink-0 text-xs leading-5 text-faint-foreground tabular-nums', stoppable && 'pointer-fine:group-hover/row:invisible pointer-fine:group-has-focus-visible/row:invisible')}>{time}</span>
+            )}
+          </TooltipTrigger>
+          {/* The whole name, what it runs on, and how it stands, as T3 Code's card says them; with no model known, its state at the card's left. */}
+          <TooltipContent side="left" align="start" className="grid max-w-72 gap-1 px-4 py-3 text-sm">
+            <span className="font-medium break-words">{row.name}</span>
+            <span className="flex items-center justify-between gap-4 text-xs text-muted-foreground">
+              {model !== undefined && <span className="min-w-0 truncate">{model}</span>}
+              <span className="flex shrink-0 items-center gap-1.5">
+                <RunMark status={row.status} className="size-3" />
+                {state}
+              </span>
+            </span>
+          </TooltipContent>
+        </Tooltip>
+        {stoppable && (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={`Stop ${row.name}`}
+            loading={stopping}
+            onClick={stop}
+            className="absolute top-1/2 right-0 -translate-y-1/2 text-danger not-pointer-fine:hidden pointer-fine:opacity-0 pointer-fine:group-hover/row:opacity-100 pointer-fine:group-has-focus-visible/row:opacity-100"
+          >
+            <Square className="size-3 fill-current" />
+          </Button>
+        )}
+      </FocusHome>
     </li>
   )
 }
@@ -263,7 +267,8 @@ function Shown({ row, projectId, events, onOpenAgent, onClose }: { row: Subagent
   const transcript = useMemo(() => (callId !== undefined ? subagentTranscript(events, callId).map(untagged) : withoutPrompt(ownLog, row.prompt)), [callId, events, ownLog, row.prompt])
   const calls = transcript.filter(e => e.kind === 'driver' && e.event.type === 'action').length
   return (
-    <section aria-label={row.name} className="flex min-h-0 flex-1 flex-col border-t border-hairline">
+    // Its Stop gone once the run stopped, the keyboard stays in it, on its next press.
+    <FocusHome as="section" aria-label={row.name} className="flex min-h-0 flex-1 flex-col border-t border-hairline">
       {/* As the pane's own head: its name and its last glyph 16 in. */}
       <header className="flex h-11 shrink-0 items-center gap-1 pr-2 pl-4">
         <h3 className="min-w-0 flex-1 truncate text-sm font-medium">{row.name}</h3>
@@ -304,7 +309,7 @@ function Shown({ row, projectId, events, onOpenAgent, onClose }: { row: Subagent
           }
         />
       </div>
-    </section>
+    </FocusHome>
   )
 }
 

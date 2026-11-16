@@ -108,6 +108,28 @@ describe('the list of a run\'s subagents', () => {
     expect(screen.queryByRole('button', { name: /Stop/ })).toBeNull()
   })
 
+  test('its Stop gone once the run stopped, the keyboard stays: on its row, or in its open part on its next press', async () => {
+    const working = run(26, 'Visual check in a browser', 'running')
+    const stopped = (meta: AgentMeta): AgentMeta => ({ ...meta, status: 'stopped', endedAt: '2026-10-01T10:29:00.000Z' })
+    const list = render(panel({ subagents: [working] }))
+    const stop = screen.getByRole('button', { name: 'Stop Visual check in a browser' })
+    stop.focus()
+    fireEvent.click(stop)
+    await waitFor(() => expect(sendStop).toHaveBeenCalledWith('p1', working.id))
+    list.rerender(panel({ subagents: [stopped(working)] }))
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: /^Visual check in a browser/ })))
+    cleanup()
+    const other = run(27, 'Print styles', 'running')
+    const opened = render(panel({ subagents: [other], onOpenAgent: () => {} }))
+    fireEvent.click(screen.getByRole('button', { name: /^Print styles/ }))
+    const part = screen.getByRole('region', { name: 'Print styles' })
+    within(part).getByRole('button', { name: 'Stop' }).focus()
+    fireEvent.click(within(part).getByRole('button', { name: 'Stop' }))
+    await waitFor(() => expect(sendStop).toHaveBeenCalledWith('p1', other.id))
+    opened.rerender(panel({ subagents: [stopped(other)], onOpenAgent: () => {} }))
+    await waitFor(() => expect(document.activeElement).toBe(within(screen.getByRole('region', { name: 'Print styles' })).getByRole('button', { name: 'Open its page' })))
+  })
+
   test('past eight rows in all, the ended ones fold into one row that says how many and opens them', () => {
     const events = Array.from({ length: 8 }, (_, at) => call(`toolu_${at}`, `Ended ${at}`, at, 'ended')).flat()
     render(panel({ subagents: [run(24, 'Account page tests', 'running')], events }))
