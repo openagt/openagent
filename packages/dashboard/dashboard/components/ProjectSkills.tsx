@@ -189,19 +189,25 @@ export function SkillsSettings({ projectId }: { projectId: string }) {
   )
 }
 
-/** Skills while they are read, in the shape of their ticks. */
+/** Skills while they are read, in the shape of the page: its sentence, a group's name, then its ticks where theirs stand. */
 function SkillShapes() {
   return (
-    <div className={SKILL_TICKS_CLASS}>
-      {Array.from({ length: 6 }, (_, at) => (
-        <div key={at} className="flex items-start gap-3">
-          <Skeleton className="mt-0.5 size-4 shrink-0 rounded-sm" />
-          <div className="min-w-0 flex-1 space-y-2 pt-0.5">
-            <Skeleton className="h-4 w-24" />
-            <Skeleton className="h-3 w-4/5" />
-          </div>
+    <div className="space-y-8">
+      <Skeleton className="h-5 w-2/3" />
+      <div>
+        <Skeleton className="mb-2 h-5 w-32" />
+        <div className="grid gap-x-4 gap-y-2 md:grid-cols-2">
+          {Array.from({ length: 6 }, (_, at) => (
+            <div key={at} className="flex items-start gap-3 py-2">
+              <Skeleton className="mt-0.5 size-4 shrink-0 rounded-sm" />
+              <div className="min-w-0 flex-1 space-y-2 pt-0.5">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-3 w-4/5" />
+              </div>
+            </div>
+          ))}
         </div>
-      ))}
+      </div>
     </div>
   )
 }
@@ -306,12 +312,13 @@ function SkillCards({ projectId, skills, onDone }: { projectId: string; skills: 
   }
 
   return (
-    <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">The skills every agent gets by default come with every run and are not here.</p>
+    <div className="space-y-8">
+      <p className="max-w-xl text-sm text-muted-foreground">The skills every agent gets by default come with every run and are not here.</p>
       {skills.groups.map(group => (
         <fieldset key={group.title}>
-          <legend className="mb-3 text-xs font-medium text-muted-foreground">{group.title}</legend>
-          <div className={SKILL_TICKS_CLASS}>
+          <legend className="mb-2 text-sm font-semibold">{group.title}</legend>
+          {/* Each tick's fill is pulled out by its own padding: its box stands on the inset, its words 24 under the last. */}
+          <div className="grid gap-x-4 gap-y-2 md:grid-cols-2">
             {group.skills.map(skill => {
               const notes = [NOTES[skill.standing], skill.waiting && skills.startBranch !== undefined ? `waiting to reach ${skills.startBranch}` : undefined].filter(Boolean)
               return (
@@ -326,7 +333,7 @@ function SkillCards({ projectId, skills, onDone }: { projectId: string; skills: 
         {error && <p role="alert" className="mb-2 text-xs text-danger">{error}</p>}
         <div className="flex flex-wrap items-center justify-end gap-2">
           {/* What a Save does to the project's files, beside it, once there is something to save. */}
-          <span className="mr-auto min-w-0 flex-1 basis-60 text-xs text-muted-foreground">
+          <span className="mr-auto min-w-0 flex-1 basis-60 text-xs text-faint-foreground max-md:basis-full">
             {nothing ? (
               'Nothing to change.'
             ) : (
@@ -338,10 +345,11 @@ function SkillCards({ projectId, skills, onDone }: { projectId: string; skills: 
               </>
             )}
           </span>
-          <Button type="button" variant="secondary" disabled={busy || nothing} onClick={cancel}>
+          {/* On a phone the two share the width, each under a thumb. */}
+          <Button type="button" variant="ghost" disabled={busy || nothing} onClick={cancel} className="max-md:flex-1">
             Cancel
           </Button>
-          <Button type="button" disabled={nothing} loading={busy} onClick={() => void save()}>
+          <Button type="button" disabled={nothing} loading={busy} onClick={() => void save()} className="max-md:flex-1">
             {busy ? 'Saving…' : saveWord}
           </Button>
         </div>
@@ -381,13 +389,14 @@ export function SkillTick({ name, description, note, checked, onChange, disabled
         </div>
       </div>
     )
+  // A press anywhere on it ticks it; lit under the pointer by a fill its own padding pulls out, so its box stands on the inset.
   return (
-    <label className="flex cursor-pointer items-start gap-3">
+    <label className="-mx-3 flex min-w-0 cursor-pointer items-start gap-3 rounded-md px-3 py-2 transition-colors pointer-fine:hover:bg-foreground/4">
       <Checkbox checked={checked} onCheckedChange={next => onChange(next === true)} disabled={disabled} className="mt-0.5" aria-label={label} />
       <span className="min-w-0">
         <span className="block text-sm font-medium">{name}</span>
         {note !== undefined && <span className="block text-xs text-warning">{note}</span>}
-        <span className="block text-xs text-muted-foreground">{description}</span>
+        <span className="block text-xs text-faint-foreground">{description}</span>
       </span>
     </label>
   )
