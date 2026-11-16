@@ -514,11 +514,12 @@ export const Composer = forwardRef<ComposerHandle, {
               ends as far from the box's foot as from its right; the room it gives up is over it. */}
           <TooltipsPastBox value={surface}>
             <div className={cn('mt-2', rowClass, 'h-7')}>
-              <div className={rowLeftClass}>
+              {/* In a narrow box both sides give way, each by what it is wide: the left's words and the Auto menu's. */}
+              <div className={cn(rowLeftClass, '@max-xl:flex-auto')}>
                 {commandsEl}
                 {controls}
               </div>
-              <div className="flex shrink-0 items-center gap-0.5">
+              <div className="flex items-center gap-0.5 @xl:shrink-0 @max-xl:min-w-0 @max-xl:*:shrink-0">
                 {controlsEnd}
                 {driverModelEl ||
                   // Only with something in it: an empty one would still take the row's gap, and the
