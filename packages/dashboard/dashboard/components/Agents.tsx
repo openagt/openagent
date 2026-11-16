@@ -2,11 +2,12 @@ import { useContext } from 'react'
 import type { ActiveAgent, AgentDoing } from '../../src/index.js'
 import { Panel, PanelGroup, PanelNote, PanelRow } from './ui/panel.js'
 import { Skeleton } from './ui/skeleton.js'
-import { SentenceShape, Slot } from './ui/slot.js'
+import { PanelShape, Slot } from './ui/slot.js'
 import { PartDescription } from './PartDescription.js'
 import type { ReadState } from '../lib/use-async.js'
 import { formatDateTime, formatDuration } from '../lib/format-date.js'
 import { OnComputer } from './MachineMark.js'
+import { MiddleCut } from './MiddleCut.js'
 import { runName } from '../../src/client.js'
 import { awaitingName } from '../lib/agent-label.js'
 import { runWord } from '../lib/run-words.js'
@@ -47,7 +48,7 @@ export function Agents({
   return (
     <PanelGroup bare title="At work">
       <PartDescription>Agents currently working</PartDescription>
-      <Slot of={{ state, value: working }} shape={<SentenceShape />}>
+      <Slot of={{ state, value: working }} shape={<PanelShape />}>
         {() => (
           <Panel>
             {working.length === 0 && <PanelNote>No agent is at work.</PanelNote>}
@@ -99,10 +100,18 @@ function RunRow({ agent, naming, doing, projectNamed, href, onOpen }: {
         )
       }
       meta={[
-        agent.branch && <span className="font-mono">{agent.branch}</span>,
         agent.cloud === 'waiting' ? runWord('waiting') : agent.cloud === 'in-cloud' ? 'in cloud' : undefined,
         projectNamed && agent.projectName,
         agent.computer && <OnComputer computer={agent.computer} />,
+        // The part that gives way, with its last step: cut in its middle, as the Logs cut it, so the words before it stay whole.
+        agent.branch && {
+          fact: (
+            <span className="flex min-w-0 font-mono" title={agent.branch}>
+              <MiddleCut text={agent.branch} />
+            </span>
+          ),
+          className: 'not-last:shrink',
+        },
         doing !== undefined && (
           <span title={doing} className="font-mono">
             {doing}

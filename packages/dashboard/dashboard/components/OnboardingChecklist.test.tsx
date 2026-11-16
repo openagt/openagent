@@ -219,8 +219,8 @@ describe('the first steps on the Overview', () => {
     onDashboard.mockResolvedValue(WITH_PROJECT)
     steps({ projects: [SHOP] })
     await waitFor(() => expect(within(row('Connect GitHub')).getByLabelText('Done')).toBeTruthy())
-    expect(within(row('Connect GitHub')).getByText('· @octo')).toBeTruthy()
-    expect(within(row('Add your first project')).getByText('· shop')).toBeTruthy()
+    expect(within(row('Connect GitHub')).getByText('@octo')).toBeTruthy()
+    expect(within(row('Add your first project')).getByText('shop')).toBeTruthy()
   })
 
   test('the coding agent, while it is missing, is a step of its own with its press', async () => {

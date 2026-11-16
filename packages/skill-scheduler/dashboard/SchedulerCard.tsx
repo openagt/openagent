@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Button, PageLink, Panel, PanelGroup, PartDescription, RowShapes, Slot, Tooltip, TooltipContent, TooltipTrigger, cn, formatAge, inPlace, formatDateTime, useModuleHost, useOpenAgentDown, usePolled, type ModuleCardProps, type ModuleProject } from '@openagt/dashboard/module'
+import { Button, PageLink, Panel, PanelGroup, PartDescription, Skeleton, Slot, Tooltip, TooltipContent, TooltipTrigger, cn, formatAge, inPlace, formatDateTime, useModuleHost, useOpenAgentDown, usePolled, type ModuleCardProps, type ModuleProject } from '@openagt/dashboard/module'
 import { CodeWords } from './CodeWords.js'
 import { cannotRun, heldBy, notAsked, readSchedulers, schedulersKey, rowTitle, schedulerStatus, schedulerStopped, startedNow, startsNext, unlistedWords, type Answered, type SchedulerCommand, type SchedulerRow } from './schedulers.js'
 
@@ -44,7 +44,25 @@ export function SchedulerCard({ projects }: ModuleCardProps) {
   return (
     <PanelGroup bare title="Automations" action={<PageLink href={host.pageHref('automations')} onOpen={open}>Automations</PageLink>}>
       <PartDescription>What starts by itself while nobody is at the keyboard</PartDescription>
-      <Slot of={{ state, value: rows }} shape={<RowShapes rows={projects.length || 1} />}>
+      <Slot
+        of={{ state, value: rows }}
+        // While they are read, a project's row as it stands with nothing switched on: its status over one sentence, each a
+        // bar centred on its line, so the shapes stand 16 in from the card's edges.
+        shape={
+          <Panel>
+            {Array.from({ length: projects.length || 1 }, (_, at) => (
+              <li key={at} className="relative space-y-1 px-4 py-3 before:absolute before:top-0 before:right-4 before:left-4 before:h-px not-first:before:bg-hairline">
+                <div className="flex h-4 items-center">
+                  <Skeleton className="h-2 w-24" />
+                </div>
+                <div className="flex h-4 items-center">
+                  <Skeleton className="h-2 w-2/3" />
+                </div>
+              </li>
+            ))}
+          </Panel>
+        }
+      >
         {() => (
           // A project to a row of one card, 16 in from its edges, a hairline from inset to inset between them.
           <Panel>

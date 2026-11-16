@@ -24,6 +24,7 @@ import { Page } from './Page.js'
 import { overlayOpen, pressed } from '../lib/shortcut.js'
 import { LinePart, NEEDS_YOU_ID, WORKING_ID, counted, scrollToPart } from './LinePart.js'
 import { YourAgentsPart } from './YourAgentsPart.js'
+import { useIsMobile } from '../lib/use-mobile.js'
 
 /**
  * The place in the line under the title that the Overview leaves for the packages' parts: its own
@@ -196,6 +197,8 @@ export function DashboardPage({
   }, [editing])
   const scopeName = scope === null ? undefined : projects.find(project => project.id === scope)?.name
   const own = layouts?.[layoutKey] !== undefined
+  const resetWords = layoutKey === ALL_PROJECTS ? 'Reset to the default layout' : 'Use the all-projects layout'
+  const phone = useIsMobile()
   const reset = (): void => {
     const { [layoutKey]: _dropped, ...rest } = layouts ?? {}
     updatePreferences({ overviewLayouts: rest })
@@ -237,9 +240,9 @@ export function DashboardPage({
       actions={
         editing ? (
           <>
-            {own && (
+            {own && !phone && (
               <Button variant="ghost" onClick={reset}>
-                {layoutKey === ALL_PROJECTS ? 'Reset to the default layout' : 'Use the all-projects layout'}
+                {resetWords}
               </Button>
             )}
             {/* Focused as it takes Customize's place, which the press took away from the keyboard. */}
@@ -256,7 +259,7 @@ export function DashboardPage({
         )
       }
     >
-      {/* Arranging keeps the parts in their order: the first steps and the updates stay, each part gains the sentence that says what it is, and what arranging adds comes after the parts. */}
+      {/* Arranging keeps the parts in their order and where they stand: the first steps and the updates stay, and what arranging adds comes after the parts. */}
       <div className="space-y-10">
         {!layoutRead ? null : editing ? (
           <EditOverview
@@ -270,6 +273,16 @@ export function DashboardPage({
                 {scopeName !== undefined ? 'Each project keeps its own; a project you never arranged uses the all-projects one.' : 'A project you never arranged on its own uses it too.'} Drag a card by its handle, pick its width, or take it off with <TakeOffMark />. On a phone every card is full width.
               </>
             }
+            // On a phone the head has room for Done alone beside the line under the title: the reset stands here, under the tray's words.
+            {...(own && phone
+              ? {
+                  reset: (
+                    <Button variant="secondary" className="h-11" onClick={reset}>
+                      {resetWords}
+                    </Button>
+                  ),
+                }
+              : {})}
           />
         ) : arranged.some(({ hidden }) => !hidden) ? (
           // On a first visit the parts come in from the top: none is drawn under the Human Queue or the first steps until they have answered, as either grows from its waiting room by more than a line.
