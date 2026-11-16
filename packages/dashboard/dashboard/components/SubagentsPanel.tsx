@@ -244,7 +244,7 @@ function Shown({ row, projectId, events, onOpenAgent, onClose }: { row: Subagent
   const calls = transcript.filter(e => e.kind === 'driver' && e.event.type === 'action').length
   return (
     <section aria-label={row.name} className="flex min-h-0 flex-1 flex-col border-t border-hairline">
-      {/* As the pane's own head: its name 16 in, its presses 8 in. */}
+      {/* As the pane's own head: its name and its last glyph 16 in. */}
       <header className="flex h-11 shrink-0 items-center gap-1 pr-2 pl-4">
         <h3 className="min-w-0 flex-1 truncate text-sm font-medium">{row.name}</h3>
         {row.working && runId && (
@@ -259,7 +259,7 @@ function Shown({ row, projectId, events, onOpenAgent, onClose }: { row: Subagent
           </Button>
         )}
         <Tooltip>
-          <TooltipTrigger render={<Button variant="ghost" size="icon-sm" className="text-muted-foreground" aria-label={`Close ${row.name}`} onClick={onClose} />}>
+          <TooltipTrigger render={<Button variant="ghost" size="icon-sm" className="mr-0.5 text-muted-foreground" aria-label={`Close ${row.name}`} onClick={onClose} />}>
             <X className="size-4" />
           </TooltipTrigger>
           <TooltipContent>Close</TooltipContent>

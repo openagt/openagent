@@ -312,7 +312,7 @@ function PaneCard({ pane, over = false }: { pane: Pane; /** Laid over the chat: 
           {/* The pane's name stands until the pane puts its own title here. */}
           <div ref={setTitle} className="peer flex min-w-0 flex-1 items-center gap-1 empty:hidden" />
           <h2 className="min-w-0 flex-1 truncate pl-2 text-sm font-medium peer-[:not(:empty)]:hidden">{pane.label}</h2>
-          {/* Over the chat its last press is the pane's own: pulled in so its glyph, as the arrow's at the left, stands 16 in. */}
+          {/* Its last press (over the chat the pane's own, else Close) is pulled in so its glyph, as the name and the arrow at the left, stands 16 in. */}
           <div ref={setActions} className={cn('flex shrink-0 items-center gap-1 empty:hidden', over && 'mr-0.5')} />
           {!over && (
             <>
@@ -334,7 +334,7 @@ function PaneCard({ pane, over = false }: { pane: Pane; /** Laid over the chat: 
                 <TooltipContent>{fills ? 'Back to its place' : 'Fill the page'}</TooltipContent>
               </Tooltip>
               <Tooltip>
-                <TooltipTrigger render={<Button variant="ghost" size="icon-sm" className="shrink-0 text-muted-foreground" aria-label={`Close ${pane.label}`} onClick={() => setPaneOpen(page, pane.id, false)} />}>
+                <TooltipTrigger render={<Button variant="ghost" size="icon-sm" className="mr-0.5 shrink-0 text-muted-foreground" aria-label={`Close ${pane.label}`} onClick={() => setPaneOpen(page, pane.id, false)} />}>
                   <X className="h-4 w-4" />
                 </TooltipTrigger>
                 <TooltipContent>Close</TooltipContent>
