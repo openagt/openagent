@@ -354,8 +354,11 @@ export function OnboardingChecklist({
                 ) : (
                   <StepMark at={at} open={isOpen} />
                 )}
-                {/* The action goes under the words until it fits beside them with the words 16rem wide or more; beside them it is centred on the row, and a command goes under its press where the two do not fit one line. */}
-                <div className="@container flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-2">
+                {/* The action goes under the words until it fits whole beside them with the words 16rem wide or more, so a
+                    command is cut only where the row has no room for it. Beside them it is centred on the row and the title
+                    stays on the row's first line, with the step's number; a command goes under its press where the two do
+                    not fit one line. */}
+                <div className="flex min-w-0 flex-1 flex-wrap items-start gap-x-3 gap-y-2">
                   <div className="min-w-0 flex-[1_1_16rem] space-y-1">
                     <div className="flex flex-wrap items-center gap-x-2">
                       <button
@@ -380,7 +383,7 @@ export function OnboardingChecklist({
                     </div>
                     {isOpen && step.description && (typeof step.description === 'string' ? <p className="text-xs text-muted-foreground">{step.description}</p> : step.description)}
                   </div>
-                  {isOpen && step.action && <div className="flex max-w-full shrink-0 @xl:max-w-[calc(100%-16.75rem)]">{step.action}</div>}
+                  {isOpen && step.action && <div className="flex max-w-full shrink-0 self-center">{step.action}</div>}
                 </div>
               </li>
             )
