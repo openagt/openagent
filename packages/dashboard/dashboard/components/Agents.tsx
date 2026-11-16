@@ -7,6 +7,7 @@ import { PartDescription } from './PartDescription.js'
 import type { ReadState } from '../lib/use-async.js'
 import { formatDateTime, formatDuration } from '../lib/format-date.js'
 import { OnComputer } from './MachineMark.js'
+import { MiddleCut } from './MiddleCut.js'
 import { runName } from '../../src/client.js'
 import { awaitingName } from '../lib/agent-label.js'
 import { runWord } from '../lib/run-words.js'
@@ -99,10 +100,18 @@ function RunRow({ agent, naming, doing, projectNamed, href, onOpen }: {
         )
       }
       meta={[
-        agent.branch && <span className="font-mono">{agent.branch}</span>,
         agent.cloud === 'waiting' ? runWord('waiting') : agent.cloud === 'in-cloud' ? 'in cloud' : undefined,
         projectNamed && agent.projectName,
         agent.computer && <OnComputer computer={agent.computer} />,
+        // The part that gives way, with its last step: cut in its middle, as the Logs cut it, so the words before it stay whole.
+        agent.branch && {
+          fact: (
+            <span className="flex min-w-0 font-mono" title={agent.branch}>
+              <MiddleCut text={agent.branch} />
+            </span>
+          ),
+          className: 'not-last:shrink',
+        },
         doing !== undefined && (
           <span title={doing} className="font-mono">
             {doing}
