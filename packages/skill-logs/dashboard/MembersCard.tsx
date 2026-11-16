@@ -79,22 +79,27 @@ export function MembersCard({ projects }: ModuleCardProps) {
               <li key={member.person} aria-label={personName(member.person, member.name)} className="relative flex min-w-0 items-center gap-3 px-4 py-3 before:absolute before:top-0 before:right-4 before:left-4 before:h-px not-first:before:bg-hairline">
                 <PersonMark email={member.person} name={member.name} picture={member.account?.avatar} you={member.you} />
                 <div className="min-w-0 flex-1">
-                  <p className="flex min-w-0 items-center gap-1.5 text-sm">
-                    <span className="min-w-0 truncate font-medium" title={personSaid(member.person, member.account)}>
-                      {personName(member.person, member.name)}
-                    </span>
-                    {member.you && <span className="shrink-0 text-xs text-faint-foreground">you</span>}
-                  </p>
+                  {/* The name, then how many of their runs stand one way now at the line's end; where the card is too
+                      narrow for both, those go under the name's line, so the name is cut only where it alone is wider. */}
+                  <div className="flex flex-wrap items-center gap-x-3">
+                    <p className="flex min-w-0 items-center gap-1.5 text-sm">
+                      <span className="min-w-0 truncate font-medium" title={personSaid(member.person, member.account)}>
+                        {personName(member.person, member.name)}
+                      </span>
+                      {member.you && <span className="shrink-0 text-xs text-faint-foreground">you</span>}
+                    </p>
+                    {(member.running > 0 || member.waiting > 0) && (
+                      <span className="ml-auto flex h-5 shrink-0 items-center gap-3 text-xs text-muted-foreground">
+                        {member.running > 0 && <Going status="running" count={member.running} />}
+                        {member.waiting > 0 && <Going status="waiting" count={member.waiting} />}
+                      </span>
+                    )}
+                  </div>
                   <p className="mt-1 truncate text-xs text-faint-foreground tabular-nums" title={projects.length > 1 ? `In ${member.projects.join(', ')}` : undefined}>
                     {didWords(member)}
                   </p>
                 </div>
-                {member.running > 0 || member.waiting > 0 ? (
-                  <span className="flex shrink-0 items-center gap-3 text-xs text-muted-foreground">
-                    {member.running > 0 && <Going status="running" count={member.running} />}
-                    {member.waiting > 0 && <Going status="waiting" count={member.waiting} />}
-                  </span>
-                ) : (
+                {member.running > 0 || member.waiting > 0 ? null : (
                   <Tooltip>
                     <TooltipTrigger render={<span className="shrink-0 text-xs text-faint-foreground tabular-nums" />}>{formatAge(member.lastAt)}</TooltipTrigger>
                     <TooltipContent>Last active {formatDateTime(member.lastAt)}</TooltipContent>
