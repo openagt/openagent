@@ -5,7 +5,7 @@ import { ComposerShape } from './Composer.js'
 import { TopBar } from './Panes.js'
 import { ProjectErrorBanner } from './ProjectErrorBanner.js'
 import { ProjectSkillsLine } from './ProjectSkills.js'
-import { WaitingPanel, holdsBack } from './HumanQueueList.js'
+import { HumanQueueList, holdsBack } from './HumanQueueList.js'
 import { ScrollArea } from './ui/scroll-area.js'
 import { PanelGroup } from './ui/panel.js'
 import type { StartPicks } from '../lib/started-from.js'
@@ -107,7 +107,7 @@ export function ProjectHome({
                 the box's edges, as an agent's chat is: its name and its card start where the box does. */}
             {waiting.length > 0 && (
               <PanelGroup bare title={<span className="text-warning">Waiting on you</span>} count={holdsBack(waiting) ? waiting.length : undefined}>
-                <WaitingPanel key={projectId} items={waiting} onOpenAgent={onOpenAgent} />
+                <HumanQueueList key={projectId} items={waiting} onOpenAgent={onOpenAgent} />
               </PanelGroup>
             )}
             {/* What the project's skills need from the person, when they need something (#2023): a card

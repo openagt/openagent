@@ -12,7 +12,7 @@ vi.mock('./ProjectActions.js', () => ({ ProjectActions: () => null }))
 vi.mock('./ProjectErrorBanner.js', () => ({ ProjectErrorBanner: () => null }))
 vi.mock('./ProjectSkills.js', () => ({ ProjectSkillsLine: () => <div>skills line</div> }))
 vi.mock('./StartAgentForm.js', () => ({ StartAgentForm: () => <div>start form</div> }))
-vi.mock('./HumanQueueList.js', () => ({ WaitingPanel: ({ items }: { items: unknown[] }) => <div>{items.length} rows</div>, holdsBack: (items: unknown[]) => items.length > 6 }))
+vi.mock('./HumanQueueList.js', () => ({ HumanQueueList: ({ items }: { items: unknown[] }) => <div>{items.length} rows</div>, holdsBack: (items: unknown[]) => items.length > 6 }))
 
 const { ProjectHome } = await import('./ProjectHome.js')
 

@@ -1,8 +1,7 @@
 import { useContext, useState, type ReactNode } from 'react'
 import type { Intervention } from '../../src/index.js'
 import { interventionKey } from '../../src/client.js'
-import { Button } from './ui/button.js'
-import { Panel, PanelMore, PanelNote, PanelRow } from './ui/panel.js'
+import { Row } from './ui/list.js'
 import { RunMark } from './RunMark.js'
 import { formatRelative } from '../lib/format-date.js'
 import { OnComputer } from './MachineMark.js'
@@ -55,8 +54,6 @@ interface WaitingRow {
   since: string
   /** The address a click opens: the session, else the request on the git host. */
   href: string | undefined
-  /** It opens on the git host, in a new tab. */
-  external: boolean
   /** A plain click: the session, else the request, else the project. */
   open: () => void
 }
@@ -83,7 +80,6 @@ function useWaitingRows(items: Intervention[], onOpenAgent: (projectId: string, 
       hint: item.computer ? `${hoverOf(item)} · runs on ${item.computer.name}` : hoverOf(item),
       since: formatRelative(item.createdAt, ''),
       href,
-      external: !item.agentId && item.kind === 'pr',
       open: item.agentId ? () => onOpenAgent(item.projectId, item.agentId!) : item.kind === 'pr' ? () => window.open(item.url, '_blank', 'noreferrer') : () => onOpenProject?.(item.projectId),
     }
   })
@@ -101,19 +97,19 @@ export function holdsBack(items: readonly Intervention[]): boolean {
   return items.length - SHOWN_AT_FIRST > 1
 }
 
-/** The press on a row, by its kind: each opens where it is done, the session (its question, its changes and their Publish) or the request. */
-const PRESSES: Record<Intervention['kind'], string> = { awaiting: 'Answer', pr: 'Review', unpushed: 'Review', uncommitted: 'Review' }
-
 /**
- * What waits on the person (#632/#1139), one panel of rows, as every list of it draws them (the
- * Overview's Human Queue, the launcher's "Waiting on you"): the waiting mark, the run's name as the
- * sidebar says it, under it what is needed in the waiting colour and what it is about (a question is
- * read whole: two lines before it is cut), its project only when the rows are of several, and at its
- * right how long ago and the press that does what it needs, at rest as under the pointer; on a phone
- * the age gives way to the press. The first few show, and a line offers the rest. `empty`: the
- * sentence where the rows would be when nothing waits; without one there is no panel.
+ * The things only a person can clear (#632/#1139), one row each, as the Human Queue and the
+ * launcher's "Waiting on you" both list them: the waiting mark and what is needed, in the waiting
+ * colour, the run's name as the sidebar says it, then what it is about, its project and how long ago,
+ * on the list's right edge: the row's fill under the pointer, its cursor and its focus say it opens.
+ * A row is one line, with no rule between rows and no panel around them (his picks). The rows read as
+ * columns: what is needed takes the width of the widest word, so every name starts at one place, and
+ * the time is set right. The project is named only when the rows are of several: on one project's page
+ * every row would say the same word. The first few show, and a line offers the rest, so a long queue
+ * does not push everything under it off the page. `empty`: the sentence where the rows would be when
+ * nothing waits; without one there is nothing.
  */
-export function WaitingPanel({
+export function HumanQueueList({
   items,
   onOpenAgent,
   onOpenProject,
@@ -126,31 +122,50 @@ export function WaitingPanel({
   empty?: ReactNode
 }) {
   const { rows, more, projects } = useWaitingRows(items, onOpenAgent, onOpenProject)
-  if (rows.length === 0 && empty === undefined) return null
+  if (rows.length === 0) return empty === undefined ? null : <p className="text-sm text-muted-foreground">{empty}</p>
   return (
-    <Panel>
-      {rows.length === 0 && <PanelNote>{empty}</PanelNote>}
-      {rows.map(({ key, item, needs, detail, hint, since, href, external, open }) => (
-        <PanelRow
-          key={key}
-          state={<RunMark status="waiting" />}
-          title={item.title}
-          titleHint={hint}
-          meta={[<span className="font-medium text-warning">{needs}</span>, detail, projects && item.projectName, item.computer && <OnComputer computer={item.computer} />]}
-          metaLines={2}
-          href={href}
-          external={external}
-          onClick={open}
-          fact={since}
-          actions={
-            <Button variant={item.kind === 'awaiting' ? 'default' : 'secondary'} size="sm" aria-label={`${PRESSES[item.kind]}: ${item.title}`} onClick={open} className="relative">
-              {PRESSES[item.kind]}
-            </Button>
-          }
-          actionsAtRest
-        />
-      ))}
-      {more && <PanelMore onClick={more.toggle}>{more.words}</PanelMore>}
-    </Panel>
+    // Pulled out by the rows' own inset, so their marks start where the heading does.
+    <div className="-mx-3">
+      <ul>
+        {rows.map(({ key, item, needs, detail, hint, since, href, open }) => (
+          <Row
+            key={key}
+            // The words keep 4.5:1 on the hover's fill: what is quiet at rest is the text's own colour under the pointer.
+            className="text-muted-foreground"
+            // What is needed is said in the link's own name too, so the keyboard and a screen reader meet it there, once.
+            leading={
+              <span aria-hidden className="flex items-center gap-2 font-medium text-warning md:w-32">
+                <RunMark status="waiting" />
+                {needs}
+              </span>
+            }
+            title={
+              // Where a click takes the person, on a hover that waits, with the computer it runs on.
+              <span title={hint} className="text-foreground">
+                <span className="sr-only">{`${needs}: `}</span>
+                {item.title}
+                {detail !== undefined && <span className="ml-3 font-normal text-muted-foreground group-hover/row:text-foreground">{detail}</span>}
+              </span>
+            }
+            meta={
+              <span className="flex items-center gap-2 group-hover/row:text-foreground">
+                {/* A run on another of the person's computers is marked by its kind's icon before the
+                    project, as the list of runs marks it: a row has no room for its name too. */}
+                {item.computer && <OnComputer computer={item.computer} named={false} />}
+                {projects && <span>{item.projectName}</span>}
+                <span className="min-w-14 text-right tabular-nums">{since}</span>
+              </span>
+            }
+            {...(href !== undefined ? { href } : {})}
+            onClick={open}
+          />
+        ))}
+      </ul>
+      {more && (
+        <button type="button" onClick={more.toggle} className="focus-ring mt-1 rounded-md px-3 py-1 text-sm text-muted-foreground hover:text-foreground">
+          {more.words}
+        </button>
+      )}
+    </div>
   )
 }
