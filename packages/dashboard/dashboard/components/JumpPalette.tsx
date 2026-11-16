@@ -225,6 +225,8 @@ export function JumpPalette({ waiting, runs, pages, projects, scope, here, hrefO
             'fixed z-50 flex flex-col overflow-hidden border border-hairline bg-card text-card-foreground shadow-lg outline-none',
             'md:top-24 md:left-1/2 md:w-[min(36rem,calc(100vw-2rem))] md:-translate-x-1/2 md:rounded-lg',
             'max-md:inset-x-2 max-md:top-2 max-md:rounded-lg',
+            // Where no foot is drawn (a touch screen), the list ends 16 over the box's edge, as it starts under the field.
+            'pointer-coarse:pb-4',
             'origin-top transition-[opacity,scale] duration-180 data-[ending-style]:duration-120 data-[starting-style]:scale-97 data-[starting-style]:opacity-0 data-[ending-style]:scale-97 data-[ending-style]:opacity-0',
           )}
         >
@@ -248,7 +250,7 @@ export function JumpPalette({ waiting, runs, pages, projects, scope, here, hrefO
                 ref={input}
                 aria-label="Jump to"
                 placeholder="Jump to a run, a project or a page"
-                className="h-full min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-faint-foreground max-md:text-base"
+                className="h-5 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-faint-foreground max-md:text-base"
                 onKeyDown={event => {
                   const place = marked.current
                   // Base UI leaves a key held with ⌘ or Ctrl to the page.

@@ -136,9 +136,10 @@ export function SessionRepoPicks({
         <Combobox.Portal>
           <Combobox.Positioner positionMethod={positionMethod} sideOffset={6} align="start" className="z-50 outline-none">
             <Combobox.Popup data-overlay="picker" aria-label="Add repo" className={cn(MENU_POPUP_CLASS, 'w-[24rem] max-w-[var(--available-width)]')}>
-              <div className="flex items-center gap-3 border-b border-hairline px-4">
+              {/* The field one line tall, 16 in from the band's every edge, as the jump's is. */}
+              <div className="flex h-13 items-center gap-3 border-b border-hairline px-4">
                 <Search className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-                <Combobox.Input aria-label="Search repos" placeholder="Search repos" className="h-9 w-full min-w-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
+                <Combobox.Input aria-label="Search repos" placeholder="Search repos" className="h-5 w-full min-w-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
               </div>
               <ScrollArea viewportClassName="h-[min(20rem,calc(var(--available-height)-5rem))]">
                 <div className={MENU_BODY_CLASS}>

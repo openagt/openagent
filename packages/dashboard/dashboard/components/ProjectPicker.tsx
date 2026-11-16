@@ -311,9 +311,10 @@ export function ProjectPicker({
         <Combobox.Portal>
           <Combobox.Positioner positionMethod={positionMethod} sideOffset={6} align="start" className="z-50 outline-none">
             <Combobox.Popup data-overlay="picker" aria-label={name} className={cn(MENU_POPUP_CLASS, 'group/picker w-[22rem] max-w-[var(--available-width)]')}>
-              <div className="flex items-center gap-3 border-b border-hairline px-4">
+              {/* The field one line tall, 16 in from the band's every edge, as the jump's is. */}
+              <div className="flex h-13 items-center gap-3 border-b border-hairline px-4">
                 <Search className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-                <Combobox.Input aria-label="Search projects and repos" placeholder="Search, or paste a GitHub address" className="h-9 w-full min-w-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
+                <Combobox.Input aria-label="Search projects and repos" placeholder="Search, or paste a GitHub address" className="h-5 w-full min-w-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
               </div>
               {/* As tall as its rows; opened upward, from the message box's row, of a set height, so the search stays where it is as the list narrows. */}
               <ScrollArea viewportClassName="max-h-[min(20rem,calc(var(--available-height)-5rem))] group-data-[side=top]/picker:h-[min(20rem,calc(var(--available-height)-5rem))]">

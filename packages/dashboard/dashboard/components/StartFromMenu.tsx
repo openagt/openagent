@@ -111,9 +111,10 @@ export function StartFromMenu({ projectId, main, local, pick, onPick, busy }: { 
       <Combobox.Portal>
         <Combobox.Positioner sideOffset={6} align="start" className="z-50 outline-none">
           <Combobox.Popup data-overlay="picker" aria-label="The agent starts from" className={cn(MENU_POPUP_CLASS, 'w-[22rem] max-w-[var(--available-width)]')}>
-            <div className="flex items-center gap-3 border-b border-hairline px-4">
+            {/* The field one line tall, 16 in from the band's every edge, as the jump's is. */}
+              <div className="flex h-13 items-center gap-3 border-b border-hairline px-4">
               <Search className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-              <Combobox.Input aria-label="Search branches" placeholder="Search branches" className="h-9 w-full min-w-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
+              <Combobox.Input aria-label="Search branches" placeholder="Search branches" className="h-5 w-full min-w-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
             </div>
             {/* The menu opens upward from the box's row: a list of a set height keeps the search and the first rows where they are as the answer lands, and as the search narrows it. */}
             <ScrollArea viewportClassName="h-[min(20rem,calc(var(--available-height)-2.5rem))]">
