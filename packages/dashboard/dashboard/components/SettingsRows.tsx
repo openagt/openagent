@@ -83,17 +83,21 @@ export function SettingsRow({
 /**
  * Things listed in an entry (devices, folders): rows on the dialog's inset with no card and no rule,
  * 24 apart (44 from row to row with one line, 64 with two), each lit by a fill its own padding
- * pulls out past the inset, so lighting one moves nothing.
+ * pulls out past the inset, so lighting one moves nothing. As a {@link Panel} does, it lays out its
+ * rows' columns: what a row has at its right stands in one column as wide as the widest row's, its
+ * words at its right, so it has one place in every row.
  */
 export function SettingsItems({ className, ...props }: { className?: string; children: ReactNode; 'aria-label'?: string }) {
-  return <ul className={cn('-mx-4 -my-3 flex flex-col', className)} {...props} />
+  return <ul className={cn('-mx-4 -my-3 grid grid-cols-[minmax(0,1fr)_auto] *:col-span-full', className)} {...props} />
 }
 
 /**
  * One row of {@link SettingsItems}: its icon (16, on the name's line) on the inset, its name 12 after,
  * what is known of it under the name; at its right what it is now (`end`, with a chevron when the row
- * opens a page) centred on the row, and its own presses (`actions`), which a desktop shows under the
- * pointer and the keyboard and a phone always. With `onClick` or `href` the whole row is the press.
+ * opens a page) on the name's line, which under the pointer and the keyboard gives its room to the
+ * row's own presses (`actions`, centred on the row; always shown where no mouse points, and on a
+ * phone-width screen, where the end gives way to them), as a {@link PanelRow}'s fact does. With
+ * `onClick` or `href` the whole row is the press.
  */
 export function SettingsItem({ icon: Icon, title, detail, end, actions, onClick, href }: {
   icon?: ComponentType<{ className?: string; 'aria-hidden'?: boolean }>
@@ -120,24 +124,32 @@ export function SettingsItem({ icon: Icon, title, detail, end, actions, onClick,
   return (
     <li
       className={cn(
-        'group/item relative flex items-start gap-3 rounded-md px-4 py-3 text-sm',
+        'group/item relative grid grid-cols-subgrid items-start rounded-md px-4 py-3 text-sm',
         (onClick !== undefined || href !== undefined || actions !== undefined) && 'transition-colors pointer-fine:hover:bg-foreground/4 has-[[aria-expanded=true]]:bg-foreground/4 has-[[data-cover]:active]:bg-foreground/8',
       )}
     >
-      {Icon && (
-        <span className="flex h-5 w-4 shrink-0 items-center text-faint-foreground">
-          <Icon aria-hidden className="size-4" />
+      <div className="flex min-w-0 items-start gap-3">
+        {Icon && (
+          <span className="flex h-5 w-4 shrink-0 items-center text-faint-foreground">
+            <Icon aria-hidden className="size-4" />
+          </span>
+        )}
+        <span className="min-w-0 flex-1">
+          {named}
+          {detail !== undefined && <span className="mt-0.5 block truncate text-xs text-faint-foreground">{detail}</span>}
         </span>
-      )}
-      <span className="min-w-0 flex-1">
-        {named}
-        {detail !== undefined && <span className="mt-0.5 block truncate text-xs text-faint-foreground">{detail}</span>}
-      </span>
+      </div>
+      {/* The end and the presses share the list's last column and take the row's whole height (their margins
+          undo the row's padding): the end on the name's line, the presses centred on the row over it. */}
       {(end !== undefined || actions !== undefined) && (
-        <span className="-my-3 flex shrink-0 items-center gap-2 self-stretch">
-          {end !== undefined && <span className="flex items-center gap-1 text-xs text-muted-foreground [&>svg]:size-4 [&>svg]:text-faint-foreground">{end}</span>}
+        <span className="col-start-2 -my-3 ml-3 grid self-stretch justify-items-end">
+          {end !== undefined && (
+            <span className={cn('col-start-1 row-start-1 mt-3 flex h-5 items-center gap-1 self-start text-xs text-muted-foreground [&>svg]:size-4 [&>svg]:text-faint-foreground', actions !== undefined && 'not-pointer-fine:invisible max-md:invisible pointer-fine:group-hover/item:invisible pointer-fine:group-focus-within/item:invisible pointer-fine:group-has-[[aria-expanded=true]]/item:invisible')}>{end}</span>
+          )}
           {/* A press with no painted box is pulled out by its own padding by its caller, so its glyph ends on the inset. */}
-          {actions !== undefined && <span className="relative flex items-center gap-1 pointer-fine:opacity-0 pointer-fine:group-hover/item:opacity-100 pointer-fine:group-focus-within/item:opacity-100 pointer-fine:has-[[aria-expanded=true]]:opacity-100">{actions}</span>}
+          {actions !== undefined && (
+            <span className="relative col-start-1 row-start-1 flex items-center gap-1 self-center md:pointer-fine:opacity-0 md:pointer-fine:group-hover/item:opacity-100 md:pointer-fine:group-focus-within/item:opacity-100 md:pointer-fine:group-has-[[aria-expanded=true]]/item:opacity-100">{actions}</span>
+          )}
         </span>
       )}
     </li>
