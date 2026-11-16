@@ -106,6 +106,29 @@ describe('the panes\' icons', () => {
     expect(screen.queryByRole('group', { name: 'Panes' })).toBeNull()
   })
 
+  test("with no room kept for this project, what stands before the icons is drawn with them, once they are known; a later visit holds their room", async () => {
+    let answer = (_docs: unknown[]) => {}
+    onDocs.mockImplementation(() => new Promise(resolve => (answer = resolve)))
+    const first = render(
+      <PanesProvider {...base}>
+        <PaneToggles before={<button type="button">the menu</button>} />
+      </PanesProvider>,
+    )
+    const end = () => screen.getByRole('button', { name: 'the menu' }).parentElement!
+    expect(end().className).toContain('invisible')
+    await act(async () => answer([]))
+    expect(end().className).not.toContain('invisible')
+    expect(icons()).toEqual(['Changes', 'Files', 'Browser'])
+    first.unmount()
+    forgetRemembered()
+    render(
+      <PanesProvider {...base}>
+        <PaneToggles before={<button type="button">the menu</button>} />
+      </PanesProvider>,
+    )
+    expect(end().className).not.toContain('invisible')
+  })
+
   test("an icon's tooltip is its pane's name only", async () => {
     render(<Page />)
     const tip = await hoverTooltip(icon('Files'))
