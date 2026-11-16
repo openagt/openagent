@@ -131,6 +131,24 @@ describe('the list of a run\'s subagents', () => {
     expect(tip.textContent).toBe('Read the theme tokensclaude-sonnet-5-5Done · ran 7m')
   })
 
+  test('with no model known, a card comes only where the row cuts the name, and then says its state alone', async () => {
+    vi.useRealTimers()
+    const { model: _model, ...sub } = run(1, 'Read the theme tokens', 'done', 7)
+    // jsdom lays nothing out: every box is 0 wide, so a name is cut once it is wider than that.
+    const width = vi.spyOn(Element.prototype, 'scrollWidth', 'get').mockReturnValue(0)
+    render(panel({ subagents: [sub] }))
+    const row = screen.getByRole('button', { name: /^Read the theme tokens/ })
+    fireEvent.mouseEnter(row)
+    fireEvent.mouseMove(row)
+    await new Promise(resolve => setTimeout(resolve, 600))
+    expect(screen.queryByRole('tooltip')).toBeNull()
+    cleanup()
+    width.mockReturnValue(400)
+    render(panel({ subagents: [sub] }))
+    const tip = await hoverTooltip(screen.getByRole('button', { name: /^Read the theme tokens/ }))
+    expect(tip.textContent).toBe('Read the theme tokensDone · ran 7m')
+    width.mockRestore()
+  })
 })
 
 describe('the subagent a row opened', () => {

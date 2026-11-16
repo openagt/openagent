@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState, type ReactNode, type Ref } from 'react'
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type Ref, type RefObject } from 'react'
 import { ChevronRight, Square, X } from 'lucide-react'
 import type { AgentMeta, OpenAgentEvent } from '../../src/index.js'
 import { onAgent } from '../rpc/reads.js'
@@ -94,6 +94,22 @@ function useTicking(on: boolean): void {
   }, [on])
 }
 
+/** Whether `text` is cut where `ref` draws it on one line, read again as its box changes its size. */
+function useCut(ref: RefObject<HTMLElement | null>, text: string): boolean {
+  const [cut, setCut] = useState(false)
+  useLayoutEffect(() => {
+    const box = ref.current
+    if (!box) return
+    const read = () => setCut(box.scrollWidth > box.clientWidth)
+    read()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(read)
+    observer.observe(box)
+    return () => observer.disconnect()
+  }, [ref, text])
+  return cut
+}
+
 const byStart = (a: SubagentRow, b: SubagentRow): number => (a.startedAt < b.startedAt ? -1 : a.startedAt > b.startedAt ? 1 : 0)
 
 /** The run's subagents, those at work over those that ended; past {@link FOLD_PAST} rows in all, the ended ones fold into one. */
@@ -169,9 +185,12 @@ function SubagentItem({ row, reason, open, projectId, onPick }: { row: SubagentR
   const second = error ?? reason
   const model = row.model !== undefined ? [anyModelName(models, row.model), row.agent?.effort].filter(Boolean).join(' · ') : undefined
   const state = row.working ? `${capital(runWord(row.status))} · ${time}` : time !== undefined ? `${capital(runWord(row.status))} · ran ${time}` : capital(runWord(row.status))
+  const name = useRef<HTMLSpanElement>(null)
+  // The card says what the row does not: the whole name where the row cuts it, or what it runs on.
+  const tells = useCut(name, row.name) || model !== undefined
   return (
     <li className="group/row relative">
-      <Tooltip>
+      <Tooltip disabled={!tells}>
         <TooltipTrigger
           render={
             <button
@@ -188,18 +207,20 @@ function SubagentItem({ row, reason, open, projectId, onPick }: { row: SubagentR
             <RunMark status={row.status} />
           </span>
           <span className="min-w-0 flex-1 text-start">
-            <span className="block truncate">{row.name}</span>
+            <span ref={name} className="block truncate">
+              {row.name}
+            </span>
             {second !== undefined && <span className={cn('block truncate text-xs max-md:leading-5', runTone('failed'))}>{second}</span>}
           </span>
           {time !== undefined && (
             <span className={cn('shrink-0 text-xs leading-5 text-faint-foreground tabular-nums', stoppable && 'pointer-fine:group-hover/row:invisible pointer-fine:group-has-focus-visible/row:invisible')}>{time}</span>
           )}
         </TooltipTrigger>
-        {/* The whole name, what it runs on, and how it stands, as T3 Code's card says them. */}
+        {/* The whole name, what it runs on, and how it stands, as T3 Code's card says them; with no model known, its state at the card's left. */}
         <TooltipContent side="left" align="start" className="grid max-w-72 gap-1 px-4 py-3 text-sm">
           <span className="font-medium break-words">{row.name}</span>
           <span className="flex items-center justify-between gap-4 text-xs text-muted-foreground">
-            <span className="min-w-0 truncate">{model}</span>
+            {model !== undefined && <span className="min-w-0 truncate">{model}</span>}
             <span className="flex shrink-0 items-center gap-1.5">
               <RunMark status={row.status} className="size-3" />
               {state}
