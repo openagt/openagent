@@ -107,7 +107,7 @@ try {
           const cdp = await context.newCDPSession(page)
           const { data } = await cdp.send('Page.captureScreenshot', { format: 'webp', quality: 90, clip: { ...clip, scale: 1 } })
           files.push([`${picture.name}-${window}-${scheme}.webp`, Buffer.from(data, 'base64')])
-          console.log(`public/pictures/${files.at(-1)[0]} ${clip.width}x${clip.height}`)
+          console.log(`public/pictures/${files.at(-1)[0]} ${clip.width}x${clip.height}, its smallest text ${await smallestText(page, clip)} px`)
         })
       }
       written[picture.name].push({ window, width: clip.width, height: clip.height, media: shot.media })
@@ -192,4 +192,20 @@ async function part(page, { keep, rows, around }) {
     return end
   }, [last.y + last.height + margin, x, x + width])
   return { x, y, width, height: Math.ceil(end) - y }
+}
+
+/** The size of the smallest text in the part, in the page's pixels, which the site shows at its own. */
+async function smallestText(page, clip) {
+  return page.evaluate(({ x, y, width, height }) => {
+    const sizes = []
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT)
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      if (!node.nodeValue.trim()) continue
+      const range = document.createRange()
+      range.selectNodeContents(node)
+      const inside = [...range.getClientRects()].some(box => box.width > 0 && box.left < x + width && box.right > x && box.top < y + height && box.bottom > y)
+      if (inside) sizes.push(parseFloat(getComputedStyle(node.parentElement).fontSize))
+    }
+    return Math.min(...sizes)
+  }, clip)
 }
