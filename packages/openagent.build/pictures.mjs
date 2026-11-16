@@ -60,7 +60,7 @@ const PICTURES = [
     ],
   },
   // The project's tickets, each a plan away, under both lists of "Autonomous AI": from the presses over the
-  // title; on a phone, where they are in a menu, from the title.
+  // title; on a phone, whose own bar holds the title, from the presses the page keeps there.
   {
     name: 'tickets',
     path: demo => `${demo.project.id}/tickets`,
@@ -68,7 +68,7 @@ const PICTURES = [
     shots: [
       { window: 1024, media: '(min-width: 832px)', keep: 'main', rows: ['main >> text=Add to queue', 'main >> text=Login page'] },
       { window: 960, media: '(min-width: 768px)', keep: 'main', rows: ['main >> text=Add to queue', 'main >> text=Login page'] },
-      { window: 358, media: '', keep: 'main', rows: ['main h1', 'main >> text=Login page'] },
+      { window: 358, media: '', keep: 'main', rows: ['main >> text=New ticket', 'main >> text=Login page'] },
     ],
   },
 ]

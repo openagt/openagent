@@ -1,12 +1,18 @@
 import { forwardRef, useEffect, useImperativeHandle, useState } from 'react'
 import { cn } from '../../lib/utils.js'
 import { MENU_SURFACE_CLASS } from '../ui/dropdown-menu.js'
+import { PathCut } from '../MiddleCut.js'
 
 // The floating command/reference menu (#470) the `/` and `@` triggers open. A shadcn-style
 // popover surface driven imperatively by @tiptap/suggestion (which owns positioning), so it
 // is a plain list here: arrow keys move, Enter/Tab pick, and items may carry a group header.
 // It reads as a listbox to assistive tech (#948): options carry ids the editor's
 // aria-activedescendant points at, since focus never leaves the contenteditable.
+//
+// It is as wide as the box around it (`suggestion.ts` gives that one its width, and keeps it on
+// the screen). A row too long for it gives up its label, never its hint: a hint cut to "fi…"
+// says nothing. A file's path gives up its folders before its name, as a path does everywhere,
+// so two files of one folder never read alike.
 export interface SuggestionItem {
   id: string
   label: string
@@ -15,6 +21,8 @@ export interface SuggestionItem {
   group?: string | undefined
   /** Hover text, for an item whose label and hint don't say where its output lands (#698). */
   title?: string | undefined
+  /** The path the label ends with, for a file: what is cut as a path. */
+  path?: string | undefined
 }
 
 export interface SuggestionListProps {
@@ -74,14 +82,14 @@ export const SuggestionList = forwardRef<SuggestionListRef, SuggestionListProps>
     // Only rendered when the trigger has an emptyNote and nothing was typed yet (suggestion.ts
     // hides the portal otherwise), so a mistyped query still just closes the menu.
     return (
-      <div role="status" className={cn("w-64 p-2 text-sm text-muted-foreground", MENU_SURFACE_CLASS)}>
+      <div role="status" className={cn("p-2 text-sm text-muted-foreground", MENU_SURFACE_CLASS)}>
         {emptyNote ?? 'No matches'}
       </div>
     )
   }
 
   return (
-    <div role="listbox" aria-label="Suggestions" className={cn("max-h-72 w-64 overflow-y-auto p-1.5 text-sm", MENU_SURFACE_CLASS)}>
+    <div role="listbox" aria-label="Suggestions" className={cn("max-h-72 overflow-y-auto p-1.5 text-sm", MENU_SURFACE_CLASS)}>
       {items.map((item, i) => (
         <div key={item.id}>
           {item.group && (i === 0 || items[i - 1]?.group !== item.group) && (
@@ -94,7 +102,8 @@ export const SuggestionList = forwardRef<SuggestionListRef, SuggestionListProps>
             id={optionDomId(i)}
             role="option"
             aria-selected={i === selected}
-            {...(item.title ? { title: item.title } : {})}
+            // A path cut to fit is whole on a hover.
+            {...(item.title ? { title: item.title } : item.path !== undefined ? { title: item.label } : {})}
             onMouseDown={e => {
               e.preventDefault()
               command(item)
@@ -105,8 +114,15 @@ export const SuggestionList = forwardRef<SuggestionListRef, SuggestionListProps>
               i === selected ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/60',
             )}
           >
-            <span className="truncate font-medium">{item.label}</span>
-            {item.hint && <span className="ml-auto truncate text-xs text-muted-foreground">{item.hint}</span>}
+            {item.path !== undefined && item.label.endsWith(item.path) ? (
+              <span className="flex min-w-0 font-medium">
+                <span className="shrink-0">{item.label.slice(0, item.label.length - item.path.length)}</span>
+                <PathCut path={item.path} />
+              </span>
+            ) : (
+              <span className="min-w-0 truncate font-medium">{item.label}</span>
+            )}
+            {item.hint && <span className="ml-auto shrink-0 text-xs text-muted-foreground">{item.hint}</span>}
           </button>
         </div>
       ))}

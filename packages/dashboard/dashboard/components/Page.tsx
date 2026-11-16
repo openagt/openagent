@@ -64,9 +64,9 @@ export function Page({
         {/* A phone's bar names the page and says its count: there this block shows only the buttons and the line, and is said alone when it has neither, taking no room. */}
         <div className={cn(bar !== undefined && 'mb-3', actions === undefined && line === undefined && 'max-md:sr-only max-md:mb-0')}>
           {/* One row at every width: the name with its count, then the page's buttons at its right. */}
-          <div className={cn('flex items-center justify-between gap-4 md:min-h-8', line !== undefined && 'md:flex-wrap md:gap-y-1')}>
-            {/* A page's name and its count never give up width: the buttons do. */}
-            <div className="flex shrink-0 items-center gap-2">
+          <div className={cn('flex items-center justify-between gap-4 md:min-h-8 md:items-start', line !== undefined && 'md:flex-wrap md:gap-y-1')}>
+            {/* A page's name and its count never give up width: the buttons do. As high as a row of buttons, at the top: where the buttons take two rows, the name stands beside the first, not between them. */}
+            <div className="flex shrink-0 items-center gap-2 md:min-h-8">
               {/* While the sidebar is hidden, the button that shows it again stands before the name. */}
               <ShowSidebarButton />
               <h1 className="text-xl font-semibold">

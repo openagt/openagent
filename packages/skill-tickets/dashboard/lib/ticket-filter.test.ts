@@ -21,6 +21,7 @@ import {
   type TicketRow,
   type TicketsView,
 } from './ticket-filter.js'
+import { isHighPriority } from '../../src/module.js'
 
 const ticket = (file: string, over: Partial<WorkspaceTicket> = {}): WorkspaceTicket => ({
   file,
@@ -71,10 +72,19 @@ describe('priority facet (buckets + range + none)', () => {
   const rows = [row('crit.md', { priority: '9' }), row('mid.md', { priority: '5' }), row('low.md', { priority: '1' }), row('bare.md')]
 
   test('a bucket selects its span; none selects the unprioritized; both OR together', () => {
-    const buckets = filtersWith({ priority: { buckets: ['critical'], range: null, none: false } })
+    const buckets = filtersWith({ priority: { buckets: ['high'], range: null, none: false } })
     expect(filterRows(rows, buckets).map(r => r.ticket.file)).toEqual(['crit.md'])
-    const withNoneToo = filtersWith({ priority: { buckets: ['critical'], range: null, none: true } })
+    const withNoneToo = filtersWith({ priority: { buckets: ['high'], range: null, none: true } })
     expect(filterRows(rows, withNoneToo).map(r => r.ticket.file)).toEqual(['crit.md', 'bare.md'])
+  })
+
+  test('"High" holds what the Overview\u2019s hot-tickets card calls high priority, from the same number up', () => {
+    const edge = [6, 7, 8, 10].map(priority => row(`p${priority}.md`, { priority: String(priority) }))
+    const high = filterRows(edge, filtersWith({ priority: { buckets: ['high'], range: null, none: false } })).map(r => r.ticket.file)
+    expect(high).toEqual(['p7.md', 'p8.md', 'p10.md'])
+    expect(high).toEqual(edge.filter(r => isHighPriority(r.ticket.priority)).map(r => r.ticket.file))
+    // No bucket is named for one number: "critical" is the format's word for 10 alone.
+    expect(PRIORITY_BUCKETS.map(bucket => `${bucket.label} ${bucket.min}–${bucket.max}`)).toEqual(['High 7–10', 'Medium 4–6', 'Low 0–3'])
   })
 
   test('a range is inclusive and never admits a ticket that names no value', () => {
@@ -84,9 +94,9 @@ describe('priority facet (buckets + range + none)', () => {
 
   test('the update helpers keep buckets and range mutually exclusive, none independent', () => {
     let f = { buckets: [], range: null, none: false } as ReturnType<typeof withNone>
-    f = withBucketToggled(f, 'critical')
+    f = withBucketToggled(f, 'high')
     f = withNone(f, true)
-    expect(f).toEqual({ buckets: ['critical'], range: null, none: true })
+    expect(f).toEqual({ buckets: ['high'], range: null, none: true })
     f = withRange(f, [2, 6])
     expect(f).toEqual({ buckets: [], range: [2, 6], none: true })
     f = withBucketToggled(f, 'low')
@@ -160,11 +170,11 @@ describe('bucketUnionRange', () => {
   const f = (buckets: string[]) => ({ buckets, range: null, none: false })
 
   test('a single bucket or an adjacent pair is one span; skipping the middle is not', () => {
-    expect(bucketUnionRange(f(['critical']), PRIORITY_BUCKETS)).toEqual([8, 10])
-    expect(bucketUnionRange(f(['medium', 'critical']), PRIORITY_BUCKETS)).toEqual([5, 10])
-    expect(bucketUnionRange(f(['low', 'medium', 'critical']), PRIORITY_BUCKETS)).toEqual([0, 10])
-    // Critical ∪ Low skips Medium — no [min,max] pair can say that.
-    expect(bucketUnionRange(f(['critical', 'low']), PRIORITY_BUCKETS)).toBeNull()
+    expect(bucketUnionRange(f(['high']), PRIORITY_BUCKETS)).toEqual([7, 10])
+    expect(bucketUnionRange(f(['medium', 'high']), PRIORITY_BUCKETS)).toEqual([4, 10])
+    expect(bucketUnionRange(f(['low', 'medium', 'high']), PRIORITY_BUCKETS)).toEqual([0, 10])
+    // High ∪ Low skips Medium — no [min,max] pair can say that.
+    expect(bucketUnionRange(f(['high', 'low']), PRIORITY_BUCKETS)).toBeNull()
     expect(bucketUnionRange(f([]), PRIORITY_BUCKETS)).toBeNull()
   })
 })
@@ -180,7 +190,7 @@ describe('facet counts', () => {
     // With the dx topic selected, priority counts still cover only dx rows…
     const f = filtersWith({ topics: ['dx'] })
     const priority = rangeFacetCounts(rows, f, 'priority')
-    expect(priority.buckets['critical']).toBe(1)
+    expect(priority.buckets['high']).toBe(1)
     expect(priority.buckets['low']).toBe(0)
     // …while topic counts ignore the topic selection itself, so ux stays pickable.
     const topics = topicFacetCounts(rows, f)
@@ -214,7 +224,7 @@ describe('URL codec', () => {
   test('round-trips a fully loaded view', () => {
     const view = defaultView()
     view.filters.q = 'lock races'
-    view.filters.priority = { buckets: ['critical'], range: null, none: true }
+    view.filters.priority = { buckets: ['high'], range: null, none: true }
     view.filters.effort = { buckets: [], range: [2, 6], none: false }
     view.filters.topics = ['dx', 'ux']
     view.filters.topicsNone = true

@@ -1,5 +1,6 @@
 import type { ProjectTickets, WorkspaceTicket } from './types.js'
 import { parsePriority } from './ticket-priority.js'
+import { HIGH_PRIORITY_FLOOR } from '../../src/module.js'
 
 // The /tickets filter model (#1144): everything the toolbar can express, as one plain value the
 // page owns and the URL carries. Pure functions over in-memory rows — the whole backlog is already
@@ -25,10 +26,14 @@ export interface RangeBucket {
   max: number
 }
 
+// "High" is what the Overview's hot-tickets card calls high, from the same number: a ticket in its
+// "High priority" lane is under "High" here. Not "Critical": that is the format's word for 10
+// alone, the one priority a row prints in red. Medium is around 5, what a ticket with no priority
+// counts as on the queue.
 export const PRIORITY_BUCKETS: readonly RangeBucket[] = [
-  { id: 'critical', label: 'Critical', min: 8, max: 10 },
-  { id: 'medium', label: 'Medium', min: 5, max: 7 },
-  { id: 'low', label: 'Low', min: 0, max: 4 },
+  { id: 'high', label: 'High', min: HIGH_PRIORITY_FLOOR, max: 10 },
+  { id: 'medium', label: 'Medium', min: 4, max: HIGH_PRIORITY_FLOOR - 1 },
+  { id: 'low', label: 'Low', min: 0, max: 3 },
 ]
 
 // Effort/uncertainty are the plan preamble's 0-10 keys (0 trivial/obvious, 10 months/unclear).
@@ -62,7 +67,7 @@ const RANGE_FACET_IDS = Object.keys(RANGE_FACETS) as RangeFacetId[]
 /**
  * One numeric facet's selection: named buckets (unioned), a fine-grained min-max range, and the
  * tickets that name no value at all. Buckets and the range are two ways to say the same thing, so
- * the update helpers keep them mutually exclusive; `none` composes with either — "critical OR
+ * the update helpers keep them mutually exclusive; `none` composes with either — "high OR
  * unprioritized" is a real triage lens.
  */
 export interface RangeFilter {
@@ -329,7 +334,7 @@ export function unlinkedCount(rows: TicketRow[], f: TicketFilters): number {
 }
 
 // ---- The URL codec (#784's doctrine: the URL is the selection — filters are selection too). ----
-// `/tickets?q=lock&priority=critical,none&stage=unplanned&sort=priority` is shareable, reloadable,
+// `/tickets?q=lock&priority=high,none&stage=unplanned&sort=priority` is shareable, reloadable,
 // and survives opening a ticket and coming back. Defaults are omitted so the bare page stays `/tickets`.
 
 const RANGE_TOKEN = /^(\d{1,2})-(\d{1,2})$/

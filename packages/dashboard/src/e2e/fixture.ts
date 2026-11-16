@@ -1,6 +1,7 @@
 // A fixture project as the E2E stories and the demo stand it up (see README.md): a real git repo
-// with an `origin`, the tickets and queue skills (and more for the demo), and, once it is added to a dashboard, start and
-// resume lines that run `fake-run-bin.js`, so a Start goes the whole production way offline.
+// with an `origin`, the tickets and queue skills (and more for the demo), and, once it is added to a dashboard, start
+// and resume lines that run `fake-run-bin.js`, so a Start goes the whole production way offline, and a check line that
+// says nothing is in its way.
 import { copyFile, mkdir, writeFile } from 'node:fs/promises'
 import { execFile } from 'node:child_process'
 import { dirname, join, resolve } from 'node:path'
@@ -33,14 +34,27 @@ export async function git(cwd: string, ...args: string[]): Promise<string> {
   return stdout
 }
 
+/** Who a fixture's commits are by, and where its `origin` stands, when not the stories' own. */
+export interface FixtureOptions {
+  /** The repository's git user: its seed commit is theirs, and every commit made in the folder after. */
+  user?: { name: string; email: string }
+  /**
+   * The bare repository that stands in for `origin`. Inside the project's folder by default, where
+   * a story's clean-up takes it with the project; a project a person looks at has it elsewhere, or
+   * its files (`HEAD`, `config`, `hooks/…`) are listed among the project's own.
+   */
+  origin?: string
+}
+
 /**
  * Make `cwd` (an empty directory) a fixture repo holding `files` and the texts of `skills`: committed
  * on `main`, except the tickets and the queue, which go on the data branch where the product reads them.
  */
-export async function makeFixtureRepo(cwd: string, files: Record<string, string> = {}, skills: readonly FixtureSkill[] = ['tickets', 'queue']): Promise<void> {
+export async function makeFixtureRepo(cwd: string, files: Record<string, string> = {}, skills: readonly FixtureSkill[] = ['tickets', 'queue'], options: FixtureOptions = {}): Promise<void> {
+  const user = options.user ?? { name: 'e2e', email: 'e2e@test' }
   await git(cwd, 'init', '-q', '-b', 'main')
-  await git(cwd, 'config', 'user.email', 'e2e@test')
-  await git(cwd, 'config', 'user.name', 'e2e')
+  await git(cwd, 'config', 'user.email', user.email)
+  await git(cwd, 'config', 'user.name', user.name)
   const seeded = Object.keys(files).length ? files : { 'README.md': '# story fixture\n' }
   // The tickets and the queue live on the `agent-data` branch (#1748), never in the working
   // tree: a story that seeds them names the same paths, and they land where the product reads.
@@ -70,19 +84,27 @@ export async function makeFixtureRepo(cwd: string, files: Record<string, string>
   }
   // A bare repo standing in for `origin`, because a real project has one: an agent's branch
   // starts from its default branch, and whether a run's work reached it is what a story reads.
-  const origin = join(cwd, 'origin.git')
+  const origin = options.origin ?? join(cwd, 'origin.git')
+  await mkdir(dirname(origin), { recursive: true })
   await git(cwd, 'init', '-q', '--bare', origin)
   await git(cwd, 'remote', 'add', 'origin', origin)
 }
 
-/** The tool the fixture's start and resume lines run: a stand-in for a real run's, with a scripted agent. */
+/** The tool the fixture's hook lines run: a stand-in for a real run's, with a scripted agent. */
 export const FAKE_RUN = fileURLToPath(new URL('./fake-run-bin.js', import.meta.url))
 
+/** What the fixture's check line prints: nothing stands in the way of a scripted start, which needs no CLI and no login. */
+const NOTHING_WRONG = JSON.stringify({ problems: [], warnings: [] })
+
 /**
- * Give an added fixture project its start and resume lines, and only those: this machine's file,
- * under the directory adding the project ignored. Written after the add, which writes its own
- * defaults there.
+ * Give a fixture project its start, resume and check lines, and only those: this machine's file,
+ * under the directory adding the project ignores. Written after the add, over the defaults the add
+ * writes there; or before it, for a project a person adds later: an add keeps every line already
+ * there, so the project starts scripted runs from its first Start, never a real coding agent. The
+ * check is the shell's own `echo`: a launcher asks it each time it opens, and nothing is started for it.
  */
 export async function writeFakeRunHooks(cwd: string): Promise<void> {
-  await writeFile(join(cwd, PROJECT_HOOKS_FILE), `start: node ${JSON.stringify(FAKE_RUN)} start\nresume: node ${JSON.stringify(FAKE_RUN)} resume\n`)
+  const run = (mode: string) => `${mode}: node ${JSON.stringify(FAKE_RUN)} ${mode}\n`
+  await mkdir(dirname(join(cwd, PROJECT_HOOKS_FILE)), { recursive: true })
+  await writeFile(join(cwd, PROJECT_HOOKS_FILE), `${run('start')}${run('resume')}check: ${JSON.stringify(`echo '${NOTHING_WRONG}'`)}\n`)
 }

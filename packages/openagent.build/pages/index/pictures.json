@@ -3,25 +3,25 @@
     {
       "window": 1120,
       "width": 1120,
-      "height": 447,
+      "height": 443,
       "media": "(min-width: 1184px)"
     },
     {
       "window": 960,
       "width": 960,
-      "height": 447,
+      "height": 443,
       "media": "(min-width: 1024px)"
     },
     {
       "window": 704,
       "width": 662,
-      "height": 236,
+      "height": 232,
       "media": "(min-width: 768px)"
     },
     {
       "window": 390,
       "width": 348,
-      "height": 236,
+      "height": 232,
       "media": ""
     }
   ],
@@ -67,7 +67,7 @@
     {
       "window": 358,
       "width": 358,
-      "height": 264,
+      "height": 246,
       "media": ""
     }
   ]
