@@ -51,18 +51,30 @@ function detach(args: string[], env: NodeJS.ProcessEnv = process.env): void {
   spawn(process.execPath, [fileURLToPath(import.meta.url), ...args], { cwd: repo, detached: true, stdio: 'ignore', env }).unref()
 }
 
-/** The runs an `agents` run starts for itself, by their prompts: the task on the first line, the word that scripts it after. */
-const RUN_SUBAGENTS = ['Account page tests\n\nhold', 'Theme switch in the header\n\nhold', 'Read the theme tokens', 'Visual check in a browser\n\nfails']
+/**
+ * The runs an `agents` run starts for itself: the prompt (the task on the first line, the word that
+ * scripts it after), how many seconds one that fails works first, and how long one that ends at once
+ * says on its card that it ran, so a picture shows the times real runs take.
+ */
+const RUN_SUBAGENTS: Array<{ task: string; failsAfter?: number; ranFor?: number }> = [
+  { task: 'Account page tests\n\nhold' },
+  { task: 'Theme switch in the header\n\nhold' },
+  { task: 'Read the theme tokens', ranFor: 200 },
+  { task: 'Visual check in a browser\n\nfails', failsAfter: 9 },
+]
+/** What the runs of its own run on, on their cards. */
+const RUN_MODEL = 'claude-sonnet-4-5'
 /** Why the subagent that fails failed, as the line its main run is told says it. */
 const FAILURE = 'Chrome did not start'
-/** The subagents an `agents` run's coding agent starts inside its session: its name, and whether it is still at work, ended or failed. */
-const CALL_SUBAGENTS: Array<[string, 'working' | 'ended' | 'failed']> = [
-  ['Find colours written by hand', 'working'],
-  ['Settings page in dark', 'ended'],
-  ['Map the order table', 'failed'],
+/** The subagents an `agents` run's coding agent starts inside its session: its name, whether it is still at work, ended or failed, and how many seconds it works first. */
+const CALL_SUBAGENTS: Array<[string, 'working' | 'ended' | 'failed', number]> = [
+  ['Find colours written by hand', 'working', 0],
+  ['Settings page in dark', 'ended', 14],
+  ['Map the order table', 'failed', 5],
 ]
 /** What "many" adds: ended ones, so the list holds more than it shows at once. */
 const MORE_SUBAGENTS = ['Order table contrast', 'Dark images for the avatars', 'Focus rings in dark', 'Charts in dark', 'Email preview in dark', 'Print styles', 'Docs for the switch', 'Changelog line']
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
 /**
  * What an `agents` run does before it holds: its prompt, a word on the plan, its coding agent's own
@@ -79,20 +91,25 @@ async function startSubagents(id: string, prompt: string, log: SessionLog, signa
   await write({ type: 'action', label: 'Read', detail: 'src/account/Orders.tsx', id: 'toolu_own_orders' })
   await write({ type: 'output', id: 'toolu_own_orders', text: 'export function Orders() {}' })
   await write({ type: 'text', text: 'Three parts can go at once. I will start an agent on each and look for colours written by hand while they work.' })
-  const calls = [...CALL_SUBAGENTS, ...(prompt.includes('many') ? MORE_SUBAGENTS.map(name => [name, 'ended'] as const) : [])]
-  for (const [at, [name, end]] of calls.entries()) {
+  const calls = [...CALL_SUBAGENTS, ...(prompt.includes('many') ? MORE_SUBAGENTS.map((name, at) => [name, 'ended', 2 + at] as const) : [])]
+  for (const [at, [name]] of calls.entries()) {
     const call = `toolu_${at}`
     await write({ type: 'action', label: 'Agent', detail: name, id: call })
     await write({ type: 'subagent', id: call, status: 'working', name, role: 'general-purpose', model: 'claude-haiku-4-5', prompt: `${name}.\nSay what you found in one paragraph.` })
     await write({ type: 'action', label: 'Read', detail: 'src/theme/tokens.css', id: `${call}_read`, subagent: call })
-    if (end === 'working') continue
-    await write({ type: 'text', text: `${name}: done.`, subagent: call })
-    await write({ type: 'subagent', id: call, status: end, name })
   }
-  const runs = RUN_SUBAGENTS.map((task, at) => ({ task, id: agentIdFromStartedAt(new Date(Date.now() + at).toISOString()) }))
-  for (const { task, id: child } of runs) detach(['run', child], { ...process.env, PROMPT: task, E2E_PARENT: id })
-  // Told of each that ends on its own, once it has.
+  const runs = RUN_SUBAGENTS.map(({ task, failsAfter, ranFor }, at) => ({ task, failsAfter, ranFor, id: agentIdFromStartedAt(new Date(Date.now() + at).toISOString()) }))
+  for (const { task, failsAfter, ranFor, id: child } of runs) {
+    detach(['run', child], { ...process.env, PROMPT: task, MODEL: RUN_MODEL, E2E_PARENT: id, ...(failsAfter ? { E2E_FAILS_AFTER: String(failsAfter) } : {}), ...(ranFor ? { E2E_RAN_FOR: String(ranFor) } : {}) })
+  }
+  // Each of its own that ends, after the seconds it works; and told of each run that ends on its own, once it has.
   return async () => {
+    const ending = [...calls.entries()].filter(([, [, end]]) => end !== 'working').map(async ([at, [name, end, after]]) => {
+      await sleep(after * 1000)
+      if (signal.aborted) return
+      await write({ type: 'text', text: `${name}: done.`, subagent: `toolu_${at}` })
+      await write({ type: 'subagent', id: `toolu_${at}`, status: end, name })
+    })
     for (const { task, id: child } of runs.filter(run => !run.task.includes('hold'))) {
       while (!signal.aborted) {
         const card = await findRun(repo, child).catch(() => undefined)
@@ -100,9 +117,10 @@ async function startSubagents(id: string, prompt: string, log: SessionLog, signa
           await write(startEvent(childEndedLine({ id: child, status: card.status, ...(task.includes('fails') ? { detail: FAILURE } : {}) }), {}))
           break
         }
-        await new Promise(r => setTimeout(r, 200))
+        await sleep(200)
       }
     }
+    await Promise.all(ending)
   }
 }
 
@@ -141,6 +159,7 @@ async function session(id: string, checkout: string, prompt: string, card: Omit<
   const ended = told?.()
   try {
     if (prompt.includes('fails')) {
+      await sleep(Number(process.env['E2E_FAILS_AFTER'] ?? 0) * 1000)
       await driverSession.log!.record({ type: 'error', message: FAILURE })
       throw new Error(FAILURE)
     }
@@ -204,7 +223,9 @@ async function main(): Promise<void> {
     const parent = process.env['E2E_PARENT']
     const caller = { pid: process.pid, host: hostname(), workspace: checkout.path, ...publishOf(process.env['PUBLISH'], undefined), ...(parent ? { parent } : {}) }
     // The coding agent named as agent-runner names it, its default when the start named none.
-    await session(runId, checkout.path, prompt, { id: runId, startedAt: new Date().toISOString(), intent: prompt, driver: process.env['DRIVER'] ?? 'claude-code', ...(process.env['MODEL'] ? { model: process.env['MODEL'] } : {}), branch: checkout.branch, caller }, false)
+    // A run whose card is to say it ran a while (`E2E_RAN_FOR`, in seconds) started that long ago.
+    const startedAt = new Date(Date.now() - Number(process.env['E2E_RAN_FOR'] ?? 0) * 1000).toISOString()
+    await session(runId, checkout.path, prompt, { id: runId, startedAt, intent: prompt, driver: process.env['DRIVER'] ?? 'claude-code', ...(process.env['MODEL'] ? { model: process.env['MODEL'] } : {}), branch: checkout.branch, caller }, false)
     return
   }
   if (mode === 'continue' && runId) {
