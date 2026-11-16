@@ -81,12 +81,13 @@ describe('the list of a run\'s subagents', () => {
     render(panel({ events, subagents }))
     expect(screen.getAllByRole('heading').map(h => h.textContent)).toEqual(['Failed', 'Working', 'Ended'])
     expect(rowNames()).toEqual([
-      'Map the order table · failed · 2m',
-      'Visual check in a browser · failed · 2m · Chrome did not start',
-      'Account page tests · working · 6m',
-      'Find colours written by hand · working · 2m',
-      'Read the theme tokens · done · 3m',
+      'Map the order table · failed',
+      'Visual check in a browser · failed · Chrome did not start',
+      'Account page tests · working',
+      'Find colours written by hand · working',
+      'Read the theme tokens · done',
     ])
+    expect(rowButtons().map(row => document.getElementById(row.getAttribute('aria-describedby') ?? '')?.textContent)).toEqual(['2m 0s', '2m 0s', '6m 0s', '2m 0s', '3m 0s'])
     expect(screen.getByText('Chrome did not start')).toBeTruthy()
     // Nothing is open until a row is pressed.
     expect(screen.queryByRole('button', { name: /^Close / })).toBeNull()
@@ -134,11 +135,22 @@ describe('the list of a run\'s subagents', () => {
     pointTo(under)
     list.rerender(panel({ subagents: [run(20, 'Find the old tokens', 'done', 5), run(22, 'Account page tests', 'running'), run(24, 'Print styles', 'running'), run(26, 'Theme switch in the header', 'running')] }))
     expect(rowButtons()[1]).toBe(under)
-    expect(rowNames()).toEqual(['Find the old tokens · done · 5m', 'Account page tests · working · 8m', 'Print styles · working · 6m'])
+    expect(rowNames()).toEqual(['Find the old tokens · done', 'Account page tests · working', 'Print styles · working'])
     expect(screen.queryByRole('button', { name: 'Stop Find the old tokens' })).toBeNull()
     pointAway(under)
-    expect(rowNames()).toEqual(['Account page tests · working · 8m', 'Print styles · working · 6m', 'Theme switch in the header · working · 4m', 'Find the old tokens · done · 5m'])
+    expect(rowNames()).toEqual(['Account page tests · working', 'Print styles · working', 'Theme switch in the header · working', 'Find the old tokens · done'])
     expect(rowButtons()[0]).toBe(under)
+  })
+
+  test("a subagent's time is the chat's count, said as what describes its row: at work it counts each second and its name stays the same", () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] })
+    vi.setSystemTime(new Date('2026-10-01T10:30:43.000Z'))
+    render(panel({ subagents: [run(22, 'Account page tests', 'running'), run(1, 'Read the theme tokens', 'done', 3)] }))
+    const working = screen.getByRole('button', { name: /^Account page tests/ })
+    expect([working.getAttribute('aria-label'), working.getAttribute('aria-describedby') && document.getElementById(working.getAttribute('aria-describedby')!)?.textContent]).toEqual(['Account page tests · working', '8m 43s'])
+    act(() => vi.advanceTimersByTime(5000))
+    expect(screen.getByRole('button', { name: 'Account page tests · working', description: '8m 48s' })).toBe(working)
+    expect(screen.getByRole('button', { name: 'Read the theme tokens · done', description: '3m 0s' })).toBeTruthy()
   })
 
   test('a run at work is stopped from its row or from its open part; a subagent of the coding agent\'s own, or one that ended, has no Stop', async () => {
@@ -197,7 +209,7 @@ describe('the list of a run\'s subagents', () => {
     render(panel({ subagents: [run(24, 'Account page tests', 'running')], events, agentId: 'folds' }))
     const fold = screen.getByRole('button', { name: 'Ended · 8' })
     expect(fold.getAttribute('aria-expanded')).toBe('false')
-    expect(rowNames()).toEqual(['Account page tests · working · 6m'])
+    expect(rowNames()).toEqual(['Account page tests · working'])
     fireEvent.click(fold)
     expect(rowNames()).toHaveLength(9)
     cleanup()
@@ -236,7 +248,8 @@ describe('the list of a run\'s subagents', () => {
     const sub = run(1, 'Read the theme tokens', 'done', 7)
     render(panel({ subagents: [sub] }))
     const tip = await hoverTooltip(screen.getByRole('button', { name: /^Read the theme tokens/ }))
-    expect(tip.textContent).toBe('Read the theme tokensclaude-sonnet-5-5Done · ran 7m')
+    // The dot before its time is drawn, not said.
+    expect(tip.textContent).toBe('Read the theme tokensclaude-sonnet-5-5Doneran 7m 0s')
   })
 
   test('with no model known, a card comes only where the row cuts the name, and then says its state alone', async () => {
@@ -254,7 +267,7 @@ describe('the list of a run\'s subagents', () => {
     width.mockReturnValue(400)
     render(panel({ subagents: [sub] }))
     const tip = await hoverTooltip(screen.getByRole('button', { name: /^Read the theme tokens/ }))
-    expect(tip.textContent).toBe('Read the theme tokensDone · ran 7m')
+    expect(tip.textContent).toBe('Read the theme tokensDoneran 7m 0s')
     width.mockRestore()
   })
 })

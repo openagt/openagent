@@ -5,7 +5,7 @@ import { onAgent } from '../rpc/reads.js'
 import { panesPage } from '../lib/panes.js'
 import { revealSubagent, useRevealedSubagent } from '../lib/reveal-change.js'
 import { arrange, failureReasons, subagentRows, subagentTranscript, type SubagentRow } from '../lib/subagents.js'
-import { formatDuration, formatElapsed, formatSince } from '../lib/format-date.js'
+import { formatElapsed } from '../lib/format-date.js'
 import { anyModelName, useModels } from '../lib/models.js'
 import { runTone, runWord } from '../lib/run-words.js'
 import { usePolled } from '../lib/use-async.js'
@@ -18,7 +18,7 @@ import { navRowClass } from './ui/nav-row.js'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip.js'
 import { EventList } from './EventList.js'
 import { RunMark } from './RunMark.js'
-import { tokenWords } from './ToolCalls.js'
+import { Seconds, tokenWords } from './ToolCalls.js'
 
 // The pane of a run's subagents, beside its chat: a calm list of them, one line each (its state's
 // mark, its name, how long it worked), what waits on the person and what failed first; and under
@@ -33,8 +33,6 @@ import { tokenWords } from './ToolCalls.js'
 const TRANSCRIPT_EVERY_MS = 2_000
 /** How often an ended one's is: it changes no more, and a read now and then costs nothing. */
 const ENDED_EVERY_MS = 60_000
-/** How often a working row's time is said again: it counts in minutes. */
-const TICK_MS = 15_000
 const NO_EVENTS: OpenAgentEvent[] = []
 
 export function SubagentsPanel({
@@ -112,16 +110,6 @@ function rowOf(list: HTMLElement | null, key: string | undefined): HTMLElement |
   return [...(list?.querySelectorAll<HTMLElement>('[data-key]') ?? [])].find(row => row.dataset['key'] === key) ?? null
 }
 
-/** Draws again now and then while `on`, so a working row's time goes on. */
-function useTicking(on: boolean): void {
-  const [, setTick] = useState(0)
-  useEffect(() => {
-    if (!on) return
-    const timer = setInterval(() => setTick(n => n + 1), TICK_MS)
-    return () => clearInterval(timer)
-  }, [on])
-}
-
 /** Whether `text` is cut where `ref` draws it on one line, read again as its box changes its size. */
 function useCut(ref: RefObject<HTMLElement | null>, text: string): boolean {
   const [cut, setCut] = useState(false)
@@ -162,7 +150,6 @@ function SubagentList({ ref, fold, page, rows, reasons, shown, projectId, onPick
   onStop: (key: string) => void
   className: string
 }) {
-  useTicking(rows.some(row => row.working))
   const [endedOpen, setEndedOpen] = useState(() => foldsOpened.get(page) ?? false)
   const pressFold = () => {
     foldsOpened.set(page, !endedOpen)
@@ -212,10 +199,13 @@ function Part({ name, children }: { name: string; children: ReactNode }) {
   )
 }
 
-/** How long a subagent has worked, or worked in all: "6m"; none for one that ended with no end known. */
-function ranFor(row: SubagentRow): string | undefined {
-  if (row.working) return formatSince(row.startedAt)
-  return row.endedAt !== undefined ? formatDuration(Date.parse(row.endedAt) - Date.parse(row.startedAt)) : undefined
+/**
+ * How long a subagent has worked, in the chat's form ("43s", "1m 12s"): counted every second while it
+ * works, by the chat's own counter; none for one that is not at work and has no end known.
+ */
+function Span({ row }: { row: SubagentRow }): ReactNode {
+  if (row.working) return <Seconds since={row.startedAt} />
+  return row.endedAt !== undefined ? formatElapsed(Date.parse(row.endedAt) - Date.parse(row.startedAt)) : null
 }
 
 const capital = (words: string): string => words.charAt(0).toUpperCase() + words.slice(1)
@@ -231,12 +221,12 @@ function SubagentItem({ row, reason, open, projectId, onPick, onStop }: { row: S
   const runId = row.agent?.id
   const { stopping, error, stop } = useStop(projectId, runId, row.working)
   const stoppable = row.working && runId !== undefined
-  const time = ranFor(row)
+  const timed = row.working || row.endedAt !== undefined
+  const time = useId()
   const second = error ?? reason
   // A run's failure is told it by a line its end sends: its row keeps the room for it from its first frame.
   const twoLines = second !== undefined || (runId !== undefined && row.status === 'failed')
   const model = row.model !== undefined ? [anyModelName(models, row.model), row.agent?.effort].filter(Boolean).join(' · ') : undefined
-  const state = row.working ? `${capital(runWord(row.status))} · ${time}` : time !== undefined ? `${capital(runWord(row.status))} · ran ${time}` : capital(runWord(row.status))
   const name = useRef<HTMLSpanElement>(null)
   // The card says what the row does not: the whole name where the row cuts it, or what it runs on.
   const tells = useCut(name, row.name) || model !== undefined
@@ -249,7 +239,9 @@ function SubagentItem({ row, reason, open, projectId, onPick, onStop }: { row: S
               type="button"
               data-key={row.key}
               aria-expanded={open}
-              aria-label={[row.name, runWord(row.status), time, second].filter(Boolean).join(' · ')}
+              // Its time is what describes it, not its name: a name said again every second floods the ear.
+              aria-label={[row.name, runWord(row.status), second].filter(Boolean).join(' · ')}
+              aria-describedby={timed ? time : undefined}
               onClick={() => onPick(row.key)}
               className={cn(navRowClass(open), twoLines && 'items-start md:h-12 md:py-1.5 max-md:h-16 max-md:py-3')}
             />
@@ -264,8 +256,10 @@ function SubagentItem({ row, reason, open, projectId, onPick, onStop }: { row: S
             </span>
             {second !== undefined && <span className={cn('block truncate text-xs max-md:leading-5', runTone('failed'))}>{second}</span>}
           </span>
-          {time !== undefined && (
-            <span className={cn('shrink-0 text-xs leading-5 text-faint-foreground tabular-nums', stoppable && 'pointer-fine:group-hover/row:invisible pointer-fine:group-has-focus-visible/row:invisible')}>{time}</span>
+          {timed && (
+            <span id={time} className={cn('shrink-0 text-xs leading-5 text-faint-foreground tabular-nums', stoppable && 'pointer-fine:group-hover/row:invisible pointer-fine:group-has-focus-visible/row:invisible')}>
+              <Span row={row} />
+            </span>
           )}
         </TooltipTrigger>
         {/* The whole name, what it runs on, and how it stands, as T3 Code's card says them; with no model known, its state at the card's left. */}
@@ -275,7 +269,14 @@ function SubagentItem({ row, reason, open, projectId, onPick, onStop }: { row: S
             {model !== undefined && <span className="min-w-0 truncate">{model}</span>}
             <span className="flex shrink-0 items-center gap-1.5">
               <RunMark status={row.status} className="size-3" />
-              {state}
+              {capital(runWord(row.status))}
+              {/* Its dot stands with its time: the chat's counter says nothing in a run's first two seconds. */}
+              {timed && (
+                <span className="tabular-nums empty:hidden before:me-1.5 before:content-['·']">
+                  {!row.working && 'ran '}
+                  <Span row={row} />
+                </span>
+              )}
             </span>
           </span>
         </TooltipContent>
