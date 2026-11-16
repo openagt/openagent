@@ -122,7 +122,7 @@ function SubagentList({ ref, rows, reasons, shown, projectId, onPick, className 
             <button type="button" aria-expanded={endedOpen} onClick={() => setEndedOpen(open => !open)} className={cn(navRowClass(false), 'text-muted-foreground')}>
               <span aria-hidden className="w-4 shrink-0" />
               <span className="min-w-0 flex-1 text-start">Ended · {ended.length}</span>
-              <ChevronRight aria-hidden className={cn('transition-transform duration-150 ease-out', endedOpen && 'rotate-90')} />
+              <ChevronRight aria-hidden className={cn('transition-transform', endedOpen && 'rotate-90')} />
             </button>
             {endedOpen && <ul>{ended.map(item)}</ul>}
           </section>
@@ -181,7 +181,7 @@ function SubagentItem({ row, reason, open, projectId, onPick }: { row: SubagentR
               aria-expanded={open}
               aria-label={[row.name, runWord(row.status), time, second].filter(Boolean).join(' · ')}
               onClick={() => onPick(row.key)}
-              className={cn(navRowClass(open), second !== undefined && 'items-start md:h-12 md:py-1.5 max-md:h-16 max-md:py-3.5')}
+              className={cn(navRowClass(open), second !== undefined && 'items-start md:h-12 md:py-1.5 max-md:h-16 max-md:py-3')}
             />
           }
         >
@@ -190,7 +190,7 @@ function SubagentItem({ row, reason, open, projectId, onPick }: { row: SubagentR
           </span>
           <span className="min-w-0 flex-1 text-start">
             <span className="block truncate">{row.name}</span>
-            {second !== undefined && <span className={cn('block truncate text-xs', runTone('failed'))}>{second}</span>}
+            {second !== undefined && <span className={cn('block truncate text-xs max-md:leading-5', runTone('failed'))}>{second}</span>}
           </span>
           {time !== undefined && (
             <span className={cn('shrink-0 text-xs leading-5 text-faint-foreground tabular-nums', stoppable && 'pointer-fine:group-hover/row:invisible pointer-fine:group-has-focus-visible/row:invisible')}>{time}</span>
