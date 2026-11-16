@@ -80,8 +80,8 @@ function Row({ kind, name, note, online, health, behind }: { kind: MachineKind; 
   )
   return (
     <PanelRow
-      // The rings are the row's last cell: in a narrow card it takes a line of its own, starting where the name does.
-      className={rings ? '@max-[16.5rem]/devices:flex-wrap @max-[16.5rem]/devices:[&>span:last-child]:my-0 @max-[16.5rem]/devices:[&>span:last-child]:basis-full @max-[16.5rem]/devices:[&>span:last-child]:justify-items-start @max-[16.5rem]/devices:[&>span:last-child]:pl-7 @max-[16.5rem]/devices:[&>span:last-child>span]:mt-0' : ''}
+      // The rings are the row's last cell: in a narrow card it takes a grid row of its own across the card, starting where the name does.
+      className={rings ? '@max-[16.5rem]/devices:[&>span:last-child]:col-span-full @max-[16.5rem]/devices:[&>span:last-child]:row-start-2 @max-[16.5rem]/devices:[&>span:last-child]:mx-0 @max-[16.5rem]/devices:[&>span:last-child]:mt-3 @max-[16.5rem]/devices:[&>span:last-child]:mb-0 @max-[16.5rem]/devices:[&>span:last-child]:pl-7 @max-[16.5rem]/devices:[&>span:last-child]:justify-items-start @max-[16.5rem]/devices:[&>span:last-child>span]:mt-0' : ''}
       state={<MachineMark kind={kind} online={online} labelled />}
       title={name}
       titleHint={name}
