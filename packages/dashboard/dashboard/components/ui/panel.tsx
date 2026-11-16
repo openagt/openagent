@@ -1,4 +1,4 @@
-import { Fragment, useId, type ReactNode } from 'react'
+import { isValidElement, useId, type ReactNode } from 'react'
 import { cn } from '../../lib/utils.js'
 import { inPlace } from '../../lib/in-place.js'
 import { cardSurface } from './card.js'
@@ -72,9 +72,39 @@ export function PanelMore({ children, onClick }: { children: ReactNode; onClick:
 // The whole row is the link or the press: the title's box covers the row. The row's presses stand above that cover.
 const coverClass = 'outline-none after:absolute after:inset-0'
 
+/** A fact of a line of facts; with a class, what its own wrapper needs too (`max-md:sr-only`: a phone leaves it, its dot with it, to a screen reader). */
+export type Fact = ReactNode | { fact: ReactNode; className: string }
+
+/**
+ * A line of facts, joined one way everywhere: a dot between each two, 6 px on either side of it. The dot
+ * is drawn in the wrapper of the fact it stands before, and not said, so a fact a narrow screen does not
+ * draw takes its dot along. A fact that is nothing (`false`, `''`, `undefined`) is left out. `part` is each
+ * fact's wrapper's own class and `words` its words', where the line is one line and its words give way.
+ */
+export function Facts({ facts, className, part, words }: { facts: Fact[]; className?: string; part?: string; words?: string }) {
+  const shown = facts.filter(fact => fact !== undefined && fact !== null && fact !== false && fact !== '')
+  return (
+    <span className={className}>
+      {shown.map((fact, index) => {
+        const own = typeof fact === 'object' && fact !== null && !isValidElement(fact) && 'fact' in fact ? fact : { fact, className: undefined }
+        return (
+          <span key={index} className={cn(part, own.className)}>
+            {index > 0 && (
+              <span aria-hidden className="mx-1.5 shrink-0">
+                ·
+              </span>
+            )}
+            {words === undefined ? own.fact : <span className={words}>{own.fact}</span>}
+          </span>
+        )
+      })}
+    </span>
+  )
+}
+
 /**
  * One row of a {@link Panel}, two lines: what it is (`state`: a place, a {@link StateCell}), its name, and
- * under it what is known of it (`meta`, parts said with a dot between them). At its right one fact
+ * under it what is known of it (`meta`: {@link Facts}). At its right one fact
  * (`fact`: an age, a place) that, under the pointer and the keyboard, gives its room to the row's
  * own presses (`actions`, always shown where no mouse points, and on a phone-width screen, where a row's
  * press is the one way to its actions). With `href` it is a link (`external`
@@ -99,7 +129,7 @@ export function PanelRow({ state, before, title, titleHint, meta = [], metaLines
   title: ReactNode
   /** Said under the pointer over the name: the whole text where the name stands in for it. */
   titleHint?: string | undefined
-  meta?: ReactNode[]
+  meta?: Fact[]
   /** How many lines what is known of it may take before it is cut: 2 for a sentence a person must read whole (a question). */
   metaLines?: 1 | 2
   columns?: ReactNode
@@ -147,14 +177,11 @@ export function PanelRow({ state, before, title, titleHint, meta = [], metaLines
         {named}
         {/* On one line every part but the last is said whole and the last gives way, cut with "…"; on two, the parts run on and the second line is cut. */}
         {parts.length > 0 && (
-          <span className={cn('mt-1 text-xs text-faint-foreground', metaLines === 2 ? 'line-clamp-2' : 'flex min-w-0 items-center gap-1.5')}>
-            {parts.map((part, index) => (
-              <Fragment key={index}>
-                {index > 0 && <span aria-hidden className={cn(metaLines === 2 && 'mx-1.5')}>·</span>}
-                {metaLines === 2 ? part : <span className="min-w-0 truncate not-last:shrink-0">{part}</span>}
-              </Fragment>
-            ))}
-          </span>
+          <Facts
+            facts={parts}
+            className={cn('mt-1 text-xs text-faint-foreground', metaLines === 2 ? 'line-clamp-2' : 'flex min-w-0 items-center')}
+            {...(metaLines === 2 ? {} : { part: 'flex min-w-0 items-center not-last:shrink-0', words: 'min-w-0 truncate' })}
+          />
         )}
       </span>
       {columns !== undefined && <span className="flex h-5 shrink-0 items-center gap-4 text-xs text-faint-foreground">{columns}</span>}

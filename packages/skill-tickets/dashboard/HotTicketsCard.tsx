@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { ArrowUp, Bot, CirclePause, Clock, WifiOff, type LucideIcon } from 'lucide-react'
-import { Button, Card, LinkActions, PageLink, Panel, PanelGroup, PanelNote, SentenceShape, Slot, cn, formatDateTime, inPlace, runSaid, usePolled, useModuleHost, useOpenAgentDown, type ModuleCardProps, type ModuleProject, type ReadState } from '@openagt/dashboard/module'
+import { Button, Card, Facts, LinkActions, PageLink, Panel, PanelGroup, PanelNote, SentenceShape, Slot, cn, formatDateTime, inPlace, runSaid, usePolled, useModuleHost, useOpenAgentDown, type ModuleCardProps, type ModuleProject, type ReadState } from '@openagt/dashboard/module'
 import { claimState, heldBack, holderAgent, hotLane, ticketLink, withHolder, type ClaimState, type HotLane } from '../src/module.js'
 import { holdingRun } from './lib/holding-run.js'
 import { listTickets } from './lib/list.js'
@@ -228,7 +228,7 @@ function Row({ hot, showProject, reload }: { hot: HotTicket; showProject: boolea
         )}
         {(fact || showProject) && (
           <span className="max-w-40 truncate text-xs text-muted-foreground" title={fact}>
-            {[fact, showProject ? project.name : undefined].filter(Boolean).join(' · ')}
+            <Facts facts={[fact, showProject && project.name]} />
           </span>
         )}
       </span>

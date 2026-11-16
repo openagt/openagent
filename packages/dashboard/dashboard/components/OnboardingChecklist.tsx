@@ -7,7 +7,7 @@ import { usePerson } from '../lib/use-person.js'
 import { cn } from '../lib/utils.js'
 import { Button, buttonVariants } from './ui/button.js'
 import { inPlace } from '../lib/in-place.js'
-import { Panel, PanelGroup } from './ui/panel.js'
+import { Facts, Panel, PanelGroup } from './ui/panel.js'
 import { Skeleton } from './ui/skeleton.js'
 import { usePreferences, updatePreferences, notificationsEnabled } from '../lib/preferences.js'
 import { setBrowserNotifications, useNotificationPermission } from '../lib/notification-permission.js'
@@ -365,8 +365,8 @@ export function OnboardingChecklist({
                         {...(press ? { 'data-cover': true } : {})}
                         className={cn('flex flex-wrap items-center gap-x-2 text-left text-sm', press && 'outline-none after:absolute after:inset-0', step.done ? 'text-muted-foreground' : isOpen ? 'font-medium' : 'text-muted-foreground hover:text-foreground')}
                       >
-                        <span>{step.label}</span>
-                        {step.done && step.doneNote && <span className="truncate text-xs text-muted-foreground">· {step.doneNote}</span>}
+                        {/* What was done after its name, as every line of facts joins them. */}
+                        <Facts facts={[step.label, step.done && step.doneNote && { fact: step.doneNote, className: 'truncate text-xs text-muted-foreground' }]} className="flex min-w-0 items-center" />
                         {step.optional && !step.done && <span className="text-xs font-normal text-muted-foreground">Optional</span>}
                       </button>
                       {isOpen && step.info && (

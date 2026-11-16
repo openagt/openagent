@@ -262,19 +262,22 @@ export function LogsPage({ projects, path }: ModulePageProps) {
                       many && project.name,
                       card.cost !== undefined && dollars(card.cost),
                       // Last, as the part that gives way, and cut in its middle: runs started the same minute differ only at
-                      // their branch's end. A phone, where it has no room, drops it with its dot.
-                      !phone && card.branch && (
-                        <span className="flex min-w-0 font-mono" title={card.branch}>
-                          <MiddleCut text={card.branch} />
-                        </span>
-                      ),
+                      // their branch's end. A phone, where it has no room, leaves it with its dot to a screen reader.
+                      card.branch && {
+                        fact: (
+                          <span className="flex min-w-0 font-mono" title={card.branch}>
+                            <MiddleCut text={card.branch} />
+                          </span>
+                        ),
+                        className: 'max-md:sr-only',
+                      },
                     ]}
                     columns={
                       <>
                         {columns.who && <RunPerson person={card.person} account={accountOf(project.id, card.person)} />}
-                        {columns.agent && <span className="w-36 truncate max-md:hidden">{agentSaid(card, agents)}</span>}
+                        {columns.agent && <span className="w-36 truncate max-md:sr-only">{agentSaid(card, agents)}</span>}
                         {columns.pr && (
-                          <span className="w-12 text-right max-md:hidden">
+                          <span className="w-12 text-right max-md:sr-only">
                             {card.pr && (
                               <a href={card.pr.url} target="_blank" rel="noreferrer" title={`Pull request #${card.pr.number}`} className="focus-ring relative rounded-sm text-primary hover:underline">
                                 #{card.pr.number}

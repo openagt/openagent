@@ -1,4 +1,4 @@
-import { PageLink, Panel, PanelGroup, PanelNote, PartDescription, PersonMark, RunMark, SentenceShape, Slot, Tooltip, TooltipContent, TooltipTrigger, formatAge, formatDateTime, personName, personSaid, runWord, useModuleHost, usePolled, type ModuleCardProps, type ModuleHostPerson } from '@openagt/dashboard/module'
+import { Facts, PageLink, Panel, PanelGroup, PanelNote, PartDescription, PersonMark, RunMark, SentenceShape, Slot, Tooltip, TooltipContent, TooltipTrigger, formatAge, formatDateTime, personName, personSaid, runWord, useModuleHost, usePolled, type ModuleCardProps, type ModuleHostPerson } from '@openagt/dashboard/module'
 import { membersOf, peopleWithRuns, type Member, type PersonActivity } from '../src/people.js'
 
 // The Overview's Members card: who worked in the projects shown in the last 30 days, from `logs
@@ -18,13 +18,13 @@ const NONE: Shown[] = []
 /** How many days back the card looks. */
 const DAYS = 30
 
-/** What a person did in those days, in a few words: "63 runs · $13.70 · 416 commits", "5 commits". */
-function didWords(member: Member): string {
-  const parts = [
-    member.runs > 0 ? `${member.runs === 1 ? '1 run' : `${member.runs} runs`}${member.cost > 0 ? ` · $${member.cost.toFixed(2)}` : ''}` : undefined,
-    member.commits > 0 ? (member.commits === 1 ? '1 commit' : `${member.commits} commits`) : undefined,
-  ].filter(Boolean)
-  return parts.length ? parts.join(' · ') : 'Nothing in the last 30 days'
+/** What a person did in those days, as facts of a line: "63 runs", "$13.70", "416 commits"; none when they did nothing. */
+function didFacts(member: Member): string[] {
+  return [
+    member.runs > 0 && (member.runs === 1 ? '1 run' : `${member.runs} runs`),
+    member.runs > 0 && member.cost > 0 && `$${member.cost.toFixed(2)}`,
+    member.commits > 0 && (member.commits === 1 ? '1 commit' : `${member.commits} commits`),
+  ].filter(fact => fact !== false)
 }
 
 /** How many runs of a member stand one way now, by their state's mark and word: "working", "2 waiting". */
@@ -96,7 +96,7 @@ export function MembersCard({ projects }: ModuleCardProps) {
                     )}
                   </div>
                   <p className="mt-1 truncate text-xs text-faint-foreground tabular-nums" title={projects.length > 1 ? `In ${member.projects.join(', ')}` : undefined}>
-                    {didWords(member)}
+                    {didFacts(member).length > 0 ? <Facts facts={didFacts(member)} /> : 'Nothing in the last 30 days'}
                   </p>
                 </div>
                 {member.running > 0 || member.waiting > 0 ? null : (
