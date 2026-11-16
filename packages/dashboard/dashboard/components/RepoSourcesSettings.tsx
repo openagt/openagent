@@ -92,9 +92,9 @@ function Sources({ sources, onChanged }: { sources: RepoSources; onChanged: () =
                   setOwner(event.target.value)
                   reset()
                 }}
-                className="w-60 max-md:flex-1"
+                className="w-60 max-md:h-11 max-md:flex-1"
               />
-              <Button type="submit" variant="secondary" disabled={!owner.trim()} loading={busy}>
+              <Button type="submit" variant="secondary" disabled={!owner.trim()} loading={busy} className="max-md:h-11">
                 Add
               </Button>
             </form>
