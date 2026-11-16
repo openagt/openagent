@@ -24,9 +24,11 @@ vi.mock('./YourAgentsPart.js', () => ({ YourAgentsPart: () => <span>your agents<
 const modules = vi.hoisted(() => ({ loaded: true, gone: false, line: [] as { id: string; order: number; node: unknown }[] }))
 vi.mock('./ModuleCards.js', async () => {
   const { Section } = await import('./ui/section.js')
-  // A package's card as packages draw them: a part with a link to its page at its heading's right.
+  const { PartDescription } = await import('./PartDescription.js')
+  // A package's card as packages draw them: a part with a link to its page at its heading's right, and the sentence that says what it is.
   const node = (
     <Section title="Hot" action={<a href="/tickets">Every ticket of the project</a>}>
+      <PartDescription>The tickets to do first</PartDescription>
       <div>a package's card</div>
     </Section>
   )
@@ -197,6 +199,14 @@ describe('the Overview', () => {
     expect(bar.parentElement).toBe(card.parentElement)
     expect(card.contains(bar)).toBe(false)
     expect(bar.className.split(' ')).toEqual(expect.arrayContaining(['absolute', 'bottom-full', 'right-0']))
+  })
+
+  test("while the page is arranged, a part's sentence is still for a screen reader alone, so arranging moves nothing", async () => {
+    show()
+    fireEvent.click(await screen.findByRole('button', { name: 'Customize' }))
+    const sentence = screen.getByText('The tickets to do first')
+    expect(sentence.className).toBe('sr-only')
+    expect(sentence.closest('[inert]')!.className).not.toMatch(/sr-only/)
   })
 
   test('Esc leaves Customize as Done does, and the keyboard is back on Customize', async () => {

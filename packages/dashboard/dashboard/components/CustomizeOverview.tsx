@@ -259,8 +259,8 @@ export function EditOverview({ arranged, under, layouts, layoutKey, notice }: { 
               onWidth={picked => write(changed(card.id, { width: picked }))}
               onHide={() => write(changed(card.id, { hidden: true }))}
             />
-            {/* The card as it stands, its own buttons asleep while it is being arranged, with the sentence that says what it is. Its heading's link to its page is not drawn, its room kept. */}
-            <div inert className="flex flex-1 select-none flex-col *:flex-1 [&_[data-part-description]]:not-sr-only [&_section>div:first-child>h2~*]:invisible">
+            {/* The card as it stands, its own buttons asleep while it is being arranged; its sentence still for a screen reader alone, so arranging moves nothing. Its heading's link to its page is not drawn, its room kept. */}
+            <div inert className="flex flex-1 select-none flex-col *:flex-1 [&_section>div:first-child>h2~*]:invisible">
               {card.node}
             </div>
           </div>

@@ -258,7 +258,7 @@ export function DashboardPage({
         )
       }
     >
-      {/* Arranging keeps the parts in their order: the first steps and the updates stay, each part gains the sentence that says what it is, and what arranging adds comes after the parts. */}
+      {/* Arranging keeps the parts in their order and where they stand: the first steps and the updates stay, and what arranging adds comes after the parts. */}
       <div className="space-y-10">
         {!layoutRead ? null : editing ? (
           <EditOverview
