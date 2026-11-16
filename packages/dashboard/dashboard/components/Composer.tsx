@@ -514,12 +514,12 @@ export const Composer = forwardRef<ComposerHandle, {
               ends as far from the box's foot as from its right; the room it gives up is over it. */}
           <TooltipsPastBox value={surface}>
             <div className={cn('mt-2', rowClass, 'h-7')}>
-              {/* In a narrow box both sides give way, each by what it is wide: the left's words and the Auto menu's. */}
-              <div className={cn(rowLeftClass, '@max-xl:flex-auto')}>
+              {/* In a narrow box, where its items say their icons only, each stays whole and the side scrolls, as the row above the box does. */}
+              <div className={cn(rowLeftClass, '@max-xl:overflow-x-auto @max-xl:[scrollbar-width:none] @max-xl:[mask-image:linear-gradient(to_right,#000_85%,transparent)] @max-xl:*:shrink-0')}>
                 {commandsEl}
                 {controls}
               </div>
-              <div className="flex items-center gap-0.5 @xl:shrink-0 @max-xl:min-w-0 @max-xl:*:shrink-0">
+              <div className="flex shrink-0 items-center gap-0.5">
                 {controlsEnd}
                 {driverModelEl ||
                   // Only with something in it: an empty one would still take the row's gap, and the

@@ -1,4 +1,4 @@
-import { Check } from 'lucide-react'
+import { ArrowUpFromLine, Check, CircleOff, GitCommitHorizontal, GitMerge, GitPullRequestArrow, type LucideIcon } from 'lucide-react'
 import { PUBLISH_LABELS, type PublishPick } from '../../src/client.js'
 import { cn } from '../lib/utils.js'
 import { rowButtonClass, RowChevron, rowWideClass } from './ui/row-item.js'
@@ -14,6 +14,15 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
 } from './ui/dropdown-menu.js'
+
+/** Each pick as its icon, which says it in a narrow box, as the agent, the skills and Context say themselves there. */
+const PUBLISH_ICONS: Readonly<Record<PublishPick, LucideIcon>> = {
+  nothing: CircleOff,
+  commit: GitCommitHorizontal,
+  branch: ArrowUpFromLine,
+  pr: GitPullRequestArrow,
+  merge: GitMerge,
+}
 
 const PUBLISH_DESCRIPTIONS: Readonly<Record<PublishPick, string>> = {
   nothing: 'Adds nothing to your message. The agent decides, and usually commits.',
@@ -52,6 +61,7 @@ export function AutoMenu({
 }) {
   // Only the levels that open a pull request have one to name.
   const opensRequest = publish === 'pr' || publish === 'merge'
+  const Icon = PUBLISH_ICONS[publish]
   const into = opensRequest ? target : undefined
   return (
     <DropdownMenu>
@@ -62,18 +72,15 @@ export function AutoMenu({
               type="button"
               disabled={busy}
               // A branch's name can run long: of a set width at most, as the branch button is, phone too.
-              // In a narrow box it is the item of the foot's right that gives way: its pick first, then cut.
-              className={cn(rowButtonClass, 'max-w-[20rem]! @max-xl:shrink!')}
+              className={cn(rowButtonClass, 'max-w-[20rem]!')}
             />
           }
         >
-          <span className="truncate">
-            <span className={rowWideClass}>Auto:</span>
-            {` ${PUBLISH_LABELS[publish]}${into ? ` → ${into.into}` : ''}`}
-          </span>
+          <Icon className="size-4 shrink-0 @xl:hidden" aria-hidden />
+          <span className={cn('truncate', rowWideClass)}>{`Auto: ${PUBLISH_LABELS[publish]}${into ? ` → ${into.into}` : ''}`}</span>
           <RowChevron />
         </TooltipTrigger>
-        <TooltipContent>{`What the agent does by itself when it finishes.${into ? ` The pull request goes into ${into.into}.` : ''}`}</TooltipContent>
+        <TooltipContent>{`${PUBLISH_LABELS[publish]}: what the agent does by itself when it finishes.${into ? ` The pull request goes into ${into.into}.` : ''}`}</TooltipContent>
       </Tooltip>
       <DropdownMenuContent className="min-w-[19rem] max-w-[22rem]">
         <DropdownMenuGroup>

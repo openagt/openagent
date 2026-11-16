@@ -237,12 +237,11 @@ export interface Arrangement {
   folds: boolean
 }
 
-/** Where a subagent's row stands: "Ended" only for one that ended done or stopped. */
-function partOf(row: SubagentRow): ListPart {
-  if (row.status === 'waiting') return 'Needs you'
-  if (row.status === 'failed') return 'Failed'
-  return row.status === 'done' || row.status === 'stopped' ? 'Ended' : 'Working'
-}
+/** The part of the pane's list each state stands in, a group's name and not the state's word: "Ended" holds done and stopped; any other state is at work. */
+const PART_OF: Readonly<Partial<Record<string, ListPart>>> = { waiting: 'Needs you', failed: 'Failed', done: 'Ended', stopped: 'Ended' }
+
+/** Where a subagent's row stands. */
+const partOf = (row: SubagentRow): ListPart => PART_OF[row.status] ?? 'Working'
 
 const PARTS: readonly ListPart[] = ['Needs you', 'Failed', 'Working', 'Ended']
 
