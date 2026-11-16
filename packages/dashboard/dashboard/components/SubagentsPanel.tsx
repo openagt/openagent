@@ -64,28 +64,45 @@ export function SubagentsPanel({
   const reasons = useMemo(() => failureReasons(events, subagents), [events, subagents])
   const shown = rows.find(row => row.key === asked?.key)
   const list = useRef<HTMLDivElement>(null)
-  // Closed, the keyboard goes back to the row that opened it.
-  const close = (key: string) => {
-    revealSubagent(page)
-    rowOf(list.current, key)?.focus()
-  }
-  // A run stopped from its row: its Stop goes with its work and its row moves under Ended, drawn
-  // anew, so the keyboard goes to the row there; else, the pane being its home, to the pane's first press.
-  const stopped = useRef<string | undefined>(undefined)
-  const landing = useMemo<RefObject<HTMLElement | null>>(() => ({ get current() { return rowOf(list.current, stopped.current) } }), [])
+  const fold = useRef<HTMLButtonElement>(null)
+  // What had the keyboard when the part was asked for: the row that opened it, here or in the chat.
+  const opener = useRef<Element | null>(null)
+  useLayoutEffect(() => {
+    if (asked?.key !== undefined) opener.current = document.activeElement
+  }, [asked])
+  // The pane is the home of what a press in it takes away. Closed, the part's keyboard goes back to
+  // what opened it, if that is still on the page; else to its row in the list; else, with that row
+  // inside the closed fold, to the fold's line. A run stopped from its row loses its Stop and moves
+  // under Ended, drawn anew: the keyboard goes to its row there.
+  const back = useRef<{ opener?: Element | null; key: string } | undefined>(undefined)
+  const landing = useMemo<RefObject<HTMLElement | null>>(
+    () => ({
+      get current() {
+        const to = back.current
+        if (to === undefined) return null
+        if (to.opener instanceof HTMLElement && to.opener.isConnected && to.opener !== document.body) return to.opener
+        return rowOf(list.current, to.key) ?? fold.current
+      },
+    }),
+    [],
+  )
   return (
     <FocusHome className="flex min-h-0 flex-1 flex-col" landing={landing}>
       <SubagentList
         ref={list}
+        fold={fold}
         rows={rows}
         reasons={reasons}
         shown={shown?.key}
         projectId={projectId}
         onPick={key => revealSubagent(page, key === shown?.key ? undefined : key)}
-        onStop={key => (stopped.current = key)}
+        onStop={key => (back.current = { key })}
         className={shown ? 'max-h-1/2 shrink-0' : 'flex-1'}
       />
-      {shown && <Shown key={shown.key} row={shown} projectId={projectId} events={events} onOpenAgent={onOpenAgent} onClose={() => close(shown.key)} />}
+      {shown && <Shown key={shown.key} row={shown} projectId={projectId} events={events} onOpenAgent={onOpenAgent} onClose={() => {
+            back.current = { opener: opener.current, key: shown.key }
+            revealSubagent(page)
+          }} />}
     </FocusHome>
   )
 }
@@ -124,8 +141,10 @@ function useCut(ref: RefObject<HTMLElement | null>, text: string): boolean {
 const byStart = (a: SubagentRow, b: SubagentRow): number => (a.startedAt < b.startedAt ? -1 : a.startedAt > b.startedAt ? 1 : 0)
 
 /** The run's subagents, those at work over those that ended; past {@link FOLD_PAST} rows in all, the ended ones fold into one. */
-function SubagentList({ ref, rows, reasons, shown, projectId, onPick, onStop, className }: {
+function SubagentList({ ref, fold, rows, reasons, shown, projectId, onPick, onStop, className }: {
   ref: Ref<HTMLDivElement>
+  /** The fold's line, while it is drawn. */
+  fold: Ref<HTMLButtonElement>
   rows: readonly SubagentRow[]
   reasons: ReadonlyMap<string, string>
   shown: string | undefined
@@ -147,7 +166,7 @@ function SubagentList({ ref, rows, reasons, shown, projectId, onPick, onStop, cl
         (rows.length > FOLD_PAST ? (
           <section aria-label="Ended">
             {/* A row in the list's place: its words on the names' edge. */}
-            <button type="button" aria-expanded={endedOpen} onClick={() => setEndedOpen(open => !open)} className={cn(navRowClass(false), 'text-muted-foreground')}>
+            <button ref={fold} type="button" aria-expanded={endedOpen} onClick={() => setEndedOpen(open => !open)} className={cn(navRowClass(false), 'text-muted-foreground')}>
               <span aria-hidden className="w-4 shrink-0" />
               <span className="min-w-0 flex-1 text-start">Ended · {ended.length}</span>
               <ChevronRight aria-hidden className={cn('transition-transform', endedOpen && 'rotate-90')} />

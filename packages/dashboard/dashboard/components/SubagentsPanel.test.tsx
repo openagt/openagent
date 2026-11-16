@@ -46,6 +46,12 @@ function call(id: string, name: string, at: number, end?: 'ended' | 'failed'): O
   ]
 }
 
+/** A press as a browser makes it: the control takes the keyboard, then the click. */
+function press(control: HTMLElement): void {
+  control.focus()
+  fireEvent.click(control)
+}
+
 const rowNames = () => screen.queryAllByRole('listitem').map(item => within(item).getAllByRole('button')[0]!.getAttribute('aria-label'))
 
 describe('the list of a run\'s subagents', () => {
@@ -79,15 +85,35 @@ describe('the list of a run\'s subagents', () => {
     const sub = run(1, 'Write the docs', 'done', 1)
     render(panel({ subagents: [sub] }))
     const row = screen.getByRole('button', { name: /^Write the docs/ })
-    fireEvent.click(row)
+    press(row)
     expect(row.getAttribute('aria-expanded')).toBe('true')
     expect(screen.getByRole('region', { name: 'Write the docs' })).toBeTruthy()
-    fireEvent.click(row)
+    press(row)
     expect(screen.queryByRole('region', { name: 'Write the docs' })).toBeNull()
-    fireEvent.click(row)
-    fireEvent.click(screen.getByRole('button', { name: 'Close Write the docs' }))
+    press(row)
+    press(screen.getByRole('button', { name: 'Close Write the docs' }))
     expect(screen.queryByRole('region', { name: 'Write the docs' })).toBeNull()
-    expect(document.activeElement).toBe(row)
+    return waitFor(() => expect(document.activeElement).toBe(row))
+  })
+
+  test('opened from outside the pane, closed, the keyboard goes back to what opened it; with that gone and its row in the closed fold, to the fold', async () => {
+    const ended = Array.from({ length: 8 }, (_, at) => run(at, `Ended ${at}`, 'done', 1))
+    const withOpener = (opener: boolean) => (
+      <>
+        {/* The chat's row, as the chat draws it: it asks the page for the subagent. */}
+        <FocusHome>{opener && <button type="button" onClick={() => revealSubagent('p1/main', `run:${ended[2]!.id}`)}>The chat's row</button>}</FocusHome>
+        {panel({ subagents: [run(24, 'Account page tests', 'running'), ...ended] })}
+      </>
+    )
+    const page = render(withOpener(true))
+    const chatRow = screen.getByRole('button', { name: "The chat's row" })
+    press(chatRow)
+    press(screen.getByRole('button', { name: 'Close Ended 2' }))
+    await waitFor(() => expect(document.activeElement).toBe(chatRow))
+    press(chatRow)
+    page.rerender(withOpener(false))
+    press(screen.getByRole('button', { name: 'Close Ended 2' }))
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Ended · 8' })))
   })
 
   test('a run at work is stopped from its row or from its open part; a subagent of the coding agent\'s own, or one that ended, has no Stop', async () => {
