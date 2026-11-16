@@ -939,6 +939,20 @@ describe('Settings › Devices: a code typed on another computer', () => {
   const STUDIO = { id: 'abc123def456', name: 'Studio', online: true, added: false }
   const ROMS = { id: 'f00f00f00f00', name: "Rom's PC", online: true, added: false, owner: 'rom' }
 
+  test('the entry is drawn once a server set up elsewhere said who this person is there, with its line in it: its answer moves nothing', async () => {
+    const { host } = door(() => ok(OPEN), [VPS], args => ok(args[0] === 'shared' ? { shared: [] } : { servers: [] }))
+    let say: ((said: Awaited<ReturnType<ModuleHost['machinePerson']>>) => void) | undefined
+    vi.mocked(host.machinePerson).mockImplementation(() => new Promise(resolve => (say = resolve)))
+    // The saved machines answer after the servers: the servers' answer alone says nothing of a server set up elsewhere.
+    vi.mocked(host.machines).mockImplementation(async () => (await new Promise(resolve => setTimeout(resolve, 100)), { version: '0.0.0', name: 'Adas-MacBook', machines: [VPS] }))
+    show(host)
+    await waitFor(() => expect(say).toBeDefined())
+    expect(screen.queryByRole('heading', { name: 'This computer' })).toBeNull()
+    await act(async () => say!({ ok: true, said: { owner: true, devices: [] } }))
+    expect(await screen.findByRole('heading', { name: 'This computer' })).toBeTruthy()
+    expect(screen.getByRole('switch', { name: 'From anywhere, through my-vps' })).toBeTruthy()
+  })
+
   test('Join with a code: where and the code, pasted both at once; this computer keeps its line there, and the person\'s own computers there are saved through it', async () => {
     const saved: ModuleMachine[] = []
     const { host, serverCommand } = door(() => ok(OFF), saved, args => ok(args[0] === 'shared' || args[0] === 'shared-reach' ? { shared: [] } : { servers: [] }))

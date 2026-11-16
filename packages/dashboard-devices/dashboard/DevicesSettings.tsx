@@ -71,8 +71,9 @@ export function DevicesSettings({ everyMs = 3_000, devicesEveryMs = 30_000, devi
 
   // One person's own OpenAgent on a computer several people use: their devices are the door's, and only they are shown.
   if (status?.person !== undefined) return <PersonDevices person={status.person} everyMs={everyMs} />
-  // Nothing but the rows' shape until this computer said what it is: a server never offers a server to set up for a moment.
-  const known = d.door !== undefined && !(d.machines === undefined && d.door.ok)
+  // Nothing but the rows' shape until this computer said what it is (a server never offers a server to set up for a moment)
+  // and the servers said what they add to it (a line through each), so a read that arrives moves nothing.
+  const known = d.door !== undefined && !(d.machines === undefined && d.door.ok) && (!d.door.ok || d.firstRead)
   if (!known) return <Slot of={{ state: 'unknown', value: undefined }} shape={<SettingsRowShapes rows={3} />}>{() => null}</Slot>
 
   if (adding)

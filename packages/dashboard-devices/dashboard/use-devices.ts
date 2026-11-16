@@ -48,6 +48,8 @@ export interface Devices {
   devicesError: Record<string, string | undefined>
   /** What this computer keeps for each server installed elsewhere: its line there. */
   shared: SharedRow[]
+  /** Whether the servers, and what each server set up elsewhere says of this person, have answered once: the rows they add to This computer are known. */
+  firstRead: boolean
   items: Item[]
   /** The GitHub account this computer is logged in to, and why there is none. */
   account: string | undefined
@@ -128,7 +130,7 @@ export function useDevices({ everyMs, devicesEveryMs, devicesAnswerMs = DEVICES_
   // What each server with a door of its own, set up elsewhere, says of this computer's person there; a computer on Tailscale says too.
   const doors = (machines?.machines ?? []).filter(machine => (hasDoor(machine) || onTailscale(machine)) && !installed(machine.url))
   const doorIds = doors.map(machine => machine.id).join(' ')
-  const { value: people } = usePolled<Record<string, PersonRead>>(
+  const { value: people, state: peopleState } = usePolled<Record<string, PersonRead>>(
     doors.length
       ? async () => {
           const said = await Promise.all(doors.map(async machine => [machine.id, await host.machinePerson(machine.id).then(asked => (asked.ok ? readPersonThere(asked.said) : asked.unknown ? undefined : null))] as const))
@@ -143,6 +145,9 @@ export function useDevices({ everyMs, devicesEveryMs, devicesAnswerMs = DEVICES_
   // And this computer's line to each of them.
   const { value: sharedRead, reload: reloadShared } = usePolled<Answer<SharedRow[]> | undefined>(doors.length ? () => loadShared(host, doors.map(machine => machine.url)) : null, undefined, Math.max(everyMs, 10_000), [doorIds], 'previous')
   const shared = sharedRead?.ok ? sharedRead.value : []
+  // Once: a server joined later is read with the page drawn, its line row coming in as the person asked for it.
+  const firstRead = useRef(false)
+  if (read !== undefined && machines !== undefined && (doors.length === 0 || peopleState !== 'unknown')) firstRead.current = true
 
   // Who is in at each server this computer installed, a computer at home too: asked over SSH, one read at a time each.
   const [awaited, setAwaited] = useState<string | undefined>()
@@ -321,6 +326,7 @@ export function useDevices({ everyMs, devicesEveryMs, devicesAnswerMs = DEVICES_
     devices: lastDevices.current,
     devicesError,
     shared,
+    firstRead: firstRead.current,
     items: itemsOf(sources),
     account,
     noLogin,
