@@ -1,6 +1,6 @@
 import { Fragment, createContext, useContext, useEffect, useRef, useState, type ComponentType, type FormEvent, type ReactNode, type RefObject } from 'react'
 import { ChevronRight, Circle, CircleArrowUp, CircleCheck, CircleX, Loader2, Pencil } from 'lucide-react'
-import { Badge, Button, Input, RadioGroupOption, Row, Section, SettingsFoot, cn, formatDateTime, formatRelative, useOpenAgentDown, useSettingsHold } from '@openagt/dashboard/module'
+import { Badge, Button, Input, RadioGroupOption, Section, SettingsFoot, SettingsItem, cn, formatDateTime, formatRelative, useOpenAgentDown, useSettingsHold } from '@openagt/dashboard/module'
 import type { DeviceRow } from './devices.js'
 import type { StepState } from './servers.js'
 
@@ -57,22 +57,23 @@ export function Facts({ children }: { children: ReactNode[] }) {
 }
 
 /** A device in a list: its icon, its name, the line under it, its state at the right, and its page or its own presses. */
-export function ListedDevice({ icon: Icon, name, facts, state, actions, onOpen }: { icon: ComponentType<{ className?: string; 'aria-hidden'?: boolean }>; name: string; facts: ReactNode[]; state?: ReactNode; actions?: ReactNode; onOpen?: () => void }) {
+export function ListedDevice({ icon, name, facts, state, actions, onOpen }: { icon: ComponentType<{ className?: string; 'aria-hidden'?: boolean }>; name: string; facts: ReactNode[]; state?: ReactNode; actions?: ReactNode; onOpen?: () => void }) {
   return (
-    <Row
-      leading={<Icon aria-hidden className="size-4" />}
+    <SettingsItem
+      icon={icon}
       title={name}
       detail={<Facts>{facts}</Facts>}
-      meta={
-        state !== undefined || onOpen !== undefined ? (
-          <>
-            {state}
-            {onOpen && <ChevronRight aria-hidden className="size-4" />}
-          </>
-        ) : undefined
-      }
-      actions={actions}
-      stackOnPhone
+      {...(state !== undefined || onOpen !== undefined
+        ? {
+            end: (
+              <>
+                {state}
+                {onOpen && <ChevronRight aria-hidden />}
+              </>
+            ),
+          }
+        : {})}
+      {...(actions !== undefined ? { actions } : {})}
       {...(onOpen ? { onClick: onOpen } : {})}
     />
   )
@@ -189,9 +190,9 @@ export function Problem({ children }: { children: ReactNode }) {
   )
 }
 
-/** The presses a form or a question ends on: one row at its end, Cancel before the press it ends on, each 44 high on a phone. */
+/** The presses a form or a question ends on: one row at its end, Cancel before the press it ends on; on a phone each 44 high, sharing the width. */
 export function PressRow({ children }: { children: ReactNode }) {
-  return <div className="flex justify-end gap-2 max-md:[&_:is(button,a)]:h-11">{children}</div>
+  return <div className="flex justify-end gap-2 max-md:[&_:is(button,a)]:h-11 max-md:[&>*]:flex-1">{children}</div>
 }
 
 /** The presses of a way of adding: in Settings' foot, where they hold their place from step to step; outside Settings, under the flow. */

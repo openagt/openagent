@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ChevronLeft, Ellipsis, House, Loader2, Monitor, Plus, Server, Smartphone, Tablet, UserPlus, UserRound } from 'lucide-react'
-import { Badge, Button, ConfirmDialog, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Input, List, Row, RowShapes, Section, SettingsRow, SettingsRowShapes, SettingsSection, Slot, formatDateTime, formatRelative, useOpenAgentDown, usePolled, useSettingsCrumb } from '@openagt/dashboard/module'
+import { Badge, Button, ConfirmDialog, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Input, RowShapes, Section, SettingsItem, SettingsItems, SettingsRow, SettingsRowShapes, SettingsSection, Slot, formatDateTime, formatRelative, useOpenAgentDown, usePolled, useSettingsCrumb } from '@openagt/dashboard/module'
 import { addDevice, keepPerson, loadMine, myName, nameOwner, removeDevice, removeMine, removePerson, renameDevice, setTailscale, type Answer, type DeviceRow, type DoorStatus, type LineRow, type PersonRow, type PersonThere } from './devices.js'
 import { installFailed, removeDevice as removeServerDevice } from './servers.js'
 import { ADDING, AddDevice, isAdding, useJoined, type Adding } from './AddDevice.js'
@@ -79,7 +79,7 @@ export function DevicesSettings({ everyMs = 3_000, devicesEveryMs = 30_000, devi
     return (
       <>
         {way(() => add(undefined))}
-        <section aria-label={ADDING[adding]} className="max-w-prose">
+        <section aria-label={ADDING[adding]}>
           <AddDevice
             d={d}
             adding={adding}
@@ -188,51 +188,55 @@ function YourDevices({ d, onOpen, onAdd }: { d: Devices; onOpen: (item: Item) =>
   return (
     <Section
       title="Your devices"
-      {...(items.length ? { count: items.length } : {})}
       action={
-        <>
+        // Unpainted, as every part head's press: the last one's words end on the inset, the row as tall as the name.
+        <div className="-my-1 -mr-2 flex items-center gap-1">
           {addsPersons && (
-            <Button variant="secondary" title="Someone else, by their name: they add this computer to their own OpenAgent with the code, and get a user of their own here." onClick={() => setAddingPerson(true)}>
+            <Button variant="ghost" size="sm" className="max-md:h-11" title="Someone else, by their name: they add this computer to their own OpenAgent with the code, and get a user of their own here." onClick={() => setAddingPerson(true)}>
               <UserPlus className="size-4" aria-hidden />
               Add person
             </Button>
           )}
-          <Button onClick={onAdd}>
+          <Button variant="ghost" size="sm" className="max-md:h-11" onClick={onAdd}>
             <Plus className="size-4" aria-hidden />
             Add device
           </Button>
-        </>
+        </div>
       }
     >
-      {addingPerson && (
-        <Invite
-          label={d.machines?.name ?? 'this computer'}
-          tailscale={status?.tailscale !== undefined && status.https === undefined}
-          ask={person => addDevice(host, person)}
-          persons={{
-            owner: persons.find(person => person.owner)?.name,
-            myName: () => myName(host),
-            nameOwner: async name => {
-              const named = await nameOwner(host, name)
-              await d.reloadDoor().catch(() => {})
-              return named.ok ? { ok: true } : named
-            },
-          }}
-          joined={joined}
-          onCode={code => setCodeOn(code !== undefined)}
-          onClose={() => {
-            setAddingPerson(false)
-            setCodeOn(false)
-          }}
-        />
-      )}
-      {items.length === 0 && !persons.length && <p className="text-sm text-muted-foreground">{server ? 'None yet. Add device: a phone from anywhere, or a computer.' : status?.tailscale ? 'None yet. Add device: a phone or a computer on your Tailscale network.' : 'None yet. Add device: a phone or a computer on the same Wi-Fi.'}</p>}
-      <List aria-label="Your devices">
-        {items.map(item => (
-          <ItemRow key={item.key} d={d} item={item} onOpen={() => onOpen(item)} />
-        ))}
-      </List>
-      {persons.length > 0 && <DoorPeople d={d} persons={persons} devices={status?.devices ?? []} lines={status?.lines ?? []} />}
+      <div className="flex flex-col gap-6">
+        {addingPerson && (
+          <Invite
+            label={d.machines?.name ?? 'this computer'}
+            tailscale={status?.tailscale !== undefined && status.https === undefined}
+            ask={person => addDevice(host, person)}
+            persons={{
+              owner: persons.find(person => person.owner)?.name,
+              myName: () => myName(host),
+              nameOwner: async name => {
+                const named = await nameOwner(host, name)
+                await d.reloadDoor().catch(() => {})
+                return named.ok ? { ok: true } : named
+              },
+            }}
+            joined={joined}
+            onCode={code => setCodeOn(code !== undefined)}
+            onClose={() => {
+              setAddingPerson(false)
+              setCodeOn(false)
+            }}
+          />
+        )}
+        {items.length === 0 && !persons.length && <p className="text-sm text-muted-foreground">{server ? 'None yet. Add device: a phone from anywhere, or a computer.' : status?.tailscale ? 'None yet. Add device: a phone or a computer on your Tailscale network.' : 'None yet. Add device: a phone or a computer on the same Wi-Fi.'}</p>}
+        {items.length > 0 && (
+          <SettingsItems aria-label="Your devices">
+            {items.map(item => (
+              <ItemRow key={item.key} d={d} item={item} onOpen={() => onOpen(item)} />
+            ))}
+          </SettingsItems>
+        )}
+        {persons.length > 0 && <DoorPeople d={d} persons={persons} devices={status?.devices ?? []} lines={status?.lines ?? []} />}
+      </div>
     </Section>
   )
 }
@@ -323,7 +327,7 @@ function PhoneRow({ d, item }: { d: Devices; item: PhoneItem }) {
         actions={
           // While its own change runs the menu stays shut, and its press keeps the keyboard.
           <DropdownMenu open={menuOpen} onOpenChange={next => setMenuOpen(next && !busy && !removing)}>
-            <DropdownMenuTrigger aria-label={`${item.name}: more`} render={<Button variant="ghost" size="icon-sm" loading={busy || removing} />}>
+            <DropdownMenuTrigger aria-label={`${item.name}: more`} render={<Button variant="ghost" size="icon-sm" className="-mr-1.5" loading={busy || removing} />}>
               {removing ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Ellipsis className="size-4" aria-hidden />}
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
@@ -338,7 +342,7 @@ function PhoneRow({ d, item }: { d: Devices; item: PhoneItem }) {
       {/* Asked first, as every removal is: a device taken out gets in again only with a new code. */}
       <ConfirmDialog open={confirming} onOpenChange={setConfirming} title={`Remove ${item.name}?`} body={`${item.name} is taken out, and gets in again only with a new code.`} confirmLabel="Remove" onSuccess={() => (setRemoving(true), void act(remove))} />
       {error !== undefined && (
-        <li className="px-3">
+        <li className="px-4 pb-3">
           <Problem>{error}</Problem>
         </li>
       )}
@@ -393,14 +397,13 @@ function DoorDevice({ device, mine, busy, onRemove }: { device: DeviceRow; mine:
   const seen = device.seen !== undefined ? `Last seen ${formatRelative(device.seen)}, added ${formatRelative(device.added)}` : `Added ${formatRelative(device.added)}`
   const line = device.line ? `${device.person !== undefined && !mine ? `A computer of ${device.person}` : 'A computer of yours'}: runs can be started on it from here. Remove it and it is no longer in "Run on".` : undefined
   return (
-    <Row
-      leading={<Icon className="size-4" aria-hidden />}
+    <SettingsItem
+      icon={Icon}
       title={device.name}
       detail={<span title={line ?? formatDateTime(device.seen ?? device.added)}>{line ?? seen}</span>}
-      {...(line !== undefined ? { meta: <span title={formatDateTime(device.seen ?? device.added)}>{seen}</span> } : {})}
-      stackOnPhone
+      {...(line !== undefined ? { end: <span title={formatDateTime(device.seen ?? device.added)}>{seen}</span> } : {})}
       actions={
-        <Button variant="ghost" size="sm" loading={busy} disabled={down} aria-label={`Remove ${device.name}`} onClick={onRemove}>
+        <Button variant="ghost" size="sm" className="-mr-2" loading={busy} disabled={down} aria-label={`Remove ${device.name}`} onClick={onRemove}>
           Remove
         </Button>
       }
@@ -462,11 +465,13 @@ function DoorPeople({ d, persons, devices, lines }: { d: Devices; persons: Perso
             {person.problem !== undefined && !person.working && <p role="alert" className="text-xs text-danger">{`${person.name}'s own user on this computer could not be made: ${person.problem.replace(/\.?$/, '.')} Add a device for them again to try again.`}</p>}
             {/* A person of a server has their devices at that server: none here is none missing. */}
             {person.from === undefined && theirs.length === 0 && <p className="text-xs text-muted-foreground">No device yet.</p>}
-            <List aria-label={`Devices of ${person.name}`}>
-              {theirs.map(device => (
-                <DoorDevice key={device.id} device={device} mine={person.owner === true} busy={busy} onRemove={() => void act(() => removeDevice(host, device.id))} />
-              ))}
-            </List>
+            {theirs.length > 0 && (
+              <SettingsItems aria-label={`Devices of ${person.name}`}>
+                {theirs.map(device => (
+                  <DoorDevice key={device.id} device={device} mine={person.owner === true} busy={busy} onRemove={() => void act(() => removeDevice(host, device.id))} />
+                ))}
+              </SettingsItems>
+            )}
           </div>
         )
       })}
@@ -505,13 +510,16 @@ function PersonDevices({ person, everyMs }: { person: string; everyMs: number })
       <Slot of={{ state: read === undefined ? 'unknown' : 'fresh', value: mine }} shape={<RowShapes />}>
         {mine =>
           mine !== undefined && (
-            <Section title="Your devices" {...(devices.length > 0 ? { count: devices.length } : {})}>
-              {devices.length === 0 && <p className="text-sm text-muted-foreground">None.</p>}
-              <List aria-label="Your devices">
-                {devices.map(device => (
-                  <DoorDevice key={device.id} device={device} mine busy={busy} onRemove={() => void remove(device.id)} />
-                ))}
-              </List>
+            <Section title="Your devices">
+              {devices.length === 0 ? (
+                <p className="text-sm text-muted-foreground">None.</p>
+              ) : (
+                <SettingsItems aria-label="Your devices">
+                  {devices.map(device => (
+                    <DoorDevice key={device.id} device={device} mine busy={busy} onRemove={() => void remove(device.id)} />
+                  ))}
+                </SettingsItems>
+              )}
             </Section>
           )
         }
