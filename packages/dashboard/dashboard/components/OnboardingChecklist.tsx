@@ -321,7 +321,7 @@ export function OnboardingChecklist({
                       <div className="flex max-w-full shrink-0 flex-wrap items-center gap-3">
                         <Skeleton className="h-8 w-36" />
                         {/* The coding agent's press comes with the command that does the same in a terminal. */}
-                        {step.key === 'agent' && <Skeleton className="h-7 w-92 max-w-full max-md:h-12" />}
+                        {step.key === 'agent' && <Skeleton className="h-7 w-92 max-w-full max-md:h-11" />}
                       </div>
                     </div>
                   ) : (
