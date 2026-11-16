@@ -16,6 +16,14 @@
   --font-app: 'IBM Plex Sans Variable', ui-sans-serif, system-ui, sans-serif;
   --font-code: 'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, monospace;
   --font-document: 'Source Serif 4 Variable', ui-serif, Georgia, serif;
+  /* What stands at the window's foot over every page while it is drawn: a phone's bar of pages
+     (PhoneBar), its 56 row and its rule. A page's part that keeps to the window's foot stands on it:
+     `bottom-[calc(var(--foot)+1rem)]`. */
+  --foot: 0px;
+}
+
+:root:has([data-pages-bar]) {
+  --foot: calc(3.5rem + 1px);
 }
 
 /* The Neutral palette (Settings › Appearance): shadcn's neutral greys, light and dark, in place of

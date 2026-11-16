@@ -75,7 +75,8 @@ export function PagesBar({
   // 44 by 26 behind every icon, filled only on the page that is open.
   const pill = (active: boolean) => cn('relative flex h-6.5 w-11 items-center justify-center rounded-full transition-colors', active && 'bg-foreground/8')
   return (
-    <nav aria-label="Pages" className="sticky bottom-0 z-20 flex shrink-0 border-t border-hairline bg-background">
+    // Its height is the page's `--foot` (tailwind.css), which a page's part kept to the window's foot stands on.
+    <nav aria-label="Pages" data-pages-bar="" className="sticky bottom-0 z-20 flex shrink-0 border-t border-hairline bg-background">
       <a href={overviewHref} onClick={inPlace(onOverview)} aria-current={overviewActive ? 'page' : undefined} aria-label={waiting > 0 ? `Overview, ${waiting} waiting on you` : 'Overview'} className={item(overviewActive)}>
         <span className={pill(overviewActive)}>
           <LayoutDashboard className="size-5" aria-hidden />

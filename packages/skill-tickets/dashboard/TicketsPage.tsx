@@ -199,7 +199,7 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
         }
       </Slot>
       {/* The selection bar's room at the list's end, 16 under it, kept whether or not a row is ticked, so ticking moves nothing. */}
-      <div aria-hidden className="h-13 max-md:h-41" />
+      <div aria-hidden className="h-13 max-md:h-38" />
       {barRows.length > 0 && (
         <SelectionBar
           leaving={!hasSelection}
@@ -217,7 +217,8 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
 /** The selection's bar, floating over the list's foot and taking no room, so ticking a row moves nothing. */
 function SelectionBar({ leaving, count, onSelectAll, onClear, children }: { leaving: boolean; count: number; /** Ticks every shown ticket; none once all are. */ onSelectAll: (() => void) | undefined; onClear: () => void; children: ReactNode }) {
   return (
-    <div className="pointer-events-none sticky bottom-6 z-10 h-0 max-md:bottom-4">
+    // On a phone 16 over what stands at the window's foot, the shell's bar of pages (`--foot`).
+    <div className="pointer-events-none sticky bottom-6 z-10 h-0 max-md:bottom-[calc(var(--foot)+1rem)]">
       <div
         role="region"
         aria-label="Selected tickets"
