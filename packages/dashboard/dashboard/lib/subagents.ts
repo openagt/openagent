@@ -105,7 +105,8 @@ export interface CallSubagent {
   /** How many tokens and tool calls it went through, as far as its coding agent says. */
   tokens?: number
   toolUses?: number
-  status: 'working' | 'ended' | 'failed'
+  /** `stopped`: its run's process ended while it worked, and it with it. */
+  status: 'working' | 'ended' | 'failed' | 'stopped'
   name?: string
   role?: string
   model?: string
@@ -132,10 +133,18 @@ function stepOfSubagent(e: OpenAgentEvent): string | undefined {
   return event.type === 'action' || event.type === 'output' || event.type === 'text' || event.type === 'thought' ? event.subagent : undefined
 }
 
-/** The run's own subagents of its coding agent, in the order they were started. */
+/**
+ * The run's own subagents of its coding agent, in the order they were started. One still working
+ * when the run's process ends (its `end`) ended with it: its coding agent tells of its end at its
+ * call's answer and nowhere else, so without that a message that continues the run would make it
+ * read as working again. A new prompt alone ends none: a subagent in the background goes on across them.
+ */
 export function callSubagents(events: readonly OpenAgentEvent[]): CallSubagent[] {
   const byId = new Map<string, CallSubagent>()
   for (const e of events) {
+    if (e.kind === 'end') {
+      for (const [id, call] of byId) if (call.status === 'working') byId.set(id, { ...call, status: 'stopped', ...(e.at !== undefined ? { endedAt: e.at } : {}) })
+    }
     if (e.kind !== 'driver') continue
     const event = e.event
     if (event.type === 'subagent') {

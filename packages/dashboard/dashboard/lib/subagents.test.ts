@@ -1,6 +1,6 @@
 import type { AgentMeta, OpenAgentEvent } from '../../src/index.js'
 import { describe, expect, test } from 'vitest'
-import { arrange, callSubagents, holdsMainAgent, subagentWait, isOpenSubagent, nestRows, runRow, subagentEnd, subagentEvents, drivesSubagents, stepWords, subagentSteps, subagentStartedAt, subagentsOf, taskLabel, type SubagentRow, type SubagentStep } from './subagents.js'
+import { arrange, callSubagents, subagentRows, holdsMainAgent, subagentWait, isOpenSubagent, nestRows, runRow, subagentEnd, subagentEvents, drivesSubagents, stepWords, subagentSteps, subagentStartedAt, subagentsOf, taskLabel, type SubagentRow, type SubagentStep } from './subagents.js'
 
 function agent(id: string, over: Partial<AgentMeta> = {}): AgentMeta {
   return { status: 'done', id, startedAt: '2026-10-01T10:00:00.000Z', updatedAt: '2026-10-01T10:00:00.000Z', ...over }
@@ -163,6 +163,16 @@ describe('callSubagents and subagentEvents', () => {
   test('one subagent per id, as its newest event says, with how many calls it made, the last tool, and when it started and ended', () => {
     expect(callSubagents([call, started, named, read, grep])).toEqual([{ id: 'toolu_a', status: 'working', name: 'Map the pages', model: 'claude-haiku-5-5', startedAt: '2026-10-01T10:00:10.000Z', calls: 2, tool: 'Grep' }])
     expect(callSubagents([call, started, named, read, grep, said, answered, ended])[0]).toMatchObject({ status: 'ended', calls: 2, endedAt: '2026-10-01T10:00:40.000Z' })
+  })
+
+  test("one still working when its run's process ended is over, stopped, also once a message continues the run; a new prompt alone ends none", () => {
+    const end: OpenAgentEvent = { kind: 'end', ok: false, stopped: true, at: '2026-10-01T10:00:30.000Z' }
+    const continued = ev({ type: 'start', prompt: 'And the footer too.' }, '01:00')
+    expect(callSubagents([call, started, read, end, continued])[0]).toMatchObject({ status: 'stopped', endedAt: '2026-10-01T10:00:30.000Z' })
+    expect(subagentRows([], [call, started, read, end, continued], true)[0]).toMatchObject({ status: 'stopped', working: false })
+    expect(callSubagents([call, started, read, continued])[0]).toMatchObject({ status: 'working' })
+    // One that ended before the run's process did keeps how it ended.
+    expect(callSubagents([call, started, said, answered, ended, end])[0]).toMatchObject({ status: 'ended', endedAt: '2026-10-01T10:00:40.000Z' })
   })
 
   test("what the chat passes over: the subagent's events, its call and that call's answer, and all it said and did; never the run's own steps", () => {
