@@ -11,6 +11,7 @@ import { runTone, runWord } from '../lib/run-words.js'
 import { usePolled } from '../lib/use-async.js'
 import { useStop } from '../lib/use-stop.js'
 import { FocusHome } from '../lib/focus-home.js'
+import { useHold } from '../lib/hold.js'
 import { cn } from '../lib/utils.js'
 import { Button } from './ui/button.js'
 import { navRowClass } from './ui/nav-row.js'
@@ -140,9 +141,13 @@ function useCut(ref: RefObject<HTMLElement | null>, text: string): boolean {
 
 const byStart = (a: SubagentRow, b: SubagentRow): number => (a.startedAt < b.startedAt ? -1 : a.startedAt > b.startedAt ? 1 : 0)
 
-/** The run's subagents, those at work over those that ended; past {@link FOLD_PAST} rows in all, the ended ones fold into one. */
+/**
+ * The run's subagents, those at work over those that ended; past {@link FOLD_PAST} rows in all, the
+ * ended ones fold into one. While the person is in it, it holds still (`useHold`): a row that ends
+ * keeps its place and loses its Stop, so the Stop under the pointer stays its own row's.
+ */
 function SubagentList({ ref, fold, rows, reasons, shown, projectId, onPick, onStop, className }: {
-  ref: Ref<HTMLDivElement>
+  ref: RefObject<HTMLDivElement | null>
   /** The fold's line, while it is drawn. */
   fold: Ref<HTMLButtonElement>
   rows: readonly SubagentRow[]
@@ -156,14 +161,25 @@ function SubagentList({ ref, fold, rows, reasons, shown, projectId, onPick, onSt
 }) {
   useTicking(rows.some(row => row.working))
   const [endedOpen, setEndedOpen] = useState(false)
-  const working = rows.filter(row => row.working).sort(byStart)
-  const ended = rows.filter(row => !row.working).sort(byStart)
+  // Which rows stand where, held while the person is in the list; each row drawn from its newest state.
+  const arrangement = useMemo(
+    () => ({
+      working: rows.filter(row => row.working).sort(byStart).map(row => row.key),
+      ended: rows.filter(row => !row.working).sort(byStart).map(row => row.key),
+      folds: rows.length > FOLD_PAST,
+    }),
+    [rows],
+  )
+  const held = useHold(ref, arrangement)
+  const byKey = new Map(rows.map(row => [row.key, row]))
+  const working = held.working.flatMap(key => byKey.get(key) ?? [])
+  const ended = held.ended.flatMap(key => byKey.get(key) ?? [])
   const item = (row: SubagentRow) => <SubagentItem key={row.key} row={row} reason={reasons.get(row.key)} open={row.key === shown} projectId={projectId} onPick={onPick} onStop={() => onStop(row.key)} />
   return (
     <div ref={ref} className={cn('min-h-0 overflow-y-auto px-2 pt-2', className)}>
       {working.length > 0 && <Part name="Working">{working.map(item)}</Part>}
       {ended.length > 0 &&
-        (rows.length > FOLD_PAST ? (
+        (held.folds ? (
           <section aria-label="Ended">
             {/* A row in the list's place: its words on the names' edge. */}
             <button ref={fold} type="button" aria-expanded={endedOpen} onClick={() => setEndedOpen(open => !open)} className={cn(navRowClass(false), 'text-muted-foreground')}>

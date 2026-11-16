@@ -52,6 +52,17 @@ function press(control: HTMLElement): void {
   fireEvent.click(control)
 }
 
+/** The pointer comes onto `element`, as a browser says it: an enter on it and on each box around it. */
+function pointTo(element: Element): void {
+  for (let node: Element | null = element; node; node = node.parentElement) fireEvent.pointerEnter(node)
+}
+
+/** The pointer leaves the page from `element`. */
+function pointAway(element: Element): void {
+  for (let node: Element | null = element; node; node = node.parentElement) fireEvent.pointerLeave(node)
+}
+
+const rowButtons = () => screen.queryAllByRole('listitem').map(item => within(item).getAllByRole('button')[0]!)
 const rowNames = () => screen.queryAllByRole('listitem').map(item => within(item).getAllByRole('button')[0]!.getAttribute('aria-label'))
 
 describe('the list of a run\'s subagents', () => {
@@ -114,6 +125,20 @@ describe('the list of a run\'s subagents', () => {
     page.rerender(withOpener(false))
     press(screen.getByRole('button', { name: 'Close Ended 2' }))
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Ended · 8' })))
+  })
+
+  test('while the pointer is in the list it holds still: one that ends keeps its place and loses its Stop, one that starts waits, and the row under the pointer stays the same element at the same index until the pointer leaves', () => {
+    const ending = run(20, 'Find the old tokens', 'running')
+    const list = render(panel({ subagents: [ending, run(22, 'Account page tests', 'running'), run(24, 'Print styles', 'running')] }))
+    const under = screen.getByRole('button', { name: /^Account page tests/ })
+    pointTo(under)
+    list.rerender(panel({ subagents: [run(20, 'Find the old tokens', 'done', 5), run(22, 'Account page tests', 'running'), run(24, 'Print styles', 'running'), run(26, 'Theme switch in the header', 'running')] }))
+    expect(rowButtons()[1]).toBe(under)
+    expect(rowNames()).toEqual(['Find the old tokens · done · 5m', 'Account page tests · working · 8m', 'Print styles · working · 6m'])
+    expect(screen.queryByRole('button', { name: 'Stop Find the old tokens' })).toBeNull()
+    pointAway(under)
+    expect(rowNames()).toEqual(['Account page tests · working · 8m', 'Print styles · working · 6m', 'Theme switch in the header · working · 4m', 'Find the old tokens · done · 5m'])
+    expect(rowButtons()[0]).toBe(under)
   })
 
   test('a run at work is stopped from its row or from its open part; a subagent of the coding agent\'s own, or one that ended, has no Stop', async () => {
