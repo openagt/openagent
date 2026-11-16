@@ -7,7 +7,7 @@ import { CodeWords, Command } from './CodeWords.js'
 import { EditPanel } from './EditPanel.js'
 import { openedAutomation, type OpenedAutomation } from './automation-form.js'
 import { AGENT_LABELS, DEFAULT_AGENT, TICK_MS } from '../src/names.js'
-import { cannotRun, decided, heldBy, notAsked, startedNow, type Answered, isOwn, modelLabel, pace, readSchedulers, schedulersKey, rowTitle, schedulerStatus, schedulerStopped, unlistedWords, type AgentModels, type SchedulerCommand, type SchedulerRow } from './schedulers.js'
+import { atOnce, atOnceWords, cannotRun, decided, heldBy, notAsked, startedNow, type Answered, isOwn, modelLabel, pace, publishes, saysAtOnce, readSchedulers, schedulersKey, rowTitle, schedulerStatus, schedulerStopped, unlistedWords, type AgentModels, type SchedulerCommand, type SchedulerRow } from './schedulers.js'
 
 // The Automations page: what starts by itself while nobody is at the keyboard. One part per
 // project the page is given (every project that has this package, or the one picked in the
@@ -283,7 +283,7 @@ export function AutomationsPage({ projects }: ModulePageProps) {
                                         {/* What it says it does, after its name and quieter: cut with it at the row's end, and whole in its panel. */}
                                         {scheduled.description && <span className="text-muted-foreground"> {scheduled.description}</span>}
                                       </p>
-                                      <Stands host={host} project={row.project} scheduled={scheduled} stopped={schedulerStopped(row)} />
+                                      <Stands host={host} project={row.project} scheduled={scheduled} stopped={schedulerStopped(row)} picks={shown === undefined} />
                                     </div>
                                     {/* Centred on the name and its line. Under a mouse the presses take room only while the
                                         pointer or the keyboard is on the row, or while what they did is open; the switch is
@@ -494,14 +494,15 @@ function SkillsLink() {
 }
 
 /**
- * A row's second line, two facts at most, joined as a card's row joins its facts: where it stands (when it
- * last ran, that its last run failed, or that it is still going, which opens that run), then what holds
- * it or when it starts next. That is what the scheduler last decided for it while it is on, or, while
- * the scheduler is stopped, that it does not start; a command the coding agent cannot run says so
- * whatever its switch; else its pace. Its other picks are its Edit panel's. One line, cut, under a
- * mouse; two on a phone.
+ * A row's second line, joined as a card's row joins its facts: where it stands (when it last ran, that its
+ * last run failed, or that it is still going, which opens that run); what holds it or when it starts next,
+ * when there is something to say (what the scheduler last decided for it while it is on, or, while the
+ * scheduler is stopped, that it does not start; a command the coding agent cannot run says so whatever its
+ * switch); then its picks: its pace, how many agents at once when that is worth saying, and how far its runs
+ * publish, left to the panel while it is open, which says them as they would be. Its other picks are its Edit
+ * panel's. One line, cut, under a mouse; two on a phone.
  */
-function Stands({ host, project, scheduled, stopped }: { host: ModuleHost; project: ModuleProject; scheduled: SchedulerCommand; /** Why nothing starts by itself in its project, while that is so ({@link schedulerStopped}). */ stopped: string | undefined }) {
+function Stands({ host, project, scheduled, stopped, picks }: { host: ModuleHost; project: ModuleProject; scheduled: SchedulerCommand; /** Why nothing starts by itself in its project, while that is so ({@link schedulerStopped}). */ stopped: string | undefined; /** Whether its picks are said: not while its panel is open. */ picks: boolean }) {
   const last = scheduled.lastRun
   const idle = scheduled.on && stopped !== undefined && cannotRun(scheduled) === undefined
   const decision = idle ? `Does not start: ${stopped.charAt(0).toLowerCase()}${stopped.slice(1)}` : decided(scheduled)
@@ -521,13 +522,14 @@ function Stands({ host, project, scheduled, stopped }: { host: ModuleHost; proje
             <TooltipContent>{formatDateTime(last.at)}</TooltipContent>
           </Tooltip>
         ),
-        decision !== undefined ? (
+        decision !== undefined && (
           <span className={cn(idle || held ? 'text-warning' : undefined)}>
             <CodeWords text={decision} />
           </span>
-        ) : (
-          pace(scheduled)
         ),
+        picks && pace(scheduled),
+        picks && saysAtOnce(scheduled) && atOnceWords(atOnce(scheduled)),
+        picks && publishes(scheduled),
       ]}
     />
   )

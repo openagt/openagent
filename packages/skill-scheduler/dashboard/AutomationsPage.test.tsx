@@ -118,15 +118,15 @@ describe('the Automations page: its rows', () => {
 
     const cleanupRow = row('/post-merge-cleanup')
     expect(within(cleanupRow).getByText('Write up merged pull requests.')).toBeTruthy()
-    // Its line: where it stands, then when it runs; its other picks are its panel's.
-    expect(within(cleanupRow).getByText('Never ran').parentElement!.textContent).toBe('Never ran·Every day')
+    // Its line: where it stands, then when it runs and how far its runs publish; its other picks are its panel's.
+    expect(within(cleanupRow).getByText('Never ran').parentElement!.textContent).toBe('Never ran·Every day·May commit, pushes nothing')
     expect(await inForce('/post-merge-cleanup')).toContain('Every day. Claude Code, Opus 5.5. May commit, pushes nothing.')
     expect(within(cleanupRow).getByRole('switch', { name: 'Run /post-merge-cleanup by itself' }).getAttribute('aria-checked')).toBe('true')
 
     // Nobody switched it on here: Off, whatever its skill says.
     const queueRow = row('/work-queue')
     expect(within(queueRow).getByText('Work one queued task.')).toBeTruthy()
-    expect(within(queueRow).getByText('Never ran').parentElement!.textContent).toBe('Never ran·When the queue holds a task')
+    expect(within(queueRow).getByText('Never ran').parentElement!.textContent).toBe('Never ran·When the queue holds a task·As its skill says')
     expect(within(queueRow).getByRole('switch', { name: 'Run /work-queue by itself' }).getAttribute('aria-checked')).toBe('false')
     // The same three controls on every row.
     for (const name of ['/post-merge-cleanup', '/work-queue']) expect(within(row(name)).getAllByRole('button').map(b => b.textContent)).toEqual(['Run now', 'Edit'])
@@ -183,9 +183,11 @@ describe('the Automations page: its rows', () => {
     expect(within(row('/work-queue')).getByText('/work-queue')).toBeTruthy()
 
     // Everything on a row a person made is their pick, and its panel offers no skill's to go back to; on a skill's row a pick of theirs is the panel's own choice.
-    expect(within(kept).getByText('Never ran').parentElement!.textContent).toBe('Never ran·Every day at 10:00')
+    expect(within(kept).getByText('Never ran').parentElement!.textContent).toBe('Never ran·Every day at 10:00·May commit, pushes nothing')
+    // More than one agent at once is worth saying on its line.
+    expect(within(row('/answer-comments')).getByText('Never ran').parentElement!.textContent).toBe('Never ran·Every 15 minutes at most, when someone commented·Up to 2 at once·May commit, pushes nothing')
     expect(await inForce('/answer-comments', panel => expect(queryRadio(panel, 'As the skill says')).toBeNull())).toContain('Up to 2 at once.')
-    expect(within(row('/post-merge-cleanup')).getByText('Never ran').parentElement!.textContent).toBe('Never ran·Every 2 days')
+    expect(within(row('/post-merge-cleanup')).getByText('Never ran').parentElement!.textContent).toBe('Never ran·Every 2 days·May commit, pushes nothing')
     await inForce('/post-merge-cleanup', panel => expect([ownPick(panel, 'When it runs'), ownPick(panel, 'How many at once')]).toEqual([true, false]))
     expect(await inForce('/work-queue', panel => expect([ownPick(panel, 'When it runs'), ownPick(panel, 'How many at once')]).toEqual([false, true]))).toContain('Up to 3 at once.')
   })
