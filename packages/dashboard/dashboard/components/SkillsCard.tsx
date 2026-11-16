@@ -158,7 +158,8 @@ function Row({ read, reload, href, onOpen }: { read: Read; reload: () => Promise
   const says = skills ? skillsSay(skills) : undefined
   return (
     <li aria-label={project.name} className="min-w-0">
-      <div className="flex min-w-0 items-center gap-2 text-sm md:min-h-10 max-md:min-h-11">
+      {/* Where the card is too narrow for the name and what stands after it, those go under the name's line, so the name is cut only where it alone is wider. */}
+      <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm md:min-h-10 max-md:min-h-11">
         <a href={href} onClick={inPlace(onOpen)} className="min-w-0 truncate font-medium hover:underline">
           {project.name}
         </a>
