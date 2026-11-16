@@ -16,8 +16,9 @@
 //             can act on a run that is certainly still working;
 //   "ask"     the first turn ends on a question, so the run ends `waiting`;
 //   "commit"  the run commits a file, so its branch holds work to push;
-//   "agents"  the run starts subagents of both kinds (runs of its own, one of which fails, and its
-//             coding agent's own) and keeps working until it is stopped; "many" starts more of them;
+//   "agents"  the run starts subagents of both kinds (runs of its own, one of which fails and one
+//             of which asks, and its coding agent's own) and keeps working until it is stopped; "many"
+//             starts more of them;
 //   "fails"   the run fails, as a subagent that cannot do its job does.
 // When `$OPENAGENT_E2E_STARTS_FILE` is set, every `start` and `resume` appends what its
 // environment carried there, one JSON line each: the only place a story can see it.
@@ -61,6 +62,7 @@ const RUN_SUBAGENTS: Array<{ task: string; failsAfter?: number; ranFor?: number 
   { task: 'Theme switch in the header\n\nhold' },
   { task: 'Read the theme tokens', ranFor: 200 },
   { task: 'Visual check in a browser\n\nfails', failsAfter: 9 },
+  { task: 'Pick the dark palette\n\nask' },
 ]
 /** What the runs of its own run on, on their cards. */
 const RUN_MODEL = 'claude-sonnet-4-5'
@@ -117,7 +119,7 @@ async function startSubagents(id: string, prompt: string, log: SessionLog, signa
       while (!signal.aborted) {
         const card = await findRun(repo, child).catch(() => undefined)
         if (card && card.status !== 'running') {
-          await write(startEvent(childEndedLine({ id: child, status: card.status, ...(task.includes('fails') ? { detail: FAILURE } : {}) }), {}))
+          await write(startEvent(childEndedLine({ id: child, status: card.status, ...(task.includes('fails') ? { detail: FAILURE } : {}), ...(card.status === 'waiting' ? { question: QUESTION.title } : {}) }), {}))
           break
         }
         await sleep(200)
