@@ -43,8 +43,8 @@ const PICTURES = [
     shots: [
       { window: 1120, width: 1120, media: '(min-width: 1184px)', keep: 'window', rows: [undefined, 'main >> role=button[name=/^Answer/]'] },
       { window: 960, width: 960, media: '(min-width: 1024px)', keep: 'window', rows: [undefined, 'main >> role=button[name=/^Answer/]'] },
-      { window: 704, width: 662, media: '(min-width: 768px)', around: 'main >> role=region[name="Which way?"]' },
-      { window: 390, width: 348, media: '', around: 'main >> role=region[name="Which way?"]' },
+      { window: 704, width: 704, media: '(min-width: 768px)', around: 'main >> role=region[name="Which way?"]' },
+      { window: 390, width: 358, media: '', around: 'main >> role=region[name="Which way?"]' },
     ],
   },
   // The launcher's "Waiting on you": the Human Queue as a person meets it, in two thirds of the column (the
