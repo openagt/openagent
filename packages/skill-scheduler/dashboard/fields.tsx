@@ -355,7 +355,7 @@ export function AgentsFields({ name, draft, asSaid, start, where, disabled, onCh
     </div>
   )
   return (
-    <fieldset disabled={disabled} className="space-y-2">
+    <fieldset disabled={disabled} className="min-w-0 space-y-2">
       {asSaid ? (
         <RadioGroup aria-label={name} value={draft.kind} onValueChange={kind => onChange(kind === 'own' ? typed : { kind: 'skill' })} disabled={disabled}>
           <RadioGroupOption value="skill">
@@ -430,7 +430,9 @@ export function RunsOnFields({
   // A model picked before that the agent does not list, or has not listed yet, is still the pick.
   const models = [{ value: 'skill', label: follows }, ...listed, ...(model !== 'skill' && !listed.some(m => m.value === model) ? [{ value: model, label: model }] : [])]
   return (
-    <fieldset disabled={disabled} className="space-y-2">
+    // `min-w-0`: a fieldset is as wide as its widest field by default, and on a phone the model's would carry the
+    // whole part, its notes too, past the form's edge and out from under its foot.
+    <fieldset disabled={disabled} className="min-w-0 space-y-2">
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <Label htmlFor="automation-agent" className="w-14">
           Agent
@@ -453,7 +455,7 @@ export function RunsOnFields({
           Model
         </Label>
         <Select items={models} value={model} disabled={disabled} onValueChange={next => onChange({ agent, model: next as ModelDraft })}>
-          <SelectTrigger id="automation-model" className="w-72">
+          <SelectTrigger id="automation-model" className="w-72 max-w-full">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

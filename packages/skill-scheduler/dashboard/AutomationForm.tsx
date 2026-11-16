@@ -102,7 +102,7 @@ export function AutomationForm({
       className="mb-8 max-w-180 space-y-6"
     >
       <h3 className="text-base font-semibold">New automation</h3>
-      <fieldset disabled={saving} className="space-y-6">
+      <fieldset disabled={saving} className="min-w-0 space-y-6">
         <Section title="Name">
           <div className="flex items-center gap-1 text-sm">
             {/* A shared one is a command a person can type; one kept on this machine is no command, so it has no slash. */}
