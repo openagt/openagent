@@ -32,7 +32,7 @@ import { Seconds, tokenWords } from './ToolCalls.js'
 
 /** How often a working subagent's own log is read again: the runs poll's own pace. */
 const TRANSCRIPT_EVERY_MS = 2_000
-/** How often an ended one's is: it changes no more, and a read now and then costs nothing. */
+/** How often an ended one's is: it should change no more, and each read is its whole log. */
 const ENDED_EVERY_MS = 60_000
 const NO_EVENTS: OpenAgentEvent[] = []
 
@@ -224,7 +224,9 @@ function SubagentItem({ row, reason, open, projectId, onPick, onStop }: { row: S
   const stoppable = row.working && runId !== undefined
   const timed = row.working || row.endedAt !== undefined
   const time = useId()
-  const second = error ?? reason
+  // Under its name, why it failed; or, on a working one, why its Stop was refused, in the daemon's
+  // words and not in a failure's colour: a refusal says nothing of how the subagent stands.
+  const second = reason ?? error ?? undefined
   // A run's failure is told it by a line its end sends: its row keeps the room for it from its first frame.
   const twoLines = second !== undefined || (runId !== undefined && row.status === 'failed')
   const model = row.model !== undefined ? [anyModelName(models, row.model), row.agent?.effort].filter(Boolean).join(' · ') : undefined
@@ -255,7 +257,7 @@ function SubagentItem({ row, reason, open, projectId, onPick, onStop }: { row: S
             <span ref={name} className="block truncate">
               {row.name}
             </span>
-            {second !== undefined && <span className={cn('block truncate text-xs max-md:leading-5', runTone('failed'))}>{second}</span>}
+            {second !== undefined && <span className={cn('block truncate text-xs max-md:leading-5', reason !== undefined ? runTone('failed') : 'text-muted-foreground')}>{second}</span>}
           </span>
           {timed && (
             <span id={time} className={cn('shrink-0 text-xs leading-5 text-faint-foreground tabular-nums', stoppable && 'pointer-fine:group-hover/row:invisible pointer-fine:group-has-focus-visible/row:invisible')}>
@@ -304,7 +306,7 @@ function SubagentItem({ row, reason, open, projectId, onPick, onStop }: { row: S
 /** The subagent a row opened, under the list: its name and what can be done with it, over its prompt and what it said and did. */
 function Shown({ row, projectId, events, onOpenAgent, onClose }: { row: SubagentRow; projectId: string; events: readonly OpenAgentEvent[]; onOpenAgent?: ((agentId: string) => void) | undefined; onClose: () => void }) {
   const runId = row.agent?.id
-  const { stopping, stop } = useStop(projectId, runId, row.working)
+  const { stopping, error, stop } = useStop(projectId, runId, row.working)
   // A run's own log, read often while it works. Remembered by the run, so the pane opened again,
   // and the read that goes on when the subagent ends, show what was read from the first frame:
   // without that the pane said it had nothing to show until the read answered.
@@ -346,6 +348,8 @@ function Shown({ row, projectId, events, onOpenAgent, onClose }: { row: Subagent
           <TooltipContent>Close</TooltipContent>
         </Tooltip>
       </header>
+      {/* A Stop the daemon refused, in its words, on a line of its own under the head. */}
+      {error !== null && <p className="shrink-0 px-4 pb-2 text-sm text-muted-foreground">{error}</p>}
       <div className="flex min-h-0 flex-1 flex-col">
         <EventList
           events={transcript}
@@ -370,7 +374,8 @@ function Shown({ row, projectId, events, onOpenAgent, onClose }: { row: Subagent
 }
 
 /**
- * What the subagent was told, as a message, and what it runs on. One that did not end well says how.
+ * What the subagent was told, as a message, and what it runs on ("model · effort", as its card says
+ * it). One that did not end well says how.
  * How long it has worked is the log's own moving line at its end, as the chat says it.
  */
 function PaneHead({ row }: { row: SubagentRow }) {
@@ -386,7 +391,7 @@ function PaneHead({ row }: { row: SubagentRow }) {
       )}
       {(row.model !== undefined || ended) && (
         <div className="flex flex-wrap items-baseline gap-x-2 text-muted-foreground">
-          {row.model !== undefined && <span>Model {anyModelName(models, row.model)}</span>}
+          {row.model !== undefined && <span>{[anyModelName(models, row.model), row.agent?.effort].filter(Boolean).join(' · ')}</span>}
           {ended && <span className={runTone(row.status)}>{runWord(row.status)}</span>}
         </div>
       )}

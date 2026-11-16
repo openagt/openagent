@@ -2,9 +2,10 @@ import type { AgentDoing, AgentMeta, OpenAgentEvent } from '../../src/index.js'
 import { startedAtFromAgentId } from '../../src/agent-id.js'
 import { agentLabel } from './agent-label.js'
 
-// A run started for another run is that run's subagent: its card names the other run as its
-// parent. Everything the dashboard shows about subagents (the rail's tree, the rows in the main
-// agent's chat, the line above its message box) is read off that one field.
+// A run's subagents are of two kinds. A run started for it is one: its card names the run as its
+// `parent`, and the rail's tree reads that field alone. One its coding agent started inside its
+// session is known only from the run's log, by its `subagent` events; and how a run of the first kind
+// ended is read from the line its end sends the run. The chat's rows and the pane read both kinds.
 
 /** Runs in the order they were started: an id sorts by start time. */
 function byStart(a: Pick<AgentMeta, 'id'>, b: Pick<AgentMeta, 'id'>): number {
@@ -16,7 +17,7 @@ export function subagentsOf(agents: readonly AgentMeta[], id: string): AgentMeta
   return agents.filter(agent => agent.parent === id).sort(byStart)
 }
 
-/** What a subagent's row calls it: the first line of what it was asked. */
+/** What a subagent's row calls it: the first line of its run's name, its title before what it was asked. */
 export function taskLabel(agent: Pick<AgentMeta, 'id' | 'intent' | 'branch' | 'startedAt'>): string {
   return agentLabel(agent).split('\n')[0]!.trim()
 }

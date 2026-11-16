@@ -172,6 +172,21 @@ describe('the list of a run\'s subagents', () => {
     expect(screen.queryByRole('button', { name: /Stop/ })).toBeNull()
   })
 
+  test('a Stop the daemon refused is said in its words on a line of its own, never in a failure\'s place or colour', async () => {
+    sendStop.mockResolvedValue({ ok: false, error: 'The run is not live.' })
+    const working = run(26, 'Visual check in a browser', 'running')
+    render(panel({ subagents: [working, run(5, 'Map the pages', 'failed', 2)], events: [{ kind: 'driver', event: { type: 'start', prompt: `The run ${run(5, 'Map the pages', 'failed', 2).id}, started for this run, ended failed: Chrome did not start.` }, at: '2026-10-01T10:08:00.000Z' }] }))
+    fireEvent.click(screen.getByRole('button', { name: 'Stop Visual check in a browser' }))
+    const refusal = await screen.findByText('The run is not live.')
+    expect(refusal.className).not.toContain('text-danger')
+    expect(screen.getByText('Chrome did not start').className).toContain('text-danger')
+    fireEvent.click(screen.getByRole('button', { name: /^Visual check in a browser/ }))
+    const part = screen.getByRole('region', { name: 'Visual check in a browser' })
+    fireEvent.click(within(part).getByRole('button', { name: 'Stop' }))
+    const said = await within(part).findByText('The run is not live.')
+    expect(said.className).not.toContain('text-danger')
+  })
+
   test('its Stop gone once the run stopped, the keyboard stays: on its row, moved under Ended, or in its open part on its next press', async () => {
     const working = run(26, 'Visual check in a browser', 'running')
     const stopped = (meta: AgentMeta): AgentMeta => ({ ...meta, status: 'stopped', endedAt: '2026-10-01T10:29:00.000Z' })
@@ -284,7 +299,7 @@ describe('the subagent a row opened', () => {
     render(panel({ events }))
     act(() => revealSubagent('p1/main', 'call:toolu_a'))
     expect(within(screen.getByRole('region', { name: 'Map the pages' })).getByRole('heading').textContent).toBe('Map the pages')
-    expect(screen.getByText('Model claude-haiku-5-5')).toBeTruthy()
+    expect(screen.getByText('claude-haiku-5-5')).toBeTruthy()
     expect(screen.getByRole('region', { name: 'Its prompt' }).textContent).toContain('Read how the pages are served.\nStart at server.ts.')
     expect(screen.getByText('The pages are served by server.ts.')).toBeTruthy()
     expect(screen.getByText('server.ts')).toBeTruthy()
@@ -293,7 +308,7 @@ describe('the subagent a row opened', () => {
     expect(screen.queryByRole('button', { name: 'Open its page' })).toBeNull()
   })
 
-  test('a subagent that is a run of its own: its model, its cost and its branch, its prompt, then its own log; its page is one click away', async () => {
+  test('a subagent that is a run of its own: its model and effort, its cost and its branch, its prompt, then its own log; its page is one click away', async () => {
     onAgent.mockResolvedValue([{ kind: 'driver', event: { type: 'text', text: 'I wrote the docs.' }, at: '2026-10-01T10:02:00.000Z' }] satisfies OpenAgentEvent[])
     const opened: string[] = []
     const sub: AgentMeta = {
@@ -306,6 +321,7 @@ describe('the subagent a row opened', () => {
       title: 'Write the docs',
       intent: 'Write the README.\n\nYou are a subagent.',
       model: 'claude-sonnet-5-5',
+      effort: 'high',
       cost: 0.36,
       branch: 'agent-2026-10-01T10-01-00-000Z',
     }
@@ -313,6 +329,8 @@ describe('the subagent a row opened', () => {
     act(() => revealSubagent('p1/main', `run:${sub.id}`))
     expect(within(screen.getByRole('region', { name: 'Write the docs' })).getByRole('heading').textContent).toBe('Write the docs')
     expect(screen.getByRole('region', { name: 'Its prompt' }).textContent).toContain('You are a subagent.')
+    // What it runs on, as its card says it.
+    expect(screen.getByText('claude-sonnet-5-5 · high')).toBeTruthy()
     await waitFor(() => expect(screen.getByText('I wrote the docs.')).toBeTruthy())
     expect(screen.getByText(`1m 7s · $0.36 · on ${sub.branch}`)).toBeTruthy()
     expect(onAgent).toHaveBeenCalledWith('p1', sub.id)
