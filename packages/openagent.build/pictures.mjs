@@ -153,7 +153,8 @@ async function taken(path, ready, shot, window, scheme, use) {
 
 /**
  * The part of the page to keep, on whole pixels: an element's box, or the window's or the main column's
- * width from a margin over its first row (or the window's top) to one under its last.
+ * width from a margin over its first row (or the window's top) to one under its last, moved down to fall between
+ * two rows of every column it crosses (the sidebar's beside the main column's), never through one.
  */
 async function part(page, { keep, rows, around }) {
   if (around) {
@@ -168,5 +169,27 @@ async function part(page, { keep, rows, around }) {
   const first = top === undefined ? { y: margin } : await page.locator(top).first().boundingBox()
   const last = await page.locator(bottom).first().boundingBox()
   const y = Math.max(0, Math.floor(first.y - margin))
-  return { x: Math.ceil(across.x), y, width: Math.floor(across.width), height: Math.ceil(last.y + last.height + margin) - y }
+  const x = Math.ceil(across.x)
+  const width = Math.floor(across.width)
+  const end = await page.evaluate(([end, left, right]) => {
+    // A row: a press, a link, a list's item or a line of text, each its own height.
+    const boxes = [...document.querySelectorAll('a, button, li, [role=row]')].map(e => e.getBoundingClientRect())
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT)
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      if (!node.nodeValue.trim()) continue
+      const range = document.createRange()
+      range.selectNodeContents(node)
+      boxes.push(...range.getClientRects())
+    }
+    const rows = boxes.filter(box => box.height > 0 && box.height < 80 && box.right > left && box.left < right)
+    const through = () => rows.filter(box => box.top < end && box.bottom > end)
+    for (let cut = through(); cut.length; cut = through()) {
+      // The edge goes under the rows it cuts, halfway to the next one.
+      const under = Math.max(...cut.map(box => box.bottom))
+      const next = Math.min(under + 24, ...rows.filter(box => box.top >= under).map(box => box.top))
+      end = (under + next) / 2
+    }
+    return end
+  }, [last.y + last.height + margin, x, x + width])
+  return { x, y, width, height: Math.ceil(end) - y }
 }
