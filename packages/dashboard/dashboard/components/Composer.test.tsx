@@ -335,11 +335,15 @@ describe('Composer (#721)', () => {
 
   test('the row above the box: the launcher\'s, led by "Run on"; inside a session, the one it is given, in the same place, and no "Run on" of its own', () => {
     renderComposer({ startsAt: <span>the launcher's place</span> })
-    const followedByBox = (el: Element) => el.closest('.h-8')!.nextElementSibling === box()
+    // In the row that stands right before the box.
+    const followedByBox = (el: Element) => {
+      for (let row = el.parentElement; row; row = row.parentElement) if (row.nextElementSibling === box()) return true
+      return false
+    }
     expect(followedByBox(screen.getByText("the launcher's place"))).toBe(true)
     expect(followedByBox(screen.getByRole('button', { name: /^Run on: / }))).toBe(true)
     cleanup()
-    renderComposer({ inAgent: true, sessionRow: <div className="h-8"><span>where it started</span></div> })
+    renderComposer({ inAgent: true, sessionRow: <div><span>where it started</span></div> })
     expect(followedByBox(screen.getByText('where it started'))).toBe(true)
     expect(screen.queryByRole('button', { name: /^Run on: / })).toBeNull()
   })
@@ -538,8 +542,7 @@ describe('the rows around the box', () => {
     expect(runOn().className).not.toContain('border')
     // Each one line of a fixed height: a longer label at the left cannot move the select or the page. The box's last
     // row is as high as its items, so what stands at its end is as far from the box's foot as from its right.
-    expect(above.className).toContain('h-8')
-    expect(under.className).toContain('h-7')
+    for (const row of [above, under]) expect(row.className).toContain('h-7')
     for (const row of [above, under]) expect(row.className).not.toContain('flex-wrap')
     expect(place.parentElement!.className).toContain('min-w-0')
     expect(select.parentElement!.className).toContain('shrink-0')

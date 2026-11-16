@@ -36,7 +36,7 @@ describe('a session\'s row above the box', () => {
 
   test('its height is the row\'s own, whatever has landed: nothing moves when a name lands', () => {
     const { container } = render(<SessionRow runsOn="This machine" elsewhere={false} />)
-    expect(container.firstElementChild!.className.split(' ')).toContain('h-8')
+    expect(container.firstElementChild!.className.split(' ')).toContain('h-7')
     expect(words(container)).toEqual(['This machine'])
   })
 
