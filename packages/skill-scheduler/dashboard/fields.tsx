@@ -17,12 +17,18 @@ import { PRINTS_SOMETHING, UNIT_WORDS, modelLabel, notAsked, publishChoices, sto
 const hint = 'text-xs text-muted-foreground'
 
 /**
- * A form's foot: where it is kept, then its presses. It stays in view at the window's foot while the
- * form is longer than the window, and what scrolls under it fades out at its edge, as under the chat's bar.
+ * A form's foot: where it is kept, then its presses. It stays in view at the window's foot (on a phone,
+ * on the bar of pages) while the form is longer than the window, and what scrolls under it fades out
+ * at its edge, as under the chat's bar. It is drawn on the surface the form stands on: the page, or a row's card.
  */
-export function FormFoot({ where, children }: { where: ReactNode; children: ReactNode }) {
+export function FormFoot({ where, on = 'page', children }: { where: ReactNode; on?: 'page' | 'card'; children: ReactNode }) {
   return (
-    <div className="sticky bottom-0 -mx-3 flex flex-wrap items-center justify-between gap-3 bg-background px-3 py-3 before:pointer-events-none before:absolute before:inset-x-0 before:bottom-full before:h-4 before:bg-gradient-to-t before:from-background">
+    <div
+      className={cn(
+        'sticky bottom-(--foot) -mx-3 flex flex-wrap items-center justify-between gap-3 px-3 py-3 before:pointer-events-none before:absolute before:inset-x-0 before:bottom-full before:h-4 before:bg-gradient-to-t',
+        on === 'card' ? 'bg-card before:from-card' : 'bg-background before:from-background',
+      )}
+    >
       {/* Beside the presses where both fit, else over them, at the full width. */}
       <p className="min-w-0 grow basis-60 text-xs text-muted-foreground">{where}</p>
       <div className="ml-auto flex gap-2">{children}</div>

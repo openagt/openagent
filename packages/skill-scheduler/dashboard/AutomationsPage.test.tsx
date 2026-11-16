@@ -5,6 +5,7 @@ import { OpenAgentDown, fakeHost } from '@openagt/dashboard/module/testing'
 import { AutomationsPage } from './AutomationsPage.js'
 import { CodeWords } from './CodeWords.js'
 import { ANY_AGENT, ON_CLAUDE, STATUS, hostAnswering } from './fixtures.js'
+import { openMenu, phoneScreen } from '../../dashboard/dashboard/test-utils.js'
 import { checked, choices, offered, openList, pick, queryRadio, radio, radioNames, showing } from '../../dashboard/dashboard/test-controls.js'
 
 // The coding agents' own lists, as the dashboard asked them: what a row's agent and model are picked from, and named by.
@@ -92,10 +93,11 @@ describe('the Automations page: its rows', () => {
     const { host } = scheduler()
     show(host)
     const gemstack = await screen.findByRole('region', { name: 'gemstack' })
-    expect(screen.getByText("What starts by itself while nobody is at the keyboard. Every row starts switched off: it runs on this machine only once you switch it on here.")).toBeTruthy()
-    expect(within(gemstack).getByText('Scheduler on').className).toMatch(/text-success/)
-    // The scheduler's model, named as the rows name it.
-    expect(await within(gemstack).findByText('Model: Opus 5.5')).toBeTruthy()
+    expect(screen.getByText('What starts by itself while nobody is at the keyboard.')).toBeTruthy()
+    // One project: its scheduler's line stands under the page's own.
+    expect(screen.getByText('Scheduler on').className).toMatch(/text-success/)
+    // The scheduler's model, on the coding agent it is a model of, named as the rows name it.
+    await waitFor(() => expect(screen.getByText('Scheduler on').parentElement!.textContent).toMatch(/^Scheduler on·Claude Code, Opus 5.5·/))
     // Nobody made a row of their own here: one group, the skills'.
     expect(within(gemstack).getAllByRole('region').map(g => document.getElementById(g.getAttribute('aria-labelledby')!)!.textContent)).toEqual(["From the project's skills"])
 
@@ -114,6 +116,28 @@ describe('the Automations page: its rows', () => {
     expect(within(queueRow).getByRole('switch', { name: 'Run /work-queue by itself' }).getAttribute('aria-checked')).toBe('false')
     // The same three controls on every row.
     for (const name of ['/post-merge-cleanup', '/work-queue']) expect(within(row(name)).getAllByRole('button').map(b => b.textContent)).toEqual(['Run now', 'Edit'])
+  })
+
+  test('on a phone a row is its name, its line and its switch, with "Run now" and "Edit" in its "⋯"; the panel closed, the keyboard is back on the "⋯"', async () => {
+    const wide = phoneScreen()
+    try {
+      const { host } = scheduler()
+      show(host)
+      await screen.findByRole('region', { name: 'gemstack' })
+      const queue = row('/work-queue')
+      expect(within(queue).queryByRole('button', { name: 'Edit /work-queue' })).toBeNull()
+      expect(within(queue).getByRole('switch', { name: 'Run /work-queue by itself' })).toBeTruthy()
+      const more = within(queue).getByRole('button', { name: 'More for /work-queue' })
+      await openMenu(more)
+      expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toEqual(['Run now', 'Edit'])
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Edit' }))
+      const panel = await within(row('/work-queue')).findByRole('group', { name: 'Editing /work-queue' })
+      fireEvent.click(within(panel).getByRole('button', { name: 'Cancel' }))
+      await gone('/work-queue')
+      await waitFor(() => expect(document.activeElement).toBe(within(row('/work-queue')).getByRole('button', { name: 'More for /work-queue' })))
+    } finally {
+      wide()
+    }
   })
 
   test('a project\'s rows come in two groups, the automations a person made and the commands of the project\'s skills; a row a person made says who gets it, and one kept on this machine is named without a slash; only a row that could follow its skill marks a pick as "your pick"', async () => {
@@ -498,6 +522,15 @@ describe('the Automations page: its rows', () => {
     expect(disabled(within(held).getByRole('button', { name: 'Edit /work-queue' }))).toBe(false)
     answers[1]!({ ok: true, output: { ok: true } })
     await waitFor(() => expect(within(gemstack).getByRole('listitem', { name: '/post-merge-cleanup' }).className).not.toMatch(/opacity-60/))
+  })
+
+  test("a running scheduler's line says when it last looked only once that is two ticks late, in the warning colour", async () => {
+    const { host } = hostAnswering(projectId => ({ ok: true, output: { ...STATUS, lastTick: { ...STATUS.lastTick, at: projectId === 'p1' ? new Date(Date.now() - 10_000).toISOString() : '2026-10-03T10:00:00.000Z' } } }))
+    show(host, [GEMSTACK, OTHER])
+    const gemstack = await screen.findByRole('region', { name: 'gemstack' })
+    expect(within(gemstack).queryByText(/^Last looked/)).toBeNull()
+    const late = within(screen.getByRole('region', { name: 'other' })).getByText(/^Last looked/)
+    expect(late.className).toMatch(/text-warning/)
   })
 
   test('a tick that decided nothing says why in the heading; a scheduler that is off, or on with no process, says what that means and how it starts', async () => {
@@ -2325,7 +2358,7 @@ describe("the rows are the project's files as they stand", () => {
     failing = true
     fireEvent.click(within(row('/work-queue')).getByRole('switch'))
     expect((await within(gemstack).findByRole('alert')).textContent).toBe('The scheduler could not be read: the state file could not be read')
-    expect(within(gemstack).getByText('Scheduler not readable')).toBeTruthy()
+    expect(screen.getByText('Scheduler not readable')).toBeTruthy()
     expect(runCommand).toHaveBeenCalledWith('p1', ['switch', 'work-queue', 'on'])
     // The rows stay, in their groups, and so does the panel with what was typed in it.
     expect(within(screen.getByRole('region', { name: 'Your automations' })).getByRole('listitem', { name: 'tidy' })).toBeTruthy()
@@ -2336,7 +2369,7 @@ describe("the rows are the project's files as they stand", () => {
     failing = false
     fireEvent.click(within(row('/post-merge-cleanup')).getByRole('switch'))
     await waitFor(() => expect(within(gemstack).queryByRole('alert')).toBeNull())
-    expect(within(gemstack).getByText('Scheduler on')).toBeTruthy()
+    expect(screen.getByText('Scheduler on')).toBeTruthy()
     expect((within(editing('tidy')).getByLabelText('What the agent is told') as HTMLTextAreaElement).value).toBe('Tidy up, and say what moved.')
   })
 })

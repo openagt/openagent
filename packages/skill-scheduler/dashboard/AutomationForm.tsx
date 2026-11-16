@@ -163,7 +163,7 @@ export function AutomationForm({
       )}
       <FormFoot where={whereHint(draft, schedulerRuns)}>
         <Button
-          variant="secondary"
+          variant="ghost"
           disabled={saving}
           onClick={() => {
             forget()
