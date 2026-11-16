@@ -28,7 +28,6 @@ import { ModuleSlot, projectsHaving } from './ModulePageView.js'
 import { ConfirmDialog } from './ui/confirm-dialog.js'
 import { buttonVariants } from './ui/button.js'
 import { BACKDROP_CLASS, DIALOG_PRESSES_CLASS } from './ui/dialog.js'
-import { Switch } from './ui/switch.js'
 import { RadioGroup, RadioGroupItem } from './ui/radio-group.js'
 import { ScrollArea } from './ui/scroll-area.js'
 import { InSection, Section } from './ui/section.js'
@@ -37,7 +36,7 @@ import { MENU_TRIGGER_OPEN_CLASS } from './ui/dropdown-menu.js'
 import { navRowClass } from './ui/nav-row.js'
 import { cn } from '../lib/utils.js'
 import { useProjectLabel } from '../lib/project-labels.js'
-import { SettingsFootContext, SettingsRow as Row, SettingsSection, SettingsSelectRow as SelectRow, type SettingsOption as SelectOption } from './SettingsRows.js'
+import { SettingsFootContext, SettingsSection, SettingsSelectRow as SelectRow, ToggleRow, type SettingsOption as SelectOption } from './SettingsRows.js'
 
 // Settings (#958): a dialog over the page you are on, a list of entries on the left and the
 // picked entry's settings on the right. It opens from the person's menu and closes back to the
@@ -609,44 +608,6 @@ function HeadedSection({ heading, children }: { heading: string; children: React
     <Section title={heading}>
       <SettingsSection>{children}</SettingsSection>
     </Section>
-  )
-}
-
-/** A setting that is on or off and takes effect at once: a switch, not a box to tick in a form still to be sent. */
-function ToggleRow({
-  label,
-  description,
-  checked,
-  onChange,
-  disabled = false,
-  dimmed = disabled,
-}: {
-  label: string
-  description: string
-  checked: boolean
-  onChange: (next: boolean) => void
-  /** A capability the daemon or browser withholds, e.g. notifications the browser has blocked. */
-  disabled?: boolean
-  /** Greyed while what it needs is off, and still to be switched. */
-  dimmed?: boolean
-}) {
-  const id = useId()
-  return (
-    <Row
-      label={label}
-      description={description}
-      dimmed={dimmed}
-      labelFor={id}
-      control={
-        <Switch
-          id={id}
-          checked={checked}
-          disabled={disabled}
-          onCheckedChange={next => onChange(next === true)}
-          aria-label={label}
-        />
-      }
-    />
   )
 }
 

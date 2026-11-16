@@ -1,9 +1,10 @@
-import { createContext, useContext, type ReactNode } from 'react'
+import { createContext, useContext, useId, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select.js'
 import { cn } from '../lib/utils.js'
 import { DaemonDown } from '../lib/use-daemon-health.js'
 import { Skeleton } from './ui/skeleton.js'
+import { Switch } from './ui/switch.js'
 
 // Settings' building blocks (#958): an entry's settings, a row, a row picked from a list. The
 // dashboard's own entries are made of them, and so is an entry a module brings (`@openagt/dashboard/module`
@@ -152,6 +153,44 @@ export function SettingsSelectRow({
             ))}
           </SelectContent>
         </Select>
+      }
+    />
+  )
+}
+
+/** A setting that is on or off and takes effect at once: a switch, not a box to tick in a form still to be sent. */
+export function ToggleRow({
+  label,
+  description,
+  checked,
+  onChange,
+  disabled = false,
+  dimmed = disabled,
+}: {
+  label: string
+  description: string
+  checked: boolean
+  onChange: (next: boolean) => void
+  /** A capability the daemon or browser withholds, e.g. notifications the browser has blocked. */
+  disabled?: boolean
+  /** Greyed while what it needs is off, and still to be switched. */
+  dimmed?: boolean
+}) {
+  const id = useId()
+  return (
+    <SettingsRow
+      label={label}
+      description={description}
+      dimmed={dimmed}
+      labelFor={id}
+      control={
+        <Switch
+          id={id}
+          checked={checked}
+          disabled={disabled}
+          onCheckedChange={next => onChange(next === true)}
+          aria-label={label}
+        />
       }
     />
   )
