@@ -242,9 +242,15 @@ export function PhoneCode({
         <div className="flex gap-6 sm:items-start max-sm:flex-col">
           <QrOnWhite text={link!} />
           <div className="w-full min-w-0 space-y-3">
-            <ol className="list-decimal space-y-2 pl-5 text-sm marker:text-muted-foreground">
-              {steps.map(step => (
-                <li key={step}>{step}</li>
+            <ol className="space-y-3 text-sm">
+              {steps.map((step, at) => (
+                <li key={step} className="flex gap-3">
+                  {/* Its number on the step's first line, in a quiet disc. */}
+                  <span aria-hidden className="flex size-5 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-medium tabular-nums text-muted-foreground">
+                    {at + 1}
+                  </span>
+                  <span className="min-w-0">{step}</span>
+                </li>
               ))}
             </ol>
             {hint !== undefined && <p className="text-xs text-muted-foreground">{hint}</p>}
@@ -299,7 +305,7 @@ export function PhoneCode({
 /** The QR code on white with room around it, in either theme: a camera finds a code by its quiet edge. */
 function QrOnWhite({ text }: { text: string }) {
   return (
-    <div className="shrink-0 rounded-lg bg-white p-4">
+    <div className="shrink-0 rounded-lg bg-white p-4 ring-1 ring-hairline">
       <QrCode text={text} label="The code a new device scans" />
     </div>
   )
