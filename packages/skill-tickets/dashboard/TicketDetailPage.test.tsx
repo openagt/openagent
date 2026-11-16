@@ -114,7 +114,9 @@ describe('TicketDetailPage (#1144)', () => {
     expect((await fact('Stage')).textContent).toBe('Unplanned')
     expect((await fact('Issue')).querySelector('a')?.getAttribute('href')).toBe('https://example.com/org/repo/issues/42')
     expect((await fact('Opened')).textContent).toBe('2d ago')
-    expect((await fact('File')).textContent).toBe('tickets/do-the-thing.md')
+    // One line, cut in its middle where the column is narrow: whole under the pointer and to a screen reader.
+    expect((await fact('File')).querySelector('[title]')!.getAttribute('title')).toBe('tickets/do-the-thing.md')
+    expect((await fact('File')).querySelector('.sr-only')!.textContent).toBe('tickets/do-the-thing.md')
     // Where the facts are not beside the title, what decides the next step stands under it.
     expect(screen.getByRole('heading', { name: 'Do the thing' }).nextElementSibling?.textContent).toBe('P3·Unplanned')
   })
@@ -150,7 +152,7 @@ describe('TicketDetailPage (#1144)', () => {
     onTicket.mockResolvedValue(ticket({ planned: true, priority: '8' }))
     addToQueue.mockResolvedValue({ ok: true })
     render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
-    await queue('Add to queue')
+    await queue('Add to queue: work')
     // The title as the link, pointing back at the ticket's file, its priority as a number on the
     // queue's own 0–10 scale.
     await waitFor(() => expect(addToQueue).toHaveBeenCalledWith(expect.anything(), 'p1', [{ text: 'Do the thing', href: 'tickets/2026-07-20_do-the-thing.md', priority: 8 }]))
@@ -160,7 +162,7 @@ describe('TicketDetailPage (#1144)', () => {
     onTicket.mockResolvedValue(ticket({ planned: true }))
     addToQueue.mockResolvedValue({ ok: true })
     render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
-    await queue('Add to queue')
+    await queue('Add to queue: work')
     await waitFor(() => expect(addToQueue).toHaveBeenCalledWith(expect.anything(), 'p1', [{ text: 'Do the thing', href: 'tickets/2026-07-20_do-the-thing.md', priority: 5 }]))
   })
 
@@ -170,7 +172,7 @@ describe('TicketDetailPage (#1144)', () => {
     render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
     expect(await screen.findByRole('button', { name: 'Plan now' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Start work' })).toBeNull()
-    await queue('Add to queue')
+    await queue('Add to queue: plan')
     await waitFor(() => expect(addToQueue).toHaveBeenCalledWith(expect.anything(), 'p1', [{ text: 'Create tickets/2026-07-20_do-the-thing.plan.md', priority: 8 }]))
   })
 
@@ -178,9 +180,9 @@ describe('TicketDetailPage (#1144)', () => {
     onTicket.mockResolvedValue(ticket())
     addToQueue.mockResolvedValue({ ok: true })
     render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
-    await queue('Add to queue')
+    await queue('Add to queue: plan')
     // The press now says so, and cannot be pressed again.
-    const queued = await screen.findByRole('button', { name: 'Queued' })
+    const queued = await screen.findByRole('button', { name: 'Queued: plan' })
     expect(queued.getAttribute('aria-disabled')).toBe('true')
     fireEvent.click(queued)
     expect(addToQueue).toHaveBeenCalledTimes(1)
@@ -190,7 +192,7 @@ describe('TicketDetailPage (#1144)', () => {
     onTicket.mockResolvedValue(ticket())
     const onQueue = { ...modules().linkActions[0]!, done: async () => (link: { text: string }) => link.text === 'Create tickets/2026-07-20_do-the-thing.plan.md' }
     render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />, { ...modules(), linkActions: [onQueue] })
-    expect((await screen.findByRole('button', { name: 'Queued' })).getAttribute('aria-disabled')).toBe('true')
+    expect((await screen.findByRole('button', { name: 'Queued: plan' })).getAttribute('aria-disabled')).toBe('true')
     expect(addToQueue).not.toHaveBeenCalled()
   })
 
@@ -198,10 +200,10 @@ describe('TicketDetailPage (#1144)', () => {
     onTicket.mockResolvedValue(ticket())
     addToQueue.mockResolvedValue({ ok: false, error: 'the queue could not be written' })
     render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
-    await queue('Add to queue')
+    await queue('Add to queue: plan')
     expect(await screen.findByText(/could not be written/i)).toBeTruthy()
-    expect(screen.queryByText('Queued')).toBeNull()
-    expect(screen.getByRole('button', { name: 'Add to queue' }).getAttribute('aria-disabled')).toBeNull()
+    expect(screen.queryByText('Queued: plan')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Add to queue: plan' }).getAttribute('aria-disabled')).toBeNull()
   })
 
   test('no module offering an action on links in this project, no button (#1774)', async () => {

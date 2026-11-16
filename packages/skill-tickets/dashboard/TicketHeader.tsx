@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { LockOpen, MoreHorizontal, Pencil } from 'lucide-react'
 import {
   Badge,
@@ -8,6 +8,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  MiddleCut,
   PriorityBadge,
   cn,
   useAction,
@@ -264,14 +265,9 @@ export function TicketFacts({
           <span title={ticketDay(ticket)}>{ticketAge(ticket)}</span>
         </Fact>
         <Fact name="File">
-          {/* It may break after a slash or an underscore, never inside a word. */}
-          <span className="min-w-0 font-mono text-xs text-muted-foreground">
-            {`${TICKETS_DIR}/${ticket.file}`.split(/(?<=[/_])/).map((part, at) => (
-              <Fragment key={at}>
-                {at > 0 && <wbr />}
-                {part}
-              </Fragment>
-            ))}
+          {/* One line, cut in its middle where the column is narrow, its ending whole; whole under the pointer. */}
+          <span title={`${TICKETS_DIR}/${ticket.file}`} className="flex min-w-0 font-mono text-xs text-muted-foreground">
+            <MiddleCut text={`${TICKETS_DIR}/${ticket.file}`} />
           </span>
         </Fact>
       </dl>
