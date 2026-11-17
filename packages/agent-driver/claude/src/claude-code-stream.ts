@@ -306,15 +306,16 @@ export class StreamJsonParser {
     // The work the CLI runs in the background, as a level: every change says the whole set.
     if (type === 'system' && obj['subtype'] === 'background_tasks_changed' && Array.isArray(obj['tasks'])) this.background = obj['tasks'].length
     if (type === 'result') {
-      this.succeeded = obj['subtype'] === 'success' && obj['is_error'] !== true
       const result = obj['result']
       if (typeof result === 'string') this.finalText = result
       const usage = parseUsage(obj)
       if (usage) this.usage = { ...usage, ...(this.context !== undefined ? { contextTokens: this.context } : {}) }
       // The agent waits on work it runs in the background: the CLI says a result each time the
       // agent is idle, and the work's end wakes it for another. The turn goes on, and a message
-      // sent meanwhile still reaches it.
+      // sent meanwhile still reaches it. Such a result is not the turn's success: a Stop while it
+      // waits is a stop.
       if (this.background > 0 && this.asked === undefined && !this.stopping) return announced
+      this.succeeded = obj['subtype'] === 'success' && obj['is_error'] !== true
       // The turn's last line: nothing more is coming to answer, so the CLI may exit.
       this.io?.end()
       this.answered = this.asked !== undefined || this.stopping || this.succeeded
