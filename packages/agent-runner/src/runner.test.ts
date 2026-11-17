@@ -11,7 +11,7 @@ import { accountsPath, addAccount } from '@openagt/skill-account-rotation'
 import { writeAgent } from '@openagt/agent-data'
 import { markerCard, writeMarker } from './records.js'
 import { runCommand } from './run.js'
-import { ACCOUNT_ENV, detachResume, detachRun, driverFor, readyToRun, resumeArgs, resumeProject, runArgs, workAs } from './runner.js'
+import { ACCOUNT_ENV, detachResume, detachRun, driverFor, gitHostRepo, readyToRun, resumeArgs, resumeProject, runArgs, workAs } from './runner.js'
 import { removeRepo, testRepo } from './test-repo.js'
 import { noGitHost } from './run-test-support.js'
 import { TITLE_SYSTEM } from './title.js'
@@ -265,6 +265,18 @@ test('ready to run on Codex: skills in ~/.agents/skills are no warning while run
   } finally {
     await removeRepo(repo)
   }
+})
+
+test('a session with no project asks the git host of its repos, never only of its own folder, which is at none', async () => {
+  const atHost = new Set(['/projects/app', '/repos/site', '/repos/api'])
+  const atGitHost = async (repo: string) => atHost.has(repo)
+  // A project's run: the project itself.
+  assert.equal(await gitHostRepo('/projects/app', [{ name: 'site', from: '/repos/site' }], { atGitHost }), '/projects/app')
+  // A session's folder, at no git host: the first of its repos that is at one.
+  assert.equal(await gitHostRepo('/sessions/s1', [{ name: 'notes', from: '/repos/notes' }, { name: 'site', from: '/repos/site' }, { name: 'api', from: '/repos/api' }], { atGitHost }), '/repos/site')
+  // No repo at a git host, or none at all: the folder, as before.
+  assert.equal(await gitHostRepo('/sessions/s2', [{ name: 'notes', from: '/repos/notes' }], { atGitHost }), '/sessions/s2')
+  assert.equal(await gitHostRepo('/sessions/s3', undefined, { atGitHost }), '/sessions/s3')
 })
 
 test('ready to run, and the run: the computer\u2019s account at the git host, or the one picked for the session; no account, or one the git host cannot give, stops the run before it starts', async () => {
