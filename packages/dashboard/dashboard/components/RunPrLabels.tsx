@@ -11,7 +11,7 @@ import { PR_MARKS, prStateOf } from '../lib/pr-marks.js'
 export function RunPrLabels({ prs }: { prs: readonly { number: number; url: string; state?: string | undefined }[] }) {
   if (prs.length === 0) return null
   return (
-    <span className="flex min-w-0 items-center gap-1.5 max-sm:shrink-0">
+    <span className="flex shrink-0 items-center gap-1.5">
       {prs.map(pr => {
         const state = pr.state === undefined ? undefined : prStateOf(pr.state)
         const mark = state ? PR_MARKS[state] : undefined

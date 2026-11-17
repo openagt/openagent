@@ -84,8 +84,8 @@ export function HandoffSummary({ handoff, subagent = false }: { handoff: AgentHa
 /** What the Commit button says to the agent: it commits its own work, in its own words. */
 const COMMIT_MESSAGE = 'Commit your work.'
 
-/** The next step's look: the page's primary press, at a button's height (32), as the card's ✕. Busy, a press stays focusable (`aria-disabled`): a disabled one drops the focus to the page. */
-const NEXT_STEP = 'aria-disabled:pointer-events-none aria-disabled:opacity-50'
+/** The next step's look: a quiet press on the bar's own fill, not the page's primary one. Busy, a press stays focusable (`aria-disabled`): a disabled one drops the focus to the page. */
+const NEXT_STEP = 'bg-background/60 hover:bg-background aria-disabled:pointer-events-none aria-disabled:opacity-50'
 
 /** The project's main branch by name, when the handoff was measured from it; a run measured from a commit only knows it as "the main branch". */
 function mainBranchName(base: string | undefined): string {
@@ -211,6 +211,8 @@ function NextStep({
       <>
         <Uncommitted paths={paths} committed={!handoff.empty} />
         <Button
+          size="sm"
+          variant="ghost"
           className={NEXT_STEP}
           {...step}
           onClick={() => {
@@ -254,7 +256,7 @@ function NextStep({
       return (
         <>
           <Reason>not in the PR yet</Reason>
-          <Button className={NEXT_STEP} {...step} onClick={push}>
+          <Button size="sm" variant="ghost" className={NEXT_STEP} {...step} onClick={push}>
             <Steady words={['Update PR', 'Updating PR…']} now={pending === 'push' ? 1 : 0} />
           </Button>
         </>
@@ -262,6 +264,8 @@ function NextStep({
     }
     return (
       <Button
+        size="sm"
+        variant="ghost"
         className={NEXT_STEP}
         {...step}
         title={`Merges PR #${pr.number} now, or once its checks pass`}
@@ -299,6 +303,8 @@ function NextStep({
       <>
         <Reason>Not in {mainBranchName(handoff.base)} yet.</Reason>
         <Button
+          size="sm"
+          variant="ghost"
           className={NEXT_STEP}
           {...step}
           onClick={() => press('merge-branch', () => sendMergeBranch(projectId, agentId), 'Could not merge the branch.')}
@@ -314,7 +320,7 @@ function NextStep({
     if (handoff.pushed) return null
     return (
       <>
-        <Button className={NEXT_STEP} {...step} onClick={push}>
+        <Button size="sm" variant="ghost" className={NEXT_STEP} {...step} onClick={push}>
           <Steady words={['Publish branch', 'Publishing…']} now={pending === 'push' ? 1 : 0} />
         </Button>
       </>
@@ -337,6 +343,8 @@ function NextStep({
       {handoff.carries && <Carries carries={handoff.carries} />}
       <ButtonGroup>
         <Button
+          size="sm"
+          variant="ghost"
           className={cn(NEXT_STEP, 'pr-1.5!')}
           {...step}
           title={`${handoff.pushed ? 'Opens' : 'Pushes the branch and opens'} a pull request for ${handoff.branch}`}
@@ -344,16 +352,16 @@ function NextStep({
         >
           <Steady words={['Open PR', 'Opening PR…', 'Publishing…']} now={pending === 'pr' ? 1 : pending === 'push' ? 2 : 0} />
         </Button>
-        <ButtonGroupSeparator className="bg-primary-foreground/30 opacity-100" />
+        <ButtonGroupSeparator className="bg-border opacity-100" />
         <DropdownMenu>
             <DropdownMenuTrigger
               type="button"
               aria-label="Other choices"
               {...step}
               className={cn(
-                buttonVariants(),
+                buttonVariants({ size: 'sm', variant: 'ghost' }),
                 NEXT_STEP,
-                'px-1 data-[popup-open]:bg-primary-active',
+                'px-1 data-[popup-open]:bg-background',
               )}
             >
               <ChevronDown className="h-3.5 w-3.5" />
