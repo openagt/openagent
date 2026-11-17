@@ -132,6 +132,16 @@ describe('ChangesPanel', () => {
   })
 })
 
+describe('ChangesPanel beside its diffs', () => {
+  test('the list of files takes the smaller part of the pane, the diffs the larger, and a line number stands on the pane\'s own ground', async () => {
+    render(<ChangesPanel projectId="p1" agentId="run-1" context={context} />)
+    await waitFor(() => expect(within(list()).getAllByRole('button').length).toBeGreaterThan(0))
+    expect(list().parentElement!.className.split(' ')).toEqual(expect.arrayContaining(['w-2/5', 'max-w-64']))
+    await waitFor(() => expect(document.querySelector('[aria-label=Diffs] .sticky.left-0.select-none')).toBeTruthy())
+    expect(document.querySelector('[aria-label=Diffs] .sticky.left-0.select-none')!.className.split(' ')).toContain('bg-background')
+  })
+})
+
 describe('ChangesPanel remembered', () => {
   test('opened again for the same run, the pane shows what was read last at once, with no "Looking…" line, and reads again', async () => {
     const first = render(<ChangesPanel projectId="p1" agentId="run-1" context={context} />)

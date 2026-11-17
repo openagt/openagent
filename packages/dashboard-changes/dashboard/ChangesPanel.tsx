@@ -551,10 +551,10 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePan
           {merged !== undefined && <span className="shrink-0">{merged ? '· merged' : '· not merged yet'}</span>}
         </p>
       )}
-      {/* Beside each other while the pane is wide enough; on a narrow pane, one or the other. */}
+      {/* Beside each other while the pane is wide enough, the diffs given the larger part; on a narrow pane, one or the other. */}
       <div ref={setBody} className="flex min-h-0 min-w-0 flex-auto">
         {listShown && (
-          <div className={cn('flex min-h-0 flex-col', narrow ? 'w-full' : 'w-1/2 max-w-72 min-w-48 shrink-0 border-r border-hairline')}>
+          <div className={cn('flex min-h-0 flex-col', narrow ? 'w-full' : 'w-2/5 max-w-64 min-w-48 shrink-0 border-r border-hairline')}>
             <ChangeList paths={paths} changes={changes} group={settings.group} picked={picked} rings={agentId !== undefined} onPick={pick} />
             {agentId && commits.length > 0 && <CommitList commits={commits} picked={sha} open={commitsOpen} onOpen={setCommitsOpen} onPick={chosen => setCommitClick(chosen === undefined ? null : { agentId, sha: chosen })} />}
           </div>
