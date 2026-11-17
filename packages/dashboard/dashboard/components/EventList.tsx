@@ -1074,7 +1074,7 @@ export function EventList({
                   ) : choiceRow && choiceRow.pick === undefined && projectId !== undefined && agentId !== undefined ? (
                     // The question the agent waits on, answered here, under what it said.
                     typing ? null : <div className="mt-1 flex min-w-0 flex-1 flex-col gap-2">
-                      <QuestionPanel key={`${agentId}:${chatGate(choiceRow.choice)}`} projectId={projectId} agentId={agentId} choice={choiceRow.choice} askedAt={e.at} active={e === asking} focused={e === openedOn.current} onSaid={onSaid} focusNext={focusNext} />
+                      <QuestionPanel key={`${agentId}:${chatGate(choiceRow.choice)}`} projectId={projectId} agentId={agentId} choice={choiceRow.choice} active={e === asking} focused={e === openedOn.current} onSaid={onSaid} focusNext={focusNext} />
                       {footer}
                     </div>
                   ) : choiceRow?.pick !== undefined ? (

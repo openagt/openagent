@@ -42,10 +42,10 @@ const PICTURES = [
     path: (demo, runs) => `${demo.project.id}/${runs.waiting}`,
     ready: 'text=Which way?',
     shots: [
-      { window: 1120, width: 1120, media: '(min-width: 1184px)', keep: 'window', rows: [undefined, 'main >> role=button[name=/^Answer/]'] },
-      { window: 960, width: 960, media: '(min-width: 1024px)', keep: 'window', rows: [undefined, 'main >> role=button[name=/^Answer/]'] },
-      { window: 704, width: 704, media: '(min-width: 768px)', keep: 'window', rows: [undefined, 'main >> role=button[name=/^Answer/]'] },
-      { window: 358, width: 358, media: '', keep: 'window', rows: [undefined, 'main >> role=button[name=/^Answer/]'] },
+      { window: 1120, width: 1120, media: '(min-width: 1184px)', keep: 'window', rows: [undefined, 'main >> role=button[name=/^Submit/]'] },
+      { window: 960, width: 960, media: '(min-width: 1024px)', keep: 'window', rows: [undefined, 'main >> role=button[name=/^Submit/]'] },
+      { window: 704, width: 704, media: '(min-width: 768px)', keep: 'window', rows: [undefined, 'main >> role=button[name=/^Submit/]'] },
+      { window: 358, width: 358, media: '', keep: 'window', rows: [undefined, 'main >> role=button[name=/^Submit/]'] },
     ],
   },
   // The launcher's "Waiting on you": the Human Queue as a person meets it, in two thirds of the column (the

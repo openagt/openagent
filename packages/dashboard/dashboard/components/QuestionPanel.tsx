@@ -6,13 +6,10 @@ import { sendChoice, sendMessage } from '../rpc/control.js'
 import { useAction } from '../lib/use-action.js'
 import { DaemonDown } from '../lib/use-daemon-health.js'
 import { cn } from '../lib/utils.js'
-import { formatSince } from '../lib/format-date.js'
-import { StateCell } from './ui/state.js'
 import { RadioGroup } from './ui/radio-group.js'
 import { answerPrompt, skipPrompt } from '../lib/answered-question.js'
 import { MOD_KEY, pressed, typedInto } from '../lib/shortcut.js'
 import { isMobileScreen } from '../lib/use-mobile.js'
-import { Facts } from './ui/panel.js'
 
 /** The pick that is no option: the person's own words, typed in the "Other" row. */
 const OTHER = Symbol('other')
@@ -61,7 +58,7 @@ function Choice({ multi, value, on, disabled, onPick, children }: { multi: boole
 
 // The question an agent's turn ended on, in the chat under what the agent said, the way Claude
 // Code on the web asks: a card with the title on a grey band, one row per option (a ring, its
-// label, its description), an "Other" row to answer in one's own words, and Skip / Answer. The
+// label, its description), an "Other" row to answer in one's own words, and Skip / Submit. The
 // number keys pick, as before, with no number drawn. An option's pick goes over the control RPC,
 // which hands the chosen labels to the agent; "Other" and Skip go as a message in the same
 // sentence's shape, so the chat draws every answer, a skip too, as the question and what was said
@@ -78,13 +75,10 @@ export function QuestionPanel({
   onSaid,
   focusNext,
   send,
-  askedAt,
 }: {
   projectId: string
   agentId: string
   choice: ChoiceRequest
-  /** When the agent asked it: how long it has waited, on the card's first line. */
-  askedAt?: string | undefined
   /** The one question the keys answer: the number keys pick, ⌘ or Ctrl + Enter submits. */
   active?: boolean
   /** The question the page opened on: its pick takes the focus as it shows, where the screen is no phone's. */
@@ -215,13 +209,7 @@ export function QuestionPanel({
   if (sent) return null
   return (
     <section ref={card} role="region" aria-label={choice.title} className="flex w-full max-w-[480px] flex-col overflow-clip rounded-box font-sans text-sm ring-1 ring-border">
-      <div className="flex flex-col gap-1 bg-foreground/5 px-4 py-3">
-        <span className="flex items-center gap-2 text-xs text-warning">
-          <StateCell state="waiting" className="size-3" />
-          <Facts facts={['Waiting for your answer', askedAt !== undefined && formatSince(askedAt)]} />
-        </span>
-        <h2 id={titleId} className="font-normal">{choice.title}</h2>
-      </div>
+      <h2 id={titleId} className="bg-foreground/5 px-4 py-3 font-normal">{choice.title}</h2>
       <Choices multi={choice.multi} labelledBy={titleId} picked={picked} onPick={setPicked} disabled={busy}>
         {choice.options.map(o => {
           const on = choice.multi ? checked.has(o.id) : picked === o.id
@@ -233,7 +221,7 @@ export function QuestionPanel({
                   <span>
                     {o.label}
                     {/* A box of its own, which a screen reader reads as a word apart from the label. */}
-                    {o.id === choice.recommended && <span className="ml-2 inline-block text-xs font-normal text-muted-foreground">Recommended</span>}
+                    {o.id === choice.recommended && <span className="ml-2 inline-block text-muted-foreground">Recommended</span>}
                   </span>
                   {o.detail && <span className="text-muted-foreground">{o.detail}</span>}
                 </span>
@@ -276,10 +264,10 @@ export function QuestionPanel({
           </button>
         )}
         <button type="button" disabled={busy || down || !ready} onClick={submit} className="flex h-6 items-center gap-1.5 rounded-md bg-foreground px-2 text-xs font-medium text-background hover:bg-foreground/90 disabled:opacity-60">
-          Answer
+          Submit
           {active && (
             // The message box's rule for naming keys: none on a touch screen, none at a phone's width. While a text field
-            // outside the card has Ctrl+Enter, the keys are dimmed and keep their place, so Answer and Skip stand still.
+            // outside the card has Ctrl+Enter, the keys are dimmed and keep their place, so Submit and Skip stand still.
             <span className={cn('gap-0.5 transition-opacity pointer-coarse:hidden max-md:hidden md:not-pointer-coarse:flex', keysElsewhere && 'opacity-40')} aria-hidden>
               <kbd className="flex h-4 min-w-4 items-center justify-center rounded-sm border border-background/20 px-0.5 font-sans text-xs">{MOD_KEY}</kbd>
               <kbd className="flex h-4 min-w-4 items-center justify-center rounded-sm border border-background/20 px-0.5 font-sans text-xs">Enter</kbd>
