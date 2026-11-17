@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState, type ComponentType, type FormEvent, type ReactNode, type RefObject } from 'react'
 import { ChevronRight, Circle, CircleArrowUp, CircleCheck, CircleX, Loader2, Pencil } from 'lucide-react'
-import { Badge, Button, Facts, Input, RadioGroupOption, Section, SettingsFoot, SettingsItem, SettingsRow, cn, type Fact, formatDateTime, formatRelative, useOpenAgentDown, useSettingsHold } from '@openagt/dashboard/module'
+import { Badge, Button, Facts, Input, RadioGroupOption, Section, SettingsFoot, SettingsItem, SettingsRow, cn, formatDateTime, formatRelative, useOpenAgentDown, useSettingsHold } from '@openagt/dashboard/module'
 import type { DeviceRow } from './devices.js'
 import type { StepState } from './servers.js'
 
@@ -46,12 +46,13 @@ export function State({ tone, children }: { tone: 'working' | 'good' | 'warn' | 
 const TONE = { working: 'info', good: 'success', warn: 'warning', bad: 'danger', quiet: 'neutral' } as const
 
 /** A device in a list: its icon, its name, the line under it, its state at the right, and its page or its own presses. */
-export function ListedDevice({ icon, name, facts, state, actions, onOpen }: { icon: ComponentType<{ className?: string; 'aria-hidden'?: boolean }>; name: string; facts: Fact[]; state?: ReactNode; actions?: ReactNode; onOpen?: () => void }) {
+export function ListedDevice({ icon, name, facts, state, actions, onOpen }: { icon: ComponentType<{ className?: string; 'aria-hidden'?: boolean }>; name: string; facts: ReactNode[]; state?: ReactNode; actions?: ReactNode; onOpen?: () => void }) {
   return (
     <SettingsItem
       icon={icon}
       title={name}
-      detail={<Facts facts={facts} />}
+      // Facts wrap whole, so a phone keeps a device's route and its age.
+      detail={<WholeFacts facts={facts} />}
       {...(state !== undefined || onOpen !== undefined
         ? {
             end: (

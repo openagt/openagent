@@ -323,7 +323,6 @@ function PhoneRow({ d, item }: { d: Devices; item: PhoneItem }) {
       <ListedDevice
         icon={icon}
         name={item.name}
-        // The age before the route, so a narrow row cuts the route first.
         facts={[word, <span title={formatDateTime(item.seen ?? item.added)}>{seenWords(item.seen, item.added)}</span>, where]}
         {...(removing ? { state: <State tone="working">Removing…</State> } : {})}
         actions={
