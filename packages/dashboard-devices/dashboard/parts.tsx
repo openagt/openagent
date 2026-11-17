@@ -357,9 +357,10 @@ export function Seen({ device, note }: { device: DeviceRow; note?: string | unde
 /** One of a dialog's choices: its radio, its title and what it means, filled under the pointer; `children` under the words. */
 export function Choice({ value, disabled, title, words, badge, children }: { value: string; disabled?: boolean | undefined; title: string; words: string; badge?: string | undefined; children?: ReactNode }) {
   return (
-    <RadioGroupOption value={value} disabled={disabled} className="flex-nowrap items-start gap-x-3 rounded-md px-3 py-2 transition-colors hover:bg-accent has-[[data-disabled]]:hover:bg-transparent [&>[data-slot=radio-group-item]]:mt-0.5">
+    // A choice that is off dims its radio and its title alone: its words say why, and stay readable.
+    <RadioGroupOption value={value} disabled={disabled} className="flex-nowrap items-start gap-x-3 rounded-md px-3 py-2 transition-colors hover:bg-accent has-[[data-disabled]]:opacity-100 has-[[data-disabled]]:hover:bg-transparent [&>[data-slot=radio-group-item]]:mt-0.5">
       <span className="min-w-0 flex-1">
-        <span className="flex items-center gap-2 font-medium">
+        <span className={cn('flex items-center gap-2 font-medium', disabled && 'text-muted-foreground')}>
           {title}
           {badge !== undefined && <Badge>{badge}</Badge>}
         </span>
