@@ -144,7 +144,7 @@ export const CODE_SHAPE = (
 
 /** A phone's code while it is asked for: the QR code's square and the steps beside it. */
 const QR_SHAPE = (
-  <div className="flex gap-6 max-sm:flex-col">
+  <div className="flex gap-6 max-sm:flex-col max-sm:items-center">
     <Skeleton className="size-64 shrink-0 rounded-lg" />
     <div className="w-full space-y-3">
       <Skeleton className="h-4 w-3/4" />
@@ -239,7 +239,8 @@ export function PhoneCode({
       ) : expired ? (
         <RanOut />
       ) : (
-        <div className="flex gap-6 sm:items-start max-sm:flex-col">
+        // On a phone the code stands centred over the steps, as Invite's does.
+        <div className="flex gap-6 sm:items-start max-sm:flex-col max-sm:items-center">
           <QrOnWhite text={link!} />
           <div className="w-full min-w-0 space-y-3">
             <ol className="space-y-3 text-sm">
