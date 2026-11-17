@@ -312,7 +312,7 @@ function AddComputer({ d, onGive, onSetUpServer, onClose }: { d: Devices; /** Gi
       {found !== undefined && found.length > 0 && (
         <SettingsItems aria-label="On this Wi-Fi">
           {found.map(computer => (
-            // The row is the press, as a device's row that opens its page is: "Connect" at its right at rest, at every width.
+            // The row is the press, as a device's row that opens its page is: "Connect" at its right at rest, at every width, in the words of the list's own press.
             <SettingsItem
               key={computer.url}
               icon={Monitor}
@@ -327,7 +327,7 @@ function AddComputer({ d, onGive, onSetUpServer, onClose }: { d: Devices; /** Gi
                 : {
                     end: (
                       <>
-                        Connect
+                        <span className="text-sm font-medium text-foreground">Connect</span>
                         <ChevronRight aria-hidden />
                       </>
                     ),
@@ -338,19 +338,19 @@ function AddComputer({ d, onGive, onSetUpServer, onClose }: { d: Devices; /** Gi
         </SettingsItems>
       )}
       <p className="max-w-xl text-xs text-faint-foreground">Don't see it? Open OpenAgent on it, on the same Wi-Fi, and turn on "On this Wi-Fi" in its Settings › Devices.</p>
-      {/* A way of its own, a part 32 under the list. */}
+      {/* A way of its own, a part 32 under the list, and quieter than its rows' Connect. */}
       <div className="mt-2">
         <SettingsRow
           label="Somewhere else?"
           description={server ? `At the office, at a friend's: it joins through ${server.label}.` : "At the office, at a friend's: it joins through a server. Add a server first."}
           control={
             server || !onSetUpServer ? (
-              <Button type="button" variant="secondary" disabled={!server} onClick={onGive}>
+              <Button type="button" variant="ghost" disabled={!server} onClick={onGive}>
                 <Ticket className="size-4" aria-hidden />
                 Give it a code
               </Button>
             ) : (
-              <Button type="button" variant="secondary" onClick={onSetUpServer}>
+              <Button type="button" variant="ghost" onClick={onSetUpServer}>
                 <Server className="size-4" aria-hidden />
                 Set up a server
               </Button>

@@ -5,7 +5,7 @@ import { idsOf, myName, type Answer, type DeviceRow } from './devices.js'
 import { installDone, installFailed, nameOwner, removeDevice, removePerson, setPeople, setWho, askLink, type ServerRow } from './servers.js'
 import { labelOf, type ServerItem } from './model.js'
 import { Invite } from './codes.js'
-import { Head, PHONE_OWN_LINE, Part, PressRow, Problem, Removal, Said, Seen, State, StepLine, Tabs, hostOf, olderThan } from './parts.js'
+import { Head, Part, PressRow, Problem, Removal, Said, Seen, State, StepLine, Tabs, hostOf, olderThan } from './parts.js'
 import type { Devices } from './use-devices.js'
 
 // A server's own page in Settings › Devices, for a server this computer installed OpenAgent on:
@@ -79,7 +79,7 @@ export function ServerPage({ d, item, onBack, invite = false }: { d: Devices; it
         icon={home ? House : Server}
         name={item.name}
         badge={home ? 'Server at home' : 'Server'}
-        facts={[state, home ? `through ${labelOf(d.machines?.machines ?? [], server.through!)}` : server.tailscale ? 'on your Tailscale network' : item.name !== server.address ? server.address : undefined, item.door?.tailscale !== undefined && !server.tailscale ? `on Tailscale at ${item.door.tailscale}` : undefined, machine?.version !== undefined && PHONE_OWN_LINE(`OpenAgent ${machine.version}`)]}
+        facts={[state, home ? `through ${labelOf(d.machines?.machines ?? [], server.through!)}` : server.tailscale ? 'on your Tailscale network' : item.name !== server.address ? server.address : undefined, item.door?.tailscale !== undefined && !server.tailscale ? `on Tailscale at ${item.door.tailscale}` : undefined, machine?.version !== undefined && `OpenAgent ${machine.version}`]}
         {...(machine ? { rename: async (name: string) => {
           const renamed = await host.renameMachine(machine.id, name)
           await d.reloadMachines().catch(() => {})
@@ -171,6 +171,8 @@ function Overview({ d, item }: { d: Devices; item: ServerItem }) {
   const sendable = machine ? 'done' : reason !== undefined ? 'failed' : server.adding ? 'running' : 'waiting'
   // The steps fold into one line once there is nothing left to see in them.
   const settled = done && machine !== undefined
+  // Installed but not reached: connecting again is the page's one way on, and Remove waits quietly under it.
+  const reconnect = done && machine?.version === undefined && (reason !== undefined || !server.adding)
   return (
     <>
       <Part title="Install">
@@ -197,8 +199,8 @@ function Overview({ d, item }: { d: Devices; item: ServerItem }) {
             <ChevronRight aria-hidden className="h-3 w-3" />
           </button>
         )}
-        {done && machine?.version === undefined && (reason !== undefined || !server.adding) && (
-          <Button variant="secondary" disabled={busy || down} aria-label={machine ? `Connect ${server.address} again` : `Finish connecting ${server.address}`} className="max-md:h-11" onClick={() => void d.addToMachines(server)}>
+        {reconnect && (
+          <Button disabled={busy || down} aria-label={machine ? `Connect ${server.address} again` : `Finish connecting ${server.address}`} className="max-md:h-11" onClick={() => void d.addToMachines(server)}>
             {machine ? 'Connect again' : 'Finish connecting'}
           </Button>
         )}
@@ -215,7 +217,7 @@ function Overview({ d, item }: { d: Devices; item: ServerItem }) {
         <Removal label="Remove server" said="Takes the server off this list, and this computer out of the server.">
           <ConfirmDialog
             trigger={
-              <Button variant="secondary" className="text-danger" disabled={busy} aria-label={`Remove ${server.address}`}>
+              <Button variant={reconnect ? 'ghost' : 'secondary'} className="text-danger" disabled={busy} aria-label={`Remove ${server.address}`}>
                 Remove
               </Button>
             }

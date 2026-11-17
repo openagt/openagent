@@ -106,29 +106,34 @@ export function PanelMore({ children, onClick }: { children: ReactNode; onClick:
 // The whole row is the link or the press: the title's box covers the row. The row's presses stand above that cover.
 const coverClass = 'outline-none after:absolute after:inset-0'
 
-/** A fact of a line of facts; with a class, what its own wrapper needs too (`max-md:sr-only`: a phone leaves it, its dot with it, to a screen reader). */
+/** A fact of a run of facts; with a class, what its own wrapper needs too (`max-md:sr-only`: a phone leaves it, its dot with it, to a screen reader). */
 export type Fact = ReactNode | { fact: ReactNode; className: string }
 
 /**
- * A line of facts, joined one way everywhere: a dot between each two, 6 px on either side of it. The dot
- * is drawn in the wrapper of the fact it stands before, and not said, so a fact a narrow screen does not
- * draw takes its dot along. A fact that is nothing (`false`, `''`, `undefined`) is left out. `part` is each
- * fact's wrapper's own class and `words` its words', where the line is one line and its words give way.
+ * A run of facts, joined one way everywhere: a dot between each two, in a 16 px column of its own, drawn with the fact
+ * after it and not said. A fact never breaks inside itself: the run wraps between facts, and no line opens with a dot,
+ * since the run stands 16 px out to its left and cuts that margin off, where a dot that would open a line stands. A fact
+ * a narrow screen does not draw takes its dot along. A fact that is nothing (`false`, `''`, `undefined`) is left out.
+ * `lead` (a badge) opens the run with no dot after it. `oneLine`: the run keeps to one line, and its last fact's words
+ * give way.
  */
-export function Facts({ facts, className, part, words }: { facts: Fact[]; className?: string; part?: string; words?: string }) {
+export function Facts({ facts, lead, oneLine = false, className }: { facts: Fact[]; lead?: ReactNode; oneLine?: boolean; className?: string }) {
   const shown = facts.filter(fact => fact !== undefined && fact !== null && fact !== false && fact !== '')
   return (
-    <span className={className}>
+    <span className={cn('-ml-4 flex min-w-0 items-center [clip-path:inset(0_0_0_1rem)]', !oneLine && 'flex-wrap', className)}>
+      {lead !== undefined && <span className="-mr-2 flex shrink-0 pl-4">{lead}</span>}
       {shown.map((fact, index) => {
         const own = typeof fact === 'object' && fact !== null && !isValidElement(fact) && 'fact' in fact ? fact : { fact, className: undefined }
+        // The first fact has no dot before it, but with a lead, whose dot stands unseen as its gap.
+        const dot = index > 0 || lead !== undefined
         return (
-          <span key={index} className={cn(part, own.className)}>
-            {index > 0 && (
-              <span aria-hidden className="mx-1.5 shrink-0">
+          <span key={index} className={cn('min-w-0 max-w-full whitespace-nowrap', oneLine ? 'flex items-center not-last:shrink-0' : 'truncate', !dot && 'pl-4', own.className)}>
+            {dot && (
+              <span aria-hidden className={cn('inline-block w-4 shrink-0 text-center', index === 0 && 'invisible')}>
                 ·
               </span>
             )}
-            {words === undefined ? own.fact : <span className={words}>{own.fact}</span>}
+            {oneLine ? <span className="min-w-0 truncate">{own.fact}</span> : own.fact}
           </span>
         )
       })}
@@ -157,7 +162,7 @@ export function Facts({ facts, className, part, words }: { facts: Fact[]; classN
  * comes to the row for (Answer, Review); then the fact stands just before them, centred on the row with
  * them, and is left to a screen reader on a phone, where the room is the name's.
  */
-export function PanelRow({ state, before, title, titleHint, meta = [], metaLines = 1, under, columns, fact, actions, actionsAtRest = false, href, external = false, onClick, className, 'aria-label': label }: {
+export function PanelRow({ state, before, title, titleHint, meta = [], under, columns, fact, actions, actionsAtRest = false, href, external = false, onClick, className, 'aria-label': label }: {
   state?: ReactNode
   /** On the name's line before it, 12 after `state`, its own column (a ticket's priority): `meta` starts under the name, not under it. */
   before?: ReactNode
@@ -165,8 +170,6 @@ export function PanelRow({ state, before, title, titleHint, meta = [], metaLines
   /** Said under the pointer over the name: the whole text where the name stands in for it. */
   titleHint?: string | undefined
   meta?: Fact[]
-  /** How many lines what is known of it may take before it is cut: 2 for a sentence a person must read whole (a question). */
-  metaLines?: 1 | 2
   under?: ReactNode
   columns?: ReactNode
   fact?: ReactNode
@@ -216,14 +219,8 @@ export function PanelRow({ state, before, title, titleHint, meta = [], metaLines
         {before !== undefined && <span className="flex h-5 shrink-0 items-center">{before}</span>}
         <span className="min-w-0 flex-1">
           {named}
-          {/* On one line every part but the last is said whole and the last gives way, cut with "…"; on two, the parts run on and the second line is cut. */}
-          {parts.length > 0 && (
-            <Facts
-              facts={parts}
-              className={cn('mt-1 text-xs text-faint-foreground', metaLines === 2 ? 'line-clamp-2' : 'flex min-w-0 items-center')}
-              {...(metaLines === 2 ? {} : { part: 'flex min-w-0 items-center not-last:shrink-0', words: 'min-w-0 truncate' })}
-            />
-          )}
+          {/* One line: every part but the last is said whole and the last gives way, cut with "…". */}
+          {parts.length > 0 && <Facts facts={parts} className="mt-1 text-xs text-faint-foreground" oneLine />}
           {under !== undefined && <span className="mt-1 block text-xs">{under}</span>}
         </span>
         {columns !== undefined && <span className="flex h-5 shrink-0 items-center gap-4 text-xs text-faint-foreground">{columns}</span>}

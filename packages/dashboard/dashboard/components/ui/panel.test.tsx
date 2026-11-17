@@ -7,13 +7,29 @@ afterEach(cleanup)
 describe('Facts', () => {
   test('a dot between each two facts, drawn with the fact after it and not said, so a fact a phone leaves takes its dot along', () => {
     const { container } = render(<Facts facts={['3 runs', { fact: 'feature/login', className: 'max-md:sr-only' }, false, '', '2 commits']} />)
-    const parts = [...container.firstElementChild!.children]
+    const run = container.firstElementChild!
+    const parts = [...run.children]
     // A fact that is nothing is left out, with no dot of its own.
     expect(parts.map(part => part.textContent)).toEqual(['3 runs', '·feature/login', '·2 commits'])
     expect(parts[0]!.querySelector('[aria-hidden]')).toBeNull()
-    const branch = parts[1]!
-    expect(branch.className).toBe('max-md:sr-only')
-    expect(branch.querySelector('[aria-hidden]')!.textContent).toBe('·')
+    expect(parts[1]!.className).toContain('max-md:sr-only')
+    expect(parts[1]!.querySelector('[aria-hidden]')!.textContent).toBe('·')
+    // A fact never breaks inside itself; the run wraps between facts, its dots' margin out to the left and cut off.
+    expect(parts.every(part => part.className.includes('whitespace-nowrap'))).toBe(true)
+    expect(run.className).toContain('flex-wrap')
+    expect(run.className).toContain('-ml-4')
+    expect(run.className).toContain('[clip-path:inset(0_0_0_1rem)]')
+  })
+
+  test('one line: its last fact gives way, the others keep their room; a lead opens it with no dot seen after it', () => {
+    const { container } = render(<Facts oneLine lead={<b>Server</b>} facts={['Online', '203.0.113.5']} />)
+    const run = container.firstElementChild!
+    expect(run.className).not.toContain('flex-wrap')
+    const [lead, online, address] = [...run.children]
+    expect(lead!.textContent).toBe('Server')
+    expect(online!.firstElementChild!.className).toContain('invisible')
+    expect(online!.className).toContain('not-last:shrink-0')
+    expect(address!.lastElementChild!.className).toContain('truncate')
   })
 })
 

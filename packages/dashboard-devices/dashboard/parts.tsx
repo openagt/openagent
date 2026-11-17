@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState, type ComponentType, type FormEvent, type ReactNode, type RefObject } from 'react'
 import { ChevronRight, Circle, CircleArrowUp, CircleCheck, CircleX, Loader2, Pencil } from 'lucide-react'
-import { Badge, Button, Facts, Input, RadioGroupOption, Section, SettingsFoot, SettingsItem, SettingsRow, cn, type Fact, formatDateTime, formatRelative, useOpenAgentDown, useSettingsHold } from '@openagt/dashboard/module'
+import { Badge, Button, Facts, Input, RadioGroupOption, Section, SettingsFoot, SettingsItem, SettingsRow, cn, formatDateTime, formatRelative, useOpenAgentDown, useSettingsHold } from '@openagt/dashboard/module'
 import type { DeviceRow } from './devices.js'
 import type { StepState } from './servers.js'
 
@@ -46,7 +46,7 @@ export function State({ tone, children }: { tone: 'working' | 'good' | 'warn' | 
 const TONE = { working: 'info', good: 'success', warn: 'warning', bad: 'danger', quiet: 'neutral' } as const
 
 /** A device in a list: its icon, its name, the line under it, its state at the right, and its page or its own presses. */
-export function ListedDevice({ icon, name, facts, state, actions, onOpen }: { icon: ComponentType<{ className?: string; 'aria-hidden'?: boolean }>; name: string; facts: Fact[]; state?: ReactNode; actions?: ReactNode; onOpen?: () => void }) {
+export function ListedDevice({ icon, name, facts, state, actions, onOpen }: { icon: ComponentType<{ className?: string; 'aria-hidden'?: boolean }>; name: string; facts: ReactNode[]; state?: ReactNode; actions?: ReactNode; onOpen?: () => void }) {
   return (
     <SettingsItem
       icon={icon}
@@ -271,17 +271,12 @@ export function RenameForm({ name, rename, onClose }: { name: string; rename: Re
   )
 }
 
-/**
- * A fact of a server's head a phone puts on a line of its own, with no dot (its version): its kind's badge and its state are
- * boxes a line breaks after, so a fact run on would open the facts' second line with its dot.
- */
-export const PHONE_OWN_LINE = (fact: ReactNode): Fact => ({ fact, className: 'max-md:block max-md:[&>[aria-hidden]]:hidden' })
 
 /** A device's page is named above it, in the Settings dialog's header: its own top says it once more only outside the dialog. */
 export const NamedAbove = createContext(false)
 
 /** The top of a device's page: its icon, name and facts, and Rename; under Settings' header, which names it, its kind and facts alone. */
-export function Head({ icon: Icon, name, badge, facts, rename }: { icon: ComponentType<{ className?: string; 'aria-hidden'?: boolean }>; name: string; badge?: string; facts: Fact[]; rename?: Rename }) {
+export function Head({ icon: Icon, name, badge, facts, rename }: { icon: ComponentType<{ className?: string; 'aria-hidden'?: boolean }>; name: string; badge?: string; facts: ReactNode[]; rename?: Rename }) {
   const { renaming, open, close, press } = useRenaming()
   const namedAbove = useContext(NamedAbove)
   return (
@@ -301,8 +296,7 @@ export function Head({ icon: Icon, name, badge, facts, rename }: { icon: Compone
           )}
           {/* One run of words: on a phone the badge stays at the start of the facts' first line, not on a line of its own. */}
           <p className="min-w-0 text-xs text-muted-foreground">
-            {namedAbove && badge !== undefined && <Badge className="mr-2 align-middle">{badge}</Badge>}
-            <Facts facts={facts} />
+            <Facts {...(namedAbove && badge !== undefined ? { lead: <Badge>{badge}</Badge> } : {})} facts={facts} />
           </p>
         </div>
         {rename && !renaming && (
@@ -343,9 +337,10 @@ export function Seen({ device, note }: { device: DeviceRow; note?: string | unde
 /** One of a dialog's choices: its radio, its title and what it means, filled under the pointer; `children` under the words. */
 export function Choice({ value, disabled, title, words, badge, children }: { value: string; disabled?: boolean | undefined; title: string; words: string; badge?: string | undefined; children?: ReactNode }) {
   return (
-    <RadioGroupOption value={value} disabled={disabled} className="flex-nowrap items-start gap-x-3 rounded-md px-3 py-2 transition-colors hover:bg-accent has-[[data-disabled]]:hover:bg-transparent [&>[data-slot=radio-group-item]]:mt-0.5">
+    // A choice that is off dims its radio and its title alone: its words say why, and stay readable.
+    <RadioGroupOption value={value} disabled={disabled} className="flex-nowrap items-start gap-x-3 rounded-md px-3 py-2 transition-colors hover:bg-accent has-[[data-disabled]]:opacity-100 has-[[data-disabled]]:hover:bg-transparent [&>[data-slot=radio-group-item]]:mt-0.5">
       <span className="min-w-0 flex-1">
-        <span className="flex items-center gap-2 font-medium">
+        <span className={cn('flex items-center gap-2 font-medium', disabled && 'text-muted-foreground')}>
           {title}
           {badge !== undefined && <Badge>{badge}</Badge>}
         </span>

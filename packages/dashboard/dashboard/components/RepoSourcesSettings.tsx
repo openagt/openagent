@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { X } from 'lucide-react'
-import { onRepoSources, sendAddRepoOwner, sendRemoveRepoFolder, sendRemoveRepoOwner, type RepoSources } from '../rpc/projects.js'
+import { FolderPlus, X } from 'lucide-react'
+import { onRepoSources, sendAddRepoFolder, sendAddRepoOwner, sendRemoveRepoFolder, sendRemoveRepoOwner, type RepoSources } from '../rpc/projects.js'
 import { useLoaded } from '../lib/use-async.js'
 import { useAction } from '../lib/use-action.js'
 import { Button } from './ui/button.js'
@@ -53,6 +53,8 @@ function Sources({ sources, onChanged }: { sources: RepoSources; onChanged: () =
     })
   const removeOwner = (name: string) => void run(() => sendRemoveRepoOwner(name), 'Could not remove it.').then(again)
   const removeFolder = (folder: string) => void run(() => sendRemoveRepoFolder(folder), 'Could not remove it.').then(again)
+  // The picker's own "Search another folder…": this computer's folder dialog, the folder picked added.
+  const addFolder = () => void run(() => sendAddRepoFolder(), 'Could not add it.').then(again)
 
   return (
     <SettingsSection description="Where the project picker finds repos, besides your projects. OpenAgent's own GitHub accounts list their repos there too.">
@@ -100,9 +102,17 @@ function Sources({ sources, onChanged }: { sources: RepoSources; onChanged: () =
             </form>
           </div>
         </Section>
-        <Section title="Folders searched on this computer">
+        <Section
+          title="Folders searched on this computer"
+          action={
+            <Button variant="ghost" size="sm" className="max-md:h-11" disabled={busy} onClick={addFolder}>
+              <FolderPlus className="size-4" aria-hidden />
+              Search another folder&hellip;
+            </Button>
+          }
+        >
           <div className="space-y-6">
-            <p className="max-w-md text-xs text-faint-foreground">Your home folder, and the folders added with &ldquo;Search another folder&hellip;&rdquo; in the picker.</p>
+            <p className="max-w-md text-xs text-faint-foreground">Your home folder, and the folders added here or with &ldquo;Search another folder&hellip;&rdquo; in the picker.</p>
             {sources.folders.length > 0 ? (
               <SettingsItems aria-label="Folders searched">
                 {sources.folders.map(folder => (

@@ -10,7 +10,7 @@ import { JoinedPage, OtherPage } from './JoinedPage.js'
 import { ServerPage } from './ServerPage.js'
 import { ThisComputer } from './ThisComputer.js'
 import { hasServer, labelOf, reachedAt, type Item, type PhoneItem } from './model.js'
-import { LinkPress, ListedDevice, NamedAbove, PressRow, Problem, State, olderThan } from './parts.js'
+import { ListedDevice, NamedAbove, PressRow, Problem, State, olderThan } from './parts.js'
 import { useDevices, type Devices, type Paces } from './use-devices.js'
 
 // Settings › Devices: this computer, how the person's devices reach it, and every device of
@@ -159,14 +159,24 @@ function Start({ d, onAdd }: { d: Devices; onAdd: (adding: Adding) => void }) {
             }
           />
         )}
-        <div className="space-y-2 text-xs text-muted-foreground">
-          <p>
-            Someone gave you a code? <LinkPress onClick={() => onAdd('join')}>Join with a code</LinkPress>
-          </p>
-          <p>
-            On Tailscale? From anywhere, with no server: <LinkPress loading={turning} disabled={down} onClick={() => void onTailscale()}>Reach this computer on your Tailscale network</LinkPress>
-          </p>
-        </div>
+        <SettingsRow
+          label="Someone gave you a code?"
+          description="Join a server of yours, or a computer someone shared with you."
+          control={
+            <Button variant="secondary" onClick={() => onAdd('join')}>
+              Join with a code
+            </Button>
+          }
+        />
+        <SettingsRow
+          label="On Tailscale?"
+          description="Your devices on Tailscale reach this computer from anywhere, with no server."
+          control={
+            <Button variant="secondary" loading={turning} disabled={down} onClick={() => void onTailscale()}>
+              Reach this computer on your Tailscale network
+            </Button>
+          }
+        />
         {why !== undefined && <Problem>{why}</Problem>}
       </SettingsSection>
     </Section>
@@ -323,7 +333,6 @@ function PhoneRow({ d, item }: { d: Devices; item: PhoneItem }) {
       <ListedDevice
         icon={icon}
         name={item.name}
-        // The age before the route, so a narrow row cuts the route first.
         facts={[word, <span title={formatDateTime(item.seen ?? item.added)}>{seenWords(item.seen, item.added)}</span>, where]}
         {...(removing ? { state: <State tone="working">Removing…</State> } : {})}
         actions={

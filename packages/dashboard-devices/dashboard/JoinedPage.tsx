@@ -5,7 +5,7 @@ import { idsOf, readPersonThere, type Answer, type DeviceRow } from './devices.j
 import { loadOther, otherLogin, sharedForget, type OtherLogin, type OtherRow } from './servers.js'
 import { hasDoor, throughOf, type JoinedItem, type OtherItem } from './model.js'
 import { ComputersThrough } from './ServerPage.js'
-import { Head, LoginLine, PHONE_OWN_LINE, Part, Problem, Removal, Seen, State, Tabs, hostOf, useChange } from './parts.js'
+import { Head, LoginLine, Part, Problem, Removal, Seen, State, Tabs, hostOf, useChange } from './parts.js'
 import type { Devices } from './use-devices.js'
 
 // The page of a server this person is in at, set up from somewhere else: their own from another
@@ -38,7 +38,7 @@ export function JoinedPage({ d, item, onBack }: { d: Devices; item: JoinedItem; 
         icon={Server}
         name={item.name}
         badge="Server"
-        facts={[machine.version !== undefined ? <State tone="good">Online</State> : <State tone="quiet">Does not answer right now</State>, hostOf(machine.url), machine.version !== undefined && PHONE_OWN_LINE(`OpenAgent ${machine.version}`)]}
+        facts={[machine.version !== undefined ? <State tone="good">Online</State> : <State tone="quiet">Does not answer right now</State>, hostOf(machine.url), machine.version !== undefined && `OpenAgent ${machine.version}`]}
         rename={async name => {
           const renamed = await host.renameMachine(machine.id, name)
           await d.reloadMachines().catch(() => {})

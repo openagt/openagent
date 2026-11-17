@@ -369,7 +369,7 @@ export function OnboardingChecklist({
                         className={cn('flex flex-wrap items-center gap-x-2 text-left text-sm', press && 'outline-none after:absolute after:inset-0', step.done ? 'text-muted-foreground' : isOpen ? 'font-medium' : 'text-muted-foreground hover:text-foreground')}
                       >
                         {/* What was done after its name, as every line of facts joins them. */}
-                        <Facts facts={[step.label, step.done && step.doneNote && { fact: step.doneNote, className: 'truncate text-xs text-muted-foreground' }]} className="flex min-w-0 items-center" />
+                        <Facts oneLine facts={[step.label, step.done && step.doneNote && { fact: step.doneNote, className: 'text-xs text-muted-foreground' }]} />
                         {step.optional && !step.done && <span className="text-xs font-normal text-muted-foreground">Optional</span>}
                       </button>
                       {isOpen && step.info && (
