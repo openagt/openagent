@@ -1,5 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type Ref, type RefObject } from 'react'
-import { ChevronRight, Square, X } from 'lucide-react'
+import { ArrowLeft, ChevronRight, Square, X } from 'lucide-react'
+import { useIsMobile } from '../lib/use-mobile.js'
 import type { AgentMeta, OpenAgentEvent } from '../../src/index.js'
 import { onAgent } from '../rpc/reads.js'
 import { panesPage } from '../lib/panes.js'
@@ -103,7 +104,8 @@ export function SubagentsPanel({
         projectId={projectId}
         onPick={key => revealSubagent(page, key === shown?.key ? undefined : key)}
         onStop={key => (back.current = { key })}
-        className={shown ? 'max-h-1/2 shrink-0' : 'flex-1'}
+        // On a phone an opened subagent takes the pane in the list's place, its arrow back to the list; beside it the list would be cut.
+        className={shown ? 'max-md:hidden md:max-h-1/2 md:shrink-0' : 'flex-1'}
       />
       {shown && <Shown key={shown.key} row={shown} projectId={projectId} events={events} onOpenAgent={onOpenAgent} onClose={() => {
             back.current = { opener: opener.current, key: shown.key }
@@ -241,7 +243,7 @@ function SubagentItem({ row, failed, reason, open, projectId, onPick, onStop }: 
   const second = reason ?? error ?? undefined
   // A run's failure is told it by a line its end sends: its row keeps the room for it from its first frame.
   const twoLines = second !== undefined || (runId !== undefined && failed)
-  const model = row.model !== undefined ? <Facts oneLine facts={[anyModelName(models, row.model), row.agent?.effort]} /> : undefined
+  const model = row.model !== undefined ? `Model ${anyModelName(models, row.model)}` : undefined
   const name = useRef<HTMLSpanElement>(null)
   // The card says what the row does not: the whole name where the row cuts it, or what it runs on.
   const tells = useCut(name, row.name) || model !== undefined
@@ -318,6 +320,7 @@ function SubagentItem({ row, failed, reason, open, projectId, onPick, onStop }: 
 /** The subagent a row opened, under the list: its name and what can be done with it, over its prompt and what it said and did. */
 function Shown({ row, projectId, events, onOpenAgent, onClose }: { row: SubagentRow; projectId: string; events: readonly OpenAgentEvent[]; onOpenAgent?: ((agentId: string) => void) | undefined; onClose: () => void }) {
   const runId = row.agent?.id
+  const phone = useIsMobile()
   const { stopping, error, stop } = useStop(projectId, runId, row.working)
   // A run's own log, read often while it works. Remembered by the run, so the pane opened again,
   // and the read that goes on when the subagent ends, show what was read from the first frame:
@@ -338,9 +341,17 @@ function Shown({ row, projectId, events, onOpenAgent, onClose }: { row: Subagent
   const ending = row.working ? null : transcript.length > 0 ? <PaneFoot row={row} calls={calls} /> : <p className="py-1 font-sans text-sm text-muted-foreground">It left nothing to show.</p>
   return (
     // Its Stop gone once the run stopped, the keyboard stays in it, on its next press.
-    <FocusHome as="section" aria-label={row.name} className="flex min-h-0 flex-1 flex-col border-t border-hairline">
-      {/* As the pane's own head: its name and its last glyph 16 in. */}
-      <header className="flex h-11 shrink-0 items-center gap-1 pr-2 pl-4">
+    <FocusHome as="section" aria-label={row.name} className="flex min-h-0 flex-1 flex-col md:border-t md:border-hairline">
+      {/* As the pane's own head: its name and its last glyph 16 in; on a phone, where it takes the list's place, an arrow back to all of them first. */}
+      <header className="flex h-11 shrink-0 items-center gap-1 pr-2 pl-4 max-md:pl-2">
+        {phone && (
+          <Tooltip>
+            <TooltipTrigger render={<Button variant="ghost" size="icon-bar" className="ml-0.5 text-muted-foreground" aria-label="Back to all subagents" onClick={onClose} />}>
+              <ArrowLeft className="size-4" />
+            </TooltipTrigger>
+            <TooltipContent>All subagents</TooltipContent>
+          </Tooltip>
+        )}
         <h3 className="min-w-0 flex-1 truncate text-sm font-medium">{row.name}</h3>
         {row.working && runId && (
           <Button variant="secondary" size="sm" loading={stopping} onClick={stop}>
@@ -353,12 +364,14 @@ function Shown({ row, projectId, events, onOpenAgent, onClose }: { row: Subagent
             Open its page
           </Button>
         )}
-        <Tooltip>
-          <TooltipTrigger render={<Button variant="ghost" size="icon-sm" className="mr-0.5 text-muted-foreground" aria-label={`Close ${row.name}`} onClick={onClose} />}>
-            <X className="size-4" />
-          </TooltipTrigger>
-          <TooltipContent>Close</TooltipContent>
-        </Tooltip>
+        {!phone && (
+          <Tooltip>
+            <TooltipTrigger render={<Button variant="ghost" size="icon-sm" className="mr-0.5 text-muted-foreground" aria-label={`Close ${row.name}`} onClick={onClose} />}>
+              <X className="size-4" />
+            </TooltipTrigger>
+            <TooltipContent>Close</TooltipContent>
+          </Tooltip>
+        )}
       </header>
       {/* A Stop the daemon refused, in its words, on a line of its own under the head. */}
       {error !== null && <p className="shrink-0 px-4 pb-2 text-sm text-muted-foreground">{error}</p>}
@@ -386,8 +399,8 @@ function Shown({ row, projectId, events, onOpenAgent, onClose }: { row: Subagent
 }
 
 /**
- * What the subagent was told, as a message, and what it runs on ("model · effort", as its card says
- * it). One that did not end well says how.
+ * What the subagent was told, as a message, and what it runs on ("Model …", as its card says it). One
+ * that did not end well says how.
  * How long it has worked is the log's own moving line at its end, as the chat says it.
  */
 function PaneHead({ row }: { row: SubagentRow }) {
@@ -402,7 +415,7 @@ function PaneHead({ row }: { row: SubagentRow }) {
         </section>
       )}
       {(row.model !== undefined || ended) && (
-        <Facts facts={[row.model !== undefined && anyModelName(models, row.model), row.model !== undefined && row.agent?.effort, ended && <span className={runTone(row.status)}>{runWord(row.status)}</span>]} className="text-muted-foreground" />
+        <Facts facts={[row.model !== undefined && `Model ${anyModelName(models, row.model)}`, ended && <span className={runTone(row.status)}>{runWord(row.status)}</span>]} className="text-muted-foreground" />
       )}
     </div>
   )

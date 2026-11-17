@@ -132,6 +132,18 @@ describe('ChangesPanel', () => {
   })
 })
 
+describe('ChangesPanel\'s diffs', () => {
+  test('a line cut at the edge fades into the pane\'s own ground, its line number on that ground too', async () => {
+    render(<ChangesPanel projectId="p1" agentId="run-1" context={context} />)
+    await waitFor(() => expect(document.querySelector('[aria-label=Diffs] .sticky.left-0.select-none')).toBeTruthy())
+    const number = document.querySelector<HTMLElement>('[aria-label=Diffs] .sticky.left-0.select-none')!
+    expect(number.className.split(' ')).toContain('bg-background')
+    const lines = number.closest<HTMLElement>('.overflow-x-auto')!
+    expect(lines.getAttribute('style')).toContain('var(--background)')
+    expect(lines.getAttribute('style')).toContain('var(--foreground) 22%')
+  })
+})
+
 describe('ChangesPanel remembered', () => {
   test('opened again for the same run, the pane shows what was read last at once, with no "Looking…" line, and reads again', async () => {
     const first = render(<ChangesPanel projectId="p1" agentId="run-1" context={context} />)

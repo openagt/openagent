@@ -78,8 +78,8 @@ describe('AgentHistory (#785)', () => {
     expect(screen.queryByRole('link', { name: /^Run 6/ })).toBeNull()
     fireEvent.click(screen.getByRole('link', { name: '1 more' }))
     expect(onDashboard).toHaveBeenCalled()
-    // The Overview row carries how many wait, as the phone's bar does.
-    expect(screen.getByRole('link', { name: 'Overview, 6 waiting on you' }).textContent).toBe('Overview6, 6 waiting on you')
+    // The Overview row carries the Human Queue's count.
+    expect(screen.getByRole('link', { name: /^Overview/ }).textContent).toBe('Overview6')
   })
 
   test('a run waiting on the person is listed once, under "Waiting on you", picked there while it is the page shown; the Log lists the others', () => {

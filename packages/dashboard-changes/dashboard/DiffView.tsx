@@ -86,12 +86,12 @@ function More({ children, onClick }: { children: string; onClick: (() => void) |
 
 /**
  * A shadow at the right edge while a long line goes on past it, gone once scrolled to its end: the
- * card's own colour moves with the lines and covers the shadow at their end. Said for every system,
+ * pane's own ground moves with the lines and covers the shadow at their end. Said for every system,
  * since a scrollbar that only shows while scrolling says nothing before.
  */
 const MORE_RIGHT = {
   background:
-    'linear-gradient(to left, var(--card), var(--card)) right / 1rem 100% no-repeat local, linear-gradient(to left, color-mix(in oklab, var(--foreground) 14%, transparent), transparent) right / 0.75rem 100% no-repeat scroll',
+    'linear-gradient(to left, var(--background), var(--background)) right / 1.25rem 100% no-repeat local, linear-gradient(to left, color-mix(in oklab, var(--foreground) 22%, transparent), transparent) right / 1rem 100% no-repeat scroll',
 }
 
 /** Whether a file is new whole: every line of its diff added. */
@@ -121,7 +121,7 @@ export function DiffView({ diff, wrap, whole, onWhole, className }: { diff: File
           const kind = fresh ? 'same' : row.kind
           return (
             <div key={i} className="flex">
-              <span className="sticky left-0 shrink-0 select-none bg-card pr-2 pl-2 text-right text-muted-foreground" style={{ width }}>
+              <span className="sticky left-0 shrink-0 select-none bg-background pr-2 pl-2 text-right text-muted-foreground" style={{ width }}>
                 {row.number}
               </span>
               <span className={cn('flex min-w-0 flex-1 border-l-2', TINT[kind])}>

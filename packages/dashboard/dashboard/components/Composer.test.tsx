@@ -474,6 +474,13 @@ const box = (): HTMLElement => {
 const commands = () => screen.getByRole('button', { name: 'Commands' })
 
 describe('the box', () => {
+  test('its 2 wide focus edge is drawn while its text has the keyboard; on the + or in its menu the edge is a 1 wide primary border, so the +\'s own ring stands alone', () => {
+    renderComposer()
+    const cls = box().className.split(' ')
+    expect(cls).toEqual(expect.arrayContaining(['has-[[role=textbox]:focus]:outline-2', 'focus-within:border-primary', 'has-[[aria-expanded=true]]:border-primary']))
+    expect(cls.filter(c => c.startsWith('focus-within:outline') || c.startsWith('has-[[aria-expanded=true]]:outline'))).toEqual([])
+  })
+
   test('it holds the commands menu, the text and the submit: the model and "Run on" are outside it, on rows of their own', () => {
     renderComposer()
     fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'x' } })

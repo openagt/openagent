@@ -11,7 +11,7 @@ vi.mock('../rpc/models.js', () => ({ onModels: () => new Promise(() => {}) }))
 const { SubagentsPanel } = await import('./SubagentsPanel.js')
 const { forgetRevealedChanges, revealSubagent } = await import('../lib/reveal-change.js')
 const { forgetRemembered } = await import('../lib/use-async.js')
-const { hoverTooltip } = await import('../test-utils.js')
+const { hoverTooltip, phoneScreen } = await import('../test-utils.js')
 const { FocusHome } = await import('../lib/focus-home.js')
 
 beforeEach(() => {
@@ -100,6 +100,23 @@ describe('the list of a run\'s subagents', () => {
     const { container } = render(panel({ events: [], subagents: [run(1, 'Read the theme tokens', 'done', 3)] }))
     const foot = container.querySelector('.sticky.bottom-0.bg-gradient-to-t')!
     expect(foot.className.split(' ')).toContain('from-background')
+  })
+
+  test('on a phone an opened subagent takes the list\'s place, its arrow back to all of them where the ✕ stands beside the list', () => {
+    const subagents = [run(1, 'Read the theme tokens', 'done', 3), run(24, 'Account page tests', 'running')]
+    const wide = phoneScreen()
+    try {
+      render(panel({ events: [], subagents }))
+      fireEvent.click(screen.getByRole('button', { name: /^Account page tests/ }))
+      const list = rowButtons()[0]!.closest('.overflow-y-auto')!
+      expect(list.className.split(' ')).toEqual(expect.arrayContaining(['max-md:hidden', 'md:max-h-1/2']))
+      expect(screen.queryByRole('button', { name: 'Close Account page tests' })).toBeNull()
+      fireEvent.click(screen.getByRole('button', { name: 'Back to all subagents' }))
+      expect(screen.queryByRole('region', { name: 'Account page tests' })).toBeNull()
+      expect(rowButtons()[0]!.closest('.overflow-y-auto')!.className.split(' ')).toContain('flex-1')
+    } finally {
+      wide()
+    }
   })
 
   test('a row opens its subagent under the list, and pressed again, or closed, it is gone; the keyboard goes back to its row', () => {
@@ -288,7 +305,7 @@ describe('the list of a run\'s subagents', () => {
     render(panel({ subagents: [sub] }))
     const tip = await hoverTooltip(screen.getByRole('button', { name: /^Read the theme tokens/ }))
     // The dot before its time is drawn, not said.
-    expect(tip.textContent).toBe('Read the theme tokensclaude-sonnet-5-5Doneran 7m 0s')
+    expect(tip.textContent).toBe('Read the theme tokensModel claude-sonnet-5-5Doneran 7m 0s')
   })
 
   test('with no model known, a card comes only where the row cuts the name, and then says its state alone', async () => {
@@ -323,7 +340,7 @@ describe('the subagent a row opened', () => {
     render(panel({ events }))
     act(() => revealSubagent('p1/main', 'call:toolu_a'))
     expect(within(screen.getByRole('region', { name: 'Map the pages' })).getByRole('heading').textContent).toBe('Map the pages')
-    expect(screen.getByText('claude-haiku-5-5')).toBeTruthy()
+    expect(screen.getByText('Model claude-haiku-5-5')).toBeTruthy()
     expect(screen.getByRole('region', { name: 'Its prompt' }).textContent).toContain('Read how the pages are served.\nStart at server.ts.')
     expect(screen.getByText('The pages are served by server.ts.')).toBeTruthy()
     expect(screen.getByText('server.ts')).toBeTruthy()
@@ -332,7 +349,7 @@ describe('the subagent a row opened', () => {
     expect(screen.queryByRole('button', { name: 'Open its page' })).toBeNull()
   })
 
-  test('a subagent that is a run of its own: its model and effort, its cost and its branch, its prompt, then its own log; its page is one click away', async () => {
+  test('a subagent that is a run of its own: its model, its cost and its branch, its prompt, then its own log; its page is one click away', async () => {
     onAgent.mockResolvedValue([{ kind: 'driver', event: { type: 'text', text: 'I wrote the docs.' }, at: '2026-10-01T10:02:00.000Z' }] satisfies OpenAgentEvent[])
     const opened: string[] = []
     const sub: AgentMeta = {
@@ -353,8 +370,8 @@ describe('the subagent a row opened', () => {
     act(() => revealSubagent('p1/main', `run:${sub.id}`))
     expect(within(screen.getByRole('region', { name: 'Write the docs' })).getByRole('heading').textContent).toBe('Write the docs')
     expect(screen.getByRole('region', { name: 'Its prompt' }).textContent).toContain('You are a subagent.')
-    // What it runs on, as its card says it.
-    expect(factsLine('claude-sonnet-5-5 · high')).toBeTruthy()
+    // What it runs on.
+    expect(screen.getByText('Model claude-sonnet-5-5')).toBeTruthy()
     await waitFor(() => expect(screen.getByText('I wrote the docs.')).toBeTruthy())
     // Under the log once its read answered: a slow read's shape is held a moment longer, so it does not flash.
     await waitFor(() => expect(factsLine(`1m 7s · $0.36 · on ${sub.branch}`)).toBeTruthy())
