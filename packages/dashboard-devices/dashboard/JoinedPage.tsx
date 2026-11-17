@@ -161,6 +161,8 @@ export function OtherPage({ d, item, onBack }: { d: Devices; item: OtherItem; on
   const { busy, setBusy, error, setError, act } = useChange(reload)
   const row = read?.ok ? read.value.find(candidate => candidate.url === machine.url) : undefined
   const making = row?.making ?? { working: false }
+  // The login a run there still lacks leads, Claude's first: a run needs it. One that is there is replaced by a quiet press.
+  const leads = !read?.ok ? undefined : row?.claude === undefined ? 'claude' : row?.github === undefined ? 'github' : undefined
   useEffect(() => setWorking(making.working), [making.working])
   const name = item.name
   // Shared on a server both are in at, where copies come from; or shared with this person at its own door.
@@ -187,12 +189,12 @@ export function OtherPage({ d, item, onBack }: { d: Devices; item: OtherItem; on
             {read !== undefined && !read.ok && <p className="text-xs text-muted-foreground">{`${name} did not say: ${read.error}`}</p>}
             <ul aria-label={`Your logins on ${name}`} className="flex flex-col gap-6">
               <LoginLine label="GitHub" words={otherWords('GitHub', row?.github, name)} said={undefined}>
-                <Button variant="secondary" disabled={busy || account === undefined || down} aria-label={`Log in to GitHub on ${name} instead`} title={account !== undefined ? `Copies the login of ${account} from this computer to your own OpenAgent on ${name}.${copies}` : noLogin} onClick={() => void act(() => otherLogin(host, machine.url, 'github'))}>
+                <Button variant={leads === 'github' ? 'default' : 'secondary'} disabled={busy || account === undefined || down} aria-label={`Log in to GitHub on ${name} instead`} title={account !== undefined ? `Copies the login of ${account} from this computer to your own OpenAgent on ${name}.${copies}` : noLogin} onClick={() => void act(() => otherLogin(host, machine.url, 'github'))}>
                   {row?.github === undefined ? 'Log in here' : 'Log in here instead'}
                 </Button>
               </LoginLine>
               <LoginLine label="Claude" words={making.asking ? "Claude: say yes in the page this computer's browser opened." : making.working ? `Claude: one moment, ${name} is being told.` : otherWords('Claude', row?.claude, name)} said={making.working ? undefined : making.said}>
-                <Button variant="secondary" disabled={busy || (making.working && making.asking !== true) || down} aria-label={`Log in to Claude on ${name} instead`} title={`Opens this computer's browser, where you say yes once. The login is made for your OpenAgent on ${name} alone and lasts a year.${copies}`} onClick={() => void act(() => otherLogin(host, machine.url, 'claude'))}>
+                <Button variant={leads === 'claude' ? 'default' : 'secondary'} disabled={busy || (making.working && making.asking !== true) || down} aria-label={`Log in to Claude on ${name} instead`} title={`Opens this computer's browser, where you say yes once. The login is made for your OpenAgent on ${name} alone and lasts a year.${copies}`} onClick={() => void act(() => otherLogin(host, machine.url, 'claude'))}>
                   {making.asking ? 'Start over' : row?.claude === undefined ? 'Log in here' : 'Log in here instead'}
                 </Button>
               </LoginLine>
