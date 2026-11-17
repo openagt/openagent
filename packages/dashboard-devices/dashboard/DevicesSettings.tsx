@@ -10,7 +10,7 @@ import { JoinedPage, OtherPage } from './JoinedPage.js'
 import { ServerPage } from './ServerPage.js'
 import { ThisComputer } from './ThisComputer.js'
 import { hasServer, labelOf, reachedAt, type Item, type PhoneItem } from './model.js'
-import { ListedDevice, NamedAbove, PressRow, Problem, State, olderThan } from './parts.js'
+import { LinkPress, ListedDevice, NamedAbove, PressRow, Problem, State, olderThan } from './parts.js'
 import { useDevices, type Devices, type Paces } from './use-devices.js'
 
 // Settings › Devices: this computer, how the person's devices reach it, and every device of
@@ -160,17 +160,16 @@ function Start({ d, onAdd }: { d: Devices; onAdd: (adding: Adding) => void }) {
             }
           />
         )}
-        {/* The ways in for someone who already has one, quiet under the ways to set up: a line each, its press a link at its end. */}
-        <div className="space-y-2 border-t border-border pt-4">
+        {/* The ways in for someone who already has one, one compact group under the ways to set up: each its words, its
+            link under them. */}
+        <div className="space-y-3 border-t border-border pt-4">
           <OtherWay question="Someone gave you a code?" words="Join a server of yours, or a computer someone shared with you.">
-            <Button variant="link" className="px-0 max-md:h-11" onClick={() => onAdd('join')}>
-              Join with a code
-            </Button>
+            <LinkPress onClick={() => onAdd('join')}>Join with a code</LinkPress>
           </OtherWay>
           <OtherWay question="On Tailscale?" words="Your devices on Tailscale reach this computer from anywhere, with no server.">
-            <Button variant="link" className="px-0 max-md:h-11" loading={turning} disabled={down} onClick={() => void onTailscale()}>
+            <LinkPress loading={turning} disabled={down} onClick={() => void onTailscale()}>
               Reach this computer on your Tailscale network
-            </Button>
+            </LinkPress>
           </OtherWay>
         </div>
         {why !== undefined && <Problem>{why}</Problem>}
@@ -181,11 +180,11 @@ function Start({ d, onAdd }: { d: Devices; onAdd: (adding: Adding) => void }) {
 
 function OtherWay({ question, words, children }: { question: string; words: string; children: ReactNode }) {
   return (
-    <div className="flex items-center justify-between gap-3 max-sm:flex-col max-sm:items-start max-sm:gap-1">
-      <p className="text-sm text-muted-foreground">
+    <div className="space-y-1">
+      <p className="text-xs text-muted-foreground">
         <span className="font-medium text-foreground">{question}</span> {words}
       </p>
-      <div className="shrink-0">{children}</div>
+      {children}
     </div>
   )
 }
