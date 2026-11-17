@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, RefreshCw } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import {
   Badge,
   Button,
@@ -9,8 +9,8 @@ import {
   PanelGroup,
   PanelRow,
   RunMark,
-  StartAgentPress,
   StateCell,
+  UpdateTicketsButton,
   cn,
   formatDateTime,
   formatRelative,
@@ -284,7 +284,11 @@ export function useTicketsMeta(projectId: string | null): TicketsMeta {
   return useLoaded<TicketsMeta>(projectId ? async () => readMeta(await host.runCommand(projectId, ['meta', '--local'])) : null, NO_META, [projectId])
 }
 
-/** A project's presses at a head's right: when its tickets were last updated, the update, and a new ticket. */
+/**
+ * A project's presses at a head's right: when its tickets were last updated, then "Update tickets", the one
+ * button every surface that offers the update draws, its menu setting the run up before it starts; then a
+ * new ticket.
+ */
 export function ProjectTicketsPresses({ projectId, primary = true }: { projectId: string; /** New ticket is the head's primary. */ primary?: boolean }) {
   const host = useModuleHost()
   const meta = useTicketsMeta(projectId)
@@ -302,26 +306,17 @@ export function ProjectTicketsPresses({ projectId, primary = true }: { projectId
           {error}
         </span>
       )}
-      <span className="flex items-center gap-1 text-sm text-faint-foreground">
-        <span title={meta.lastImportedAt ? `Updated from the tracker ${formatDateTime(meta.lastImportedAt)}` : 'No import from the tracker on record'}>
-          {meta.lastImportedAt ? `Updated ${formatRelative(meta.lastImportedAt)}` : 'Never updated'}
-        </span>
-        <StartAgentPress
-          variant="ghost"
-          size="icon-sm"
-          icon={<RefreshCw className="size-3.5" aria-hidden />}
-          ariaLabel="Update tickets"
-          tooltip={
-            meta.lastImportedAt
-              ? 'An agent brings tickets/ up to date with the issues and comments changed since the last update.'
-              : 'An agent brings tickets/ up to date with the issue tracker. With none on record, everything open comes across.'
-          }
-          busy={busy}
-          starting={starting}
-          onStart={() => void update()}
-          className="text-muted-foreground"
-        />
+      {/* On a phone the stamp gives way, so the update and New ticket keep one line. */}
+      <span title={meta.lastImportedAt ? `Updated from the tracker ${formatDateTime(meta.lastImportedAt)}` : 'No import from the tracker on record'} className="text-sm text-faint-foreground max-md:hidden">
+        {meta.lastImportedAt ? `Updated ${formatRelative(meta.lastImportedAt)}` : 'Never updated'}
       </span>
+      <UpdateTicketsButton
+        variant="secondary"
+        busy={busy || starting}
+        onStart={() => void update()}
+        onConfigure={() => host.configureRun(projectId, UPDATE_TICKETS_PROMPT)}
+        lastImportedAt={meta.lastImportedAt}
+      />
       <Button variant={primary ? 'default' : 'ghost'} className={cn(!primary && '-mr-3')} onClick={() => host.openPage('tickets', [NEW_TICKET], projectId)}>
         <Plus className="size-4" aria-hidden /> New ticket
       </Button>

@@ -290,8 +290,9 @@ export function AutomationsPage({ projects }: ModulePageProps) {
                                     <div className="min-w-0 flex-1">
                                       <p className="truncate leading-5 max-md:line-clamp-2 max-md:whitespace-normal">
                                         <span className="font-medium">{title}</span>
-                                        {/* What it says it does, after its name and quieter: cut with it at the row's end, and whole in its panel. */}
-                                        {scheduled.description && <span className="text-muted-foreground"> {scheduled.description}</span>}
+                                        {/* What it says it does, after its name and quieter, apart from it as a list's row sets its
+                                            detail: cut with it at the row's end, and whole in its panel. */}
+                                        {scheduled.description && <span className="ml-3 text-muted-foreground">{scheduled.description}</span>}
                                       </p>
                                       <Stands host={host} project={row.project} scheduled={scheduled} stopped={schedulerStopped(row)} picks={shown === undefined} />
                                     </div>
@@ -410,7 +411,6 @@ export function AutomationsPage({ projects }: ModulePageProps) {
                       </div>
                     ),
                 )}
-                {row.error === undefined && !row.on && <SchedulerOff />}
                 {row.error === undefined && row.on && !row.running && (
                   <div className="mt-4 max-w-180 text-sm text-warning">
                     <p>The scheduler is on but its process is not running, so nothing here starts by itself. To start it, run in the project:</p>
@@ -426,70 +426,70 @@ export function AutomationsPage({ projects }: ModulePageProps) {
   )
 }
 
+/** A press in a line of facts: its words' size, and on a phone a finger's 44 around them. */
+const LINE_PRESS = 'focus-ring relative rounded-sm font-medium hover:underline after:absolute after:-inset-y-3 after:-inset-x-1 md:after:-inset-y-1.5'
+
 /**
  * A project's scheduler in one line: whether it runs, and the model rows on Claude Code start on where
- * nothing else names one; then, in the warning colour, a look that is late or that failed. Under the
- * page's line when the page shows one project, else under the project's name.
+ * nothing else names one; then, in the warning colour, a look that is late or that failed; while it is
+ * off, the ways to turn it on: where it is ticked so it starts with the dashboard, and "In a terminal",
+ * which shows under the line the two commands that start it, now (`start`) and with the dashboard from
+ * now on (`init`). The page says it is off here alone. Under the page's line when the page shows one
+ * project, else under the project's name.
  */
 function StatusLine({ row, agents, className }: { row: SchedulerRow; agents: readonly AgentModels[]; className?: string }) {
   const status = schedulerStatus(row)
   const note = row.lastTick?.note
-  return (
-    // Joined as every line of facts is; in the flow of its words, so a line it wraps to never starts with a dot.
-    <Facts
-      className={cn('block text-xs text-muted-foreground', className)}
-      facts={[
-        <span className={cn('inline-flex items-center gap-1.5 font-medium', status.tone)}>
-          <span aria-hidden className="size-1.5 rounded-full bg-current" />
-          Scheduler {status.label}
-        </span>,
-        row.model && `${AGENT_LABELS[DEFAULT_AGENT]}, ${modelLabel(agents, DEFAULT_AGENT, row.model)}`,
-        row.lastTick && row.running && Date.now() - Date.parse(row.lastTick.at) > LATE && (
-          <Tooltip>
-            <TooltipTrigger render={<span className="text-warning" />}>
-              Last looked <span className="tabular-nums">{formatAge(row.lastTick.at)}</span>
-            </TooltipTrigger>
-            <TooltipContent>The scheduler last looked {formatDateTime(row.lastTick.at)}</TooltipContent>
-          </Tooltip>
-        ),
-        // Why its last look decided nothing, when it says: a pull that failed. "off" is the status, and a project that schedules nothing says so below.
-        note !== undefined && note !== 'off' && note !== NOTHING_SCHEDULED && <span className="text-warning">{`Its last look: ${note}`}</span>,
-      ]}
-    />
-  )
-}
-
-/**
- * A project whose scheduler is off: one sentence, and the press to where it is ticked, so it starts
- * with the dashboard. The two commands that start it from a terminal are behind a press of their own.
- */
-function SchedulerOff() {
-  const host = useModuleHost()
   const [commands, setCommands] = useState(false)
+  const off = row.error === undefined && !row.on
   return (
-    <div className="mt-4 space-y-2 text-sm text-muted-foreground">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <p className="min-w-0 grow basis-60">The scheduler is off in this project, so nothing here starts by itself.</p>
-        {/* At the page's right edge, as its other presses; under the sentence on a phone, where the first one's words stand on the page's left edge. */}
-        <div className="flex gap-2 max-md:-ml-3">
-          <Button variant="ghost" aria-expanded={commands} onClick={() => setCommands(shown => !shown)}>
-            In a terminal
-          </Button>
-          {/* Ticked in Skills, it starts with the dashboard. */}
-          <Button variant="secondary" onClick={() => host.openSettings('skills')}>
-            Turn it on in Skills
-          </Button>
-        </div>
-      </div>
-      {commands && (
-        <div className="max-w-180 space-y-2">
-          <p className="pt-2">To start it now, run in the project:</p>
+    <div className={className}>
+      {/* Joined as every line of facts is; in the flow of its words, so a line it wraps to never starts with a dot. */}
+      <Facts
+        className="block text-xs text-muted-foreground"
+        facts={[
+          <span className={cn('inline-flex items-center gap-1.5 font-medium', status.tone)}>
+            <span aria-hidden className="size-1.5 rounded-full bg-current" />
+            Scheduler {status.label}
+          </span>,
+          row.model && `${AGENT_LABELS[DEFAULT_AGENT]}, ${modelLabel(agents, DEFAULT_AGENT, row.model)}`,
+          row.lastTick && row.running && Date.now() - Date.parse(row.lastTick.at) > LATE && (
+            <Tooltip>
+              <TooltipTrigger render={<span className="text-warning" />}>
+                Last looked <span className="tabular-nums">{formatAge(row.lastTick.at)}</span>
+              </TooltipTrigger>
+              <TooltipContent>The scheduler last looked {formatDateTime(row.lastTick.at)}</TooltipContent>
+            </Tooltip>
+          ),
+          // Why its last look decided nothing, when it says: a pull that failed. "off" is the status, and a project that schedules nothing says so below.
+          note !== undefined && note !== 'off' && note !== NOTHING_SCHEDULED && <span className="text-warning">{`Its last look: ${note}`}</span>,
+          off && <TurnOn />,
+          off && (
+            <button type="button" aria-expanded={commands} onClick={() => setCommands(shown => !shown)} className={cn(LINE_PRESS, 'text-muted-foreground hover:text-foreground')}>
+              In a terminal
+            </button>
+          ),
+        ]}
+      />
+      {off && commands && (
+        <div className="mt-3 max-w-180 space-y-2 text-sm text-muted-foreground">
+          <p>To start it now, run in the project:</p>
           <Command text={START} />
           <p className="pt-2">To start it with the dashboard from now on:</p>
           <Command text={INIT} />
         </div>
       )}
     </div>
+  )
+}
+
+/** Where a scheduler that is off is turned on: Settings › Skills, whose tick starts it with the dashboard. */
+function TurnOn() {
+  const host = useModuleHost()
+  return (
+    <button type="button" onClick={() => host.openSettings('skills')} className={cn(LINE_PRESS, 'text-primary')}>
+      Turn it on in Skills
+    </button>
   )
 }
 
@@ -510,7 +510,7 @@ function SkillsLink() {
  * scheduler is stopped, that it does not start; a command the coding agent cannot run says so whatever its
  * switch); then its picks: its pace, how many agents at once when that is worth saying, and how far its runs
  * publish, left to the panel while it is open, which says them as they would be. Its other picks are its Edit
- * panel's. One line, cut, under a mouse; two on a phone.
+ * panel's. One line, cut, under a mouse; wrapped whole on a phone.
  */
 function Stands({ host, project, scheduled, stopped, picks }: { host: ModuleHost; project: ModuleProject; scheduled: SchedulerCommand; /** Why nothing starts by itself in its project, while that is so ({@link schedulerStopped}). */ stopped: string | undefined; /** Whether its picks are said: not while its panel is open. */ picks: boolean }) {
   const last = scheduled.lastRun
@@ -520,7 +520,7 @@ function Stands({ host, project, scheduled, stopped, picks }: { host: ModuleHost
   const held = cannotRun(scheduled) !== undefined || (scheduled.on && heldBy(scheduled) !== undefined)
   return (
     <Facts
-      className="mt-1 line-clamp-2 text-xs text-faint-foreground md:line-clamp-1"
+      className="mt-1 text-xs text-faint-foreground md:line-clamp-1"
       facts={[
         last === undefined ? (
           'Never ran'

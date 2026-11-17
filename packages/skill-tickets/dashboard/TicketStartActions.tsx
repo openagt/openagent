@@ -7,7 +7,8 @@ import { planLink, planTicketPrompt, ticketLink, workOnTicketPrompt } from '../s
  * A ticket's next step, now or later, wherever the ticket is shown: with no plan yet, its plan is
  * written now or queued; with one, the work is started now or queued. "Now" starts an agent;
  * "later" hands the same ask to the installed modules' link actions — "Add to queue" when the
- * project has a queue package — and offers nothing without one. One button, the step now, the rest
+ * project has a queue package — and offers nothing without one. On the page its press says what it
+ * queues after the module's own verb, as the selection's do: "Add to queue: plan", "Add to queue: work". One button, the step now, the rest
  * in its menu, so a ticket's actions never crowd it; shorter words on the list's dense rows
  * (`compact`). A ticket no agent is handed now (in review, waiting, claimed) is not offered this: its
  * row says what is queued for it with {@link QueuedMark}.
@@ -42,6 +43,7 @@ export function TicketStartActions({
         tooltip: 'Starts an agent working on this ticket, from its plan',
         laterSays: 'An agent works on it when the queue reaches it.',
         menu: `Other ways to work on ${ticket.title}`,
+        queues: 'work',
         configure: "Opens the launcher with this ticket's prompt, so you can set the model and where it runs.",
         failure: 'The work agent could not be started.',
       }
@@ -52,6 +54,7 @@ export function TicketStartActions({
         tooltip: "Starts an agent writing this ticket's plan",
         laterSays: 'An agent writes the plan when the queue reaches it.',
         menu: `Other ways to plan ${ticket.title}`,
+        queues: 'plan',
         configure: 'Opens the launcher with the plan prompt, so you can set the model and where it runs.',
         failure: 'The planning agent could not be started.',
       }
@@ -111,7 +114,7 @@ export function TicketStartActions({
                 render={<Button variant="secondary" loading={queued === 'running'} aria-disabled={done || undefined} onClick={() => !done && void queue(action.key)} className={cn(done && 'text-muted-foreground')} />}
               >
                 {done ? <Check className="size-4" aria-hidden /> : <ListPlus className="size-4" aria-hidden />}
-                {done ? (action.doneLabel ?? 'Queued') : action.label}
+                {`${done ? (action.doneLabel ?? 'Queued') : action.label}: ${step.queues}`}
               </TooltipTrigger>
               <TooltipContent>{done ? 'It is on the queue.' : step.laterSays}</TooltipContent>
             </Tooltip>

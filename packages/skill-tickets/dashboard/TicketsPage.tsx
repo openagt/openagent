@@ -225,24 +225,25 @@ function SelectionBar({ leaving, count, onSelectAll, onClear, children }: { leav
         aria-label="Selected tickets"
         className={cn(
           'pointer-events-auto absolute bottom-0 flex items-center gap-1 menu-surface rounded-lg py-1 pr-1 pl-4 text-sm shadow-lg ring-1 ring-foreground/10 backdrop-blur-xl',
-          // In the middle of the column on a wider screen; on a phone across it, each add on a line of its own, its words whole.
-          'md:left-1/2 md:w-max md:-translate-x-1/2 max-md:inset-x-0 max-md:flex-wrap max-md:px-4 max-md:py-0',
+          // In the middle of the column, as wide as what it holds. On a phone a grid: the count, Select all and the
+          // close on its first line, each add on a line of its own under them, its words whole; as wide as its widest line.
+          'left-1/2 w-max max-w-full -translate-x-1/2 max-md:grid max-md:grid-cols-[auto_1fr_auto] max-md:px-4 max-md:py-0',
           'transition-[opacity,translate] ease-out starting:translate-y-2 starting:opacity-0',
           leaving ? 'pointer-events-none translate-y-2 opacity-0 duration-120' : 'duration-180',
         )}
       >
         <span className="mr-2 font-medium tabular-nums">{count} selected</span>
         {onSelectAll && (
-          <Button variant="ghost" size="sm" onClick={onSelectAll} className="max-md:h-11">
+          <Button variant="ghost" size="sm" onClick={onSelectAll} className="max-md:h-11 max-md:justify-self-start">
             Select all
           </Button>
         )}
         {/* On a phone the adds are the bar's rows, as a phone's menu draws them: 4 in from its sides, their words on the
             first line's inset. */}
-        <div className="contents max-md:order-last max-md:-mx-3 max-md:flex max-md:shrink-0 max-md:basis-[calc(100%+1.5rem)] max-md:flex-col max-md:*:h-11 max-md:*:w-full max-md:*:justify-start max-md:*:px-3">
+        <div className="contents max-md:order-last max-md:col-span-full max-md:-mx-3 max-md:flex max-md:flex-col max-md:*:h-11 max-md:*:w-full max-md:*:justify-start max-md:*:px-3">
           {children}
         </div>
-        <Button variant="ghost" size="icon-sm" aria-label="Clear the selection" title="Clear the selection (Esc)" onClick={onClear} className="text-muted-foreground max-md:-mr-3 max-md:ml-auto max-md:size-11">
+        <Button variant="ghost" size="icon-sm" aria-label="Clear the selection" title="Clear the selection (Esc)" onClick={onClear} className="text-muted-foreground max-md:col-start-3 max-md:-mr-3 max-md:size-11">
           <X className="size-4" aria-hidden />
         </Button>
       </div>

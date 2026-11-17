@@ -281,6 +281,8 @@ export function LogsPage({ projects }: ModulePageProps) {
                           <span className={runLineTone(shownStatus(card))} {...(card.offline ? { title: card.offline } : {})}>
                             {standing(card)}
                           </span>,
+                          // On a phone the time stands in the line, so the name has the row's width and the row keeps its two lines.
+                          phone && <span title={formatDateTime(card.startedAt)}>{clock(card.startedAt)}</span>,
                           // What its work still needs before it leaves this machine, in the sidebar's words.
                           ...leftParts(card, project.gitHost),
                           many && project.name,
@@ -312,12 +314,14 @@ export function LogsPage({ projects }: ModulePageProps) {
                           </>
                         }
                         fact={
-                          <span className="tabular-nums whitespace-nowrap" title={formatDateTime(card.startedAt)}>
-                            {clock(card.startedAt)}
-                          </span>
+                          phone ? undefined : (
+                            <span className="tabular-nums whitespace-nowrap" title={formatDateTime(card.startedAt)}>
+                              {clock(card.startedAt)}
+                            </span>
+                          )
                         }
                         // The run's press, in the time's place under the pointer and the keyboard: Answer where its question waits, else Review.
-                        // It opens the run, as the row does, so a phone, where the row is the press, keeps the time.
+                        // It opens the run, as the row does, so a phone, where the row is the press, has none: its time is in its line.
                         {...(phone
                           ? {}
                           : {

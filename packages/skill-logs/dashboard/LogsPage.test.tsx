@@ -104,7 +104,7 @@ test("a run's name is a link to the run: the keyboard reaches it, it opens the r
   expect(host.openAgent.mock.calls).toEqual([['p1', 'r1']])
 })
 
-test("each status is the sidebar's mark: a waiting run's hexagon waits, and one that ended is done", async () => {
+test("each status is the sidebar's mark and word: a waiting run's hexagon waits and it needs an answer, and one that ended is done", async () => {
   const host = hostWith([
     { id: 'r1', startedAt: at(now - 1000), status: 'waiting', title: 'Asks' },
     { id: 'r2', startedAt: at(now - 2000), endedAt: at(now - 1000), status: 'done', title: 'Ended' },
@@ -118,6 +118,8 @@ test("each status is the sidebar's mark: a waiting run's hexagon waits, and one 
   await screen.findAllByText('Asks')
   expect(mark('Asks')).toContain('text-warning')
   expect(mark('Ended')).toContain('text-success')
+  // The Human Queue's two words for a run parked on a question: one word for one state.
+  expect(screen.getAllByText('Asks')[0]!.closest('li')!.textContent).toContain('Needs answer')
 })
 
 test("a run whose pull request merged reads as the sidebar's merged run, its number a link to the request", async () => {

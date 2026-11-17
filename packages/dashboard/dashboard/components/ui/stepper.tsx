@@ -2,9 +2,9 @@ import type { HTMLAttributes } from 'react'
 import { Minus, Plus } from 'lucide-react'
 import { cn } from '../../lib/utils.js'
 
-/** A step: 28 square, and on a phone 44 wide with its press reaching 6 past the group's top and bottom. */
+/** A step: 28 square, and on a phone a finger's 44: 44 wide, its press reaching 8 past its own top and bottom. */
 const STEP =
-  'focus-ring-inset relative flex size-7 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground active:bg-foreground/10 disabled:pointer-events-none disabled:opacity-40 max-md:w-11 max-md:after:absolute max-md:after:inset-x-0 max-md:after:-inset-y-1.5'
+  'focus-ring-inset relative flex size-7 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground active:bg-foreground/10 disabled:pointer-events-none disabled:opacity-40 max-md:w-11 max-md:after:absolute max-md:after:inset-x-0 max-md:after:-inset-y-2'
 
 /**
  * A whole number from `min` to `max`, typed or stepped, with what it counts after it ("2 agents"): a

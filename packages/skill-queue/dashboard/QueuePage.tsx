@@ -211,6 +211,8 @@ function BatchStart({ read, primary, fill = false, names, starts }: { read: Proj
       prompt={workOnEntryPrompt(free[0]!)}
       configureDescription="Opens the launcher with the top entry's prompt: one agent, not the batch."
       fill={fill}
+      // On a phone each half reaches a finger's 44, 6 past its top and bottom, as the stepper's steps do.
+      className="relative max-md:after:absolute max-md:after:inset-x-0 max-md:after:-inset-y-1.5"
     />
   )
   // A phone's, in the page: 16 over the first part's name.
@@ -383,7 +385,7 @@ function EntryRow({ project, placed, names, starts, reload, onRemoved }: { proje
               />
             )}
             <DropdownMenu>
-              <DropdownMenuTrigger render={<Button data-remove-entry variant="ghost" size="icon-sm" aria-label={`More for entry ${place}`} className="-mr-1.5" />}>
+              <DropdownMenuTrigger render={<Button data-remove-entry variant="ghost" size="icon-bar" aria-label={`More for entry ${place}`} className="-mr-1.5" />}>
                 <Ellipsis className="size-4" aria-hidden />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
@@ -482,7 +484,7 @@ function AddEntry({ project, reload }: { project: ModuleProject; reload: () => P
             />
           </div>
           <Select items={items} value={String(priority)} disabled={adding} onValueChange={next => setPriority(Number(next))}>
-            <SelectTrigger aria-label="Priority of the new task" title={`Goes to the end of priority ${priority}`} className="h-9 w-32 justify-between border-transparent bg-accent px-3 hover:border-transparent max-md:flex-1">
+            <SelectTrigger aria-label="Priority of the new task" title={`Goes to the end of priority ${priority}`} className="h-9 w-32 justify-between border-transparent bg-accent px-3 hover:border-transparent max-md:h-11 max-md:flex-1">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -494,7 +496,7 @@ function AddEntry({ project, reload }: { project: ModuleProject; reload: () => P
               ))}
             </SelectContent>
           </Select>
-          <Button type="submit" variant="secondary" className="h-9" loading={adding} disabled={down} aria-label="Add to queue" title="Add to the queue (Enter)">
+          <Button type="submit" variant="secondary" className="h-9 max-md:h-11" loading={adding} disabled={down} aria-label="Add to queue" title="Add to the queue (Enter)">
             {adding ? 'Adding…' : 'Add'}
           </Button>
         </div>

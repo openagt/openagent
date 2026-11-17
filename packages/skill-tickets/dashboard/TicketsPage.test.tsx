@@ -96,7 +96,16 @@ describe('TicketsPage (#1144)', () => {
     expect(header.querySelector('p')!.textContent).toBe('The backlog agents plan from, read from tickets/.')
     expect(within(header).getByText('Never updated')).toBeTruthy()
     const presses = within(header.firstElementChild as HTMLElement).getAllByRole('button').map(button => button.getAttribute('aria-label') ?? button.textContent?.trim())
-    expect(presses.slice(-2)).toEqual(['Update tickets', 'New ticket'])
+    expect(presses.slice(-3)).toEqual(['Update tickets', 'Other ways to update the tickets', 'New ticket'])
+  })
+
+  test("Update tickets' menu sets the run up before it starts: Configure first opens the launcher with the update", async () => {
+    onAllTickets.mockResolvedValue([{ projectId: 'p1', projectName: 'Alpha', tickets: [ticket({ title: 'Do the thing' })] }])
+    render()
+    await screen.findByText('Do the thing')
+    await configureFirst('Other ways to update the tickets')
+    await waitFor(() => expect(host.configureRun).toHaveBeenCalledWith('p1', '/update-tickets'))
+    expect(host.startRun).not.toHaveBeenCalled()
   })
 
   test("reads every project's tickets and lists each under its own project heading", async () => {
