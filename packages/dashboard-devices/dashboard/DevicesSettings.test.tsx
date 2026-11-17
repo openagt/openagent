@@ -125,6 +125,20 @@ describe('Settings › Devices: this computer, and how devices reach it', () => 
     expect(host.runCommand).not.toHaveBeenCalled()
   })
 
+  test('the two other ways in read as sentences: each question, a space, its words, and its link on a line of its own', async () => {
+    show(door(() => ok(OFF)).host)
+    const way = (link: string) => screen.getByRole('button', { name: link }).parentElement!
+    await waitFor(() => way('Join with a code'))
+    for (const [link, words] of [
+      ['Join with a code', 'Someone gave you a code? Join a server of yours, or a computer someone shared with you.'],
+      ['Reach this computer on your Tailscale network', 'On Tailscale? Your devices on Tailscale reach this computer from anywhere, with no server.'],
+    ]) {
+      expect(way(link!).querySelector('p')!.textContent).toBe(words)
+      // The link is a block of its own, under the words: not run into them.
+      expect(way(link!).children[1]!.textContent).toBe(link)
+    }
+  })
+
   test('a phone on this Wi-Fi with the door shut: it is opened first, after saying the link is not locked', async () => {
     let state: object = OFF
     const { host, runComputerCommand } = door(args => {
