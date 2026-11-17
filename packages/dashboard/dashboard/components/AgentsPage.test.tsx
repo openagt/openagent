@@ -121,16 +121,16 @@ describe('the Agents page', () => {
     await waitFor(() => expect(document.activeElement).toBe(edit))
   })
 
-  test("a skill's sentence is one line, the whole of it on a press of that line, which ticks nothing", async () => {
+  test("a skill's sentence is two lines at most, the whole of it on a press of them, which ticks nothing", async () => {
     render(<AgentsPage />)
     fireEvent.click(await newAgentPress())
     const editor = screen.getByRole('dialog', { name: 'New agent' })
     const sentence = within(editor).getByRole('button', { name: 'Read the code.' })
     expect(sentence.getAttribute('aria-expanded')).toBe('false')
-    expect(sentence.className).toContain('truncate')
+    expect(sentence.className).toContain('line-clamp-2')
     fireEvent.click(sentence)
     expect(sentence.getAttribute('aria-expanded')).toBe('true')
-    expect(sentence.className).not.toContain('truncate')
+    expect(sentence.className).not.toContain('line-clamp-2')
     expect(within(editor).getByRole('checkbox', { name: 'readability' }).getAttribute('aria-checked')).toBe('false')
   })
 
