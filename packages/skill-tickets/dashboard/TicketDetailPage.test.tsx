@@ -114,8 +114,9 @@ describe('TicketDetailPage (#1144)', () => {
     expect((await fact('Stage')).textContent).toBe('Unplanned')
     expect((await fact('Issue')).querySelector('a')?.getAttribute('href')).toBe('https://example.com/org/repo/issues/42')
     expect((await fact('Opened')).textContent).toBe('2d ago')
-    // Whole, wrapping where the column is narrow.
-    expect((await fact('File')).textContent).toBe('tickets/do-the-thing.md')
+    // One line, cut in its middle where the column is narrow: whole under the pointer and to a screen reader.
+    expect((await fact('File')).querySelector('[title]')!.getAttribute('title')).toBe('tickets/do-the-thing.md')
+    expect((await fact('File')).querySelector('.sr-only')!.textContent).toBe('tickets/do-the-thing.md')
     // Where the facts are not beside the title, what decides the next step stands under it.
     expect(screen.getByRole('heading', { name: 'Do the thing' }).nextElementSibling?.textContent).toBe('P3·Unplanned')
   })

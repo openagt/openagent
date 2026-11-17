@@ -376,6 +376,28 @@ export function TicketFilterBar({
     </DropdownMenu>
   )
 
+  const hasTopic = topicFacet.topics.length > 0 || topicFacet.none > 0
+  const hasLink = notLinked > 0 || f.unlinked
+  const topicRows = (
+    <>
+      {topicFacet.topics.map(([topic, count]) => (
+        <OptionRow
+          key={topic}
+          label={topic}
+          count={count}
+          checked={f.topics.includes(topic)}
+          onChange={() => set({ topics: toggled(f.topics, topic) })}
+        />
+      ))}
+      {(topicFacet.none > 0 || f.topicsNone) && (
+        <>
+          {topicFacet.topics.length > 0 && <Separator className="my-1" />}
+          <OptionRow label="No topics" count={topicFacet.none} checked={f.topicsNone} onChange={topicsNone => set({ topicsNone })} />
+        </>
+      )}
+    </>
+  )
+
   return (
     <div className="flex items-start gap-2">
       {/* The filters, then the sort, wrapping where they meet the search, on a phone too: every filter whole, none
@@ -404,29 +426,29 @@ export function TicketFilterBar({
 
       {reading && (
         <span aria-hidden className="invisible contents">
-          <FacetTrigger label="Topic" value={undefined} tabIndex={-1} />
-          <Button variant="ghost" size="sm" tabIndex={-1}>
-            Not linked
-          </Button>
-        </span>
-      )}
-      {(topicFacet.topics.length > 0 || topicFacet.none > 0) && (
-        <CheckFacet label="Topic" value={picked(f.topicsNone ? [...f.topics, 'No topics'] : f.topics)}>
-          {topicFacet.topics.map(([topic, count]) => (
-            <OptionRow
-              key={topic}
-              label={topic}
-              count={count}
-              checked={f.topics.includes(topic)}
-              onChange={() => set({ topics: toggled(f.topics, topic) })}
-            />
-          ))}
-          {(topicFacet.none > 0 || f.topicsNone) && (
+          {phone ? (
+            <FacetTrigger label="More filters" value={undefined} tabIndex={-1} />
+          ) : (
             <>
-              <Separator className="my-1" />
-              <OptionRow label="No topics" count={topicFacet.none} checked={f.topicsNone} onChange={topicsNone => set({ topicsNone })} />
+              <FacetTrigger label="Topic" value={undefined} tabIndex={-1} />
+              <Button variant="ghost" size="sm" tabIndex={-1}>
+                Not linked
+              </Button>
             </>
           )}
+        </span>
+      )}
+      {/* On a phone the topics and "Not linked" are one press, so no filter stands alone on a line of its own. */}
+      {phone && (hasTopic || hasLink) && (
+        <CheckFacet label="More filters" value={picked([...f.topics, ...(f.topicsNone ? ['No topics'] : []), ...(f.unlinked ? ['Not linked'] : [])])}>
+          {hasTopic && topicRows}
+          {hasTopic && hasLink && <Separator className="my-1" />}
+          {hasLink && <OptionRow label="Not linked" count={notLinked} checked={f.unlinked} onChange={unlinked => set({ unlinked })} />}
+        </CheckFacet>
+      )}
+      {!phone && hasTopic && (
+        <CheckFacet label="Topic" value={picked(f.topicsNone ? [...f.topics, 'No topics'] : f.topics)}>
+          {topicRows}
         </CheckFacet>
       )}
 
@@ -452,7 +474,7 @@ export function TicketFilterBar({
         />
       )}
 
-      {(notLinked > 0 || f.unlinked) && (
+      {!phone && hasLink && (
         <Button
           variant="ghost"
           size="sm"
