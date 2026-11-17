@@ -171,6 +171,8 @@ function Overview({ d, item }: { d: Devices; item: ServerItem }) {
   const sendable = machine ? 'done' : reason !== undefined ? 'failed' : server.adding ? 'running' : 'waiting'
   // The steps fold into one line once there is nothing left to see in them.
   const settled = done && machine !== undefined
+  // Installed but not reached: connecting again is the page's one way on, and Remove waits quietly under it.
+  const reconnect = done && machine?.version === undefined && (reason !== undefined || !server.adding)
   return (
     <>
       <Part title="Install">
@@ -197,8 +199,8 @@ function Overview({ d, item }: { d: Devices; item: ServerItem }) {
             <ChevronRight aria-hidden className="h-3 w-3" />
           </button>
         )}
-        {done && machine?.version === undefined && (reason !== undefined || !server.adding) && (
-          <Button variant="secondary" disabled={busy || down} aria-label={machine ? `Connect ${server.address} again` : `Finish connecting ${server.address}`} className="max-md:h-11" onClick={() => void d.addToMachines(server)}>
+        {reconnect && (
+          <Button disabled={busy || down} aria-label={machine ? `Connect ${server.address} again` : `Finish connecting ${server.address}`} className="max-md:h-11" onClick={() => void d.addToMachines(server)}>
             {machine ? 'Connect again' : 'Finish connecting'}
           </Button>
         )}
@@ -215,7 +217,7 @@ function Overview({ d, item }: { d: Devices; item: ServerItem }) {
         <Removal label="Remove server" said="Takes the server off this list, and this computer out of the server.">
           <ConfirmDialog
             trigger={
-              <Button variant="secondary" className="text-danger" disabled={busy} aria-label={`Remove ${server.address}`}>
+              <Button variant={reconnect ? 'ghost' : 'secondary'} className="text-danger" disabled={busy} aria-label={`Remove ${server.address}`}>
                 Remove
               </Button>
             }
