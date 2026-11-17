@@ -14,9 +14,10 @@ export default function Page() {
           </p>
           <CommandBox command="install" />
         </Step>
-        <Step title="One-time run">
+        {/* Installing is the way the page recommends; running it once, the quiet second under it. */}
+        <Step title="One-time run" quiet>
           <p style={pStyle}>You just want to try it out? Run it once, no install:</p>
-          <CommandBox command="try" />
+          <CommandBox command="try" quiet />
         </Step>
       </div>
     </Subpage>
