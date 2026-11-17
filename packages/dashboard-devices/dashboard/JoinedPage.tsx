@@ -54,7 +54,7 @@ export function JoinedPage({ d, item, onBack }: { d: Devices; item: JoinedItem; 
               <p className="max-w-[72ch] text-sm">{owner ? 'Yours, set up from another computer.' : person?.person !== undefined ? `You are in as ${person.person}.` : 'You are in.'}</p>
               <p className="mt-0.5 max-w-[72ch] text-sm text-muted-foreground">
                 {owner
-                  ? 'Its install, its updates and its invites are done from the computer that set it up, its logins on the Permissions page. From here, your phone and this computer reach it, and runs go there.'
+                  ? 'Installed, updated and shared from the computer that set it up. Its logins are on the Permissions page.'
                   : 'Your runs there are yours: they use your own GitHub and Claude logins.'}
               </p>
             </div>
