@@ -18,7 +18,7 @@ import { Skeleton, useSkeleton } from './ui/skeleton.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { MENU_BODY_CLASS, MENU_ITEM_CLASS, MENU_POPUP_CLASS, MENU_TRIGGER_OPEN_CLASS, MenuMark } from './ui/dropdown-menu.js'
 import { PROJECT_ROW_CLASS } from './ui/nav-row.js'
-import { usePopupPlacement } from './ui/popup-placement.js'
+import { usePopupPosition } from './ui/popup-placement.js'
 import { usePickerSearch } from './ui/picker-search.js'
 import { AddProjectPanel } from './AddProjectPanel.js'
 import { Facts } from './ui/panel.js'
@@ -192,7 +192,7 @@ export function ProjectPicker({
   onProjectAdded: () => void
 }) {
   const label = useProjectLabel()
-  const positionMethod = usePopupPlacement()
+  const position = usePopupPosition()
   const search = usePickerSearch()
   const { open, typed } = search
   const [adding, setAdding] = useState<{ folder: string } | { address: string } | null>(null)
@@ -318,7 +318,7 @@ export function ProjectPicker({
           trigger
         )}
         <Combobox.Portal>
-          <Combobox.Positioner positionMethod={positionMethod} sideOffset={6} align="start" className="z-50 outline-none">
+          <Combobox.Positioner {...position} sideOffset={6} align="start" className="z-50 outline-none">
             <Combobox.Popup data-overlay="picker" aria-label={name} className={cn(MENU_POPUP_CLASS, 'w-[22rem] max-w-[var(--available-width)]')}>
               {/* The field one line tall, 16 in from the band's every edge, as the jump's is. */}
               <div className="flex h-13 items-center gap-3 border-b border-hairline px-4">

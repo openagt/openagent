@@ -2,7 +2,7 @@
 import { createContext, useContext, useRef, type ComponentProps, type RefObject } from 'react'
 import { Tooltip as TooltipPrimitive } from '@base-ui/react/tooltip'
 import { cn } from '../../lib/utils.js'
-import { POPUP_MOTION_CLASS, usePopupPlacement } from './popup-placement.js'
+import { POPUP_MOTION_CLASS, usePopupPosition } from './popup-placement.js'
 
 // A trimmed shadcn-style Tooltip on Base UI (already a dep across the ui/ kit — no Radix pulled
 // in). Per item:
@@ -74,7 +74,7 @@ function TooltipContent({
   side?: ComponentProps<typeof TooltipPrimitive.Positioner>['side']
   align?: ComponentProps<typeof TooltipPrimitive.Positioner>['align']
 }) {
-  const positionMethod = usePopupPlacement()
+  const position = usePopupPosition()
   const box = useContext(PastBox)
   const trigger = useContext(TriggerOf)
   const placement = box && trigger ? { anchor: pastBox(box, trigger), side: 'bottom' as const, align: 'start' as const } : { ...(side ? { side } : {}), ...(align ? { align } : {}) }
@@ -86,7 +86,7 @@ function TooltipContent({
           positioner, was painted *behind* it: the preset hints in the launcher's menu rendered
           with the right words and were covered by the very menu that triggered them. */}
       <TooltipPrimitive.Positioner
-        positionMethod={positionMethod}
+        {...position}
         className="z-50"
         sideOffset={sideOffset}
         {...placement}
