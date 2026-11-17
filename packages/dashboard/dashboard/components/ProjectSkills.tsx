@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { onProjectSkills, sendChangeSkills, sendProjectSkills, type ProjectSkills, type ProjectSkill, type SendSkillsResult } from '../rpc/skills.js'
 import { useAction } from '../lib/use-action.js'
@@ -6,7 +6,6 @@ import { useLoaded, usePolled } from '../lib/use-async.js'
 import { onSkillsSaved, skillsSaved } from '../lib/skills-saved.js'
 import { useSettingsHold } from '../lib/settings-hold.js'
 import { takeLostFocus } from '../lib/lost-focus.js'
-import { useCut } from '../lib/use-cut.js'
 import { Button, buttonVariants } from './ui/button.js'
 import { Checkbox } from './ui/checkbox.js'
 import { Skeleton } from './ui/skeleton.js'
@@ -361,17 +360,19 @@ function SkillCards({ projectId, skills, onDone }: { projectId: string; skills: 
   )
 }
 
+/** The words up to the end of the first sentence: a stop, a question or an exclamation mark before a capital (so "e.g. a"
+ *  goes on), or all of them. */
+const firstSentence = (text: string): string => /^[\s\S]*?[.!?](?=\s+["“(]?[A-Z])/.exec(text.trim())?.[0] ?? text.trim()
+
 /** The skills' ticks laid out: a column, two from a tablet up, 12 between rows. */
 export const SKILL_TICKS_CLASS = 'grid gap-x-6 gap-y-3 md:grid-cols-2'
 
 /**
- * One skill to tick: the box, its name, and its sentence under it, two lines of it with the rest on a press of the chevron; a note, a warning, between them. No box around it.
+ * One skill to tick: the box, its name, and its first sentence under it, whole, with the rest on a press of the chevron; a note, a warning, between them. No box around it.
  * `brief`: one line of the sentence, the whole of it on a press of that line.
  */
 export function SkillTick({ name, description, note, checked, onChange, disabled, label = name, brief = false }: { name: string; description: string; note?: ReactNode; checked: boolean; onChange: (on: boolean) => void; disabled?: boolean | undefined; label?: string | undefined; brief?: boolean }) {
   const [whole, setWhole] = useState(false)
-  const sentence = useRef<HTMLSpanElement>(null)
-  const cut = useCut(sentence, description)
   if (brief)
     return (
       <div className="min-w-0">
@@ -395,6 +396,9 @@ export function SkillTick({ name, description, note, checked, onChange, disabled
         </div>
       </div>
     )
+  // A sentence read to its end rather than cut mid-way by an ellipsis: the first, and the rest a press away.
+  const first = firstSentence(description)
+  const more = first.length < description.trim().length
   // A press anywhere on it ticks it, but on its chevron; lit under the pointer by a fill its own padding pulls out, so its box stands on the inset.
   return (
     <label className="-mx-3 flex min-w-0 cursor-pointer items-start gap-3 rounded-md px-3 py-2 transition-colors pointer-fine:hover:bg-foreground/4">
@@ -402,7 +406,7 @@ export function SkillTick({ name, description, note, checked, onChange, disabled
       <span className="min-w-0 flex-1">
         <span className="flex items-start justify-between gap-2">
           <span className="min-w-0 text-sm font-medium">{name}</span>
-          {(cut || whole) && (
+          {more && (
             // 28 high over the name's 20 line, pulled into it so the row keeps its height.
             <Button type="button" variant="ghost" size="icon-sm" aria-expanded={whole} aria-label={`All of what ${name} does`} onClick={() => setWhole(on => !on)} className="-my-1 -mr-1.5">
               <ChevronDown className={cn('size-4 transition-transform', whole && 'rotate-180')} aria-hidden />
@@ -410,9 +414,7 @@ export function SkillTick({ name, description, note, checked, onChange, disabled
           )}
         </span>
         {note !== undefined && <span className="block text-xs text-warning">{note}</span>}
-        <span ref={sentence} className={cn('text-xs text-faint-foreground', whole ? 'block' : 'line-clamp-2')}>
-          {description}
-        </span>
+        <span className="block text-xs text-faint-foreground">{whole ? description : first}</span>
       </span>
     </label>
   )

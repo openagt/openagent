@@ -229,23 +229,18 @@ describe('the Skills page', () => {
     expect(isTicked('triage')).toBe(true)
   })
 
-  test("a skill's sentence past two lines is cut there, the whole of it on a press of its chevron, which ticks nothing", async () => {
-    // jsdom lays nothing out: every box is drawn taller than it is, so every sentence reads as cut.
-    const tall = vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(48)
-    try {
-      onProjectSkills.mockResolvedValue(skills({ groups: [{ title: 'Tickets and queue', skills: [skill('plan')] }] }))
-      render(<SkillsSettings projectId="p1" />)
-      const sentence = await screen.findByText('What plan does.')
-      expect(sentence.className).toContain('line-clamp-2')
-      const chevron = screen.getByRole('button', { name: 'All of what plan does' })
-      expect(chevron.getAttribute('aria-expanded')).toBe('false')
-      fireEvent.click(chevron)
-      expect(chevron.getAttribute('aria-expanded')).toBe('true')
-      expect(sentence.className).not.toContain('line-clamp-2')
-      expect(isTicked('plan')).toBe(false)
-    } finally {
-      tall.mockRestore()
-    }
+  test("a skill says its first sentence whole, the rest on a press of its chevron, which ticks nothing; one sentence alone has no chevron", async () => {
+    onProjectSkills.mockResolvedValue(skills({ groups: [{ title: 'Tickets and queue', skills: [{ ...skill('plan'), description: 'Plans a ticket, e.g. a big one, before work starts. Then it asks you.' }, skill('triage')] }] }))
+    render(<SkillsSettings projectId="p1" />)
+    const sentence = await screen.findByText('Plans a ticket, e.g. a big one, before work starts.')
+    const chevron = screen.getByRole('button', { name: 'All of what plan does' })
+    expect(chevron.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(chevron)
+    expect(chevron.getAttribute('aria-expanded')).toBe('true')
+    expect(sentence.textContent).toBe('Plans a ticket, e.g. a big one, before work starts. Then it asks you.')
+    expect(isTicked('plan')).toBe(false)
+    expect(screen.getByText('What triage does.')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'All of what triage does' })).toBeNull()
   })
 
   test('opened again the ticks show what the project has; a tick removed deletes, a tick added writes', async () => {
