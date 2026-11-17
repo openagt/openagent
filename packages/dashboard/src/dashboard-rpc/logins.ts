@@ -12,6 +12,7 @@ import { contextProjects } from './context.js'
 import { readProvider, remoteHost, type GitHostProvider } from '../dashboard/git-hosts.js'
 import { readCopied } from '../dashboard/copied-logins.js'
 import { syncLogins } from '../dashboard/logins-sync.js'
+import { refreshLoginShellPath } from '../shell-path.js'
 import { hasAddedAccount } from '@openagt/skill-account-rotation'
 
 export type { GitHostAccount, GitHostProvider } from '../dashboard/git-hosts.js'
@@ -98,6 +99,14 @@ export async function onGitHosts(): Promise<GitHostsView> {
  * in there before a project is. A project with no remote is on none.
  */
 async function readGitHosts(): Promise<GitHostsView> {
+  const view = await readGitHostsOnce()
+  if (!view.hosts.some(row => row.provider?.installed === false)) return view
+  // A `gh` installed since OpenAgent started, or only on the terminal's PATH, is found.
+  await refreshLoginShellPath()
+  return readGitHostsOnce()
+}
+
+async function readGitHostsOnce(): Promise<GitHostsView> {
   const projects = await contextProjects().list()
   const byHost = new Map<string, { roots: string[]; names: string[] }>()
   for (const project of projects) {
@@ -242,7 +251,12 @@ const fixes = new Map<DriverName, { fixing?: DriverFix['kind']; stop?: AbortCont
 /** The coding agent picked in Settings, or `driver`: installed, logged in, and what a press fixes. */
 export async function onAgentState(driver?: string): Promise<AgentState> {
   const name = driver !== undefined && isDriverName(driver) ? driver : await loginsWiring.driver()
-  const ready = await loginsWiring.ready(name)
+  let ready = await loginsWiring.ready(name)
+  // A coding agent installed since OpenAgent started, or only on the terminal's PATH, is found.
+  if (ready.fix?.kind === 'install') {
+    await refreshLoginShellPath()
+    ready = await loginsWiring.ready(name)
+  }
   const press = fixes.get(name)
   // A computer with no browser cannot log its agent in by a press: on a server the person adds an account in its card instead; elsewhere the command is typed there.
   const noPress = ready.fix?.kind === 'log-in' && accountsWiring.headless()
