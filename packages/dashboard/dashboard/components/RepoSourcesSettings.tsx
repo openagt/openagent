@@ -102,14 +102,15 @@ function Sources({ sources, onChanged }: { sources: RepoSources; onChanged: () =
             </form>
           </div>
         </Section>
-        {/* Its press stands at the heading's right on a desktop, and under the whole heading on a phone, where both would cut the heading. */}
+        {/* Its press stands at the heading's right on a desktop; on a phone, where both would cut the heading, under the
+            heading's line of help, the three one group. */}
         <Section title="Folders searched on this computer" className="relative">
-          <Button variant="ghost" size="sm" className="max-md:mb-4 max-md:-ml-2 max-md:h-11 md:absolute md:-top-0.5 md:right-0" disabled={busy} onClick={addFolder}>
+          <p className="max-w-md text-xs text-faint-foreground">Your home folder, and the folders added here or with &ldquo;Search another folder&hellip;&rdquo; in the picker.</p>
+          <Button variant="ghost" size="sm" className="max-md:-ml-2 max-md:h-11 md:absolute md:-top-0.5 md:right-0" disabled={busy} onClick={addFolder}>
             <FolderPlus className="size-4" aria-hidden />
             Search another folder&hellip;
           </Button>
-          <div className="space-y-6">
-            <p className="max-w-md text-xs text-faint-foreground">Your home folder, and the folders added here or with &ldquo;Search another folder&hellip;&rdquo; in the picker.</p>
+          <div className="mt-6 space-y-6 max-md:mt-2">
             {sources.folders.length > 0 ? (
               <SettingsItems aria-label="Folders searched">
                 {sources.folders.map(folder => (
