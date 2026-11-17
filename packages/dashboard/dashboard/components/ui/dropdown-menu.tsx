@@ -35,10 +35,11 @@ function PopupBody({ children }: { children: ReactNode }) {
 }
 /**
  * A menu's row: one line centred in it; a row with a second line (its part marked `data-line2`) stands from its top, its
- * mark on its name's line. On a phone a finger's row: 44 high with one line, 64 with two.
+ * mark on its name's line. On a phone a finger's row, at least 44 high, its height from its padding: its words' ink (their
+ * line's leading is inside it) as far from its fill over and under them as beside them, so a second line adds only its own.
  */
 export const MENU_ITEM_CLASS =
-  'relative flex cursor-pointer select-none items-center has-[[data-line2]]:items-start gap-3 rounded-md px-2 py-1.5 text-sm font-normal outline-none md:min-h-8 max-md:min-h-11 max-md:has-[[data-line2]]:min-h-16 max-md:has-[[data-line2]]:py-3 data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50'
+  'relative flex cursor-pointer select-none items-center has-[[data-line2]]:items-start gap-3 rounded-md px-2 py-1.5 text-sm font-normal outline-none md:min-h-8 max-md:min-h-11 max-md:py-1 data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50'
 
 /** A row's icon or tick, in a box one line of its name tall: on that line whether the row has one line or two. */
 export function MenuMark({ children, className }: { children: ReactNode; className?: string }) {
