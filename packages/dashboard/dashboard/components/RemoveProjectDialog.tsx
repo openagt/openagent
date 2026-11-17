@@ -83,17 +83,23 @@ export function RemoveProjectDialog({
             <span>Also delete OpenAgent&rsquo;s files in this folder</span>
           </label>
           {!files && (
-            // Under the box's words, on their edge: the box's 16 and the gap's 8.
-            <p className="mt-1 pl-6 text-xs text-muted-foreground">
-              Nothing in the folder is deleted: OpenAgent&rsquo;s own files there stay too (<span className={name}>.openagent</span>,{' '}
-              <span className={name}>.branches</span>, <span className={name}>.agent-runner</span>), and so do the agents&rsquo; records (in{' '}
-              <span className={name}>~/.openagent</span>, or on the branch <span className={name}>agent-data</span> if you shared them).
-            </p>
+            // Under the box's words, on their edge: the box's 16 and the gap's 8. What it comes to
+            // first, at the words' size; the folders it names under it, smaller.
+            <div className="mt-1 pl-6 text-muted-foreground">
+              <p className="text-sm">Nothing in the folder is deleted:</p>
+              <p className="mt-1 text-xs">
+                OpenAgent&rsquo;s own files there stay too (<span className={name}>.openagent</span>, <span className={name}>.branches</span>,{' '}
+                <span className={name}>.agent-runner</span>), and so do the agents&rsquo; records (in <span className={name}>~/.openagent</span>, or
+                on the branch <span className={name}>agent-data</span> if you shared them).
+              </p>
+            </div>
           )}
           {files && (
             <div className="mt-3 rounded-md border border-hairline p-3 text-sm text-muted-foreground">
-              <p>
-                This deletes, on this machine: the agents&rsquo; checkouts in <span className={name}>.branches</span>, the folders{' '}
+              {/* What it comes to first, on a line of its own; what it deletes under it. */}
+              <p className="text-foreground">This deletes, on this machine:</p>
+              <p className="mt-1">
+                the agents&rsquo; checkouts in <span className={name}>.branches</span>, the folders{' '}
                 <span className={name}>.openagent</span> (with <span className={name}>hooks.yml</span>, the project&rsquo;s start lines) and{' '}
                 <span className={name}>.agent-runner</span>, the agents&rsquo; records in <span className={name}>~/.openagent</span>, and the
                 local branch <span className={name}>agent-data</span>. A tool that
