@@ -363,7 +363,7 @@ export function AgentHistory({
             little space below the group (pb-2) before the session list. The `!` because a module's
             stylesheet, loaded after the dashboard's, redefines the header's own `p-2`, which would
             otherwise win over a plain `pt-0`. */}
-        <SidebarHeader className="gap-0 pt-0! pb-2">
+        <SidebarHeader className="gap-0.5 pt-0! pb-2">
           {/* "New" starts a session — but where depends on what exists: with no project it prompts to
               add one first, with one project it starts there, with several it opens a picker. With
               one project picked at the top, it starts there. */}
@@ -380,7 +380,7 @@ export function AgentHistory({
           {/* The modules' pages the shell hands over (#1774), the picked project's only when one is
               picked: destinations with no project selected, like the Overview, named by the module,
               never by the dashboard — the tickets' page among them, when a package brings one. */}
-          <Slot of={modulePages} shape={<NavShapes />} className="flex flex-col">
+          <Slot of={modulePages} shape={<NavShapes />} className="flex flex-col gap-0.5">
             {known => (
               <>
                 {known.map(page => (
@@ -493,7 +493,7 @@ export function AgentHistory({
 /** Two of the rows below while they are read, in their own shape and height: a {@link Slot}'s `shape`. */
 function NavShapes() {
   return Array.from({ length: 2 }, (_, at) => (
-    <div key={at} className="flex items-center gap-2 px-1.5 md:h-7 max-md:h-11">
+    <div key={at} className="flex items-center gap-2 px-1.5 md:h-8 max-md:h-11">
       <Skeleton className="size-4 shrink-0 rounded-sm" />
       <Skeleton className={cn('h-3.5', at === 0 ? 'w-20' : 'w-24')} />
     </div>
@@ -888,7 +888,7 @@ function AgentHistoryRow({
     'aria-label': `${naming ? 'Naming this session' : titleText} · ${said}`,
     'aria-current': active ? ('page' as const) : undefined,
     // The navigation's row: 32 high (44 on a phone), the picked one filled, the one under the pointer half filled.
-    className: cn('focus-ring rail-row flex w-full items-center gap-2 rounded-md px-1.5 text-left text-sm text-foreground transition-colors md:h-7 max-md:h-11', active ? 'bg-foreground/8' : 'hover:bg-foreground/4 active:bg-foreground/8'),
+    className: cn('focus-ring rail-row flex w-full items-center gap-2 rounded-lg px-1.5 text-left text-sm text-foreground transition-colors md:h-8 max-md:h-11', active ? 'bg-foreground/8' : 'hover:bg-foreground/4 active:bg-foreground/8'),
     ...(standIn ? { 'data-stand-in': '' } : {}),
     onPointerEnter: onNear,
     onFocus: onNear,
