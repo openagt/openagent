@@ -6,6 +6,7 @@ import { forgetRemembered, type ModuleScheduledCommand } from '@openagt/dashboar
 import { QueuePage } from './QueuePage.js'
 import { NO_MODULES, fakeHost, renderWithHost, type FakeHost } from './test-host.js'
 import { workOnEntryPrompt } from '../src/module.js'
+import { openMenu, phoneScreen } from '../../dashboard/dashboard/test-utils.js'
 
 // The page rendered from nothing but this package: a host answering `queue --local --full`, and
 // the queue's own `done` and `add`. What other packages tell it (which commands start by
@@ -14,7 +15,7 @@ import { workOnEntryPrompt } from '../src/module.js'
 
 const alpha = { id: 'p1', name: 'alpha', gitHost: true }
 const PLAN = 'Create tickets/2026-08-01_login-page.plan.md'
-const FULL = [{ entry: 'Hand-written on top' }, { entry: 'Urgent', priority: 8 }, { entry: 'Also urgent', priority: 8 }, { entry: 'Later', priority: 3 }]
+const FULL = [{ entry: 'Hand-written on top' }, { entry: 'Hot fix', priority: 8 }, { entry: 'Also urgent', priority: 8 }, { entry: 'Later', priority: 3 }]
 
 afterEach(() => {
   cleanup()
@@ -41,15 +42,33 @@ function scheduling(commands: ModuleScheduledCommand[]): MountedModules {
   }
 }
 
-/** The section headings with their counts and the entries, top to bottom, as the page shows them: an entry with its number. */
-const shown = () => [...document.querySelectorAll('h2, ul > li')].map(node => (node.tagName === 'H2' ? node.textContent : `${node.querySelector('span')?.textContent} ${node.querySelector('[title]')?.textContent}`))
+/** The section headings and the entries' names, top to bottom, as the page shows them. */
+const shown = () => [...document.querySelectorAll('h2, ul > li')].map(node => (node.tagName === 'H2' ? node.textContent : node.querySelector('[title]')?.textContent))
+/** Entry `place`'s menu opened, and its removal asked for. */
+const removeEntry = async (place: number): Promise<void> => {
+  await openMenu(await screen.findByRole('button', { name: `More for entry ${place}` }))
+  fireEvent.click(await screen.findByRole('menuitem', { name: 'Remove from the queue' }))
+}
+/** What the line under the page's title says of who takes from the queue. */
 const taker = (): string => screen.getByRole('status', { name: 'Who takes from the queue' }).textContent ?? ''
 
 describe('QueuePage', () => {
-  test('shows the entries in the order agents take them, numbered across the sections: an unranked entry above the sections is first', async () => {
+  test('shows the entries in the order agents take them, under the section each sits in: an unranked entry above the sections is first', async () => {
     show()
     await screen.findByText('Hand-written on top')
-    expect(shown()).toEqual(['No priority 1 entry', '1. Hand-written on top', 'Priority 8 2 entries', '2. Urgent', '3. Also urgent', 'Priority 3 1 entry', '4. Later'])
+    expect(shown()).toEqual(['No priority', 'Hand-written on top', 'Priority 8', 'Hot fix', 'Also urgent', 'Priority 3', 'Later'])
+  })
+
+  test('under a name, where the entry came from, or a typed entry\'s words after its name, starting with a capital', async () => {
+    show([{ entry: 'Tidy the loader', priority: 5 }, { entry: '[Login page](tickets/2026-08-01_login-page.md)', priority: 5 }, { entry: '[Upstream bug](https://github.com/x/y/issues/1)', priority: 5 }, { entry: 'Search: forgive typos in product names', priority: 5 }])
+    const first = (await screen.findByText('Tidy the loader')).closest('li')!
+    // A typed line with nothing after its name is the name alone.
+    expect(first.textContent).not.toContain('·')
+    const typed = screen.getByText('Search').closest('li')!
+    expect(typed.textContent).toContain('Forgive typos in product names')
+    expect(typed.querySelector('[title]')?.getAttribute('title')).toBe('Search: forgive typos in product names')
+    expect(screen.getByText('Login page').closest('li')!.textContent).toContain('From a ticket')
+    expect(screen.getByText('Upstream bug').closest('li')!.textContent).toContain('From github.com')
   })
 
   test("while the queue is first read, its rows' shapes stand where the entries will, and the entries take their place", async () => {
@@ -59,105 +78,120 @@ describe('QueuePage', () => {
     let answer = () => {}
     host.runCommand.mockImplementationOnce(() => new Promise(resolve => (answer = () => resolve({ ok: true, output: FULL }))))
     renderWithHost(<QueuePage projects={[alpha]} projectId={null} path={[]} />, host, NO_MODULES)
-    expect(screen.getByRole('status').textContent).toBe('Loading…')
-    expect(screen.queryByText('Nothing queued.')).toBeNull()
+    expect(screen.getByText('Loading…')).toBeTruthy()
+    expect(screen.queryByText('Nothing queued')).toBeNull()
     answer()
     await screen.findByText('Hand-written on top')
     expect(screen.queryByText('Loading…')).toBeNull()
   })
 
-  test('says what the two ends of the scale mean: on the page, and on a section at either end', async () => {
+  test('names a section by its priority, the number the queue file holds, ends of the scale too', async () => {
     show([{ entry: 'Now', priority: 10 }, { entry: 'Some day', priority: 0 }])
     await screen.findByText('Now')
-    expect(screen.getByText(/10 is the most urgent, 0 is only if there is capacity/)).toBeTruthy()
-    expect(screen.getByRole('region', { name: 'Priority 10 most urgent' })).toBeTruthy()
-    expect(screen.getByRole('region', { name: 'Priority 0 only if there is capacity' })).toBeTruthy()
+    expect(screen.getByRole('region', { name: 'Priority 10' })).toBeTruthy()
+    expect(screen.getByRole('region', { name: 'Priority 0' })).toBeTruthy()
   })
 
   describe('who takes from the queue', () => {
     test('with no package that starts commands by itself, entries wait for a person, and nothing links anywhere', async () => {
       show()
-      await screen.findByText('Urgent')
-      expect(taker()).toBe('Nothing takes from this queue by itself: entries wait until you start them.')
+      await screen.findByText('Hot fix')
+      expect(taker()).toBe('Entries wait here until you start them.')
+      expect(screen.queryByRole('link', { name: /Automations/ })).toBeNull()
     })
 
     test('the command that works the queue, switched off: entries wait, and the line opens the page that switches it', async () => {
       const openPage = vi.fn()
       show(FULL, scheduling([{ command: 'plan-tickets', on: true, note: 'Next start in 3h, if there is work' }, { command: 'work-queue', on: false }]), { ...INERT_HOST_SERVICES, openPage })
-      await waitFor(() => expect(taker()).toBe('/work-queue is off: entries wait until you start them.Change it in Automations'))
+      await waitFor(() => expect(taker()).toBe('Entries wait here until you start them. Change it in Automations.'))
       fireEvent.click(screen.getByRole('link', { name: 'Automations' }))
       expect(openPage).toHaveBeenCalledWith('automations')
     })
 
     test('switched on: an agent takes the first entry nobody claimed, and when it starts next is said in the scheduling package\'s words', async () => {
       show(FULL, scheduling([{ command: 'work-queue', on: true, note: 'Starts when there is work' }]))
-      await waitFor(() => expect(taker()).toBe('/work-queue is on: an agent takes the first entry nobody has claimed. Starts when there is work.Change it in Automations'))
+      await waitFor(() => expect(taker()).toBe('Agents take entries from here by themselves. Starts when there is work. Change it in Automations.'))
     })
 
     test('switched on while nothing starts by itself: the line says off, with why', async () => {
       show(FULL, scheduling([{ command: 'work-queue', on: false, note: 'The scheduler is off' }]))
-      await waitFor(() => expect(taker()).toContain('/work-queue is off: entries wait until you start them. The scheduler is off.'))
+      await waitFor(() => expect(taker()).toBe('Entries wait here until you start them. The scheduler is off. Change it in Automations.'))
     })
 
     test('while what starts by itself is not known, the page says nothing of it: not read yet, or a read that failed', async () => {
       // The installed modules are not known yet.
       show(FULL, { ...NO_MODULES, loaded: false })
-      await screen.findByText('Urgent')
+      await screen.findByText('Hot fix')
       expect(screen.queryByRole('status', { name: 'Who takes from the queue' })).toBeNull()
       cleanup()
       // The scheduling package could not read this project.
       show(FULL, { ...NO_MODULES, schedule: { page: 'automations', read: async () => Promise.reject(new Error('no')), package: 'a-scheduler', projects: ['p1'] } })
-      await screen.findByText('Urgent')
+      await screen.findByText('Hot fix')
       await new Promise(resolve => setTimeout(resolve, 20))
       expect(screen.queryByRole('status', { name: 'Who takes from the queue' })).toBeNull()
     })
 
     test('coming back to the page, the line stands from the first frame: what was read last time, until the fresh read lands', async () => {
       show(FULL, scheduling([{ command: 'work-queue', on: true }]))
-      await waitFor(() => expect(taker()).toContain('/work-queue is on'))
+      await waitFor(() => expect(taker()).toContain('Agents take entries from here by themselves'))
       cleanup()
       show(FULL, { ...scheduling([]), schedule: { page: 'automations', read: () => new Promise(() => {}), package: 'a-scheduler', projects: ['p1'] } })
-      await screen.findByText('Urgent')
-      expect(taker()).toContain('/work-queue is on')
+      await screen.findByText('Hot fix')
+      expect(taker()).toContain('Agents take entries from here by themselves')
     })
 
     test('opening the page again, the line stands from the first frame, also while the installed modules are not known yet', async () => {
       show(FULL, scheduling([{ command: 'work-queue', on: true }]))
-      await waitFor(() => expect(taker()).toContain('/work-queue is on'))
+      await waitFor(() => expect(taker()).toContain('Agents take entries from here by themselves.'))
       cleanup()
       forgetRemembered()
       show(FULL, { ...NO_MODULES, loaded: false })
-      expect(taker()).toContain('/work-queue is on')
+      expect(taker()).toContain('Agents take entries from here by themselves.')
       await waitFor(() => expect(host.runCommand).toHaveBeenCalled())
       await new Promise(resolve => setTimeout(resolve, 20))
-      expect(taker()).toContain('/work-queue is on')
+      expect(taker()).toContain('Agents take entries from here by themselves.')
     })
 
     test('a project whose scheduled commands hold none that works the queue has nothing taking from it', async () => {
       show(FULL, scheduling([{ command: 'plan-tickets', on: true }]))
-      await screen.findByText('Urgent')
+      await screen.findByText('Hot fix')
       await waitFor(() => expect(host.runCommand).toHaveBeenCalled())
-      expect(taker()).toBe('Nothing takes from this queue by itself: entries wait until you start them.')
+      expect(taker()).toBe('Entries wait here until you start them. Change it in Automations.')
     })
   })
 
   describe('starting', () => {
-    test('an entry\'s play button starts one agent on that entry alone', async () => {
+    test('an entry\'s "Start now" starts one agent on that entry alone', async () => {
       show()
-      await screen.findByText('Urgent')
-      fireEvent.click(screen.getByRole('button', { name: 'Start an agent on entry 2' }))
-      await waitFor(() => expect(host.startRun.mock.calls).toEqual([['p1', workOnEntryPrompt('Urgent')]]))
+      await screen.findByText('Hot fix')
+      fireEvent.click(screen.getByRole('button', { name: 'Start now: entry 2' }))
+      await waitFor(() => expect(host.startRun.mock.calls).toEqual([['p1', workOnEntryPrompt('Hot fix')]]))
+    })
+
+    test('beside a free entry\'s "Start now", its menu sets a run up first or removes it; one an agent is on, only removes it', async () => {
+      host = fakeHost({ p1: { '--local --full': FULL } })
+      host.agents.mockImplementation(async () => [{ id: 'run-7', status: 'running', startedAt: '2026-10-01T10:00:00.000Z', ask: workOnEntryPrompt('Hand-written on top') }])
+      renderWithHost(<QueuePage projects={[alpha]} projectId={null} path={[]} />, host)
+      await screen.findByRole('button', { name: /^An agent is on it/ })
+      await openMenu(screen.getByRole('button', { name: 'More for entry 1' }))
+      expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toEqual(['Remove from the queue'])
+      fireEvent.keyDown(document.activeElement!, { key: 'Escape' })
+      await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
+      await openMenu(screen.getByRole('button', { name: 'More for entry 2' }))
+      expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toEqual(['Configure first, then run', 'Remove from the queue'])
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Configure first, then run' }))
+      expect(host.configureRun).toHaveBeenCalledWith('p1', workOnEntryPrompt('Hot fix'))
     })
 
     test('the batch starts one agent per entry from the top, as many as the count says, without leaving the page', async () => {
       show()
-      await screen.findByText('Urgent')
+      await screen.findByText('Hot fix')
       fireEvent.change(screen.getByRole('spinbutton', { name: 'How many agents to start' }), { target: { value: '2' } })
       fireEvent.click(screen.getByRole('button', { name: 'Start 2 agents' }))
       await waitFor(() =>
         expect(host.startRun.mock.calls).toEqual([
           ['p1', workOnEntryPrompt('Hand-written on top'), { land: false }],
-          ['p1', workOnEntryPrompt('Urgent'), { land: false }],
+          ['p1', workOnEntryPrompt('Hot fix'), { land: false }],
         ]),
       )
     })
@@ -179,7 +213,7 @@ describe('QueuePage', () => {
 
     test('the count is stepped as well as typed, the AI Queue card\'s control', async () => {
       show()
-      await screen.findByText('Urgent')
+      await screen.findByText('Hot fix')
       fireEvent.click(screen.getByRole('button', { name: 'One agent fewer' }))
       expect(screen.getByRole('button', { name: 'Start 2 agents' })).toBeTruthy()
       fireEvent.click(screen.getByRole('button', { name: 'One agent more' }))
@@ -188,22 +222,22 @@ describe('QueuePage', () => {
 
     test('a start that is refused says why', async () => {
       show()
-      await screen.findByText('Urgent')
+      await screen.findByText('Hot fix')
       host.startRun.mockResolvedValueOnce({ ok: false, error: 'the daemon refused' })
-      fireEvent.click(screen.getByRole('button', { name: 'Start an agent on entry 1' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Start now: entry 1' }))
       expect((await screen.findByRole('alert')).textContent).toBe('the daemon refused')
     })
 
     test('an entry a working agent was asked says so, and opens that agent; one that only waits does not', async () => {
       host = fakeHost({ p1: { '--local --full': FULL } })
       host.agents.mockImplementation(async () => [
-        { id: 'run-7', status: 'running', startedAt: '2026-10-01T10:00:00.000Z', ask: workOnEntryPrompt('Urgent') },
+        { id: 'run-7', status: 'running', startedAt: '2026-10-01T10:00:00.000Z', ask: workOnEntryPrompt('Hot fix') },
         { id: 'run-6', status: 'done', startedAt: '2026-10-01T09:00:00.000Z', ask: workOnEntryPrompt('Later') },
       ])
       renderWithHost(<QueuePage projects={[alpha]} projectId={null} path={[]} />, host)
-      const on = await screen.findByRole('button', { name: 'An agent is on it' })
-      expect(screen.getAllByRole('button', { name: 'An agent is on it' })).toHaveLength(1)
-      expect(on.closest('li')?.textContent).toContain('Urgent')
+      const on = await screen.findByRole('button', { name: /^An agent is on it · \d+d$/ })
+      expect(screen.getAllByRole('button', { name: /^An agent is on it/ })).toHaveLength(1)
+      expect(on.closest('li')?.textContent).toContain('Hot fix')
       fireEvent.click(on)
       expect(host.openAgent).toHaveBeenCalledWith('p1', 'run-7')
     })
@@ -212,13 +246,13 @@ describe('QueuePage', () => {
       host = fakeHost({ p1: { '--local --full': FULL } })
       host.agents.mockImplementation(async () => [{ id: 'run-7', status: 'waiting', startedAt: '2026-10-01T10:00:00.000Z', ask: workOnEntryPrompt('Hand-written on top') }])
       renderWithHost(<QueuePage projects={[alpha]} projectId={null} path={[]} />, host)
-      await screen.findByRole('button', { name: 'An agent is on it' })
-      expect(screen.queryByRole('button', { name: 'Start an agent on entry 1' })).toBeNull()
+      await screen.findByRole('button', { name: /^(An agent is on it|Waiting on you) · / })
+      expect(screen.queryByRole('button', { name: 'Start now: entry 1' })).toBeNull()
       fireEvent.change(screen.getByRole('spinbutton', { name: 'How many agents to start' }), { target: { value: '2' } })
       fireEvent.click(screen.getByRole('button', { name: 'Start 2 agents' }))
       await waitFor(() =>
         expect(host.startRun.mock.calls).toEqual([
-          ['p1', workOnEntryPrompt('Urgent'), { land: false }],
+          ['p1', workOnEntryPrompt('Hot fix'), { land: false }],
           ['p1', workOnEntryPrompt('Also urgent'), { land: false }],
         ]),
       )
@@ -228,31 +262,58 @@ describe('QueuePage', () => {
       host = fakeHost({ p1: { '--local --full': FULL } })
       host.agents.mockImplementation(async () => [{ id: 'run-7', status: 'running', startedAt: '2026-10-01T10:00:00.000Z', ask: workOnEntryPrompt('Hand-written on top') }])
       renderWithHost(<QueuePage projects={[alpha]} projectId={null} path={[]} />, host)
-      await screen.findByRole('button', { name: 'An agent is on it' })
-      expect(screen.queryByRole('button', { name: 'Start an agent on entry 1' })).toBeNull()
+      await screen.findByRole('button', { name: /^(An agent is on it|Waiting on you) · / })
+      expect(screen.queryByRole('button', { name: 'Start now: entry 1' })).toBeNull()
+      // Its one press is its menu, which still removes it.
+      await removeEntry(1)
+      fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Cancel' }))
       fireEvent.change(screen.getByRole('spinbutton', { name: 'How many agents to start' }), { target: { value: '2' } })
       fireEvent.click(screen.getByRole('button', { name: 'Start 2 agents' }))
       await waitFor(() =>
         expect(host.startRun.mock.calls).toEqual([
-          ['p1', workOnEntryPrompt('Urgent'), { land: false }],
+          ['p1', workOnEntryPrompt('Hot fix'), { land: false }],
           ['p1', workOnEntryPrompt('Also urgent'), { land: false }],
         ]),
       )
     })
+
+    test('on a phone a row has one press, its menu, holding its start, the launcher and its removal', async () => {
+      const wide = phoneScreen()
+      try {
+        show()
+        await screen.findByText('Hot fix')
+        expect(screen.queryByRole('button', { name: /^Start now: entry/ })).toBeNull()
+        // Who takes from the queue said once; the field, then the count and the batch's start, over the entries they start.
+        expect(screen.getAllByRole('status', { name: 'Who takes from the queue' })).toHaveLength(1)
+        const field = screen.getByRole('textbox', { name: 'A task to add to the queue' })
+        const start = screen.getByRole('button', { name: 'Start 3 agents' })
+        const first = screen.getByText('Hand-written on top')
+        expect(field.compareDocumentPosition(start) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+        expect(start.compareDocumentPosition(first) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+        await openMenu(screen.getByRole('button', { name: 'More for entry 2' }))
+        expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toEqual(['Start now', 'Configure first, then run', 'Remove from the queue'])
+        fireEvent.click(screen.getByRole('menuitem', { name: 'Start now' }))
+        await waitFor(() => expect(host.startRun.mock.calls).toEqual([['p1', workOnEntryPrompt('Hot fix')]]))
+      } finally {
+        wide()
+      }
+    })
   })
 
   describe('removing', () => {
-    test('the bin asks first, with the entry as written; "Remove" runs `queue done` with exactly that line and reads the queue again', async () => {
-      show()
-      await screen.findByText('Urgent')
-      fireEvent.click(screen.getByRole('button', { name: 'Remove entry 2 from the queue' }))
+    test('removing, from the entry\'s menu, asks first, naming the entry as its row does; "Remove" runs `queue done` with the line as written and reads the queue again', async () => {
+      const ticket = '[Login page](tickets/2026-08-01_login-page.md)'
+      show([{ entry: 'Hot fix', priority: 5 }, { entry: ticket, priority: 5 }])
+      await screen.findByText('Login page')
+      await removeEntry(2)
       const dialog = await screen.findByRole('alertdialog')
       expect(dialog.textContent).toContain('Remove this entry from the queue?')
-      expect(dialog.textContent).toContain('Urgent')
+      expect(within(dialog).getByRole('heading').nextElementSibling?.textContent).toMatch(/^Login page is deleted from the queue of /)
+      expect(dialog.textContent).not.toContain('tickets/')
       expect(host.act).not.toHaveBeenCalled()
       const reads = host.runCommand.mock.calls.length
       fireEvent.click(within(dialog).getByRole('button', { name: 'Remove' }))
-      await waitFor(() => expect(host.act).toHaveBeenCalledWith('p1', ['done', '--', 'Urgent']))
+      await waitFor(() => expect(host.act).toHaveBeenCalledWith('p1', ['done', '--', ticket]))
       await waitFor(() => expect(host.runCommand.mock.calls.length).toBeGreaterThan(reads))
     })
 
@@ -266,21 +327,21 @@ describe('QueuePage', () => {
       })
       renderWithHost(<QueuePage projects={[alpha]} projectId={null} path={[]} />, host, NO_MODULES)
       const remove = async (place: number, focused: string) => {
-        fireEvent.click(await screen.findByRole('button', { name: `Remove entry ${place} from the queue` }))
+        await removeEntry(place)
         fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Remove' }))
         await waitFor(() => expect(document.activeElement?.getAttribute('aria-label')).toBe(focused))
       }
       await screen.findByText('Third')
-      await remove(3, 'Remove entry 2 from the queue')
-      await remove(1, 'Remove entry 1 from the queue')
+      await remove(3, 'More for entry 2')
+      await remove(1, 'More for entry 1')
       expect(document.activeElement?.closest('li')?.textContent).toContain('Second')
       await remove(1, 'A task to add to the queue')
     })
 
     test('"Cancel" removes nothing', async () => {
       show()
-      await screen.findByText('Urgent')
-      fireEvent.click(screen.getByRole('button', { name: 'Remove entry 2 from the queue' }))
+      await screen.findByText('Hot fix')
+      await removeEntry(2)
       fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Cancel' }))
       await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
       expect(host.act).not.toHaveBeenCalled()
@@ -288,12 +349,12 @@ describe('QueuePage', () => {
 
     test('a removal the queue refuses stays on screen with the queue\'s reason', async () => {
       show()
-      await screen.findByText('Urgent')
-      host.act.mockImplementation(async () => ({ ok: false, error: 'no open queue entry reads "Urgent"' }))
-      fireEvent.click(screen.getByRole('button', { name: 'Remove entry 2 from the queue' }))
+      await screen.findByText('Hot fix')
+      host.act.mockImplementation(async () => ({ ok: false, error: 'no open queue entry reads "Hot fix"' }))
+      await removeEntry(2)
       const dialog = await screen.findByRole('alertdialog')
       fireEvent.click(within(dialog).getByRole('button', { name: 'Remove' }))
-      expect(await within(dialog).findByText('no open queue entry reads "Urgent"')).toBeTruthy()
+      expect(await within(dialog).findByText('no open queue entry reads "Hot fix"')).toBeTruthy()
       expect(screen.getByRole('alertdialog')).toBeTruthy()
     })
   })
@@ -304,13 +365,13 @@ describe('QueuePage', () => {
 
     test('nothing typed adds nothing: the press says what is missing under the field, with the caret there; a task typed is added with `queue add` at priority 5, trimmed, and the field empties', async () => {
       show()
-      await screen.findByText('Urgent')
-      // Among entries, what the press does with a task stands under the field before one is typed; what is missing takes its place.
-      expect(screen.getByText(/^It goes to the end of its priority\./)).toBeTruthy()
+      await screen.findByText('Hot fix')
+      // Where the task goes is the pick's title; under the field stands nothing until a press adds nothing.
+      expect(screen.getByLabelText('Priority of the new task').getAttribute('title')).toBe('Goes to the end of priority 5')
+      expect(screen.queryByRole('alert')).toBeNull()
       fireEvent.click(add())
       expect(host.act).not.toHaveBeenCalled()
-      expect(screen.getByText('Write the task first.')).toBeTruthy()
-      expect(screen.queryByText(/^It goes to the end of its priority\./)).toBeNull()
+      expect(screen.getByRole('alert').textContent).toBe('Write the task first.')
       expect(document.activeElement).toBe(field())
       fireEvent.change(field(), { target: { value: '  Tidy the loader  ' } })
       fireEvent.click(add())
@@ -320,7 +381,7 @@ describe('QueuePage', () => {
 
     test('once a task is added, by Enter or by the press, the caret is back in the field, for the next one', async () => {
       show()
-      await screen.findByText('Urgent')
+      await screen.findByText('Hot fix')
       fireEvent.change(field(), { target: { value: 'Tidy the loader' } })
       add().focus()
       fireEvent.click(add())
@@ -330,7 +391,7 @@ describe('QueuePage', () => {
 
     test('the priority picked is the section the task goes to', async () => {
       show()
-      await screen.findByText('Urgent')
+      await screen.findByText('Hot fix')
       fireEvent.click(screen.getByRole('combobox', { name: 'Priority of the new task' }))
       // Base UI takes a click only on the choice the pointer is on.
       const urgent = await screen.findByRole('option', { name: /^Priority 10/ })
@@ -343,7 +404,7 @@ describe('QueuePage', () => {
 
     test('a task the queue did not take stays typed, with why', async () => {
       show()
-      await screen.findByText('Urgent')
+      await screen.findByText('Hot fix')
       host.act.mockImplementation(async () => ({ ok: false, error: 'the push was refused' }))
       fireEvent.change(field(), { target: { value: 'Tidy the loader' } })
       fireEvent.click(add())
@@ -351,13 +412,11 @@ describe('QueuePage', () => {
       expect(field().value).toBe('Tidy the loader')
     })
 
-    test('an empty queue says so in one line over the field that takes a task', async () => {
+    test('an empty queue is the same page: who takes from it, the field that takes a task, and one line under it', async () => {
       show([], scheduling([{ command: 'work-queue', on: false }]))
       expect(await screen.findByText('Nothing queued.')).toBeTruthy()
       expect(field()).toBeTruthy()
-      expect(screen.queryByText(/^It goes to the end of its priority\./)).toBeNull()
-      await new Promise(resolve => setTimeout(resolve, 20))
-      expect(screen.queryByRole('status', { name: 'Who takes from the queue' })).toBeNull()
+      await waitFor(() => expect(taker()).toContain('Change it in Automations.'))
     })
   })
 
@@ -381,10 +440,10 @@ describe('QueuePage', () => {
       fireEvent.click(title)
       expect(openPage).toHaveBeenCalledWith('tickets', ['2026-08-01_login-page.md'], 'p1')
       // What an agent is started with is still the line as written.
-      fireEvent.click(screen.getByRole('button', { name: 'Start an agent on entry 1' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Start now: entry 1' }))
       await waitFor(() => expect(host.startRun.mock.calls).toEqual([['p1', workOnEntryPrompt(PLAN)]]))
       // The question names it as the row does, with the line as written; what is removed is that line: the queue knows no other name for it.
-      fireEvent.click(screen.getByRole('button', { name: 'Remove entry 1 from the queue' }))
+      await removeEntry(1)
       const dialog = await screen.findByRole('alertdialog')
       expect(within(dialog).getByText('Plan: Login page')).toBeTruthy()
       expect(within(dialog).getByText(PLAN)).toBeTruthy()
@@ -396,8 +455,10 @@ describe('QueuePage', () => {
       const names = async () => ({ 'tickets/2026-08-01_login-page.plan.md': { title: 'Plan: Login page', href: 'tickets/2026-08-01_login-page.md', done: { ask: PLAN, title: 'Plan: Login page · already written' } } })
       show([{ entry: PLAN, priority: 8 }, { entry: 'Urgent', priority: 8 }, { entry: 'Later', priority: 3 }], naming(names))
       await screen.findByRole('button', { name: 'Plan: Login page · already written' })
-      expect(screen.queryByRole('button', { name: 'Start an agent on entry 1' })).toBeNull()
-      expect(screen.getByRole('button', { name: 'Remove entry 1 from the queue' })).toBeTruthy()
+      expect(screen.queryByRole('button', { name: 'Start now: entry 1' })).toBeNull()
+      await openMenu(screen.getByRole('button', { name: 'More for entry 1' }))
+      expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toEqual(['Remove from the queue'])
+      fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
       expect((screen.getByRole('spinbutton', { name: 'How many agents to start' }) as HTMLInputElement).max).toBe('2')
       fireEvent.click(screen.getByRole('button', { name: 'Start 2 agents' }))
       await waitFor(() =>
@@ -414,7 +475,7 @@ describe('QueuePage', () => {
       show([{ entry: review, priority: 8 }], naming(names))
       // Named as the plan it asks about: "already written" would say it is done.
       await screen.findByRole('button', { name: 'Plan: Login page' })
-      expect(screen.getByRole('button', { name: 'Start an agent on entry 1' })).toBeTruthy()
+      expect(screen.getByRole('button', { name: 'Start now: entry 1' })).toBeTruthy()
       fireEvent.click(screen.getByRole('button', { name: 'Start 1 agent' }))
       await waitFor(() => expect(host.startRun.mock.calls).toEqual([['p1', workOnEntryPrompt(review), { land: false }]]))
     })
@@ -435,7 +496,7 @@ describe('QueuePage', () => {
 
   test('a second visit opens with the last list at once, faded once its fresh read has been out a second', async () => {
     show()
-    await screen.findByText('Urgent')
+    await screen.findByText('Hot fix')
     cleanup()
     forgetRemembered()
     const slow = fakeHost()
@@ -444,7 +505,7 @@ describe('QueuePage', () => {
     slow.runCommand.mockImplementation(() => new Promise(resolve => reads.push(() => resolve({ ok: false, error: 'read too late' }))))
     try {
       renderWithHost(<QueuePage projects={[alpha]} projectId={null} path={[]} />, slow, NO_MODULES)
-      const entry = screen.getByText('Urgent')
+      const entry = screen.getByText('Hot fix')
       expect(entry.closest('[data-stale]')).toBeNull()
       await waitFor(() => expect(entry.closest('[data-stale]')).not.toBeNull(), { timeout: 2000 })
     } finally {

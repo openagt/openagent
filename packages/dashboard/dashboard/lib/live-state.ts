@@ -113,3 +113,16 @@ export function currentAgentEvents(events: readonly OpenAgentEvent[]): OpenAgent
   }
   return events.slice(start)
 }
+
+/**
+ * The state a run's page says it is in, as the run table names it (`run-words.ts`): waiting while a
+ * question waits on the person, running while it works, merged once its pull request is, else how
+ * it ended; undefined while none of that is known.
+ */
+export function shownStatus(working: boolean | null, asking: boolean, outcome: AgentOutcome | undefined, merged: boolean): string | undefined {
+  if (asking || outcome?.waiting) return 'waiting'
+  if (working) return 'running'
+  if (merged) return 'merged'
+  if (!outcome) return undefined
+  return outcome.stopped ? 'stopped' : outcome.ok ? 'done' : 'failed'
+}

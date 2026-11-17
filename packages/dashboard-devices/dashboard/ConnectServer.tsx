@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { CircleCheck, CircleX, Loader2, PlugZap } from 'lucide-react'
-import { Button, Checkbox, Input, RadioGroup, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, cn, useOpenAgentDown, usePolled } from '@openagt/dashboard/module'
+import { Button, Checkbox, Facts, Input, RadioGroup, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, cn, useOpenAgentDown, usePolled } from '@openagt/dashboard/module'
 import type { Answer } from './devices.js'
 import { installDone, installFailed, testConnection, type ServerRow, type Tested } from './servers.js'
 import { CopyButton } from './codes.js'
@@ -82,7 +82,7 @@ export function ConnectServer({ d, onClose, onInvite }: { d: Devices; onClose: (
 
   const server = installed !== undefined ? d.servers.find(row => row.address === installed) : undefined
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <Stepper at={stage} />
       {stage === 'where' && <Where kind={kind} onKind={pickKind} doors={doors.map(door => ({ value: door.url, label: door.label }))} through={through} onVia={setVia} onCancel={() => leave(onClose)} onNext={() => setStage('connect')} />}
       {stage === 'connect' && (
@@ -120,24 +120,24 @@ export function ConnectServer({ d, onClose, onInvite }: { d: Devices; onClose: (
         </form>
       )}
       {stage === 'logins' && (
-        <div className="space-y-4">
-          <label className="flex items-start gap-2 text-sm">
+        <div className="space-y-6">
+          <label className="flex items-start gap-3 text-sm">
             <Checkbox className="mt-0.5" checked={useMine} onCheckedChange={checked => setUseMine(checked === true)} aria-label="Use my logins from this computer" />
             <span>
               Use my logins from this computer
-              <span className="block text-xs text-muted-foreground">Runs on the server use the accounts you're logged into here. Logging in or out here updates the server.</span>
+              <span className="mt-0.5 block text-xs text-faint-foreground">Runs on the server use the accounts you're logged into here. Logging in or out here updates the server.</span>
             </span>
           </label>
-          <div className="space-y-1 pl-6 text-xs">
+          <div className="space-y-1 pl-7 text-xs">
             <p>The server gets logins of its own. Nothing here is logged out, now or later.</p>
             <p className="text-muted-foreground">Unchecked: the server has no logins. You can turn it on later on the Permissions page.</p>
           </div>
           {remote !== undefined && (
-            <label className="flex items-start gap-2 text-sm">
+            <label className="flex items-start gap-3 text-sm">
               <Checkbox className="mt-0.5" checked={useMine && syncData} disabled={!useMine} onCheckedChange={checked => setSyncData(checked === true)} aria-label="Sync my agent data there too" />
               <span>
                 Sync my agent data there too
-                <span className="block text-xs text-muted-foreground">{`Its agent data syncs with ${remote}, as this computer's does: the same logs, tickets and agents on both. Sent as the GitHub login copied there${useMine ? '' : ', so it needs your logins'}.`}</span>
+                <span className="mt-0.5 block text-xs text-faint-foreground">{`Its agent data syncs with ${remote}, as this computer's does: the same logs, tickets and agents on both. Sent as the GitHub login copied there${useMine ? '' : ', so it needs your logins'}.`}</span>
               </span>
             </label>
           )}
@@ -166,8 +166,7 @@ function Stepper({ at }: { at: Stage }) {
     <ol aria-label="Steps" className="text-xs text-muted-foreground">
       {STAGES.map((stage, i) => (
         <li key={stage.id} aria-current={i === index ? 'step' : undefined} aria-label={`${stage.title}: ${i < index ? 'done' : i === index ? 'now' : 'next'}`} className={cn(i !== index && 'sr-only')}>
-          {`Step ${i + 1} of ${STAGES.length} · `}
-          <span className="font-medium text-foreground">{stage.title}</span>
+          <Facts facts={[`Step ${i + 1} of ${STAGES.length}`, <span className="font-medium text-foreground">{stage.title}</span>]} />
         </li>
       ))}
     </ol>
@@ -182,7 +181,7 @@ function Where({ kind, onKind, doors, through, onVia, onCancel, onNext }: { kind
         <Choice value="tailscale" title="A PC on your Tailscale network" words="Ubuntu or Debian, with Tailscale on it, signed in as you. Your devices on Tailscale reach it from anywhere, with a lock: no cloud server needed." />
         <Choice value="home" disabled={doors.length === 0} title="A PC at home or in an office" words="Ubuntu or Debian, on all the time. Nothing on the internet reaches it, so it is reached through one of your cloud servers." />
         {/* Why it cannot be picked, outside the dimmed choice: read at full contrast. */}
-        {doors.length === 0 && <p className="-mt-1 pl-10 text-xs text-muted-foreground">Set up a cloud server first.</p>}
+        {doors.length === 0 && <p className="-mt-1 pl-10 text-sm text-muted-foreground">Set up a cloud server first.</p>}
       </RadioGroup>
       {kind === 'home' && through !== undefined && (
         <div className="flex items-center gap-2 pl-7 text-xs text-muted-foreground">
@@ -227,7 +226,7 @@ function Paste({ lead, text, label, after }: { lead: string; text: string; label
   return (
     <div className="space-y-2 text-xs">
       <p>{lead}</p>
-      <div className="flex items-center gap-2 rounded-md bg-muted py-1 pr-1 pl-3">
+      <div className="flex items-center gap-2 rounded-md bg-muted py-2 pr-2 pl-4 max-md:py-0 max-md:pr-0">
         <code title={text} className="min-w-0 flex-1 truncate font-mono text-sm">
           {text}
         </code>
@@ -358,7 +357,7 @@ function Ready({ d, server, onInvite, onClose }: { d: Devices; server: ServerRow
   const item = d.items.find(candidate => candidate.kind === 'server' && candidate.server.address === server.address)
   const name = item?.name ?? server.address
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div className="flex flex-col gap-1">
         <CircleCheck aria-hidden className="h-5 w-5 text-success" />
         <p className="text-sm font-medium">{`${name} is ready.`}</p>

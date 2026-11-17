@@ -19,7 +19,7 @@ import { Button } from './ui/button.js'
 import { PERMISSIONS_PAGE } from '../lib/use-route.js'
 import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
 import { promptWithContext } from '../lib/use-context-set.js'
-import { stashPendingDraft } from '../lib/draft-handoff.js'
+import { keepDraft, stashPendingDraft } from '../lib/draft-handoff.js'
 import { AutoMenu } from './AutoMenu.js'
 import { ProjectContextMenu } from './ContextMenu.js'
 import { Composer, type ComposerHandle } from './Composer.js'
@@ -259,7 +259,6 @@ export function StartAgentForm({
   const account = useSessionAccount(address, machine?.id, pickedAccount ?? onAgent?.accounts.github)
 
   const submit = async (text: string) => {
-    if (busy) return
     setNote(STARTING)
     setSentTo(machine ? machineName(machine) : clonedHere ? hereName() : null)
     const { publish: _publish, ...unpublished } = startPicks(preferences)
@@ -280,19 +279,22 @@ export function StartAgentForm({
       // A remote agent (#1067) carries the machine label so the view can mark where it executes.
       // What this page says goes with it, for the run's page until the run's record says it.
       const started = startFrom ? (startFromPick?.kind === 'local' ? startFrom.local : startFromPick?.kind === 'published' ? startFromPick.branch : startFrom.main) : undefined
-      carryBox(() => onAgentStarted?.(text, result.agentId, machine?.label, result.projectId, {
-        ...(started !== undefined ? { branch: started } : {}),
-        ...(!noProject && remote && account !== undefined ? { gitAccount: account } : {}),
-        ...(agentId !== undefined ? { agent: agentId } : {}),
-        ...pickedSkills,
-        ...(noProject ? {} : { publish: publishPick }),
-        ...(prInto !== undefined ? { prBase: prInto } : {}),
-        ...(preferences.driver ? { driver: preferences.driver } : {}),
-        ...(preferences.model ? { model: preferences.model } : {}),
-        ...(preferences.effort ? { effort: preferences.effort } : {}),
-        ...(noProject && !machine && repos.length > 0 ? { repos: repos.map(repo => ({ name: repo.name, from: repo.path })) } : {}),
-      })) // select the run we just started (#761)
-      composerRef.current?.clear()
+      // The box keeps the words until the move has taken its picture of them; its draft goes with the page.
+      void carryBox(() => {
+        keepDraft(`launcher:${projectId}`, '')
+        onAgentStarted?.(text, result.agentId, machine?.label, result.projectId, {
+          ...(started !== undefined ? { branch: started } : {}),
+          ...(!noProject && remote && account !== undefined ? { gitAccount: account } : {}),
+          ...(agentId !== undefined ? { agent: agentId } : {}),
+          ...pickedSkills,
+          ...(noProject ? {} : { publish: publishPick }),
+          ...(prInto !== undefined ? { prBase: prInto } : {}),
+          ...(preferences.driver ? { driver: preferences.driver } : {}),
+          ...(preferences.model ? { model: preferences.model } : {}),
+          ...(preferences.effort ? { effort: preferences.effort } : {}),
+          ...(noProject && !machine && repos.length > 0 ? { repos: repos.map(repo => ({ name: repo.name, from: repo.path })) } : {}),
+        }) // select the run we just started (#761)
+      }).finally(() => composerRef.current?.clear())
       setRepos([])
       setSkillPicks(agentPicks(onAgent))
     } else setRefused(true)
@@ -306,7 +308,7 @@ export function StartAgentForm({
   return (
     // The width and the padding of an agent's message box (`AgentComposer.tsx`): the box is in the
     // same place on both pages.
-    <form onSubmit={e => e.preventDefault()} className="@container relative mx-auto w-full max-w-3xl px-4 pt-2 pb-4">
+    <form onSubmit={e => e.preventDefault()} className="@container mx-auto w-full max-w-3xl px-4 pt-2 pb-4">
       <Composer
         // A box of its own per project, so the prompt carried over from the picker lands in it (below).
         key={projectId}
@@ -333,12 +335,15 @@ export function StartAgentForm({
           </>
         }
         // Who runs, under the box at the left (his order): the agent, the skills this session gets, then the Context picker.
+        // All three land together once the agents are read, so the agent's and the skills' landing moves no Context.
         controls={
+          agentsView !== undefined && (
           <>
             <AgentMenu agents={agentsView?.agents} picked={onAgent?.id} busy={busy} onPick={id => updatePreferences({ agent: id === DEFAULT_AGENT ? '' : id })} />
             <SkillsMenu projectId={noProject ? undefined : projectId} agent={onAgent} groups={agentsView?.skills} picks={skillPicks} onChange={setSkillPicks} busy={busy} />
             {!noProject && <ProjectContextMenu projectId={projectId} context={context} busy={busy} onToggle={toggleContext} />}
           </>
+          )
         }
         // What becomes of the work, at that row's right, before the model: who it pushes as (the
         // project's git host account on the computer the run goes to, picked for this session), then
@@ -364,82 +369,83 @@ export function StartAgentForm({
         canSubmit={!noStartHook}
         submitLabel="Start agent"
         submitBusyLabel="Starting…"
-      />
-
-      {/* Feedback right where the action is (#948): above the box, over the page, so the box never moves. */}
-      <div className="absolute inset-x-4 bottom-full flex flex-col gap-1.5 pb-1">
-        {/* A start that hit what the check says, or the missing logins, says nothing the boxes below do not. */}
-        {/* A refusal of this computer's hooks.yml: the project opens in the editor from here as from its menu. */}
-        {error && missingThere.length === 0 && !readiness?.problems.length && <Refusal {...said(error)} {...(!machine && !clonedHere && hooksRefused ? { actions: <OpenInEditor projectId={projectId} /> } : {})} />}
-        {machine && missingThere.length > 0 && (
-          <Refusal
-            title={`Your ${missingThere.join(' and ')} ${missingThere.length === 1 ? 'login is' : 'logins are'} not on ${name} yet.`}
-            detail={`Runs there use your own logins. Log ${missingThere.length === 1 ? 'it' : 'them'} in on its page, or start your first run there from your page on ${reachedThrough(machine.url) ?? 'its server'}, which copies yours.`}
-            actions={
-              <Button type="button" size="sm" onClick={() => services.openSettings('devices', machine.id)}>
-                {`Log in on ${name}`}
-              </Button>
-            }
-          />
-        )}
-        {readiness?.problems.map(problem =>
-          problem === readiness.fix?.problem ? (
-            machine ? (
-              readiness.fix.kind === 'log-in' ? (
-                <Refusal key={problem} title={`${agentName} is not logged in on ${name}.`} actions={<MachineLogins machineId={machine.id} onAccounts={() => services.openPage(PERMISSIONS_PAGE)} />} />
-              ) : (
-                // The install brings every coding agent, and an update brings one added since.
-                <Refusal
-                  key={problem}
-                  title={`${agentName} is not installed on ${name}.`}
-                  detail={`Update ${name} to get it.`}
-                  actions={
-                    <Button type="button" size="sm" onClick={() => services.openSettings('devices', machine.id)}>
-                      {`Update ${name}`}
-                    </Button>
-                  }
-                />
-              )
-            ) : (
+        // Feedback right where the action is (#948): above the box, over the page, so the box never moves.
+        notes={
+          <>
+            {/* A start that hit what the check says, or the missing logins, says nothing the boxes below do not. */}
+            {/* A refusal of this computer's hooks.yml: the project opens in the editor from here as from its menu. */}
+            {error && missingThere.length === 0 && !readiness?.problems.length && <Refusal {...said(error)} {...(!machine && !clonedHere && hooksRefused ? { actions: <OpenInEditor projectId={projectId} /> } : {})} />}
+            {machine && missingThere.length > 0 && (
               <Refusal
-                key={problem}
-                {...(agent && !agent.ready ? { title: agentWords(agent), actions: <AgentFix state={agent} onChanged={() => void reloadAgent()} size="sm" /> } : said(problem))}
+                title={`Your ${missingThere.join(' and ')} ${missingThere.length === 1 ? 'login is' : 'logins are'} not on ${name} yet.`}
+                detail={`Runs there use your own logins. Log ${missingThere.length === 1 ? 'it' : 'them'} in on its page, or start your first run there from your page on ${reachedThrough(machine.url) ?? 'its server'}, which copies yours.`}
+                actions={
+                  <Button type="button" size="sm" onClick={() => services.openSettings('devices', machine.id)}>
+                    {`Log in on ${name}`}
+                  </Button>
+                }
               />
-            )
-          ) : (
-            <Refusal key={problem} {...said(problem)} />
-          ),
-        )}
-        {readiness?.warnings.map(warning => (
-          <p key={warning} role="alert" className="flex items-start gap-2 rounded-lg bg-[color-mix(in_oklab,var(--color-warning)_8%,var(--color-background))] px-3 py-2 text-sm text-foreground">
-            <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden />
-            {/* One flex item: the sentence's code marks flow in it as words do. */}
-            <span className="min-w-0">
-              <InlineMarkdown text={warning} />
-            </span>
-          </p>
-        ))}
-        {noStartHook && (
-          <Refusal
-            title="This project has no start hook."
-            detail={
-              <>
-                Add a <code className="font-mono">start:</code> line to <code className="font-mono">.openagent/hooks.yml</code>.
-              </>
-            }
-          />
-        )}
-        {note === STARTING && startingSaid && !error && (
-          // The chat's own first line (`SessionLine.tsx`), in its words and its look: the page that
-          // opens a moment later goes on saying it. A machine that does not have the project yet
-          // clones it first, which can take minutes: the line says so for as long as it does.
-          <p role="status" className="flex items-center gap-2 px-2 text-sm text-muted-foreground">
-            <Dots />
-            <span className="text-shimmer">{cloning && sentTo ? `Cloning ${projectName ?? 'this project'} on ${sentTo}, the first time only` : note}</span>
-          </p>
-        )}
-        {note !== STARTING && note && !error && <p role="status" className="px-2 text-xs text-muted-foreground">{note}</p>}
-      </div>
+            )}
+            {readiness?.problems.map(problem =>
+              problem === readiness.fix?.problem ? (
+                machine ? (
+                  readiness.fix.kind === 'log-in' ? (
+                    <Refusal key={problem} title={`${agentName} is not logged in on ${name}.`} actions={<MachineLogins machineId={machine.id} onAccounts={() => services.openPage(PERMISSIONS_PAGE)} />} />
+                  ) : (
+                    // The install brings every coding agent, and an update brings one added since.
+                    <Refusal
+                      key={problem}
+                      title={`${agentName} is not installed on ${name}.`}
+                      detail={`Update ${name} to get it.`}
+                      actions={
+                        <Button type="button" size="sm" onClick={() => services.openSettings('devices', machine.id)}>
+                          {`Update ${name}`}
+                        </Button>
+                      }
+                    />
+                  )
+                ) : (
+                  <Refusal
+                    key={problem}
+                    {...(agent && !agent.ready ? { title: agentWords(agent), actions: <AgentFix state={agent} onChanged={() => void reloadAgent()} size="sm" /> } : said(problem))}
+                  />
+                )
+              ) : (
+                <Refusal key={problem} {...said(problem)} />
+              ),
+            )}
+            {readiness?.warnings.map(warning => (
+              <p key={warning} role="alert" className="flex items-start gap-2 rounded-lg bg-[color-mix(in_oklab,var(--color-warning)_8%,var(--color-background))] px-3 py-2 text-sm text-foreground">
+                <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden />
+                {/* One flex item: the sentence's code marks flow in it as words do. */}
+                <span className="min-w-0">
+                  <InlineMarkdown text={warning} />
+                </span>
+              </p>
+            ))}
+            {noStartHook && (
+              <Refusal
+                title="This project has no start hook."
+                detail={
+                  <>
+                    Add a <code className="font-mono">start:</code> line to <code className="font-mono">.openagent/hooks.yml</code>.
+                  </>
+                }
+              />
+            )}
+            {note === STARTING && startingSaid && !error && (
+              // The chat's own first line (`SessionLine.tsx`), in its words and its look: the page that
+              // opens a moment later goes on saying it. A machine that does not have the project yet
+              // clones it first, which can take minutes: the line says so for as long as it does.
+              <p role="status" className="flex items-center gap-2 px-2 text-sm text-muted-foreground">
+                <Dots />
+                <span className="text-shimmer">{cloning && sentTo ? `Cloning ${projectName ?? 'this project'} on ${sentTo}, the first time only` : note}</span>
+              </p>
+            )}
+            {note !== STARTING && note && !error && <p role="status" className="px-2 text-xs text-muted-foreground">{note}</p>}
+          </>
+        }
+      />
     </form>
   )
 }
@@ -447,13 +453,17 @@ export function StartAgentForm({
 /**
  * Starting a run carries the box from this page to its place on the run's page in one movement: the
  * browser's own view transition, the box named the same on both (`composer`, Composer and
- * tailwind.css). Under reduced motion, or where the browser has none, the page just changes.
+ * tailwind.css), and the words in it the same as the run's first message (`words`). Under reduced
+ * motion, or where the browser has none, the page just changes. Settles once the move is over.
  */
-function carryBox(update: () => void): void {
-  if (typeof document.startViewTransition !== 'function' || matchMedia('(prefers-reduced-motion: reduce)').matches) return update()
+function carryBox(update: () => void): Promise<void> {
+  if (typeof document.startViewTransition !== 'function' || matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    update()
+    return Promise.resolve()
+  }
   const root = document.documentElement
   root.classList.add('carrying-box')
-  void document.startViewTransition(() => flushSync(update)).finished.finally(() => root.classList.remove('carrying-box'))
+  return document.startViewTransition(() => flushSync(update)).finished.finally(() => root.classList.remove('carrying-box'))
 }
 
 /** This computer, in "Cloning … on …": by the name the page was reached at, or as this computer when it is open on it. */
@@ -497,7 +507,8 @@ function Refusal({ title, detail, actions }: { title: ReactNode; detail?: ReactN
             <p className="mt-0.5 text-xs">{detail}</p>
           </>
         )}
-        {actions !== undefined && <div className="mt-2 flex flex-wrap items-center gap-2 text-foreground">{actions}</div>}
+        {/* Its presses are a finger's 44 on a phone, as every press there is. */}
+        {actions !== undefined && <div className="mt-2 flex flex-wrap items-center gap-2 text-foreground max-md:[&_button]:h-11">{actions}</div>}
       </div>
     </div>
   )

@@ -85,7 +85,7 @@ vi.mock('./PromptEditor.js', async () => {
 /** What the editor is actually holding, as opposed to what Start would submit. */
 const editorText = (): string => (screen.getByLabelText('prompt') as HTMLInputElement).value
 
-const { Composer } = await import('./Composer.js')
+const { BoxNotes, Composer } = await import('./Composer.js')
 type ComposerHandle = import('./Composer.js').ComposerHandle
 
 function renderComposer(over: Partial<Parameters<typeof Composer>[0]> = {}) {
@@ -130,9 +130,10 @@ describe('Composer (#721)', () => {
     expect(screen.getByRole('button', { name: 'Commands' })).toBeTruthy()
     expect(screen.getByRole('button', { name: /^Run on: / })).toBeTruthy()
     expect((await hoverTooltip(agentTrigger())).textContent).toContain('Coding agent: Claude Code')
-    // The submit button appears only once the prompt has text (#721).
+    // The launcher's press is named and there from the start, off until the prompt has text.
+    expect((screen.getByRole('button', { name: /Start session/ }) as HTMLButtonElement).disabled).toBe(true)
     fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'x' } })
-    expect(screen.getByRole('button', { name: /Start session/ })).toBeTruthy()
+    expect((screen.getByRole('button', { name: /Start session/ }) as HTMLButtonElement).disabled).toBe(false)
   })
 
   test('in a session (#831) there is no agent/model select, and the rest of the row stays', () => {
@@ -154,8 +155,8 @@ describe('Composer (#721)', () => {
     expect(screen.getByLabelText('prompt').dataset['label']).toBe('Prompt')
   })
 
-  test('the submit button is hidden until the editor has text, then appears and fires onSubmit', () => {
-    const { onSubmit } = renderComposer()
+  test('a session\'s send is hidden until the editor has text, then appears and fires onSubmit', () => {
+    const { onSubmit } = renderComposer({ inAgent: true })
     // Empty prompt: nothing to send, so the button is not in the DOM (#721).
     expect(screen.queryByRole('button', { name: 'Send' })).toBeNull()
     fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'ship it' } })
@@ -334,12 +335,15 @@ describe('Composer (#721)', () => {
 
   test('the row above the box: the launcher\'s, led by "Run on"; inside a session, the one it is given, in the same place, and no "Run on" of its own', () => {
     renderComposer({ startsAt: <span>the launcher's place</span> })
-    const box = () => screen.getByRole('button', { name: 'Commands' }).closest('.items-end')!
-    const followedByBox = (el: Element) => el.closest('.h-8')!.nextElementSibling === box()
+    // In the row that stands right before the box.
+    const followedByBox = (el: Element) => {
+      for (let row = el.parentElement; row; row = row.parentElement) if (row.nextElementSibling === box()) return true
+      return false
+    }
     expect(followedByBox(screen.getByText("the launcher's place"))).toBe(true)
     expect(followedByBox(screen.getByRole('button', { name: /^Run on: / }))).toBe(true)
     cleanup()
-    renderComposer({ inAgent: true, sessionRow: <div className="h-8"><span>where it started</span></div> })
+    renderComposer({ inAgent: true, sessionRow: <div><span>where it started</span></div> })
     expect(followedByBox(screen.getByText('where it started'))).toBe(true)
     expect(screen.queryByRole('button', { name: /^Run on: / })).toBeNull()
   })
@@ -397,7 +401,7 @@ describe('Composer (#721)', () => {
     const submit = screen.getByRole('button', { name: 'Send' })
     expect(submit.hasAttribute('disabled')).toBe(true)
     // Held, it looks held: faded, not the full colour of a press that would start.
-    expect(submit.className).toContain('disabled:opacity-40')
+    expect(submit.className).toContain('disabled:opacity-50')
     fireEvent.click(submit)
     fireEvent.click(screen.getByText('editor-submit'))
     expect(onSubmit).not.toHaveBeenCalled()
@@ -410,6 +414,40 @@ describe('Composer (#721)', () => {
     renderComposer()
     await waitFor(() => expect(machinesRpc.onMachines).toHaveBeenCalled())
     expect(note()).toBeNull()
+  })
+
+  test('every note lies over the page above the box, the caller\'s and its own in one place, none in the box\'s flow; a page that keeps a place for them gets them there', async () => {
+    const box = { id: 'box', url: 'http://127.0.0.1:4311', label: 'rom-desktop', owner: 'rom' }
+    await saveMachines(box)
+    selectMachine(box.id)
+    renderComposer({ notes: <p role="alert">Could not send.</p> })
+    await waitFor(() => expect(screen.queryByRole('note')).not.toBeNull())
+    const notes = screen.getByRole('note').parentElement!
+    expect(screen.getByRole('alert').parentElement).toBe(notes)
+    expect(notes.parentElement!.className).toContain('absolute')
+    expect(notes.parentElement!.className).toContain('bottom-full')
+    expect(screen.getByLabelText('prompt').closest('.border')!.contains(notes)).toBe(false)
+    cleanup()
+    const place = document.createElement('div')
+    document.body.append(place)
+    render(
+      <BoxNotes.Provider value={place}>
+        <Composer files={[]} onSubmit={vi.fn()} busy={false} submitLabel="Send" submitBusyLabel="Sending…" notes={<p role="alert">Could not send.</p>} />
+      </BoxNotes.Provider>,
+    )
+    expect(place.contains(screen.getByRole('alert'))).toBe(true)
+    place.remove()
+  })
+
+  test('a box whose send is on its way sends nothing more, by the arrow or the keyboard, and keeps what is typed', () => {
+    const { onSubmit } = renderComposer({ busy: true })
+    fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'ship it' } })
+    // The launcher's press waits with the keyboard on it, refusing presses.
+    expect(screen.getByRole('button', { name: 'Send' }).getAttribute('aria-disabled')).toBe('true')
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    fireEvent.click(screen.getByText('editor-submit'))
+    expect(onSubmit).not.toHaveBeenCalled()
+    expect(editorText()).toBe('ship it')
   })
 
   test('an online "Run on" machine leaves Start enabled with no offline note (#1073)', async () => {
@@ -436,6 +474,13 @@ const box = (): HTMLElement => {
 const commands = () => screen.getByRole('button', { name: 'Commands' })
 
 describe('the box', () => {
+  test('its 2 wide focus edge is drawn while its text has the keyboard; on the + or in its menu the edge is a 1 wide primary border, so the +\'s own ring stands alone', () => {
+    renderComposer()
+    const cls = box().className.split(' ')
+    expect(cls).toEqual(expect.arrayContaining(['has-[[role=textbox]:focus]:outline-2', 'focus-within:border-primary', 'has-[[aria-expanded=true]]:border-primary']))
+    expect(cls.filter(c => c.startsWith('focus-within:outline') || c.startsWith('has-[[aria-expanded=true]]:outline'))).toEqual([])
+  })
+
   test('it holds the commands menu, the text and the submit: the model and "Run on" are outside it, on rows of their own', () => {
     renderComposer()
     fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'x' } })
@@ -443,12 +488,17 @@ describe('the box', () => {
     expect(box().contains(commands())).toBe(true)
     expect(box().contains(agentTrigger())).toBe(false)
     expect(box().contains(screen.getByRole('button', { name: /^Run on: / }))).toBe(false)
+    cleanup()
+    renderComposer({ inAgent: true })
+    fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'x' } })
+    expect(box().contains(screen.getByRole('button', { name: 'Send' }))).toBe(true)
   })
 
-  test('the commands menu is at the left of the text, the submit at its right, both kept at its last line', () => {
-    renderComposer()
+  test('the commands menu is at the left of the text and a session\'s send at its right, both kept at its last line', () => {
+    renderComposer({ inAgent: true })
     const editor = screen.getByLabelText('prompt')
     const submit = box().querySelector('button[aria-label="Send"]')!
+    expect(box().firstElementChild!.contains(commands())).toBe(true)
     expect(commands().compareDocumentPosition(editor) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(editor.compareDocumentPosition(submit) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(box().className).toContain('items-end')

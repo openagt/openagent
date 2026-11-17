@@ -110,6 +110,8 @@ export function TicketEditor({
           value={title}
           onChange={event => setTitle(event.target.value)}
           placeholder="What should be done, in a few words"
+          // On a phone each field is a finger's 44, as the form's presses are.
+          className="max-md:h-11"
           aria-invalid={askedTitle && untitled}
           // The issue's note is said at the two fields it may write again.
           aria-describedby={[askedTitle && untitled && 'ticket-title-missing', issueLabel && 'ticket-issue-note'].filter(Boolean).join(' ') || undefined}
@@ -124,11 +126,11 @@ export function TicketEditor({
       <div className="flex gap-4 max-sm:flex-col">
         <div className="space-y-2 sm:w-32">
           <Label htmlFor="ticket-priority">Priority</Label>
-          <Input ref={priorityField} id="ticket-priority" value={priority} onChange={event => setPriority(event.target.value)} inputMode="numeric" placeholder="0–10" aria-invalid={!priorityOk} aria-describedby={priorityOk ? undefined : 'ticket-priority-error'} />
+          <Input ref={priorityField} id="ticket-priority" value={priority} onChange={event => setPriority(event.target.value)} inputMode="numeric" placeholder="0–10" className="max-md:h-11" aria-invalid={!priorityOk} aria-describedby={priorityOk ? undefined : 'ticket-priority-error'} />
         </div>
         <div className="flex-1 space-y-2">
           <Label htmlFor="ticket-topics">Topics</Label>
-          <Input id="ticket-topics" value={topics} onChange={event => setTopics(event.target.value)} placeholder="ui, install" />
+          <Input id="ticket-topics" value={topics} onChange={event => setTopics(event.target.value)} placeholder="ui, install" className="max-md:h-11" />
         </div>
       </div>
       {!priorityOk && (
@@ -138,7 +140,7 @@ export function TicketEditor({
       )}
       <div className="space-y-2">
         <Label htmlFor="ticket-waiting">Waiting on</Label>
-        <Input id="ticket-waiting" value={waiting} onChange={event => setWaiting(event.target.value)} placeholder="Nothing" aria-describedby="ticket-waiting-note" />
+        <Input id="ticket-waiting" value={waiting} onChange={event => setWaiting(event.target.value)} placeholder="Nothing" className="max-md:h-11" aria-describedby="ticket-waiting-note" />
         <p id="ticket-waiting-note" className="text-xs text-muted-foreground">
           No agent plans or works the ticket while it waits. Empty it when the wait is over.
         </p>
@@ -167,7 +169,8 @@ export function TicketEditor({
           Not saved: {error}
         </p>
       )}
-      <div className="flex justify-end gap-2 pt-2">
+      {/* Kept in view at the window's foot (on a phone, on the bar of pages) while the form is longer than the window, what scrolls under it fading at its edge, as the automation form's foot. */}
+      <div className="sticky bottom-(--foot) -mx-3 flex justify-end gap-2 bg-background px-3 py-3 before:pointer-events-none before:absolute before:inset-x-0 before:bottom-full before:h-4 before:bg-gradient-to-t before:from-background max-md:*:h-11 max-md:*:flex-1">
         <Button type="button" variant="ghost" size="lg" onClick={onCancel} disabled={saving}>
           Cancel
         </Button>

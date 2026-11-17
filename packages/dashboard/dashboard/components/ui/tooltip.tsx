@@ -2,7 +2,7 @@
 import { createContext, useContext, useRef, type ComponentProps, type RefObject } from 'react'
 import { Tooltip as TooltipPrimitive } from '@base-ui/react/tooltip'
 import { cn } from '../../lib/utils.js'
-import { POPUP_MOTION_CLASS, usePopupPlacement } from './popup-placement.js'
+import { POPUP_MOTION_CLASS, usePopupPosition } from './popup-placement.js'
 
 // A trimmed shadcn-style Tooltip on Base UI (already a dep across the ui/ kit — no Radix pulled
 // in). Per item:
@@ -10,9 +10,10 @@ import { POPUP_MOTION_CLASS, usePopupPlacement } from './popup-placement.js'
 const TooltipProvider = TooltipPrimitive.Provider
 
 /**
- * The box a row of items stands in, at its foot (the message box's last line): an item's tooltip
- * opens past the box's edge, under it or, with no room there, over it, its left edge on the item's.
- * Opened from the item itself it would lie over the text being typed, or the items beside it.
+ * The box a row of items belongs to (the message box, its row of controls under it): an item's tooltip
+ * opens past the box and the item both, under them or, with no room there, over them, its left edge on
+ * the item's. Opened from the item itself it would lie over the text being typed, or the items beside it;
+ * past the box alone, over the item, where it takes the pointer that would press it.
  */
 const PastBox = createContext<RefObject<HTMLElement | null> | null>(null)
 export const TooltipsPastBox = PastBox.Provider
@@ -20,11 +21,18 @@ export const TooltipsPastBox = PastBox.Provider
 /** Each tooltip's trigger, for its content to stand by. */
 const TriggerOf = createContext<RefObject<HTMLElement | null> | null>(null)
 
-function Tooltip(props: ComponentProps<typeof TooltipPrimitive.Root>) {
+/** A tooltip, which never opens over the menu or picker its trigger has open: that says more than it would. */
+function Tooltip({ onOpenChange, ...props }: ComponentProps<typeof TooltipPrimitive.Root>) {
   const trigger = useRef<HTMLElement | null>(null)
   return (
     <TriggerOf.Provider value={trigger}>
-      <TooltipPrimitive.Root {...props} />
+      <TooltipPrimitive.Root
+        {...props}
+        onOpenChange={(open, details) => {
+          if (open && trigger.current?.hasAttribute('data-popup-open')) return details.cancel()
+          onOpenChange?.(open, details)
+        }}
+      />
     </TriggerOf.Provider>
   )
 }
@@ -46,7 +54,7 @@ function TooltipTrigger(props: ComponentProps<typeof TooltipPrimitive.Trigger>) 
   )
 }
 
-/** Where a tooltip in a box's row stands: an anchor as wide as its item and as tall as the box. */
+/** Where a tooltip in a box's row stands: an anchor as wide as its item, from the top of the box or the item to the foot of either. */
 function pastBox(box: RefObject<HTMLElement | null>, trigger: RefObject<HTMLElement | null>) {
   return () => {
     const item = trigger.current
@@ -55,8 +63,9 @@ function pastBox(box: RefObject<HTMLElement | null>, trigger: RefObject<HTMLElem
       contextElement: item,
       getBoundingClientRect: () => {
         const edges = box.current!.getBoundingClientRect()
-        const { x, width } = item.getBoundingClientRect()
-        return DOMRect.fromRect({ x, width, y: edges.y, height: edges.height })
+        const { x, width, top, bottom } = item.getBoundingClientRect()
+        const y = Math.min(edges.top, top)
+        return DOMRect.fromRect({ x, width, y, height: Math.max(edges.bottom, bottom) - y })
       },
     }
   }
@@ -74,7 +83,7 @@ function TooltipContent({
   side?: ComponentProps<typeof TooltipPrimitive.Positioner>['side']
   align?: ComponentProps<typeof TooltipPrimitive.Positioner>['align']
 }) {
-  const positionMethod = usePopupPlacement()
+  const position = usePopupPosition()
   const box = useContext(PastBox)
   const trigger = useContext(TriggerOf)
   const placement = box && trigger ? { anchor: pastBox(box, trigger), side: 'bottom' as const, align: 'start' as const } : { ...(side ? { side } : {}), ...(align ? { align } : {}) }
@@ -86,7 +95,7 @@ function TooltipContent({
           positioner, was painted *behind* it: the preset hints in the launcher's menu rendered
           with the right words and were covered by the very menu that triggered them. */}
       <TooltipPrimitive.Positioner
-        positionMethod={positionMethod}
+        {...position}
         className="z-50"
         sideOffset={sideOffset}
         {...placement}

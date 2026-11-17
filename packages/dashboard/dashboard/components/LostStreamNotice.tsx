@@ -5,7 +5,7 @@ import { TriangleAlert } from 'lucide-react'
 // died" look identical.
 export function LostStreamNotice() {
   return (
-    <div role="status" className="mx-auto flex w-full max-w-3xl items-center gap-2 px-4 py-2 text-sm text-muted-foreground">
+    <div role="status" className="mx-auto flex w-full max-w-3xl items-center gap-2 px-4 py-2 md:px-8 text-sm text-muted-foreground">
       <TriangleAlert className="size-3.5 shrink-0 text-warning" aria-hidden />
       Live stream lost — reconnecting. The session keeps running; this view may be behind.
     </div>

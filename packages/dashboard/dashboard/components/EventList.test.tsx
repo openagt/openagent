@@ -65,7 +65,7 @@ describe('EventList conversation rows', () => {
     expect(boxes[1]!.textContent).toBe('second')
   })
 
-  test('a prompt is a grey box on the right, and neither it nor the reply wears a label', () => {
+  test('a prompt is a card on the right, and neither it nor the reply wears a label', () => {
     const events: OpenAgentEvent[] = [
       { kind: 'driver', event: { type: 'start', prompt: 'what is your name?' } },
       { kind: 'driver', event: { type: 'text', text: 'I am **Claude**.' } },
@@ -73,7 +73,7 @@ describe('EventList conversation rows', () => {
     render(<EventList events={events} stick={false} />)
     const box = screen.getByLabelText('Your message')
     expect(box.textContent).toBe('what is your name?')
-    expect(box.className).toContain('bg-muted')
+    expect(box.className).toContain('bg-card')
     expect(box.parentElement!.className).toContain('items-end')
     expect(box.closest('.font-sans')).toBeTruthy()
     expect(screen.queryByText('you')).toBeNull()
@@ -229,16 +229,16 @@ describe('EventList tool calls', () => {
 
   test('the line is known by its first call, so it stays the same row while calls are added', () => {
     const { rerender } = render(<EventList events={[prompt, call('Bash', 'ls')]} stick={false} />)
-    expect(ids()).toEqual(['0', '1'])
+    expect(ids()).toEqual(['turn:1', '1'])
     rerender(<EventList events={[prompt, call('Bash', 'ls'), thought('next'), call('Bash', 'pwd')]} stick={false} />)
-    expect(ids()).toEqual(['0', '1'])
+    expect(ids()).toEqual(['turn:1', '1'])
     expect(screen.getByRole('button', { name: 'Ran 2 commands' })).toBeTruthy()
   })
 
   test('a thought is no row: among calls it is inside their line, and with no call it shows nowhere', () => {
     render(<EventList events={[prompt, thought('plan it'), call('Bash', 'ls'), said('Done.'), thought('all good'), said('Bye.')]} stick={false} />)
     expect(screen.queryByText(/Thinking|Thought|plan it|all good/)).toBeNull()
-    expect(ids()).toEqual(['0', '1', '3', '5'])
+    expect(ids()).toEqual(['turn:1', '1', '3', '5'])
     // Nor inside: thinking is no step the agent took, and the panel is the steps. Settings turns it on.
     expect(screen.getByRole('button', { name: 'Ran ls' })).toBeTruthy()
     expect(screen.queryByText('plan it')).toBeNull()
@@ -275,7 +275,7 @@ describe('EventList tool calls', () => {
     const printed = (id: string, text: string): OpenAgentEvent => ({ kind: 'driver', event: { type: 'output', id, text } })
     // Two calls at once: their outputs come after both, the second one first, one after a message.
     render(<EventList events={[prompt, run('t1', 'ls'), run('t2', 'pwd'), printed('t2', '/repo'), said('Looking.'), printed('t1', 'a.ts'), printed('gone', 'lost')]} stick={false} />)
-    expect(ids()).toEqual(['0', '1', '4'])
+    expect(ids()).toEqual(['turn:1', '1', '4'])
     expect(screen.queryByText(/a\.ts|\/repo|lost/)).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Ran 2 commands' }))
     fireEvent.click(screen.getByRole('button', { name: 'Ran ls' }))
@@ -552,14 +552,14 @@ describe('EventList session line', () => {
 
   test('it sits right under the first prompt, and opens to what was set up', () => {
     render(<EventList events={[prompt, said, { ...prompt }]} setup={setup} stick={false} />)
-    expect(ids()).toEqual(['0', 'setup', '1', '2'])
+    expect(ids()).toEqual(['turn:1', 'setup', '1', 'turn:2'])
     fireEvent.click(screen.getByRole('button', { name: 'Initialized session' }))
     expect(screen.getByText('agent-1')).toBeTruthy()
   })
 
   test('under a prompt with nothing after it yet, and above everything in a log with no prompt', () => {
     const { rerender } = render(<EventList events={[prompt]} setup={setup} stick={false} />)
-    expect(ids()).toEqual(['0', 'setup'])
+    expect(ids()).toEqual(['turn:1', 'setup'])
     rerender(<EventList events={[said]} setup={setup} stick={false} />)
     expect(ids()).toEqual(['setup', '0'])
   })
@@ -585,7 +585,7 @@ describe('EventList session line', () => {
 
   test('the agent\'s first row came before its card was read: the line is there with that row, not after it', () => {
     render(<EventList events={[prompt, said]} setup={{}} working stick={false} />)
-    expect(ids()).toEqual(['0', 'setup', '1'])
+    expect(ids()).toEqual(['turn:1', 'setup', '1'])
     expect(screen.getByText('Initialized session')).toBeTruthy()
   })
 
@@ -938,7 +938,8 @@ describe('EventList subagent rows', () => {
     expect(screen.getByText(/Validate the form/)).toBeTruthy()
     expect(screen.getByText('claude-sonnet-5-5')).toBeTruthy()
     // Its last step whole on a hover; a run of its own has a branch, and says nothing of it here.
-    expect(screen.getByText('Edit · 3 calls').getAttribute('title')).toBe('Edit login.ts')
+    const doing = screen.getByText('3 calls').closest('[title]')!
+    expect([doing.textContent, doing.getAttribute('title')]).toEqual(['Edit·3 calls', 'Edit login.ts'])
     expect(screen.queryByText('no branch')).toBeNull()
     expect(screen.queryByText(/You are a subagent/)).toBeNull()
     // Between the command that started it and what the agent said next.
@@ -975,7 +976,7 @@ describe('EventList subagent rows', () => {
     const third = sub({ id: '2026-10-01T10-03-00-000Z', startedAt: '2026-10-01T10:03:00.000Z', status: 'done', endedAt: '2026-10-01T10:04:00.000Z', intent: 'Fix the typo' })
     const { container } = render(<EventList events={later} subagents={[first, second, afterWords, third]} stick={false} />)
     fireEvent.click(screen.getByRole('button', { name: 'Ran 2 agents' }))
-    expect(screen.getByText('50s · $0.25')).toBeTruthy()
+    expect(screen.getByText('$0.25').parentElement!.textContent).toBe('50s·$0.25')
     const text = container.textContent ?? ''
     // Both where the first was started, ahead of what the agent said after them.
     expect(text.indexOf('Ran 2 agents')).toBeLessThan(text.indexOf('Validate the form'))
@@ -1007,7 +1008,7 @@ describe('EventList subagent rows', () => {
     const { container } = render(<EventList events={agentCall} working onOpenSubagent={key => opened.push(key)} stick={false} />)
     expect(screen.getByText('Map the pages')).toBeTruthy()
     expect(screen.getByText('claude-haiku-5-5')).toBeTruthy()
-    expect(screen.getByText('Read · 1 call')).toBeTruthy()
+    expect(screen.getByText('1 call').parentElement!.textContent).toBe('Read·1 call')
     // Nothing of the subagent's in the run's own rows: not the call, not its steps, not its words.
     const text = container.textContent ?? ''
     expect(text).not.toMatch(/server\.ts|Agent/)
@@ -1179,6 +1180,16 @@ describe('EventList hides the block a question is written in', () => {
     expect(screen.getByText(/"title"/)).toBeTruthy()
   })
 
+  test('a pick made on the question as it is written stays once the run says it, under an id of its own', () => {
+    const two = '```await-choices\n{ "title": "Which color?", "options": [{ "label": "Red" }, { "label": "Blue" }] }\n```'
+    const asking = reply(`Pick one.\n\n${two}`)
+    const { rerender } = render(<EventList events={[prompt, asking]} projectId="p1" agentId="r1" stick={false} />)
+    fireEvent.click(screen.getByRole('radio', { name: 'Blue' }))
+    const said = { kind: 'choice', id: '2026-11-15T10:00:00.000Z', at: '2026-11-15T10:00:00.000Z', title: 'Which color?', options: [{ id: 'opt:0', label: 'Red' }, { id: 'opt:1', label: 'Blue' }] } as OpenAgentEvent
+    rerender(<EventList events={[prompt, asking, said]} projectId="p1" agentId="r1" stick={false} />)
+    expect(screen.getByRole('radio', { name: 'Blue' }).getAttribute('aria-checked')).toBe('true')
+  })
+
   test('a last message that is a question is one the moment it is written, before the run says it', () => {
     const asking = reply(`Pick one.\n\n${block}`)
     const early = withEarlyQuestion([prompt, asking])
@@ -1239,10 +1250,10 @@ describe('EventList scroll anchor', () => {
     const events = [prompt('first'), reply('one'), { kind: 'end', ok: true } as OpenAgentEvent]
     const { container, rerender } = render(<EventList events={events} stick={false} />)
     const ids = () => [...container.querySelectorAll('[data-message-id]')].map(el => el.getAttribute('data-message-id'))
-    expect(ids()).toEqual(['0', '1'])
+    expect(ids()).toEqual(['turn:1', '1'])
     // The run goes on: the new rows are known by their own place in the log, past the end's.
     rerender(<EventList events={[...events, prompt('second'), reply('two')]} stick={false} />)
-    expect(ids()).toEqual(['0', '1', '3', '4'])
+    expect(ids()).toEqual(['turn:1', '1', 'turn:2', '4'])
   })
 
   test('the live line keeps its place when it has nothing to say: nothing under it moves when the turn ends', () => {
@@ -1279,7 +1290,7 @@ describe('EventList queued messages and the wait for subagents', () => {
     const onSendNow = vi.fn()
     const onEdit = vi.fn()
     render(<EventList events={[prompt, said]} working queued={[{ id: 'm1', text: 'and then this', later: false, onSendNow, onEdit }]} stick={false} />)
-    expect(ids()).toEqual(['0', '1', 'queued-m1'])
+    expect(ids()).toEqual(['turn:1', '1', 'queued-m1'])
     const box = screen.getByLabelText('Your message, waiting')
     expect(box.textContent).toBe('and then this')
     fireEvent.click(screen.getByRole('button', { name: 'Send now' }))
@@ -1335,7 +1346,7 @@ describe('EventList queued messages and the wait for subagents', () => {
 
   test('an agent that ended its turn while subagents work says how many it waits for, as the moving last line', () => {
     const { rerender } = render(<EventList events={[prompt, said]} waitingOn={2} stick={false} />)
-    expect(ids()).toEqual(['0', '1', 'waiting-on'])
+    expect(ids()).toEqual(['turn:1', '1', 'waiting-on'])
     expect(screen.getByRole('status').textContent).toBe('Waiting for 2 subagents')
     rerender(<EventList events={[prompt, said]} waitingOn={1} stick={false} />)
     expect(screen.getByRole('status').textContent).toBe('Waiting for 1 subagent')
@@ -1365,7 +1376,7 @@ describe('EventList changed files', () => {
     const events = [prompt('go'), ...edit('c1', `${WS}/A.md`, 2, 1), { ...said }, prompt('more'), ...edit('c2', `${WS}/src/b.ts`, 5, 0), { ...said }]
     render(<EventList events={events} setup={{ workspace: WS }} stick={false} />)
     // The first turn's work opens with the session's set-up: no row of its own.
-    expect(ids()).toEqual(['0', '1', '3', 'changes-4', '4', '5', '7', 'changes-last'])
+    expect(ids()).toEqual(['turn:1', '1', '3', 'changes-turn:2', 'turn:2', '5', '7', 'changes-last'])
     expect(rows()).toEqual(['A.md+2 −1', 'b.ts+5 −0'])
   })
 
@@ -1374,7 +1385,7 @@ describe('EventList changed files', () => {
     const events = [prompt('go'), ...edit('c1', `${WS}/A.md`, 2, 1), { ...said, at }, prompt('more'), ...edit('c2', `${WS}/b.ts`, 5, 0), { ...said, at }]
     render(<EventList events={events} setup={{ workspace: WS }} stick={false} />)
     const rowOf = (id: string) => document.querySelector(`[data-message-id="${id}"]`) as HTMLElement
-    for (const id of ['changes-4', 'changes-last']) {
+    for (const id of ['changes-turn:2', 'changes-last']) {
       expect(within(rowOf(id)).getByRole('button', { name: 'Copy this message' })).toBeTruthy()
       expect(rowOf(id).querySelector('time')?.getAttribute('datetime')).toBe(at)
     }
@@ -1392,13 +1403,13 @@ describe('EventList changed files', () => {
   test('a message just sent leaves the ended turn\'s files where they were, above it: they do not go and come back', () => {
     const events = [prompt('go'), ...edit('c1', `${WS}/A.md`, 2, 1), said]
     const { rerender } = render(<EventList events={events} stick={false} />)
-    expect(ids()).toEqual(['0', '1', '3', 'changes-last'])
+    expect(ids()).toEqual(['turn:1', '1', '3', 'changes-last'])
     rerender(<EventList events={events} sending="and more" working stick={false} />)
-    expect(ids()).toEqual(['0', '1', '3', 'changes-last', 'sending'])
+    expect(ids()).toEqual(['turn:1', '1', '3', 'changes-last', 'turn:2'])
     expect(rows()).toEqual(['A.md+2 −1'])
     // Its own prompt line arrives: the same rows, above it.
     rerender(<EventList events={[...events, prompt('and more')]} working stick={false} />)
-    expect(ids()).toEqual(['0', '1', '3', 'changes-4', '4'])
+    expect(ids()).toEqual(['turn:1', '1', '3', 'changes-turn:2', 'turn:2'])
     expect(rows()).toEqual(['A.md+2 −1'])
   })
 

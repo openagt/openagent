@@ -3,25 +3,28 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { flushSync } from 'react-dom'
 import { SlidersHorizontal } from 'lucide-react'
 import { Quota } from './Quota.js'
-import { Section } from './ui/section.js'
 import { SentenceShape, Slot } from './ui/slot.js'
 import { PartDescription } from './PartDescription.js'
 import { Button } from './ui/button.js'
-import { HumanQueueList } from './HumanQueueList.js'
+import { HumanQueueList, holdsBack } from './HumanQueueList.js'
+import { PanelGroup } from './ui/panel.js'
 import { updatePreferences, usePreferences, usePreferencesLoaded } from '../lib/preferences.js'
 import { OnboardingChecklist } from './OnboardingChecklist.js'
 import { AgentUpdates } from './AgentUpdates.js'
 import { Agents } from './Agents.js'
+import { useRunsDoing } from '../lib/use-doing.js'
 import { useModuleCards, type OverviewCard } from './ModuleCards.js'
 import { SkillsCard } from './SkillsCard.js'
 import { CardGrid, EditOverview, TakeOffMark, UNDER, UnderCards, type Under } from './CustomizeOverview.js'
 import { ALL_PROJECTS, arrangeCards } from '../../src/client.js'
 import type { ProjectSummary } from '../../src/index.js'
 import type { ReadState } from '../lib/use-async.js'
+import type { ListedPage } from '../lib/use-modules.js'
 import { Page } from './Page.js'
 import { overlayOpen, pressed } from '../lib/shortcut.js'
 import { LinePart, NEEDS_YOU_ID, WORKING_ID, counted, scrollToPart } from './LinePart.js'
 import { YourAgentsPart } from './YourAgentsPart.js'
+import { useIsMobile } from '../lib/use-mobile.js'
 
 /**
  * The place in the line under the title that the Overview leaves for the packages' parts: its own
@@ -55,6 +58,7 @@ export function DashboardPage({
   projects,
   scope,
   onProjectAdded,
+  listedPages,
 }: {
   onSelectProject: (id: string) => void
   /** The address `onSelectProject` goes to: a link's `href`. */
@@ -75,15 +79,22 @@ export function DashboardPage({
   scope: string | null
   /** A project was added from the first steps: the app reads its projects again. */
   onProjectAdded: () => void
+  /** The modules' pages as the sidebar lists them, null where none is known yet: which projects have the Queue and the Tickets, before the packages' code is in. */
+  listedPages: readonly ListedPage[] | null
 }) {
   // Its ✕ hides it (#958), and a switch in Settings › Appearance shows it again.
   const onboardingDismissed = usePreferences().onboardingDismissed ?? false
   const namesRuns = usePreferences().nameRuns !== false
   const working = active.active.filter(agent => scope === null || agent.projectId === scope)
+  const doing = useRunsDoing(working)
   const shownProjects = scope === null ? projects : projects.filter(project => project.id === scope)
   // Every card the Overview can show here, each with the widths it stands at; the person's layout
   // for this page (the picked project's, else all projects') orders them, sizes them, and hides some.
   const { cards: moduleCards, line: moduleLine, loaded: modulesLoaded } = useModuleCards(shownProjects)
+  const queueComing = !modulesLoaded && moduleLine.length === 0 && listedPages?.some(page => page.segment === 'queue' && shownProjects.some(project => page.projects.includes(project.id))) === true
+  // Until the pages are known (a browser's first visit) nor any package's part is in, whether the queue's part comes is
+  // not known: the parts after its place wait, so a part coming in before them pushes nothing.
+  const placeKnown = modulesLoaded || moduleLine.length > 0 || listedPages !== null
   // What the number counts, kind by kind: "1 question, 1 to publish".
   const waiting = KINDS.map(kind => ({ kind, count: interventions.filter(item => item.kind === kind.value).length })).filter(({ count }) => count > 0)
   // How things stand, in one line under the title, each part a link to where it is: what needs the
@@ -95,6 +106,7 @@ export function DashboardPage({
       node: (
         <LinePart
           reading={interventionsState === 'unknown'}
+          shape="2 need you"
           note={waiting.length === 0 ? 'Nothing waits on you' : waiting.map(({ kind, count }) => kind.counted(count)).join(', ')}
           onClick={() => scrollToPart(NEEDS_YOU_ID)}
         >
@@ -106,16 +118,17 @@ export function DashboardPage({
       id: 'working-now',
       order: 2,
       node: (
-        <LinePart reading={active.state === 'unknown'} live={working.length > 0} note={counted(working.length, 'agent at work', 'agents at work', 'No agent is at work')} {...(working.length > 0 ? { onClick: () => scrollToPart(WORKING_ID) } : {})}>
+        <LinePart reading={active.state === 'unknown'} shape="1 working" live={working.length > 0} note={counted(working.length, 'agent at work', 'agents at work', 'No agent is at work')} {...(working.length > 0 ? { onClick: () => scrollToPart(WORKING_ID) } : {})}>
           {working.length === 0 ? 'no agent working' : `${working.length} working`}
         </LinePart>
       ),
     },
-    // Until the packages' code is in, one part waits in their place: a part that came after the line
-    // was drawn would lengthen it, and on a phone push the Customize press and the page under it.
-    ...(modulesLoaded || moduleLine.length > 0 ? moduleLine : [{ id: 'packages', order: PACKAGES_PLACE, node: <LinePart reading>{null}</LinePart> }]),
+    // Until the packages' code is in, the queue's part waits in its place, as wide as it, where the sidebar's pages say a
+    // shown project has the Queue: a part that came after the line was drawn would lengthen it (on a phone pushing the
+    // Customize press and the page under it), and a place no part takes would shorten it.
+    ...(queueComing ? [{ id: 'packages', order: PACKAGES_PLACE, node: <LinePart reading shape="4 queued">{null}</LinePart> }] : moduleLine),
     // The person's agents (Rom's design: an agent is a name, skills and accounts): how many, by name, a press from their page.
-    { id: 'your-agents', order: 4, node: <YourAgentsPart /> },
+    ...(placeKnown ? [{ id: 'your-agents', order: 4, node: <YourAgentsPart /> }] : []),
   ].sort((one, other) => one.order - other.order)
   const cards: OverviewCard[] = [
     {
@@ -123,7 +136,7 @@ export function DashboardPage({
       stale: interventionsState === 'kept',
       label: 'Human Queue',
       order: 5,
-      width: '1',
+      width: '2/3',
       minWidth: '1/2',
       node: (
         <div id={NEEDS_YOU_ID} className="flex scroll-mt-6 flex-col *:flex-1">
@@ -131,24 +144,27 @@ export function DashboardPage({
         </div>
       ),
     },
-    // Usage (#1139): the one figure that governs everything the agent may do next.
-    { id: 'usage', label: 'Usage', order: 6, width: '1', minWidth: '1/2', node: <Quota projects={projects} /> },
+    // Under what needs the person, a column two thirds wide down the page's left and one a third wide
+    // beside it, the packages' cards taking their turns in both: each third comes after the card it
+    // stands beside (the hot tickets beside what is at work, the account's usage, the one figure that
+    // governs everything the agent may do next (#1139), beside the queue), so the first steps under
+    // what needs the person never move the thirds to the left.
     {
       id: 'working',
       stale: active.state === 'kept',
-      label: 'Agents at work',
-      order: 7,
-      width: '1/2',
-      minWidth: '1/3',
+      label: 'At work',
+      order: 6,
+      width: '2/3',
+      minWidth: '1/2',
       node: (
         <div id={WORKING_ID} className="flex scroll-mt-6 flex-col *:flex-1">
-          <Agents working={working} state={active.state} namesRuns={namesRuns} onSelectAgent={onSelectAgent} />
+          <Agents working={working} state={active.state} namesRuns={namesRuns} doing={doing} projectsNamed={scope === null} onSelectAgent={onSelectAgent} />
         </div>
       ),
     },
-    // How each project's skills stand: a newer version to take, skills not yet where agents start from. A half beside
-    // the agents at work, so the two split on the halves' line: a half beside a third splits on no line of the rows below.
-    { id: 'skills', label: 'Skills', order: 8, width: '1/2', minWidth: '1/4', node: <SkillsCard projects={shownProjects} onSelectProject={onSelectProject} projectHref={projectHref} /> },
+    { id: 'usage', label: 'Usage', order: 9, width: '1/3', minWidth: '1/3', node: <Quota projects={projects} /> },
+    // How each project's skills stand: a newer version to take, skills not yet where agents start from.
+    { id: 'skills', label: 'Skills', order: 41, width: '1/3', minWidth: '1/4', node: <SkillsCard projects={shownProjects} onSelectProject={onSelectProject} projectHref={projectHref} /> },
     // The cards the installed packages declare (#1818): a package's own summary of its data, only
     // when one of the projects shown (every registered one, or the picked one alone) has the package.
     ...moduleCards,
@@ -181,6 +197,8 @@ export function DashboardPage({
   }, [editing])
   const scopeName = scope === null ? undefined : projects.find(project => project.id === scope)?.name
   const own = layouts?.[layoutKey] !== undefined
+  const resetWords = layoutKey === ALL_PROJECTS ? 'Reset to the default layout' : 'Use the all-projects layout'
+  const phone = useIsMobile()
   const reset = (): void => {
     const { [layoutKey]: _dropped, ...rest } = layouts ?? {}
     updatePreferences({ overviewLayouts: rest })
@@ -193,7 +211,7 @@ export function DashboardPage({
     card: 'human-queue',
     node: (
       <>
-        {!onboardingDismissed && <OnboardingChecklist projects={projects} onAgentStarted={onAgentStarted} onSelectProject={onSelectProject} onProjectAdded={onProjectAdded} onRead={firstStepsHaveRead} />}
+        {!onboardingDismissed && <OnboardingChecklist projects={projects} onAgentStarted={onAgentStarted} onSelectProject={onSelectProject} onProjectAdded={onProjectAdded} onRead={firstStepsHaveRead} listedPages={listedPages} />}
         <AgentUpdates />
       </>
     ),
@@ -222,9 +240,9 @@ export function DashboardPage({
       actions={
         editing ? (
           <>
-            {own && (
+            {own && !phone && (
               <Button variant="ghost" onClick={reset}>
-                {layoutKey === ALL_PROJECTS ? 'Reset to the default layout' : 'Use the all-projects layout'}
+                {resetWords}
               </Button>
             )}
             {/* Focused as it takes Customize's place, which the press took away from the keyboard. */}
@@ -233,14 +251,15 @@ export function DashboardPage({
             </Button>
           </>
         ) : (
-          <Button ref={customize} variant="ghost" className="gap-1.5 text-muted-foreground" onClick={() => setEditing(true)}>
-            <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden />
-            Customize
+          // Pulled out by its own padding, so its words (on a phone its mark alone, the line beside it keeping the width) end on the cards' edge.
+          <Button ref={customize} variant="ghost" className="-mr-3 gap-1.5 text-muted-foreground max-md:size-10 max-md:px-0" onClick={() => setEditing(true)}>
+            <SlidersHorizontal className="h-3.5 w-3.5 max-md:size-4" aria-hidden />
+            <span className="max-md:sr-only">Customize</span>
           </Button>
         )
       }
     >
-      {/* Arranging keeps the parts in their order: the first steps and the updates stay, each part gains the sentence that says what it is, and what arranging adds comes after the parts. */}
+      {/* Arranging keeps the parts in their order and where they stand: the first steps and the updates stay, and what arranging adds comes after the parts. */}
       <div className="space-y-10">
         {!layoutRead ? null : editing ? (
           <EditOverview
@@ -254,6 +273,16 @@ export function DashboardPage({
                 {scopeName !== undefined ? 'Each project keeps its own; a project you never arranged uses the all-projects one.' : 'A project you never arranged on its own uses it too.'} Drag a card by its handle, pick its width, or take it off with <TakeOffMark />. On a phone every card is full width.
               </>
             }
+            // On a phone the head has room for Done alone beside the line under the title: the reset stands here, under the tray's words.
+            {...(own && phone
+              ? {
+                  reset: (
+                    <Button variant="secondary" className="h-11" onClick={reset}>
+                      {resetWords}
+                    </Button>
+                  ),
+                }
+              : {})}
           />
         ) : arranged.some(({ hidden }) => !hidden) ? (
           // On a first visit the parts come in from the top: none is drawn under the Human Queue or the first steps until they have answered, as either grows from its waiting room by more than a line.
@@ -274,11 +303,13 @@ export function DashboardPage({
   )
 }
 
-// The Human Queue (#632/#1139): the cross-project things only a person can clear. Four kinds: open
-// PRs to review (proposals and finished work both surface as PRs) — merge to confirm, close to
-// reject — which open the session that made them, or the PR itself when no run here did; runs
-// paused mid-flight on a question (#636), which jump into that project's live view to answer; and
-// work a finished session left uncommitted or unpushed. #627 notifications fire off the same set.
+// What needs the person (#632/#1139), the Human Queue: the cross-project things only a person can
+// clear. Four kinds: open PRs to review (proposals and finished work both surface as PRs) — merge to
+// confirm, close to reject — which open the session that made them, or the PR itself when no run here
+// did; runs paused mid-flight on a question (#636), which jump into that project's live view to
+// answer; and work a finished session left uncommitted or unpushed. #627 notifications fire off the
+// same set. One list, newest first as the queue gives them: a row says what is needed first in its
+// line, so the kinds need no heading of their own.
 function HumanQueue({
   items,
   state,
@@ -286,41 +317,25 @@ function HumanQueue({
   onSelectAgent,
 }: {
   items: Intervention[]
-  /** What is known of the items: until they are read, by this visit or an earlier one, the card says it is loading, not that nothing waits. */
+  /** What is known of the items: until they are read, by this visit or an earlier one, the part waits in a sentence's room, not saying that nothing waits. */
   state: ReadState
   onSelectProject: (id: string) => void
   onSelectAgent: (projectId: string, agentId: string) => void
 }) {
-  const groups = KINDS.map(kind => ({ ...kind, items: items.filter(item => item.kind === kind.value) })).filter(group => group.items.length > 0)
   return (
-    <Section title="Human Queue" count={items.length > 0 ? items.length : undefined}>
+    <PanelGroup bare title={<span className="text-warning">Human Queue</span>} count={holdsBack(items) ? items.length : undefined}>
       <PartDescription>Agents awaiting your approval, review, or input</PartDescription>
       <Slot of={{ state, value: items }} shape={<SentenceShape />}>
-        {() => items.length === 0 ? (
-          <p className="text-sm text-muted-foreground">AI doesn&apos;t need you.</p>
-        ) : (
-          // One group per kind, under a quiet heading with how many: a few questions are not lost
-          // among many checkouts left to commit. Each group shows its first rows and offers the rest.
-          // Pulled out by the rows' own inset, so their text starts where the heading does.
-          <div className="space-y-3">
-            {groups.map(group => (
-              <Section key={group.value} title={group.label} count={group.items.length}>
-                <div className="-mx-3">
-                  <HumanQueueList grouped items={group.items} onOpenAgent={onSelectAgent} onOpenProject={onSelectProject} />
-                </div>
-              </Section>
-            ))}
-          </div>
-        )}
+        {() => <HumanQueueList items={items} onOpenAgent={onSelectAgent} onOpenProject={onSelectProject} empty="AI doesn't need you." />}
       </Slot>
-    </Section>
+    </PanelGroup>
   )
 }
 
-/** The kinds the card groups its rows by, in the order of how much they hold a run up: a question stops one. */
-const KINDS: { value: Intervention['kind']; label: string; counted: (count: number) => string }[] = [
-  { value: 'awaiting', label: 'Questions', counted: count => (count === 1 ? '1 question' : `${count} questions`) },
-  { value: 'pr', label: 'Pull requests', counted: count => (count === 1 ? '1 pull request' : `${count} pull requests`) },
-  { value: 'unpushed', label: 'To publish', counted: count => `${count} to publish` },
-  { value: 'uncommitted', label: 'To commit', counted: count => `${count} to commit` },
+/** The kinds of what needs the person, in the order of how much they hold a run up (a question stops one), as the line under the title counts them. */
+const KINDS: { value: Intervention['kind']; counted: (count: number) => string }[] = [
+  { value: 'awaiting', counted: count => (count === 1 ? '1 question' : `${count} questions`) },
+  { value: 'pr', counted: count => (count === 1 ? '1 pull request' : `${count} pull requests`) },
+  { value: 'unpushed', counted: count => `${count} to publish` },
+  { value: 'uncommitted', counted: count => `${count} to commit` },
 ]

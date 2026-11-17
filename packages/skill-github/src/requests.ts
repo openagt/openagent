@@ -21,6 +21,8 @@ export interface Request {
   mergedAt?: string
   /** The commit a merged request landed as on the base branch. */
   mergeCommit?: string
+  /** GitHub will merge it by itself once its checks pass: auto-merge is on for it. */
+  armed?: true
 }
 
 export interface RequestsQuery {
@@ -35,7 +37,7 @@ export interface RequestsQuery {
 /** The most requests one read answers. */
 export const REQUESTS_LIMIT = 50
 
-const FIELDS = 'number,url,state,title,isDraft,headRefName,headRefOid,createdAt,mergedAt,mergeCommit'
+const FIELDS = 'number,url,state,title,isDraft,headRefName,headRefOid,createdAt,mergedAt,mergeCommit,autoMergeRequest'
 
 /** The gh command line for a query: what the test checks, and what runs. */
 export function requestsArgs(query: RequestsQuery): string[] {
@@ -53,6 +55,7 @@ interface GhRequest {
   createdAt?: unknown
   mergedAt?: unknown
   mergeCommit?: { oid?: unknown } | null
+  autoMergeRequest?: unknown
 }
 
 /** gh's OPEN / MERGED / CLOSED, lowercased; anything else reads as closed. */
@@ -77,6 +80,7 @@ export function parseRequests(output: unknown): Request[] {
       createdAt: typeof row.createdAt === 'string' ? row.createdAt : '',
       ...(typeof row.mergedAt === 'string' && row.mergedAt ? { mergedAt: row.mergedAt } : {}),
       ...(typeof row.mergeCommit?.oid === 'string' && row.mergeCommit.oid ? { mergeCommit: row.mergeCommit.oid } : {}),
+      ...(row.autoMergeRequest && typeof row.autoMergeRequest === 'object' ? { armed: true as const } : {}),
     })
   }
   return requests

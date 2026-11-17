@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { Intervention } from '../../src/index.js'
-import { HumanQueueList, needsWord } from './HumanQueueList.js'
+import { HumanQueueList, holdsBack, needsWord } from './HumanQueueList.js'
 
 afterEach(cleanup)
 
@@ -33,13 +33,22 @@ describe('the Human Queue\'s rows', () => {
     expect(screen.getAllByRole('listitem').map(row => row.querySelector('[aria-hidden]')!.textContent)).toEqual(['Needs answer', 'Needs commit', 'Needs PR', 'Needs push', 'Needs merge'])
   })
 
-  test('a row ends with how long ago, on the right edge: no arrow, its fill, cursor and focus say it opens', () => {
+  test('a row is one line that ends with how long ago, on the right edge: no press and no arrow, its fill, cursor and focus say it opens', () => {
     const since = new Date(Date.now() - 2 * 86_400_000).toISOString()
     render(<HumanQueueList items={[item({ kind: 'awaiting', title: 'Asks', question: 'q?', agentId: 'r1', awaitId: 'q', createdAt: since })]} onOpenAgent={() => {}} />)
     const row = screen.getByRole('listitem')
     expect(row.textContent).toBe('Needs answerNeeds answer: Asksq?2d ago')
     expect(row.querySelector('.lucide-arrow-right')).toBeNull()
-    expect(row.querySelector('.lucide-circle-help')).toBeTruthy()
+    expect(screen.queryByRole('button')).toBeNull()
+    // No rule between rows and no panel around them.
+    expect(row.closest('ul')!.parentElement!.className).not.toMatch(/border|rounded-lg|bg-card/)
+  })
+
+  test('nothing waits: nothing, unless the place says so in a sentence', () => {
+    const { container, rerender } = render(<HumanQueueList items={[]} onOpenAgent={() => {}} />)
+    expect(container.innerHTML).toBe('')
+    rerender(<HumanQueueList items={[]} onOpenAgent={() => {}} empty="Nothing waits." />)
+    expect(container.textContent).toBe('Nothing waits.')
   })
 
   test('the project is named only when the rows are of several projects', () => {
@@ -59,10 +68,10 @@ describe('the Human Queue\'s rows', () => {
     )
     const rows = screen.getAllByRole('listitem').map(row => row.textContent)
     expect(rows).toEqual(['Needs answerNeeds answer: Asks thereq?', 'Needs commitNeeds commit: Left here'])
+    expect(screen.getByRole('img', { name: 'Runs on Suleimans-MacBook-Pro' })).toBeTruthy()
     // The icon of the computer's kind, as the list of runs marks a run there, named to a screen reader.
     const [there, here] = screen.getAllByRole('listitem')
     expect(there!.querySelector('.lucide-laptop')).toBeTruthy()
-    expect(screen.getByRole('img', { name: 'Runs on Suleimans-MacBook-Pro' })).toBeTruthy()
     expect(here!.querySelector('.lucide-laptop')).toBeNull()
   })
 
@@ -74,6 +83,8 @@ describe('the Human Queue\'s rows', () => {
   test('the first five show, and a line offers the rest, and then fewer again', () => {
     const items = Array.from({ length: 8 }, (_, i) => item({ kind: 'uncommitted', title: `run ${i}`, agentId: `r${i}` }))
     render(<HumanQueueList items={items} onOpenAgent={() => {}} />)
+    expect(holdsBack(items)).toBe(true)
+    // Five rows, and the line under them offers the rest.
     expect(screen.getAllByRole('listitem')).toHaveLength(5)
     fireEvent.click(screen.getByRole('button', { name: 'Show 3 more' }))
     expect(screen.getAllByRole('listitem')).toHaveLength(8)
@@ -84,6 +95,7 @@ describe('the Human Queue\'s rows', () => {
   test('six: the sixth shows too, since a line offering one more is as tall as the row it hides', () => {
     const items = Array.from({ length: 6 }, (_, i) => item({ kind: 'uncommitted', title: `run ${i}`, agentId: `r${i}` }))
     render(<HumanQueueList items={items} onOpenAgent={() => {}} />)
+    expect(holdsBack(items)).toBe(false)
     expect(screen.getAllByRole('listitem')).toHaveLength(6)
     expect(screen.queryByRole('button', { name: /more|fewer/ })).toBeNull()
   })

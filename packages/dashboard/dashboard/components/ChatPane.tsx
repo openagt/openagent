@@ -1,5 +1,5 @@
-import { useLayoutEffect, useRef, type ReactNode } from 'react'
-import { ComposerShape } from './Composer.js'
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { BoxNotes, ComposerShape } from './Composer.js'
 import { TopBar } from './Panes.js'
 
 // An agent's page, laid out as Claude Code on the web lays out a session: the chat fills the
@@ -30,6 +30,7 @@ export function ChatPane({ top, bottom, children }: { top: ReactNode; bottom: Re
   const topBar = useRef<HTMLDivElement>(null)
   const bottomBar = useRef<HTMLDivElement>(null)
   const probe = useRef<HTMLDivElement>(null)
+  const [notes, setNotes] = useState<HTMLDivElement | null>(null)
   useLayoutEffect(() => {
     const touch = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches
     const read = () => {
@@ -64,13 +65,18 @@ export function ChatPane({ top, bottom, children }: { top: ReactNode; bottom: Re
         {children}
         {/* On a window too short for a tall question, the bar scrolls inside itself. */}
         <div ref={bottomBar} data-testid="chat-bottom" className="absolute right-(--chat-edge) bottom-0 left-0 z-10 max-h-full overflow-y-auto bg-background pl-[calc(var(--chat-edge)_-_var(--chat-scroll-bar))] pointer-coarse:right-(--chat-scroll-bar) pointer-coarse:pl-0">
-          {bottom}
+          <BoxNotes.Provider value={notes}>{bottom}</BoxNotes.Provider>
         </div>
         {/* A short fade over the message box, so a row passing out of view is not cut by a straight
             line; none under the top bar, whose line parts the two. It stops short of the scroll bar, and
             of a strip as wide as one where the scroll bar lies over the content and takes no room (a
             Mac's): there the bar would show up faded at its end. */}
         <div className="pointer-events-none absolute right-(--chat-edge) bottom-(--chat-bar) left-0 z-10 h-4 bg-gradient-to-t from-background to-transparent" aria-hidden />
+        {/* The box's notes, over the chat right above the bar and on the box's edges: the bar scrolls
+            inside itself, which would cut them, and in it they would push the chat's end up. */}
+        <div className="pointer-events-none absolute right-(--chat-edge) bottom-(--chat-bar) left-0 z-10 pl-[calc(var(--chat-edge)_-_var(--chat-scroll-bar))] pointer-coarse:right-(--chat-scroll-bar) pointer-coarse:pl-0">
+          <div ref={setNotes} data-testid="box-notes" className="pointer-events-auto mx-auto w-full max-w-3xl px-4" />
+        </div>
       </div>
     </div>
   )

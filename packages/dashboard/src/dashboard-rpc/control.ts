@@ -46,20 +46,25 @@ function agentLockKey(cwd: string, agentId: string): string {
  * this machine's and alive. The run's tool asks its agent to end the turn where it is, as Esc does
  * in Claude Code; a message continues it. The card is the file the dashboard shows the run from, and its pid is
  * whoever runs the agent; OpenAgent names no tool. A run still starting is stopped once its card
- * names its pid. Nothing else: a run without a live pid here has nothing to stop.
+ * names its pid. Nothing else: a run without a live pid here has nothing to stop, and is answered why.
  */
-export async function sendStop(projectId: string, agentId?: string): Promise<void> {
-  return relayOr(agentId, 'sendStop', [projectId, agentId], async () => {
+export async function sendStop(projectId: string, agentId?: string): Promise<SteerResult> {
+  return relayOr(agentId, 'sendStop', [projectId, agentId], async (): Promise<SteerResult> => {
     const cwd = await resolveProjectPath(projectId)
-    if (!cwd || !agentId) return
+    if (!cwd || !agentId) return { ok: false, error: 'unknown session' }
     const meta = await cardOnceUp(cwd, agentId)
-    if (!meta || meta.status !== 'running' || meta.pid === undefined || meta.host !== hostname() || !isPidAlive(meta.pid)) return
+    if (!meta || (meta.status === 'running' && meta.pid === undefined)) return { ok: false, error: 'It has not started yet.' }
+    if (meta.status !== 'running') return { ok: false, error: 'It had already ended.' }
+    if (meta.host !== hostname()) return { ok: false, error: `This run is on ${meta.host ?? 'another computer'}.` }
+    if (meta.pid === undefined || !isPidAlive(meta.pid)) return { ok: false, error: 'Its process had already ended.' }
     try {
       process.kill(meta.pid, 'SIGINT')
     } catch {
       // Gone between the probe and the signal.
+      return { ok: false, error: 'Its process had already ended.' }
     }
-  }, undefined)
+    return { ok: true }
+  }, { ok: false, error: 'could not reach the machine' })
 }
 
 /**
@@ -88,24 +93,42 @@ async function startedElsewhere(cwd: string, agentId: string): Promise<SteerResu
   return host !== undefined && host !== hostname() ? { ok: false, error: `This run is on ${host}. Continue it there.` } : undefined
 }
 
+/** The answer each question still open was given, by the run's lock key and the question's id. */
+const answersGiven = new Map<string, Map<string, string>>()
+
 /**
  * Answer the question a run stopped on (#304, #1774). `pick` is one option id, or the chosen
  * subset of a multi-select; the answer handed to the run is the chosen labels, read off the
  * question as the run's own diary holds it, so only what the agent offered can be answered.
+ * Answered once, a question takes no second answer, from any tab or device, until the run goes on
+ * from it: the resumed run writes its first line seconds later, and until then the diary still
+ * holds the question open.
  */
 export async function sendChoice(projectId: string, id: string, pick: string | string[], agentId?: string): Promise<SteerResult> {
   return relayOr(agentId, 'sendChoice', [projectId, id, pick, agentId], async (): Promise<SteerResult> => {
     const cwd = await resolveProjectPath(projectId)
     if (!cwd || !agentId || !isRunId(agentId)) return { ok: false, error: 'unknown session' }
-    const question = pendingChoices((await loadAgentEvents(cwd, agentId).catch(() => undefined)) ?? []).find(choice => choice.id === id)
-    if (!question) return { ok: false, error: 'that question is no longer open' }
-    const picked = [pick].flat()
-    const labels = question.options.filter(option => picked.includes(option.id)).map(option => option.label)
-    if (labels.length !== picked.length) return { ok: false, error: 'every pick must be one of the question\'s options' }
-    if (!question.multi && labels.length !== 1) return { ok: false, error: 'pick exactly one option' }
-    const elsewhere = await startedElsewhere(cwd, agentId)
-    if (elsewhere) return elsewhere
-    return sayToRun(cwd, agentId, { kind: 'answer', question: question.title, answer: labels.length ? labels.join(', ') : '(none)' })
+    const run = agentLockKey(cwd, agentId)
+    return withAgentLock(run, async (): Promise<SteerResult> => {
+      const open = pendingChoices((await loadAgentEvents(cwd, agentId).catch(() => undefined)) ?? [])
+      const held = answersGiven.get(run)
+      for (const asked of held?.keys() ?? []) if (!open.some(choice => choice.id === asked)) held?.delete(asked)
+      if (held?.size === 0) answersGiven.delete(run)
+      const question = open.find(choice => choice.id === id)
+      if (!question) return { ok: false, error: 'that question is no longer open' }
+      const given = held?.get(id)
+      if (given !== undefined) return { ok: false, error: `Already answered: ${given}` }
+      const picked = [pick].flat()
+      const labels = question.options.filter(option => picked.includes(option.id)).map(option => option.label)
+      if (labels.length !== picked.length) return { ok: false, error: 'every pick must be one of the question\'s options' }
+      if (!question.multi && labels.length !== 1) return { ok: false, error: 'pick exactly one option' }
+      const elsewhere = await startedElsewhere(cwd, agentId)
+      if (elsewhere) return elsewhere
+      const answer = labels.length ? labels.join(', ') : '(none)'
+      const said = await sayToRun(cwd, agentId, { kind: 'answer', question: question.title, answer })
+      if (said.ok) answersGiven.set(run, new Map(answersGiven.get(run)).set(id, answer))
+      return said
+    })
   }, { ok: false, error: 'could not reach the machine' })
 }
 

@@ -90,10 +90,10 @@ export function ConfirmDialog({
           </AlertDialog.Description>
           {extra && <div className="mt-3">{extra}</div>}
           {error && <p className="mt-2 text-xs text-danger">{error}</p>}
-          <div className={cn('mt-5 flex justify-end gap-2', DIALOG_PRESSES_CLASS)}>
+          <div className={cn('mt-6 flex justify-end gap-2', DIALOG_PRESSES_CLASS)}>
             <AlertDialog.Close
               render={
-                <Button variant="secondary" disabled={busy}>
+                <Button variant="ghost" disabled={busy}>
                   Cancel
                 </Button>
               }

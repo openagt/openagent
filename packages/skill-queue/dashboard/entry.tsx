@@ -1,5 +1,4 @@
-import { Bot } from 'lucide-react'
-import { Tooltip, TooltipContent, TooltipTrigger, pathsIn, useModuleHost, type FileNames, type ModuleAgent } from '@openagt/dashboard/module'
+import { Tooltip, TooltipContent, TooltipTrigger, cn, formatDuration, pathsIn, useModuleHost, type FileNames, type ModuleAgent } from '@openagt/dashboard/module'
 import { entryLabel } from '../src/module.js'
 
 // How one queue entry reads, on the Queue page and on the Overview's card alike. An entry is a
@@ -58,18 +57,30 @@ export function EntryTitle({ view, entry, className }: { view: EntryView; entry:
   )
 }
 
-/** The mark of an entry an agent is working on, which opens that agent: on the Queue page and on the Overview's card alike. */
+/**
+ * Who is on an entry, said in its row and opening that agent: on the Queue page and on the Overview's
+ * card alike. An agent at work in the working colour, one waiting on the person's answer in the
+ * colour of what waits on you, each with how long it has been on it.
+ */
 export function AgentOnEntry({ projectId, agent }: { projectId: string; agent: ModuleAgent }) {
   const host = useModuleHost()
+  const asking = agent.status === 'waiting'
+  const since = Date.parse(agent.startedAt)
   return (
     <Tooltip>
       <TooltipTrigger
-        render={<button type="button" onClick={() => host.openAgent(projectId, agent.id)} className="inline-flex shrink-0 items-center gap-1 rounded-full bg-success/15 px-2 py-0.5 text-xs font-medium text-success hover:underline" />}
+        render={
+          <button
+            type="button"
+            onClick={() => host.openAgent(projectId, agent.id)}
+            className={cn('focus-ring relative z-10 inline-flex shrink-0 items-center rounded-sm font-medium hover:underline', asking ? 'text-warning' : 'text-info')}
+          />
+        }
       >
-        <Bot className="h-3 w-3" aria-hidden />
-        <span className="max-md:sr-only">An agent is on it</span>
+        {asking ? 'Waiting on you' : 'An agent is on it'}
+        {Number.isFinite(since) && ` · ${formatDuration(Date.now() - since)}`}
       </TooltipTrigger>
-      <TooltipContent>An agent is working on this entry: open it</TooltipContent>
+      <TooltipContent>{asking ? 'The agent on this entry asks you something: open it' : 'An agent is working on this entry: open it'}</TooltipContent>
     </Tooltip>
   )
 }

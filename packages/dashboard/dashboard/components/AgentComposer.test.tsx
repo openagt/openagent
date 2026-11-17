@@ -38,6 +38,7 @@ vi.mock('./Composer.js', async () => {
       <button type="button" disabled={props.busy} onClick={() => props.onSubmit('hello', { later: true })}>
         submit later
       </button>
+      {props.notes}
       <span data-testid="composer-props">
         {JSON.stringify({ inAgent: props.inAgent, busyLabel: props.submitBusyLabel, placeholder: props.placeholder, sessionModel: props.sessionModel, autoFocus: props.autoFocus })}
       </span>
@@ -169,27 +170,37 @@ describe('AgentComposer box', () => {
 
 describe('AgentComposer slot control (#1455)', () => {
   test('a live session offers Stop in the slot, and pressing it stops this run', async () => {
-    sendStop.mockResolvedValue(undefined)
-    renderComposer()
+    sendStop.mockResolvedValue({ ok: true })
+    renderComposer({ agentId: 'run-stopped' })
     const stop = screen.getByRole('button', { name: 'Stop agent' })
     fireEvent.click(stop)
-    await waitFor(() => expect(sendStop).toHaveBeenCalledWith('p1', 'run-1'))
+    await waitFor(() => expect(sendStop).toHaveBeenCalledWith('p1', 'run-stopped'))
     // A landed Stop must not be re-fireable while the end event is still in flight: the button
-    // stays disabled ("Stopping…") until `live` flips — the session's menu's own latch.
-    await waitFor(() => expect((screen.getByRole('button', { name: 'Stop agent' }) as HTMLButtonElement).disabled).toBe(true))
+    // waits ("Stopping…") until `live` flips, and takes no second press.
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Stop agent' }).getAttribute('aria-disabled')).toBe('true'))
+    fireEvent.click(screen.getByRole('button', { name: 'Stop agent' }))
+    expect(sendStop).toHaveBeenCalledTimes(1)
+  })
+
+  test('a Stop that reached nothing says why, and Stop is offered again', async () => {
+    sendStop.mockResolvedValue({ ok: false, error: 'It had already ended.' })
+    renderComposer({ agentId: 'run-refused' })
+    fireEvent.click(screen.getByRole('button', { name: 'Stop agent' }))
+    expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'It had already ended.')
+    expect(screen.getByRole('button', { name: 'Stop agent' }).getAttribute('aria-disabled')).toBeNull()
   })
 
   test('the Stopping… latch releases when the stop lands, so a continued run gets a working Stop again', async () => {
     // A message continues the SAME agent (#762) — same id — so a latch keyed to the agent id alone
     // re-engaged on the resumed session and froze its Stop as a disabled spinner.
-    sendStop.mockResolvedValue(undefined)
-    const ui = (live: boolean) => <AgentComposer projectId="p1" agentId="run-1" live={live} files={[]} />
+    sendStop.mockResolvedValue({ ok: true })
+    const ui = (live: boolean) => <AgentComposer projectId="p1" agentId="run-continued" live={live} files={[]} />
     const { rerender } = render(ui(true))
     fireEvent.click(screen.getByRole('button', { name: 'Stop agent' }))
-    await waitFor(() => expect((screen.getByRole('button', { name: 'Stop agent' }) as HTMLButtonElement).disabled).toBe(true))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Stop agent' }).getAttribute('aria-disabled')).toBe('true'))
     rerender(ui(false)) // the end lands: the run is no longer live
     rerender(ui(true)) // the resume brings the same run back
-    expect((screen.getByRole('button', { name: 'Stop agent' }) as HTMLButtonElement).disabled).toBe(false)
+    expect(screen.getByRole('button', { name: 'Stop agent' }).getAttribute('aria-disabled')).toBeNull()
   })
 
   test('a Stop that failed says so and can be pressed again, by the button or by Esc', async () => {
@@ -223,8 +234,8 @@ describe('AgentComposer slot control (#1455)', () => {
   test('Esc stops a live session, as in Claude Code, unless a question or the box took it', async () => {
     // The clock alone is stood in for: a double press is told by it.
     vi.useFakeTimers({ toFake: ['Date'] })
-    sendStop.mockResolvedValue(undefined)
-    renderComposer()
+    sendStop.mockResolvedValue({ ok: true })
+    renderComposer({ agentId: 'run-esc' })
     // A question over the session: the key is its Cancel.
     const question = render(<ConfirmDialog open onOpenChange={() => {}} title="Delete this session?" body="It goes for good." confirmLabel="Delete" />)
     fireEvent.keyDown(screen.getByRole('alertdialog'), { key: 'Escape' })
@@ -246,7 +257,7 @@ describe('AgentComposer slot control (#1455)', () => {
     expect(sendStop).not.toHaveBeenCalled()
     // A press of its own in the box stops the agent, even when the box takes the key.
     fireEvent.keyDown(box, { key: 'Escape' })
-    await waitFor(() => expect(sendStop).toHaveBeenCalledWith('p1', 'run-1'))
+    await waitFor(() => expect(sendStop).toHaveBeenCalledWith('p1', 'run-esc'))
     box.remove()
     sendStop.mockClear()
     cleanup()

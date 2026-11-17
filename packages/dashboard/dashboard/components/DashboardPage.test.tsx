@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import type { ActiveAgent, Intervention } from '../../src/index.js'
+import type { ListedPage } from '../lib/use-modules.js'
 
 // The Overview's own layout: its cards on a grid, ordered, sized and hidden by the person's layout
 // for the page (#overview layouts). The cards are tested on their own; here they are stand-ins, the
@@ -23,14 +24,19 @@ vi.mock('./YourAgentsPart.js', () => ({ YourAgentsPart: () => <span>your agents<
 const modules = vi.hoisted(() => ({ loaded: true, gone: false, line: [] as { id: string; order: number; node: unknown }[] }))
 vi.mock('./ModuleCards.js', async () => {
   const { Section } = await import('./ui/section.js')
-  // A package's card as packages draw them: a part with a link to its page at its heading's right.
+  const { PartDescription } = await import('./PartDescription.js')
+  // A package's card as packages draw them: a part with a link to its page at its heading's right, and the sentence that says what it is.
   const node = (
     <Section title="Hot" action={<a href="/tickets">Every ticket of the project</a>}>
+      <PartDescription>The tickets to do first</PartDescription>
       <div>a package's card</div>
     </Section>
   )
   return { useModuleCards: () => ({ cards: modules.gone ? [] : [{ id: '@x/tickets/hot', label: 'Hot tickets', width: '1/2', minWidth: '1/3', present: true, node }], line: modules.line, loaded: modules.loaded }) }
 })
+// The screen's size, as the page reads it: a desktop's unless a test says a phone's.
+const screenSize = vi.hoisted(() => ({ phone: false }))
+vi.mock('../lib/use-mobile.js', async original => ({ ...(await original<typeof import('../lib/use-mobile.js')>()), useIsMobile: () => screenSize.phone }))
 const prefs = vi.hoisted(() => ({ value: { onboardingDismissed: true } as Record<string, unknown>, loaded: true, updatePreferences: vi.fn() }))
 vi.mock('../lib/preferences.js', () => ({ usePreferences: () => prefs.value, usePreferencesLoaded: () => prefs.loaded, updatePreferences: prefs.updatePreferences }))
 
@@ -41,8 +47,10 @@ const active = (agentId: string, projectId = 'p1'): ActiveAgent => ({ projectId,
 const projects = [{ id: 'p1', name: 'alpha' }, { id: 'p2', name: 'beta' }] as never[]
 /** The agents at work, as the shell read them. */
 let working: ActiveAgent[] = []
+/** The modules' pages as the sidebar lists them: none known until a test says. */
+let listed: readonly ListedPage[] | null = null
 const overview = (scope: string | null = null, kept = { interventions: false, active: false }, read = true) => (
-  <DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} projectHref={id => `/${id}`} onSelectAgent={() => {}} onAgentStarted={() => {}} interventions={[]} interventionsState={!read ? 'unknown' : kept.interventions ? 'kept' : 'fresh'} active={{ active: working, state: !read ? 'unknown' : kept.active ? 'kept' : 'fresh' }} projects={projects} scope={scope} />
+  <DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} projectHref={id => `/${id}`} onSelectAgent={() => {}} onAgentStarted={() => {}} interventions={[]} interventionsState={!read ? 'unknown' : kept.interventions ? 'kept' : 'fresh'} active={{ active: working, state: !read ? 'unknown' : kept.active ? 'kept' : 'fresh' }} projects={projects} scope={scope} listedPages={listed} />
 )
 const show = (...args: Parameters<typeof overview>) => render(overview(...args))
 /** The cards drawn, in order, each with its grid classes. */
@@ -50,6 +58,8 @@ const drawn = () => [...document.querySelectorAll<HTMLElement>('[data-card]')].m
 
 beforeEach(() => {
   working = []
+  screenSize.phone = false
+  listed = null
   prefs.value = { onboardingDismissed: true }
   prefs.loaded = true
   prefs.updatePreferences.mockReset()
@@ -65,21 +75,24 @@ describe('the Overview', () => {
     working = []
     show()
     await screen.findByText('Human Queue')
-    expect(drawn().map(card => card.id)).toEqual(['human-queue', 'usage', 'working', 'skills', '@x/tickets/hot'])
+    expect(drawn().map(card => card.id)).toEqual(['human-queue', 'working', 'usage', 'skills', '@x/tickets/hot'])
     expect(screen.getByText('No agent is at work.')).toBeTruthy()
-    // Full width is the whole row at every size; a half is a half once the column has the room, at
-    // every width past that; a row's cards fill it.
-    expect(drawn()[0]!.spans).toContain('basis-full')
-    expect(drawn()[0]!.spans).not.toMatch(/@\w+:basis-/)
-    expect(drawn()[3]!.spans).toContain('@2xl:basis-[calc(50%_-_1rem)]')
-    expect(drawn()[3]!.spans).not.toContain('@4xl:')
+    // Two columns once the page has the room: what needs the person and what is at work two thirds
+    // wide, the usage a third beside them; in a middling column each is a half, in a narrow one the
+    // whole row; a half is a half from a middling column on; a row's cards fill it.
+    expect(drawn()[0]!.spans).toContain('@max-2xl:basis-full')
+    expect(drawn()[0]!.spans).toContain('@2xl:basis-[calc(50%_-_1rem)]')
+    expect(drawn()[0]!.spans).toContain('@4xl:basis-[calc(66.667%_-_0.667rem)]')
+    expect(drawn()[1]!.spans).toContain('@4xl:basis-[calc(66.667%_-_0.667rem)]')
+    expect(drawn()[2]!.spans).toContain('@4xl:basis-[calc(33.333%_-_1.333rem)]')
     expect(drawn()[4]!.spans).toContain('@2xl:basis-[calc(50%_-_1rem)]')
+    expect(drawn()[4]!.spans).not.toContain('@4xl:')
     expect(drawn()[4]!.spans).toContain('grow-[6]')
     cleanup()
     working = [active('r1', 'p1')]
     show()
     expect(await screen.findByText('working on r1')).toBeTruthy()
-    expect(drawn().map(card => card.id)).toEqual(['human-queue', 'usage', 'working', 'skills', '@x/tickets/hot'])
+    expect(drawn().map(card => card.id)).toEqual(['human-queue', 'working', 'usage', 'skills', '@x/tickets/hot'])
     cleanup()
     // With a project picked, only that project's agents count.
     show('p2')
@@ -93,7 +106,7 @@ describe('the Overview', () => {
     show()
     const firstSteps = await screen.findByText('onboarding')
     expect(firstSteps.parentElement!.previousElementSibling!.getAttribute('data-card')).toBe('human-queue')
-    expect(firstSteps.parentElement!.nextElementSibling!.getAttribute('data-card')).toBe('usage')
+    expect(firstSteps.parentElement!.nextElementSibling!.getAttribute('data-card')).toBe('working')
     cleanup()
     prefs.value = { overviewLayouts: { '*': [{ id: 'usage' }, { id: 'human-queue', hidden: true }] } }
     show()
@@ -115,8 +128,8 @@ describe('the Overview', () => {
     expect(drawn().map(card => card.id)).toEqual(['@x/tickets/hot', 'human-queue', 'skills', 'working'])
     expect(screen.queryByText('usage')).toBeNull()
     expect(drawn()[0]!.spans).toContain('@4xl:basis-[calc(33.333%_-_1.333rem)]')
-    // The Human Queue fits half at the narrowest: a quarter is passed over for its own width, the whole row.
-    expect(drawn()[1]!.spans).not.toMatch(/@\w+:basis-/)
+    // What needs the person fits half at the narrowest: a quarter is passed over for its own width, two thirds.
+    expect(drawn()[1]!.spans).toContain('@4xl:basis-[calc(66.667%_-_0.667rem)]')
     expect(drawn()[2]!.spans).toContain('@4xl:basis-[calc(25%_-_1.5rem)]')
   })
 
@@ -139,7 +152,7 @@ describe('the Overview', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Customize' }))
     expect(screen.getByRole('status').textContent).toMatch(/Arranging the layout for alpha/)
     // Every shown card has its bar; the agents at work, though none works, are there to be placed.
-    expect(screen.getAllByRole('toolbar').map(bar => bar.getAttribute('aria-label'))).toEqual(['Usage', 'Human Queue', 'Agents at work', 'Hot tickets'])
+    expect(screen.getAllByRole('toolbar').map(bar => bar.getAttribute('aria-label'))).toEqual(['Usage', 'Human Queue', 'At work', 'Hot tickets'])
     // The card hidden waits in the tray.
     const tray = within(screen.getByRole('region', { name: 'Cards not on the page' }))
     expect(tray.getAllByRole('listitem').map(item => item.getAttribute('aria-label'))).toEqual(['Skills'])
@@ -156,7 +169,7 @@ describe('the Overview', () => {
     fireEvent.click(tray.getByRole('button', { name: 'Add Skills' }))
     expect(saved()['p1']!.map(place => place.id).at(-1)).toBe('skills')
     expect(saved()['p1']!.at(-1)).toEqual({ id: 'skills' })
-    // The arrow keys on a card's handle move it among the cards on the page: Usage passes the Human Queue.
+    // The arrow keys on a card's handle move it among the cards on the page: Usage passes what needs the person.
     // (Each press here is read against the layout the page started with: the stand-in preferences do not change.)
     fireEvent.keyDown(screen.getByRole('button', { name: 'Move Usage: arrow keys' }), { key: 'ArrowRight' })
     expect(saved()['p1']!.map(place => place.id)).toEqual(['skills', 'human-queue', 'usage', 'working', '@x/tickets/hot'])
@@ -173,12 +186,46 @@ describe('the Overview', () => {
     // The press that took Customize away hands the keyboard to Done, not to the page.
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Done' }))
     const asleep = screen.getByText("a package's card").closest<HTMLElement>('[inert]')!
-    // Its heading's link is not drawn, however long its words: the card's bar stands in its place, on every card.
+    // Its heading's link is not drawn, however long its words.
     const link = screen.getByRole('link', { name: 'Every ticket of the project' }).parentElement!
     expect([...asleep.querySelectorAll('section>div:first-child>h2~*')]).toEqual([link])
     expect(asleep.className.split(' ')).toContain('[&_section>div:first-child>h2~*]:invisible')
     fireEvent.click(screen.getByRole('button', { name: 'Done' }))
     expect(screen.getByText("a package's card").closest('[inert]')).toBeNull()
+  })
+
+  test("while the page is arranged, a card's bar stands above the card, on its frame: it covers none of the card, however narrow, and moves none of it", async () => {
+    show()
+    fireEvent.click(await screen.findByRole('button', { name: 'Customize' }))
+    const bar = screen.getByRole('toolbar', { name: 'Hot tickets' })
+    const card = screen.getByText("a package's card").closest<HTMLElement>('[inert]')!
+    // Beside the card, not in it, and laid out of the flow: the card's heading and rows stand where they stood.
+    expect(bar.parentElement).toBe(card.parentElement)
+    expect(card.contains(bar)).toBe(false)
+    expect(bar.className.split(' ')).toEqual(expect.arrayContaining(['absolute', 'bottom-full', 'right-0']))
+  })
+
+  test("while the page is arranged, a part's sentence is still for a screen reader alone, so arranging moves nothing", async () => {
+    show()
+    fireEvent.click(await screen.findByRole('button', { name: 'Customize' }))
+    const sentence = screen.getByText('The tickets to do first')
+    expect(sentence.className).toBe('sr-only')
+    expect(sentence.closest('[inert]')!.className).not.toMatch(/sr-only/)
+  })
+
+  test("on a phone the press that gives up the page's own layout stands in the tray at the page's foot, under its words, and Done stands alone in the head", async () => {
+    screenSize.phone = true
+    prefs.value = { onboardingDismissed: true, overviewLayouts: { '*': [{ id: 'skills', hidden: true }] } }
+    show()
+    fireEvent.click(await screen.findByRole('button', { name: 'Customize' }))
+    const tray = screen.getByRole('region', { name: 'Cards not on the page' })
+    const reset = within(tray).getByRole('button', { name: 'Reset to the default layout' })
+    // Under the tray's two sentences, in its full words.
+    const [, words] = tray.querySelectorAll('p')
+    expect(words!.compareDocumentPosition(reset) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(screen.getAllByRole('button', { name: 'Reset to the default layout' })).toEqual([reset])
+    fireEvent.click(reset)
+    expect(prefs.updatePreferences).toHaveBeenCalledWith({ overviewLayouts: {} })
   })
 
   test('Esc leaves Customize as Done does, and the keyboard is back on Customize', async () => {
@@ -241,7 +288,7 @@ describe('the Overview', () => {
     window.removeEventListener('error', caught)
     expect(thrown).toEqual([])
     expect(prefs.updatePreferences).not.toHaveBeenCalled()
-    expect(drawn().map(card => card.id)).toEqual(['human-queue', 'usage', 'working', 'skills'])
+    expect(drawn().map(card => card.id)).toEqual(['human-queue', 'working', 'usage', 'skills'])
   })
 
   test('a card dragged on the page leaves the page still, shows where it lands, and moves only when dropped', async () => {
@@ -258,7 +305,7 @@ describe('the Overview', () => {
     expect(prefs.updatePreferences).not.toHaveBeenCalled()
     fireEvent.drop(document.querySelector('[data-card="human-queue"]')!, transfer)
     const order = (prefs.updatePreferences.mock.lastCall![0] as { overviewLayouts: Record<string, { id: string }[]> }).overviewLayouts['*']!.map(place => place.id)
-    expect(order).toEqual(['skills', 'human-queue', 'usage', 'working', '@x/tickets/hot'])
+    expect(order).toEqual(['skills', 'human-queue', 'working', 'usage', '@x/tickets/hot'])
   })
 
   test('the cards slide to their places after a drag, never after a key or a press, nor under reduced motion', async () => {
@@ -345,14 +392,14 @@ describe('the Overview', () => {
     expect(drawn().map(card => card.id)).toEqual(['human-queue'])
     firstSteps.read = true
     rerender(overview())
-    expect(drawn().map(card => card.id)).toEqual(['human-queue', 'usage', 'working', 'skills', '@x/tickets/hot'])
+    expect(drawn().map(card => card.id)).toEqual(['human-queue', 'working', 'usage', 'skills', '@x/tickets/hot'])
     cleanup()
     // With the first steps put away, only the Human Queue is waited for.
     prefs.value = { onboardingDismissed: true }
     firstSteps.read = false
     show()
     await screen.findByText('Human Queue')
-    expect(drawn().map(card => card.id)).toEqual(['human-queue', 'usage', 'working', 'skills', '@x/tickets/hot'])
+    expect(drawn().map(card => card.id)).toEqual(['human-queue', 'working', 'usage', 'skills', '@x/tickets/hot'])
   })
 
   test('no card is drawn before the layout is read: a card taken off never reads anything', async () => {
@@ -375,6 +422,8 @@ describe('the Overview', () => {
 
   test("before the packages' code is in, their part of the line waits in its place, and the part that comes takes it", async () => {
     modules.loaded = false
+    // The sidebar's pages say a shown project has the Queue: its part will stand there.
+    listed = [{ segment: 'queue', label: 'Queue', projects: ['p2'] }]
     const { rerender } = show()
     const line = (await screen.findByText('no agent working')).closest('p')!
     expect(line.textContent).toBe('·nothing needs you·no agent working·Loading…·your agents')
@@ -390,6 +439,23 @@ describe('the Overview', () => {
     expect(line.textContent).toBe('·nothing needs you·no agent working·your agents')
   })
 
+  test("before the packages' code is in, no place waits for the queue's part where the sidebar's pages say no shown project has the Queue; while they say nothing yet, the parts after its place wait", async () => {
+    modules.loaded = false
+    listed = [{ segment: 'queue', label: 'Queue', projects: ['p2'] }, { segment: 'logs', label: 'Logs', projects: ['p1'] }]
+    show('p1')
+    const line = (await screen.findByText('no agent working')).closest('p')!
+    expect(line.textContent).toBe('·nothing needs you·no agent working·your agents')
+    cleanup()
+    // A browser's first visit: no page known, no place held, and what stands after it waits until a part or the pages come.
+    listed = null
+    const { rerender } = show()
+    const firstVisit = (await screen.findByText('no agent working')).closest('p')!
+    expect(firstVisit.textContent).toBe('·nothing needs you·no agent working')
+    modules.line = [{ id: '@x/queue/queued', order: 3, node: <span>nothing queued</span> }]
+    rerender(overview())
+    expect(firstVisit.textContent).toBe('·nothing needs you·no agent working·nothing queued·your agents')
+  })
+
   test('the Human Queue says it is loading before its read, not that nothing waits', async () => {
     show(null, { interventions: false, active: false }, false)
     const card = (await screen.findByText('Human Queue')).closest('[data-card]')!
@@ -402,7 +468,7 @@ describe('the Overview', () => {
     const item = (kind: Intervention['kind'], n: number): Intervention => ({ projectId: 'p1', projectName: 'alpha', kind, title: `t${n}`, agentId: `r${n}` })
     const scrolled = vi.fn()
     Element.prototype.scrollIntoView = scrolled
-    render(<DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} projectHref={id => `/${id}`} onSelectAgent={() => {}} onAgentStarted={() => {}} interventions={[item('awaiting', 1), item('awaiting', 2), item('pr', 3)]} interventionsState="fresh" active={{ active: [], state: 'fresh' }} projects={projects} scope={null} />)
+    render(<DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} projectHref={id => `/${id}`} onSelectAgent={() => {}} onAgentStarted={() => {}} interventions={[item('awaiting', 1), item('awaiting', 2), item('pr', 3)]} interventionsState="fresh" active={{ active: [], state: 'fresh' }} projects={projects} scope={null} listedPages={null} />)
     const part = await screen.findByRole('button', { name: '3 need you' })
     expect(part.getAttribute('title')).toBe('2 questions, 1 pull request')
     fireEvent.click(part)
@@ -419,11 +485,12 @@ describe('the Overview', () => {
       item({ number: 6, title: 'Add DESCRIPTION.md', url: 'https://x/pull/6', agentId: 'r6' }),
       item({ number: 8, title: 'Condense README', url: 'https://x/pull/8' }),
     ]
-    render(<DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} projectHref={id => `/${id}`} onSelectAgent={onSelectAgent} onAgentStarted={() => {}} interventions={interventions} interventionsState="fresh" active={{ active: [], state: 'fresh' }} projects={[]} scope={null} />)
-    // Grouped by kind, each under its heading, in the order that holds a run up most; a row says its kind on its icon's hover.
-    expect(within(screen.getByRole('region', { name: 'Human Queue' })).getAllByRole('region').map(group => document.getElementById(group.getAttribute('aria-labelledby')!)!.textContent)).toEqual(['Pull requests', 'To commit'])
-    expect(screen.getByTitle('Needs commit')).toBeTruthy()
-    expect(screen.getByText('1 file')).toBeTruthy()
+    render(<DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} projectHref={id => `/${id}`} onSelectAgent={onSelectAgent} onAgentStarted={() => {}} interventions={interventions} interventionsState="fresh" active={{ active: [], state: 'fresh' }} projects={[]} scope={null} listedPages={null} />)
+    // One list, in the order the queue gives them: a row says what it needs first in its line, so no kind has a heading.
+    const part = within(screen.getByRole('region', { name: 'Human Queue' }))
+    expect(part.queryAllByRole('region')).toEqual([])
+    expect(part.getAllByRole('listitem').map(row => row.textContent)).toEqual(['Needs commitNeeds commit: Create test.md1 file', 'Needs mergeNeeds merge: Add DESCRIPTION.md#6', 'Needs mergeNeeds merge: Condense README#8'])
+    // The row is the press: it opens where what it needs is done.
     fireEvent.click(screen.getByText('Create test.md'))
     fireEvent.click(screen.getByText('Add DESCRIPTION.md'))
     expect(onSelectAgent.mock.calls).toEqual([['p1', 'r1'], ['p1', 'r6']])

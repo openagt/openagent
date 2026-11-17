@@ -10,6 +10,7 @@ import { Slot } from './ui/slot.js'
 import { PathStrip } from './PathStrip.js'
 import { AGENT_DATA_ENTRY } from './AgentDataSettings.js'
 import { SendAs, firstSendAs } from './SendAs.js'
+import { Facts } from './ui/panel.js'
 
 /** The Settings entry's id: the project's own page, beside the person's own folder's `agent-data`. */
 export const PROJECT_AGENT_DATA_ENTRY = 'project-agent-data'
@@ -113,7 +114,7 @@ function ProjectData({ projectId, data, reload }: { projectId: string; data: Pro
       {error && <p className="text-xs text-danger">{error}</p>}
       <SettingsRow
         label="What is kept"
-        description={kept.length > 0 ? kept.map(k => `${KIND_WORDS[k.kind](k.count)} (${k.skill})`).join(' · ') : 'Nothing yet.'}
+        description={kept.length > 0 ? <Facts facts={kept.map(k => `${KIND_WORDS[k.kind](k.count)} (${k.skill})`)} /> : 'Nothing yet.'}
         control={null}
       />
       <ConfirmDialog

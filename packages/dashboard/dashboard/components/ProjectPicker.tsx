@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Combobox } from '@base-ui/react/combobox'
 import { addressOfRemote } from '@openagt/agent-data/repository-address'
 import { Cloud, Check, ChevronsUpDown, Folder, FolderGit2, FolderPlus, FolderSearch, Layers, Plus, Search } from 'lucide-react'
@@ -16,11 +16,13 @@ import { buttonVariants } from './ui/button.js'
 import { ScrollArea } from './ui/scroll-area.js'
 import { Skeleton, useSkeleton } from './ui/skeleton.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
-import { MENU_ITEM_CLASS, MENU_POPUP_CLASS, MENU_TRIGGER_OPEN_CLASS } from './ui/dropdown-menu.js'
+import { MENU_BODY_CLASS, MENU_ITEM_CLASS, MENU_POPUP_CLASS, MENU_TRIGGER_OPEN_CLASS, MenuMark } from './ui/dropdown-menu.js'
 import { PROJECT_ROW_CLASS } from './ui/nav-row.js'
-import { usePopupPlacement } from './ui/popup-placement.js'
+import { usePopupPosition } from './ui/popup-placement.js'
 import { usePickerSearch } from './ui/picker-search.js'
 import { AddProjectPanel } from './AddProjectPanel.js'
+import { Facts } from './ui/panel.js'
+import { MiddleCut } from './MiddleCut.js'
 
 /** How many repos the menu lists before a search: the search reaches the rest. */
 export const REPOS_SHOWN = 20
@@ -36,7 +38,7 @@ interface Row {
   value: string
   label: string
   /** Under the label, muted: a repo's address, or its folder when it has none. */
-  detail?: string
+  detail?: ReactNode
   pick: { kind: 'none' } | { kind: 'project'; project: ProjectSummary } | { kind: 'repo'; path: string } | { kind: 'hosted'; address: string } | { kind: 'address'; typed: string }
   /** What the search matches besides the label. */
   search: string
@@ -115,7 +117,7 @@ function ElsewhereLine({ machineId }: { machineId: string }) {
   if (!machine) return null
   const Icon = MACHINE_ICONS[machineKind(machine).kind]
   return (
-    <span className="flex items-center gap-1 text-xs text-muted-foreground">
+    <span data-line2 className="flex items-center gap-1 text-xs leading-4 text-muted-foreground">
       <Icon className="h-3 w-3 shrink-0" aria-hidden />
       <span className="truncate">on {machineName(machine)}</span>
     </span>
@@ -127,22 +129,22 @@ function ProjectLine({ project, label }: { project: ProjectSummary; label: strin
   return (
     <>
       {/* The dot in a box the size of the other rows' icons, so every row's name starts at one edge. */}
-      <span className="mt-0.5 flex h-3.5 w-3.5 shrink-0 items-center justify-center">
+      <MenuMark className="w-3.5 justify-center">
         <ProjectDot project={project} />
-      </span>
-      <span className="min-w-0 flex-1 leading-tight">
+      </MenuMark>
+      <span className="min-w-0 flex-1 leading-5">
         <ProjectName name={project.name} label={label} />
         {project.machine !== undefined && <ElsewhereLine machineId={project.machine} />}
         {/* What the daemon finds wrong with it, in words: the project's own page carries the detail. */}
         {project.errors?.map(e => (
-          <span key={e.code} title={e.message} className="block truncate text-xs text-danger">
+          <span key={e.code} data-line2 title={e.message} className="block truncate text-xs leading-4 text-danger">
             {projectErrorTitle(e.code)}
           </span>
         ))}
-        {!project.errors?.length && !project.activated && <span className="block text-xs text-muted-foreground">Not activated</span>}
+        {!project.errors?.length && !project.activated && <span data-line2 className="block text-xs leading-4 text-muted-foreground">Not activated</span>}
         {/* Nothing wrong: the repository has no remote, or the person keeps the agents' records here. */}
         {!project.errors?.length && project.activated && project.local && (
-          <span className="block text-xs text-muted-foreground">{project.local === 'no-remote' ? 'Local only, no remote' : 'Records kept on this machine'}</span>
+          <span data-line2 className="block text-xs leading-4 text-muted-foreground">{project.local === 'no-remote' ? 'Local only, no remote' : 'Records kept on this machine'}</span>
         )}
       </span>
     </>
@@ -190,11 +192,18 @@ export function ProjectPicker({
   onProjectAdded: () => void
 }) {
   const label = useProjectLabel()
-  const positionMethod = usePopupPlacement()
+  const position = usePopupPosition()
   const search = usePickerSearch()
   const { open, typed } = search
   const [adding, setAdding] = useState<{ folder: string } | { address: string } | null>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
+  // The list as tall as its rows with nothing typed, and that tall while a person types, so the search
+  // stays where it is as the rows narrow (opened upward too, where the list's top would move down).
+  const list = useRef<HTMLDivElement>(null)
+  const untyped = useRef<number>(undefined)
+  useLayoutEffect(() => {
+    if (!typed && list.current) untyped.current = list.current.offsetHeight
+  })
   // The folder just added, and what was picked then, until the projects read again have it: then it
   // is picked, however late that is, unless another pick was made meanwhile, which stays. The panel
   // says it was added until it closes itself or Done closes it, whether the pick came yet or not.
@@ -231,7 +240,7 @@ export function ProjectPicker({
       ...(repos?.hosted ?? []).map((repo): Row => ({
         value: `hosted:${repo.address}`,
         label: repo.address.split('/').slice(1).join('/'),
-        detail: `${repo.private ? 'Private · ' : ''}Not on this computer · ${repo.from}`,
+        detail: <Facts facts={[repo.private && 'Private', 'Not on this computer', repo.from]} />,
         pick: { kind: 'hosted', address: repo.address },
         search: `${repo.address}\n${repo.description ?? ''}`,
       })),
@@ -262,8 +271,7 @@ export function ProjectPicker({
         {none.label}
       </button>
     ) : look === 'sidebar' ? (
-      // A ghost row of the sidebar's, 32 high (44 on a phone) whatever it shows, so the rows under it never move: the
-      // chevrons say it opens, the soft fill under the pointer that it is pressed.
+      // A card on the sidebar, as high whatever it shows, so the rows under it never move: the chevrons say it opens.
       <button type="button" className={PROJECT_ROW_CLASS}>
         <span className="flex size-4 shrink-0 items-center justify-center">
           {pending ? null : project ? <ProjectDot project={project} /> : <Layers className="size-4 text-muted-foreground" aria-hidden />}
@@ -310,15 +318,15 @@ export function ProjectPicker({
           trigger
         )}
         <Combobox.Portal>
-          <Combobox.Positioner positionMethod={positionMethod} sideOffset={6} align="start" className="z-50 outline-none">
-            <Combobox.Popup data-overlay="picker" aria-label={name} className={cn(MENU_POPUP_CLASS, 'group/picker w-[22rem] max-w-[var(--available-width)]')}>
-              <div className="flex items-center gap-2 border-b border-border px-3">
-                <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
-                <Combobox.Input aria-label="Search projects and repos" placeholder="Search, or paste a GitHub address" className="h-9 w-full min-w-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
+          <Combobox.Positioner {...position} sideOffset={6} align="start" className="z-50 outline-none">
+            <Combobox.Popup data-overlay="picker" aria-label={name} className={cn(MENU_POPUP_CLASS, 'w-[22rem] max-w-[var(--available-width)]')}>
+              {/* The field one line tall, 16 in from the band's every edge, as the jump's is. */}
+              <div className="flex h-13 items-center gap-3 border-b border-hairline px-4">
+                <Search className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                <Combobox.Input aria-label="Search projects and repos" placeholder="Search, or paste a GitHub address" className="h-5 w-full min-w-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
               </div>
-              {/* As tall as its rows; opened upward, from the message box's row, of a set height, so the search stays where it is as the list narrows. */}
-              <ScrollArea viewportClassName="max-h-[min(20rem,calc(var(--available-height)-5rem))] group-data-[side=top]/picker:h-[min(20rem,calc(var(--available-height)-5rem))]">
-                <div className="p-1">
+              <ScrollArea ref={list} style={typed ? { minHeight: untyped.current } : undefined} viewportClassName="max-h-[min(20rem,calc(var(--available-height)-5rem))]">
+                <div className={MENU_BODY_CLASS}>
                   <Combobox.Empty className="px-2 py-1.5 text-xs text-muted-foreground empty:hidden">No project or repo by that name.</Combobox.Empty>
                   <Combobox.List>
                     {(group: Group) => (
@@ -326,26 +334,48 @@ export function ProjectPicker({
                         {group.label && <Combobox.GroupLabel className="px-2 pt-2 pb-1 text-xs font-normal text-muted-foreground">{group.label}</Combobox.GroupLabel>}
                         <Combobox.Collection>
                           {(row: Row) => (
-                            <Combobox.Item key={row.value} value={row} className={cn(MENU_ITEM_CLASS, 'items-start')}>
+                            <Combobox.Item key={row.value} value={row} className={MENU_ITEM_CLASS}>
                               {/* Each row leads with its own mark; the pick is the tick at the row's end. */}
                               {row.pick.kind === 'address' ? (
-                                <Plus className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                                <MenuMark>
+                                  <Plus className="size-3.5 text-muted-foreground" aria-hidden />
+                                </MenuMark>
                               ) : row.pick.kind === 'none' ? (
-                                <Layers className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                                <MenuMark>
+                                  <Layers className="size-3.5 text-muted-foreground" aria-hidden />
+                                </MenuMark>
                               ) : row.pick.kind === 'repo' ? (
-                                <FolderGit2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                                <MenuMark>
+                                  <FolderGit2 className="size-3.5 text-muted-foreground" aria-hidden />
+                                </MenuMark>
                               ) : row.pick.kind === 'hosted' ? (
-                                <Cloud className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                                <MenuMark>
+                                  <Cloud className="size-3.5 text-muted-foreground" aria-hidden />
+                                </MenuMark>
                               ) : null}
                               {row.pick.kind === 'project' ? (
                                 <ProjectLine project={row.pick.project} label={row.label} />
                               ) : (
-                                <span className="min-w-0 flex-1 leading-tight">
+                                <span className="min-w-0 flex-1 leading-5">
                                   <span className="block truncate">{row.label}</span>
-                                  {row.detail && <span className="block truncate text-xs text-muted-foreground">{row.detail}</span>}
+                                  {row.detail && (
+                                    <span
+                                      data-line2
+                                      className="flex min-w-0 text-xs leading-4 text-muted-foreground"
+                                      {...(row.pick.kind === 'repo' && typeof row.detail === 'string' ? { title: row.detail } : {})}
+                                    >
+                                      {/* A repo's path on one line, cut in its middle: where it starts and the folder it ends in show, and
+                                          the whole of it is in the title and said to a screen reader. */}
+                                      {row.pick.kind === 'repo' && typeof row.detail === 'string' ? <MiddleCut text={row.detail} /> : <span className="min-w-0 truncate">{row.detail}</span>}
+                                    </span>
+                                  )}
                                 </span>
                               )}
-                              {row.value === current.value && <Check className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />}
+                              {row.value === current.value && (
+                                <MenuMark>
+                                  <Check className="size-3.5" aria-hidden />
+                                </MenuMark>
+                              )}
                             </Combobox.Item>
                           )}
                         </Combobox.Collection>

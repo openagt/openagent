@@ -97,7 +97,7 @@ describe('Settings dropdowns (#1172)', () => {
         expect(showing(select)).not.toBe('')
       }
     }
-    await usable(['Project', 'Theme', 'Colours', 'Primary colour', 'Font', 'Code font', 'File preview font', 'Editor'])
+    await usable(['Project', 'Font', 'Code font', 'File preview font', 'Editor'])
     fireEvent.click(screen.getByRole('button', { name: 'Coding agent' }))
     await usable(['Project', 'Coding agent', 'Model'])
   })
@@ -111,20 +111,37 @@ describe('Settings dropdowns (#1172)', () => {
     expect(showing(select('Editor'))).toBe('Auto-detect')
   })
 
-  test('picking a theme saves it, and the row shows it', async () => {
+})
+
+describe('Settings › Appearance, its pictures and swatches', () => {
+  const picked = (group: string) => within(screen.getByRole('radiogroup', { name: group })).getAllByRole('radio').filter(checked).map(radio => radio.textContent || radio.getAttribute('aria-label'))
+
+  test('picking a theme saves it, and its picture shows picked', async () => {
     prefsRead.mockResolvedValueOnce({})
     refreshPreferences()
     open('appearance')
-    await waitFor(() => expect(showing(select('Theme'))).toBe('System'))
-    expect(await choices(select('Theme'))).toEqual(['System', 'Light', 'Dark'])
-    await pick(select('Theme'), 'Dark')
+    await waitFor(() => expect(picked('Theme')).toEqual(['System']))
+    expect(within(screen.getByRole('radiogroup', { name: 'Theme' })).getAllByRole('radio').map(radio => radio.textContent)).toEqual(['System', 'Light', 'Dark'])
+    fireEvent.click(screen.getByRole('radio', { name: 'Dark' }))
     expect(saves()).toEqual([{ theme: 'dark' }])
-    expect(showing(select('Theme'))).toBe('Dark')
+    await waitFor(() => expect(picked('Theme')).toEqual(['Dark']))
+  })
+
+  test("the colours' swatches are the palette's own, the default first, and a switch of colours starts on the new one's default", async () => {
+    prefsRead.mockResolvedValueOnce({ accent: 'green' })
+    refreshPreferences()
+    open('appearance')
+    await waitFor(() => expect(picked('Primary colour')).toEqual(['Green']))
+    expect(within(screen.getByRole('radiogroup', { name: 'Primary colour' })).getAllByRole('radio').map(radio => radio.getAttribute('aria-label'))).toEqual(['Blue', 'Green', 'Aqua', 'Yellow', 'Orange', 'Red', 'Purple'])
+    fireEvent.click(screen.getByRole('radio', { name: 'Aqua' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Neutral' }))
+    expect(saves()).toEqual([{ accent: 'aqua' }, { palette: 'neutral', accent: '' }])
+    await waitFor(() => expect(picked('Primary colour')).toEqual(['The colours’ own']))
   })
 })
 
 describe('Settings › Coding agent', () => {
-  test('a coding agent that is not installed says so in its row', async () => {
+  test('a coding agent that is not installed says so in its row, with the way to Permissions, where it is installed', async () => {
     const answered = onModels.getMockImplementation()!
     onModels.mockResolvedValue({ 'claude-code': { models: [], error: 'not found', missing: true }, codex: { models: [], error: 'not logged in' } } as never)
     prefsRead.mockResolvedValueOnce({})
@@ -132,6 +149,7 @@ describe('Settings › Coding agent', () => {
     try {
       open('agent')
       expect(await screen.findByText('Claude Code is not installed on this computer.')).toBeTruthy()
+      expect(screen.getByRole('link', { name: 'Install it on Permissions' }).getAttribute('href')).toBe('/permissions')
     } finally {
       onModels.mockImplementation(answered)
     }

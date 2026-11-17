@@ -193,7 +193,7 @@ describe('run handoff (#799)', () => {
     const cancelled = { ...worked, hasRemote: false, base: 'main', commits: [{ sha: 'a'.repeat(40), short: 'aaaaaaa', subject: 'Change to welcome' }, { sha: 'b'.repeat(40), short: 'bbbbbbb', subject: 'Change back to hello' }], files: [], insertions: 0, deletions: 0, empty: true }
     onAgentHandoff.mockResolvedValue(cancelled)
     render(<Harness />)
-    await waitFor(() => expect(screen.getByText('2 commits · no change left')).toBeTruthy())
+    await waitFor(() => expect(screen.getByText('no change left').parentElement!.textContent).toBe('2 commits·no change left'))
     expect(screen.getByText('Nothing to merge: the commits cancel out.')).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Merge' })).toBeNull()
     cleanup()
@@ -323,9 +323,25 @@ describe('run handoff (#799)', () => {
     expect(screen.queryByRole('button', { name: 'Merge PR' })).toBeNull()
   })
 
-  test('a merge left to wait for the checks says so, and is not offered again', async () => {
-    onAgentHandoff.mockResolvedValue({ ...worked, pushed: true, pr: { number: 42, url: 'https://example.test/42', state: 'OPEN', title: 'Add dark mode' } })
+  test('a merge left to wait for the checks says so, and is not offered again, after a reload too', async () => {
+    const open = { number: 42, url: 'https://example.test/42', state: 'OPEN', title: 'Add dark mode' }
+    onAgentHandoff.mockResolvedValue({ ...worked, pushed: true, pr: open })
     sendMerge.mockResolvedValue({ ok: true, number: 42, url: 'https://example.test/42', merge: 'auto-armed' })
+    render(<Harness />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Merge PR' }))
+    await waitFor(() => expect(document.querySelector('[aria-live="polite"]')!.textContent).toBe('PR #42 merges when its checks pass.'))
+    expect(screen.queryByRole('button', { name: 'Merge PR' })).toBeNull()
+    // The git host says it is armed: a page opened again, here or on another device, says so as well.
+    cleanup()
+    onAgentHandoff.mockResolvedValue({ ...worked, pushed: true, pr: { ...open, armed: true } })
+    render(<Harness />)
+    expect(await screen.findByText('PR #42 merges when its checks pass.')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Merge PR' })).toBeNull()
+  })
+
+  test("a merge left to the provider's watcher is not offered again in this tab", async () => {
+    onAgentHandoff.mockResolvedValue({ ...worked, pushed: true, pr: { number: 42, url: 'https://example.test/42', state: 'OPEN', title: 'Add dark mode' } })
+    sendMerge.mockResolvedValue({ ok: true, number: 42, url: 'https://example.test/42', merge: 'watching' })
     render(<Harness />)
     fireEvent.click(await screen.findByRole('button', { name: 'Merge PR' }))
     await waitFor(() => expect(document.querySelector('[aria-live="polite"]')!.textContent).toBe('PR #42 merges when its checks pass.'))

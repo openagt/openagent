@@ -96,7 +96,8 @@ export function StopBabysitting() {
         {PROBLEMS.map((p) => (
           <div key={p.title} className="split" style={{ padding: 'var(--space-items) 0' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <span style={{ ...text('sm'), fontWeight: 500, color: 'var(--muted-foreground)' }}>Problem</span>
+              {/* The heading's small print, as each row's label is the small print of its sentence. */}
+              <span style={{ ...text('xs'), fontWeight: 500, color: 'var(--muted-foreground)' }}>Problem</span>
               <h3 style={{ margin: 0, ...text('lg'), fontWeight: 600 }}>{p.title}</h3>
               {p.desc && <p style={{ margin: '4px 0 0', ...text('sm'), color: 'var(--muted-foreground)' }}>{p.desc}</p>}
             </div>
@@ -105,11 +106,11 @@ export function StopBabysitting() {
                 <div
                   key={i}
                   className="solution-row"
-                  style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: 16, alignItems: 'baseline' }}
+                  style={{ display: 'grid', gridTemplateColumns: '96px 1fr', gap: 16, alignItems: 'baseline' }}
                 >
-                  <span style={{ ...text('sm'), color: 'var(--muted-foreground)', whiteSpace: 'nowrap' }}>
-                    <span style={{ marginRight: 6 }}>
-                      <r.Icon size={16} aria-hidden style={{ verticalAlign: '-0.125em' }} />
+                  <span style={{ ...text('xs'), fontWeight: 500, color: 'var(--muted-foreground)', whiteSpace: 'nowrap' }}>
+                    <span style={{ marginRight: 4 }}>
+                      <r.Icon size={14} aria-hidden style={{ verticalAlign: '-0.125em' }} />
                     </span>
                     {r.label}
                   </span>

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { forgetRemembered } from '../lib/use-async.js'
 import { openMenu } from '../test-utils.js'
-import { takePendingDraft } from '../lib/draft-handoff.js'
+import { keepDraft, keptDraft, takePendingDraft } from '../lib/draft-handoff.js'
 
 // Everything the form reads goes through a lib module, so the mocks stop at the `rpc/` stubs: an
 // unmocked one reaches for `/_rpc/<name>`, and there is no daemon behind jsdom to answer.
@@ -79,12 +79,13 @@ vi.mock('../lib/use-start-agent.js', async () => ({
 // the form lets it submit at all, and renders the launcher's controls.
 const composerProps = vi.hoisted(() => ({ current: {} as Record<string, unknown> }))
 const composerFocus = vi.hoisted(() => vi.fn())
+const composerClear = vi.hoisted(() => vi.fn())
 vi.mock('./Composer.js', async () => {
   const { forwardRef, useImperativeHandle } = await import('react')
   const Composer = forwardRef((props: any, ref: any) => {
     composerProps.current = props
     useImperativeHandle(ref, () => ({
-      clear: () => {},
+      clear: composerClear,
       focus: composerFocus,
     }))
     return (
@@ -92,6 +93,7 @@ vi.mock('./Composer.js', async () => {
         <div data-testid="starts-at">{props.startsAt}</div>
         <div data-testid="controls">{props.controls}</div>
         <div data-testid="controls-end">{props.controlsEnd}</div>
+        <div data-testid="notes">{props.notes}</div>
         <button type="button" disabled={!props.canSubmit} onClick={() => props.onSubmit('do the thing')}>
           submit-typed
         </button>
@@ -121,6 +123,7 @@ afterEach(() => {
   forgetRemembered()
   start.mockReset()
   composerFocus.mockReset()
+  composerClear.mockReset()
   startSays.cloning = false
   startSays.error = null
   onCommands.mockReset()
@@ -171,6 +174,38 @@ describe('StartAgentForm (#1774)', () => {
     expect(start).toHaveBeenCalledWith('p1', 'do the thing', { driver: 'codex', model: 'gpt-5' })
   })
 
+  test('a start carries the words: the box keeps them for the move\'s picture, its update drops the draft, and the box is emptied once the move is over, also where the page stayed', async () => {
+    onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: true })
+    start.mockResolvedValue({ agentId: 'r1' })
+    keepDraft('launcher:p1', 'do the thing')
+    let update: (() => void) | undefined
+    let over = () => {}
+    const finished = new Promise<void>(resolve => (over = resolve))
+    const reduced = window.matchMedia
+    window.matchMedia = (query: string) => ({ ...reduced(query), matches: false })
+    document.startViewTransition = ((callback: () => void) => {
+      update = callback
+      return { finished }
+    }) as unknown as typeof document.startViewTransition
+    try {
+      const onAgentStarted = vi.fn()
+      render(<StartAgentForm {...props} onAgentStarted={onAgentStarted} />)
+      fireEvent.click(screen.getByText('submit-typed'))
+      await waitFor(() => expect(update).toBeDefined())
+      expect(keptDraft('launcher:p1')).toBe('do the thing')
+      expect(onAgentStarted).not.toHaveBeenCalled()
+      update!()
+      expect(onAgentStarted).toHaveBeenCalled()
+      expect(keptDraft('launcher:p1')).toBeUndefined()
+      expect(composerClear).not.toHaveBeenCalled()
+      over()
+      await waitFor(() => expect(composerClear).toHaveBeenCalled())
+    } finally {
+      window.matchMedia = reduced
+      delete (document as { startViewTransition?: unknown }).startViewTransition
+    }
+  })
+
   test('while the start is asked for, the form says "Starting session", the chat\'s own first line, and nothing once it answers', async () => {
     onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: true })
     let answer!: (result: { agentId: string }) => void
@@ -187,7 +222,7 @@ describe('StartAgentForm (#1774)', () => {
     render(<StartAgentForm {...props} />)
     act(() => (composerProps.current.onPreset as (label: string, replaced: boolean) => void)('footer', false))
     expect(screen.getByRole('status').textContent).toBe('footer loaded — review or edit, then Start')
-    expect(screen.getByRole('status').parentElement!.className).toContain('bottom-full')
+    expect(screen.getByRole('status').parentElement!.dataset.testid).toBe('notes')
   })
 
   test('a start refused in a moment is not preceded by a flash of "Starting session"', async () => {
@@ -281,7 +316,7 @@ describe('StartAgentForm (#1774)', () => {
     const title = within(alert).getByText('shop could not be cloned on Studio.')
     expect(title.className).toContain('text-sm')
     expect(within(alert).getByText('Studio says: This computer has no login that can read github.com/acme/shop.').className).toContain('text-xs')
-    expect(alert.parentElement!.className).toContain('bottom-full')
+    expect(alert.parentElement!.dataset.testid).toBe('notes')
   })
 
   test('under the box, at the left: the agent, then Skills, then the Context picker; at the right, before the model: the account, then the "Auto" menu', async () => {
@@ -543,7 +578,7 @@ describe('StartAgentForm (#1774)', () => {
     expect(warning!.querySelector('svg')!.getAttribute('class')).toContain('text-warning')
     expect((screen.getByText('submit-typed') as HTMLButtonElement).disabled).toBe(false)
     // Above the box, over the page: the box does not move when they come.
-    expect(problem!.parentElement!.className).toContain('bottom-full')
+    expect(problem!.parentElement!.dataset.testid).toBe('notes')
   })
 
   test('with a machine picked, the machine is asked whether a run would start there, and its logged-out agent is said in words naming it, with this computer\'s logins to use there', async () => {

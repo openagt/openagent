@@ -14,31 +14,32 @@ export function ProjectMenu({ projectId, onProjectRemoved }: { projectId: string
 
 // The bar at the top of the "New agent session" page: the project's ⋮ menu and the icons of the page's
 // panes (Panes), at the end of the row. The row is laid out as an agent's top bar is
-// (AgentActionBar), so the ⋮ and the icons are in the same place on both pages. It names the page
-// where a session's bar has the session's name; it names no project and says nothing of the
+// (AgentActionBar), so the ⋮ and the icons are in the same place on both pages. The page's question
+// names it, over the box (ProjectHome); on a phone, where the list comes first, in this bar, where a
+// session's bar has the session's name (`name`). The bar names no project and says nothing of the
 // project's checkout.
 export function ProjectActions({
   projectId,
+  name,
   onProjectRemoved,
 }: {
   projectId: string
+  /** The page's name, as its own heading in the bar. */
+  name?: string | undefined
   onProjectRemoved?: (() => void) | undefined
 }) {
   return (
-    // As an agent's top bar does, on a phone the row keeps its start free for the menu's button.
     <TopBar>
-      <div className="flex h-11 shrink-0 items-center gap-2 overflow-hidden pr-2 md:pl-4 max-md:pl-11">
+      <div className="flex h-11 shrink-0 items-center gap-2 overflow-hidden pr-2 pl-4">
         <ShowSidebarButton />
-        {/* The page's name, as the sidebar's row says it, where a session's page has its name. */}
-        <h1 className="min-w-0 truncate px-2 text-sm font-medium">New agent session</h1>
+        {name !== undefined && <h1 className={BAR_NAME}>{name}</h1>}
         <div className="grow shrink-0" />
         {/* No project, no menu of a project's. */}
-        {/* The ⋮ and the panes' icons, one kind of button, 4px apart. */}
-        <div className="flex shrink-0 items-center gap-1">
-          {projectId !== SESSIONS_ID && <ProjectMenu projectId={projectId} onProjectRemoved={onProjectRemoved} />}
-          <PaneToggles />
-        </div>
+        <PaneToggles before={projectId !== SESSIONS_ID && <ProjectMenu projectId={projectId} onProjectRemoved={onProjectRemoved} />} />
       </div>
     </TopBar>
   )
 }
+
+/** The look of a page's name in its top bar, as a session's name stands in its own. */
+export const BAR_NAME = 'min-w-0 truncate text-sm font-medium'

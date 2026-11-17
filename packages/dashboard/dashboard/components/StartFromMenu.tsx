@@ -10,8 +10,9 @@ import { rowButtonClass, RowChevron } from './ui/row-item.js'
 import { OptionLabel } from './ui/option-label.js'
 import { ScrollArea } from './ui/scroll-area.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
-import { MENU_ITEM_CLASS, MENU_POPUP_CLASS, MENU_TRIGGER_OPEN_CLASS } from './ui/dropdown-menu.js'
+import { MENU_BODY_CLASS, MENU_ITEM_CLASS, MENU_POPUP_CLASS, MENU_TRIGGER_OPEN_CLASS, MenuMark } from './ui/dropdown-menu.js'
 import { usePickerSearch } from './ui/picker-search.js'
+import { usePopupPosition } from './ui/popup-placement.js'
 
 /** The most rows the menu draws at once: the search reaches the rest. */
 const ROWS_DRAWN = 200
@@ -78,6 +79,7 @@ const samePick = (a: Row, b: Row): boolean => a.value === b.value
 // the rest lands under them. A search box in a menu is a combobox's: a plain menu takes every key
 // for its own typing-to-jump.
 export function StartFromMenu({ projectId, main, local, pick, onPick, busy }: { projectId: string; main: string; local: string; pick: StartFromPick | undefined; onPick: (pick: StartFromPick | undefined) => void; busy: boolean }) {
+  const position = usePopupPosition()
   const label = startFromLabel(pick, main, local)
   const search = usePickerSearch()
   const { open } = search
@@ -109,23 +111,28 @@ export function StartFromMenu({ projectId, main, local, pick, onPick, busy }: { 
         <TooltipContent>{`The agent starts from ${label}`}</TooltipContent>
       </Tooltip>
       <Combobox.Portal>
-        <Combobox.Positioner sideOffset={6} align="start" className="z-50 outline-none">
+        <Combobox.Positioner {...position} sideOffset={6} align="start" className="z-50 outline-none">
           <Combobox.Popup data-overlay="picker" aria-label="The agent starts from" className={cn(MENU_POPUP_CLASS, 'w-[22rem] max-w-[var(--available-width)]')}>
-            <div className="flex items-center gap-2 border-b border-border px-3">
-              <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
-              <Combobox.Input aria-label="Search branches" placeholder="Search branches" className="h-9 w-full min-w-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
+            {/* The field one line tall, 16 in from the band's every edge, as the jump's is. */}
+              <div className="flex h-13 items-center gap-3 border-b border-hairline px-4">
+              <Search className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+              <Combobox.Input aria-label="Search branches" placeholder="Search branches" className="h-5 w-full min-w-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
             </div>
             {/* The menu opens upward from the box's row: a list of a set height keeps the search and the first rows where they are as the answer lands, and as the search narrows it. */}
             <ScrollArea viewportClassName="h-[min(20rem,calc(var(--available-height)-2.5rem))]">
-              <div className="p-1">
+              <div className={MENU_BODY_CLASS}>
                 <p className="px-2 py-1.5 text-xs font-normal text-muted-foreground">The agent starts from</p>
                 <Combobox.Empty className="px-2 py-1.5 text-xs text-muted-foreground empty:hidden">No branch by that name.</Combobox.Empty>
                 <Combobox.List>
                   {(row: Row) => (
-                    <Combobox.Item key={row.value} value={row} className={cn(MENU_ITEM_CLASS, 'items-start')}>
-                      {row.description !== undefined ? <OptionLabel label={row.label} description={row.description} /> : <span className="min-w-0 flex-1 leading-tight [overflow-wrap:anywhere]">{row.label}</span>}
+                    <Combobox.Item key={row.value} value={row} className={MENU_ITEM_CLASS}>
+                      {row.description !== undefined ? <OptionLabel label={row.label} description={row.description} /> : <span className="min-w-0 flex-1 leading-5 [overflow-wrap:anywhere]">{row.label}</span>}
                       {/* The pick is the tick at the row's end. */}
-                      {row.value === picked.value && <Check className="ml-auto mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />}
+                      {row.value === picked.value && (
+                        <MenuMark className="ml-auto">
+                          <Check className="size-3.5" aria-hidden />
+                        </MenuMark>
+                      )}
                     </Combobox.Item>
                   )}
                 </Combobox.List>

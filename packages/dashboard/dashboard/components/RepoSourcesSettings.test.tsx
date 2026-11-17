@@ -7,13 +7,14 @@ const onRepoSources = vi.fn(async () => sources)
 const sendAddRepoOwner = vi.fn(async (_typed: string) => ({ ok: true }) as { ok: true } | { ok: false; error: string })
 const sendRemoveRepoOwner = vi.fn(async (_owner: string) => ({ ok: true as const }))
 const sendRemoveRepoFolder = vi.fn(async (_folder: string) => ({ ok: true as const }))
-vi.mock('../rpc/projects.js', () => ({ onRepoSources, sendAddRepoOwner, sendRemoveRepoOwner, sendRemoveRepoFolder }))
+const sendAddRepoFolder = vi.fn(async () => ({ ok: true as const, added: true }))
+vi.mock('../rpc/projects.js', () => ({ onRepoSources, sendAddRepoFolder, sendAddRepoOwner, sendRemoveRepoOwner, sendRemoveRepoFolder }))
 
 const { RepoSourcesSettings } = await import('./RepoSourcesSettings.js')
 
 beforeEach(() => {
   sources = { folders: ['/work/clients'], owners: ['github.com/vikejs'] }
-  for (const fn of [onRepoSources, sendAddRepoOwner, sendRemoveRepoOwner, sendRemoveRepoFolder]) fn.mockClear()
+  for (const fn of [onRepoSources, sendAddRepoFolder, sendAddRepoOwner, sendRemoveRepoOwner, sendRemoveRepoFolder]) fn.mockClear()
 })
 afterEach(cleanup)
 
@@ -39,6 +40,16 @@ describe('Settings › Repos', () => {
     fireEvent.change(await screen.findByLabelText('GitHub user or organization'), { target: { value: 'vikejs/vike' } })
     fireEvent.click(screen.getByRole('button', { name: 'Add' }))
     expect(await screen.findByText('"vikejs/vike" is not a user or organization.')).toBeTruthy()
+  })
+
+  test("with no folder added, the section's own press searches another one, as the picker does, and lists it", async () => {
+    sources = { ...sources, folders: [] }
+    render(<RepoSourcesSettings />)
+    expect(await screen.findByText('No folder added yet: only your home folder is searched.')).toBeTruthy()
+    sources = { ...sources, folders: ['/work/clients'] }
+    fireEvent.click(screen.getByRole('button', { name: 'Search another folder…' }))
+    await waitFor(() => expect(sendAddRepoFolder).toHaveBeenCalledTimes(1))
+    expect(await screen.findByTitle('/work/clients')).toBeTruthy()
   })
 
   test('a folder added to search in can be taken off', async () => {

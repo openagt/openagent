@@ -9,6 +9,7 @@ import { Button, buttonVariants } from './ui/button.js'
 import { ButtonGroup, ButtonGroupSeparator } from './ui/button-group.js'
 import { DiffStat } from './DiffStat.js'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu.js'
+import { Facts } from './ui/panel.js'
 
 // The end-of-session handoff (#799): what this session produced, and the next step offered rather
 // than described. Before this, a finished session showed no branch, no commits and no diff, so
@@ -43,7 +44,7 @@ export function HandoffSummary({ handoff, subagent = false }: { handoff: AgentHa
   const commits = `${handoff.commits.length} commit${handoff.commits.length === 1 ? '' : 's'}`
   // Commits that undo each other leave the files as the base has them. The commits are still what
   // the agent did, so they are counted, and that nothing is left of them is said beside the count.
-  if (handoff.empty && handoff.commits.length > 0) return <span className="text-muted-foreground">{commits} · no change left</span>
+  if (handoff.empty && handoff.commits.length > 0) return <Facts facts={[commits, 'no change left']} className="text-muted-foreground" />
   // Nothing committed and files left on disk: neither "merged" nor "no changes" is true of that,
   // and the words beside the Commit button name the files. So the verdict says nothing.
   if (handoff.empty && handoff.pendingFiles?.length) return null
@@ -112,10 +113,16 @@ export function HandoffActions(props: {
   const { handoff, act } = props.state
   // What the last press did, said until the work on the branch moves on or the bar is put away.
   const [said, setSaid] = useState<{ text: string; work: string; title?: string; shown?: false } | null>(null)
-  // The pull request a merge pressed here left to merge once its checks pass.
-  const [armed, setArmed] = useState<number | null>(null)
+  // The pull request a merge pressed here left to the provider's own watcher, which the git host does not report.
+  const [watched, setWatched] = useState<number | null>(null)
   const work = handoff ? [handoff.commits.length, handoff.pendingFiles?.length ?? 0, handoff.insertions, handoff.deletions].join('|') : ''
   const saying = said?.work === work ? said : null
+  // A merge that waits for the checks: armed on the git host, read with the pull request, or watched since a press here.
+  const pr = handoff?.pr && !handoff.movedPastPr && !handoff.merged && handoff.pr.state === 'OPEN' ? handoff.pr : undefined
+  const armed = pr !== undefined && (pr.armed === true || watched === pr.number)
+  // What the last press did, in the bar, unless the bar already shows it (`shown: false`): then the screen reader alone hears it.
+  const inBar = saying?.shown === false ? null : saying
+  const shown: { text: string; title?: string } | null = inBar ?? (armed ? { text: mergesLater(pr.number) } : null)
   const press: Pressed = (which, fn, failed, answered, says) => {
     if (props.state.busy) return
     // The bar, not the split button around a press: that group is gone once its press is done.
@@ -123,18 +130,18 @@ export function HandoffActions(props: {
     void act(which, fn, failed, answered).then(value => {
       const told = value === undefined ? undefined : says?.(value)
       if (told) setSaid({ ...told, work })
-      if (value !== undefined && which === 'merge' && (value as { merge?: string }).merge !== 'merged') setArmed(handoff?.pr?.number ?? null)
+      if (value !== undefined && which === 'merge' && (value as { merge?: string }).merge === 'watching') setWatched(handoff?.pr?.number ?? null)
       requestAnimationFrame(() => keepFocusIn(bar))
     })
   }
   return (
     <>
-      {saying && saying.shown !== false && (
-        <Reason {...(saying.title ? { title: saying.title } : {})} hidden>
-          {saying.text}
+      {shown && (
+        <Reason {...(shown.title ? { title: shown.title } : {})} hidden={shown === inBar}>
+          {shown.text}
         </Reason>
       )}
-      <NextStep {...props} press={press} armed={armed !== null && armed === handoff?.pr?.number} />
+      <NextStep {...props} press={press} armed={armed} />
       <span aria-live="polite" className="sr-only">
         {saying?.text}
       </span>
@@ -174,7 +181,7 @@ function NextStep({
   subagent?: boolean
   onAsked?: ((text: string | null) => void) | undefined
   press: Pressed
-  /** This PR's merge was pressed here, and waits for its checks. */
+  /** This PR merges by itself once its checks pass. */
   armed: boolean
 }) {
   const { handoff, pending } = state
@@ -267,8 +274,8 @@ function NextStep({
             'merge',
             () => sendMerge(projectId, agentId),
             'Could not merge the pull request.',
-            done => (done.merge === 'merged' ? { pr: { ...pr, state: 'MERGED' } } : undefined),
-            done => ({ text: done.merge === 'merged' ? `Merged PR #${pr.number}.` : `PR #${pr.number} merges when its checks pass.` }),
+            done => (done.merge === 'merged' ? { pr: { ...pr, state: 'MERGED' } } : done.merge === 'auto-armed' ? { pr: { ...pr, armed: true } } : undefined),
+            done => ({ text: done.merge === 'merged' ? `Merged PR #${pr.number}.` : mergesLater(pr.number) }),
           )
         }
       >
@@ -437,6 +444,11 @@ function Steady({ words, now }: { words: readonly string[]; now: number }) {
       <span>{words[now]}</span>
     </span>
   )
+}
+
+/** What the bar says of a pull request that merges by itself once its checks pass. */
+function mergesLater(number: number): string {
+  return `PR #${number} merges when its checks pass.`
 }
 
 /** Why there is nothing to press. Reads as part of the bar, not as an error. `hidden`: said to a screen reader elsewhere. */

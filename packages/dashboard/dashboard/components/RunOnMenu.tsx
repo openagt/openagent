@@ -97,8 +97,9 @@ export function RunOnMenu({ connection, busy }: { connection: ConnectionControl;
       <DropdownMenuContent align="start" className="min-w-[19rem] max-w-[22rem]">
         <DropdownMenuGroup>
           <DropdownMenuLabel>Run on</DropdownMenuLabel>
-          {/* Each row leads with its machine's mark; the pick is the tick at the row's end. */}
-          <DropdownMenuItem className={cn('items-start gap-2', connection.onlyThere && 'opacity-60')} disabled={connection.onlyThere} onClick={() => connection.onSelectLocal()}>
+          {/* Each row leads with its machine's mark, its words at the menu's gap from it as "Add a machine…"'s
+              are; the pick is the tick at the row's end. */}
+          <DropdownMenuItem className={cn('items-start', connection.onlyThere && 'opacity-60')} disabled={connection.onlyThere} onClick={() => connection.onSelectLocal()}>
             <Laptop className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
             <OptionLabel
               label={here}
@@ -119,7 +120,7 @@ export function RunOnMenu({ connection, busy }: { connection: ConnectionControl;
             return (
               <DropdownMenuItem
                 key={machine.id}
-                className={cn('items-start gap-2', (offline || closed) && 'opacity-60')}
+                className={cn('items-start', (offline || closed) && 'opacity-60')}
                 disabled={closed}
                 onClick={() => connection.onSelect(machine)}
               >

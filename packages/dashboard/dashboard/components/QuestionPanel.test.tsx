@@ -41,6 +41,7 @@ describe('QuestionPanel', () => {
     expect(screen.getByRole('button', { name: 'Submit' })).toBeTruthy()
   })
 
+
   test('Submit names its keys where there is a keyboard, never on a touch screen or at a phone\'s width, as the message box does', () => {
     render(panel({ active: true }))
     const keys = screen.getByRole('button', { name: 'Submit' }).querySelector('kbd')!.parentElement!

@@ -40,7 +40,13 @@ function renderPicker(over: Partial<Parameters<typeof ProjectPicker>[0]> = {}) {
 
 const trigger = () => screen.getByRole('combobox', { name: 'The session works in' })
 const search = () => screen.getByRole('combobox', { name: 'Search projects and repos' })
-const options = () => screen.getAllByRole('option').map(option => option.textContent)
+/** A row's words, a cut path once: its drawn halves, hidden beside the whole of it said to a screen reader, left out. */
+const said = (row: Element) => {
+  const copy = row.cloneNode(true) as Element
+  for (const hidden of copy.querySelectorAll('.sr-only + [aria-hidden="true"]')) hidden.remove()
+  return copy.textContent
+}
+const options = () => screen.getAllByRole('option').map(said)
 
 describe('ProjectPicker', () => {
   test('as a button that adds a project (the first steps): its words on it, and no "no project" row, only what can be added', async () => {
@@ -146,12 +152,12 @@ describe('ProjectPicker', () => {
     renderPicker()
     await openMenu(trigger())
     await screen.findByRole('option', { name: /bati/ })
-    expect(options()).toEqual(['No project', 'alpha', 'vikegithub.com/vikejs/vike', 'notes/home/me/notes', 'octo-agent/shopPrivate · Not on this computer · @octo-agent', 'vikejs/batiNot on this computer · vikejs'])
+    expect(options()).toEqual(['No project', 'alpha', 'vikegithub.com/vikejs/vike', 'notes/home/me/notes', 'octo-agent/shopPrivate·Not on this computer·@octo-agent', 'vikejs/batiNot on this computer·vikejs'])
     // Found by its description too; its address is no "Add" row.
     fireEvent.change(search(), { target: { value: 'scaffold' } })
-    expect(options()).toEqual(['vikejs/batiNot on this computer · vikejs'])
+    expect(options()).toEqual(['vikejs/batiNot on this computer·vikejs'])
     fireEvent.change(search(), { target: { value: 'github.com/vikejs/bati' } })
-    expect(options()).toEqual(['vikejs/batiNot on this computer · vikejs'])
+    expect(options()).toEqual(['vikejs/batiNot on this computer·vikejs'])
     fireEvent.click(screen.getByRole('option', { name: /vikejs\/bati/ }))
     expect(await screen.findByText('Do you trust this repository?')).toBeTruthy()
     await waitFor(() => expect(onCloneTarget).toHaveBeenCalledWith('github.com/vikejs/bati'))
@@ -246,8 +252,8 @@ describe('ProjectPicker', () => {
     const { onPick } = renderPicker({ picked: 'alpha-1', pickedName: 'alpha' })
     await openMenu(trigger())
     // The pick is the tick at the row's end; the other rows carry none.
-    expect(screen.getByRole('option', { name: 'alpha' }).lastElementChild!.classList.contains('lucide-check')).toBe(true)
-    expect(screen.getByRole('option', { name: 'No project' }).lastElementChild!.classList.contains('lucide-check')).toBe(false)
+    expect(screen.getByRole('option', { name: 'alpha' }).lastElementChild!.querySelector('.lucide-check') !== null).toBe(true)
+    expect(screen.getByRole('option', { name: 'No project' }).lastElementChild!.querySelector('.lucide-check') !== null).toBe(false)
     fireEvent.click(await screen.findByRole('option', { name: 'No project' }))
     expect(onPick).toHaveBeenLastCalledWith(null)
     cleanup()

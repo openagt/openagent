@@ -8,6 +8,8 @@ import { MembersCard } from './MembersCard.js'
 // behind their emails. The tally itself is src/people.test.ts's.
 
 const NOW = new Date().toISOString()
+/** What a member did, as the card's line of facts says it: "3 runs · $1.50 · 2 commits", each fact joined by its one dot. */
+const did = (words: string) => (_: string, element: Element | null) => element?.tagName === 'P' && element.textContent === words.replaceAll(' · ', '·')
 const person = (email: string, over: Record<string, unknown> = {}) => ({ person: email, runs: 0, running: 0, waiting: 0, cost: 0, commits: 0, lastAt: NOW, ...over })
 
 /** A host whose `logs people` says `people`; the runs it lists are `runs`, and with none it cannot list them. */
@@ -52,7 +54,7 @@ test("each member by the name git knows, their picture where the git host knows 
   expect(within(fresh).getByText('NE')).toBeTruthy()
   // A picture that fails to load: the letters.
   const me = screen.getByRole('listitem', { name: 'Suleiman Shahbari' })
-  expect(within(me).getByText('3 runs · $1.50 · 2 commits')).toBeTruthy()
+  expect(within(me).getByText(did('3 runs · $1.50 · 2 commits'))).toBeTruthy()
   fireEvent.error(me.querySelector('img')!)
   expect(me.querySelector('img')).toBeNull()
   expect(within(me).getByText('SS')).toBeTruthy()
@@ -68,7 +70,7 @@ test('a person with two emails on one git host account is one row, with their na
   )
   show(host)
   // The card opens on the members it remembers: this waits for its own read.
-  await screen.findByText('2 runs · $0.24 · 2 commits')
+  await screen.findByText(did('2 runs · $0.24 · 2 commits'))
   const [rom, ...others] = screen.getAllByRole('listitem')
   expect(others).toHaveLength(0)
   expect(rom!.getAttribute('aria-label')).toBe('Romuald Brillout')
@@ -89,7 +91,7 @@ test("a member's runs are counted as the dashboard lists them: a run its record 
   )
   show(host)
   const me = await screen.findByRole('listitem', { name: 'Suleiman Shahbari' })
-  expect(within(me).getByText('2 runs · $1.50 · 2 commits')).toBeTruthy()
+  expect(within(me).getByText(did('2 runs · $1.50 · 2 commits'))).toBeTruthy()
   expect(within(me).queryByText(/working/)).toBeNull()
   // Only the runs of the days the card counts are asked for: a project keeps hundreds.
   const [[project, wanted]] = vi.mocked(host.agents).mock.calls as [[string, { since: string }]]
@@ -118,6 +120,6 @@ test('a member with runs that wait on an answer says so beside the ones working'
   show(host)
   const member = await screen.findByRole('listitem', { name: 'Suleiman Shahbari' })
   expect(within(member).getByText('working')).toBeTruthy()
-  // In the sidebar's amber for a run that waits.
-  expect(within(member).getByText('2 waiting').querySelector('span')!.className).toMatch(/bg-warning/)
+  // In the sidebar's amber for a run that waits: its mark, the hexagon (RunMark).
+  expect(within(member).getByText('2 need an answer').querySelector('svg')!.getAttribute('class')).toMatch(/text-warning/)
 })

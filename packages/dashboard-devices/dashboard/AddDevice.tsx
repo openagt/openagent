@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { Monitor, Server, Ticket } from 'lucide-react'
-import { Button, List, RadioGroup, Row, buttonVariants, useOpenAgentDown, type ModuleMachine } from '@openagt/dashboard/module'
+import { ChevronRight, Monitor, Server, Ticket } from 'lucide-react'
+import { Button, RadioGroup, SettingsItem, SettingsItems, SettingsRow, buttonVariants, useOpenAgentDown, type ModuleMachine } from '@openagt/dashboard/module'
 import { addDevice, findComputers, readPersonThere, setSwitch, type Answer, type FoundComputer, type Given } from './devices.js'
 import { askLink, installDone } from './servers.js'
 import { CodeCard, Joined, NoCodeYet, PhoneCode, RanOut, Waiting, clock, useCode } from './codes.js'
@@ -306,43 +306,57 @@ function AddComputer({ d, onGive, onSetUpServer, onClose }: { d: Devices; /** Gi
   if (connecting) return <Connecting d={d} computer={connecting} canBoth={status?.listening === true} onBack={() => setConnecting(undefined)} onClose={onClose} />
 
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col gap-6">
       <Waiting>{noneYet && !found?.length ? 'No computer found on this Wi-Fi yet. Still looking…' : 'Looking on this Wi-Fi…'}</Waiting>
       {error !== undefined && <Problem>{error}</Problem>}
       {found !== undefined && found.length > 0 && (
-        <List aria-label="On this Wi-Fi">
+        <SettingsItems aria-label="On this Wi-Fi">
           {found.map(computer => (
-            <Row
+            // The row is the press, as a device's row that opens its page is: "Connect" at its right at rest, at every width, in the words of the list's own press.
+            <SettingsItem
               key={computer.url}
-              leading={<Monitor className="size-4" aria-hidden />}
-              title={computer.name}
-              {...(computer.version !== undefined ? { detail: `OpenAgent ${computer.version}` } : {})}
-              meta={
-                <Button variant="secondary" disabled={down} aria-label={`Connect ${computer.name}`} onClick={() => setConnecting(computer)}>
-                  Connect
-                </Button>
+              icon={Monitor}
+              title={
+                <>
+                  <span className="sr-only">Connect</span> {computer.name}
+                </>
               }
+              {...(computer.version !== undefined ? { detail: `OpenAgent ${computer.version}` } : {})}
+              {...(down
+                ? {}
+                : {
+                    end: (
+                      <>
+                        <span className="text-sm font-medium text-foreground">Connect</span>
+                        <ChevronRight aria-hidden />
+                      </>
+                    ),
+                    onClick: () => setConnecting(computer),
+                  })}
             />
           ))}
-        </List>
+        </SettingsItems>
       )}
-      <p className="text-xs text-muted-foreground">Don't see it? Open OpenAgent on it, on the same Wi-Fi, and turn on "On this Wi-Fi" in its Settings › Devices.</p>
-      <div className="flex flex-wrap items-center justify-between gap-3 pt-3">
-        <span className="text-sm font-medium">
-          Somewhere else?
-          <span className="block text-xs font-normal text-muted-foreground">{server ? `At the office, at a friend's: it joins through ${server.label}.` : "At the office, at a friend's: it joins through a server. Add a server first."}</span>
-        </span>
-        {server || !onSetUpServer ? (
-          <Button type="button" variant="secondary" disabled={!server} onClick={onGive}>
-            <Ticket className="size-4" aria-hidden />
-            Give it a code
-          </Button>
-        ) : (
-          <Button type="button" variant="secondary" onClick={onSetUpServer}>
-            <Server className="size-4" aria-hidden />
-            Set up a server
-          </Button>
-        )}
+      <p className="max-w-xl text-xs text-faint-foreground">Don't see it? Open OpenAgent on it, on the same Wi-Fi, and turn on "On this Wi-Fi" in its Settings › Devices.</p>
+      {/* A way of its own, a part 32 under the list, and quieter than its rows' Connect. */}
+      <div className="mt-2">
+        <SettingsRow
+          label="Somewhere else?"
+          description={server ? `At the office, at a friend's: it joins through ${server.label}.` : "At the office, at a friend's: it joins through a server. Add a server first."}
+          control={
+            server || !onSetUpServer ? (
+              <Button type="button" variant="ghost" className="max-md:-ml-3 md:-mr-3" disabled={!server} onClick={onGive}>
+                <Ticket className="size-4" aria-hidden />
+                Give it a code
+              </Button>
+            ) : (
+              <Button type="button" variant="ghost" className="max-md:-ml-3 md:-mr-3" onClick={onSetUpServer}>
+                <Server className="size-4" aria-hidden />
+                Set up a server
+              </Button>
+            )
+          }
+        />
       </div>
       {/* Its way out, where every other way of adding keeps one: the dialog it was had only its ×. */}
       <Presses>

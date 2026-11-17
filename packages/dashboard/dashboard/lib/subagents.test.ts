@@ -1,6 +1,6 @@
 import type { AgentMeta, OpenAgentEvent } from '../../src/index.js'
 import { describe, expect, test } from 'vitest'
-import { callSubagents, holdsMainAgent, subagentWait, isOpenSubagent, nestRows, runRow, subagentEnd, subagentEvents, drivesSubagents, stepWords, subagentSteps, subagentStartedAt, subagentsOf, taskLabel, type SubagentStep } from './subagents.js'
+import { arrange, callSubagents, subagentRows, holdsMainAgent, subagentWait, isOpenSubagent, nestRows, runRow, subagentEnd, subagentEvents, drivesSubagents, stepWords, subagentSteps, subagentStartedAt, subagentsOf, taskLabel, type SubagentRow, type SubagentStep } from './subagents.js'
 
 function agent(id: string, over: Partial<AgentMeta> = {}): AgentMeta {
   return { status: 'done', id, startedAt: '2026-10-01T10:00:00.000Z', updatedAt: '2026-10-01T10:00:00.000Z', ...over }
@@ -165,6 +165,16 @@ describe('callSubagents and subagentEvents', () => {
     expect(callSubagents([call, started, named, read, grep, said, answered, ended])[0]).toMatchObject({ status: 'ended', calls: 2, endedAt: '2026-10-01T10:00:40.000Z' })
   })
 
+  test("one still working when its run's process ended is over, stopped, also once a message continues the run; a new prompt alone ends none", () => {
+    const end: OpenAgentEvent = { kind: 'end', ok: false, stopped: true, at: '2026-10-01T10:00:30.000Z' }
+    const continued = ev({ type: 'start', prompt: 'And the footer too.' }, '01:00')
+    expect(callSubagents([call, started, read, end, continued])[0]).toMatchObject({ status: 'stopped', endedAt: '2026-10-01T10:00:30.000Z' })
+    expect(subagentRows([], [call, started, read, end, continued], true)[0]).toMatchObject({ status: 'stopped', working: false })
+    expect(callSubagents([call, started, read, continued])[0]).toMatchObject({ status: 'working' })
+    // One that ended before the run's process did keeps how it ended.
+    expect(callSubagents([call, started, said, answered, ended, end])[0]).toMatchObject({ status: 'ended', endedAt: '2026-10-01T10:00:40.000Z' })
+  })
+
   test("what the chat passes over: the subagent's events, its call and that call's answer, and all it said and did; never the run's own steps", () => {
     const events = [call, started, named, read, grep, said, answered, ended, own]
     expect([...subagentEvents(events)]).toEqual([call, started, named, read, grep, said, answered, ended])
@@ -254,5 +264,34 @@ describe('subagentWait', () => {
     const start = ev({ type: 'subagent', id: 'item_1:t1', status: 'working' }, '00:03')
     const back = ev({ type: 'output', id: 'item_1', text: 'done' }, '00:09')
     expect(subagentWait([prompt, start, call, back]).waiting).toBe(true)
+  })
+})
+
+describe('arrange', () => {
+  /** A row of `status` that started `at` minutes into the hour. */
+  const row = (key: string, status: string, at: number): SubagentRow => ({ key, name: key, status, working: status === 'running', startedAt: `2026-10-01T10:${String(at).padStart(2, '0')}:00.000Z` })
+
+  test('forty rows, two failed and one asking: those three lead, the asking one first, and the ended ones fold', () => {
+    const rows = Array.from({ length: 37 }, (_, at) => row(`ended ${at}`, at % 2 ? 'done' : 'stopped', at))
+    rows.push(row('late failure', 'failed', 50), row('asks', 'waiting', 45), row('early failure', 'failed', 40))
+    const { parts, folds } = arrange(rows)
+    expect(parts.map(part => [part.name, part.keys.slice(0, 2)])).toEqual([
+      ['Waiting on you', ['asks']],
+      ['Failed', ['early failure', 'late failure']],
+      ['Ended', ['ended 0', 'ended 1']],
+    ])
+    expect(folds).toBe(true)
+  })
+
+  test('each part only when it holds a row, its rows by start; those at work and one whose computer does not answer work; eight in all fold nothing', () => {
+    const { parts, folds } = arrange([row('b', 'running', 5), row('a', 'unknown', 2), row('c', 'done', 1)])
+    expect(parts).toEqual([
+      { name: 'Working', keys: ['a', 'b'] },
+      { name: 'Ended', keys: ['c'] },
+    ])
+    expect(folds).toBe(false)
+    expect(arrange(Array.from({ length: 8 }, (_, at) => row(`${at}`, 'done', at))).folds).toBe(false)
+    // Nine with none ended: nothing to fold.
+    expect(arrange(Array.from({ length: 9 }, (_, at) => row(`${at}`, 'failed', at))).folds).toBe(false)
   })
 })

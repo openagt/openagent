@@ -221,12 +221,26 @@ describe('the Skills page', () => {
     render(<SkillsSettings projectId="p1" />)
     await screen.findByText('Tickets and queue')
     expect(card('tickets').textContent).toBe('ticketsa newer version is thereWhat tickets does.')
-    expect(card('queue').textContent).toBe('queuechanged by hand · waiting to reach mainWhat queue does.')
+    expect(card('queue').textContent).toBe('queuechanged by hand·waiting to reach mainWhat queue does.')
     expect(card('plan').textContent).toBe('planyour own textWhat plan does.')
     expect(card('triage').textContent).toBe('triageWhat triage does.')
     expect(isTicked('triage')).toBe(false)
     fireEvent.click(screen.getByText('What triage does.'))
     expect(isTicked('triage')).toBe(true)
+  })
+
+  test("a skill says its first sentence whole, the rest on a press of its chevron, which ticks nothing; one sentence alone has no chevron", async () => {
+    onProjectSkills.mockResolvedValue(skills({ groups: [{ title: 'Tickets and queue', skills: [{ ...skill('plan'), description: 'Plans a ticket, e.g. a big one, before work starts. Then it asks you.' }, skill('triage')] }] }))
+    render(<SkillsSettings projectId="p1" />)
+    const sentence = await screen.findByText('Plans a ticket, e.g. a big one, before work starts.')
+    const chevron = screen.getByRole('button', { name: 'All of what plan does' })
+    expect(chevron.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(chevron)
+    expect(chevron.getAttribute('aria-expanded')).toBe('true')
+    expect(sentence.textContent).toBe('Plans a ticket, e.g. a big one, before work starts. Then it asks you.')
+    expect(isTicked('plan')).toBe(false)
+    expect(screen.getByText('What triage does.')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'All of what triage does' })).toBeNull()
   })
 
   test('opened again the ticks show what the project has; a tick removed deletes, a tick added writes', async () => {

@@ -126,7 +126,7 @@ function DropBar({ side }: { side: 'before' | 'after' }) {
  * new places: this page's (the picked project's, or the one of every project, which also lays out a
  * project never arranged on its own).
  */
-export function EditOverview({ arranged, under, layouts, layoutKey, notice }: { arranged: Placed[]; /** Drawn where it stands on the page, so arranging moves nothing. */ under: Under; layouts: OverviewLayouts | undefined; layoutKey: string; /** What arranging does, said above the tray. */ notice: ReactNode }) {
+export function EditOverview({ arranged, under, layouts, layoutKey, notice, reset }: { arranged: Placed[]; /** Drawn where it stands on the page, so arranging moves nothing. */ under: Under; layouts: OverviewLayouts | undefined; layoutKey: string; /** What arranging does, said above the tray. */ notice: ReactNode; /** The press that gives up this page's own layout, when it is drawn here rather than in the page's head (on a phone). */ reset?: ReactNode }) {
   const [dragging, setDragging] = useState<Dragging | null>(null)
   // Where the card being dragged lands: beside one card (before or after it, by which half of it the
   // pointer is over), or at the end, over the page's empty room. It is drawn as a bar in the gap,
@@ -259,8 +259,8 @@ export function EditOverview({ arranged, under, layouts, layoutKey, notice }: { 
               onWidth={picked => write(changed(card.id, { width: picked }))}
               onHide={() => write(changed(card.id, { hidden: true }))}
             />
-            {/* The card as it stands, its own buttons asleep while it is being arranged, with the sentence that says what it is. Its heading's link to its page is not drawn, its room kept: the bar stands there, on every card, however long the link's words. */}
-            <div inert className="flex flex-1 select-none flex-col *:flex-1 [&_[data-part-description]]:not-sr-only [&_section>div:first-child>h2~*]:invisible">
+            {/* The card as it stands, its own buttons asleep while it is being arranged; its sentence still for a screen reader alone, so arranging moves nothing. Its heading's link to its page is not drawn, its room kept. */}
+            <div inert className="flex flex-1 select-none flex-col *:flex-1 [&_section>div:first-child>h2~*]:invisible">
               {card.node}
             </div>
           </div>
@@ -289,6 +289,7 @@ export function EditOverview({ arranged, under, layouts, layoutKey, notice }: { 
             'Not on the page: drag one onto a card to put it there, or press + to add it at the end.'
           )}
         </p>
+        {reset !== undefined && <div className={cn(tray.length > 0 && 'mb-3')}>{reset}</div>}
         {tray.length > 0 && (
           <ul className="flex flex-wrap gap-2">
             {tray.map(({ card }) => (
@@ -325,8 +326,9 @@ export function TakeOffMark() {
 /** The bar above a card while the page is arranged, so it covers none of the card: its handle, its widths, and ✕. */
 function CardBar({ label, widths, width, first, last, onStep, onWidth, onHide }: { label: string; widths: CardWidth[]; width: CardWidth; first: boolean; last: boolean; onStep: (by: -1 | 1) => void; onWidth: (width: CardWidth) => void; onHide: () => void }) {
   return (
-    // On the heading's line, where its link stood (not drawn while arranging), so the part keeps its place.
-    <div role="toolbar" aria-label={label} className="absolute top-0 right-0 z-10 flex h-8 items-center gap-1 bg-background pl-2">
+    // On the card's frame, over its top edge and above the card: it covers none of the card, however narrow the card or
+    // long its title, and the card keeps its place. Its ground hides the frame's line under it, nothing else.
+    <div role="toolbar" aria-label={label} className="absolute right-0 bottom-full z-10 flex h-5 items-center gap-1 bg-background px-1 pointer-coarse:gap-6">
       <button
         type="button"
         aria-label={`Move ${label}: arrow keys`}
@@ -336,12 +338,12 @@ function CardBar({ label, widths, width, first, last, onStep, onWidth, onHide }:
           event.preventDefault()
           onStep(by)
         }}
-        className="focus-ring not-pointer-coarse:flex size-7 cursor-grab items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground pointer-coarse:hidden"
+        className="focus-ring not-pointer-coarse:flex size-5 cursor-grab items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground pointer-coarse:hidden"
       >
         <GripVertical className="h-4 w-4" aria-hidden />
       </button>
       {/* A touch screen drags nothing: there a card moves by a press. */}
-      <span className="not-pointer-coarse:hidden pointer-coarse:flex">
+      <span className="not-pointer-coarse:hidden pointer-coarse:flex pointer-coarse:gap-6">
         <BarButton label={`Move ${label} earlier`} disabled={first} onClick={() => onStep(-1)}>
           <ChevronLeft className="h-4 w-4" aria-hidden />
         </BarButton>
@@ -358,7 +360,7 @@ function CardBar({ label, widths, width, first, last, onStep, onWidth, onHide }:
               type="button"
               aria-pressed={option === width}
               onClick={() => onWidth(option)}
-              className={cn('focus-ring h-7 min-w-7 rounded-md px-1.5 tabular-nums transition-colors', option === width ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-accent hover:text-foreground')}
+              className={cn('focus-ring h-5 min-w-5 rounded-md px-1.5 tabular-nums transition-colors', option === width ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-accent hover:text-foreground')}
             >
               {WIDTH_WORDS[option]}
             </button>
@@ -374,7 +376,8 @@ function CardBar({ label, widths, width, first, last, onStep, onWidth, onHide }:
 
 function BarButton({ label, disabled = false, onClick, children }: { label: string; disabled?: boolean; onClick: () => void; children: ReactNode }) {
   return (
-    <button type="button" aria-label={label} title={label} disabled={disabled} onClick={onClick} className="focus-ring flex items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50 pointer-fine:size-7 pointer-coarse:size-11">
+    // Drawn as small as the bar is tall; under a finger it takes 44 px all round, beyond what it draws.
+    <button type="button" aria-label={label} title={label} disabled={disabled} onClick={onClick} className="focus-ring relative flex size-5 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50 pointer-coarse:after:absolute pointer-coarse:after:-inset-3">
       {children}
     </button>
   )

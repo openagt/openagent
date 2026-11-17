@@ -6,8 +6,10 @@ import { useQuota } from '../lib/quota.js'
 import { useModuleHost, type ModuleProject, type UsageLimitSaved } from '../module/index.js'
 import { useMountedModules, type MountedUsageLimit } from '../lib/use-modules.js'
 import { usePolled } from '../lib/use-async.js'
-import { Section } from './ui/section.js'
-import { SentenceShape, Slot } from './ui/slot.js'
+import { PanelGroup } from './ui/panel.js'
+import { Card } from './ui/card.js'
+import { Slot, WordsShape } from './ui/slot.js'
+import { Skeleton } from './ui/skeleton.js'
 import { cn } from '../lib/utils.js'
 import { ModuleSlot, projectsHaving } from './ModulePageView.js'
 import { formatRelative, formatResetDay, formatResetTooltip, formatDuration, formatDurationLong } from '../lib/format-date.js'
@@ -24,7 +26,7 @@ import {
 } from '../lib/quota-bar.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { AddedAccountsUsage, useAgentAccounts } from './AgentAccounts.js'
-import { loggedOut, useAgentState } from './Logins.js'
+import { agentLoginState, loggedOut, useAgentState } from './Logins.js'
 
 // The usage bar (#960): one week-long track, so "am I ahead or behind?" is a glance rather than a
 // calculation. It replaces the pair of flat meters that came before (#519/#879), which showed the
@@ -394,6 +396,9 @@ function OtherWindowRow({ window }: { window: DriverQuotaWindow }) {
   )
 }
 
+/** What the card says where Claude Code is not installed: no usage to read. */
+const NOT_FOUND = 'Claude Code was not found, so usage cannot be read.'
+
 /** Why there's no reading, in words a user can act on; `signedOut` while Claude Code itself is not logged in. */
 function unavailableNote(view: QuotaView, signedOut: boolean): string | undefined {
   switch (view.unavailable) {
@@ -403,7 +408,7 @@ function unavailableNote(view: QuotaView, signedOut: boolean): string | undefine
       // Claude Code logged out answers so too: it has no account at all.
       return signedOut ? 'Claude Code is not logged in, so there is no usage to show.' : 'This account has no subscription usage to report, so there is no boundary to measure against.'
     case 'agent-not-found':
-      return 'Claude Code was not found, so usage cannot be read.'
+      return NOT_FOUND
     case 'unrecognized':
       // The poller no longer gives up on this (#960), so where a reading survives, say it is
       // behind rather than that the boundary is off, which read as terminal.
@@ -499,42 +504,70 @@ export function Quota({ projects }: { projects: ProjectSummary[] }) {
   const windows = view?.windows ?? []
 
   return (
-    <Section title="Usage">
-      <div className="space-y-4">
-        <Slot of={{ state: view ? 'fresh' : 'unknown', value: view }} shape={<SentenceShape />}>
-          {() => (
-            <div className="space-y-4">
-              {/* Without a placeable week there is no axis to draw. Say so, loudly — no fallback (Rom):
-                  this used to degrade to the week as a plain figure, which hid a real defect for weeks —
-                  a reset phrasing the parser didn't know just made the panel quietly plainer, and nothing
-                  anywhere said the boundary was gone. Quote the text that failed: it is the bug report. */}
-              {view?.boundary && week ? (
-                usageLimit ? (
-                  <ModuleSlot package={usageLimit.package} label="usage limit">
-                    <LimitedWeekBar limit={usageLimit} projects={projectsHaving(usageLimit.projects, projects)} boundary={view.boundary} percentUsed={week.percentUsed} others={windows} />
-                  </ModuleSlot>
-                ) : (
-                  <WeekBar boundary={view.boundary} percentUsed={week.percentUsed} others={windows} />
-                )
-              ) : view && view.windows.length ? (
-                <p role="alert" className="text-sm text-danger">
-                  {unplaceableWeek(week, windows)}
+    <PanelGroup bare title="Usage">
+      {/* A card for the bar and the windows; where it says only why there are none, that sentence stands under the heading alone. */}
+      <Card className="space-y-4 px-4 py-3 has-[>p:only-child]:border-0 has-[>p:only-child]:bg-transparent has-[>p:only-child]:p-0 has-[>p:only-child]:shadow-none">
+        {/* The bar's place, drawn while it is read and when there is a bar or a window to show: an empty one would stand as a gap over the note. */}
+        {(!view || (view.boundary && week) || windows.length > 0) && (
+          <Slot
+            of={{ state: view ? 'fresh' : 'unknown', value: view }}
+            // While it is read, what it will say: where Claude Code is known not to be installed, the sentence that says
+            // so; else the week's bar as it stands, its days' line, the bar, the sentence under them.
+            shape={
+              agentLoginState(claude) === 'not-installed' ? (
+                <p className="text-sm">
+                  <WordsShape words={NOT_FOUND} />
                 </p>
-              ) : null}
-
-              {/* Normally these live behind the bar's own "show all limits" tooltip — but without a bar
-                  to hide them in, they still have to show up somewhere; the windows Claude Code did
-                  report are data, not a fallback, and stay regardless. */}
-              {!(view?.boundary && week) && windows.length ? (
-                <div className="space-y-1 border-t border-border pt-3">
-                  {windows.map(w => (
-                    <OtherWindow key={w.label} window={w} />
-                  ))}
+              ) : (
+                // Each a bar centred on its line, so the shapes stand 16 in from the card's edges.
+                <div className="space-y-1.5">
+                  <div className="flex h-4 items-center">
+                    <Skeleton className="h-2 w-full" />
+                  </div>
+                  <div className="flex h-4 items-center">
+                    <Skeleton className="h-2.5 w-full rounded-full" />
+                  </div>
+                  <div className="flex h-5 items-center">
+                    <Skeleton className="h-3 w-2/3" />
+                  </div>
                 </div>
-              ) : null}
-            </div>
-          )}
-        </Slot>
+              )
+            }
+          >
+            {() => (
+              <div className="space-y-4">
+                {/* Without a placeable week there is no axis to draw. Say so, loudly — no fallback (Rom):
+                    this used to degrade to the week as a plain figure, which hid a real defect for weeks —
+                    a reset phrasing the parser didn't know just made the panel quietly plainer, and nothing
+                    anywhere said the boundary was gone. Quote the text that failed: it is the bug report. */}
+                {view?.boundary && week ? (
+                  usageLimit ? (
+                    <ModuleSlot package={usageLimit.package} label="usage limit">
+                      <LimitedWeekBar limit={usageLimit} projects={projectsHaving(usageLimit.projects, projects)} boundary={view.boundary} percentUsed={week.percentUsed} others={windows} />
+                    </ModuleSlot>
+                  ) : (
+                    <WeekBar boundary={view.boundary} percentUsed={week.percentUsed} others={windows} />
+                  )
+                ) : view && view.windows.length ? (
+                  <p role="alert" className="text-sm text-danger">
+                    {unplaceableWeek(week, windows)}
+                  </p>
+                ) : null}
+
+                {/* Normally these live behind the bar's own "show all limits" tooltip — but without a bar
+                    to hide them in, they still have to show up somewhere; the windows Claude Code did
+                    report are data, not a fallback, and stay regardless. */}
+                {!(view?.boundary && week) && windows.length ? (
+                  <div className="space-y-1 border-t border-border pt-3">
+                    {windows.map(w => (
+                      <OtherWindow key={w.label} window={w} />
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            )}
+          </Slot>
+        )}
 
         <AddedAccountsUsage />
 
@@ -544,7 +577,7 @@ export function Quota({ projects }: { projects: ProjectSummary[] }) {
             {staleAt !== undefined ? ` Last read ${formatRelative(new Date(staleAt).toISOString())}.` : ''}
           </p>
         ) : null}
-      </div>
-    </Section>
+      </Card>
+    </PanelGroup>
   )
 }

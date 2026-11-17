@@ -1,4 +1,5 @@
-import { FilterChips, List, MiddleCut, Page, PersonMark, Row, RowShapes, STATUS_DOT, Section, STATUS_RING, Slot, cn, formatDateTime, formatDuration, needsWord, personSaid, runName, useGitHostPeople, useModuleHost, usePolled, type ModuleAgent, type ModuleHostPerson, type ModulePageProps, type ModuleProject, type ReadState } from '@openagt/dashboard/module'
+import { useState, type ReactNode } from 'react'
+import { Button, Empty, Facts, FilterChips, MiddleCut, Page, PanelGroup, PanelGroups, PanelRow, PanelShape, PersonMark, RunMark, Skeleton, Slot, WordsShape, formatDateTime, formatDuration, needsWord, personSaid, runName, runLineTone, useCodingAgents, useGitHostPeople, useIsMobile, runsAgain, runWord, useModuleHost, usePolled, type CodingAgent, type ModuleAgent, type ModuleHostPerson, type ModulePageProps, type ModuleProject, type ReadState } from '@openagt/dashboard/module'
 import type { RunCard } from '../src/run.js'
 
 /** How many runs each project lists: the command's own default page is 20; the page shows more. */
@@ -14,6 +15,8 @@ export interface RunRow {
     offline?: string
     /** Whose run it is, by the email its record is kept under; a very old card has none. */
     person?: string
+    /** Its pull request merged, as the git host last said, read where the sidebar reads it: the run reads as merged there and here. */
+    merged?: boolean
     /** Its work that never left this machine, as the dashboard lists it: files left uncommitted, commits never pushed. */
     uncommitted?: number
     unpublished?: number
@@ -60,6 +63,7 @@ function cardOf(run: ModuleAgent): Omit<RunRow['card'], 'id' | 'startedAt'> {
     ...(run.cost !== undefined ? { cost: run.cost } : {}),
     ...(run.driver ? { driver: run.driver } : {}),
     ...(run.model ? { model: run.model } : {}),
+    ...(run.pr ? { pr: { number: run.pr.number, url: run.pr.url }, ...(run.pr.state === 'merged' ? { merged: true } : {}) } : {}),
     ...(run.uncommitted ? { uncommitted: run.uncommitted } : {}),
     ...(run.unpublished ? { unpublished: run.unpublished } : {}),
     ...(run.status === 'unknown' ? { offline: `${run.machine ?? 'Its computer'} offline${run.seenAt ? ` · last seen ${formatDateTime(run.seenAt)}` : ''}` } : {}),
@@ -77,31 +81,14 @@ const NOTHING_READ: Read = { rows: [], failed: [] }
 /** The statuses a chip picks, in this order: what is going, then how runs ended, then the runs whose computer does not answer. */
 const STATUSES = ['running', 'waiting', 'done', 'stopped', 'failed', 'unknown']
 
-/** A status as the page says it, on a chip and beside a run's dot alike, and as the rest of the dashboard says it: a live run is "Working"; "Status unknown". */
-function statusWord(status: string): string {
-  const word = status === 'unknown' ? 'status unknown' : status === 'running' ? 'working' : status
-  return word[0]!.toUpperCase() + word.slice(1)
-}
+/** A status as its chip says it: the word every place says, and a computer that does not answer in one. */
+const chipWord = (value: string): string => (value === 'unknown' ? 'unknown' : runWord(value))
 
-/** A run's status as a dot in the dashboard's colors: filled while something is going on, a ring once nothing is. */
-function StatusDot({ status }: { status: string }) {
-  return (
-    <span className="flex size-4 items-center justify-center">
-      <span aria-hidden className={cn('size-2 shrink-0 rounded-full', STATUS_DOT[status] ?? cn('border', STATUS_RING[status] ?? STATUS_RING['done']))} />
-    </span>
-  )
-}
-
-/** A run's status in words; one whose computer does not answer says which, pointed at. */
-function StatusWord({ status, offline }: { status: string; offline?: string | undefined }) {
-  return <span {...(offline ? { title: offline } : {})}>{statusWord(status)}</span>
-}
-
-/** What a run's work still needs before it leaves this machine, as its row in the sidebar says it: "Needs commit · 2 files", "Needs push · 1 commit". */
-export function leftWords(card: Pick<RunRow['card'], 'uncommitted' | 'unpublished'>, gitHost: boolean): string | undefined {
-  if (card.uncommitted) return `${needsWord('uncommitted')} · ${card.uncommitted} file${card.uncommitted === 1 ? '' : 's'}`
-  if (card.unpublished) return `${needsWord('unpushed', gitHost)} · ${card.unpublished} commit${card.unpublished === 1 ? '' : 's'}`
-  return undefined
+/** What a run's work still needs before it leaves this machine, in the sidebar's words, as two facts of its line: "Needs commit", "2 files". */
+export function leftParts(card: Pick<RunRow['card'], 'uncommitted' | 'unpublished'>, gitHost: boolean): string[] {
+  if (card.uncommitted) return [needsWord('uncommitted'), `${card.uncommitted} file${card.uncommitted === 1 ? '' : 's'}`]
+  if (card.unpublished) return [needsWord('unpushed', gitHost), `${card.unpublished} commit${card.unpublished === 1 ? '' : 's'}`]
+  return []
 }
 
 /** The day a run started, as a heading says it: "Today", "Yesterday", else the weekday and the date. */
@@ -140,6 +127,36 @@ function clock(iso: string): string {
   return new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
 }
 
+/** Whether the run's question waits on the person. */
+const asks = (card: RunRow['card']): boolean => card.status === 'waiting'
+
+/** A run's press: Answer where its question waits, else Review. */
+const pressOf = (card: RunRow['card']): string => (asks(card) ? 'Answer' : 'Review')
+
+/** How a run is drawn and said: as its status, but a done run whose pull request merged as merged, the sidebar's word for it. */
+function shownStatus(card: RunRow['card']): string {
+  return card.status === 'done' && card.merged ? 'merged' : card.status
+}
+
+/** How a run stands, as its row's line opens: its state's word, with how long it took once it is over ("Done in 11m"). */
+function standing(card: RunRow['card']): string {
+  const word = runWord(shownStatus(card))
+  const said = word[0]!.toUpperCase() + word.slice(1)
+  const length = took(card)
+  if (length === undefined || card.merged) return said
+  return card.status === 'done' ? `${said} in ${length}` : `${said} after ${length}`
+}
+
+/** The coding agent that ran it and its model, by the names the agent gives them ("Claude Code · Opus 5.5"). */
+function agentSaid(card: RunRow['card'], agents: CodingAgent[]): ReactNode {
+  const agent = agents.find(option => option.value === card.driver)
+  const model = card.model && (agent?.models.find(option => option.value === card.model)?.label ?? card.model)
+  return <Facts facts={[agent?.label ?? card.driver, model]} />
+}
+
+/** The query's name for the status the list shows. */
+const STATUS_PARAM = 'status'
+
 /** What cost a sum of runs: "$1.23", nothing for none. */
 function dollars(cost: number): string {
   return `$${cost.toFixed(2)}`
@@ -148,10 +165,11 @@ function dollars(cost: number): string {
 /**
  * The Logs page: every project's recorded runs, newest first, from `logs --limit 50` in each
  * project, each as the dashboard says it stands right now ({@link withLiveRuns}). A chip shows one
- * status, at `/logs/<status>`. A row opens the run's own page in the dashboard. A project whose
- * command fails is named with the command's own reason, and the other projects still show.
+ * status, kept in the query (`/logs?status=waiting`). A row opens the run's own page in the
+ * dashboard. A project whose command fails is named with the command's own reason, and the other
+ * projects still show.
  */
-export function LogsPage({ projects, path }: ModulePageProps) {
+export function LogsPage({ projects }: ModulePageProps) {
   const host = useModuleHost()
   const key = projects.map(p => p.id).join(',')
   const { value: live, state: liveState } = usePolled<LiveRuns[]>(
@@ -160,6 +178,7 @@ export function LogsPage({ projects, path }: ModulePageProps) {
     10_000,
     [key],
     { remember: `skill-logs:live:${key}`, stored: true },
+    runsAgain(undefined),
   )
   const { value: recorded, state: recordedState, failing } = usePolled<Read>(
     async () => {
@@ -186,10 +205,18 @@ export function LogsPage({ projects, path }: ModulePageProps) {
   const state: ReadState = recordedState === 'unknown' ? (read.rows.length > 0 ? liveState : 'unknown') : liveState === 'kept' ? 'kept' : recordedState
   const accountOf = useGitHostPeople(read.rows.map(({ project, card }) => ({ projectId: project.id, person: card.person })), host.gitHostPeople, 'skill-logs:people')
 
-  // Which status the list shows: every one, until a chip picks one, kept in the address (`/logs/waiting`) so a
-  // reload or Back from a run shows the list the person left. One no run has any more goes back to all.
-  const picked = path[0] ?? null
-  const counts = STATUSES.map(value => ({ value, label: statusWord(value), count: read.rows.filter(row => row.card.status === value).length })).filter(c => c.count > 0)
+  // Which status the list shows: every one, until a chip picks one, kept in the query (`?status=waiting`) as a list's view
+  // is, not in the path, which names a page below this one: a reload or Back from a run shows the list the person left.
+  // One no run has any more goes back to all.
+  const [picked, setPicked] = useState(() => (typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get(STATUS_PARAM)))
+  const pick = (value: string | null) => {
+    setPicked(value)
+    const query = new URLSearchParams(window.location.search)
+    if (value === null) query.delete(STATUS_PARAM)
+    else query.set(STATUS_PARAM, value)
+    host.adjustPage(undefined, query.toString())
+  }
+  const counts = STATUSES.map(value => ({ value, label: chipWord(value)[0]!.toUpperCase() + chipWord(value).slice(1), count: read.rows.filter(row => row.card.status === value).length })).filter(c => c.count > 0)
   const status = counts.some(c => c.value === picked) ? picked : null
   const shown = status === null ? read.rows : read.rows.filter(row => row.card.status === status)
   const days = byDay(shown)
@@ -199,10 +226,11 @@ export function LogsPage({ projects, path }: ModulePageProps) {
   // Over every run, not the ones the chip shows, so picking a status moves no column.
   const columns = {
     who: new Set(read.rows.map(row => row.card.person).filter(Boolean)).size > 1,
-    took: read.rows.some(row => took(row.card) !== undefined),
-    cost: read.rows.some(row => row.card.cost !== undefined),
-    left: read.rows.some(row => leftWords(row.card, row.project.gitHost) !== undefined),
+    agent: read.rows.some(row => row.card.driver !== undefined || row.card.model !== undefined),
+    pr: read.rows.some(row => row.card.pr !== undefined),
   }
+  const agents = useCodingAgents()
+  const phone = useIsMobile()
   // A project that gave a whole page may have older runs the page does not list.
   const capped = projects.some(project => recorded.rows.filter(row => row.project.id === project.id).length >= LIMIT)
 
@@ -210,9 +238,18 @@ export function LogsPage({ projects, path }: ModulePageProps) {
     <Page
       title="Logs"
       description={capped ? `The last ${LIMIT} runs recorded in ${many ? 'each of these projects' : only}, newest first.` : `Every run recorded in ${many ? 'these projects' : only}, newest first.`}
-      bar={state === 'unknown' ? undefined : <FilterChips chips={counts} total={read.rows.length} picked={status} onPick={value => host.adjustPage(value === null ? [] : [value])} />}
+      // While the runs are read, the chips' track holds its place, and the list waits as a day of runs.
+      bar={state === 'unknown' ? <Skeleton className="h-8 w-72 rounded-lg max-md:h-11" /> : <FilterChips chips={counts} total={read.rows.length} picked={status} onPick={pick} />}
     >
-      <Slot of={{ state, value: read, failing }} shape={<RowShapes rows={3} />} className="@container space-y-6">
+      <Slot
+        of={{ state, value: read, failing }}
+        shape={
+          <PanelGroup title={<WordsShape words="Today" />} bare>
+            <PanelShape rows={3} />
+          </PanelGroup>
+        }
+        className="space-y-8"
+      >
         {() => (
           <>
             {read.failed.map(({ project, error }) => (
@@ -220,55 +257,86 @@ export function LogsPage({ projects, path }: ModulePageProps) {
                 Could not read the runs of {project.name}: {error}
               </p>
             ))}
-            {read.rows.length === 0 && read.failed.length === 0 && <p className="text-sm text-muted-foreground">No runs recorded yet.</p>}
-            {/* Each run is a row: its name, then what is said of it in columns that stand in one place down the
-                page and whatever the chip picks; a column no run has a value for is not drawn. Columns give way
-                to the name as the page's column narrows, and on a phone they go under it. */}
-            {days.map(({ day, rows, cost }) => (
-              <Section key={day} title={day} count={runsSaid(rows.length, cost)}>
-                <List>
-                  {rows.map(({ project, card }) => (
-                    <Row
-                      key={`${project.id}/${card.id}`}
-                      stackOnPhone
-                      // As every list names a run, over what it was asked; a run with none of those goes by its id.
-                      title={runName(card) ?? card.id}
-                      detail={card.title?.trim() && card.intent?.trim() ? card.intent : undefined}
-                      href={host.agentHref(project.id, card.id)}
-                      onClick={() => host.openAgent(project.id, card.id)}
-                      meta={
-                        <>
-                          {/* Its state said once: the dot beside its word. */}
-                          <span className="flex items-center gap-1 md:w-28">
-                            <StatusDot status={card.status} />
-                            <StatusWord status={card.status} offline={card.offline} />
-                          </span>
-                          {columns.who && <RunPerson person={card.person} account={accountOf(project.id, card.person)} />}
-                          {many && <span className="truncate md:w-24">{project.name}</span>}
-                          {card.pr ? (
-                            <a href={card.pr.url} target="_blank" rel="noreferrer" className="relative text-primary hover:underline md:w-40 @max-3xl:md:w-auto">
-                              #{card.pr.number}
-                            </a>
-                          ) : (
-                            // Cut in its middle: runs started the same minute differ only at their branch's end.
-                            <span className="flex min-w-0 font-mono max-md:hidden md:w-40 @max-3xl:hidden" title={card.branch}>
-                              {card.branch && <MiddleCut text={card.branch} />}
+            {read.rows.length === 0 && read.failed.length === 0 && (
+              <Empty title="No runs recorded yet.">A run is listed here from the moment an agent starts on this project.</Empty>
+            )}
+            {/* A day is a panel of its runs. A row: its mark, its name over how it stands, then on the name's line at
+                its right whose it is, the agent that ran it and its pull request, each in a column that stands in one
+                place down the page (a column no run has a value for is not drawn), and when it started. On a phone the
+                time alone stays. */}
+            {days.length > 0 && (
+              <PanelGroups className="gap-y-8">
+                {days.map(({ day, rows, cost }) => (
+                  <PanelGroup key={day} title={day} {...(cost > 0 ? { count: dollars(cost) } : {})}>
+                    {rows.map(({ project, card }) => (
+                      <PanelRow
+                        key={`${project.id}/${card.id}`}
+                        state={<RunMark status={shownStatus(card)} />}
+                        // As every list names a run; a run with none of its names goes by its id. What it was asked, whole, under the pointer.
+                        title={runName(card) ?? card.id}
+                        titleHint={card.intent?.trim() || undefined}
+                        href={host.agentHref(project.id, card.id)}
+                        onClick={() => host.openAgent(project.id, card.id)}
+                        meta={[
+                          <span className={runLineTone(shownStatus(card))} {...(card.offline ? { title: card.offline } : {})}>
+                            {standing(card)}
+                          </span>,
+                          // On a phone the time stands in the line, so the name has the row's width and the row keeps its two lines.
+                          phone && <span title={formatDateTime(card.startedAt)}>{clock(card.startedAt)}</span>,
+                          // What its work still needs before it leaves this machine, in the sidebar's words.
+                          ...leftParts(card, project.gitHost),
+                          many && project.name,
+                          card.cost !== undefined && dollars(card.cost),
+                          // Last, as the part that gives way, and cut in its middle: runs started the same minute differ only at
+                          // their branch's end. A phone, where it has no room, leaves it with its dot to a screen reader.
+                          card.branch && {
+                            fact: (
+                              <span className="flex min-w-0 font-mono" title={card.branch}>
+                                <MiddleCut text={card.branch} />
+                              </span>
+                            ),
+                            className: 'max-md:sr-only',
+                          },
+                        ]}
+                        columns={
+                          <>
+                            {columns.who && <RunPerson person={card.person} account={accountOf(project.id, card.person)} />}
+                            {columns.agent && <span className="w-36 truncate max-md:sr-only">{agentSaid(card, agents)}</span>}
+                            {columns.pr && (
+                              <span className="w-12 text-right max-md:sr-only">
+                                {card.pr && (
+                                  <a href={card.pr.url} target="_blank" rel="noreferrer" title={`Pull request #${card.pr.number}`} className="focus-ring relative rounded-sm text-primary hover:underline">
+                                    #{card.pr.number}
+                                  </a>
+                                )}
+                              </span>
+                            )}
+                          </>
+                        }
+                        fact={
+                          phone ? undefined : (
+                            <span className="tabular-nums whitespace-nowrap" title={formatDateTime(card.startedAt)}>
+                              {clock(card.startedAt)}
                             </span>
-                          )}
-                          {/* What its work still needs before it leaves this machine, in the sidebar's words. */}
-                          {columns.left && <span className="truncate md:w-40">{leftWords(card, project.gitHost)}</span>}
-                          {columns.took && <span className="text-right tabular-nums md:w-12 @max-2xl:hidden">{took(card) !== undefined && <><span className="sr-only">took </span>{took(card)}</>}</span>}
-                          {columns.cost && <span className="text-right tabular-nums md:w-14">{card.cost !== undefined && dollars(card.cost)}</span>}
-                          <span className="whitespace-nowrap text-right tabular-nums md:w-16" title={formatDateTime(card.startedAt)}>
-                            {clock(card.startedAt)}
-                          </span>
-                        </>
-                      }
-                    />
-                  ))}
-                </List>
-              </Section>
-            ))}
+                          )
+                        }
+                        // The run's press, in the time's place under the pointer and the keyboard: Answer where its question waits, else Review.
+                        // It opens the run, as the row does, so a phone, where the row is the press, has none: its time is in its line.
+                        {...(phone
+                          ? {}
+                          : {
+                              actions: (
+                                <Button variant={asks(card) ? 'default' : 'secondary'} size="sm" className="relative" aria-label={`${pressOf(card)}: ${runName(card) ?? card.id}`} onClick={() => host.openAgent(project.id, card.id)}>
+                                  {pressOf(card)}
+                                </Button>
+                              ),
+                            })}
+                      />
+                    ))}
+                  </PanelGroup>
+                ))}
+              </PanelGroups>
+            )}
           </>
         )}
       </Slot>
@@ -278,11 +346,6 @@ export function LogsPage({ projects, path }: ModulePageProps) {
 
 /** Whose run it is. A very old card names nobody: no mark, and the columns after it stay in line with the others. */
 function RunPerson({ person, account }: { person: string | undefined; account: ModuleHostPerson | undefined }) {
-  if (!person) return <span aria-hidden className="size-6 shrink-0" />
-  return <PersonMark email={person} picture={account?.avatar} said={personSaid(person, account)} className="size-6" />
-}
-
-/** How many runs a day had and what they cost together. */
-function runsSaid(runs: number, cost: number): string {
-  return `${runs === 1 ? '1 run' : `${runs} runs`}${cost > 0 ? ` · ${dollars(cost)}` : ''}`
+  if (!person) return <span aria-hidden className="size-5 shrink-0" />
+  return <PersonMark email={person} picture={account?.avatar} said={personSaid(person, account)} className="size-5" />
 }

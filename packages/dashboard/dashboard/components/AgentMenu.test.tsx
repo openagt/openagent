@@ -30,6 +30,13 @@ describe("a session's agent under the box, as words", () => {
     expect(screen.getByRole('tooltip').textContent).toBe('This session is on the agent Reviewer: its skills and accounts')
   })
 
+  test('in a narrow box, as on a phone, the name still stands beside the robot, cut shorter instead of left to the icon', async () => {
+    render(<AgentOff agent="reviewer" />)
+    const name = await screen.findByText('Reviewer')
+    expect(name.className.split(' ')).not.toContain('@max-xl:sr-only')
+    expect(name.className.split(' ')).toEqual(expect.arrayContaining(['truncate', '@max-xl:max-w-20']))
+  })
+
   test('a record that names no agent is on the default, said as the launcher says it; one this computer lacks, by its id', async () => {
     const { rerender } = render(<AgentOff agent={undefined} />)
     await screen.findByText('Default')

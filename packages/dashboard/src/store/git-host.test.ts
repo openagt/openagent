@@ -104,4 +104,6 @@ test('the provider is looked up again after the window, or when changed() says s
     { number: 1, url: 'u', state: 'closed', title: '', draft: false, branch: '', head: '', createdAt: '' },
   ])
   assert.deepEqual(parseRequests({ not: 'a list' }), [])
+  // A request the git host will merge by itself once its checks pass says so.
+  assert.equal(parseRequests([{ number: 4, url: 'u', state: 'open', armed: true }])[0]?.armed, true)
 })

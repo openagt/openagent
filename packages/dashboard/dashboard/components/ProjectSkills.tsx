@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
+import { ChevronDown } from 'lucide-react'
 import { onProjectSkills, sendChangeSkills, sendProjectSkills, type ProjectSkills, type ProjectSkill, type SendSkillsResult } from '../rpc/skills.js'
 import { useAction } from '../lib/use-action.js'
 import { useLoaded, usePolled } from '../lib/use-async.js'
@@ -9,6 +10,7 @@ import { Button, buttonVariants } from './ui/button.js'
 import { Checkbox } from './ui/checkbox.js'
 import { Skeleton } from './ui/skeleton.js'
 import { Slot } from './ui/slot.js'
+import { Facts } from './ui/panel.js'
 import { SettingsFoot } from './SettingsRows.js'
 import { cn } from '../lib/utils.js'
 
@@ -189,19 +191,25 @@ export function SkillsSettings({ projectId }: { projectId: string }) {
   )
 }
 
-/** Skills while they are read, in the shape of their ticks. */
+/** Skills while they are read, in the shape of the page: its sentence, a group's name, then its ticks where theirs stand. */
 function SkillShapes() {
   return (
-    <div className={SKILL_TICKS_CLASS}>
-      {Array.from({ length: 6 }, (_, at) => (
-        <div key={at} className="flex items-start gap-3">
-          <Skeleton className="mt-0.5 size-4 shrink-0 rounded-sm" />
-          <div className="min-w-0 flex-1 space-y-2 pt-0.5">
-            <Skeleton className="h-4 w-24" />
-            <Skeleton className="h-3 w-4/5" />
-          </div>
+    <div className="space-y-8">
+      <Skeleton className="h-5 w-2/3" />
+      <div>
+        <Skeleton className="mb-2 h-5 w-32" />
+        <div className="grid gap-x-4 gap-y-2 md:grid-cols-2">
+          {Array.from({ length: 6 }, (_, at) => (
+            <div key={at} className="flex items-start gap-3 py-2">
+              <Skeleton className="mt-0.5 size-4 shrink-0 rounded-sm" />
+              <div className="min-w-0 flex-1 space-y-2 pt-0.5">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-3 w-4/5" />
+              </div>
+            </div>
+          ))}
         </div>
-      ))}
+      </div>
     </div>
   )
 }
@@ -306,16 +314,17 @@ function SkillCards({ projectId, skills, onDone }: { projectId: string; skills: 
   }
 
   return (
-    <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">The skills every agent gets by default come with every run and are not here.</p>
+    <div className="space-y-8">
+      <p className="max-w-xl text-sm text-muted-foreground">The skills every agent gets by default come with every run and are not here.</p>
       {skills.groups.map(group => (
         <fieldset key={group.title}>
-          <legend className="mb-3 text-xs font-medium text-muted-foreground">{group.title}</legend>
-          <div className={SKILL_TICKS_CLASS}>
+          <legend className="mb-2 text-sm font-semibold">{group.title}</legend>
+          {/* Each tick's fill is pulled out by its own padding: its box stands on the inset, its words 24 under the last. */}
+          <div className="grid gap-x-4 gap-y-2 md:grid-cols-2">
             {group.skills.map(skill => {
               const notes = [NOTES[skill.standing], skill.waiting && skills.startBranch !== undefined ? `waiting to reach ${skills.startBranch}` : undefined].filter(Boolean)
               return (
-                <SkillTick key={skill.name} name={skill.name} description={skill.description} note={notes.length > 0 ? notes.join(' · ') : undefined} checked={ticked.has(skill.name)} onChange={on => tick(skill.name, on)} disabled={busy} />
+                <SkillTick key={skill.name} name={skill.name} description={skill.description} note={notes.length > 0 ? <Facts facts={notes} /> : undefined} checked={ticked.has(skill.name)} onChange={on => tick(skill.name, on)} disabled={busy} />
               )
             })}
           </div>
@@ -326,7 +335,7 @@ function SkillCards({ projectId, skills, onDone }: { projectId: string; skills: 
         {error && <p role="alert" className="mb-2 text-xs text-danger">{error}</p>}
         <div className="flex flex-wrap items-center justify-end gap-2">
           {/* What a Save does to the project's files, beside it, once there is something to save. */}
-          <span className="mr-auto min-w-0 flex-1 basis-60 text-xs text-muted-foreground">
+          <span className="mr-auto min-w-0 flex-1 basis-60 text-xs text-faint-foreground max-md:basis-full">
             {nothing ? (
               'Nothing to change.'
             ) : (
@@ -338,10 +347,11 @@ function SkillCards({ projectId, skills, onDone }: { projectId: string; skills: 
               </>
             )}
           </span>
-          <Button type="button" variant="secondary" disabled={busy || nothing} onClick={cancel}>
+          {/* On a phone the two share the width, each under a thumb. */}
+          <Button type="button" variant="ghost" disabled={busy || nothing} onClick={cancel} className="max-md:flex-1">
             Cancel
           </Button>
-          <Button type="button" disabled={nothing} loading={busy} onClick={() => void save()}>
+          <Button type="button" disabled={nothing} loading={busy} onClick={() => void save()} className="max-md:flex-1">
             {busy ? 'Saving…' : saveWord}
           </Button>
         </div>
@@ -350,14 +360,18 @@ function SkillCards({ projectId, skills, onDone }: { projectId: string; skills: 
   )
 }
 
+/** The words up to the end of the first sentence: a stop, a question or an exclamation mark before a capital (so "e.g. a"
+ *  goes on), or all of them. */
+const firstSentence = (text: string): string => /^[\s\S]*?[.!?](?=\s+["“(]?[A-Z])/.exec(text.trim())?.[0] ?? text.trim()
+
 /** The skills' ticks laid out: a column, two from a tablet up, 12 between rows. */
 export const SKILL_TICKS_CLASS = 'grid gap-x-6 gap-y-3 md:grid-cols-2'
 
 /**
- * One skill to tick: the box, its name, and its sentence under it; a note, a warning, between them. No box around it.
+ * One skill to tick: the box, its name, and its first sentence under it, whole, with the rest on a press of the chevron; a note, a warning, between them. No box around it.
  * `brief`: one line of the sentence, the whole of it on a press of that line.
  */
-export function SkillTick({ name, description, note, checked, onChange, disabled, label = name, brief = false }: { name: string; description: string; note?: string | undefined; checked: boolean; onChange: (on: boolean) => void; disabled?: boolean | undefined; label?: string | undefined; brief?: boolean }) {
+export function SkillTick({ name, description, note, checked, onChange, disabled, label = name, brief = false }: { name: string; description: string; note?: ReactNode; checked: boolean; onChange: (on: boolean) => void; disabled?: boolean | undefined; label?: string | undefined; brief?: boolean }) {
   const [whole, setWhole] = useState(false)
   if (brief)
     return (
@@ -373,21 +387,34 @@ export function SkillTick({ name, description, note, checked, onChange, disabled
             type="button"
             aria-expanded={whole}
             onClick={() => setWhole(on => !on)}
-            // 24 high over a 16 line: its own box, since a cut line clips whatever reaches past it.
-            className={cn('focus-ring -my-1 block max-w-full rounded-sm py-1 text-left text-xs text-muted-foreground hover:text-foreground', !whole && 'truncate')}
+            // 4 over and under its lines: its own box, since cut lines clip whatever reaches past them. Two lines
+            // before the cut, the rest a press away.
+            className={cn('focus-ring -my-1 block max-w-full rounded-sm py-1 text-left text-xs text-muted-foreground hover:text-foreground', !whole && 'line-clamp-2')}
           >
             {description}
           </button>
         </div>
       </div>
     )
+  // A sentence read to its end rather than cut mid-way by an ellipsis: the first, and the rest a press away.
+  const first = firstSentence(description)
+  const more = first.length < description.trim().length
+  // A press anywhere on it ticks it, but on its chevron; lit under the pointer by a fill its own padding pulls out, so its box stands on the inset.
   return (
-    <label className="flex cursor-pointer items-start gap-3">
+    <label className="-mx-3 flex min-w-0 cursor-pointer items-start gap-3 rounded-md px-3 py-2 transition-colors pointer-fine:hover:bg-foreground/4">
       <Checkbox checked={checked} onCheckedChange={next => onChange(next === true)} disabled={disabled} className="mt-0.5" aria-label={label} />
-      <span className="min-w-0">
-        <span className="block text-sm font-medium">{name}</span>
+      <span className="min-w-0 flex-1">
+        <span className="flex items-start justify-between gap-2">
+          <span className="min-w-0 text-sm font-medium">{name}</span>
+          {more && (
+            // 28 high over the name's 20 line, pulled into it so the row keeps its height.
+            <Button type="button" variant="ghost" size="icon-sm" aria-expanded={whole} aria-label={`All of what ${name} does`} onClick={() => setWhole(on => !on)} className="-my-1 -mr-1.5">
+              <ChevronDown className={cn('size-4 transition-transform', whole && 'rotate-180')} aria-hidden />
+            </Button>
+          )}
+        </span>
         {note !== undefined && <span className="block text-xs text-warning">{note}</span>}
-        <span className="block text-xs text-muted-foreground">{description}</span>
+        <span className="block text-xs text-faint-foreground">{whole ? description : first}</span>
       </span>
     </label>
   )

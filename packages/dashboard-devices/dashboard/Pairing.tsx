@@ -87,7 +87,7 @@ export function Connecting({ d, computer, canBoth, onBack, onClose }: { d: Devic
 
   const name = computer.name
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {phase.at === 'asking' || phase.at === 'saving' ? (
         <div role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="size-4 shrink-0 animate-spin text-primary" aria-hidden />
@@ -105,11 +105,11 @@ export function Connecting({ d, computer, canBoth, onBack, onClose }: { d: Devic
             {shownNumber(phase.asked.number)}
           </p>
           <Waiting>{`Waiting for ${name}…`}</Waiting>
-          <label className="flex items-start gap-2 text-sm">
+          <label className="flex items-start gap-3 text-sm">
             <Checkbox className="mt-0.5" checked={both && canBoth} disabled={!canBoth} onCheckedChange={checked => setBoth(checked === true)} aria-label={`${name} can start runs on this computer too`} />
             <span>
               {`${name} can start runs on this computer too`}
-              <span className="block text-xs text-muted-foreground">{canBoth ? 'Then runs go both ways.' : 'Turn on "On this Wi-Fi" here first: then runs can go both ways.'}</span>
+              <span className="mt-0.5 block text-xs text-faint-foreground">{canBoth ? 'Then runs go both ways.' : 'Turn on "On this Wi-Fi" here first: then runs can go both ways.'}</span>
             </span>
           </label>
         </>
@@ -219,7 +219,7 @@ export function AskPopup() {
 
   return (
     <Dialog open onOpenChange={open => !open && setClosed(new Set([...closed, ask.id]))} title="A computer wants to connect" initialFocus={deny}>
-      <div className="space-y-4">
+      <div className="space-y-6">
         <p className="flex items-start gap-2 text-sm">
           <Laptop className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
           <span>

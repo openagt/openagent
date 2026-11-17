@@ -1,4 +1,4 @@
-import type { HTMLAttributes } from 'react'
+import type { ComponentProps, HTMLAttributes } from 'react'
 import { cn } from '../../lib/utils.js'
 
 // shadcn/ui's ButtonGroup (base): controls that act on one thing — a button and the arrow holding
@@ -11,7 +11,7 @@ import { cn } from '../../lib/utils.js'
 // spans of its own next to its trigger (focus guards, and the span that owns its popup), and the
 // arrow that is the group's last control would lose its outer corners while its menu is open.
 
-export function ButtonGroup({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
+export function ButtonGroup({ className, ...props }: ComponentProps<'div'>) {
   return (
     <div
       role="group"

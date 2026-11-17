@@ -129,10 +129,10 @@ export function Join({ d, onClose, onJoined }: { d: Devices; onClose: () => void
   }
 
   return (
-    <form id={formId} className="space-y-4" onSubmit={event => void join(event)}>
-      <p className="text-sm text-muted-foreground">Type what the other device shows.</p>
+    <form id={formId} className="space-y-6" onSubmit={event => void join(event)}>
+      <p className="max-w-xl text-sm text-muted-foreground">Type what the other device shows: a server of yours, or a computer someone shared with you.</p>
       {/* The two fields are one column, as wide as an address: a link pasted whole scrolls in its field. */}
-      <label className="block max-w-xs space-y-1">
+      <label className="block max-w-sm space-y-2">
         <span className="block text-sm font-medium">Where</span>
         <Input
           ref={whereField}
@@ -145,9 +145,9 @@ export function Join({ d, onClose, onJoined }: { d: Devices; onClose: () => void
           onChange={event => setWhere(event.target.value)}
           aria-invalid={whereWrong}
           aria-describedby={whereWrong ? 'pairing-address-error' : undefined}
-          className="font-mono"
+          className="font-mono max-md:h-11"
         />
-        <span className="block text-xs text-muted-foreground">An address, or the whole link the other device gave.</span>
+        <span className="block text-xs text-faint-foreground">An address, or the whole link the other device gave.</span>
         {whereWrong && (
           <span id="pairing-address-error" className="block text-xs text-danger">
             That is no address: type it as the other device shows it, like 203.0.113.10.
@@ -155,7 +155,7 @@ export function Join({ d, onClose, onJoined }: { d: Devices; onClose: () => void
         )}
       </label>
       {!isLink(where) && (
-        <label className="block max-w-xs space-y-1">
+        <label className="block max-w-sm space-y-2">
           <span className="block text-sm font-medium">Code</span>
           <Input
             ref={codeField}
@@ -170,7 +170,7 @@ export function Join({ d, onClose, onJoined }: { d: Devices; onClose: () => void
             onChange={event => setCode(event.target.value)}
             aria-invalid={codeWrong}
             aria-describedby={codeWrong ? 'pairing-code-error' : undefined}
-            className="font-mono uppercase placeholder:normal-case"
+            className="font-mono uppercase placeholder:normal-case max-md:h-11"
           />
           {codeWrong && (
             <span id="pairing-code-error" className="block text-xs text-danger">
@@ -180,11 +180,11 @@ export function Join({ d, onClose, onJoined }: { d: Devices; onClose: () => void
         </label>
       )}
       {server && (
-        <label className="flex items-start gap-2 text-sm">
+        <label className="flex items-start gap-3 text-sm">
           <Checkbox className="mt-0.5" checked={both} onCheckedChange={checked => setBoth(checked === true)} aria-label="Your other devices can start runs on this computer" />
           <span>
             Your other devices can start runs on this computer
-            <span className="block text-xs text-muted-foreground">{`Through ${shownWhere}, while it is on.`}</span>
+            <span className="mt-0.5 block text-xs text-faint-foreground">{`Through ${shownWhere}, while it is on.`}</span>
           </span>
         </label>
       )}

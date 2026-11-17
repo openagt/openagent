@@ -101,6 +101,38 @@ afterEach(() => {
   calls.length = 0
 })
 
+describe('the queue of what needs you', () => {
+  test('a change of the runs reads it again at once, as it does the sidebar', async () => {
+    const streams: { onmessage: ((message: { data: string }) => void) | null }[] = []
+    vi.stubGlobal(
+      'EventSource',
+      class {
+        onopen = null
+        onerror = null
+        onmessage: ((message: { data: string }) => void) | null = null
+        constructor() {
+          streams.push(this)
+        }
+        close(): void {}
+      },
+    )
+    try {
+      answerShell([])
+      window.history.replaceState(null, '', '/app/overview')
+      render(<App />)
+      const reads = () => calls.filter(call => call.name === 'onInterventions').length
+      await waitFor(() => expect(reads()).toBeGreaterThan(0))
+      await waitFor(() => expect(streams.length).toBe(1))
+      const before = reads()
+      act(() => streams[0]!.onmessage?.({ data: JSON.stringify({ kind: 'runs', projectId: PROJECT.id }) }))
+      // Well inside the five seconds the queue is polled at.
+      await waitFor(() => expect(reads()).toBeGreaterThan(before), { timeout: 1000 })
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+})
+
 describe('module pages in the shell (#1774)', () => {
   test("a module opens the dashboard's own pages in the project the address picks, every project where none is, and the page it is on adds no entry", async () => {
     function Opens() {
@@ -284,9 +316,38 @@ describe('module pages in the shell (#1774)', () => {
         render(<App />)
         // The name alone: the page's count stands beside it in the bar once the page has read it. Read in the wait: the first
         // button found may be the launcher's shape's, until the word is known to be no project's.
-        await waitFor(() => expect(screen.getByRole('button', { name: 'Open the menu' }).parentElement!.querySelector('span')!.textContent).toBe(name))
+        await waitFor(() => expect(document.querySelector('[data-phone-bar]')!.querySelector('span')!.textContent).toBe(name))
         cleanup()
       }
+    } finally {
+      wide()
+    }
+  })
+
+  test("on a phone a page under a module's page has a back arrow in its bar, up to that page; the page itself has none", async () => {
+    function ListPage({ path }: ModulePageProps) {
+      const host = useModuleHost()
+      return path.length === 0 ? createElement('button', { onClick: () => host.openPage('list', ['a'], PROJECT.id) }, 'open item a') : createElement('p', null, `item ${path.join('/')}`)
+    }
+    answerShell([{ package: '@acme/list', url: moduleModule('__listPhoneBack', { pages: [{ segment: 'list', label: 'List', Page: ListPage }] }), projects: [PROJECT.id] }])
+    const wide = phoneScreen()
+    try {
+      // Opened cold: nothing behind it, so the arrow opens the list.
+      window.history.replaceState(null, '', '/list/a')
+      render(<App />)
+      expect(await screen.findByText('item a')).toBeTruthy()
+      fireEvent.click(within(document.querySelector<HTMLElement>('[data-phone-bar]')!).getByRole('button', { name: 'Back' }))
+      expect(await screen.findByRole('button', { name: 'open item a' })).toBeTruthy()
+      expect(window.location.pathname).toBe('/list')
+      expect(within(document.querySelector<HTMLElement>('[data-phone-bar]')!).queryByRole('button', { name: 'Back' })).toBeNull()
+
+      // Opened from the list: the arrow is the browser's Back, to the list's own entry.
+      fireEvent.click(screen.getByRole('button', { name: 'open item a' }))
+      expect(await screen.findByText('item a')).toBeTruthy()
+      const entries = window.history.length
+      fireEvent.click(within(document.querySelector<HTMLElement>('[data-phone-bar]')!).getByRole('button', { name: 'Back' }))
+      expect(await screen.findByRole('button', { name: 'open item a' })).toBeTruthy()
+      expect(window.history.length).toBe(entries)
     } finally {
       wide()
     }
@@ -299,7 +360,7 @@ describe('module pages in the shell (#1774)', () => {
       window.history.replaceState(null, '', '/nothing')
       render(<App />)
       // Until the projects are read the word may be a project's, whose page waits as its shape: the bar comes once it is known.
-      await waitFor(() => expect(screen.getByRole('button', { name: 'Open the menu' }).parentElement!.textContent).toBe('Not found'))
+      await waitFor(() => expect(document.querySelector('[data-phone-bar]')!.textContent).toBe('Not found'))
     } finally {
       wide()
     }
@@ -350,8 +411,9 @@ describe('a first visit, the projects not read yet', () => {
     render(<App />)
     const shape = await within(await screen.findByRole('main')).findByRole('status', {}, { timeout: 2000 })
     expect(shape.closest('.max-w-3xl')).not.toBeNull()
-    // A project's page has its own top row: no phone bar names the word as a page while it waits.
-    expect(document.querySelector('main')!.textContent).toBe('Loading…')
+    // A project's page has its own top row: no phone bar names the word as a page while it waits. Its
+    // question is known before the read, and stands where it will.
+    expect(document.querySelector('main')!.textContent).toBe('What should an agent do?Loading…')
     answer()
     expect(await screen.findByText('the launcher of app')).toBeTruthy()
     expect(within(document.querySelector('main')!).queryByRole('status')).toBeNull()
@@ -398,8 +460,8 @@ describe('a first visit, the projects not read yet', () => {
     try {
       window.history.replaceState(null, '', '/agents')
       render(<App />)
-      // The bar holds the menu's button and the page's name alone; a page with no bar has the button over it.
-      expect(screen.getByRole('button', { name: 'Open the menu' }).parentElement!.textContent).toBe('Agents')
+      // The bar holds the page's name alone.
+      expect(document.querySelector('[data-phone-bar]')!.textContent).toBe('Agents')
     } finally {
       wide()
     }
@@ -464,7 +526,7 @@ describe('module cards on the Overview (#1818)', () => {
       answers.set('onInterventions', () => ({ items: [{ projectId: PROJECT.id, projectName: 'app', kind: 'awaiting', title: 'Pick a name', agentId: 'r1' }], whole: [PROJECT.id] }))
       window.history.replaceState(null, '', '/')
       render(<App />)
-      expect(await screen.findByText('Pick a name')).toBeTruthy()
+      expect(await within(screen.getByRole('main')).findByText('Pick a name')).toBeTruthy()
       await new Promise(resolve => setTimeout(resolve, 50))
       expect(announced).toEqual([])
     } finally {
@@ -552,6 +614,29 @@ describe('module cards on the Overview (#1818)', () => {
       const banner = (await screen.findByRole('alert')).textContent
       expect(banner).toBe('OpenAgent has stopped. Start it again with openagent in a terminal; an installed one restarts with the computer or with its installer\u2019s command.')
     } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  test("on a phone the banner draws its first sentence on its one line and says the rest to a screen reader; the page's top bar stands under it", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const wide = phoneScreen()
+    try {
+      answerShell([])
+      render(<App />)
+      await waitFor(() => expect(document.querySelector('[data-phone-bar]')!.textContent).toBe('Overview'))
+      answers.set('onProjects', () => { throw new TypeError('Failed to fetch') })
+      await act(async () => void (await vi.advanceTimersByTimeAsync(5000 + 1000)))
+      const banner = await screen.findByRole('alert')
+      // The whole of it is said; what a phone's line has no room for is said only.
+      expect(banner.textContent).toBe('OpenAgent has stopped. Start it again with openagent in a terminal; an installed one restarts with the computer or with its installer’s command.')
+      const said = banner.querySelector('.max-md\\:sr-only')!
+      expect(said.textContent).toBe(' Start it again with openagent in a terminal; an installed one restarts with the computer or with its installer’s command.')
+      expect(said.parentElement!.className).toContain('max-md:truncate')
+      // The banner keeps to the window's top as the page scrolls; the top bar keeps to the banner's foot.
+      expect(document.querySelector('[data-phone-bar]')!.className.split(' ')).toContain('top-(--top-banner,0px)')
+    } finally {
+      wide()
       vi.useRealTimers()
     }
   })
@@ -720,18 +805,19 @@ describe('the project select (#1513)', () => {
     fireEvent.click(screen.getByRole('option', { name: to }))
   }
 
-  test('all projects show until one is picked; then the Overview, its badge and the agent list show only that project', async () => {
+  test('all projects show until one is picked; then the Overview, what needs you and the agent list show only that project', async () => {
     answerTwo()
     render(<App />)
     expect(await screen.findByText('card for app, site')).toBeTruthy()
-    expect(await screen.findByText('app asks')).toBeTruthy()
+    // Listed on the Overview and in the sidebar's "Waiting on you".
+    await waitFor(() => expect(screen.getAllByText('app asks')).toHaveLength(2))
     expect(await screen.findByText('app works')).toBeTruthy()
     expect(await screen.findByText('app ran')).toBeTruthy()
 
     await pick('All projects', /site/)
     expect(url()).toBe('/site/overview')
     expect(await screen.findByText('card for site')).toBeTruthy()
-    expect(screen.getByText('site asks')).toBeTruthy()
+    await waitFor(() => expect(screen.getAllByText('site asks')).toHaveLength(2))
     expect(screen.queryByText('app asks')).toBeNull()
     expect(screen.getByText('site works')).toBeTruthy()
     expect(screen.queryByText('app works')).toBeNull()
@@ -748,8 +834,8 @@ describe('the project select (#1513)', () => {
     expect(url()).toBe('/site/logs')
     expect(await screen.findByText('runs of site')).toBeTruthy()
     expect(document.title).toBe('(1) Logs · site — OpenAgent')
-    // The sidebar marks the page that is open, also with Settings open over it. The Overview row's
-    // name carries its Human Queue count here, and the person's row ends in "settings", hence the patterns.
+    // The sidebar marks the page that is open, also with Settings open over it. The person's row ends
+    // in "settings", hence the patterns.
     const marked = () => ['Overview', 'Logs', 'Settings'].filter(name => screen.getByRole(name === 'Settings' ? 'button' : 'link', { name: name === 'Settings' ? /settings$/i : new RegExp(`^${name}`) }).getAttribute('aria-current') === 'page')
     expect(marked()).toEqual(['Logs'])
     fireEvent.click(screen.getByRole('button', { name: /settings$/i }))
@@ -1133,7 +1219,7 @@ describe('the Context of a session continued from its box', () => {
 
 // A phone has no width for the sidebar beside the page (#1824).
 describe('the shell on a phone', () => {
-  test('the sidebar is closed, and a bar names the page beside the button that opens it; a project\'s own pages get the button alone', async () => {
+  test('the sidebar is closed and opens from the bar of pages at the foot of every page; a bar names a page with no top row of its own', async () => {
     const wide = phoneScreen()
     try {
       answerShell([])
@@ -1141,12 +1227,13 @@ describe('the shell on a phone', () => {
       answers.set('onDocs', () => [])
       answers.set('onProjectFiles', () => [])
       render(<App />)
-      const open = await screen.findByRole('button', { name: 'Open the menu' })
-      // The bar's word, not the sidebar's row: the sidebar is closed. The page's own heading says it
-      // too, to a screen reader only: the bar already names the page.
+      const open = await screen.findByRole('button', { name: 'More' })
+      // The top bar's word and the bar of pages' press, not the sidebar's row: the sidebar is closed.
+      // The page's own heading says it too, to a screen reader only: the bar already names the page.
       expect(await screen.findByRole('heading', { name: 'Overview' })).toBeTruthy()
-      expect(screen.getAllByText('Overview').map(el => (el.closest('h1') ? 'heading' : el.tagName))).toEqual(['SPAN', 'heading'])
-      expect(screen.queryByRole('link', { name: 'Overview' })).toBeNull()
+      expect(screen.getAllByText('Overview').map(el => (el.closest('h1') ? 'heading' : el.closest('nav') ? 'pages' : el.tagName))).toEqual(['SPAN', 'heading', 'pages'])
+      const pages = screen.getByRole('navigation', { name: 'Pages' })
+      expect(within(pages).getByRole('link', { name: 'Overview' }).getAttribute('aria-current')).toBe('page')
 
       expect(open.getAttribute('aria-expanded')).toBe('false')
       fireEvent.click(open)
@@ -1155,17 +1242,89 @@ describe('the shell on a phone', () => {
       fireEvent.click(await screen.findByRole('button', { name: /settings$/i }))
       fireEvent.click(screen.getByRole('menuitem', { name: 'Settings' }))
       expect(await screen.findByText("the settings dialog on ''")).toBeTruthy()
-      await waitFor(() => expect(screen.queryByRole('link', { name: 'Overview' })).toBeNull())
+      await waitFor(() => expect(screen.queryByRole('link', { name: 'New agent session' })).toBeNull())
 
-      // The launcher has a top row of its own, which keeps its corner free for the button.
-      fireEvent.click(screen.getByRole('button', { name: 'Open the menu' }))
+      // The launcher has a top row of its own: no bar names it, and the bar of pages stays at its foot.
+      fireEvent.click(screen.getByRole('button', { name: 'More' }))
       // New is one click, to the page of a session with no project.
       fireEvent.click(await screen.findByRole('link', { name: 'New agent session' }))
       expect(await screen.findByText(/^the launcher of/)).toBeTruthy()
       await waitFor(() => expect(screen.queryByRole('link', { name: 'New agent session' })).toBeNull())
-      expect(screen.getByRole('button', { name: 'Open the menu' })).toBeTruthy()
-      expect(screen.queryByText('Overview')).toBeNull()
+      expect(document.querySelector('[data-phone-bar]')).toBeNull()
+      expect(within(screen.getByRole('navigation', { name: 'Pages' })).getByRole('link', { name: 'Overview' }).getAttribute('aria-current')).toBeNull()
       expect(screen.queryByText('Settings')).toBeNull()
+    } finally {
+      wide()
+    }
+  })
+
+  test('on a phone the Overview in the bar of pages counts what waits on the person, with the modules\' pages beside it', async () => {
+    const wide = phoneScreen()
+    try {
+      answerShell([{ package: '@acme/logs', url: moduleModule('__phoneBarLogs', { pages: [{ segment: 'logs', label: 'Logs', Page: () => null }] }), projects: [PROJECT.id] }])
+      answers.set('onInterventions', () => ({ items: [{ projectId: PROJECT.id, projectName: 'app', kind: 'awaiting', title: 'Pick a name', agentId: 'r1' }], whole: [PROJECT.id] }))
+      render(<App />)
+      const pages = await screen.findByRole('navigation', { name: 'Pages' })
+      await waitFor(() => expect(within(pages).getByRole('link', { name: 'Overview, 1 waiting on you' })).toBeTruthy())
+      fireEvent.click(await within(pages).findByRole('link', { name: 'Logs' }))
+      await waitFor(() => expect(window.location.pathname).toBe('/logs'))
+      expect(within(pages).getByRole('link', { name: 'Logs' }).getAttribute('aria-current')).toBe('page')
+      // New opens the "New agent session" page, as the sidebar's New does; More opens the sidebar.
+      fireEvent.click(within(pages).getByRole('link', { name: 'New' }))
+      expect(await screen.findByText(/^the launcher of/)).toBeTruthy()
+      expect(within(pages).getByRole('link', { name: 'New' }).getAttribute('aria-current')).toBe('page')
+      expect(within(pages).getByRole('button', { name: 'More' }).getAttribute('aria-expanded')).toBe('false')
+    } finally {
+      wide()
+    }
+  })
+
+  test('on a phone the bar of pages is drawn complete once its pages are known: none of its presses moves as they come', async () => {
+    const wide = phoneScreen()
+    let answerModules = (_modules: unknown[]) => {}
+    answerShell([])
+    answers.set('onModules', () => new Promise(resolve => (answerModules = resolve)))
+    try {
+      render(<App />)
+      const pages = await screen.findByRole('navigation', { name: 'Pages' })
+      expect(within(pages).queryAllByRole('link')).toEqual([])
+      await act(async () => answerModules([{ package: '@acme/logs', url: moduleModule('__firstBarLogs', { pages: [{ segment: 'logs', label: 'Logs', Page: () => null }] }), projects: [PROJECT.id] }]))
+      await waitFor(() => expect(within(pages).getAllByRole('link').map(link => link.textContent)).toEqual(['Overview', 'Logs', 'New']))
+    } finally {
+      wide()
+    }
+  })
+
+  test("on a phone a session's page has no bar of pages; its top bar's back arrow goes to the page shown before, or to the Overview from a link opened cold", async () => {
+    const wide = phoneScreen()
+    const id = '2026-11-14T23-05-03-506Z'
+    try {
+      answerShell([])
+      answers.set('onQuota', () => null)
+      answers.set('onDashboard', () => null)
+      answers.set('onAgentChanges', () => [])
+      answers.set('onDocs', () => [])
+      answers.set('onProjectFiles', () => [])
+      answers.set('onRetainedWorktrees', () => [])
+      answers.set('onAgents', () => [{ id, status: 'done', startedAt: '2026-11-14T23:05:03.506Z', updatedAt: '2026-11-14T23:06:00.000Z', intent: 'pick a name' }])
+      answers.set('onInterventions', () => ({ items: [{ projectId: PROJECT.id, projectName: 'app', kind: 'awaiting', title: 'Pick a name', agentId: id }], whole: [PROJECT.id] }))
+
+      // Opened cold, from a link: nothing of this app's is behind it, so Back goes to the Overview.
+      window.history.replaceState(null, '', `/${PROJECT.name}/${id}`)
+      render(<App />)
+      const backButton = await screen.findByRole('button', { name: 'Back' })
+      expect(screen.queryByRole('navigation', { name: 'Pages' })).toBeNull()
+      fireEvent.click(backButton)
+      await waitFor(() => expect(window.location.pathname).toBe(`/${PROJECT.name}/overview`))
+      expect(await screen.findByRole('navigation', { name: 'Pages' })).toBeTruthy()
+
+      // Opened from the Overview: Back is the browser's, to the Overview's own entry.
+      fireEvent.click(await within(screen.getByRole('main')).findByRole('link', { name: /Pick a name/ }))
+      await waitFor(() => expect(window.location.pathname).toBe(`/${PROJECT.name}/${id}`))
+      const entries = window.history.length
+      fireEvent.click(await screen.findByRole('button', { name: 'Back' }))
+      await waitFor(() => expect(window.location.pathname).toBe(`/${PROJECT.name}/overview`))
+      expect(window.history.length).toBe(entries)
     } finally {
       wide()
     }
@@ -1211,7 +1370,7 @@ describe('the shell on a phone', () => {
     answerShell([])
     render(<App />)
     expect(await screen.findByRole('link', { name: 'Overview' })).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Open the menu' })).toBeNull()
+    expect(screen.queryByRole('navigation', { name: 'Pages' })).toBeNull()
     // The sidebar's row, and the page's own heading: no bar names it a third time.
     expect(await screen.findByRole('heading', { name: 'Overview' })).toBeTruthy()
     expect(screen.getAllByText('Overview')).toHaveLength(2)

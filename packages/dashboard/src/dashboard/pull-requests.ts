@@ -29,6 +29,8 @@ export interface LinkedPr {
   headRefOid?: string
   /** The commit a merged PR landed as on the base branch, when the git host said. */
   mergeCommit?: string
+  /** The git host will merge it by itself once its checks pass. */
+  armed?: true
 }
 
 /** An open PR on the interventions queue (#632). */
@@ -74,6 +76,7 @@ export function linkedPrOf(request: GitHostRequest): LinkedPr {
     ...(request.createdAt ? { createdAt: request.createdAt } : {}),
     ...(request.head ? { headRefOid: request.head } : {}),
     ...(request.mergeCommit ? { mergeCommit: request.mergeCommit } : {}),
+    ...(request.armed ? { armed: true as const } : {}),
   }
 }
 

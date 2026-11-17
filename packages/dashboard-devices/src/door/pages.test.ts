@@ -28,8 +28,10 @@ test('a command is drawn as code, and what HTML would read as a tag is shown as 
 
 test("the pages are in the dashboard's palette, light and dark, and carry its logo", () => {
   const css = dashboardFile('tokens.css')
-  const light = propertiesOf(css.slice(css.indexOf(':root {'), css.indexOf('}', css.indexOf(':root {'))))
-  const dark = propertiesOf(css.slice(css.indexOf('.dark {'), css.indexOf('}', css.indexOf('.dark {'))))
+  // Each palette's rule starts a line, its selector list led by `:root` or `.dark`.
+  const block = (selector: RegExp): string => css.slice(css.search(selector), css.indexOf('}', css.search(selector)))
+  const light = propertiesOf(block(/^:root\b/m))
+  const dark = propertiesOf(block(/^\.dark\b/m))
   const strands = [...dashboardFile('components/Logo.tsx').matchAll(/d: '([^']+)'/g)].map(([, d]) => d!)
   assert.equal(strands.length, 6)
   for (const html of PAGES) {

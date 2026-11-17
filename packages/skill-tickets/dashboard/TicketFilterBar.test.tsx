@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test, vi } from 'vitest'
+import { afterEach, describe, expect, onTestFinished, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { WorkspaceTicket } from './lib/types.js'
 import { defaultView, type TicketRow, type TicketsView } from './lib/ticket-filter.js'
@@ -10,9 +10,9 @@ const row = (file: string, over: Partial<WorkspaceTicket> = {}, projectId = 'p1'
   ticket: { file, title: file, summary: '', date: '2026-01-01T00:00:00.000Z', planned: false, ...over },
 })
 
-const renderBar = (rows: TicketRow[], view: TicketsView = defaultView()) => {
+const renderBar = (rows: TicketRow[], view: TicketsView = defaultView(), spansProjects = false) => {
   const onChange = vi.fn()
-  render(<TicketFilterBar view={view} rows={rows} onChange={onChange} />)
+  render(<TicketFilterBar view={view} rows={rows} spansProjects={spansProjects} onChange={onChange} />)
   return { onChange }
 }
 
@@ -21,7 +21,7 @@ afterEach(cleanup)
 describe('TicketFilterBar (#1144)', () => {
   test('the priority facet offers buckets with counts, a range slider, and "No priority" when real', async () => {
     const { onChange } = renderBar([row('a.md', { priority: '9' }), row('b.md', { priority: '4' }), row('c.md')])
-    fireEvent.click(screen.getByRole('button', { name: /priority/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^priority/i }))
     // Counts ride each option, so a pick's yield is visible before it is made.
     const high = await screen.findByLabelText('High (7–10)')
     expect(screen.getByText('High (7–10)').parentElement?.textContent).toContain('1')
@@ -36,7 +36,7 @@ describe('TicketFilterBar (#1144)', () => {
 
   test('"No priority" hides when every ticket names one', () => {
     renderBar([row('a.md', { priority: '9' })])
-    fireEvent.click(screen.getByRole('button', { name: /priority/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^priority/i }))
     expect(screen.queryByLabelText('No priority')).toBeNull()
   })
 
@@ -50,9 +50,9 @@ describe('TicketFilterBar (#1144)', () => {
     expect(screen.getByRole('button', { name: /uncertainty/i })).toBeTruthy()
   })
 
-  test('the topics facet lists case-deduped topics with counts, busiest first', async () => {
+  test('the topic facet lists case-deduped topics with counts, busiest first', async () => {
     const { onChange } = renderBar([row('a.md', { topics: ['UX'] }), row('b.md', { topics: ['ux', 'dx'] })])
-    fireEvent.click(screen.getByRole('button', { name: /topics/i }))
+    fireEvent.click(screen.getByRole('button', { name: 'Topic' }))
     fireEvent.click(await screen.findByLabelText('ux'))
     const next = onChange.mock.calls[0]![0] as TicketsView
     expect(next.filters.topics).toEqual(['ux'])
@@ -76,30 +76,31 @@ describe('TicketFilterBar (#1144)', () => {
     expect(next.sort).toEqual({ key: 'priority', dir: 'desc' })
   })
 
-  test('picking a new sort key starts at its natural direction; the active key is a no-op', async () => {
+  test('the sort says how the list is ordered, in words; picking a new key starts at its natural direction; the active key is a no-op', async () => {
     const { onChange } = renderBar([row('a.md')])
-    fireEvent.click(screen.getByRole('button', { name: /sort: date/i }))
-    fireEvent.click(await screen.findByRole('menuitemcheckbox', { name: 'Priority' }))
-    expect((onChange.mock.calls[0]![0] as TicketsView).sort).toEqual({ key: 'priority', dir: 'desc' })
+    expect(screen.getByText('Sorted by priority')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Sorted by priority, highest first' }))
+    fireEvent.click(await screen.findByRole('menuitemcheckbox', { name: 'Date' }))
+    expect((onChange.mock.calls[0]![0] as TicketsView).sort).toEqual({ key: 'date', dir: 'desc' })
     onChange.mockClear()
-    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Date' }))
+    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Priority' }))
     expect(onChange).not.toHaveBeenCalled()
   })
 
   test('the asc/desc pair sits in the menu, labeled by meaning, the applied one checked', async () => {
     const { onChange } = renderBar([row('a.md')])
-    fireEvent.click(screen.getByRole('button', { name: /sort: date/i }))
-    const desc = await screen.findByRole('menuitemcheckbox', { name: 'Newest first' })
+    fireEvent.click(screen.getByRole('button', { name: /^sorted by priority/i }))
+    const desc = await screen.findByRole('menuitemcheckbox', { name: 'Highest first' })
     expect(desc.getAttribute('aria-checked')).toBe('true')
-    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Oldest first' }))
-    expect((onChange.mock.calls[0]![0] as TicketsView).sort).toEqual({ key: 'date', dir: 'asc' })
+    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Lowest first' }))
+    expect((onChange.mock.calls[0]![0] as TicketsView).sort).toEqual({ key: 'priority', dir: 'asc' })
   })
 
   test('a contiguous bucket selection mirrors onto the slider instead of dimming it', async () => {
     const view = defaultView()
     view.filters.priority = { buckets: ['high', 'medium'], range: null, none: false }
     renderBar([row('a.md', { priority: '9' })], view)
-    fireEvent.click(screen.getByRole('button', { name: /priority/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^priority/i }))
     await screen.findByLabelText('High (7–10)')
     expect(document.querySelector('[data-dimmed]')).toBeNull()
     // Adjacent buckets are one span, so the readout (and the thumbs) sit on the union.
@@ -110,7 +111,7 @@ describe('TicketFilterBar (#1144)', () => {
     const view = defaultView()
     view.filters.priority = { buckets: ['high', 'low'], range: null, none: false }
     renderBar([row('a.md', { priority: '9' })], view)
-    fireEvent.click(screen.getByRole('button', { name: /priority/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^priority/i }))
     await screen.findByLabelText('High (7–10)')
     expect(document.querySelector('[data-dimmed]')).toBeTruthy()
     expect(screen.getByText(/range: not one span/i)).toBeTruthy()
@@ -123,12 +124,36 @@ describe('TicketFilterBar (#1144)', () => {
     expect(screen.queryByText('/')).toBeNull()
   })
 
-  test('"Group by project" unticks into the flat list', async () => {
-    const { onChange } = renderBar([row('a.md')])
-    fireEvent.click(screen.getByRole('button', { name: /sort: date/i }))
+  test('"Group by project" unticks into the flat list; a page of one project does not offer it', async () => {
+    const { onChange } = renderBar([row('a.md')], defaultView(), true)
+    fireEvent.click(screen.getByRole('button', { name: /^sorted by/i }))
     fireEvent.click(await screen.findByText('Group by project'))
     const next = onChange.mock.calls[0]![0] as TicketsView
     expect(next.group).toBe('none')
+    cleanup()
+    renderBar([row('a.md')])
+    fireEvent.click(screen.getByRole('button', { name: /^sorted by/i }))
+    await screen.findByRole('menuitemcheckbox', { name: 'Date' })
+    expect(screen.queryByText('Group by project')).toBeNull()
+  })
+
+  test("on a phone the search is a press at the strip's end that opens the field; closing it clears what was typed", async () => {
+    // A phone's screen, as the dashboard asks for one.
+    const had = window.matchMedia
+    window.matchMedia = (query: string) => ({ matches: query.includes('48rem'), media: query, addEventListener() {}, removeEventListener() {} }) as unknown as MediaQueryList
+    onTestFinished(() => {
+      window.matchMedia = had
+    })
+    const onChange = vi.fn()
+    const { rerender } = render(<TicketFilterBar view={defaultView()} rows={[row('a.md')]} spansProjects={false} onChange={onChange} />)
+    expect(screen.queryByRole('textbox', { name: /search tickets/i })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Search tickets' }))
+    expect(screen.getByRole('textbox', { name: /search tickets/i })).toBeTruthy()
+    const typed = defaultView()
+    typed.filters.q = 'lock'
+    rerender(<TicketFilterBar view={typed} rows={[row('a.md')]} spansProjects={false} onChange={onChange} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Close the search' }))
+    expect((onChange.mock.calls.at(-1)![0] as TicketsView).filters.q).toBe('')
   })
 
   test('"/" focuses the search field unless something is already being typed into', () => {

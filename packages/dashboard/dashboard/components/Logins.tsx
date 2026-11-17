@@ -69,11 +69,15 @@ export function PackageLogo({ svg, className }: { svg: string | undefined; class
   return <span aria-hidden className={cn('size-4 shrink-0 bg-current', className)} style={{ maskImage: url, WebkitMaskImage: url, maskSize: 'contain', WebkitMaskSize: 'contain', maskRepeat: 'no-repeat', WebkitMaskRepeat: 'no-repeat' }} />
 }
 
-/** The command a press runs, under its button, so the person sees what is done on their computer: one line, which scrolls sideways when it is longer than its room. */
+/**
+ * The command a press runs, under its button, so the person sees what is done on their computer: one line, which scrolls sideways when it
+ * is longer than its room. On a phone the copy press is a finger's size, its glyph 16 in from the right: the command starts 16 in too.
+ */
 export function CommandLine({ command }: { command: string }) {
   return (
-    <div className="flex min-w-0 items-center gap-1 rounded-md bg-muted py-0.5 pr-0.5 pl-2">
-      <code className="min-w-0 flex-1 overflow-x-auto py-1 font-mono text-xs whitespace-nowrap text-muted-foreground">{command}</code>
+    <div className="flex min-w-0 items-center gap-1 rounded-md bg-muted py-0.5 pr-0.5 pl-2 max-md:pl-4">
+      {/* Where it has no room it ends with "…" on a whole character, and scrolls to its end. */}
+      <code className="min-w-0 flex-1 overflow-x-auto py-1 font-mono text-xs text-ellipsis whitespace-nowrap text-muted-foreground">{command}</code>
       <CopyButton text={command} label="Copy the command" className="justify-center md:size-6 max-md:size-11" />
     </div>
   )
@@ -101,9 +105,10 @@ export type FixVariant = 'secondary' | undefined
 
 /** A press that fixes one thing: its button, what it is doing while it does, the command it runs, why it failed. With `words`, what is missing stands on the press's line, the press at its right edge. While it is busy, `url` is the page it said to open, and `onCancel` stops it. */
 export function FixAction({ label, busy, busyWords, command, failed, onPress, words, url, onCancel, size = 'default', variant }: { label: string; busy: boolean; busyWords: string; command?: string; failed?: string; onPress: () => void; words?: ReactNode; url?: string | undefined; onCancel?: (() => void) | undefined; size?: 'default' | 'sm' | undefined; variant?: FixVariant }) {
-  // Busy, the press stays with the focus it was pressed with, and says it is waiting under it.
+  // Busy, the press stays with the focus it was pressed with, and says it is waiting under it. On a phone the
+  // page's press is a finger's 44, as a form's foot is.
   const press = (
-    <Button size={size} variant={variant} loading={busy} onClick={onPress}>
+    <Button size={size} variant={variant} loading={busy} onClick={onPress} className={cn(size === 'default' && 'max-md:h-11')}>
       {label}
     </Button>
   )
