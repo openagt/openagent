@@ -12,6 +12,7 @@ import { MENU_BODY_CLASS, MENU_ITEM_CLASS, MENU_POPUP_CLASS, MENU_TRIGGER_OPEN_C
 import { usePopupPlacement } from './ui/popup-placement.js'
 import { usePickerSearch } from './ui/picker-search.js'
 import { ASK_AGAIN_MS, REPOS_SHOWN, repoDetail } from './ProjectPicker.js'
+import { PathCut } from './MiddleCut.js'
 
 /** The most rows a search lists. */
 const SEARCH_SHOWN = 200
@@ -156,8 +157,9 @@ export function SessionRepoPicks({
                               </MenuMark>
                               <span className="min-w-0 leading-5">
                                 <span className="block truncate">{row.label}</span>
-                                <span data-line2 className="block truncate text-xs leading-4 text-muted-foreground">
-                                  {row.detail}
+                                {/* Its folders cut first, then the middle of its last one: the folder that tells two repos apart stays. */}
+                                <span data-line2 className="flex min-w-0 text-xs leading-4 text-muted-foreground">
+                                  <PathCut path={row.detail} />
                                 </span>
                               </span>
                             </Combobox.Item>
