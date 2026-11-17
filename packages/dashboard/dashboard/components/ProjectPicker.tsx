@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Combobox } from '@base-ui/react/combobox'
 import { addressOfRemote } from '@openagt/agent-data/repository-address'
 import { Cloud, Check, ChevronsUpDown, Folder, FolderGit2, FolderPlus, FolderSearch, Layers, Plus, Search } from 'lucide-react'
@@ -22,6 +22,7 @@ import { usePopupPlacement } from './ui/popup-placement.js'
 import { usePickerSearch } from './ui/picker-search.js'
 import { AddProjectPanel } from './AddProjectPanel.js'
 import { Facts } from './ui/panel.js'
+import { PathCut } from './MiddleCut.js'
 
 /** How many repos the menu lists before a search: the search reaches the rest. */
 export const REPOS_SHOWN = 20
@@ -196,6 +197,13 @@ export function ProjectPicker({
   const { open, typed } = search
   const [adding, setAdding] = useState<{ folder: string } | { address: string } | null>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
+  // The list as tall as its rows with nothing typed, and that tall while a person types, so the search
+  // stays where it is as the rows narrow (opened upward too, where the list's top would move down).
+  const list = useRef<HTMLDivElement>(null)
+  const untyped = useRef<number>(undefined)
+  useLayoutEffect(() => {
+    if (!typed && list.current) untyped.current = list.current.offsetHeight
+  })
   // The folder just added, and what was picked then, until the projects read again have it: then it
   // is picked, however late that is, unless another pick was made meanwhile, which stays. The panel
   // says it was added until it closes itself or Done closes it, whether the pick came yet or not.
@@ -311,14 +319,13 @@ export function ProjectPicker({
         )}
         <Combobox.Portal>
           <Combobox.Positioner positionMethod={positionMethod} sideOffset={6} align="start" className="z-50 outline-none">
-            <Combobox.Popup data-overlay="picker" aria-label={name} className={cn(MENU_POPUP_CLASS, 'group/picker w-[22rem] max-w-[var(--available-width)]')}>
+            <Combobox.Popup data-overlay="picker" aria-label={name} className={cn(MENU_POPUP_CLASS, 'w-[22rem] max-w-[var(--available-width)]')}>
               {/* The field one line tall, 16 in from the band's every edge, as the jump's is. */}
               <div className="flex h-13 items-center gap-3 border-b border-hairline px-4">
                 <Search className="size-4 shrink-0 text-muted-foreground" aria-hidden />
                 <Combobox.Input aria-label="Search projects and repos" placeholder="Search, or paste a GitHub address" className="h-5 w-full min-w-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
               </div>
-              {/* As tall as its rows; opened upward, from the message box's row, of a set height, so the search stays where it is as the list narrows. */}
-              <ScrollArea viewportClassName="max-h-[min(20rem,calc(var(--available-height)-5rem))] group-data-[side=top]/picker:h-[min(20rem,calc(var(--available-height)-5rem))]">
+              <ScrollArea ref={list} style={typed ? { minHeight: untyped.current } : undefined} viewportClassName="max-h-[min(20rem,calc(var(--available-height)-5rem))]">
                 <div className={MENU_BODY_CLASS}>
                   <Combobox.Empty className="px-2 py-1.5 text-xs text-muted-foreground empty:hidden">No project or repo by that name.</Combobox.Empty>
                   <Combobox.List>
@@ -352,8 +359,9 @@ export function ProjectPicker({
                                 <span className="min-w-0 flex-1 leading-5">
                                   <span className="block truncate">{row.label}</span>
                                   {row.detail && (
-                                    <span data-line2 className="block truncate text-xs leading-4 text-muted-foreground">
-                                      {row.detail}
+                                    <span data-line2 className="flex min-w-0 text-xs leading-4 text-muted-foreground">
+                                      {/* A path's folders cut first, then the middle of its last one: the folder that tells two repos apart stays. */}
+                                      {row.pick.kind === 'repo' && typeof row.detail === 'string' ? <PathCut path={row.detail} /> : <span className="min-w-0 truncate">{row.detail}</span>}
                                     </span>
                                   )}
                                 </span>

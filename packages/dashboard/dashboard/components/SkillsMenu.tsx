@@ -5,7 +5,6 @@ import { onProjectSkills } from '../rpc/skills.js'
 import { skillsAgain } from '../lib/skills-saved.js'
 import { useLoaded } from '../lib/use-async.js'
 import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
-import { cn } from '../lib/utils.js'
 import { SKILLS_ENTRY } from './ProjectSkills.js'
 import { RowChevron, RowSaid, rowButtonClass, rowWideClass } from './ui/row-item.js'
 import { useAgentsList } from './AgentsPage.js'
@@ -183,13 +182,14 @@ export function SkillsMenu({
                     value={picks.project === undefined ? 'all' : picks.project === 'none' ? 'none' : null}
                     onValueChange={(pick: 'all' | 'none') => onChange(pick === 'all' ? { on: picks.on, off: picks.off } : { ...picks, project: 'none' })}
                   >
+                    {/* Marked at the right, in the one column every skill's tick stands in. */}
                     <DropdownMenuRadioItem value="all" closeOnClick={false}>
-                      <Check className={cn('h-3.5 w-3.5 shrink-0', picks.project === undefined ? 'opacity-100' : 'opacity-0')} aria-hidden />
                       All
+                      <span className="ml-auto flex size-4 shrink-0 items-center justify-center">{picks.project === undefined && <Check className="size-4" aria-hidden />}</span>
                     </DropdownMenuRadioItem>
                     <DropdownMenuRadioItem value="none" closeOnClick={false}>
-                      <Check className={cn('h-3.5 w-3.5 shrink-0', picks.project === 'none' ? 'opacity-100' : 'opacity-0')} aria-hidden />
                       None
+                      <span className="ml-auto flex size-4 shrink-0 items-center justify-center">{picks.project === 'none' && <Check className="size-4" aria-hidden />}</span>
                     </DropdownMenuRadioItem>
                   </DropdownMenuRadioGroup>
                   {held.map(name => (

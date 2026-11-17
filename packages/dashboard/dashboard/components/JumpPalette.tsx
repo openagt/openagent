@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from 'react'
 import { Dialog as BaseDialog } from '@base-ui/react/dialog'
 import { Autocomplete } from '@base-ui/react/autocomplete'
-import { Blocks, Folder, LayoutDashboard, Search } from 'lucide-react'
+import { Blocks, Folder, LayoutDashboard, Search, X } from 'lucide-react'
 import type { AgentMeta, FoundAgent, Intervention, ProjectSummary } from '../../src/index.js'
 import { onAllAgents } from '../rpc/reads.js'
 import type { Route } from '../lib/route.js'
@@ -15,7 +15,7 @@ import { needsWord } from './HumanQueueList.js'
 import { RunMark } from './RunMark.js'
 import { KeyCaps } from './ShortcutList.js'
 import { BACKDROP_CLASS } from './ui/dialog.js'
-import { Button } from './ui/button.js'
+import { Button, buttonVariants } from './ui/button.js'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip.js'
 import { Facts } from './ui/panel.js'
 
@@ -226,8 +226,8 @@ export function JumpPalette({ waiting, runs, pages, projects, scope, here, hrefO
             'fixed z-50 flex flex-col overflow-hidden border border-hairline bg-card text-card-foreground shadow-lg outline-none',
             'md:top-24 md:left-1/2 md:w-[min(36rem,calc(100vw-2rem))] md:-translate-x-1/2 md:rounded-lg',
             'max-md:inset-x-2 max-md:top-2 max-md:rounded-lg',
-            // Where no foot is drawn (a touch screen), the list ends 16 over the box's edge, as it starts under the field.
-            'pointer-coarse:pb-4',
+            // Where no foot is drawn (a phone, a touch screen), the list ends 16 over the box's edge, as it starts under the field.
+            'max-md:pb-4 pointer-coarse:pb-4',
             'origin-top transition-[opacity,scale] duration-180 data-[ending-style]:duration-120 data-[starting-style]:scale-97 data-[starting-style]:opacity-0 data-[ending-style]:scale-97 data-[ending-style]:opacity-0',
           )}
         >
@@ -259,6 +259,13 @@ export function JumpPalette({ waiting, runs, pages, projects, scope, here, hrefO
                   window.open(hrefOf(place.to), '_blank', 'noopener')
                 }}
               />
+              {/* Where the foot that says the keys is not drawn, a close to touch, pulled out by its own padding so its glyph ends on the inset. */}
+              <BaseDialog.Close
+                aria-label="Close"
+                className={cn(buttonVariants({ variant: 'ghost', size: 'icon-bar' }), '-mr-1.5 hidden text-muted-foreground hover:text-foreground max-md:inline-flex pointer-coarse:inline-flex')}
+              >
+                <X className="size-4" aria-hidden />
+              </BaseDialog.Close>
             </div>
             {/* What a screen reader hears of the list; with nothing in it, the empty line says so. */}
             <Autocomplete.Status className="sr-only">{count === 0 ? '' : count === 1 ? '1 place' : `${count} places`}</Autocomplete.Status>
@@ -274,16 +281,18 @@ export function JumpPalette({ waiting, runs, pages, projects, scope, here, hrefO
                         key={place.key}
                         value={place}
                         render={<a href={hrefOf(place.to)} onClick={inPlace(() => pick(place))} />}
-                        className="flex cursor-pointer items-center gap-3 rounded-md px-2 text-sm outline-none select-none md:h-9 max-md:h-11 data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground"
+                        // A name too long for one line goes on to a second: 36 high with one line, 56 with two; on a phone 44 and 64.
+                        className="flex cursor-pointer items-start gap-3 rounded-md px-2 py-2 text-sm outline-none select-none max-md:py-3 data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground"
                       >
-                        <span aria-hidden className="flex size-4 shrink-0 items-center justify-center">
+                        {/* The mark and the facts on the name's first line. */}
+                        <span aria-hidden className="flex h-5 w-4 shrink-0 items-center justify-center">
                           {place.mark}
                         </span>
                         {/* What was typed stands out in the name, so a person sees why the row is there. */}
-                        <span data-name className="min-w-0 flex-1 truncate">
+                        <span data-name className="min-w-0 flex-1 line-clamp-2">
                           {foundParts(place.name, query).map((part, index) => (part.found ? <strong key={index} className="font-semibold">{part.text}</strong> : part.text))}
                         </span>
-                        {place.meta?.some(Boolean) && <Facts facts={place.meta} className="max-w-[45%] shrink-0 truncate text-xs text-muted-foreground" />}
+                        {place.meta?.some(Boolean) && <Facts facts={place.meta} className="max-w-[45%] shrink-0 truncate text-xs leading-5 text-muted-foreground" />}
                       </Autocomplete.Item>
                     )}
                   </Autocomplete.Collection>
@@ -294,7 +303,7 @@ export function JumpPalette({ waiting, runs, pages, projects, scope, here, hrefO
             {/* On the rows' edge, where the first row's mark would be. */}
             <Autocomplete.Empty className="flex h-[min(26rem,60dvh)] items-start px-4 py-3 text-sm text-muted-foreground empty:hidden">Nothing matches “{query}”</Autocomplete.Empty>
             {/* Its keys 16 in from the band's every edge, as the field is in the band at the top. */}
-            <div className="flex h-13 shrink-0 items-center gap-4 border-t border-hairline px-4 text-xs text-muted-foreground pointer-coarse:hidden">
+            <div className="flex h-13 shrink-0 items-center gap-4 border-t border-hairline px-4 text-xs text-muted-foreground max-md:hidden pointer-coarse:hidden">
               <span className="flex items-center gap-1.5">
                 <KeyCaps keys={['Enter']} /> Go
               </span>
