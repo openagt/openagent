@@ -3,25 +3,25 @@
     {
       "window": 1120,
       "width": 1120,
-      "height": 518,
+      "height": 572,
       "media": "(min-width: 1184px)"
     },
     {
       "window": 960,
       "width": 960,
-      "height": 518,
+      "height": 572,
       "media": "(min-width: 1024px)"
     },
     {
       "window": 704,
       "width": 704,
-      "height": 480,
+      "height": 486,
       "media": "(min-width: 768px)"
     },
     {
       "window": 358,
       "width": 358,
-      "height": 504,
+      "height": 510,
       "media": ""
     }
   ],
@@ -29,7 +29,7 @@
     {
       "window": 1002,
       "width": 714,
-      "height": 146,
+      "height": 145,
       "media": "(min-width: 1184px)"
     },
     {
@@ -41,7 +41,7 @@
     {
       "window": 992,
       "width": 704,
-      "height": 146,
+      "height": 145,
       "media": "(min-width: 768px)"
     },
     {
@@ -67,7 +67,7 @@
     {
       "window": 358,
       "width": 358,
-      "height": 257,
+      "height": 285,
       "media": ""
     }
   ]
