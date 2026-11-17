@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { Button, Empty, Facts, FilterChips, MiddleCut, Page, PanelGroup, PanelGroups, PanelRow, PersonMark, RowShapes, RunMark, Slot, formatDateTime, formatDuration, needsWord, personSaid, runName, runLineTone, useCodingAgents, useGitHostPeople, useIsMobile, runsAgain, runWord, useModuleHost, usePolled, type CodingAgent, type ModuleAgent, type ModuleHostPerson, type ModulePageProps, type ModuleProject, type ReadState } from '@openagt/dashboard/module'
+import { Button, Empty, Facts, FilterChips, MiddleCut, Page, PanelGroup, PanelGroups, PanelRow, PanelShape, PersonMark, RunMark, Skeleton, Slot, WordsShape, formatDateTime, formatDuration, needsWord, personSaid, runName, runLineTone, useCodingAgents, useGitHostPeople, useIsMobile, runsAgain, runWord, useModuleHost, usePolled, type CodingAgent, type ModuleAgent, type ModuleHostPerson, type ModulePageProps, type ModuleProject, type ReadState } from '@openagt/dashboard/module'
 import type { RunCard } from '../src/run.js'
 
 /** How many runs each project lists: the command's own default page is 20; the page shows more. */
@@ -238,9 +238,18 @@ export function LogsPage({ projects }: ModulePageProps) {
     <Page
       title="Logs"
       description={capped ? `The last ${LIMIT} runs recorded in ${many ? 'each of these projects' : only}, newest first.` : `Every run recorded in ${many ? 'these projects' : only}, newest first.`}
-      bar={state === 'unknown' ? undefined : <FilterChips chips={counts} total={read.rows.length} picked={status} onPick={pick} />}
+      // While the runs are read, the chips' track holds its place, and the list waits as a day of runs.
+      bar={state === 'unknown' ? <Skeleton className="h-8 w-72 rounded-lg max-md:h-11" /> : <FilterChips chips={counts} total={read.rows.length} picked={status} onPick={pick} />}
     >
-      <Slot of={{ state, value: read, failing }} shape={<RowShapes rows={3} />} className="space-y-8">
+      <Slot
+        of={{ state, value: read, failing }}
+        shape={
+          <PanelGroup title={<WordsShape words="Today" />} bare>
+            <PanelShape rows={3} />
+          </PanelGroup>
+        }
+        className="space-y-8"
+      >
         {() => (
           <>
             {read.failed.map(({ project, error }) => (
