@@ -410,6 +410,34 @@ html[data-pinned] body {
   }
 }
 
+/* The jump's list on a phone (JumpPalette): a fade over its foot while rows go on under it, as the Subagents
+   list's foot fades, gone once its last row is in view. Driven by the list's own scroll, on a timeline the popup
+   shares with it; with nothing to scroll, or without scroll-timeline support, it is not drawn. */
+.jump-popup {
+  timeline-scope: --jump-list;
+}
+.jump-list {
+  scroll-timeline: --jump-list y;
+}
+.jump-fade {
+  opacity: 0;
+}
+@supports (animation-timeline: scroll()) {
+  .jump-fade {
+    animation: jump-fade-away 1ms linear both;
+    animation-timeline: --jump-list;
+    animation-range: calc(100% - 2rem) 100%;
+  }
+}
+@keyframes jump-fade-away {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
 /* The chat's last line while the agent works (ToolCalls.tsx), as Claude Code on the web draws
    its own: a band of light crossing the grey text, and three dots in the accent colour rising one
    after the other. Its words, when they change,

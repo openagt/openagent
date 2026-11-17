@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Button, Input, RadioGroup, RadioGroupOption, useKeptDraft, useOpenAgentDown, type ModuleCommandResult, type ModuleProject } from '@openagt/dashboard/module'
+import { Button, Input, RadioGroup, RadioGroupOption, cn, useKeptDraft, useOpenAgentDown, type ModuleCommandResult, type ModuleProject } from '@openagt/dashboard/module'
 import { EMPTY_DRAFT, addArgs, draftProblem, draftSentence, isUntouched, nameProblem, ownPaceArgs, savedFile, savedWords, whereHint, type AutomationDraft, type OwnPace } from './automation-form.js'
-import { FormFoot, LineFields, PaceFields, PromptField, SaveWords, Section } from './fields.js'
+import { FormFoot, LineFields, PHONE_FIELD, PaceFields, PromptField, SaveWords, Section } from './fields.js'
 import { DEFAULT_AGENT } from '../src/names.js'
 
 // The "New automation" form of the Automations page: a person's own prompt, saved as a command of
@@ -117,7 +117,7 @@ export function AutomationForm({
               aria-label="Name"
               aria-invalid={badName !== undefined}
               {...(badName !== undefined ? { 'aria-describedby': 'automation-name-problem' } : {})}
-              className="w-64 max-w-full font-mono"
+              className={cn('w-64 max-w-full font-mono', PHONE_FIELD)}
             />
           </div>
           {badName !== undefined && (

@@ -489,6 +489,20 @@ describe('Settings › Devices: another computer, once', () => {
     expect(within(screen.getByRole('list', { name: 'Your devices' })).getAllByRole('listitem')).toHaveLength(2)
   })
 
+  test('a computer saved here that does not answer is said first, before how this computer is reached, with the way on; once it answers nothing is said', async () => {
+    const { host } = door(() => ok({ ...OPEN, devices: [IN_HERE] }), [{ id: STUDIO.id, label: STUDIO.label, url: STUDIO.url, listed: STUDIO.listed! }])
+    show(host)
+    expect((await findRow('Studio Mac')).textContent).toContain('Offline')
+    const said = screen.getByText('Studio Mac does not answer').parentElement!
+    expect(said.textContent).toBe('Studio Mac does not answerRuns cannot go there until it is on and online. Open it below to connect it again.')
+    // Before This computer: what is down comes first.
+    expect(said.compareDocumentPosition(screen.getByRole('region', { name: 'This computer' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    cleanup()
+    show(door(() => ok({ ...OPEN, devices: [IN_HERE] }), [STUDIO]).host)
+    await findRow('Studio Mac')
+    expect(screen.queryByText(/does not answer/)).toBeNull()
+  })
+
   test("on a server, another person's computer in at the door is theirs alone: under them, never among the owner's devices with a way to send runs to it", async () => {
     const ADAS = { id: 'ada000000001', name: 'OpenAgent on ada-laptop', added: PHONE.added, line: true, person: 'Ada' }
     const OWN = { id: 'own000000001', name: 'OpenAgent on Studio', added: PHONE.added }

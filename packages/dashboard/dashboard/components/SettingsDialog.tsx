@@ -227,7 +227,9 @@ export function SettingsDialog({
             </nav>
           )}
           {!listOnly && (
-            <div className="flex min-w-0 flex-1 flex-col">
+            // With no presses at its foot, the entry ends on the dialog's inset, as it begins under the head: what is cut at
+            // the scroll edge fades out there, never on the window's own edge.
+            <div className={cn('group/frame flex min-w-0 flex-1 flex-col', phone ? 'has-[>[data-foot]:empty]:pb-[max(1rem,env(safe-area-inset-bottom))]' : 'has-[>[data-foot]:empty]:pb-6')}>
               {/* The dialog's head on its one inset, as every dialog's (ui/dialog.tsx): 24 on a computer, a phone's top bar on a phone. */}
               <div className={cn('flex shrink-0 items-center gap-2', phone ? 'h-12 px-4' : 'h-6 box-content px-6 pt-4.5 pb-4')}>
                 {phone && (
@@ -264,9 +266,10 @@ export function SettingsDialog({
                   <X className="size-4" aria-hidden />
                 </BaseDialog.Close>
               </div>
-              {/* `peer/entry`: what goes on under the foot fades out at the body's visible end, as under the chat's bar. */}
-              <ScrollArea className="peer/entry min-h-0 flex-1 after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-4 after:bg-gradient-to-t after:from-card after:opacity-0 data-[overflow-y-end]:after:opacity-100">
-                <div className={cn('space-y-4', phone ? 'px-4 pt-2 pb-4' : 'px-6 pb-6')}>
+              {/* `peer/entry`: what goes on under the foot fades out at the body's visible end, as under the chat's bar; on a
+                  phone over 32, as the Subagents list's foot, so the fade reaches past the gap between two rows. */}
+              <ScrollArea className={cn('peer/entry min-h-0 flex-1 after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-4 after:bg-gradient-to-t after:from-card after:opacity-0 data-[overflow-y-end]:after:opacity-100', phone && 'after:h-8')}>
+                <div className={cn('space-y-4', phone ? 'px-4 pt-2 pb-4' : 'px-6 pb-6', 'group-has-[>[data-foot]:empty]/frame:pb-0')}>
                   {savedTo.length > 0 && (
                     <p className="text-xs text-muted-foreground">
                       Saved to {savedTo.length === 1 ? 'one project' : `${savedTo.length} projects`}: {savedTo.map(p => label(p.id, p.name)).join(', ')}.
@@ -286,7 +289,7 @@ export function SettingsDialog({
                 </div>
               </ScrollArea>
               {/* The entry's presses on the dialog's inset, under a hairline, as every dialog's foot. */}
-              <div ref={setFoot} className={cn('shrink-0 border-t border-hairline empty:hidden', phone ? 'px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))]' : 'px-6 pt-4 pb-6', DIALOG_PRESSES_CLASS)} />
+              <div ref={setFoot} data-foot className={cn('shrink-0 border-t border-hairline empty:hidden', phone ? 'px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))]' : 'px-6 pt-4 pb-6', DIALOG_PRESSES_CLASS)} />
             </div>
           )}
           <ConfirmDialog
@@ -466,7 +469,8 @@ function useOwnEntries(): Entry[] {
       title: 'Claude web',
       icon: Globe,
       body: (
-        <SettingsSection description="A Claude web agent hands off and ends, so the questions its session asks never reach this dashboard. The Claude web bridge carries them back and types your answers into the session.">
+        // The switch's two sentences say what it does and what it needs; an introduction above them told the same.
+        <SettingsSection>
           <ToggleRow
             label="Claude web bridge"
             description="Carry claude.ai questions into this dashboard and type your answers back. A browser signed in to claude.ai does the work, through the bridge extension."

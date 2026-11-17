@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { Plus } from 'lucide-react'
 import { Button, Input, Label, RadioGroup, RadioGroupItem, RadioGroupOption, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Textarea, cn, useModuleHost, type ModuleProject } from '@openagt/dashboard/module'
 import type { PublishPick } from '../src/state.js'
 import { AGENTS, AGENT_LABELS, AGENT_SKILLS_DIR, DEFAULT_AGENT, MAX_AGENTS, type AgentName } from '../src/names.js'
@@ -15,6 +16,9 @@ import { PRINTS_SOMETHING, UNIT_WORDS, modelLabel, notAsked, publishChoices, sto
 
 /** A small text beside or under a field: what it means, or that it is optional. */
 const hint = 'text-xs text-muted-foreground'
+
+/** A field typed into or picked from, on a phone: a finger's 44, as the form's presses. */
+export const PHONE_FIELD = 'max-md:h-11'
 
 /**
  * A form's foot: where it is kept, then its presses. It stays in view at the window's foot (on a phone,
@@ -85,10 +89,18 @@ export function PromptField({ prompt, autoFocus, onChange }: { prompt: string; a
  * reads it, and "Try it" runs it once in the project and shows what it printed and whether an
  * agent would start; nothing is saved and nothing starts. An answer shown is for the line as it
  * stands: changing the line takes it away, and an answer that comes back late is dropped, a
- * written line too.
+ * written line too. Most automations run by time alone, so until a row has a line, or the person
+ * asks for one, the fields fold behind one press, and what it does and when it runs lead the form.
  */
 export function LineFields({ project, said, agent, onChange }: { project: ModuleProject; said: Said; agent: AgentName; onChange: (change: Partial<Said>) => void }) {
   const host = useModuleHost()
+  const [shown, setShown] = useState(said.when.trim() !== '' || said.waitsFor.trim() !== '')
+  const waitsFor = useRef<HTMLInputElement>(null)
+  /** Unfolded by the press: the words' field takes the focus, never on a form opened with a line. */
+  const unfolded = useRef(false)
+  useEffect(() => {
+    if (shown && unfolded.current) waitsFor.current?.focus()
+  }, [shown])
   const [tried, setTried] = useState<'trying' | TriedLine | undefined>()
   const [written, setWritten] = useState<'writing' | string | undefined>()
   /** The last try asked for: an answer to an earlier one, come back late, changes nothing. */
@@ -119,6 +131,19 @@ export function LineFields({ project, said, agent, onChange }: { project: Module
     if ('line' in read) lineChanged(read.line)
     setWritten('said' in read ? read.said : undefined)
   }
+  if (!shown)
+    return (
+      // Pulled out by its own padding, so its glyph stands on the form's edge.
+      <Button
+        variant="ghost"
+        aria-expanded={false}
+        onClick={() => ((unfolded.current = true), setShown(true))}
+        className={cn('-ml-3 text-muted-foreground', PHONE_FIELD)}
+      >
+        <Plus className="size-4" aria-hidden />
+        Start it only when there is work
+      </Button>
+    )
   return (
     <>
       <Label htmlFor="automation-waits-for" className="pt-2">
@@ -126,6 +151,7 @@ export function LineFields({ project, said, agent, onChange }: { project: Module
       </Label>
       <Input
         id="automation-waits-for"
+        ref={waitsFor}
         type="text"
         value={said.waitsFor}
         onChange={e => {
@@ -134,9 +160,10 @@ export function LineFields({ project, said, agent, onChange }: { project: Module
           setWritten(undefined)
         }}
         placeholder="when someone commented"
+        className={PHONE_FIELD}
       />
       <div className="flex flex-wrap items-center gap-3">
-        <Button variant="secondary" disabled={words === '' || written === 'writing'} onClick={() => void writeIt()}>
+        <Button variant="secondary" disabled={words === '' || written === 'writing'} onClick={() => void writeIt()} className={PHONE_FIELD}>
           {written === 'writing' ? 'Writing…' : 'Write the line'}
         </Button>
         <span className={hint}>{AGENT_LABELS[agent]} writes it from these words, for a fraction of a cent.</span>
@@ -166,7 +193,7 @@ export function LineFields({ project, said, agent, onChange }: { project: Module
         While the row is on it runs every minute: an agent starts with what it prints, and nothing, or an empty list, starts none. <span className="font-mono">$LAST_RUN</span> is when the row last started.
       </p>
       <div className="flex flex-wrap items-center gap-3">
-        <Button variant="secondary" disabled={line === '' || tried === 'trying'} onClick={() => void tryIt()}>
+        <Button variant="secondary" disabled={line === '' || tried === 'trying'} onClick={() => void tryIt()} className={PHONE_FIELD}>
           {tried === 'trying' ? 'Trying…' : 'Try it'}
         </Button>
         <span className={hint}>Runs it once, here: no agent starts.</span>
@@ -263,9 +290,9 @@ export function PaceFields({
   const interval = (
     // A field typed into is the pick: nobody types a wait and means another choice.
     <div className={cn('flex flex-wrap items-center gap-2 text-sm', !own && 'opacity-60')}>
-      <Input type="number" name="every" min={1} max={MAX_COUNT} value={typed.count} disabled={disabled} onChange={e => onChange(wait({ count: e.target.value }))} aria-label="How long" className="w-20" />
+      <Input type="number" name="every" min={1} max={MAX_COUNT} value={typed.count} disabled={disabled} onChange={e => onChange(wait({ count: e.target.value }))} aria-label="How long" className={cn('w-20', PHONE_FIELD)} />
       <Select items={PACE_UNITS.map(unit => ({ value: unit, label: unitWord(unit, typed.count) }))} value={typed.unit} disabled={disabled} onValueChange={unit => onChange(wait({ unit: unit as PaceUnit }))}>
-        <SelectTrigger aria-label="Unit" className="w-28">
+        <SelectTrigger aria-label="Unit" className={cn('w-28', PHONE_FIELD)}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -289,7 +316,7 @@ export function PaceFields({
             // Chrome sends no change while a blank time is typed part-way, so leaving the field tells it; left as it was, it picks nothing.
             onBlur={e => e.target.validity.badInput !== (own && draft.atHalfTyped === true) && onChange(wait({ at: e.target.value }))}
             aria-label={work ? 'Not before this time of day' : 'Time of day'}
-            className="w-auto"
+            className={cn('w-auto', PHONE_FIELD)}
           />
           <span className={hint}>optional, this machine's time{typed.unit === 'mo' ? '; a month counts as 30 days' : ''}</span>
         </>
@@ -359,7 +386,7 @@ export function AgentsFields({ name, draft, asSaid, start, where, disabled, onCh
   const count = (
     <div className={cn('flex flex-wrap items-center gap-2 text-sm', draft.kind !== 'own' && 'opacity-60')}>
       <span>Up to</span>
-      <Input type="number" name="agents" min={1} max={MAX_AGENTS} value={typed.count} disabled={disabled} onChange={e => onChange({ kind: 'own', count: e.target.value })} aria-label="How many agents" className="w-20" />
+      <Input type="number" name="agents" min={1} max={MAX_AGENTS} value={typed.count} disabled={disabled} onChange={e => onChange({ kind: 'own', count: e.target.value })} aria-label="How many agents" className={cn('w-20', PHONE_FIELD)} />
       <span>{Number(typed.count) === 1 ? 'agent' : 'agents'} at once</span>
     </div>
   )
@@ -389,7 +416,7 @@ export function PublishField({ gitHost, own, pick, disabled, onChange }: { gitHo
   const choices = publishChoices(gitHost, pick).map(choice => ({ value: choice, label: publishLabel(choice, own) }))
   return (
     <Select items={choices} value={pick} disabled={disabled} onValueChange={next => onChange(next as PublishPick)}>
-      <SelectTrigger aria-label="What its runs publish" className="w-56">
+      <SelectTrigger aria-label="What its runs publish" className={cn('w-56', PHONE_FIELD)}>
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
@@ -447,7 +474,7 @@ export function RunsOnFields({
           Agent
         </Label>
         <Select items={AGENTS.map(a => ({ value: a, label: AGENT_LABELS[a] }))} value={agent} disabled={disabled} onValueChange={next => onChange({ agent: next as AgentName, model: 'skill' })}>
-          <SelectTrigger id="automation-agent" className="w-44">
+          <SelectTrigger id="automation-agent" className={cn('w-44', PHONE_FIELD)}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -464,7 +491,7 @@ export function RunsOnFields({
           Model
         </Label>
         <Select items={models} value={model} disabled={disabled} onValueChange={next => onChange({ agent, model: next as ModelDraft })}>
-          <SelectTrigger id="automation-model" className="w-72 max-w-full">
+          <SelectTrigger id="automation-model" className={cn('w-72 max-w-full', PHONE_FIELD)}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

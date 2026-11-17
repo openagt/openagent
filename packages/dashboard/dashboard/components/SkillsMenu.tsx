@@ -147,8 +147,8 @@ export function SkillsMenu({
           ))}
           {more.length > 0 && (
             <DropdownMenuSub>
+              {/* On the skills' own text edge: a name, as theirs are, with no mark before it. */}
               <DropdownMenuSubTrigger>
-                <span className="h-3.5 w-3.5 shrink-0" aria-hidden />
                 More skills
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent className="min-w-[14rem]">
@@ -173,7 +173,6 @@ export function SkillsMenu({
               <DropdownMenuLabel>Project skills</DropdownMenuLabel>
               {held.length === 0 ? (
                 <DropdownMenuItem disabled>
-                  <span className="h-3.5 w-3.5 shrink-0" aria-hidden />
                   <span className="text-muted-foreground">None yet</span>
                 </DropdownMenuItem>
               ) : (

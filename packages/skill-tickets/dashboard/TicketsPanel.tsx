@@ -62,10 +62,9 @@ export interface RowsProps {
 
 /** Tickets as one card, or once the list is long and spans stages, a card per stage in the order agents take them. */
 export function TicketRows({ rows, ...props }: RowsProps & { rows: readonly ListedTicket[] }) {
-  const priorities = rows.some(row => row.ticket.priority !== undefined)
   const stages = STAGE_ORDER.map(stage => ({ stage, rows: rows.filter(row => ticketStage(row.ticket) === stage) })).filter(part => part.rows.length > 0)
   const row = (listed: ListedTicket, showStage: boolean) => (
-    <TicketRow key={`${listed.projectId}/${listed.ticket.file}`} listed={listed} priorities={priorities} showStage={showStage} {...props} />
+    <TicketRow key={`${listed.projectId}/${listed.ticket.file}`} listed={listed} showStage={showStage} {...props} />
   )
   if (rows.length < GROUP_BY_STAGE_FROM || stages.length < 2) return <Panel aria-label="Tickets">{rows.map(listed => row(listed, true))}</Panel>
   return (
@@ -80,10 +79,8 @@ export function TicketRows({ rows, ...props }: RowsProps & { rows: readonly List
 }
 
 /** One ticket as a row; under the pointer its next step takes its facts' place. */
-function TicketRow({ listed, priorities, showStage, busy, starting, isSelected, onToggleSelect, onOpen, onStart, onConfigure, onTopic, onClaimed }: RowsProps & {
+function TicketRow({ listed, showStage, busy, starting, isSelected, onToggleSelect, onOpen, onStart, onConfigure, onTopic, onClaimed }: RowsProps & {
   listed: ListedTicket
-  /** Whether some ticket of the list has a priority: the column is kept on every row, or on none. */
-  priorities: boolean
   /** Said on the row: not where the row's part is named by its stage, unless its word carries a mark. */
   showStage: boolean
 }) {
@@ -122,7 +119,9 @@ function TicketRow({ listed, priorities, showStage, busy, starting, isSelected, 
           />
         )
       }
-      before={priorities ? <Priority value={ticket.priority} /> : undefined}
+      // Every row holds the priority's column, one with none too, so the titles are one column in
+      // every list, as the rows that wait for the read hold it.
+      before={<Priority value={ticket.priority} />}
       title={ticket.title}
       href={host.pageHref('tickets', [ticket.file], projectId)}
       onClick={() => onOpen(listed)}

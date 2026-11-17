@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { ChevronLeft, Ellipsis, House, Loader2, Monitor, Plus, Server, Smartphone, Tablet, UserPlus, UserRound } from 'lucide-react'
 import { Badge, Button, ConfirmDialog, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Input, RowShapes, Section, SettingsItem, SettingsItems, SettingsRow, SettingsRowShapes, SettingsSection, Slot, formatDateTime, formatRelative, useOpenAgentDown, usePolled, useSettingsCrumb } from '@openagt/dashboard/module'
 import { addDevice, keepPerson, loadMine, myName, nameOwner, removeDevice, removeMine, removePerson, renameDevice, setTailscale, type Answer, type DeviceRow, type DoorStatus, type LineRow, type PersonRow, type PersonThere } from './devices.js'
@@ -113,6 +113,7 @@ export function DevicesSettings({ everyMs = 3_000, devicesEveryMs = 30_000, devi
   const start = d.items.length === 0 && !status?.on && status?.https === undefined && status?.tailscale === undefined && persons.length === 0
   return (
     <div className="space-y-8">
+      <Unanswered items={d.items} />
       <ThisComputer d={d} start={start} />
       {start ? <Start d={d} onAdd={add} /> : <YourDevices d={d} onOpen={item => setOpened(openedOf(item))} onAdd={() => add('add')} />}
       {d.door !== undefined && !d.door.ok && <Problem>{`The devices could not be read: ${d.door.error}`}</Problem>}
@@ -159,27 +160,33 @@ function Start({ d, onAdd }: { d: Devices; onAdd: (adding: Adding) => void }) {
             }
           />
         )}
-        <SettingsRow
-          label="Someone gave you a code?"
-          description="Join a server of yours, or a computer someone shared with you."
-          control={
-            <Button variant="secondary" onClick={() => onAdd('join')}>
+        {/* The ways in for someone who already has one, quiet under the ways to set up: a line each, its press a link at its end. */}
+        <div className="space-y-2 border-t border-border pt-4">
+          <OtherWay question="Someone gave you a code?" words="Join a server of yours, or a computer someone shared with you.">
+            <Button variant="link" className="px-0 max-md:h-11" onClick={() => onAdd('join')}>
               Join with a code
             </Button>
-          }
-        />
-        <SettingsRow
-          label="On Tailscale?"
-          description="Your devices on Tailscale reach this computer from anywhere, with no server."
-          control={
-            <Button variant="secondary" loading={turning} disabled={down} onClick={() => void onTailscale()}>
+          </OtherWay>
+          <OtherWay question="On Tailscale?" words="Your devices on Tailscale reach this computer from anywhere, with no server.">
+            <Button variant="link" className="px-0 max-md:h-11" loading={turning} disabled={down} onClick={() => void onTailscale()}>
               Reach this computer on your Tailscale network
             </Button>
-          }
-        />
+          </OtherWay>
+        </div>
         {why !== undefined && <Problem>{why}</Problem>}
       </SettingsSection>
     </Section>
+  )
+}
+
+function OtherWay({ question, words, children }: { question: string; words: string; children: ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-3 max-sm:flex-col max-sm:items-start max-sm:gap-1">
+      <p className="text-sm text-muted-foreground">
+        <span className="font-medium text-foreground">{question}</span> {words}
+      </p>
+      <div className="shrink-0">{children}</div>
+    </div>
   )
 }
 
@@ -249,6 +256,25 @@ function YourDevices({ d, onOpen, onAdd }: { d: Devices; onOpen: (item: Item) =>
         {persons.length > 0 && <DoorPeople d={d} persons={persons} devices={status?.devices ?? []} lines={status?.lines ?? []} />}
       </div>
     </Section>
+  )
+}
+
+/** A computer or a server that is saved here and does not answer, as its row says "Offline". */
+const unanswering = (item: Item): boolean => {
+  if (item.kind === 'phone') return false
+  if (item.kind === 'server') return item.machine !== undefined && item.machine.version === undefined && !item.server.working && !installFailed(item.server)
+  return item.machine !== undefined && item.machine.version === undefined
+}
+
+/** What does not answer, first: before how this computer is reached, so the person sees what is down and the way on. */
+function Unanswered({ items }: { items: Item[] }) {
+  const names = items.filter(unanswering).map(item => item.name)
+  if (names.length === 0) return null
+  return (
+    <div role="status">
+      <p className="text-sm font-medium">{names.length === 1 ? `${names[0]} does not answer` : `${names.length} of your devices do not answer`}</p>
+      <p className="mt-0.5 text-sm text-muted-foreground">{`${names.length === 1 ? 'Runs cannot go there' : `${new Intl.ListFormat('en', { type: 'conjunction' }).format(names)}: runs cannot go to them`} until ${names.length === 1 ? 'it is' : 'they are'} on and online. ${names.length === 1 ? 'Open it below' : 'Open one below'} to connect it again.`}</p>
+    </div>
   )
 }
 

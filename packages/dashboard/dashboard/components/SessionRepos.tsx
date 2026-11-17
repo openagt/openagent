@@ -9,7 +9,7 @@ import { rowButtonClass, rowItemClass, RowSaid } from './ui/row-item.js'
 import { ScrollArea } from './ui/scroll-area.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { MENU_BODY_CLASS, MENU_ITEM_CLASS, MENU_POPUP_CLASS, MENU_TRIGGER_OPEN_CLASS, MenuMark } from './ui/dropdown-menu.js'
-import { usePopupPlacement } from './ui/popup-placement.js'
+import { usePopupPosition } from './ui/popup-placement.js'
 import { usePickerSearch } from './ui/picker-search.js'
 import { ASK_AGAIN_MS, REPOS_SHOWN, repoDetail } from './ProjectPicker.js'
 import { PathWhole } from './MiddleCut.js'
@@ -80,7 +80,7 @@ export function SessionRepoPicks({
 }) {
   const search = usePickerSearch()
   const { open, typed } = search
-  const positionMethod = usePopupPlacement()
+  const position = usePopupPosition()
   // Asked again shortly while the look through this computer is still on its way, and the menu is open.
   const [again, setAgain] = useState(0)
   const repos = useLoaded<ReposRead | null>(() => onRepos().catch(() => ({ repos: [], hosted: [], reposLoading: false, hostedLoading: false, canAddFolder: false })), null, [open, again])
@@ -135,7 +135,7 @@ export function SessionRepoPicks({
           <TooltipContent>A copy of the repo in the session's folder, on a branch of its own</TooltipContent>
         </Tooltip>
         <Combobox.Portal>
-          <Combobox.Positioner positionMethod={positionMethod} sideOffset={6} align="start" className="z-50 outline-none">
+          <Combobox.Positioner {...position} sideOffset={6} align="start" className="z-50 outline-none">
             <Combobox.Popup data-overlay="picker" aria-label="Add repo" className={cn(MENU_POPUP_CLASS, 'w-[24rem] max-w-[var(--available-width)]')}>
               {/* The field one line tall, 16 in from the band's every edge, as the jump's is. */}
               <div className="flex h-13 items-center gap-3 border-b border-hairline px-4">

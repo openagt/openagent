@@ -73,27 +73,31 @@ export function RemoveProjectDialog({
         <AlertDialog.Backdrop className={BACKDROP_CLASS} />
         <AlertDialog.Popup data-overlay="question" initialFocus={cancel} className={POPUP}>
           <AlertDialog.Title className="text-base font-semibold">{label ? `Remove the project ${label}?` : 'Remove this project?'}</AlertDialog.Title>
-          {/* What removing does first; what the box would delete, or keeps, beside the box. */}
           <AlertDialog.Description className="mt-2 text-sm text-muted-foreground">
-            It leaves the dashboard&rsquo;s list{scheduled && <>, and its scheduler stops unless you set it to keep running</>}. Your files and your
-            commits stay. Add the folder again to bring the project back.
+            It leaves the dashboard&rsquo;s list{scheduled && <>, and its scheduler stops unless you set it to keep running</>}.{' '}
+            {files ? (
+              <>Your files and your commits stay.</>
+            ) : (
+              <>
+                Nothing in the folder is deleted: your files and your commits stay, and so do OpenAgent&rsquo;s own files there (
+                <span className={name}>.openagent</span>, <span className={name}>.branches</span>,{' '}
+                <span className={name}>.agent-runner</span>), and the agents&rsquo; records (in <span className={name}>~/.openagent</span>,
+                or on the branch <span className={name}>agent-data</span> if you shared them).
+              </>
+            )}{' '}
+            Add the folder again to bring the project back.
           </AlertDialog.Description>
           <label className="mt-4 flex cursor-pointer items-start gap-2 text-sm text-foreground">
             <Checkbox checked={files} onCheckedChange={checked => setFiles(checked === true)} disabled={busy} className="mt-0.5" />
             <span>Also delete OpenAgent&rsquo;s files in this folder</span>
           </label>
-          {!files && (
-            // Under the box's words, on their edge: the box's 16 and the gap's 8.
-            <p className="mt-1 pl-6 text-xs text-muted-foreground">
-              Nothing in the folder is deleted: OpenAgent&rsquo;s own files there stay too (<span className={name}>.openagent</span>,{' '}
-              <span className={name}>.branches</span>, <span className={name}>.agent-runner</span>), and so do the agents&rsquo; records (in{' '}
-              <span className={name}>~/.openagent</span>, or on the branch <span className={name}>agent-data</span> if you shared them).
-            </p>
-          )}
           {files && (
-            <div className="mt-3 rounded-md border border-hairline p-3 text-sm text-muted-foreground">
-              <p>
-                This deletes, on this machine: the agents&rsquo; checkouts in <span className={name}>.branches</span>, the folders{' '}
+            // 12 at its sides; 8 above and under, which the lines' leading brings to the sides' 12.
+            <div className="mt-3 rounded-md border border-hairline px-3 py-2 text-sm text-muted-foreground">
+              {/* What it comes to first, on a line of its own; what it deletes under it. */}
+              <p className="text-foreground">This deletes, on this machine:</p>
+              <p className="mt-1">
+                the agents&rsquo; checkouts in <span className={name}>.branches</span>, the folders{' '}
                 <span className={name}>.openagent</span> (with <span className={name}>hooks.yml</span>, the project&rsquo;s start lines) and{' '}
                 <span className={name}>.agent-runner</span>, the agents&rsquo; records in <span className={name}>~/.openagent</span>, and the
                 local branch <span className={name}>agent-data</span>. A tool that

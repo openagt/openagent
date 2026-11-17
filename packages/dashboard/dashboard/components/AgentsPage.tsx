@@ -19,6 +19,7 @@ import { Label } from './ui/label.js'
 import { Page } from './Page.js'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select.js'
 import { PanelShape, Slot } from './ui/slot.js'
+import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip.js'
 
 // The Agents page (Rom's design): an agent is a name, a set of skills and a set of accounts, made
 // once and used in any project or none. One row per agent, the default first, each edited in a
@@ -399,42 +400,42 @@ function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord;
       }
     >
       <form id={formId} noValidate onSubmit={submit} className="space-y-6 pb-1">
+        {/* The default's name is the title's and stays: no field for it, the reason under the title. */}
+        {isDefault && <p className="text-sm text-muted-foreground">The default agent keeps its name: it is the one a session is on unless you pick another.</p>}
         {/* Who it is first, its name and the account it pushes as side by side from a tablet up, then the
             coding agents' accounts it works with, then what it knows: its skills. */}
         <div className="grid gap-x-4 gap-y-6 md:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label htmlFor="agent-name">Name</Label>
-            <Input
-              id="agent-name"
-              ref={nameField}
-              value={draft.name}
-              disabled={isDefault}
-              readOnly={busy}
-              placeholder="Social media"
-              // On a phone a finger's 44, as the foot's presses.
-              className="max-md:h-11"
-              aria-invalid={nameMissing || nameRefused}
-              {...(nameMissing ? { 'aria-describedby': 'agent-name-missing' } : nameRefused ? { 'aria-describedby': 'agent-refused' } : isDefault ? { 'aria-describedby': 'agent-name-kept' } : {})}
-              onChange={event => {
-                setNameMissing(false)
-                setNameRefused(false)
-                setDraft(d => ({ ...d, name: event.target.value }))
-              }}
-            />
-            {nameMissing && (
-              <p id="agent-name-missing" className="text-xs text-danger">
-                Give the agent a name.
-              </p>
-            )}
-            {isDefault && (
-              <p id="agent-name-kept" className="text-xs text-muted-foreground">
-                The default agent keeps its name: it is the one a session is on unless you pick another.
-              </p>
-            )}
-          </div>
+          {!isDefault && (
+            <div className="space-y-1.5">
+              <Label htmlFor="agent-name">Name</Label>
+              <Input
+                id="agent-name"
+                ref={nameField}
+                value={draft.name}
+                readOnly={busy}
+                placeholder="Social media"
+                // On a phone a finger's 44, as the foot's presses.
+                className="max-md:h-11"
+                aria-invalid={nameMissing || nameRefused}
+                {...(nameMissing ? { 'aria-describedby': 'agent-name-missing' } : nameRefused ? { 'aria-describedby': 'agent-refused' } : {})}
+                onChange={event => {
+                  setNameMissing(false)
+                  setNameRefused(false)
+                  setDraft(d => ({ ...d, name: event.target.value }))
+                }}
+              />
+              {nameMissing && (
+                <p id="agent-name-missing" className="text-xs text-danger">
+                  Give the agent a name.
+                </p>
+              )}
+            </div>
+          )}
           <div className="space-y-1.5">
             <Label htmlFor="agent-github">On GitHub as</Label>
-            <div className="flex flex-wrap items-center gap-2">
+            {/* The pick, and beside it a square of its height that adds an account: the block stays as
+                short as the name's beside it. */}
+            <div className="flex items-center gap-2">
               <Select items={githubItems} value={draft.github ?? COMPUTERS} onValueChange={next => setDraft(d => ({ ...d, ...(next ? { github: String(next) } : {}), ...(next ? {} : { github: undefined }) }))} disabled={busy}>
                 <SelectTrigger id="agent-github" aria-label="GitHub account" className="min-w-0 grow basis-auto max-md:h-11">
                   <SelectValue />
@@ -448,10 +449,16 @@ function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord;
                 </SelectContent>
               </Select>
               {view.github && (
-                <Button type="button" variant="secondary" disabled={busy} onClick={() => addingAccount.add(view.github!.host)} className="max-md:h-11">
-                  <Plus className="size-4" aria-hidden />
-                  Add account
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Button type="button" variant="secondary" size="icon" aria-label="Add account" disabled={busy} onClick={() => addingAccount.add(view.github!.host)} className="shrink-0 max-md:size-11" />
+                    }
+                  >
+                    <Plus className="size-4" aria-hidden />
+                  </TooltipTrigger>
+                  <TooltipContent>Add account</TooltipContent>
+                </Tooltip>
               )}
             </div>
             <p className="text-xs text-muted-foreground">Runs push and open pull requests as this account. An account this computer does not have refuses the start.</p>

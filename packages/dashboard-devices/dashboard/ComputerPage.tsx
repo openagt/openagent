@@ -37,7 +37,7 @@ export function ComputerPage({ d, item, onBack, onSetUp }: { d: Devices; item: C
       <Head
         icon={Monitor}
         name={item.name}
-        facts={[state, 'Computer', where, runs, machine?.version !== undefined ? `OpenAgent ${machine.version}` : undefined]}
+        facts={[state, where, runs, machine?.version !== undefined ? `OpenAgent ${machine.version}` : undefined]}
         // Its name is its own: renamed on it, and read from it everywhere. One that only got in here is renamed on it.
         {...(machine
           ? {
@@ -102,15 +102,18 @@ export function ComputerPage({ d, item, onBack, onSetUp }: { d: Devices; item: C
       {machine && hasDoor(machine) && <ComputersThrough host={host} machine={machine} busy={busy} everyMs={30_000} />}
       {!through && !item.line && (
         <Part title="Who can use it">
-          {/* What decides who may use it is read at the size of a part's sentence, as a joined server's is. */}
-          <div>
-            <p className="max-w-[72ch] text-sm">Only you.</p>
-            <p className="mt-0.5 max-w-[72ch] text-sm text-muted-foreground">{`Other people cannot start runs on ${item.name}: on a personal computer they would run as you, with your logins. To share it, set it up as a server: each person then gets a user of their own on it. Linux for now.`}</p>
-          </div>
-          <Button variant="secondary" className="max-md:h-11" onClick={onSetUp}>
-            <Server className="size-4" aria-hidden />
-            Set it up as a server
-          </Button>
+          {/* The fact first; sharing it beside the press that does it. */}
+          <p className="text-sm">{`Only you: on a personal computer, someone else's runs would run as you, with your logins.`}</p>
+          <SettingsRow
+            label="Share it"
+            description="Set it up as a server: each person then gets a user of their own on it. Linux for now."
+            control={
+              <Button variant="secondary" onClick={onSetUp}>
+                <Server className="size-4" aria-hidden />
+                Set it up as a server
+              </Button>
+            }
+          />
         </Part>
       )}
       <Removal label="Remove computer" said="Both computers forget each other. Nothing is deleted.">

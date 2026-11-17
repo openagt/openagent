@@ -260,7 +260,8 @@ describe('the Agents page', () => {
     fireEvent.click(within(await screen.findByRole('alertdialog', { name: 'Discard your changes to Reviewer?' })).getByRole('button', { name: 'Discard' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     fireEvent.click(screen.getByRole('button', { name: 'Edit Default' }))
-    expect((screen.getByLabelText('Name') as HTMLInputElement).disabled).toBe(true)
+    expect(screen.queryByLabelText('Name')).toBeNull()
+    expect(screen.getByRole('dialog', { name: 'Editing Default' }).textContent).toMatch(/The default agent keeps its name/)
     // An agent that names no account: one plain item, not the computer's account repeated.
     expect(screen.getByLabelText('GitHub account').textContent).toBe('None — whatever the computer uses')
   })
