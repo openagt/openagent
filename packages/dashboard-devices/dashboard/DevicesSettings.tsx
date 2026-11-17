@@ -113,6 +113,7 @@ export function DevicesSettings({ everyMs = 3_000, devicesEveryMs = 30_000, devi
   const start = d.items.length === 0 && !status?.on && status?.https === undefined && status?.tailscale === undefined && persons.length === 0
   return (
     <div className="space-y-8">
+      <Unanswered items={d.items} />
       <ThisComputer d={d} start={start} />
       {start ? <Start d={d} onAdd={add} /> : <YourDevices d={d} onOpen={item => setOpened(openedOf(item))} onAdd={() => add('add')} />}
       {d.door !== undefined && !d.door.ok && <Problem>{`The devices could not be read: ${d.door.error}`}</Problem>}
@@ -249,6 +250,25 @@ function YourDevices({ d, onOpen, onAdd }: { d: Devices; onOpen: (item: Item) =>
         {persons.length > 0 && <DoorPeople d={d} persons={persons} devices={status?.devices ?? []} lines={status?.lines ?? []} />}
       </div>
     </Section>
+  )
+}
+
+/** A computer or a server that is saved here and does not answer, as its row says "Offline". */
+const unanswering = (item: Item): boolean => {
+  if (item.kind === 'phone') return false
+  if (item.kind === 'server') return item.machine !== undefined && item.machine.version === undefined && !item.server.working && !installFailed(item.server)
+  return item.machine !== undefined && item.machine.version === undefined
+}
+
+/** What does not answer, first: before how this computer is reached, so the person sees what is down and the way on. */
+function Unanswered({ items }: { items: Item[] }) {
+  const names = items.filter(unanswering).map(item => item.name)
+  if (names.length === 0) return null
+  return (
+    <div role="status">
+      <p className="text-sm font-medium">{names.length === 1 ? `${names[0]} does not answer` : `${names.length} of your devices do not answer`}</p>
+      <p className="mt-0.5 text-sm text-muted-foreground">{`${names.length === 1 ? 'Runs cannot go there' : `${new Intl.ListFormat('en', { type: 'conjunction' }).format(names)}: runs cannot go to them`} until ${names.length === 1 ? 'it is' : 'they are'} on and online. ${names.length === 1 ? 'Open it below' : 'Open one below'} to connect it again.`}</p>
+    </div>
   )
 }
 
