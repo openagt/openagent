@@ -6,8 +6,10 @@ import { cn } from '../../lib/utils.js'
 // in). Built for the tickets filter's fine-grained 0-10 ranges (#1144); minimal on purpose — one
 // value shape (a [min, max] pair), themed with the dashboard's CSS-var tokens.
 
+// A thumb is 14 across, 20 on a phone, and a finger's 44 reaches it there.
 const THUMB_CLASS =
-  'h-3.5 w-3.5 rounded-full border border-primary bg-card shadow-sm outline-none ' +
+  'size-3.5 rounded-full border border-primary bg-card shadow-sm outline-none max-md:size-5 ' +
+  'max-md:after:absolute max-md:after:-inset-3 ' +
   'focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] focus-visible:ring-offset-1'
 
 export function RangeSlider({
@@ -36,6 +38,9 @@ export function RangeSlider({
       min={min}
       max={max}
       step={1}
+      // The thumbs stop at the lane's ends rather than overhang them, so the lane keeps the
+      // inset of what is around it.
+      thumbAlignment="edge"
       className={cn('w-full', className)}
     >
       <SliderPrimitive.Control className="flex w-full touch-none select-none items-center py-1.5">

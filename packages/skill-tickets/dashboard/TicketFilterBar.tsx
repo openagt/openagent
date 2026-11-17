@@ -179,7 +179,7 @@ function RangeRow({
   const displayed = filter.range ?? union
   return (
     <div
-      className={cn('px-2 py-1', dimmed && 'opacity-40')}
+      className={cn('px-2 py-2', dimmed && 'opacity-40')}
       data-dimmed={dimmed || undefined}
       title={dimmed ? 'The selected buckets skip a middle span — dragging the range replaces them' : undefined}
     >
