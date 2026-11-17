@@ -113,7 +113,7 @@ export function DevicesSettings({ everyMs = 3_000, devicesEveryMs = 30_000, devi
   const start = d.items.length === 0 && !status?.on && status?.https === undefined && status?.tailscale === undefined && persons.length === 0
   return (
     <div className="space-y-8">
-      <Unanswered items={d.items} />
+      <Unanswered d={d} onOpen={item => setOpened(openedOf(item))} />
       <ThisComputer d={d} start={start} />
       {start ? <Start d={d} onAdd={add} /> : <YourDevices d={d} onOpen={item => setOpened(openedOf(item))} onAdd={() => add('add')} />}
       {d.door !== undefined && !d.door.ok && <Problem>{`The devices could not be read: ${d.door.error}`}</Problem>}
@@ -266,14 +266,28 @@ const unanswering = (item: Item): boolean => {
   return item.machine !== undefined && item.machine.version === undefined
 }
 
-/** What does not answer, first: before how this computer is reached, so the person sees what is down and the way on. */
-function Unanswered({ items }: { items: Item[] }) {
-  const names = items.filter(unanswering).map(item => item.name)
-  if (names.length === 0) return null
+/** What does not answer, first: before how this computer is reached, so the person sees what is down, each by its name
+ *  opening the page that connects it again (its row stays in the list below, with every device). */
+function Unanswered({ d, onOpen }: { d: Devices; onOpen: (item: Item) => void }) {
+  const down = d.items.filter(unanswering)
+  if (down.length === 0) return null
+  const named = (item: Item) => (
+    <Button key={item.key} variant="link" className="h-auto p-0 align-baseline" onClick={() => onOpen(item)}>
+      {item.name}
+    </Button>
+  )
+  // The names joined as the language joins them ("A, B, and C"), each its own press.
+  const names = new Intl.ListFormat('en', { type: 'conjunction' }).formatToParts(down.map(item => item.key)).map((part, i) => (part.type === 'element' ? named(down.find(item => item.key === part.value)!) : <span key={i}>{part.value}</span>))
   return (
     <div role="status">
-      <p className="text-sm font-medium">{names.length === 1 ? `${names[0]} does not answer` : `${names.length} of your devices do not answer`}</p>
-      <p className="mt-0.5 text-sm text-muted-foreground">{`${names.length === 1 ? 'Runs cannot go there' : `${new Intl.ListFormat('en', { type: 'conjunction' }).format(names)}: runs cannot go to them`} until ${names.length === 1 ? 'it is' : 'they are'} on and online. ${names.length === 1 ? 'Open it below' : 'Open one below'} to connect it again.`}</p>
+      <p className="text-sm font-medium">{down.length === 1 ? `${down[0]!.name} does not answer` : `${down.length} of your devices do not answer`}</p>
+      <p className="mt-0.5 text-sm text-muted-foreground">
+        {down.length === 1 ? (
+          <>Runs cannot go there until it is on and online. Open {names} to connect it again.</>
+        ) : (
+          <>{names}: runs cannot go to them until they are on and online. Open one to connect it again.</>
+        )}
+      </p>
     </div>
   )
 }

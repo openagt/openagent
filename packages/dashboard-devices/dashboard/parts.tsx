@@ -352,12 +352,13 @@ export function Choice({ value, disabled, title, words, badge, children }: { val
   )
 }
 
-/** A code or an address to type somewhere else, in mono on a muted strip, with its copy press; `big` for one read from across a room. */
+/** A code or an address to type somewhere else, in mono on a muted strip, with its copy press 8 in from the strip's edge (on a phone the
+ *  44 press is the strip's height); `big` for one read from across a room. */
 export function CodeStrip({ label, text, big = false, copy }: { label: string; text: string; big?: boolean; copy: ReactNode }) {
   return (
     <div className="space-y-1">
       <p className="text-xs text-muted-foreground">{label}</p>
-      <div className="flex items-center gap-2 rounded-md bg-muted py-1 pr-1 pl-4 max-md:py-0 max-md:pr-0">
+      <div className="flex items-center gap-2 rounded-md bg-muted py-2 pr-2 pl-4 max-md:py-0 max-md:pr-0">
         <span className={cn('min-w-0 flex-1 truncate font-mono', big ? 'text-xl font-semibold tracking-wider' : 'text-sm')}>{text}</span>
         {copy}
       </div>
