@@ -53,6 +53,11 @@ describe('ProjectHome', () => {
     const form = screen.getByText('start form')
     expect(form.parentElement!.className.split(' ')).toContain('order-last')
     expect(document.querySelector('.md\\:basis-\\[38\\%\\]')).toBeNull()
+    // The top bar lies over the page's top, see-through and blurred, short of the list's scroll bar,
+    // and the list, first, starts under it.
+    expect(screen.getByTestId('home-top').className.split(' ')).toEqual(expect.arrayContaining(['absolute', 'top-0', 'left-0', 'right-2.5', 'z-20', 'bg-background/80', 'backdrop-blur-md']))
+    expect(screen.getByTestId('home-room').style.getPropertyValue('--home-top')).toBe('0px')
+    expect(questions.closest('.max-w-3xl')!.className.split(' ')).toContain('pt-(--home-top)')
     // The rows scroll in the chat's column; the box is outside what scrolls, so it stays in place.
     expect(questions.closest('.max-w-3xl')).toBeTruthy()
     expect(form.closest('[data-slot="scroll-area"]')).toBeNull()
