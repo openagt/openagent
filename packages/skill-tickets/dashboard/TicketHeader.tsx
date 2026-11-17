@@ -8,7 +8,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  MiddleCut,
   PriorityBadge,
   cn,
   useAction,
@@ -266,10 +265,8 @@ export function TicketFacts({
           <span title={ticketDay(ticket)}>{ticketAge(ticket)}</span>
         </Fact>
         <Fact name="File">
-          {/* One line, cut in its middle where the column is narrow, its ending whole; whole under the pointer. */}
-          <span title={`${TICKETS_DIR}/${ticket.file}`} className="flex min-w-0 font-mono text-xs text-muted-foreground">
-            <MiddleCut text={`${TICKETS_DIR}/${ticket.file}`} />
-          </span>
+          {/* Whole, wrapping where the column is narrow: a path read to be found is never cut. */}
+          <span className="min-w-0 font-mono text-xs text-muted-foreground [overflow-wrap:anywhere]">{`${TICKETS_DIR}/${ticket.file}`}</span>
         </Fact>
       </dl>
       {sessions.length > 0 && (
