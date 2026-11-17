@@ -12,7 +12,7 @@ import { basicSkills } from './basic-skills.js'
 import { gitHostCommand, gitHostEnv } from './git-host.js'
 import { namedAtStart, resumeRun, runCommand, runIdFrom, type RunOutcome, type RunRequest } from './run.js'
 import { askName } from './title.js'
-import { publishChange, runnerMark, type NO_PUBLISH, type Publish } from './records.js'
+import { publishChange, runnerMark, type NO_PUBLISH, type Publish, type SessionRepo } from './records.js'
 import { acquireRunLock, handOverRunLock, isPidAlive, releaseRunLock, runStderrPath } from './run-lock.js'
 import { accountRotation, accountsPath, hasAddedAccount, readAccounts } from '@openagt/skill-account-rotation'
 import { AGENT_ID_ENV, type AgentRecord } from '@openagt/agent-data'
@@ -69,6 +69,19 @@ export async function workAs(repo: string, login: string | undefined, deps: { gi
   if (!given.ok) throw new Error(login !== undefined ? cannotWorkAs(login, given.error) : given.error)
   Object.assign(deps.env ?? process.env, given.env)
   return given.login
+}
+
+/**
+ * The folder a run asks the git host about: `repo` when it is at one, else the first of the
+ * session's repos that is. A session with no project works in a folder of its own, with its repos
+ * copied in it: that folder is at no git host, its repos are, and a run asked only of the folder
+ * would push them with the person's own login.
+ */
+export async function gitHostRepo(repo: string, repos: SessionRepo[] | undefined, deps: { atGitHost?: (repo: string) => Promise<boolean> } = {}): Promise<string> {
+  const atHost = deps.atGitHost ?? (async (at: string) => (await gitHostCommand(at)) !== undefined)
+  if (await atHost(repo)) return repo
+  for (const { from } of repos ?? []) if (await atHost(from)) return from
+  return repo
 }
 
 /** The command line of a spawned run: the model, the coding agent, the publish level, the attached text, the parent, the base, the pull request's base, the branch and what it is for named only when the run has them, so the run's own defaults apply otherwise. */
@@ -243,7 +256,7 @@ export async function runProject(repo: string, opts: ProjectRun, deps: { workAs?
   // The name is asked for before the git host's account is read, which takes a second or more
   // (`gitHostEnv` runs the git host's command) and is nothing the small model naming the run needs.
   const naming = namedAtStart({ ...rest, marked }) ? askName(driverFor(driver, undefined, setup, accounts), rest.prompt) : undefined
-  const as = await (deps.workAs ?? workAs)(repo, gitAccount ?? (await agentLoginFor(repo, on)))
+  const as = await (deps.workAs ?? workAs)(await gitHostRepo(repo, rest.repos), gitAccount ?? (await agentLoginFor(repo, on)))
   return runCommand(repo, {
     ...rest,
     ...(naming !== undefined ? { naming } : {}),
@@ -285,7 +298,7 @@ export async function resumeProject(
   const on = await runAgent(previous?.agent, log)
   const picks: SkillPicks = { ...(previous?.skillsOn !== undefined ? { on: previous.skillsOn } : {}), ...(previous?.skillsOff !== undefined ? { off: previous.skillsOff } : {}), ...(previous?.projectSkills !== undefined ? { project: previous.projectSkills } : {}) }
   const accounts = accountsOn(on)
-  const as = await (deps.workAs ?? workAs)(repo, previous?.gitAccount)
+  const as = await (deps.workAs ?? workAs)(await gitHostRepo(repo, previous?.repos), previous?.gitAccount)
   return resumeRun(repo, {
     id: opts.id,
     ...(opts.text !== undefined ? { text: opts.text } : {}),
