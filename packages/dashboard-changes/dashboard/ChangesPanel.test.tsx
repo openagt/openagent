@@ -45,10 +45,10 @@ const NOT_MERGED = 'main → agent-x'
 const diffLines = (root: HTMLElement = document.body) => [...root.querySelectorAll('.font-mono > div > div')].map(line => line.textContent)
 
 describe('ChangesPanel', () => {
-  test('a run’s page lists only the files the run changed, grouped by folder, and its header says between which branches and that they are not merged yet', async () => {
+  test('a run’s page lists only the files the run changed, grouped by folder, and under its header it says between which branches and that they are not merged yet', async () => {
     render(<ChangesPanel projectId="p1" agentId="run-1" context={context} />)
-    await waitFor(() => expect(within(screen.getByTestId('pane-title')).getByText(NOT_MERGED)).toBeTruthy())
-    expect(within(screen.getByTestId('pane-title')).getByText('· not merged yet')).toBeTruthy()
+    await waitFor(() => expect(screen.getByText(NOT_MERGED)).toBeTruthy())
+    expect(screen.getByText('· not merged yet')).toBeTruthy()
     expect(readRun).toHaveBeenCalledWith(expect.anything(), 'p1', 'run-1')
     expect(readProject).not.toHaveBeenCalled()
     expect(within(list()).getAllByRole('button').map(b => [b.textContent, b.title])).toEqual([
@@ -101,10 +101,13 @@ describe('ChangesPanel', () => {
     expect(row(/app\.ts/)).toBeTruthy()
   })
 
-  test('a run that changed nothing, a run whose changes are gone, and a run still being read each say so in one line', async () => {
+  test('a run that changed nothing, a run whose changes are gone, and a run still being read each say so in one line, and one with nothing draws no search or list press', async () => {
     readRun.mockResolvedValue({ source: 'unchanged', changes: {} })
     render(<ChangesPanel projectId="p1" agentId="run-1" context={context} />)
     await waitFor(() => expect(screen.getByText('This session changed no files.')).toBeTruthy())
+    // Nothing to search or list: neither press is drawn.
+    expect(screen.queryByLabelText('Search changed files')).toBeNull()
+    expect(screen.queryByLabelText(/the list of files/)).toBeNull()
     cleanup()
     readRun.mockResolvedValue({ source: 'gone' })
     render(<ChangesPanel projectId="p1" agentId="run-2" context={context} />)
@@ -414,10 +417,9 @@ describe('ChangesPanel, as Claude Code on the web draws it', () => {
     fireEvent.click(await findRow(/new\.ts/))
     await waitFor(() => expect(screen.queryByRole('list', { name: 'Changed files' })).toBeNull())
     await waitFor(() => expect(scrolled.mock.contexts.at(-1)).toBe(screen.getByRole('region', { name: 'src/new.ts' })))
-    // Too narrow for the branches, the head keeps its name and says them on hover, not a fragment.
-    const title = within(screen.getByTestId('pane-title')).getByRole('heading')
-    expect(title.textContent).toBe('Changes')
-    expect(title.getAttribute('title')).toMatch(/→/)
+    // The branches keep their own line under the head, which keeps its name.
+    expect(within(screen.getByTestId('pane-title')).getByRole('heading').textContent).toBe('Changes')
+    expect(screen.getByText(NOT_MERGED)).toBeTruthy()
     vi.unstubAllGlobals()
   })
 
