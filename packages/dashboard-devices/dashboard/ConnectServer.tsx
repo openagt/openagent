@@ -179,7 +179,7 @@ function Where({ kind, onKind, doors, through, onVia, onCancel, onNext }: { kind
       <RadioGroup aria-label="Where the server is" value={kind} onValueChange={next => onKind(next as Kind)} className="-mx-3 gap-0">
         <Choice value="vps" title="A cloud server (VPS)" words="DigitalOcean, Hetzner and the like, with Ubuntu or Debian. Reached from anywhere, with a lock." />
         <Choice value="tailscale" title="A PC on your Tailscale network" words="Ubuntu or Debian, with Tailscale on it, signed in as you. Your devices on Tailscale reach it from anywhere, with a lock: no cloud server needed." />
-        <Choice value="home" disabled={doors.length === 0} badge={doors.length === 0 ? 'Needs a cloud server' : undefined} title="A PC at home or in an office" words="Ubuntu or Debian, on all the time. Nothing on the internet reaches it, so it is reached through one of your cloud servers." />
+        <Choice value="home" disabled={doors.length === 0} title="A PC at home or in an office" words="Ubuntu or Debian, on all the time. Nothing on the internet reaches it, so it is reached through one of your cloud servers." />
         {/* Why it cannot be picked, outside the dimmed choice: read at full contrast. */}
         {doors.length === 0 && <p className="-mt-1 pl-10 text-sm text-muted-foreground">Set up a cloud server first.</p>}
       </RadioGroup>
