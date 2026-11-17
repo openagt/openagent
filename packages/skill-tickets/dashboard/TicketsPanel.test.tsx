@@ -231,13 +231,13 @@ describe('the tickets list', () => {
     expect(age.getAttribute('title')).toBe(now.toLocaleDateString())
   })
 
-  test('the priority column is kept on every row once a ticket of the list has one, and given up when none has', async () => {
+  test('the priority column is kept on every row, in a list where no ticket has one too, so the titles stand where the waiting rows put them', async () => {
     render(<Rows tickets={[ticket({ priority: '3' }), ticket({ file: 'b.md', title: 'Other' })]} />)
     const otherRow = (await screen.findByText('Other')).closest('li')!
     expect(otherRow.querySelector('.w-6')).not.toBeNull()
     cleanup()
     render(<Rows tickets={[ticket(), ticket({ file: 'b.md', title: 'Other' })]} />)
-    expect((await screen.findByText('Other')).closest('li')!.querySelector('.w-6')).toBeNull()
+    expect((await screen.findByText('Other')).closest('li')!.querySelector('.w-6')).not.toBeNull()
   })
 
   test('the list renders whatever order it is given (#1144)', async () => {
