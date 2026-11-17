@@ -465,14 +465,8 @@ describe('Composer (#721)', () => {
   })
 })
 
-// The text's line of the box: the nearest element around the editor that keeps its ends at the last line.
+// The bordered box: the nearest element around the editor that draws the border.
 const box = (): HTMLElement => {
-  let el: HTMLElement = screen.getByLabelText('prompt')
-  while (!el.className.split(' ').includes('items-end')) el = el.parentElement!
-  return el
-}
-// The box's surface: the nearest element around the editor that draws the edge.
-const surface = (): HTMLElement => {
   let el: HTMLElement = screen.getByLabelText('prompt')
   while (!el.className.split(' ').includes('border')) el = el.parentElement!
   return el
@@ -480,16 +474,13 @@ const surface = (): HTMLElement => {
 const commands = () => screen.getByRole('button', { name: 'Commands' })
 
 describe('the box', () => {
-  test('its text\'s line holds the commands menu, the text and the send (the launcher\'s start); the model and "Run on" are on lines of their own, in the same surface', () => {
+  test('it holds the commands menu, the text and the submit: the model and "Run on" are outside it, on rows of their own', () => {
     renderComposer()
     fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'x' } })
     expect(box().contains(screen.getByRole('button', { name: 'Send' }))).toBe(true)
     expect(box().contains(commands())).toBe(true)
     expect(box().contains(agentTrigger())).toBe(false)
     expect(box().contains(screen.getByRole('button', { name: /^Run on: / }))).toBe(false)
-    // One object with one edge: the surface holds the row above, the text and the row under.
-    expect(surface().contains(agentTrigger())).toBe(true)
-    expect(surface().contains(screen.getByRole('button', { name: /^Run on: / }))).toBe(true)
     cleanup()
     renderComposer({ inAgent: true })
     fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'x' } })
@@ -536,10 +527,11 @@ describe('the rows around the box', () => {
     // Said in words, drawn as every item of the rows is: no border of its own.
     expect(runOn().textContent).toBe('This machine')
     expect(runOn().className).not.toContain('border')
-    // Each one line of a fixed height: a longer label at the left cannot move the select or the page. The box's last
-    // row is as high as its items, so what stands at its end is as far from the box's foot as from its right.
-    for (const row of [above, under]) expect(row.className).toContain('h-7')
-    for (const row of [above, under]) expect(row.className).not.toContain('flex-wrap')
+    // Each one line of a fixed height: a longer label at the left cannot move the select or the page.
+    for (const row of [above, under]) {
+      expect(row.className).toContain('h-8')
+      expect(row.className).not.toContain('flex-wrap')
+    }
     expect(place.parentElement!.className).toContain('min-w-0')
     expect(select.parentElement!.className).toContain('shrink-0')
   })

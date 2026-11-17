@@ -1,3 +1,5 @@
+import { useLayoutEffect, useRef } from 'react'
+import { cn } from '../lib/utils.js'
 import type { Intervention, ProjectError, ProjectSummary } from '../../src/index.js'
 import { StartAgentForm } from './StartAgentForm.js'
 import { ProjectActions } from './ProjectActions.js'
@@ -10,15 +12,16 @@ import { ScrollArea } from './ui/scroll-area.js'
 import { PanelGroup } from './ui/panel.js'
 import type { StartPicks } from '../lib/started-from.js'
 import { SESSIONS_ID } from '../../src/project-address.js'
+import { useIsMobile } from '../lib/use-mobile.js'
 
 // The project home / launcher: the "New agent session" page. It is never consumed by an agent: starting
 // one appends an agent to the rail and adds that agent's own view (AgentView) alongside, and this
 // page stays put, so you can launch again.
 //
-// The box to start an agent is what the page is for: from 768px up it stands at the page's optical
-// centre under the page's question, with what waits on the person under it, in the chat's column (#1455 item 4), the Human
-// Queue's own rows; on a phone it is at the bottom, where an agent's message box is, with the rows
-// above it. Starting a run carries the box to its place on the run's page (StartAgentForm). The
+// The box to start an agent is what the page is for: with nothing waiting, from 768px up it stands at
+// the page's optical centre under the page's question. What waits on the person (#1455 item 4), the Human
+// Queue's own rows, comes first, in the chat's column, and the box at the bottom, where an agent's
+// message box is; so on a phone. Starting a run carries the box to its place on the run's page (StartAgentForm). The
 // project's Docs are not here: they are the Docs pane (Panes), on this page as on an agent's.
 //
 // With no project (`SESSIONS_ID`), the page is the same without what a project has: its skills.
@@ -72,20 +75,41 @@ export function ProjectHome({
   home?: string | undefined
 }) {
   const noProject = projectId === SESSIONS_ID
+  // The list comes first, the box at the foot: while something waits, and on a phone.
+  const isMobile = useIsMobile()
+  const listFirst = waiting.length > 0 || isMobile
+  // The room the top bar and its notices take, written for the page to start under it, as an
+  // agent's page does (ChatPane, `--chat-top`).
+  const room = useRef<HTMLDivElement>(null)
+  const top = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    const read = () => room.current!.style.setProperty('--home-top', `${top.current!.getBoundingClientRect().height}px`)
+    read()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(read)
+    observer.observe(top.current!)
+    return () => observer.disconnect()
+  }, [])
   return (
-    <>
-      <ProjectActions projectId={projectId} onProjectRemoved={home === undefined ? onProjectRemoved : undefined} />
-      {/* Above everything, because an agent started on a project whose agent-data branch cannot
-          reach origin (#1599) works from stale tickets and a queue nobody else will see. */}
-      <ProjectErrorBanner errors={errors} />
-      {/* The page is for the box: from 768px up it stands where the eye lands, under the page's
-          question, and what waits for the person is under it, scrolling under it and never pushing
-          it. On a phone the box stays at the bottom, in the thumb's reach, with what waits above it,
-          as an agent's page has its chat. The column keeps a scroll bar's room at its right, as the
-          chat's does (ChatPane), so the box stands on a session's box's edges and is carried without a sideways step. */}
+    <div ref={room} data-testid="home-room" className="relative isolate flex min-h-0 flex-1 flex-col">
+      {/* Over the page's top, as an agent's page has it: what scrolls under it shows through, blurred.
+          It stops short of the list's scroll bar (ui/scroll-area, 10 wide), which is drawn over the
+          page's whole height; only the bar's line crosses it, to the page's edge. */}
+      <div ref={top} data-testid="home-top" className="absolute top-0 right-2.5 left-0 z-20 bg-background/80 backdrop-blur-md">
+        <ProjectActions projectId={projectId} onProjectRemoved={home === undefined ? onProjectRemoved : undefined} />
+        {/* Above everything, because an agent started on a project whose agent-data branch cannot
+            reach origin (#1599) works from stale tickets and a queue nobody else will see. */}
+        <ProjectErrorBanner errors={errors} />
+      </div>
+      <div aria-hidden className="pointer-events-none absolute top-[calc(2.75rem-1px)] right-0 z-20 h-px w-2.5 bg-border" />
+      {/* What waits for the person comes first, under the page's question, and the box under it, at the
+          bottom, as an agent's page has its chat (his pick); so on a phone, where the box is in the
+          thumb's reach. With nothing waiting, from 768px up the box stands where the eye lands, under
+          the page's question. The column keeps a scroll bar's room at its right, as the chat's does
+          (ChatPane), so the box stands on a session's box's edges and is carried without a sideways step. */}
       <div className="scrollbar-thin scrollbar-gutter-stable flex min-h-0 flex-1 flex-col overflow-y-auto">
-        <Question />
-        <div className="shrink-0 max-md:order-last">
+        {!listFirst && <Question />}
+        <div className={cn('shrink-0', listFirst && 'order-last')}>
           <StartAgentForm
             projectId={projectId}
             projectName={projectName}
@@ -101,35 +125,38 @@ export function ProjectHome({
             onProjectAdded={onProjectAdded}
           />
         </div>
-        <ScrollArea className="min-h-0 flex-1" viewportClassName="chat-scroll h-full">
-          <div className="mx-auto w-full max-w-3xl space-y-8 px-4 pt-6 pb-4 md:pt-4">
-            {/* No part at all when nothing waits: an empty "Waiting on you" is noise on every launch. On
-                the box's edges, as an agent's chat is: its name and its card start where the box does. */}
-            {waiting.length > 0 && (
-              <PanelGroup bare title={<span className="text-warning">Waiting on you</span>} count={holdsBack(waiting) ? waiting.length : undefined}>
-                <HumanQueueList key={projectId} items={waiting} onOpenAgent={onOpenAgent} />
-              </PanelGroup>
-            )}
-            {/* What the project's skills need from the person, when they need something (#2023): a card
-                under the agents that wait, in the same column; with nothing to say there is no card,
-                and "Skills" under the box opens the project's Skills page in Settings. */}
-            {!noProject && <ProjectSkillsLine key={projectId} projectId={projectId} onChanged={onSkillsChanged} />}
+        <ScrollArea className="min-h-0 flex-1" viewportClassName="h-full">
+          {/* Its rows start under the top bar, which lies over the list's start, where the list is first. */}
+          <div className={cn('mx-auto w-full max-w-3xl', listFirst && 'pt-(--home-top)')}>
+            <div className="space-y-8 px-4 pt-6 pb-4 md:pt-4">
+              {listFirst && <h1 className={QUESTION}>What should an agent do?</h1>}
+              {/* No part at all when nothing waits: an empty "Waiting on you" is noise on every launch. On
+                  the box's edges, as an agent's chat is: its name and its card start where the box does. */}
+              {waiting.length > 0 && (
+                <PanelGroup bare title={<span className="text-warning">Waiting on you</span>} count={holdsBack(waiting) ? waiting.length : undefined}>
+                  <HumanQueueList key={projectId} items={waiting} onOpenAgent={onOpenAgent} />
+                </PanelGroup>
+              )}
+              {/* What the project's skills need from the person, when they need something (#2023): a card
+                  under the agents that wait, in the same column; with nothing to say there is no card,
+                  and "Skills" under the box opens the project's Skills page in Settings. */}
+              {!noProject && <ProjectSkillsLine key={projectId} projectId={projectId} onChanged={onSkillsChanged} />}
+            </div>
           </div>
         </ScrollArea>
       </div>
-    </>
+    </div>
   )
 }
 
-/**
- * The page's name, its question: from a tablet up over the box, the two standing where the eye lands
- * (the question's top at about a quarter of the page); on a phone first under the bar, the box at the foot.
- */
+const QUESTION = 'text-xl font-semibold tracking-tight md:text-2xl'
+
+/** The page's name, its question, over the box: the two standing where the eye lands (the question's top at about a quarter of the page). */
 function Question() {
   return (
     <>
-      <div className="shrink-0 max-md:hidden md:basis-[24%]" aria-hidden />
-      <h1 className="mx-auto w-full max-w-3xl shrink-0 px-4 text-xl font-semibold tracking-tight max-md:pt-4 md:pb-4 md:text-center md:text-2xl">What should an agent do?</h1>
+      <div className="shrink-0 basis-[24%]" aria-hidden />
+      <h1 className={cn('mx-auto w-full max-w-3xl shrink-0 px-4 pb-4 text-center', QUESTION)}>What should an agent do?</h1>
     </>
   )
 }
@@ -139,18 +166,23 @@ function Question() {
  * top bar's row, its question, and its box's shape where the box will stand.
  */
 export function ProjectHomeShape() {
+  const isMobile = useIsMobile()
   return (
-    <>
-      <TopBar>
-        <div className="h-11" />
-      </TopBar>
+    <div className="relative isolate flex min-h-0 flex-1 flex-col">
+      <div className="absolute top-0 right-2.5 left-0 z-20">
+        <TopBar>
+          <div className="h-11" />
+        </TopBar>
+      </div>
+      <div aria-hidden className="pointer-events-none absolute top-[calc(2.75rem-1px)] right-0 z-20 h-px w-2.5 bg-border" />
       <div className="scrollbar-thin scrollbar-gutter-stable flex min-h-0 flex-1 flex-col overflow-y-auto">
-        <Question />
-        <div className="mx-auto w-full max-w-3xl shrink-0 px-4 pt-2 pb-4 max-md:order-last">
+        {/* On a phone the question heads the list, under the bar and the list's own top room. */}
+        {isMobile ? <h1 className={cn('mx-auto w-full max-w-3xl px-4 pt-[calc(2.75rem+1.5rem)]', QUESTION)}>What should an agent do?</h1> : <Question />}
+        <div className={cn('mx-auto w-full max-w-3xl shrink-0 px-4 pt-2 pb-4', isMobile && 'order-last')}>
           <ComposerShape />
         </div>
         <div className="min-h-0 flex-1" />
       </div>
-    </>
+    </div>
   )
 }

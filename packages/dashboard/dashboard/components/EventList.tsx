@@ -992,14 +992,15 @@ export function EventList({
       <FollowSent sent={(sending === undefined || answeredInPlace ? 0 : 1) + queued.length} />
       {/* A layer of its own: "Jump to latest" stays under the message box's bar. */}
       <MessageScroller className="isolate flex-1">
-        <MessageScrollerViewport ref={viewport} aria-label="Agent output" className="chat-scroll scroll-pb-(--chat-bottom)">
+        <MessageScrollerViewport ref={viewport} aria-label="Agent output" className="scroll-pt-(--chat-top) scroll-pb-(--chat-bottom)">
+          {/* The rows start under the page's top bar, which lies over the log's start (ChatPane, `--chat-top`). */}
           {/* The chat's column: 16 in on a phone, 32 on a desktop, where the painted blocks are pulled
               out by 16 to stand 16 in with the message box, their words on the column. */}
           {/* In a pane the column fills the pane, at any width it is given, and its right padding is
               less by the scroll bar's room (`--log-gutter`), so it stands as far from both of its edges. */}
           <MessageScrollerContent
             spacerClassName="order-last"
-            className={cn('w-full gap-3 pt-4 font-mono text-xs', evenEdges ? 'pr-[calc(--spacing(4)-var(--log-gutter,0px))] pl-4 md:pr-[calc(--spacing(8)-var(--log-gutter,0px))] md:pl-8' : 'mx-auto max-w-3xl px-4 md:px-8')}
+            className={cn('w-full gap-3 pt-[calc(var(--chat-top,0px)+1rem)] font-mono text-xs', evenEdges ? 'pr-[calc(--spacing(4)-var(--log-gutter,0px))] pl-4 md:pr-[calc(--spacing(8)-var(--log-gutter,0px))] md:pl-8' : 'mx-auto max-w-3xl px-4 md:px-8')}
           >
             {/* First in the page, so never the row the browser keeps in place when a row above
                 it grows: a steps line opened at the log's end opens under the line, the line
@@ -1142,7 +1143,7 @@ export function EventList({
             {tail}
           </MessageScrollerContent>
         </MessageScrollerViewport>
-        <MessageScrollerButton className="data-[direction=end]:bottom-[calc(var(--chat-bottom,0px)+1.25rem)]" />
+        <MessageScrollerButton className="data-[direction=end]:bottom-[calc(var(--chat-bottom,0px)+1.25rem)] data-[direction=start]:top-[calc(var(--chat-top,0px)+0.75rem)]" />
       </MessageScroller>
       {/* After the scroller, so the rows are measured and its own opening place is already applied. */}
       {openedAt && <OpenAtReply messageId={idOf(openedAt)} viewport={viewport} />}

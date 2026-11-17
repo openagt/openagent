@@ -20,8 +20,10 @@ export function BrandLink({ working, href = '/', onNavigate }: { working: boolea
       {/* Below sm the wordmark folds away so the nav fits a narrow viewport (#980); the mark stays,
           and it is still the link home (#909). Said with a screen-size class alone, never a bare
           `hidden` undone at a width: a tool page's stylesheet is loaded after the page's and has
-          its own `.hidden`, which then won and hid the word at every width. */}
-      <span className="shrink-0 font-['IBM_Plex_Sans',ui-sans-serif,sans-serif] text-[17px] leading-6 font-medium max-sm:hidden">OpenAgent</span>
+          its own `.hidden`, which then won and hid the word at every width. In IBM Plex Sans as the
+          website has it, whatever font the person picked: the dashboard loads it as "IBM Plex Sans
+          Variable" (lib/fonts.ts), a name the website's static files never take. */}
+      <span className="shrink-0 font-['IBM_Plex_Sans_Variable','IBM_Plex_Sans',ui-sans-serif,sans-serif] text-[17px] leading-6 font-medium max-sm:hidden">OpenAgent</span>
     </a>
   )
 }

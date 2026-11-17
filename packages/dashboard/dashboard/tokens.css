@@ -28,9 +28,9 @@
   /* A row's second line, an age: 4.5:1 on a card. */
   --faint-foreground: #6c7a71;
   --border: #dfe3dd;
-  /* The edge of what a person types into or ticks: 3:1 or more on every surface it sits on (the
-     page, a card, the sidebar, a hovered row). */
-  --input: color-mix(in oklab, var(--foreground) 60%, var(--background));
+  /* The edge of what a person types into or ticks, as shadcn's: the border's own colour in light,
+     white at 15% in dark, where the field is also filled (input.tsx). */
+  --input: var(--border);
   --shadow-tint: #3a4248;
   /* The primary colour is Everforest's blue (his pick), darkened like the status colours below;
      what is done stays Everforest's green (`--success`). */
@@ -98,7 +98,7 @@
   --muted-foreground: #9da9a0;
   --faint-foreground: #808b84;
   --border: #30383c;
-  --input: color-mix(in oklab, var(--foreground) 58%, var(--background));
+  --input: color-mix(in oklab, var(--foreground) 15%, transparent);
   --shadow-tint: #000000;
   /* Everforest's blue; what is done stays its green (`--success`). */
   --primary: #7fbbb3;

@@ -45,15 +45,21 @@ describe('ProjectHome', () => {
       await Promise.resolve()
       await Promise.resolve()
     })
-    // The box to start an agent first and the waiting rows under it; on a phone the box is drawn last, at the bottom.
+    // What waits comes first and the box is drawn last, at the bottom, on every screen: no room is
+    // kept above the box to stand it at 38% of the page while something waits.
     expect(screen.getByRole('region', { name: 'Waiting on you' })).toBeTruthy()
     expect(screen.getByRole('heading', { level: 1, name: 'What should an agent do?' })).toBeTruthy()
     // How many in all is said only where rows are held back: one row says it by being there.
     expect(screen.getByRole('heading', { name: 'Waiting on you' })).toBeTruthy()
     const questions = screen.getByText('1 rows')
     const form = screen.getByText('start form')
-    expect(form.compareDocumentPosition(questions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(form.parentElement!.className).toContain('max-md:order-last')
+    expect(form.parentElement!.className.split(' ')).toContain('order-last')
+    expect(document.querySelector('.md\\:basis-\\[38\\%\\]')).toBeNull()
+    // The top bar lies over the page's top, see-through and blurred, short of the list's scroll bar,
+    // and the list, first, starts under it.
+    expect(screen.getByTestId('home-top').className.split(' ')).toEqual(expect.arrayContaining(['absolute', 'top-0', 'left-0', 'right-2.5', 'z-20', 'bg-background/80', 'backdrop-blur-md']))
+    expect(screen.getByTestId('home-room').style.getPropertyValue('--home-top')).toBe('0px')
+    expect(questions.closest('.max-w-3xl')!.className.split(' ')).toContain('pt-(--home-top)')
     // The rows scroll in the chat's column; the box is outside what scrolls, so it stays in place.
     expect(questions.closest('.max-w-3xl')).toBeTruthy()
     expect(form.closest('[data-slot="scroll-area"]')).toBeNull()

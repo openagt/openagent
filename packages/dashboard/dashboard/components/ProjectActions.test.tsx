@@ -37,7 +37,7 @@ describe('ProjectActions', () => {
 
   test("laid out as an agent's top bar: a line under it only while the chat scrolls under it, the same row, the menu at the end", () => {
     const { container } = render(<ProjectActions projectId="p1" />)
-    expect(container.firstElementChild!.className).toBe('top-bar-line')
+    expect(container.firstElementChild!.className).toBe('shadow-[inset_0_-1px_0_var(--color-border)]')
     const row = container.firstElementChild!.firstElementChild!
     // No layout in the test DOM, so the row is read off its classes.
     expect(row.className).not.toMatch(/border/)

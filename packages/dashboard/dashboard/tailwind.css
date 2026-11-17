@@ -43,7 +43,7 @@
   --muted-foreground: oklch(0.54 0 0);
   --faint-foreground: oklch(0.62 0 0);
   --border: oklch(0.922 0 0);
-  --input: color-mix(in oklab, var(--foreground) 46%, var(--background));
+  --input: var(--border);
   --shadow-tint: oklch(0.145 0 0);
   --primary: oklch(0.205 0 0);
   --primary-foreground: oklch(0.985 0 0);
@@ -81,7 +81,7 @@
   --muted-foreground: oklch(0.708 0 0);
   --faint-foreground: oklch(0.58 0 0);
   --border: oklch(1 0 0 / 10%);
-  --input: color-mix(in oklab, var(--foreground) 50%, var(--background));
+  --input: oklch(1 0 0 / 15%);
   --shadow-tint: #000000;
   --primary: oklch(0.922 0 0);
   --primary-foreground: oklch(0.205 0 0);

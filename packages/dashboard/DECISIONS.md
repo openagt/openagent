@@ -217,7 +217,10 @@ already made, and lists it in its pull request; for anything else it proposes an
   with a module, which tells someone using the skill alone that they need the dashboard.
 - What a module shows beside the chat is a pane, as on Claude Code on the web. Each pane
   has an icon at the end of the page's top bar, which opens and closes it. The open panes
-  are cards in one column, in the order they were opened, the agent's browser among them.
+  stand in one column, flush with the chat and with each other as Claude Code's do (not
+  cards apart), in the order they were opened, the agent's browser among them. The page's
+  top bar is over the chat alone, so the column reaches the window's top and each pane's
+  header stands level with the bar.
   The line between the chat and the column, and the line between two panes, is dragged.
   Each agent's page keeps its own sizes, and a page never sized starts with the last sizes
   set on any. On a phone the column lies over the chat. Picked over one side panel with a

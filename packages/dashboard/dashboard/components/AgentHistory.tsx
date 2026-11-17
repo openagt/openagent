@@ -366,7 +366,7 @@ export function AgentHistory({
             little space below the group (pb-2) before the session list. The `!` because a module's
             stylesheet, loaded after the dashboard's, redefines the header's own `p-2`, which would
             otherwise win over a plain `pt-0`. */}
-        <SidebarHeader className="gap-0 pt-0! pb-2">
+        <SidebarHeader className="gap-0.5 pt-0! pb-2">
           {/* "New" starts a session — but where depends on what exists: with no project it prompts to
               add one first, with one project it starts there, with several it opens a picker. With
               one project picked at the top, it starts there. */}
@@ -394,7 +394,7 @@ export function AgentHistory({
           {/* The modules' pages the shell hands over (#1774), the picked project's only when one is
               picked: destinations with no project selected, like the Overview, named by the module,
               never by the dashboard — the tickets' page among them, when a package brings one. */}
-          <Slot of={modulePages} shape={<NavShapes />} className="flex flex-col">
+          <Slot of={modulePages} shape={<NavShapes />} className="flex flex-col gap-0.5">
             {known => (
               <>
                 {known.map(page => (
@@ -608,7 +608,8 @@ function WaitingOnYou({
 }) {
   const shown = waiting.slice(0, WAITING_SHOWN)
   const rest = waiting.length - shown.length
-  const rowClass = 'focus-ring flex w-full items-center gap-3 rounded-md px-2 text-left text-sm text-foreground transition-colors hover:bg-foreground/4 active:bg-foreground/8'
+  // The navigation's row (ui/nav-row): corners 8, 2 apart, and 32 high (44 on a phone) at the least, grown by its lines.
+  const rowClass = 'focus-ring flex w-full items-center gap-3 rounded-lg px-2 text-left text-sm text-foreground transition-colors hover:bg-foreground/4 active:bg-foreground/8'
   return (
     <SidebarGroup className="pt-3! pb-0!">
       <SidebarGroupLabel>Waiting on you</SidebarGroupLabel>
@@ -624,7 +625,7 @@ function WaitingOnYou({
                   href={href}
                   aria-label={`${item.title} · ${need}`}
                   {...(external ? { target: '_blank', rel: 'noreferrer' } : { onClick: inPlace(() => onOpen(item)) })}
-                  className={cn(rowClass, 'py-1.5 md:min-h-12 max-md:min-h-16')}
+                  className={cn(rowClass, 'py-1.5 md:min-h-8 max-md:min-h-11')}
                 >
                   <span className="flex min-w-0 flex-1 flex-col">
                     {/* The mark and the age on the name's first line, never between the two (spacing.md 3). The
@@ -978,7 +979,7 @@ function AgentHistoryRow({
     'aria-label': `${naming ? 'Naming this session' : titleText} · ${said}`,
     'aria-current': active ? ('page' as const) : undefined,
     // The navigation's row: 32 high (44 on a phone), the picked one filled, the one under the pointer half filled.
-    className: cn('focus-ring rail-row flex w-full items-center gap-3 rounded-md px-2 text-left text-sm text-foreground transition-colors md:h-8 max-md:h-11', active ? 'bg-foreground/8' : 'hover:bg-foreground/4 active:bg-foreground/8'),
+    className: cn('focus-ring rail-row flex w-full items-center gap-3 rounded-lg px-2 text-left text-sm text-foreground transition-colors md:h-8 max-md:h-11', active ? 'bg-foreground/8' : 'hover:bg-foreground/4 active:bg-foreground/8'),
     ...(standIn ? { 'data-stand-in': '' } : {}),
     onPointerEnter: onNear,
     onFocus: onNear,

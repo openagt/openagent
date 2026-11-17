@@ -56,21 +56,22 @@ const DRIVER_UI: Record<DriverName, { icon: DriverOption['icon'] }> = {
 }
 
 /**
- * The message box's surface: the raised one, with the hairline, holding the row of where the agent
- * starts as its first line and the row of how it runs as its last. It is focused almost all the time
- * it is on screen, so focus is its own edge and nothing more: the caret says the rest. The edge is a
- * field's focus, 2 wide in the focus colour over the hairline, as the presses' ring is 2 wide. It stays
- * while the keyboard is on one of its items or in a menu one of them opened.
+ * The message box, as Claude Code's (DECISIONS.md, his pick): the raised surface with the hairline,
+ * holding only the +, the text and the send. Where the agent starts is a row above it, how it runs a
+ * row under it. It is focused almost all the time it is on screen, so focus is its own edge and nothing
+ * more: the caret says the rest. The edge is a field's focus, 2 wide in the focus colour over the
+ * hairline, as the presses' ring is 2 wide. It stays while the keyboard is on the + or in the menu it opened.
  */
-const SURFACE = '[view-transition-name:composer] flex flex-col rounded-box border border-hairline bg-card p-2 shadow-lg focus-within:outline-2 focus-within:-outline-offset-1 focus-within:outline-focus has-[[aria-expanded=true]]:outline-2 has-[[aria-expanded=true]]:-outline-offset-1 has-[[aria-expanded=true]]:outline-focus'
+const BOX = '[view-transition-name:composer] flex items-end rounded-box border border-hairline bg-card shadow-lg focus-within:outline-2 focus-within:-outline-offset-1 focus-within:outline-focus has-[[aria-expanded=true]]:outline-2 has-[[aria-expanded=true]]:-outline-offset-1 has-[[aria-expanded=true]]:outline-focus'
 
 /**
- * The box while the page it stands on is read: a {@link Slot}'s shape at the box's size and corner,
- * its three rows' heights and nothing in them, so the box takes its place without moving anything.
+ * The box while the page it stands on is read: a {@link Slot}'s shape at the three bands' heights,
+ * the box's corner on the middle one, and nothing in them, so the box takes its place without
+ * moving anything.
  */
 export function ComposerShape() {
   return (
-    <Slot of={{ value: null, state: 'unknown' }} shape={<Skeleton className="rounded-box border border-transparent p-2"><div className="mb-1 h-8" /><div className="h-9" /><div className="mt-1 h-8" /></Skeleton>}>
+    <Slot of={{ value: null, state: 'unknown' }} shape={<div><div className="mb-1 h-8" /><Skeleton className="h-11 rounded-box" /><div className="mt-1 h-8" /></div>}>
       {() => null}
     </Slot>
   )
@@ -473,8 +474,8 @@ export const Composer = forwardRef<ComposerHandle, {
     </div>
   )
 
-  // Every note at once, stacked up from the box; none moves the box or what is typed in it. A note is
-  // a card as the box is, so it stands the step between two cards from the box and from the next note: 12.
+  // Every note at once, stacked up from the prompt area; none moves the box or what is typed in it. A note
+  // is a card, so it stands the step between two cards from the prompt area and from the next note: 12.
   const notesSlot = useContext(BoxNotes)
   const notesEl = (
     <div className="flex flex-col gap-3 pb-3 empty:hidden">
@@ -488,52 +489,51 @@ export const Composer = forwardRef<ComposerHandle, {
   return (
     <>
       <div className="relative">
-        {notesSlot ? createPortal(notesEl, notesSlot) : <div className="absolute inset-x-0 bottom-full">{notesEl}</div>}
-        <div ref={surface} className={SURFACE}>
-          {/* Where the agent starts, the box's first line (his pick, above the text): the machine, the
-              project and the branch, drawn as the last line draws its items. A session has its own words
-              in the same place. */}
-          {inAgent ? (
-            sessionRow
-          ) : (
-            <RowAboveBox>
-              {runOnEl}
-              {startsAt}
-            </RowAboveBox>
-          )}
+        {/* Where the agent starts, above the box (his pick): the machine, the project and the branch,
+            drawn as the row under the box draws its items. A session has its own words in the same place. */}
+        {inAgent ? (
+          sessionRow
+        ) : (
+          <RowAboveBox>
+            {runOnEl}
+            {startsAt}
+          </RowAboveBox>
+        )}
 
-          {/* The text, as Claude Code's: the commands menu (+) at its left, the text, and the send at its right
-              (the launcher's "Start agent"), the two kept at the text's last line. One line tall when empty,
-              growing with what is typed. The editor is borderless: the edge is the surface's. */}
-          <div className="flex items-end">
-            <div className="-mr-2 flex shrink-0 items-center py-1">{commandsEl}</div>
-            <div className="min-w-0 flex-1">{editorEl}</div>
-            <div className="flex shrink-0 items-center py-1">{slotEl}</div>
-          </div>
-
-          {/* How it runs, the box's last line: the caller's controls at the left, the model at the right. The left side is the one that gives way: a longer label there
-              never moves the model or the page below. As high as its items; the room it gives up is over it. */}
-          <TooltipsPastBox value={surface}>
-            <div className={cn('mt-2', rowClass, 'h-7')}>
-              {/* In a narrow box, where its items say their icons only, each stays whole and the side scrolls, as the row above the box does. */}
-              <div className={cn(rowLeftClass, '@max-xl:overflow-x-auto @max-xl:[scrollbar-width:none] @max-xl:[mask-image:linear-gradient(to_right,#000_85%,transparent)] @max-xl:*:shrink-0')}>
-                {controls}
-              </div>
-              <div className="flex shrink-0 items-center gap-0.5">
-                {controlsEnd}
-                {driverModelEl ||
-                  // Only with something in it: an empty one would still take the row's gap, and the
-                  // row's last item would end off the box's inset.
-                  ((sessionModel !== undefined || sessionContext) && (
-                    <span className="flex items-center">
-                      {sessionModel !== undefined && <span className={rowItemClass}>{sessionModel}</span>}
-                      {sessionContext}
-                    </span>
-                  ))}
-              </div>
-            </div>
-          </TooltipsPastBox>
+        {/* The box, as Claude Code's: the raised surface, the commands menu (+) at its left, the text,
+            and the send at its right (the launcher's "Start agent"), the two kept at the last line. One
+            line tall when empty, growing with what is typed. The editor is borderless: the edge is the box's. */}
+        <div ref={surface} className={BOX}>
+          <div className="-mr-2 flex shrink-0 items-center py-1 pr-1 pl-0.5">{commandsEl}</div>
+          <div className="min-w-0 flex-1">{editorEl}</div>
+          <div className="flex shrink-0 items-center py-1 pr-0.5 pl-1">{slotEl}</div>
         </div>
+
+        {/* How it runs, under the box: the caller's controls at the left, the model at the right. The
+            left side is the one that gives way: a longer label there never moves the model or the
+            page below. */}
+        <TooltipsPastBox value={surface}>
+          <div className={cn('mt-1', rowClass)}>
+            {/* In a narrow box, where its items say their icons only, each stays whole and the side scrolls, as the row above the box does. */}
+            <div className={cn(rowLeftClass, '@max-xl:overflow-x-auto @max-xl:[scrollbar-width:none] @max-xl:[mask-image:linear-gradient(to_right,#000_85%,transparent)] @max-xl:*:shrink-0')}>
+              {controls}
+            </div>
+            <div className="flex shrink-0 items-center gap-0.5">
+              {controlsEnd}
+              {driverModelEl ||
+                // Only with something in it: an empty one would still take the row's gap, and the
+                // row's last item would end off the row's end.
+                ((sessionModel !== undefined || sessionContext) && (
+                  <span className="flex items-center">
+                    {sessionModel !== undefined && <span className={rowItemClass}>{sessionModel}</span>}
+                    {sessionContext}
+                  </span>
+                ))}
+            </div>
+          </div>
+        </TooltipsPastBox>
+        {/* Last, so the box is the first thing drawn; laid over the page above the prompt area all the same. */}
+        {notesSlot ? createPortal(notesEl, notesSlot) : <div className="absolute inset-x-0 bottom-full">{notesEl}</div>}
       </div>
 
       {addingPreset && (

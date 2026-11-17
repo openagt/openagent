@@ -493,7 +493,7 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePan
 
   // Only work that changed something is merged or not: a run that changed nothing, or one starting, says neither.
   const merged = agentId !== undefined && run !== null && 'merged' in run ? run.merged : undefined
-  const between = run && 'changes' in run && run.from && run.to ? `${run.from} → ${run.to}` : undefined
+  const between = run && 'changes' in run && run.from && run.to ? { from: run.from, to: run.to } : undefined
   const [diffsElement, setDiffsElement] = useState<HTMLElement | null>(null)
   useEffect(() => {
     if (allAsked !== undefined) diffsElement?.scrollTo({ top: 0 })
@@ -541,11 +541,13 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePan
   return (
     <>
       {header(true)}
-      {/* The branches the changes are between, cut in their middle so the run's own stays told apart,
-          and whether they are merged: quiet, on a line of their own under the head. */}
+      {/* The branches the changes are between, as Claude Code's: the branch measured from whole, then
+          the run's own, cut in its middle so two runs' branches stay told apart, and whether they are
+          merged: quiet, on a line of their own under the head. */}
       {between && (
-        <p title={between} className="flex h-8 shrink-0 items-center gap-1 border-b border-hairline px-4 text-xs text-muted-foreground">
-          <MiddleCut text={between} />
+        <p title={`${between.from} → ${between.to}`} className="flex h-8 shrink-0 items-center gap-1 border-b border-hairline px-4 text-xs text-muted-foreground">
+          <span className="shrink-0">{`${between.from} →`}</span>
+          <MiddleCut text={between.to} />
           {merged !== undefined && <span className="shrink-0">{merged ? '· merged' : '· not merged yet'}</span>}
         </p>
       )}

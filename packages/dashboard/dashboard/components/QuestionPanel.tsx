@@ -9,7 +9,6 @@ import { cn } from '../lib/utils.js'
 import { formatSince } from '../lib/format-date.js'
 import { StateCell } from './ui/state.js'
 import { RadioGroup } from './ui/radio-group.js'
-import { Button } from './ui/button.js'
 import { answerPrompt, skipPrompt } from '../lib/answered-question.js'
 import { MOD_KEY, pressed, typedInto } from '../lib/shortcut.js'
 import { isMobileScreen } from '../lib/use-mobile.js'
@@ -18,16 +17,16 @@ import { Facts } from './ui/panel.js'
 /** The pick that is no option: the person's own words, typed in the "Other" row. */
 const OTHER = Symbol('other')
 
-// A pick's mark, drawn as the shared radio and checkbox are (ui/radio-group, ui/checkbox): the
-// whole row is the control here, so the mark is only its picture. Centred on the first line's 20.
+// A pick's mark, as Claude Code on the web draws one: a ring, filled with a dot when picked; a
+// box with a tick where several may be picked. The whole row is the control, so the mark is only its picture.
 function Mark({ on, multi }: { on: boolean; multi: boolean | undefined }) {
   return multi ? (
-    <span className={cn('mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-sm border transition-colors', on ? 'border-primary bg-primary text-primary-foreground' : 'border-input group-hover/choice:border-input-hover')} aria-hidden>
-      {on && <Check className="size-3" strokeWidth={3} />}
+    <span className={cn('mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border', on ? 'border-primary bg-primary text-primary-foreground' : 'border-foreground/20')} aria-hidden>
+      {on && <Check className="h-3 w-3" />}
     </span>
   ) : (
-    <span className={cn('mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border transition-colors', on ? 'border-primary' : 'border-input group-hover/choice:border-input-hover')} aria-hidden>
-      {on && <span className="size-2 rounded-full bg-primary" />}
+    <span className={cn('mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full', on ? 'bg-primary' : 'border border-foreground/20')} aria-hidden>
+      {on && <span className="h-1.5 w-1.5 rounded-full bg-primary-foreground" />}
     </span>
   )
 }
@@ -36,21 +35,19 @@ function Mark({ on, multi }: { on: boolean; multi: boolean | undefined }) {
 // the pick. Where several may be picked, each row is a box of its own.
 function Choices({ multi, labelledBy, picked, onPick, disabled, children }: { multi: boolean | undefined; labelledBy: string; picked: string | typeof OTHER | undefined; onPick: (value: string | typeof OTHER) => void; disabled: boolean; children: ReactNode }) {
   return multi ? (
-    <ul className="-mx-2 flex flex-col">{children}</ul>
+    <ul className="flex flex-col">{children}</ul>
   ) : (
-    <RadioGroup render={<ul />} aria-labelledby={labelledBy} value={picked} onValueChange={value => onPick(value as string | typeof OTHER)} disabled={disabled} className="-mx-2 flex flex-col gap-0">
+    <RadioGroup render={<ul />} aria-labelledby={labelledBy} value={picked} onValueChange={value => onPick(value as string | typeof OTHER)} disabled={disabled} className="flex flex-col gap-0">
       {children}
     </RadioGroup>
   )
 }
 
-// A choice's row: the radio group's radio, or a box the row toggles, from the card's edge to its edge.
-// A row of one line is 44 high, of two 64, its mark 16 in on the first line's, its words 44 in
-// (spacing.md 3), and rows are parted by nothing but their padding; none is filled but the one
-// picked and the one under the pointer, with the lightest fill a list's hovered row has (ui/panel).
-function Choice({ multi, value, on, twoLines, disabled, onPick, children }: { multi: boolean | undefined; value: string | typeof OTHER; on: boolean; twoLines: boolean; disabled: boolean; onPick: () => void; children: ReactNode }) {
-  // A second line ends on its baseline, lower in its line than a mark ends: less padding under it keeps the words' insets even.
-  const row = cn('group/choice focus-ring-inset flex w-full items-start gap-3 px-4 pt-3 text-left transition-colors enabled:hover:bg-foreground/4 enabled:active:bg-foreground/8 disabled:opacity-60', twoLines ? 'pb-2' : 'pb-3', on && 'bg-foreground/4')
+// A choice's row: the radio group's radio, or a box the row toggles. Rows are parted by a line, as
+// Claude Code on the web parts them; none is filled but the one under the pointer, or the one the
+// keyboard is on, which is filled a shade and never ringed.
+function Choice({ multi, value, on, disabled, onPick, children }: { multi: boolean | undefined; value: string | typeof OTHER; on: boolean; disabled: boolean; onPick: () => void; children: ReactNode }) {
+  const row = 'flex w-full items-start gap-3 p-4 text-left outline-none enabled:hover:bg-foreground/[0.03] focus-visible:bg-foreground/[0.05] dark:enabled:hover:bg-foreground/[0.07] dark:focus-visible:bg-foreground/[0.09] disabled:opacity-60'
   return multi ? (
     <button type="button" role="checkbox" aria-checked={on} disabled={disabled} onClick={onPick} className={row}>
       {children}
@@ -63,7 +60,7 @@ function Choice({ multi, value, on, twoLines, disabled, onPick, children }: { mu
 }
 
 // The question an agent's turn ended on, in the chat under what the agent said, the way Claude
-// Code on the web asks: the one card in the chat, its title, one row per option (a ring, its
+// Code on the web asks: a card with the title on a grey band, one row per option (a ring, its
 // label, its description), an "Other" row to answer in one's own words, and Skip / Answer. The
 // number keys pick, as before, with no number drawn. An option's pick goes over the control RPC,
 // which hands the chosen labels to the agent; "Other" and Skip go as a message in the same
@@ -217,23 +214,23 @@ export function QuestionPanel({
 
   if (sent) return null
   return (
-    <section ref={card} role="region" aria-label={choice.title} className="flex w-full flex-col gap-1 rounded-box bg-card p-2 font-sans text-sm shadow-sm md:-mx-4 md:w-auto ring-1 ring-warning/30">
-      <div className="flex flex-col gap-0.5 px-2 pt-1.5 pb-1">
-        <span className="flex items-center gap-2 text-xs font-semibold text-warning">
+    <section ref={card} role="region" aria-label={choice.title} className="flex w-full max-w-[480px] flex-col overflow-clip rounded-box font-sans text-sm ring-1 ring-border">
+      <div className="flex flex-col gap-1 bg-foreground/5 px-4 py-3">
+        <span className="flex items-center gap-2 text-xs text-warning">
           <StateCell state="waiting" className="size-3" />
           <Facts facts={['Waiting for your answer', askedAt !== undefined && formatSince(askedAt)]} />
         </span>
-        <h2 id={titleId} className="text-base font-semibold">{choice.title}</h2>
+        <h2 id={titleId} className="font-normal">{choice.title}</h2>
       </div>
       <Choices multi={choice.multi} labelledBy={titleId} picked={picked} onPick={setPicked} disabled={busy}>
         {choice.options.map(o => {
           const on = choice.multi ? checked.has(o.id) : picked === o.id
           return (
-            <li key={o.id}>
-              <Choice multi={choice.multi} value={o.id} on={on} twoLines={Boolean(o.detail)} disabled={busy} onPick={() => pick(o.id)}>
+            <li key={o.id} className="border-t border-border first:border-t-0">
+              <Choice multi={choice.multi} value={o.id} on={on} disabled={busy} onPick={() => pick(o.id)}>
                 <Mark on={on} multi={choice.multi} />
-                <span className="flex min-w-0 flex-1 flex-col gap-1">
-                  <span className="font-medium">
+                <span className="flex min-w-0 flex-1 flex-col gap-2">
+                  <span>
                     {o.label}
                     {/* A box of its own, which a screen reader reads as a word apart from the label. */}
                     {o.id === choice.recommended && <span className="ml-2 inline-block text-xs font-normal text-muted-foreground">Recommended</span>}
@@ -245,10 +242,10 @@ export function QuestionPanel({
           )
         })}
         {!send && (
-          <li className="flex flex-col">
-            <Choice multi={choice.multi} value={OTHER} on={otherPicked} twoLines={false} disabled={busy} onPick={pickOther}>
+          <li className="flex flex-col border-t border-border">
+            <Choice multi={choice.multi} value={OTHER} on={otherPicked} disabled={busy} onPick={pickOther}>
               <Mark on={otherPicked} multi={choice.multi} />
-              <span className="min-w-0 flex-1 font-medium">Other</span>
+              <span className="min-w-0 flex-1">Other</span>
             </Choice>
             {otherPicked && (
               <input
@@ -262,33 +259,33 @@ export function QuestionPanel({
                 name="own-answer"
                 placeholder="Type your own answer here"
                 aria-label="Your own answer"
-                className="mr-4 mb-2 ml-11 h-8 rounded-md border border-border bg-transparent px-3 outline-none placeholder:text-faint-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+                className="mx-4 mb-2 ml-11 rounded-md border border-border bg-transparent px-3 py-1.5 outline-none placeholder:text-muted-foreground focus:border-primary"
               />
             )}
           </li>
         )}
       </Choices>
-      <div className="flex items-center gap-2 px-2 pt-1 pb-2">
+      <div className="flex items-center gap-2 px-4 pt-2 pb-4">
         {/* One line in every state, so the buttons never move: what went wrong, or that it is on its way. */}
-        <span role={error ? 'alert' : busy ? 'status' : undefined} className={cn('min-w-0 flex-1 truncate pl-2 text-xs', error ? 'text-danger' : 'text-muted-foreground')}>
+        <span role={error ? 'alert' : busy ? 'status' : undefined} className={cn('min-w-0 flex-1 truncate text-xs', error ? 'text-danger' : 'text-muted-foreground')}>
           {error ?? (busy ? 'Sending your answer…' : '')}
         </span>
         {!send && (
-          <Button variant="ghost" disabled={busy || down} onClick={() => say(skipPrompt(choice.title))}>
+          <button type="button" disabled={busy || down} onClick={() => say(skipPrompt(choice.title))} className="h-6 rounded-md bg-foreground/10 px-2 text-xs hover:bg-foreground/15 disabled:opacity-60">
             Skip
-          </Button>
+          </button>
         )}
-        <Button disabled={busy || down || !ready} onClick={submit}>
+        <button type="button" disabled={busy || down || !ready} onClick={submit} className="flex h-6 items-center gap-1.5 rounded-md bg-foreground px-2 text-xs font-medium text-background hover:bg-foreground/90 disabled:opacity-60">
           Answer
           {active && (
             // The message box's rule for naming keys: none on a touch screen, none at a phone's width. While a text field
             // outside the card has Ctrl+Enter, the keys are dimmed and keep their place, so Answer and Skip stand still.
             <span className={cn('gap-0.5 transition-opacity pointer-coarse:hidden max-md:hidden md:not-pointer-coarse:flex', keysElsewhere && 'opacity-40')} aria-hidden>
-              <kbd className="flex h-5 min-w-5 items-center justify-center rounded-sm border border-primary-foreground/30 px-1 font-sans text-xs font-normal">{MOD_KEY}</kbd>
-              <kbd className="flex h-5 min-w-5 items-center justify-center rounded-sm border border-primary-foreground/30 px-1 font-sans text-xs font-normal">Enter</kbd>
+              <kbd className="flex h-4 min-w-4 items-center justify-center rounded-sm border border-background/20 px-0.5 font-sans text-xs">{MOD_KEY}</kbd>
+              <kbd className="flex h-4 min-w-4 items-center justify-center rounded-sm border border-background/20 px-0.5 font-sans text-xs">Enter</kbd>
             </span>
           )}
-        </Button>
+        </button>
       </div>
     </section>
   )
