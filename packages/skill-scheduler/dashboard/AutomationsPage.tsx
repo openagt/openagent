@@ -494,7 +494,7 @@ function StatusLine({ row, agents, className }: { row: SchedulerRow; agents: rea
   )
 }
 
-/** Two rows while they are read on a phone, where a row's name and words take two lines and its facts two more: as tall as the rows that come */
+/** Two rows while they are read on a phone, where a row's name and words take two lines and its facts two more: as tall as the rows that come, and as wide. */
 function PhoneRowShapes() {
   return (
     <Panel>
@@ -517,6 +517,8 @@ function PhoneRowShapes() {
               <Skeleton className="h-2 w-2/3" />
             </span>
           </span>
+          {/* The switch's and the menu's room at the row's right, left free as the rows that come keep it. */}
+          <span aria-hidden className="w-14 shrink-0" />
         </li>
       ))}
     </Panel>
