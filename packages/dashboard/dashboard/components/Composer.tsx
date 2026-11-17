@@ -58,10 +58,11 @@ const DRIVER_UI: Record<DriverName, { icon: DriverOption['icon'] }> = {
 /**
  * The message box's surface: the raised one, with the hairline, holding the row of where the agent
  * starts as its first line and the row of how it runs as its last. It is focused almost all the time
- * it is on screen, so focus is its own edge in the primary colour and nothing more: the caret says the
- * rest. The edge stays while the keyboard is on one of its items or in a menu one of them opened.
+ * it is on screen, so focus is its own edge and nothing more: the caret says the rest. The edge is a
+ * field's focus, 2 wide in the focus colour over the hairline, as the presses' ring is 2 wide. It stays
+ * while the keyboard is on one of its items or in a menu one of them opened.
  */
-const SURFACE = '[view-transition-name:composer] flex flex-col rounded-box border border-hairline bg-card p-2 shadow-lg transition-colors focus-within:border-primary has-[[aria-expanded=true]]:border-primary'
+const SURFACE = '[view-transition-name:composer] flex flex-col rounded-box border border-hairline bg-card p-2 shadow-lg focus-within:outline-2 focus-within:-outline-offset-1 focus-within:outline-focus has-[[aria-expanded=true]]:outline-2 has-[[aria-expanded=true]]:-outline-offset-1 has-[[aria-expanded=true]]:outline-focus'
 
 /**
  * The box while the page it stands on is read: a {@link Slot}'s shape at the box's size and corner,

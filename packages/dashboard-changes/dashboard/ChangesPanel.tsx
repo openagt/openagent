@@ -45,8 +45,8 @@ import { CONTEXT_LINES, MAX_PREVIEW_LINES } from '../src/confined.js'
 import { foldAll, foldDiff, setChangesSetting, showWhole, useChangesSettings, usePageDiffs, wholeKey } from './settings.js'
 
 // The Changes pane, as Claude Code on the web draws it: in its header a button that hides the list,
-// the branch the changes are measured from and the run's own ("main → agent-…"), then search and a
-// ⋮ menu; the files that changed in a list on the left, each with its lines added and removed,
+// then search and a ⋮ menu, and under it the branch the changes are measured from and the run's own
+// ("main → agent-…"); the files that changed in a list on the left, each with its lines added and removed,
 // grouped by folder; and on the right every file's diff, one under another, each under its own
 // header that folds it away. A click in the list scrolls to that file's diff. A pane too narrow for
 // both hides the list: its button then shows the list in the diffs' place, until a file is picked.
@@ -286,14 +286,12 @@ function useHeld<T>(agentId: string | undefined, value: T, keep: boolean, moving
 }
 
 /**
- * The pane's header: its name, then on a pane wide enough the branches the changes are between and
- * whether they are merged, then the files' total; then search, the button that hides the list, and
- * the ⋮ menu.
+ * The pane's header: its name and the files' total; then, when there are files, search and the
+ * button that hides the list; then the ⋮ menu. The branches the changes are between have a line of
+ * their own under it.
  */
-function ChangesHeader({ between, narrow, merged, page, paths, changes, listShown, onPick, onToggleList, onRefresh }: {
-  between: string | undefined
-  narrow: boolean
-  merged: boolean | undefined
+function ChangesHeader({ files, page, paths, changes, listShown, onPick, onToggleList, onRefresh }: {
+  files: boolean
   page: string
   paths: string[]
   changes: Record<string, FileMark>
@@ -309,42 +307,32 @@ function ChangesHeader({ between, narrow, merged, page, paths, changes, listShow
   return (
     <>
       <PaneTitle>
-        {/* One line, the branches cut in their middle, so the run's own stays told apart; a pane too
-            narrow for them keeps its name and says them on hover, rather than show a fragment. */}
-        {between && !narrow ? (
-          <h2 className="flex min-w-0 items-baseline gap-2 pl-2 text-sm" title={between}>
-            <span className="shrink-0 font-medium">Changes</span>
-            <span className="flex min-w-0 items-baseline gap-1 text-muted-foreground">
-              <MiddleCut text={between} />
-              {merged !== undefined && <span className="shrink-0 text-xs">{merged ? '· merged' : '· not merged yet'}</span>}
-            </span>
-          </h2>
-        ) : (
-          <h2 className="truncate pl-2 text-sm font-medium" title={between}>
-            Changes
-          </h2>
-        )}
+        <h2 className="truncate pl-2 text-sm font-medium">Changes</h2>
         {total && <DiffStat added={total.added} removed={total.removed} zeros className="ml-auto pl-2" />}
       </PaneTitle>
       <PaneActions>
-        <ChangeSearch paths={paths} changes={changes} onPick={onPick} />
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                className={cn('shrink-0 text-muted-foreground', listShown && 'bg-accent text-accent-foreground')}
-                aria-label={listShown ? 'Hide the list of files' : 'Show the list of files'}
-                aria-pressed={listShown}
-                onClick={onToggleList}
-              />
-            }
-          >
-            <ListTree className="size-4" />
-          </TooltipTrigger>
-          <TooltipContent>{listShown ? 'Hide the list of files' : 'Show the list of files'}</TooltipContent>
-        </Tooltip>
+        {files && (
+          <>
+            <ChangeSearch paths={paths} changes={changes} onPick={onPick} />
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className={cn('shrink-0 text-muted-foreground', listShown && 'bg-accent text-accent-foreground')}
+                    aria-label={listShown ? 'Hide the list of files' : 'Show the list of files'}
+                    aria-pressed={listShown}
+                    onClick={onToggleList}
+                  />
+                }
+              >
+                <ListTree className="size-4" />
+              </TooltipTrigger>
+              <TooltipContent>{listShown ? 'Hide the list of files' : 'Show the list of files'}</TooltipContent>
+            </Tooltip>
+          </>
+        )}
         <DropdownMenu>
           <DropdownMenuTrigger aria-label="The pane’s settings" className={cn(buttonVariants({ variant: 'ghost', size: 'icon-sm' }), 'shrink-0 text-muted-foreground data-[popup-open]:bg-accent')}>
             <MoreVertical aria-hidden className="size-4" />
@@ -510,11 +498,10 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePan
   useEffect(() => {
     if (allAsked !== undefined) diffsElement?.scrollTo({ top: 0 })
   }, [allAsked, diffsElement])
-  const header = (
+  // `files`: whether there are files to search and list. A pane with none draws neither press.
+  const header = (files: boolean) => (
     <ChangesHeader
-      between={between}
-      narrow={narrow}
-      merged={merged}
+      files={files}
       page={page}
       paths={paths}
       changes={changes}
@@ -532,13 +519,13 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePan
 
   const line = (text: string) => (
     <>
-      {header}
+      {header(false)}
       <PaneNote>{text}</PaneNote>
     </>
   )
   const waiting = (
     <>
-      {header}
+      {header(true)}
       <Reading className="px-4 py-2" />
     </>
   )
@@ -553,7 +540,15 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePan
   const nothing = commit ? (commitState !== 'unknown' ? 'This commit changed no files.' : undefined) : 'No change is left: the commits cancel out.'
   return (
     <>
-      {header}
+      {header(true)}
+      {/* The branches the changes are between, cut in their middle so the run's own stays told apart,
+          and whether they are merged: quiet, on a line of their own under the head. */}
+      {between && (
+        <p title={between} className="flex h-8 shrink-0 items-center gap-1 border-b border-hairline px-4 text-xs text-muted-foreground">
+          <MiddleCut text={between} />
+          {merged !== undefined && <span className="shrink-0">{merged ? '· merged' : '· not merged yet'}</span>}
+        </p>
+      )}
       {/* Beside each other while the pane is wide enough; on a narrow pane, one or the other. */}
       <div ref={setBody} className="flex min-h-0 min-w-0 flex-auto">
         {listShown && (

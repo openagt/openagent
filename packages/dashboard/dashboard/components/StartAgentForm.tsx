@@ -507,7 +507,8 @@ function Refusal({ title, detail, actions }: { title: ReactNode; detail?: ReactN
             <p className="mt-0.5 text-xs">{detail}</p>
           </>
         )}
-        {actions !== undefined && <div className="mt-2 flex flex-wrap items-center gap-2 text-foreground">{actions}</div>}
+        {/* Its presses are a finger's 44 on a phone, as every press there is. */}
+        {actions !== undefined && <div className="mt-2 flex flex-wrap items-center gap-2 text-foreground max-md:[&_button]:h-11">{actions}</div>}
       </div>
     </div>
   )

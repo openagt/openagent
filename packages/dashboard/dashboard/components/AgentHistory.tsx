@@ -439,7 +439,9 @@ export function AgentHistory({
                         the top of the scroll (so it never dims the first row) and fades it in on scroll. */}
                     <div aria-hidden className="rail-fade pointer-events-none absolute inset-x-0 top-full h-4 bg-gradient-to-b from-sidebar to-transparent" />
                   </div>
-                  <SidebarGroupContent>
+                  {/* A row brought into view (the keyboard's focus, the page's own row) stops under the label
+                      and its fade, 32 + 16, so the label never covers the row it is about. */}
+                  <SidebarGroupContent className="[&_:is(a,button)]:scroll-mt-12">
                     <SidebarMenu className="gap-0.5">
                       {/* A just-started run, before its run.json exists — highlighted while following it. */}
                       {showOptimistic && (

@@ -71,7 +71,8 @@ export function AutoMenu({
         </TooltipTrigger>
         <TooltipContent>{`What the agent does by itself when it finishes.${into ? ` The pull request goes into ${into.into}.` : ''}`}</TooltipContent>
       </Tooltip>
-      <DropdownMenuContent className="min-w-[19rem] max-w-[22rem]">
+      {/* At the box's right, as the model's menu beside it: it opens to the left, inside the box's edge. */}
+      <DropdownMenuContent align="end" className="min-w-[19rem] max-w-[22rem]">
         <DropdownMenuGroup>
           <DropdownMenuLabel className="font-normal">When the agent finishes</DropdownMenuLabel>
           <DropdownMenuRadioGroup value={publish} onValueChange={(pick: PublishPick) => onPublish(pick)}>

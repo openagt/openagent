@@ -80,7 +80,7 @@ export function AgentWorkBar({
           <div className="flex shrink-0 items-center gap-2 empty:hidden max-md:flex-1 max-md:[&>button]:h-11 max-md:[&>button]:flex-1">{actions}</div>
           {/* Put away by hand, as Claude Code's is. Nothing is undone by it: the work is where it
               was, and the card says so again as soon as the work moves on. */}
-          <Button variant="ghost" size="icon-sm" aria-label="Hide this bar" title="Hide this bar" onClick={onHide} className="ml-auto shrink-0 text-muted-foreground max-md:h-11">
+          <Button variant="ghost" size="icon" aria-label="Hide this bar" title="Hide this bar" onClick={onHide} className="ml-auto shrink-0 text-muted-foreground max-md:h-11">
             <X className="size-4" />
           </Button>
         </div>
