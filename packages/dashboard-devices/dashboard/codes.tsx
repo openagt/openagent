@@ -72,7 +72,7 @@ export function CopyButton({ text, label, children }: { text: string; label: str
     return () => clearTimeout(timer)
   }, [copied])
   return (
-    <Button type="button" variant="ghost" size="sm" aria-label={label} onClick={() => void navigator.clipboard?.writeText(text).then(() => setCopied(true))}>
+    <Button type="button" variant="ghost" size="sm" aria-label={label} className="max-md:h-11" onClick={() => void navigator.clipboard?.writeText(text).then(() => setCopied(true))}>
       {copied ? <Check className="size-4 text-success" aria-hidden /> : <Copy className="size-4" aria-hidden />}
       {copied ? 'Copied' : children}
     </Button>

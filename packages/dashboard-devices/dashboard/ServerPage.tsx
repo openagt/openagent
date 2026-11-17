@@ -198,7 +198,7 @@ function Overview({ d, item }: { d: Devices; item: ServerItem }) {
           </button>
         )}
         {done && machine?.version === undefined && (reason !== undefined || !server.adding) && (
-          <Button variant="secondary" disabled={busy || down} aria-label={machine ? `Connect ${server.address} again` : `Finish connecting ${server.address}`} onClick={() => void d.addToMachines(server)}>
+          <Button variant="secondary" disabled={busy || down} aria-label={machine ? `Connect ${server.address} again` : `Finish connecting ${server.address}`} className="max-md:h-11" onClick={() => void d.addToMachines(server)}>
             {machine ? 'Connect again' : 'Finish connecting'}
           </Button>
         )}
