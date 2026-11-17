@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Facts, Page, Panel, PanelGroup, PanelShape, RunMark, Slot, Switch, WordsShape, Tooltip, TooltipContent, TooltipTrigger, Button, cn, formatAge, formatDateTime, inPlace, useCodingAgents, useIsMobile, useModuleHost, useOpenAgentDown, usePolled, type ModuleCommandResult, type ModuleHost, type ModuleProject } from '@openagt/dashboard/module'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Facts, Page, Panel, PanelGroup, PanelShape, RunMark, Skeleton, Slot, Switch, WordsShape, Tooltip, TooltipContent, TooltipTrigger, Button, cn, formatAge, formatDateTime, inPlace, useCodingAgents, useIsMobile, useModuleHost, useOpenAgentDown, usePolled, type ModuleCommandResult, type ModuleHost, type ModuleProject } from '@openagt/dashboard/module'
 import type { ModulePageProps } from '@openagt/dashboard/module'
 import { MoreHorizontal, Play, Plus } from 'lucide-react'
 import { AutomationForm } from './AutomationForm.js'
@@ -192,7 +192,7 @@ export function AutomationsPage({ projects }: ModulePageProps) {
         of={{ value: rows, state }}
         shape={
           <PanelGroup bare title={<WordsShape words="Your automations" />}>
-            <PanelShape rows={2} />
+            {phone ? <PhoneRowShapes /> : <PanelShape rows={2} />}
           </PanelGroup>
         }
         className="space-y-8"
@@ -493,6 +493,35 @@ function StatusLine({ row, agents, className }: { row: SchedulerRow; agents: rea
         </div>
       )}
     </div>
+  )
+}
+
+/** Two rows while they are read on a phone, where a row's name and words take two lines and its facts two more: as tall as the rows that come. */
+function PhoneRowShapes() {
+  return (
+    <Panel>
+      {[0, 1].map(at => (
+        <li key={at} className="relative flex items-start gap-3 px-4 py-3 before:absolute before:top-0 before:right-4 before:left-4 before:h-px not-first:before:bg-hairline">
+          <span className="flex h-5 w-4 shrink-0 items-center">
+            <Skeleton className="size-3 rounded-sm" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="flex h-5 items-center">
+              <Skeleton className="h-2.5 w-full" />
+            </span>
+            <span className="flex h-5 items-center">
+              <Skeleton className="h-2.5 w-2/3" />
+            </span>
+            <span className="mt-0.5 flex h-4 items-center">
+              <Skeleton className="h-2 w-1/2" />
+            </span>
+            <span className="flex h-4 items-center">
+              <Skeleton className="h-2 w-2/3" />
+            </span>
+          </span>
+        </li>
+      ))}
+    </Panel>
   )
 }
 
