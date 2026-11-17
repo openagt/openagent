@@ -71,6 +71,13 @@ function OptionRow({
   )
 }
 
+/**
+ * A facet popover's body. On a phone its rows are 44 high, so their words sit 6 further from the
+ * popover's top and bottom than a 32-high row's; the body pulls in by as much, and the words keep
+ * one inset on all four sides.
+ */
+const FACET_BODY = 'max-md:-my-1.5'
+
 /** A ghost chip of the filter row: filled while what it says is applied. */
 const CHIP_ON = 'bg-accent text-accent-foreground'
 
@@ -122,7 +129,7 @@ function RangeFacet({
     <Popover>
       <PopoverTrigger render={<FacetTrigger label={label} value={rangeValue(filter, buckets, noneLabel)} />} />
       <PopoverContent className="w-56">
-        <div>
+        <div className={FACET_BODY}>
           {buckets.map(bucket => (
             <OptionRow
               key={bucket.id}
@@ -132,15 +139,16 @@ function RangeFacet({
               onChange={() => onChange(withBucketToggled(filter, bucket.id))}
             />
           ))}
+          {/* The rules start where the ticks and the words do, on the rows' inset. */}
+          <Separator className="mx-2 my-1" />
+          <RangeRow label={label} buckets={buckets} filter={filter} onChange={onChange} />
+          {(counts.none > 0 || filter.none) && (
+            <>
+              <Separator className="mx-2 my-1" />
+              <OptionRow label={noneLabel} count={counts.none} checked={filter.none} onChange={next => onChange(withNone(filter, next))} />
+            </>
+          )}
         </div>
-        <Separator className="my-1" />
-        <RangeRow label={label} buckets={buckets} filter={filter} onChange={onChange} />
-        {(counts.none > 0 || filter.none) && (
-          <>
-            <Separator className="my-1" />
-            <OptionRow label={noneLabel} count={counts.none} checked={filter.none} onChange={next => onChange(withNone(filter, next))} />
-          </>
-        )}
       </PopoverContent>
     </Popover>
   )
@@ -165,6 +173,8 @@ function RangeRow({
   onChange: (next: RangeFilter) => void
 }) {
   const union = bucketUnionRange(filter, buckets)
+  const lowest = Math.min(...buckets.map(bucket => bucket.min))
+  const highest = Math.max(...buckets.map(bucket => bucket.max))
   const dimmed = filter.buckets.length > 0 && union === null
   const displayed = filter.range ?? union
   return (
@@ -188,9 +198,16 @@ function RangeRow({
       </div>
       <RangeSlider
         aria-label={`${label} range`}
-        value={displayed ?? [0, 10]}
+        min={lowest}
+        max={highest}
+        value={displayed ?? [lowest, highest]}
         onValueChange={next => onChange(withRange(filter, next))}
       />
+      {/* The range's ends, named under them. */}
+      <div aria-hidden className="mt-1 flex justify-between text-xs tabular-nums text-muted-foreground">
+        <span>{lowest}</span>
+        <span>{highest}</span>
+      </div>
     </div>
   )
 }
@@ -210,7 +227,7 @@ function CheckFacet({
     <Popover>
       <PopoverTrigger render={<FacetTrigger label={label} value={value} />} />
       <PopoverContent className="w-56">
-        <div>{children}</div>
+        <div className={FACET_BODY}>{children}</div>
       </PopoverContent>
     </Popover>
   )
@@ -305,7 +322,7 @@ export function TicketFilterBar({
       </div>
     )
 
-  // The sort ends the filters; on a phone it stands outside the strip's faded end, beside the search, so its glyph reads whole.
+  // The sort ends the filters; on a phone it stands beside the search, at its size, its glyph alone.
   const sort = (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -359,9 +376,10 @@ export function TicketFilterBar({
   )
 
   return (
-    <div className="flex items-center gap-2 md:items-start">
-      {/* The filters, then the sort, wrapping where they meet the search; on a phone a strip scrolled sideways, its end faded to say there is more. */}
-      <div className="-ml-2 flex min-w-0 items-center gap-1 md:flex-wrap max-md:flex-1 max-md:overflow-x-auto max-md:pe-8 max-md:[scrollbar-width:none] max-md:[mask-image:linear-gradient(to_right,#000_calc(100%_-_2rem),transparent)]">
+    <div className="flex items-start gap-2">
+      {/* The filters, then the sort, wrapping where they meet the search, on a phone too: every filter whole, none
+          behind a scroll's faded end. */}
+      <div className="-ml-2 flex min-w-0 flex-wrap items-center gap-1 max-md:flex-1">
       <RangeFacet
         label="Priority"
         noneLabel="No priority"

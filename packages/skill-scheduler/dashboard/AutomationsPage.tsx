@@ -186,7 +186,7 @@ export function AutomationsPage({ projects }: ModulePageProps) {
       description="What starts by itself while nobody is at the keyboard."
       actions={single ? single.error === undefined && newButton(single.project, true) : projects.length === 1 && newButton(projects[0]!, true, false)}
       // One project's status under the page's line, its height held from the first paint.
-      bar={projects.length === 1 ? single ? <StatusLine row={single} agents={agents} /> : <p aria-hidden className="h-4" /> : undefined}
+      bar={projects.length === 1 ? single ? <StatusLine row={single} agents={agents} /> : <StatusShape /> : undefined}
     >
       <Slot
         of={{ value: rows, state }}
@@ -423,6 +423,15 @@ export function AutomationsPage({ projects }: ModulePageProps) {
         }
       </Slot>
     </Page>
+  )
+}
+
+/** The scheduler's line while it is read: a bar in its likely words' room, so the line lands in its own place. */
+function StatusShape() {
+  return (
+    <p aria-hidden className="text-xs">
+      <WordsShape words="Scheduler on · Claude Code, opus" />
+    </p>
   )
 }
 

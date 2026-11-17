@@ -149,12 +149,13 @@ export function QueuePage({ projects }: ModulePageProps) {
       {onlyProject ? (
         <div data-queue="" className="space-y-8">
           {only?.error === undefined && <AddEntry project={onlyProject} reload={reload} />}
-          {/* Its entries while they are read: a priority's heading over a card of them. */}
+          {/* Its entries while they are read: a priority's heading over a card of one entry, its name over its facts.
+              How many there are is not known until the read; one is the fewest a queue that shows any holds. */}
           <Slot
             of={{ state, value: reads, failing }}
             shape={
               <PanelGroup title={<WordsShape words="Priority 5" />} bare>
-                <PanelShape rows={3} />
+                <PanelShape rows={1} />
               </PanelGroup>
             }
           >

@@ -105,9 +105,10 @@ export type FixVariant = 'secondary' | undefined
 
 /** A press that fixes one thing: its button, what it is doing while it does, the command it runs, why it failed. With `words`, what is missing stands on the press's line, the press at its right edge. While it is busy, `url` is the page it said to open, and `onCancel` stops it. */
 export function FixAction({ label, busy, busyWords, command, failed, onPress, words, url, onCancel, size = 'default', variant }: { label: string; busy: boolean; busyWords: string; command?: string; failed?: string; onPress: () => void; words?: ReactNode; url?: string | undefined; onCancel?: (() => void) | undefined; size?: 'default' | 'sm' | undefined; variant?: FixVariant }) {
-  // Busy, the press stays with the focus it was pressed with, and says it is waiting under it.
+  // Busy, the press stays with the focus it was pressed with, and says it is waiting under it. On a phone the
+  // page's press is a finger's 44, as a form's foot is.
   const press = (
-    <Button size={size} variant={variant} loading={busy} onClick={onPress}>
+    <Button size={size} variant={variant} loading={busy} onClick={onPress} className={cn(size === 'default' && 'max-md:h-11')}>
       {label}
     </Button>
   )

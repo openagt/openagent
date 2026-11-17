@@ -91,9 +91,10 @@ export function RowShapes({ rows = 2 }: { rows?: number }) {
  * of a {@link PanelRow}'s height (`lines`: 1 for a row of one line, 44; 2 for a name over its facts, 64). A {@link Slot}'s
  * `shape` for a part whose answer is a card of rows, so the answer moves nothing beside it or under it. As the look draws
  * a row while it is read: its mark a 12 square, each line a bar centred on it, 10 on a name's line and 8 on its facts', so
- * the shapes stand 16 in from the card's every edge, as its words do.
+ * the shapes stand 16 in from the card's every edge, as its words do. `before`: the rows have a column after their mark,
+ * as a ticket's priority ({@link PanelRow}'s `before`), left empty so the names' bars start where the names will.
  */
-export function PanelShape({ rows = 1, lines = 2 }: { rows?: number; lines?: 1 | 2 }) {
+export function PanelShape({ rows = 1, lines = 2, before = false }: { rows?: number; lines?: 1 | 2; before?: boolean }) {
   return (
     <div className={cn(cardSurface, 'overflow-hidden')}>
       {Array.from({ length: rows }, (_, at) => (
@@ -101,6 +102,7 @@ export function PanelShape({ rows = 1, lines = 2 }: { rows?: number; lines?: 1 |
           <span className="flex h-5 w-4 shrink-0 items-center">
             <Skeleton className="size-3 rounded-sm" />
           </span>
+          {before && <span className="h-5 w-6 shrink-0" />}
           <span className="min-w-0 flex-1">
             <span className="flex h-5 items-center">
               <Skeleton className={cn('h-2.5', at % 2 === 0 ? 'w-2/3' : 'w-1/2')} />

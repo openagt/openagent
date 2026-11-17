@@ -411,6 +411,8 @@ function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord;
               disabled={isDefault}
               readOnly={busy}
               placeholder="Social media"
+              // On a phone a finger's 44, as the foot's presses.
+              className="max-md:h-11"
               aria-invalid={nameMissing || nameRefused}
               {...(nameMissing ? { 'aria-describedby': 'agent-name-missing' } : nameRefused ? { 'aria-describedby': 'agent-refused' } : isDefault ? { 'aria-describedby': 'agent-name-kept' } : {})}
               onChange={event => {
@@ -434,7 +436,7 @@ function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord;
             <Label htmlFor="agent-github">On GitHub as</Label>
             <div className="flex flex-wrap items-center gap-2">
               <Select items={githubItems} value={draft.github ?? COMPUTERS} onValueChange={next => setDraft(d => ({ ...d, ...(next ? { github: String(next) } : {}), ...(next ? {} : { github: undefined }) }))} disabled={busy}>
-                <SelectTrigger id="agent-github" aria-label="GitHub account" className="min-w-0 grow basis-auto">
+                <SelectTrigger id="agent-github" aria-label="GitHub account" className="min-w-0 grow basis-auto max-md:h-11">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -446,7 +448,7 @@ function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord;
                 </SelectContent>
               </Select>
               {view.github && (
-                <Button type="button" variant="secondary" disabled={busy} onClick={() => addingAccount.add(view.github!.host)}>
+                <Button type="button" variant="secondary" disabled={busy} onClick={() => addingAccount.add(view.github!.host)} className="max-md:h-11">
                   <Plus className="size-4" aria-hidden />
                   Add account
                 </Button>

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { X } from 'lucide-react'
-import { Button, Empty, LinkActions, Page, PanelShape, Section, Slot, cn, runsAgain, usePolled, useAction, useLinkActions, useModuleHost, type ProjectLinks, type ModuleLink, type ModuleProject, type LinkActionOffer } from '@openagt/dashboard/module'
+import { Button, Empty, LinkActions, Page, PanelShape, Section, Slot, cn, runsAgain, usePolled, useAction, useIsMobile, useLinkActions, useModuleHost, type ProjectLinks, type ModuleLink, type ModuleProject, type LinkActionOffer } from '@openagt/dashboard/module'
 import { heldBack, holderAgent, planLink, ticketLink, withHolder } from '../src/module.js'
 import { holdingRun } from './lib/holding-run.js'
 import type { ProjectTickets, WorkspaceTicket } from './lib/types.js'
@@ -37,6 +37,7 @@ const keyOf = (row: { projectId: string; ticket: { file: string } }) => `${row.p
 /** The backlog of the picked project or of every project, in one view the URL carries. */
 export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
   const host = useModuleHost()
+  const phone = useIsMobile()
   const key = projects.map(p => p.id).join(',')
   // A project whose read fails says why while the others still show.
   const { value: groups, state } = usePolled<ProjectRead[]>(
@@ -150,8 +151,9 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
         </>
       }
     >
-      {/* While the tickets are read: a card of rows, one line each. */}
-      <Slot of={{ state, value: groups }} shape={<PanelShape rows={3} lines={1} />}>
+      {/* While the tickets are read: a card of rows as they land, their priority's column after the tick, one line each,
+          and on a phone two, the stage under the name. */}
+      <Slot of={{ state, value: groups }} shape={<PanelShape rows={3} lines={phone ? 2 : 1} before />}>
         {groups =>
           groups.length === 0 ? (
             <Empty title="No project has the tickets package." />
@@ -225,9 +227,10 @@ function SelectionBar({ leaving, count, onSelectAll, onClear, children }: { leav
         aria-label="Selected tickets"
         className={cn(
           'pointer-events-auto absolute bottom-0 flex items-center gap-1 menu-surface rounded-lg py-1 pr-1 pl-4 text-sm shadow-lg ring-1 ring-foreground/10 backdrop-blur-xl',
-          // In the middle of the column, as wide as what it holds. On a phone a grid: the count, Select all and the
-          // close on its first line, each add on a line of its own under them, its words whole; as wide as its widest line.
-          'left-1/2 w-max max-w-full -translate-x-1/2 max-md:grid max-md:grid-cols-[auto_1fr_auto] max-md:px-4 max-md:py-0',
+          // In the middle of the column, as wide as what it holds. On a phone part of the page's foot, on the column's
+          // edges as the list is, and a grid: the count, Select all and the close on its first line, each add on a
+          // line of its own under them, its words whole.
+          'md:left-1/2 md:w-max md:-translate-x-1/2 max-md:inset-x-0 max-md:grid max-md:grid-cols-[auto_1fr_auto] max-md:px-4 max-md:py-0',
           'transition-[opacity,translate] ease-out starting:translate-y-2 starting:opacity-0',
           leaving ? 'pointer-events-none translate-y-2 opacity-0 duration-120' : 'duration-180',
         )}
