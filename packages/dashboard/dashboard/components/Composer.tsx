@@ -504,11 +504,12 @@ export const Composer = forwardRef<ComposerHandle, {
 
         {/* The box, as Claude Code's: the raised surface, the commands menu (+) at its left, the text,
             and the send at its right (the launcher's "Start agent"), the two kept at the last line. One
-            line tall when empty, growing with what is typed. The editor is borderless: the edge is the box's. */}
+            line tall when empty, growing with what is typed. The editor is borderless: the edge is the box's.
+            On a touch screen, where the text's line is 24 high, the two stand 6 from the box's edges, so they sit on its middle. */}
         <div ref={surface} className={BOX}>
-          <div className="-mr-2 flex shrink-0 items-center py-1 pr-1 pl-0.5">{commandsEl}</div>
+          <div className="-mr-2 flex shrink-0 items-center py-1 pr-1 pl-0.5 pointer-coarse:py-1.5">{commandsEl}</div>
           <div className="min-w-0 flex-1">{editorEl}</div>
-          <div className="flex shrink-0 items-center py-1 pr-0.5 pl-1">{slotEl}</div>
+          <div className="flex shrink-0 items-center py-1 pr-0.5 pl-1 pointer-coarse:py-1.5">{slotEl}</div>
         </div>
 
         {/* How it runs, under the box: the caller's controls at the left, the model at the right. The
