@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ChevronRight, CircleCheck, House, Laptop, Loader2, Server, UserPlus, UserRound } from 'lucide-react'
-import { Button, Checkbox, ConfirmDialog, Dialog, Facts, RowShapes, SettingsItem, SettingsItems, SettingsRow, Slot, Switch, useOpenAgentDown, usePolled, type ModuleAccountsAgent, type ModuleComputersThrough, type ModuleHost, type ModuleMachine, type ModuleMachineAccount } from '@openagt/dashboard/module'
+import { Button, Checkbox, ConfirmDialog, Dialog, Facts, RowShapes, SettingsItem, SettingsItems, SettingsRow, Slot, Switch, cn, useOpenAgentDown, usePolled, type ModuleAccountsAgent, type ModuleComputersThrough, type ModuleHost, type ModuleMachine, type ModuleMachineAccount } from '@openagt/dashboard/module'
 import { idsOf, myName, type Answer, type DeviceRow } from './devices.js'
 import { installDone, installFailed, nameOwner, removeDevice, removePerson, setPeople, setWho, askLink, type ServerRow } from './servers.js'
 import { labelOf, type ServerItem } from './model.js'
@@ -217,7 +217,7 @@ function Overview({ d, item }: { d: Devices; item: ServerItem }) {
         <Removal label="Remove server" said="Takes the server off this list, and this computer out of the server.">
           <ConfirmDialog
             trigger={
-              <Button variant={reconnect ? 'ghost' : 'secondary'} className="text-danger" disabled={busy} aria-label={`Remove ${server.address}`}>
+              <Button variant={reconnect ? 'ghost' : 'secondary'} className={cn('text-danger', reconnect && 'max-md:-ml-3 md:-mr-3')} disabled={busy} aria-label={`Remove ${server.address}`}>
                 Remove
               </Button>
             }

@@ -466,7 +466,8 @@ function useOwnEntries(): Entry[] {
       title: 'Claude web',
       icon: Globe,
       body: (
-        <SettingsSection description="A Claude web agent hands off and ends, so the questions its session asks never reach this dashboard. The Claude web bridge carries them back and types your answers into the session.">
+        // The switch's two sentences say what it does and what it needs; an introduction above them told the same.
+        <SettingsSection>
           <ToggleRow
             label="Claude web bridge"
             description="Carry claude.ai questions into this dashboard and type your answers back. A browser signed in to claude.ai does the work, through the bridge extension."

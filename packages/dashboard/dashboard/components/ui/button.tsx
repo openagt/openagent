@@ -44,7 +44,8 @@ export interface ButtonProps extends ComponentProps<'button'>, VariantProps<type
 const WAITING = { 'aria-disabled': true, 'aria-busy': true, onClick: (event: MouseEvent) => event.preventDefault() } as const
 
 export function Button({ className, variant, size, loading = false, ...props }: ButtonProps) {
-  return <button className={cn(buttonVariants({ variant, size }), loading && 'cursor-progress opacity-50', className)} {...props} {...(loading && WAITING)} />
+  // Its variant is said on it, so a row of presses can line a quiet one's words up with its edge.
+  return <button data-variant={variant ?? 'default'} className={cn(buttonVariants({ variant, size }), loading && 'cursor-progress opacity-50', className)} {...props} {...(loading && WAITING)} />
 }
 
 export { buttonVariants }
