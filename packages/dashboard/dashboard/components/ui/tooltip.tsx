@@ -21,11 +21,18 @@ export const TooltipsPastBox = PastBox.Provider
 /** Each tooltip's trigger, for its content to stand by. */
 const TriggerOf = createContext<RefObject<HTMLElement | null> | null>(null)
 
-function Tooltip(props: ComponentProps<typeof TooltipPrimitive.Root>) {
+/** A tooltip, which never opens over the menu or picker its trigger has open: that says more than it would. */
+function Tooltip({ onOpenChange, ...props }: ComponentProps<typeof TooltipPrimitive.Root>) {
   const trigger = useRef<HTMLElement | null>(null)
   return (
     <TriggerOf.Provider value={trigger}>
-      <TooltipPrimitive.Root {...props} />
+      <TooltipPrimitive.Root
+        {...props}
+        onOpenChange={(open, details) => {
+          if (open && trigger.current?.hasAttribute('data-popup-open')) return details.cancel()
+          onOpenChange?.(open, details)
+        }}
+      />
     </TriggerOf.Provider>
   )
 }
