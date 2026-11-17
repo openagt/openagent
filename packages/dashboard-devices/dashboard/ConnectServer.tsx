@@ -181,7 +181,7 @@ function Where({ kind, onKind, doors, through, onVia, onCancel, onNext }: { kind
         <Choice value="tailscale" title="A PC on your Tailscale network" words="Ubuntu or Debian, with Tailscale on it, signed in as you. Your devices on Tailscale reach it from anywhere, with a lock: no cloud server needed." />
         <Choice value="home" disabled={doors.length === 0} title="A PC at home or in an office" words="Ubuntu or Debian, on all the time. Nothing on the internet reaches it, so it is reached through one of your cloud servers." />
         {/* Why it cannot be picked, outside the dimmed choice: read at full contrast. */}
-        {doors.length === 0 && <p className="-mt-1 pl-10 text-xs text-muted-foreground">Set up a cloud server first.</p>}
+        {doors.length === 0 && <p className="-mt-1 pl-10 text-sm text-muted-foreground">Set up a cloud server first.</p>}
       </RadioGroup>
       {kind === 'home' && through !== undefined && (
         <div className="flex items-center gap-2 pl-7 text-xs text-muted-foreground">

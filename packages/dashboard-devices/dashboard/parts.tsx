@@ -349,7 +349,7 @@ export function Choice({ value, disabled, title, words, badge, children }: { val
           {title}
           {badge !== undefined && <Badge>{badge}</Badge>}
         </span>
-        <span className="block text-xs text-muted-foreground">{words}</span>
+        <span className="block text-sm text-muted-foreground">{words}</span>
         {children}
       </span>
     </RadioGroupOption>
