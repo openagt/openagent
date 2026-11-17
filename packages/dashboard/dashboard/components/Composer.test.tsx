@@ -427,14 +427,8 @@ describe('Composer (#721)', () => {
   })
 })
 
-// The text's line of the box: the nearest element around the editor that keeps its ends at the last line.
+// The bordered box: the nearest element around the editor that draws the border.
 const box = (): HTMLElement => {
-  let el: HTMLElement = screen.getByLabelText('prompt')
-  while (!el.className.split(' ').includes('items-end')) el = el.parentElement!
-  return el
-}
-// The box's surface: the nearest element around the editor that draws the edge.
-const surface = (): HTMLElement => {
   let el: HTMLElement = screen.getByLabelText('prompt')
   while (!el.className.split(' ').includes('border')) el = el.parentElement!
   return el
@@ -442,16 +436,13 @@ const surface = (): HTMLElement => {
 const commands = () => screen.getByRole('button', { name: 'Commands' })
 
 describe('the box', () => {
-  test('its text\'s line holds the commands menu, the text and the submit; the model and "Run on" are on lines of their own, in the same surface', () => {
+  test('it holds the commands menu, the text and the submit: the model and "Run on" are outside it, on rows of their own', () => {
     renderComposer()
     fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'x' } })
     expect(box().contains(screen.getByRole('button', { name: 'Send' }))).toBe(true)
     expect(box().contains(commands())).toBe(true)
     expect(box().contains(agentTrigger())).toBe(false)
     expect(box().contains(screen.getByRole('button', { name: /^Run on: / }))).toBe(false)
-    // One object with one edge: the surface holds the row above, the text and the row under.
-    expect(surface().contains(agentTrigger())).toBe(true)
-    expect(surface().contains(screen.getByRole('button', { name: /^Run on: / }))).toBe(true)
   })
 
   test('the commands menu is at the left of the text, the submit at its right, both kept at its last line', () => {

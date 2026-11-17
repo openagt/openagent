@@ -1,3 +1,4 @@
+import { cn } from '../lib/utils.js'
 import type { Intervention, ProjectError, ProjectSummary } from '../../src/index.js'
 import { StartAgentForm } from './StartAgentForm.js'
 import { ProjectActions } from './ProjectActions.js'
@@ -78,14 +79,14 @@ export function ProjectHome({
       {/* Above everything, because an agent started on a project whose agent-data branch cannot
           reach origin (#1599) works from stale tickets and a queue nobody else will see. */}
       <ProjectErrorBanner errors={errors} />
-      {/* The page is for the box: from 768px up it stands where the eye lands, its top at about 38% of
-          the page, and what waits for the person is under it, scrolling under it and never pushing
-          it. On a phone the box stays at the bottom, in the thumb's reach, with what waits above it,
-          as an agent's page has its chat. The column keeps a scroll bar's room at its right, as the
-          chat's does (ChatPane), so the box stands on a session's box's edges and is carried without a sideways step. */}
+      {/* What waits for the person comes first and the box under it, at the bottom, as an agent's page
+          has its chat (his pick). With nothing waiting, from 768px up the box stands where the eye
+          lands, its top at about 38% of the page; on a phone it stays at the bottom, in the thumb's
+          reach. The column keeps a scroll bar's room at its right, as the chat's does (ChatPane), so
+          the box stands on a session's box's edges and is carried without a sideways step. */}
       <div className="scrollbar-thin scrollbar-gutter-stable flex min-h-0 flex-1 flex-col overflow-y-auto">
-        <div className="shrink-0 max-md:hidden md:basis-[38%]" aria-hidden />
-        <div className="shrink-0 max-md:order-last">
+        {waiting.length === 0 && <div className="shrink-0 max-md:hidden md:basis-[38%]" aria-hidden />}
+        <div className={cn('shrink-0', waiting.length > 0 ? 'order-last' : 'max-md:order-last')}>
           <StartAgentForm
             projectId={projectId}
             projectName={projectName}
@@ -101,7 +102,7 @@ export function ProjectHome({
             onProjectAdded={onProjectAdded}
           />
         </div>
-        <ScrollArea className="min-h-0 flex-1" viewportClassName="chat-scroll h-full">
+        <ScrollArea className="min-h-0 flex-1" viewportClassName="h-full">
           <div className="mx-auto w-full max-w-3xl">
             {/* No section at all when nothing waits: an empty "Waiting on you" is noise on every launch. */}
             {waiting.length > 0 && (

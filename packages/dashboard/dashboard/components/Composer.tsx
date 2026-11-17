@@ -55,20 +55,22 @@ const DRIVER_UI: Record<DriverName, { icon: DriverOption['icon'] }> = {
 }
 
 /**
- * The message box's surface: the raised one, with the hairline, holding the row of where the agent
- * starts as its first line and the row of how it runs as its last. It is focused almost all the time
- * it is on screen, so focus is its own edge in the primary colour and nothing more: the caret says the
- * rest. The edge stays while the keyboard is on one of its items or in a menu one of them opened.
+ * The message box, as Claude Code's (DECISIONS.md, his pick): the raised surface with the hairline,
+ * holding only the +, the text and the send. Where the agent starts is a row above it, how it runs a
+ * row under it. It is focused almost all the time it is on screen, so focus is its own edge in the
+ * primary colour and nothing more: the caret says the rest. The edge stays while the keyboard is on
+ * the + or in the menu it opened.
  */
-const SURFACE = '[view-transition-name:composer] flex flex-col rounded-box border border-hairline bg-card p-1 shadow-lg transition-colors focus-within:border-primary has-[[aria-expanded=true]]:border-primary'
+const BOX = '[view-transition-name:composer] flex items-end rounded-box border border-hairline bg-card shadow-lg transition-colors focus-within:border-primary has-[[aria-expanded=true]]:border-primary'
 
 /**
- * The box while the page it stands on is read: a {@link Slot}'s shape at the box's size and corner,
- * its three rows' heights and nothing in them, so the box takes its place without moving anything.
+ * The box while the page it stands on is read: a {@link Slot}'s shape at the three bands' heights,
+ * the box's corner on the middle one, and nothing in them, so the box takes its place without
+ * moving anything.
  */
 export function ComposerShape() {
   return (
-    <Slot of={{ value: null, state: 'unknown' }} shape={<Skeleton className="rounded-box border border-transparent p-1"><div className="mb-1 h-8" /><div className="h-9" /><div className="mt-1 h-8" /></Skeleton>}>
+    <Slot of={{ value: null, state: 'unknown' }} shape={<div><div className="mb-1 h-8" /><Skeleton className="h-11 rounded-box" /><div className="mt-1 h-8" /></div>}>
       {() => null}
     </Slot>
   )
@@ -451,49 +453,45 @@ export const Composer = forwardRef<ComposerHandle, {
 
   return (
     <>
-      <div ref={surface} className={SURFACE}>
-        {/* Where the agent starts, the box's first line (his pick, above the text): the machine, the
-            project and the branch, drawn as the last line draws its items. A session has its own words
-            in the same place. */}
-        {inAgent ? (
-          sessionRow
-        ) : (
-          <RowAboveBox>
-            {runOnEl}
-            {startsAt}
-          </RowAboveBox>
-        )}
+      {/* Where the agent starts, above the box (his pick): the machine, the project and the branch,
+          drawn as the row under the box draws its items. A session has its own words in the same place. */}
+      {inAgent ? (
+        sessionRow
+      ) : (
+        <RowAboveBox>
+          {runOnEl}
+          {startsAt}
+        </RowAboveBox>
+      )}
 
-        {loginsNote}
+      {loginsNote}
 
-        {/* The text, as Claude Code's: the commands menu (+) at its left, the text, and the submit at
-            its right, the two kept at the text's last line. One line tall when empty, growing with
-            what is typed. The editor is borderless: the edge is the surface's. The +'s icon stands
-            on the rows' first icons' line, and the send's on their last ones'. */}
-        <div className="flex items-end">
-          <div className="-mr-2 flex shrink-0 items-center py-1 pl-0.5">{commandsEl}</div>
-          <div className="min-w-0 flex-1">{editorEl}</div>
-          <div className="flex shrink-0 items-center py-1 pr-0.5">{slotEl}</div>
-        </div>
-
-        {/* How it runs, the box's last line: the caller's controls at the left, the model at the right. The
-            left side is the one that gives way: a longer label there never moves the model or the
-            page below. */}
-        <TooltipsPastBox value={surface}>
-          <div className={cn('mt-1', rowClass)}>
-            <div className={rowLeftClass}>{controls}</div>
-            <div className="flex shrink-0 items-center gap-0.5">
-              {controlsEnd}
-              {driverModelEl || (
-                <span className="flex items-center">
-                  {sessionModel !== undefined && <span className={rowItemClass}>{sessionModel}</span>}
-                  {sessionContext}
-                </span>
-              )}
-            </div>
-          </div>
-        </TooltipsPastBox>
+      {/* The box, as Claude Code's: the raised surface, the commands menu (+) at its left, the text,
+          and the submit at its right, the two kept at the last line. One line tall when empty,
+          growing with what is typed. The editor is borderless: the edge is the box's. */}
+      <div ref={surface} className={BOX}>
+        <div className="-mr-2 flex shrink-0 items-center py-1 pr-1 pl-0.5">{commandsEl}</div>
+        <div className="min-w-0 flex-1">{editorEl}</div>
+        <div className="flex shrink-0 items-center py-1 pr-0.5 pl-1">{slotEl}</div>
       </div>
+
+      {/* How it runs, under the box: the caller's controls at the left, the model at the right. The
+          left side is the one that gives way: a longer label there never moves the model or the
+          page below. */}
+      <TooltipsPastBox value={surface}>
+        <div className={cn('mt-1', rowClass)}>
+          <div className={rowLeftClass}>{controls}</div>
+          <div className="flex shrink-0 items-center gap-0.5">
+            {controlsEnd}
+            {driverModelEl || (
+              <span className="flex items-center">
+                {sessionModel !== undefined && <span className={rowItemClass}>{sessionModel}</span>}
+                {sessionContext}
+              </span>
+            )}
+          </div>
+        </div>
+      </TooltipsPastBox>
 
       {offlineNote}
       {fallbackNote}
