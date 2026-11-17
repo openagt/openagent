@@ -238,7 +238,9 @@ export function PanesProvider({
  * see-through (ChatPane).
  */
 export function TopBar({ children }: { children: ReactNode }) {
-  return <div className="border-b border-border">{children}</div>
+  // The line is drawn inside the bar's own height, as a pane's header draws its own: the two are
+  // as high, their lines level.
+  return <div className="shadow-[inset_0_-1px_0_var(--color-border)]">{children}</div>
 }
 
 /** The panes' icons, for the end of a page's top bar: one per pane, lit while its pane is open. */

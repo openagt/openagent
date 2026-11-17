@@ -52,9 +52,9 @@ export function ChatPane({ top, bottom, children }: { top: ReactNode; bottom: Re
   return (
     <div ref={pane} data-testid="chat-pane" className="@container flex min-h-0 flex-1 flex-col">
       <div className="relative isolate flex min-h-0 flex-1 flex-col overflow-hidden pointer-coarse:pb-(--chat-bar)">
-        {/* Over the chat's start, as Claude Code's: what scrolls under it shows through, blurred. It
-            stops short of the scroll bar, which runs the page's whole height. */}
-        <div ref={topBar} data-testid="chat-top" className="absolute top-0 right-(--chat-edge) left-0 z-20 bg-background/80 backdrop-blur-md pointer-coarse:right-(--chat-scroll-bar)">
+        {/* Over the chat's start, as Claude Code's: what scrolls under it shows through, blurred, the
+            scroll bar too, which runs the page's whole height. Its line reaches the panes' edge. */}
+        <div ref={topBar} data-testid="chat-top" className="absolute inset-x-0 top-0 z-20 bg-background/80 backdrop-blur-md">
           {top}
         </div>
         {/* Styled as the chat's scroller is (MessageScrollerViewport): a gutter kept, a thin bar. */}

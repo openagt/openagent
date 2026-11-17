@@ -56,14 +56,14 @@ describe('ChatPane', () => {
     expect(screen.getByTestId('chat-bottom').parentElement!.className.split(' ')).toContain('pointer-coarse:pb-(--chat-bar)')
   })
 
-  test('the top bar lies over the chat\'s start, as Claude Code\'s: see-through and blurred, short of the scroll bar, which runs the page\'s whole height', () => {
+  test('the top bar lies over the chat\'s start, as Claude Code\'s: see-through and blurred, over the scroll bar too, which runs the page\'s whole height', () => {
     render(<ChatPane top={<b>top bar</b>} bottom={<b>message box</b>}><p>chat</p></ChatPane>)
     const top = screen.getByTestId('chat-top')
     // The chat, the top bar and the message box share one room, the chat under both bars.
     const chatRoom = screen.getByText('chat').parentElement!
     expect(chatRoom.parentElement).toBe(pane())
     expect(top.parentElement).toBe(chatRoom)
-    expect(top.className.split(' ')).toEqual(expect.arrayContaining(['absolute', 'top-0', 'left-0', 'right-(--chat-edge)', 'z-20', 'bg-background/80', 'backdrop-blur-md']))
+    expect(top.className.split(' ')).toEqual(expect.arrayContaining(['absolute', 'inset-x-0', 'top-0', 'z-20', 'bg-background/80', 'backdrop-blur-md']))
     // The room is a layer of its own: a popup the dashboard opens over the page stays over the message box's bar.
     expect(chatRoom.className.split(' ')).toEqual(expect.arrayContaining(['relative', 'isolate', 'min-h-0', 'flex-1', 'overflow-hidden']))
     expect(screen.getByTestId('chat-bottom').parentElement).toBe(chatRoom)
