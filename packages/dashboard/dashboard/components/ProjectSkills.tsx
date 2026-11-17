@@ -1,10 +1,12 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { ChevronDown } from 'lucide-react'
 import { onProjectSkills, sendChangeSkills, sendProjectSkills, type ProjectSkills, type ProjectSkill, type SendSkillsResult } from '../rpc/skills.js'
 import { useAction } from '../lib/use-action.js'
 import { useLoaded, usePolled } from '../lib/use-async.js'
 import { onSkillsSaved, skillsSaved } from '../lib/skills-saved.js'
 import { useSettingsHold } from '../lib/settings-hold.js'
 import { takeLostFocus } from '../lib/lost-focus.js'
+import { useCut } from '../lib/use-cut.js'
 import { Button, buttonVariants } from './ui/button.js'
 import { Checkbox } from './ui/checkbox.js'
 import { Skeleton } from './ui/skeleton.js'
@@ -363,11 +365,13 @@ function SkillCards({ projectId, skills, onDone }: { projectId: string; skills: 
 export const SKILL_TICKS_CLASS = 'grid gap-x-6 gap-y-3 md:grid-cols-2'
 
 /**
- * One skill to tick: the box, its name, and its sentence under it; a note, a warning, between them. No box around it.
+ * One skill to tick: the box, its name, and its sentence under it, two lines of it with the rest on a press of the chevron; a note, a warning, between them. No box around it.
  * `brief`: one line of the sentence, the whole of it on a press of that line.
  */
 export function SkillTick({ name, description, note, checked, onChange, disabled, label = name, brief = false }: { name: string; description: string; note?: ReactNode; checked: boolean; onChange: (on: boolean) => void; disabled?: boolean | undefined; label?: string | undefined; brief?: boolean }) {
   const [whole, setWhole] = useState(false)
+  const sentence = useRef<HTMLSpanElement>(null)
+  const cut = useCut(sentence, description)
   if (brief)
     return (
       <div className="min-w-0">
@@ -391,14 +395,24 @@ export function SkillTick({ name, description, note, checked, onChange, disabled
         </div>
       </div>
     )
-  // A press anywhere on it ticks it; lit under the pointer by a fill its own padding pulls out, so its box stands on the inset.
+  // A press anywhere on it ticks it, but on its chevron; lit under the pointer by a fill its own padding pulls out, so its box stands on the inset.
   return (
     <label className="-mx-3 flex min-w-0 cursor-pointer items-start gap-3 rounded-md px-3 py-2 transition-colors pointer-fine:hover:bg-foreground/4">
       <Checkbox checked={checked} onCheckedChange={next => onChange(next === true)} disabled={disabled} className="mt-0.5" aria-label={label} />
-      <span className="min-w-0">
-        <span className="block text-sm font-medium">{name}</span>
+      <span className="min-w-0 flex-1">
+        <span className="flex items-start justify-between gap-2">
+          <span className="min-w-0 text-sm font-medium">{name}</span>
+          {(cut || whole) && (
+            // 28 high over the name's 20 line, pulled into it so the row keeps its height.
+            <Button type="button" variant="ghost" size="icon-sm" aria-expanded={whole} aria-label={`All of what ${name} does`} onClick={() => setWhole(on => !on)} className="-my-1 -mr-1.5">
+              <ChevronDown className={cn('size-4 transition-transform', whole && 'rotate-180')} aria-hidden />
+            </Button>
+          )}
+        </span>
         {note !== undefined && <span className="block text-xs text-warning">{note}</span>}
-        <span className="block text-xs text-faint-foreground">{description}</span>
+        <span ref={sentence} className={cn('text-xs text-faint-foreground', whole ? 'block' : 'line-clamp-2')}>
+          {description}
+        </span>
       </span>
     </label>
   )

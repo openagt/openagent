@@ -10,6 +10,7 @@ import { anyModelName, useModels } from '../lib/models.js'
 import { runTone, runWord } from '../lib/run-words.js'
 import { usePolled } from '../lib/use-async.js'
 import { useStop } from '../lib/use-stop.js'
+import { useCut } from '../lib/use-cut.js'
 import { FocusHome } from '../lib/focus-home.js'
 import { useHold } from '../lib/hold.js'
 import { cn } from '../lib/utils.js'
@@ -115,22 +116,6 @@ export function SubagentsPanel({
 /** The row of `key` in `list`, wherever it stands now. */
 function rowOf(list: HTMLElement | null, key: string | undefined): HTMLElement | null {
   return [...(list?.querySelectorAll<HTMLElement>('[data-key]') ?? [])].find(row => row.dataset['key'] === key) ?? null
-}
-
-/** Whether `text` is cut where `ref` draws it on one line, read again as its box changes its size. */
-function useCut(ref: RefObject<HTMLElement | null>, text: string): boolean {
-  const [cut, setCut] = useState(false)
-  useLayoutEffect(() => {
-    const box = ref.current
-    if (!box) return
-    const read = () => setCut(box.scrollWidth > box.clientWidth)
-    read()
-    if (typeof ResizeObserver === 'undefined') return
-    const observer = new ResizeObserver(read)
-    observer.observe(box)
-    return () => observer.disconnect()
-  }, [ref, text])
-  return cut
 }
 
 /** Whether the person opened the ended ones' fold, by the run's page: theirs once pressed, for the page's life. */

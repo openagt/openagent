@@ -76,28 +76,31 @@ export function SchedulerSettings({ projects }: ModuleSettingsProps) {
           offset !== undefined && (
             <SettingsRow
               label="Spend offset"
-              description={`How far the scheduler may start work past the quota boundary, in percentage points (max ${MAX_SPEND_OFFSET}). Negative holds it back; positive lets it borrow from the days ahead. The handle on the usage bar moves the same number.${differing.length > 0 ? ` Shown: the loosest. ${differing.map(d => `${d.name} is at ${d.offset}`).join(', ')}; saving sets each of them to the same number.` : ''}`}
+              description={`Below 0 the scheduler stops short of the quota boundary, above 0 it borrows from the days ahead, up to ${MAX_SPEND_OFFSET} either way. The handle on the usage bar moves the same number.${differing.length > 0 ? ` Shown: the loosest. ${differing.map(d => `${d.name} is at ${d.offset}`).join(', ')}; saving sets each of them to the same number.` : ''}`}
               control={
-                <Input
-                  type="number"
-                  name="spend-offset"
-                  // The text as typed while the field has the focus, so a number can be typed through a state that is none yet ("-").
-                  value={text ?? String(Math.round(offset * 10) / 10)}
-                  min={-MAX_SPEND_OFFSET}
-                  max={MAX_SPEND_OFFSET}
-                  disabled={down}
-                  step={0.1}
-                  onChange={e => {
-                    const raw = e.target.value
-                    setText(raw)
-                    // Held to the handle's reach here as well as on the input: `min`/`max` only constrain the spinner.
-                    const points = typedOffset(raw)
-                    if (points !== undefined) setOffset(points)
-                  }}
-                  onBlur={() => setText(undefined)}
-                  aria-label="Spend offset"
-                  className="w-60 max-md:w-full"
-                />
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    name="spend-offset"
+                    // The text as typed while the field has the focus, so a number can be typed through a state that is none yet ("-").
+                    value={text ?? String(Math.round(offset * 10) / 10)}
+                    min={-MAX_SPEND_OFFSET}
+                    max={MAX_SPEND_OFFSET}
+                    disabled={down}
+                    step={0.1}
+                    onChange={e => {
+                      const raw = e.target.value
+                      setText(raw)
+                      // Held to the handle's reach here as well as on the input: `min`/`max` only constrain the spinner.
+                      const points = typedOffset(raw)
+                      if (points !== undefined) setOffset(points)
+                    }}
+                    onBlur={() => setText(undefined)}
+                    aria-label="Spend offset"
+                    className="w-40 max-md:flex-1"
+                  />
+                  <span className="text-sm text-muted-foreground">% points</span>
+                </div>
               }
             />
           )

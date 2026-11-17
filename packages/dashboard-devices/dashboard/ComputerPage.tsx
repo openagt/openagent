@@ -102,16 +102,15 @@ export function ComputerPage({ d, item, onBack, onSetUp }: { d: Devices; item: C
       {machine && hasDoor(machine) && <ComputersThrough host={host} machine={machine} busy={busy} everyMs={30_000} />}
       {!through && !item.line && (
         <Part title="Who can use it">
-          <SettingsRow
-            label="Only you"
-            description={`Other people cannot start runs on ${item.name}: on a personal computer they would run as you, with your logins. To share it, set it up as a server: each person then gets a user of their own on it. Linux for now.`}
-            control={
-                <Button variant="secondary" onClick={onSetUp}>
-                  <Server className="size-4" aria-hidden />
-                  Set it up as a server
-                </Button>
-            }
-          />
+          {/* What decides who may use it is read at the size of a part's sentence, as a joined server's is. */}
+          <div>
+            <p className="max-w-[72ch] text-sm">Only you.</p>
+            <p className="mt-0.5 max-w-[72ch] text-sm text-muted-foreground">{`Other people cannot start runs on ${item.name}: on a personal computer they would run as you, with your logins. To share it, set it up as a server: each person then gets a user of their own on it. Linux for now.`}</p>
+          </div>
+          <Button variant="secondary" className="max-md:h-11" onClick={onSetUp}>
+            <Server className="size-4" aria-hidden />
+            Set it up as a server
+          </Button>
         </Part>
       )}
       <Removal label="Remove computer" said="Both computers forget each other. Nothing is deleted.">

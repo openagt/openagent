@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Monitor, Server, Ticket } from 'lucide-react'
+import { ChevronRight, Monitor, Server, Ticket } from 'lucide-react'
 import { Button, RadioGroup, SettingsItem, SettingsItems, SettingsRow, buttonVariants, useOpenAgentDown, type ModuleMachine } from '@openagt/dashboard/module'
 import { addDevice, findComputers, readPersonThere, setSwitch, type Answer, type FoundComputer, type Given } from './devices.js'
 import { askLink, installDone } from './servers.js'
@@ -312,16 +312,27 @@ function AddComputer({ d, onGive, onSetUpServer, onClose }: { d: Devices; /** Gi
       {found !== undefined && found.length > 0 && (
         <SettingsItems aria-label="On this Wi-Fi">
           {found.map(computer => (
+            // The row is the press, as a device's row that opens its page is: "Connect" at its right at rest, at every width.
             <SettingsItem
               key={computer.url}
               icon={Monitor}
-              title={computer.name}
-              {...(computer.version !== undefined ? { detail: `OpenAgent ${computer.version}` } : {})}
-              actions={
-                <Button variant="secondary" disabled={down} aria-label={`Connect ${computer.name}`} onClick={() => setConnecting(computer)}>
-                  Connect
-                </Button>
+              title={
+                <>
+                  <span className="sr-only">Connect</span> {computer.name}
+                </>
               }
+              {...(computer.version !== undefined ? { detail: `OpenAgent ${computer.version}` } : {})}
+              {...(down
+                ? {}
+                : {
+                    end: (
+                      <>
+                        Connect
+                        <ChevronRight aria-hidden />
+                      </>
+                    ),
+                    onClick: () => setConnecting(computer),
+                  })}
             />
           ))}
         </SettingsItems>

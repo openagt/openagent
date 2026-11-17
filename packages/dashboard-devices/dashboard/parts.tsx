@@ -272,10 +272,10 @@ export function RenameForm({ name, rename, onClose }: { name: string; rename: Re
 }
 
 /**
- * A fact of a server's head a phone leaves to a screen reader (its version): its kind's badge and its state are boxes a
- * line breaks after, so a fact more would open the facts' second line with its dot.
+ * A fact of a server's head a phone puts on a line of its own, with no dot (its version): its kind's badge and its state are
+ * boxes a line breaks after, so a fact run on would open the facts' second line with its dot.
  */
-export const PHONE_LEAVES = (fact: ReactNode): Fact => ({ fact, className: 'max-md:sr-only' })
+export const PHONE_OWN_LINE = (fact: ReactNode): Fact => ({ fact, className: 'max-md:block max-md:[&>[aria-hidden]]:hidden' })
 
 /** A device's page is named above it, in the Settings dialog's header: its own top says it once more only outside the dialog. */
 export const NamedAbove = createContext(false)
@@ -349,7 +349,7 @@ export function Choice({ value, disabled, title, words, badge, children }: { val
           {title}
           {badge !== undefined && <Badge>{badge}</Badge>}
         </span>
-        <span className="block text-xs text-muted-foreground">{words}</span>
+        <span className="block text-sm text-muted-foreground">{words}</span>
         {children}
       </span>
     </RadioGroupOption>
@@ -361,7 +361,7 @@ export function CodeStrip({ label, text, big = false, copy }: { label: string; t
   return (
     <div className="space-y-1">
       <p className="text-xs text-muted-foreground">{label}</p>
-      <div className="flex items-center gap-2 rounded-md bg-muted py-1 pr-1 pl-3">
+      <div className="flex items-center gap-2 rounded-md bg-muted py-1 pr-1 pl-3 max-md:py-0 max-md:pr-0">
         <span className={cn('min-w-0 flex-1 truncate font-mono', big ? 'text-xl font-semibold tracking-wider' : 'text-sm')}>{text}</span>
         {copy}
       </div>

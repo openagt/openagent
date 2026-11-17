@@ -145,7 +145,7 @@ export function Join({ d, onClose, onJoined }: { d: Devices; onClose: () => void
           onChange={event => setWhere(event.target.value)}
           aria-invalid={whereWrong}
           aria-describedby={whereWrong ? 'pairing-address-error' : undefined}
-          className="font-mono"
+          className="font-mono max-md:h-11"
         />
         <span className="block text-xs text-faint-foreground">An address, or the whole link the other device gave.</span>
         {whereWrong && (
@@ -170,7 +170,7 @@ export function Join({ d, onClose, onJoined }: { d: Devices; onClose: () => void
             onChange={event => setCode(event.target.value)}
             aria-invalid={codeWrong}
             aria-describedby={codeWrong ? 'pairing-code-error' : undefined}
-            className="font-mono uppercase placeholder:normal-case"
+            className="font-mono uppercase placeholder:normal-case max-md:h-11"
           />
           {codeWrong && (
             <span id="pairing-code-error" className="block text-xs text-danger">

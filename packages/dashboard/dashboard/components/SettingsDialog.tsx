@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useRef, useState, type ComponentType, type ReactNode } from 'react'
+import { useCallback, useContext, useEffect, useId, useRef, useState, type ComponentType, type ReactNode } from 'react'
 import { Dialog as BaseDialog } from '@base-ui/react/dialog'
 import { ArrowLeft, Bell, Bot, ChevronRight, ChevronsUpDown, Database, FolderGit2, Globe, Keyboard, Layers, Palette, Puzzle, UserRound, X, FolderSearch } from 'lucide-react'
 import { DRIVERS, DRIVER_LABELS, isDriverName } from '../../src/client.js'
@@ -8,7 +8,9 @@ import type { ProjectSummary } from '../../src/index.js'
 import { useMountedModules, type MountedSettings } from '../lib/use-modules.js'
 import { SettingsCrumbContext, type SettingsCrumb } from '../lib/settings-crumb.js'
 import { SettingsHoldContext } from '../lib/settings-hold.js'
-import { holdEntry } from '../lib/use-route.js'
+import { PERMISSIONS_PAGE, holdEntry } from '../lib/use-route.js'
+import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
+import { inPlace } from '../lib/in-place.js'
 import { useIsMobile } from '../lib/use-mobile.js'
 import { usePreferences, updatePreferences } from '../lib/preferences.js'
 import { setBrowserNotifications, useNotificationPermission } from '../lib/notification-permission.js'
@@ -334,6 +336,7 @@ function ProjectSelect({ projects, value, onChange }: { projects: ProjectSummary
 /** The dashboard's own entries, the first of the list: who you are, how it looks, what it tells you, which agent runs, on which accounts, Claude web, the keys. */
 function useOwnEntries(): Entry[] {
   const preferences = usePreferences()
+  const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
   // The start menu's own list (#1874), so Settings offers exactly the picks the menu does.
   const models = useModels()
   const drivers = driverOptions(models)
@@ -410,7 +413,11 @@ function useOwnEntries(): Entry[] {
                 {missingDriver !== undefined && (
                   <>
                     {' '}
-                    <span className="text-warning">{missingDriver} is not installed on this computer.</span>
+                    <span className="text-warning">{missingDriver} is not installed on this computer.</span>{' '}
+                    <a href={services.pageHref(PERMISSIONS_PAGE)} onClick={inPlace(() => services.openPage(PERMISSIONS_PAGE))} className="text-primary hover:underline">
+                      Install it on Permissions
+                    </a>
+                    .
                   </>
                 )}
               </>
@@ -429,7 +436,7 @@ function useOwnEntries(): Entry[] {
           />
           <ToggleRow
             label="Name each run"
-            description="A small model is asked for the two to five words a run's row shows, in place of the first line of your prompt. One short turn with no tools, about a thirtieth of a cent a run. Off, a run is listed by what you asked for."
+            description="A small model names each run in a few words, for about a thirtieth of a cent. Off, a run is listed by what you asked for."
             checked={preferences.nameRuns ?? true}
             onChange={next => updatePreferences({ nameRuns: next })}
           />
