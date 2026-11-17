@@ -16,12 +16,8 @@ export const text = (step: 'xs' | 'sm' | 'base' | 'lg' | 'xl' | '2xl' | '3xl'): 
 /** Prose: the body size, in lines of 68 characters at most. */
 export const proseStyle: CSSProperties = { margin: 0, ...text('base'), maxWidth: 'var(--measure)', textWrap: 'pretty' }
 
-/** The three claims under the hero's title; the banner says them too, each in its colour. */
-export const BADGES = [
-  ['100% Open Source', 'var(--success)'],
-  ['100% Free', 'var(--warning)'],
-  ['100% Local', 'var(--primary)'],
-] as const
+/** The three claims over the hero's title; the banner says them too. */
+export const BADGES = ['100% Open Source', '100% Free', '100% Local'] as const
 
 // A content section: max-width column with the shared vertical rhythm. The
 // rhythm is a MARGIN, not padding: anchors target the border box, so nav

@@ -47,7 +47,7 @@ export function Hero() {
           color: 'var(--muted-foreground)',
         }}
       >
-        {BADGES.map(([label]) => (
+        {BADGES.map((label) => (
           <li key={label} style={{ display: 'flex', alignItems: 'center', whiteSpace: 'nowrap' }}>
             <CheckIcon />
             {label}
