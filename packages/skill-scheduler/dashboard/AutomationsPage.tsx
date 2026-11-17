@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Facts, Page, Panel, PanelGroup, PanelShape, RunMark, Slot, Switch, Tooltip, TooltipContent, TooltipTrigger, Button, cn, formatAge, formatDateTime, inPlace, useCodingAgents, useIsMobile, useModuleHost, useOpenAgentDown, usePolled, type ModuleCommandResult, type ModuleHost, type ModuleProject } from '@openagt/dashboard/module'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Facts, Page, Panel, PanelGroup, PanelShape, RunMark, Slot, Switch, WordsShape, Tooltip, TooltipContent, TooltipTrigger, Button, cn, formatAge, formatDateTime, inPlace, useCodingAgents, useIsMobile, useModuleHost, useOpenAgentDown, usePolled, type ModuleCommandResult, type ModuleHost, type ModuleProject } from '@openagt/dashboard/module'
 import type { ModulePageProps } from '@openagt/dashboard/module'
 import { MoreHorizontal, Play, Plus } from 'lucide-react'
 import { AutomationForm } from './AutomationForm.js'
@@ -154,23 +154,25 @@ export function AutomationsPage({ projects }: ModulePageProps) {
     setPanel({ id, ...(opened ? { opened } : { refused: answer.ok ? 'its file holds something this panel cannot show' : answer.error }) })
   }
 
-  /** A project's "New automation": the page's one primary when it shows one project, a quieter press beside each project's name when it shows several. */
-  const newButton = (row: SchedulerRow, primary: boolean): ReactNode =>
-    row.error === undefined &&
-    creating !== row.project.id && (
+  /**
+   * A project's "New automation": the page's one primary when it shows one project, a quieter press beside each project's
+   * name when it shows several. Drawn from the first frame on a one-project page, and pressed once its scheduler is read.
+   */
+  const newButton = (project: ModuleProject, primary: boolean, read = true): ReactNode =>
+    creating !== project.id && (
       <Button
         ref={button => {
-          if (button) newButtons.current.set(row.project.id, button)
-          else newButtons.current.delete(row.project.id)
+          if (button) newButtons.current.set(project.id, button)
+          else newButtons.current.delete(project.id)
         }}
         variant={primary ? 'default' : 'secondary'}
-        disabled={held}
+        disabled={held || !read}
         onClick={() => {
           asked.current++
           setPanel(undefined)
-          setCreating(row.project.id)
+          setCreating(project.id)
         }}
-        aria-label={`New automation in ${row.project.name}`}
+        aria-label={`New automation in ${project.name}`}
       >
         <Plus className="size-4" aria-hidden />
         New automation
@@ -182,11 +184,19 @@ export function AutomationsPage({ projects }: ModulePageProps) {
     <Page
       title="Automations"
       description="What starts by itself while nobody is at the keyboard."
-      actions={single && newButton(single, true)}
+      actions={single ? single.error === undefined && newButton(single.project, true) : projects.length === 1 && newButton(projects[0]!, true, false)}
       // One project's status under the page's line, its height held from the first paint.
       bar={projects.length === 1 ? single ? <StatusLine row={single} agents={agents} /> : <p aria-hidden className="h-4" /> : undefined}
     >
-      <Slot of={{ value: rows, state }} shape={<PanelShape rows={2} />} className="space-y-8">
+      <Slot
+        of={{ value: rows, state }}
+        shape={
+          <PanelGroup bare title={<WordsShape words="Your automations" />}>
+            <PanelShape rows={2} />
+          </PanelGroup>
+        }
+        className="space-y-8"
+      >
         {rows =>
           rows.map(row => {
             const groups: [title: string, commands: SchedulerCommand[]][] = [
@@ -201,7 +211,7 @@ export function AutomationsPage({ projects }: ModulePageProps) {
                   <h2 id={`automations-${row.project.id}`} className={cn('min-w-0 flex-1 truncate text-base font-semibold', single !== undefined && 'sr-only')}>
                     {row.project.name}
                   </h2>
-                  {single === undefined && newButton(row, false)}
+                  {single === undefined && row.error === undefined && newButton(row.project, false)}
                 </div>
                 {single === undefined && <StatusLine row={row} agents={agents} className="mb-6" />}
                 {creating === row.project.id && (

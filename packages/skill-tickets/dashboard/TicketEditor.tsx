@@ -167,7 +167,8 @@ export function TicketEditor({
           Not saved: {error}
         </p>
       )}
-      <div className="flex justify-end gap-2 pt-2 max-md:*:h-11 max-md:*:flex-1">
+      {/* Kept in view at the window's foot (on a phone, on the bar of pages) while the form is longer than the window, what scrolls under it fading at its edge, as the automation form's foot. */}
+      <div className="sticky bottom-(--foot) -mx-3 flex justify-end gap-2 bg-background px-3 py-3 before:pointer-events-none before:absolute before:inset-x-0 before:bottom-full before:h-4 before:bg-gradient-to-t before:from-background max-md:*:h-11 max-md:*:flex-1">
         <Button type="button" variant="ghost" size="lg" onClick={onCancel} disabled={saving}>
           Cancel
         </Button>

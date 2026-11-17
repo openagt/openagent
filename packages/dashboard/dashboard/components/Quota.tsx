@@ -505,7 +505,8 @@ export function Quota({ projects }: { projects: ProjectSummary[] }) {
 
   return (
     <PanelGroup bare title="Usage">
-      <Card className="space-y-4 px-4 py-3">
+      {/* A card for the bar and the windows; where it says only why there are none, that sentence stands under the heading alone. */}
+      <Card className="space-y-4 px-4 py-3 has-[>p:only-child]:border-0 has-[>p:only-child]:bg-transparent has-[>p:only-child]:p-0 has-[>p:only-child]:shadow-none">
         {/* The bar's place, drawn while it is read and when there is a bar or a window to show: an empty one would stand as a gap over the note. */}
         {(!view || (view.boundary && week) || windows.length > 0) && (
           <Slot

@@ -229,6 +229,7 @@ const DIR_LABELS: Record<SortKey, Record<'asc' | 'desc', string>> = {
 export function TicketFilterBar({
   view,
   rows,
+  reading = false,
   spansProjects,
   onChange,
 }: {
@@ -236,6 +237,8 @@ export function TicketFilterBar({
   view: TicketsView
   /** The full unfiltered pool, for the option counts. */
   rows: TicketRow[]
+  /** The tickets are not read yet: the facets most backlogs have hold their room, unseen, so the sort after them does not move when they come. */
+  reading?: boolean
   /** The page shows more than one project: it can be grouped by them. */
   spansProjects: boolean
   onChange: (next: TicketsView) => void
@@ -327,6 +330,14 @@ export function TicketFilterBar({
         ))}
       </CheckFacet>
 
+      {reading && (
+        <span aria-hidden className="invisible contents">
+          <FacetTrigger label="Topic" value={undefined} tabIndex={-1} />
+          <Button variant="ghost" size="sm" tabIndex={-1}>
+            Not linked
+          </Button>
+        </span>
+      )}
       {(topicFacet.topics.length > 0 || topicFacet.none > 0) && (
         <CheckFacet label="Topic" value={picked(f.topicsNone ? [...f.topics, 'No topics'] : f.topics)}>
           {topicFacet.topics.map(([topic, count]) => (
