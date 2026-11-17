@@ -31,7 +31,8 @@ export function FormFoot({ where, on = 'page', children }: { where: ReactNode; o
     >
       {/* Beside the presses where both fit, else over them, at the full width. */}
       <p className="min-w-0 grow basis-60 text-xs text-muted-foreground">{where}</p>
-      <div className="ml-auto flex gap-2">{children}</div>
+      {/* On a phone a finger's 44 high, as a dialog's presses are. */}
+      <div className="ml-auto flex gap-2 max-md:[&_button]:h-11">{children}</div>
     </div>
   )
 }
@@ -67,16 +68,26 @@ export interface Said {
   waitsFor: string
 }
 
+/** What the agent is told, for an automation a person wrote: the first of "What it does". */
+export function PromptField({ prompt, autoFocus, onChange }: { prompt: string; autoFocus: boolean; onChange: (change: Partial<Said>) => void }) {
+  return (
+    <>
+      <Label htmlFor="automation-prompt">What the agent is told</Label>
+      <Textarea id="automation-prompt" rows={4} autoFocus={autoFocus} value={prompt} onChange={e => onChange({ prompt: e.target.value })} placeholder="Answer each new comment below." />
+    </>
+  )
+}
+
 /**
- * "What it does", for an automation a person wrote: what the agent is told, and an optional shell
- * line that prints what is new, with what it waits for in plain words. "Write the line" asks
+ * The optional shell line of an automation a person wrote, after the choices of when it runs, which
+ * it can take over: a line that prints what is new, with what it waits for in plain words. "Write the line" asks
  * `agent` for a line from those words and puts it in the line's box, saving nothing: the person
  * reads it, and "Try it" runs it once in the project and shows what it printed and whether an
  * agent would start; nothing is saved and nothing starts. An answer shown is for the line as it
  * stands: changing the line takes it away, and an answer that comes back late is dropped, a
  * written line too.
  */
-export function SaidFields({ project, said, agent, autoFocus, onChange }: { project: ModuleProject; said: Said; agent: AgentName; autoFocus: boolean; onChange: (change: Partial<Said>) => void }) {
+export function LineFields({ project, said, agent, onChange }: { project: ModuleProject; said: Said; agent: AgentName; onChange: (change: Partial<Said>) => void }) {
   const host = useModuleHost()
   const [tried, setTried] = useState<'trying' | TriedLine | undefined>()
   const [written, setWritten] = useState<'writing' | string | undefined>()
@@ -110,8 +121,6 @@ export function SaidFields({ project, said, agent, autoFocus, onChange }: { proj
   }
   return (
     <>
-      <Label htmlFor="automation-prompt">What the agent is told</Label>
-      <Textarea id="automation-prompt" rows={4} autoFocus={autoFocus} value={said.prompt} onChange={e => onChange({ prompt: e.target.value })} placeholder="Answer each new comment below." />
       <Label htmlFor="automation-waits-for" className="pt-2">
         What the line waits for, in plain words <span className={hint}>optional</span>
       </Label>

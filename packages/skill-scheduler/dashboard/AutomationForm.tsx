@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Button, Input, RadioGroup, RadioGroupOption, useKeptDraft, useOpenAgentDown, type ModuleCommandResult, type ModuleProject } from '@openagt/dashboard/module'
 import { EMPTY_DRAFT, addArgs, draftProblem, draftSentence, isUntouched, nameProblem, ownPaceArgs, savedFile, savedWords, whereHint, type AutomationDraft, type OwnPace } from './automation-form.js'
-import { FormFoot, PaceFields, SaidFields, SaveWords, Section } from './fields.js'
+import { FormFoot, LineFields, PaceFields, PromptField, SaveWords, Section } from './fields.js'
 import { DEFAULT_AGENT } from '../src/names.js'
 
 // The "New automation" form of the Automations page: a person's own prompt, saved as a command of
 // the project with a row like any skill's. A name; what it does, the same fields a row's Edit panel
-// has for it: what the agent is told and an optional shell line that prints what is new, with "Try
-// it"; when it runs, the same pace control; and who gets it.
+// has for it: what the agent is told; when it runs, the same pace control, then an optional shell
+// line that prints what is new, with "Try it"; and who gets it.
 //
 // Saving (`scheduler add`) is the person's choice of two: shared with the project, a skill
 // file of theirs to commit, whose row cannot start before it is where an agent's checkout starts;
@@ -127,7 +127,7 @@ export function AutomationForm({
           )}
         </Section>
         <Section title="What it does">
-          <SaidFields project={project} said={draft} agent={DEFAULT_AGENT} autoFocus={false} onChange={set} />
+          <PromptField prompt={draft.prompt} autoFocus={false} onChange={set} />
         </Section>
         <Section title="When it runs">
           <PaceFields
@@ -141,6 +141,7 @@ export function AutomationForm({
             autoFocus={false}
             onChange={next => set({ pace: next as OwnPace })}
           />
+          <LineFields project={project} said={draft} agent={DEFAULT_AGENT} onChange={set} />
         </Section>
         <Section title="Who gets it">
           <RadioGroup aria-label="Who gets the automation" value={draft.onThisMachine ? 'machine' : 'project'} onValueChange={who => set({ onThisMachine: who === 'machine' })} disabled={saving}>

@@ -4,7 +4,7 @@ import type { PublishPick } from '../src/state.js'
 import { MAX_AGENTS, OWN_AUTOMATIONS_DIR, type AgentName } from '../src/names.js'
 import { parseInterval, parseTimeOfDay } from '../src/pace.js'
 import { atRowsPace, draftProblem, draftRow, editArgs, editedWords, keptWhereHint, ownPaceArgs, removeWarning, removedWords, savedFile, saysTheSame, type AutomationDraft, type OpenedAutomation, type OwnPace } from './automation-form.js'
-import { AgentsFields, FormFoot, PaceFields, PublishField, RunsOnFields, SaidFields, SaidShown, SaveWords, Section, type ModelDraft } from './fields.js'
+import { AgentsFields, FormFoot, LineFields, PaceFields, PromptField, PublishField, RunsOnFields, SaidShown, SaveWords, Section, type ModelDraft } from './fields.js'
 import { EACH_KEEPS_OWN, agentOf, agentsArgs, agentsDraftOf, atOnce, atOnceWords, draftOf, isOwn, pace, runsOnWords, paceArgs, paceProblem, publishes, rowTitle, saysAtOnce, spelled, stopped, withDraft, type AgentModels, type AgentsDraft, type PaceDraft, type SchedulerCommand } from './schedulers.js'
 
 // The Edit panel of the Automations page: one panel, with the same parts in the same order, for
@@ -16,7 +16,7 @@ import { EACH_KEEPS_OWN, agentOf, agentsArgs, agentsDraftOf, atOnce, atOnceWords
 // `publish`, and no tracked file changes. Its pace may follow the skill.
 //
 // A row a person made with "New automation" opens with its own words to change: what the agent is
-// told, and its shell line. Its pace is picked in the same place and is the automation's own,
+// told, and, after when it runs, its shell line. Its pace is the automation's own,
 // saved into its file with its words (`scheduler edit`); only a time of day, which is this
 // machine's, is kept here (`pace`). It can be removed, after one question (`remove`). When its
 // file cannot be opened, changed by hand since it was saved, the panel says why and shows it as a
@@ -263,7 +263,7 @@ export function EditPanel({
       <Section title="What it does">
         {own ? (
           <fieldset disabled={saving} className="min-w-0 space-y-2">
-            <SaidFields project={project} said={own} agent={runsOn.agent} autoFocus onChange={change => (setOwn({ ...own, ...change }), setFailed(undefined))} />
+            <PromptField prompt={own.prompt} autoFocus onChange={change => (setOwn({ ...own, ...change }), setFailed(undefined))} />
           </fieldset>
         ) : (
           <SaidShown
@@ -282,17 +282,22 @@ export function EditPanel({
       </Section>
       <Section title="When it runs">
         {own ? (
-          <PaceFields
-            name={`How long ${title} waits after a start`}
-            draft={own.pace}
-            work={own.when.trim() !== '' ? { waitsFor: own.waitsFor.trim() || undefined } : undefined}
-            noWait={own.when.trim() !== ''}
-            start={{ count: 1, unit: 'd' }}
-            counted={`Counted from its last start, ${where}.`}
-            disabled={saving}
-            autoFocus={false}
-            onChange={next => (setOwn({ ...own, pace: next as OwnPace }), setFailed(undefined))}
-          />
+          <>
+            <PaceFields
+              name={`How long ${title} waits after a start`}
+              draft={own.pace}
+              work={own.when.trim() !== '' ? { waitsFor: own.waitsFor.trim() || undefined } : undefined}
+              noWait={own.when.trim() !== ''}
+              start={{ count: 1, unit: 'd' }}
+              counted={`Counted from its last start, ${where}.`}
+              disabled={saving}
+              autoFocus={false}
+              onChange={next => (setOwn({ ...own, pace: next as OwnPace }), setFailed(undefined))}
+            />
+            <fieldset disabled={saving} className="min-w-0 space-y-2">
+              <LineFields project={project} said={own} agent={runsOn.agent} onChange={change => (setOwn({ ...own, ...change }), setFailed(undefined))} />
+            </fieldset>
+          </>
         ) : (
           <PaceFields
             name={`How long ${title} waits after a start`}

@@ -1233,13 +1233,14 @@ describe('the Edit panel of a row a person made', () => {
     expect(within(panel).getAllByRole('region').map(r => r.getAttribute('aria-label'))).toEqual(['What it does', 'When it runs', 'How many at once', 'What it runs on', 'What its runs publish'])
     const does = part(panel, 'What it does')
     expect((within(does).getByLabelText('What the agent is told') as HTMLTextAreaElement).value).toBe('Answer each new comment below.')
-    expect((within(does).getByLabelText(/A shell line that prints what is new/) as HTMLTextAreaElement).value).toBe('gh api comments')
-    expect((within(does).getByLabelText(/What the line waits for/) as HTMLInputElement).value).toBe('when someone commented')
-    expect(within(does).getByRole('button', { name: 'Try it' })).toBeTruthy()
+    // The optional line after the choices of when it runs.
+    const when = part(panel, 'When it runs')
+    expect((within(when).getByLabelText(/A shell line that prints what is new/) as HTMLTextAreaElement).value).toBe('gh api comments')
+    expect((within(when).getByLabelText(/What the line waits for/) as HTMLInputElement).value).toBe('when someone commented')
+    expect(within(when).getByRole('button', { name: 'Try it' })).toBeTruthy()
     // The keyboard lands on what the agent is told.
     expect(document.activeElement).toBe(within(does).getByLabelText('What the agent is told'))
     // One pace control: the automation's own pace, with no skill to follow.
-    const when = part(panel, 'When it runs')
     expect(radioNames(when)).toEqual(['A wait you set', 'No wait'])
     expect(checked(radio(when, 'A wait you set'))).toBe(true)
     expect([(within(when).getByLabelText('How long') as HTMLInputElement).value, showing(within(when).getByLabelText('Unit'))]).toEqual(['15', 'minutes'])
