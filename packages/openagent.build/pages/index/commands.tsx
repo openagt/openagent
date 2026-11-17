@@ -45,7 +45,7 @@ function usePm(): Pm {
 /** `command` in the package manager the visitor picked: what a click copies, and what its press is named by. */
 export const usePickedCommand = (command: Command): string => PMS[usePm()][command]
 
-/** One tab per package manager; picking one switches every command on the page. Named as one group. */
+/** One tab per package manager, in the commands' own size; picking one switches every command on the page. Named as one group. */
 export function PmTabs() {
   const pm = usePm()
   return (
@@ -56,7 +56,7 @@ export function PmTabs() {
           className={'pm-tab pm-tab-' + name}
           aria-pressed={name === pm}
           onClick={() => pickPm(name)}
-          style={{ borderRadius: 'var(--radius-md)', padding: '4px 12px', fontFamily: mono, ...text('xs'), cursor: 'pointer' }}
+          style={{ borderRadius: 'var(--radius-md)', padding: '6px 12px', fontFamily: mono, ...text('sm'), cursor: 'pointer' }}
         >
           {name}
         </button>
@@ -90,28 +90,24 @@ function CommandLine({ command, after }: { command: Command; /** Said after each
   )
 }
 
-/** The two sizes of a command: the one a part of the page leads with, and a quieter one beside or under it. */
-const BOX = {
-  large: { ...text('sm'), minHeight: 44, padding: '8px 6px 8px 16px', gap: 16, icon: 16 },
-  small: { ...text('xs'), minHeight: 36, padding: '6px 4px 6px 12px', gap: 12, icon: 14 },
-} as const
+/** Every command is one size, wherever it stands: its words 16 in, and 12 over and under them when they take two lines. */
+const BOX = { ...text('sm'), minHeight: 44, padding: '12px 6px 12px 16px', gap: 16 } as const
 
 /**
  * `$ command` in a box that copies it: a press of the pointer anywhere on it, or of its copy press, which the
  * keyboard reaches. The press shows a check once the command is copied. Not a button as a whole, so the command
  * in it can still be selected by hand.
  */
-export function CommandBox({ command, size, after }: { command: Command; size: keyof typeof BOX; /** Said after the command. */ after?: ReactNode }) {
+export function CommandBox({ command, after }: { command: Command; /** Said after the command. */ after?: ReactNode }) {
   const { copied, copy } = useCopy()
   const picked = usePickedCommand(command)
-  const { icon, ...box } = BOX[size]
   const Icon = copied ? Check : Copy
   return (
     <span
       className="command-box"
       onClick={(e) => copy(picked, e)}
       style={{
-        ...box,
+        ...BOX,
         boxSizing: 'border-box',
         maxWidth: '100%',
         display: 'inline-flex',
@@ -127,7 +123,7 @@ export function CommandBox({ command, size, after }: { command: Command; size: k
     >
       <CommandLine command={command} after={after} />
       <button type="button" className={'copy-press' + (copied ? ' copied' : '')} aria-label={`Copy ${picked}`}>
-        <Icon size={icon} aria-hidden />
+        <Icon size={16} aria-hidden />
       </button>
       <CopiedStatus copied={copied} />
     </span>

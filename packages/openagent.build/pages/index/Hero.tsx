@@ -109,10 +109,10 @@ export function Hero() {
         <PmTabs />
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', gap: '8px 32px', maxWidth: '100%' }}>
           <Labelled label="Try:">
-            <CommandBox command="try" size="large" after={<span style={{ color: 'var(--muted-foreground)' }}># One-shot (no install)</span>} />
+            <CommandBox command="try" after={<span style={{ color: 'var(--muted-foreground)' }}># One-shot (no install)</span>} />
           </Labelled>
           <Labelled label="Or install:">
-            <CommandBox command="install" size="small" />
+            <CommandBox command="install" />
           </Labelled>
         </div>
       </div>

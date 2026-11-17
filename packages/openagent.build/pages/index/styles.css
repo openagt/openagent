@@ -304,6 +304,8 @@ html:not(.dark) .press-quiet {
 .copy-press {
   flex: none;
   position: relative;
+  /* Into the box's padding over and under it, so a command of one line is 44 high. */
+  margin: -6px 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
