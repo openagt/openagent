@@ -96,6 +96,12 @@ describe('the list of a run\'s subagents', () => {
     expect(screen.queryByRole('button', { name: /^Close / })).toBeNull()
   })
 
+  test('the list\'s foot fades into the pane\'s own ground, the page\'s, so nothing shows under the last row', () => {
+    const { container } = render(panel({ events: [], subagents: [run(1, 'Read the theme tokens', 'done', 3)] }))
+    const foot = container.querySelector('.sticky.bottom-0.bg-gradient-to-t')!
+    expect(foot.className.split(' ')).toContain('from-background')
+  })
+
   test('a row opens its subagent under the list, and pressed again, or closed, it is gone; the keyboard goes back to its row', () => {
     const sub = run(1, 'Write the docs', 'done', 1)
     render(panel({ subagents: [sub] }))
