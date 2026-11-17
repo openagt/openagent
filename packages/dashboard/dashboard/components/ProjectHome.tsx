@@ -1,3 +1,5 @@
+import { useLayoutEffect, useRef } from 'react'
+import { cn } from '../lib/utils.js'
 import type { Intervention, ProjectError, ProjectSummary } from '../../src/index.js'
 import { StartAgentForm } from './StartAgentForm.js'
 import { ProjectActions } from './ProjectActions.js'
@@ -72,20 +74,38 @@ export function ProjectHome({
   home?: string | undefined
 }) {
   const noProject = projectId === SESSIONS_ID
+  // The room the top bar and its notices take, written for the page to start under it, as an
+  // agent's page does (ChatPane, `--chat-top`).
+  const room = useRef<HTMLDivElement>(null)
+  const top = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    const read = () => room.current!.style.setProperty('--home-top', `${top.current!.getBoundingClientRect().height}px`)
+    read()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(read)
+    observer.observe(top.current!)
+    return () => observer.disconnect()
+  }, [])
   return (
-    <>
-      <ProjectActions projectId={projectId} onProjectRemoved={home === undefined ? onProjectRemoved : undefined} />
-      {/* Above everything, because an agent started on a project whose agent-data branch cannot
-          reach origin (#1599) works from stale tickets and a queue nobody else will see. */}
-      <ProjectErrorBanner errors={errors} />
-      {/* The page is for the box: from 768px up it stands where the eye lands, its top at about 38% of
-          the page, and what waits for the person is under it, scrolling under it and never pushing
-          it. On a phone the box stays at the bottom, in the thumb's reach, with what waits above it,
-          as an agent's page has its chat. The column keeps a scroll bar's room at its right, as the
-          chat's does (ChatPane), so the box stands on a session's box's edges and is carried without a sideways step. */}
+    <div ref={room} data-testid="home-room" className="relative isolate flex min-h-0 flex-1 flex-col">
+      {/* Over the page's top, as an agent's page has it: what scrolls under it shows through, blurred.
+          It stops short of the list's scroll bar (ui/scroll-area, 10 wide), which is drawn over the
+          page's whole height; only the bar's line crosses it, to the page's edge. */}
+      <div ref={top} data-testid="home-top" className="absolute top-0 right-2.5 left-0 z-20 bg-background/80 backdrop-blur-md">
+        <ProjectActions projectId={projectId} onProjectRemoved={home === undefined ? onProjectRemoved : undefined} />
+        {/* Above everything, because an agent started on a project whose agent-data branch cannot
+            reach origin (#1599) works from stale tickets and a queue nobody else will see. */}
+        <ProjectErrorBanner errors={errors} />
+      </div>
+      <div aria-hidden className="pointer-events-none absolute top-[calc(2.75rem-1px)] right-0 z-20 h-px w-2.5 bg-border" />
+      {/* What waits for the person comes first and the box under it, at the bottom, as an agent's page
+          has its chat (his pick). With nothing waiting, from 768px up the box stands where the eye
+          lands, its top at about 38% of the page; on a phone it stays at the bottom, in the thumb's
+          reach. The column keeps a scroll bar's room at its right, as the chat's does (ChatPane), so
+          the box stands on a session's box's edges and is carried without a sideways step. */}
       <div className="scrollbar-thin scrollbar-gutter-stable flex min-h-0 flex-1 flex-col overflow-y-auto">
-        <div className="shrink-0 max-md:hidden md:basis-[38%]" aria-hidden />
-        <div className="shrink-0 max-md:order-last">
+        {waiting.length === 0 && <div className="shrink-0 max-md:hidden md:basis-[38%]" aria-hidden />}
+        <div className={cn('shrink-0', waiting.length > 0 ? 'order-last' : 'max-md:order-last')}>
           <StartAgentForm
             projectId={projectId}
             projectName={projectName}
@@ -101,8 +121,10 @@ export function ProjectHome({
             onProjectAdded={onProjectAdded}
           />
         </div>
-        <ScrollArea className="min-h-0 flex-1" viewportClassName="chat-scroll h-full">
-          <div className="mx-auto w-full max-w-3xl">
+        <ScrollArea className="min-h-0 flex-1" viewportClassName="h-full">
+          {/* Its rows start under the top bar, which lies over the list's start, where the list is
+              first: while something waits, and on a phone, where the box is last. */}
+          <div className={cn('mx-auto w-full max-w-3xl', waiting.length > 0 ? 'pt-(--home-top)' : 'max-md:pt-(--home-top)')}>
             {/* No section at all when nothing waits: an empty "Waiting on you" is noise on every launch. */}
             {waiting.length > 0 && (
               // On the box's edges, as an agent's chat is; the rows reach past them by their own padding, so
@@ -120,7 +142,7 @@ export function ProjectHome({
           </div>
         </ScrollArea>
       </div>
-    </>
+    </div>
   )
 }
 

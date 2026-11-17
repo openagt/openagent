@@ -90,7 +90,7 @@ describe('AgentActionBar', () => {
     // unlike a pane's header, a line under it only while the chat is scrolled under it.
     expect(row).toContain('h-11')
     expect(row.join(' ')).not.toMatch(/border/)
-    expect(container.firstElementChild!.className).toBe('top-bar-line')
+    expect(container.firstElementChild!.className).toBe('shadow-[inset_0_-1px_0_var(--color-border)]')
     // The menu is the agent's own: it is handed the agent.
     expect(lastSession()['agentId']).toBe('run-1')
   })

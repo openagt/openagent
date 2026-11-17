@@ -954,8 +954,9 @@ export function EventList({
       <FollowSent sent={(sending === undefined || answeredInPlace ? 0 : 1) + queued.length} />
       {/* A layer of its own: "Jump to latest" stays under the message box's bar. */}
       <MessageScroller className="isolate flex-1">
-        <MessageScrollerViewport ref={viewport} aria-label="Agent output" className="chat-scroll scroll-pb-(--chat-bottom)">
-          <MessageScrollerContent spacerClassName="order-last" className="mx-auto w-full max-w-3xl gap-3 px-4 pt-4 font-mono text-xs">
+        <MessageScrollerViewport ref={viewport} aria-label="Agent output" className="scroll-pt-(--chat-top) scroll-pb-(--chat-bottom)">
+          {/* The rows start under the page's top bar, which lies over the log's start (ChatPane, `--chat-top`). */}
+          <MessageScrollerContent spacerClassName="order-last" className="mx-auto w-full max-w-3xl gap-3 px-4 pt-[calc(var(--chat-top,0px)+1rem)] font-mono text-xs">
             {/* First in the page, so never the row the browser keeps in place when a row above
                 it grows: a steps line opened at the log's end opens under the line, the line
                 where it was, as Claude Code's does, not pushed up by the room held still. */}
@@ -1099,7 +1100,7 @@ export function EventList({
             {tail}
           </MessageScrollerContent>
         </MessageScrollerViewport>
-        <MessageScrollerButton className="data-[direction=end]:bottom-[calc(var(--chat-bottom,0px)+1.25rem)]" />
+        <MessageScrollerButton className="data-[direction=end]:bottom-[calc(var(--chat-bottom,0px)+1.25rem)] data-[direction=start]:top-[calc(var(--chat-top,0px)+0.75rem)]" />
       </MessageScroller>
       {/* After the scroller, so the rows are measured and its own opening place is already applied. */}
       {openedAt && <OpenAtReply messageId={idOf(openedAt)} viewport={viewport} />}

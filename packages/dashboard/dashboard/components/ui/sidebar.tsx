@@ -144,7 +144,7 @@ function Sidebar({ side = 'left', className, children, ...props }: React.Compone
   }
 
   return (
-    <div data-slot="sidebar" className={cn('bg-sidebar text-sidebar-foreground flex h-full w-(--sidebar-width) flex-col', className)} {...props}>
+    <div data-slot="sidebar" className={cn('bg-sidebar text-sidebar-foreground flex h-full w-(--sidebar-width) flex-col border-r border-sidebar-border', className)} {...props}>
       {children}
     </div>
   )
