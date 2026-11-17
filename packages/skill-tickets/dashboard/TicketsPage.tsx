@@ -225,9 +225,10 @@ function SelectionBar({ leaving, count, onSelectAll, onClear, children }: { leav
         aria-label="Selected tickets"
         className={cn(
           'pointer-events-auto absolute bottom-0 flex items-center gap-1 menu-surface rounded-lg py-1 pr-1 pl-4 text-sm shadow-lg ring-1 ring-foreground/10 backdrop-blur-xl',
-          // In the middle of the column, as wide as what it holds. On a phone a grid: the count, Select all and the
-          // close on its first line, each add on a line of its own under them, its words whole; as wide as its widest line.
-          'left-1/2 w-max max-w-full -translate-x-1/2 max-md:grid max-md:grid-cols-[auto_1fr_auto] max-md:px-4 max-md:py-0',
+          // In the middle of the column, as wide as what it holds. On a phone part of the page's foot, on the column's
+          // edges as the list is, and a grid: the count, Select all and the close on its first line, each add on a
+          // line of its own under them, its words whole.
+          'md:left-1/2 md:w-max md:-translate-x-1/2 max-md:inset-x-0 max-md:grid max-md:grid-cols-[auto_1fr_auto] max-md:px-4 max-md:py-0',
           'transition-[opacity,translate] ease-out starting:translate-y-2 starting:opacity-0',
           leaving ? 'pointer-events-none translate-y-2 opacity-0 duration-120' : 'duration-180',
         )}

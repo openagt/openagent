@@ -305,7 +305,7 @@ export function TicketFilterBar({
       </div>
     )
 
-  // The sort ends the filters; on a phone it stands outside the strip's faded end, beside the search, so its glyph reads whole.
+  // The sort ends the filters; on a phone it stands beside the search, at its size, its glyph alone.
   const sort = (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -359,9 +359,10 @@ export function TicketFilterBar({
   )
 
   return (
-    <div className="flex items-center gap-2 md:items-start">
-      {/* The filters, then the sort, wrapping where they meet the search; on a phone a strip scrolled sideways, its end faded to say there is more. */}
-      <div className="-ml-2 flex min-w-0 items-center gap-1 md:flex-wrap max-md:flex-1 max-md:overflow-x-auto max-md:pe-8 max-md:[scrollbar-width:none] max-md:[mask-image:linear-gradient(to_right,#000_calc(100%_-_2rem),transparent)]">
+    <div className="flex items-start gap-2">
+      {/* The filters, then the sort, wrapping where they meet the search, on a phone too: every filter whole, none
+          behind a scroll's faded end. */}
+      <div className="-ml-2 flex min-w-0 flex-wrap items-center gap-1 max-md:flex-1">
       <RangeFacet
         label="Priority"
         noneLabel="No priority"
