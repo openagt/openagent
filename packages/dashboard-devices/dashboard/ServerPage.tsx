@@ -5,7 +5,7 @@ import { idsOf, myName, type Answer, type DeviceRow } from './devices.js'
 import { installDone, installFailed, nameOwner, removeDevice, removePerson, setPeople, setWho, askLink, type ServerRow } from './servers.js'
 import { labelOf, type ServerItem } from './model.js'
 import { Invite } from './codes.js'
-import { Head, PHONE_OWN_LINE, Part, PressRow, Problem, Removal, Said, Seen, State, StepLine, Tabs, hostOf, olderThan } from './parts.js'
+import { Head, Part, PressRow, Problem, Removal, Said, Seen, State, StepLine, Tabs, hostOf, olderThan } from './parts.js'
 import type { Devices } from './use-devices.js'
 
 // A server's own page in Settings › Devices, for a server this computer installed OpenAgent on:
@@ -79,7 +79,7 @@ export function ServerPage({ d, item, onBack, invite = false }: { d: Devices; it
         icon={home ? House : Server}
         name={item.name}
         badge={home ? 'Server at home' : 'Server'}
-        facts={[state, home ? `through ${labelOf(d.machines?.machines ?? [], server.through!)}` : server.tailscale ? 'on your Tailscale network' : item.name !== server.address ? server.address : undefined, item.door?.tailscale !== undefined && !server.tailscale ? `on Tailscale at ${item.door.tailscale}` : undefined, machine?.version !== undefined && PHONE_OWN_LINE(`OpenAgent ${machine.version}`)]}
+        facts={[state, home ? `through ${labelOf(d.machines?.machines ?? [], server.through!)}` : server.tailscale ? 'on your Tailscale network' : item.name !== server.address ? server.address : undefined, item.door?.tailscale !== undefined && !server.tailscale ? `on Tailscale at ${item.door.tailscale}` : undefined, machine?.version !== undefined && `OpenAgent ${machine.version}`]}
         {...(machine ? { rename: async (name: string) => {
           const renamed = await host.renameMachine(machine.id, name)
           await d.reloadMachines().catch(() => {})

@@ -272,16 +272,30 @@ export function RenameForm({ name, rename, onClose }: { name: string; rename: Re
 }
 
 /**
- * A fact of a server's head a phone puts on a line of its own, with no dot (its version): its kind's badge and its state are
- * boxes a line breaks after, so a fact run on would open the facts' second line with its dot.
+ * Facts that wrap whole: a fact never breaks inside itself, and a line never opens with a dot (each fact's dot stands in
+ * a margin the box cuts off where the fact starts a line). `lead`, a badge, opens the first line with no dot after it.
  */
-export const PHONE_OWN_LINE = (fact: ReactNode): Fact => ({ fact, className: 'max-md:block max-md:[&>[aria-hidden]]:hidden' })
+export function WholeFacts({ lead, facts }: { lead?: ReactNode; facts: ReactNode[] }) {
+  const shown = facts.filter(fact => fact !== undefined && fact !== null && fact !== false && fact !== '')
+  return (
+    <span className="block overflow-hidden">
+      <span className="-ml-4 flex flex-wrap items-center">
+        {lead !== undefined && <span className="ml-4 -mr-2 flex">{lead}</span>}
+        {shown.map((fact, index) => (
+          <span key={index} className={cn("min-w-0 max-w-full truncate before:inline-block before:w-4 before:text-center before:content-['·']", lead !== undefined && index === 0 && 'before:invisible')}>
+            {fact}
+          </span>
+        ))}
+      </span>
+    </span>
+  )
+}
 
 /** A device's page is named above it, in the Settings dialog's header: its own top says it once more only outside the dialog. */
 export const NamedAbove = createContext(false)
 
 /** The top of a device's page: its icon, name and facts, and Rename; under Settings' header, which names it, its kind and facts alone. */
-export function Head({ icon: Icon, name, badge, facts, rename }: { icon: ComponentType<{ className?: string; 'aria-hidden'?: boolean }>; name: string; badge?: string; facts: Fact[]; rename?: Rename }) {
+export function Head({ icon: Icon, name, badge, facts, rename }: { icon: ComponentType<{ className?: string; 'aria-hidden'?: boolean }>; name: string; badge?: string; facts: ReactNode[]; rename?: Rename }) {
   const { renaming, open, close, press } = useRenaming()
   const namedAbove = useContext(NamedAbove)
   return (
@@ -301,8 +315,7 @@ export function Head({ icon: Icon, name, badge, facts, rename }: { icon: Compone
           )}
           {/* One run of words: on a phone the badge stays at the start of the facts' first line, not on a line of its own. */}
           <p className="min-w-0 text-xs text-muted-foreground">
-            {namedAbove && badge !== undefined && <Badge className="mr-2 align-middle">{badge}</Badge>}
-            <Facts facts={facts} />
+            <WholeFacts lead={namedAbove && badge !== undefined ? <Badge>{badge}</Badge> : undefined} facts={facts} />
           </p>
         </div>
         {rename && !renaming && (
