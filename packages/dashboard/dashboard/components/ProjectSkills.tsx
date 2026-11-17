@@ -90,7 +90,7 @@ export function ProjectSkillsLine({ projectId, onChanged }: { projectId: string;
   if (newer.length === 0 && !sending && !inRequest && !onBranch && !error) return null
 
   return (
-    <div role="status" aria-label="This project's skills" className="m-3 flex flex-col gap-1.5 rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground">
+    <div role="status" aria-label="This project's skills" className="flex flex-col gap-1.5 rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground">
       {newer.length > 0 && (
         <span className="flex items-center justify-between gap-3">
           <span>

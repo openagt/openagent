@@ -411,9 +411,9 @@ describe('a first visit, the projects not read yet', () => {
     render(<App />)
     const shape = await within(await screen.findByRole('main')).findByRole('status', {}, { timeout: 2000 })
     expect(shape.closest('.max-w-3xl')).not.toBeNull()
-    // A project's page has its own top row: no phone bar names the word as a page while it waits. Its
-    // question is known before the read, and stands where it will.
-    expect(document.querySelector('main')!.textContent).toBe('What should an agent do?Loading…')
+    // A project's page has its own top row: no phone bar names the word as a page while it waits, and
+    // the page has no heading of its own.
+    expect(document.querySelector('main')!.textContent).toBe('Loading…')
     answer()
     expect(await screen.findByText('the launcher of app')).toBeTruthy()
     expect(within(document.querySelector('main')!).queryByRole('status')).toBeNull()

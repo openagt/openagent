@@ -26,7 +26,7 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe('ProjectHome', () => {
-  test('it is named by its question, and shows the launcher and what waits on you, and no Docs section', async () => {
+  test('it has no heading of its own, and shows the launcher and what waits on you, and no Docs section', async () => {
     render(
       <ProjectHome
         projectId="p1"
@@ -49,9 +49,9 @@ describe('ProjectHome', () => {
     // What waits comes first and the box is drawn last, at the bottom, on every screen: no room is
     // kept above the box to stand it at 38% of the page while something waits.
     expect(screen.getByRole('region', { name: 'Waiting on you' })).toBeTruthy()
-    expect(screen.getByRole('heading', { level: 1, name: 'What should an agent do?' })).toBeTruthy()
-    // How many in all is said only where rows are held back: one row says it by being there.
-    expect(screen.getByRole('heading', { name: 'Waiting on you' })).toBeTruthy()
+    // The box says what the page is for: no question over it (his pick).
+    expect(screen.queryByRole('heading', { level: 1 })).toBeNull()
+    expect(screen.getByRole('heading', { name: 'Waiting on you · 1' })).toBeTruthy()
     const questions = screen.getByText('1 rows')
     const form = screen.getByText('start form')
     expect(form.parentElement!.className.split(' ')).toContain('order-last')
@@ -71,11 +71,11 @@ describe('ProjectHome', () => {
     expect(onDocs).not.toHaveBeenCalled()
   })
 
-  test('on a phone the question stands in the top bar, once, and the list starts under the bar', () => {
+  test('on a phone the top bar names no page either', () => {
     const wide = phoneScreen()
     try {
       render(<ProjectHome projectId="p1" waiting={[]} files={[]} context={new Set()} addContext={() => {}} removeContext={() => {}} toggleContext={() => {}} onOpenAgent={() => {}} projects={[]} onPickProject={() => {}} onProjectAdded={() => {}} />)
-      expect(screen.getAllByRole('heading', { level: 1, name: 'What should an agent do?' })).toEqual([screen.getByTestId('bar-name')])
+      expect(screen.queryByRole('heading', { level: 1 })).toBeNull()
     } finally {
       wide()
     }
