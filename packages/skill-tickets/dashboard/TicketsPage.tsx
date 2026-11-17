@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { X } from 'lucide-react'
-import { Button, Empty, LinkActions, Page, PanelShape, Section, Slot, cn, runsAgain, usePolled, useAction, useLinkActions, useModuleHost, type ProjectLinks, type ModuleLink, type ModuleProject, type LinkActionOffer } from '@openagt/dashboard/module'
+import { Button, Empty, LinkActions, Page, PanelShape, Section, Slot, cn, runsAgain, usePolled, useAction, useIsMobile, useLinkActions, useModuleHost, type ProjectLinks, type ModuleLink, type ModuleProject, type LinkActionOffer } from '@openagt/dashboard/module'
 import { heldBack, holderAgent, planLink, ticketLink, withHolder } from '../src/module.js'
 import { holdingRun } from './lib/holding-run.js'
 import type { ProjectTickets, WorkspaceTicket } from './lib/types.js'
@@ -37,6 +37,7 @@ const keyOf = (row: { projectId: string; ticket: { file: string } }) => `${row.p
 /** The backlog of the picked project or of every project, in one view the URL carries. */
 export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
   const host = useModuleHost()
+  const phone = useIsMobile()
   const key = projects.map(p => p.id).join(',')
   // A project whose read fails says why while the others still show.
   const { value: groups, state } = usePolled<ProjectRead[]>(
@@ -150,8 +151,9 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
         </>
       }
     >
-      {/* While the tickets are read: a card of rows, one line each. */}
-      <Slot of={{ state, value: groups }} shape={<PanelShape rows={3} lines={1} />}>
+      {/* While the tickets are read: a card of rows as they land, their priority's column after the tick, one line each,
+          and on a phone two, the stage under the name. */}
+      <Slot of={{ state, value: groups }} shape={<PanelShape rows={3} lines={phone ? 2 : 1} before />}>
         {groups =>
           groups.length === 0 ? (
             <Empty title="No project has the tickets package." />
