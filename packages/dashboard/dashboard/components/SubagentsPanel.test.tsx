@@ -13,6 +13,7 @@ const { forgetRevealedChanges, revealSubagent } = await import('../lib/reveal-ch
 const { forgetRemembered } = await import('../lib/use-async.js')
 const { hoverTooltip, phoneScreen } = await import('../test-utils.js')
 const { FocusHome } = await import('../lib/focus-home.js')
+const { PaneHeaderContext } = await import('./PaneHeader.js')
 
 beforeEach(() => {
   forgetRevealedChanges()
@@ -102,20 +103,30 @@ describe('the list of a run\'s subagents', () => {
     expect(foot.className.split(' ')).toContain('from-background')
   })
 
-  test('on a phone an opened subagent takes the list\'s place, its arrow back to all of them where the ✕ stands beside the list', () => {
+  test('on a phone an opened subagent takes the list\'s place, named in the pane\'s own head with "Subagents" back to all of them, its presses at the head\'s end', () => {
     const subagents = [run(1, 'Read the theme tokens', 'done', 3), run(24, 'Account page tests', 'running')]
+    const title = document.createElement('div')
+    const actions = document.createElement('div')
+    document.body.append(title, actions)
     const wide = phoneScreen()
     try {
-      render(panel({ events: [], subagents }))
+      render(<PaneHeaderContext.Provider value={{ title, actions }}>{panel({ events: [], subagents })}</PaneHeaderContext.Provider>)
       fireEvent.click(screen.getByRole('button', { name: /^Account page tests/ }))
       const list = rowButtons()[0]!.closest('.overflow-y-auto')!
       expect(list.className.split(' ')).toEqual(expect.arrayContaining(['max-md:hidden', 'md:max-h-1/2']))
+      // One row of ways back: no head of its own in the pane, no ✕.
+      expect(within(title).getByRole('heading', { name: 'Account page tests' })).toBeTruthy()
+      expect(within(actions).getByRole('button', { name: 'Stop' })).toBeTruthy()
+      expect(within(screen.getByRole('region', { name: 'Account page tests' })).queryByRole('heading')).toBeNull()
       expect(screen.queryByRole('button', { name: 'Close Account page tests' })).toBeNull()
-      fireEvent.click(screen.getByRole('button', { name: 'Back to all subagents' }))
+      fireEvent.click(within(title).getByRole('button', { name: 'Back to all subagents' }))
       expect(screen.queryByRole('region', { name: 'Account page tests' })).toBeNull()
+      expect(title.childElementCount).toBe(0)
       expect(rowButtons()[0]!.closest('.overflow-y-auto')!.className.split(' ')).toContain('flex-1')
     } finally {
       wide()
+      title.remove()
+      actions.remove()
     }
   })
 
