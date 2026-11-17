@@ -451,6 +451,14 @@ function StatusLine({ row, agents, className }: { row: SchedulerRow; agents: rea
   const note = row.lastTick?.note
   const [commands, setCommands] = useState(false)
   const off = row.error === undefined && !row.on
+  // What turns it on: in the line of facts, or on a phone, where the line wraps, a row of its own under them.
+  const phone = useIsMobile()
+  const presses = off && [
+    <TurnOn />,
+    <button type="button" aria-expanded={commands} onClick={() => setCommands(shown => !shown)} className={cn(LINE_PRESS, 'text-muted-foreground hover:text-foreground')}>
+      In a terminal
+    </button>,
+  ]
   return (
     <div className={className}>
       {/* Joined as every line of facts is. */}
@@ -472,14 +480,10 @@ function StatusLine({ row, agents, className }: { row: SchedulerRow; agents: rea
           ),
           // Why its last look decided nothing, when it says: a pull that failed. "off" is the status, and a project that schedules nothing says so below.
           note !== undefined && note !== 'off' && note !== NOTHING_SCHEDULED && <span className="text-warning">{`Its last look: ${note}`}</span>,
-          off && <TurnOn />,
-          off && (
-            <button type="button" aria-expanded={commands} onClick={() => setCommands(shown => !shown)} className={cn(LINE_PRESS, 'text-muted-foreground hover:text-foreground')}>
-              In a terminal
-            </button>
-          ),
+          ...(presses && !phone ? presses : []),
         ]}
       />
+      {presses && phone && <div className="mt-3 flex items-center gap-6 text-xs">{presses.map((press, at) => <span key={at}>{press}</span>)}</div>}
       {off && commands && (
         <div className="mt-3 max-w-180 space-y-2 text-sm text-muted-foreground">
           <p>To start it now, run in the project:</p>
