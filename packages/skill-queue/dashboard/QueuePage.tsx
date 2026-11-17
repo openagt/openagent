@@ -12,6 +12,7 @@ import {
   Page,
   PanelGroup,
   PanelRow,
+  PanelShape,
   RowShapes,
   Section,
   Select,
@@ -32,6 +33,7 @@ import {
   useOpenAgentDown,
   usePolled,
   useSchedule,
+  WordsShape,
   type FileNames,
   type ModuleAgent,
   type ModulePageProps,
@@ -119,35 +121,50 @@ export function QueuePage({ projects }: ModulePageProps) {
   const starts = useQueueStarts(host)
 
   // One project's page: its start is the page's one primary press, and under its title one line says
-  // who takes from the queue (the title and the places in line say the rest).
-  const only = projects.length === 1 ? reads[0] : undefined
+  // who takes from the queue (the title and the places in line say the rest). Known before its read,
+  // so the line and the field that adds an entry stand from the first frame.
+  const onlyProject = projects.length === 1 ? projects[0] : undefined
+  const only = onlyProject && reads[0]
   // A phone's bar names the page and hides a description: there the line stands first in the page, and
   // the count and the start stand under the field, over the entries they start (ProjectQueue).
   const phone = useIsMobile()
-  const taker = only && <TakerLine projectId={only.project.id} schedule={schedule} />
+  const taker = onlyProject && <TakerLine projectId={onlyProject.id} schedule={schedule} />
 
   return (
     <Page
       title="Queue"
-      {...(phone && only
+      {...(phone && onlyProject
         ? {}
         : {
-            description: only ? taker : 'What agents take next, from the top, one list per project.',
+            description: onlyProject ? taker : 'What agents take next, from the top, one list per project.',
             actions: only && <BatchStart read={only} primary names={names} starts={starts} />,
           })}
     >
-      {phone && only && <p className="mb-6 text-sm text-muted-foreground">{taker}</p>}
+      {phone && onlyProject && <p className="mb-6 text-sm text-muted-foreground">{taker}</p>}
       {starts.error && (
         <p role="alert" className="mb-4 text-sm text-danger">
           {starts.error}
         </p>
       )}
+      {onlyProject ? (
+        <div data-queue="" className="space-y-8">
+          {only?.error === undefined && <AddEntry project={onlyProject} reload={reload} />}
+          {/* Its entries while they are read: a priority's heading over a card of them. */}
+          <Slot
+            of={{ state, value: reads, failing }}
+            shape={
+              <PanelGroup title={<WordsShape words="Priority 5" />} bare>
+                <PanelShape rows={3} />
+              </PanelGroup>
+            }
+          >
+            {reads => reads.map(read => <ProjectQueue key={read.project.id} read={read} names={names} starts={starts} reload={reload} field={false} batch={phone && <BatchStart read={read} primary fill names={names} starts={starts} />} />)}
+          </Slot>
+        </div>
+      ) : (
       <Slot of={{ state, value: reads, failing }} shape={<RowShapes rows={3} />} className="space-y-10">
         {reads =>
-          reads.map(read =>
-            only ? (
-              <ProjectQueue key={read.project.id} read={read} names={names} starts={starts} reload={reload} batch={phone && <BatchStart read={read} primary fill names={names} starts={starts} />} />
-            ) : (
+          reads.map(read => (
               <Section
                 key={read.project.id}
                 title={read.project.name}
@@ -159,10 +176,10 @@ export function QueuePage({ projects }: ModulePageProps) {
                 </p>
                 <ProjectQueue read={read} names={names} starts={starts} reload={reload} />
               </Section>
-            ),
-          )
+          ))
         }
       </Slot>
+      )}
     </Page>
   )
 }
@@ -201,11 +218,12 @@ function BatchStart({ read, primary, fill = false, names, starts }: { read: Proj
 }
 
 /**
- * One project's queue: the field that adds an entry, then its entries by priority, a card each, or one
- * line saying there are none, where they would start. `batch`, a phone's start, stands under the field
- * over the entries it starts, so the field never moves when the first entry comes.
+ * One project's queue: the field that adds an entry (unless `field` is false: a one-project page draws
+ * it before the queue is read), then its entries by priority, a card each, or one line saying there are
+ * none, where they would start. `batch`, a phone's start, stands under the field over the entries it
+ * starts, so the field never moves when the first entry comes.
  */
-function ProjectQueue({ read, names, starts, reload, batch }: { read: ProjectRead; names: FileNames; starts: QueueStarts; reload: () => Promise<void>; batch?: ReactNode }) {
+function ProjectQueue({ read, names, starts, reload, batch, field = true }: { read: ProjectRead; names: FileNames; starts: QueueStarts; reload: () => Promise<void>; batch?: ReactNode; field?: boolean }) {
   const { project, entries, error, working } = read
   const queue = useRef<HTMLDivElement>(null)
   // A removed row takes the focus with it: it goes to the entry now in its place, else the one before it, else the field that adds one.
@@ -213,7 +231,7 @@ function ProjectQueue({ read, names, starts, reload, batch }: { read: ProjectRea
   useEffect(() => {
     if (!removed || !queue.current) return
     const bins = queue.current.querySelectorAll<HTMLElement>('[data-remove-entry]')
-    ;(bins[removed.place - 1] ?? bins[bins.length - 1] ?? queue.current.querySelector<HTMLElement>('input[name="task"]'))?.focus()
+    ;(bins[removed.place - 1] ?? bins[bins.length - 1] ?? queue.current.closest('[data-queue]')?.querySelector<HTMLElement>('input[name="task"]'))?.focus()
   }, [removed])
   if (error !== undefined)
     return (
@@ -223,8 +241,8 @@ function ProjectQueue({ read, names, starts, reload, batch }: { read: ProjectRea
     )
   const runs = sections(entries!, working)
   return (
-    <div ref={queue} className="space-y-8">
-      <AddEntry project={project} reload={reload} />
+    <div ref={queue} data-queue={field ? '' : undefined} className="space-y-8">
+      {field && <AddEntry project={project} reload={reload} />}
       {runs.length === 0 ? (
         <p className="text-sm text-muted-foreground">Nothing queued.</p>
       ) : (
