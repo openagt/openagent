@@ -22,7 +22,7 @@ import { usePopupPlacement } from './ui/popup-placement.js'
 import { usePickerSearch } from './ui/picker-search.js'
 import { AddProjectPanel } from './AddProjectPanel.js'
 import { Facts } from './ui/panel.js'
-import { PathCut } from './MiddleCut.js'
+import { PathWhole } from './MiddleCut.js'
 
 /** How many repos the menu lists before a search: the search reaches the rest. */
 export const REPOS_SHOWN = 20
@@ -360,8 +360,8 @@ export function ProjectPicker({
                                   <span className="block truncate">{row.label}</span>
                                   {row.detail && (
                                     <span data-line2 className="flex min-w-0 text-xs leading-4 text-muted-foreground">
-                                      {/* A path's folders cut first, then the middle of its last one: the folder that tells two repos apart stays. */}
-                                      {row.pick.kind === 'repo' && typeof row.detail === 'string' ? <PathCut path={row.detail} /> : <span className="min-w-0 truncate">{row.detail}</span>}
+                                      {/* A repo's path whole, wrapped after a slash: every folder of it can tell two repos apart. */}
+                                      {row.pick.kind === 'repo' && typeof row.detail === 'string' ? <PathWhole path={row.detail} /> : <span className="min-w-0 truncate">{row.detail}</span>}
                                     </span>
                                   )}
                                 </span>
