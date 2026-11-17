@@ -47,7 +47,7 @@ const diffLines = (root: HTMLElement = document.body) => [...root.querySelectorA
 describe('ChangesPanel', () => {
   test('a run’s page lists only the files the run changed, grouped by folder, and its header says between which branches and that they are not merged yet', async () => {
     render(<ChangesPanel projectId="p1" agentId="run-1" context={context} />)
-    await waitFor(() => expect(within(screen.getByTestId('pane-title')).getByText(NOT_MERGED)).toBeTruthy())
+    await waitFor(() => expect(within(screen.getByTestId('pane-title')).getByTitle(NOT_MERGED)).toBeTruthy())
     expect(within(screen.getByTestId('pane-title')).getByText('· not merged yet')).toBeTruthy()
     expect(readRun).toHaveBeenCalledWith(expect.anything(), 'p1', 'run-1')
     expect(readProject).not.toHaveBeenCalled()
@@ -132,20 +132,20 @@ describe('ChangesPanel', () => {
 describe('ChangesPanel remembered', () => {
   test('opened again for the same run, the pane shows what was read last at once, with no "Looking…" line, and reads again', async () => {
     const first = render(<ChangesPanel projectId="p1" agentId="run-1" context={context} />)
-    await waitFor(() => expect(screen.getByText(NOT_MERGED)).toBeTruthy())
+    await waitFor(() => expect(screen.getByTitle(NOT_MERGED)).toBeTruthy())
     first.unmount()
     // The read is out and does not answer: the list is there all the same.
     readRun.mockReturnValue(new Promise(() => {}) as never)
     readCommits.mockReturnValue(new Promise(() => {}) as never)
     render(<ChangesPanel projectId="p1" agentId="run-1" context={context} />)
     expect(document.querySelector('[aria-busy]')).toBeNull()
-    expect(screen.getByText(NOT_MERGED)).toBeTruthy()
+    expect(screen.getByTitle(NOT_MERGED)).toBeTruthy()
     expect(readRun).toHaveBeenCalledTimes(2)
   })
 
   test('a run never seen shows the "Looking…" line until its own read answers: never another run’s list', async () => {
     const first = render(<ChangesPanel projectId="p1" agentId="run-1" context={context} />)
-    await waitFor(() => expect(screen.getByText(NOT_MERGED)).toBeTruthy())
+    await waitFor(() => expect(screen.getByTitle(NOT_MERGED)).toBeTruthy())
     first.unmount()
     readRun.mockReturnValue(new Promise(() => {}) as never)
     render(<ChangesPanel projectId="p1" agentId="run-2" context={context} />)
@@ -198,7 +198,7 @@ describe('ChangesPanel commits', () => {
     expect(commitRows().map(row => row.getAttribute('aria-pressed'))).toEqual(['false', 'true', 'false'])
 
     fireEvent.click(commitRows()[0]!)
-    await waitFor(() => expect(screen.getByText(NOT_MERGED)).toBeTruthy())
+    await waitFor(() => expect(screen.getByTitle(NOT_MERGED)).toBeTruthy())
     expect(within(list()).getAllByRole('button')).toHaveLength(3)
     await waitFor(() => expect(screen.getAllByRole('region').filter(r => r.closest('[aria-label=Diffs]')).map(r => r.getAttribute('aria-label'))).toEqual(['src/app.ts', 'src/new.ts', 'old.txt']))
   })
@@ -211,7 +211,7 @@ describe('ChangesPanel commits', () => {
     readCommits.mockResolvedValue([NEW])
     rerender(<ChangesPanel projectId="p1" agentId="run-1" context={context} activity={2} />)
     await waitFor(() => expect(commitRows()).toHaveLength(2))
-    expect(screen.getByText(NOT_MERGED)).toBeTruthy()
+    expect(screen.getByTitle(NOT_MERGED)).toBeTruthy()
     expect(commitRows()[0]!.getAttribute('aria-pressed')).toBe('true')
   })
 
@@ -295,7 +295,7 @@ describe('ChangesPanel, a file asked for from the chat', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Change the app/ }))
     await waitFor(() => expect(screen.getByText('bbbbbbb Change the app')).toBeTruthy())
     rerender(<ChangesPanel projectId="p1" agentId="run-1" context={context} reveal={ask('src/new.ts')} />)
-    await waitFor(() => expect(screen.getByText(NOT_MERGED)).toBeTruthy())
+    await waitFor(() => expect(screen.getByTitle(NOT_MERGED)).toBeTruthy())
     expect(pressed().some(text => text?.includes('new.ts'))).toBe(true)
   })
 
@@ -319,7 +319,7 @@ describe('ChangesPanel, a file asked for from the chat', () => {
     fireEvent.click(screen.getByRole('button', { name: /Change the app/ }))
     await waitFor(() => expect(screen.getByText('ccccccc Change the app')).toBeTruthy())
     rerender(<ChangesPanel projectId="p1" agentId="run-1" context={context} reveal={{ at: ++asks }} />)
-    await waitFor(() => expect(screen.getByText(NOT_MERGED)).toBeTruthy())
+    await waitFor(() => expect(screen.getByTitle(NOT_MERGED)).toBeTruthy())
   })
 
   test('a file asked for by its whole path on disk is the listed file that path ends with', async () => {

@@ -2,10 +2,12 @@ import { useLayoutEffect, useRef, type ReactNode } from 'react'
 import { ComposerShape } from './Composer.js'
 import { TopBar } from './Panes.js'
 
-// An agent's page, laid out as Claude Code on the web lays out a session: the top bar and the
-// notices under it (`top`) are the page's first row, and the chat fills the rest, its scroll bar
-// at the page's edge from under that row to the page's end. `bottom` is the message box and what
-// sits on it (the open questions, the agent's work), and lies over the chat's end.
+// An agent's page, laid out as Claude Code on the web lays out a session: the chat fills the
+// page, its scroll bar at the page's edge from the page's top to its end. The top bar and the
+// notices under it (`top`) lie over the chat's start, see-through and blurring what scrolls under
+// them, and `bottom`, the message box and what sits on it (the open questions, the agent's work),
+// lies over the chat's end. The room the top takes is written on the page as `--chat-top`, and the
+// chat's first row starts under it.
 //
 // The room that bar takes is written on the page as `--chat-bottom`, and the chat keeps its last
 // row clear of it (EventList). On a touch screen the bar does not lie over the chat: the chat ends
@@ -25,12 +27,14 @@ import { TopBar } from './Panes.js'
 // window), the bar's fade stays off the top bar.
 export function ChatPane({ top, bottom, children }: { top: ReactNode; bottom: ReactNode; children?: ReactNode }) {
   const pane = useRef<HTMLDivElement>(null)
+  const topBar = useRef<HTMLDivElement>(null)
   const bottomBar = useRef<HTMLDivElement>(null)
   const probe = useRef<HTMLDivElement>(null)
   useLayoutEffect(() => {
     const touch = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches
     const read = () => {
       const style = pane.current!.style
+      style.setProperty('--chat-top', `${topBar.current!.getBoundingClientRect().height}px`)
       const bar = bottomBar.current!.getBoundingClientRect().height
       style.setProperty('--chat-bar', `${bar}px`)
       style.setProperty('--chat-bottom', touch ? '0px' : `${bar}px`)
@@ -42,15 +46,17 @@ export function ChatPane({ top, bottom, children }: { top: ReactNode; bottom: Re
     read()
     if (typeof ResizeObserver === 'undefined') return
     const observer = new ResizeObserver(read)
-    for (const measured of [bottomBar, probe]) observer.observe(measured.current!)
+    for (const measured of [topBar, bottomBar, probe]) observer.observe(measured.current!)
     return () => observer.disconnect()
   }, [])
   return (
     <div ref={pane} data-testid="chat-pane" className="@container flex min-h-0 flex-1 flex-col">
-      <div data-testid="chat-top" className="shrink-0">
-        {top}
-      </div>
       <div className="relative isolate flex min-h-0 flex-1 flex-col overflow-hidden pointer-coarse:pb-(--chat-bar)">
+        {/* Over the chat's start, as Claude Code's: what scrolls under it shows through, blurred. It
+            stops short of the scroll bar, which runs the page's whole height. */}
+        <div ref={topBar} data-testid="chat-top" className="absolute top-0 right-(--chat-edge) left-0 z-20 bg-background/80 backdrop-blur-md pointer-coarse:right-(--chat-scroll-bar)">
+          {top}
+        </div>
         {/* Styled as the chat's scroller is (MessageScrollerViewport): a gutter kept, a thin bar. */}
         <div ref={probe} className="scrollbar-thin scrollbar-gutter-stable invisible absolute h-0 w-8 overflow-y-auto" aria-hidden />
         {children}

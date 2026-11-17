@@ -56,20 +56,19 @@ describe('ChatPane', () => {
     expect(screen.getByTestId('chat-bottom').parentElement!.className.split(' ')).toContain('pointer-coarse:pb-(--chat-bar)')
   })
 
-  test('the top bar is the page\'s first row, and the chat\'s room starts under it: the chat keeps no room for it', () => {
+  test('the top bar lies over the chat\'s start, as Claude Code\'s: see-through and blurred, short of the scroll bar, which runs the page\'s whole height', () => {
     render(<ChatPane top={<b>top bar</b>} bottom={<b>message box</b>}><p>chat</p></ChatPane>)
     const top = screen.getByTestId('chat-top')
-    expect(top.parentElement).toBe(pane())
-    expect(top.className.split(' ')).not.toContain('absolute')
-    // The chat and what lies over it share the room under the top bar, which the top bar is no part of.
+    // The chat, the top bar and the message box share one room, the chat under both bars.
     const chatRoom = screen.getByText('chat').parentElement!
     expect(chatRoom.parentElement).toBe(pane())
-    // What lies over the chat is cut at the room's edges: nothing of it reaches the top bar. And the
-    // room is a layer of its own: a popup the dashboard opens over the page stays over the message box's bar.
+    expect(top.parentElement).toBe(chatRoom)
+    expect(top.className.split(' ')).toEqual(expect.arrayContaining(['absolute', 'top-0', 'left-0', 'right-(--chat-edge)', 'z-20', 'bg-background/80', 'backdrop-blur-md']))
+    // The room is a layer of its own: a popup the dashboard opens over the page stays over the message box's bar.
     expect(chatRoom.className.split(' ')).toEqual(expect.arrayContaining(['relative', 'isolate', 'min-h-0', 'flex-1', 'overflow-hidden']))
-    expect(chatRoom.contains(top)).toBe(false)
     expect(screen.getByTestId('chat-bottom').parentElement).toBe(chatRoom)
-    expect(room('--chat-top')).toBe('')
+    // The room the top bar takes is written for the chat to start under it.
+    expect(room('--chat-top')).toBe('0px')
     // In the page's order: the top bar, the chat, the message box.
     expect(document.body.textContent).toBe('top barchatmessage box')
   })
@@ -126,13 +125,13 @@ describe('the chat\'s rows and the message box over their end', () => {
     return [...rows, screen.getByTestId('log-end-room'), ...(spacer().hidden ? [] : [spacer()])]
   }
 
-  test('the rows end above the message box, and the browser\'s own scrolling keeps clear of it; no room is kept at the start', () => {
+  test('the rows start under the top bar and end above the message box, and the browser\'s own scrolling keeps clear of both', () => {
     render(<EventList events={ended} projectId="p1" />)
-    expect(content().className.split(' ')).toEqual(expect.arrayContaining(['px-4', 'pt-4']))
+    expect(content().className.split(' ')).toEqual(expect.arrayContaining(['px-4', 'pt-[calc(var(--chat-top,0px)+1rem)]']))
     const end = screen.getByTestId('log-end-room')
     expect(end.className.split(' ')).toContain('h-[calc(var(--chat-bottom,0px)+0.5rem)]')
     expect(viewport().className.split(' ')).toContain('scroll-pb-(--chat-bottom)')
-    expect(viewport().className).not.toContain('--chat-top')
+    expect(viewport().className.split(' ')).toContain('scroll-pt-(--chat-top)')
     // "Jump to latest" stands above the message box and its fade, and nowhere else; it never lies over a bar.
     const button = document.querySelector<HTMLElement>('[data-slot="message-scroller-button"]')!.className.split(' ')
     expect(button).toContain('data-[direction=end]:bottom-[calc(var(--chat-bottom,0px)+1.25rem)]')

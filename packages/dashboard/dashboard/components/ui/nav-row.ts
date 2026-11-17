@@ -7,7 +7,7 @@ import { cn } from '../../lib/utils.js'
  */
 export function navRowClass(active: boolean): string {
   return cn(
-    'focus-ring flex w-full items-center gap-2 rounded-md px-1.5 text-sm font-normal text-foreground transition-colors md:h-8 max-md:h-11 [&>svg]:size-4 [&>svg]:shrink-0',
+    'focus-ring flex w-full items-center gap-2 rounded-md px-1.5 text-sm font-normal text-foreground transition-colors md:h-7 max-md:h-11 [&>svg]:size-4 [&>svg]:shrink-0',
     active ? 'bg-foreground/8 [&>svg]:text-foreground' : 'hover:bg-foreground/4 active:bg-foreground/8 [&>svg]:text-muted-foreground',
   )
 }

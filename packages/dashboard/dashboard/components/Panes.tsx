@@ -1,5 +1,4 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ComponentType, type ReactNode } from 'react'
-import { createPortal } from 'react-dom'
 import { ArrowLeft, Bot, FileText, Maximize2, Minimize2, X } from 'lucide-react'
 import type { Layout } from 'react-resizable-panels'
 import type { WorkspaceDoc } from '../../src/index.js'
@@ -36,8 +35,8 @@ import { useNarrow } from '../lib/use-narrow.js'
 //
 // The pieces: the provider knows the page's panes (PanesProvider, around the page and the panes),
 // the top bar draws their icons (PaneToggles), and the layout puts the column beside the
-// page (PaneLayout). On a desktop the top bar is a row over the page and its column (TopBar), so an
-// icon stays where it was pressed as a pane opens, and pressed again there closes it.
+// page (PaneLayout). The top bar is the page's own, over the chat alone (TopBar), as Claude Code's:
+// the column of panes beside it reaches the window's top.
 
 /** A pane's own id among the page's: a module's by its package and the id it gave, the dashboard's own by name. */
 const panelId = (panel: MountedPanel): string => `${panel.package}/${panel.id}`
@@ -233,17 +232,13 @@ export function PanesProvider({
   return <PanesContext.Provider value={value}>{children}</PanesContext.Provider>
 }
 
-/** The row over the page (the chat), beside its panes, that the page's top bar is drawn in (PaneLayout); none on a phone, or on a page with no panes. */
-const TopBarRow = createContext<HTMLElement | null>(null)
-
 /**
- * A page's top bar: in the row over the page, beside its panes, where there is one, else where it
- * stands. Always lined under, scrolled or not, with no fade under the line.
+ * A page's top bar, where the page puts it: over the chat alone, the panes beside it. Always lined
+ * under, scrolled or not, with no fade under the line; an agent's page lays it over the chat's start,
+ * see-through (ChatPane).
  */
 export function TopBar({ children }: { children: ReactNode }) {
-  const row = useContext(TopBarRow)
-  const bar = <div className="border-b border-border">{children}</div>
-  return row ? createPortal(bar, row) : bar
+  return <div className="border-b border-border">{children}</div>
 }
 
 /** The panes' icons, for the end of a page's top bar: one per pane, lit while its pane is open. */
@@ -406,7 +401,6 @@ const COLUMN_LEAST = 288
 export function PaneLayout({ children }: { children: ReactNode }) {
   const { page, enabled, open, expanded } = useContext(PanesContext)
   const isMobile = useIsMobile()
-  const [row, setRow] = useState<HTMLElement | null>(null)
   const [room, setRoom] = useState<HTMLElement | null>(null)
   const over = useNarrow(room, CHAT_LEAST + COLUMN_LEAST + 8) || isMobile
   const beside = open.length > 0 && !over
@@ -421,36 +415,30 @@ export function PaneLayout({ children }: { children: ReactNode }) {
     if (isUserInteraction && chat !== undefined && panes !== undefined) setPaneSizes(page, WORKSPACE, { [CHAT]: chat, [COLUMN]: panes })
   }
   return (
-    // `relative`: a pane that fills the page is laid over all of this.
-    <div className="relative flex min-w-0 flex-1 flex-col">
-      <TopBarRow.Provider value={row}>
-        <div ref={setRoom} className="relative flex min-h-0 flex-1">
-          {/* No line is dragged under a pane that fills the page. */}
-          <ResizablePanelGroup orientation="horizontal" disabled={expanded !== undefined} onLayoutChanged={remember} className="min-h-0 flex-1">
-            <ResizablePanel id={CHAT} minSize={CHAT_LEAST} className="flex min-w-0 flex-col" style={{ overflow: 'hidden' }}>
-              {/* The top bar's row: over the chat only, so the panes beside it reach the window's top. */}
-              {!isMobile && <div ref={setRow} className="shrink-0" />}
-              {children}
-            </ResizablePanel>
-            {beside && <ResizableHandle aria-label="The width of the chat and the panes" />}
-            {beside && (
-              <ResizablePanel id={columnId} defaultSize={`${column}%`} minSize={COLUMN_LEAST} style={{ overflow: 'hidden' }}>
-                <PaneStack />
-              </ResizablePanel>
-            )}
-          </ResizablePanelGroup>
-          {over && open.length > 0 && (
-            // The whole room under the top bar, 44 high: the chat's row, or on a phone the page's own.
-            <div className="absolute inset-x-0 top-11 bottom-0 z-20 flex flex-col bg-background">
-              {open.map(pane => (
-                <div key={pane.id} className="min-h-0 flex-1">
-                  <PaneCard pane={pane} over />
-                </div>
-              ))}
+    // `relative`: a pane that fills the page, or lies over the chat, is laid over all of this.
+    <div ref={setRoom} className="relative flex min-h-0 min-w-0 flex-1">
+      {/* No line is dragged under a pane that fills the page. */}
+      <ResizablePanelGroup orientation="horizontal" disabled={expanded !== undefined} onLayoutChanged={remember} className="min-h-0 flex-1">
+        <ResizablePanel id={CHAT} minSize={CHAT_LEAST} className="flex min-w-0 flex-col" style={{ overflow: 'hidden' }}>
+          {children}
+        </ResizablePanel>
+        {beside && <ResizableHandle aria-label="The width of the chat and the panes" />}
+        {beside && (
+          <ResizablePanel id={columnId} defaultSize={`${column}%`} minSize={COLUMN_LEAST} style={{ overflow: 'hidden' }}>
+            <PaneStack />
+          </ResizablePanel>
+        )}
+      </ResizablePanelGroup>
+      {over && open.length > 0 && (
+        // The whole room under the top bar, 44 high: the chat's row, or on a phone the page's own.
+        <div className="absolute inset-x-0 top-11 bottom-0 z-20 flex flex-col bg-background">
+          {open.map(pane => (
+            <div key={pane.id} className="min-h-0 flex-1">
+              <PaneCard pane={pane} over />
             </div>
-          )}
+          ))}
         </div>
-      </TopBarRow.Provider>
+      )}
     </div>
   )
 }

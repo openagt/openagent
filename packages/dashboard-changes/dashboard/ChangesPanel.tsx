@@ -278,7 +278,7 @@ function useHeld<T>(agentId: string | undefined, value: T, keep: boolean, moving
  * pane's name; then search, the button that hides the list, and the ⋮ menu.
  */
 function ChangesHeader({ between, merged, page, paths, changes, listShown, onPick, onToggleList, onRefresh }: {
-  between: string | undefined
+  between: { from: string; to: string } | undefined
   merged: boolean | undefined
   page: string
   paths: string[]
@@ -292,10 +292,12 @@ function ChangesHeader({ between, merged, page, paths, changes, listShown, onPic
   return (
     <>
       <PaneTitle>
-        {/* One line, the branches cut in their middle on a narrow pane, so the run's own stays told apart. */}
+        {/* One line, as Claude Code's: the branch measured from whole, then the run's own, cut in its
+            middle on a narrow pane so two runs' branches stay told apart. */}
         {between ? (
-          <h2 className="flex min-w-0 items-baseline gap-1 pl-2 text-sm text-muted-foreground" title={between}>
-            <MiddleCut text={between} />
+          <h2 className="flex min-w-0 items-baseline gap-1 pl-2 text-sm text-muted-foreground" title={`${between.from} → ${between.to}`}>
+            <span className="shrink-0">{`${between.from} →`}</span>
+            <MiddleCut text={between.to} />
             {merged !== undefined && <span className="shrink-0 text-xs">{merged ? '· merged' : '· not merged yet'}</span>}
           </h2>
         ) : (
@@ -481,7 +483,7 @@ export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePan
 
   // Only work that changed something is merged or not: a run that changed nothing, or one starting, says neither.
   const merged = agentId !== undefined && run !== null && 'merged' in run ? run.merged : undefined
-  const between = run && 'changes' in run && run.from && run.to ? `${run.from} → ${run.to}` : undefined
+  const between = run && 'changes' in run && run.from && run.to ? { from: run.from, to: run.to } : undefined
   const [diffsElement, setDiffsElement] = useState<HTMLElement | null>(null)
   useEffect(() => {
     if (allAsked !== undefined) diffsElement?.scrollTo({ top: 0 })
