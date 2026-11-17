@@ -84,6 +84,16 @@ function More({ children, onClick }: { children: string; onClick: (() => void) |
   )
 }
 
+/**
+ * A shadow at the right edge while a long line goes on past it, gone once scrolled to its end: the
+ * card's own colour moves with the lines and covers the shadow at their end. Said for every system,
+ * since a scrollbar that only shows while scrolling says nothing before.
+ */
+const MORE_RIGHT = {
+  background:
+    'linear-gradient(to left, var(--card), var(--card)) right / 1rem 100% no-repeat local, linear-gradient(to left, color-mix(in oklab, var(--foreground) 14%, transparent), transparent) right / 0.75rem 100% no-repeat scroll',
+}
+
 /** Whether a file is new whole: every line of its diff added. */
 export const isNewFile = (status: string) => status === 'untracked' || status === 'added'
 
@@ -104,7 +114,7 @@ export function DiffView({ diff, wrap, whole, onWhole, className }: { diff: File
   const fresh = isNewFile(diff.status)
   return (
     // Unwrapped, a long line scrolls sideways inside its file, each row as wide as the longest so its tint runs under it.
-    <div className={cn('overflow-x-auto font-mono text-xs text-foreground', className)}>
+    <div className={cn('overflow-x-auto font-mono text-xs text-foreground', className)} style={wrap ? undefined : MORE_RIGHT}>
       <div className={wrap ? undefined : 'w-max min-w-full'}>
         {rows.map((row, i) => {
           if (row.kind === 'gap') return <More key={i} onClick={ask}>{`${row.hidden} unmodified ${row.hidden === 1 ? 'line' : 'lines'}`}</More>
