@@ -226,7 +226,7 @@ function Paste({ lead, text, label, after }: { lead: string; text: string; label
   return (
     <div className="space-y-2 text-xs">
       <p>{lead}</p>
-      <div className="flex items-center gap-2 rounded-md bg-muted py-1 pr-1 pl-4 max-md:py-0 max-md:pr-0">
+      <div className="flex items-center gap-2 rounded-md bg-muted py-2 pr-2 pl-4 max-md:py-0 max-md:pr-0">
         <code title={text} className="min-w-0 flex-1 truncate font-mono text-sm">
           {text}
         </code>
