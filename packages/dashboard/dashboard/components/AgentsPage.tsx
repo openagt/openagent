@@ -400,39 +400,37 @@ function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord;
       }
     >
       <form id={formId} noValidate onSubmit={submit} className="space-y-6 pb-1">
+        {/* The default's name is the title's and stays: no field for it, the reason under the title. */}
+        {isDefault && <p className="-mt-2 text-sm text-muted-foreground">The default agent keeps its name: it is the one a session is on unless you pick another.</p>}
         {/* Who it is first, its name and the account it pushes as side by side from a tablet up, then the
             coding agents' accounts it works with, then what it knows: its skills. */}
         <div className="grid gap-x-4 gap-y-6 md:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label htmlFor="agent-name">Name</Label>
-            <Input
-              id="agent-name"
-              ref={nameField}
-              value={draft.name}
-              disabled={isDefault}
-              readOnly={busy}
-              placeholder="Social media"
-              // On a phone a finger's 44, as the foot's presses.
-              className="max-md:h-11"
-              aria-invalid={nameMissing || nameRefused}
-              {...(nameMissing ? { 'aria-describedby': 'agent-name-missing' } : nameRefused ? { 'aria-describedby': 'agent-refused' } : isDefault ? { 'aria-describedby': 'agent-name-kept' } : {})}
-              onChange={event => {
-                setNameMissing(false)
-                setNameRefused(false)
-                setDraft(d => ({ ...d, name: event.target.value }))
-              }}
-            />
-            {nameMissing && (
-              <p id="agent-name-missing" className="text-xs text-danger">
-                Give the agent a name.
-              </p>
-            )}
-            {isDefault && (
-              <p id="agent-name-kept" className="text-xs text-muted-foreground">
-                The default agent keeps its name: it is the one a session is on unless you pick another.
-              </p>
-            )}
-          </div>
+          {!isDefault && (
+            <div className="space-y-1.5">
+              <Label htmlFor="agent-name">Name</Label>
+              <Input
+                id="agent-name"
+                ref={nameField}
+                value={draft.name}
+                readOnly={busy}
+                placeholder="Social media"
+                // On a phone a finger's 44, as the foot's presses.
+                className="max-md:h-11"
+                aria-invalid={nameMissing || nameRefused}
+                {...(nameMissing ? { 'aria-describedby': 'agent-name-missing' } : nameRefused ? { 'aria-describedby': 'agent-refused' } : {})}
+                onChange={event => {
+                  setNameMissing(false)
+                  setNameRefused(false)
+                  setDraft(d => ({ ...d, name: event.target.value }))
+                }}
+              />
+              {nameMissing && (
+                <p id="agent-name-missing" className="text-xs text-danger">
+                  Give the agent a name.
+                </p>
+              )}
+            </div>
+          )}
           <div className="space-y-1.5">
             <Label htmlFor="agent-github">On GitHub as</Label>
             {/* The pick, and beside it a square of its height that adds an account: the block stays as
