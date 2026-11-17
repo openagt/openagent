@@ -176,7 +176,8 @@ export function Problem({ children }: { children: ReactNode }) {
 
 /** The presses a form or a question ends on: one row at its end, Cancel before the press it ends on; on a phone each 44 high, sharing the width. */
 export function PressRow({ children }: { children: ReactNode }) {
-  return <div className="flex justify-end gap-2 max-md:[&_:is(button,a)]:h-11 max-md:[&>*]:flex-1">{children}</div>
+  // A quiet press that ends the row is pulled out by its padding, so its words end on the edge a boxed press would.
+  return <div className="flex justify-end gap-2 max-md:[&_:is(button,a)]:h-11 max-md:[&>*]:flex-1 md:[&>[data-variant=ghost]:last-child]:-mr-3">{children}</div>
 }
 
 /** The presses of a way of adding: in Settings' foot, where they hold their place from step to step; outside Settings, under the flow. */

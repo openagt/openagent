@@ -345,12 +345,12 @@ function AddComputer({ d, onGive, onSetUpServer, onClose }: { d: Devices; /** Gi
           description={server ? `At the office, at a friend's: it joins through ${server.label}.` : "At the office, at a friend's: it joins through a server. Add a server first."}
           control={
             server || !onSetUpServer ? (
-              <Button type="button" variant="ghost" disabled={!server} onClick={onGive}>
+              <Button type="button" variant="ghost" className="max-md:-ml-3 md:-mr-3" disabled={!server} onClick={onGive}>
                 <Ticket className="size-4" aria-hidden />
                 Give it a code
               </Button>
             ) : (
-              <Button type="button" variant="ghost" onClick={onSetUpServer}>
+              <Button type="button" variant="ghost" className="max-md:-ml-3 md:-mr-3" onClick={onSetUpServer}>
                 <Server className="size-4" aria-hidden />
                 Set up a server
               </Button>
