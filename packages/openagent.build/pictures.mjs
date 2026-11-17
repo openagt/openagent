@@ -30,12 +30,13 @@ const sizes = new URL('pages/index/pictures.json', import.meta.url)
  * What each picture shows: the page and what it waits for, then one shot for each width of room the site gives
  * it, each for the screens its `media` names (the last one for every other screen): the part of the dashboard to
  * keep, `width` wide, the window's width or its main column's from a margin over one element to a margin under
- * another (`rows`), or an element's box (`around`), in a window about `window` wide: as much wider as
+ * another (`rows`), in a window about `window` wide: as much wider as
  * the part must be to have its width beside the dashboard's own margins and sidebar.
  */
 const PICTURES = [
   // A run waiting on the person's decision: the hero, the column's width, the window's top beside the sidebar's;
-  // where the column is narrower than the dashboard with its sidebar, the question alone.
+  // where the column is narrower than the dashboard with its sidebar, the dashboard as a phone has it, its bar
+  // over the question, so the picture shows the app around the question.
   {
     name: 'run',
     path: (demo, runs) => `${demo.project.id}/${runs.waiting}`,
@@ -43,8 +44,8 @@ const PICTURES = [
     shots: [
       { window: 1120, width: 1120, media: '(min-width: 1184px)', keep: 'window', rows: [undefined, 'main >> role=button[name=/^Answer/]'] },
       { window: 960, width: 960, media: '(min-width: 1024px)', keep: 'window', rows: [undefined, 'main >> role=button[name=/^Answer/]'] },
-      { window: 704, width: 704, media: '(min-width: 768px)', around: 'main >> role=region[name="Which way?"]' },
-      { window: 390, width: 358, media: '', around: 'main >> role=region[name="Which way?"]' },
+      { window: 704, width: 704, media: '(min-width: 768px)', keep: 'window', rows: [undefined, 'main >> role=button[name=/^Answer/]'] },
+      { window: 358, width: 358, media: '', keep: 'window', rows: [undefined, 'main >> role=button[name=/^Answer/]'] },
     ],
   },
   // The launcher's "Waiting on you": the Human Queue as a person meets it, in two thirds of the column (the
@@ -144,7 +145,7 @@ async function taken(path, ready, shot, window, scheme, use) {
         for (const [from, to] of scrub) if (node.nodeValue.includes(from)) node.nodeValue = node.nodeValue.replaceAll(from, to)
       }
     }, [[[demo.home, '~'], [homedir(), '~'], [hostname(), 'this computer']]])
-    for (const row of [shot.around, ...(shot.rows ?? [])].filter(Boolean)) await page.locator(row).first().waitFor()
+    for (const row of shot.rows.filter(Boolean)) await page.locator(row).first().waitFor()
     return await use(page, context)
   } finally {
     await context.close()
@@ -152,17 +153,11 @@ async function taken(path, ready, shot, window, scheme, use) {
 }
 
 /**
- * The part of the page to keep, on whole pixels: an element's box, or the window's or the main column's
- * width from a margin over its first row (or the window's top) to one under its last, moved down to fall between
- * two rows of every column it crosses (the sidebar's beside the main column's), never through one.
+ * The part of the page to keep, on whole pixels: the window's or the main column's width from a margin over
+ * its first row (or the window's top) to one under its last, moved down to fall between two rows of every
+ * column it crosses (the sidebar's beside the main column's), never through one.
  */
-async function part(page, { keep, rows, around }) {
-  if (around) {
-    const box = await page.locator(around).first().boundingBox()
-    const x = Math.floor(box.x)
-    const y = Math.floor(box.y)
-    return { x, y, width: Math.ceil(box.x + box.width) - x, height: Math.ceil(box.y + box.height) - y }
-  }
+async function part(page, { keep, rows }) {
   const [top, bottom] = rows
   const margin = 24
   const across = keep === 'main' ? await page.locator('main').boundingBox() : { x: 0, width: page.viewportSize().width }

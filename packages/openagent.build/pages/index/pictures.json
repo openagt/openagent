@@ -13,15 +13,15 @@
       "media": "(min-width: 1024px)"
     },
     {
-      "window": 746,
+      "window": 704,
       "width": 704,
-      "height": 272,
+      "height": 480,
       "media": "(min-width: 768px)"
     },
     {
-      "window": 400,
+      "window": 358,
       "width": 358,
-      "height": 272,
+      "height": 504,
       "media": ""
     }
   ],
