@@ -1,5 +1,5 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type Ref, type RefObject } from 'react'
-import { ArrowLeft, ChevronRight, Square, X } from 'lucide-react'
+import { ChevronRight, Square, X } from 'lucide-react'
 import { useIsMobile } from '../lib/use-mobile.js'
 import type { AgentMeta, OpenAgentEvent } from '../../src/index.js'
 import { onAgent } from '../rpc/reads.js'
@@ -21,6 +21,7 @@ import { SentenceShape, Slot } from './ui/slot.js'
 import { navRowClass } from './ui/nav-row.js'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip.js'
 import { EventList } from './EventList.js'
+import { PaneActions, PaneTitle } from './PaneHeader.js'
 import { RunMark } from './RunMark.js'
 import { Seconds, tokenWords } from './ToolCalls.js'
 
@@ -104,7 +105,7 @@ export function SubagentsPanel({
         projectId={projectId}
         onPick={key => revealSubagent(page, key === shown?.key ? undefined : key)}
         onStop={key => (back.current = { key })}
-        // On a phone an opened subagent takes the pane in the list's place, its arrow back to the list; beside it the list would be cut.
+        // On a phone an opened subagent takes the pane in the list's place, "Subagents" in the pane's head back to the list; beside it the list would be cut.
         className={shown ? 'max-md:hidden md:max-h-1/2 md:shrink-0' : 'flex-1'}
       />
       {shown && <Shown key={shown.key} row={shown} projectId={projectId} events={events} onOpenAgent={onOpenAgent} onClose={() => {
@@ -339,40 +340,53 @@ function Shown({ row, projectId, events, onOpenAgent, onClose }: { row: Subagent
   const calls = transcript.filter(e => e.kind === 'driver' && e.event.type === 'action').length
   // Under the prompt, in the log: a note beside it took half the room, and on a phone the prompt's top scrolled away.
   const ending = row.working ? null : transcript.length > 0 ? <PaneFoot row={row} calls={calls} /> : <p className="py-1 font-sans text-sm text-muted-foreground">It left nothing to show.</p>
+  const presses = (
+    <>
+      {row.working && runId && (
+        <Button variant="secondary" size="sm" loading={stopping} onClick={stop}>
+          <Square aria-hidden className="size-3 fill-current text-danger" />
+          {stopping ? 'Stopping…' : 'Stop'}
+        </Button>
+      )}
+      {runId && onOpenAgent && (
+        <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => onOpenAgent(runId)}>
+          Open its page
+        </Button>
+      )}
+    </>
+  )
   return (
     // Its Stop gone once the run stopped, the keyboard stays in it, on its next press.
     <FocusHome as="section" aria-label={row.name} className="flex min-h-0 flex-1 flex-col md:border-t md:border-hairline">
-      {/* As the pane's own head: its name and its last glyph 16 in; on a phone, where it takes the list's place, an arrow back to all of them first. */}
-      <header className="flex h-11 shrink-0 items-center gap-1 pr-2 pl-4 max-md:pl-2">
-        {phone && (
-          <Tooltip>
-            <TooltipTrigger render={<Button variant="ghost" size="icon-bar" className="ml-0.5 text-muted-foreground" aria-label="Back to all subagents" onClick={onClose} />}>
-              <ArrowLeft className="size-4" />
-            </TooltipTrigger>
-            <TooltipContent>All subagents</TooltipContent>
-          </Tooltip>
-        )}
-        <h3 className="min-w-0 flex-1 truncate text-sm font-medium">{row.name}</h3>
-        {row.working && runId && (
-          <Button variant="secondary" size="sm" loading={stopping} onClick={stop}>
-            <Square aria-hidden className="size-3 fill-current text-danger" />
-            {stopping ? 'Stopping…' : 'Stop'}
-          </Button>
-        )}
-        {runId && onOpenAgent && (
-          <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => onOpenAgent(runId)}>
-            Open its page
-          </Button>
-        )}
-        {!phone && (
+      {phone ? (
+        // On a phone, where it takes the list's place, it is named in the pane's own head, one row of
+        // ways back: the pane's arrow to the chat, "Subagents" to all of them; its presses at the end.
+        <>
+          <PaneTitle>
+            <Tooltip>
+              <TooltipTrigger render={<Button variant="ghost" size="sm" className="shrink-0 px-2 text-muted-foreground" aria-label="Back to all subagents" onClick={onClose} />}>
+                Subagents
+              </TooltipTrigger>
+              <TooltipContent>All subagents</TooltipContent>
+            </Tooltip>
+            <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+            <h3 className="min-w-0 flex-1 truncate pl-1 text-sm font-medium">{row.name}</h3>
+          </PaneTitle>
+          <PaneActions>{presses}</PaneActions>
+        </>
+      ) : (
+        // As the pane's own head: its name and its last glyph 16 in.
+        <header className="flex h-11 shrink-0 items-center gap-1 pr-2 pl-4">
+          <h3 className="min-w-0 flex-1 truncate text-sm font-medium">{row.name}</h3>
+          {presses}
           <Tooltip>
             <TooltipTrigger render={<Button variant="ghost" size="icon-sm" className="mr-0.5 text-muted-foreground" aria-label={`Close ${row.name}`} onClick={onClose} />}>
               <X className="size-4" />
             </TooltipTrigger>
             <TooltipContent>Close</TooltipContent>
           </Tooltip>
-        )}
-      </header>
+        </header>
+      )}
       {/* A Stop the daemon refused, in its words, on a line of its own under the head. */}
       {error !== null && <p className="shrink-0 px-4 pb-2 text-sm text-muted-foreground">{error}</p>}
       <div className="flex min-h-0 flex-1 flex-col">
