@@ -16,7 +16,7 @@ export function Panel({ ordered = false, className, children, ...props }: { orde
   const List = ordered ? 'ol' : 'ul'
   const inPage = useContext(PageColumns)
   return (
-    <List {...props} className={cn(cardSurface, 'grid overflow-hidden *:col-span-full', inPage ? 'col-span-full grid-cols-subgrid' : 'grid-cols-[minmax(0,1fr)_auto_auto]', className)}>
+    <List {...props} className={cn(cardSurface, 'grid overflow-hidden *:col-span-full', ONE_SENTENCE, inPage ? 'col-span-full grid-cols-subgrid' : 'grid-cols-[minmax(0,1fr)_auto_auto]', className)}>
       {children}
     </List>
   )
@@ -80,9 +80,16 @@ export function PanelGroup({ title, badge, count, action, bare = false, children
   )
 }
 
-/** A {@link Panel}'s one sentence where its rows would be: what it holds when it holds none, on the rows' inset. */
+/** A {@link Panel} that holds its {@link PanelNote} alone is that sentence under the part's heading, with no card: a card is for rows. */
+const ONE_SENTENCE = 'has-[>[data-note]:only-child]:border-0 has-[>[data-note]:only-child]:bg-transparent has-[>[data-note]:only-child]:shadow-none'
+
+/** A {@link Panel}'s one sentence where its rows would be: what it holds when it holds none, on the rows' inset; alone in it, on the heading's edge. */
 export function PanelNote({ children }: { children: ReactNode }) {
-  return <li className="px-4 py-3 text-sm text-muted-foreground">{children}</li>
+  return (
+    <li data-note="" className="px-4 py-3 text-sm text-muted-foreground only:p-0">
+      {children}
+    </li>
+  )
 }
 
 /** The press at a {@link Panel}'s foot that shows the rows it holds back, or hides them again: "Show 3 more", as tall as a one-line row. */
