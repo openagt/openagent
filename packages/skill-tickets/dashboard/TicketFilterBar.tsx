@@ -71,6 +71,13 @@ function OptionRow({
   )
 }
 
+/**
+ * A facet popover's body. On a phone its rows are 44 high, so their words sit 6 further from the
+ * popover's top and bottom than a 32-high row's; the body pulls in by as much, and the words keep
+ * one inset on all four sides.
+ */
+const FACET_BODY = 'max-md:-my-1.5'
+
 /** A ghost chip of the filter row: filled while what it says is applied. */
 const CHIP_ON = 'bg-accent text-accent-foreground'
 
@@ -122,7 +129,7 @@ function RangeFacet({
     <Popover>
       <PopoverTrigger render={<FacetTrigger label={label} value={rangeValue(filter, buckets, noneLabel)} />} />
       <PopoverContent className="w-56">
-        <div>
+        <div className={FACET_BODY}>
           {buckets.map(bucket => (
             <OptionRow
               key={bucket.id}
@@ -132,16 +139,16 @@ function RangeFacet({
               onChange={() => onChange(withBucketToggled(filter, bucket.id))}
             />
           ))}
+          {/* The rules start where the ticks and the words do, on the rows' inset. */}
+          <Separator className="mx-2 my-1" />
+          <RangeRow label={label} buckets={buckets} filter={filter} onChange={onChange} />
+          {(counts.none > 0 || filter.none) && (
+            <>
+              <Separator className="mx-2 my-1" />
+              <OptionRow label={noneLabel} count={counts.none} checked={filter.none} onChange={next => onChange(withNone(filter, next))} />
+            </>
+          )}
         </div>
-        {/* The rules start where the ticks and the words do, on the rows' inset. */}
-        <Separator className="mx-2 my-1" />
-        <RangeRow label={label} buckets={buckets} filter={filter} onChange={onChange} />
-        {(counts.none > 0 || filter.none) && (
-          <>
-            <Separator className="mx-2 my-1" />
-            <OptionRow label={noneLabel} count={counts.none} checked={filter.none} onChange={next => onChange(withNone(filter, next))} />
-          </>
-        )}
       </PopoverContent>
     </Popover>
   )
@@ -220,7 +227,7 @@ function CheckFacet({
     <Popover>
       <PopoverTrigger render={<FacetTrigger label={label} value={value} />} />
       <PopoverContent className="w-56">
-        <div>{children}</div>
+        <div className={FACET_BODY}>{children}</div>
       </PopoverContent>
     </Popover>
   )
