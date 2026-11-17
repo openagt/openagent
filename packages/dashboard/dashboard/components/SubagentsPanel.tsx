@@ -175,8 +175,10 @@ function SubagentList({ ref, fold, page, rows, reasons, shown, projectId, onPick
           </Part>
         )
       })}
-      {/* The list's foot, 16 under its last row: while more is under it, what is cut there fades out rather than ending on a line. */}
-      <div aria-hidden className="pointer-events-none sticky bottom-0 h-4 bg-gradient-to-t from-card to-transparent" />
+      {/* The list's foot, 16 under its last row: while more is under it, what is cut there fades out rather than ending on a line.
+          On a phone 32: its rows are 44, and a cut between two would leave 16 of fade over the gap alone, with nothing to
+          say the list goes on; 32 lays the fade over the next row's name. */}
+      <div aria-hidden className="pointer-events-none sticky bottom-0 h-4 bg-gradient-to-t from-card to-transparent max-md:h-8" />
     </div>
   )
 }

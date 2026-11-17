@@ -12,8 +12,9 @@ import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 // failed says why on a line of its own. It is there while there is something to say: the agent has
 // changes, a pull request or a next step. An agent that changed nothing has no card.
 //
-// A card of its own, as the look's handoff: the box's surface, hairline, shadow and corner, 8 above
-// the box (the box's dock's own top padding) and nothing of it under the box. At least 44 high, its
+// A card of its own, as the look's handoff: the box's surface, hairline and corner, 8 above the box
+// (the box's dock's own top padding) and nothing of it under the box. It has no shadow: the box is
+// the one raised surface, and the card reads as part of its group, not as a second one over it. At least 44 high, its
 // words 16 in and its presses 8 in from the edges they touch (spacing.md 3, 6). On a phone its words
 // take the first line and its presses the line under it, 44 high, sharing the width.
 export function AgentWorkBar({
@@ -48,7 +49,7 @@ export function AgentWorkBar({
   return (
     <div className="mx-auto w-full max-w-3xl px-4 pt-2">
       {/* Focusable by script only: a press that leaves nothing to press next leaves the focus here. */}
-      <div role="group" aria-label="This session's work" tabIndex={-1} className="flex min-h-11 flex-wrap items-center gap-x-2 rounded-box border border-hairline bg-card py-1 pr-2 pl-4 text-sm shadow-lg outline-none max-md:gap-y-2 max-md:pt-3 max-md:pb-2 max-md:pl-2">
+      <div role="group" aria-label="This session's work" tabIndex={-1} className="flex min-h-11 flex-wrap items-center gap-x-2 rounded-box border border-hairline bg-card py-1 pr-2 pl-4 text-sm outline-none max-md:gap-y-2 max-md:pt-3 max-md:pb-2 max-md:pl-2">
         {/* The words: what the run did, then its branch, the two parts that give up width, each cut
             short, the branch in its middle so the end that tells it apart stays, its whole name in its
             tooltip; then what the branch holds and its pull request, whole. */}

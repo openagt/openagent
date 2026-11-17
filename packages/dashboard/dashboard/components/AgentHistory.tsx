@@ -624,16 +624,17 @@ function WaitingOnYou({
                   href={href}
                   aria-label={`${item.title} · ${need}`}
                   {...(external ? { target: '_blank', rel: 'noreferrer' } : { onClick: inPlace(() => onOpen(item)) })}
-                  className={cn(rowClass, 'md:h-12 max-md:h-16')}
+                  className={cn(rowClass, 'py-1.5 md:min-h-12 max-md:min-h-16')}
                 >
                   <span className="flex min-w-0 flex-1 flex-col">
-                    {/* The mark on the name's line, never between the two (spacing.md 3). */}
-                    <span className="flex min-w-0 items-center gap-3">
-                      <span className="flex size-4 shrink-0 items-center justify-center">
+                    {/* The mark and the age on the name's first line, never between the two (spacing.md 3). The
+                        name takes two lines before it is cut: what waits on the person is told apart by it. */}
+                    <span className="flex min-w-0 items-start gap-3">
+                      <span className="flex h-5 w-4 shrink-0 items-center justify-center">
                         <StateCell state="waiting" />
                       </span>
-                      <span className="min-w-0 flex-1 truncate">{item.title}</span>
-                      <span aria-hidden className={AGE}>
+                      <span className="line-clamp-2 min-w-0 flex-1 break-words">{item.title}</span>
+                      <span aria-hidden className={cn(AGE, 'leading-5')}>
                         {formatSince(item.createdAt)}
                       </span>
                     </span>
