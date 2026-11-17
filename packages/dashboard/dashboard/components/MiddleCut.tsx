@@ -1,4 +1,3 @@
-import { Fragment } from 'react'
 
 // A name cut in its middle where its line is too narrow, so its ending stays: "applyp…msg.sample",
 // "From branch agent-2…-37-943Z". A file's ending says what it is; a branch's is what tells two apart.
@@ -33,23 +32,5 @@ export function PathCut({ path }: { path: string }) {
       {name > 0 && <span className="min-w-0 shrink-[1000000] truncate text-muted-foreground">{path.slice(0, name)}</span>}
       <MiddleCut text={path.slice(name)} />
     </>
-  )
-}
-
-/**
- * `path` whole, on as many lines as it needs: broken after a slash, and inside a folder's name only where
- * one is longer than the line. For a repository's place in a picker, where every part of it tells two
- * repos apart.
- */
-export function PathWhole({ path }: { path: string }) {
-  return (
-    <span className="min-w-0 [overflow-wrap:anywhere]">
-      {path.split(/(?<=\/)/).map((part, at) => (
-        <Fragment key={at}>
-          {at > 0 && <wbr />}
-          {part}
-        </Fragment>
-      ))}
-    </span>
   )
 }

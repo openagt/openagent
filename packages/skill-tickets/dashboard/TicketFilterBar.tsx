@@ -139,12 +139,13 @@ function RangeFacet({
               onChange={() => onChange(withBucketToggled(filter, bucket.id))}
             />
           ))}
-          {/* The rules start where the ticks and the words do, on the rows' inset. */}
-          <Separator className="mx-2 my-1" />
+          {/* The rules start where the ticks and the words do and end where the counts do, on the rows' inset
+              (w-auto: the separator's own full width would run its margins past the right edge). */}
+          <Separator className="mx-2 my-1 w-auto" />
           <RangeRow label={label} buckets={buckets} filter={filter} onChange={onChange} />
           {(counts.none > 0 || filter.none) && (
             <>
-              <Separator className="mx-2 my-1" />
+              <Separator className="mx-2 my-1 w-auto" />
               <OptionRow label={noneLabel} count={counts.none} checked={filter.none} onChange={next => onChange(withNone(filter, next))} />
             </>
           )}
