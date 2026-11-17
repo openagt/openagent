@@ -155,9 +155,13 @@ export function QueuePage({ projects }: ModulePageProps) {
           <Slot
             of={{ state, value: reads, failing }}
             shape={
-              <PanelGroup title={<WordsShape words="Priority 5" />} bare>
-                <PanelShape rows={1} />
-              </PanelGroup>
+              <div>
+                {/* On a phone, the batch's start over the entries: its row's room and the 16 under it, held as the read page draws them. */}
+                {phone && <div aria-hidden className="mb-4 h-11" />}
+                <PanelGroup title={<WordsShape words="Priority 5" />} bare>
+                  <PanelShape rows={1} />
+                </PanelGroup>
+              </div>
             }
           >
             {reads => reads.map(read => <ProjectQueue key={read.project.id} read={read} names={names} starts={starts} reload={reload} field={false} batch={phone && <BatchStart read={read} primary fill names={names} starts={starts} />} />)}
