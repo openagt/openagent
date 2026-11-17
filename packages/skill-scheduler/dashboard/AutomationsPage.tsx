@@ -451,8 +451,7 @@ function StatusLine({ row, agents, className }: { row: SchedulerRow; agents: rea
   const note = row.lastTick?.note
   const [commands, setCommands] = useState(false)
   const off = row.error === undefined && !row.on
-  // What turns it on: in the line of facts, or on a phone, where the line wraps, a row of its own under them.
-  const phone = useIsMobile()
+  // What turns it on: a row of its own under the facts, in the page's words' size, so the way out of "off" reads as one.
   const presses = off && [
     <TurnOn />,
     <button type="button" aria-expanded={commands} onClick={() => setCommands(shown => !shown)} className={cn(LINE_PRESS, 'text-muted-foreground hover:text-foreground')}>
@@ -480,10 +479,9 @@ function StatusLine({ row, agents, className }: { row: SchedulerRow; agents: rea
           ),
           // Why its last look decided nothing, when it says: a pull that failed. "off" is the status, and a project that schedules nothing says so below.
           note !== undefined && note !== 'off' && note !== NOTHING_SCHEDULED && <span className="text-warning">{`Its last look: ${note}`}</span>,
-          ...(presses && !phone ? presses : []),
         ]}
       />
-      {presses && phone && <div className="mt-3 flex items-center gap-6 text-xs">{presses.map((press, at) => <span key={at}>{press}</span>)}</div>}
+      {presses && <div className="mt-2 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm max-md:mt-3">{presses.map((press, at) => <span key={at}>{press}</span>)}</div>}
       {off && commands && (
         <div className="mt-3 max-w-180 space-y-2 text-sm text-muted-foreground">
           <p>To start it now, run in the project:</p>
@@ -496,7 +494,7 @@ function StatusLine({ row, agents, className }: { row: SchedulerRow; agents: rea
   )
 }
 
-/** Two rows while they are read on a phone, where a row's name and words take two lines and its facts two more: as tall as the rows that come. */
+/** Two rows while they are read on a phone, where a row's name and words take two lines and its facts two more: as tall as the rows that come */
 function PhoneRowShapes() {
   return (
     <Panel>

@@ -562,9 +562,11 @@ describe('the Automations page: its rows', () => {
     const other = screen.getByRole('region', { name: 'other' })
     expect(within(other).getByText('Scheduler off')).toBeTruthy()
     expect(within(other).queryByText(/: off/)).toBeNull()
-    // Said off once, on its line, with the one way to turn it on: Settings › Skills, whose tick starts it with the dashboard.
+    // Said off once, on its line, with the one way to turn it on, Settings › Skills, whose tick starts it with the dashboard, on a row of its own under it.
     expect(within(other).queryByText(/^The scheduler is off/)).toBeNull()
-    expect(within(other).getByText('Scheduler off').parentElement!.parentElement!.textContent).toMatch(/^Scheduler off·.*·Turn it on in Skills·In a terminal$/)
+    const facts = within(other).getByText('Scheduler off').parentElement!.parentElement!
+    expect(facts.textContent).toMatch(/^Scheduler off·[^·]+·Last looked /)
+    expect(facts.nextElementSibling!.textContent).toBe('Turn it on in SkillsIn a terminal')
     fireEvent.click(within(other).getByRole('button', { name: 'Turn it on in Skills' }))
     expect(host.openSettings).toHaveBeenCalledWith('skills')
     expect(within(gemstack).queryByRole('button', { name: 'Turn it on in Skills' })).toBeNull()
