@@ -1,5 +1,6 @@
 import { ReadyNaming } from '@openagt/agent-runner'
 import { withLocalBin } from './local-bin.js'
+import { refreshLoginShellPath } from './shell-path.js'
 import { startDashboard, type Dashboard } from './dashboard/server.js'
 import { createProjectRuntime } from './daemon-runtime.js'
 import { defaultQuotaSource } from './dashboard/quota.js'
@@ -99,6 +100,9 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
   const env = opts.env ?? process.env
   // What a press installs is found at once, by the checks and by every run started from here.
   withLocalBin(process.env)
+  // What the person's terminal runs is found by the checks and by every run started from here: the
+  // service's own PATH is the one its install's terminal had.
+  await refreshLoginShellPath()
   // The browser bridge (#1237). Opt-in, because it opens the daemon's one route reachable from
   // another origin, behind a key of its own. The key may not exist yet, hence ensure, not read.
   const bridgeOn = (await readPreferences(env)).bridge === true
