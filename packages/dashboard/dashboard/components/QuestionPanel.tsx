@@ -18,7 +18,7 @@ const OTHER = Symbol('other')
 // box with a tick where several may be picked. The whole row is the control, so the mark is only its picture.
 function Mark({ on, multi }: { on: boolean; multi: boolean | undefined }) {
   return multi ? (
-    <span className={cn('mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border', on ? 'border-primary bg-primary text-primary-foreground' : 'border-foreground/20')} aria-hidden>
+    <span className={cn('mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border', on ? 'border-primary bg-primary text-primary-foreground' : 'border-foreground/20')} aria-hidden>
       {on && <Check className="h-3 w-3" />}
     </span>
   ) : (
@@ -247,7 +247,7 @@ export function QuestionPanel({
                 name="own-answer"
                 placeholder="Type your own answer here"
                 aria-label="Your own answer"
-                className="mx-4 mb-2 ml-11 rounded-md border border-border bg-transparent px-2.5 py-1.5 outline-none placeholder:text-muted-foreground focus:border-primary"
+                className="mx-4 mb-2 ml-11 rounded-md border border-border bg-transparent px-3 py-1.5 outline-none placeholder:text-muted-foreground focus:border-primary"
               />
             )}
           </li>
@@ -259,18 +259,18 @@ export function QuestionPanel({
           {error ?? (busy ? 'Sending your answer…' : '')}
         </span>
         {!send && (
-          <button type="button" disabled={busy || down} onClick={() => say(skipPrompt(choice.title))} className="h-6 rounded-md bg-foreground/10 px-2 text-[13px] hover:bg-foreground/15 disabled:opacity-60">
+          <button type="button" disabled={busy || down} onClick={() => say(skipPrompt(choice.title))} className="h-6 rounded-md bg-foreground/10 px-2 text-xs hover:bg-foreground/15 disabled:opacity-60">
             Skip
           </button>
         )}
-        <button type="button" disabled={busy || down || !ready} onClick={submit} className="flex h-6 items-center gap-1.5 rounded-md bg-foreground px-2 text-[13px] font-medium text-background hover:bg-foreground/90 disabled:opacity-60">
+        <button type="button" disabled={busy || down || !ready} onClick={submit} className="flex h-6 items-center gap-1.5 rounded-md bg-foreground px-2 text-xs font-medium text-background hover:bg-foreground/90 disabled:opacity-60">
           Submit
           {active && (
             // The message box's rule for naming keys: none on a touch screen, none at a phone's width. While a text field
             // outside the card has Ctrl+Enter, the keys are dimmed and keep their place, so Submit and Skip stand still.
             <span className={cn('gap-0.5 transition-opacity pointer-coarse:hidden max-md:hidden md:not-pointer-coarse:flex', keysElsewhere && 'opacity-40')} aria-hidden>
-              <kbd className="flex h-[17px] min-w-[17px] items-center justify-center rounded border border-background/20 px-0.5 font-sans text-[11px]">{MOD_KEY}</kbd>
-              <kbd className="flex h-[17px] min-w-[17px] items-center justify-center rounded border border-background/20 px-0.5 font-sans text-[11px]">Enter</kbd>
+              <kbd className="flex h-4 min-w-4 items-center justify-center rounded-sm border border-background/20 px-0.5 font-sans text-xs">{MOD_KEY}</kbd>
+              <kbd className="flex h-4 min-w-4 items-center justify-center rounded-sm border border-background/20 px-0.5 font-sans text-xs">Enter</kbd>
             </span>
           )}
         </button>
