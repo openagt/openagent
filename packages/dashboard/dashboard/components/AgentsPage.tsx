@@ -401,7 +401,7 @@ function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord;
     >
       <form id={formId} noValidate onSubmit={submit} className="space-y-6 pb-1">
         {/* The default's name is the title's and stays: no field for it, the reason under the title. */}
-        {isDefault && <p className="-mt-2 text-sm text-muted-foreground">The default agent keeps its name: it is the one a session is on unless you pick another.</p>}
+        {isDefault && <p className="text-sm text-muted-foreground">The default agent keeps its name: it is the one a session is on unless you pick another.</p>}
         {/* Who it is first, its name and the account it pushes as side by side from a tablet up, then the
             coding agents' accounts it works with, then what it knows: its skills. */}
         <div className="grid gap-x-4 gap-y-6 md:grid-cols-2">
