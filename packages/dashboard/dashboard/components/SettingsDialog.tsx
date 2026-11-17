@@ -211,13 +211,13 @@ export function SettingsDialog({
               )}
               {/* Named for a screen reader only: the list starts with them, and needs no title over it. */}
               <section aria-label="You and this computer">
-                <ul className="flex flex-col gap-px">{yours.map(item)}</ul>
+                <ul className="flex flex-col gap-0.5">{yours.map(item)}</ul>
               </section>
               <section aria-label="Project">
                 <p className="flex h-8 items-center px-1.5 text-xs font-medium text-muted-foreground">Project</p>
                 <ProjectSelect projects={projects} value={project?.id ?? ALL_PROJECTS} onChange={id => leave(() => setPicked(id))} />
                 {projectEntries.length > 0 ? (
-                  <ul className="mt-px flex flex-col gap-px">{projectEntries.map(item)}</ul>
+                  <ul className="mt-0.5 flex flex-col gap-0.5">{projectEntries.map(item)}</ul>
                 ) : (
                   <p className="px-1.5 pt-2 text-xs text-muted-foreground">Nothing to set for your projects.</p>
                 )}
