@@ -74,23 +74,10 @@ export default function Page() {
           <br />
           let AI do the rest.
         </div>
-        <div style={{ display: 'flex', gap: 13, fontFamily: mono, fontSize: 16.5, marginTop: 8 }}>
-          {BADGES.map(([label, color]) => (
-            <span
-              key={label}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 9,
-                border: '1px solid var(--border)',
-                borderRadius: 999,
-                padding: '8px 17px',
-                color,
-              }}
-            >
-              <span style={{ width: 8, height: 8, borderRadius: '50%', background: color }} />
-              {label}
-            </span>
+        {/* The claims as one plain line, quieter than the name beside them. */}
+        <div style={{ display: 'flex', gap: 28, fontFamily: mono, fontSize: 18, color: 'var(--muted-foreground)', marginTop: 8 }}>
+          {BADGES.map((label) => (
+            <span key={label}>{label}</span>
           ))}
         </div>
       </div>

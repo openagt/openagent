@@ -1,7 +1,7 @@
 import type { CSSProperties, ReactNode } from 'react'
 import { Footer } from './Footer'
 import { TopNav } from './TopNav'
-import { h2Style, h3Style, proseStyle } from './ui'
+import { h2Style, h3Style, proseStyle, text } from './ui'
 
 /** A subpage's paragraph. */
 export const pStyle: CSSProperties = { ...proseStyle, color: 'var(--muted-foreground)' }
@@ -46,11 +46,11 @@ export function Subpage({ title, lead, under, children }: {
   )
 }
 
-/** One part of a subpage, under its heading. */
-export function Step({ title, children }: { title: string; children: ReactNode }) {
+/** One part of a subpage, under its heading; a quiet one, the second way beside the one the page recommends, a step smaller and muted. */
+export function Step({ title, quiet, children }: { title: string; quiet?: boolean; children: ReactNode }) {
   return (
-    <section style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <h2 style={h3Style}>{title}</h2>
+    <section style={{ display: 'flex', flexDirection: 'column', gap: quiet ? 8 : 16 }}>
+      <h2 style={quiet ? { ...h3Style, ...text('base'), color: 'var(--muted-foreground)' } : h3Style}>{title}</h2>
       {children}
     </section>
   )
