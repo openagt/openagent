@@ -241,7 +241,7 @@ function SubagentItem({ row, failed, reason, open, projectId, onPick, onStop }: 
   const second = reason ?? error ?? undefined
   // A run's failure is told it by a line its end sends: its row keeps the room for it from its first frame.
   const twoLines = second !== undefined || (runId !== undefined && failed)
-  const model = row.model !== undefined ? <Facts oneLine facts={[anyModelName(models, row.model), row.agent?.effort]} /> : undefined
+  const model = row.model !== undefined ? `Model ${anyModelName(models, row.model)}` : undefined
   const name = useRef<HTMLSpanElement>(null)
   // The card says what the row does not: the whole name where the row cuts it, or what it runs on.
   const tells = useCut(name, row.name) || model !== undefined
@@ -386,8 +386,8 @@ function Shown({ row, projectId, events, onOpenAgent, onClose }: { row: Subagent
 }
 
 /**
- * What the subagent was told, as a message, and what it runs on ("model · effort", as its card says
- * it). One that did not end well says how.
+ * What the subagent was told, as a message, and what it runs on ("Model …", as its card says it). One
+ * that did not end well says how.
  * How long it has worked is the log's own moving line at its end, as the chat says it.
  */
 function PaneHead({ row }: { row: SubagentRow }) {
@@ -402,7 +402,7 @@ function PaneHead({ row }: { row: SubagentRow }) {
         </section>
       )}
       {(row.model !== undefined || ended) && (
-        <Facts facts={[row.model !== undefined && anyModelName(models, row.model), row.model !== undefined && row.agent?.effort, ended && <span className={runTone(row.status)}>{runWord(row.status)}</span>]} className="text-muted-foreground" />
+        <Facts facts={[row.model !== undefined && `Model ${anyModelName(models, row.model)}`, ended && <span className={runTone(row.status)}>{runWord(row.status)}</span>]} className="text-muted-foreground" />
       )}
     </div>
   )

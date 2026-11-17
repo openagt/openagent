@@ -44,9 +44,8 @@ function AgentRow({ row, onOpen }: { row: SubagentRow; onOpen?: ((key: string) =
 }
 
 /**
- * What a subagent sent its main agent, folded: "Message from <its name>", so several in a row are told
- * apart, as the Subagents pane names them. Opened, the message. One that did not end well says how,
- * beside the words.
+ * What a subagent sent its main agent, folded: "Message from subagent". Opened, whose it is and the
+ * message. One that did not end well says how, beside the words.
  */
 export function SubagentMessage({ name, text, status, detail }: { name: string; text?: string | undefined; status?: string | undefined; detail?: string | undefined }) {
   const [open, setOpen] = useState(false)
@@ -54,14 +53,14 @@ export function SubagentMessage({ name, text, status, detail }: { name: string; 
   const words = (
     <>
       <span className="shrink-0">Message from</span>
-      <span className="min-w-0 truncate text-foreground">{name}</span>
+      <span className="shrink-0 text-foreground">subagent</span>
       {status !== undefined && status !== 'done' && <span className={cn('shrink-0', runTone(status))}>{runWord(status)}</span>}
     </>
   )
   return (
     <div className="min-w-0 flex-1 font-sans text-sm text-muted-foreground">
       {body || detail !== undefined ? (
-        <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open} aria-label={`Message from ${name}`} className="flex max-w-full min-w-0 items-center gap-1.5 py-0.5 text-left hover:text-foreground">
+        <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open} aria-label="Message from subagent" className="flex max-w-full min-w-0 items-center gap-1.5 py-0.5 text-left hover:text-foreground">
           {words}
           <ChevronRight className={cn('h-3.5 w-3.5 shrink-0 transition-transform', open && 'rotate-90')} aria-hidden />
         </button>
@@ -70,7 +69,7 @@ export function SubagentMessage({ name, text, status, detail }: { name: string; 
       )}
       {open && (
         <div className="mt-1 flex flex-col gap-1">
-          {detail !== undefined && <div>{detail.charAt(0).toUpperCase() + detail.slice(1)}</div>}
+          <div>From: {name}{detail !== undefined && ` (${detail})`}</div>
           {body && <div className="text-foreground"><Markdown text={text} /></div>}
         </div>
       )}
