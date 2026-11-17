@@ -159,6 +159,8 @@ export class StreamJsonParser {
   private hurrying = false
   /** How many tasks the CLI runs in the background now, as its last `background_tasks_changed` said. */
   private background = 0
+  /** The agent is idle, its turn waiting on work it runs in the background: nothing it is asked reaches it until that work ends. */
+  private idle = false
 
   /** Answer the CLI's requests on `io` from now on, and close it when the turn is over. */
   talk(io: CliIo): void {
@@ -197,10 +199,15 @@ export class StreamJsonParser {
     else this.hurrying = true
   }
 
-  /** The person's Stop, as Esc in Claude Code: the turn is interrupted where it is, and is over. */
-  stop(): boolean {
+  /**
+   * The person's Stop, as Esc in Claude Code: the turn is interrupted where it is, and is over. An
+   * agent idle on work in the background does not hear the interrupt: its turn is stopped all the
+   * same, and its process ended at once (`'idle'`), with the work.
+   */
+  stop(): boolean | 'idle' {
     if (!this.io || this.answered) return false
     this.stopping = true
+    if (this.idle) return 'idle'
     this.control(`stop-${randomUUID()}`, { subtype: 'interrupt' })
     return true
   }
@@ -254,6 +261,8 @@ export class StreamJsonParser {
       announced.push({ type: 'session', sessionId: this.sessionId })
     }
     const type = obj['type']
+    // The agent writes or is written to: it is awake.
+    if (type === 'assistant' || type === 'stream_event' || type === 'user') this.idle = false
     // The CLI's first line names the model it resolved the pick to (`claude-opus-5-5` for `opus`),
     // or the one it chose when none was picked: what the turn runs on, said before it runs.
     if (type === 'system' && obj['subtype'] === 'init' && typeof obj['model'] === 'string' && obj['model'] !== '') {
@@ -314,7 +323,10 @@ export class StreamJsonParser {
       // agent is idle, and the work's end wakes it for another. The turn goes on, and a message
       // sent meanwhile still reaches it. Such a result is not the turn's success: a Stop while it
       // waits is a stop.
-      if (this.background > 0 && this.asked === undefined && !this.stopping) return announced
+      if (this.background > 0 && this.asked === undefined && !this.stopping) {
+        this.idle = true
+        return announced
+      }
       this.succeeded = obj['subtype'] === 'success' && obj['is_error'] !== true
       // The turn's last line: nothing more is coming to answer, so the CLI may exit.
       this.io?.end()

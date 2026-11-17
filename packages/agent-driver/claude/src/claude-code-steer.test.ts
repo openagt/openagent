@@ -98,12 +98,26 @@ test('the person’s Stop interrupts the turn, which is then stopped, not failed
 
 test('a Stop while the agent waits on work in the background is a stop: the result it said while waiting is not the turn’s end', () => {
   const parser = new StreamJsonParser()
-  parser.talk(recordingIo())
+  const io = recordingIo()
+  parser.talk(io)
   push(parser, { type: 'system', subtype: 'background_tasks_changed', tasks: [{ task_id: 't1' }], session_id: 's1' })
   push(parser, { type: 'result', subtype: 'success', is_error: false, result: 'I will wait for it.', session_id: 's1' })
-  assert.equal(parser.stop(), true)
-  // The CLI, idle, says nothing more and is ended: the turn is the person's stop, not a failure.
+  // Idle, the agent would not hear an interrupt: none is sent, and its process is ended at once.
+  assert.equal(parser.stop(), 'idle')
+  assert.deepEqual(io.lines, [])
+  // The turn is the person's stop, not a failure.
   assert.equal(parser.result().stopped, true)
+})
+
+test('an agent the work in the background woke again hears the interrupt as any working agent does', () => {
+  const parser = new StreamJsonParser()
+  const io = recordingIo()
+  parser.talk(io)
+  push(parser, { type: 'system', subtype: 'background_tasks_changed', tasks: [{ task_id: 't1' }], session_id: 's1' })
+  push(parser, { type: 'result', subtype: 'success', is_error: false, result: 'I will wait for it.', session_id: 's1' })
+  push(parser, { type: 'assistant', message: { content: [{ type: 'text', text: 'It finished.' }] }, session_id: 's1' })
+  assert.equal(parser.stop(), true)
+  assert.deepEqual(io.lines[0]!['request'], { subtype: 'interrupt' })
 })
 
 test('a result while the agent waits on work in the background is not the turn’s end: a message still reaches it, and the result after the work is', () => {
