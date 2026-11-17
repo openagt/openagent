@@ -40,7 +40,13 @@ function renderPicker(over: Partial<Parameters<typeof ProjectPicker>[0]> = {}) {
 
 const trigger = () => screen.getByRole('combobox', { name: 'The session works in' })
 const search = () => screen.getByRole('combobox', { name: 'Search projects and repos' })
-const options = () => screen.getAllByRole('option').map(option => option.textContent)
+/** A row's words, a cut path once: its drawn halves, hidden beside the whole of it said to a screen reader, left out. */
+const said = (row: Element) => {
+  const copy = row.cloneNode(true) as Element
+  for (const hidden of copy.querySelectorAll('.sr-only + [aria-hidden="true"]')) hidden.remove()
+  return copy.textContent
+}
+const options = () => screen.getAllByRole('option').map(said)
 
 describe('ProjectPicker', () => {
   test('as a button that adds a project (the first steps): its words on it, and no "no project" row, only what can be added', async () => {
