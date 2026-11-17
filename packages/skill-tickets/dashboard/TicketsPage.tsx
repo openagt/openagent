@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { X } from 'lucide-react'
-import { Button, Empty, LinkActions, Page, RowShapes, Section, Slot, cn, runsAgain, usePolled, useAction, useLinkActions, useModuleHost, type ProjectLinks, type ModuleLink, type ModuleProject, type LinkActionOffer } from '@openagt/dashboard/module'
+import { Button, Empty, LinkActions, Page, PanelShape, Section, Slot, cn, runsAgain, usePolled, useAction, useLinkActions, useModuleHost, type ProjectLinks, type ModuleLink, type ModuleProject, type LinkActionOffer } from '@openagt/dashboard/module'
 import { heldBack, holderAgent, planLink, ticketLink, withHolder } from '../src/module.js'
 import { holdingRun } from './lib/holding-run.js'
 import type { ProjectTickets, WorkspaceTicket } from './lib/types.js'
@@ -146,11 +146,12 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
       bar={
         <>
           {error && <p role="alert" className="mb-2 text-xs text-danger">{error}</p>}
-          {!noTicket && <TicketFilterBar view={view} rows={rows} spansProjects={projects.length > 1} onChange={setView} />}
+          {!noTicket && <TicketFilterBar view={view} rows={rows} reading={state === 'unknown'} spansProjects={projects.length > 1} onChange={setView} />}
         </>
       }
     >
-      <Slot of={{ state, value: groups }} shape={<RowShapes rows={3} />}>
+      {/* While the tickets are read: a card of rows, one line each. */}
+      <Slot of={{ state, value: groups }} shape={<PanelShape rows={3} lines={1} />}>
         {groups =>
           groups.length === 0 ? (
             <Empty title="No project has the tickets package." />
