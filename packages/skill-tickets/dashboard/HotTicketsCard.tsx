@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { ArrowUp, Bot, CirclePause, Clock, WifiOff, type LucideIcon } from 'lucide-react'
-import { Button, LinkActions, PageLink, Section, SentenceShape, Slot, cn, formatDateTime, inPlace, usePolled, useModuleHost, useOpenAgentDown, type ModuleCardProps, type ModuleProject, type ReadState } from '@openagt/dashboard/module'
+import { Button, Card, Facts, LinkActions, PageLink, Panel, PanelGroup, PanelNote, Skeleton, Slot, cn, formatDateTime, inPlace, runSaid, usePolled, useModuleHost, useOpenAgentDown, type ModuleCardProps, type ModuleProject, type ReadState } from '@openagt/dashboard/module'
 import { claimState, heldBack, holderAgent, hotLane, ticketLink, withHolder, type ClaimState, type HotLane } from '../src/module.js'
 import { holdingRun } from './lib/holding-run.js'
 import { listTickets } from './lib/list.js'
@@ -89,20 +89,22 @@ export function HotTicketsCard({ projects }: ModuleCardProps) {
   )
 
   return (
-    <Section title="Hot tickets" count={read.hot.length > 0 ? read.hot.length : undefined} action={<PageLink href={host.pageHref('tickets')} onOpen={() => host.openPage('tickets')}>Tickets</PageLink>}>
+    <PanelGroup bare title="Hot tickets" action={<PageLink href={host.pageHref('tickets')} onOpen={() => host.openPage('tickets')}>Tickets</PageLink>}>
       {state !== 'unknown' && read.hot.length === 0 && read.errors.length === 0 ? (
         // Named lanes, not "no tickets": the list is a shortlist, and its empty state must not
         // claim the backlog is empty when merely nothing qualifies.
-        <p className="text-sm text-muted-foreground">Nothing claimed, high priority or waiting.</p>
+        <Panel>
+          <PanelNote>Nothing claimed, high priority or waiting.</PanelNote>
+        </Panel>
       ) : (
         <HotList hot={read.hot} errors={read.errors} state={state} showProject={projects.length > 1} reload={reload} />
       )}
-    </Section>
+    </PanelGroup>
   )
 }
 
 /**
- * The list, as an issue list draws one: a quiet heading per kind, with how many; under it one row
+ * The list, as an issue list draws one, on one card: a quiet heading per kind, with how many; under it one row
  * per ticket, whose small icon says the same in its tone and whose title takes the row. Ordered by
  * what needs a person most: a claim held for nobody, then work going on, then what is flagged,
  * then what waits on someone else. A kind with nothing in it has no heading.
@@ -122,26 +124,42 @@ function HotList({ hot, errors, state, showProject, reload }: { hot: HotTicket[]
           </Button>
         </div>
       ))}
-      <Slot of={{ state, value: hot }} shape={<SentenceShape />}>
-        {() => (
-          // Every ticket, never a "+N more": the list is the shortlist. Pulled out by the rows' own
-          // inset, so their text starts where the heading does.
-          <div className="-mx-3 space-y-3">
-            {groups.map(({ lane, tickets }) => (
-              <section key={lane.key} aria-label={lane.heading}>
-                <h3 className="flex items-baseline gap-1.5 px-3 pb-0.5 text-xs font-medium text-muted-foreground">
-                  {lane.heading}
-                  <span className="tabular-nums">{tickets.length}</span>
-                </h3>
-                <ul>
-                  {tickets.map(t => (
-                    <Row key={`${t.project.id}:${t.ticket.file}`} hot={t} showProject={showProject} reload={reload} />
-                  ))}
-                </ul>
-              </section>
-            ))}
-          </div>
-        )}
+      <Slot
+        of={{ state, value: hot }}
+        // While they are read, the card as one kind of one ticket stands: its kind's line, then the ticket's row, each a
+        // bar centred on its line, so the shapes stand 16 in from the card's edges.
+        shape={
+          <Card className="pt-3">
+            <div className="flex h-4 items-center px-4">
+              <Skeleton className="h-2 w-24" />
+            </div>
+            <div className="flex h-11 items-center gap-3 px-4">
+              <Skeleton className="size-3 shrink-0 rounded-sm" />
+              <Skeleton className="h-2.5 w-2/3" />
+            </div>
+          </Card>
+        }
+      >
+        {() =>
+          groups.length > 0 && (
+            // Every ticket, never a "+N more": the list is the shortlist. A kind after the first stands under a hairline, from inset to inset.
+            <Card className="overflow-hidden">
+              {groups.map(({ lane, tickets }) => (
+                <section key={lane.key} aria-label={lane.heading} className="relative pt-3 before:absolute before:top-0 before:right-4 before:left-4 before:h-px not-first:before:bg-hairline">
+                  <h3 className="flex items-baseline gap-1.5 px-4 text-xs font-medium text-faint-foreground">
+                    {lane.heading}
+                    <span className="tabular-nums">{tickets.length}</span>
+                  </h3>
+                  <ul>
+                    {tickets.map(t => (
+                      <Row key={`${t.project.id}:${t.ticket.file}`} hot={t} showProject={showProject} reload={reload} />
+                    ))}
+                  </ul>
+                </section>
+              ))}
+            </Card>
+          )
+        }
       </Slot>
     </>
   )
@@ -151,7 +169,7 @@ function HotList({ hot, errors, state, showProject, reload }: { hot: HotTicket[]
 function stateOf(hot: HotTicket): { Icon: LucideIcon; says: string; tone: string } {
   const holder = hot.ticket.lockedByAgent?.name ?? hot.ticket.lockedBy
   const by = holder ? `, claimed by ${holder}` : ''
-  if (hot.lane === 'working') return { Icon: Bot, says: `${hot.holder?.status === 'waiting' ? 'Its run waits on your answer' : 'Its run is at work'}${by}: open the run`, tone: 'text-success' }
+  if (hot.lane === 'working') return { Icon: Bot, says: `Its run ${hot.holder?.status === 'waiting' ? runSaid('waiting') : `is ${runSaid('running')}`}${by}: open the run`, tone: 'text-success' }
   if (hot.lane === 'offline') {
     const seen = hot.holder?.seenAt ? `, last seen ${formatDateTime(hot.holder.seenAt)}` : ''
     return { Icon: WifiOff, says: `${hot.holder?.machine ?? 'Its computer'} is offline${seen}: how its run stands is unknown${by}`, tone: 'text-muted-foreground' }
@@ -202,7 +220,7 @@ function Row({ hot, showProject, reload }: { hot: HotTicket; showProject: boolea
   const fact = lane === 'waiting' ? ticket.waiting : lane === 'high-priority' && ticket.priority ? `Priority ${ticket.priority}` : undefined
   const mark = <Icon className="h-3.5 w-3.5" aria-hidden />
   return (
-    <li className="group/row relative flex items-center gap-3 rounded-md px-3 text-sm transition-colors hover:bg-accent md:h-10 max-md:h-11">
+    <li className="group/row relative flex items-center gap-3 bg-card px-4 py-3 text-sm transition-colors hover:bg-accent">
       {lane === 'working' && holder ? (
         <button type="button" onClick={() => host.openAgent(project.id, holder.id)} title={says} aria-label={says} className={cn('flex size-4 shrink-0 items-center justify-center', tone)}>
           {mark}
@@ -225,7 +243,7 @@ function Row({ hot, showProject, reload }: { hot: HotTicket; showProject: boolea
         )}
         {(fact || showProject) && (
           <span className="max-w-40 truncate text-xs text-muted-foreground" title={fact}>
-            {[fact, showProject ? project.name : undefined].filter(Boolean).join(' · ')}
+            <Facts facts={[fact, showProject && project.name]} />
           </span>
         )}
       </span>

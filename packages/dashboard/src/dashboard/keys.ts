@@ -20,8 +20,9 @@ import type { Intervention } from './interventions.js'
  * the gate it is parked on, or the agent whose work is uncommitted or unpushed.
  *
  * The agent is part of the awaiting key because a gate id is only unique within its own agent:
- * every agent's first gate is `await-choices`. Two agents running in one project (#736) and both
- * parked would otherwise share one identity, and the dedupe would announce only one of them.
+ * a question's id is the time of its diary line, which another agent's question can share. Two
+ * agents running in one project (#736) and both parked would otherwise share one identity, and
+ * the dedupe would announce only one of them.
  */
 export function interventionKey(item: Intervention): string {
   if (item.kind === 'awaiting') return `awaiting:${item.projectId}:${item.agentId ?? ''}:${item.awaitId ?? ''}`

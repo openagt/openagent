@@ -3,7 +3,7 @@ import { Markdown, Slot, useModuleHost, type ModuleHost } from '@openagt/dashboa
 import { claimState, ticketBody } from '../src/module.js'
 import { readTicketFile } from '../src/ticket-file.js'
 import { TicketPageShell, TicketPageNote, TicketPageShape } from './TicketPageShell.js'
-import { TicketHeader } from './TicketHeader.js'
+import { TicketFacts, TicketHeader, ticketSlug } from './TicketHeader.js'
 import { TicketEditor } from './TicketEditor.js'
 import { useTicket } from './lib/use-ticket.js'
 
@@ -28,7 +28,7 @@ export function TicketDetailPage({
   slug: string
 }) {
   const host = useModuleHost()
-  const { read, state, reload } = useTicket(projectId, slug)
+  const { read, state, reload, released } = useTicket(projectId, slug)
   const ticket = read && 'ticket' in read ? read.ticket : null
   const onBack = () => host.backToPage('tickets')
   // The ticket written by hand in place of its text, until saved or left.
@@ -39,7 +39,11 @@ export function TicketDetailPage({
   })
 
   return (
-    <TicketPageShell onBack={onBack} crumbs={ticket ? [{ label: ticket.title }] : []}>
+    <TicketPageShell
+      onBack={onBack}
+      crumbs={ticket ? [{ label: ticketSlug(ticket.file), file: true }] : []}
+      aside={ticket && read && 'ticket' in read && !editing ? <TicketFacts projectId={projectId} ticket={ticket} holderStatus={read.holderStatus} sessions={read.sessions} /> : undefined}
+    >
       <Slot of={{ state, value: read }} shape={<TicketPageShape />}>
         {read =>
           read && 'error' in read ? (
@@ -51,7 +55,7 @@ export function TicketDetailPage({
             <TicketPageNote>This ticket does not exist.</TicketPageNote>
           ) : editing ? (
             <>
-              <h1 className="mb-6 text-xl font-semibold">Edit ticket</h1>
+              <h1 className="mb-6 text-2xl font-semibold tracking-tight max-md:text-xl">Edit ticket</h1>
               <TicketEditor
                 projectId={projectId}
                 file={ticket.file}
@@ -69,12 +73,11 @@ export function TicketDetailPage({
                 projectId={projectId}
                 ticket={ticket}
                 holderStatus={read.holderStatus}
-                sessions={read.sessions}
                 tab="ticket"
                 onEdit={() => setEditing(true)}
-                onChanged={() => void reload()}
+                onReleased={released}
               />
-              <div className="mt-6 max-w-180">
+              <div className="max-w-180">
                 <Markdown text={ticketBody(ticket.content)} page />
               </div>
             </>

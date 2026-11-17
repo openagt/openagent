@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { DEFAULT_FAN_OUT_COUNT, DEFAULT_PRIORITY, PRIORITIES, QUEUE_COMMAND, addArgs, addTextArgs, doneArgs, isEntryLine, isPlacedEntry, isWorkingOn, priorityMeaning, addToQueue, alreadyQueued, entryLabel, fanOut, fanOutLabel, queueLine, readEntries, topEntries, workOnEntryPrompt, type CommandResult } from './module.js'
+import { DEFAULT_FAN_OUT_COUNT, DEFAULT_PRIORITY, PRIORITIES, QUEUE_COMMAND, addArgs, addTextArgs, doneArgs, isEntryLine, isPlacedEntry, isWorkingOn, entryHeadline, priorityMeaning, addToQueue, alreadyQueued, entryLabel, fanOut, fanOutLabel, queueLine, readEntries, topEntries, workOnEntryPrompt, type CommandResult } from './module.js'
 
 test('entryLabel shows a leading link\'s text, opens only an absolute http(s) target, and keeps anything else whole', () => {
   assert.deepEqual(entryLabel('[Login page](tickets/2026-08-01_login-page.md) — needs the cookie first'), { text: 'Login page' })
@@ -145,4 +145,14 @@ test('an agent is on an entry when it was asked exactly what the page asks for t
   assert.equal(isWorkingOn(undefined, 'Tidy the loader'), false)
   // An empty line is in every prompt, and is no entry.
   assert.equal(isWorkingOn('/work-queue', '  '), false)
+})
+
+test('entryHeadline names a typed entry by its words up to the first sentence end, colon or dash, the rest under it; a line without one is all name', () => {
+  assert.deepEqual(entryHeadline('Fix the checkout rounding. Coupons and gift cards both apply.'), { name: 'Fix the checkout rounding', rest: 'Coupons and gift cards both apply.' })
+  assert.deepEqual(entryHeadline('Search: forgive typos in product names'), { name: 'Search', rest: 'forgive typos in product names' })
+  assert.deepEqual(entryHeadline('Dark mode — follow the system setting'), { name: 'Dark mode', rest: 'follow the system setting' })
+  assert.deepEqual(entryHeadline('Is the cart slow? Measure it first'), { name: 'Is the cart slow', rest: 'Measure it first' })
+  // A dot, colon or dash inside a word is part of it.
+  assert.deepEqual(entryHeadline('  Bump vite to 7.1 and fix src/app.ts:12 re-renders  '), { name: 'Bump vite to 7.1 and fix src/app.ts:12 re-renders' })
+  assert.deepEqual(entryHeadline('Ends with a dot.'), { name: 'Ends with a dot.' })
 })

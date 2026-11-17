@@ -46,6 +46,8 @@ export interface GitHostRequest {
   mergedAt?: string
   /** The commit a merged request landed as on the base branch. */
   mergeCommit?: string
+  /** The git host will merge it by itself once its checks pass. */
+  armed?: true
 }
 
 /** The project's page on the git host, and what the git host is called: what a link is drawn from. */
@@ -114,6 +116,7 @@ export function parseRequests(output: unknown): GitHostRequest[] {
       createdAt: typeof row['createdAt'] === 'string' ? row['createdAt'] : '',
       ...(typeof row['mergedAt'] === 'string' ? { mergedAt: row['mergedAt'] } : {}),
       ...(typeof row['mergeCommit'] === 'string' ? { mergeCommit: row['mergeCommit'] } : {}),
+      ...(row['armed'] === true ? { armed: true as const } : {}),
     })
   }
   return requests

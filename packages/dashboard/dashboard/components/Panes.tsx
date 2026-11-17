@@ -31,7 +31,8 @@ import { useNarrow } from '../lib/use-narrow.js'
 // their least width), the open pane lies over the chat, under the top bar, which keeps its icons, and
 // its header's arrow goes back to the chat.
 //
-// One pane has no icon: the subagent a row of the chat opened, which only such a row opens.
+// A run that started subagents has their pane too: the list of them, and the one a row opened
+// (here or in the chat) under it.
 //
 // The pieces: the provider knows the page's panes (PanesProvider, around the page and the panes),
 // the top bar draws their icons (PaneToggles), and the layout puts the column beside the
@@ -41,7 +42,7 @@ import { useNarrow } from '../lib/use-narrow.js'
 /** A pane's own id among the page's: a module's by its package and the id it gave, the dashboard's own by name. */
 const panelId = (panel: MountedPanel): string => `${panel.package}/${panel.id}`
 const DOCS = 'docs'
-const SUBAGENT = 'subagent'
+const SUBAGENTS = 'subagents'
 
 /** The room between the chat and the column of panes, and its two parts. */
 const WORKSPACE = 'workspace'
@@ -56,8 +57,6 @@ interface Pane {
   icon: ComponentType<{ className?: string }>
   /** The module's panel; absent on the dashboard's own panes. */
   panel?: MountedPanel
-  /** No icon in the top bar: something else on the page opens it. */
-  hidden?: true
 }
 
 interface PanesValue {
@@ -76,22 +75,26 @@ interface PanesValue {
   show: RevealedFile | undefined
   docs: WorkspaceDoc[]
   docsLoaded: boolean
-  /** What the Subagent pane shows. */
-  subagent: ReactNode
-  /** How many icons to hold room for until the modules and the docs are read: as many as this project had when they last were. */
-  held: number
+  /** What the Subagents pane shows. */
+  subagents: ReactNode
+  /**
+   * How many icons to hold room for until the modules and the docs are read: as many as this project
+   * had when they last were. Null while they are not read in a browser that kept none for it.
+   */
+  held: number | null
 }
 
-const NO_PANES: PanesValue = { page: '', enabled: false, panes: [], open: [], expanded: undefined, panelProps: undefined, reveal: undefined, show: undefined, docs: [], docsLoaded: false, subagent: null, held: 0 }
+const NO_PANES: PanesValue = { page: '', enabled: false, panes: [], open: [], expanded: undefined, panelProps: undefined, reveal: undefined, show: undefined, docs: [], docsLoaded: false, subagents: null, held: 0 }
 
 /** localStorage key prefix of how many pane icons each project's top bar had once its panes were all known. */
 const ICONS_KEY = 'oa.pane-icons:'
 
-function keptIcons(projectId: string): number {
+function keptIcons(projectId: string): number | null {
   try {
-    return Number(globalThis.localStorage?.getItem(ICONS_KEY + projectId)) || 0
+    const kept = globalThis.localStorage?.getItem(ICONS_KEY + projectId)
+    return kept == null ? null : Number(kept) || 0
   } catch {
-    return 0
+    return null
   }
 }
 
@@ -132,7 +135,7 @@ export function PanesProvider({
   context,
   toggleContext,
   activity,
-  subagent,
+  subagents,
   children,
 }: {
   projectId: string | null
@@ -147,8 +150,8 @@ export function PanesProvider({
   toggleContext: (path: string) => void
   /** How many events the selected run's feed has shown, for the modules' panes. */
   activity?: number
-  /** What the Subagent pane shows, once a row of the chat opened one: on an agent's page. */
-  subagent?: ReactNode
+  /** What the Subagents pane shows: on the page of a run that started subagents. */
+  subagents?: ReactNode
   children: ReactNode
 }) {
   const shown = enabled ? projectId : null
@@ -169,27 +172,26 @@ export function PanesProvider({
   // Docs pane is earned by content (#1146): one that can only say "nothing yet" is not offered.
   const { panels: mounted, loaded: modulesLoaded } = useMountedModules()
   const page = panesPage(shown ?? '', agentId)
-  // The Subagent pane is there once a row asked for a subagent on this page.
   const subagentAsked = useRevealedSubagent(page)
-  const showsSubagent = subagent !== undefined && subagentAsked !== undefined
+  const hasSubagents = subagents !== undefined
   const panes = useMemo<Pane[]>(() => {
     if (!shown) return []
     const ofModules = mounted.filter(panel => panel.projects.includes(shown)).map(panel => ({ id: panelId(panel), label: panel.label, icon: panel.icon, panel }))
     const own: Pane[] = [
       ...(docs.length > 0 ? [{ id: DOCS, label: 'Docs', icon: FileText }] : []),
-      ...(showsSubagent ? [{ id: SUBAGENT, label: 'Subagent', icon: Bot, hidden: true as const }] : []),
+      ...(hasSubagents ? [{ id: SUBAGENTS, label: 'Subagents', icon: Bot }] : []),
     ]
     return [...ofModules, ...own]
-  }, [mounted, shown, docs.length, showsSubagent])
+  }, [mounted, shown, docs.length, hasSubagents])
 
   // A module's icon is its own component, so it cannot be drawn before the module is loaded: until
   // then the bar holds the room the icons took last time, and the ⋮ before them stays where it is.
+  // With nothing kept, the ⋮ and the icons are drawn once, together, when they are known.
   const settled = modulesLoaded && docsLoaded
-  const iconCount = panes.filter(pane => !pane.hidden).length
   useEffect(() => {
-    if (shown && settled) keepIcons(shown, iconCount)
-  }, [shown, settled, iconCount])
-  const held = shown && !settled ? keptIcons(shown) : 0
+    if (shown && settled) keepIcons(shown, panes.length)
+  }, [shown, settled, panes.length])
+  const held = shown !== null && !settled ? keptIcons(shown) : 0
 
   const openIds = useOpenPanes(page)
   const open = useMemo(() => openIds.flatMap(id => panes.find(pane => pane.id === id) ?? []), [openIds, panes])
@@ -213,8 +215,8 @@ export function PanesProvider({
   // A live screen asked for from the chat: the pane that shows it is opened.
   const screenAsked = useRevealedScreen(page)
   useOpenOnAsk(page, screenAsked?.at, panes.find(pane => pane.panel?.screen)?.id)
-  // A subagent asked for from the chat: its pane is opened.
-  useOpenOnAsk(page, subagentAsked?.at, showsSubagent ? SUBAGENT : undefined)
+  // A subagent asked for from the chat: the pane of the run's subagents is opened, with that one open.
+  useOpenOnAsk(page, subagentAsked?.key !== undefined ? subagentAsked.at : undefined, hasSubagents ? SUBAGENTS : undefined)
 
   // The Context as a module's pane sees it: its files only, never the project paths the
   // launcher's project checkboxes also put in it (#661).
@@ -226,8 +228,8 @@ export function PanesProvider({
   )
 
   const value = useMemo<PanesValue>(
-    () => ({ page, enabled: shown !== null, panes, open, expanded: open.some(pane => pane.id === expanded) ? expanded : undefined, panelProps, reveal, show, docs, docsLoaded, subagent: subagent ?? null, held }),
-    [page, shown, panes, open, expanded, panelProps, reveal, show, docs, docsLoaded, subagent, held],
+    () => ({ page, enabled: shown !== null, panes, open, expanded: open.some(pane => pane.id === expanded) ? expanded : undefined, panelProps, reveal, show, docs, docsLoaded, subagents: subagents ?? null, held }),
+    [page, shown, panes, open, expanded, panelProps, reveal, show, docs, docsLoaded, subagents, held],
   )
   return <PanesContext.Provider value={value}>{children}</PanesContext.Provider>
 }
@@ -243,39 +245,48 @@ export function TopBar({ children }: { children: ReactNode }) {
   return <div className="shadow-[inset_0_-1px_0_var(--color-border)]">{children}</div>
 }
 
-/** The panes' icons, for the end of a page's top bar: one per pane, lit while its pane is open. */
-export function PaneToggles() {
+/**
+ * The end of a page's top bar: what stands before the panes' icons (`before`: the project's ⋮), then
+ * one icon per pane, lit while its pane is open. The ⋮ and the icons are one kind of button, 4px
+ * apart, the last glyph ending 16 from the bar's edge as the title starts 16 from the other
+ * (ui/look/spacing.md 4).
+ */
+export function PaneToggles({ before }: { before?: ReactNode }) {
   const { page, panes, open, held } = useContext(PanesContext)
-  const offered = panes.filter(pane => !pane.hidden)
-  if (offered.length === 0 && held === 0) return null
+  const room = Math.max(held ?? 0, panes.length)
   return (
-    <div role="group" aria-label="Panes" className="flex shrink-0 items-center gap-1">
-      {Array.from({ length: held - offered.length }, (_, at) => (
-        <span key={`held-${at}`} className="size-7 shrink-0" aria-hidden />
-      ))}
-      {offered.map(pane => {
-        const isOpen = open.includes(pane)
-        return (
-          <Tooltip key={pane.id}>
-            <TooltipTrigger
-              render={
-                <Button
-                  variant="ghost"
-                  size="icon-bar"
-                  className={cn('text-muted-foreground', isOpen && 'bg-accent text-accent-foreground')}
-                  aria-label={pane.label}
-                  aria-pressed={isOpen}
-                  onClick={() => setPaneOpen(page, pane.id, !isOpen)}
-                />
-              }
-            >
-              <pane.icon className="h-4 w-4" />
-            </TooltipTrigger>
-            {/* Its name only, as Claude Code's icons say "Files" and "Changes". */}
-            <TooltipContent>{pane.label}</TooltipContent>
-          </Tooltip>
-        )
-      })}
+    <div className={cn('flex shrink-0 items-center gap-1 pr-0.5', held === null && 'invisible')}>
+      {before}
+      {room > 0 && (
+        <div role="group" aria-label="Panes" className="flex shrink-0 items-center gap-1">
+          {Array.from({ length: room - panes.length }, (_, at) => (
+            <span key={`held-${at}`} className="size-7 shrink-0" aria-hidden />
+          ))}
+          {panes.map(pane => {
+            const isOpen = open.includes(pane)
+            return (
+              <Tooltip key={pane.id}>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      variant="ghost"
+                      size="icon-bar"
+                      className={cn('text-muted-foreground', isOpen && 'bg-accent text-accent-foreground')}
+                      aria-label={pane.label}
+                      aria-pressed={isOpen}
+                      onClick={() => setPaneOpen(page, pane.id, !isOpen)}
+                    />
+                  }
+                >
+                  <pane.icon className="h-4 w-4" />
+                </TooltipTrigger>
+                {/* Its name only, as Claude Code's icons say "Files" and "Changes". */}
+                <TooltipContent>{pane.label}</TooltipContent>
+              </Tooltip>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
@@ -286,7 +297,7 @@ export function PaneToggles() {
  * in place of its name and before those buttons (`PaneTitle`, `PaneActions`).
  */
 function PaneCard({ pane, over = false }: { pane: Pane; /** Laid over the chat: flush, its way out an arrow back to the chat. */ over?: boolean }) {
-  const { page, expanded, panelProps, reveal, show, docs, docsLoaded, subagent } = useContext(PanesContext)
+  const { page, expanded, panelProps, reveal, show, docs, docsLoaded, subagents } = useContext(PanesContext)
   const fills = !over && expanded === pane.id
   const [title, setTitle] = useState<HTMLElement | null>(null)
   const [actions, setActions] = useState<HTMLElement | null>(null)
@@ -301,7 +312,7 @@ function PaneCard({ pane, over = false }: { pane: Pane; /** Laid over the chat: 
           {over && (
             <Tooltip>
               <TooltipTrigger
-                render={<Button variant="ghost" size="icon-bar" className="text-muted-foreground" aria-label="Back to the chat" onClick={() => setPaneOpen(page, pane.id, false)} />}
+                render={<Button variant="ghost" size="icon-bar" className="ml-0.5 text-muted-foreground" aria-label="Back to the chat" onClick={() => setPaneOpen(page, pane.id, false)} />}
               >
                 <ArrowLeft className="size-4" />
               </TooltipTrigger>
@@ -311,7 +322,8 @@ function PaneCard({ pane, over = false }: { pane: Pane; /** Laid over the chat: 
           {/* The pane's name stands until the pane puts its own title here. */}
           <div ref={setTitle} className="peer flex min-w-0 flex-1 items-center gap-1 empty:hidden" />
           <h2 className="min-w-0 flex-1 truncate pl-2 text-sm font-medium peer-[:not(:empty)]:hidden">{pane.label}</h2>
-          <div ref={setActions} className="flex shrink-0 items-center gap-1 empty:hidden" />
+          {/* Its last press (over the chat the pane's own, else Close) is pulled in so its glyph, as the name and the arrow at the left, stands 16 in. */}
+          <div ref={setActions} className={cn('flex shrink-0 items-center gap-1 empty:hidden', over && 'mr-0.5')} />
           {!over && (
             <>
               <Tooltip>
@@ -332,7 +344,7 @@ function PaneCard({ pane, over = false }: { pane: Pane; /** Laid over the chat: 
                 <TooltipContent>{fills ? 'Back to its place' : 'Fill the page'}</TooltipContent>
               </Tooltip>
               <Tooltip>
-                <TooltipTrigger render={<Button variant="ghost" size="icon-sm" className="shrink-0 text-muted-foreground" aria-label={`Close ${pane.label}`} onClick={() => setPaneOpen(page, pane.id, false)} />}>
+                <TooltipTrigger render={<Button variant="ghost" size="icon-sm" className="mr-0.5 shrink-0 text-muted-foreground" aria-label={`Close ${pane.label}`} onClick={() => setPaneOpen(page, pane.id, false)} />}>
                   <X className="h-4 w-4" />
                 </TooltipTrigger>
                 <TooltipContent>Close</TooltipContent>
@@ -342,8 +354,8 @@ function PaneCard({ pane, over = false }: { pane: Pane; /** Laid over the chat: 
         </header>
         {/* The pane fills what is left of its height, and scrolls inside itself. */}
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          {pane.id === SUBAGENT ? (
-            <PaneHeaderContext.Provider value={slots}>{subagent}</PaneHeaderContext.Provider>
+          {pane.id === SUBAGENTS ? (
+            <PaneHeaderContext.Provider value={slots}>{subagents}</PaneHeaderContext.Provider>
           ) : pane.panel && panelProps ? (
             <ModuleSlot package={pane.panel.package} label={`${pane.label} pane`}>
               <PaneHeaderContext.Provider value={slots}>

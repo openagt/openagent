@@ -2,11 +2,12 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { ChevronRight } from 'lucide-react'
 import { cn } from '../lib/utils.js'
 import { formatElapsed } from '../lib/format-date.js'
-import { STATUS_TONE } from '../lib/status-tone.js'
+import { runTone, runWord } from '../lib/run-words.js'
 import { anyModelName, useModels } from '../lib/models.js'
 import { stepWords, type SubagentRow, type SubagentStep } from '../lib/subagents.js'
 import { Markdown } from './Markdown.js'
 import { Seconds } from './ToolCalls.js'
+import { Facts } from './ui/panel.js'
 
 // A main agent's subagents in its chat, as Claude Code on the web draws them, in the look of the
 // agent's other steps: one grey line that says what is going on and opens to one bordered panel. While
@@ -17,10 +18,6 @@ import { Seconds } from './ToolCalls.js'
 
 /** How long the moving line stays on one working subagent's name. */
 const NAME_EVERY_MS = 2500
-
-function toneOf(status: string): string {
-  return status === 'waiting' ? 'text-muted-foreground' : (STATUS_TONE[status] ?? 'text-muted-foreground')
-}
 
 /** A subagent's row: the verb in grey, its name in dark, its model; while it works the tool it is on; how long it took. */
 function AgentRow({ row, onOpen }: { row: SubagentRow; onOpen?: ((key: string) => void) | undefined }) {
@@ -35,13 +32,12 @@ function AgentRow({ row, onOpen }: { row: SubagentRow; onOpen?: ((key: string) =
         ? row.calls !== undefined && (
             // What it is on now and how many calls it made; its last step whole on a hover.
             <span className="min-w-0 shrink-0 truncate" title={row.doing}>
-              {[row.tool, `${row.calls} ${row.calls === 1 ? 'call' : 'calls'}`].filter(Boolean).join(' · ')}
+              <Facts facts={[row.tool, `${row.calls} ${row.calls === 1 ? 'call' : 'calls'}`]} />
             </span>
           )
-        : row.status !== 'done' && <span className={cn('shrink-0', toneOf(row.status))}>{row.status}</span>}
+        : row.status !== 'done' && <span className={cn('shrink-0', runTone(row.status))}>{runWord(row.status)}</span>}
       <span className="ml-auto shrink-0 tabular-nums" title={`Started ${new Date(row.startedAt).toLocaleString()}`}>
-        {row.working ? <Seconds since={row.startedAt} /> : row.endedAt !== undefined ? formatElapsed(Date.parse(row.endedAt) - Date.parse(row.startedAt)) : null}
-        {row.cost !== undefined && ` · $${row.cost.toFixed(2)}`}
+        <Facts facts={[row.working ? <Seconds since={row.startedAt} /> : row.endedAt !== undefined && formatElapsed(Date.parse(row.endedAt) - Date.parse(row.startedAt)), row.cost !== undefined && `$${row.cost.toFixed(2)}`]} />
       </span>
     </button>
   )
@@ -58,7 +54,7 @@ export function SubagentMessage({ name, text, status, detail }: { name: string; 
     <>
       <span className="shrink-0">Message from</span>
       <span className="shrink-0 text-foreground">subagent</span>
-      {status !== undefined && status !== 'done' && <span className={cn('shrink-0', toneOf(status))}>{status}</span>}
+      {status !== undefined && status !== 'done' && <span className={cn('shrink-0', runTone(status))}>{runWord(status)}</span>}
     </>
   )
   return (
@@ -78,6 +74,36 @@ export function SubagentMessage({ name, text, status, detail }: { name: string; 
         </div>
       )}
     </div>
+  )
+}
+
+/** What the folded line says: a working subagent's name, or what came of them. */
+interface Said {
+  text: string
+  working: boolean
+}
+
+/**
+ * The folded line's words, changing in place. The words that leave stay under the ones that come
+ * until those are readable (`morph-out`), so the line is never its chevron alone; the first words
+ * of a line come with it, at once. The arrival is the words' box, its shimmer the words in it: one
+ * element cannot run both animations.
+ */
+function LineWords({ said }: { said: Said }) {
+  const [shown, setShown] = useState<{ now: Said; before?: Said }>({ now: said })
+  if (shown.now.text !== said.text || shown.now.working !== said.working) setShown({ now: said, before: shown.now })
+  const words = (each: Said) => <span className={each.working ? 'text-shimmer' : 'group-hover/status:text-foreground group-has-focus-visible/status:text-foreground'}>{each.text}</span>
+  return (
+    <span className="grid min-w-0 text-left">
+      {shown.before && (
+        <span key={`left:${shown.before.text}`} aria-hidden className="morph-out min-w-0 truncate [grid-area:1/1]" onAnimationEnd={e => e.target === e.currentTarget && setShown(was => ({ now: was.now }))}>
+          {words(shown.before)}
+        </span>
+      )}
+      <span key={shown.now.text} className={cn('min-w-0 truncate [grid-area:1/1]', shown.before && 'morph-in')}>
+        {words(shown.now)}
+      </span>
+    </span>
   )
 }
 
@@ -106,17 +132,7 @@ export function SubagentSteps({ steps, lead, onOpen }: { steps: readonly Subagen
     <div className="min-w-0 flex-1 font-sans text-sm text-muted-foreground">
       <div className="group/status flex">
         <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open} aria-label={current ? `Working: ${current.name}` : words} className="flex min-w-0 items-center gap-1.5 py-0.5">
-          {current ? (
-            <>
-              <span key={current.key} className="morph-in min-w-0 truncate text-left text-shimmer">
-                {current.name}
-              </span>
-            </>
-          ) : (
-            <span key={words} className="morph-in min-w-0 truncate text-left group-hover/status:text-foreground group-has-focus-visible/status:text-foreground">
-              {words}
-            </span>
-          )}
+          <LineWords said={current ? { text: current.name, working: true } : { text: words, working: false }} />
           <ChevronRight className={cn('h-3.5 w-3.5 shrink-0 transition-transform', open && 'rotate-90')} aria-hidden />
         </button>
       </div>

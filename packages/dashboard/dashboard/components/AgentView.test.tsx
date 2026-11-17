@@ -29,7 +29,7 @@ vi.mock('../rpc/control.js', () => ({
   withdrawMessage,
   sendNow,
   sendOpenPullRequest: vi.fn(async () => null),
-  sendMerge: vi.fn(async () => ({ ok: true, merge: 'auto' })),
+  sendMerge: vi.fn(async () => ({ ok: true, merge: 'auto-armed' })),
   sendSetHandoff: vi.fn(async () => null),
   sendBridgeAnswer: vi.fn(async () => null),
   sendBridgeAnswerCancel: vi.fn(async () => null),
@@ -280,12 +280,15 @@ describe("the bar's own state is one session's", () => {
   // Repo B's session seen first; then repo A's #42 set to merge once its checks pass, and B's session again, its PR numbered `other`.
   const armA = async (other: number) => {
     onAgent.mockResolvedValue(ARCHIVED)
-    onAgentHandoff.mockImplementation((async (project: string) => (project === 'p1' ? pr(42) : pr(other))) as never)
+    // Pressed, repo A's #42 is armed on its git host, and its reads say so.
+    let armed = false
+    onAgentHandoff.mockImplementation((async (project: string) => (project === 'p1' ? { ...pr(42), pr: { ...pr(42).pr, ...(armed ? { armed: true } : {}) } } : pr(other))) as never)
     const page = render(view({ projectId: 'p2', agentId: 'run-2' }))
     await screen.findByRole('button', { name: 'Merge PR' })
     page.rerender(view())
     await waitFor(() => expect(onAgentHandoff).toHaveBeenCalledWith('p1', 'run-1'))
     await new Promise(resolve => setTimeout(resolve, 20))
+    armed = true
     fireEvent.click(await screen.findByRole('button', { name: 'Merge PR' }))
     await waitFor(() => expect(document.querySelector('[aria-live="polite"]')!.textContent).toBe('PR #42 merges when its checks pass.'))
     expect(screen.queryByRole('button', { name: 'Merge PR' })).toBeNull()
@@ -1199,6 +1202,19 @@ describe('a run just started', () => {
     // its words are only the ones fading out.
     expect(screen.queryByText('Starting session')?.closest('.cross-fade-out') ?? null).not.toBeNull()
     expect(screen.getByRole('status')).toBeTruthy()
+  })
+
+  test('its prompt is the chat\'s first row from the first frame, and stays the same row as the run\'s lines land before and after its own line', () => {
+    const rows = () => [...document.querySelectorAll('[data-message-id]')]
+    const { rerender } = render(view({ live: true, events: [], startedWith: 'Say hi' }))
+    const prompt = rows()[0]!
+    expect(prompt.textContent).toContain('Say hi')
+    const session = { kind: 'session', driver: 'claude-code', workspace: '/repo', fake: false } as OpenAgentEvent
+    rerender(view({ live: true, events: [session], startedWith: 'Say hi' }))
+    expect(rows()[0]).toBe(prompt)
+    rerender(view({ live: true, events: [session, { kind: 'driver', event: { type: 'start', prompt: 'Say hi' } }], startedWith: 'Say hi' }))
+    expect(rows()[0]).toBe(prompt)
+    expect(screen.getAllByText('Say hi')).toHaveLength(1)
   })
 
   test('a run stopped before its first turn keeps its prompt, stops counting, and says it stopped', async () => {

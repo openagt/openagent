@@ -1,4 +1,5 @@
-import { forwardRef, useContext, useEffect, useImperativeHandle, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { createContext, forwardRef, useContext, useEffect, useImperativeHandle, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { ArrowUp, Loader2 } from 'lucide-react'
 import type { ProjectSummary } from '../../src/index.js'
 import { machineName, type DriverName } from '../../src/client.js'
@@ -57,11 +58,13 @@ const DRIVER_UI: Record<DriverName, { icon: DriverOption['icon'] }> = {
 /**
  * The message box, as Claude Code's (DECISIONS.md, his pick): the raised surface with the hairline,
  * holding only the +, the text and the send. Where the agent starts is a row above it, how it runs a
- * row under it. It is focused almost all the time it is on screen, so focus is its own edge in the
- * primary colour and nothing more: the caret says the rest. The edge stays while the keyboard is on
- * the + or in the menu it opened.
+ * row under it. It is focused almost all the time it is on screen, so focus is its own edge and nothing
+ * more: the caret says the rest. While its text has the keyboard the edge is a field's focus, 2 wide in
+ * the focus colour over its edge, as the presses' ring is 2 wide. While the keyboard is on the + or
+ * in the menu it opened, the edge is his 1 wide primary border, so the +'s own ring stands alone.
  */
-const BOX = '[view-transition-name:composer] flex items-end rounded-box border border-hairline bg-card shadow-lg transition-colors focus-within:border-primary has-[[aria-expanded=true]]:border-primary'
+const BOX =
+  '[view-transition-name:composer] flex items-end rounded-box border border-hairline bg-card shadow-lg transition-colors focus-within:border-primary has-[[aria-expanded=true]]:border-primary has-[[role=textbox]:focus]:outline-2 has-[[role=textbox]:focus]:-outline-offset-1 has-[[role=textbox]:focus]:outline-focus'
 
 /**
  * The box while the page it stands on is read: a {@link Slot}'s shape at the three bands' heights,
@@ -87,6 +90,13 @@ export interface ComposerHandle {
   /** Put `text` in the box after what is typed there, the caret left where it is. */
   append: (text: string) => void
 }
+
+/**
+ * Where a page lays the box's notes, over itself above the box, when the box cannot: a session's
+ * box is in a bar that scrolls inside itself, which would cut them (ChatPane). Elsewhere they lie
+ * right above the box.
+ */
+export const BoxNotes = createContext<HTMLElement | null>(null)
 
 // The shared agent composer (#721), laid out as Claude Code's: a box one line tall when empty that
 // holds the commands menu (+), the text (the Tiptap editor, `/` `@` `#` triggers) and the submit at
@@ -143,12 +153,15 @@ export const Composer = forwardRef<ComposerHandle, {
   idleControl?: ReactNode
   /** The saved machine the project is on, when only another computer of the person's has it (elsewhere.ts). */
   home?: string | undefined
+  /** What the caller says about the box: laid over the page above it with the box's own notes,
+   *  never in its flow, so the text being typed does not move when one comes or goes. */
+  notes?: ReactNode
   /** Which box this is, by project or session: what is typed in it is kept in this browser, across a navigation and a reload, until it is sent. */
   draftKey?: string | undefined
   /** The box takes the caret when it opens. */
   autoFocus?: boolean | undefined
 }>(function Composer(
-  { files, addContext, removeContext, startsAt, controls, controlsEnd, sessionModel, sessionContext, onSubmit, onPromptChange, onPreset, busy, submitLabel, submitBusyLabel, placeholder, inAgent = false, sessionRow, canSubmit = true, idleControl, home, draftKey, autoFocus = false },
+  { files, addContext, removeContext, startsAt, controls, controlsEnd, sessionModel, sessionContext, onSubmit, onPromptChange, onPreset, busy, submitLabel, submitBusyLabel, placeholder, inAgent = false, sessionRow, canSubmit = true, idleControl, home, notes, draftKey, autoFocus = false },
   ref,
 ) {
   const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
@@ -230,6 +243,9 @@ export const Composer = forwardRef<ComposerHandle, {
   const untold = !inAgent && !!selectedMachine && owner !== undefined && !selectedMachine.told && toldNow !== selectedMachine.id
   // OpenAgent is not answering: nothing typed can be sent, and the box keeps it.
   const down = useContext(DaemonDown)
+  // What holds a send, whatever the box holds: the one list the arrow and the keyboard both read.
+  // #1073: a keyboard submit is held too when the target machine is offline.
+  const held = busy || targetOffline || untold || down || !canSubmit
 
   useImperativeHandle(ref, () => ({
     clear: () => {
@@ -280,8 +296,7 @@ export const Composer = forwardRef<ComposerHandle, {
   const submit = (e?: FormEvent, later = false) => {
     e?.preventDefault()
     const text = prompt.trim()
-    // #1073: a keyboard submit must be blocked too when the target machine is offline.
-    if (!text || busy || submittingRef.current || targetOffline || untold || down || !canSubmit) return
+    if (!text || held || submittingRef.current) return
     submittingRef.current = true
     void Promise.resolve(onSubmit(text, { later })).finally(() => {
       submittingRef.current = false
@@ -374,14 +389,15 @@ export const Composer = forwardRef<ComposerHandle, {
     />
   )
 
-  // The submit is a single icon button that only shows once the prompt has text (#721): an empty
-  // launcher has nothing to send, and the arrow reads as "send" in either place (Start session /
-  // Send). It is always full size (never appears to grow): it fades in and slides into place, and
-  // its layout footprint is animated with a negative margin (0 <- -w) rather than its width, so the
-  // text to its left gives way smoothly. `aria-hidden` while empty
-  // keeps it out of the a11y tree and role queries.
+  // A session's send is a single icon button that only shows once the box has text (#721): it fades
+  // in and slides into place, its layout footprint animated with a negative margin (0 <- -w) rather
+  // than its width, so the text to its left gives way smoothly; `aria-hidden` while empty keeps it out
+  // of the a11y tree. The launcher's is a press named for what it does ("Start agent"), at the text's
+  // right as a session's send is, there from the first frame and off while the box is empty: starting
+  // an agent is what the page is for, so its press is not a glyph that comes and goes.
   const hasPrompt = !!prompt.trim()
-  const submitButton = (
+  const submitTip = busy ? submitBusyLabel : down ? 'OpenAgent is not answering' : `${submitLabel}  (Enter · Shift+Enter for a new line)`
+  const submitButton = inAgent ? (
     <Tooltip>
       <TooltipTrigger
         render={
@@ -389,7 +405,7 @@ export const Composer = forwardRef<ComposerHandle, {
             type="submit"
             size="icon-sm"
             onClick={submit}
-            disabled={busy || !hasPrompt || targetOffline || untold || down || !canSubmit}
+            disabled={held || !hasPrompt}
             aria-hidden={!hasPrompt}
             tabIndex={hasPrompt ? undefined : -1}
             aria-label={submitLabel}
@@ -408,7 +424,16 @@ export const Composer = forwardRef<ComposerHandle, {
       >
         {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
       </TooltipTrigger>
-      <TooltipContent>{busy ? submitBusyLabel : down ? 'OpenAgent is not answering' : `${submitLabel}  (Enter · Shift+Enter for a new line)`}</TooltipContent>
+      <TooltipContent>{submitTip}</TooltipContent>
+    </Tooltip>
+  ) : (
+    <Tooltip>
+      {/* 28 high, as the rows' items; a finger's 44 around it on a phone. While the start is asked for it
+          keeps its words and the keyboard, dimmed: the note above the box says what is under way. */}
+      <TooltipTrigger render={<Button type="submit" size="sm" onClick={submit} disabled={(held && !busy) || !hasPrompt} loading={busy} className="relative ml-2 max-md:after:absolute max-md:after:-inset-2" />}>
+        {submitLabel}
+      </TooltipTrigger>
+      <TooltipContent>{submitTip}</TooltipContent>
     </Tooltip>
   )
 
@@ -418,21 +443,21 @@ export const Composer = forwardRef<ComposerHandle, {
 
   // #1073: an offline target blocks Start; say so and point back to the pick of where it runs. No auto-fallback.
   const offlineNote = targetOffline && (
-    <p role="alert" className="mt-2 text-xs text-danger">
+    <p role="alert" className="rounded-md bg-background px-2 py-0.5 text-xs text-danger">
       {`${selectedMachine ? machineName(selectedMachine) : 'The selected machine'} is offline. Pick another place to run, then start.`}
     </p>
   )
   // The saved pick, let go as the page opened: where the run goes instead, and why.
   const here = thisMachineName() === 'This machine' ? 'this machine' : thisMachineName()
   const fallbackNote = !inAgent && fallback && !selectedMachine && (
-    <p role="status" className="mt-2 text-xs text-muted-foreground">
+    <p role="status" className="rounded-md bg-background px-2 py-0.5 text-xs text-muted-foreground">
       {fallback.why === 'gone'
         ? `The computer you last picked to run on is no longer saved, so runs start on ${here}.`
         : `${fellBackFrom ? machineName(fellBackFrom) : 'The computer you last picked'} is offline, so runs start on ${here}. Pick it again once it is on.`}
     </p>
   )
   const loginsNote = untold && (
-    <div role="note" className="mb-1.5 flex items-center gap-3 rounded-md border border-border bg-background px-3 py-2 text-xs">
+    <div role="note" className="flex items-center gap-3 rounded-md border border-border bg-background px-3 py-2 text-xs">
       <p className="min-w-0 flex-1">
         <span className="text-foreground">{`Your own logins are used on ${owner}'s computer: copied there by a server of yours, or logged in on its page.`}</span>{' '}
         <span className="text-muted-foreground">{`${owner} can see what is on it. Runs there start once you say OK.`}</span>
@@ -451,50 +476,68 @@ export const Composer = forwardRef<ComposerHandle, {
     </div>
   )
 
-  return (
-    <>
-      {/* Where the agent starts, above the box (his pick): the machine, the project and the branch,
-          drawn as the row under the box draws its items. A session has its own words in the same place. */}
-      {inAgent ? (
-        sessionRow
-      ) : (
-        <RowAboveBox>
-          {runOnEl}
-          {startsAt}
-        </RowAboveBox>
-      )}
-
+  // Every note at once, stacked up from the prompt area; none moves the box or what is typed in it. A note
+  // is a card, so it stands the step between two cards from the prompt area and from the next note: 12.
+  const notesSlot = useContext(BoxNotes)
+  const notesEl = (
+    <div className="flex flex-col gap-3 pb-3 empty:hidden">
+      {notes}
       {loginsNote}
-
-      {/* The box, as Claude Code's: the raised surface, the commands menu (+) at its left, the text,
-          and the submit at its right, the two kept at the last line. One line tall when empty,
-          growing with what is typed. The editor is borderless: the edge is the box's. */}
-      <div ref={surface} className={BOX}>
-        <div className="-mr-2 flex shrink-0 items-center py-1 pr-1 pl-0.5">{commandsEl}</div>
-        <div className="min-w-0 flex-1">{editorEl}</div>
-        <div className="flex shrink-0 items-center py-1 pr-0.5 pl-1">{slotEl}</div>
-      </div>
-
-      {/* How it runs, under the box: the caller's controls at the left, the model at the right. The
-          left side is the one that gives way: a longer label there never moves the model or the
-          page below. */}
-      <TooltipsPastBox value={surface}>
-        <div className={cn('mt-1', rowClass)}>
-          <div className={rowLeftClass}>{controls}</div>
-          <div className="flex shrink-0 items-center gap-0.5">
-            {controlsEnd}
-            {driverModelEl || (
-              <span className="flex items-center">
-                {sessionModel !== undefined && <span className={rowItemClass}>{sessionModel}</span>}
-                {sessionContext}
-              </span>
-            )}
-          </div>
-        </div>
-      </TooltipsPastBox>
-
       {offlineNote}
       {fallbackNote}
+    </div>
+  )
+
+  return (
+    <>
+      <div className="relative">
+        {/* Where the agent starts, above the box (his pick): the machine, the project and the branch,
+            drawn as the row under the box draws its items. A session has its own words in the same place. */}
+        {inAgent ? (
+          sessionRow
+        ) : (
+          <RowAboveBox>
+            {runOnEl}
+            {startsAt}
+          </RowAboveBox>
+        )}
+
+        {/* The box, as Claude Code's: the raised surface, the commands menu (+) at its left, the text,
+            and the send at its right (the launcher's "Start agent"), the two kept at the last line. One
+            line tall when empty, growing with what is typed. The editor is borderless: the edge is the box's.
+            On a touch screen, where the text's line is 24 high, the two stand 6 from the box's edges, so they sit on its middle. */}
+        <div ref={surface} className={BOX}>
+          <div className="-mr-2 flex shrink-0 items-center py-1 pr-1 pl-0.5 pointer-coarse:py-1.5">{commandsEl}</div>
+          <div className="min-w-0 flex-1">{editorEl}</div>
+          <div className="flex shrink-0 items-center py-1 pr-0.5 pl-1 pointer-coarse:py-1.5">{slotEl}</div>
+        </div>
+
+        {/* How it runs, under the box: the caller's controls at the left, the model at the right. The
+            left side is the one that gives way: a longer label there never moves the model or the
+            page below. */}
+        <TooltipsPastBox value={surface}>
+          <div className={cn('mt-1', rowClass)}>
+            {/* In a narrow box, where its items say their icons only, each stays whole and the side scrolls, as the row above the box does. */}
+            <div className={cn(rowLeftClass, '@max-xl:overflow-x-auto @max-xl:[scrollbar-width:none] @max-xl:[mask-image:linear-gradient(to_right,#000_85%,transparent)] @max-xl:*:shrink-0')}>
+              {controls}
+            </div>
+            <div className="flex shrink-0 items-center gap-0.5">
+              {controlsEnd}
+              {driverModelEl ||
+                // Only with something in it: an empty one would still take the row's gap, and the
+                // row's last item would end off the row's end.
+                ((sessionModel !== undefined || sessionContext) && (
+                  <span className="flex items-center">
+                    {sessionModel !== undefined && <span className={rowItemClass}>{sessionModel}</span>}
+                    {sessionContext}
+                  </span>
+                ))}
+            </div>
+          </div>
+        </TooltipsPastBox>
+        {/* Last, so the box is the first thing drawn; laid over the page above the prompt area all the same. */}
+        {notesSlot ? createPortal(notesEl, notesSlot) : <div className="absolute inset-x-0 bottom-full">{notesEl}</div>}
+      </div>
 
       {addingPreset && (
         <PresetCreatePanel

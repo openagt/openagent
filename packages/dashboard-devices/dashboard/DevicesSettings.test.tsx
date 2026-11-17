@@ -125,6 +125,20 @@ describe('Settings › Devices: this computer, and how devices reach it', () => 
     expect(host.runCommand).not.toHaveBeenCalled()
   })
 
+  test('the two other ways in read as sentences: each question, a space, its words, and its link on a line of its own', async () => {
+    show(door(() => ok(OFF)).host)
+    const way = (link: string) => screen.getByRole('button', { name: link }).parentElement!
+    await waitFor(() => way('Join with a code'))
+    for (const [link, words] of [
+      ['Join with a code', 'Someone gave you a code? Join a server of yours, or a computer someone shared with you.'],
+      ['Reach this computer on your Tailscale network', 'On Tailscale? Your devices on Tailscale reach this computer from anywhere, with no server.'],
+    ]) {
+      expect(way(link!).querySelector('p')!.textContent).toBe(words)
+      // The link is a block of its own, under the words: not run into them.
+      expect(way(link!).children[1]!.textContent).toBe(link)
+    }
+  })
+
   test('a phone on this Wi-Fi with the door shut: it is opened first, after saying the link is not locked', async () => {
     let state: object = OFF
     const { host, runComputerCommand } = door(args => {
@@ -487,6 +501,22 @@ describe('Settings › Devices: another computer, once', () => {
     const other = getRow('Studio')
     expect(other.textContent).toContain('starts runs here')
     expect(within(screen.getByRole('list', { name: 'Your devices' })).getAllByRole('listitem')).toHaveLength(2)
+  })
+
+  test('a computer saved here that does not answer is said first, before how this computer is reached, its name opening its page; once it answers nothing is said', async () => {
+    const { host } = door(() => ok({ ...OPEN, devices: [IN_HERE] }), [{ id: STUDIO.id, label: STUDIO.label, url: STUDIO.url, listed: STUDIO.listed! }])
+    show(host)
+    expect((await findRow('Studio Mac')).textContent).toContain('Offline')
+    const said = screen.getByText('Studio Mac does not answer').parentElement!
+    expect(said.textContent).toBe('Studio Mac does not answerRuns cannot go there until it is on and online. Open Studio Mac to connect it again.')
+    // Before This computer: what is down, and the way on, first.
+    expect(said.compareDocumentPosition(screen.getByRole('region', { name: 'This computer' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    fireEvent.click(within(said).getByRole('button', { name: 'Studio Mac' }))
+    expect(await screen.findByRole('button', { name: 'Back to Devices' })).toBeTruthy()
+    cleanup()
+    show(door(() => ok({ ...OPEN, devices: [IN_HERE] }), [STUDIO]).host)
+    await findRow('Studio Mac')
+    expect(screen.queryByText(/does not answer/)).toBeNull()
   })
 
   test("on a server, another person's computer in at the door is theirs alone: under them, never among the owner's devices with a way to send runs to it", async () => {
@@ -938,6 +968,20 @@ describe('Settings › Devices: a code typed on another computer', () => {
   const VPS: ModuleMachine = { id: 'https://203.0.113.10', label: 'my-vps', url: 'https://203.0.113.10', version: '0.0.0' }
   const STUDIO = { id: 'abc123def456', name: 'Studio', online: true, added: false }
   const ROMS = { id: 'f00f00f00f00', name: "Rom's PC", online: true, added: false, owner: 'rom' }
+
+  test('the entry is drawn once a server set up elsewhere said who this person is there, with its line in it: its answer moves nothing', async () => {
+    const { host } = door(() => ok(OPEN), [VPS], args => ok(args[0] === 'shared' ? { shared: [] } : { servers: [] }))
+    let say: ((said: Awaited<ReturnType<ModuleHost['machinePerson']>>) => void) | undefined
+    vi.mocked(host.machinePerson).mockImplementation(() => new Promise(resolve => (say = resolve)))
+    // The saved machines answer after the servers: the servers' answer alone says nothing of a server set up elsewhere.
+    vi.mocked(host.machines).mockImplementation(async () => (await new Promise(resolve => setTimeout(resolve, 100)), { version: '0.0.0', name: 'Adas-MacBook', machines: [VPS] }))
+    show(host)
+    await waitFor(() => expect(say).toBeDefined())
+    expect(screen.queryByRole('heading', { name: 'This computer' })).toBeNull()
+    await act(async () => say!({ ok: true, said: { owner: true, devices: [] } }))
+    expect(await screen.findByRole('heading', { name: 'This computer' })).toBeTruthy()
+    expect(screen.getByRole('switch', { name: 'From anywhere, through my-vps' })).toBeTruthy()
+  })
 
   test('Join with a code: where and the code, pasted both at once; this computer keeps its line there, and the person\'s own computers there are saved through it', async () => {
     const saved: ModuleMachine[] = []

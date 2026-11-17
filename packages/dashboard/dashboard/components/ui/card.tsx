@@ -3,10 +3,12 @@ import { ArrowRight } from 'lucide-react'
 import { cn } from '../../lib/utils.js'
 import { inPlace } from '../../lib/in-place.js'
 
-// Minimal shadcn-style Card for the dashboard page (#471): a bordered surface with an
-// optional header. Just enough structure to keep the page's panels consistent.
+/** The card's surface: white, a step above the page, its hairline and a faint lift. */
+export const cardSurface = 'rounded-lg border border-hairline bg-card text-card-foreground shadow-sm'
+
+/** The card: a white surface a step above the page, its hairline and a faint lift, with an optional header. */
 export function Card({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn('rounded-lg border border-border bg-card text-card-foreground', className)} {...props} />
+  return <div className={cn(cardSurface, className)} {...props} />
 }
 
 export function CardHeader({ className, ...props }: HTMLAttributes<HTMLDivElement>) {

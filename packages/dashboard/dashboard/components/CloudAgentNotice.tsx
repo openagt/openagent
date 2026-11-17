@@ -35,7 +35,7 @@ export function CloudAgentNotice({
   if (target !== 'web') return null
   return (
     <div className="mx-auto w-full max-w-3xl">
-      <div role="status" className="flex flex-wrap items-center gap-2 px-4 py-2 text-sm text-muted-foreground">
+      <div role="status" className="flex flex-wrap items-center gap-2 px-4 py-2 text-sm md:px-8 text-muted-foreground">
         <Cloud className="h-3.5 w-3.5 shrink-0" aria-hidden />
         <span className="min-w-0 flex-1">
           {session

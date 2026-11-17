@@ -23,6 +23,16 @@ export function priorityMeaning(priority: number): string | undefined {
 }
 
 /**
+ * A typed entry as a row says it: its name, the words up to the end of its first sentence, a colon or
+ * a dash, and the rest of its words where it has more. A line with none of those is all name.
+ */
+export function entryHeadline(text: string): { name: string; rest?: string } {
+  const line = text.trim()
+  const split = /^(.+?)(?:[.!?:]|\s[-–—])\s+(\S.*)$/s.exec(line)
+  return split ? { name: split[1]!, rest: split[2]! } : { name: line }
+}
+
+/**
  * The `queue add` command line for a text typed on the page, at the priority picked. The text
  * comes after `--`: a person may type a task that opens with a dash, and it is still the task,
  * never a flag.

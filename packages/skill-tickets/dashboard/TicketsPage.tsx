@@ -1,6 +1,7 @@
-import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Button, LinkActions, Page, RowShapes, Section, Slot, cn, usePolled, useAction, useLinkActions, useModuleHost, type ProjectLinks, type ModuleLink, type ModuleProject, type LinkActionOffer } from '@openagt/dashboard/module'
-import { UPDATE_TICKETS_PROMPT, heldBack, holderAgent, planLink, ticketLink, withHolder } from '../src/module.js'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { X } from 'lucide-react'
+import { Button, Empty, LinkActions, Page, PanelShape, Section, Slot, cn, runsAgain, usePolled, useAction, useIsMobile, useLinkActions, useModuleHost, type ProjectLinks, type ModuleLink, type ModuleProject, type LinkActionOffer } from '@openagt/dashboard/module'
+import { heldBack, holderAgent, planLink, ticketLink, withHolder } from '../src/module.js'
 import { holdingRun } from './lib/holding-run.js'
 import type { ProjectTickets, WorkspaceTicket } from './lib/types.js'
 import { listTickets } from './lib/list.js'
@@ -9,13 +10,13 @@ import {
   filterRows,
   flattenTickets,
   formatTicketsView,
-  hasAnyFilter,
   parseTicketsView,
   sortRows,
+  type TicketRow,
   type TicketsView,
 } from './lib/ticket-filter.js'
 import { TicketFilterBar } from './TicketFilterBar.js'
-import { ProjectTicketsPresses, TicketList, TicketsPanel, TicketRow, importSaid, useTicketsMeta } from './TicketsPanel.js'
+import { ProjectTicketsPresses, TicketsPanel, type ListedTicket, type RowsProps } from './TicketsPanel.js'
 
 /** Stable initial for the cross-project tickets poll, so it does not churn on every render. */
 const EMPTY_GROUPS: ProjectTickets[] = []
@@ -25,35 +26,30 @@ interface ProjectRead extends ProjectTickets {
   error?: string
 }
 
-/** The view the page opens with: whatever the URL says (#784's doctrine — the URL is the
- *  selection, filters included), or the defaults where there is no URL to read. */
+/** The view the page opens with: whatever the URL says (the URL is the selection, filters included), or the defaults. */
 function initialView(): TicketsView {
   return typeof window === 'undefined' ? defaultView() : parseTicketsView(window.location.search)
 }
 
-// The Tickets view (#1144): every registered project's `tickets/*.md`, one section per project —
-// its own full page rather than a tab squeezed into the 22rem right rail, and cross-project rather
-// than scoped to whichever project happened to be selected, since the backlog is worth seeing
-// whole. Filtering/sorting/grouping (#1144) all live in one URL-carried TicketsView: search,
-// faceted filters (priority/topics/stage/effort/uncertainty/project/unlinked), sort with
-// direction, and Group by project (each section its own poll-independent TicketsPanel) vs a flat
-// cross-project list — the one view that can answer "what is the single highest-priority ticket
-// anywhere". Rows are selectable (the list idiom of issue trackers): while any shown row is ticked, a
-// bar at the foot of the list holds the queue buttons for just the selected tickets.
+/** A ticket's key on a page that spans projects, where two projects can share a filename. */
+const keyOf = (row: { projectId: string; ticket: { file: string } }) => `${row.projectId}/${row.ticket.file}`
+
+/** The backlog of the picked project or of every project, in one view the URL carries. */
 export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
   const host = useModuleHost()
+  const phone = useIsMobile()
   const key = projects.map(p => p.id).join(',')
-  // Every project's tickets from `tickets list --local` in each, with each claim's holder looked up
-  // among the project's runs: a lock names a run's id, so a claim a run made links to its page
-  // and reads as its session name. A project whose command fails is named with the command's own
-  // reason, and the other projects still show. A local read, no fetch: cheap enough to poll.
+  // A project whose read fails says why while the others still show.
   const { value: groups, state } = usePolled<ProjectRead[]>(
     () =>
       Promise.all(
         projects.map(async (project): Promise<ProjectRead> => {
           const [listed, agents] = await Promise.all([listTickets(host, project.id), host.agents(project.id).catch(() => [])])
           if ('error' in listed) return { projectId: project.id, projectName: project.name, tickets: [], error: listed.error }
-          const tickets = listed.tickets.map(ticket => withHolder(ticket, holdingRun(holderAgent(agents, ticket.lockedBy))))
+          const tickets = listed.tickets.map(ticket => {
+            const holder = holderAgent(agents, ticket.lockedBy)
+            return { ...withHolder(ticket, holdingRun(holder)), ...(holder ? { holderStatus: holder.status } : {}) }
+          })
           return { projectId: project.id, projectName: project.name, tickets }
         }),
       ),
@@ -62,76 +58,31 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
     [key],
     // Kept for the next visit: the page opens with the last list, faded until it is read again.
     { remember: `skill-tickets:page:${key}`, stored: true },
+    runsAgain(undefined),
   )
   const [view, setViewState] = useState<TicketsView>(initialView)
-  const open = (projectId: string, path: string[]) => host.openPage('tickets', path, projectId)
-  const onOpenTicket = (projectId: string, file: string) => open(projectId, [file])
-  const onOpenTicketPlan = (projectId: string, file: string) => open(projectId, [file, 'plan'])
-  const onOpenAgent = (projectId: string, agentId: string) => host.openAgent(projectId, agentId)
-
-  // Every view change mirrors into the query string — an adjust, not a navigation: filters are
-  // page state the Back button should step over, not through, and the address stays shareable.
+  // A view change is an adjust, not a navigation: Back steps over filters, and the address stays shareable.
   const setView = (next: TicketsView) => {
     setViewState(next)
     if (typeof window !== 'undefined') host.adjustPage(undefined, formatTicketsView(next, window.location.search))
   }
   const clearFilters = () => setView({ ...view, filters: defaultView().filters })
-  // Click-to-filter (#1144): a row's topic badge adds its topic, the claim marker narrows to
-  // claimed — additive, so clicking a second topic widens the OR instead of replacing it.
-  // Lowercased on the way in, the one casing the filters hold (the query-string parser does the
-  // same): matching lowercases the ticket's own topics, so a badge reading `UX` filtered nothing.
-  const addTopic = (raw: string) => {
-    const topic = raw.toLowerCase()
-    if (!view.filters.topics.includes(topic)) setView({ ...view, filters: { ...view.filters, topics: [...view.filters.topics, topic] } })
-  }
-  const filterClaimed = () => {
-    if (!view.filters.stage.includes('claimed'))
-      setView({ ...view, filters: { ...view.filters, stage: [...view.filters.stage, 'claimed'] } })
-  }
 
   const rows = useMemo(() => flattenTickets(groups), [groups])
+  // Read, and no project holds a ticket: there is nothing to filter, so the filters are not drawn.
+  const noTicket = state !== 'unknown' && groups.every(g => g.error === undefined && g.tickets.length === 0)
   const visible = filterRows(rows, view.filters)
-  const filtered = hasAnyFilter(view.filters)
-
-  // Flat mode renders rows outside any TicketsPanel, so the plan and start columns need their own
-  // action with the row's own project (a panel binds one projectId; the flat list has one per row).
-  // The dashboard starts the run with the person's own picks and lands on it.
-  const { busy, error, run } = useAction()
-  // Which start is in flight, by its project and prompt: only the button that asked it spins.
-  const [starting, setStarting] = useState<{ projectId: string; prompt: string } | null>(null)
-  const startSession = async (projectId: string, prompt: string, failure: string) => {
-    setStarting({ projectId, prompt })
-    await run(() => host.startRun(projectId, prompt), failure)
-    setStarting(null)
-  }
-  // A page of one project: its update and its New ticket stand in the page's head, its import stamp in the sentence under it.
-  const only = projects.length === 1 ? projects[0] : undefined
-  const meta = useTicketsMeta(only?.id ?? null)
-  // The page-wide adds: every unclaimed shown ticket handed, as a link, to the actions the
-  // installed modules offer on links — "Add to queue" when a project has a queue package — as the
-  // ticket itself, or as the ask for its plan. Both walk the shown order, so within a priority
-  // section entries keep the order the reader saw. What is already there is the action's own to
-  // leave alone: this page knows nothing of a queue. No agent starts here. Each stops at the
-  // first failure, whose reason lands under the buttons.
-
   const flatRows = sortRows(visible, view.sort)
 
-  // The row selection (the list idiom of issue trackers): tick some rows and the queue buttons narrow to just
-  // them. Keyed project + file, since the page spans projects and two projects can share a
-  // filename. Only shown selected rows count — a selected ticket the filters hide is neither
-  // acted on nor counted, and comes back with its row — so what the buttons act on is always
-  // visible below. A key whose ticket is gone lingers in the set harmlessly: it intersects
-  // nothing shown.
+  const { busy, error, run } = useAction()
+  const [starting, setStarting] = useState<{ projectId: string; prompt: string } | null>(null)
+  const only = projects.length === 1 ? projects[0] : undefined
+
+  // A ticked ticket the filters hide is neither counted nor acted on, and comes back ticked with its row.
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set())
-  const toggleSelected = (key: string) =>
-    setSelected(prev => {
-      const next = new Set(prev)
-      if (!next.delete(key)) next.add(key)
-      return next
-    })
-  const selectedShown = flatRows.filter(r => selected.has(`${r.projectId}/${r.ticket.file}`))
+  const selectedShown = flatRows.filter(r => selected.has(keyOf(r)))
   const hasSelection = selectedShown.length > 0
-  // Escape hands the page back, as Clear selection does, unless something open took the key first.
+  // Escape hands the page back, as the bar's clear does, unless something open took the key first.
   useEffect(() => {
     if (!hasSelection) return
     const onKey = (event: KeyboardEvent) => {
@@ -140,9 +91,7 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [hasSelection])
-
-
-  // The selection's bar lingers 120ms after the last tick goes, drawn as it was, so it can leave.
+  // The bar lingers 120 ms after the last tick goes, drawn as it was, so it can leave.
   const lastSelected = useRef(selectedShown)
   if (hasSelection) lastSelected.current = selectedShown
   const [leaving, setLeaving] = useState(false)
@@ -158,279 +107,203 @@ export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
   }, [hasSelection])
   const barRows = hasSelection ? selectedShown : leaving ? lastSelected.current : []
 
+  const rowsProps: RowsProps = {
+    busy,
+    starting,
+    isSelected: row => selected.has(keyOf(row)),
+    onToggleSelect: row =>
+      setSelected(prev => {
+        const next = new Set(prev)
+        if (!next.delete(keyOf(row))) next.add(keyOf(row))
+        return next
+      }),
+    onOpen: row => host.openPage('tickets', [row.ticket.file], row.projectId),
+    onStart: async (row, prompt, failure) => {
+      setStarting({ projectId: row.projectId, prompt })
+      await run(() => host.startRun(row.projectId, prompt), failure)
+      setStarting(null)
+    },
+    onConfigure: (row, prompt) => host.configureRun(row.projectId, prompt),
+    // Added to what is filtered, so a second topic widens the list; lowercased, the one casing the filters hold.
+    onTopic: raw => {
+      const topic = raw.toLowerCase()
+      if (!view.filters.topics.includes(topic)) setView({ ...view, filters: { ...view.filters, topics: [...view.filters.topics, topic] } })
+    },
+    onClaimed: () => {
+      if (!view.filters.stage.includes('claimed')) setView({ ...view, filters: { ...view.filters, stage: [...view.filters.stage, 'claimed'] } })
+    },
+  }
+  const listed = (r: TicketRow, named: boolean): ListedTicket => ({ projectId: r.projectId, ...(named ? { projectName: r.projectName } : {}), ticket: r.ticket })
+
   return (
-    // The header (with the count, the page's buttons and its filter bar) stays above the list while the list scrolls.
     <Page
       title="Tickets"
-      // Shown/total beside the name it counts (#1144 follow-up): unfiltered it reads n/n, doubling as the backlog's total.
-      count={state !== 'unknown' && rows.length > 0 ? `${visible.length}/${rows.length}` : undefined}
       description={
         <>
-          {only ? 'This project\u2019s' : 'Every project\u2019s'} <code className="rounded-sm bg-muted px-1 font-mono text-xs">tickets/</code> backlog: what agents plan from.
-          {only && ` ${importSaid(meta.lastImportedAt)}.`}
+          {only ? 'The backlog' : 'Every project’s backlog'} agents plan from, read from <code className="rounded-sm bg-muted px-1 font-mono text-xs">tickets/</code>.
         </>
       }
-      // The whole shown set onto the queue: the detail page's Queue action lifted to the page, and
-      // its plan sibling. While rows are ticked the selection's bar speaks for them instead, and
-      // these keep their place, unseen, so nothing on the page moves. Then the project's own
-      // presses, New ticket the primary, last.
-      actions={
-        <>
-          {state !== 'unknown' && (
-            // On a phone the head holds the project's own presses alone: there the queue's adds are the selection bar's.
-            <span className={cn('contents max-md:hidden', hasSelection && '[&>*]:invisible')} aria-hidden={hasSelection || undefined} inert={hasSelection || undefined}>
-              <QueueAdds rows={flatRows} selection={false} disabled={busy} />
-            </span>
-          )}
-          {only && (
-            <ProjectTicketsPresses
-              projectId={only.id}
-              busy={busy}
-              starting={starting?.projectId === only.id && starting.prompt === UPDATE_TICKETS_PROMPT}
-              onStart={() => void startSession(only.id, UPDATE_TICKETS_PROMPT, 'The update could not be started.')}
-              lastImportedAt={meta.lastImportedAt}
-            />
-          )}
-        </>
-      }
+      actions={only && <ProjectTicketsPresses projectId={only.id} />}
       bar={
         <>
-          {/* Page-level failures land here, above the toolbar, so grouped mode shows them too — the
-              header owns an action of its own now, not just the flat rows'. */}
-          {error && <p className="text-xs text-danger">{error}</p>}
-          <TicketFilterBar
-            view={view}
-            rows={rows}
-            onChange={setView}
-          />
+          {error && <p role="alert" className="mb-2 text-xs text-danger">{error}</p>}
+          {!noTicket && <TicketFilterBar view={view} rows={rows} reading={state === 'unknown'} spansProjects={projects.length > 1} onChange={setView} />}
         </>
       }
     >
-      <Slot of={{ state, value: groups }} shape={<RowShapes rows={3} />}>
+      {/* While the tickets are read: a card of rows as they land, their priority's column after the tick, one line each,
+          and on a phone two, the stage under the name. */}
+      <Slot of={{ state, value: groups }} shape={<PanelShape rows={3} lines={phone ? 2 : 1} before />}>
         {groups =>
           groups.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No project has the tickets package.</p>
-          ) : view.group === 'none' ? (
-            // The flat cross-project list: one pool, one order, rows carrying their project. No
-            // per-project Update bars here — those belong to the sections, and grouped mode is a
-            // menu click away.
-            <div className="space-y-2">
-              {filtered && rows.length - visible.length > 0 && (
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-muted-foreground">
-                  <span>
-                    {rows.length - visible.length} ticket{rows.length - visible.length === 1 ? '' : 's'} hidden by the current filters.
-                  </span>
-                  <Button variant="secondary" onClick={clearFilters}>
-                    Clear filters
-                  </Button>
-                </div>
-              )}
-              {flatRows.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  {rows.length === 0 ? 'No tickets in any project yet — group by project to import a project\'s issues.' : 'No tickets match.'}
-                </p>
+            <Empty title="No project has the tickets package." />
+          ) : groups.length > 1 && view.group === 'project' ? (
+            // A part per project, each with its own presses: the page's head cannot hold one project's.
+            <div className="space-y-8">
+              {groups.map(g => (
+                <Section key={g.projectId} title={g.projectName} action={<ProjectTicketsPresses projectId={g.projectId} primary={false} />}>
+                  <TicketsPanel
+                    projectId={g.projectId}
+                    rows={flatRows.filter(r => r.projectId === g.projectId).map(r => listed(r, false))}
+                    error={g.error}
+                    hiddenByFilter={g.tickets.length - visible.filter(r => r.projectId === g.projectId).length}
+                    onClearFilters={clearFilters}
+                    {...rowsProps}
+                  />
+                </Section>
+              ))}
+            </div>
+          ) : groups.length > 1 ? (
+            // One list across projects, each row saying its own.
+            <div className="space-y-4">
+              {groups
+                .filter(g => g.error !== undefined)
+                .map(g => (
+                  <p key={g.projectId} role="alert" className="text-sm text-danger">
+                    Could not read the tickets of {g.projectName}: {g.error}
+                  </p>
+                ))}
+              {rows.length === 0 ? (
+                <Empty title="No project has a ticket yet." />
               ) : (
-                <TicketList tickets={flatRows.map(r => r.ticket)}>
-                    {flatRows.map(r => (
-                      <TicketRow
-                        key={`${r.projectId}/${r.ticket.file}`}
-                        projectId={r.projectId}
-                        ticket={r.ticket}
-                        projectName={projects.length > 1 ? r.projectName : undefined}
-                        busy={busy}
-                        starting={starting?.projectId === r.projectId ? starting.prompt : null}
-                        selected={selected.has(`${r.projectId}/${r.ticket.file}`)}
-                        onToggleSelect={() => toggleSelected(`${r.projectId}/${r.ticket.file}`)}
-                        onOpen={() => onOpenTicket(r.projectId, r.ticket.file)}
-                        onStart={(prompt, failure) => void startSession(r.projectId, prompt, failure)}
-                        onConfigure={prompt => host.configureRun(r.projectId, prompt)}
-                        onOpenPlan={() => onOpenTicketPlan(r.projectId, r.ticket.file)}
-                        onTopicClick={addTopic}
-                        onClaimedClick={filterClaimed}
-                        onOpenAgent={agentId => onOpenAgent(r.projectId, agentId)}
-                      />
-                    ))}
-                </TicketList>
+                <TicketsPanel projectId="" rows={flatRows.map(r => listed(r, true))} hiddenByFilter={rows.length - visible.length} onClearFilters={clearFilters} {...rowsProps} />
               )}
             </div>
           ) : (
-            <div className="space-y-8">
-              {groups.map(g => {
-                const groupRows = visible.filter(r => r.projectId === g.projectId)
-                const sorted = sortRows(groupRows, view.sort)
-                const panel = (
-                  <>
-                    {g.error !== undefined && (
-                      <p role="alert" className="mb-2 text-sm text-danger">
-                        Could not read the tickets of {g.projectName}: {g.error}
-                      </p>
-                    )}
-                    <TicketsPanel
-                      projectId={g.projectId}
-                      tickets={sorted.map(r => r.ticket)}
-                      pressesInHead={only !== undefined}
-                      hiddenByFilter={g.tickets.length - groupRows.length}
-                      isSelected={file => selected.has(`${g.projectId}/${file}`)}
-                      onToggleSelect={file => toggleSelected(`${g.projectId}/${file}`)}
-                      onOpen={file => onOpenTicket(g.projectId, file)}
-                      onOpenPlan={file => onOpenTicketPlan(g.projectId, file)}
-                      onTopicClick={addTopic}
-                      onClaimedClick={filterClaimed}
-                      onOpenAgent={agentId => onOpenAgent(g.projectId, agentId)}
-                      onClearFilters={filtered ? clearFilters : undefined}
-                    />
-                  </>
-                )
-                return (
-                  <Fragment key={g.projectId}>
-                    {/* One project's page needs no heading naming it: the sidebar does. */}
-                    {groups.length === 1 ? panel : <Section title={g.projectName}>{panel}</Section>}
-                  </Fragment>
-                )
-              })}
-            </div>
+            <TicketsPanel
+              projectId={groups[0]!.projectId}
+              rows={flatRows.map(r => listed(r, false))}
+              error={groups[0]!.error}
+              hiddenByFilter={rows.length - visible.length}
+              onClearFilters={clearFilters}
+              {...rowsProps}
+            />
           )
         }
       </Slot>
+      {/* The selection bar's room at the list's end, 16 under it, kept whether or not a row is ticked, so ticking moves nothing. */}
+      <div aria-hidden className="h-13 max-md:h-38" />
       {barRows.length > 0 && (
         <SelectionBar
           leaving={!hasSelection}
           count={barRows.length}
-          // From one tick to every shown ticket: how the whole shown set is acted on where the head's own presses are not shown (a phone).
-          onSelectAll={barRows.length < flatRows.length ? () => setSelected(new Set([...selected, ...flatRows.map(r => `${r.projectId}/${r.ticket.file}`)])) : undefined}
+          onSelectAll={barRows.length < flatRows.length ? () => setSelected(new Set([...selected, ...flatRows.map(keyOf)])) : undefined}
           onClear={() => setSelected(new Set())}
         >
-          <QueueAdds rows={barRows} selection disabled={busy || !hasSelection} />
+          <QueueAdds rows={barRows} disabled={busy || !hasSelection} />
         </SelectionBar>
       )}
     </Page>
   )
 }
-/**
- * The selection's readout and its presses (the list idiom of issue trackers): the readout and the
- * selection's own presses, then the adds, the primary last. On a wide screen it floats at the
- * bottom of the list's column, at its right edge, and takes no room; on a phone it is the list's
- * last part, kept in view at the window's foot, its adds a press each across its width. Either way
- * ticking a row moves nothing on the page.
- */
-function SelectionBar({ leaving, count, onSelectAll, onClear, children }: { leaving: boolean; count: number; /** Ticks every shown ticket; none when all are ticked. */ onSelectAll: (() => void) | undefined; onClear: () => void; children: ReactNode }) {
+
+/** The selection's bar, floating over the list's foot and taking no room, so ticking a row moves nothing. */
+function SelectionBar({ leaving, count, onSelectAll, onClear, children }: { leaving: boolean; count: number; /** Ticks every shown ticket; none once all are. */ onSelectAll: (() => void) | undefined; onClear: () => void; children: ReactNode }) {
   return (
-    <div className="pointer-events-none sticky z-10 md:bottom-16 md:h-0 max-md:bottom-4 max-md:pt-4">
+    // On a phone 16 over what stands at the window's foot, the shell's bar of pages (`--foot`).
+    <div className="pointer-events-none sticky bottom-6 z-10 h-0 max-md:bottom-[calc(var(--foot)+1rem)]">
       <div
         role="region"
         aria-label="Selected tickets"
         className={cn(
-          'pointer-events-auto flex flex-wrap items-center gap-2 menu-surface rounded-lg p-1 pl-3 text-sm shadow-lg ring-1 ring-foreground/10 backdrop-blur-xl',
-          'md:absolute md:top-2 md:right-0 md:w-fit md:max-w-full max-md:p-2 max-md:pl-4',
+          'pointer-events-auto absolute bottom-0 flex items-center gap-1 menu-surface rounded-lg py-1 pr-1 pl-4 text-sm shadow-lg ring-1 ring-foreground/10 backdrop-blur-xl',
+          // In the middle of the column, as wide as what it holds. On a phone part of the page's foot, on the column's
+          // edges as the list is, and a grid: the count, Select all and the close on its first line, each add on a
+          // line of its own under them, its words whole.
+          'md:left-1/2 md:w-max md:-translate-x-1/2 max-md:inset-x-0 max-md:grid max-md:grid-cols-[auto_1fr_auto] max-md:px-4 max-md:py-0',
           'transition-[opacity,translate] ease-out starting:translate-y-2 starting:opacity-0',
           leaving ? 'pointer-events-none translate-y-2 opacity-0 duration-120' : 'duration-180',
         )}
       >
-        <span className="tabular-nums">{count} selected</span>
+        <span className="mr-2 font-medium tabular-nums">{count} selected</span>
         {onSelectAll && (
-          <Button variant="ghost" onClick={onSelectAll} className="max-md:h-11">
+          <Button variant="ghost" size="sm" onClick={onSelectAll} className="max-md:h-11 max-md:justify-self-start">
             Select all
           </Button>
         )}
-        <Button variant="ghost" onClick={onClear} className="max-md:ml-auto max-md:h-11">
-          Clear selection
+        {/* On a phone the adds are the bar's rows, as a phone's menu draws them: 4 in from its sides, their words on the
+            first line's inset. */}
+        <div className="contents max-md:order-last max-md:col-span-full max-md:-mx-3 max-md:flex max-md:flex-col max-md:*:h-11 max-md:*:w-full max-md:*:justify-start max-md:*:px-3">
+          {children}
+        </div>
+        <Button variant="ghost" size="icon-sm" aria-label="Clear the selection" title="Clear the selection (Esc)" onClick={onClear} className="text-muted-foreground max-md:col-start-3 max-md:-mr-3 max-md:size-11">
+          <X className="size-4" aria-hidden />
         </Button>
-        <div className="contents max-md:flex max-md:basis-full max-md:flex-col max-md:gap-2 max-md:*:h-11 max-md:*:w-full">{children}</div>
       </div>
     </div>
   )
 }
 
-/**
- * The page-wide adds: every unclaimed ticket of `rows` handed, as a link, to the actions the
- * installed modules offer on links — "Add to queue" when a project has a queue package — as the
- * ticket itself, or as the ask for its plan. Both walk the shown order, so within a priority
- * section entries keep the order the reader saw. What is already there is the action's own to
- * leave alone: this page knows nothing of a queue. No agent starts here. Each stops at the
- * first failure, whose reason lands under the buttons. `selection`: `rows` are the ticked ones,
- * and the ticket add is the bar's primary press.
- */
-function QueueAdds({ rows, selection, disabled }: { rows: ReturnType<typeof flattenTickets>; selection: boolean; disabled: boolean }) {
-  // Both skip claimed tickets: a ticket some agent already holds (#1420) is being worked, and its
-  // entry would outlive that work as queue noise. Both skip tickets in review or waiting too: no
-  // agent is handed one, nor its plan. The plan add also skips planned tickets, whose plan
-  // already exists. In the shown order, each row carrying its own project, so a cross-project
-  // view needs no special case: every entry lands on its own project's queue.
-  const ready = rows.filter(r => !heldBack(r.ticket))
-  const heldShown = rows.length - ready.length
-  const targets = ready.filter(r => !r.ticket.locked)
-  const claimedShown = ready.length - targets.length
+/** The ticked tickets, or the asks for their plans, handed as links to the actions modules offer on links. */
+function QueueAdds({ rows, disabled }: { rows: readonly TicketRow[]; disabled: boolean }) {
+  // Not a ticket an agent holds, nor one in review or waiting; a plan only for a ticket that has none.
+  const targets = rows.filter(r => !heldBack(r.ticket) && !r.ticket.locked)
   const planTargets = targets.filter(r => !r.ticket.planned)
-  // One flip per acted-on set and per button: once this exact set is added the button says so and
-  // rests, and any change to the set — a filter, a poll bringing new tickets, a selection — arms
-  // it again (the button's own rule, keyed by these).
-  const queueKey = targets.map(r => `${r.projectId}/${r.ticket.file}`).join('\n')
-  const planKey = planTargets.map(r => `${r.projectId}/${r.ticket.file}`).join('\n')
+  const queueKey = targets.map(keyOf).join('\n')
+  const planKey = planTargets.map(keyOf).join('\n')
   const projectsShown = [...new Set(rows.map(r => r.projectId))]
   const ticketLinks = linksByProject(targets, ticketLink)
-  // Once every ticket of the set is on the queue, it is the next step there, and its plan is not
-  // asked for beside it: from the press here at once, or as the queue reads it.
+  // Once every ticket of the set is on the queue, its plan is not asked for beside it.
   const queuedAlready = useLinkActions(projectsShown, ticketLinks).actions
   const [addedHere, setAddedHere] = useState<string | null>(null)
   const ticketsQueued = addedHere === queueKey || (queuedAlready.length > 0 && queuedAlready.every(action => action.done))
-  const which = selection ? 'selected' : 'shown'
-  // The labels count what the click adds, never a ticket it will skip or one already added, each
-  // the object of the module's own verb: "Add to queue: 5 tickets". Done, they say what it did to the whole set on its projects: "Queued: 5 tickets".
-  const queueLabel = (action: LinkActionOffer, done: boolean) => (done ? `${action.doneLabel ?? action.label}: ${counted(action.total, 'ticket')}` : `${action.label}: ${counted(action.left, 'ticket')}`)
-  const planLabel = (action: LinkActionOffer, done: boolean) => (done ? `${action.doneLabel ?? action.label}: ${counted(action.total, 'plan')}` : `${action.label}: ${counted(action.left, 'plan')}`)
-  // Each renders only when it has something to add — "all 0 tickets" is not an offer, the list
-  // already explains an empty set, and an all-claimed (or, for plans, all-planned) one has
-  // nothing left to ask for.
+  const left = rows.length - targets.length
+  // Each the object of the module's own verb, "Add to queue: 2 tickets", counting what a press adds, never a
+  // ticket it skips or one already on the queue; done, what the set now has on the queue: "Queued: 3 plans".
+  const label = (noun: string) => (action: LinkActionOffer, done: boolean) =>
+    done ? `${action.doneLabel ?? action.label}: ${counted(action.total, noun)}` : `${action.label}: ${counted(action.left, noun)}`
   return (
     <>
-      {planTargets.length > 0 && !ticketsQueued && (
-        <LinkActions
-          projects={projectsShown}
-          targets={linksByProject(planTargets, planLink)}
-          resetKey={`plans\n${planKey}`}
-          label={planLabel}
-          variant="ghost"
-          disabled={disabled}
-          tooltip={
-            <>
-              Each {selection ? 'selected ' : ''}ticket gets its plan asked for — the same &quot;Create tickets/….plan.md&quot; entry the plan-tickets
-              command queues — worked highest priority first and, within a priority, in the order shown below. Tickets already planned, held by an agent,
-              in review or waiting stay as they are, and what is already there is left alone.
-              {selection && ' The rest of the shown set stays put.'}
-            </>
-          }
-        />
-      )}
       {targets.length > 0 && (
         <LinkActions
           projects={projectsShown}
           targets={ticketLinks}
           resetKey={`tickets\n${queueKey}`}
           onDone={() => setAddedHere(queueKey)}
-          label={queueLabel}
-          variant={selection ? 'default' : 'ghost'}
+          label={label('ticket')}
+          variant="ghost"
+          size="sm"
           disabled={disabled}
-          tooltip={
-            <>
-              {`Every ${selection ? 'selected ' : ''}ticket joins the queue — the work OpenAgent picks up on its own, worked highest priority first and, within a priority, in the order shown below. A ticket already queued stays as it is.`}
-              {selection && ' The rest of the shown set stays put.'}
-              {claimedShown === 1 && ` The claimed ticket ${which} is left to the agent holding it.`}
-              {claimedShown > 1 && ` The ${claimedShown} claimed tickets ${which} are left to the agents holding them.`}
-              {heldShown === 1 && ` The ticket in review or waiting ${which} is left out.`}
-              {heldShown > 1 && ` The ${heldShown} tickets in review or waiting ${which} are left out.`}
-            </>
-          }
+          tooltip={`Each ticket joins the queue, worked highest priority first.${left > 0 ? ` ${counted(left, 'ticket')} an agent holds, in review or waiting ${left === 1 ? 'is' : 'are'} left out.` : ''}`}
+        />
+      )}
+      {planTargets.length > 0 && !ticketsQueued && (
+        <LinkActions
+          projects={projectsShown}
+          targets={linksByProject(planTargets, planLink)}
+          resetKey={`plans\n${planKey}`}
+          label={label('plan')}
+          variant="ghost"
+          size="sm"
+          disabled={disabled}
+          tooltip="Each ticket with no plan gets its plan asked for on the queue, the entry the plan-tickets command queues."
         />
       )}
     </>
   )
 }
 
-/**
- * What a page-wide add hands the link actions: each ticket as a link — the ticket itself
- * (`ticketLink`), or the ask for its plan (`planLink`) — grouped by project in the shown order,
- * one group per project in order of first appearance.
- */
+/** Each ticket as a link (the ticket, or the ask for its plan), grouped by project in the shown order. */
 function linksByProject(rows: readonly { projectId: string; ticket: WorkspaceTicket }[], asLink: (ticket: WorkspaceTicket) => ModuleLink): ProjectLinks[] {
   const groups: ProjectLinks[] = []
   for (const { projectId, ticket } of rows) {
@@ -441,11 +314,7 @@ function linksByProject(rows: readonly { projectId: string; ticket: WorkspaceTic
   return groups
 }
 
-/**
- * What a page-wide add acts on, as the object of its verb: "5 tickets", "1 plan", in digits beside each other. Short, so the
- * heading stays one line: which tickets it takes — the shown or the selected ones, less the ones
- * it skips — is the tooltip's to say.
- */
+/** "2 tickets", "1 plan": in digits, beside each other. */
 function counted(count: number, noun: string): string {
   return `${count} ${noun}${count === 1 ? '' : 's'}`
 }

@@ -9,7 +9,6 @@ import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.j
 import { PROJECT_AGENT_DATA_ENTRY } from './ProjectAgentDataSettings.js'
 import {
   sendOpenInApp,
-  sendStop,
   sendRemoveWorktree,
   sendDeleteAgent,
   sendCreateRepository,
@@ -17,6 +16,7 @@ import {
 import { useLoaded } from '../lib/use-async.js'
 import { buttonVariants } from './ui/button.js'
 import { useAction } from '../lib/use-action.js'
+import { useStop } from '../lib/use-stop.js'
 import { DaemonDown } from '../lib/use-daemon-health.js'
 import { cn } from '../lib/utils.js'
 import { describeSessionLink } from '../lib/session-link.js'
@@ -131,24 +131,15 @@ export function AgentActionsMenu({
 
   // Per session, as in the composer: the page keeps this menu from one session to the next, and an answer is the session's it was pressed in.
   const { busy, error, run } = useAction(agentId ?? '')
-  const shown = useRef(agentId)
-  shown.current = agentId
 
-  // A landed Stop stays "Stopping…" until the run is no longer live, so it can't be re-fired; continued later, it can be stopped again.
-  const [stopRequested, setStopRequested] = useState(false)
-  useEffect(() => setStopRequested(false), [agentId, live])
-  const stopping = busy || (stopRequested && live)
+  // The message box's Stop and this one are one press (`use-stop.ts`).
+  const { stopping, error: stopError, stop: stopSession } = useStop(projectId, agentId ?? undefined, live)
   // OpenAgent is not answering: Stop cannot reach the agent, here as in the composer.
   const down = useContext(DaemonDown)
 
   const [confirmDelete, setConfirmDelete] = useState(false)
 
   const openApp = (target: 'files' | 'editor') => run(() => sendOpenInApp(projectId, target, agentId ?? undefined), 'Failed to open.')
-  const stopSession = () =>
-    void run(() => sendStop(projectId, agentId ?? undefined), 'Could not stop the session.').then(outcome => {
-      // A Stop that lands once another session is shown latches nothing there: that one still works.
-      if (outcome.ok && shown.current === agentId) setStopRequested(true)
-    })
   const removeWorktree = () => {
     if (!agentId) return
     void run(() => sendRemoveWorktree(projectId, agentId), 'Could not remove the worktree.').then(outcome => {
@@ -290,7 +281,7 @@ export function AgentActionsMenu({
           {(live || removable || deletable) && <DropdownMenuSeparator />}
 
           {live && (
-            <DropdownMenuItem disabled={stopping || down} onClick={() => void stopSession()}>
+            <DropdownMenuItem disabled={stopping || down} onClick={stopSession}>
               <Square className="h-3 w-3 shrink-0 fill-current" /> {stopping ? 'Stopping…' : 'Stop agent'}
             </DropdownMenuItem>
           )}
@@ -317,7 +308,7 @@ export function AgentActionsMenu({
             </>
           )}
 
-          {error && <p className="px-2 py-1.5 text-xs text-danger">{error}</p>}
+          {(error ?? stopError) && <p className="px-2 py-1.5 text-xs text-danger">{error ?? stopError}</p>}
         </DropdownMenuContent>
       </DropdownMenu>
 

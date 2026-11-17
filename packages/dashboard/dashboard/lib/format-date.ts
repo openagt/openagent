@@ -97,6 +97,17 @@ export function formatDuration(ms: number): string {
   return `${Math.floor(hours / 24)}d`
 }
 
+/**
+ * How long ago something began, in one short word for a row's end: "now" under a minute, then
+ * {@link formatDuration}'s "2m" / "3h" / "5d". Empty when there is no date to read.
+ */
+export function formatSince(value: string | undefined): string {
+  const date = parse(value)
+  if (!date) return ''
+  const ms = Date.now() - date.getTime()
+  return ms < 60_000 ? 'now' : formatDuration(ms)
+}
+
 /** A span of work to the second, as a live count reads it: "9s", then "1m 5s", then "1h 2m". */
 export function formatElapsed(ms: number): string {
   const seconds = Math.max(0, Math.floor(ms / 1000))

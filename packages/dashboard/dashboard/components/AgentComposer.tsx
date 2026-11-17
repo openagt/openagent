@@ -3,8 +3,9 @@ import type { GitHostHome } from '../../src/index.js'
 import { useContext, useEffect, useRef, useState, type MutableRefObject, type ReactNode } from 'react'
 import { Loader2, Square } from 'lucide-react'
 import { Composer, type ComposerHandle } from './Composer.js'
-import { sendMessage, sendStop } from '../rpc/control.js'
+import { sendMessage } from '../rpc/control.js'
 import { useAction } from '../lib/use-action.js'
+import { useStop } from '../lib/use-stop.js'
 import { keepDraft, keptDraft } from '../lib/draft-handoff.js'
 import { DaemonDown } from '../lib/use-daemon-health.js'
 import { Button } from './ui/button.js'
@@ -149,18 +150,9 @@ export function AgentComposer({
   // A touch screen has no keys to name: its pointer is a finger. A phone's box has no room for them either.
   const touch = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches
   const { busy, error, run } = useAction(agentId)
-  // The slot's Stop (#1455), its own action so a message send's busy beat cannot read as
-  // "stopping". A landed Stop stays "Stopping…" until the end event flips `live`, so it cannot
-  // be re-fired. Released the moment `live` drops, not only on an agent switch: a message continues
-  // the SAME agent (#762), so a latch keyed to the agent id alone re-engaged on the continued
-  // session and froze its Stop as a disabled spinner.
-  const { busy: stopBusy, error: stopError, run: runStop } = useAction(agentId)
-  const [stopRequested, setStopRequested] = useState(false)
-  useEffect(() => setStopRequested(false), [agentId])
-  useEffect(() => {
-    if (!live) setStopRequested(false)
-  }, [live])
-  const stopping = stopBusy || (stopRequested && live)
+  // The slot's Stop (#1455), its own press so a message send's busy beat cannot read as
+  // "stopping", and the session menu's Stop the same press: one per run (`use-stop.ts`).
+  const { stopping, error: stopError, stop: stopSession } = useStop(projectId, agentId, live)
   // OpenAgent is not answering: Stop cannot reach the agent, by the button or by Esc.
   const down = useContext(DaemonDown)
   // The "Auto" menu, as the launcher's (his pick): how far the run takes its work. A pick goes with
@@ -201,7 +193,6 @@ export function AgentComposer({
   }
 
   const send = async (text: string, { later }: { later: boolean } = { later: false }): Promise<void> => {
-    if (busy) return
     // The box is emptied as the message goes, so what is typed meanwhile stays; a message refused comes back to it
     // as the same draft: its chips, and the Context it went with.
     const sent = contextSet?.context
@@ -229,12 +220,6 @@ export function AgentComposer({
     }
   }
 
-  const stopSession = () =>
-    void runStop(() => sendStop(projectId, agentId).then(() => true), 'Could not stop the agent.').then(result => {
-      // A Stop that lands once another session is shown latches nothing there: that one still works.
-      if (result.ok && shown.current === agentId) setStopRequested(true)
-    })
-
   // Esc stops the agent, as in Claude Code, also typed in the box, unless it closes something open
   // first: a menu, a dialog, the box's own suggestions. Read before anything on the page takes the
   // key, while what it closes still reads open. An Esc straight after the one that closed something
@@ -261,10 +246,11 @@ export function AgentComposer({
             type="button"
             size="icon-sm"
             onClick={stopSession}
-            disabled={stopping || down}
+            loading={stopping}
+            disabled={down}
             aria-label="Stop agent"
             // Stopping draws its spinner in full; off while OpenAgent is not answering, Stop is dimmed as any button off.
-            className={stopping ? 'shrink-0 disabled:opacity-100' : 'shrink-0'}
+            className={stopping ? 'shrink-0 opacity-100' : 'shrink-0'}
           />
         }
       >
@@ -286,10 +272,9 @@ export function AgentComposer({
   const surfacedError = error ?? stopError
 
   return (
-    // The chat's column and its side padding (EventList), so the box and what is in the chat share both edges.
+    // The box stands on the chat's 16 inset at every width, as the chat's cards do, so on a desktop its
+    // words, 16 inside it, stand on the chat's column (32 in, EventList).
     <div className="@container mx-auto w-full max-w-3xl px-4 pt-2 pb-4">
-      {surfacedError && <p role="alert" className="mb-1 px-2 text-xs text-danger">{surfacedError}</p>}
-      {notSent && <p role="status" className="mb-1 px-2 text-xs text-muted-foreground">Not sent: the session stopped first.</p>}
       <Composer
         // A box of its own per session, with the draft it was left with.
         key={agentId}
@@ -335,6 +320,12 @@ export function AgentComposer({
           </>
         }
         idleControl={idleControl}
+        notes={
+          <>
+            {surfacedError && <p role="alert" className="rounded-md bg-background px-2 py-0.5 text-xs text-danger">{surfacedError}</p>}
+            {notSent && <p role="status" className="rounded-md bg-background px-2 py-0.5 text-xs text-muted-foreground">Not sent: the session stopped first.</p>}
+          </>
+        }
         // What the box can do, not what it is for: the keys for a working agent, as Claude Code's box
         // says them in the same place; a touch screen has none to name.
         placeholder={down ? 'OpenAgent is not answering' : live ? (touch || phone ? 'Message the agent…' : `Enter to send, ${shortcut('Enter')} to queue for later`) : asked ? 'Or answer in your own words…' : 'Message the agent to continue it…'}

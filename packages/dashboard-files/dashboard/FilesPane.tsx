@@ -77,7 +77,9 @@ function Tab({ tab, shown, onShow, onKeep, onClose }: { tab: OpenTab; shown: boo
     <div role="tab" aria-selected={shown} className={cn('flex h-7 shrink-0 items-center rounded-md text-sm text-muted-foreground hover:bg-accent', shown && 'bg-accent text-foreground')}>
       <button type="button" title={tab.path} onClick={onShow} onDoubleClick={onKeep} className="flex h-full items-center gap-2 rounded-md pl-2 focus-ring-inset">
         <FileIcon path={tab.path} />
-        <span className={cn('max-w-40 truncate', !tab.kept && 'italic')}>{nameOf(tab.path)}</span>
+        {/* A preview's name is slanted; its last letter leans past the box `truncate` clips at, so a
+            hair of room is left for it: "README.md" read "README.ma". */}
+        <span className={cn('max-w-40 truncate', !tab.kept && 'pr-0.5 italic')}>{nameOf(tab.path)}</span>
       </button>
       <button type="button" aria-label={`Close ${nameOf(tab.path)}`} onClick={onClose} className="flex h-full items-center rounded-md px-1.5 hover:text-foreground focus-ring-inset">
         <X aria-hidden className="size-3.5" />

@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { Check, Plus } from 'lucide-react'
 import { onMachineAgentAccounts, sendMachineAgentAccountFirst } from '../rpc/machines.js'
 import { onAgentAccounts, sendUseAgentAccountFirst, type AccountRow, type AccountWindow, type AccountsAgent, type AccountsView } from '../rpc/accounts.js'
@@ -5,6 +6,7 @@ import { AccountBar } from './ui/account-bar.js'
 import { readAhead, usePolled } from '../lib/use-async.js'
 import { cn } from '../lib/utils.js'
 import { DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from './ui/dropdown-menu.js'
+import { Facts } from './ui/panel.js'
 
 // The accounts runs use, per coding agent, as the run's own places read them. Adding and removing
 // them is the skill's (`@openagt/skill-account-rotation`, its card on the Overview and in Settings ›
@@ -43,10 +45,10 @@ export function longest(account: AccountRow): AccountWindow | undefined {
 }
 
 /** That window as a line: "62% this week", "7% this month", with when an added one's was said. */
-function usageWords(account: AccountRow): string | undefined {
+function usageWords(account: AccountRow): ReactNode {
   const window = longest(account)
   if (window === undefined) return account.own ? undefined : 'not used yet'
-  return `${Math.round(window.percent)}% ${window.label === '5 h' ? 'of 5 h' : `this ${window.label}`}${account.asOf !== undefined ? ` · as of ${clock(account.asOf)}` : ''}`
+  return <Facts facts={[`${Math.round(window.percent)}% ${window.label === '5 h' ? 'of 5 h' : `this ${window.label}`}`, account.asOf !== undefined && `as of ${clock(account.asOf)}`]} />
 }
 
 /** Where a saved machine's accounts of an agent are remembered on the page: a switch back to it shows them at once. */
@@ -84,11 +86,11 @@ export function runAccounts(view: AccountsView): AccountRow[] {
 }
 
 /** The account an agent's runs take first, as its row in the agent picker says it: its name, and how full it is. */
-export function firstAccount(view: AccountsView | undefined): { name: string; percent: string } | undefined {
+export function firstAccount(view: AccountsView | undefined): { name: string; percent: string | undefined } | undefined {
   const first = view && runAccounts(view)[0]
   if (!first) return undefined
   const window = longest(first)
-  return { name: first.name, percent: first.state === 'limited' ? ' · limited' : window !== undefined ? ` · ${Math.round(window.percent)}%` : '' }
+  return { name: first.name, percent: first.state === 'limited' ? 'limited' : window !== undefined ? `${Math.round(window.percent)}%` : undefined }
 }
 
 /**

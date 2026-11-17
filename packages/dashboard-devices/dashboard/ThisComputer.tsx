@@ -95,7 +95,7 @@ export function ThisComputer({ d, start }: { d: Devices; /** The start page: not
       action={
         // Its owner names it, and everyone sees that name: a person the owner invited has no Rename.
         !renaming && d.machines?.renames === true ? (
-          <Button ref={renamePress} variant="ghost" size="sm" className="max-md:h-11" onClick={rename}>
+          <Button ref={renamePress} variant="ghost" size="sm" className="-my-1 -mr-2 max-md:h-11" onClick={rename}>
             <Pencil className="size-4" aria-hidden />
             Rename
           </Button>
@@ -115,89 +115,93 @@ export function ThisComputer({ d, start }: { d: Devices; /** The start page: not
             onClose={renamed}
           />
         ) : (
-          <div className="flex items-center gap-3">
-            <Laptop aria-hidden className="size-4 shrink-0 text-muted-foreground" />
+          <div className="flex items-start gap-3">
+            <span className="flex h-5 w-4 shrink-0 items-center">
+              <Laptop aria-hidden className="size-4 text-faint-foreground" />
+            </span>
             <div className="min-w-0">
-              <p className="truncate text-sm">{name}</p>
-              {start && <p className="text-xs text-muted-foreground">Nothing reaches it yet: only this computer's own browser opens OpenAgent.</p>}
+              <p className="truncate text-sm font-medium">{name}</p>
+              {start && <p className="mt-0.5 text-xs text-faint-foreground">Nothing reaches it yet: only this computer's own browser opens OpenAgent.</p>}
             </div>
           </div>
         )}
         {!start && (
-          <div className="space-y-4">
-            <p className="text-xs font-medium text-muted-foreground">How your devices reach it</p>
-            {where !== undefined ? (
-              <Way label="On the internet" words={`This computer is a server. A device that is in opens OpenAgent at ${where} from anywhere.`} />
-            ) : (
-              // Your own devices on your Tailscale network, from anywhere, with or without a server: the door
-              // listens on this computer alone, and Tailscale serves it there, with a lock.
-              <Way
-                label="On your Tailscale network"
-                words={
-                  status?.tailscale
-                    ? status.listening
-                      ? `Your devices on Tailscale open OpenAgent at https://${status.tailscale.address}, from anywhere, with a lock.`
-                      : `At https://${status.tailscale.address} once Tailscale serves it.`
-                    : 'Your own phones and computers on Tailscale, from anywhere, with a lock. Tailscale must run on this computer.'
-                }
-              >
-                <Switch aria-label="On your Tailscale network" checked={status?.tailscale !== undefined} disabled={busy || !status || down} onCheckedChange={onTailscale} />
-              </Way>
-            )}
-            {where === undefined && status?.tailscale !== undefined && !status.listening && status.problem !== undefined && !busy && (
-              <div className="space-y-2">
-                <Problem>{status.problem}</Problem>
-                {status.fixAt !== undefined && (
-                  <a href={status.fixAt} target="_blank" rel="noreferrer" className={buttonVariants({ variant: 'secondary' })}>
-                    Turn on Serve
-                  </a>
-                )}
-              </div>
-            )}
-            {/* Beside Tailscale too: a phone at home that is not on Tailscale, and the devices that got in on this Wi-Fi, at the address they know. */}
-            {where === undefined && (
-              <Way label="On this Wi-Fi" words="Phones and computers at home, with no lock on the link.">
-                <Switch
-                  aria-label="On this Wi-Fi"
-                  checked={status?.on ?? false}
-                  disabled={busy || !status || down}
-                  onCheckedChange={on => {
-                    if (on) setConfirming(true)
-                    else wifi(false)
-                  }}
-                />
-              </Way>
-            )}
-            {confirming && (
-              <div role="alertdialog" aria-label="Turn on On this Wi-Fi" className="space-y-3">
-                <p className="max-w-180 text-sm">{WARNING}</p>
-                <div className="flex gap-2">
-                  <Button variant="ghost" onClick={() => setConfirming(false)}>
-                    Cancel
-                  </Button>
-                  <Button disabled={down} onClick={() => wifi(true)}>
-                    Turn on
-                  </Button>
+          <div>
+            <p className="mb-2 text-xs font-medium text-faint-foreground">How your devices reach it</p>
+            <div className="flex flex-col gap-6">
+              {where !== undefined ? (
+                <Way label="On the internet" words={`This computer is a server. A device that is in opens OpenAgent at ${where} from anywhere.`} />
+              ) : (
+                // Your own devices on your Tailscale network, from anywhere, with or without a server: the door
+                // listens on this computer alone, and Tailscale serves it there, with a lock.
+                <Way
+                  label="On your Tailscale network"
+                  words={
+                    status?.tailscale
+                      ? status.listening
+                        ? `Your devices on Tailscale open OpenAgent at https://${status.tailscale.address}, from anywhere, with a lock.`
+                        : `At https://${status.tailscale.address} once Tailscale serves it.`
+                      : 'Your own phones and computers on Tailscale, from anywhere, with a lock. Tailscale must run on this computer.'
+                  }
+                >
+                  <Switch aria-label="On your Tailscale network" checked={status?.tailscale !== undefined} disabled={busy || !status || down} onCheckedChange={onTailscale} />
+                </Way>
+              )}
+              {where === undefined && status?.tailscale !== undefined && !status.listening && status.problem !== undefined && !busy && (
+                <div className="space-y-2">
+                  <Problem>{status.problem}</Problem>
+                  {status.fixAt !== undefined && (
+                    <a href={status.fixAt} target="_blank" rel="noreferrer" className={buttonVariants({ variant: 'secondary' })}>
+                      Turn on Serve
+                    </a>
+                  )}
                 </div>
-              </div>
-            )}
-            {(status?.on || status?.https) && status.tailscale === undefined && status.problem !== undefined && !busy && <Problem>{status.problem}</Problem>}
-            {status?.tailscale !== undefined && status.wifi?.problem !== undefined && !busy && <Problem>{status.wifi.problem}</Problem>}
-            {lines.map(line => (
-              <Way
-                key={line.key}
-                label={`From anywhere, through ${line.label}`}
-                words={
-                  line.refused
-                    ? `Off: ${line.label} no longer lets this computer in for its line. Turn it on to set the line up again.`
-                    : 'Your phone and your other computers start runs here from any internet. This computer must be on.'
-                }
-              >
-                <Switch aria-label={`From anywhere, through ${line.label}`} checked={line.on} disabled={busy || down} onCheckedChange={on => void line.turn(on)} />
-              </Way>
-            ))}
-            {server && !d.isServer && <p className="text-xs text-muted-foreground">{`Only you can use this computer. To share a computer with people${firstServer !== undefined ? ` on ${firstServer}` : ''}, set it up as a server: Linux for now.`}</p>}
-            {error !== undefined && <Problem>{error}</Problem>}
+              )}
+              {/* Beside Tailscale too: a phone at home that is not on Tailscale, and the devices that got in on this Wi-Fi, at the address they know. */}
+              {where === undefined && (
+                <Way label="On this Wi-Fi" words="Phones and computers at home, with no lock on the link.">
+                  <Switch
+                    aria-label="On this Wi-Fi"
+                    checked={status?.on ?? false}
+                    disabled={busy || !status || down}
+                    onCheckedChange={on => {
+                      if (on) setConfirming(true)
+                      else wifi(false)
+                    }}
+                  />
+                </Way>
+              )}
+              {confirming && (
+                <div role="alertdialog" aria-label="Turn on On this Wi-Fi" className="space-y-3">
+                  <p className="max-w-180 text-sm">{WARNING}</p>
+                  <div className="flex gap-2">
+                    <Button variant="ghost" onClick={() => setConfirming(false)}>
+                      Cancel
+                    </Button>
+                    <Button disabled={down} onClick={() => wifi(true)}>
+                      Turn on
+                    </Button>
+                  </div>
+                </div>
+              )}
+              {(status?.on || status?.https) && status.tailscale === undefined && status.problem !== undefined && !busy && <Problem>{status.problem}</Problem>}
+              {status?.tailscale !== undefined && status.wifi?.problem !== undefined && !busy && <Problem>{status.wifi.problem}</Problem>}
+              {lines.map(line => (
+                <Way
+                  key={line.key}
+                  label={`From anywhere, through ${line.label}`}
+                  words={
+                    line.refused
+                      ? `Off: ${line.label} no longer lets this computer in for its line. Turn it on to set the line up again.`
+                      : 'Your phone and your other computers start runs here from any internet. This computer must be on.'
+                  }
+                >
+                  <Switch aria-label={`From anywhere, through ${line.label}`} checked={line.on} disabled={busy || down} onCheckedChange={on => void line.turn(on)} />
+                </Way>
+              ))}
+              {server && !d.isServer && <p className="text-xs text-muted-foreground">{`Only you can use this computer. To share a computer with people${firstServer !== undefined ? ` on ${firstServer}` : ''}, set it up as a server: Linux for now.`}</p>}
+              {error !== undefined && <Problem>{error}</Problem>}
+            </div>
           </div>
         )}
       </div>

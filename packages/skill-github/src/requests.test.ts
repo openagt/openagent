@@ -5,10 +5,10 @@ import type { GhRunner } from './gh.js'
 
 // One read for every question about pull requests: what is asked of gh, and what comes back.
 
-const row = (over: Record<string, unknown> = {}) => ({ number: 7, url: 'https://github.com/o/r/pull/7', state: 'OPEN', title: 'T', isDraft: false, headRefName: 'agent-x', headRefOid: 'abc', createdAt: '2026-09-20T10:00:00Z', mergedAt: null, mergeCommit: null, ...over })
+const row = (over: Record<string, unknown> = {}) => ({ number: 7, url: 'https://github.com/o/r/pull/7', state: 'OPEN', title: 'T', isDraft: false, headRefName: 'agent-x', headRefOid: 'abc', createdAt: '2026-09-20T10:00:00Z', mergedAt: null, mergeCommit: null, autoMergeRequest: null, ...over })
 
 test('the query becomes one gh listing: state (all by default), head branch, the limit, the fields', () => {
-  assert.deepEqual(requestsArgs({}), ['pr', 'list', '--state', 'all', '--limit', '50', '--json', 'number,url,state,title,isDraft,headRefName,headRefOid,createdAt,mergedAt,mergeCommit'])
+  assert.deepEqual(requestsArgs({}), ['pr', 'list', '--state', 'all', '--limit', '50', '--json', 'number,url,state,title,isDraft,headRefName,headRefOid,createdAt,mergedAt,mergeCommit,autoMergeRequest'])
   assert.deepEqual(requestsArgs({ branch: 'agent-x', state: 'open' }).slice(0, 6), ['pr', 'list', '--state', 'open', '--head', 'agent-x'])
 })
 
@@ -22,6 +22,12 @@ test("gh's rows become requests: states lowercased, the head as branch and sha, 
   assert.equal(closed?.state, 'closed')
   assert.equal(parseRequests([row(), { title: 'junk' }]).length, 1)
   assert.deepEqual(parseRequests('not a list'), [])
+})
+
+test('a request GitHub will merge by itself once its checks pass is armed; one without auto-merge is not', () => {
+  const [armed, plain] = parseRequests([row({ autoMergeRequest: { enabledAt: '2026-11-15T10:00:00Z', mergeMethod: 'SQUASH' } }), row({ number: 8 })])
+  assert.equal(armed?.armed, true)
+  assert.equal(plain && 'armed' in plain, false)
 })
 
 test('--since keeps what was created at or after it, or merged at or after it when only merged ones are asked for', () => {

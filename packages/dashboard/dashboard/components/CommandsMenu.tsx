@@ -105,7 +105,8 @@ export function CommandsMenu({
               type="button"
               disabled={busy}
               aria-label="Commands"
-              className={cn(buttonVariants({ variant: 'ghost', size: 'icon-sm' }), 'text-muted-foreground data-[popup-open]:bg-accent')}
+              // As high as the row's items and as wide as their padding makes them, so its + stands where their icons do.
+              className={cn(buttonVariants({ variant: 'ghost', size: 'icon-sm' }), 'w-8 text-muted-foreground data-[popup-open]:bg-accent')}
             />
           }
         >

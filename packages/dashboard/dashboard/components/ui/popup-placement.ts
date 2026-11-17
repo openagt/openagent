@@ -10,9 +10,12 @@ export type PopupPlacement = 'absolute' | 'fixed'
 /** The placement the popups opened inside take: the sidebar provides `fixed`. */
 export const PopupPlacementContext = createContext<PopupPlacement>('absolute')
 
-/** The placement of a popup opened here. */
-export function usePopupPlacement(): PopupPlacement {
-  return useContext(PopupPlacementContext)
+/** How near a popup comes to the window's edges: never nearer than the page's own 16, so on a phone it never stands against one. */
+export const POPUP_EDGE = 16
+
+/** Where a popup opened here is placed, and how far it keeps from the window's edges: what every popup's positioner takes. */
+export function usePopupPosition(): { positionMethod: PopupPlacement; collisionPadding: number } {
+  return { positionMethod: useContext(PopupPlacementContext), collisionPadding: POPUP_EDGE }
 }
 
 /**

@@ -10,7 +10,7 @@ import { PathStrip } from './PathStrip.js'
 /** The dialog's title, as every dialog's. */
 const TITLE = 'mb-3 text-base font-semibold'
 /** Its presses, under what it says, primary last. */
-const PRESSES = cn('mt-5 flex gap-2', DIALOG_PRESSES_CLASS)
+const PRESSES = cn('mt-6 flex gap-2', DIALOG_PRESSES_CLASS)
 
 // Add a project (#396/#1150): the OS's own folder picker instead of a typed path — the daemon
 // opens the dialog (a browser page cannot learn an absolute path from a picker of its own) and
@@ -199,7 +199,7 @@ export function AddProjectPanel({
             <p className="mt-2 text-sm text-muted-foreground">It is cloned into the projects folder of this computer, with the logins this computer has.</p>
             {error && <p className="mt-3 text-sm text-danger">{error}</p>}
             <div className={cn(PRESSES, 'justify-end')}>
-              <Button type="button" variant="secondary" onClick={onClose}>
+              <Button type="button" variant="ghost" onClick={onClose}>
                 Cancel
               </Button>
               <Button type="submit" loading={busy} disabled={!typed.trim()}>
@@ -212,7 +212,7 @@ export function AddProjectPanel({
             <p className={TITLE}>Add project</p>
             <p className="text-sm text-danger">{pickError}</p>
             <div className={cn(PRESSES, 'flex-wrap justify-end')}>
-              <Button type="button" variant="secondary" onClick={onClose}>
+              <Button type="button" variant="ghost" onClick={onClose}>
                 Cancel
               </Button>
               <Button type="button" variant="secondary" onClick={() => setByAddress(true)}>
@@ -268,7 +268,7 @@ export function AddProjectPanel({
               Choose the repository&apos;s folder in the system dialog…
             </p>
             <div className={cn(PRESSES, 'justify-end')}>
-              <Button type="button" variant="secondary" onClick={onClose}>
+              <Button type="button" variant="ghost" onClick={onClose}>
                 Cancel
               </Button>
             </div>

@@ -153,7 +153,7 @@ describe('the agent picker holds each agent\'s accounts, on the computer the run
     renderComposer()
     fireEvent.click(await screen.findByRole('button', { name: /^Coding agent: / }))
     const row = await screen.findByRole('menuitem', { name: /Claude Code/ })
-    await waitFor(() => expect(row.textContent).toBe('Claude CodeAda · 22%'))
+    await waitFor(() => expect(row.textContent).toBe('Claude CodeAda·22%'))
     fireEvent.click(row)
     const part = (await screen.findByText('Accounts')).closest('[role=menu]')!
     expect([...part.querySelectorAll('[role=menuitem]')].map(item => item.textContent)).toEqual(['Opus 5.5', 'Ada22%', 'Dani61%', 'Add account…'])
@@ -215,7 +215,7 @@ describe('each saved computer that answers is asked ahead what the pickers show 
     render(<GitAccountMenu address="github.com/acme/shop" machineId={STUDIO} on="Studio" busy={false} picked={undefined} onPick={vi.fn()} onAddThere={vi.fn()} />)
     expect(screen.getByRole('button', { name: 'GitHub account: @octo-vps' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: /^Coding agent: / }))
-    expect(screen.getByRole('menuitem', { name: /Claude Code/ }).textContent).toBe('Claude CodeAda · 22%')
+    expect(screen.getByRole('menuitem', { name: /Claude Code/ }).textContent).toBe('Claude CodeAda·22%')
   })
 })
 

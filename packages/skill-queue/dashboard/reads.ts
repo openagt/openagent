@@ -1,4 +1,4 @@
-import { pathsIn, useFileNames, usePolled, useModuleHost, type FileNames, type ModuleAgent, type ModuleProject, type ReadState } from '@openagt/dashboard/module'
+import { pathsIn, runsAgain, useFileNames, usePolled, useModuleHost, type FileNames, type ModuleAgent, type ModuleProject, type ReadState } from '@openagt/dashboard/module'
 import { isEntryLine, readEntries } from '../src/module.js'
 
 /** One project's open entries as read, or why the command failed, and its agents at work. */
@@ -34,6 +34,7 @@ export function useQueueReads(projects: ModuleProject[]): { reads: ProjectRead[]
     [key],
     // One read for the tile and the card, kept for the next visit: the page opens with the last count.
     { remember: `skill-queue:queue:${key}`, stored: true },
+    runsAgain(undefined),
   )
   const names = useFileNames(
     reads.map(read => ({ projectId: read.project.id, paths: read.entries.flatMap(pathsIn) })),

@@ -15,10 +15,10 @@ import { AgentView } from './components/AgentView.js'
 import { ChatShape } from './components/ChatPane.js'
 import { PageShape } from './components/Page.js'
 import { agentLabel, awaitingName } from './lib/agent-label.js'
-import { subagentsOf, taskLabel } from './lib/subagents.js'
+import { callSubagents, subagentsOf, taskLabel } from './lib/subagents.js'
 import { PaneLayout, PanesProvider } from './components/Panes.js'
-import { SubagentPanel } from './components/SubagentPanel.js'
-import { MenuButton, PhoneBar, PhoneBarCount } from './components/PhoneBar.js'
+import { SubagentsPanel } from './components/SubagentsPanel.js'
+import { PagesBar, PhoneBar, PhoneBarCount } from './components/PhoneBar.js'
 import { cn } from './lib/utils.js'
 import { onSkillsSaved } from './lib/skills-saved.js'
 import { usePolled } from './lib/use-async.js'
@@ -47,7 +47,7 @@ import { useActiveAgents } from './lib/use-working.js'
 import { useFavicon } from './lib/favicon.js'
 import { DaemonDown, INSTALLED_RESTARTS, useDaemonHealth } from './lib/use-daemon-health.js'
 import { useContextSet } from './lib/use-context-set.js'
-import { TriangleAlert } from 'lucide-react'
+import { Bot, KeyRound, TriangleAlert } from 'lucide-react'
 import type { StartPicks } from './lib/started-from.js'
 import { useShortcut } from './lib/shortcut.js'
 import { FocusHome } from './lib/focus-home.js'
@@ -66,10 +66,10 @@ const EMPTY_INTERVENTIONS: ProjectionRead<Intervention> = { items: [], whole: []
 /** Stable initial for the activity poll (#627), so it does not churn on every render. */
 const EMPTY_ACTIVITY: ProjectionRead<Activity> = { items: [], whole: [] }
 
-/** The dashboard's own pages, by the name a phone's bar gives each, as it gives a module's page its label. */
+/** The dashboard's own pages, by the name a phone's bar gives each, as it gives a module's page its label, and the icon the sidebar and the jump draw for it. */
 const OWN_PAGES = new Map([
-  [AGENTS_PAGE, 'Agents'],
-  [PERMISSIONS_PAGE, 'Permissions'],
+  [AGENTS_PAGE, { label: 'Agents', icon: Bot }],
+  [PERMISSIONS_PAGE, { label: 'Permissions', icon: KeyRound }],
 ])
 
 /** The run this page started last: what the page says of it until the run's own record does. */
@@ -240,15 +240,20 @@ export function App() {
 
   // The cross-project "needs you" queue (#632): open PRs to review, questions to answer, work left
   // on this machine. Polled here in the shell so the sidebar badge, the Overview card and the
-  // launcher's "Waiting on you" share one poll. Every five seconds, so an answered question leaves
-  // the list soon; the git host is read no more often for it, its listing being cached.
+  // launcher's "Waiting on you" share one poll. Read again the moment a run changes, as the sidebar
+  // is, and every five seconds for what no run tells (a pull request on the git host, read no more
+  // often for it, its listing being cached).
   // The read as a whole goes to the notifier, which tells of every project's items whichever one
   // is picked, and also needs to know which projects the poll actually reached before it calls
   // anything "new" (#1625).
-  const { value: interventionsRead, state: interventionsState } = usePolled<ProjectionRead<Intervention>>(onInterventions, EMPTY_INTERVENTIONS, 5000, [], {
-    remember: 'interventions',
-    stored: true,
-  })
+  const { value: interventionsRead, state: interventionsState } = usePolled<ProjectionRead<Intervention>>(
+    onInterventions,
+    EMPTY_INTERVENTIONS,
+    5000,
+    [],
+    { remember: 'interventions', stored: true },
+    runsAgain(undefined),
+  )
 
   const project = projectId ? projects.find(p => p.id === projectId) : undefined
   const projectName = project ? (labels.get(project.id) ?? project.name) : null
@@ -351,6 +356,9 @@ export function App() {
   const showDashboard = () => {
     go({ projectId: null, agentId: null })
   }
+  // A phone's session page has no bar of pages: its top bar's back arrow goes to the page this app
+  // showed before it, and to the Overview when there is none (a link opened cold).
+  const backFromSession = () => back(() => true, showDashboard)
 
   // Settings (#958): a dialog over the page you are on, which stays under it, its own query too;
   // with `item`, at that page inside the entry. Moving between its entries, from its list or from a
@@ -457,6 +465,8 @@ export function App() {
   const sessionGone = agentId !== null && !selectedAgent && agentsState === 'fresh' && (agentId !== agentStart.id || agentStart.listed === true)
   // The runs started for the selected one: rows in its chat.
   const subagents = useMemo(() => (agentId ? subagentsOf(agents, agentId) : []), [agents, agentId])
+  // Its coding agent's own count too: a run may start no run of its own and still have subagents.
+  const hasSubagents = useMemo(() => subagents.length > 0 || callSubagents(events).length > 0, [subagents, events])
   // The project is off the list: read the list again and leave its page for the Overview of every
   // project at once, since the one it was picked as is gone; "Project removed" is said over it.
   const leaveRemovedProject = () => {
@@ -526,6 +536,7 @@ export function App() {
           projects={projects}
           scope={scope}
           onProjectAdded={reloadProjects}
+          listedPages={listedPages}
         />
       )
     }
@@ -580,6 +591,7 @@ export function App() {
       onAgentStarted,
       contextSet,
       onProjectRemoved: removableHere,
+      onBack: backFromSession,
     }
     if (!selectedAgent) {
       // Not in the list: either the run we just started (its card lands a beat later) or a
@@ -627,18 +639,20 @@ export function App() {
   // An address that shows a "No such …" page: its own words are further down.
   const notFound = unknownProject || sessionGone || (pageSegment !== null && addressesRead && !OWN_PAGES.has(pageSegment) && !modulePage)
   // The name a phone's top bar gives the page; null on a project's own pages, which have a top row.
-  const phoneTitle = notFound ? 'Not found' : projectShape ? null : pageSegment ? (OWN_PAGES.get(pageSegment) ?? modulePage?.label ?? listedPage?.label ?? '') : projectId === null ? 'Overview' : null
+  const phoneTitle = notFound ? 'Not found' : projectShape ? null : pageSegment ? (OWN_PAGES.get(pageSegment)?.label ?? modulePage?.label ?? listedPage?.label ?? '') : projectId === null ? 'Overview' : null
   // A page with no chat (the Overview, a module's page) scrolls as a page: the browser's own
   // scrolling, which bounces at either end, and its header goes up with the rest. On a phone its bar
   // stays at the top; on a wider screen the sidebar stays beside it. A chat keeps its box at the
   // bottom, and only its own columns scroll.
   const pageScrolls = phoneTitle !== null
+  // A module's page opened below its own top (a ticket of the Tickets) goes back up to it from the phone's bar.
+  const backUp = modulePage && pageSegment && route.pagePath?.length ? () => hostServices.backToPage(pageSegment, [], scope ?? undefined) : undefined
   // The tab says the page first, as its heading or the sidebar names it, then the project the count is scoped to (#1923).
   const pageName =
     route.settings !== undefined
       ? 'Settings'
       : pageSegment
-        ? (OWN_PAGES.get(pageSegment) ?? modulePage?.label ?? (addressesRead ? 'No such page' : (listedPage?.label ?? null)))
+        ? (OWN_PAGES.get(pageSegment)?.label ?? modulePage?.label ?? (addressesRead ? 'No such page' : (listedPage?.label ?? null)))
         : unknownProject
           ? 'No such project'
           : sessionGone
@@ -675,13 +689,23 @@ export function App() {
       {!healthy && (
         // Kept at the top of a page that scrolls, over an opaque ground, as the pinned sidebar is under it.
         <div role="alert" className={cn('h-(--top-banner) shrink-0 bg-background', pageScrolls && 'sticky top-0 z-30')}>
-          {/* The banners' strip: a tinted fill with no edge, its mark in the warning's colour, its words in the text's. */}
+          {/* The banners' strip: a tinted fill with no edge, its mark in the warning's colour, its words in the text's. One
+              line high on every screen (`--top-banner`): a phone draws its first sentence and says the rest to a screen reader. */}
           <div className="flex h-full items-center gap-2 bg-warning/10 px-4 text-sm">
             <TriangleAlert className="size-4 shrink-0 text-warning" aria-hidden />
             {daemon === 'stopped' ? (
-              <span>OpenAgent has stopped. Start it again with <code className="font-mono">openagent</code> in a terminal; {INSTALLED_RESTARTS}.</span>
+              <span className="min-w-0 max-md:truncate">
+                OpenAgent has stopped.
+                <span className="max-md:sr-only">
+                  {' '}
+                  Start it again with <code className="font-mono">openagent</code> in a terminal; {INSTALLED_RESTARTS}.
+                </span>
+              </span>
             ) : (
-              'OpenAgent is not answering — retrying. Nothing can be sent, started, stopped, answered or published until it is back.'
+              <span className="min-w-0 max-md:truncate">
+                OpenAgent is not answering — retrying.
+                <span className="max-md:sr-only"> Nothing can be sent, started, stopped, answered or published until it is back.</span>
+              </span>
             )}
           </div>
         </div>
@@ -697,6 +721,7 @@ export function App() {
       <div className={cn('relative flex min-h-0 flex-1', pageScrolls ? 'overflow-x-clip' : 'overflow-hidden')}>
         <AgentHistory
           pageScrolls={pageScrolls}
+          notFound={notFound}
           projectId={projectId}
           scope={scope}
           scopePending={scopePending}
@@ -726,36 +751,49 @@ export function App() {
           pages={sidebarPages}
           activePage={pageSegment}
           onPage={showPage}
-          interventionCount={interventions.length}
+          waiting={interventions}
           hrefOf={hrefOf}
         />
-        {/* On a phone the sidebar is a sheet, and this button, over the page's top left corner,
-            opens it. An agent's page and the "New agent session" page keep that corner of their top row
-            free; a page with no top row of its own gets a bar that names it. */}
-        {isMobile && !pageScrolls && <MenuButton />}
         {/* A project's page and an agent's have panes beside them (Panes). A module's page takes
             the full width itself (#1774), the way the Overview does. */}
         <PanesProvider
           projectId={projectId}
           agentId={agentId}
           // A session with no project has no files or changes of a project's to show beside it, and
-          // one that is gone has none at all.
-          enabled={!pageSegment && !noProject && !sessionGone}
+          // one that is gone, or a project that is not registered, has none at all.
+          enabled={!pageSegment && !noProject && !sessionGone && !unknownProject}
           files={files}
           context={context}
           toggleContext={toggleContext}
           activity={events.length}
-          // A subagent a row of the agent's chat opened, beside the chat.
-          subagent={projectId && agentId ? <SubagentPanel projectId={projectId} agentId={agentId} events={events} subagents={subagents} live={selectedAgent?.status === 'running'} onOpenAgent={selectAgent} /> : undefined}
+          // The run's subagents, when it started any, beside the chat.
+          subagents={projectId && agentId && hasSubagents ? <SubagentsPanel projectId={projectId} agentId={agentId} events={events} subagents={subagents} live={selectedAgent?.status === 'running'} onOpenAgent={selectAgent} /> : undefined}
         >
           <PaneLayout>
             <FocusHome as="main" className="flex min-h-0 min-w-0 flex-1 flex-col">
-              {isMobile && phoneTitle !== null && <PhoneBar title={phoneTitle} countSlot={setPhoneCount} />}
+              {isMobile && phoneTitle !== null && <PhoneBar title={phoneTitle} countSlot={setPhoneCount} onBack={backUp} />}
               <PhoneBarCount.Provider value={phoneCount}>{renderMain()}</PhoneBarCount.Provider>
             </FocusHome>
           </PaneLayout>
         </PanesProvider>
       </div>
+      {/* On a phone the sidebar is a sheet, opened from the bar of pages at the foot of every page
+          but a session's, whose message box is the page's foot (its top bar's arrow goes back). */}
+      {isMobile && agentId === null && (
+        <PagesBar
+          pages={sidebarPages}
+          activePage={pageSegment}
+          overviewActive={projectId === null && pageSegment === null}
+          overviewHref={hrefOf({ projectId: null, agentId: null })}
+          onOverview={showDashboard}
+          pageHref={segment => hrefOf({ projectId: null, agentId: null, page: segment })}
+          onPage={showPage}
+          newHref={hrefOf({ projectId: scope ?? SESSIONS_ID, agentId: null })}
+          newActive={!notFound && projectId !== null && agentId === null}
+          onNew={() => newAgentInProject(scope ?? SESSIONS_ID)}
+          waiting={interventions.length}
+        />
+      )}
       {/* What a module of this computer's draws over every page: a popup it raises itself. */}
       {modules.everyPage.map(({ EveryPage, package: pkg }) => (
         <ModuleSlot key={pkg} package={pkg} label={`${pkg} popup`}>
@@ -765,7 +803,7 @@ export function App() {
       <JumpPalette
         waiting={interventions}
         runs={pageRuns}
-        pages={[...shownPages, ...[...OWN_PAGES].map(([segment, label]) => ({ segment, label }))]}
+        pages={[...shownPages, ...[...OWN_PAGES].map(([segment, page]) => ({ segment, ...page }))]}
         projects={projects}
         scope={scope}
         here={route}

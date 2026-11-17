@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Check, CircleCheck, Copy, ExternalLink, Loader2, RotateCw } from 'lucide-react'
-import { Button, Dialog, Input, QrCode, Skeleton, Slot, useOpenAgentDown } from '@openagt/dashboard/module'
+import { Button, Dialog, Input, QrCode, Skeleton, Slot, StepNumber, useOpenAgentDown } from '@openagt/dashboard/module'
 import { failed, type Answer, type Given } from './devices.js'
 import { CodeStrip, LinkPress, Presses, PressRow, Problem } from './parts.js'
 
@@ -72,7 +72,7 @@ export function CopyButton({ text, label, children }: { text: string; label: str
     return () => clearTimeout(timer)
   }, [copied])
   return (
-    <Button type="button" variant="ghost" size="sm" aria-label={label} onClick={() => void navigator.clipboard?.writeText(text).then(() => setCopied(true))}>
+    <Button type="button" variant="ghost" size="sm" aria-label={label} className="max-md:h-11" onClick={() => void navigator.clipboard?.writeText(text).then(() => setCopied(true))}>
       {copied ? <Check className="size-4 text-success" aria-hidden /> : <Copy className="size-4" aria-hidden />}
       {copied ? 'Copied' : children}
     </Button>
@@ -144,7 +144,7 @@ export const CODE_SHAPE = (
 
 /** A phone's code while it is asked for: the QR code's square and the steps beside it. */
 const QR_SHAPE = (
-  <div className="flex gap-6 max-sm:flex-col">
+  <div className="flex gap-6 max-sm:flex-col max-sm:items-center">
     <Skeleton className="size-64 shrink-0 rounded-lg" />
     <div className="w-full space-y-3">
       <Skeleton className="h-4 w-3/4" />
@@ -239,12 +239,16 @@ export function PhoneCode({
       ) : expired ? (
         <RanOut />
       ) : (
-        <div className="flex gap-6 sm:items-start max-sm:flex-col">
+        // On a phone the code stands centred over the steps, as Invite's does.
+        <div className="flex gap-6 sm:items-start max-sm:flex-col max-sm:items-center">
           <QrOnWhite text={link!} />
           <div className="w-full min-w-0 space-y-3">
-            <ol className="list-decimal space-y-2 pl-5 text-sm marker:text-muted-foreground">
-              {steps.map(step => (
-                <li key={step}>{step}</li>
+            <ol className="space-y-3 text-sm">
+              {steps.map((step, at) => (
+                <li key={step} className="flex gap-3">
+                  <StepNumber at={at} />
+                  <span className="min-w-0">{step}</span>
+                </li>
               ))}
             </ol>
             {hint !== undefined && <p className="text-xs text-muted-foreground">{hint}</p>}
@@ -299,7 +303,7 @@ export function PhoneCode({
 /** The QR code on white with room around it, in either theme: a camera finds a code by its quiet edge. */
 function QrOnWhite({ text }: { text: string }) {
   return (
-    <div className="shrink-0 rounded-lg bg-white p-4">
+    <div className="shrink-0 rounded-lg bg-white p-4 ring-1 ring-hairline">
       <QrCode text={text} label="The code a new device scans" />
     </div>
   )

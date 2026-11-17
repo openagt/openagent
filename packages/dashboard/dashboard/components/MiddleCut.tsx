@@ -1,3 +1,4 @@
+
 // A name cut in its middle where its line is too narrow, so its ending stays: "applyp…msg.sample",
 // "From branch agent-2…-37-943Z". A file's ending says what it is; a branch's is what tells two apart.
 // A path gives up its folders before its name: two files of one folder never read alike.

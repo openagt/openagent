@@ -248,17 +248,17 @@ describe('URL codec', () => {
     const view = parseTicketsView('?priority=banana,99-1,none&stage=weird&sort=nope&group=sideways')
     expect(view.filters.priority).toEqual({ buckets: [], range: null, none: true })
     expect(view.filters.stage).toEqual([])
-    expect(view.sort).toEqual({ key: 'date', dir: 'desc' })
+    expect(view.sort).toEqual({ key: 'priority', dir: 'desc' })
     expect(view.group).toBe('project')
   })
 
   test('sort defaults per key are omitted; a flipped direction is written', () => {
     const view = defaultView()
-    view.sort = { key: 'priority', dir: 'desc' } // priority's own default direction
-    expect(formatTicketsView(view)).toBe('sort=priority')
-    view.sort = { key: 'date', dir: 'asc' }
+    view.sort = { key: 'date', dir: 'desc' } // the date's own default direction
+    expect(formatTicketsView(view)).toBe('sort=date')
+    view.sort = { key: 'priority', dir: 'asc' }
     expect(formatTicketsView(view)).toBe('dir=asc')
-    expect(parseTicketsView('?dir=asc').sort).toEqual({ key: 'date', dir: 'asc' })
+    expect(parseTicketsView('?dir=asc').sort).toEqual({ key: 'priority', dir: 'asc' })
   })
 
   test('hasAnyFilter sees filters, never sort or grouping', () => {

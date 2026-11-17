@@ -26,12 +26,14 @@ export const BACKDROP_CLASS =
 /**
  * Where a dialog stands: in the window's middle, grown in 180ms and gone in 120ms; on a phone, a
  * sheet from the bottom edge, as wide as the screen, so a long form and the keyboard leave its
- * presses within the thumb's reach.
+ * presses within the thumb's reach. One inset holds its title, its body and its presses: 24 on
+ * every side, 16 on a phone (ui/look/spacing.md 10), measured from the ink: the top gives back
+ * the 6 the title's line stands over its capitals.
  */
 export const DIALOG_POPUP_CLASS = cn(
   'fixed z-50 flex flex-col border border-hairline bg-card text-card-foreground shadow-lg outline-none',
-  'md:left-1/2 md:top-1/2 md:max-h-[calc(100dvh-2rem)] md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-lg md:p-5',
-  'max-md:inset-x-0 max-md:bottom-0 max-md:max-h-[calc(100dvh-1rem)] max-md:rounded-t-lg max-md:px-4 max-md:pt-4 max-md:pb-[max(1rem,env(safe-area-inset-bottom))]',
+  'md:left-1/2 md:top-1/2 md:max-h-[calc(100dvh-2rem)] md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-lg md:px-6 md:pt-4.5 md:pb-6',
+  'max-md:inset-x-0 max-md:bottom-0 max-md:max-h-[calc(100dvh-1rem)] max-md:rounded-t-lg max-md:px-4 max-md:pt-3 max-md:pb-[max(1rem,env(safe-area-inset-bottom))]',
   'transition-[opacity,scale,translate] duration-180 data-[ending-style]:duration-120 data-[starting-style]:opacity-0 data-[ending-style]:opacity-0',
   'md:data-[starting-style]:scale-97 md:data-[ending-style]:scale-97 max-md:data-[starting-style]:translate-y-8 max-md:data-[ending-style]:translate-y-8',
 )
@@ -78,15 +80,17 @@ export function Dialog({
         >
           <div className="mb-4 flex shrink-0 items-center justify-between gap-3">
             <BaseDialog.Title className="text-base font-semibold">{title}</BaseDialog.Title>
+            {/* Pulled out by its own padding, so its glyph ends on the inset. */}
             <BaseDialog.Close
               aria-label="Close"
-              className={cn(buttonVariants({ variant: 'ghost', size: 'icon-bar' }), '-my-1 -mr-1 text-muted-foreground hover:text-foreground')}
+              className={cn(buttonVariants({ variant: 'ghost', size: 'icon-bar' }), '-my-1 -mr-1.5 text-muted-foreground hover:text-foreground')}
             >
               <X className="size-4" aria-hidden />
             </BaseDialog.Close>
           </div>
-          {/* What scrolls when the form is taller than the window; the room at its sides keeps a field's focus ring whole. */}
-          <div className="-mx-1 min-h-0 flex-1 overflow-y-auto px-1">
+          {/* What scrolls when the form is taller than the window; the room on every side (4, the ring's 2 and its 2 out) keeps
+              the focus ring of a field or of a press at its edge whole: the presses ending a dialog without a `footer`. */}
+          <div className="-m-1 min-h-0 flex-1 overflow-y-auto p-1">
             {/* Under the dialog's title, a section is a group of it. */}
             <InSection>{children}</InSection>
           </div>

@@ -102,7 +102,7 @@ test('stop a run; its checkout is reclaimed, then the run is deleted (#737/#1032
     await world.waitAgent(project, agentId, 'running')
 
     // Stop is a signal to the pid the run's card names: the run ends `stopped`, not failed.
-    await rpc(sendStop)(project.id, agentId)
+    assert.deepEqual(await rpc(sendStop)(project.id, agentId), { ok: true })
     const end = await waitFor(() => tail.events.find(e => e.kind === 'end'), 'the end event')
     assert.equal(end.kind === 'end' && end.stopped, true)
     tail.stop()
@@ -130,7 +130,7 @@ test('a Stop pressed while the run is still starting stops it once its card name
     const project = await world.addProject()
     // The start line answered the run's id; the run is still making its checkout, so no card names its pid yet.
     const agentId = await world.startAgent(project, 'hold: long experiment')
-    await rpc(sendStop)(project.id, agentId)
+    assert.deepEqual(await rpc(sendStop)(project.id, agentId), { ok: true })
     await world.waitAgent(project, agentId, 'stopped')
   } finally {
     await world.close()

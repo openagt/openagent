@@ -16,12 +16,24 @@
   --font-app: 'IBM Plex Sans Variable', ui-sans-serif, system-ui, sans-serif;
   --font-code: 'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, monospace;
   --font-document: 'Source Serif 4 Variable', ui-serif, Georgia, serif;
+  /* A phone's bar of pages (PhoneBar): its presses 56 high and its rule, the one height the bar is
+     drawn at and `--foot` is read from. */
+  --pages-bar: calc(3.5rem + 1px);
+  /* What stands at the window's foot over every page while it is drawn: the bar of pages. A page's
+     part that keeps to the window's foot stands on it: `bottom-[calc(var(--foot)+1rem)]`. */
+  --foot: 0px;
+}
+
+:root:has([data-pages-bar]) {
+  --foot: var(--pages-bar);
 }
 
 /* The Neutral palette (Settings › Appearance): shadcn's neutral greys, light and dark, in place of
    OpenAgent's greens, and the status colours from Tailwind's palette, as shadcn's themes take
    them: its 600s on light, its 400s on dark. The logo keeps the theme's own. */
-:root[data-palette='neutral']:not(.dark) {
+:root[data-palette='neutral']:not(.dark),
+:root[data-palette='neutral'] [data-scheme='light'],
+:root[data-palette='neutral']:not(.dark) [data-swatch=''] {
   --background: oklch(1 0 0);
   --sidebar: oklch(0.985 0 0);
   --foreground: oklch(0.145 0 0);
@@ -57,7 +69,9 @@
   --code-type: #b34a00;
 }
 
-:root.dark[data-palette='neutral'] {
+:root.dark[data-palette='neutral'],
+:root[data-palette='neutral'] [data-scheme='dark'],
+:root.dark[data-palette='neutral'] [data-swatch=''] {
   --background: oklch(0.145 0 0);
   --sidebar: oklch(0.205 0 0);
   --foreground: oklch(0.985 0 0);
@@ -97,175 +111,221 @@
    palette's own colours. On OpenAgent, Everforest's (its blue, the default, is set above), each
    darkened on light as the status colours are; on Neutral, Tailwind's as shadcn's themes offer
    them, its 600 on light and its 400 on dark. Each with text that reads on it. */
-:root:not([data-palette])[data-accent='green'] {
+:root:not([data-palette])[data-accent='green'],
+:root:not([data-palette]) [data-swatch='green'] {
   --primary: #6f7f00;
 }
-:root.dark:not([data-palette])[data-accent='green'] {
+:root.dark:not([data-palette])[data-accent='green'],
+:root.dark:not([data-palette]) [data-swatch='green'] {
   --primary: #a7c080;
 }
-:root:not([data-palette])[data-accent='aqua'] {
+:root:not([data-palette])[data-accent='aqua'],
+:root:not([data-palette]) [data-swatch='aqua'] {
   --primary: #2d8a66;
 }
-:root.dark:not([data-palette])[data-accent='aqua'] {
+:root.dark:not([data-palette])[data-accent='aqua'],
+:root.dark:not([data-palette]) [data-swatch='aqua'] {
   --primary: #83c092;
 }
-:root:not([data-palette])[data-accent='yellow'] {
+:root:not([data-palette])[data-accent='yellow'],
+:root:not([data-palette]) [data-swatch='yellow'] {
   --primary: #9a6b00;
 }
-:root.dark:not([data-palette])[data-accent='yellow'] {
+:root.dark:not([data-palette])[data-accent='yellow'],
+:root.dark:not([data-palette]) [data-swatch='yellow'] {
   --primary: #dbbc7f;
 }
-:root:not([data-palette])[data-accent='orange'] {
+:root:not([data-palette])[data-accent='orange'],
+:root:not([data-palette]) [data-swatch='orange'] {
   --primary: #c25f12;
 }
-:root.dark:not([data-palette])[data-accent='orange'] {
+:root.dark:not([data-palette])[data-accent='orange'],
+:root.dark:not([data-palette]) [data-swatch='orange'] {
   --primary: #e69875;
 }
-:root:not([data-palette])[data-accent='red'] {
+:root:not([data-palette])[data-accent='red'],
+:root:not([data-palette]) [data-swatch='red'] {
   --primary: #d1403d;
 }
-:root.dark:not([data-palette])[data-accent='red'] {
+:root.dark:not([data-palette])[data-accent='red'],
+:root.dark:not([data-palette]) [data-swatch='red'] {
   --primary: #e67e80;
 }
-:root:not([data-palette])[data-accent='purple'] {
+:root:not([data-palette])[data-accent='purple'],
+:root:not([data-palette]) [data-swatch='purple'] {
   --primary: #a24f8c;
 }
-:root.dark:not([data-palette])[data-accent='purple'] {
+:root.dark:not([data-palette])[data-accent='purple'],
+:root.dark:not([data-palette]) [data-swatch='purple'] {
   --primary: #d699b6;
 }
-:root[data-palette='neutral'][data-accent='amber'] {
+:root[data-palette='neutral'][data-accent='amber'],
+:root[data-palette='neutral'] [data-swatch='amber'] {
   --primary: var(--color-amber-600);
   --primary-foreground: var(--color-neutral-950);
 }
-:root.dark[data-palette='neutral'][data-accent='amber'] {
+:root.dark[data-palette='neutral'][data-accent='amber'],
+:root.dark[data-palette='neutral'] [data-swatch='amber'] {
   --primary: var(--color-amber-400);
   --primary-foreground: var(--color-neutral-950);
 }
-:root[data-palette='neutral'][data-accent='blue'] {
+:root[data-palette='neutral'][data-accent='blue'],
+:root[data-palette='neutral'] [data-swatch='blue'] {
   --primary: var(--color-blue-600);
   --primary-foreground: #ffffff;
 }
-:root.dark[data-palette='neutral'][data-accent='blue'] {
+:root.dark[data-palette='neutral'][data-accent='blue'],
+:root.dark[data-palette='neutral'] [data-swatch='blue'] {
   --primary: var(--color-blue-400);
   --primary-foreground: var(--color-neutral-950);
 }
-:root[data-palette='neutral'][data-accent='cyan'] {
+:root[data-palette='neutral'][data-accent='cyan'],
+:root[data-palette='neutral'] [data-swatch='cyan'] {
   --primary: var(--color-cyan-600);
   --primary-foreground: #ffffff;
 }
-:root.dark[data-palette='neutral'][data-accent='cyan'] {
+:root.dark[data-palette='neutral'][data-accent='cyan'],
+:root.dark[data-palette='neutral'] [data-swatch='cyan'] {
   --primary: var(--color-cyan-400);
   --primary-foreground: var(--color-neutral-950);
 }
-:root[data-palette='neutral'][data-accent='emerald'] {
+:root[data-palette='neutral'][data-accent='emerald'],
+:root[data-palette='neutral'] [data-swatch='emerald'] {
   --primary: var(--color-emerald-600);
   --primary-foreground: #ffffff;
 }
-:root.dark[data-palette='neutral'][data-accent='emerald'] {
+:root.dark[data-palette='neutral'][data-accent='emerald'],
+:root.dark[data-palette='neutral'] [data-swatch='emerald'] {
   --primary: var(--color-emerald-400);
   --primary-foreground: var(--color-neutral-950);
 }
-:root[data-palette='neutral'][data-accent='fuchsia'] {
+:root[data-palette='neutral'][data-accent='fuchsia'],
+:root[data-palette='neutral'] [data-swatch='fuchsia'] {
   --primary: var(--color-fuchsia-600);
   --primary-foreground: #ffffff;
 }
-:root.dark[data-palette='neutral'][data-accent='fuchsia'] {
+:root.dark[data-palette='neutral'][data-accent='fuchsia'],
+:root.dark[data-palette='neutral'] [data-swatch='fuchsia'] {
   --primary: var(--color-fuchsia-400);
   --primary-foreground: var(--color-neutral-950);
 }
-:root[data-palette='neutral'][data-accent='green'] {
+:root[data-palette='neutral'][data-accent='green'],
+:root[data-palette='neutral'] [data-swatch='green'] {
   --primary: var(--color-green-600);
   --primary-foreground: #ffffff;
 }
-:root.dark[data-palette='neutral'][data-accent='green'] {
+:root.dark[data-palette='neutral'][data-accent='green'],
+:root.dark[data-palette='neutral'] [data-swatch='green'] {
   --primary: var(--color-green-400);
   --primary-foreground: var(--color-neutral-950);
 }
-:root[data-palette='neutral'][data-accent='indigo'] {
+:root[data-palette='neutral'][data-accent='indigo'],
+:root[data-palette='neutral'] [data-swatch='indigo'] {
   --primary: var(--color-indigo-600);
   --primary-foreground: #ffffff;
 }
-:root.dark[data-palette='neutral'][data-accent='indigo'] {
+:root.dark[data-palette='neutral'][data-accent='indigo'],
+:root.dark[data-palette='neutral'] [data-swatch='indigo'] {
   --primary: var(--color-indigo-400);
   --primary-foreground: var(--color-neutral-950);
 }
-:root[data-palette='neutral'][data-accent='lime'] {
+:root[data-palette='neutral'][data-accent='lime'],
+:root[data-palette='neutral'] [data-swatch='lime'] {
   --primary: var(--color-lime-600);
   --primary-foreground: var(--color-neutral-950);
 }
-:root.dark[data-palette='neutral'][data-accent='lime'] {
+:root.dark[data-palette='neutral'][data-accent='lime'],
+:root.dark[data-palette='neutral'] [data-swatch='lime'] {
   --primary: var(--color-lime-400);
   --primary-foreground: var(--color-neutral-950);
 }
-:root[data-palette='neutral'][data-accent='orange'] {
+:root[data-palette='neutral'][data-accent='orange'],
+:root[data-palette='neutral'] [data-swatch='orange'] {
   --primary: var(--color-orange-600);
   --primary-foreground: #ffffff;
 }
-:root.dark[data-palette='neutral'][data-accent='orange'] {
+:root.dark[data-palette='neutral'][data-accent='orange'],
+:root.dark[data-palette='neutral'] [data-swatch='orange'] {
   --primary: var(--color-orange-400);
   --primary-foreground: var(--color-neutral-950);
 }
-:root[data-palette='neutral'][data-accent='pink'] {
+:root[data-palette='neutral'][data-accent='pink'],
+:root[data-palette='neutral'] [data-swatch='pink'] {
   --primary: var(--color-pink-600);
   --primary-foreground: #ffffff;
 }
-:root.dark[data-palette='neutral'][data-accent='pink'] {
+:root.dark[data-palette='neutral'][data-accent='pink'],
+:root.dark[data-palette='neutral'] [data-swatch='pink'] {
   --primary: var(--color-pink-400);
   --primary-foreground: var(--color-neutral-950);
 }
-:root[data-palette='neutral'][data-accent='purple'] {
+:root[data-palette='neutral'][data-accent='purple'],
+:root[data-palette='neutral'] [data-swatch='purple'] {
   --primary: var(--color-purple-600);
   --primary-foreground: #ffffff;
 }
-:root.dark[data-palette='neutral'][data-accent='purple'] {
+:root.dark[data-palette='neutral'][data-accent='purple'],
+:root.dark[data-palette='neutral'] [data-swatch='purple'] {
   --primary: var(--color-purple-400);
   --primary-foreground: var(--color-neutral-950);
 }
-:root[data-palette='neutral'][data-accent='red'] {
+:root[data-palette='neutral'][data-accent='red'],
+:root[data-palette='neutral'] [data-swatch='red'] {
   --primary: var(--color-red-600);
   --primary-foreground: #ffffff;
 }
-:root.dark[data-palette='neutral'][data-accent='red'] {
+:root.dark[data-palette='neutral'][data-accent='red'],
+:root.dark[data-palette='neutral'] [data-swatch='red'] {
   --primary: var(--color-red-400);
   --primary-foreground: var(--color-neutral-950);
 }
-:root[data-palette='neutral'][data-accent='rose'] {
+:root[data-palette='neutral'][data-accent='rose'],
+:root[data-palette='neutral'] [data-swatch='rose'] {
   --primary: var(--color-rose-600);
   --primary-foreground: #ffffff;
 }
-:root.dark[data-palette='neutral'][data-accent='rose'] {
+:root.dark[data-palette='neutral'][data-accent='rose'],
+:root.dark[data-palette='neutral'] [data-swatch='rose'] {
   --primary: var(--color-rose-400);
   --primary-foreground: var(--color-neutral-950);
 }
-:root[data-palette='neutral'][data-accent='sky'] {
+:root[data-palette='neutral'][data-accent='sky'],
+:root[data-palette='neutral'] [data-swatch='sky'] {
   --primary: var(--color-sky-600);
   --primary-foreground: #ffffff;
 }
-:root.dark[data-palette='neutral'][data-accent='sky'] {
+:root.dark[data-palette='neutral'][data-accent='sky'],
+:root.dark[data-palette='neutral'] [data-swatch='sky'] {
   --primary: var(--color-sky-400);
   --primary-foreground: var(--color-neutral-950);
 }
-:root[data-palette='neutral'][data-accent='teal'] {
+:root[data-palette='neutral'][data-accent='teal'],
+:root[data-palette='neutral'] [data-swatch='teal'] {
   --primary: var(--color-teal-600);
   --primary-foreground: #ffffff;
 }
-:root.dark[data-palette='neutral'][data-accent='teal'] {
+:root.dark[data-palette='neutral'][data-accent='teal'],
+:root.dark[data-palette='neutral'] [data-swatch='teal'] {
   --primary: var(--color-teal-400);
   --primary-foreground: var(--color-neutral-950);
 }
-:root[data-palette='neutral'][data-accent='violet'] {
+:root[data-palette='neutral'][data-accent='violet'],
+:root[data-palette='neutral'] [data-swatch='violet'] {
   --primary: var(--color-violet-600);
   --primary-foreground: #ffffff;
 }
-:root.dark[data-palette='neutral'][data-accent='violet'] {
+:root.dark[data-palette='neutral'][data-accent='violet'],
+:root.dark[data-palette='neutral'] [data-swatch='violet'] {
   --primary: var(--color-violet-400);
   --primary-foreground: var(--color-neutral-950);
 }
-:root[data-palette='neutral'][data-accent='yellow'] {
+:root[data-palette='neutral'][data-accent='yellow'],
+:root[data-palette='neutral'] [data-swatch='yellow'] {
   --primary: var(--color-yellow-600);
   --primary-foreground: var(--color-neutral-950);
 }
-:root.dark[data-palette='neutral'][data-accent='yellow'] {
+:root.dark[data-palette='neutral'][data-accent='yellow'],
+:root.dark[data-palette='neutral'] [data-swatch='yellow'] {
   --primary: var(--color-yellow-400);
   --primary-foreground: var(--color-neutral-950);
 }
@@ -347,6 +407,34 @@ html[data-pinned] body {
 @keyframes rail-fade-appear {
   to {
     opacity: 1;
+  }
+}
+
+/* The jump's list on a phone (JumpPalette): a fade over its foot while rows go on under it, as the Subagents
+   list's foot fades, gone once its last row is in view. Driven by the list's own scroll, on a timeline the popup
+   shares with it; with nothing to scroll, or without scroll-timeline support, it is not drawn. */
+.jump-popup {
+  timeline-scope: --jump-list;
+}
+.jump-list {
+  scroll-timeline: --jump-list y;
+}
+.jump-fade {
+  opacity: 0;
+}
+@supports (animation-timeline: scroll()) {
+  .jump-fade {
+    animation: jump-fade-away 1ms linear both;
+    animation-timeline: --jump-list;
+    animation-range: calc(100% - 2rem) 100%;
+  }
+}
+@keyframes jump-fade-away {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
   }
 }
 
@@ -440,6 +528,21 @@ html[data-pinned] body {
 .morph-in {
   animation: morph-in 0.18s cubic-bezier(0.2, 0, 0, 1);
 }
+/* Words that leave as others come in their place: whole until those are readable (a third of
+   morph-in, by when its curve has them three quarters in), then gone by two thirds. */
+.morph-out {
+  animation: morph-out 0.18s linear forwards;
+}
+@keyframes morph-out {
+  0%,
+  33% {
+    opacity: 1;
+  }
+  67%,
+  100% {
+    opacity: 0;
+  }
+}
 @keyframes morph-in {
   from {
     opacity: 0;
@@ -512,7 +615,8 @@ html[data-pinned] body {
     transition-duration: 0s !important;
   }
   .cross-fade-out,
-  .dots-leave {
+  .dots-leave,
+  .morph-out {
     display: none;
   }
   .text-shimmer {
@@ -618,9 +722,21 @@ html[data-pinned] body {
   @view-transition {
     navigation: auto;
   }
-  /* Starting a run (StartAgentForm): the box moves to its place on the run's page, the rest of the
-     page changes under it, both on the scale's 180ms. */
+  /* Starting a run (StartAgentForm): the box moves to its place on the run's page, the words in it
+     to the chat's first message, the rest of the page changes under them, all on the scale's 180ms.
+     The words keep their size on the way: a picture stretched to its new box would warp them. */
+  .carrying-box form .ProseMirror,
+  .carrying-box [data-message-id='turn:1'] [aria-label='Your message'] {
+    view-transition-name: words;
+  }
+  .carrying-box::view-transition-old(words),
+  .carrying-box::view-transition-new(words) {
+    height: 100%;
+    object-fit: none;
+    object-position: left top;
+  }
   .carrying-box::view-transition-group(composer),
+  .carrying-box::view-transition-group(words),
   .carrying-box::view-transition-old(root),
   .carrying-box::view-transition-new(root) {
     animation-duration: 180ms;

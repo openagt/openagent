@@ -7,6 +7,8 @@ import type { HoldingRun, Ticket, TicketDetail } from '../../src/module.js'
 export interface WorkspaceTicket extends Ticket {
   /** The run whose id the lock names, when it is one of this project's (`withHolder`). */
   lockedByAgent?: HoldingRun
+  /** How that run stands (`ModuleAgent.status`). */
+  holderStatus?: string
 }
 
 /** One ticket with its entire markdown, for its own page. */

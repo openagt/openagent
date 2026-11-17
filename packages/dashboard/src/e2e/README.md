@@ -14,6 +14,7 @@ A word in the prompt picks what the scripted agent does:
 | `hold` | waits for `<checkout>/.openagent/go` before its first turn, so it is certainly still working |
 | `commit` | commits a file, so its branch holds work to push |
 | `refuse` | its start hook fails, and the page says why |
+| `agents` | starts subagents of both kinds (runs of its own, one of which fails and one of which asks, and its coding agent's own) and keeps working until it is stopped; with `many`, more of them |
 | anything else | answers `done: <prompt>`, and the run ends |
 
 ## The backend stories: `story-*.test.ts`

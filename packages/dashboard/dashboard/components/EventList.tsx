@@ -5,10 +5,11 @@ import { Fragment, useContext, useEffect, useLayoutEffect, useMemo, useRef, useS
 import { Check, ChevronRight, Copy, PencilLine } from 'lucide-react'
 import { pendingChoices } from '../lib/live-state.js'
 import { DaemonDown } from '../lib/use-daemon-health.js'
-import { callRow, callSubagents, isAgentsOwn, runRow, endMessage, subagentEnd, subagentEvents, subagentReport, subagentSteps, subagentWait, type SubagentEnd } from '../lib/subagents.js'
+import { callSubagents, isAgentsOwn, runRow, endMessage, subagentEnd, subagentEvents, subagentReport, subagentRows, subagentSteps, subagentWait, type SubagentEnd } from '../lib/subagents.js'
 import { answeredQuestion } from '../lib/answered-question.js'
 import { rowWords, type RowWords } from '../lib/row-words.js'
 import { formatAge } from '../lib/format-date.js'
+import { cn } from '../lib/utils.js'
 import { AnsweredChoice } from './AnsweredChoice.js'
 import { QuestionPanel } from './QuestionPanel.js'
 import { Markdown } from './Markdown.js'
@@ -112,29 +113,27 @@ function rowTone(e: OpenAgentEvent): string {
 }
 
 /**
- * The row's BACKGROUND wash (#1508): a tint across the whole line, findable from the scrollbar's
- * distance.
- * Only the rows the eye actually hunts for get one — failures (the reader's own turns are boxes
- * already) — and at a whisper of alpha, so the
- * text keeps the contrast and the bulk of the log stays plain canvas.
+ * The row's box. A failure is a painted block (#1508), findable from the scrollbar's distance, at a
+ * whisper of alpha so the text keeps its contrast: on a phone it stands on the page's 16 inset with its
+ * words 16 inside, as the chat's cards do; on a desktop it is pulled out by 16, so its words stand on the
+ * chat's column. Every other row carries the same -mx/px pair, so its hover band and its words keep
+ * the column.
  */
-function rowWash(e: OpenAgentEvent): string {
-  return isFailure(e) ? 'bg-danger/10' : ''
+function rowBox(e: OpenAgentEvent): string {
+  return isFailure(e) ? 'rounded-lg bg-danger/10 px-4 py-2 md:-mx-4' : '-mx-1.5 rounded-sm px-1.5'
 }
 
 /**
- * Hoist the agent's first prompt to the top of the log (#1170).
- *
- * It is emitted after the `session` event, so the one line the reader wrote themselves opened
- * under a row they did not write.
- * Only the *first* prompt moves: a later turn is part of the conversation and belongs where it
- * happened. The rows it jumps keep their order, so the log reads as "what I asked, then
- * everything that followed".
+ * The log in its turns, each opened by its prompt (#1170): what a run writes before its first
+ * prompt is the first turn's, under it, so the log reads as "what I asked, then everything that
+ * followed". A later turn stays where it happened. A message being sent is its turn's prompt
+ * already, where its own line will stand: first in a run with no prompt yet, else last.
  */
-function promptFirst(events: OpenAgentEvent[]): OpenAgentEvent[] {
+function inTurns(events: OpenAgentEvent[], sent: OpenAgentEvent | undefined): OpenAgentEvent[] {
   const at = events.findIndex(isTurnBoundary)
-  if (at <= 0) return events
-  return [events[at]!, ...events.slice(0, at), ...events.slice(at + 1)]
+  if (at < 0) return sent === undefined ? events : [sent, ...events]
+  const turns = at === 0 ? events : [events[at]!, ...events.slice(0, at), ...events.slice(at + 1)]
+  return sent === undefined ? turns : [...turns, sent]
 }
 
 /**
@@ -161,6 +160,14 @@ function PassedChoice({ choice, footer }: { choice: ChoiceRequest; footer?: Reac
   )
 }
 
+/**
+ * The gate a question is to the chat: its own id, or, for a question of the run's diary (whose id
+ * is its line's time), the one gate every question of a run is, the early card's too.
+ */
+function chatGate(choice: { id: string; at?: string | undefined }): string {
+  return choice.id === choice.at ? QUESTION_TAG : choice.id
+}
+
 /** A question's row: answered through its gate (`pick`), passed by with a message instead (`passed`), or still waiting for its answer. */
 type ChoiceRow = { choice: ChoiceRequest; pick?: string | readonly string[]; passed?: true }
 
@@ -184,11 +191,11 @@ function foldChoiceRows(events: OpenAgentEvent[]): {
   const lastFiring = new Map<string, { e: OpenAgentEvent; at: number }>()
   const lastResolved = new Map<string, { e: Extract<OpenAgentEvent, { kind: 'choice-resolved' }>; at: number }>()
   events.forEach((e, at) => {
-    if (e.kind === 'choice') lastFiring.set(e.id, { e, at })
+    if (e.kind === 'choice') lastFiring.set(chatGate(e), { e, at })
     else if (e.kind === 'choice-resolved') lastResolved.set(e.id, { e, at })
   })
-  // A question answered in its card: every firing of it, not only the last. A local agent's
-  // questions all share one id, so an earlier question is an earlier firing.
+  // A question answered in its card: every firing of it, not only the last. A run's questions are
+  // one gate here, so an earlier question is an earlier firing.
   const answered = new Set(events.flatMap(e => (isTurnBoundary(e) ? [answeredQuestion((e as { event: { prompt: string } }).event.prompt)?.question] : [])))
   for (const e of events) if (e.kind === 'choice' && answered.has(e.title)) hidden.add(e)
   const open = new Set(pendingChoices(events).map(c => c.id))
@@ -196,7 +203,7 @@ function foldChoiceRows(events: OpenAgentEvent[]): {
     if (hidden.has(firing.e)) continue
     const { kind: _kind, ...choice } = firing.e as { kind: 'choice' } & ChoiceRequest
     const resolved = lastResolved.get(id)
-    if (open.has(id)) {
+    if (open.has(choice.id)) {
       rows.set(firing.e, { choice })
     } else if (resolved && resolved.at > firing.at) {
       // A resolution from BEFORE this firing answered an earlier gate, not this one — a gate
@@ -214,7 +221,7 @@ function foldChoiceRows(events: OpenAgentEvent[]): {
 /**
  * The question a turn ends on, the moment its message is written. The run says it only when the
  * agent's process is done, about a second later, and until then the message would show its block
- * as raw JSON. Read with the run's own parser, so it is the same question under the same id, and
+ * as raw JSON. Read with the run's own parser, so it is the same question, at the same gate, and
  * the run's own line of it takes its place without a change. Only a turn's last message, with
  * nothing after it: a block the agent went on from is not what the run will ask.
  */
@@ -343,7 +350,8 @@ function Age({ at }: { at: string }) {
  */
 function ReplyFooter({ text, at }: { text: string; at?: string | undefined }) {
   return (
-    <div className="turn-footer flex h-6 items-center gap-1 font-sans text-muted-foreground opacity-0 transition-opacity focus-within:opacity-100 pointer-coarse:opacity-100">
+    // Pulled out by the copy press's own padding, so its glyph stands on the chat's one left edge (ui/look/spacing.md 4).
+    <div className="turn-footer -ml-1.5 flex h-6 items-center gap-1 font-sans text-muted-foreground opacity-0 transition-opacity focus-within:opacity-100 pointer-coarse:opacity-100">
       <CopyMessage text={text} />
       {at !== undefined && <Age at={at} />}
     </div>
@@ -364,7 +372,7 @@ function isTall(text: string): boolean {
 // Claude Code on the web keeps an answered question. A skipped one says so where the answer would be.
 function Answer({ question, answer }: { question: string; answer?: string | undefined }) {
   return (
-    <div role="group" aria-label="Your answer" className="flex w-full max-w-[480px] flex-col gap-0.5 rounded-lg px-3 py-2 font-sans text-sm ring-1 ring-border">
+    <div role="group" aria-label="Your answer" className="flex w-full max-w-[480px] flex-col gap-0.5 rounded-lg px-4 py-2 font-sans text-sm ring-1 ring-border md:-mx-4">
       <div className="font-medium text-foreground">{question}</div>
       {answer !== undefined ? <div className="text-muted-foreground">{answer}</div> : <div className="italic text-muted-foreground">Skipped</div>}
     </div>
@@ -377,7 +385,7 @@ const FILES_ROW = 'group/row -mx-1.5 mt-2 flex items-start gap-2 rounded-sm px-1
 // A turn's files, and under them the turn's copy and time when the turn ended on them.
 function TurnFiles({ files, onOpen, footer }: { files: readonly ChangedFile[]; onOpen?: ((path?: string) => void) | undefined; footer?: { text: string; at: string | undefined } | undefined }) {
   return (
-    <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+    <div className="flex min-w-0 flex-1 flex-col gap-2">
       <ChangedFiles files={files} onOpen={onOpen} />
       {footer && <ReplyFooter text={footer.text} at={footer.at} />}
     </div>
@@ -409,7 +417,7 @@ function Prompt({ text, at, waiting, attached, fresh = false }: { text: string; 
             <CopyMessage text={text} />
           </div>
         )}
-        <div role="group" aria-label={waiting ? 'Your message, waiting' : 'Your message'} className="max-w-[80%] min-w-0 rounded-lg bg-muted px-3 py-2">
+        <div role="group" aria-label={waiting ? 'Your message, waiting' : 'Your message'} className="max-w-[80%] min-w-0 rounded-lg rounded-br-sm bg-card px-4 py-2 shadow-sm ring-1 ring-hairline">
           <div className={tall && !open ? 'max-h-40 overflow-hidden' : ''}>
             <Markdown text={text} />
           </div>
@@ -632,6 +640,22 @@ function shownAsRow(e: OpenAgentEvent): boolean {
   return true
 }
 
+// The room the log's scroller keeps for a scroll bar on its right, written on it as `--log-gutter`:
+// none where the scroll bar lies over the content (a phone's, a Mac's), its width where it takes
+// room of its own, shown or not. Read again as the scroller changes its size.
+function useGutterRead(viewport: RefObject<HTMLDivElement | null>, on: boolean): void {
+  useLayoutEffect(() => {
+    const view = viewport.current
+    if (!on || !view) return
+    const read = () => view.style.setProperty('--log-gutter', `${view.offsetWidth - view.clientWidth}px`)
+    read()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(read)
+    observer.observe(view)
+    return () => observer.disconnect()
+  }, [viewport, on])
+}
+
 // The room the log's rows have got smaller: the message box's bar grew over the log's end (a
 // question opened over it, the agent's work came in), or the view itself got shorter (the top
 // bar's details opened, a notice came under it). A log that was at its end stays at it. The
@@ -697,6 +721,8 @@ export function EventList({
   openAt,
   head,
   tail,
+  startedAt,
+  evenEdges = false,
   projectId,
   agentId,
   onSaid,
@@ -712,8 +738,8 @@ export function EventList({
   /** The message the agent is writing, as far as it has got: the agent's row after the last, drawn
    *  as a finished reply is. Never an event: its whole message's row replaces it. */
   writing?: string
-  /** A message just sent to an ended agent: the last prompt row, until the prompt's own line
-   *  arrives and takes the same row. Being a prompt, the scroller brings it into view. */
+  /** A message just sent: its turn's prompt row, the first in a run with no prompt yet, until the
+   *  prompt's own line arrives and takes the same row. Being a prompt, the scroller brings it into view. */
   sending?: string | undefined
   /** When that message was sent, where this page did not see it go (a reload): its live line counts from then. */
   sendingAt?: string | undefined
@@ -734,6 +760,14 @@ export function EventList({
   /** Pinned after the last row, inside the scroller (#1265): the log's "and then…" — a web agent's
    *  live mirror box — that must scroll (and stick) with the log rather than float over it. */
   tail?: ReactNode
+  /** When a log whose first prompt is in its head, not among its rows (a subagent's), began: its
+   *  live line counts from there. */
+  startedAt?: string | undefined
+  /** The log fills a pane: its column is as wide as the pane, and its words and painted blocks stand
+   *  as far from the pane's right edge as from its left, the room its scroller keeps for a scroll bar
+   *  taken off its right padding. The page's chat is a column of a reading width, centred in the room
+   *  left of that bar, and the message box under it stops short of the bar too (ChatPane). */
+  evenEdges?: boolean
   /** The log's own project: with it, a resolved gate is the collapsed ✓ card, and an open one is
    *  the question's card when the log knows its agent too. Without it, every `choice` row keeps the
    *  formatter's text. */
@@ -767,13 +801,15 @@ export function EventList({
   // The files each turn's edits changed: a row for each at the end of the turn, once it has ended.
   const workspace = setup?.workspace
   const changes = useMemo(() => turnChanges(events, workspace), [events, workspace])
-  const rowIds = useMemo(() => new Map(events.map((e, at) => [e, String(at)])), [events])
+  // A prompt is known by its turn, so the message being sent is the row its own line becomes.
+  const { rowIds, turns } = useMemo(() => {
+    let turns = 0
+    return { rowIds: new Map(events.map((e, at) => [e, isTurnBoundary(e) ? `turn:${++turns}` : String(at)])), turns }
+  }, [events])
   const asked = useMemo(() => askedReplies(events), [events])
   // The coding agent's own subagents, and what of the log their rows say instead.
   const calls = useMemo(() => callSubagents(events), [events])
   const theirs = useMemo(() => subagentEvents(events), [events])
-  const logged = promptFirst(events).filter(e => shownAsRow(e) && !choiceRows?.hidden.has(e) && !screenRows.hidden.has(e) && !theirs.has(e))
-  // Every row and every passed end, in order, a message just sent last; `shown` is the rows alone.
   // An answer just given to the question the chat asks: it stands where the card was until the
   // agent's own line of it arrives in that same place, as Claude Code on the web answers in place.
   // It is no message at the end, which came and then went back up.
@@ -785,7 +821,8 @@ export function EventList({
   const sentAt = useMemo(() => (sending !== undefined ? (sendingAt ?? new Date().toISOString()) : undefined), [sending, sendingAt])
   // Its row holds no time, as one being sent shows none.
   const sent: OpenAgentEvent | undefined = sending !== undefined ? { kind: 'driver', event: { type: 'start', prompt: sending } } : undefined
-  const kept: OpenAgentEvent[] = sent === undefined || answeredInPlace ? logged : [...logged, sent]
+  // Every row and every passed end, in their turns; `shown` is the rows alone.
+  const kept = inTurns(events, answeredInPlace ? undefined : sent).filter(e => shownAsRow(e) && !choiceRows?.hidden.has(e) && !screenRows.hidden.has(e) && !theirs.has(e))
   // Every event and the message just sent: what the turn going on is read off.
   const told = sent === undefined ? events : [...events, sent]
   // The text of a row's message: the reply a question follows, without the question's block.
@@ -829,7 +866,7 @@ export function EventList({
   if (sentAt !== undefined) lastSent.current = sentAt
   const turnBoundary = [...unfolded].reverse().find(isTurnBoundary)
   const sentTurn = lastSent.current !== undefined && turnBoundary !== undefined && turnBoundary !== sent && told.find(e => isTurnBoundary(e) && e !== sent && e.at !== undefined && e.at > lastSent.current!) === turnBoundary
-  const turnStart = later(wokeAt, blocked.wokeAt) ?? (sentTurn || (sent !== undefined && turnBoundary === sent) ? lastSent.current : turnBoundary?.at) ?? unfolded[unfolded.length - 1]?.at
+  const turnStart = later(wokeAt, blocked.wokeAt) ?? (sentTurn || (sent !== undefined && turnBoundary === sent) ? lastSent.current : turnBoundary?.at) ?? startedAt ?? unfolded[unfolded.length - 1]?.at
   // The prompts that told this run one of its subagents ended: SUBAGENT rows, not the reader's own.
   const ends = new Map<OpenAgentEvent, SubagentEnd>()
   for (const e of shown) {
@@ -838,10 +875,10 @@ export function EventList({
   }
   // A row is known by its event's place in the whole log, not among the rows shown: a row that
   // stops being shown (an end the run went on after) then changes no other row's identity, and
-  // the scroller keeps its place. A message just sent has no place yet.
-  const idOf = (e: OpenAgentEvent): string => rowIds.get(e) ?? 'sending'
+  // the scroller keeps its place. A message just sent is the next turn's.
+  const idOf = (e: OpenAgentEvent): string => rowIds.get(e) ?? `turn:${turns + 1}`
   const groupOf = (e: OpenAgentEvent): string => (ends.has(e) ? SUBAGENT : rowGroup(e))
-  const rows = [...subagents.map(agent => runRow(agent, doing[agent.id])), ...calls.map(call => callRow(call, working, events[0]?.at ?? new Date(0).toISOString()))]
+  const rows = subagentRows(subagents, events, working, doing)
   // A prompt or the agent's own words part them: what it started after saying something comes after those words.
   const reports = new Map(calls.flatMap(call => {
     const report = subagentReport(events, call.id)
@@ -909,6 +946,7 @@ export function EventList({
   const viewport = useRef<HTMLDivElement>(null)
   const endRoom = useRef<HTMLDivElement>(null)
   useEndKept(viewport, endRoom)
+  useGutterRead(viewport, evenEdges)
   // The last row of each turn the agent finished, with what its footer copies: everything the
   // agent said since the person's last message, its messages one paragraph apart, as Claude Code on
   // the web's copy takes them; a turn that said nothing but a question, the question. Claude Code
@@ -956,7 +994,14 @@ export function EventList({
       <MessageScroller className="isolate flex-1">
         <MessageScrollerViewport ref={viewport} aria-label="Agent output" className="scroll-pt-(--chat-top) scroll-pb-(--chat-bottom)">
           {/* The rows start under the page's top bar, which lies over the log's start (ChatPane, `--chat-top`). */}
-          <MessageScrollerContent spacerClassName="order-last" className="mx-auto w-full max-w-3xl gap-3 px-4 pt-[calc(var(--chat-top,0px)+1rem)] font-mono text-xs">
+          {/* The chat's column: 16 in on a phone, 32 on a desktop, where the painted blocks are pulled
+              out by 16 to stand 16 in with the message box, their words on the column. */}
+          {/* In a pane the column fills the pane, at any width it is given, and its right padding is
+              less by the scroll bar's room (`--log-gutter`), so it stands as far from both of its edges. */}
+          <MessageScrollerContent
+            spacerClassName="order-last"
+            className={cn('w-full gap-3 pt-[calc(var(--chat-top,0px)+1rem)] font-mono text-xs', evenEdges ? 'pr-[calc(--spacing(4)-var(--log-gutter,0px))] pl-4 md:pr-[calc(--spacing(8)-var(--log-gutter,0px))] md:pl-8' : 'mx-auto max-w-3xl px-4 md:px-8')}
+          >
             {/* First in the page, so never the row the browser keeps in place when a row above
                 it grows: a steps line opened at the log's end opens under the line, the line
                 where it was, as Claude Code's does, not pushed up by the room held still. */}
@@ -995,29 +1040,27 @@ export function EventList({
                 )}
                 {/* A message just sent ends the last turn as its own prompt line will: the turn's
                     files stay above it, where they were, and do not go and come back. */}
-                {idOf(e) === 'sending' && changes.last.length > 0 && (
+                {e === sent && changes.last.length > 0 && (
                   <MessageScrollerItem messageId="changes-last" className={FILES_ROW}>
                     <TurnFiles files={changes.last} onOpen={onOpenChange} />
                   </MessageScrollerItem>
                 )}
                 {i === setupAt && setupRow}
                 {startedRows(i)}
-                {/* Every row carries the same -mx/px pair so a washed row's band and a plain row's
-                    text share the exact same columns; only the background differs. */}
-                <MessageScrollerItem messageId={idOf(e)} data-prompt={(own && !answer) || undefined} className={`group/row relative -mx-1.5 flex items-start gap-2 rounded-sm px-1.5 ${answer || inPlace ? 'mt-1 mb-3' : own ? 'mt-3 first:mt-0' : ''} ${end ? '' : rowWash(e)}`}>
+                <MessageScrollerItem messageId={idOf(e)} data-prompt={(own && !answer) || undefined} className={`group/row relative flex items-start gap-2 ${end ? '-mx-1.5 rounded-sm px-1.5' : rowBox(e)} ${answer || inPlace ? 'mt-1 mb-3' : own ? 'mt-3 first:mt-0' : ''}`}>
                   {answer ? (
                     <Answer {...answer} />
                   ) : inPlace && sentAnswer ? (
                     <Answer {...sentAnswer} />
                   ) : own && message !== null ? (
-                    <Prompt text={message} at={at} attached={e.kind === 'driver' && e.event.type === 'start' ? e.event.attached : undefined} fresh={idOf(e) === 'sending'} />
+                    <Prompt text={message} at={at} attached={e.kind === 'driver' && e.event.type === 'start' ? e.event.attached : undefined} fresh={e === sent} />
                   ) : end ? (
                     // A subagent ended: what the run was told about it, folded.
                     <SubagentMessage name={runRow(end.agent, undefined).name} text={endMessage(end.rest)} status={end.status} detail={end.detail} />
                   ) : message !== null ? (
                     // The agent's reply, shown whole, and the last of a finished turn with its footer.
                     footer ? (
-                      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                      <div className="flex min-w-0 flex-1 flex-col gap-2">
                         <Reply text={message} />
                         {footer}
                       </div>
@@ -1030,8 +1073,8 @@ export function EventList({
                     <PassedChoice choice={choiceRow.choice} footer={footer} />
                   ) : choiceRow && choiceRow.pick === undefined && projectId !== undefined && agentId !== undefined ? (
                     // The question the agent waits on, answered here, under what it said.
-                    typing ? null : <div className="mt-1 flex min-w-0 flex-1 flex-col gap-1.5">
-                      <QuestionPanel key={`${agentId}:${choiceRow.choice.id}`} projectId={projectId} agentId={agentId} choice={choiceRow.choice} active={e === asking} focused={e === openedOn.current} onSaid={onSaid} focusNext={focusNext} />
+                    typing ? null : <div className="mt-1 flex min-w-0 flex-1 flex-col gap-2">
+                      <QuestionPanel key={`${agentId}:${chatGate(choiceRow.choice)}`} projectId={projectId} agentId={agentId} choice={choiceRow.choice} active={e === asking} focused={e === openedOn.current} onSaid={onSaid} focusNext={focusNext} />
                       {footer}
                     </div>
                   ) : choiceRow?.pick !== undefined ? (
@@ -1079,7 +1122,7 @@ export function EventList({
             )}
             {/* The live line's place is kept when it has nothing to say (a message being written,
                 the agent's turn over): nothing under it moves up when it goes, nor down when it comes. */}
-            {shown.length > 0 && (
+            {(shown.length > 0 || head !== undefined) && (
               <div data-testid="live-line" className="-mx-1.5 flex min-h-5 shrink-0 items-center gap-2 rounded-sm px-1.5">
                 {/* Under the reply as it streams, too: the agent is still at it, and Claude Code on
                     the web keeps its dots and its count there. The line said a word before, which

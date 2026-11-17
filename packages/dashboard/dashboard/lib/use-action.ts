@@ -4,7 +4,7 @@ import { useCallback, useState } from 'react'
  * What an action did: `ok` says whether it succeeded, and only then is there a `value`.
  *
  * Said as a pair rather than as "the value, or `undefined` when it did not succeed", because an
- * action that succeeds with nothing to report is not a failure: with the value alone, a `sendStop`
+ * action that succeeds with nothing to report is not a failure: with the value alone, an action
  * that resolves void was indistinguishable from one that threw, and every such caller had to map
  * its success to a stand-in value to tell the two apart.
  */

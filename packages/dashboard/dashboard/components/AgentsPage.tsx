@@ -1,12 +1,14 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type Ref } from 'react'
-import { Bot, Check, Loader2, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { Ellipsis, Loader2, Plus } from 'lucide-react'
 import { onAgentLogins, onAgentsList, sendCopyAgentLogins, sendRemoveAgent, sendSaveAgent, type AgentAccountChoice, type AgentLoginsOn, type AgentRecord, type AgentsView } from '../rpc/agents.js'
 import { DEFAULT_AGENT } from '../../src/client.js'
 import { holdEntry } from '../lib/use-route.js'
 import { usePolled, type ReadState } from '../lib/use-async.js'
 import { useAddGitAccount } from './AddGitAccount.js'
 import { Button } from './ui/button.js'
-import { List, Row } from './ui/list.js'
+import { Panel, PanelRow } from './ui/panel.js'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu.js'
+import { useIsMobile } from '../lib/use-mobile.js'
 import { Section } from './ui/section.js'
 import { Checkbox } from './ui/checkbox.js'
 import { SKILL_TICKS_CLASS, SkillTick } from './ProjectSkills.js'
@@ -16,7 +18,8 @@ import { Input } from './ui/input.js'
 import { Label } from './ui/label.js'
 import { Page } from './Page.js'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select.js'
-import { RowShapes, Slot } from './ui/slot.js'
+import { PanelShape, Slot } from './ui/slot.js'
+import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip.js'
 
 // The Agents page (Rom's design): an agent is a name, a set of skills and a set of accounts, made
 // once and used in any project or none. One row per agent, the default first, each edited in a
@@ -83,7 +86,7 @@ export function AgentsPage() {
   const newAgent = useRef<HTMLButtonElement>(null)
   // The agent just removed: once the list is read without it, its Remove press is gone with its card, and the focus goes to "New agent".
   const removed = useRef<string | undefined>(undefined)
-  // The agent just made: once the list is read with it, the focus goes to its row's Edit.
+  // The agent just made: once the list is read with it, the focus goes to its row's Edit (on a phone its menu).
   const made = useRef<string | undefined>(undefined)
   const madeEdit = useRef<HTMLButtonElement>(null)
   useEffect(() => {
@@ -102,7 +105,6 @@ export function AgentsPage() {
   return (
     <Page
       title="Agents"
-      count={view && state !== 'unknown' ? view.agents.length : undefined}
       description="An agent is a name, a set of skills and a set of accounts. Pick one under the message box; it works in any project, or in none."
       actions={
         <Button ref={newAgent} disabled={!view || adding} onClick={() => setAdding(true)}>
@@ -111,14 +113,14 @@ export function AgentsPage() {
         </Button>
       }
     >
-      <Slot of={{ state, value: view, failing }} shape={<RowShapes />}>
+      <Slot of={{ state, value: view, failing }} shape={<PanelShape />}>
         {view =>
           view && (
-            <List aria-label="Agents">
+            <Panel aria-label="Agents">
               {view.agents.map(agent => (
                 <AgentRow key={agent.id} agent={agent} view={view} devices={devices} onChanged={changed} onRemoved={() => void (removed.current = agent.id)} {...(agent.id === made.current ? { editRef: madeEdit } : {})} />
               ))}
-            </List>
+            </Panel>
           )
         }
       </Slot>
@@ -129,72 +131,108 @@ export function AgentsPage() {
 }
 
 /**
- * One agent: its name over what it starts with (its skills and the accounts it works as), and the
- * presses that edit or remove it; under it, what it goes without and where its GitHub account is.
+ * One agent, a row of the page's panel: its name (the default says it is used unless another is
+ * picked), under it what it starts with (its skills and the accounts it works as), then a line of its
+ * own for each skill every agent starts with that it goes without, and one that says where its GitHub
+ * account is, device by device, a device it could not be copied to in the warning colour with why.
+ * Edit and Remove come under the pointer and the keyboard, and "Copy again" beside them where a copy
+ * failed; on a phone the row's one press is a menu of them.
  * `onRemoved` is told before the list is read again without it.
  */
 function AgentRow({ agent, view, devices, onChanged, onRemoved, editRef }: { agent: AgentRecord; view: AgentsView; devices: AgentLoginsOn[] | undefined; onChanged: () => Promise<void>; onRemoved: () => void; editRef?: Ref<HTMLButtonElement> }) {
   const [editing, setEditing] = useState(false)
+  const [removing, setRemoving] = useState(false)
+  const phone = useIsMobile()
   const isDefault = agent.id === DEFAULT_AGENT
   // What a skill every agent starts with does is what this one goes without: the skill's own line says it.
   const without = (view.skills[0]?.skills ?? []).filter(skill => !agent.skills.includes(skill.name))
-  const said = [
+  const facts = [
     `${agent.skills.length === 0 ? 'No skills' : agent.skills.join(', ')}${agent.projectSkills ? '' : ', no project skills'}`,
     agent.accounts.github !== undefined ? `@${agent.accounts.github} on GitHub` : 'GitHub: whatever the computer uses',
     ...(agent.accounts.claude ? [`Claude: ${agent.accounts.claude.map(id => view.claude.find(account => account.id === id)?.name ?? id).join(', ')}`] : []),
     ...(agent.accounts.codex ? [`Codex: ${agent.accounts.codex.map(id => view.codex.find(account => account.id === id)?.name ?? id).join(', ')}`] : []),
-  ].join(' · ')
+  ]
+  const login = agent.accounts.github
+  const where = login !== undefined && devices && devices.length > 0 ? devices : undefined
+  const failed = where?.some(device => device.reachable && device.github[login!]?.state === 'failed') ?? false
+  const copy = useCopyAgain(onChanged)
+  const under = (without.length > 0 || where !== undefined) && (
+    <>
+      {without.map(skill => (
+        <span key={skill.name} className="block text-faint-foreground">{`Without ${skill.name}, which every agent starts with. ${skill.description}`}</span>
+      ))}
+      {where !== undefined && <OnDevices login={login!} devices={where} />}
+      {copy.error !== undefined && (
+        <span role="alert" className="block text-danger">
+          {copy.error}
+        </span>
+      )}
+    </>
+  )
   return (
     <>
-      <Row
-        stackOnPhone
-        leading={<Bot className="size-4" aria-hidden />}
-        title={agent.name}
-        detail={<span title={said}>{said}</span>}
-        {...(isDefault ? { meta: 'The agent a session is on unless you pick another.' } : {})}
-        actions={
+      <PanelRow
+        title={
           <>
-            <Button ref={editRef} size="sm" variant="ghost" aria-label={`Edit ${agent.name}`} onClick={() => setEditing(true)}>
-              <Pencil className="size-4" aria-hidden />
-              Edit
-            </Button>
-            {!isDefault && (
-              <ConfirmDialog
-                trigger={
-                  <Button size="sm" variant="ghost" className="hover:text-danger" aria-label={`Remove ${agent.name}`}>
-                    <Trash2 className="size-4" aria-hidden />
-                    Remove
-                  </Button>
-                }
-                title={`Remove ${agent.name}?`}
-                body="Sessions that ran on it keep their records. Nothing is removed from any account."
-                confirmLabel="Remove"
-                onConfirm={async () => {
-                  const done = await sendRemoveAgent(agent.id)
-                  if (!done.ok) throw new Error(done.error)
-                }}
-                onSuccess={() => {
-                  onRemoved()
-                  void onChanged()
-                }}
-              />
-            )}
+            {agent.name}
+            {isDefault && <span className="font-normal text-muted-foreground"> used unless you pick another</span>}
           </>
         }
+        titleHint={facts.join(' · ')}
+        meta={facts}
+        {...(under ? { under } : {})}
+        actions={
+          phone ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger render={<Button ref={editRef} variant="ghost" size="icon-sm" aria-label={`More for ${agent.name}`} className="-mr-1.5" />}>
+                <Ellipsis className="size-4" aria-hidden />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setEditing(true)}>Edit</DropdownMenuItem>
+                {failed && (
+                  <DropdownMenuItem disabled={copy.busy} onClick={copy.run}>
+                    Copy again
+                  </DropdownMenuItem>
+                )}
+                {!isDefault && <DropdownMenuItem onClick={() => setRemoving(true)}>Remove</DropdownMenuItem>}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <>
+              {failed && (
+                <Button size="sm" variant="ghost" loading={copy.busy} onClick={copy.run}>
+                  Copy again
+                </Button>
+              )}
+              <Button ref={editRef} size="sm" variant="secondary" aria-label={`Edit ${agent.name}`} onClick={() => setEditing(true)}>
+                Edit
+              </Button>
+              {/* Unpainted at the row's end: pulled out by its own padding, its word ends on the inset. */}
+              {!isDefault && (
+                <Button size="sm" variant="ghost" className="-mr-2 hover:text-danger" aria-label={`Remove ${agent.name}`} onClick={() => setRemoving(true)}>
+                  Remove
+                </Button>
+              )}
+            </>
+          )
+        }
       />
-      {without.length > 0 && (
-        // Under the agent's name, on the edge its words start at.
-        <li className="space-y-0.5 pb-2 pr-3 pl-10 text-xs text-muted-foreground">
-          {without.map(skill => (
-            <p key={skill.name}>{`Without ${skill.name}, which every agent starts with. ${skill.description}`}</p>
-          ))}
-        </li>
-      )}
-      {agent.accounts.github !== undefined && devices && devices.length > 0 && (
-        // Under the agent's name, on the edge its words start at.
-        <li className="pb-2 pr-3 pl-10">
-          <OnDevices login={agent.accounts.github} devices={devices} onCopied={onChanged} />
-        </li>
+      {!isDefault && (
+        <ConfirmDialog
+          open={removing}
+          onOpenChange={setRemoving}
+          title={`Remove ${agent.name}?`}
+          body="Sessions that ran on it keep their records. Nothing is removed from any account."
+          confirmLabel="Remove"
+          onConfirm={async () => {
+            const done = await sendRemoveAgent(agent.id)
+            if (!done.ok) throw new Error(done.error)
+          }}
+          onSuccess={() => {
+            onRemoved()
+            void onChanged()
+          }}
+        />
       )}
       {editing && <AgentEditor agent={agent} view={view} onAccounts={onChanged} onDone={async saved => (setEditing(false), saved ? onChanged() : undefined)} />}
     </>
@@ -202,61 +240,51 @@ function AgentRow({ agent, view, devices, onChanged, onRemoved, editRef }: { age
 }
 
 /**
- * Where an agent's GitHub account is: one line per device of the person's, as the last copy left
- * it. The account goes to every device by itself when the agent is saved and every minute after;
- * "Copy again" is for one that failed, with why.
+ * Where an agent's GitHub account is: one line, a device after another, as the last copy left it. The
+ * account goes to every device by itself when the agent is saved and every minute after, so a device
+ * it could not reach is the one said in the warning colour, with why.
  */
-function OnDevices({ login, devices, onCopied }: { login: string; devices: AgentLoginsOn[]; onCopied: () => Promise<void> }) {
-  const [copying, setCopying] = useState(false)
-  const [error, setError] = useState<string | undefined>()
-  const copy = async () => {
-    setCopying(true)
-    setError(undefined)
-    try {
-      const done = await sendCopyAgentLogins()
-      if (!done.ok) setError(done.error)
-      await onCopied()
-    } finally {
-      setCopying(false)
-    }
-  }
-  const failed = devices.some(device => device.reachable && device.github[login]?.state === 'failed')
+function OnDevices({ login, devices }: { login: string; devices: AgentLoginsOn[] }) {
   return (
-    <ul aria-label={`Where @${login} is`} className="space-y-0.5 text-xs">
+    <ul aria-label={`Where @${login} is`} className="flex flex-wrap gap-x-1.5 text-faint-foreground">
       {devices.map(device => {
         const on = device.github[login]
         return (
-          <li key={device.machineId} className="flex items-center gap-1.5">
+          <li key={device.machineId} className="not-first:before:mr-1.5 not-first:before:content-['·']">
             {!device.reachable ? (
-              <span className="text-muted-foreground">{device.label}: not reached</span>
+              `${device.label}: not reached`
             ) : on?.state === 'there' ? (
-              <>
-                <Check className="size-3.5 text-success" aria-hidden />
-                <span>on {device.label}</span>
-              </>
+              `On ${device.label}`
             ) : on?.state === 'failed' ? (
               <span className="text-warning">{`${device.label}: not copied — ${on.error ?? 'it did not take it'}`}</span>
             ) : (
-              <span className="text-muted-foreground">{device.label}: not copied yet</span>
+              `${device.label}: not copied yet`
             )}
           </li>
         )
       })}
-      {failed && (
-        <li>
-          <Button size="sm" variant="ghost" className="-ml-2 font-normal" disabled={copying} onClick={() => void copy()}>
-            {copying ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : <RefreshCw className="size-3.5" aria-hidden />}
-            {copying ? 'Copying…' : 'Copy again'}
-          </Button>
-          {error !== undefined && (
-            <span role="alert" className="ml-2 text-danger">
-              {error}
-            </span>
-          )}
-        </li>
-      )}
     </ul>
   )
+}
+
+/** "Copy again": the agents' GitHub accounts sent to every device once more, then the list read again; why it failed, when it did. */
+function useCopyAgain(onCopied: () => Promise<void>): { busy: boolean; error: string | undefined; run: () => void } {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | undefined>()
+  const run = (): void => {
+    setBusy(true)
+    setError(undefined)
+    void (async () => {
+      try {
+        const done = await sendCopyAgentLogins()
+        if (!done.ok) setError(done.error)
+        await onCopied()
+      } finally {
+        setBusy(false)
+      }
+    })()
+  }
+  return { busy, error, run }
 }
 
 /** No account of the agent's own, whatever the computer uses: the value of the select for an agent that names none. */
@@ -349,7 +377,7 @@ function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord;
             </p>
           )}
           <div className="flex items-center justify-end gap-2">
-            <Button variant="secondary" disabled={busy} onClick={close}>
+            <Button variant="ghost" disabled={busy} onClick={close}>
               Cancel
             </Button>
             <Button type="submit" form={formId} loading={busy}>
@@ -372,35 +400,73 @@ function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord;
       }
     >
       <form id={formId} noValidate onSubmit={submit} className="space-y-6 pb-1">
-        <div className="space-y-1.5">
-          <Label htmlFor="agent-name">Name</Label>
-          <Input
-            id="agent-name"
-            ref={nameField}
-            value={draft.name}
-            disabled={isDefault}
-            readOnly={busy}
-            placeholder="Social media"
-            aria-invalid={nameMissing || nameRefused}
-            {...(nameMissing ? { 'aria-describedby': 'agent-name-missing' } : nameRefused ? { 'aria-describedby': 'agent-refused' } : isDefault ? { 'aria-describedby': 'agent-name-kept' } : {})}
-            onChange={event => {
-              setNameMissing(false)
-              setNameRefused(false)
-              setDraft(d => ({ ...d, name: event.target.value }))
-            }}
-            className="max-w-sm"
-          />
-          {nameMissing && (
-            <p id="agent-name-missing" className="text-xs text-danger">
-              Give the agent a name.
-            </p>
+        {/* The default's name is the title's and stays: no field for it, the reason under the title. */}
+        {isDefault && <p className="text-sm text-muted-foreground">The default agent keeps its name: it is the one a session is on unless you pick another.</p>}
+        {/* Who it is first, its name and the account it pushes as side by side from a tablet up, then the
+            coding agents' accounts it works with, then what it knows: its skills. */}
+        <div className="grid gap-x-4 gap-y-6 md:grid-cols-2">
+          {!isDefault && (
+            <div className="space-y-1.5">
+              <Label htmlFor="agent-name">Name</Label>
+              <Input
+                id="agent-name"
+                ref={nameField}
+                value={draft.name}
+                readOnly={busy}
+                placeholder="Social media"
+                // On a phone a finger's 44, as the foot's presses.
+                className="max-md:h-11"
+                aria-invalid={nameMissing || nameRefused}
+                {...(nameMissing ? { 'aria-describedby': 'agent-name-missing' } : nameRefused ? { 'aria-describedby': 'agent-refused' } : {})}
+                onChange={event => {
+                  setNameMissing(false)
+                  setNameRefused(false)
+                  setDraft(d => ({ ...d, name: event.target.value }))
+                }}
+              />
+              {nameMissing && (
+                <p id="agent-name-missing" className="text-xs text-danger">
+                  Give the agent a name.
+                </p>
+              )}
+            </div>
           )}
-          {isDefault && (
-            <p id="agent-name-kept" className="text-xs text-muted-foreground">
-              The default agent keeps its name: it is the one a session is on unless you pick another.
-            </p>
-          )}
+          <div className="space-y-1.5">
+            <Label htmlFor="agent-github">On GitHub as</Label>
+            {/* The pick, and beside it a square of its height that adds an account: the block stays as
+                short as the name's beside it. */}
+            <div className="flex items-center gap-2">
+              <Select items={githubItems} value={draft.github ?? COMPUTERS} onValueChange={next => setDraft(d => ({ ...d, ...(next ? { github: String(next) } : {}), ...(next ? {} : { github: undefined }) }))} disabled={busy}>
+                <SelectTrigger id="agent-github" aria-label="GitHub account" className="min-w-0 grow basis-auto max-md:h-11">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {githubItems.map(item => (
+                    <SelectItem key={item.value} value={item.value}>
+                      {item.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {view.github && (
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Button type="button" variant="secondary" size="icon" aria-label="Add account" disabled={busy} onClick={() => addingAccount.add(view.github!.host)} className="shrink-0 max-md:size-11" />
+                    }
+                  >
+                    <Plus className="size-4" aria-hidden />
+                  </TooltipTrigger>
+                  <TooltipContent>Add account</TooltipContent>
+                </Tooltip>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">Runs push and open pull requests as this account. An account this computer does not have refuses the start.</p>
+            {addingAccount.dialog}
+          </div>
         </div>
+        <AccountPicks label="Claude" accounts={view.claude} picked={draft.claude} busy={busy} onTick={(id, on) => tick('claude', id, on)} onAll={() => setDraft(d => ({ ...d, claude: new Set() }))} />
+        <AccountPicks label="Codex" accounts={view.codex} picked={draft.codex} busy={busy} onTick={(id, on) => tick('codex', id, on)} onAll={() => setDraft(d => ({ ...d, codex: new Set() }))} />
         <div className="space-y-4">
           <div>
             <p className="text-sm font-semibold">Skills</p>
@@ -425,36 +491,6 @@ function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord;
             disabled={busy}
           />
         </div>
-        <div className="space-y-3">
-          <p className="text-sm font-semibold">Accounts</p>
-          <div className="space-y-1.5">
-            <Label htmlFor="agent-github">GitHub</Label>
-            <div className="flex flex-wrap items-center gap-2">
-              <Select items={githubItems} value={draft.github ?? COMPUTERS} onValueChange={next => setDraft(d => ({ ...d, ...(next ? { github: String(next) } : {}), ...(next ? {} : { github: undefined }) }))} disabled={busy}>
-                <SelectTrigger id="agent-github" aria-label="GitHub account" className="min-w-0 max-w-sm grow basis-48">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {githubItems.map(item => (
-                    <SelectItem key={item.value} value={item.value}>
-                      {item.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {view.github && (
-                <Button type="button" variant="secondary" disabled={busy} onClick={() => addingAccount.add(view.github!.host)}>
-                  <Plus className="size-4" aria-hidden />
-                  Add account
-                </Button>
-              )}
-            </div>
-            <p className="text-xs text-muted-foreground">Runs push and open pull requests as this account. An account this computer does not have refuses the start.</p>
-            {addingAccount.dialog}
-          </div>
-          <AccountPicks label="Claude" accounts={view.claude} picked={draft.claude} busy={busy} onTick={(id, on) => tick('claude', id, on)} onAll={() => setDraft(d => ({ ...d, claude: new Set() }))} />
-          <AccountPicks label="Codex" accounts={view.codex} picked={draft.codex} busy={busy} onTick={(id, on) => tick('codex', id, on)} onAll={() => setDraft(d => ({ ...d, codex: new Set() }))} />
-        </div>
         {/* At the scroll's foot while more is under it: what is cut there fades out rather than ending on a line. */}
         <div aria-hidden className="pointer-events-none sticky bottom-0 -mt-6 h-4 bg-gradient-to-t from-card to-transparent" />
       </form>
@@ -471,7 +507,7 @@ function AccountPicks({ label, accounts: all, picked, busy, onTick, onAll }: { l
   if (accounts.length === 0) return null
   return (
     <fieldset className="space-y-1.5">
-      <legend className="text-sm">{label}</legend>
+      <legend className="text-sm font-medium">{`${label} accounts`}</legend>
       <div className="flex flex-wrap gap-3">
         {/* Left by ticking an account, as a radio is left by picking another. */}
         <label className="flex cursor-pointer items-center gap-2 text-sm">

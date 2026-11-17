@@ -31,3 +31,9 @@ test('a module is sent only the runs it asked for, each in the fields a module r
   // The record's own fields (its checkout, its session, its runner) are no module's.
   assert.deepEqual(moduleAgents(RUNS, { ids: ['old'] }), [{ id: 'old', status: 'done', startedAt: '2026-08-01T10:00:00.000Z', name: 'agent-old', ask: 'an old ask' }])
 })
+
+test("a run's pull request reaches a module with how the git host last said it stands, so a merged run reads as the sidebar's", () => {
+  const pr = { number: 48, url: 'https://example.com/pull/48' }
+  assert.deepEqual(moduleAgents([run('merged', '2026-10-20T10:00:00.000Z', { pr, prState: 'merged' })])[0]!.pr, { ...pr, state: 'merged' })
+  assert.deepEqual(moduleAgents([run('unread', '2026-10-20T10:00:00.000Z', { pr })])[0]!.pr, pr, 'not read yet: no state')
+})

@@ -9,8 +9,10 @@ import { usePolled } from '../lib/use-async.js'
 import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
 import { cn } from '../lib/utils.js'
 import { Button } from './ui/button.js'
-import { Section } from './ui/section.js'
-import { RowShapes, Slot } from './ui/slot.js'
+import { PanelGroup } from './ui/panel.js'
+import { Card } from './ui/card.js'
+import { Slot } from './ui/slot.js'
+import { Skeleton } from './ui/skeleton.js'
 import { PartDescription } from './PartDescription.js'
 import { useAction } from '../lib/use-action.js'
 import { SKILLS_ENTRY, sendWord, skillsSay, updateSkills } from './ProjectSkills.js'
@@ -104,7 +106,8 @@ export function SkillsCard({ projects, onSelectProject, projectHref }: { project
     }
   }
   return (
-    <Section
+    <PanelGroup
+      bare
       title="Skills"
       action={
         updatable.length > 1 ? (
@@ -115,9 +118,22 @@ export function SkillsCard({ projects, onSelectProject, projectHref }: { project
       }
     >
       <PartDescription>What each project adds to its agents, and what is new</PartDescription>
-      <Slot of={{ state, value: reads }} shape={<RowShapes rows={projects.length || 1} />}>
+      <Slot
+        of={{ state, value: reads }}
+        shape={
+          // A project's row as two bars, 16 in from the card's edges as its words are.
+          <Card className="px-4 py-2">
+            {Array.from({ length: projects.length || 1 }, (_, at) => (
+              <div key={at} className="flex flex-col justify-center gap-1 md:h-10 max-md:h-11 max-md:gap-2">
+                <Skeleton className="h-2.5 w-1/3" />
+                <Skeleton className="h-2.5 w-2/3" />
+              </div>
+            ))}
+          </Card>
+        }
+      >
         {() => (
-          <>
+          <Card className="px-4 py-2">
             <ul>
               {reads.map(read => (
                 <Row key={read.project.id} read={read} reload={reload} href={projectHref(read.project.id)} onOpen={() => onSelectProject(read.project.id)} />
@@ -125,10 +141,10 @@ export function SkillsCard({ projects, onSelectProject, projectHref }: { project
             </ul>
             {all.error && <p className="mt-2 text-xs text-danger">{all.error}</p>}
             <Usage used={used} unused={unused} />
-          </>
+          </Card>
         )}
       </Slot>
-    </Section>
+    </PanelGroup>
   )
 }
 
@@ -149,7 +165,8 @@ function Row({ read, reload, href, onOpen }: { read: Read; reload: () => Promise
   const says = skills ? skillsSay(skills) : undefined
   return (
     <li aria-label={project.name} className="min-w-0">
-      <div className="flex min-w-0 items-center gap-2 text-sm md:min-h-10 max-md:min-h-11">
+      {/* Where the card is too narrow for the name and what stands after it, those go under the name's line, so the name is cut only where it alone is wider. */}
+      <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm md:min-h-10 max-md:min-h-11">
         <a href={href} onClick={inPlace(onOpen)} className="min-w-0 truncate font-medium hover:underline">
           {project.name}
         </a>

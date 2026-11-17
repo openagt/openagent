@@ -92,9 +92,12 @@ export function RemoveProjectDialog({
             <span>Also delete OpenAgent&rsquo;s files in this folder</span>
           </label>
           {files && (
-            <div className="mt-3 rounded-md border border-hairline p-3 text-sm text-muted-foreground">
-              <p>
-                This deletes, on this machine: the agents&rsquo; checkouts in <span className={name}>.branches</span>, the folders{' '}
+            // 12 at its sides; 8 above and under, which the lines' leading brings to the sides' 12.
+            <div className="mt-3 rounded-md border border-hairline px-3 py-2 text-sm text-muted-foreground">
+              {/* What it comes to first, on a line of its own; what it deletes under it. */}
+              <p className="text-foreground">This deletes, on this machine:</p>
+              <p className="mt-1">
+                the agents&rsquo; checkouts in <span className={name}>.branches</span>, the folders{' '}
                 <span className={name}>.openagent</span> (with <span className={name}>hooks.yml</span>, the project&rsquo;s start lines) and{' '}
                 <span className={name}>.agent-runner</span>, the agents&rsquo; records in <span className={name}>~/.openagent</span>, and the
                 local branch <span className={name}>agent-data</span>. A tool that
@@ -114,11 +117,11 @@ export function RemoveProjectDialog({
             </div>
           )}
           {error && <p className="mt-3 text-sm text-danger">{error}</p>}
-          <div className={cn('mt-5 flex justify-end gap-2', DIALOG_PRESSES_CLASS)}>
+          <div className={cn('mt-6 flex justify-end gap-2', DIALOG_PRESSES_CLASS)}>
             <AlertDialog.Close
               ref={cancel}
               render={
-                <Button variant="secondary" disabled={busy}>
+                <Button variant="ghost" disabled={busy}>
                   Cancel
                 </Button>
               }
@@ -168,7 +171,7 @@ export function ProjectRemovedReport({ children }: { children: ReactNode }) {
                 It left the dashboard&rsquo;s list, and nothing in the folder was deleted. Add the folder again to bring the project back.
               </AlertDialog.Description>
             )}
-            <div className={cn('mt-5 flex justify-end', DIALOG_PRESSES_CLASS)}>
+            <div className={cn('mt-6 flex justify-end', DIALOG_PRESSES_CLASS)}>
               <AlertDialog.Close ref={done} render={<Button>Done</Button>} />
             </div>
           </AlertDialog.Popup>

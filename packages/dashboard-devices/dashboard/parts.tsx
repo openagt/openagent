@@ -1,6 +1,6 @@
-import { Fragment, createContext, useContext, useEffect, useRef, useState, type ComponentType, type FormEvent, type ReactNode, type RefObject } from 'react'
+import { createContext, useContext, useEffect, useRef, useState, type ComponentType, type FormEvent, type ReactNode, type RefObject } from 'react'
 import { ChevronRight, Circle, CircleArrowUp, CircleCheck, CircleX, Loader2, Pencil } from 'lucide-react'
-import { Badge, Button, Input, RadioGroupOption, Row, Section, SettingsFoot, cn, formatDateTime, formatRelative, useOpenAgentDown, useSettingsHold } from '@openagt/dashboard/module'
+import { Badge, Button, Facts, Input, RadioGroupOption, Section, SettingsFoot, SettingsItem, SettingsRow, cn, formatDateTime, formatRelative, useOpenAgentDown, useSettingsHold } from '@openagt/dashboard/module'
 import type { DeviceRow } from './devices.js'
 import type { StepState } from './servers.js'
 
@@ -45,34 +45,24 @@ export function State({ tone, children }: { tone: 'working' | 'good' | 'warn' | 
 
 const TONE = { working: 'info', good: 'success', warn: 'warning', bad: 'danger', quiet: 'neutral' } as const
 
-/** The words of a line under a name, apart: "Computer · on this Wi-Fi". */
-export function Facts({ children }: { children: ReactNode[] }) {
-  const shown = children.filter(child => child !== undefined && child !== false && child !== null && child !== '')
-  return shown.map((child, i) => (
-    <Fragment key={i}>
-      {i > 0 && ' · '}
-      <span>{child}</span>
-    </Fragment>
-  ))
-}
-
 /** A device in a list: its icon, its name, the line under it, its state at the right, and its page or its own presses. */
-export function ListedDevice({ icon: Icon, name, facts, state, actions, onOpen }: { icon: ComponentType<{ className?: string; 'aria-hidden'?: boolean }>; name: string; facts: ReactNode[]; state?: ReactNode; actions?: ReactNode; onOpen?: () => void }) {
+export function ListedDevice({ icon, name, facts, state, actions, onOpen }: { icon: ComponentType<{ className?: string; 'aria-hidden'?: boolean }>; name: string; facts: ReactNode[]; state?: ReactNode; actions?: ReactNode; onOpen?: () => void }) {
   return (
-    <Row
-      leading={<Icon aria-hidden className="size-4" />}
+    <SettingsItem
+      icon={icon}
       title={name}
-      detail={<Facts>{facts}</Facts>}
-      meta={
-        state !== undefined || onOpen !== undefined ? (
-          <>
-            {state}
-            {onOpen && <ChevronRight aria-hidden className="size-4" />}
-          </>
-        ) : undefined
-      }
-      actions={actions}
-      stackOnPhone
+      detail={<Facts facts={facts} />}
+      {...(state !== undefined || onOpen !== undefined
+        ? {
+            end: (
+              <>
+                {state}
+                {onOpen && <ChevronRight aria-hidden />}
+              </>
+            ),
+          }
+        : {})}
+      {...(actions !== undefined ? { actions } : {})}
       {...(onOpen ? { onClick: onOpen } : {})}
     />
   )
@@ -83,7 +73,8 @@ export function Tabs<T extends string>({ tabs, value, onChange, label }: { tabs:
   // One tab is no choice: the page is its overview alone.
   if (tabs.length < 2) return null
   return (
-    <div role="tablist" aria-label={label} className="mt-4 flex gap-1 border-b border-hairline">
+    // The first tab's words stand on the page's left edge, 24 under its head; the next part 24 under the tabs.
+    <div role="tablist" aria-label={label} className="mt-6 flex gap-6 border-b border-hairline">
       {tabs.map(tab => (
         <button
           key={tab.id}
@@ -91,7 +82,7 @@ export function Tabs<T extends string>({ tabs, value, onChange, label }: { tabs:
           role="tab"
           aria-selected={tab.id === value}
           onClick={() => onChange(tab.id)}
-          className={cn('focus-ring -mb-px rounded-t-md border-b-2 px-3 py-2 text-sm font-medium transition-colors', tab.id === value ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground')}
+          className={cn('focus-ring -mb-px rounded-t-sm border-b-2 pt-1 pb-2 text-sm font-medium transition-colors max-md:pt-3 max-md:pb-3', tab.id === value ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground pointer-fine:hover:text-foreground')}
         >
           {tab.title}
         </button>
@@ -100,47 +91,41 @@ export function Tabs<T extends string>({ tabs, value, onChange, label }: { tabs:
   )
 }
 
-/** A part of a device's page, with its heading. */
-export function Part({ title, children }: { title?: string; children: ReactNode }) {
+/**
+ * A part of a device's page, with its heading and the press at its right: 32 under the part before
+ * it, 24 under the page's head or its tabs; its rows 24 apart, as Settings' own.
+ */
+export function Part({ title, action, children }: { title?: string; action?: ReactNode; children: ReactNode }) {
+  const place = 'pt-8 [[data-head]+&]:pt-6 [[role=tablist]+&]:pt-6'
   // A part's own paragraphs keep the spec's measure, 72 characters a line, however wide Settings is.
+  const rows = 'flex flex-col gap-6 [&>p]:max-w-[72ch] [&>button]:self-start'
   if (title !== undefined)
     return (
-      <Section title={title} className="pt-6">
-        <div className="space-y-3 [&>p]:max-w-[72ch]">{children}</div>
+      <Section title={title} action={action} className={place}>
+        <div className={rows}>{children}</div>
       </Section>
     )
-  return <section className="space-y-3 pt-6 [&>p]:max-w-[72ch]">{children}</section>
+  return <section className={cn(place, rows)}>{children}</section>
 }
 
-/** The press that removes the device a page is about: a group of its own at the page's end, under a hairline, with what it does said under it. */
-export function Removal({ said, children }: { said: string; children: ReactNode }) {
+/** The press that removes the device a page is about: the page's last part, a setting's row with what it does and its press. */
+export function Removal({ label, said, children }: { label: string; said: string; children: ReactNode }) {
   return (
-    <section className="mt-6 space-y-1 border-t border-hairline pt-6">
-      {children}
-      <p className="max-w-[72ch] text-xs text-muted-foreground">{said}</p>
-    </section>
-  )
-}
-
-/** A switch row of a page: what it is, what it means now, and the switch. */
-export function SwitchLine({ label, words, children }: { label: string; words: string; children: ReactNode }) {
-  return (
-    <div className="flex items-start justify-between gap-4">
-      <span className="min-w-0">
-        <span className="block text-sm">{label}</span>
-        <span className="block text-xs text-muted-foreground">{words}</span>
-      </span>
-      {children}
-    </div>
+    <Part>
+      <SettingsRow label={label} description={said} control={children} />
+    </Part>
   )
 }
 
 /** One login's line: what is there, what a person can do about it, and why the last try failed. */
 export function LoginLine({ label, words, said, children }: { label: string; words: string; said: string | undefined; children: ReactNode }) {
   return (
-    <li aria-label={label} className="space-y-1.5">
-      <p>{words}</p>
-      <div className="flex flex-wrap items-center gap-2">{children}</div>
+    <li aria-label={label} className="space-y-2">
+      {/* A setting's row: what is there, and its presses at the right; on a phone under the words. */}
+      <div className="flex items-center justify-between gap-x-6 gap-y-3 max-md:flex-col max-md:items-stretch">
+        <p className="min-w-0 max-w-md text-sm">{words}</p>
+        <div className="flex shrink-0 flex-wrap items-center gap-2 max-md:[&_button]:h-11">{children}</div>
+      </div>
       {said !== undefined && <Said>{said}</Said>}
     </li>
   )
@@ -189,9 +174,10 @@ export function Problem({ children }: { children: ReactNode }) {
   )
 }
 
-/** The presses a form or a question ends on: one row at its end, Cancel before the press it ends on, each 44 high on a phone. */
+/** The presses a form or a question ends on: one row at its end, Cancel before the press it ends on; on a phone each 44 high, sharing the width. */
 export function PressRow({ children }: { children: ReactNode }) {
-  return <div className="flex justify-end gap-2 max-md:[&_:is(button,a)]:h-11">{children}</div>
+  // A quiet press that ends the row is pulled out by its padding, so its words end on the edge a boxed press would.
+  return <div className="flex justify-end gap-2 max-md:[&_:is(button,a)]:h-11 max-md:[&>*]:flex-1 md:[&>[data-variant=ghost]:last-child]:-mr-3">{children}</div>
 }
 
 /** The presses of a way of adding: in Settings' foot, where they hold their place from step to step; outside Settings, under the flow. */
@@ -286,6 +272,7 @@ export function RenameForm({ name, rename, onClose }: { name: string; rename: Re
   )
 }
 
+
 /** A device's page is named above it, in the Settings dialog's header: its own top says it once more only outside the dialog. */
 export const NamedAbove = createContext(false)
 
@@ -294,8 +281,9 @@ export function Head({ icon: Icon, name, badge, facts, rename }: { icon: Compone
   const { renaming, open, close, press } = useRenaming()
   const namedAbove = useContext(NamedAbove)
   return (
-    <div className={cn('flex items-center gap-3', namedAbove ? 'min-h-8' : 'min-h-12')}>
-        <Icon aria-hidden className="size-5 shrink-0 text-muted-foreground" />
+    // Under Settings' header, which names the page, the facts stand on the page's left edge: they say its kind in words, so no icon says it again.
+    <div data-head className={cn('flex items-center gap-3', namedAbove ? 'min-h-8' : 'min-h-12')}>
+        {!namedAbove && <Icon aria-hidden className="size-5 shrink-0 text-muted-foreground" />}
         <div className="min-w-0 flex-1">
           {renaming && rename ? (
             <RenameForm name={name} rename={rename} onClose={close} />
@@ -309,12 +297,12 @@ export function Head({ icon: Icon, name, badge, facts, rename }: { icon: Compone
           )}
           {/* One run of words: on a phone the badge stays at the start of the facts' first line, not on a line of its own. */}
           <p className="min-w-0 text-xs text-muted-foreground">
-            {namedAbove && badge !== undefined && <Badge className="mr-2 align-middle">{badge}</Badge>}
-            <Facts>{facts}</Facts>
+            <Facts {...(namedAbove && badge !== undefined ? { lead: <Badge>{badge}</Badge> } : {})} facts={facts} />
           </p>
         </div>
         {rename && !renaming && (
-          <Button ref={press} variant="ghost" size="sm" className="max-md:h-11" onClick={open}>
+          // Pulled out by its own padding: its words end on the page's right edge.
+          <Button ref={press} variant="ghost" size="sm" className="-mr-2 max-md:h-11" onClick={open}>
             <Pencil className="size-4" aria-hidden />
             Rename
           </Button>
@@ -335,43 +323,42 @@ export function LinkPress({ loading = false, disabled = false, onClick, children
 /** When a device that is in got in and was last seen, and what it is when that needs saying. */
 export function Seen({ device, note }: { device: DeviceRow; note?: string | undefined }) {
   return (
-    <>
-      <span title={formatDateTime(device.seen ?? device.added)}>
-        {`Added ${formatRelative(device.added)}`}
-        {device.seen !== undefined ? `, last seen ${formatRelative(device.seen)}` : ''}
-      </span>
-      {note !== undefined && (
-        <>
-          {' · '}
-          <span title={note}>{note}</span>
-        </>
-      )}
-    </>
+    <Facts
+      facts={[
+        <span title={formatDateTime(device.seen ?? device.added)}>
+          {`Added ${formatRelative(device.added)}`}
+          {device.seen !== undefined ? `, last seen ${formatRelative(device.seen)}` : ''}
+        </span>,
+        note !== undefined && <span title={note}>{note}</span>,
+      ]}
+    />
   )
 }
 
 /** One of a dialog's choices: its radio, its title and what it means, filled under the pointer; `children` under the words. */
 export function Choice({ value, disabled, title, words, badge, children }: { value: string; disabled?: boolean | undefined; title: string; words: string; badge?: string | undefined; children?: ReactNode }) {
   return (
-    <RadioGroupOption value={value} disabled={disabled} className="flex-nowrap items-start gap-x-3 rounded-md px-3 py-2 transition-colors hover:bg-accent has-[[data-disabled]]:hover:bg-transparent [&>[data-slot=radio-group-item]]:mt-0.5">
+    // A choice that is off dims its radio and its title alone: its words say why, and stay readable.
+    <RadioGroupOption value={value} disabled={disabled} className="flex-nowrap items-start gap-x-3 rounded-md px-3 py-2 transition-colors hover:bg-accent has-[[data-disabled]]:opacity-100 has-[[data-disabled]]:hover:bg-transparent [&>[data-slot=radio-group-item]]:mt-0.5">
       <span className="min-w-0 flex-1">
-        <span className="flex items-center gap-2 font-medium">
+        <span className={cn('flex items-center gap-2 font-medium', disabled && 'text-muted-foreground')}>
           {title}
           {badge !== undefined && <Badge>{badge}</Badge>}
         </span>
-        <span className="block text-xs text-muted-foreground">{words}</span>
+        <span className="block text-sm text-muted-foreground">{words}</span>
         {children}
       </span>
     </RadioGroupOption>
   )
 }
 
-/** A code or an address to type somewhere else, in mono on a muted strip, with its copy press; `big` for one read from across a room. */
+/** A code or an address to type somewhere else, in mono on a muted strip, with its copy press 8 in from the strip's edge (on a phone the
+ *  44 press is the strip's height); `big` for one read from across a room. */
 export function CodeStrip({ label, text, big = false, copy }: { label: string; text: string; big?: boolean; copy: ReactNode }) {
   return (
     <div className="space-y-1">
       <p className="text-xs text-muted-foreground">{label}</p>
-      <div className="flex items-center gap-2 rounded-md bg-muted py-1 pr-1 pl-3">
+      <div className="flex items-center gap-2 rounded-md bg-muted py-2 pr-2 pl-4 max-md:py-0 max-md:pr-0">
         <span className={cn('min-w-0 flex-1 truncate font-mono', big ? 'text-xl font-semibold tracking-wider' : 'text-sm')}>{text}</span>
         {copy}
       </div>

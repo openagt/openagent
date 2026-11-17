@@ -1,15 +1,13 @@
 import { useState } from 'react'
-import { X } from 'lucide-react'
-import { onRepoSources, sendAddRepoOwner, sendRemoveRepoFolder, sendRemoveRepoOwner, type RepoSources } from '../rpc/projects.js'
+import { FolderPlus, X } from 'lucide-react'
+import { onRepoSources, sendAddRepoFolder, sendAddRepoOwner, sendRemoveRepoFolder, sendRemoveRepoOwner, type RepoSources } from '../rpc/projects.js'
 import { useLoaded } from '../lib/use-async.js'
 import { useAction } from '../lib/use-action.js'
 import { Button } from './ui/button.js'
 import { Input } from './ui/input.js'
-import { List, Row } from './ui/list.js'
 import { Section } from './ui/section.js'
-import { Separator } from './ui/separator.js'
 import { PathStrip } from './PathStrip.js'
-import { SettingsRowShapes, SettingsSection } from './SettingsRows.js'
+import { SettingsItem, SettingsItems, SettingsRowShapes, SettingsSection } from './SettingsRows.js'
 import { Slot } from './ui/slot.js'
 
 /** The Settings entry's id. */
@@ -55,27 +53,29 @@ function Sources({ sources, onChanged }: { sources: RepoSources; onChanged: () =
     })
   const removeOwner = (name: string) => void run(() => sendRemoveRepoOwner(name), 'Could not remove it.').then(again)
   const removeFolder = (folder: string) => void run(() => sendRemoveRepoFolder(folder), 'Could not remove it.').then(again)
+  // The picker's own "Search another folder…": this computer's folder dialog, the folder picked added.
+  const addFolder = () => void run(() => sendAddRepoFolder(), 'Could not add it.').then(again)
 
   return (
     <SettingsSection description="Where the project picker finds repos, besides your projects. OpenAgent's own GitHub accounts list their repos there too.">
-      <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-8">
         <Section title="GitHub users and organizations">
-          <div className="space-y-3">
-            <p className="text-xs text-muted-foreground">Their repos are listed in the picker, read as the GitHub account runs use; picked, one is cloned. The same on each of your computers.</p>
+          <div className="space-y-6">
+            <p className="max-w-md text-xs text-faint-foreground">Their repos are listed in the picker, read as the GitHub account runs use; picked, one is cloned. The same on each of your computers.</p>
             {sources.owners.length > 0 && (
-              <List boxed aria-label="GitHub users and organizations">
+              <SettingsItems aria-label="GitHub users and organizations">
                 {sources.owners.map(name => (
-                  <Row
+                  <SettingsItem
                     key={name}
                     title={name.replace(/^github\.com\//, '')}
                     actions={
-                      <Button variant="ghost" size="icon-sm" aria-label={`Remove ${name}`} disabled={busy} onClick={() => removeOwner(name)}>
+                      <Button variant="ghost" size="icon-sm" className="-mr-1.5" aria-label={`Remove ${name}`} disabled={busy} onClick={() => removeOwner(name)}>
                         <X className="size-4" aria-hidden />
                       </Button>
                     }
                   />
                 ))}
-              </List>
+              </SettingsItems>
             )}
             <form
               className="flex items-center gap-2"
@@ -94,32 +94,37 @@ function Sources({ sources, onChanged }: { sources: RepoSources; onChanged: () =
                   setOwner(event.target.value)
                   reset()
                 }}
-                className="w-60 max-md:flex-1"
+                className="w-60 max-md:h-11 max-md:flex-1"
               />
-              <Button type="submit" variant="secondary" disabled={!owner.trim()} loading={busy}>
+              <Button type="submit" variant="secondary" disabled={!owner.trim()} loading={busy} className="max-md:h-11">
                 Add
               </Button>
             </form>
           </div>
         </Section>
-        <Separator className="bg-hairline" />
-        <Section title="Folders searched on this computer">
-          <div className="space-y-3">
-            <p className="text-xs text-muted-foreground">Your home folder, and the folders added with &ldquo;Search another folder&hellip;&rdquo; in the picker.</p>
+        {/* Its press stands at the heading's right on a desktop; on a phone, where both would cut the heading, under the
+            heading's line of help, the three one group. */}
+        <Section title="Folders searched on this computer" className="relative">
+          <p className="max-w-md text-xs text-faint-foreground">Your home folder, and the folders added here or with &ldquo;Search another folder&hellip;&rdquo; in the picker.</p>
+          <Button variant="ghost" size="sm" className="max-md:-ml-2 max-md:h-11 md:absolute md:-top-0.5 md:right-0" disabled={busy} onClick={addFolder}>
+            <FolderPlus className="size-4" aria-hidden />
+            Search another folder&hellip;
+          </Button>
+          <div className="mt-6 space-y-6 max-md:mt-2">
             {sources.folders.length > 0 ? (
-              <List boxed aria-label="Folders searched">
+              <SettingsItems aria-label="Folders searched">
                 {sources.folders.map(folder => (
-                  <Row
+                  <SettingsItem
                     key={folder}
                     title={<PathStrip path={folder} />}
                     actions={
-                      <Button variant="ghost" size="icon-sm" aria-label={`Remove ${folder}`} disabled={busy} onClick={() => removeFolder(folder)}>
+                      <Button variant="ghost" size="icon-sm" className="-mr-1.5" aria-label={`Remove ${folder}`} disabled={busy} onClick={() => removeFolder(folder)}>
                         <X className="size-4" aria-hidden />
                       </Button>
                     }
                   />
                 ))}
-              </List>
+              </SettingsItems>
             ) : (
               <p className="text-sm text-muted-foreground">No folder added yet: only your home folder is searched.</p>
             )}

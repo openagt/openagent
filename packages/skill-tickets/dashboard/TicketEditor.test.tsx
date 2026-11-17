@@ -103,10 +103,11 @@ describe('a ticket written by hand', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(host.act).toHaveBeenCalled())
     await act(() => new Promise(resolve => setTimeout(resolve, 50)))
-    expect(screen.queryByText('Priority 3')).toBeNull()
+    // The look says a priority as "P3", under the title and at the side.
+    expect(screen.queryAllByText('P3')).toEqual([])
     expect(screen.getByRole('button', { name: 'Saving…' })).toBeTruthy()
     land()
-    expect(await screen.findByText('Priority 5')).toBeTruthy()
+    expect((await screen.findAllByText('P5')).length).toBeGreaterThan(0)
     expect(screen.queryByRole('heading', { name: 'Edit ticket' })).toBeNull()
   })
 

@@ -1,5 +1,6 @@
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Button } from '../components/ui/button.js'
+import { Segmented } from '../components/ui/segmented.js'
 import { Card, CardContent, CardHeader, CardTitle, PageLink } from '../components/ui/card.js'
 import { Input } from '../components/ui/input.js'
 import { Badge } from '../components/ui/badge.js'
@@ -14,8 +15,16 @@ import { OptionLabel } from '../components/ui/option-label.js'
 import { DisclosureToggle } from '../components/DisclosureToggle.js'
 import { Section } from '../components/ui/section.js'
 import { List, Row } from '../components/ui/list.js'
+import { Facts, Panel, PanelGroup, PanelMore, PanelNote, PanelRow } from '../components/ui/panel.js'
+import { PriorityBadge, StateCell, StatePill, type WorkState } from '../components/ui/state.js'
+import { Stepper } from '../components/ui/stepper.js'
+import { ButtonGroup } from '../components/ui/button-group.js'
+import { ComposedField, ComposedFieldFoot, ComposedFieldInput } from '../components/ui/composed-field.js'
+import { Empty } from '../components/ui/empty.js'
+import { FilterChips } from '../components/FilterChips.js'
 import { RowShapes, Slot } from '../components/ui/slot.js'
-import { ChevronRight, Folder, Trash2 } from 'lucide-react'
+import { ChevronRight, CornerDownLeft, Ellipsis, Folder, Monitor, Play, Smartphone, Trash2 } from 'lucide-react'
+import { SettingsItem, SettingsItems, SettingsRow, SettingsSection } from '../components/SettingsRows.js'
 import { JumpPalette, openJump } from '../components/JumpPalette.js'
 import { ShortcutList } from '../components/ShortcutList.js'
 import type { AgentMeta } from '../../src/index.js'
@@ -324,12 +333,13 @@ const UNITS = [
 
 /** The fields a form is made of. Every one is the shipped component; the select's list is portalled at runtime, so only its trigger shows here. */
 function FormControls() {
+  const [colours, setColours] = useState('openagent')
   return (
     <div className="space-y-5">
       <Labelled label="Focus: a field's ring is its edge; a press's ring stands 2px off it">
-        <Input aria-label="A focused field" defaultValue="A field" className="w-48 outline-2 -outline-offset-1 outline-primary" />
-        <Button variant="secondary" className="outline-2 outline-offset-2 outline-primary">A press</Button>
-        <Checkbox aria-label="A focused checkbox" className="outline-2 outline-offset-2 outline-primary" />
+        <Input aria-label="A focused field" defaultValue="A field" className="w-48 outline-2 -outline-offset-1 outline-focus" />
+        <Button variant="secondary" className="outline-2 outline-offset-2 outline-focus">A press</Button>
+        <Checkbox aria-label="A focused checkbox" className="outline-2 outline-offset-2 outline-focus" />
       </Labelled>
       <p className="text-xs text-muted-foreground">
         Every field, select and mark has the one edge, <code>--input</code>, at 3:1 or more on each surface it sits on (the page, a card, the sidebar, a hovered row): OpenAgent light 3.08–3.65:1, dark 3.18–3.94:1; Neutral light 3.52–3.84:1, dark 3.32–4.34:1. Under the pointer it goes a step further; ticked or on, it is the primary colour.
@@ -369,6 +379,9 @@ function FormControls() {
             <SelectValue />
           </SelectTrigger>
         </Select>
+      </Labelled>
+      <Labelled label="Segmented: one pick among two or three short words, the picked one a card on the track">
+        <Segmented label="Colours" value={colours} options={[{ value: 'openagent', label: 'OpenAgent' }, { value: 'neutral', label: 'Neutral' }]} onChange={setColours} />
       </Labelled>
       <Labelled label="Switch: on or off, at once. Checkbox: one line of a form or a list">
         <Switch aria-label="On" defaultChecked />
@@ -524,6 +537,158 @@ function EmptyStates() {
   )
 }
 
+// ---------------------------------------------------------------- the look's parts
+
+const STATES: WorkState[] = ['working', 'waiting', 'queued', 'done', 'merged', 'failed', 'stopped', 'idle']
+
+function States() {
+  return (
+    <div className="space-y-4">
+      <Labelled label="The cell">
+        {STATES.map(state => (
+          <span key={state} className="inline-flex items-center gap-2 text-sm">
+            <StateCell state={state} />
+            {state}
+          </span>
+        ))}
+      </Labelled>
+      <Labelled label="As a pill">
+        <StatePill state="working">Working · 7m</StatePill>
+        <StatePill state="waiting">Needs you</StatePill>
+        <StatePill state="queued">Queued</StatePill>
+        <StatePill state="done">Done</StatePill>
+        <StatePill state="merged">Merged</StatePill>
+        <StatePill state="failed">Failed</StatePill>
+        <StatePill state="stopped">Stopped</StatePill>
+      </Labelled>
+      <Labelled label="A priority">
+        <PriorityBadge priority={10} />
+        <PriorityBadge priority={8} />
+        <PriorityBadge priority={5} />
+        <PriorityBadge priority={0} />
+      </Labelled>
+    </div>
+  )
+}
+
+function Panels() {
+  const start = (
+    <>
+      <Button variant="secondary" size="sm">
+        <Play className="size-3.5" aria-hidden />
+        Start now
+      </Button>
+      <Button variant="ghost" size="icon-sm" aria-label="More">
+        <Ellipsis className="size-4" aria-hidden />
+      </Button>
+    </>
+  )
+  return (
+    <div className="space-y-8">
+      <PanelGroup title="Urgent" badge={<PriorityBadge priority={8} />} count="3" action={<Button variant="link" size="sm">Queue</Button>}>
+        <PanelRow state={<StateCell state="working" />} title="Login page" meta={[<span className="font-medium text-info">Claude is on it · 4m</span>, 'from a ticket']} fact="Open run" />
+        <PanelRow state={<StateCell state="queued" />} title="A press: the whole row opens it, its presses come in under the pointer" meta={['Next up', 'typed here']} fact="2nd" actions={start} onClick={() => {}} />
+        <PanelRow state={<StateCell state="queued" />} title={LONG_TITLE} meta={['from a ticket', LONG_TITLE]} fact="3rd" actions={start} href="#long" onClick={() => {}} />
+        <PanelRow
+          state={<StateCell state="done" />}
+          title="Columns that stay under the pointer, the fact giving way"
+          meta={['Done in 11m']}
+          columns={
+            <>
+              <Facts facts={['Claude', 'Opus']} className="w-24" />
+              <span className="w-12 text-right">#48</span>
+            </>
+          }
+          fact="3:03 PM"
+          actions={
+            <Button variant="secondary" size="sm">
+              Review
+            </Button>
+          }
+          onClick={() => {}}
+        />
+      </PanelGroup>
+      <PanelGroup title="Human Queue: the press at rest">
+        <PanelRow
+          state={<StateCell state="waiting" />}
+          title="A row whose press is what the person comes for"
+          meta={['Needs answer', 'Where should the cart go?']}
+          fact="2m"
+          actions={<Button size="sm">Answer</Button>}
+          actionsAtRest
+          onClick={() => {}}
+        />
+      </PanelGroup>
+      <PanelGroup title="Nothing pressable" count="2">
+        <PanelRow state={<StateCell state="done" />} title="Its name only" meta={['what is known of it']} fact="2h" />
+        <PanelRow before={<span className="w-6 text-right text-xs font-medium tabular-nums text-muted-foreground">P8</span>} title="A fact before its name, in a column of its own" meta={['what is known of it']} fact="1w" />
+        <PanelMore onClick={() => {}}>Show 4 more</PanelMore>
+      </PanelGroup>
+      <PanelGroup title="Bare: its own panel, a sentence where the rows would be" bare>
+        <Panel>
+          <PanelNote>Nothing waits here.</PanelNote>
+        </Panel>
+      </PanelGroup>
+    </div>
+  )
+}
+
+function Filters() {
+  const [picked, setPicked] = useState<string | null>('working')
+  const chips = [
+    { value: 'waiting', label: 'Waiting', count: 2 },
+    { value: 'working', label: 'Working', count: 2 },
+    { value: 'done', label: 'Done', count: 6 },
+    { value: 'failed', label: 'Failed', count: 2 },
+  ]
+  return <FilterChips chips={chips} total={12} picked={picked} onPick={setPicked} />
+}
+
+function Composing() {
+  return (
+    <div className="max-w-xl space-y-6">
+      <ComposedField>
+        <ComposedFieldInput aria-label="A task" placeholder="Add a task: what should an agent do?" />
+        <ComposedFieldFoot>
+          <Select items={[{ value: '5', label: 'Priority 5' }]} value="5">
+            <SelectTrigger aria-label="Priority" className="h-7 w-auto border-transparent bg-accent px-2">
+              <SelectValue />
+            </SelectTrigger>
+          </Select>
+          <p className="min-w-0 flex-1 text-xs text-faint-foreground">Goes to the end of priority 5</p>
+          <span className="inline-flex items-center gap-1 text-xs text-faint-foreground max-md:hidden">
+            <kbd className="inline-flex h-4.5 items-center rounded-sm px-1 ring-1 ring-hairline ring-inset">
+              <CornerDownLeft className="size-3" aria-hidden />
+            </kbd>
+            to add
+          </span>
+          <Button variant="secondary" size="sm">Add</Button>
+        </ComposedFieldFoot>
+      </ComposedField>
+      <Labelled label="A stepper joined to its press">
+        <ButtonGroup>
+          <Stepper value={2} max={5} unit="agents" label="How many agents" fewer="One fewer" more="One more" onChange={() => {}} />
+          <Button>
+            <Play className="size-3.5" aria-hidden />
+            Start 2
+          </Button>
+        </ButtonGroup>
+      </Labelled>
+    </div>
+  )
+}
+
+function Empties() {
+  return (
+    <div className="max-w-xl space-y-8">
+      <Empty title="No runs yet." action={<Button variant="secondary">New agent session</Button>}>
+        A run shows here from the moment an agent starts.
+      </Empty>
+      <Empty title="Nothing queued." />
+    </div>
+  )
+}
+
 // ---------------------------------------------------------------- registry
 
 const LONG_TITLE = 'Move the release notes for every package into one page the website renders, and link each version from the changelog of its own'
@@ -542,7 +707,7 @@ function Lists() {
           <Row leading={<Folder className="size-4" aria-hidden />} title="A press: the whole row does it" meta={<ChevronRight className="size-4" aria-hidden />} onClick={() => {}} />
           <Row title="Neither: only its own action, shown under the pointer" meta="12 files" actions={remove} />
           <Row leading={<Folder className="size-4" aria-hidden />} title="Two lines: its name" detail="and, under it, what it was asked: the row is 48 high" meta="2d ago" href="#two" onClick={() => {}} actions={remove} />
-          <Row leading={<Folder className="size-4" aria-hidden />} title={LONG_TITLE} meta="$0.15 · 2d ago" href="#long" actions={remove} />
+          <Row leading={<Folder className="size-4" aria-hidden />} title={LONG_TITLE} meta={<Facts facts={['$0.15', '2d ago']} />} href="#long" actions={remove} />
         </List>
       </Section>
       <Section title="Boxed: in something with no edge of its own" count="2">
@@ -553,7 +718,7 @@ function Lists() {
       </Section>
       <Section title="Two lines on a phone" count="2">
         <List aria-label="Stacked on a phone">
-          <Row stackOnPhone title={LONG_TITLE} meta="shop · done · $0.15 · 12:04" href="#stacked" onClick={() => {}} />
+          <Row stackOnPhone title={LONG_TITLE} meta={<Facts facts={['shop', 'done', '$0.15', '12:04']} />} href="#stacked" onClick={() => {}} />
           <Row stackOnPhone title="A short one stays one line, 44 high" meta="12:01" href="#short" onClick={() => {}} />
         </List>
       </Section>
@@ -562,6 +727,24 @@ function Lists() {
       </Section>
       <Section title={LONG_TITLE} count="40" action={<Button variant="link" size="sm">All runs</Button>}>
         <p className="text-sm text-muted-foreground">A long heading is cut; its count and its press stay.</p>
+      </Section>
+    </div>
+  )
+}
+
+/** An entry of Settings: its rows on the dialog's inset, then things listed in it, one lit as under the pointer. */
+function SettingsRows() {
+  return (
+    <div className="max-w-2xl space-y-8 rounded-lg bg-card p-6 ring-1 ring-hairline">
+      <SettingsSection>
+        <SettingsRow label="Name each run" description="A small model is asked for the two to five words a run's row shows." control={<Switch aria-label="Name each run" defaultChecked />} />
+        <SettingsRow label="Show what the coding agent thought" description="Inside a run of steps, a row for each thought between them." control={<Switch aria-label="Show what the coding agent thought" />} />
+      </SettingsSection>
+      <Section title="Your devices">
+        <SettingsItems aria-label="Your devices">
+          <SettingsItem icon={Smartphone} title="iPhone, Safari" detail={<Facts facts={['Phone', 'on this Wi-Fi', 'last seen 2m ago']} />} actions={<Button variant="ghost" size="icon-sm" className="-mr-1.5" aria-label="iPhone, Safari: more"><Ellipsis className="size-4" aria-hidden /></Button>} />
+          <SettingsItem icon={Monitor} title="Studio Mac" detail={<Facts facts={['Computer', 'runs go both ways']} />} end={<><Badge tone="success">Online</Badge><ChevronRight aria-hidden /></>} onClick={() => {}} />
+        </SettingsItems>
       </Section>
     </div>
   )
@@ -641,10 +824,18 @@ export const PREVIEWS: Preview[] = [
     node: <StatTiles />,
   },
   {
+    path: 'components/settings-rows.html',
+    group: 'Components',
+    name: 'Settings rows',
+    subtitle: 'A setting on the dialog\'s inset, its control centred; things listed 24 apart, a fill pulled out by its own padding',
+    width: 900,
+    node: <SettingsRows />,
+  },
+  {
     path: 'components/form-controls.html',
     group: 'Components',
     name: 'Form controls',
-    subtitle: 'Radio group, select, switch, checkbox, label, input, textarea',
+    subtitle: 'Radio group, segmented, select, switch, checkbox, label, input, textarea',
     width: 900,
     node: <FormControls />,
   },
@@ -663,6 +854,46 @@ export const PREVIEWS: Preview[] = [
     subtitle: 'A heading with its count and press, then rows on the page or boxed, a link, a press, or holding their own action',
     width: 900,
     node: <Lists />,
+  },
+  {
+    path: 'components/state.html',
+    group: 'Components',
+    name: 'State marks + priority',
+    subtitle: 'The logo\'s hexagon in each state, alone and as a pill; a priority as P8',
+    width: 900,
+    node: <States />,
+  },
+  {
+    path: 'components/panel.html',
+    group: 'Components',
+    name: 'Card + panel of rows',
+    subtitle: 'A group header (name, badge, count, link) over a card of two-line rows: a state, a name, what is known, one fact that gives way to the row\'s presses',
+    width: 900,
+    node: <Panels />,
+  },
+  {
+    path: 'components/filter.html',
+    group: 'Components',
+    name: 'Segmented filter',
+    subtitle: 'A list told apart by one field: All and a segment per value, each with its count, the picked one a card on the track',
+    width: 900,
+    node: <Filters />,
+  },
+  {
+    path: 'components/composed-field.html',
+    group: 'Components',
+    name: 'Composed field + stepper',
+    subtitle: 'The text, a pick and the send in one card; a count joined to the press it counts for',
+    width: 900,
+    node: <Composing />,
+  },
+  {
+    path: 'components/empty.html',
+    group: 'Components',
+    name: 'Empty',
+    subtitle: 'Nothing here yet, said as the page: one plain sentence on the column\'s edge, what fills it, the press that does',
+    width: 900,
+    node: <Empties />,
   },
   {
     path: 'components/disclosure.html',

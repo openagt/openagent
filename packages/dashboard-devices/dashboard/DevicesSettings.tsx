@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { ChevronLeft, Ellipsis, House, Loader2, Monitor, Plus, Server, Smartphone, Tablet, UserPlus, UserRound } from 'lucide-react'
-import { Badge, Button, ConfirmDialog, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Input, List, Row, RowShapes, Section, SettingsRow, SettingsRowShapes, SettingsSection, Slot, formatDateTime, formatRelative, useOpenAgentDown, usePolled, useSettingsCrumb } from '@openagt/dashboard/module'
+import { Badge, Button, ConfirmDialog, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Input, RowShapes, Section, SettingsItem, SettingsItems, SettingsRow, SettingsRowShapes, SettingsSection, Slot, formatDateTime, formatRelative, useOpenAgentDown, usePolled, useSettingsCrumb } from '@openagt/dashboard/module'
 import { addDevice, keepPerson, loadMine, myName, nameOwner, removeDevice, removeMine, removePerson, renameDevice, setTailscale, type Answer, type DeviceRow, type DoorStatus, type LineRow, type PersonRow, type PersonThere } from './devices.js'
 import { installFailed, removeDevice as removeServerDevice } from './servers.js'
 import { ADDING, AddDevice, isAdding, useJoined, type Adding } from './AddDevice.js'
@@ -71,15 +71,16 @@ export function DevicesSettings({ everyMs = 3_000, devicesEveryMs = 30_000, devi
 
   // One person's own OpenAgent on a computer several people use: their devices are the door's, and only they are shown.
   if (status?.person !== undefined) return <PersonDevices person={status.person} everyMs={everyMs} />
-  // Nothing but the rows' shape until this computer said what it is: a server never offers a server to set up for a moment.
-  const known = d.door !== undefined && !(d.machines === undefined && d.door.ok)
+  // Nothing but the rows' shape until this computer said what it is (a server never offers a server to set up for a moment)
+  // and the servers said what they add to it (a line through each), so a read that arrives moves nothing.
+  const known = d.door !== undefined && !(d.machines === undefined && d.door.ok) && (!d.door.ok || d.firstRead)
   if (!known) return <Slot of={{ state: 'unknown', value: undefined }} shape={<SettingsRowShapes rows={3} />}>{() => null}</Slot>
 
   if (adding)
     return (
       <>
         {way(() => add(undefined))}
-        <section aria-label={ADDING[adding]} className="max-w-prose">
+        <section aria-label={ADDING[adding]}>
           <AddDevice
             d={d}
             adding={adding}
@@ -112,6 +113,7 @@ export function DevicesSettings({ everyMs = 3_000, devicesEveryMs = 30_000, devi
   const start = d.items.length === 0 && !status?.on && status?.https === undefined && status?.tailscale === undefined && persons.length === 0
   return (
     <div className="space-y-8">
+      <Unanswered d={d} onOpen={item => setOpened(openedOf(item))} />
       <ThisComputer d={d} start={start} />
       {start ? <Start d={d} onAdd={add} /> : <YourDevices d={d} onOpen={item => setOpened(openedOf(item))} onAdd={() => add('add')} />}
       {d.door !== undefined && !d.door.ok && <Problem>{`The devices could not be read: ${d.door.error}`}</Problem>}
@@ -158,17 +160,33 @@ function Start({ d, onAdd }: { d: Devices; onAdd: (adding: Adding) => void }) {
             }
           />
         )}
-        <div className="space-y-2 text-xs text-muted-foreground">
-          <p>
-            Someone gave you a code? <LinkPress onClick={() => onAdd('join')}>Join with a code</LinkPress>
-          </p>
-          <p>
-            On Tailscale? From anywhere, with no server: <LinkPress loading={turning} disabled={down} onClick={() => void onTailscale()}>Reach this computer on your Tailscale network</LinkPress>
-          </p>
+        {/* The ways in for someone who already has one, one compact group under the ways to set up: each its words, its
+            link under them. */}
+        <div className="space-y-3 border-t border-border pt-4">
+          <OtherWay question="Someone gave you a code?" words="Join a server of yours, or a computer someone shared with you.">
+            <LinkPress onClick={() => onAdd('join')}>Join with a code</LinkPress>
+          </OtherWay>
+          <OtherWay question="On Tailscale?" words="Your devices on Tailscale reach this computer from anywhere, with no server.">
+            <LinkPress loading={turning} disabled={down} onClick={() => void onTailscale()}>
+              Reach this computer on your Tailscale network
+            </LinkPress>
+          </OtherWay>
         </div>
         {why !== undefined && <Problem>{why}</Problem>}
       </SettingsSection>
     </Section>
+  )
+}
+
+function OtherWay({ question, words, children }: { question: string; words: string; children: ReactNode }) {
+  return (
+    <div className="space-y-1">
+      <p className="text-xs text-muted-foreground">
+        <span className="font-medium text-foreground">{question}</span>{' '}
+        {words}
+      </p>
+      {children}
+    </div>
   )
 }
 
@@ -188,52 +206,89 @@ function YourDevices({ d, onOpen, onAdd }: { d: Devices; onOpen: (item: Item) =>
   return (
     <Section
       title="Your devices"
-      {...(items.length ? { count: items.length } : {})}
       action={
-        <>
+        // Unpainted, as every part head's press: the last one's words end on the inset, the row as tall as the name.
+        <div className="-my-1 -mr-2 flex items-center gap-1">
           {addsPersons && (
-            <Button variant="secondary" title="Someone else, by their name: they add this computer to their own OpenAgent with the code, and get a user of their own here." onClick={() => setAddingPerson(true)}>
+            <Button variant="ghost" size="sm" className="max-md:h-11" title="Someone else, by their name: they add this computer to their own OpenAgent with the code, and get a user of their own here." onClick={() => setAddingPerson(true)}>
               <UserPlus className="size-4" aria-hidden />
               Add person
             </Button>
           )}
-          <Button onClick={onAdd}>
+          <Button variant="ghost" size="sm" className="max-md:h-11" onClick={onAdd}>
             <Plus className="size-4" aria-hidden />
             Add device
           </Button>
-        </>
+        </div>
       }
     >
-      {addingPerson && (
-        <Invite
-          label={d.machines?.name ?? 'this computer'}
-          tailscale={status?.tailscale !== undefined && status.https === undefined}
-          ask={person => addDevice(host, person)}
-          persons={{
-            owner: persons.find(person => person.owner)?.name,
-            myName: () => myName(host),
-            nameOwner: async name => {
-              const named = await nameOwner(host, name)
-              await d.reloadDoor().catch(() => {})
-              return named.ok ? { ok: true } : named
-            },
-          }}
-          joined={joined}
-          onCode={code => setCodeOn(code !== undefined)}
-          onClose={() => {
-            setAddingPerson(false)
-            setCodeOn(false)
-          }}
-        />
-      )}
-      {items.length === 0 && !persons.length && <p className="text-sm text-muted-foreground">{server ? 'None yet. Add device: a phone from anywhere, or a computer.' : status?.tailscale ? 'None yet. Add device: a phone or a computer on your Tailscale network.' : 'None yet. Add device: a phone or a computer on the same Wi-Fi.'}</p>}
-      <List aria-label="Your devices">
-        {items.map(item => (
-          <ItemRow key={item.key} d={d} item={item} onOpen={() => onOpen(item)} />
-        ))}
-      </List>
-      {persons.length > 0 && <DoorPeople d={d} persons={persons} devices={status?.devices ?? []} lines={status?.lines ?? []} />}
+      <div className="flex flex-col gap-6">
+        {addingPerson && (
+          <Invite
+            label={d.machines?.name ?? 'this computer'}
+            tailscale={status?.tailscale !== undefined && status.https === undefined}
+            ask={person => addDevice(host, person)}
+            persons={{
+              owner: persons.find(person => person.owner)?.name,
+              myName: () => myName(host),
+              nameOwner: async name => {
+                const named = await nameOwner(host, name)
+                await d.reloadDoor().catch(() => {})
+                return named.ok ? { ok: true } : named
+              },
+            }}
+            joined={joined}
+            onCode={code => setCodeOn(code !== undefined)}
+            onClose={() => {
+              setAddingPerson(false)
+              setCodeOn(false)
+            }}
+          />
+        )}
+        {items.length === 0 && !persons.length && <p className="text-sm text-muted-foreground">{server ? 'None yet. Add device: a phone from anywhere, or a computer.' : status?.tailscale ? 'None yet. Add device: a phone or a computer on your Tailscale network.' : 'None yet. Add device: a phone or a computer on the same Wi-Fi.'}</p>}
+        {items.length > 0 && (
+          <SettingsItems aria-label="Your devices">
+            {items.map(item => (
+              <ItemRow key={item.key} d={d} item={item} onOpen={() => onOpen(item)} />
+            ))}
+          </SettingsItems>
+        )}
+        {persons.length > 0 && <DoorPeople d={d} persons={persons} devices={status?.devices ?? []} lines={status?.lines ?? []} />}
+      </div>
     </Section>
+  )
+}
+
+/** A computer or a server that is saved here and does not answer, as its row says "Offline". */
+const unanswering = (item: Item): boolean => {
+  if (item.kind === 'phone') return false
+  if (item.kind === 'server') return item.machine !== undefined && item.machine.version === undefined && !item.server.working && !installFailed(item.server)
+  return item.machine !== undefined && item.machine.version === undefined
+}
+
+/** What does not answer, first: before how this computer is reached, so the person sees what is down, each by its name
+ *  opening the page that connects it again (its row stays in the list below, with every device). */
+function Unanswered({ d, onOpen }: { d: Devices; onOpen: (item: Item) => void }) {
+  const down = d.items.filter(unanswering)
+  if (down.length === 0) return null
+  const named = (item: Item) => (
+    <Button key={item.key} variant="link" className="h-auto p-0 align-baseline" onClick={() => onOpen(item)}>
+      {item.name}
+    </Button>
+  )
+  // The names joined as the language joins them ("A, B, and C"), each its own press.
+  const names = new Intl.ListFormat('en', { type: 'conjunction' }).formatToParts(down.map(item => item.key)).map((part, i) => (part.type === 'element' ? named(down.find(item => item.key === part.value)!) : <span key={i}>{part.value}</span>))
+  return (
+    <div role="status">
+      <p className="text-sm font-medium">{down.length === 1 ? `${down[0]!.name} does not answer` : `${down.length} of your devices do not answer`}</p>
+      <p className="mt-0.5 text-sm text-muted-foreground">
+        {down.length === 1 ? (
+          <>Runs cannot go there until it is on and online. Open {names} to connect it again.</>
+        ) : (
+          <>{names}: runs cannot go to them until they are on and online. Open one to connect it again.</>
+        )}
+      </p>
+    </div>
   )
 }
 
@@ -318,12 +373,12 @@ function PhoneRow({ d, item }: { d: Devices; item: PhoneItem }) {
       <ListedDevice
         icon={icon}
         name={item.name}
-        facts={[word, where, <span title={formatDateTime(item.seen ?? item.added)}>{seenWords(item.seen, item.added)}</span>]}
+        facts={[word, <span title={formatDateTime(item.seen ?? item.added)}>{seenWords(item.seen, item.added)}</span>, where]}
         {...(removing ? { state: <State tone="working">Removing…</State> } : {})}
         actions={
           // While its own change runs the menu stays shut, and its press keeps the keyboard.
           <DropdownMenu open={menuOpen} onOpenChange={next => setMenuOpen(next && !busy && !removing)}>
-            <DropdownMenuTrigger aria-label={`${item.name}: more`} render={<Button variant="ghost" size="icon-sm" loading={busy || removing} />}>
+            <DropdownMenuTrigger aria-label={`${item.name}: more`} render={<Button variant="ghost" size="icon-sm" className="-mr-1.5" loading={busy || removing} />}>
               {removing ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Ellipsis className="size-4" aria-hidden />}
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
@@ -338,7 +393,7 @@ function PhoneRow({ d, item }: { d: Devices; item: PhoneItem }) {
       {/* Asked first, as every removal is: a device taken out gets in again only with a new code. */}
       <ConfirmDialog open={confirming} onOpenChange={setConfirming} title={`Remove ${item.name}?`} body={`${item.name} is taken out, and gets in again only with a new code.`} confirmLabel="Remove" onSuccess={() => (setRemoving(true), void act(remove))} />
       {error !== undefined && (
-        <li className="px-3">
+        <li className="px-4 pb-3">
           <Problem>{error}</Problem>
         </li>
       )}
@@ -393,14 +448,13 @@ function DoorDevice({ device, mine, busy, onRemove }: { device: DeviceRow; mine:
   const seen = device.seen !== undefined ? `Last seen ${formatRelative(device.seen)}, added ${formatRelative(device.added)}` : `Added ${formatRelative(device.added)}`
   const line = device.line ? `${device.person !== undefined && !mine ? `A computer of ${device.person}` : 'A computer of yours'}: runs can be started on it from here. Remove it and it is no longer in "Run on".` : undefined
   return (
-    <Row
-      leading={<Icon className="size-4" aria-hidden />}
+    <SettingsItem
+      icon={Icon}
       title={device.name}
       detail={<span title={line ?? formatDateTime(device.seen ?? device.added)}>{line ?? seen}</span>}
-      {...(line !== undefined ? { meta: <span title={formatDateTime(device.seen ?? device.added)}>{seen}</span> } : {})}
-      stackOnPhone
+      {...(line !== undefined ? { end: <span title={formatDateTime(device.seen ?? device.added)}>{seen}</span> } : {})}
       actions={
-        <Button variant="ghost" size="sm" loading={busy} disabled={down} aria-label={`Remove ${device.name}`} onClick={onRemove}>
+        <Button variant="ghost" size="sm" className="-mr-2" loading={busy} disabled={down} aria-label={`Remove ${device.name}`} onClick={onRemove}>
           Remove
         </Button>
       }
@@ -462,11 +516,13 @@ function DoorPeople({ d, persons, devices, lines }: { d: Devices; persons: Perso
             {person.problem !== undefined && !person.working && <p role="alert" className="text-xs text-danger">{`${person.name}'s own user on this computer could not be made: ${person.problem.replace(/\.?$/, '.')} Add a device for them again to try again.`}</p>}
             {/* A person of a server has their devices at that server: none here is none missing. */}
             {person.from === undefined && theirs.length === 0 && <p className="text-xs text-muted-foreground">No device yet.</p>}
-            <List aria-label={`Devices of ${person.name}`}>
-              {theirs.map(device => (
-                <DoorDevice key={device.id} device={device} mine={person.owner === true} busy={busy} onRemove={() => void act(() => removeDevice(host, device.id))} />
-              ))}
-            </List>
+            {theirs.length > 0 && (
+              <SettingsItems aria-label={`Devices of ${person.name}`}>
+                {theirs.map(device => (
+                  <DoorDevice key={device.id} device={device} mine={person.owner === true} busy={busy} onRemove={() => void act(() => removeDevice(host, device.id))} />
+                ))}
+              </SettingsItems>
+            )}
           </div>
         )
       })}
@@ -505,13 +561,16 @@ function PersonDevices({ person, everyMs }: { person: string; everyMs: number })
       <Slot of={{ state: read === undefined ? 'unknown' : 'fresh', value: mine }} shape={<RowShapes />}>
         {mine =>
           mine !== undefined && (
-            <Section title="Your devices" {...(devices.length > 0 ? { count: devices.length } : {})}>
-              {devices.length === 0 && <p className="text-sm text-muted-foreground">None.</p>}
-              <List aria-label="Your devices">
-                {devices.map(device => (
-                  <DoorDevice key={device.id} device={device} mine busy={busy} onRemove={() => void remove(device.id)} />
-                ))}
-              </List>
+            <Section title="Your devices">
+              {devices.length === 0 ? (
+                <p className="text-sm text-muted-foreground">None.</p>
+              ) : (
+                <SettingsItems aria-label="Your devices">
+                  {devices.map(device => (
+                    <DoorDevice key={device.id} device={device} mine busy={busy} onRemove={() => void remove(device.id)} />
+                  ))}
+                </SettingsItems>
+              )}
             </Section>
           )
         }

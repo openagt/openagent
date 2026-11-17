@@ -147,7 +147,7 @@ describe('Agent accounts', () => {
     views(TWO)
     const { unmount } = render(<AddedAccountsUsage />)
     const rows = await screen.findByLabelText('Other Claude accounts')
-    expect(rows.textContent).toMatch(/^Dani20% this week · as of /)
+    expect(rows.textContent).toMatch(/^Dani20% this week·as of /)
     expect(rows.textContent).not.toContain('Suleiman')
     unmount()
     views({ now: NOW, accounts: [TWO.accounts[0]] })

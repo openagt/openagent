@@ -2,9 +2,10 @@ import type { AgentDoing, AgentMeta, OpenAgentEvent } from '../../src/index.js'
 import { startedAtFromAgentId } from '../../src/agent-id.js'
 import { agentLabel } from './agent-label.js'
 
-// A run started for another run is that run's subagent: its card names the other run as its
-// parent. Everything the dashboard shows about subagents (the rail's tree, the rows in the main
-// agent's chat, the line above its message box) is read off that one field.
+// A run's subagents are of two kinds. A run started for it is one: its card names the run as its
+// `parent`, and the rail's tree reads that field alone. One its coding agent started inside its
+// session is known only from the run's log, by its `subagent` events; and how a run of the first kind
+// ended is read from the line its end sends the run. The chat's rows and the pane read both kinds.
 
 /** Runs in the order they were started: an id sorts by start time. */
 function byStart(a: Pick<AgentMeta, 'id'>, b: Pick<AgentMeta, 'id'>): number {
@@ -16,7 +17,7 @@ export function subagentsOf(agents: readonly AgentMeta[], id: string): AgentMeta
   return agents.filter(agent => agent.parent === id).sort(byStart)
 }
 
-/** What a subagent's row calls it: the first line of what it was asked. */
+/** What a subagent's row calls it: the first line of its run's name, its title before what it was asked. */
 export function taskLabel(agent: Pick<AgentMeta, 'id' | 'intent' | 'branch' | 'startedAt'>): string {
   return agentLabel(agent).split('\n')[0]!.trim()
 }
@@ -104,7 +105,8 @@ export interface CallSubagent {
   /** How many tokens and tool calls it went through, as far as its coding agent says. */
   tokens?: number
   toolUses?: number
-  status: 'working' | 'ended' | 'failed'
+  /** `stopped`: its run's process ended while it worked, and it with it. */
+  status: 'working' | 'ended' | 'failed' | 'stopped'
   name?: string
   role?: string
   model?: string
@@ -131,10 +133,18 @@ function stepOfSubagent(e: OpenAgentEvent): string | undefined {
   return event.type === 'action' || event.type === 'output' || event.type === 'text' || event.type === 'thought' ? event.subagent : undefined
 }
 
-/** The run's own subagents of its coding agent, in the order they were started. */
+/**
+ * The run's own subagents of its coding agent, in the order they were started. One still working
+ * when the run's process ends (its `end`) ended with it: its coding agent tells of its end at its
+ * call's answer and nowhere else, so without that a message that continues the run would make it
+ * read as working again. A new prompt alone ends none: a subagent in the background goes on across them.
+ */
 export function callSubagents(events: readonly OpenAgentEvent[]): CallSubagent[] {
   const byId = new Map<string, CallSubagent>()
   for (const e of events) {
+    if (e.kind === 'end') {
+      for (const [id, call] of byId) if (call.status === 'working') byId.set(id, { ...call, status: 'stopped', ...(e.at !== undefined ? { endedAt: e.at } : {}) })
+    }
     if (e.kind !== 'driver') continue
     const event = e.event
     if (event.type === 'subagent') {
@@ -215,6 +225,37 @@ export interface SubagentRow {
   call?: CallSubagent
 }
 
+/** The parts of the pane's list, in their order: what waits on the person, what failed, what works, what ended. */
+export type ListPart = 'Waiting on you' | 'Failed' | 'Working' | 'Ended'
+
+/** How many rows the pane's list holds before its ended ones fold into one line. */
+export const FOLD_PAST = 8
+
+/** Which rows stand in which part of the pane's list, by key, and whether its ended ones fold. */
+export interface Arrangement {
+  parts: { name: ListPart; keys: string[] }[]
+  folds: boolean
+}
+
+/** The part of the pane's list each state stands in, a group's name and not the state's word: "Ended" holds done and stopped; any other state is at work. */
+const PART_OF: Readonly<Partial<Record<string, ListPart>>> = { waiting: 'Waiting on you', failed: 'Failed', done: 'Ended', stopped: 'Ended' }
+
+/** Where a subagent's row stands. */
+const partOf = (row: SubagentRow): ListPart => PART_OF[row.status] ?? 'Working'
+
+const PARTS: readonly ListPart[] = ['Waiting on you', 'Failed', 'Working', 'Ended']
+
+/**
+ * The pane's list of a run's subagents: each part that holds a row, in {@link PARTS}' order, its rows
+ * in the order they started; past {@link FOLD_PAST} rows in all, the ended ones fold. A failed one
+ * is never folded: its main agent was told and goes on, but the person was not.
+ */
+export function arrange(rows: readonly SubagentRow[]): Arrangement {
+  const started = [...rows].sort((a, b) => (a.startedAt < b.startedAt ? -1 : a.startedAt > b.startedAt ? 1 : 0))
+  const parts = PARTS.map(name => ({ name, keys: started.filter(row => partOf(row) === name).map(row => row.key) })).filter(part => part.keys.length > 0)
+  return { parts, folds: rows.length > FOLD_PAST && parts.some(part => part.name === 'Ended') }
+}
+
 /** A subagent run as its row. */
 export function runRow(agent: AgentMeta, doing: AgentDoing | undefined): SubagentRow {
   const working = agent.status === 'running'
@@ -257,6 +298,29 @@ export function callRow(call: CallSubagent, runWorking: boolean, fallbackAt: str
     ...(call.toolUses !== undefined ? { toolUses: call.toolUses } : {}),
     call,
   }
+}
+
+/**
+ * A run's subagents of both kinds as their rows: the runs started for it, then the ones its coding
+ * agent started inside its session, each in the order they were started. `working` is whether the
+ * run's own process works; `doing`, what each working run is on now.
+ */
+export function subagentRows(runs: readonly AgentMeta[], events: readonly OpenAgentEvent[], working: boolean, doing: Readonly<Record<string, AgentDoing>> = {}): SubagentRow[] {
+  const fallbackAt = events[0]?.at ?? new Date(0).toISOString()
+  return [...runs.map(agent => runRow(agent, doing[agent.id])), ...callSubagents(events).map(call => callRow(call, working, fallbackAt))]
+}
+
+/**
+ * Why each of a run's subagents that failed failed, by its row's key, as the line the run was told
+ * when it ended says it. A subagent of the coding agent's own is told of by nothing that says why.
+ */
+export function failureReasons(events: readonly OpenAgentEvent[], runs: readonly AgentMeta[]): Map<string, string> {
+  const reasons = new Map<string, string>()
+  for (const e of events) {
+    const end = e.kind === 'driver' && e.event.type === 'start' ? subagentEnd(e.event.prompt, runs) : undefined
+    if (end?.status === 'failed' && end.detail !== undefined) reasons.set(`run:${end.agent.id}`, end.detail)
+  }
+  return reasons
 }
 
 /** One thing of a stretch of the chat: a subagent started, or a message one sent when it ended. */
