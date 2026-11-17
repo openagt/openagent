@@ -82,6 +82,16 @@ describe('AgentHistory (#785)', () => {
     expect(screen.getByRole('link', { name: 'Overview, 6 waiting on you' }).textContent).toBe('Overview6, 6 waiting on you')
   })
 
+  test('a run waiting on the person is listed once, under "Waiting on you", picked there while it is the page shown; the Log lists the others', () => {
+    const asked = { projectId: 'p1', projectName: 'p1', kind: 'awaiting' as const, title: 'Pick a colour', agentId: 'run-2', awaitId: 'q1', createdAt: new Date().toISOString() }
+    renderRail(
+      <AgentHistory projectId="p1" scope="p1" agents={[agent({ intent: 'Make the cart', status: 'done' }), agent({ id: 'run-2', intent: 'Pick a colour', status: 'waiting' })]} selectedAgentId="run-2" onSelect={() => {}} waiting={[asked]} hrefOf={route => `/${route.projectId}/${route.agentId}`} />,
+    )
+    expect(screen.getAllByRole('link', { name: /Pick a colour/ }).map(link => link.getAttribute('aria-label'))).toEqual(['Pick a colour · Needs answer'])
+    expect(screen.getByRole('link', { name: 'Pick a colour · Needs answer' }).getAttribute('aria-current')).toBe('page')
+    expect(screen.getByRole('link', { name: /Make the cart/ })).toBeTruthy()
+  })
+
   test('with nothing waiting there is no "Waiting on you" part', () => {
     renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent()]} selectedAgentId={null} onSelect={() => {}} />)
     expect(screen.queryByText('Waiting on you')).toBeNull()
