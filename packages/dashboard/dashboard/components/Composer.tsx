@@ -59,10 +59,12 @@ const DRIVER_UI: Record<DriverName, { icon: DriverOption['icon'] }> = {
  * The message box, as Claude Code's (DECISIONS.md, his pick): the raised surface with the hairline,
  * holding only the +, the text and the send. Where the agent starts is a row above it, how it runs a
  * row under it. It is focused almost all the time it is on screen, so focus is its own edge and nothing
- * more: the caret says the rest. The edge is a field's focus, 2 wide in the focus colour over the
- * hairline, as the presses' ring is 2 wide. It stays while the keyboard is on the + or in the menu it opened.
+ * more: the caret says the rest. While its text has the keyboard the edge is a field's focus, 2 wide in
+ * the focus colour over its edge, as the presses' ring is 2 wide. While the keyboard is on the + or
+ * in the menu it opened, the edge is his 1 wide primary border, so the +'s own ring stands alone.
  */
-const BOX = '[view-transition-name:composer] flex items-end rounded-box border border-hairline bg-card shadow-lg focus-within:outline-2 focus-within:-outline-offset-1 focus-within:outline-focus has-[[aria-expanded=true]]:outline-2 has-[[aria-expanded=true]]:-outline-offset-1 has-[[aria-expanded=true]]:outline-focus'
+const BOX =
+  '[view-transition-name:composer] flex items-end rounded-box border border-hairline bg-card shadow-lg transition-colors focus-within:border-primary has-[[aria-expanded=true]]:border-primary has-[[role=textbox]:focus]:outline-2 has-[[role=textbox]:focus]:-outline-offset-1 has-[[role=textbox]:focus]:outline-focus'
 
 /**
  * The box while the page it stands on is read: a {@link Slot}'s shape at the three bands' heights,
