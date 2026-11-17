@@ -51,8 +51,7 @@ export function ListedDevice({ icon, name, facts, state, actions, onOpen }: { ic
     <SettingsItem
       icon={icon}
       title={name}
-      // Facts wrap whole, so a phone keeps a device's route and its age.
-      detail={<WholeFacts facts={facts} />}
+      detail={<Facts facts={facts} />}
       {...(state !== undefined || onOpen !== undefined
         ? {
             end: (
@@ -272,25 +271,6 @@ export function RenameForm({ name, rename, onClose }: { name: string; rename: Re
   )
 }
 
-/**
- * Facts that wrap whole: a fact never breaks inside itself, and a line never opens with a dot (each fact's dot stands in
- * a margin the box cuts off where the fact starts a line). `lead`, a badge, opens the first line with no dot after it.
- */
-export function WholeFacts({ lead, facts }: { lead?: ReactNode; facts: ReactNode[] }) {
-  const shown = facts.filter(fact => fact !== undefined && fact !== null && fact !== false && fact !== '')
-  return (
-    <span className="block overflow-hidden">
-      <span className="-ml-4 flex flex-wrap items-center">
-        {lead !== undefined && <span className="ml-4 -mr-2 flex">{lead}</span>}
-        {shown.map((fact, index) => (
-          <span key={index} className={cn("min-w-0 max-w-full truncate before:inline-block before:w-4 before:text-center before:content-['·']", lead !== undefined && index === 0 && 'before:invisible')}>
-            {fact}
-          </span>
-        ))}
-      </span>
-    </span>
-  )
-}
 
 /** A device's page is named above it, in the Settings dialog's header: its own top says it once more only outside the dialog. */
 export const NamedAbove = createContext(false)
@@ -316,7 +296,7 @@ export function Head({ icon: Icon, name, badge, facts, rename }: { icon: Compone
           )}
           {/* One run of words: on a phone the badge stays at the start of the facts' first line, not on a line of its own. */}
           <p className="min-w-0 text-xs text-muted-foreground">
-            <WholeFacts lead={namedAbove && badge !== undefined ? <Badge>{badge}</Badge> : undefined} facts={facts} />
+            <Facts {...(namedAbove && badge !== undefined ? { lead: <Badge>{badge}</Badge> } : {})} facts={facts} />
           </p>
         </div>
         {rename && !renaming && (

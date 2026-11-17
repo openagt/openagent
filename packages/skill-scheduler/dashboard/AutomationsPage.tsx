@@ -444,9 +444,9 @@ function StatusLine({ row, agents, className }: { row: SchedulerRow; agents: rea
   const off = row.error === undefined && !row.on
   return (
     <div className={className}>
-      {/* Joined as every line of facts is; in the flow of its words, so a line it wraps to never starts with a dot. */}
+      {/* Joined as every line of facts is. */}
       <Facts
-        className="block text-xs text-muted-foreground"
+        className="text-xs text-muted-foreground"
         facts={[
           <span className={cn('inline-flex items-center gap-1.5 font-medium', status.tone)}>
             <span aria-hidden className="size-1.5 rounded-full bg-current" />
@@ -520,7 +520,7 @@ function Stands({ host, project, scheduled, stopped, picks }: { host: ModuleHost
   const held = cannotRun(scheduled) !== undefined || (scheduled.on && heldBy(scheduled) !== undefined)
   return (
     <Facts
-      className="mt-1 text-xs text-faint-foreground md:line-clamp-1"
+      className="mt-1 text-xs text-faint-foreground"
       facts={[
         last === undefined ? (
           'Never ran'

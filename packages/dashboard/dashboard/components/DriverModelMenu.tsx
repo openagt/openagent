@@ -139,7 +139,7 @@ export function DriverModelMenu({
                 <span className="flex-1">{a.label}</span>
                 {/* A long name gives way, never how full the account is. */}
                 {a.account && (
-                  <Facts facts={[{ fact: a.account.name, className: 'min-w-0 truncate' }, a.account.percent !== undefined && { fact: a.account.percent, className: 'shrink-0' }]} className="flex max-w-48 min-w-0 text-muted-foreground" />
+                  <Facts oneLine facts={[{ fact: a.account.name, className: 'not-last:shrink' }, a.account.percent !== undefined && { fact: a.account.percent, className: 'shrink-0' }]} className="max-w-48 text-muted-foreground" />
                 )}
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent className="min-w-[15rem]">

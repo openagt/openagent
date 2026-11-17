@@ -292,7 +292,7 @@ export function JumpPalette({ waiting, runs, pages, projects, scope, here, hrefO
                         <span data-name className="min-w-0 flex-1 line-clamp-2">
                           {foundParts(place.name, query).map((part, index) => (part.found ? <strong key={index} className="font-semibold">{part.text}</strong> : part.text))}
                         </span>
-                        {place.meta?.some(Boolean) && <Facts facts={place.meta} className="max-w-[45%] shrink-0 truncate text-xs leading-5 text-muted-foreground" />}
+                        {place.meta?.some(Boolean) && <Facts oneLine facts={place.meta} className="max-w-[45%] shrink-0 text-xs leading-5 text-muted-foreground" />}
                       </Autocomplete.Item>
                     )}
                   </Autocomplete.Collection>

@@ -239,7 +239,7 @@ function SubagentItem({ row, failed, reason, open, projectId, onPick, onStop }: 
   const second = reason ?? error ?? undefined
   // A run's failure is told it by a line its end sends: its row keeps the room for it from its first frame.
   const twoLines = second !== undefined || (runId !== undefined && failed)
-  const model = row.model !== undefined ? <Facts facts={[anyModelName(models, row.model), row.agent?.effort]} className="min-w-0 truncate" /> : undefined
+  const model = row.model !== undefined ? <Facts oneLine facts={[anyModelName(models, row.model), row.agent?.effort]} /> : undefined
   const name = useRef<HTMLSpanElement>(null)
   // The card says what the row does not: the whole name where the row cuts it, or what it runs on.
   const tells = useCut(name, row.name) || model !== undefined
