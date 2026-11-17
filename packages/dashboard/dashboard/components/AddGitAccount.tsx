@@ -246,7 +246,8 @@ export function HostFix({ row, onChanged, size = 'default', variant }: { row: Gi
   if (p.installed && p.accounts.length > 0 && !p.loggingIn) return adding.dialog
   return (
     <>
-      <Button size={size} variant={variant} onClick={() => adding.add(row.host)}>
+      {/* On a phone a finger's 44, as the coding agent's own fix (AgentFix). */}
+      <Button size={size} variant={variant} onClick={() => adding.add(row.host)} className={cn(size === 'default' && 'max-md:h-11')}>
         {`Add a ${p.name} account`}
       </Button>
       {adding.dialog}

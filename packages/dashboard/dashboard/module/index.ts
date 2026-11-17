@@ -679,7 +679,7 @@ export { Tooltip, TooltipTrigger, TooltipContent } from '../components/ui/toolti
 export { DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from '../components/ui/dropdown-menu.js'
 export { ContextMenu, ContextMenuTrigger } from '../components/ui/context-menu.js'
 export { PaneTitle, PaneActions } from '../components/PaneHeader.js'
-export { Page, PageColumn } from '../components/Page.js'
+export { Page, PageColumn, PagePresses } from '../components/Page.js'
 export { Section } from '../components/ui/section.js'
 export { List, Row } from '../components/ui/list.js'
 export { Facts, Panel, PanelGroup, PanelGroups, PanelMore, PanelNote, PanelRow, StepNumber, type Fact } from '../components/ui/panel.js'

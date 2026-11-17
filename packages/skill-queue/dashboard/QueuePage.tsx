@@ -10,6 +10,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
   Page,
+  PagePresses,
   PanelGroup,
   PanelRow,
   PanelShape,
@@ -217,7 +218,7 @@ function BatchStart({ read, primary, fill = false, names, starts }: { read: Proj
     />
   )
   // A phone's, in the page: 16 over the first part's name.
-  return fill ? <div className="mb-4">{press}</div> : press
+  return fill ? <PagePresses className="mb-4">{press}</PagePresses> : press
 }
 
 /**

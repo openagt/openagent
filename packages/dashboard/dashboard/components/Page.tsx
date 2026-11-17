@@ -23,6 +23,14 @@ export function PageColumn({ children }: { children: ReactNode }) {
 }
 
 /**
+ * Where a page's own presses stand (its head's, a part's start, an account to add): on a phone each is a finger's 44 high,
+ * whatever size it is drawn at elsewhere, a pair's halves and a count's stepper with it.
+ */
+export function PagePresses({ className, children }: { className?: string; children: ReactNode }) {
+  return <div className={cn('max-md:[&_:is(.h-7,.h-8,.h-9)]:h-11', className)}>{children}</div>
+}
+
+/**
  * A page while its code is imported: its name, as this browser listed it, where the page's name
  * will stand (none on a first visit, where it is not known yet), and rows' shapes where its list
  * will stand. The page takes its place without moving its name.
@@ -82,7 +90,7 @@ export function Page({
               </h1>
             </div>
             {/* The buttons give up width: they go under each other, from the right, when the row is narrower than them, and on a phone a button's words longer than the screen are cut. */}
-            {actions !== undefined && <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">{actions}</div>}
+            {actions !== undefined && <PagePresses className="flex min-w-0 flex-wrap items-center justify-end gap-2">{actions}</PagePresses>}
             {/* Under the row from a tablet up, as the description is; on a phone, where the bar names the page, first in the row. */}
             {line !== undefined && <p className="min-w-0 text-sm text-muted-foreground max-md:order-first max-md:flex-1 md:order-last md:basis-full">{line}</p>}
           </div>
