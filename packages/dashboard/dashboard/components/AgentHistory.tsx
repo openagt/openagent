@@ -91,6 +91,7 @@ export function AgentHistory({
   homeHref = '/',
   agents,
   selectedAgentId,
+  notFound = false,
   onSelect,
   recentAgents,
   onSelectRecent,
@@ -128,6 +129,8 @@ export function AgentHistory({
   /** The picked project's agents; unused when all projects show, where `recentAgents` is the list. */
   agents: AgentMeta[]
   selectedAgentId: string | null
+  /** The address names no project, session or page: nothing in the list is the page shown. */
+  notFound?: boolean
   onSelect: (agentId: string | null) => void
   /** The brand mark animates while any agent is working (moved off the navbar with the brand). */
   working?: boolean
@@ -265,8 +268,8 @@ export function AgentHistory({
 
   // New is the active view when a project is open on its launcher (its "New" / Start-a-session
   // screen: a project selected, no run picked, not following a live one). On the Overview that role
-  // belongs to the Overview item instead, so the two are never active at once.
-  const atProjectLauncher = projectId !== null && selectedAgentId === null
+  // belongs to the Overview item instead, so the two are never active at once. A Not found page is none of them.
+  const atProjectLauncher = !notFound && projectId !== null && selectedAgentId === null
 
   // Whose run, which coding agent and which project are marked only where the listed rows differ in them.
   const differ = (of: (row: Row) => string | undefined) => new Set(rows.map(of)).size > 1

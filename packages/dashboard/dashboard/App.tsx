@@ -721,6 +721,7 @@ export function App() {
       <div className={cn('relative flex min-h-0 flex-1', pageScrolls ? 'overflow-x-clip' : 'overflow-hidden')}>
         <AgentHistory
           pageScrolls={pageScrolls}
+          notFound={notFound}
           projectId={projectId}
           scope={scope}
           scopePending={scopePending}
@@ -788,7 +789,7 @@ export function App() {
           pageHref={segment => hrefOf({ projectId: null, agentId: null, page: segment })}
           onPage={showPage}
           newHref={hrefOf({ projectId: scope ?? SESSIONS_ID, agentId: null })}
-          newActive={projectId !== null && agentId === null}
+          newActive={!notFound && projectId !== null && agentId === null}
           onNew={() => newAgentInProject(scope ?? SESSIONS_ID)}
           waiting={interventions.length}
         />
