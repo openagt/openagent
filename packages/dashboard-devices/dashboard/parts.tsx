@@ -356,7 +356,7 @@ export function CodeStrip({ label, text, big = false, copy }: { label: string; t
   return (
     <div className="space-y-1">
       <p className="text-xs text-muted-foreground">{label}</p>
-      <div className="flex items-center gap-2 rounded-md bg-muted py-1 pr-1 pl-3 max-md:py-0 max-md:pr-0">
+      <div className="flex items-center gap-2 rounded-md bg-muted py-1 pr-1 pl-4 max-md:py-0 max-md:pr-0">
         <span className={cn('min-w-0 flex-1 truncate font-mono', big ? 'text-xl font-semibold tracking-wider' : 'text-sm')}>{text}</span>
         {copy}
       </div>
