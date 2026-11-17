@@ -182,7 +182,8 @@ function OtherWay({ question, words, children }: { question: string; words: stri
   return (
     <div className="space-y-1">
       <p className="text-xs text-muted-foreground">
-        <span className="font-medium text-foreground">{question}</span> {words}
+        <span className="font-medium text-foreground">{question}</span>{' '}
+        {words}
       </p>
       {children}
     </div>
