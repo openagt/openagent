@@ -374,7 +374,6 @@ export function AgentView({
           {/* Where the work is and the next step, above the message box and its row. */}
           <AgentWorkBar
             checkout={barCheckout}
-            did={showHandoff ? handoff.handoff?.commits[0]?.subject : undefined}
             summary={
               ready &&
               (showHandoff ? (

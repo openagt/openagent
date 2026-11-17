@@ -1,23 +1,20 @@
 import type { ReactNode } from 'react'
 import type { AgentWorktree } from '../../src/index.js'
 import { X } from 'lucide-react'
-import { cn } from '../lib/utils.js'
 import { Button } from './ui/button.js'
 import { MiddleCut } from './MiddleCut.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 
-// The bar above the message box and its row, as Claude Code on the web has one: what the run did in
-// its own words, its branch, what it holds (+N −N), its pull request, and, at the end, the next step
-// as a button and an ✕ that puts the bar away. The row under it says the project. A step that
+// The bar above the message box and its row, as Claude Code on the web has one: the run's branch,
+// what it holds (+N −N), its pull request, and, at the end, the next step as a button and an ✕ that
+// puts the bar away. The row under it says the project. A step that
 // failed says why on a line of its own. It is there while there is something to say: the agent has
 // changes, a pull request or a next step. An agent that changed nothing has no bar.
 //
-// It is a quiet strip joined to the box's top edge, at its x and its width: its foot runs on under
-// the box's rounded top, so bar and box read as one block of controls under the conversation rather
-// than as two boxes.
+// It is a rounded strip of its own over the box, at the box's x and width, its presses quiet: the
+// branch leads, since a commit's subject (a merge's "Merge branch …") tells less than the branch does.
 export function AgentWorkBar({
   checkout,
-  did,
   summary,
   actions,
   error,
@@ -27,8 +24,6 @@ export function AgentWorkBar({
 }: {
   /** The agent's checkout as the page read it: its branch and its pull request. */
   checkout: AgentWorktree | null
-  /** What the run did, in its own words: its last commit's subject. */
-  did?: string | undefined
   /** What the branch holds, in a phrase. */
   summary?: ReactNode
   /** The next step (Commit, Open PR, Merge), or the words that stand where it would be. */
@@ -45,21 +40,18 @@ export function AgentWorkBar({
   const branch = checkout?.branch
   if (branch === undefined || !show || away) return null
   return (
-    // `-mb-4`: over the box's own top padding and 8px further, under the box's top edge.
-    <div className="mx-auto -mb-4 w-full max-w-3xl px-4 pt-2">
+    <div className="mx-auto w-full max-w-3xl px-4 pt-2">
       {/* One line at every width: on a phone too the branch gives way and the rest keeps its place.
           In the dark theme the hover fill is the bar's own colour, so its buttons get Everforest's
           next step up (both names: `bg-accent` reads the first, the Button's variants the second). */}
       {/* Focusable by script only: a press that leaves nothing to press next leaves the focus here. */}
-      <div role="group" aria-label="This session's work" tabIndex={-1} className="overflow-hidden rounded-t-box border-x border-t border-hairline bg-muted px-2 pb-2 text-sm outline-none dark:[--accent:#374145] dark:[--color-accent:#374145]">
+      <div role="group" aria-label="This session's work" tabIndex={-1} className="overflow-hidden rounded-[10px] bg-muted px-2 text-sm outline-none dark:[--accent:#374145] dark:[--color-accent:#374145]">
         <div className="flex h-10 items-center gap-2">
-          {/* What the run did, then its branch: the two parts that give up width, each cut short, the
-              branch in its middle so the end that tells it apart stays, its whole name in its
-              tooltip. No icon beside it: the name says what it is, and the row is shorter without one. */}
-          <span className="flex min-w-0 flex-1 items-baseline gap-2 pl-1">
-            {did && <span className="min-w-0 shrink truncate text-foreground">{did}</span>}
+          {/* The branch, the one part that gives up width: cut in its middle so the end that tells it
+              apart stays, its whole name in its tooltip. No icon beside it: the name says what it is. */}
+          <span className="flex min-w-0 flex-1 items-center pl-1">
             <Tooltip>
-              <TooltipTrigger render={<span className={cn('flex min-w-0 font-mono text-xs text-muted-foreground', did ? 'max-w-1/2 shrink-0' : 'flex-1')} />}>
+              <TooltipTrigger render={<span className="flex min-w-0 flex-1 text-muted-foreground" />}>
                 <MiddleCut text={branch} />
               </TooltipTrigger>
               <TooltipContent className="whitespace-pre-line">{[branch, checkout?.checkout?.path].filter(Boolean).join('\n')}</TooltipContent>
@@ -73,7 +65,7 @@ export function AgentWorkBar({
               <Tooltip>
                 <TooltipTrigger render={<a href={checkout.pr.url} target="_blank" rel="noreferrer" className="flex shrink-0 items-center gap-1.5 text-primary hover:underline" />}>
                   <span>PR #{checkout.pr.number}</span>
-                  <span className="text-xs text-muted-foreground">{checkout.pr.state.toLowerCase()}</span>
+                  <span className="rounded-full border border-border px-1.5 text-xs uppercase text-muted-foreground">{checkout.pr.state.toLowerCase()}</span>
                 </TooltipTrigger>
                 <TooltipContent>{checkout.pr.title}</TooltipContent>
               </Tooltip>
@@ -83,7 +75,7 @@ export function AgentWorkBar({
           {/* Put away by hand, as Claude Code's is. Nothing is undone by it: the work is where it
               was, and the bar says so again as soon as the work moves on. */}
           <Button variant="ghost" size="icon-sm" aria-label="Hide this bar" title="Hide this bar" onClick={onHide} className="shrink-0 text-muted-foreground">
-            <X className="size-4" />
+            <X className="size-3.5" />
           </Button>
         </div>
         {error && (
