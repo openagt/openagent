@@ -6,12 +6,12 @@ import { cn } from '../../lib/utils.js'
  * What is typed and the controls that send it, as one control: a card holding its text
  * ({@link ComposedFieldInput}) and under it a foot ({@link ComposedFieldFoot}) of what qualifies the
  * text, a line of what the press does, and the press. While the text has the keyboard the card's
- * edge darkens, as the message box's does.
+ * edge is a field's focus, 2 wide in the focus colour, as the message box's is.
  */
 // Its spacing is the look's rule (ui/look/spacing.md): a control in it stands 8 in from each edge it
 // touches, and its words and marks start on the 16 inset.
 export function ComposedField({ className, ...props }: ComponentProps<'div'>) {
-  return <div className={cn('rounded-lg border border-hairline bg-card p-2 shadow-sm transition-colors has-[[data-slot=composed-field-input]:focus-visible]:border-input', className)} {...props} />
+  return <div className={cn('rounded-lg border border-hairline bg-card p-2 shadow-sm transition-colors has-[[data-slot=composed-field-input]:focus-visible]:outline-2 has-[[data-slot=composed-field-input]:focus-visible]:-outline-offset-1 has-[[data-slot=composed-field-input]:focus-visible]:outline-focus', className)} {...props} />
 }
 
 /** The text of a {@link ComposedField}, after a plus that says it adds: no edge of its own, the card's is. */
