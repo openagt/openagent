@@ -412,7 +412,7 @@ export const Composer = forwardRef<ComposerHandle, {
             className={cn(
               // `disabled:opacity-*` overrides the base (the button is disabled while empty/busy), so the
               // hidden state must force it to 0 and the shown state back to full for the busy spinner.
-              'relative shrink-0 transition-[margin,opacity,scale] duration-200 ease-[cubic-bezier(0.2,0.8,0.2,1)] motion-reduce:transition-none max-md:after:absolute max-md:after:-inset-2',
+              'relative shrink-0 transition-[margin,opacity,scale] duration-180 ease-out motion-reduce:transition-none max-md:after:absolute max-md:after:-inset-2',
               IN_BOX,
               hasPrompt
                 ? // Full while busy, for its spinner; faded while something else holds the start (the note's OK, a machine offline).
