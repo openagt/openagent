@@ -11,7 +11,7 @@ vi.mock('../rpc/models.js', () => ({ onModels: () => new Promise(() => {}) }))
 const { SubagentsPanel } = await import('./SubagentsPanel.js')
 const { forgetRevealedChanges, revealSubagent } = await import('../lib/reveal-change.js')
 const { forgetRemembered } = await import('../lib/use-async.js')
-const { hoverTooltip } = await import('../test-utils.js')
+const { hoverTooltip, phoneScreen } = await import('../test-utils.js')
 const { FocusHome } = await import('../lib/focus-home.js')
 
 beforeEach(() => {
@@ -100,6 +100,23 @@ describe('the list of a run\'s subagents', () => {
     const { container } = render(panel({ events: [], subagents: [run(1, 'Read the theme tokens', 'done', 3)] }))
     const foot = container.querySelector('.sticky.bottom-0.bg-gradient-to-t')!
     expect(foot.className.split(' ')).toContain('from-background')
+  })
+
+  test('on a phone an opened subagent takes the list\'s place, its arrow back to all of them where the ✕ stands beside the list', () => {
+    const subagents = [run(1, 'Read the theme tokens', 'done', 3), run(24, 'Account page tests', 'running')]
+    const wide = phoneScreen()
+    try {
+      render(panel({ events: [], subagents }))
+      fireEvent.click(screen.getByRole('button', { name: /^Account page tests/ }))
+      const list = rowButtons()[0]!.closest('.overflow-y-auto')!
+      expect(list.className.split(' ')).toEqual(expect.arrayContaining(['max-md:hidden', 'md:max-h-1/2']))
+      expect(screen.queryByRole('button', { name: 'Close Account page tests' })).toBeNull()
+      fireEvent.click(screen.getByRole('button', { name: 'Back to all subagents' }))
+      expect(screen.queryByRole('region', { name: 'Account page tests' })).toBeNull()
+      expect(rowButtons()[0]!.closest('.overflow-y-auto')!.className.split(' ')).toContain('flex-1')
+    } finally {
+      wide()
+    }
   })
 
   test('a row opens its subagent under the list, and pressed again, or closed, it is gone; the keyboard goes back to its row', () => {
