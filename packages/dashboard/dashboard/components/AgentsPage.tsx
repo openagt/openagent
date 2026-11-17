@@ -19,6 +19,7 @@ import { Label } from './ui/label.js'
 import { Page } from './Page.js'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select.js'
 import { PanelShape, Slot } from './ui/slot.js'
+import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip.js'
 
 // The Agents page (Rom's design): an agent is a name, a set of skills and a set of accounts, made
 // once and used in any project or none. One row per agent, the default first, each edited in a
@@ -434,7 +435,9 @@ function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord;
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="agent-github">On GitHub as</Label>
-            <div className="flex flex-wrap items-center gap-2">
+            {/* The pick, and beside it a square of its height that adds an account: the block stays as
+                short as the name's beside it. */}
+            <div className="flex items-center gap-2">
               <Select items={githubItems} value={draft.github ?? COMPUTERS} onValueChange={next => setDraft(d => ({ ...d, ...(next ? { github: String(next) } : {}), ...(next ? {} : { github: undefined }) }))} disabled={busy}>
                 <SelectTrigger id="agent-github" aria-label="GitHub account" className="min-w-0 grow basis-auto max-md:h-11">
                   <SelectValue />
@@ -448,10 +451,16 @@ function AgentEditor({ agent, view, onAccounts, onDone }: { agent?: AgentRecord;
                 </SelectContent>
               </Select>
               {view.github && (
-                <Button type="button" variant="secondary" disabled={busy} onClick={() => addingAccount.add(view.github!.host)} className="max-md:h-11">
-                  <Plus className="size-4" aria-hidden />
-                  Add account
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Button type="button" variant="secondary" size="icon" aria-label="Add account" disabled={busy} onClick={() => addingAccount.add(view.github!.host)} className="shrink-0 max-md:size-11" />
+                    }
+                  >
+                    <Plus className="size-4" aria-hidden />
+                  </TooltipTrigger>
+                  <TooltipContent>Add account</TooltipContent>
+                </Tooltip>
               )}
             </div>
             <p className="text-xs text-muted-foreground">Runs push and open pull requests as this account. An account this computer does not have refuses the start.</p>
