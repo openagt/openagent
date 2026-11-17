@@ -151,16 +151,19 @@ describe('opening and closing a pane', () => {
     expect(cards()).toEqual(['Docs', 'Changes', 'Files'])
   })
 
-  test('the page\'s top bar is a row over the page and its panes: an icon that opened a pane stays where it was pressed, and the same press closes it', () => {
+  test('the page\'s top bar is over the chat alone, as Claude Code\'s, so the panes beside it reach the top: an icon that opened a pane stays where it was pressed, and the same press closes it', () => {
     render(<PageWithItsBar />)
     const files = icon('Files')
     const chat = document.getElementById('chat')!
-    expect(chat.contains(files)).toBe(false)
-    expect(files.closest('header')!.compareDocumentPosition(chat) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    // In the chat's column, first in it.
+    expect(chat.contains(files)).toBe(true)
+    expect(chat.firstElementChild!.contains(files)).toBe(true)
     fireEvent.click(files)
     expect(cards()).toEqual(['Files'])
     expect(icon('Files')).toBe(files)
     expect(card('Files').contains(files)).toBe(false)
+    // The pane's column holds no bar over it: its own header is at its top.
+    expect(card('Files').closest('[data-panel]')!.contains(files)).toBe(false)
     fireEvent.click(files)
     expect(cards()).toEqual([])
   })
@@ -514,7 +517,7 @@ describe('on a phone', () => {
     const { container } = render(<Page />)
     fireEvent.click(icon('Files'))
     const over = card('Files').closest('.absolute')!
-    for (const cls of ['absolute', 'inset-x-0', 'bottom-0', 'z-20', 'max-md:top-11']) expect(over.className.split(' ')).toContain(cls)
+    for (const cls of ['absolute', 'inset-x-0', 'top-11', 'bottom-0', 'z-20']) expect(over.className.split(' ')).toContain(cls)
     expect(container.querySelectorAll('[data-panel]')).toHaveLength(1)
     expect(screen.queryByRole('separator')).toBeNull()
     expect(screen.getByText('the chat')).toBeTruthy()

@@ -233,11 +233,11 @@ export function PanesProvider({
   return <PanesContext.Provider value={value}>{children}</PanesContext.Provider>
 }
 
-/** The row over the page and its panes that the page's top bar is drawn in (PaneLayout); none on a phone, or on a page with no panes. */
+/** The row over the page (the chat), beside its panes, that the page's top bar is drawn in (PaneLayout); none on a phone, or on a page with no panes. */
 const TopBarRow = createContext<HTMLElement | null>(null)
 
 /**
- * A page's top bar: in the row over the page and its panes where there is one, else where it
+ * A page's top bar: in the row over the page, beside its panes, where there is one, else where it
  * stands. Always lined under, scrolled or not, with no fade under the line.
  */
 export function TopBar({ children }: { children: ReactNode }) {
@@ -397,10 +397,11 @@ const CHAT_LEAST = 320
 const COLUMN_LEAST = 288
 
 /**
- * A page and its panes: the page's top bar over both, the page (the chat) at the start, and at its
- * end the column of open panes, the line between them dragged to share the width. Where the room
- * holds less than both at their least (a phone; a window at 768 with the sidebar open), the open
- * pane lies over the page under its top bar instead. A page with no panes is drawn as it is.
+ * A page and its panes, as Claude Code's: the page (the chat) at the start with its top bar over it
+ * alone, and at its end the column of open panes, from the window's top down, each pane's header
+ * level with the top bar; the line between them is dragged to share the width. Where the room holds
+ * less than both at their least (a phone; a window at 768 with the sidebar open), the open pane lies
+ * over the page under its top bar instead. A page with no panes is drawn as it is.
  */
 export function PaneLayout({ children }: { children: ReactNode }) {
   const { page, enabled, open, expanded } = useContext(PanesContext)
@@ -422,12 +423,13 @@ export function PaneLayout({ children }: { children: ReactNode }) {
   return (
     // `relative`: a pane that fills the page is laid over all of this.
     <div className="relative flex min-w-0 flex-1 flex-col">
-      {!isMobile && <div ref={setRow} className="shrink-0" />}
       <TopBarRow.Provider value={row}>
         <div ref={setRoom} className="relative flex min-h-0 flex-1">
           {/* No line is dragged under a pane that fills the page. */}
           <ResizablePanelGroup orientation="horizontal" disabled={expanded !== undefined} onLayoutChanged={remember} className="min-h-0 flex-1">
             <ResizablePanel id={CHAT} minSize={CHAT_LEAST} className="flex min-w-0 flex-col" style={{ overflow: 'hidden' }}>
+              {/* The top bar's row: over the chat only, so the panes beside it reach the window's top. */}
+              {!isMobile && <div ref={setRow} className="shrink-0" />}
               {children}
             </ResizablePanel>
             {beside && <ResizableHandle aria-label="The width of the chat and the panes" />}
@@ -438,8 +440,8 @@ export function PaneLayout({ children }: { children: ReactNode }) {
             )}
           </ResizablePanelGroup>
           {over && open.length > 0 && (
-            // The whole room under the top bar, which on a phone is the page's own, 44 high.
-            <div className="absolute inset-x-0 top-0 bottom-0 z-20 flex flex-col bg-background max-md:top-11">
+            // The whole room under the top bar, 44 high: the chat's row, or on a phone the page's own.
+            <div className="absolute inset-x-0 top-11 bottom-0 z-20 flex flex-col bg-background">
               {open.map(pane => (
                 <div key={pane.id} className="min-h-0 flex-1">
                   <PaneCard pane={pane} over />
