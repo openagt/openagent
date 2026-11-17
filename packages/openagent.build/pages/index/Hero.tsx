@@ -107,12 +107,13 @@ export function Hero() {
         style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, marginTop: 12, maxWidth: '100%' }}
       >
         <PmTabs />
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', gap: '8px 32px', maxWidth: '100%' }}>
+        {/* One way leads: trying it once; installing is the quiet second, under it. */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, maxWidth: '100%' }}>
           <Labelled label="Try:">
             <CommandBox command="try" after={<span style={{ color: 'var(--muted-foreground)' }}># One-shot (no install)</span>} />
           </Labelled>
           <Labelled label="Or install:">
-            <CommandBox command="install" />
+            <CommandBox command="install" quiet />
           </Labelled>
         </div>
       </div>

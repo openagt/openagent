@@ -96,9 +96,19 @@ const BOX = { ...text('sm'), minHeight: 44, padding: '12px 6px 12px 16px', gap: 
 /**
  * `$ command` in a box that copies it: a press of the pointer anywhere on it, or of its copy press, which the
  * keyboard reaches. The press shows a check once the command is copied. Not a button as a whole, so the command
- * in it can still be selected by hand.
+ * in it can still be selected by hand. A quiet one, the second way beside the one a page recommends, has muted
+ * words and no fill, and its edge shows only under the pointer.
  */
-export function CommandBox({ command, after }: { command: Command; /** Said after the command. */ after?: ReactNode }) {
+export function CommandBox({
+  command,
+  after,
+  quiet,
+}: {
+  command: Command
+  /** Said after the command. */
+  after?: ReactNode
+  quiet?: boolean
+}) {
   const { copied, copy } = useCopy()
   const picked = usePickedCommand(command)
   const Icon = copied ? Check : Copy
@@ -115,8 +125,9 @@ export function CommandBox({ command, after }: { command: Command; /** Said afte
         justifyContent: 'space-between',
         textAlign: 'left',
         cursor: 'pointer',
-        background: 'var(--card)',
-        border: '1px solid var(--border)',
+        background: quiet ? 'transparent' : 'var(--card)',
+        color: quiet ? 'var(--muted-foreground)' : undefined,
+        border: `1px solid ${quiet ? 'transparent' : 'var(--border)'}`,
         borderRadius: 'var(--radius-lg)',
         fontFamily: mono,
       }}
