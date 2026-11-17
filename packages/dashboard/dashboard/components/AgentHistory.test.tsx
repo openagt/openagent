@@ -653,7 +653,8 @@ describe('subagents on the rail', () => {
 
   test('while a subagent works the list is open under its main agent, each row named by its task', () => {
     renderRail(<AgentHistory projectId="p1" scope="p1" agents={[sub('c2', { status: 'running' }), sub('c1'), main]} selectedAgentId={null} onSelect={() => {}} />)
-    const fold = screen.getByRole('button', { name: /2 subagents · 1 running/ })
+    const fold = screen.getByRole('button', { name: /2 subagents · 1 working/ })
+    expect(fold.getAttribute('title')).toBe('2 subagents, 1 working')
     expect(fold.getAttribute('aria-expanded')).toBe('true')
     expect(screen.getByText('task c1')).toBeTruthy()
     expect(screen.getByText('task c2')).toBeTruthy()
@@ -720,7 +721,7 @@ describe('subagents on the rail', () => {
 
   test('the reader folding the list of a working subagent wins over it being open by itself', () => {
     renderRail(<AgentHistory projectId="p1" scope="p1" agents={[sub('c1', { status: 'running' }), main]} selectedAgentId={null} onSelect={() => {}} />)
-    fireEvent.click(screen.getByRole('button', { name: /1 subagent · 1 running/ }))
+    fireEvent.click(screen.getByRole('button', { name: /1 subagent · 1 working/ }))
     expect(screen.queryByText('task c1')).toBeNull()
   })
 
