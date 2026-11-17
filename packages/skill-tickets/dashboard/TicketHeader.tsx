@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { LockOpen, MoreHorizontal, Pencil } from 'lucide-react'
 import {
   Badge,
+  MiddleCut,
   Button,
   ConfirmDialog,
   DropdownMenu,
@@ -264,9 +265,11 @@ export function TicketFacts({
         <Fact name="Opened">
           <span title={ticketDay(ticket)}>{ticketAge(ticket)}</span>
         </Fact>
-        <Fact name="File">
-          {/* Whole, wrapping where the column is narrow: a path read to be found is never cut. */}
-          <span className="min-w-0 font-mono text-xs text-muted-foreground [overflow-wrap:anywhere]">{`${TICKETS_DIR}/${ticket.file}`}</span>
+        <Fact name="File" under>
+          {/* One line under its name, so its date never breaks across two; cut in its middle only where even that is narrow, its ending whole; whole under the pointer. */}
+          <span title={`${TICKETS_DIR}/${ticket.file}`} className="flex min-w-0 font-mono text-xs text-muted-foreground">
+            <MiddleCut text={`${TICKETS_DIR}/${ticket.file}`} />
+          </span>
         </Fact>
       </dl>
       {sessions.length > 0 && (
@@ -279,10 +282,10 @@ export function TicketFacts({
   )
 }
 
-/** One fact of the side list: its name in a column of its own, its value beside it. `wide`: said under the title on a narrow screen instead. */
-function Fact({ name, wide = false, children }: { name: string; wide?: boolean; children: ReactNode }) {
+/** One fact of the side list: its name in a column of its own, its value beside it, or `under` it where the value needs the list's width. `wide`: said under the title on a narrow screen instead. */
+function Fact({ name, wide = false, under = false, children }: { name: string; wide?: boolean; under?: boolean; children: ReactNode }) {
   return (
-    <div className={cn('flex items-baseline gap-2 py-1.5', wide && 'max-lg:hidden')}>
+    <div className={cn('flex gap-2 py-1.5', under ? 'flex-col gap-1' : 'items-baseline', wide && 'max-lg:hidden')}>
       <dt className="w-20 shrink-0 text-faint-foreground">{name}</dt>
       <dd className="flex min-w-0 flex-wrap items-baseline gap-1">{children}</dd>
     </div>
