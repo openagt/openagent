@@ -272,10 +272,10 @@ export function RenameForm({ name, rename, onClose }: { name: string; rename: Re
 }
 
 /**
- * A fact of a server's head a phone leaves to a screen reader (its version): its kind's badge and its state are boxes a
- * line breaks after, so a fact more would open the facts' second line with its dot.
+ * A fact of a server's head a phone puts on a line of its own, with no dot (its version): its kind's badge and its state are
+ * boxes a line breaks after, so a fact run on would open the facts' second line with its dot.
  */
-export const PHONE_LEAVES = (fact: ReactNode): Fact => ({ fact, className: 'max-md:sr-only' })
+export const PHONE_OWN_LINE = (fact: ReactNode): Fact => ({ fact, className: 'max-md:block max-md:[&>[aria-hidden]]:hidden' })
 
 /** A device's page is named above it, in the Settings dialog's header: its own top says it once more only outside the dialog. */
 export const NamedAbove = createContext(false)
