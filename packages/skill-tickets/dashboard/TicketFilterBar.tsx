@@ -133,11 +133,12 @@ function RangeFacet({
             />
           ))}
         </div>
-        <Separator className="my-1" />
+        {/* The rules start where the ticks and the words do, on the rows' inset. */}
+        <Separator className="mx-2 my-1" />
         <RangeRow label={label} buckets={buckets} filter={filter} onChange={onChange} />
         {(counts.none > 0 || filter.none) && (
           <>
-            <Separator className="my-1" />
+            <Separator className="mx-2 my-1" />
             <OptionRow label={noneLabel} count={counts.none} checked={filter.none} onChange={next => onChange(withNone(filter, next))} />
           </>
         )}
@@ -165,6 +166,8 @@ function RangeRow({
   onChange: (next: RangeFilter) => void
 }) {
   const union = bucketUnionRange(filter, buckets)
+  const lowest = Math.min(...buckets.map(bucket => bucket.min))
+  const highest = Math.max(...buckets.map(bucket => bucket.max))
   const dimmed = filter.buckets.length > 0 && union === null
   const displayed = filter.range ?? union
   return (
@@ -188,9 +191,16 @@ function RangeRow({
       </div>
       <RangeSlider
         aria-label={`${label} range`}
-        value={displayed ?? [0, 10]}
+        min={lowest}
+        max={highest}
+        value={displayed ?? [lowest, highest]}
         onValueChange={next => onChange(withRange(filter, next))}
       />
+      {/* The range's ends, named under them. */}
+      <div aria-hidden className="mt-1 flex justify-between text-xs tabular-nums text-muted-foreground">
+        <span>{lowest}</span>
+        <span>{highest}</span>
+      </div>
     </div>
   )
 }
