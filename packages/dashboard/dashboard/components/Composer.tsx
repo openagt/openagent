@@ -473,10 +473,11 @@ export const Composer = forwardRef<ComposerHandle, {
     </div>
   )
 
-  // Every note at once, stacked up from the box; none moves the box or what is typed in it.
+  // Every note at once, stacked up from the box; none moves the box or what is typed in it. A note is
+  // a card as the box is, so it stands the step between two cards from the box and from the next note: 12.
   const notesSlot = useContext(BoxNotes)
   const notesEl = (
-    <div className="flex flex-col gap-1.5 pb-1 empty:hidden">
+    <div className="flex flex-col gap-3 pb-3 empty:hidden">
       {notes}
       {loginsNote}
       {offlineNote}
