@@ -273,7 +273,9 @@ export function AgentHistory({
   const telling: Telling = { person: differ(row => row.agent.person?.toLowerCase()), driver: differ(row => driverFromImpl(row.agent.driver)), project: differ(row => row.project) }
 
   // The rows as a tree: a run started for another run in the list sits under it, as its subagent.
-  const tree = nestRows(rows)
+  // A run listed in "Waiting on you" is not listed again in the Log; one with subagents stays, so they keep their place.
+  const waitingListed = new Set(waiting.slice(0, WAITING_SHOWN).flatMap(item => (item.agentId ? [`${item.projectId}:${item.agentId}`] : [])))
+  const tree = nestRows(rows).filter(({ row, subagents }) => subagents.length > 0 || !waitingListed.has(`${row.projectId}:${row.agent.id}`))
   // Which lists of subagents the reader opened or folded by hand, by the main agent's row.
   const [folds, setFolds] = useState<Record<string, boolean>>({})
 
@@ -419,6 +421,7 @@ export function AgentHistory({
                   <WaitingOnYou
                     waiting={waiting}
                     hrefOf={item => (item.agentId ? hrefOf({ projectId: item.projectId, agentId: item.agentId }) : item.url)}
+                    isOpen={item => item.agentId !== undefined && item.agentId === selectedAgentId && item.projectId === (crossProject ? projectId : listOf)}
                     onOpen={item => (item.agentId ? leave(onSelectRecent ?? (() => {}))(item.projectId, item.agentId) : undefined)}
                     moreHref={homeHref}
                     onMore={leave(onDashboard)}
@@ -588,12 +591,13 @@ const WAITING_SHOWN = 5
  * What waits on the person, over the Log: each the compact two-line row (spacing.md 3), the waiting
  * hexagon and the run's name, cut at the row's end, with how long it has waited at its end as the Log's
  * rows have it, and under the name, quiet, what it needs in the Human Queue's two words; past five, a
- * row that opens the Overview, where the Human Queue lists them all. The Log still lists every run in
- * its order: a run answered stays where it was.
+ * row that opens the Overview, where the Human Queue lists them all. A run listed here is not listed
+ * again in the Log; once answered it is back in the Log, in its order.
  */
 function WaitingOnYou({
   waiting,
   hrefOf,
+  isOpen,
   onOpen,
   moreHref,
   onMore,
@@ -601,6 +605,8 @@ function WaitingOnYou({
   waiting: readonly Intervention[]
   /** Where a row goes: its run's page, or a pull request no run here opened. */
   hrefOf: (item: Intervention) => string | undefined
+  /** Whether a row's run is the page shown: its row is the picked one, as the Log's would be. */
+  isOpen: (item: Intervention) => boolean
   /** Open a row's run in place. */
   onOpen: (item: Intervention) => void
   moreHref: string
@@ -609,7 +615,7 @@ function WaitingOnYou({
   const shown = waiting.slice(0, WAITING_SHOWN)
   const rest = waiting.length - shown.length
   // The navigation's row (ui/nav-row): corners 8, 2 apart, and 32 high (44 on a phone) at the least, grown by its lines.
-  const rowClass = 'focus-ring flex w-full items-center gap-3 rounded-lg px-2 text-left text-sm text-foreground transition-colors hover:bg-foreground/4 active:bg-foreground/8'
+  const rowClass = 'focus-ring flex w-full items-center gap-3 rounded-lg px-2 text-left text-sm text-foreground transition-colors'
   return (
     <SidebarGroup className="pt-3! pb-0!">
       <SidebarGroupLabel>Waiting on you</SidebarGroupLabel>
@@ -624,8 +630,9 @@ function WaitingOnYou({
                 <a
                   href={href}
                   aria-label={`${item.title} · ${need}`}
+                  aria-current={isOpen(item) ? 'page' : undefined}
                   {...(external ? { target: '_blank', rel: 'noreferrer' } : { onClick: inPlace(() => onOpen(item)) })}
-                  className={cn(rowClass, 'py-1.5 md:min-h-8 max-md:min-h-11')}
+                  className={cn(rowClass, 'py-1.5 md:min-h-8 max-md:min-h-11', isOpen(item) ? 'bg-foreground/8' : 'hover:bg-foreground/4 active:bg-foreground/8')}
                 >
                   <span className="flex min-w-0 flex-1 flex-col">
                     {/* The mark and the age on the name's first line, never between the two (spacing.md 3). The
@@ -648,7 +655,7 @@ function WaitingOnYou({
           })}
           {rest > 0 && (
             <SidebarMenuItem>
-              <a href={moreHref} onClick={inPlace(onMore)} className={cn(rowClass, 'text-muted-foreground md:h-8 max-md:h-11')}>
+              <a href={moreHref} onClick={inPlace(onMore)} className={cn(rowClass, 'text-muted-foreground hover:bg-foreground/4 active:bg-foreground/8 md:h-8 max-md:h-11')}>
                 <span aria-hidden className="size-4 shrink-0" />
                 {rest} more
               </a>
