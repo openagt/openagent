@@ -28,6 +28,13 @@ describe('ProjectActions', () => {
     expect(menu.mock.calls[0]![0].agentId).toBeUndefined()
   })
 
+  test('given the page\'s name, as on a phone, the bar heads with it, as a session\'s bar with its name', () => {
+    render(<ProjectActions projectId="p1" name="What should an agent do?" />)
+    const name = screen.getByRole('heading', { level: 1, name: 'What should an agent do?' })
+    expect(name.className.split(' ')).toEqual(expect.arrayContaining(['truncate', 'text-sm', 'font-medium']))
+    expect(name.nextElementSibling!.className).toContain('grow')
+  })
+
   test('the menu is handed what to tell once the project is removed', () => {
     menu.mockClear()
     const onProjectRemoved = vi.fn()

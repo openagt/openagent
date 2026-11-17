@@ -8,13 +8,14 @@ const onDocs = vi.hoisted(() => vi.fn())
 vi.mock('../rpc/reads.js', () => ({ onDocs }))
 
 // The sections are tested on their own; here they are stand-ins.
-vi.mock('./ProjectActions.js', () => ({ ProjectActions: () => null }))
+vi.mock('./ProjectActions.js', () => ({ ProjectActions: ({ name }: { name?: string }) => (name === undefined ? null : <h1 data-testid="bar-name">{name}</h1>), BAR_NAME: '' }))
 vi.mock('./ProjectErrorBanner.js', () => ({ ProjectErrorBanner: () => null }))
 vi.mock('./ProjectSkills.js', () => ({ ProjectSkillsLine: () => <div>skills line</div> }))
 vi.mock('./StartAgentForm.js', () => ({ StartAgentForm: () => <div>start form</div> }))
 vi.mock('./HumanQueueList.js', () => ({ HumanQueueList: ({ items }: { items: unknown[] }) => <div>{items.length} rows</div>, holdsBack: (items: unknown[]) => items.length > 6 }))
 
 const { ProjectHome } = await import('./ProjectHome.js')
+const { phoneScreen } = await import('../test-utils.js')
 
 const WAITS: Intervention = { projectId: 'p1', projectName: 'p1', kind: 'awaiting', title: 'Auth store', question: 'Cache it?', agentId: 'r1', awaitId: 'q1' }
 
@@ -68,6 +69,16 @@ describe('ProjectHome', () => {
     expect(screen.queryByRole('heading', { name: 'Docs' })).toBeNull()
     expect(screen.queryByText('PLAN.md')).toBeNull()
     expect(onDocs).not.toHaveBeenCalled()
+  })
+
+  test('on a phone the question stands in the top bar, once, and the list starts under the bar', () => {
+    const wide = phoneScreen()
+    try {
+      render(<ProjectHome projectId="p1" waiting={[]} files={[]} context={new Set()} addContext={() => {}} removeContext={() => {}} toggleContext={() => {}} onOpenAgent={() => {}} projects={[]} onPickProject={() => {}} onProjectAdded={() => {}} />)
+      expect(screen.getAllByRole('heading', { level: 1, name: 'What should an agent do?' })).toEqual([screen.getByTestId('bar-name')])
+    } finally {
+      wide()
+    }
   })
 
   test('nothing waits: no section, no heading', () => {

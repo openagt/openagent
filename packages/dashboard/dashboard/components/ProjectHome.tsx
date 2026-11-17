@@ -2,7 +2,7 @@ import { useLayoutEffect, useRef } from 'react'
 import { cn } from '../lib/utils.js'
 import type { Intervention, ProjectError, ProjectSummary } from '../../src/index.js'
 import { StartAgentForm } from './StartAgentForm.js'
-import { ProjectActions } from './ProjectActions.js'
+import { BAR_NAME, ProjectActions } from './ProjectActions.js'
 import { ComposerShape } from './Composer.js'
 import { TopBar } from './Panes.js'
 import { ProjectErrorBanner } from './ProjectErrorBanner.js'
@@ -96,7 +96,7 @@ export function ProjectHome({
           It stops short of the list's scroll bar (ui/scroll-area, 10 wide), which is drawn over the
           page's whole height; only the bar's line crosses it, to the page's edge. */}
       <div ref={top} data-testid="home-top" className="absolute top-0 right-2.5 left-0 z-20 bg-background/80 backdrop-blur-md">
-        <ProjectActions projectId={projectId} onProjectRemoved={home === undefined ? onProjectRemoved : undefined} />
+        <ProjectActions projectId={projectId} name={isMobile ? QUESTION_WORDS : undefined} onProjectRemoved={home === undefined ? onProjectRemoved : undefined} />
         {/* Above everything, because an agent started on a project whose agent-data branch cannot
             reach origin (#1599) works from stale tickets and a queue nobody else will see. */}
         <ProjectErrorBanner errors={errors} />
@@ -129,7 +129,8 @@ export function ProjectHome({
           {/* Its rows start under the top bar, which lies over the list's start, where the list is first. */}
           <div className={cn('mx-auto w-full max-w-3xl', listFirst && 'pt-(--home-top)')}>
             <div className="space-y-8 px-4 pt-6 pb-4 md:pt-4">
-              {listFirst && <h1 className={QUESTION}>What should an agent do?</h1>}
+              {/* On a phone the question stands in the bar over the list, which keeps the room. */}
+              {listFirst && !isMobile && <h1 className={QUESTION}>{QUESTION_WORDS}</h1>}
               {/* No part at all when nothing waits: an empty "Waiting on you" is noise on every launch. On
                   the box's edges, as an agent's chat is: its name and its card start where the box does. */}
               {waiting.length > 0 && (
@@ -149,6 +150,7 @@ export function ProjectHome({
   )
 }
 
+const QUESTION_WORDS = 'What should an agent do?'
 const QUESTION = 'text-xl font-semibold tracking-tight md:text-2xl'
 
 /** The page's name, its question, over the box: the two standing where the eye lands (the question's top at about a quarter of the page). */
@@ -156,7 +158,7 @@ function Question() {
   return (
     <>
       <div className="shrink-0 basis-[24%]" aria-hidden />
-      <h1 className={cn('mx-auto w-full max-w-3xl shrink-0 px-4 pb-4 text-center', QUESTION)}>What should an agent do?</h1>
+      <h1 className={cn('mx-auto w-full max-w-3xl shrink-0 px-4 pb-4 text-center', QUESTION)}>{QUESTION_WORDS}</h1>
     </>
   )
 }
@@ -171,13 +173,13 @@ export function ProjectHomeShape() {
     <div className="relative isolate flex min-h-0 flex-1 flex-col">
       <div className="absolute top-0 right-2.5 left-0 z-20">
         <TopBar>
-          <div className="h-11" />
+          <div className="flex h-11 items-center pl-4">{isMobile && <h1 className={BAR_NAME}>{QUESTION_WORDS}</h1>}</div>
         </TopBar>
       </div>
       <div aria-hidden className="pointer-events-none absolute top-[calc(2.75rem-1px)] right-0 z-20 h-px w-2.5 bg-border" />
       <div className="scrollbar-thin scrollbar-gutter-stable flex min-h-0 flex-1 flex-col overflow-y-auto">
-        {/* On a phone the question heads the list, under the bar and the list's own top room. */}
-        {isMobile ? <h1 className={cn('mx-auto w-full max-w-3xl px-4 pt-[calc(2.75rem+1.5rem)]', QUESTION)}>What should an agent do?</h1> : <Question />}
+        {/* On a phone the question stands in the bar. */}
+        {!isMobile && <Question />}
         <div className={cn('mx-auto w-full max-w-3xl shrink-0 px-4 pt-2 pb-4', isMobile && 'order-last')}>
           <ComposerShape />
         </div>
