@@ -2,7 +2,7 @@ import { Popover as BasePopover } from '@base-ui/react/popover'
 import type { ComponentProps, ReactNode } from 'react'
 import { cn } from '../../lib/utils.js'
 import { ScrollArea } from './scroll-area.js'
-import { POPUP_MOTION_CLASS, usePopupPlacement } from './popup-placement.js'
+import { POPUP_MOTION_CLASS, usePopupPosition } from './popup-placement.js'
 
 // The shadcn "base" popover (Base UI, not Radix) — the floating panel for rich content a menu can't
 // hold, like a ticket filter facet's panel. Same surface as the
@@ -30,10 +30,10 @@ export function PopoverContent({
   children,
   ...props
 }: ComponentProps<typeof BasePopover.Popup> & { sideOffset?: number; align?: 'start' | 'center' | 'end' }) {
-  const positionMethod = usePopupPlacement()
+  const position = usePopupPosition()
   return (
     <BasePopover.Portal>
-      <BasePopover.Positioner positionMethod={positionMethod} sideOffset={sideOffset} align={align} className="z-50 outline-none">
+      <BasePopover.Positioner {...position} sideOffset={sideOffset} align={align} className="z-50 outline-none">
         <BasePopover.Popup
           data-overlay="panel"
           className={cn(

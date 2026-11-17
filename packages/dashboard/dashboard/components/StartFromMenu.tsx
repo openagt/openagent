@@ -12,6 +12,7 @@ import { ScrollArea } from './ui/scroll-area.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { MENU_BODY_CLASS, MENU_ITEM_CLASS, MENU_POPUP_CLASS, MENU_TRIGGER_OPEN_CLASS, MenuMark } from './ui/dropdown-menu.js'
 import { usePickerSearch } from './ui/picker-search.js'
+import { usePopupPosition } from './ui/popup-placement.js'
 
 /** The most rows the menu draws at once: the search reaches the rest. */
 const ROWS_DRAWN = 200
@@ -78,6 +79,7 @@ const samePick = (a: Row, b: Row): boolean => a.value === b.value
 // the rest lands under them. A search box in a menu is a combobox's: a plain menu takes every key
 // for its own typing-to-jump.
 export function StartFromMenu({ projectId, main, local, pick, onPick, busy }: { projectId: string; main: string; local: string; pick: StartFromPick | undefined; onPick: (pick: StartFromPick | undefined) => void; busy: boolean }) {
+  const position = usePopupPosition()
   const label = startFromLabel(pick, main, local)
   const search = usePickerSearch()
   const { open } = search
@@ -109,7 +111,7 @@ export function StartFromMenu({ projectId, main, local, pick, onPick, busy }: { 
         <TooltipContent>{`The agent starts from ${label}`}</TooltipContent>
       </Tooltip>
       <Combobox.Portal>
-        <Combobox.Positioner sideOffset={6} align="start" className="z-50 outline-none">
+        <Combobox.Positioner {...position} sideOffset={6} align="start" className="z-50 outline-none">
           <Combobox.Popup data-overlay="picker" aria-label="The agent starts from" className={cn(MENU_POPUP_CLASS, 'w-[22rem] max-w-[var(--available-width)]')}>
             {/* The field one line tall, 16 in from the band's every edge, as the jump's is. */}
               <div className="flex h-13 items-center gap-3 border-b border-hairline px-4">

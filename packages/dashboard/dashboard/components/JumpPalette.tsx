@@ -223,7 +223,7 @@ export function JumpPalette({ waiting, runs, pages, projects, scope, here, hrefO
           initialFocus={input}
           finalFocus={() => !picked.current}
           className={cn(
-            'fixed z-50 flex flex-col overflow-hidden border border-hairline bg-card text-card-foreground shadow-lg outline-none',
+            'jump-popup fixed z-50 flex flex-col overflow-hidden border border-hairline bg-card text-card-foreground shadow-lg outline-none',
             'md:top-24 md:left-1/2 md:w-[min(36rem,calc(100vw-2rem))] md:-translate-x-1/2 md:rounded-lg',
             'max-md:inset-x-2 max-md:top-2 max-md:rounded-lg',
             // Where no foot is drawn (a phone, a touch screen), the list ends 16 over the box's edge, as it starts under the field.
@@ -271,7 +271,7 @@ export function JumpPalette({ waiting, runs, pages, projects, scope, here, hrefO
             <Autocomplete.Status className="sr-only">{count === 0 ? '' : count === 1 ? '1 place' : `${count} places`}</Autocomplete.Status>
             {/* One height whatever it holds: the box keeps its size and its foot its place as a person types. */}
             {/* The rows' fill 8 in from the box's edges, their marks and the groups' names 16 in, as the field's glyph. */}
-            <Autocomplete.List className="h-[min(26rem,60dvh)] scroll-py-2 overflow-y-auto overscroll-contain p-2 empty:hidden">
+            <Autocomplete.List className="jump-list h-[min(26rem,60dvh)] scroll-py-2 overflow-y-auto overscroll-contain p-2 empty:hidden">
               {(group: (typeof groups)[number]) => (
                 <Autocomplete.Group key={group.label} items={group.items} className="not-last:pb-2">
                   <Autocomplete.GroupLabel className="flex h-8 items-center px-2 text-xs font-medium text-muted-foreground">{group.label}</Autocomplete.GroupLabel>
@@ -300,6 +300,8 @@ export function JumpPalette({ waiting, runs, pages, projects, scope, here, hrefO
                 </Autocomplete.Group>
               )}
             </Autocomplete.List>
+            {/* Where no foot is drawn, over the list's last 32 above the box's 16: what goes on under it fades out, so the list says it goes on. */}
+            <div aria-hidden className="jump-fade pointer-events-none absolute inset-x-0 bottom-4 hidden h-8 bg-gradient-to-t from-card to-transparent max-md:block pointer-coarse:block" />
             {/* On the rows' edge, where the first row's mark would be. */}
             <Autocomplete.Empty className="flex h-[min(26rem,60dvh)] items-start px-4 py-3 text-sm text-muted-foreground empty:hidden">Nothing matches “{query}”</Autocomplete.Empty>
             {/* Its keys 16 in from the band's every edge, as the field is in the band at the top. */}
