@@ -162,7 +162,7 @@ export function Facts({ facts, lead, oneLine = false, className }: { facts: Fact
  * comes to the row for (Answer, Review); then the fact stands just before them, centred on the row with
  * them, and is left to a screen reader on a phone, where the room is the name's.
  */
-export function PanelRow({ state, before, title, titleHint, meta = [], metaLines = 1, under, columns, fact, actions, actionsAtRest = false, href, external = false, onClick, className, 'aria-label': label }: {
+export function PanelRow({ state, before, title, titleHint, meta = [], under, columns, fact, actions, actionsAtRest = false, href, external = false, onClick, className, 'aria-label': label }: {
   state?: ReactNode
   /** On the name's line before it, 12 after `state`, its own column (a ticket's priority): `meta` starts under the name, not under it. */
   before?: ReactNode
@@ -170,8 +170,6 @@ export function PanelRow({ state, before, title, titleHint, meta = [], metaLines
   /** Said under the pointer over the name: the whole text where the name stands in for it. */
   titleHint?: string | undefined
   meta?: Fact[]
-  /** How many lines what is known of it may take before it is cut: 2 for a sentence a person must read whole (a question). */
-  metaLines?: 1 | 2
   under?: ReactNode
   columns?: ReactNode
   fact?: ReactNode
@@ -221,14 +219,8 @@ export function PanelRow({ state, before, title, titleHint, meta = [], metaLines
         {before !== undefined && <span className="flex h-5 shrink-0 items-center">{before}</span>}
         <span className="min-w-0 flex-1">
           {named}
-          {/* On one line every part but the last is said whole and the last gives way, cut with "…"; on two, the parts run on and the second line is cut. */}
-          {parts.length > 0 && (
-            <Facts
-              facts={parts}
-              className={cn('mt-1 text-xs text-faint-foreground', metaLines === 2 && 'max-h-8')}
-              oneLine={metaLines === 1}
-            />
-          )}
+          {/* One line: every part but the last is said whole and the last gives way, cut with "…". */}
+          {parts.length > 0 && <Facts facts={parts} className="mt-1 text-xs text-faint-foreground" oneLine />}
           {under !== undefined && <span className="mt-1 block text-xs">{under}</span>}
         </span>
         {columns !== undefined && <span className="flex h-5 shrink-0 items-center gap-4 text-xs text-faint-foreground">{columns}</span>}
