@@ -1,7 +1,9 @@
 import { SESSIONS_ID } from '../../src/project-address.js'
 import type { GitHostHome } from '../../src/index.js'
 import { useContext, useEffect, useRef, useState, type MutableRefObject, type ReactNode } from 'react'
-import { Loader2, Square } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
+import { cn } from '../lib/utils.js'
+import { IN_BOX } from '../lib/in-box.js'
 import { Composer, type ComposerHandle } from './Composer.js'
 import { sendMessage } from '../rpc/control.js'
 import { useAction } from '../lib/use-action.js'
@@ -237,24 +239,26 @@ export function AgentComposer({
     return () => window.removeEventListener('keydown', onKey, true)
   })
 
-  // The empty box's slot control while the agent works: Stop, as Claude Code's, a square in the box's one primary press.
+  // The empty box's slot control while the agent works: Stop, a quiet press with a small solid square,
+  // its fill only under the pointer, its corner following the box's (IN_BOX).
   const idleControl = live ? (
     <Tooltip>
       <TooltipTrigger
         render={
           <Button
             type="button"
+            variant="ghost"
             size="icon-sm"
             onClick={stopSession}
             loading={stopping}
             disabled={down}
             aria-label="Stop agent"
             // Stopping draws its spinner in full; off while OpenAgent is not answering, Stop is dimmed as any button off.
-            className={stopping ? 'shrink-0 opacity-100' : 'shrink-0'}
+            className={cn('shrink-0 text-foreground', IN_BOX, stopping && 'opacity-100')}
           />
         }
       >
-        {stopping ? <Loader2 className="h-4 w-4 animate-spin" /> : <Square className="size-3 fill-current" />}
+        {stopping ? <Loader2 className="h-4 w-4 animate-spin" /> : <span aria-hidden className="size-[11px] rounded-[3px] bg-current" />}
       </TooltipTrigger>
       <TooltipContent className="flex items-center gap-1.5">
         {stopping ? (
