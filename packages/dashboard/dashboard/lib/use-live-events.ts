@@ -12,6 +12,11 @@ import { onEvents, type EventChannel } from '../rpc/events.js'
 // run's id picks the file to follow. Changing it resubscribes, which is what makes selecting run A
 // vs run B show different output. Without an id there is nothing to follow (the daemon streams no
 // run for none), so nothing is subscribed.
+//
+// A tab out of sight holds no stream: each stream holds one of the six connections a browser opens
+// to the dashboard, shared by all its tabs, and the calls of the tab in sight waited for a free one.
+// Back in sight, the feed opens again as a reconnect does: the replay swaps in whole, so the feed
+// on screen never blanks.
 
 /** The live feed plus whether its channel is currently down (#948). */
 export interface LiveEvents {
@@ -58,6 +63,10 @@ export function useLiveEvents(projectId: string | null, agentId?: string | null)
     let first = true
     let timer: ReturnType<typeof setTimeout> | undefined
     let graceTimer: ReturnType<typeof setTimeout> | undefined
+    // Out of sight, the feed is closed; each opening counts, so a stream that comes after the tab
+    // went out of sight is closed at once, and its end retries nothing.
+    let hidden = document.visibilityState === 'hidden'
+    let opening = 0
 
     // A dead stream used to be silent: the daemon restarts, events just stop, and "the agent
     // went quiet" is indistinguishable from "the feed died" (#948). Now an errored close (or a
@@ -80,8 +89,9 @@ export function useLiveEvents(projectId: string | null, agentId?: string | null)
       // shows less than it already showed (#1402's rule, applied to the live channel).
       const reconnect = !first
       first = false
+      const mine = ++opening
       void onEvents(projectId, agentId).then(ch => {
-        if (cancelled) {
+        if (cancelled || mine !== opening) {
           void ch.close()
           return
         }
@@ -150,17 +160,37 @@ export function useLiveEvents(projectId: string | null, agentId?: string | null)
           // collapse this exists to prevent, and the next attempt replays from the top anyway.
           buffer = undefined
           if (graceTimer) clearTimeout(graceTimer)
-          if (err) retry()
+          if (err && mine === opening) retry()
         })
-      }, retry)
+      }, () => {
+        if (mine === opening) retry()
+      })
     }
 
-    subscribe()
-    return () => {
-      cancelled = true
+    const close = () => {
+      opening++
       if (timer) clearTimeout(timer)
       if (graceTimer) clearTimeout(graceTimer)
       void channel?.close()
+      channel = undefined
+    }
+    const onVisibility = () => {
+      const now = document.visibilityState === 'hidden'
+      if (now === hidden) return
+      hidden = now
+      if (hidden) {
+        close()
+        // What it was writing is read again with the rest when the tab is back in sight.
+        setWriting('')
+      } else subscribe()
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+
+    if (!hidden) subscribe()
+    return () => {
+      cancelled = true
+      document.removeEventListener('visibilitychange', onVisibility)
+      close()
     }
     // agentId is a dependency: selecting another agent must resubscribe to that agent's log (#749).
   }, [projectId, agentId])
