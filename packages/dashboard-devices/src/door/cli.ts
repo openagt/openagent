@@ -48,7 +48,7 @@ ${helpRows([
   ['ask <url>', 'ask the computer whose door is at <url>, as find names it, to let this one in: the number both screens show, and the secret the answer is heard by'],
   ['ask-answer <url> -', 'whether a person there allowed it, with the secret on standard input: waits a while for the answer, and once allowed, answers the link this computer gets in with'],
   ['ask-cancel <url> -', `take this computer's ask away there, with the secret on standard input`],
-  ['asks [--wait <seconds>] [--seen <id,…>]', 'the computers on this Wi-Fi asking to get in here; with --wait, waits up to that long (at most 25) until they are other than --seen says'],
+  ['asks', 'the computers on this Wi-Fi asking to get in here'],
   ['allow <id>', 'let in the computer asking by that id; deny <id> says no, and it waits a minute to ask again'],
   ['serve', `the door's own process, run by OpenAgent for as long as it runs itself (OPENAGENT_URL says where OpenAgent is)`],
   ['server <command>', 'the servers this computer sets up over SSH: devices server lists their commands'],
@@ -76,8 +76,6 @@ export interface CliIO {
   /** How this Wi-Fi is asked for the doors open on it, and how `serve` says its door there; on the network itself when unsaid. */
   find?: typeof find
   announce?: typeof announce
-  /** How often `asks --wait` looks at the file. */
-  asksLookMs?: number
   /** The name of the person at this computer, as git knows it; asked of git when unsaid. */
   myName?: () => Promise<string | undefined>
   /** How the helper at `path` is run as root with `args`; with `sudo -n` when unsaid. */
@@ -678,24 +676,11 @@ export async function runCli(args: string[], io: CliIO): Promise<number> {
         return print(heard.value)
       }
       case 'asks': {
-        let wait = 0
-        let seen: string | undefined
-        for (let i = 0; i < rest.length; i += 2) {
-          const [flag, value] = [rest[i], rest[i + 1]]
-          if (flag === '--wait' && value !== undefined && /^\d+$/.test(value)) wait = Math.min(Number(value), 25)
-          else if (flag === '--seen' && value !== undefined) seen = value
-          else return usage()
-        }
+        if (rest.length) break
         // Another person's device sees none: only this computer's own screen and the owner's devices are asked.
         if (!mayAnswerAsks(io.env)) return print({ asks: [] })
-        const until = Date.now() + wait * 1000
-        for (;;) {
-          const store = await readStoreStrict(io.env)
-          const asks = store === 'unreadable' ? [] : waitingAsks(store)
-          // Answered at once with nothing seen yet, or once the asks are other than the page has.
-          if (seen === undefined || asks.map(ask => ask.id).join(',') !== seen || Date.now() >= until) return print({ asks })
-          await new Promise(resolve => setTimeout(resolve, io.asksLookMs ?? 500))
-        }
+        const store = await readStoreStrict(io.env)
+        return print({ asks: store === 'unreadable' ? [] : waitingAsks(store) })
       }
       case 'allow':
       case 'deny': {
