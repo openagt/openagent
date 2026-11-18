@@ -1,5 +1,5 @@
 import { AGENT_ENV, Refused, UsageError, errorMessage, inRepo, nodeGitRunner, parseCommandArgs, runCommandLine, runPackageCommand, sessionsHomeOf, PROJECT_SKILLS_ENV, SKILLS_OFF_ENV, SKILLS_ON_ENV, helpRows, helpText, type Command, type GitRunner } from '@openagt/agent-data'
-import { liftSkillRules, projectRoot } from '@openagt/skill-branches'
+import { liftSkillRules, projectRoot, sessionRepos } from '@openagt/skill-branches'
 import { DRIVER_NAMES, GIT_ACCOUNT_ENV, agentLoginFor, detachResume, detachRun, isDriverName, readyToRun, resumeProject, runProject, type DriverName, type SpawnedResume } from './runner.js'
 import type { RunOutcome, RunRequest } from './run.js'
 import { agentNamed, anySkillPick, runAgent, skillPicksNamed } from './agent.js'
@@ -8,7 +8,6 @@ import { cleanup } from './cleanup.js'
 import { everyBasicSkill } from './basic-skills.js'
 import { isPublish, NO_PUBLISH, PUBLISH_LEVELS } from './records.js'
 import { gitHostCommand } from './git-host.js'
-import { sessionRepos } from './session-folder.js'
 
 /**
  * The command line: JSON on stdout, one line for a person on stderr, and the exit code says how

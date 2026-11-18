@@ -3,44 +3,21 @@ import { basicGitHosts, basicPackageNames } from './basic-skills.js'
 
 /**
  * The project's git host (#1820), reached by declaration: whichever package declares
- * `"openagent": { "git-host": "<command>" }` answers the pull requests, and this tool runs that
- * command the way the dashboard runs any provided command. A package the project installed for it
- * comes first; else the git host among the basic skills every run gets, where it answers for the
- * project (`basic-skills.ts`), so a project with nothing installed has one too. Nothing here names
- * a git host or a package: a project with none has no pull requests to read back.
+ * `"openagent": { "git-host": "<command>" }` answers, and this tool runs that command the way the
+ * dashboard runs any provided command. A package the project installed for it comes first; else
+ * the git host among the basic skills every run gets, where it answers for the project
+ * (`basic-skills.ts`), so a project with nothing installed has one too. Nothing here names a git
+ * host or a package.
  *
- * The one question this tool asks of it: which pull request a branch has, for the run's record.
+ * What this tool asks of it: the account a run works as there. The pull request a run's branch
+ * has is the github module's to read back (`@openagt/skill-github/module`).
  */
-
-/** The pull request a branch has, as the record keeps it. */
-export interface BranchRequest {
-  number: number
-  url: string
-}
-
-/** What a run asks of the git host; a test may hand in its own. */
-export interface GitHost {
-  /** The newest pull request whose head is `branch`, open or closed; none when there is none, no git host, or the git host could not tell. */
-  requestOfBranch(repo: string, branch: string): Promise<BranchRequest | undefined>
-}
 
 const NO_GIT_HOST = 'this project has no git host package'
 
 /** The command of the project's git host: its own package's, else a basic skill's, the basic skills' names never read from the project. */
 export async function gitHostCommand(repo: string): Promise<ProvidedCommand | undefined> {
   return readProvidedCommand(repo, 'git-host', await basicGitHosts(repo).catch(() => []), await basicPackageNames()).catch(() => undefined)
-}
-
-/** The git host the project declares, run as a command. */
-export const projectGitHost: GitHost = {
-  async requestOfBranch(repo, branch) {
-    const command = await gitHostCommand(repo)
-    if (!command) return undefined
-    const result = await runPackageCommand(repo, command, ['requests', '--branch', branch])
-    if (!result.ok || !Array.isArray(result.output)) return undefined
-    const first = result.output[0] as { number?: unknown; url?: unknown } | undefined
-    return first && typeof first.number === 'number' && typeof first.url === 'string' ? { number: first.number, url: first.url } : undefined
-  },
 }
 
 /**

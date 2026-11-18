@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { OwnProjectsAsked, PROJECTS_KEPT_MS, elsewhereHomes, elsewhereId, elsewhereSummary, homeOf, idInLineName, isElsewhereId, lineNameOf, ownProjectsOf, type OwnMachine, type OwnProject } from './elsewhere.js'
-import { projectId } from '../registry.js'
+import { projectId } from '@openagt/agent-data'
 
 const shop: OwnProject = { id: 'shop-1abc', name: 'shop', path: '/Users/me/shop', address: 'github.com/me/shop', spelling: 'github.com/Me/shop', share: true, gitHost: true, activated: true }
 const notes: OwnProject = { id: 'notes-2def', name: 'notes', path: '/Users/me/notes', share: false, gitHost: false, activated: true }

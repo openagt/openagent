@@ -34,7 +34,11 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
-    "./SKILL.md": "./SKILL.md"
+    "./SKILL.md": "./SKILL.md",
+    "./module": {
+      "types": "./dist/module.d.ts",
+      "default": "./dist/module.js"
+    }
   },
   "scripts": {
     "build": "cp ../../skills/github/SKILL.md SKILL.md && tsc -p tsconfig.build.json",
@@ -45,6 +49,7 @@
   },
   "dependencies": {
     "@openagt/agent-data": "workspace:*",
+    "@openagt/hooks": "workspace:*",
     "@openagt/skill-logs": "workspace:*"
   },
   "devDependencies": {

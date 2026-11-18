@@ -11,8 +11,8 @@ import { markerCard, writeMarker } from './records.js'
 import { sweep } from './sweep.js'
 import { runCli } from './cli.js'
 import { runArgs } from './runner.js'
-import { SESSION_FOLDER_STAYS, sessionRepos } from './session-folder.js'
-import { NOW, noGitHost } from './run-test-support.js'
+import { SESSION_FOLDER_STAYS, sessionRepos } from '@openagt/skill-branches'
+import { NOW, testModules } from './run-test-support.js'
 import { git, removeRepo, testRepo } from './test-repo.js'
 
 // A session with no project: a run in the sessions home works in a folder of its own there, with
@@ -46,7 +46,7 @@ test('a run in the sessions home works in its own folder, keeps it, and is recor
   await mkdir(skill, { recursive: true })
   await writeFile(join(skill, 'SKILL.md'), '---\nname: a-skill\n---\n')
   const seen: { cwd?: string } = {}
-  const outcome = await runCommand(home, { prompt: 'Read the news', driver: writingDriver(seen), host: 'this-box', pid: 4242, now: () => NOW, gitHost: noGitHost, skills: async () => [{ name: 'a-skill', dir: skill }] })
+  const outcome = await runCommand(home, { prompt: 'Read the news', driver: writingDriver(seen), host: 'this-box', pid: 4242, now: () => NOW, modules: testModules(), skills: async () => [{ name: 'a-skill', dir: skill }] })
 
   assert.equal(seen.cwd, sessionFolder(home, ID), 'the agent works in the session folder')
   assert.equal(outcome.status, 'done')
@@ -66,9 +66,9 @@ test('a run in the sessions home works in its own folder, keeps it, and is recor
 
 test('a session goes on in the same folder when it is resumed', async () => {
   const home = await freshHome()
-  await runCommand(home, { prompt: 'Read the news', driver: writingDriver(), host: 'this-box', pid: 4242, now: () => NOW, gitHost: noGitHost, skills: async () => [] })
+  await runCommand(home, { prompt: 'Read the news', driver: writingDriver(), host: 'this-box', pid: 4242, now: () => NOW, modules: testModules(), skills: async () => [] })
   const seen: { cwd?: string } = {}
-  const outcome = await resumeRun(home, { id: ID, text: 'And the weather', driver: writingDriver(seen), host: 'this-box', pid: 4243, gitHost: noGitHost, skills: async () => [] })
+  const outcome = await resumeRun(home, { id: ID, text: 'And the weather', driver: writingDriver(seen), host: 'this-box', pid: 4243, modules: testModules(), skills: async () => [] })
   assert.equal(outcome.status, 'done')
   assert.equal(seen.cwd, sessionFolder(home, ID))
   assert.equal((await findRun(home, ID))?.status, 'done')
@@ -117,7 +117,7 @@ test('a session with repos has a copy of each in its folder, on its own branch, 
     const repos = await sessionRepos([withOrigin, withNone])
     assert.deepEqual(repos, [{ name: 'repo', from: withOrigin }, { name: 'repo-2', from: withNone }], 'two folders of one name are told apart')
     const seen: { cwd?: string } = {}
-    const outcome = await runCommand(home, { prompt: 'Compare them', driver: writingDriver(seen), host: 'this-box', pid: 4242, now: () => NOW, gitHost: noGitHost, skills: async () => [], repos })
+    const outcome = await runCommand(home, { prompt: 'Compare them', driver: writingDriver(seen), host: 'this-box', pid: 4242, now: () => NOW, modules: testModules(), skills: async () => [], repos })
     assert.equal(outcome.status, 'done')
     const folder = sessionFolder(home, ID)
     assert.equal(seen.cwd, folder, 'the agent starts in the session folder, the repos in it')
@@ -143,11 +143,11 @@ test('a resumed session keeps its copies as the agent left them, and makes again
   const two = await repoWithoutOrigin()
   try {
     const repos = await sessionRepos([one, two])
-    await runCommand(home, { prompt: 'Start', driver: writingDriver(), host: 'this-box', pid: 4242, now: () => NOW, gitHost: noGitHost, skills: async () => [], repos })
+    await runCommand(home, { prompt: 'Start', driver: writingDriver(), host: 'this-box', pid: 4242, now: () => NOW, modules: testModules(), skills: async () => [], repos })
     const folder = sessionFolder(home, ID)
     await writeFile(join(folder, 'repo', 'work.txt'), 'the agent was here\n')
     await rm(join(folder, 'repo-2'), { recursive: true, force: true })
-    const outcome = await resumeRun(home, { id: ID, text: 'Go on', driver: writingDriver(), host: 'this-box', pid: 4243, gitHost: noGitHost, skills: async () => [] })
+    const outcome = await resumeRun(home, { id: ID, text: 'Go on', driver: writingDriver(), host: 'this-box', pid: 4243, modules: testModules(), skills: async () => [] })
     assert.equal(outcome.status, 'done')
     assert.equal(await readFile(join(folder, 'repo', 'work.txt'), 'utf8'), 'the agent was here\n', 'a copy that stayed is kept as it is')
     assert.equal(await branchOf(join(folder, 'repo-2')), `agent-${ID}`, 'a copy that is gone is made again')

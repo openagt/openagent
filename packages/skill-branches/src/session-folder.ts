@@ -1,8 +1,16 @@
 import { mkdir, stat } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { checkoutRoot, nodeGitRunner, originUrl, sessionFolder, type GitRunner } from '@openagt/agent-data'
-import { agentBranchName } from '@openagt/skill-branches'
-import type { SessionRepo } from './records.js'
+import { agentBranchName } from './branch-names.js'
+
+/**
+ * A repo a session with no project has as context: the folder it was copied from, and the name
+ * of its copy in the session's folder.
+ */
+export interface SessionRepo {
+  name: string
+  from: string
+}
 
 /**
  * The repos given to a session, each by a folder in it: the repo's own top folder, named by that

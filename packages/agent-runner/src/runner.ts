@@ -12,10 +12,12 @@ import { basicSkills } from './basic-skills.js'
 import { gitHostCommand, gitHostEnv } from './git-host.js'
 import { namedAtStart, resumeRun, runCommand, runIdFrom, type RunOutcome, type RunRequest } from './run.js'
 import { askName } from './title.js'
-import { publishChange, runnerMark, type NO_PUBLISH, type Publish, type SessionRepo } from './records.js'
+import { publishChange, runnerMark, type NO_PUBLISH, type Publish } from './records.js'
+import type { SessionRepo } from '@openagt/skill-branches'
 import { acquireRunLock, handOverRunLock, isPidAlive, releaseRunLock, runStderrPath } from './run-lock.js'
 import { accountRotation, accountsPath, hasAddedAccount, readAccounts } from '@openagt/skill-account-rotation'
 import { AGENT_ID_ENV, type AgentRecord } from '@openagt/agent-data'
+import { DISTRIBUTION_ENV, loadHandedDown, type DistributionEntry } from '@openagt/hooks'
 
 /**
  * The tool's process side: a run in this process, the same run detached in its own process and
@@ -240,7 +242,8 @@ export interface ProjectRun extends RunRequest {
  * id here and marks itself. The model is the
  * one given; none given, the coding agent starts on its own default.
  */
-export async function runProject(repo: string, opts: ProjectRun, deps: { workAs?: typeof workAs } = {}): Promise<RunOutcome> {
+export async function runProject(repo: string, opts: ProjectRun, deps: { workAs?: typeof workAs; modules?: readonly DistributionEntry[] } = {}): Promise<RunOutcome> {
+  const modules = deps.modules ?? (await distributionModules())
   // What the run is asked, its start, its agent and its log go on to it as they are; the rest is read here.
   const { id: given, mark, driver = 'claude-code', gitAccount, skills: picks = {}, ...rest } = opts
   const id = given ?? runIdFrom(new Date().toISOString())
@@ -259,6 +262,7 @@ export async function runProject(repo: string, opts: ProjectRun, deps: { workAs?
     ...rest,
     ...(naming !== undefined ? { naming } : {}),
     id,
+    modules,
     marked,
     driver: driverFor(driver, id, setup, accounts),
     skills: (where, agent) => basicSkills(where, agent, on, picks),
@@ -278,8 +282,9 @@ export async function runProject(repo: string, opts: ProjectRun, deps: { workAs?
 export async function resumeProject(
   repo: string,
   opts: SpawnedResume & { log?: (line: string) => void },
-  deps: { driverFor?: typeof driverFor; workAs?: typeof workAs } = {},
+  deps: { driverFor?: typeof driverFor; workAs?: typeof workAs; modules?: readonly DistributionEntry[] } = {},
 ): Promise<RunOutcome> {
+  const modules = deps.modules ?? (await distributionModules())
   const card = await findRun(repo, opts.id)
   const recorded = card?.driver ?? 'claude-code'
   if (!isDriverName(recorded)) throw new Error(`run ${opts.id} is on ${recorded}, which agent-runner cannot start`)
@@ -293,6 +298,7 @@ export async function resumeProject(
   const as = await (deps.workAs ?? workAs)(await gitHostRepo(repo, previous?.repos), previous?.gitAccount)
   return resumeRun(repo, {
     id: opts.id,
+    modules,
     ...(opts.text !== undefined ? { text: opts.text } : {}),
     ...(opts.answer !== undefined ? { answer: opts.answer } : {}),
     ...(opts.model !== undefined ? { model: opts.model } : {}),
@@ -304,6 +310,18 @@ export async function resumeProject(
     ...(as !== undefined ? { gitAccount: as } : {}),
     ...(opts.log ? { log: opts.log } : {}),
   })
+}
+
+/**
+ * The modules a run of this process goes through: those of the distribution that started it, which
+ * hands itself down to every process it starts (`@openagt/hooks`' {@link DISTRIBUTION_ENV}). A run
+ * started with none handed down is refused before anything is written: without its distribution's
+ * modules a run has no checkout to work in.
+ */
+async function distributionModules(): Promise<DistributionEntry[]> {
+  const modules = await loadHandedDown(process.env)
+  if (!modules) throw new Error(`no distribution was handed down to this process (${DISTRIBUTION_ENV}): a run goes through the modules of the OpenAgent that starts it`)
+  return modules
 }
 
 /** The account a run starts on, of the agent it runs on, by name, when whoever started it picked one: a scheduler's pick. */

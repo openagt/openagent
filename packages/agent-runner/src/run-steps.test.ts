@@ -8,12 +8,11 @@ import type { GitRunner } from '@openagt/agent-data'
 import { createHooks } from '@openagt/hooks'
 import { worktreePath } from '@openagt/skill-branches'
 import { findRun } from '@openagt/skill-logs'
-import type { Leg } from './leg.js'
 import { resumeRun, runCommand } from './run.js'
 import { STOPPED_DETAIL } from './session.js'
-import { runModules } from './steps/modules.js'
+import { BUILT_IN_MODULES } from './steps/modules.js'
 import { git, handDownBasicSkills, readUntimedDiary, removeRepo, testRepo } from './test-repo.js'
-import { NOW, noGitHost, committingDriver } from './run-test-support.js'
+import { NOW, committingDriver, testModules } from './run-test-support.js'
 
 // A run as OpenAgent starts it: with the basic skills handed down.
 handDownBasicSkills()
@@ -25,8 +24,7 @@ handDownBasicSkills()
 const unstarted = (started: { yes: boolean }): Driver => ({ id: 'fake', start: async opts => ((started.yes = true), new FakeDriver({ turns: [{ text: 'Done.' }] }).start(opts)) })
 
 test("a run's steps, in their order: its checkout and skills, the agent's turns, then where the work went, the record, the reclaim and the person's line", async () => {
-  // The steps only close over the leg; listing them runs none.
-  const steps = await createHooks(runModules({} as Leg)).steps({ options: {} })
+  const steps = await createHooks([...testModules(), ...BUILT_IN_MODULES]).steps({ options: {} })
   assert.deepEqual(
     steps.map(step => `${step.module}: ${step.name}`),
     [
@@ -47,7 +45,7 @@ test('a run whose checkout cannot be made is recorded failed, saying which step 
   const repo = await testRepo()
   try {
     const started = { yes: false }
-    const outcome = await runCommand(repo, { prompt: '/work-queue', base: 'no-such-branch', driver: unstarted(started), now: () => NOW, gitHost: noGitHost })
+    const outcome = await runCommand(repo, { prompt: '/work-queue', base: 'no-such-branch', driver: unstarted(started), now: () => NOW, modules: testModules() })
     assert.equal(outcome.status, 'failed')
     assert.match(outcome.detail ?? '', /^make the checkout: .*no-such-branch/)
     assert.deepEqual(outcome.checkout, { reclaimed: false, reason: 'no checkout' })
@@ -72,7 +70,7 @@ test('a run stopped while its checkout is made is not started: the agent never r
       return out
     }
     const started = { yes: false }
-    const outcome = await runCommand(repo, { prompt: '/work-queue', driver: unstarted(started), git: signalling, now: () => NOW, gitHost: noGitHost })
+    const outcome = await runCommand(repo, { prompt: '/work-queue', driver: unstarted(started), now: () => NOW, modules: testModules({ git: signalling }) })
     assert.equal(outcome.status, 'stopped')
     assert.equal(outcome.detail, STOPPED_DETAIL)
     assert.equal(started.yes, false, 'the steps still to prepare the run, and its turns, are skipped')
@@ -91,7 +89,7 @@ test('a continued run whose checkout cannot be made is recorded failed, its reco
   const repo = await testRepo()
   const elsewhere = await mkdtemp(join(tmpdir(), 'agent-runner-elsewhere-'))
   try {
-    const first = await runCommand(repo, { prompt: 'fix it', driver: committingDriver(), now: () => NOW, gitHost: noGitHost })
+    const first = await runCommand(repo, { prompt: 'fix it', driver: committingDriver(), now: () => NOW, modules: testModules() })
     assert.equal(first.status, 'done')
     assert.equal(first.branch, 'agent-fix-it')
     const before = await readUntimedDiary(repo, first.id)
@@ -99,7 +97,7 @@ test('a continued run whose checkout cannot be made is recorded failed, its reco
     await git(['worktree', 'add', join(elsewhere, 'tree'), 'agent-fix-it'], repo)
 
     const started = { yes: false }
-    const outcome = await resumeRun(repo, { id: first.id, text: 'one more thing', driver: unstarted(started), now: () => NOW, gitHost: noGitHost })
+    const outcome = await resumeRun(repo, { id: first.id, text: 'one more thing', driver: unstarted(started), now: () => NOW, modules: testModules() })
     assert.equal(outcome.status, 'failed')
     assert.match(outcome.detail ?? '', /^make the checkout: /)
     assert.equal(started.yes, false)

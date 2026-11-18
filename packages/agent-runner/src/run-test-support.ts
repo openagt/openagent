@@ -2,10 +2,19 @@
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { FakeDriver, promptSent, type Driver, type DriverSession, type DriverStartOptions, type FakeDriverSession } from '@openagt/agent-driver'
-import type { GitHost } from './git-host.js'
+import type { GitRunner } from '@openagt/agent-data'
+import type { DistributionEntry, PullRequest } from '@openagt/hooks'
+import { gitBranchesModule } from '@openagt/skill-branches/module'
+import { githubModule } from '@openagt/skill-github/module'
+import agentDriver from './module.js'
 import { git } from './test-repo.js'
 
 export const NOW = new Date('2026-09-16T14:01:00.000Z')
+
+/** What a run asks of its git host, as a test stands in for it: the pull request a branch has. */
+export interface GitHost {
+  requestOfBranch(dir: string, branch: string): Promise<PullRequest | undefined>
+}
 
 /** A git host with no pull request for any branch: what a run whose agent opened none reads. */
 export const noGitHost: GitHost = { requestOfBranch: async () => undefined }
@@ -92,4 +101,17 @@ export function publishingDriver(gitHost: ReturnType<typeof fakeGitHost>, seen: 
       })
     },
   }
+}
+
+/**
+ * The modules a test's run goes through, as OpenAgent's distribution lists them for a run:
+ * git-branches and github, each with what the test stands in for, and agent-driver.
+ */
+export function testModules(deps: { gitHost?: GitHost; git?: GitRunner } = {}): DistributionEntry[] {
+  const gitHost = deps.gitHost ?? noGitHost
+  return [
+    { module: gitBranchesModule(deps.git ? { git: deps.git } : {}) },
+    { module: githubModule({ requestOfBranch: (dir, branch) => gitHost.requestOfBranch(dir, branch) }) },
+    { module: agentDriver },
+  ]
 }

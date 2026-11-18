@@ -16,9 +16,11 @@ already made, and lists it in its pull request; for anything else it proposes an
   the driver would get git and the skills with it. Either way was open; this one for now.
 - The runner depends on `@openagt/agent-driver` for the session contract, on each coding
   agent's adapter (`@openagt/agent-driver-claude`, `@openagt/agent-driver-codex`) for
-  its driver and its readiness check, on the branches package for the checkout and the
-  reclaim, on the logs package for the records, and on `agent-data` for the branch. It
-  never depends on OpenAgent; OpenAgent brings it, as one of its packages.
+  its driver and its readiness check, on the logs package for the records, and on
+  `agent-data` for the branch. A run's checkout and its pull request are steps of the
+  modules of the distribution that starts the run, handed down to the run's process
+  (`@openagt/hooks`, #2394). It never depends on OpenAgent; OpenAgent brings it, as one
+  of its packages.
 - The runner reads no schedule: a run is the prompt it is given. It names no skill: the
   skills every run gets are handed to it by the package that started OpenAgent
   (`@openagt/dashboard`), and a git host's among them only where the project is on that host.
@@ -55,16 +57,12 @@ already made, and lists it in its pull request; for anything else it proposes an
   agent made. The home is beside the personal folder, not in it: the personal folder is
   committed whole and synced to the person's repository. Picked over the folder in the
   personal folder, where a session's files would be pushed with the records.
-- A session's repos are clones in its folder, one per repo, made from the repo's folder and
-  pointed at the repo's own origin, each on a branch `agent-<id>`; a repo with no origin
-  gets a clone with none. The folder holds everything: deleting it deletes the session's
-  work. Picked over worktrees, which a project's runs use: a session's repo is no project,
-  and nothing of the session is left in it.
 - The agent publishes its own work, when asked to, through the skills in its checkout; the
-  run publishes nothing, and reads the pull request back off the branch for the record,
-  through the command the project's git host package declares, never through a git host's
-  own client. Picked over the run opening the
-  request from the branch's commits, and over the agent leaving a title and body in a file.
+  run publishes nothing, and the git host's module reads the pull request back off the
+  branch for the record (github's step, #2394). Picked over the run opening the request
+  from the branch's commits, over the agent leaving a title and body in a file, and over
+  the command a project's own git host package declares: the distribution decides the git
+  host.
 - `git-host <command>` runs a command of the project's git host package and prints what it
   printed, so a skill's check reads pull requests with no git host named. Picked over a
   skill naming the GitHub skill's command.

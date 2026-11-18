@@ -1,11 +1,10 @@
 import { readFile, stat } from 'node:fs/promises'
 import { listSessionFolders, nodeGitRunner, sessionFolder, sessionsHomeOf, type GitRunner } from '@openagt/agent-data'
-import { agentBranchName, reclaimWorktree, worktreeDirEntries, worktreePath } from '@openagt/skill-branches'
+import { agentBranchName, reclaimWorktree, SESSION_FOLDER_STAYS, worktreeDirEntries, worktreePath } from '@openagt/skill-branches'
 import { listRuns, type LogsDeps, type RunCard } from '@openagt/skill-logs'
 import { endLiveCard, readLiveCard, readLiveDiary } from './live-card.js'
 import { lockHolder, runStderrPath } from './run-lock.js'
 import { recordBranchGone, recordRun, runnerMark, startOf } from './records.js'
-import { SESSION_FOLDER_STAYS } from './session-folder.js'
 
 /**
  * The belt (#1774): what a run's own process could not do because it died. A scheduler runs it on

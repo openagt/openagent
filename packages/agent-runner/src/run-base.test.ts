@@ -8,7 +8,7 @@ import { findRun } from '@openagt/skill-logs'
 import { resumeRun, runCommand } from './run.js'
 import { runnerMark } from './records.js'
 import { git, handDownBasicSkills, removeRepo, testRepo } from './test-repo.js'
-import { NOW, noGitHost } from './run-test-support.js'
+import { NOW, testModules } from './run-test-support.js'
 
 // A run told to start from a branch as origin has it, end to end on a real repository and a real
 // bare origin, with the agent faked. Its own file: `run.test.ts` is at the runner's time limit.
@@ -41,7 +41,7 @@ test('a run started from a branch only origin has starts on origin\'s copy, fetc
     const theirs = (await git(['rev-parse', 'HEAD'], other)).trim()
 
     const seen = { head: '' }
-    const outcome = await runCommand(repo, { prompt: 'Do it', base: publishedBase('feature-x'), driver: looking(seen), now: () => NOW, gitHost: noGitHost })
+    const outcome = await runCommand(repo, { prompt: 'Do it', base: publishedBase('feature-x'), driver: looking(seen), now: () => NOW, modules: testModules() })
     assert.equal(outcome.status, 'done')
     assert.equal(seen.head, theirs)
     const ended = await findRun(repo, outcome.id)
@@ -52,13 +52,13 @@ test('a run started from a branch only origin has starts on origin\'s copy, fetc
     // The empty branch went with the checkout: a resume makes it again from the same place, which no local branch of that name can take over.
     await git(['branch', 'feature-x', 'main'], repo)
     seen.head = ''
-    const continued = await resumeRun(repo, { id: outcome.id, text: 'Look again.', driver: looking(seen), now: () => new Date(NOW.getTime() + 60_000), gitHost: noGitHost })
+    const continued = await resumeRun(repo, { id: outcome.id, text: 'Look again.', driver: looking(seen), now: () => new Date(NOW.getTime() + 60_000), modules: testModules() })
     assert.equal(continued.status, 'done')
     assert.equal(seen.head, theirs)
 
     // Gone from origin: the run fails on its record, with words, and started from nothing else.
     await git(['push', '-q', 'origin', '--delete', 'feature-x'], other)
-    const gone = await runCommand(repo, { prompt: 'Do it again', base: publishedBase('feature-x'), driver: new FakeDriver({ turns: [{ text: 'Never asked.' }] }), now: () => NOW, gitHost: noGitHost })
+    const gone = await runCommand(repo, { prompt: 'Do it again', base: publishedBase('feature-x'), driver: new FakeDriver({ turns: [{ text: 'Never asked.' }] }), now: () => NOW, modules: testModules() })
     assert.equal(gone.status, 'failed')
     assert.match(gone.detail ?? '', /the branch feature-x could not be fetched from origin/)
   } finally {

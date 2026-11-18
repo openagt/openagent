@@ -3,6 +3,7 @@ import { runDaemon, DEFAULT_DAEMON_PORT } from '../daemon.js'
 import { joinRunningDashboard } from '../join-dashboard.js'
 import type { StartedProject } from '../dashboard/types.js'
 import { handDownSkills } from './skills.js'
+import { handDownDistribution } from './distribution.js'
 import { repositoryOf } from './project.js'
 import { openInBrowser } from './browser.js'
 import { openagentVersion } from '../version.js'
@@ -112,8 +113,9 @@ async function runForegroundDaemonCmd(args: CliArgs, io: CliIO): Promise<number>
   const port = args.port ?? DEFAULT_DAEMON_PORT
   let project: string | undefined
   try {
-    // Set in this process's own environment, so everything the dashboard starts inherits it.
+    // Set in this process's own environment, so everything the dashboard starts inherits them.
     await handDownSkills(process.env)
+    handDownDistribution(process.env)
     // A server's service starts in its user's home, which is no project however it looks: a home
     // made a repository would be added again at every start.
     project = process.env.OPENAGENT_SERVER === '1' ? undefined : await repositoryOf(cwd)

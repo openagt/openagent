@@ -64,6 +64,11 @@ already made, and lists it in its pull request; for anything else it proposes an
   one entry, so a bin an install adds lands in the user's folder too; the others (`.pnpm`,
   `.modules.yaml`) would tell the package manager the checkout's tree was installed there,
   which it was not.
+- A session's repos are clones in its folder, one per repo, made from the repo's folder and
+  pointed at the repo's own origin, each on a branch `agent-<id>`; a repo with no origin
+  gets a clone with none. The folder holds everything: deleting it deletes the session's
+  work. Picked over worktrees, which a project's runs use: a session's repo is no project,
+  and nothing of the session is left in it.
 - Everything after the worktree is best-effort: a checkout missing any of it is a worse
   run, not a failed one.
 

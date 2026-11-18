@@ -98,3 +98,4 @@ export {
   type ProvidedCommandLookup,
   type PackageCommandResult,
 } from './provided-command.js'
+export { projectId } from './project-id.js'

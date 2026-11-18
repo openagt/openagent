@@ -10,9 +10,8 @@ import { acquireRunLock, releaseRunLock } from './run-lock.js'
 import { resumeRun, runCommand } from './run.js'
 import { AFRESH_NOTICE, earlierWorkLine, PUBLISH_LINES, STOPPED_DETAIL } from './session.js'
 import { recordRun, runnerMark } from './records.js'
-import type { GitHost } from './git-host.js'
 import { handDownBasicSkills, readUntimedDiary, removeRepo, testRepo } from './test-repo.js'
-import { NOW, noGitHost, fakeGitHost, wrap, QUESTION, committingDriver, ticking } from './run-test-support.js'
+import { NOW, fakeGitHost, wrap, QUESTION, committingDriver, ticking, testModules, type GitHost } from './run-test-support.js'
 
 // A run as OpenAgent starts it: with the basic skills handed down.
 handDownBasicSkills()
@@ -54,7 +53,7 @@ test('a signal to the run\'s process stops it: the agent asked to end its turn, 
   try {
     let prompted!: () => void
     const started = new Promise<void>(resolve => (prompted = resolve))
-    const running = runCommand(repo, { prompt: '/work-queue', model: 'opus', driver: patientDriver('stop', () => prompted()), now: () => NOW, gitHost: noGitHost })
+    const running = runCommand(repo, { prompt: '/work-queue', model: 'opus', driver: patientDriver('stop', () => prompted()), now: () => NOW, modules: testModules() })
     await started
     const pressed = Date.now()
     process.kill(process.pid, 'SIGINT') // what a dashboard's Stop sends; this test's own process has the run's handler
@@ -78,7 +77,7 @@ test('a second signal ends an agent that does not stop: the session killed, the 
   try {
     let prompted!: () => void
     const started = new Promise<void>(resolve => (prompted = resolve))
-    const running = runCommand(repo, { prompt: '/work-queue', model: 'opus', driver: patientDriver('signal', () => prompted()), now: () => NOW, gitHost: noGitHost })
+    const running = runCommand(repo, { prompt: '/work-queue', model: 'opus', driver: patientDriver('signal', () => prompted()), now: () => NOW, modules: testModules() })
     await started
     const pressed = Date.now()
     process.kill(process.pid, 'SIGINT')
@@ -114,7 +113,7 @@ test('a run stopped before its agent took its prompt, continued with a message, 
         return new FakeDriver({ turns: [] }).start(opts)
       },
     }
-    const running = runCommand(repo, { prompt: 'Redesign the checkout page', driver: slow, now: () => NOW, gitHost: noGitHost })
+    const running = runCommand(repo, { prompt: 'Redesign the checkout page', driver: slow, now: () => NOW, modules: testModules() })
     await started
     process.kill(process.pid, 'SIGINT')
     const first = await running
@@ -130,7 +129,7 @@ test('a run stopped before its agent took its prompt, continued with a message, 
         return fake
       },
     }
-    const second = await resumeRun(repo, { id: first.id, text: 'Use the new colours', driver: going, now: () => NOW, gitHost: noGitHost })
+    const second = await resumeRun(repo, { id: first.id, text: 'Use the new colours', driver: going, now: () => NOW, modules: testModules() })
     assert.equal(second.status, 'done')
     assert.deepEqual(sent, [promptSent('Redesign the checkout page\n\nUse the new colours', { attached: earlierWorkLine(first.id, undefined) })])
   } finally {
@@ -164,7 +163,7 @@ test('a message a stopped run never read is not sent when the run is continued: 
         }
       },
     }
-    const running = runCommand(repo, { prompt: '/work-queue', driver: working, now: () => NOW, gitHost: noGitHost })
+    const running = runCommand(repo, { prompt: '/work-queue', driver: working, now: () => NOW, modules: testModules() })
     await started
     process.kill(process.pid, 'SIGINT')
     const first = await running
@@ -179,7 +178,7 @@ test('a message a stopped run never read is not sent when the run is continued: 
         return fake
       },
     }
-    const second = await resumeRun(repo, { id: first.id, text: 'go on', driver: going, now: () => NOW, gitHost: noGitHost })
+    const second = await resumeRun(repo, { id: first.id, text: 'go on', driver: going, now: () => NOW, modules: testModules() })
     assert.equal(second.status, 'done')
     assert.deepEqual(sent.map(prompt => prompt.split('\n')[0]), ['go on'])
   } finally {
@@ -192,7 +191,7 @@ test('a run whose last turn asked ends waiting and keeps its checkout; the answe
   try {
     // First session: the agent asks. Second session, resumed by the recorded id: it finishes.
     const asking = new FakeDriver({ turns: [{ text: QUESTION }], sessionId: 's-ask' })
-    const first = await runCommand(repo, { prompt: '/work-queue', model: 'opus', driver: asking, host: 'this-box', pid: 4242, now: () => NOW, gitHost: noGitHost })
+    const first = await runCommand(repo, { prompt: '/work-queue', model: 'opus', driver: asking, host: 'this-box', pid: 4242, now: () => NOW, modules: testModules() })
     assert.equal(first.status, 'waiting')
     assert.deepEqual(first.checkout, { reclaimed: false, reason: 'waiting' })
     assert.equal(await stat(worktreePath(repo, first.id)).then(() => true, () => false), true, 'the checkout waits for the answer')
@@ -221,7 +220,7 @@ test('a run whose last turn asked ends waiting and keeps its checkout; the answe
         return new FakeDriver({ turns: [{ text: 'Shipped.' }], sessionId: 's-ask' }).start(opts)
       },
     }
-    const second = await resumeRun(repo, { id: first.id, answer: 'Approve', driver: finishing, host: 'this-box', pid: 4243, now: () => new Date(NOW.getTime() + 3_600_000), gitHost: noGitHost })
+    const second = await resumeRun(repo, { id: first.id, answer: 'Approve', driver: finishing, host: 'this-box', pid: 4243, now: () => new Date(NOW.getTime() + 3_600_000), modules: testModules() })
     assert.equal(resumedWith, 's-ask', 'the session resumes by the id the record carries')
     assert.equal(second.id, first.id, 'the same run')
     assert.match(questionAtResume, /^name: ask$/m, 'a kept checkout is given the links a new one gets before the agent goes on')
@@ -243,11 +242,11 @@ test('a run whose last turn asked ends waiting and keeps its checkout; the answe
 test('a resumed run whose coding agent cannot start is recorded failed, not as the end its kept checkout had before', async () => {
   const repo = await testRepo()
   try {
-    const first = await runCommand(repo, { prompt: '/work-queue', driver: new FakeDriver({ turns: [{ text: QUESTION }], sessionId: 's-ask' }), now: () => NOW, gitHost: noGitHost })
+    const first = await runCommand(repo, { prompt: '/work-queue', driver: new FakeDriver({ turns: [{ text: QUESTION }], sessionId: 's-ask' }), now: () => NOW, modules: testModules() })
     assert.equal(first.status, 'waiting')
     const dying: Driver = { id: 'fake', start: async () => { throw new Error('codex: not installed') } }
     const later = new Date(NOW.getTime() + 60_000)
-    const second = await resumeRun(repo, { id: first.id, answer: 'Approve', driver: dying, now: () => later, gitHost: noGitHost })
+    const second = await resumeRun(repo, { id: first.id, answer: 'Approve', driver: dying, now: () => later, modules: testModules() })
     assert.equal(second.status, 'failed')
     const card = await findRun(repo, first.id)
     assert.equal(card?.status, 'failed', 'the record says how this leg ended')
@@ -264,14 +263,14 @@ test('a question asked with the agent’s own tool ends the run waiting as a wri
     // As Claude Code's AskUserQuestion: the agent said a sentence, and the driver stopped the turn on its question.
     const question = { title: 'Which colour?', header: 'Colour', options: [{ id: 'opt:0', label: 'Blue' }, { id: 'opt:1', label: 'Green', detail: 'Light green' }], recommended: 'opt:0' }
     const asking = new FakeDriver({ turns: [{ text: 'One thing first.', question }], sessionId: 's-tool' })
-    const first = await runCommand(repo, { prompt: 'Make the background light', driver: asking, now: () => NOW, gitHost: noGitHost })
+    const first = await runCommand(repo, { prompt: 'Make the background light', driver: asking, now: () => NOW, modules: testModules() })
     assert.equal(first.status, 'waiting')
     const diary = await readUntimedDiary(repo, first.id)
     assert.deepEqual(diary.find(l => l.kind === 'question'), { kind: 'question', ...question })
     assert.deepEqual(diary.at(-1), { kind: 'ended', status: 'waiting' })
 
     const finishing = new FakeDriver({ turns: [{ text: 'Made it green.' }], sessionId: 's-tool' })
-    const second = await resumeRun(repo, { id: first.id, answer: 'Green', driver: finishing, now: () => NOW, gitHost: noGitHost })
+    const second = await resumeRun(repo, { id: first.id, answer: 'Green', driver: finishing, now: () => NOW, modules: testModules() })
     assert.equal(second.status, 'done')
     const resumed = (await readUntimedDiary(repo, first.id)).filter(l => l.kind === 'start').at(-1)
     assert.equal(resumed?.['prompt'], 'You paused to ask: "Which colour?". The user chose: Green. Continue with that decision.')
@@ -285,7 +284,7 @@ test('a resumed run whose conversation its coding agent no longer has goes on in
   try {
     const gitHost = fakeGitHost('agent-fix-it')
     gitHost.open()
-    const first = await runCommand(repo, { prompt: '/fix-it', driver: committingDriver(), now: () => NOW, gitHost })
+    const first = await runCommand(repo, { prompt: '/fix-it', driver: committingDriver(), now: () => NOW, modules: testModules({ gitHost }) })
     assert.equal(first.status, 'done')
     assert.equal((await findRun(repo, first.id))?.caller?.['sessionId'], 's-1')
 
@@ -298,7 +297,7 @@ test('a resumed run whose conversation its coding agent no longer has goes on in
         return fake
       },
     }
-    const second = await resumeRun(repo, { id: first.id, text: '/reply a comment came', driver: forgetful, now: () => NOW, gitHost })
+    const second = await resumeRun(repo, { id: first.id, text: '/reply a comment came', driver: forgetful, now: () => NOW, modules: testModules({ gitHost }) })
     assert.equal(second.id, first.id, 'the same run')
     assert.equal(second.status, 'done')
     const pointer = earlierWorkLine(first.id, { url: 'https://example.com/x/y/pull/12' })
@@ -322,7 +321,7 @@ test('a resumed run whose conversation its coding agent no longer has goes on in
 test('a resumed run whose record names no conversation goes on in a fresh one the same way', async () => {
   const repo = await testRepo()
   try {
-    const first = await runCommand(repo, { prompt: '/work-queue', driver: new FakeDriver({ turns: [{ text: 'Done.' }] }), now: () => NOW, gitHost: noGitHost })
+    const first = await runCommand(repo, { prompt: '/work-queue', driver: new FakeDriver({ turns: [{ text: 'Done.' }] }), now: () => NOW, modules: testModules() })
     const card = await findRun(repo, first.id)
     delete card!.caller!['sessionId']
     await recordRun(repo, card!, (await readDiary(repo, first.id))!)
@@ -338,7 +337,7 @@ test('a resumed run whose record names no conversation goes on in a fresh one th
         return fake
       },
     }
-    const second = await resumeRun(repo, { id: first.id, text: 'one more thing', driver: fresh, now: () => NOW, gitHost: noGitHost })
+    const second = await resumeRun(repo, { id: first.id, text: 'one more thing', driver: fresh, now: () => NOW, modules: testModules() })
     assert.equal(second.status, 'done')
     assert.equal(resumedWith, undefined)
     assert.deepEqual(sent, [promptSent('one more thing', { attached: earlierWorkLine(first.id, undefined) })])
@@ -358,18 +357,18 @@ test("the person's ended line runs when a run ends waiting and when it ends done
     const lines = async () => (await readFile(out, 'utf8').catch(() => '')).split('\n').filter(Boolean)
 
     const asking = new FakeDriver({ turns: [{ text: QUESTION }], sessionId: 's-ask' })
-    const first = await runCommand(repo, { prompt: '/work-queue', driver: asking, now: () => NOW, gitHost: noGitHost })
+    const first = await runCommand(repo, { prompt: '/work-queue', driver: asking, now: () => NOW, modules: testModules() })
     assert.equal(first.status, 'waiting')
     assert.deepEqual(await lines(), ['waiting|Ship it?||repo: "/work-queue" is waiting for you: Ship it?'])
 
     const gitHost = fakeGitHost('agent-fix-it')
     gitHost.open()
-    const second = await resumeRun(repo, { id: first.id, answer: 'Approve', driver: committingDriver(), now: () => NOW, gitHost })
+    const second = await resumeRun(repo, { id: first.id, answer: 'Approve', driver: committingDriver(), now: () => NOW, modules: testModules({ gitHost }) })
     assert.equal(second.status, 'done')
     assert.deepEqual((await lines())[1], 'done||https://example.com/x/y/pull/12|repo: "/work-queue" opened a pull request: https://example.com/x/y/pull/12')
 
     // Continued again, the same pull request: nothing new for the person.
-    const third = await resumeRun(repo, { id: first.id, text: 'one more thing', driver: new FakeDriver({ turns: [{ text: 'Done.' }] }), now: () => NOW, gitHost })
+    const third = await resumeRun(repo, { id: first.id, text: 'one more thing', driver: new FakeDriver({ turns: [{ text: 'Done.' }] }), now: () => NOW, modules: testModules({ gitHost }) })
     assert.equal(third.status, 'done')
     assert.equal((await lines()).length, 2)
   } finally {
@@ -383,23 +382,23 @@ test('a run that opens another pull request keeps the one before among its earli
     // Whatever the run's branch, the request the git host has for it now.
     let request = { number: 12, url: 'https://example.com/x/y/pull/12' }
     const gitHost: GitHost = { requestOfBranch: async () => request }
-    const first = await runCommand(repo, { prompt: 'fix it', driver: committingDriver(), now: () => NOW, gitHost })
+    const first = await runCommand(repo, { prompt: 'fix it', driver: committingDriver(), now: () => NOW, modules: testModules({ gitHost }) })
     assert.equal(first.status, 'done')
     assert.equal((await findRun(repo, first.id))?.caller?.['earlierPrs'], undefined, 'one request has no earlier one')
 
     request = { number: 13, url: 'https://example.com/x/y/pull/13' }
-    await resumeRun(repo, { id: first.id, text: 'move it to a new branch', driver: new FakeDriver({ turns: [{ text: 'Moved.' }] }), now: () => NOW, gitHost })
+    await resumeRun(repo, { id: first.id, text: 'move it to a new branch', driver: new FakeDriver({ turns: [{ text: 'Moved.' }] }), now: () => NOW, modules: testModules({ gitHost }) })
     const moved = await findRun(repo, first.id)
     assert.deepEqual(moved?.pr, request)
     assert.deepEqual(moved?.caller?.['earlierPrs'], [{ number: 12, url: 'https://example.com/x/y/pull/12' }])
 
     // The same request again: nothing new among the earlier ones.
-    await resumeRun(repo, { id: first.id, text: 'one more thing', driver: new FakeDriver({ turns: [{ text: 'Done.' }] }), now: () => NOW, gitHost })
+    await resumeRun(repo, { id: first.id, text: 'one more thing', driver: new FakeDriver({ turns: [{ text: 'Done.' }] }), now: () => NOW, modules: testModules({ gitHost }) })
     assert.deepEqual((await findRun(repo, first.id))?.caller?.['earlierPrs'], [{ number: 12, url: 'https://example.com/x/y/pull/12' }])
 
     // The work moved back to the first branch: its request is the run's again, and no earlier one.
     request = { number: 12, url: 'https://example.com/x/y/pull/12' }
-    await resumeRun(repo, { id: first.id, text: 'back to the first branch', driver: new FakeDriver({ turns: [{ text: 'Back.' }] }), now: () => NOW, gitHost })
+    await resumeRun(repo, { id: first.id, text: 'back to the first branch', driver: new FakeDriver({ turns: [{ text: 'Back.' }] }), now: () => NOW, modules: testModules({ gitHost }) })
     const back = await findRun(repo, first.id)
     assert.deepEqual(back?.pr, request)
     assert.deepEqual(back?.caller?.['earlierPrs'], [{ number: 13, url: 'https://example.com/x/y/pull/13' }])
@@ -420,7 +419,7 @@ test('a line already in the inbox when the turn ends becomes the next turn of th
         })
       },
     }
-    const outcome = await runCommand(repo, { prompt: '/work-queue', model: 'opus', publish: 'commit', driver: chatty, now: () => NOW, gitHost: noGitHost })
+    const outcome = await runCommand(repo, { prompt: '/work-queue', model: 'opus', publish: 'commit', driver: chatty, now: () => NOW, modules: testModules() })
     assert.equal(outcome.status, 'done')
     const diary = await readUntimedDiary(repo, outcome.id)
     assert.deepEqual(diary.filter(l => l.kind === 'start').map(l => l['prompt']), ['/work-queue', 'also add a test'])
@@ -446,7 +445,7 @@ test('a message that says how far to take the work changes the run\'s level from
         })
       },
     }
-    const outcome = await runCommand(repo, { prompt: 'fix the typo', publish: 'commit', driver: chatty, now: () => NOW, gitHost: noGitHost })
+    const outcome = await runCommand(repo, { prompt: 'fix the typo', publish: 'commit', driver: chatty, now: () => NOW, modules: testModules() })
     assert.equal(outcome.status, 'done')
     const starts = (await readUntimedDiary(repo, outcome.id)).filter(l => l.kind === 'start')
     assert.deepEqual(starts.map(l => [l['prompt'], l['added']]), [
@@ -466,13 +465,13 @@ test('a message that says how far to take the work changes the run\'s level from
 test('the account a run works as at the git host is on its record, and a resume on another account says that one from then on', async () => {
   const repo = await testRepo()
   try {
-    const first = await runCommand(repo, { prompt: 'Fix the typo', gitAccount: 'octo-one', driver: new FakeDriver({ turns: [{ text: 'Done.' }], sessionId: 's-1' }), now: ticking(), gitHost: noGitHost })
+    const first = await runCommand(repo, { prompt: 'Fix the typo', gitAccount: 'octo-one', driver: new FakeDriver({ turns: [{ text: 'Done.' }], sessionId: 's-1' }), now: ticking(), modules: testModules() })
     const card = await findRun(repo, first.id)
     assert.equal(runnerMark(card!)?.gitAccount, 'octo-one')
     assert.equal(card!.caller?.['gitAccount'], 'octo-one', 'what the dashboard reads')
-    await resumeRun(repo, { id: first.id, text: 'Go on.', gitAccount: 'octo-two', driver: new FakeDriver({ turns: [{ text: 'Done.' }] }), now: ticking(), gitHost: noGitHost })
+    await resumeRun(repo, { id: first.id, text: 'Go on.', gitAccount: 'octo-two', driver: new FakeDriver({ turns: [{ text: 'Done.' }] }), now: ticking(), modules: testModules() })
     assert.equal((await findRun(repo, first.id))!.caller?.['gitAccount'], 'octo-two')
-    await resumeRun(repo, { id: first.id, text: 'And on.', driver: new FakeDriver({ turns: [{ text: 'Done.' }] }), now: ticking(), gitHost: noGitHost })
+    await resumeRun(repo, { id: first.id, text: 'And on.', driver: new FakeDriver({ turns: [{ text: 'Done.' }] }), now: ticking(), modules: testModules() })
     assert.equal((await findRun(repo, first.id))!.caller?.['gitAccount'], 'octo-two', 'a git host that cannot say leaves the last one it could')
   } finally {
     await removeRepo(repo)
@@ -484,15 +483,15 @@ test('a resume can give the run a new level, or take its level away; its record 
   try {
     const prompts: string[] = []
     const listening = (text: string): Driver => ({ id: 'fake', start: async opts => wrap(await new FakeDriver({ turns: [{ text }], sessionId: 's-1' }).start(opts), async prompt => void prompts.push(prompt)) })
-    const first = await runCommand(repo, { prompt: 'Fix the typo', publish: 'commit', driver: listening('Done.'), host: 'this-box', pid: 4242, now: ticking(), gitHost: noGitHost })
+    const first = await runCommand(repo, { prompt: 'Fix the typo', publish: 'commit', driver: listening('Done.'), host: 'this-box', pid: 4242, now: ticking(), modules: testModules() })
     assert.equal((await findRun(repo, first.id))?.caller?.['publish'], 'commit', 'a reader finds the level beside the host')
-    await resumeRun(repo, { id: first.id, text: 'Ship it.', publish: 'pr', driver: listening('Done.'), host: 'this-box', pid: 4243, now: ticking(), gitHost: noGitHost })
+    await resumeRun(repo, { id: first.id, text: 'Ship it.', publish: 'pr', driver: listening('Done.'), host: 'this-box', pid: 4243, now: ticking(), modules: testModules() })
     assert.equal(prompts[1], `Ship it.\n\n${PUBLISH_LINES.pr}`)
     assert.equal(runnerMark((await findRun(repo, first.id))!)?.publish, 'pr')
     assert.equal((await findRun(repo, first.id))?.caller?.['publish'], 'pr')
-    await resumeRun(repo, { id: first.id, text: 'Go on.', driver: listening('Done.'), host: 'this-box', pid: 4244, now: ticking(), gitHost: noGitHost })
+    await resumeRun(repo, { id: first.id, text: 'Go on.', driver: listening('Done.'), host: 'this-box', pid: 4244, now: ticking(), modules: testModules() })
     assert.equal(prompts[2], `Go on.\n\n${PUBLISH_LINES.pr}`, 'no level given: the one it was given last')
-    await resumeRun(repo, { id: first.id, text: 'Keep it local.', publish: null, driver: listening('Done.'), host: 'this-box', pid: 4245, now: ticking(), gitHost: noGitHost })
+    await resumeRun(repo, { id: first.id, text: 'Keep it local.', publish: null, driver: listening('Done.'), host: 'this-box', pid: 4245, now: ticking(), modules: testModules() })
     assert.equal(prompts[3], 'Keep it local.', 'its level taken away: the words as written')
     assert.equal(runnerMark((await findRun(repo, first.id))!)?.publish, undefined)
     assert.equal((await findRun(repo, first.id))?.caller?.['publish'], undefined)
@@ -526,7 +525,7 @@ test('a line written after the last turn took the inbox, while the card still sa
         }
       },
     }
-    const outcome = await runCommand(repo, { prompt: '/work-queue', attached: 'Found:\n["one entry"]', model: 'opus', driver: recording, now: () => NOW, gitHost: noGitHost })
+    const outcome = await runCommand(repo, { prompt: '/work-queue', attached: 'Found:\n["one entry"]', model: 'opus', driver: recording, now: () => NOW, modules: testModules() })
     assert.equal(outcome.status, 'done')
     assert.deepEqual(outcome.checkout, { reclaimed: true })
     const diary = await readUntimedDiary(repo, outcome.id)
@@ -547,7 +546,7 @@ test('a signal that comes while the run records and reclaims is ignored: the run
       process.kill(process.pid, 'SIGINT')
       await new Promise(resolve => setTimeout(resolve, 50))
     })
-    const outcome = await runCommand(repo, { prompt: '/work-queue', model: 'opus', driver: new FakeDriver({ turns: [{ text: 'Done.' }] }), now: () => NOW, gitHost })
+    const outcome = await runCommand(repo, { prompt: '/work-queue', model: 'opus', driver: new FakeDriver({ turns: [{ text: 'Done.' }] }), now: () => NOW, modules: testModules({ gitHost }) })
     assert.equal(outcome.status, 'done')
     assert.deepEqual(outcome.checkout, { reclaimed: true })
     assert.equal((await findRun(repo, outcome.id))?.status, 'done')
@@ -559,14 +558,14 @@ test('a signal that comes while the run records and reclaims is ignored: the run
 test('a resume waits while another process of the run holds its lock, then reads the run as that one left it', async () => {
   const repo = await testRepo()
   try {
-    const first = await runCommand(repo, { prompt: '/work-queue', model: 'opus', driver: new FakeDriver({ turns: [{ text: QUESTION }], sessionId: 's-ask' }), now: () => NOW, gitHost: noGitHost })
+    const first = await runCommand(repo, { prompt: '/work-queue', model: 'opus', driver: new FakeDriver({ turns: [{ text: QUESTION }], sessionId: 's-ask' }), now: () => NOW, modules: testModules() })
     assert.equal(first.status, 'waiting')
     // The run's own process, or an earlier resume, still at work.
     const alive = new Set([777])
     await acquireRunLock(repo, first.id, { pid: 777, isAlive: pid => alive.has(pid) })
     let started = false
     const finishing: Driver = { id: 'fake', start: async opts => ((started = true), new FakeDriver({ turns: [{ text: 'Shipped.' }] }).start(opts)) }
-    const resuming = resumeRun(repo, { id: first.id, answer: 'Approve', driver: finishing, pid: 778, isAlive: pid => alive.has(pid), now: () => NOW, gitHost: noGitHost })
+    const resuming = resumeRun(repo, { id: first.id, answer: 'Approve', driver: finishing, pid: 778, isAlive: pid => alive.has(pid), now: () => NOW, modules: testModules() })
     await new Promise(resolve => setTimeout(resolve, 1200))
     assert.equal(started, false, 'the resume waits for the holder')
     assert.equal((await findRun(repo, first.id))?.status, 'waiting')

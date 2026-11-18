@@ -1,12 +1,16 @@
 import { linkSkillsInFolder, relinkCheckout, type SkillLink } from '@openagt/skill-branches'
-import { RunOrder, type RunStep } from '@openagt/hooks'
-import type { Leg } from '../leg.js'
+import { defineModule, RunOrder, type RunContext } from '@openagt/hooks'
+import { legOf } from '../leg.js'
 import { leavingOut } from '../project-skills.js'
 
-/** skills' step: the run's skills, linked where it works for its coding agent. */
-export function skillsSteps(leg: Leg): RunStep[] {
-  return [{ order: RunOrder.SKILLS, name: 'link the skills', run: () => linkSkills(leg) }]
-}
+/**
+ * skills, the module, as far as it is this package's until it has a package of its own: the run's
+ * skills, linked where it works for its coding agent.
+ */
+export const skills = defineModule({
+  name: 'skills',
+  hooks: { 'run.step': [{ order: RunOrder.SKILLS, name: 'link the skills', run: linkSkills }] },
+})
 
 /**
  * The run's skills, linked where its coding agent looks for them: into a session's folder as they
@@ -15,10 +19,11 @@ export function skillsSteps(leg: Leg): RunStep[] {
  * by whatever version ran then: its links are brought to what a new one gets. Skills that cannot be
  * read are none.
  */
-async function linkSkills(leg: Leg): Promise<void> {
-  const { checkout, here } = leg
-  if (!checkout) return
-  const skills = await here.skills(leg.repo, leg.driver).catch((): SkillLink[] => [])
-  if (checkout.branch === undefined) await linkSkillsInFolder(checkout.path, skills, here.git)
-  else await relinkCheckout(leg.repo, checkout.path, { skills, without: leavingOut(leg.mark.projectSkills, here.git) }, here.git)
+async function linkSkills(ctx: RunContext): Promise<void> {
+  const workspace = ctx.workspace
+  if (workspace === undefined) return
+  const { here, repo, driver } = legOf(ctx)
+  const linked = await here.skills(repo, driver).catch((): SkillLink[] => [])
+  if (!ctx.project) await linkSkillsInFolder(workspace, linked, here.git)
+  else await relinkCheckout(ctx.project.dir, workspace, { skills: linked, without: leavingOut(ctx.options.skills?.project, here.git) }, here.git)
 }

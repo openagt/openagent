@@ -1,8 +1,8 @@
 import { accentOf, isCodeFont, isDocumentFont, isFont, isPalette, type Accent, type CodeFont, type DocumentFont, type Font, type Palette } from './appearance.js'
 import { sanitizeOverviewLayouts, type OverviewLayouts } from './overview-layout.js'
-import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
+import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { randomBytes } from 'node:crypto'
-import { DEFAULT_AGENT, isAgentId } from '@openagt/agent-data'
+import { DEFAULT_AGENT, isAgentId, projectId } from '@openagt/agent-data'
 import { isBranchName } from './branch-name.js'
 import { isDriverName } from './driver-names.js'
 import { isPublishPick, type PublishPick } from './publish-levels.js'
@@ -307,23 +307,6 @@ export const REGISTRY_FILE = 'openagent.json'
 
 /** Owner read/write only: the file holds the bridge's key and the saved machines' keys. */
 export const REGISTRY_FILE_MODE = 0o600
-
-/**
- * Deterministic, URL-safe id for a project path: the sanitized basename plus a
- * short hash of the full path, so two repos named alike still get distinct ids.
- * Pure; same path always yields the same id.
- */
-export function projectId(path: string): string {
-  // djb2, rendered as base36: short, stable, URL-safe. Not cryptographic.
-  let hash = 5381
-  for (let i = 0; i < path.length; i++) {
-    hash = ((hash * 33) ^ path.charCodeAt(i)) >>> 0
-  }
-  const name = basename(path)
-    .toLowerCase()
-    .replace(/[^a-z0-9-]/g, '-')
-  return `${name}-${hash.toString(36)}`
-}
 
 /**
  * The registry file path, resolved from `env` (injectable so tests never touch

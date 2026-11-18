@@ -171,6 +171,9 @@ importers:
       '@openagt/dashboard-files':
         specifier: workspace:*
         version: link:../dashboard-files
+      '@openagt/hooks':
+        specifier: workspace:*
+        version: link:../hooks
       '@openagt/skill-account-rotation':
         specifier: workspace:*
         version: link:../skill-account-rotation
@@ -655,6 +658,9 @@ importers:
       '@openagt/agent-data':
         specifier: workspace:*
         version: link:../agent-data
+      '@openagt/hooks':
+        specifier: workspace:*
+        version: link:../hooks
     devDependencies:
       '@types/node':
         specifier: ^20.0.0
@@ -730,6 +736,9 @@ importers:
       '@openagt/agent-data':
         specifier: workspace:*
         version: link:../agent-data
+      '@openagt/hooks':
+        specifier: workspace:*
+        version: link:../hooks
       '@openagt/skill-logs':
         specifier: workspace:*
         version: link:../skill-logs

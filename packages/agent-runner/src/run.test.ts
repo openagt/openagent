@@ -13,7 +13,7 @@ import { markerCard, writeMarker } from './records.js'
 import { sweep } from './sweep.js'
 import { NAME_FILE_ENV } from './title.js'
 import { git, handDownBasicSkills, readUntimedDiary, removeRepo, testRepo } from './test-repo.js'
-import { NOW, noGitHost, fakeGitHost, wrap, QUESTION, committingDriver, ticking } from './run-test-support.js'
+import { NOW, fakeGitHost, wrap, QUESTION, committingDriver, testModules } from './run-test-support.js'
 
 // A run as OpenAgent starts it: with the basic skills handed down.
 handDownBasicSkills()
@@ -41,7 +41,7 @@ test('a run: marker, checkout, the live card, the prompt once, the record, the c
     }
     const gitHost = fakeGitHost('agent-fix-it')
     gitHost.open()
-    const outcome = await runCommand(repo, { prompt: '/work-queue', model: 'opus', driver: wrapped, host: 'this-box', pid: 4242, now: () => NOW, gitHost })
+    const outcome = await runCommand(repo, { prompt: '/work-queue', model: 'opus', driver: wrapped, host: 'this-box', pid: 4242, now: () => NOW, modules: testModules({ gitHost }) })
     assert.equal(outcome.id, '2026-09-16T14-01-00-000Z')
     assert.equal(outcome.status, 'done')
     assert.equal(outcome.branch, 'agent-fix-it')
@@ -90,7 +90,7 @@ test('a run: marker, checkout, the live card, the prompt once, the record, the c
 test("an agent that commits nothing: done, no PR, its empty branch goes with the checkout; a driver that throws: failed with the reason, checkout reclaimed", async () => {
   const repo = await testRepo()
   try {
-    const quiet = await runCommand(repo, { prompt: '/work-queue', model: 'opus', driver: new FakeDriver({ turns: [{ text: 'Nothing is queued.' }] }), now: () => NOW, gitHost: noGitHost })
+    const quiet = await runCommand(repo, { prompt: '/work-queue', model: 'opus', driver: new FakeDriver({ turns: [{ text: 'Nothing is queued.' }] }), now: () => NOW, modules: testModules() })
     assert.equal(quiet.status, 'done')
     assert.equal(quiet.pr, undefined)
     assert.deepEqual(quiet.checkout, { reclaimed: true })
@@ -100,7 +100,7 @@ test("an agent that commits nothing: done, no PR, its empty branch goes with the
     assert.equal(quietRecord?.branch, undefined, 'and the record names no branch that is gone')
 
     const dying: Driver = { id: 'fake', start: async () => { throw new Error('claude: not logged in') } }
-    const failed = await runCommand(repo, { prompt: '/work-queue', model: 'opus', driver: dying, now: () => new Date(NOW.getTime() + 60_000), gitHost: noGitHost })
+    const failed = await runCommand(repo, { prompt: '/work-queue', model: 'opus', driver: dying, now: () => new Date(NOW.getTime() + 60_000), modules: testModules() })
     assert.equal(failed.status, 'failed')
     assert.equal(failed.detail, 'claude: not logged in')
     const card = await findRun(repo, failed.id)
@@ -120,7 +120,7 @@ test('a run is named by the agent\'s small model: the name on its record, and a 
       id: 'claude-code',
       start: opts => new FakeDriver({ respond: prompt => (prompt.includes('Name this coding session') ? 'README.md condensing' : 'Done.') }).start(opts),
     }
-    const run = await runCommand(repo, { prompt: 'make readme.md shorter', driver, now: () => NOW, gitHost: noGitHost })
+    const run = await runCommand(repo, { prompt: 'make readme.md shorter', driver, now: () => NOW, modules: testModules() })
     assert.equal(run.status, 'done')
     const record = await findRun(repo, run.id)
     assert.equal(record?.title, 'README.md condensing')
@@ -136,7 +136,7 @@ test('a run is named by the agent\'s small model: the name on its record, and a 
     const was = process.env.OPENAGENT_NAME_RUN
     process.env.OPENAGENT_NAME_RUN = '0'
     try {
-      const unnamed = await runCommand(repo, { prompt: 'make readme.md shorter again', driver, now: () => new Date(NOW.getTime() + 120_000), gitHost: noGitHost })
+      const unnamed = await runCommand(repo, { prompt: 'make readme.md shorter again', driver, now: () => new Date(NOW.getTime() + 120_000), modules: testModules() })
       assert.equal((await findRun(repo, unnamed.id))?.title, undefined)
       assert.deepEqual((await readUntimedDiary(repo, unnamed.id)).filter(line => line.kind === 'title'), [])
     } finally {
@@ -168,7 +168,7 @@ test('a fresh run is named while its checkout is made, not after its agent has s
       namedFirst = await Promise.race([naming.then(() => true), new Promise<boolean>(resolve => setTimeout(() => resolve(false), 5_000))])
       return []
     }
-    const run = await runCommand(repo, { prompt: 'make readme.md shorter', driver, skills, now: () => NOW, gitHost: noGitHost })
+    const run = await runCommand(repo, { prompt: 'make readme.md shorter', driver, skills, now: () => NOW, modules: testModules() })
     assert.equal(run.status, 'done')
     assert.equal(namedFirst, true)
     assert.equal((await findRun(repo, run.id))?.title, 'Readme condensing')
@@ -196,7 +196,7 @@ test('a run handed the name its starter asked for keeps that one, and asks none 
     const file = join(dir, 'name.json')
     await writeFile(file, JSON.stringify({ title: 'Readme condensing' }))
     process.env[NAME_FILE_ENV] = file
-    const run = await runCommand(repo, { prompt: 'make readme.md shorter', driver, now: () => NOW, gitHost: noGitHost })
+    const run = await runCommand(repo, { prompt: 'make readme.md shorter', driver, now: () => NOW, modules: testModules() })
     assert.equal((await findRun(repo, run.id))?.title, 'Readme condensing')
     assert.ok(!asked.some(prompt => prompt.includes('Name this coding session')), 'no name asked twice')
 
@@ -206,7 +206,7 @@ test('a run handed the name its starter asked for keeps that one, and asks none 
       naming: { title: Promise.resolve('Started early'), stop: new AbortController() },
       driver,
       now: () => new Date(NOW.getTime() + 60_000),
-      gitHost: noGitHost,
+      modules: testModules(),
     })
     assert.equal((await findRun(repo, early.id))?.title, 'Started early')
   } finally {
@@ -231,7 +231,7 @@ test('a run asked only a slash command keeps it while it works, and is named fro
           },
         }).start(opts),
     }
-    const run = await runCommand(repo, { prompt: '/work-queue', driver, now: () => NOW, gitHost: noGitHost })
+    const run = await runCommand(repo, { prompt: '/work-queue', driver, now: () => NOW, modules: testModules() })
     assert.equal(run.status, 'done')
     assert.equal(asked.length, 1, 'named once, not also from the command')
     assert.match(asked[0]!, /--------\nI planned the ticket "base-ui rename warnings"\.\n--------/)
@@ -245,7 +245,7 @@ test('a run asked only a slash command keeps it while it works, and is named fro
 
     // A run that ends on a question has not reported its work: it is not named from the question.
     const asking: Driver = { id: 'claude-code', start: opts => new FakeDriver({ respond: prompt => (prompt.includes('Name this coding session') ? 'Ship it question' : QUESTION) }).start(opts) }
-    const waiting = await runCommand(repo, { prompt: '/work-queue', driver: asking, now: () => new Date(NOW.getTime() + 60_000), gitHost: noGitHost })
+    const waiting = await runCommand(repo, { prompt: '/work-queue', driver: asking, now: () => new Date(NOW.getTime() + 60_000), modules: testModules() })
     assert.equal(waiting.status, 'waiting')
     assert.equal((await findRun(repo, waiting.id))?.title, undefined)
   } finally {
@@ -276,13 +276,13 @@ test('a run\'s card says its name is being asked while it is, not once the ask e
         })
       },
     }
-    const run = await runCommand(repo, { prompt: 'make readme.md shorter', naming: { title, stop: new AbortController() }, driver, now: () => NOW, gitHost: noGitHost })
+    const run = await runCommand(repo, { prompt: 'make readme.md shorter', naming: { title, stop: new AbortController() }, driver, now: () => NOW, modules: testModules() })
     assert.deepEqual(seen, [true, undefined])
     assert.equal((await findRun(repo, run.id))?.title, undefined)
 
     // A slash command is named from its report, at its end: nothing is asked while it works.
     seen.length = 0
-    await runCommand(repo, { prompt: '/work-queue', driver, now: () => new Date(NOW.getTime() + 60_000), gitHost: noGitHost })
+    await runCommand(repo, { prompt: '/work-queue', driver, now: () => new Date(NOW.getTime() + 60_000), modules: testModules() })
     assert.deepEqual(seen, [undefined, undefined])
   } finally {
     await removeRepo(repo)
@@ -300,7 +300,7 @@ test('a run told how hard to think starts its agent that way and keeps it on its
         return new FakeDriver({ respond: () => 'Done.' }).start(opts)
       },
     }
-    const run = await runCommand(repo, { prompt: 'think about it', effort: 'high', driver, now: () => NOW, gitHost: noGitHost })
+    const run = await runCommand(repo, { prompt: 'think about it', effort: 'high', driver, now: () => NOW, modules: testModules() })
     assert.equal(run.status, 'done')
     // The naming session is the agent's own small model and thinks as it does by default; the run's
     // own session is the one told.
@@ -318,7 +318,7 @@ test('a run marked by another tool keeps that tool\'s own fields on its record, 
     // and keys of its own under its own key. Neither is an argument of the run.
     const marker = markerCard({ id: 'sub-1', startedAt: NOW.toISOString(), prompt: 'write about.html', driver: 'fake', mark: { host: 'laptop', pid: 1 } })
     await writeMarker(repo, { ...marker, title: 'Write about.html from the README', caller: { ...marker.caller, task: 'write-about-html', retries: 'sub-0' } })
-    const run = await runCommand(repo, { prompt: 'write about.html', id: 'sub-1', marked: true, driver: new FakeDriver({ respond: () => 'Done.' }), now: () => NOW, gitHost: noGitHost })
+    const run = await runCommand(repo, { prompt: 'write about.html', id: 'sub-1', marked: true, driver: new FakeDriver({ respond: () => 'Done.' }), now: () => NOW, modules: testModules() })
     assert.equal(run.status, 'done')
     const ended = await findRun(repo, 'sub-1')
     assert.equal(ended?.status, 'done', 'the run ended and wrote its own record')
@@ -345,7 +345,7 @@ test('the tick\'s run does not mark itself again, and a dirty tree keeps the che
         })
       },
     }
-    const outcome = await runCommand(repo, { prompt: '/work-queue', id: 'given-id', marked: true, model: 'opus', driver: messy, now: () => NOW, gitHost: noGitHost })
+    const outcome = await runCommand(repo, { prompt: '/work-queue', id: 'given-id', marked: true, model: 'opus', driver: messy, now: () => NOW, modules: testModules() })
     assert.equal(outcome.id, 'given-id')
     assert.equal(outcome.status, 'done')
     assert.deepEqual(outcome.checkout, { reclaimed: false, reason: 'dirty' })
@@ -379,7 +379,7 @@ test("a run holds its lock while the agent works: a sweep of this machine leaves
         })
       },
     }
-    const outcome = await runCommand(repo, { prompt: '/work-queue', model: 'opus', driver: working, host: 'this-box', pid: 4242, isAlive, now: () => NOW, gitHost: noGitHost })
+    const outcome = await runCommand(repo, { prompt: '/work-queue', model: 'opus', driver: working, host: 'this-box', pid: 4242, isAlive, now: () => NOW, modules: testModules() })
     assert.equal(seen.holder, 4242, 'the lock is held through the session')
     assert.deepEqual(seen.swept, { recorded: [], reclaimed: [], kept: [] })
     assert.equal(seen.card, 'running')
@@ -387,38 +387,6 @@ test("a run holds its lock while the agent works: a sweep of this machine leaves
     assert.equal(outcome.status, 'done')
     assert.deepEqual(outcome.checkout, { reclaimed: true })
     assert.equal(await lockHolder(repo, id, isAlive), undefined, 'let go once the run has answered')
-  } finally {
-    await removeRepo(repo)
-  }
-})
-
-/** A git host package declared in the test repository: `openagent.git-host` in its package.json, a command that keeps every call and answers canned pull requests. */
-const GIT_HOST_PACKAGE = `
-const { appendFileSync } = require('node:fs')
-const { join } = require('node:path')
-const args = process.argv.slice(2)
-appendFileSync(join(__dirname, 'calls.log'), args.join(' ') + '\\n')
-if (args[0] === 'requests') process.stdout.write(JSON.stringify([{ number: 7, url: 'https://example.com/p/pull/7', state: 'open', title: 'Fix it', draft: false, branch: args[2], head: 'abc', createdAt: '2026-09-16T14:02:00.000Z' }]))
-else { process.stderr.write('unknown\\n'); process.exit(2) }
-`
-
-test('the git host is the package the project declares: a run reads its pull request through that command', async () => {
-  const repo = await testRepo()
-  try {
-    const dir = join(repo, 'node_modules', 'git-host-fake')
-    await mkdir(dir, { recursive: true })
-    await writeFile(join(dir, 'package.json'), JSON.stringify({ name: 'git-host-fake', bin: { 'git-host-fake': 'cli.cjs' }, openagent: { 'git-host': 'git-host-fake' } }))
-    await writeFile(join(dir, 'cli.cjs'), GIT_HOST_PACKAGE)
-    await writeFile(join(repo, 'package.json'), JSON.stringify({ name: 'project', devDependencies: { 'git-host-fake': '*' } }))
-    await git(['add', 'package.json'], repo)
-    await git(['commit', '-q', '-m', 'the git host package'], repo)
-    await git(['push', '-q', 'origin', 'main'], repo)
-
-    const outcome = await runCommand(repo, { prompt: '/work-queue', driver: committingDriver(), now: ticking() })
-    assert.equal(outcome.status, 'done')
-    assert.deepEqual(outcome.pr, { number: 7, url: 'https://example.com/p/pull/7' })
-    const calls = (await readFile(join(dir, 'calls.log'), 'utf8')).trim().split('\n')
-    assert.deepEqual(calls, ['requests --branch agent-fix-it'])
   } finally {
     await removeRepo(repo)
   }
@@ -432,7 +400,7 @@ test("a checkout whose project tracks its own .gitignore in the live directory k
     await git(['add', '.openagent'], repo)
     await git(['commit', '-qm', 'add the project'], repo)
     await git(['push', '-q', 'origin', 'HEAD'], repo)
-    const outcome = await runCommand(repo, { prompt: '/work-queue', model: 'opus', driver: new FakeDriver({ turns: [{ text: 'Nothing to do.' }] }), now: () => NOW, gitHost: noGitHost })
+    const outcome = await runCommand(repo, { prompt: '/work-queue', model: 'opus', driver: new FakeDriver({ turns: [{ text: 'Nothing to do.' }] }), now: () => NOW, modules: testModules() })
     assert.equal(outcome.status, 'done')
     assert.deepEqual(outcome.checkout, { reclaimed: true }, 'the checkout stayed clean: its tracked .gitignore unchanged, the live files ignored')
   } finally {
@@ -450,7 +418,7 @@ test("an agent whose process exits with an error: the ended line says it exited,
         return Object.assign(session, { prompt: async () => Promise.reject(new AgentExitError('codex', 1, "You've hit your usage limit.")) })
       },
     }
-    const failed = await runCommand(repo, { prompt: 'say hi', driver: exiting, now: () => NOW, gitHost: noGitHost })
+    const failed = await runCommand(repo, { prompt: 'say hi', driver: exiting, now: () => NOW, modules: testModules() })
     assert.equal(failed.status, 'failed')
     assert.equal(failed.detail, "codex exited (1): You've hit your usage limit.")
     assert.deepEqual((await readUntimedDiary(repo, failed.id)).at(-1), { kind: 'ended', status: 'failed', detail: 'codex exited (1)' })

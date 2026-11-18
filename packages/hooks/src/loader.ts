@@ -1,3 +1,5 @@
+import { createRequire } from 'node:module'
+import { pathToFileURL } from 'node:url'
 import type { GitAccess } from './account.js'
 import type { AppContext, Attention, AttentionArgs } from './app.js'
 import { HOOK_NAMES, MODULE_NAME, type ModuleDefinition } from './module.js'
@@ -292,12 +294,12 @@ export interface DistributionPackage {
 }
 
 /**
- * Load a distribution's modules from their packages: each one's `./module` entry, imported with
+ * A distribution's modules, from their packages: each one's `./module` entry, imported with
  * `load`. The distribution passes its own `import`, so the packages resolve from its dependencies:
  * they are not this package's.
  */
-export async function loadDistribution(packages: readonly DistributionPackage[], load: (specifier: string) => Promise<unknown>, opts: HooksOptions = {}): Promise<Hooks> {
-  const entries = await Promise.all(
+export async function loadModules(packages: readonly DistributionPackage[], load: (specifier: string) => Promise<unknown>): Promise<DistributionEntry[]> {
+  return Promise.all(
     packages.map(async ({ package: name, on }): Promise<DistributionEntry> => {
       const exported = await load(`${name}/module`)
       const module = typeof exported === 'object' && exported !== null ? (exported as { default?: unknown }).default : undefined
@@ -307,5 +309,29 @@ export async function loadDistribution(packages: readonly DistributionPackage[],
       return on === undefined ? { module: module as ModuleDefinition } : { module: module as ModuleDefinition, on }
     }),
   )
-  return createHooks(entries, opts)
+}
+
+/** Load a distribution's modules from their packages ({@link loadModules}). */
+export async function loadDistribution(packages: readonly DistributionPackage[], load: (specifier: string) => Promise<unknown>, opts: HooksOptions = {}): Promise<Hooks> {
+  return createHooks(await loadModules(packages, load), opts)
+}
+
+/**
+ * Where a distribution hands itself down to the processes it starts, such as a run's own: the
+ * path of its file, which default-exports its packages.
+ */
+export const DISTRIBUTION_ENV = 'OPENAGENT_DISTRIBUTION'
+
+/**
+ * The modules of the distribution handed down in `env` ({@link DISTRIBUTION_ENV}), each package
+ * resolved from the distribution file's own place, as the distribution resolves it; none when
+ * none was handed down.
+ */
+export async function loadHandedDown(env: NodeJS.ProcessEnv = process.env): Promise<DistributionEntry[] | undefined> {
+  const file = env[DISTRIBUTION_ENV]
+  if (!file) return undefined
+  const exported = ((await import(pathToFileURL(file).href)) as { default?: unknown }).default
+  if (!Array.isArray(exported)) throw new Error(`${file} default-exports no distribution: a list of its packages`)
+  const require = createRequire(file)
+  return loadModules(exported as DistributionPackage[], specifier => import(pathToFileURL(require.resolve(specifier)).href))
 }

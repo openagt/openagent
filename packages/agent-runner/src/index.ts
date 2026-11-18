@@ -5,7 +5,7 @@ export { runCommand, resumeRun, runIdFrom, type RunOptions, type ResumeOptions, 
 export { sweep, type SweepDeps, type SweepResult } from './sweep.js'
 export { runProject, resumeProject, gitHostRepo, detachRun, detachResume, readyToRun, workAs, accountsOn, agentLoginFor, spawnRun, spawnResume, driverFor, isDriverName, DRIVER_NAMES, ACCOUNT_ENV, GIT_ACCOUNT_ENV, type AgentAccounts, type DriverName, type SpawnedRun, type SpawnedResume } from './runner.js'
 export { isPidAlive, lockHolder, runLockPath, runStderrPath } from './run-lock.js'
-export { projectGitHost, gitHostEnv, type GitHost, type BranchRequest } from './git-host.js'
+export { gitHostEnv } from './git-host.js'
 export { readLiveCard, readLiveDiary, endLiveCard, liveDir, inboxPath, INBOX_FILE } from './live-card.js'
 export { initHooks, writeHookLines, HOOK_LINES, type InitOutcome } from './init.js'
 export { runCli, USAGE, type CliIo } from './cli.js'

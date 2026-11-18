@@ -1,7 +1,10 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import type { AppContext, AppLifecycle } from './app.js'
-import { createHooks, loadDistribution, type DistributionEntry, type HandlerError } from './loader.js'
+import { createHooks, DISTRIBUTION_ENV, loadDistribution, loadHandedDown, type DistributionEntry, type HandlerError } from './loader.js'
 import { defineModule, type ModuleDefinition } from './module.js'
 import { RunOrder } from './order.js'
 import type { ProjectRef } from './project.js'
@@ -254,6 +257,25 @@ test("a distribution is loaded from its packages' ./module entries, through the 
   assert.equal(await hooks.enabled('tickets', P1), true)
   await assert.rejects(loadDistribution([{ package: '@openagt/nothing' }], load), /Cannot find @openagt\/nothing\/module/)
   await assert.rejects(loadDistribution([{ package: '@openagt/bare' }], async () => ({ default: 42 })), /@openagt\/bare\/module default-exports no module/)
+})
+
+test("a distribution handed down is loaded from its file, each package resolved from the file's own place", async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'hooks-distribution-'))
+  try {
+    const thing = join(dir, 'node_modules', '@openagt', 'thing')
+    await mkdir(thing, { recursive: true })
+    await writeFile(join(thing, 'package.json'), JSON.stringify({ name: '@openagt/thing', type: 'module', exports: { './module': './module.js' } }))
+    await writeFile(join(thing, 'module.js'), "export default { name: 'thing', hooks: {} }\n")
+    const file = join(dir, 'distribution.mjs')
+    await writeFile(file, "export default [{ package: '@openagt/thing' }]\n")
+    assert.deepEqual((await loadHandedDown({ [DISTRIBUTION_ENV]: file }))?.map(entry => entry.module.name), ['thing'])
+    assert.equal(await loadHandedDown({}), undefined, 'none handed down')
+    const wrong = join(dir, 'wrong.mjs')
+    await writeFile(wrong, 'export default 42\n')
+    await assert.rejects(loadHandedDown({ [DISTRIBUTION_ENV]: wrong }), /wrong\.mjs default-exports no distribution/)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
 })
 
 test('with no store in the distribution, a plugin is off, and why is told', async () => {

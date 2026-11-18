@@ -1,6 +1,7 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { join } from 'node:path'
+import { projectId } from '@openagt/agent-data'
 import { computerName } from './computer-name.js'
 import {
   addMachine,
@@ -19,7 +20,6 @@ import {
   ensureComputerId,
   listMachines,
   listProjects,
-  projectId,
   readBridgeToken,
   readPreferences,
   removeMachine,

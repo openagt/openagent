@@ -42,10 +42,14 @@ export interface GithubOptions {
   prBase?: string
 }
 
-/** git-branches' slice: where the run's own branch starts. */
+/** git-branches' slice: where the run's own branch starts, or the branch it works on; and, for a run with no project, the repos it has. */
 export interface GitBranchesOptions {
   /** A branch of this clone, or origin's copy of one; origin's default branch when absent. */
   base?: string
+  /** A branch that exists, worked on in place of a fresh one: a person's pull request's. */
+  branch?: string
+  /** For a run with no project: the repos copied into its folder, each under its name there. */
+  repos?: { name: string; from: string }[]
 }
 
 /** skills' slice: which of the project's own skills the run gets. */
@@ -58,6 +62,42 @@ export interface SkillsOptions {
 export interface PluginsOptions {
   /** The enabled plugins this run goes without: the loader calls none of their run hooks for it. A core module named here is still on. */
   without?: string[]
+}
+
+/**
+ * What each module found out about a run, by the module's name: one module's steps hand the next
+ * what they found (github reads the branch git-branches read back), and the run's record keeps it,
+ * so a resume starts from it. A module's facts are declared here when the module moves onto the hooks.
+ */
+export interface RunFacts {
+  'git-branches'?: GitBranchesFacts
+  github?: GithubFacts
+}
+
+/** git-branches' facts: the run's branch and where its own work begins on it, and how its checkout went. */
+export interface GitBranchesFacts {
+  /** The branch the run's work is on: the one its checkout was made on, then the one the agent left it on. None for a folder with no branch. */
+  branch?: string
+  /** The commit the run's own branch was made at, where its own work begins; none for a branch it was given. */
+  baseCommit?: string
+  /** The run's branch was gone everywhere, and was made again for this resume from where its base is now. */
+  again?: true
+  /** How the run's checkout went once the run ended: reclaimed, with the branches that went with it, or kept and why. */
+  reclaimed?: { reclaimed: true; deleted?: string[] } | { reclaimed: false; reason: string }
+}
+
+/** A pull request, as a run's facts name it. */
+export interface PullRequest {
+  number: number
+  url: string
+}
+
+/** github's facts: the run's pull request, and the ones it opened before it. */
+export interface GithubFacts {
+  /** The pull request the run's branch has. */
+  pr?: PullRequest
+  /** The requests the run opened before that one, once it has had any. */
+  earlierPrs?: PullRequest[]
 }
 
 /** How a run ended, as its finishing steps read it. */
@@ -91,8 +131,8 @@ export interface RunContext {
   readonly context: string[]
   /** Variables the agent's environment gets, added at `RunOrder.ACCOUNTS`. */
   readonly env: Record<string, string>
-  /** What each module found out about the run, by the module's name (github's pull request, git-branches' branch): kept on its record. */
-  readonly facts: Record<string, unknown>
+  /** What each module found out about the run (github's pull request, git-branches' branch): kept on its record. */
+  readonly facts: RunFacts
   /** How the run ended: set by the agent's turns, read by the finishing steps. */
   outcome?: RunOutcome
   /** Aborted when the run is asked to stop. */

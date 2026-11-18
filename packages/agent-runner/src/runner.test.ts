@@ -13,7 +13,7 @@ import { markerCard, writeMarker } from './records.js'
 import { runCommand } from './run.js'
 import { ACCOUNT_ENV, detachResume, detachRun, driverFor, gitHostRepo, readyToRun, resumeArgs, resumeProject, runArgs, workAs } from './runner.js'
 import { removeRepo, testRepo } from './test-repo.js'
-import { noGitHost } from './run-test-support.js'
+import { testModules } from './run-test-support.js'
 import { TITLE_SYSTEM } from './title.js'
 
 // The detached start, with the spawn faked: the process asked for, the id answered. The marker is
@@ -157,14 +157,14 @@ test('a resumed run continues on the tool its record names, and a Codex run with
     try {
       await writeAgent({ id: 'reviewer', name: 'Reviewer', skills: ['ask'], accounts: { github: 'octo-one', claude: ['Dani', 'Nobody'] }, projectSkills: true })
       addAccount('Dani', 'x', accountsPath('claude'))
-      const first = await runCommand(repo, { prompt: 'Read the docs', driver: codex('Read.'), host: 'this-box', pid: 4242, now: () => NOW, gitHost: noGitHost, gitAccount: 'octo-one', agent: 'reviewer', skillsOff: ['ask'], projectSkills: 'none' })
+      const first = await runCommand(repo, { prompt: 'Read the docs', driver: codex('Read.'), host: 'this-box', pid: 4242, now: () => NOW, modules: testModules(), gitAccount: 'octo-one', agent: 'reviewer', skillsOff: ['ask'], projectSkills: 'none' })
       assert.equal(first.status, 'done')
       assert.equal((await findRun(repo, first.id))?.caller?.['agent'], 'reviewer')
       assert.deepEqual((await findRun(repo, first.id))?.caller?.['skillsOff'], ['ask'], 'the session\'s picks of skills are on the record')
       assert.equal((await findRun(repo, first.id))?.caller?.['projectSkills'], 'none')
       const asked: string[] = []
       const workedAs: (string | undefined)[] = []
-      const second = await resumeProject(repo, { id: first.id, text: 'And the tests?' }, { driverFor: (name, _id, setup, as) => { asked.push(`${name} ${JSON.stringify(setup)} ${JSON.stringify(as)}`); return codex('Read too.') }, workAs: async (_repo, login) => (workedAs.push(login), login) })
+      const second = await resumeProject(repo, { id: first.id, text: 'And the tests?' }, { driverFor: (name, _id, setup, as) => { asked.push(`${name} ${JSON.stringify(setup)} ${JSON.stringify(as)}`); return codex('Read too.') }, workAs: async (_repo, login) => (workedAs.push(login), login), modules: testModules() })
       assert.equal(second.status, 'done')
       assert.deepEqual(asked, ['codex {"memory":true,"connectors":true,"skills":true} {"claude":["Dani"]}'], 'no config on this machine: the run loads the person\'s setup, on the agent\'s accounts this computer has')
       assert.deepEqual(workedAs, ['octo-one'], 'the resume goes on as the account the record names, not whatever the computer\'s pick is by then')

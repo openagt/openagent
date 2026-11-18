@@ -97,6 +97,7 @@
     "@tiptap/suggestion": "^2.10.0",
     "@openagt/agent-driver": "workspace:*",
     "@openagt/agent-runner": "workspace:*",
+    "@openagt/hooks": "workspace:*",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.469.0",

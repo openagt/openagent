@@ -36,6 +36,10 @@
     "./branch-names": {
       "types": "./dist/branch-names.d.ts",
       "default": "./dist/branch-names.js"
+    },
+    "./module": {
+      "types": "./dist/module.d.ts",
+      "default": "./dist/module.js"
     }
   },
   "scripts": {
@@ -46,7 +50,8 @@
     "clean": "rm -rf dist dist-test SKILL.md"
   },
   "dependencies": {
-    "@openagt/agent-data": "workspace:*"
+    "@openagt/agent-data": "workspace:*",
+    "@openagt/hooks": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

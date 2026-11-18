@@ -6,7 +6,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { onBridgeExtensionFolder, onProjectFiles, onAgentMainBranch, onAgentWorktree } from './reads.js'
 import { provideTestContext } from './test-context.js'
-import { addProject, projectId } from '../registry.js'
+import { projectId } from '@openagt/agent-data'
+import { addProject } from '../registry.js'
 import { dispatchRelayRpc } from './relay-dispatch.js'
 
 // A project id nobody registered has no local path, so these reads have no checkout to answer

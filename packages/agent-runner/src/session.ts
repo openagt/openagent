@@ -1,7 +1,7 @@
 import { AgentExitError, ConversationGoneError, parseQuestion, promptLines, promptOf, takeInbox, type DriverPromptOptions, type DriverSession, type DriverTurn, type LogEndStatus, type PromptLine, type Question } from '@openagt/agent-driver'
 import { errorMessage } from '@openagt/agent-data'
 import type { RunOutcome } from '@openagt/hooks'
-import type { Leg, Workspace } from './leg.js'
+import type { Leg } from './leg.js'
 import { inboxPath } from './live-card.js'
 import { publishChange, type Publish } from './records.js'
 import { isBareCommand, nameRun } from './title.js'
@@ -79,21 +79,21 @@ function queued(line: PromptLine): Queued {
 }
 
 /**
- * The agent's session, from its start to the end of the last turn this process owes it, its live
- * record kept in `dir`: how the run ended. A signal to stop asks the agent to end its turn where it
- * is; `leg.killed` ends its process tree at once.
+ * The agent's session in `workspace`, from its start to the end of the last turn this process owes
+ * it, its live record kept in `dir`: how the run ended. A signal to stop asks the agent to end its
+ * turn where it is; `leg.killed` ends its process tree at once.
  */
-export async function sessionTurns(leg: Leg, checkout: Workspace, dir: string, stopped: AbortSignal): Promise<RunOutcome> {
+export async function sessionTurns(leg: Leg, workspace: string, dir: string, stopped: AbortSignal): Promise<RunOutcome> {
   const { id: _id, status: _status, endedAt: _endedAt, ...startCard } = leg.card
   const continued = leg.earlier !== undefined
   const resumeSessionId = leg.earlier?.sessionId
-  const inbox = inboxPath(checkout.path)
+  const inbox = inboxPath(workspace)
   let end: RunOutcome = { status: 'done' }
   let question: string | undefined
   let driverSession: DriverSession | undefined
   try {
     driverSession = await leg.driver.start({
-      cwd: checkout.path,
+      cwd: workspace,
       ...modelOf(leg.model),
       ...effortOf(leg.effort),
       signal: leg.killed,

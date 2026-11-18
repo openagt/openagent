@@ -6,7 +6,8 @@ import { dispatchMachineRpc, dispatchRelayRpc, ELSEWHERE_FORWARDED, isMachineRea
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { addProject, projectId } from '../registry.js'
+import { projectId } from '@openagt/agent-data'
+import { addProject } from '../registry.js'
 import type { StartAgentOptions } from '../dashboard/types.js'
 
 // The machine-side whitelist dispatcher (#1067 slice 2): a daemon that relayed an agent here calls one of a

@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
 import { createInterface } from 'node:readline'
 import { fileURLToPath } from 'node:url'
-import { projectId } from '../registry.js'
+import { projectId } from '@openagt/agent-data'
 import type { AgentMeta, AgentStatus } from '../store/index.js'
 import { makeFixtureRepo, writeFakeRunHooks } from './fixture.js'
 

@@ -2,6 +2,7 @@ import { isSkillName, type FileBranchWrite } from '@openagt/agent-data'
 import type { ProjectSkillsPick } from './agent.js'
 import { publishedBranch } from '@openagt/agent-data/names'
 import { deleteRun, writeRun, type AnyDiaryLine, type LogsDeps, type RunCard } from '@openagt/skill-logs'
+import type { SessionRepo } from '@openagt/skill-branches'
 
 /**
  * A run in flight is a run record (#1774): the `logs` skill's card on the project's `agent-data`
@@ -72,15 +73,6 @@ export interface Lasting {
   skillsOff?: string[]
   /** Which of the project's own skills stay in the run's checkout (`OPENAGENT_PROJECT_SKILLS`): none, or the ones named; every one when absent. */
   projectSkills?: ProjectSkillsPick
-}
-
-/**
- * A repo a session with no project has as context: the folder it was copied from, and the name
- * of its copy in the session's folder.
- */
-export interface SessionRepo {
-  name: string
-  from: string
 }
 
 /** The repos a mark names, as far as they are repos: anything else there is left out. */

@@ -38,6 +38,9 @@ function openagentDevDaemon(): Plugin {
         // comes from the source it is built from, so a signature change is still an error here.
         const built = new URL('../dist/daemon.js', import.meta.url).href
         const { runDaemon } = (await import(built)) as typeof import('../src/daemon.js')
+        // The runs it starts go through the dashboard's modules, as the CLI's do.
+        const { handDownDistribution } = (await import(new URL('../dist/cli/distribution.js', import.meta.url).href)) as typeof import('../src/cli/distribution.js')
+        handDownDistribution(process.env)
         const cwd = process.env.OPENAGENT_DEV_DAEMON_CWD || process.cwd()
         // Ephemeral port: the dev server owns the address the browser talks to, and binding 4200
         // would collide with an `openagent` the developer is running in another terminal.

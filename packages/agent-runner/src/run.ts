@@ -1,23 +1,25 @@
-import { sessionsHomeOf, errorMessage } from '@openagt/agent-data'
+import { errorMessage, projectId, projectNameOf, repositoryAddress, sessionsHomeOf, type GitRunner } from '@openagt/agent-data'
 import { continuationPrompt } from '@openagt/agent-driver'
-import { createHooks } from '@openagt/hooks'
-import { findRun, readDiary, type RunStatus } from '@openagt/skill-logs'
-import { runProcess, type Leg, type RunDeps } from './leg.js'
-import { lasting, markerCard, runnerMark, writeMarker, type Publish, type RunnerMark, type SessionRepo } from './records.js'
+import { createHooks, type DistributionEntry, type ProjectRef, type RunFacts, type RunInput, type RunOptions as ModuleOptions } from '@openagt/hooks'
+import type { SessionRepo } from '@openagt/skill-branches'
+import { findRun, readDiary, type RunCard, type RunStatus } from '@openagt/skill-logs'
+import { runProcess, withLeg, type Leg, type RunDeps } from './leg.js'
+import { earlierPrs, lasting, markerCard, runnerMark, writeMarker, type Publish, type RunnerMark } from './records.js'
 import type { ProjectSkillsPick } from './agent.js'
 import { withRunLock } from './run-lock.js'
 import { askName, isBareCommand, type AskedName } from './title.js'
 import { detailOf, modelOf } from './session.js'
-import { runModules } from './steps/modules.js'
+import { BUILT_IN_MODULES } from './steps/modules.js'
 
 /**
- * One run (#1774): one pipeline of steps (`@openagt/hooks`' `run.step`), each the part of a module:
- * the checkout from the branches package, the run's skills linked into it, the agent's session from
- * agent-driver with the prompt once and the agent's own loop to the end (`session.ts`), then the
- * record, the checkout reclaimed and the person told (`steps/`). A step that prepares the run and
- * fails ends it failed, recorded with what went wrong; the steps that finish it run whatever its
- * end. This process records the run and reclaims the checkout when the agent stops; a run that
- * dies is caught by the sweep, which a scheduler runs on every tick.
+ * One run (#1774): one pipeline of steps (`@openagt/hooks`' `run.step`), each the part of a module
+ * of the run's distribution: the checkout from git-branches, the run's skills linked into it, the
+ * agent's session with the prompt once and the agent's own loop to the end (`session.ts`), then
+ * where the work went read back, the record saved (`module.ts`), the checkout reclaimed and the
+ * person told. A step that prepares the run and fails ends it failed, recorded with what went
+ * wrong; the steps that finish it run whatever its end. This process records the run and reclaims
+ * the checkout when the agent stops; a run that dies is caught by the sweep, which a scheduler
+ * runs on every tick.
  *
  * The session keeps the run's live record itself, the card and the diary under `.openagent/`
  * in the checkout, in the run record's shape; this process adds its mark, the pid and the host,
@@ -126,6 +128,7 @@ export function namedAtStart(opts: { prompt: string; marked?: boolean }): boolea
 }
 
 export async function runCommand(repo: string, opts: RunOptions): Promise<RunOutcome> {
+  needsAgentDriver(opts.modules)
   const here = runProcess(opts)
   const startedAt = opts.startedAt ?? here.clock()
   const id = opts.id ?? runIdFrom(startedAt)
@@ -153,23 +156,24 @@ export async function runCommand(repo: string, opts: RunOptions): Promise<RunOut
     // named at start ({@link namedAtStart}).
     const named = opts.naming ?? (namedAtStart(opts) ? askName(opts.driver, opts.prompt) : undefined)
 
-    return runLeg({
-      repo,
-      id,
-      here,
-      driver: opts.driver,
-      ...(opts.model !== undefined ? { model: opts.model } : {}),
-      ...(opts.effort !== undefined ? { effort: opts.effort } : {}),
-      sessions: await sessionsHomeOf(repo),
-      prompt: opts.prompt,
-      ...(opts.attached !== undefined ? { attached: opts.attached } : {}),
-      ...(opts.branch !== undefined ? { branch: opts.branch } : {}),
-      ...(opts.marked ? { marked: true } : {}),
-      ...(marking ? { marking } : {}),
-      ...(named ? { named } : {}),
-      mark,
-      card,
-    })
+    return runLeg(
+      {
+        repo,
+        id,
+        here,
+        driver: opts.driver,
+        ...(opts.model !== undefined ? { model: opts.model } : {}),
+        ...(opts.effort !== undefined ? { effort: opts.effort } : {}),
+        prompt: opts.prompt,
+        ...(opts.attached !== undefined ? { attached: opts.attached } : {}),
+        ...(opts.marked ? { marked: true } : {}),
+        ...(marking ? { marking } : {}),
+        ...(named ? { named } : {}),
+        mark,
+        card,
+      },
+      { modules: opts.modules, facts: {}, ...(opts.branch !== undefined ? { branch: opts.branch } : {}) },
+    )
   })
 }
 
@@ -205,6 +209,7 @@ export interface ResumeOptions extends RunDeps {
  * here is not.
  */
 export async function resumeRun(repo: string, opts: ResumeOptions): Promise<RunOutcome> {
+  needsAgentDriver(opts.modules)
   const here = runProcess(opts)
   // Another process of this run, the one that ended it and still records and reclaims, or a
   // resume started just before this one, goes first: this one waits, then reads the run as that
@@ -221,13 +226,16 @@ export async function resumeRun(repo: string, opts: ResumeOptions): Promise<RunO
     const sessionId = typeof card.caller?.['sessionId'] === 'string' ? (card.caller['sessionId'] as string) : undefined
 
     let prompt: string
+    let resume: RunInput
     if (opts.answer !== undefined) {
       const question = [...diary].reverse().find(line => line.kind === 'question')
       const title = typeof question?.['title'] === 'string' ? (question['title'] as string) : 'your question'
       prompt = continuationPrompt(title, opts.answer)
+      resume = { answer: opts.answer }
     } else if (opts.text) {
       // A run stopped before its agent took its own prompt never had it: it goes first, the words after it.
       prompt = card.intent !== undefined && !diary.some(line => line.kind === 'start') ? `${card.intent}\n\n${opts.text}` : opts.text
+      resume = { text: opts.text }
     } else {
       throw new Error('a text or an answer is needed to resume a run')
     }
@@ -239,42 +247,105 @@ export async function resumeRun(repo: string, opts: ResumeOptions): Promise<RunO
     const model = opts.model ?? card.model
     const effort = opts.effort ?? card.effort
 
-    return runLeg({
-      repo,
-      id: opts.id,
-      here,
-      driver: opts.driver,
-      ...(model !== undefined ? { model } : {}),
-      ...(effort !== undefined ? { effort } : {}),
-      sessions: await sessionsHomeOf(repo),
-      prompt,
-      earlier: { diary, ...(sessionId !== undefined ? { sessionId } : {}) },
-      mark,
-      card,
-    })
+    return runLeg(
+      {
+        repo,
+        id: opts.id,
+        here,
+        driver: opts.driver,
+        ...(model !== undefined ? { model } : {}),
+        ...(effort !== undefined ? { effort } : {}),
+        prompt,
+        earlier: { diary, ...(sessionId !== undefined ? { sessionId } : {}) },
+        mark,
+        card,
+      },
+      { modules: opts.modules, resume, facts: recordedFacts(card, previous) },
+    )
   })
 }
 
+/** A distribution with no agent-driver has nothing to run a run's agent: refused before anything is written. */
+function needsAgentDriver(modules: readonly DistributionEntry[]): void {
+  if (!modules.some(entry => entry.module.name === 'agent-driver')) throw new Error("the run's distribution has no agent-driver module, which runs the agent")
+}
+
+/** What the run's record keeps of what its modules found out: where a resume starts from. */
+function recordedFacts(card: RunCard, mark: RunnerMark): RunFacts {
+  const earlier = earlierPrs(card)
+  const branches = { ...(card.branch !== undefined ? { branch: card.branch } : {}), ...(mark.baseCommit !== undefined ? { baseCommit: mark.baseCommit } : {}) }
+  const github = { ...(card.pr ? { pr: { number: card.pr.number, url: card.pr.url } } : {}), ...(earlier.length > 0 ? { earlierPrs: earlier } : {}) }
+  return { ...(Object.keys(branches).length > 0 ? { 'git-branches': branches } : {}), ...(Object.keys(github).length > 0 ? { github } : {}) }
+}
+
+/** The run's options, one slice per module, as the run was asked them and its record keeps them. */
+function optionsOf(mark: RunnerMark, branch: string | undefined): ModuleOptions {
+  const branches = { ...(mark.base !== undefined ? { base: mark.base } : {}), ...(branch !== undefined ? { branch } : {}), ...(mark.repos !== undefined ? { repos: mark.repos } : {}) }
+  const github = { ...(mark.prBase !== undefined ? { prBase: mark.prBase } : {}), ...(mark.gitAccount !== undefined ? { account: mark.gitAccount } : {}) }
+  return {
+    ...(mark.publish !== undefined ? { publish: mark.publish } : {}),
+    ...(Object.keys(branches).length > 0 ? { 'git-branches': branches } : {}),
+    ...(Object.keys(github).length > 0 ? { github } : {}),
+    ...(mark.projectSkills !== undefined ? { skills: { project: mark.projectSkills } } : {}),
+  }
+}
+
+/** The project a run in `dir` is in, as the hooks name it; none for a run in the sessions home, which has no project. */
+async function projectOf(dir: string, git: GitRunner): Promise<ProjectRef | undefined> {
+  if ((await sessionsHomeOf(dir)) !== undefined) return undefined
+  const remote = await repositoryAddress(dir, git)
+  return { id: projectId(dir), name: await projectNameOf(dir, git), dir, ...(remote !== undefined ? { remote } : {}) }
+}
+
+/** What a leg starts from beside what agent-driver's steps share: the run's modules, and what the run brings them. */
+interface LegStart {
+  modules: readonly DistributionEntry[]
+  /** What a resume brings; none for a fresh run. */
+  resume?: RunInput
+  /** What the run's modules found out on its earlier legs. */
+  facts: RunFacts
+  /** The branch a fresh run was told to work on (`run --branch`). */
+  branch?: string
+}
+
 /**
- * A leg of the run, through the steps of the run's modules (`steps/`), in their order. A signal
- * stops the run: the first asks the agent to end its turn where it is, as Esc does in Claude Code,
- * and the driver ends its process tree only when it cannot ask or the agent does not stop; a second
- * one ends the tree at once. The handlers stay until this process is done, so a signal that comes
- * while the run records and reclaims never kills it halfway through a write. A finishing step that
- * fails is said on the log, and the others go on.
+ * A leg of the run, through the steps of the run's modules in their order. A signal stops the run:
+ * the first asks the agent to end its turn where it is, as Esc does in Claude Code, and the driver
+ * ends its process tree only when it cannot ask or the agent does not stop; a second one ends the
+ * tree at once. The handlers stay until this process is done, so a signal that comes while the run
+ * records and reclaims never kills it halfway through a write. A finishing step that fails is said
+ * on the log, and the others go on.
  */
-async function runLeg(given: Omit<Leg, 'killed' | 'worked'>): Promise<RunOutcome> {
+async function runLeg(given: Omit<Leg, 'killed'>, start: LegStart): Promise<RunOutcome> {
   const stop = new AbortController()
   const kill = new AbortController()
   const onSignal = (): void => (stop.signal.aborted ? kill : stop).abort()
   process.on('SIGINT', onSignal)
   process.on('SIGTERM', onSignal)
   try {
-    const leg: Leg = { ...given, killed: kill.signal, worked: {} }
-    const hooks = createHooks(runModules(leg))
-    const { outcome, errors } = await hooks.run({ id: leg.id, prompt: leg.prompt, options: {}, context: [], env: {}, facts: {}, signal: stop.signal, store: hooks.store, settings: hooks.settings })
+    const leg: Leg = { ...given, killed: kill.signal }
+    const hooks = createHooks([...start.modules, ...BUILT_IN_MODULES])
+    const project = await projectOf(leg.repo, leg.here.git)
+    const ctx = withLeg(
+      {
+        id: leg.id,
+        ...(project ? { project } : {}),
+        prompt: leg.prompt,
+        options: optionsOf(leg.mark, start.branch),
+        ...(start.resume ? { resume: start.resume } : {}),
+        context: [],
+        env: {},
+        facts: start.facts,
+        signal: stop.signal,
+        store: hooks.store,
+        settings: hooks.settings,
+      },
+      leg,
+    )
+    const { outcome, errors } = await hooks.run(ctx)
     for (const { module, step, error } of errors) leg.here.log(`[agent-runner] ${module} could not ${step}: ${errorMessage(error)}`)
-    const { branch, pr } = leg.worked
+    const { branch, reclaimed } = ctx.facts['git-branches'] ?? {}
+    const pr = ctx.facts.github?.pr
     const cost = leg.recorded?.card.cost
     const detail = detailOf(outcome)
     return {
@@ -283,7 +354,7 @@ async function runLeg(given: Omit<Leg, 'killed' | 'worked'>): Promise<RunOutcome
       ...(branch !== undefined ? { branch } : {}),
       ...(pr ? { pr } : {}),
       ...(cost !== undefined ? { cost } : {}),
-      checkout: leg.reclaimed ?? { reclaimed: false, reason: 'no checkout' },
+      checkout: reclaimed === undefined ? { reclaimed: false, reason: 'no checkout' } : reclaimed.reclaimed ? { reclaimed: true } : { reclaimed: false, reason: reclaimed.reason },
       ...(detail !== undefined ? { detail } : {}),
     }
   } finally {

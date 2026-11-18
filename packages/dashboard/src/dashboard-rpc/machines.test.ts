@@ -14,7 +14,8 @@ import type { BringProject } from '../dashboard/remote-run.js'
 import { openagentVersion } from '../version.js'
 import { setDashboardContext } from './context.js'
 import { NO_ELSEWHERE, provideTestContext, testDashboardContext } from './test-context.js'
-import { REGISTRY_FILE, addMachine, addProject, projectId, useLoginsOn } from '../registry.js'
+import { projectId } from '@openagt/agent-data'
+import { REGISTRY_FILE, addMachine, addProject, useLoginsOn } from '../registry.js'
 
 // The host's capabilities, wired as the daemon wires them (D3); a test that needs other ones wires its own.
 provideTestContext()
