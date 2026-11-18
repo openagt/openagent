@@ -1,0 +1,176 @@
+// `@openagt/hooks/testing`: fakes of the hooks, so a module is tested alone: a store kept in
+// memory, a host whose runs a test drives, and a run's context for a step.
+import { StoreOrder } from './order.js'
+import type { RunContext, RunEvent, RunHost, RunInput, RunRequest, RunStatus, RunSummary } from './run.js'
+import { settingsIn } from './settings.js'
+import { chainStore, checkPath, isUnder, scopeKey, type Scope, type Store, type StoreBackend } from './store.js'
+
+/** A store kept in memory: the end of the chain, as the filesystem store is. */
+export interface MemoryStore extends StoreBackend {
+  /** The files a scope holds, by path. */
+  files(scope: Scope): Record<string, string>
+  /** Every save, in order: its scope, its message, the paths it changed. */
+  readonly saves: readonly { scope: Scope; message: string; paths: string[] }[]
+}
+
+export function memoryStore(): MemoryStore {
+  const data = new Map<string, Map<string, string>>()
+  const watchers = new Set<{ key: string; path: string; onChange: (path: string) => void }>()
+  const saves: { scope: Scope; message: string; paths: string[] }[] = []
+  const filesOf = (scope: Scope): Map<string, string> => {
+    const key = scopeKey(scope)
+    let files = data.get(key)
+    if (!files) {
+      files = new Map()
+      data.set(key, files)
+    }
+    return files
+  }
+  const changed = (scope: Scope, path: string): void => {
+    const key = scopeKey(scope)
+    for (const watcher of [...watchers]) if (watcher.key === key && isUnder(path, watcher.path)) watcher.onChange(path)
+  }
+  const store: Store = {
+    async read(scope, path) {
+      return filesOf(scope).get(checkPath(path))
+    },
+    async list(scope, dir) {
+      checkPath(dir, { dir: true })
+      return [...filesOf(scope).keys()].filter(path => path !== dir && isUnder(path, dir)).sort()
+    },
+    async save(scope, changes, message) {
+      const paths = Object.keys(changes).map(path => checkPath(path))
+      const files = filesOf(scope)
+      for (const [path, text] of Object.entries(changes)) {
+        if (text === null) files.delete(path)
+        else files.set(path, text)
+      }
+      saves.push({ scope, message, paths })
+      for (const path of paths) changed(scope, path)
+    },
+    async append(scope, path, line) {
+      const files = filesOf(scope)
+      files.set(checkPath(path), `${files.get(path) ?? ''}${line}\n`)
+      changed(scope, path)
+    },
+    watch(scope, path, onChange) {
+      const watcher = { key: scopeKey(scope), path: checkPath(path, { dir: true }), onChange }
+      watchers.add(watcher)
+      return () => {
+        watchers.delete(watcher)
+      }
+    },
+  }
+  return {
+    order: StoreOrder.FILESYSTEM,
+    wrap: () => store,
+    files: scope => Object.fromEntries(filesOf(scope)),
+    saves,
+  }
+}
+
+/** A host whose runs live in memory: a test emits their events and ends them. */
+export interface FakeHost extends RunHost {
+  /** Every start asked, in order. */
+  readonly requests: readonly RunRequest[]
+  readonly resumed: readonly { id: string; input: RunInput }[]
+  readonly steered: readonly { id: string; text: string }[]
+  readonly stopped: readonly { id: string; force: boolean }[]
+  /** A run's next event: its streams get it. */
+  emit(id: string, event: RunEvent): void
+  /** A run ends: its streams end after the events they have not read yet. */
+  end(id: string, status: Exclude<RunStatus, 'working'>): void
+}
+
+export function fakeHost(opts: { id?: string; label?: string } = {}): FakeHost {
+  const runs = new Map<string, { summary: RunSummary; events: RunEvent[]; waiting: Set<() => void> }>()
+  const requests: RunRequest[] = []
+  const resumed: { id: string; input: RunInput }[] = []
+  const steered: { id: string; text: string }[] = []
+  const stopped: { id: string; force: boolean }[] = []
+  let next = 1
+  const runOf = (id: string) => {
+    const run = runs.get(id)
+    if (!run) throw new Error(`No run ${id} here`)
+    return run
+  }
+  const wake = (run: { waiting: Set<() => void> }): void => {
+    for (const resolve of [...run.waiting]) resolve()
+    run.waiting.clear()
+  }
+  const end = (id: string, status: Exclude<RunStatus, 'working'>): void => {
+    const run = runOf(id)
+    run.summary = { ...run.summary, status, endedAt: new Date().toISOString() }
+    wake(run)
+  }
+  return {
+    id: opts.id ?? 'fake',
+    label: opts.label ?? 'A fake host',
+    requests,
+    resumed,
+    steered,
+    stopped,
+    async start(request) {
+      requests.push(request)
+      const id = `run-${next++}`
+      const summary: RunSummary = { id, status: 'working', startedAt: new Date().toISOString(), prompt: request.prompt, ...(request.project !== undefined ? { project: request.project } : {}) }
+      runs.set(id, { summary, events: [], waiting: new Set() })
+      return { id }
+    },
+    async resume(id, input) {
+      const run = runOf(id)
+      resumed.push({ id, input })
+      const { endedAt: _, ...rest } = run.summary
+      run.summary = { ...rest, status: 'working' }
+    },
+    async steer(id, text) {
+      runOf(id)
+      steered.push({ id, text })
+    },
+    async stop(id, stopOpts) {
+      stopped.push({ id, force: stopOpts?.force ?? false })
+      end(id, 'stopped')
+    },
+    async list(project) {
+      return [...runs.values()]
+        .reverse()
+        .map(run => run.summary)
+        .filter(summary => project === undefined || summary.project === project)
+    },
+    async *events(id, signal) {
+      const run = runOf(id)
+      let read = 0
+      for (;;) {
+        while (read < run.events.length) yield run.events[read++]!
+        if (run.summary.status !== 'working' || signal.aborted) return
+        await new Promise<void>(resolve => {
+          run.waiting.add(resolve)
+          signal.addEventListener('abort', () => resolve(), { once: true })
+        })
+      }
+    },
+    emit(id, event) {
+      const run = runOf(id)
+      run.events.push(event)
+      wake(run)
+    },
+    end,
+  }
+}
+
+/** A run's context for a step's tests: what is not given is empty, and the store is kept in memory. */
+export function fakeRun(given: Partial<Omit<RunContext, 'store' | 'settings'>> & { store?: Store } = {}): RunContext {
+  const store = given.store ?? chainStore([memoryStore()])
+  return {
+    id: 'run-1',
+    prompt: '',
+    options: {},
+    context: [],
+    env: {},
+    facts: {},
+    signal: new AbortController().signal,
+    ...given,
+    store,
+    settings: settingsIn(store),
+  }
+}
