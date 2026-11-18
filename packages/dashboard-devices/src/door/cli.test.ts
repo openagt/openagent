@@ -514,14 +514,8 @@ test('pairing on the Wi-Fi: find leaves this computer out, ask shows a number, t
     const refused = await run(invited, ['allow', waiting!.id])
     assert.equal(refused.code, 1)
 
-    // A page waits for the asks to change: nothing changes, so it is answered after the wait.
-    const started = Date.now()
-    assert.equal(((await run(there.env, ['asks', '--wait', '1', '--seen', waiting!.id], { asksLookMs: 50 })).out as { asks: unknown[] }).asks.length, 1)
-    assert.ok(Date.now() - started >= 900)
-    // The owner allows it while the page waits: answered at once.
-    const watching = run(there.env, ['asks', '--wait', '20', '--seen', waiting!.id], { asksLookMs: 50 })
     assert.deepEqual((await run(there.env, ['allow', waiting!.id])).out, { asks: [] })
-    assert.deepEqual((await watching).out, { asks: [] })
+    assert.deepEqual((await run(there.env, ['asks'])).out, { asks: [] })
     assert.equal((await run(there.env, ['allow', waiting!.id])).code, 1, 'no longer asking')
 
     // The secret is read on standard input, never among the arguments.

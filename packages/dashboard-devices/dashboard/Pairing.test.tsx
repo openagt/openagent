@@ -9,15 +9,11 @@ import { AskPopup } from './Pairing.js'
 const ok = (output: unknown): ModuleCommandResult => ({ ok: true, output })
 const ASK = { id: 'a1b2c3d4e5f6', name: "Ada's MacBook", number: '482913', expires: new Date(Date.now() + 120_000).toISOString() }
 
-/** A host whose `devices asks` answers `asks` at once the first time, and then waits until `change` is called. */
+/** A host whose `devices asks` answers the asks of now, at once. */
 function host(first: object[]) {
   let asks = first
-  let changed: (() => void) | undefined
   const runComputerCommand = vi.fn(async (args: string[]): Promise<ModuleCommandResult> => {
-    if (args[0] === 'asks') {
-      if (args.includes('--wait')) await new Promise<void>(resolve => (changed = resolve))
-      return ok({ asks })
-    }
+    if (args[0] === 'asks') return ok({ asks })
     if (args[0] === 'allow' || args[0] === 'deny') {
       asks = []
       return ok({ asks })
@@ -30,8 +26,8 @@ function host(first: object[]) {
     runComputerCommand,
     change(next: object[]) {
       asks = next
-      changed?.()
     },
+    reads: () => runComputerCommand.mock.calls.filter(([args]) => args[0] === 'asks').length,
   }
 }
 
@@ -42,15 +38,20 @@ const show = (h: ModuleHost) =>
     </ModuleHostContext.Provider>,
   )
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.useRealTimers()
+})
 
 describe('A computer wants to connect', () => {
   test('nothing is drawn while nobody asks; an ask that comes shows with its number, and Allow lets it in', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
     const h = host([])
     show(h.host)
-    await waitFor(() => expect(h.runComputerCommand).toHaveBeenCalledWith(['asks', '--wait', '25', '--seen', '']))
+    await waitFor(() => expect(h.runComputerCommand).toHaveBeenCalledWith(['asks']))
     expect(screen.queryByRole('dialog')).toBeNull()
     h.change([ASK])
+    await vi.advanceTimersByTimeAsync(5_000)
     expect(await screen.findByText(/asks to start runs on this computer/)).toBeTruthy()
     expect(screen.getByText("Ada's MacBook")).toBeTruthy()
     expect(screen.getByLabelText('The number').textContent).toBe('482 913')
@@ -73,11 +74,12 @@ describe('A computer wants to connect', () => {
     await waitFor(() => expect(h.runComputerCommand).toHaveBeenCalledWith(['deny', ASK.id]))
     cleanup()
 
+    vi.useFakeTimers({ shouldAdvanceTime: true })
     const other = host([ASK])
     show(other.host)
     await screen.findByLabelText('The number')
-    await waitFor(() => expect(other.runComputerCommand).toHaveBeenCalledWith(['asks', '--wait', '25', '--seen', ASK.id]))
     other.change([])
+    await vi.advanceTimersByTimeAsync(5_000)
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
   })
 
@@ -137,6 +139,33 @@ describe('A computer wants to connect', () => {
       document.dispatchEvent(new Event('visibilitychange'))
       expect(await screen.findByText("Ada's MacBook")).toBeTruthy()
       expect(h.runComputerCommand).toHaveBeenNthCalledWith(1, ['asks'])
+    } finally {
+      hidden.mockRestore()
+    }
+  })
+
+  test('no read waits; a page that goes out of sight stops reading, and a popup that is gone reads no more', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const hidden = vi.spyOn(document, 'hidden', 'get').mockReturnValue(false)
+    try {
+      const h = host([])
+      show(h.host)
+      await waitFor(() => expect(h.reads()).toBe(1))
+      expect(h.runComputerCommand).toHaveBeenNthCalledWith(1, ['asks'])
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(h.reads()).toBe(2)
+
+      hidden.mockReturnValue(true)
+      document.dispatchEvent(new Event('visibilitychange'))
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(h.reads()).toBe(2)
+      hidden.mockReturnValue(false)
+      document.dispatchEvent(new Event('visibilitychange'))
+      await waitFor(() => expect(h.reads()).toBe(3))
+
+      cleanup()
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(h.reads()).toBe(3)
     } finally {
       hidden.mockRestore()
     }

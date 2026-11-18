@@ -144,27 +144,49 @@ export function Connecting({ d, computer, canBoth, onBack, onClose }: { d: Devic
   )
 }
 
+/**
+ * How often the popup reads the asks while the page is in sight. Each read is answered at once: a
+ * read that waited for the asks to change held one of the six connections a browser opens to the
+ * dashboard, which all its tabs share, and two tabs' worth left every other call waiting.
+ */
+const LOOK_MS = 5_000
+
 /** How long the popup rests after its read failed: a computer with no door package, or one that is down. */
 const RETRY_MS = 30_000
 
-/** Once the page is in sight: a read that waits holds one of the few connections a browser opens to the dashboard, which its tabs share, so a tab out of sight holds none. */
-function inSight(): Promise<void> {
+/** Once the page is in sight, or never when `signal` ends first. */
+function inSight(signal: AbortSignal): Promise<void> {
   return new Promise(resolve => {
-    if (!document.hidden) return resolve()
-    const seen = (): void => {
-      if (document.hidden) return
-      document.removeEventListener('visibilitychange', seen)
+    if (!document.hidden || signal.aborted) return resolve()
+    const done = (): void => {
+      if (document.hidden && !signal.aborted) return
+      document.removeEventListener('visibilitychange', done)
+      signal.removeEventListener('abort', done)
       resolve()
     }
-    document.addEventListener('visibilitychange', seen)
+    document.addEventListener('visibilitychange', done)
+    signal.addEventListener('abort', done)
+  })
+}
+
+/** `ms` from now, or sooner when `signal` ends. */
+function rest(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise(resolve => {
+    const done = (): void => {
+      clearTimeout(timer)
+      signal.removeEventListener('abort', done)
+      resolve()
+    }
+    const timer = setTimeout(done, ms)
+    signal.addEventListener('abort', done)
   })
 }
 
 /**
  * Over every page: a computer on this Wi-Fi asks to connect. Shown with the number its screen
  * shows, until someone here allows it or denies it, it gives up, or its two minutes run out. Read
- * with one command at a time that waits for the asks to change, while the page is in sight. The door answers no asks to a
- * device of a person the owner invited: their page shows none.
+ * every few seconds while the page is in sight, and not at all out of sight or once the popup is
+ * gone. The door answers no asks to a device of a person the owner invited: their page shows none.
  */
 export function AskPopup() {
   const host = useModuleHost()
@@ -178,29 +200,18 @@ export function AskPopup() {
   const deny = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
-    let stopped = false
+    const stop = new AbortController()
     void (async () => {
-      let seen: string[] | undefined
-      while (!stopped) {
-        // Back in sight, it reads at once: what changed out of sight is not waited for.
-        if (document.hidden) {
-          await inSight()
-          seen = undefined
-          if (stopped) return
-        }
-        const read = await loadAsks(host, seen)
-        if (stopped) return
-        if (!read.ok) {
-          await new Promise(resolve => setTimeout(resolve, RETRY_MS))
-          continue
-        }
-        seen = read.value.map(ask => ask.id)
-        setAsks(read.value)
+      while (!stop.signal.aborted) {
+        await inSight(stop.signal)
+        if (stop.signal.aborted) return
+        const read = await loadAsks(host)
+        if (stop.signal.aborted) return
+        if (read.ok) setAsks(read.value)
+        await rest(read.ok ? LOOK_MS : RETRY_MS, stop.signal)
       }
     })()
-    return () => {
-      stopped = true
-    }
+    return () => stop.abort()
   }, [host])
 
   const ask = asks.find(candidate => !closed.has(candidate.id))

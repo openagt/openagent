@@ -320,8 +320,8 @@ export async function hearAnswer(host: ModuleHost, url: string, secret: string):
 /** Take this computer's ask away there. */
 export const cancelAsk = (host: ModuleHost, url: string, secret: string): Promise<unknown> => host.runComputerCommand(['ask-cancel', url, '-'], undefined, secret).catch(() => undefined)
 
-/** The asks waiting here; with `seen`, the answer waits up to 25 seconds for them to be other than that. */
-export const loadAsks = (host: ModuleHost, seen?: readonly string[]): Promise<Answer<AskHere[]>> => runDevices(host, ['asks', ...(seen ? ['--wait', '25', '--seen', seen.join(',')] : [])], readAsks)
+/** The asks waiting here. */
+export const loadAsks = (host: ModuleHost): Promise<Answer<AskHere[]>> => runDevices(host, ['asks'], readAsks)
 
 /** Allow the ask `id`, or deny it. */
 export const answerAsk = (host: ModuleHost, id: string, allow: boolean): Promise<Answer<AskHere[]>> => runDevices(host, [allow ? 'allow' : 'deny', id], readAsks)
