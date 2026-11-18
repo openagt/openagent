@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 
 // Record what the feed subscribes to. The channel never sends; we only care about addressing.
@@ -353,5 +353,80 @@ describe('useLiveEvents message being written', () => {
     await waitFor(() => expect(screen.getByText('0 events, writing: [Half a]')).toBeTruthy())
     ch.push({ kind: 'end', ok: false, stopped: true })
     await waitFor(() => expect(screen.getByText('1 events, writing: []')).toBeTruthy())
+  })
+})
+
+// A stream holds one of the six connections a browser opens to the dashboard, shared by all its
+// tabs: a tab out of sight holds none, and back in sight its feed opens again without blanking.
+describe('useLiveEvents out of sight', () => {
+  function FeedProbe({ agentId }: { agentId: string }) {
+    const { events, lost } = useLiveEvents('p1', agentId)
+    return <span data-testid="feed">{`${events.map(e => (e.kind === 'log' ? e.message : e.kind)).join(',')} ${lost ? 'lost' : 'live'}`}</span>
+  }
+  const feed = () => screen.getByTestId('feed').textContent
+  const log = (message: string) => ({ kind: 'log', message })
+  let visibility: ReturnType<typeof vi.spyOn>
+  const setHidden = (hidden: boolean) => {
+    visibility.mockReturnValue(hidden ? 'hidden' : 'visible')
+    act(() => void document.dispatchEvent(new Event('visibilitychange')))
+  }
+  const closable = () => {
+    const made = fakeChannel()
+    const close = vi.fn()
+    return { ...made, close, channel: { ...made.channel, close } }
+  }
+
+  beforeEach(() => {
+    visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible')
+  })
+  afterEach(() => visibility.mockRestore())
+
+  test('out of sight the stream is closed; back in sight it opens again and the replay swaps in whole', async () => {
+    const first = closable()
+    const second = closable()
+    onEvents.mockResolvedValueOnce(first.channel).mockResolvedValueOnce(second.channel)
+    render(<FeedProbe agentId="run-a" />)
+    await waitFor(() => expect(onEvents).toHaveBeenCalledTimes(1))
+    act(() => ['a', 'b'].forEach(m => first.push(log(m))))
+    expect(feed()).toBe('a,b live')
+
+    setHidden(true)
+    expect(first.close).toHaveBeenCalled()
+    expect(feed()).toBe('a,b live')
+
+    setHidden(false)
+    await waitFor(() => expect(onEvents).toHaveBeenCalledTimes(2))
+    act(() => second.push(log('a')))
+    expect(feed()).toBe('a,b live')
+    act(() => {
+      ;['b', 'c'].forEach(m => second.push(log(m)))
+      second.push({ kind: 'stream-sync' })
+    })
+    expect(feed()).toBe('a,b,c live')
+  })
+
+  test('a tab out of sight from the start opens its stream only once in sight', async () => {
+    visibility.mockReturnValue('hidden')
+    onEvents.mockResolvedValue(closable().channel)
+    render(<FeedProbe agentId="run-a" />)
+    await new Promise(resolve => setTimeout(resolve, 20))
+    expect(onEvents).not.toHaveBeenCalled()
+    setHidden(false)
+    await waitFor(() => expect(onEvents).toHaveBeenCalledTimes(1))
+  })
+
+  test('a stream that opens after the tab went out of sight is closed at once, and its end retries nothing', async () => {
+    const late = closable()
+    let open: (channel: unknown) => void = () => {}
+    onEvents.mockReturnValueOnce(new Promise(resolve => (open = resolve)))
+    render(<FeedProbe agentId="run-a" />)
+    await waitFor(() => expect(onEvents).toHaveBeenCalledTimes(1))
+    setHidden(true)
+    await act(async () => open(late.channel))
+    expect(late.close).toHaveBeenCalled()
+    act(() => late.dropWith(new Error('aborted')))
+    await new Promise(resolve => setTimeout(resolve, 1200))
+    expect(onEvents).toHaveBeenCalledTimes(1)
+    expect(feed()).toBe(' live')
   })
 })
