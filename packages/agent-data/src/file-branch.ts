@@ -548,6 +548,41 @@ export async function listBranchDir(
   return []
 }
 
+/**
+ * Every file under one directory on the branch (`''` for the whole branch), each by its path from
+ * the branch's top, sorted: off the first of the refs a read looks at ({@link readBranchFile}) that
+ * has the directory. `[]` for a directory the branch does not have. Never throws.
+ */
+export async function listBranchFiles(
+  cwd: string,
+  branch: string,
+  dir: string,
+  opts: { fresh?: boolean } = {},
+  deps: FileBranchDeps = {},
+): Promise<string[]> {
+  const r = resolveDeps(deps)
+  const repo = await cloneHome(cwd, r.git)
+  for (const ref of await readRefs(repo, branch, opts.fresh, r.git)) {
+    const files = await filesOnRef(repo, ref, dir, r.git)
+    if (files !== undefined) return files
+  }
+  return []
+}
+
+/**
+ * The files under `dir` on `ref`, by their paths from its top, sorted; `undefined` when the ref or
+ * the directory is not there. Asked from the clone's own directory, whose top is the ref's top.
+ */
+async function filesOnRef(repo: string, ref: string, dir: string, git: GitRunner): Promise<string[] | undefined> {
+  const out = await git(['ls-tree', '-r', '-z', '--name-only', `${ref}:${dir}`], repo).catch(() => undefined)
+  if (out === undefined) return undefined
+  return out
+    .split('\0')
+    .filter(Boolean)
+    .map(path => (dir === '' ? path : `${dir}/${path}`))
+    .sort()
+}
+
 /** Reads off one ref of the branch, for a reader that opens many files: fetched once, up front. */
 export interface BranchReader {
   /** The ref every read goes to: origin's copy when the branch reaches origin, else the local branch, else the copy of origin's this clone holds. */
@@ -556,6 +591,8 @@ export interface BranchReader {
   read: (rel: string) => Promise<string | undefined>
   /** One directory's entries by name; `[]` when the ref has no such directory. */
   list: (dir: string) => Promise<string[]>
+  /** Every file under a directory (`''` for all of them), by its path from the branch's top, sorted; `[]` when the ref has no such directory. */
+  files: (dir: string) => Promise<string[]>
 }
 
 /**
@@ -585,6 +622,7 @@ export async function openBranchReader(cwd: string, branch: string, deps: FileBr
         .git(['ls-tree', '--name-only', `${at}:${dir}`], cwd)
         .then(out => out.split('\n').map(line => line.trim()).filter(Boolean))
         .catch((): string[] => []),
+    files: async dir => (await filesOnRef(repo, at, dir, r.git)) ?? [],
   }
 }
 

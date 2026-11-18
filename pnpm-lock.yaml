@@ -1037,6 +1037,60 @@ importers:
 
   packages/skill-work-queue: {}
 
+  packages/store-filesystem:
+    dependencies:
+      '@openagt/agent-data':
+        specifier: workspace:*
+        version: link:../agent-data
+      '@openagt/hooks':
+        specifier: workspace:*
+        version: link:../hooks
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.43
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+
+  packages/store-git-branch:
+    dependencies:
+      '@openagt/agent-data':
+        specifier: workspace:*
+        version: link:../agent-data
+      '@openagt/hooks':
+        specifier: workspace:*
+        version: link:../hooks
+      '@openagt/store-filesystem':
+        specifier: workspace:*
+        version: link:../store-filesystem
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.43
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+
+  packages/store-git-repository:
+    dependencies:
+      '@openagt/agent-data':
+        specifier: workspace:*
+        version: link:../agent-data
+      '@openagt/hooks':
+        specifier: workspace:*
+        version: link:../hooks
+      '@openagt/store-filesystem':
+        specifier: workspace:*
+        version: link:../store-filesystem
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.43
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+
   packages/uninstall:
     dependencies:
       '@openagt/install':

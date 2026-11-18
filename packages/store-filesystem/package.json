@@ -1,0 +1,45 @@
+{
+  "name": "@openagt/store-filesystem",
+  "version": "0.1.0",
+  "description": "OpenAgent's store on this computer, the end of the store's chain: each scope's files in a folder of its own (the person's and each project's in ~/.openagent, this computer's beside it), and the writer every store that keeps files uses.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/openagt/openagent.git",
+    "directory": "packages/store-filesystem"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./module": {
+      "types": "./dist/module.d.ts",
+      "default": "./dist/module.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "tsc -p tsconfig.test.json && node ../../scripts/test-node.mjs",
+    "clean": "rm -rf dist dist-test"
+  },
+  "dependencies": {
+    "@openagt/agent-data": "workspace:*",
+    "@openagt/hooks": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^7.0.2"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

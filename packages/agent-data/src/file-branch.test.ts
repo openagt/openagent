@@ -14,6 +14,7 @@ import {
   clearSharing,
   removeFileBranch,
   listBranchDir,
+  listBranchFiles,
   openBranchReader,
   pullFileBranch,
   readBranchFile,
@@ -524,6 +525,15 @@ test('reads come off the checkout, the local ref, or origin, from a worktree too
     assert.equal(await readBranchFile(other, BRANCH, 'tickets/a.md'), '# a\n')
     assert.deepEqual(await listBranchDir(other, BRANCH, 'tickets'), ['a.md'])
     assert.deepEqual(await listBranchDir(other, BRANCH, 'nothing'), [])
+    // Every file under a directory, by its path from the branch's top, from a subdirectory too.
+    await otherMachineWrites(other, 'tickets/old/b.md', '# b\n')
+    await git(['checkout', 'main'], other)
+    await git(['branch', '-D', BRANCH], other)
+    await mkdir(join(other, 'docs'), { recursive: true })
+    assert.deepEqual(await listBranchFiles(join(other, 'docs'), BRANCH, 'tickets'), ['tickets/a.md', 'tickets/old/b.md'])
+    assert.deepEqual(await listBranchFiles(other, BRANCH, ''), ['queue.md', 'tickets/a.md', 'tickets/old/b.md'])
+    assert.deepEqual(await listBranchFiles(other, BRANCH, 'nothing'), [])
+    assert.deepEqual(await (await openBranchReader(other, BRANCH)).files('tickets'), ['tickets/a.md', 'tickets/old/b.md'])
   } finally {
     await cleanup()
   }

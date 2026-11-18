@@ -15,6 +15,7 @@ export {
 } from './git.js'
 export { excludeFromGit, unexcludeFromGit, unexcludeOnceGone, repositoryCheckouts, type ExcludeFs } from './git-exclude.js'
 export { removeOwnDirectory, type KeptEntry, type OwnDirectoryRemoval } from './own-directory.js'
+export { withLockFile, type CheckoutLockDeps } from './checkout-lock.js'
 export {
   fileBranchPath,
   fileBranchRepo,
@@ -24,6 +25,7 @@ export {
   pullFileBranch,
   readBranchFile,
   listBranchDir,
+  listBranchFiles,
   openBranchReader,
   writeFileBranchDetached,
   nodeBranchFileFs,
