@@ -113,6 +113,9 @@ importers:
       '@openagt/agent-driver-codex':
         specifier: workspace:*
         version: link:../agent-driver/codex
+      '@openagt/hooks':
+        specifier: workspace:*
+        version: link:../hooks
       '@openagt/skill-account-rotation':
         specifier: workspace:*
         version: link:../skill-account-rotation

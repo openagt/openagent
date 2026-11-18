@@ -1,7 +1,7 @@
 import { mkdir, stat } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { checkoutRoot, nodeGitRunner, originUrl, sessionFolder, type GitRunner } from '@openagt/agent-data'
-import { agentBranchName, linkSkillsInFolder, type SkillLink } from '@openagt/skill-branches'
+import { agentBranchName } from '@openagt/skill-branches'
 import type { SessionRepo } from './records.js'
 
 /**
@@ -30,9 +30,8 @@ export const SESSION_FOLDER_STAYS = 'a session folder stays'
 
 /**
  * Where a run with no project works: a folder of its own in the sessions home, made when it is not
- * there yet, the run's skills linked in where its coding agent looks for them. The folder itself has
- * no branch and no git: it stays when the run ends, holding what the agent made, and a resumed run
- * goes on in it.
+ * there yet. The folder itself has no branch and no git: it stays when the run ends, holding what
+ * the agent made, and a resumed run goes on in it.
  *
  * Each repo the session has is a copy in it, under its name: a clone of the repo's folder as it is
  * committed, on a new branch `agent-<id>`, its `origin` the repo's own (none when the repo has none,
@@ -40,10 +39,9 @@ export const SESSION_FOLDER_STAYS = 'a session folder stays'
  * project, and the session leaves nothing in it; deleting the session's folder takes it all. A copy
  * already there is kept as it is, with the agent's work; one that is gone is made again.
  */
-export async function openSessionFolder(home: string, id: string, skills: readonly SkillLink[], repos: readonly SessionRepo[] = [], git: GitRunner = nodeGitRunner()): Promise<{ path: string }> {
+export async function openSessionFolder(home: string, id: string, repos: readonly SessionRepo[] = [], git: GitRunner = nodeGitRunner()): Promise<{ path: string }> {
   const path = sessionFolder(home, id)
   await mkdir(path, { recursive: true })
-  await linkSkillsInFolder(path, skills)
   for (const repo of repos) {
     const copy = join(path, repo.name)
     if (await stat(copy).then(() => true, () => false)) continue

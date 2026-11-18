@@ -121,15 +121,14 @@ already made, and lists it in its pull request; for anything else it proposes an
   own (#2394).
 - A run starts from the branch it is told, `run --base <ref>`, written on its record. With
   none, origin's default branch, as before. Picked over a run that always starts from the
-  default branch: a run started for another run needs what that run has built so far.
-  The `start` line passes it on too (`BASE`), so a person can start a run from their own
-  local branch, or from another of the branches on origin. The second is told by the full name
-  of origin's copy, and fetched first; a fetch that fails fails the run. Picked over the
-  short `origin/x`, which a local branch of that name would take over, and over a second
-  option, which a `start` line written before it existed would drop for a silent start
-  from somewhere else. The branch's name is on the record beside the host as well, plain
-  (`x`, whichever it was), so a reader that does not know the runner's mark can say where
-  the run started.
+  default branch: a person can start a run from their own local branch, or from another of
+  the branches on origin, which the `start` line passes on too (`BASE`). The second is told
+  by the full name of origin's copy, and fetched first; a fetch that fails fails the run.
+  Picked over the short `origin/x`, which a local branch of that name would take over, and
+  over a second option, which a `start` line written before it existed would drop for a
+  silent start from somewhere else. The branch's name is on the record beside the host as
+  well, plain (`x`, whichever it was), so a reader that does not know the runner's mark can
+  say where the run started.
 - A run that makes its own branch records the commit the branch was made at: where its
   own work begins. Picked over the base's name: a branch is renamed, moves on, and is
   deleted once merged. Picked over recording it only for a run started with `--base`: once

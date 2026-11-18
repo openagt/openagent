@@ -7,7 +7,8 @@ import { worktreePath } from '@openagt/skill-branches'
 import { findRun, readDiary } from '@openagt/skill-logs'
 import { inboxPath } from './live-card.js'
 import { acquireRunLock, releaseRunLock } from './run-lock.js'
-import { AFRESH_NOTICE, earlierWorkLine, PUBLISH_LINES, resumeRun, runCommand, STOPPED_DETAIL } from './run.js'
+import { resumeRun, runCommand } from './run.js'
+import { AFRESH_NOTICE, earlierWorkLine, PUBLISH_LINES, STOPPED_DETAIL } from './session.js'
 import { recordRun, runnerMark } from './records.js'
 import type { GitHost } from './git-host.js'
 import { handDownBasicSkills, readUntimedDiary, removeRepo, testRepo } from './test-repo.js'
@@ -504,15 +505,28 @@ test('a line written after the last turn took the inbox, while the card still sa
   const repo = await testRepo()
   try {
     const driver = new FakeDriver({ turns: [{ text: 'First turn done.' }, { text: 'Late line handled.' }] })
-    let cwd = ''
-    const recording: Driver = { id: 'fake', start: async opts => ((cwd = opts.cwd), driver.start(opts)) }
-    // The pull request is read after the last turn and before the card says ended: the moment a
-    // dashboard still sees the run working and hands it a line.
-    let calls = 0
-    const gitHost = fakeGitHost('none', async () => {
-      if (calls++ === 0) await appendInbox(inboxPath(cwd), { kind: 'message', text: 'one more thing' })
-    })
-    const outcome = await runCommand(repo, { prompt: '/work-queue', attached: 'Found:\n["one entry"]', model: 'opus', driver: recording, now: () => NOW, gitHost })
+    let late = true
+    const recording: Driver = {
+      id: 'fake',
+      start: async opts => {
+        const fake = await driver.start(opts)
+        return {
+          id: fake.id,
+          cwd: fake.cwd,
+          ...(fake.log ? { log: fake.log } : {}),
+          // The turn is over and has taken its inbox, and the card does not say ended yet: the
+          // moment a dashboard still sees the run working and hands it a line.
+          prompt: async (text, promptOpts) => {
+            const turn = await fake.prompt(text, promptOpts)
+            if (late) await appendInbox(inboxPath(opts.cwd), { kind: 'message', text: 'one more thing' })
+            late = false
+            return turn
+          },
+          dispose: () => fake.dispose(),
+        }
+      },
+    }
+    const outcome = await runCommand(repo, { prompt: '/work-queue', attached: 'Found:\n["one entry"]', model: 'opus', driver: recording, now: () => NOW, gitHost: noGitHost })
     assert.equal(outcome.status, 'done')
     assert.deepEqual(outcome.checkout, { reclaimed: true })
     const diary = await readUntimedDiary(repo, outcome.id)
