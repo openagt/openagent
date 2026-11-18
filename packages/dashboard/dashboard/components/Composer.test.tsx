@@ -130,8 +130,8 @@ describe('Composer (#721)', () => {
     expect(screen.getByRole('button', { name: 'Commands' })).toBeTruthy()
     expect(screen.getByRole('button', { name: /^Run on: / })).toBeTruthy()
     expect((await hoverTooltip(agentTrigger())).textContent).toContain('Coding agent: Claude Code')
-    // The launcher's press is named and there from the start, off until the prompt has text.
-    expect((screen.getByRole('button', { name: /Start session/ }) as HTMLButtonElement).disabled).toBe(true)
+    // The launcher's send is the session's arrow, named for what it does, shown once the prompt has text.
+    expect(screen.queryByRole('button', { name: /Start session/ })).toBeNull()
     fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'x' } })
     expect((screen.getByRole('button', { name: /Start session/ }) as HTMLButtonElement).disabled).toBe(false)
   })
@@ -401,7 +401,7 @@ describe('Composer (#721)', () => {
     const submit = screen.getByRole('button', { name: 'Send' })
     expect(submit.hasAttribute('disabled')).toBe(true)
     // Held, it looks held: faded, not the full colour of a press that would start.
-    expect(submit.className).toContain('disabled:opacity-50')
+    expect(submit.className).toContain('disabled:opacity-40')
     fireEvent.click(submit)
     fireEvent.click(screen.getByText('editor-submit'))
     expect(onSubmit).not.toHaveBeenCalled()
@@ -442,8 +442,8 @@ describe('Composer (#721)', () => {
   test('a box whose send is on its way sends nothing more, by the arrow or the keyboard, and keeps what is typed', () => {
     const { onSubmit } = renderComposer({ busy: true })
     fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'ship it' } })
-    // The launcher's press waits with the keyboard on it, refusing presses.
-    expect(screen.getByRole('button', { name: 'Send' }).getAttribute('aria-disabled')).toBe('true')
+    // The send waits, its spinner in full, refusing presses.
+    expect((screen.getByRole('button', { name: 'Send' }) as HTMLButtonElement).disabled).toBe(true)
     fireEvent.click(screen.getByRole('button', { name: 'Send' }))
     fireEvent.click(screen.getByText('editor-submit'))
     expect(onSubmit).not.toHaveBeenCalled()

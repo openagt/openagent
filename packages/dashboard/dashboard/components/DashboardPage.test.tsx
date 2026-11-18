@@ -489,7 +489,7 @@ describe('the Overview', () => {
     // One list, in the order the queue gives them: a row says what it needs first in its line, so no kind has a heading.
     const part = within(screen.getByRole('region', { name: 'Human Queue' }))
     expect(part.queryAllByRole('region')).toEqual([])
-    expect(part.getAllByRole('listitem').map(row => row.textContent)).toEqual(['Needs commitNeeds commit: Create test.md1 file', 'Needs mergeNeeds merge: Add DESCRIPTION.md#6', 'Needs mergeNeeds merge: Condense README#8'])
+    expect(part.getAllByRole('listitem').map(row => row.textContent)).toEqual(['Needs commitCreate test.md1 file', 'Needs mergeAdd DESCRIPTION.md#6', 'Needs mergeCondense README#8'])
     // The row is the press: it opens where what it needs is done.
     fireEvent.click(screen.getByText('Create test.md'))
     fireEvent.click(screen.getByText('Add DESCRIPTION.md'))

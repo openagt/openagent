@@ -20,6 +20,7 @@ import { onProjects } from '../rpc/projects.js'
 import { PromptEditor, type PromptDraft, type PromptEditorHandle } from './PromptEditor.js'
 import { PresetCreatePanel } from './PresetCreatePanel.js'
 import { CommandsMenu } from './CommandsMenu.js'
+import { IN_BOX } from '../lib/in-box.js'
 import { DriverModelMenu, type DriverOption } from './DriverModelMenu.js'
 import { RunOnMenu } from './RunOnMenu.js'
 import { PERMISSIONS_PAGE } from '../lib/use-route.js'
@@ -389,15 +390,14 @@ export const Composer = forwardRef<ComposerHandle, {
     />
   )
 
-  // A session's send is a single icon button that only shows once the box has text (#721): it fades
-  // in and slides into place, its layout footprint animated with a negative margin (0 <- -w) rather
-  // than its width, so the text to its left gives way smoothly; `aria-hidden` while empty keeps it out
-  // of the a11y tree. The launcher's is a press named for what it does ("Start agent"), at the text's
-  // right as a session's send is, there from the first frame and off while the box is empty: starting
-  // an agent is what the page is for, so its press is not a glyph that comes and goes.
+  // The send is a single icon press, on a session's page and on the launcher alike, that only shows
+  // once the box has text (#721): it grows in from the middle as it fades in, and its room opens
+  // with it, by a negative margin (0 <- -w) rather than its width, so the text to its left gives way
+  // smoothly; `aria-hidden` while empty keeps it out of the a11y tree. Its name and tooltip say what
+  // it does ("Start agent" on the launcher).
   const hasPrompt = !!prompt.trim()
   const submitTip = busy ? submitBusyLabel : down ? 'OpenAgent is not answering' : `${submitLabel}  (Enter · Shift+Enter for a new line)`
-  const submitButton = inAgent ? (
+  const submitButton = (
     <Tooltip>
       <TooltipTrigger
         render={
@@ -412,26 +412,18 @@ export const Composer = forwardRef<ComposerHandle, {
             className={cn(
               // `disabled:opacity-*` overrides the base (the button is disabled while empty/busy), so the
               // hidden state must force it to 0 and the shown state back to full for the busy spinner.
-              'shrink-0 transition-[margin,opacity,transform]',
+              'relative shrink-0 transition-[margin,opacity,scale] duration-180 ease-out motion-reduce:transition-none max-md:after:absolute max-md:after:-inset-2',
+              IN_BOX,
               hasPrompt
                 ? // Full while busy, for its spinner; faded while something else holds the start (the note's OK, a machine offline).
-                  cn('ml-0 translate-x-0 opacity-100', busy ? 'disabled:opacity-100' : 'disabled:opacity-40')
+                  cn('ml-0 scale-100 opacity-100', busy ? 'disabled:opacity-100' : 'disabled:opacity-40')
                 // The hidden submit takes no room: its own width (1.75rem) back.
-                : 'pointer-events-none translate-x-2 opacity-0 disabled:opacity-0 -ml-7',
+                : 'pointer-events-none -ml-7 scale-50 opacity-0 disabled:opacity-0',
             )}
           />
         }
       >
         {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
-      </TooltipTrigger>
-      <TooltipContent>{submitTip}</TooltipContent>
-    </Tooltip>
-  ) : (
-    <Tooltip>
-      {/* 28 high, as the rows' items; a finger's 44 around it on a phone. While the start is asked for it
-          keeps its words and the keyboard, dimmed: the note above the box says what is under way. */}
-      <TooltipTrigger render={<Button type="submit" size="sm" onClick={submit} disabled={(held && !busy) || !hasPrompt} loading={busy} className="relative ml-2 max-md:after:absolute max-md:after:-inset-2" />}>
-        {submitLabel}
       </TooltipTrigger>
       <TooltipContent>{submitTip}</TooltipContent>
     </Tooltip>
@@ -505,11 +497,12 @@ export const Composer = forwardRef<ComposerHandle, {
         {/* The box, as Claude Code's: the raised surface, the commands menu (+) at its left, the text,
             and the send at its right (the launcher's "Start agent"), the two kept at the last line. One
             line tall when empty, growing with what is typed. The editor is borderless: the edge is the box's.
-            On a touch screen, where the text's line is 24 high, the two stand 6 from the box's edges, so they sit on its middle. */}
+            The two stand 5 from the box's edges on every side, their corners following its corner (IN_BOX);
+            on a touch screen, where the text's line is 24 high, 7, so they sit on its middle. */}
         <div ref={surface} className={BOX}>
-          <div className="-mr-2 flex shrink-0 items-center py-1 pr-1 pl-0.5 pointer-coarse:py-1.5">{commandsEl}</div>
+          <div className="-mr-2 flex shrink-0 items-center p-1 pointer-coarse:p-1.5 pointer-coarse:pr-1">{commandsEl}</div>
           <div className="min-w-0 flex-1">{editorEl}</div>
-          <div className="flex shrink-0 items-center py-1 pr-0.5 pl-1 pointer-coarse:py-1.5">{slotEl}</div>
+          <div className="flex shrink-0 items-center p-1 pointer-coarse:p-1.5 pointer-coarse:pl-1">{slotEl}</div>
         </div>
 
         {/* How it runs, under the box: the caller's controls at the left, the model at the right. The

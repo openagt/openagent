@@ -75,9 +75,10 @@ export interface AgentCliParser {
   hurry?(): void
   /**
    * Ask the agent to end its turn where it is; its turn's result then says `stopped`. False when
-   * it cannot be asked, and its process is ended instead.
+   * it cannot be asked, and its process is ended instead. `'idle'` when asking would not reach it
+   * (it waits on work in the background): its turn is stopped, and its process ended at once.
    */
-  stop?(): boolean
+  stop?(): boolean | 'idle'
 }
 
 /** Writing to the agent CLI's stdin, for a parser that converses with it. */
@@ -224,7 +225,9 @@ export function runCliSession(opts: RunCliSessionOptions): Promise<DriverTurn> {
     let stopTimer: ReturnType<typeof setTimeout> | undefined
     const onStop = () => {
       if (settled) return
-      if (parser.stop?.()) {
+      const asked = parser.stop?.()
+      if (asked === 'idle') return terminate()
+      if (asked) {
         stopTimer = setTimeout(terminate, STOP_GRACE_MS)
         stopTimer.unref?.()
         return

@@ -2,6 +2,7 @@ import type { CustomPreset } from '../../src/index.js'
 import type { ProjectLauncher } from '../rpc/projects.js'
 import { Plus, X } from 'lucide-react'
 import { cn } from '../lib/utils.js'
+import { IN_BOX } from '../lib/in-box.js'
 import { buttonVariants } from './ui/button.js'
 import { OptionLabel } from './ui/option-label.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
@@ -105,8 +106,8 @@ export function CommandsMenu({
               type="button"
               disabled={busy}
               aria-label="Commands"
-              // As high as the row's items and as wide as their padding makes them, so its + stands where their icons do.
-              className={cn(buttonVariants({ variant: 'ghost', size: 'icon-sm' }), 'w-8 text-muted-foreground data-[popup-open]:bg-accent')}
+              // Square, 5 in from the box's edges, its corner following the box's: its + stands where the rows' icons do.
+              className={cn(buttonVariants({ variant: 'ghost', size: 'icon-sm' }), IN_BOX, 'text-muted-foreground data-[popup-open]:bg-accent')}
             />
           }
         >

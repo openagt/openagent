@@ -290,6 +290,19 @@ test('a stop the agent can be asked for ends the turn as stopped, not failed, an
   assert.deepEqual(agent.killed, [], 'nothing was killed')
 })
 
+test('a stop the idle agent would not hear ends its process at once, and the turn as stopped, not failed', async () => {
+  const agent = drivenProcess()
+  const parser: AgentCliParser = { push: () => [], result: () => ({ text: '', stopped: true as const }), stop: () => 'idle' }
+  const stop = new AbortController()
+  const errors: unknown[] = []
+  const turn = runCliSession({ bin: 'agent', args: [], cwd: '/ws', env: {}, prompt: 'go', spawn: agent.spawn, emit: event => void (event.type === 'error' && errors.push(event)), signals: [], driver: 'agent', parser, stop: stop.signal })
+  stop.abort()
+  assert.deepEqual(agent.killed, ['SIGTERM'], 'ended at once, with no wait')
+  agent.exit(null)
+  assert.deepEqual(await turn, { text: '', stopped: true })
+  assert.deepEqual(errors, [])
+})
+
 test('a stop the agent cannot be asked for ends its process instead', async () => {
   const agent = drivenProcess()
   const stop = new AbortController()

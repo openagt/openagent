@@ -372,7 +372,7 @@ function isTall(text: string): boolean {
 // Claude Code on the web keeps an answered question. A skipped one says so where the answer would be.
 function Answer({ question, answer }: { question: string; answer?: string | undefined }) {
   return (
-    <div role="group" aria-label="Your answer" className="flex w-full max-w-[480px] flex-col gap-0.5 rounded-lg px-4 py-2 font-sans text-sm ring-1 ring-border md:-mx-4">
+    <div role="group" aria-label="Your answer" className="flex w-full flex-col gap-0.5 rounded-lg px-4 py-2 font-sans text-sm ring-1 ring-border md:-mx-4 md:w-[calc(100%+2rem)]">
       <div className="font-medium text-foreground">{question}</div>
       {answer !== undefined ? <div className="text-muted-foreground">{answer}</div> : <div className="italic text-muted-foreground">Skipped</div>}
     </div>
@@ -394,8 +394,8 @@ function TurnFiles({ files, onOpen, footer }: { files: readonly ChangedFile[]; o
 
 // The user's own message: a soft box on the right, as Markdown in the page's font. No label says
 // whose it is; the place and the box do. A long one is cut short with "Show more" under it. The
-// time it was sent sits beside the box's foot and shows while the pointer is on the message; its
-// room is always there, so nothing moves when it shows.
+// time it was sent and its copy sit under the box and show while the pointer is on the message;
+// their line is always there, so nothing moves when they show.
 // `waiting`: a message the working agent has not read yet, as Claude Code on the web shows one:
 // under it, when the agent reads it and Send now, or "Queued" for one sent for after the turn, and
 // on hover the copy and Cancel and edit, which takes it back into the box.
@@ -408,27 +408,25 @@ function Prompt({ text, at, waiting, attached, fresh = false }: { text: string; 
   const down = useContext(DaemonDown)
   return (
     <div className={`group/prompt flex min-w-0 flex-1 flex-col items-end font-sans text-foreground ${fresh ? 'bubble-in' : ''}`}>
-      {/* When it was sent and a copy of it, beside the box's foot where they take no line of their
-          own, shown while the pointer is on the message, and always to a finger. A waiting one says so under the box instead. */}
-      <div className="flex w-full min-w-0 items-end justify-end gap-1">
-        {!waiting && (
-          <div className="flex h-6 shrink-0 items-center gap-1 text-muted-foreground opacity-0 transition-opacity focus-within:opacity-100 group-hover/prompt:opacity-100 pointer-coarse:opacity-100">
-            {at !== undefined && <Age at={at} />}
-            <CopyMessage text={text} />
-          </div>
-        )}
-        <div role="group" aria-label={waiting ? 'Your message, waiting' : 'Your message'} className="max-w-[80%] min-w-0 rounded-lg rounded-br-sm bg-card px-4 py-2 shadow-sm ring-1 ring-hairline">
-          <div className={tall && !open ? 'max-h-40 overflow-hidden' : ''}>
-            <Markdown text={text} />
-          </div>
-          {tall && (
-            <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open} className="mt-1 text-xs text-muted-foreground hover:text-foreground">
-              {open ? 'Show less' : 'Show more'}
-            </button>
-          )}
+      <div role="group" aria-label={waiting ? 'Your message, waiting' : 'Your message'} className="max-w-[80%] min-w-0 rounded-lg rounded-br-sm bg-card px-4 py-2 shadow-sm ring-1 ring-hairline">
+        <div className={tall && !open ? 'max-h-40 overflow-hidden' : ''}>
+          <Markdown text={text} />
         </div>
+        {tall && (
+          <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open} className="mt-1 text-xs text-muted-foreground hover:text-foreground">
+            {open ? 'Show less' : 'Show more'}
+          </button>
+        )}
       </div>
       {attached !== undefined && <Attached text={attached} />}
+      {/* When it was sent and a copy of it, under the box, shown while the pointer is on the
+          message, and always to a finger. A waiting one says so under the box instead. */}
+      {!waiting && (
+        <div className="mt-1.5 flex h-6 items-center gap-1 text-muted-foreground opacity-0 transition-opacity focus-within:opacity-100 group-hover/prompt:opacity-100 pointer-coarse:opacity-100">
+          {at !== undefined && <Age at={at} />}
+          <CopyMessage text={text} />
+        </div>
+      )}
       {waiting && (
         <div className="mt-1 flex h-6 items-center gap-1 text-muted-foreground">
           <div className="flex items-center gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover/prompt:opacity-100 pointer-coarse:opacity-100">

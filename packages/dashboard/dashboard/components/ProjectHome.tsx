@@ -2,14 +2,13 @@ import { useLayoutEffect, useRef } from 'react'
 import { cn } from '../lib/utils.js'
 import type { Intervention, ProjectError, ProjectSummary } from '../../src/index.js'
 import { StartAgentForm } from './StartAgentForm.js'
-import { BAR_NAME, ProjectActions } from './ProjectActions.js'
+import { ProjectActions } from './ProjectActions.js'
 import { ComposerShape } from './Composer.js'
 import { TopBar } from './Panes.js'
 import { ProjectErrorBanner } from './ProjectErrorBanner.js'
 import { ProjectSkillsLine } from './ProjectSkills.js'
-import { HumanQueueList, holdsBack } from './HumanQueueList.js'
+import { HumanQueueList } from './HumanQueueList.js'
 import { ScrollArea } from './ui/scroll-area.js'
-import { PanelGroup } from './ui/panel.js'
 import type { StartPicks } from '../lib/started-from.js'
 import { SESSIONS_ID } from '../../src/project-address.js'
 import { useIsMobile } from '../lib/use-mobile.js'
@@ -96,19 +95,19 @@ export function ProjectHome({
           It stops short of the list's scroll bar (ui/scroll-area, 10 wide), which is drawn over the
           page's whole height; only the bar's line crosses it, to the page's edge. */}
       <div ref={top} data-testid="home-top" className="absolute top-0 right-2.5 left-0 z-20 bg-background/80 backdrop-blur-md">
-        <ProjectActions projectId={projectId} name={isMobile ? QUESTION_WORDS : undefined} onProjectRemoved={home === undefined ? onProjectRemoved : undefined} />
+        <ProjectActions projectId={projectId} onProjectRemoved={home === undefined ? onProjectRemoved : undefined} />
         {/* Above everything, because an agent started on a project whose agent-data branch cannot
             reach origin (#1599) works from stale tickets and a queue nobody else will see. */}
         <ProjectErrorBanner errors={errors} />
       </div>
       <div aria-hidden className="pointer-events-none absolute top-[calc(2.75rem-1px)] right-0 z-20 h-px w-2.5 bg-border" />
-      {/* What waits for the person comes first, under the page's question, and the box under it, at the
-          bottom, as an agent's page has its chat (his pick); so on a phone, where the box is in the
-          thumb's reach. With nothing waiting, from 768px up the box stands where the eye lands, under
-          the page's question. The column keeps a scroll bar's room at its right, as the chat's does
+      {/* What waits for the person comes first, and the box under it, at the bottom, as an agent's
+          page has its chat (his pick); so on a phone, where the box is in the thumb's reach. With
+          nothing waiting, from 768px up the box stands where the eye lands. The page has no heading
+          (his pick): the box says what it is for. The column keeps a scroll bar's room at its right, as the chat's does
           (ChatPane), so the box stands on a session's box's edges and is carried without a sideways step. */}
       <div className="scrollbar-thin scrollbar-gutter-stable flex min-h-0 flex-1 flex-col overflow-y-auto">
-        {!listFirst && <Question />}
+        {!listFirst && <Lift />}
         <div className={cn('shrink-0', listFirst && 'order-last')}>
           <StartAgentForm
             projectId={projectId}
@@ -129,14 +128,13 @@ export function ProjectHome({
           {/* Its rows start under the top bar, which lies over the list's start, where the list is first. */}
           <div className={cn('mx-auto w-full max-w-3xl', listFirst && 'pt-(--home-top)')}>
             <div className="space-y-8 px-4 pt-6 pb-4 md:pt-4">
-              {/* On a phone the question stands in the bar over the list, which keeps the room. */}
-              {listFirst && !isMobile && <h1 className={QUESTION}>{QUESTION_WORDS}</h1>}
               {/* No part at all when nothing waits: an empty "Waiting on you" is noise on every launch. On
                   the box's edges, as an agent's chat is: its name and its card start where the box does. */}
               {waiting.length > 0 && (
-                <PanelGroup bare title={<span className="text-warning">Waiting on you</span>} count={holdsBack(waiting) ? waiting.length : undefined}>
+                <section aria-label="Waiting on you">
+                  <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Waiting on you · {waiting.length}</h2>
                   <HumanQueueList key={projectId} items={waiting} onOpenAgent={onOpenAgent} />
-                </PanelGroup>
+                </section>
               )}
               {/* What the project's skills need from the person, when they need something (#2023): a card
                   under the agents that wait, in the same column; with nothing to say there is no card,
@@ -150,22 +148,14 @@ export function ProjectHome({
   )
 }
 
-const QUESTION_WORDS = 'What should an agent do?'
-const QUESTION = 'text-xl font-semibold tracking-tight md:text-2xl'
-
-/** The page's name, its question, over the box: the two standing where the eye lands (the question's top at about a quarter of the page). */
-function Question() {
-  return (
-    <>
-      <div className="shrink-0 basis-[24%]" aria-hidden />
-      <h1 className={cn('mx-auto w-full max-w-3xl shrink-0 px-4 pb-4 text-center', QUESTION)}>{QUESTION_WORDS}</h1>
-    </>
-  )
+/** The room over the box when nothing waits, so the box stands where the eye lands (about a third down the page). */
+function Lift() {
+  return <div className="shrink-0 basis-[30%]" aria-hidden />
 }
 
 /**
  * The launcher while the projects are read, so the address cannot yet say which project it is: its
- * top bar's row, its question, and its box's shape where the box will stand.
+ * top bar's row and its box's shape where the box will stand.
  */
 export function ProjectHomeShape() {
   const isMobile = useIsMobile()
@@ -173,13 +163,12 @@ export function ProjectHomeShape() {
     <div className="relative isolate flex min-h-0 flex-1 flex-col">
       <div className="absolute top-0 right-2.5 left-0 z-20">
         <TopBar>
-          <div className="flex h-11 items-center pl-4">{isMobile && <h1 className={BAR_NAME}>{QUESTION_WORDS}</h1>}</div>
+          <div className="h-11" />
         </TopBar>
       </div>
       <div aria-hidden className="pointer-events-none absolute top-[calc(2.75rem-1px)] right-0 z-20 h-px w-2.5 bg-border" />
       <div className="scrollbar-thin scrollbar-gutter-stable flex min-h-0 flex-1 flex-col overflow-y-auto">
-        {/* On a phone the question stands in the bar. */}
-        {!isMobile && <Question />}
+        {!isMobile && <Lift />}
         <div className={cn('mx-auto w-full max-w-3xl shrink-0 px-4 pt-2 pb-4', isMobile && 'order-last')}>
           <ComposerShape />
         </div>
