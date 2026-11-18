@@ -64,12 +64,12 @@ test('a plugin is off until its Enabled row is on, in the scope it keeps the row
   assert.equal(await hooks.enabled('github'), true)
   assert.equal(await hooks.enabled('ask'), true, 'the distribution starts ask on')
   assert.equal(await hooks.enabled('devices'), false)
-  assert.equal(await hooks.enabled('tickets', 'p1'), false)
-  await hooks.setEnabled('tickets', true, 'p1')
+  assert.equal(await hooks.enabled('tickets', P1), false)
+  await hooks.setEnabled('tickets', true, P1)
   await hooks.setEnabled('devices', true)
   await hooks.setEnabled('ask', false)
-  assert.equal(await hooks.enabled('tickets', 'p1'), true)
-  assert.equal(await hooks.enabled('tickets', 'p2'), false, 'each project has its own row')
+  assert.equal(await hooks.enabled('tickets', P1), true)
+  assert.equal(await hooks.enabled('tickets', P2), false, 'each project has its own row')
   assert.equal(await hooks.enabled('tickets'), false, 'a plugin kept per project is on in no project unless one is named')
   assert.equal(await hooks.enabled('devices'), true)
   assert.equal(await hooks.enabled('ask'), false)
@@ -99,7 +99,7 @@ test('a run goes without the plugins its options name: none of their steps, skil
       }),
     },
   ])
-  await hooks.setEnabled('browser', true, 'p1')
+  await hooks.setEnabled('browser', true, P1)
   const every = { project: P1, options: {} }
   const without = { project: P1, options: { plugins: { without: ['browser', 'github'] } } }
   assert.deepEqual((await hooks.steps(every)).map(step => step.name), ['account', 'chrome'])
@@ -215,7 +215,7 @@ test("the app's life: modules start where they are on and stop the last first; a
     ],
     errors,
   )
-  await hooks.setEnabled('github-auto-reply', true, 'p2')
+  await hooks.setEnabled('github-auto-reply', true, P2)
   await hooks.started(new AbortController().signal)
   await hooks.projectAdded({ id: 'p3', name: 'Three', dir: '/projects/three' })
   await hooks.projectRemoved(P1)
@@ -251,7 +251,7 @@ test("a distribution is loaded from its packages' ./module entries, through the 
     hooks.modules.map(module => module.name),
     ['store-filesystem', 'github', 'tickets'],
   )
-  assert.equal(await hooks.enabled('tickets', 'p1'), true)
+  assert.equal(await hooks.enabled('tickets', P1), true)
   await assert.rejects(loadDistribution([{ package: '@openagt/nothing' }], load), /Cannot find @openagt\/nothing\/module/)
   await assert.rejects(loadDistribution([{ package: '@openagt/bare' }], async () => ({ default: 42 })), /@openagt\/bare\/module default-exports no module/)
 })

@@ -3,7 +3,7 @@
 import { StoreOrder } from './order.js'
 import type { RunContext, RunEvent, RunHost, RunInput, RunRequest, RunStatus, RunSummary } from './run.js'
 import { settingsIn } from './settings.js'
-import { chainStore, checkPath, isUnder, scopeKey, type Scope, type Store, type StoreBackend } from './store.js'
+import { chainStore, changesOf, checkPath, isUnder, messageOf, scopeKey, type Scope, type Store, type StoreBackend } from './store.js'
 
 /** A store kept in memory: the end of the chain, as the filesystem store is. */
 export interface MemoryStore extends StoreBackend {
@@ -30,28 +30,32 @@ export function memoryStore(): MemoryStore {
     const key = scopeKey(scope)
     for (const watcher of [...watchers]) if (watcher.key === key && isUnder(path, watcher.path)) watcher.onChange(path)
   }
+  const read = async (scope: Scope, path: string): Promise<string | undefined> => filesOf(scope).get(checkPath(path))
+  const list = async (scope: Scope, dir: string): Promise<string[]> => {
+    checkPath(dir, { dir: true })
+    return [...filesOf(scope).keys()].filter(path => path !== dir && isUnder(path, dir)).sort()
+  }
+  // One save at a time, as a backend that locks its scope makes them: an update reads what the
+  // save before it wrote.
+  let saving: Promise<unknown> = Promise.resolve()
   const store: Store = {
-    async read(scope, path) {
-      return filesOf(scope).get(checkPath(path))
-    },
-    async list(scope, dir) {
-      checkPath(dir, { dir: true })
-      return [...filesOf(scope).keys()].filter(path => path !== dir && isUnder(path, dir)).sort()
-    },
-    async save(scope, changes, message) {
-      const paths = Object.keys(changes).map(path => checkPath(path))
-      const files = filesOf(scope)
-      for (const [path, text] of Object.entries(changes)) {
-        if (text === null) files.delete(path)
-        else files.set(path, text)
+    read,
+    list,
+    save(scope, update, message) {
+      const save = async (): Promise<void> => {
+        const changes = await changesOf(update, { read: path => read(scope, path), list: dir => list(scope, dir) })
+        const files = filesOf(scope)
+        for (const [path, text] of Object.entries(changes)) {
+          if (text === null) files.delete(path)
+          else files.set(path, text)
+        }
+        const paths = Object.keys(changes)
+        saves.push({ scope, message: messageOf(message), paths })
+        for (const path of paths) changed(scope, path)
       }
-      saves.push({ scope, message, paths })
-      for (const path of paths) changed(scope, path)
-    },
-    async append(scope, path, line) {
-      const files = filesOf(scope)
-      files.set(checkPath(path), `${files.get(path) ?? ''}${line}\n`)
-      changed(scope, path)
+      const done = saving.then(save, save)
+      saving = done.catch(() => undefined)
+      return done
     },
     watch(scope, path, onChange) {
       const watcher = { key: scopeKey(scope), path: checkPath(path, { dir: true }), onChange }

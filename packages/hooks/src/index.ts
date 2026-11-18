@@ -26,7 +26,27 @@ export {
   type RunSummary,
   type RunHost,
 } from './run.js'
-export { PERSON, COMPUTER, projectScope, scopeKey, chainStore, isStorePath, checkPath, isUnder, type Scope, type Changes, type ReadOptions, type Store, type StoreBackend } from './store.js'
+export {
+  PERSON,
+  COMPUTER,
+  projectScope,
+  scopeKey,
+  chainStore,
+  changesOf,
+  messageOf,
+  isStorePath,
+  checkPath,
+  isUnder,
+  type Scope,
+  type Changes,
+  type ScopeFiles,
+  type Update,
+  type Message,
+  type ReadOptions,
+  type Store,
+  type StoreContext,
+  type StoreBackend,
+} from './store.js'
 export { SETTING_SCOPES, SETTINGS_FILE, defineSetting, settingsIn, enabledSetting, type Setting, type SettingScope, type Settings } from './settings.js'
 export type { GitAccess, AccountAccess } from './account.js'
 export type { AppContext, AppLifecycle, AttentionFix, AttentionItem, AttentionArgs, AppAttention, Attention } from './app.js'

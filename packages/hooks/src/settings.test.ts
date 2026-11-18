@@ -1,6 +1,7 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { defineSetting, enabledSetting, SETTINGS_FILE, settingsIn } from './settings.js'
+import type { ProjectRef } from './project.js'
 import { chainStore, COMPUTER, PERSON, projectScope } from './store.js'
 import { memoryStore } from './testing.js'
 
@@ -11,6 +12,9 @@ const pace = defineSetting<number>({ key: 'scheduled-agents.pace', scope: 'proje
 const editor = defineSetting<string>({ key: 'projects.editor', scope: 'computer', default: 'code', parse: value => (typeof value === 'string' ? value : undefined) })
 const name = defineSetting<string>({ key: 'user-info.name', scope: 'person', default: '', parse: value => (typeof value === 'string' ? value : undefined) })
 
+const P1: ProjectRef = { id: 'p1', name: 'One', dir: '/projects/one' }
+const P2: ProjectRef = { id: 'p2', name: 'Two', dir: '/projects/two' }
+
 function fresh() {
   const backend = memoryStore()
   return { backend, settings: settingsIn(chainStore([backend])) }
@@ -18,15 +22,15 @@ function fresh() {
 
 test("a setting is its default until it is set, and each scope keeps its own", async () => {
   const { backend, settings } = fresh()
-  assert.equal(await settings.get(pace, 'p1'), 6)
-  await settings.set(pace, 2, 'p1')
+  assert.equal(await settings.get(pace, P1), 6)
+  await settings.set(pace, 2, P1)
   await settings.set(editor, 'zed')
   await settings.set(name, 'Ada')
-  assert.equal(await settings.get(pace, 'p1'), 2)
-  assert.equal(await settings.get(pace, 'p2'), 6, 'another project has its own')
+  assert.equal(await settings.get(pace, P1), 2)
+  assert.equal(await settings.get(pace, P2), 6, 'another project has its own')
   assert.equal(await settings.get(editor), 'zed')
   assert.equal(await settings.get(name), 'Ada')
-  assert.deepEqual(backend.files(projectScope('p1')), { [SETTINGS_FILE]: '{\n  "scheduled-agents.pace": 2\n}\n' })
+  assert.deepEqual(backend.files(projectScope(P1)), { [SETTINGS_FILE]: '{\n  "scheduled-agents.pace": 2\n}\n' })
   assert.deepEqual(Object.keys(backend.files(COMPUTER)), [SETTINGS_FILE])
   assert.deepEqual(Object.keys(backend.files(PERSON)), [SETTINGS_FILE])
   assert.deepEqual(
@@ -45,15 +49,15 @@ test('a value that is not valid reads as the default, and a broken file as no se
   const { settings } = fresh()
   const store = chainStore([memoryStore()])
   const broken = settingsIn(store)
-  await store.save(projectScope('p1'), { [SETTINGS_FILE]: '{"scheduled-agents.pace": -1}' }, 'by hand')
-  assert.equal(await broken.get(pace, 'p1'), 6)
-  await store.save(projectScope('p1'), { [SETTINGS_FILE]: '{ torn' }, 'by hand')
-  assert.equal(await broken.get(pace, 'p1'), 6)
-  await store.save(projectScope('p1'), { [SETTINGS_FILE]: '[1, 2]' }, 'by hand')
-  assert.equal(await broken.get(pace, 'p1'), 6)
-  await broken.set(pace, 4, 'p1')
-  assert.equal(await broken.get(pace, 'p1'), 4, 'a save writes the file whole again')
-  assert.equal(await settings.get(pace, 'p1'), 6)
+  await store.save(projectScope(P1), { [SETTINGS_FILE]: '{"scheduled-agents.pace": -1}' }, 'by hand')
+  assert.equal(await broken.get(pace, P1), 6)
+  await store.save(projectScope(P1), { [SETTINGS_FILE]: '{ torn' }, 'by hand')
+  assert.equal(await broken.get(pace, P1), 6)
+  await store.save(projectScope(P1), { [SETTINGS_FILE]: '[1, 2]' }, 'by hand')
+  assert.equal(await broken.get(pace, P1), 6)
+  await broken.set(pace, 4, P1)
+  assert.equal(await broken.get(pace, P1), 4, 'a save writes the file whole again')
+  assert.equal(await settings.get(pace, P1), 6)
 })
 
 test('two saves of one scope at once keep both settings', async () => {
@@ -75,7 +79,7 @@ test("a plugin's Enabled row is off unless the distribution starts the plugin on
   const off = enabledSetting('tickets', 'project', false)
   const on = enabledSetting('ask', 'computer', true)
   assert.equal(off.key, 'tickets.enabled')
-  assert.equal(await settings.get(off, 'p1'), false)
+  assert.equal(await settings.get(off, P1), false)
   assert.equal(await settings.get(on), true)
   assert.equal(off.parse('yes'), undefined)
   assert.equal(off.parse(false), false)

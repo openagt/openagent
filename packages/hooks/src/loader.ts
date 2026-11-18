@@ -5,7 +5,7 @@ import { runPipeline, type OrderedStep, type PipelineResult } from './pipeline.j
 import type { ProjectRef } from './project.js'
 import type { RunAgent, RunContext, RunHost, RunOptions, RunSkill, SkillArgs } from './run.js'
 import { enabledSetting, SETTING_SCOPES, settingsIn, type Setting, type Settings } from './settings.js'
-import { chainStore, type Store } from './store.js'
+import { chainStore, type Store, type StoreContext } from './store.js'
 
 /** A module, as a distribution lists it. */
 export interface DistributionEntry {
@@ -27,6 +27,8 @@ export interface HooksOptions {
   projects?: () => Promise<ProjectRef[]>
   /** Told of each handler that threw. Without it, the error goes to stderr. */
   onError?: (error: HandlerError) => void
+  /** The process runs one command and exits, a command an agent runs: the store's backends are told ({@link StoreContext}). */
+  oneShot?: boolean
 }
 
 /** A skill, with the module that gives it. */
@@ -52,9 +54,9 @@ export interface Hooks {
   readonly settings: Settings
   module(name: string): ModuleDefinition | undefined
   /** Whether a module is on: always for a core module; for a plugin, its Enabled row, in `project` for one kept per project. */
-  enabled(name: string, project?: string): Promise<boolean>
+  enabled(name: string, project?: ProjectRef): Promise<boolean>
   /** Switch a plugin's Enabled row, in `project` for one kept per project. */
-  setEnabled(name: string, on: boolean, project?: string): Promise<void>
+  setEnabled(name: string, on: boolean, project?: ProjectRef): Promise<void>
   /** A run's steps, sorted by order; at the same order, in the distribution's order, then each module's own. */
   steps(run: { project?: ProjectRef; options: RunOptions }): Promise<OrderedStep[]>
   /** Run a run's steps, as {@link runPipeline} does. */
@@ -64,7 +66,7 @@ export interface Hooks {
   /** The coding agents, by their ids; a second one of an id is left out. */
   agents(): Promise<RunAgent[]>
   /** Where runs can run, in a project when one is named; a second host of an id is left out. */
-  hosts(project?: string): Promise<RunHost[]>
+  hosts(project?: ProjectRef): Promise<RunHost[]>
   /** How git reaches `remote` as an account: the first module with an account for it says. */
   gitAccess(remote: string): Promise<GitAccess | undefined>
   /** What needs the person, every module's items in the distribution's order. */
@@ -84,14 +86,17 @@ export function createHooks(entries: readonly DistributionEntry[], opts: HooksOp
   const byName = new Map(modules.map(module => [module.name, module]))
   const switches = new Map<string, Setting<boolean>>()
   for (const { module, on } of entries) if (module.plugin) switches.set(module.name, enabledSetting(module.name, module.plugin.scope, on ?? false))
-  const store = chainStore(modules.flatMap(module => (module.hooks['store.backend'] ? [module.hooks['store.backend']] : [])))
+  const store = chainStore(
+    modules.flatMap(module => (module.hooks['store.backend'] ? [module.hooks['store.backend']] : [])),
+    { oneShot: opts.oneShot ?? false },
+  )
   const settings = settingsIn(store)
   const report = (module: string, hook: string, error: unknown): void => {
     if (opts.onError) opts.onError({ module, hook, error })
     else console.error(`${module}: ${hook} failed`, error)
   }
 
-  const enabled = async (name: string, project?: string): Promise<boolean> => {
+  const enabled = async (name: string, project?: ProjectRef): Promise<boolean> => {
     const module = byName.get(name)
     if (!module) return false
     const setting = switches.get(name)
@@ -104,9 +109,9 @@ export function createHooks(entries: readonly DistributionEntry[], opts: HooksOp
       return false
     }
   }
-  const isOn = async (module: ModuleDefinition, project?: string, options?: RunOptions): Promise<boolean> =>
+  const isOn = async (module: ModuleDefinition, project?: ProjectRef, options?: RunOptions): Promise<boolean> =>
     !module.plugin || (!options?.plugins?.without?.includes(module.name) && (await enabled(module.name, project)))
-  const onModules = async (project?: string, options?: RunOptions): Promise<ModuleDefinition[]> => {
+  const onModules = async (project?: ProjectRef, options?: RunOptions): Promise<ModuleDefinition[]> => {
     const flags = await Promise.all(modules.map(module => isOn(module, project, options)))
     return modules.filter((_, i) => flags[i])
   }
@@ -132,7 +137,7 @@ export function createHooks(entries: readonly DistributionEntry[], opts: HooksOp
     projects: async () => {
       const all = (await opts.projects?.()) ?? []
       if (module.plugin?.scope !== 'project') return all
-      const flags = await Promise.all(all.map(project => enabled(module.name, project.id)))
+      const flags = await Promise.all(all.map(project => enabled(module.name, project)))
       return all.filter((_, i) => flags[i])
     },
     store,
@@ -143,7 +148,7 @@ export function createHooks(entries: readonly DistributionEntry[], opts: HooksOp
   })
 
   const steps = async (run: { project?: ProjectRef; options: RunOptions }): Promise<OrderedStep[]> => {
-    const all = (await onModules(run.project?.id, run.options)).flatMap(module =>
+    const all = (await onModules(run.project, run.options)).flatMap(module =>
       (module.hooks['run.step'] ?? []).map(step => ({ order: step.order, name: step.name, module: module.name, run: (ctx: RunContext) => step.run(ctx) })),
     )
     // A stable sort: at the same order, the distribution's order and each module's own stay.
@@ -165,7 +170,7 @@ export function createHooks(entries: readonly DistributionEntry[], opts: HooksOp
     run: async ctx => runPipeline(await steps({ ...(ctx.project ? { project: ctx.project } : {}), options: ctx.options }), ctx),
     async skills(args) {
       const given: { module: string; item: GivenSkill }[] = []
-      for (const module of await onModules(args.project?.id, args.options)) {
+      for (const module of await onModules(args.project, args.options)) {
         const hook = module.hooks['run.skills']
         if (!hook) continue
         try {
@@ -199,7 +204,7 @@ export function createHooks(entries: readonly DistributionEntry[], opts: HooksOp
     },
     async attention(args) {
       const items: Attention[] = []
-      for (const module of await onModules(args.project?.id, args.options)) {
+      for (const module of await onModules(args.project, args.options)) {
         const hook = module.hooks['app.attention']
         if (!hook) continue
         try {
@@ -239,7 +244,7 @@ export function createHooks(entries: readonly DistributionEntry[], opts: HooksOp
       live = []
     },
     async projectAdded(project) {
-      for (const module of await onModules(project.id)) {
+      for (const module of await onModules(project)) {
         const lifecycle = module.hooks['app.lifecycle']
         if (!lifecycle?.projectAdded) continue
         try {
