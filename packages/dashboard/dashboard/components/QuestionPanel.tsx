@@ -43,8 +43,9 @@ function Choices({ multi, labelledBy, picked, onPick, disabled, children }: { mu
 // A choice's row: the radio group's radio, or a box the row toggles. Rows are parted by a line, as
 // Claude Code on the web parts them; none is filled but the one under the pointer, or the one the
 // keyboard is on, which is filled a shade and never ringed.
-function Choice({ multi, value, on, disabled, onPick, children }: { multi: boolean | undefined; value: string | typeof OTHER; on: boolean; disabled: boolean; onPick: () => void; children: ReactNode }) {
-  const row = 'flex w-full items-start gap-4 p-4 text-left outline-none enabled:hover:bg-foreground/[0.03] focus-visible:bg-foreground/[0.05] dark:enabled:hover:bg-foreground/[0.07] dark:focus-visible:bg-foreground/[0.09] disabled:opacity-60'
+// With `hoverOutside`, the row is filled under the pointer by what holds it: "Other" with its field, filled as one.
+function Choice({ multi, value, on, disabled, onPick, hoverOutside, children }: { multi: boolean | undefined; value: string | typeof OTHER; on: boolean; disabled: boolean; onPick: () => void; hoverOutside?: boolean; children: ReactNode }) {
+  const row = cn('flex w-full items-start gap-4 p-4 text-left outline-none focus-visible:bg-foreground/[0.05] dark:focus-visible:bg-foreground/[0.09] disabled:opacity-60', !hoverOutside && 'enabled:hover:bg-foreground/[0.03] dark:enabled:hover:bg-foreground/[0.07]')
   return multi ? (
     <button type="button" role="checkbox" aria-checked={on} disabled={disabled} onClick={onPick} className={row}>
       {children}
@@ -232,8 +233,8 @@ export function QuestionPanel({
           )
         })}
         {!send && (
-          <li className="flex flex-col border-t border-foreground/5">
-            <Choice multi={choice.multi} value={OTHER} on={otherPicked} disabled={busy} onPick={pickOther}>
+          <li className={cn('flex flex-col border-t border-foreground/5', otherPicked && !busy && 'hover:bg-foreground/[0.03] dark:hover:bg-foreground/[0.07]')}>
+            <Choice multi={choice.multi} value={OTHER} on={otherPicked} disabled={busy} onPick={pickOther} hoverOutside={otherPicked}>
               <Mark on={otherPicked} multi={choice.multi} />
               <span className="min-w-0 flex-1">Other</span>
             </Choice>
@@ -249,7 +250,7 @@ export function QuestionPanel({
                 name="own-answer"
                 placeholder="Type your own answer here"
                 aria-label="Your own answer"
-                className="mx-4 mb-2 ml-13 rounded-md border border-border bg-transparent px-3 py-1.5 outline-none placeholder:text-muted-foreground focus:border-primary"
+                className="mx-4 mb-4 ml-13 rounded-md border border-border bg-transparent px-3 py-1.5 outline-none placeholder:text-muted-foreground focus:border-primary"
               />
             )}
           </li>
