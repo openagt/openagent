@@ -209,8 +209,8 @@ export function QuestionPanel({
 
   if (sent) return null
   return (
-    // As wide as the message box under it: the chat's column, and on a desktop the 16 the box stands out by on each side.
-    <section ref={card} role="region" aria-label={choice.title} className="flex w-full flex-col overflow-clip rounded-lg font-sans text-sm ring-1 ring-border md:-mx-4 md:w-[calc(100%+2rem)]">
+    // Lined up with the chat's text on the left, and no wider than 480: a card in the conversation, not a panel across it.
+    <section ref={card} role="region" aria-label={choice.title} className="flex w-full max-w-120 flex-col overflow-clip rounded-lg font-sans text-sm ring-1 ring-border">
       <h2 id={titleId} className="bg-foreground/5 px-4 py-3 font-normal">{choice.title}</h2>
       <Choices multi={choice.multi} labelledBy={titleId} picked={picked} onPick={setPicked} disabled={busy}>
         {choice.options.map(o => {
