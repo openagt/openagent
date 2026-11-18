@@ -262,18 +262,18 @@ export function QuestionPanel({
           {error ?? (busy ? 'Sending your answer…' : '')}
         </span>
         {!send && (
-          <button type="button" disabled={busy || down} onClick={() => say(skipPrompt(choice.title))} className="h-7 rounded-md bg-foreground/15 px-2.5 text-sm hover:bg-foreground/20 disabled:opacity-60">
+          <button type="button" disabled={busy || down} onClick={() => say(skipPrompt(choice.title))} className="h-7 rounded-md bg-foreground/15 px-3 text-sm hover:bg-foreground/20 disabled:opacity-60">
             Skip
           </button>
         )}
-        <button type="button" disabled={busy || down || !ready} onClick={submit} className="flex h-7 items-center gap-1.5 rounded-md bg-foreground px-2.5 text-sm font-medium text-background hover:bg-foreground/90 disabled:opacity-60">
+        <button type="button" disabled={busy || down || !ready} onClick={submit} className="flex h-7 items-center gap-1.5 rounded-md bg-foreground px-3 text-sm font-medium text-background hover:bg-foreground/90 disabled:opacity-60">
           Submit
           {active && (
             // The message box's rule for naming keys: none on a touch screen, none at a phone's width. While a text field
             // outside the card has Ctrl+Enter, the keys are dimmed and keep their place, so Submit and Skip stand still.
             <span className={cn('gap-0.5 transition-opacity pointer-coarse:hidden max-md:hidden md:not-pointer-coarse:flex', keysElsewhere && 'opacity-40')} aria-hidden>
-              <kbd className="flex h-[18px] min-w-[18px] items-center justify-center rounded-sm border border-background/20 px-0.5 font-sans text-xs">{MOD_KEY}</kbd>
-              <kbd className="flex h-[18px] min-w-[18px] items-center justify-center rounded-sm border border-background/20 px-0.5 font-sans text-xs">↵</kbd>
+              <kbd className="flex h-4.5 min-w-4.5 items-center justify-center rounded-sm border border-background/20 px-0.5 font-sans text-xs">{MOD_KEY}</kbd>
+              <kbd className="flex h-4.5 min-w-4.5 items-center justify-center rounded-sm border border-background/20 px-0.5 font-sans text-xs">↵</kbd>
             </span>
           )}
         </button>
