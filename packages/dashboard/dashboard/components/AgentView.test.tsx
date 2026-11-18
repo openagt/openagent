@@ -8,7 +8,6 @@ import type { ModuleRunProps } from '../module/index.js'
 const onAgent = vi.fn(async () => [] as unknown)
 const onRetainedWorktrees = vi.fn(async () => [] as unknown)
 const onAgentHandoff = vi.fn(async () => null as unknown)
-const onAgentsDoing = vi.fn(async () => ({}) as unknown)
 const onBridgeQuestion = vi.fn(async () => null as unknown)
 const onBridgeEvents = vi.fn(async () => [] as unknown)
 const onBridgeAnswer = vi.fn(async () => null as unknown)
@@ -20,7 +19,7 @@ const onAgentMainBranch = vi.fn(async () => 'trunk' as string | null)
 vi.mock('../rpc/models.js', () => ({
   onModels: () => Promise.resolve({ 'claude-code': { models: [{ id: 'opus', name: 'Opus 5.5', resolvedId: 'claude-opus-5-5', contextWindow: 200_000 }] }, codex: { models: [] } }),
 }))
-vi.mock('../rpc/reads.js', () => ({ onAgent, onRetainedWorktrees, onAgentHandoff, onAgentsDoing, onBridgeQuestion, onBridgeEvents, onBridgeAnswer, onAgentWorktree, onAgentMainBranch, onGitHostHome }))
+vi.mock('../rpc/reads.js', () => ({ onAgent, onRetainedWorktrees, onAgentHandoff, onBridgeQuestion, onBridgeEvents, onBridgeAnswer, onAgentWorktree, onAgentMainBranch, onGitHostHome }))
 const sendMessage = vi.fn(async () => ({ ok: true }) as unknown)
 const withdrawMessage = vi.fn(async () => ({ ok: true }) as unknown)
 const sendNow = vi.fn(async () => ({ ok: true }) as unknown)
@@ -440,44 +439,6 @@ describe('AgentView branch read', () => {
     onAgentHandoff.mockResolvedValue({ ...PUSHED, pushed: false })
     render(view({ card: { status: 'done', saving: true } }))
     await waitFor(() => expect(screen.getByRole('button', { name: 'Open PR' })).toBeTruthy())
-  })
-})
-
-describe('the next step of a run whose subagents still work', () => {
-  const sub = (over: Record<string, unknown>) => ({ id: 'c1', parent: 'run-1', startedAt: '2026-10-01T10:00:00.000Z', updatedAt: '2026-10-01T10:00:00.000Z', status: 'done', ...over }) as never
-
-  test('Open PR is not offered while a subagent works, and is once none does', async () => {
-    onAgent.mockResolvedValue(ARCHIVED)
-    onAgentHandoff.mockResolvedValue(PUSHED)
-    const { rerender } = render(view({ card: { status: 'done' }, subagents: [sub({ status: 'running' })] }))
-    await waitFor(() => expect(onAgentHandoff).toHaveBeenCalledWith('p1', 'run-1'))
-    await waitFor(() => expect(screen.getByTestId('bar-ready').textContent).toBe('true'))
-    expect(screen.queryByRole('button', { name: 'Open PR' })).toBeNull()
-    rerender(view({ card: { status: 'done' }, subagents: [sub({ status: 'done', endedAt: '2026-10-01T10:02:00.000Z' })] }))
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Open PR' })).toBeTruthy())
-  })
-
-  test('nor right after a subagent ended: its main agent is about to go on', async () => {
-    onAgent.mockResolvedValue(ARCHIVED)
-    onAgentHandoff.mockResolvedValue(PUSHED)
-    render(view({ card: { status: 'done' }, subagents: [sub({ status: 'done', endedAt: new Date().toISOString() })] }))
-    await waitFor(() => expect(screen.getByTestId('bar-ready').textContent).toBe('true'))
-    expect(screen.queryByRole('button', { name: 'Open PR' })).toBeNull()
-  })
-})
-
-describe('a subagent’s own page', () => {
-  test('a run started for another run is offered no pull request: it says whether it is landed, and nothing of pushed', async () => {
-    onAgent.mockResolvedValue(ARCHIVED)
-    onAgentHandoff.mockResolvedValue(PUSHED)
-    const { rerender } = render(view({ card: { status: 'done', parent: 'run-0' } }))
-    await waitFor(() => expect(screen.getByText('not landed')).toBeTruthy())
-    expect(screen.queryByRole('button', { name: 'Open PR' })).toBeNull()
-    expect(screen.queryByText('· pushed')).toBeNull()
-    // The same branch on a run nobody started for another is offered its pull request.
-    rerender(view({ card: { status: 'done' } }))
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Open PR' })).toBeTruthy())
-    expect(screen.queryByText('not landed')).toBeNull()
   })
 })
 
@@ -977,33 +938,6 @@ describe('a message sent while the agent works', () => {
   })
 })
 
-describe('an ended agent whose subagents still work', () => {
-  const sub = (over: Record<string, unknown>) => ({ id: 'c1', parent: 'run-1', startedAt: '2026-10-01T10:00:00.000Z', updatedAt: '2026-10-01T10:00:00.000Z', status: 'running', ...over }) as never
-  const waits = () => screen.queryAllByRole('status').map(n => n.textContent).filter(t => t?.startsWith('Waiting for'))
-
-  test('the chat\'s last line says how many it waits for; none once they ended', async () => {
-    onAgent.mockResolvedValue(ARCHIVED)
-    const { rerender } = render(view({ card: { status: 'done' }, subagents: [sub({}), sub({ id: 'c2' })] }))
-    await waitFor(() => expect(waits()).toEqual(['Waiting for 2 subagents']))
-    rerender(view({ card: { status: 'done' }, subagents: [sub({ status: 'done', endedAt: '2026-10-01T10:02:00.000Z' }), sub({ id: 'c2', status: 'done', endedAt: '2026-10-01T10:02:00.000Z' })] }))
-    await waitFor(() => expect(waits()).toEqual([]))
-  })
-
-  test('a stopped or a failed agent says how it ended, not that it waits; a working one says what it does', async () => {
-    onAgent.mockResolvedValue(ARCHIVED)
-    const { rerender } = render(view({ card: { status: 'stopped' }, subagents: [sub({})] }))
-    await waitFor(() => expect(onAgent).toHaveBeenCalled())
-    await act(async () => {})
-    expect(waits()).toEqual([])
-    rerender(view({ card: { status: 'failed' }, subagents: [sub({})] }))
-    await act(async () => {})
-    expect(waits()).toEqual([])
-    rerender(view({ live: true, subagents: [sub({})] }))
-    await act(async () => {})
-    expect(waits()).toEqual([])
-  })
-})
-
 describe('where the agent runs, for the row above the message box', () => {
   test('this machine by itself; another machine by the name it was given; the cloud and GitHub Actions by theirs', () => {
     const runsOn = () => screen.getByTestId('row-runs-on').textContent
@@ -1117,12 +1051,9 @@ describe('the branch the row says the session started from', () => {
     expect(onAgentMainBranch).toHaveBeenCalledTimes(1)
   })
 
-  test('a run told a branch, and a subagent, whose branch is its main agent\'s: the card says it, and nothing is read', async () => {
+  test('a run told a branch: the card says it, and nothing is read', async () => {
     render(view({ card: { status: 'done' as const, base: 'feature/x', baseCommit: 'abc123' } }))
     expect(screen.getByTestId('row-started-from').dataset['value']).toBe('feature/x')
-    cleanup()
-    render(view({ card: { status: 'done' as const, parent: 'main-run', base: 'agent-main-work', baseCommit: 'abc123' } }))
-    expect(screen.getByTestId('row-started-from').dataset['value']).toBe('agent-main-work')
     await act(async () => {})
     expect(onAgentMainBranch).not.toHaveBeenCalled()
   })
@@ -1218,9 +1149,11 @@ describe('a run just started', () => {
   })
 
   test('a run stopped before its first turn keeps its prompt, stops counting, and says it stopped', async () => {
+    const stopped = [{ kind: 'end', ok: false, stopped: true }] as OpenAgentEvent[]
+    // Its archive is its one line: the stop.
+    onAgent.mockResolvedValue(stopped)
     const { rerender } = render(view({ live: true, events: [], startedWith: 'Say hi' }))
     expect(screen.getByText('Starting session')).toBeTruthy()
-    const stopped = [{ kind: 'end', ok: false, stopped: true }] as OpenAgentEvent[]
     rerender(view({ live: false, events: stopped, startedWith: 'Say hi', card: { status: 'stopped', intent: 'Say hi', branch: 'agent-x' } }))
     await waitFor(() => expect(screen.getByText('Stopped')).toBeTruthy())
     expect(screen.getAllByText('Say hi')).toHaveLength(1)

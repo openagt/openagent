@@ -22,9 +22,8 @@ describe('awaitingName', () => {
     expect(awaitingName(unasked, true, NOW)).toBe(false)
   })
 
-  test('nothing waits once there is a name, nor for a subagent, which is never named', () => {
+  test('nothing waits once there is a name', () => {
     expect(awaitingName(run({ title: 'README.md condensing' }), true, NOW)).toBe(false)
-    expect(awaitingName(run({ parent: 'r0' }), true, NOW)).toBe(false)
   })
 
   test('a run that ended or waits on the person waits for nothing: it goes by its prompt in every list at once', () => {

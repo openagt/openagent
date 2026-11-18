@@ -19,13 +19,13 @@ already made, and lists it in its pull request; for anything else it proposes an
   format nothing needs yet.
 - The defaults are what an agent needs in any project to work at all: ask, and github on a
   GitHub project. Every other skill is picked on the project's Skills page: the tickets, the
-  queue, orchestration, the logs and account rotation too. A new project shows only the
+  queue, the logs and account rotation too. A new project shows only the
   pages of the skills it picked. Picked over the skills with pages coming with every run,
   which gave a new project Tickets, Queue and Logs pages it never asked for; and over every
   skill of the list, each one more description in every agent's context.
 - The dashboard carries only the skills its own pages, buttons and automations are built on:
   the tickets and the queue with the automations that move a ticket to work (plan,
-  plan-tickets, triage, update-tickets, work-queue), orchestration, the logs, account
+  plan-tickets, triage, update-tickets, work-queue), the logs, account
   rotation, reply, the scheduler, the browser and Discord. The prompts for code reviews and
   research, the ticket suggestions and the post-merge clean-up are not carried: their texts
   stay in the repository's `skills` folder, where `npx skills add` takes them from, and one
@@ -89,12 +89,10 @@ already made, and lists it in its pull request; for anything else it proposes an
   pushed. It asks once before it does it, naming the repository, since the project's code
   leaves the machine. Which host is the package's business. Picked over a field to paste a
   repository address into, which leaves creating the repository to the person.
-- A subagent's page offers no pull request, no merge and no push. It says landed or not
-  landed. Picked over saying nothing in their place.
 - A subagent's row in its main agent's chat opens it in a pane beside the chat: its model and
-  the whole prompt it was given, then what it said and did. Picked over opening its page,
-  which takes the person away from the main agent's chat. Both kinds of subagent have the same
-  row.
+  the whole prompt it was given, then what it said and did. A subagent is one the coding agent
+  started inside its session; it has no page, branch or record of its own. Picked over opening
+  a page of its own, which takes the person away from the main agent's chat.
 - What the subagents did with nothing said between is one grey line, as Claude Code on the web
   has it: folded, it names one that works and counts the seconds, then says what came of them
   ("Ran 2 agents, received a message"); open, a panel with a row each. A message one sent is
@@ -259,8 +257,7 @@ already made, and lists it in its pull request; for anything else it proposes an
 - A project has a skill when every run gets it by default (the command names those), or
   when the skill's text is in the project, where the coding agents read it
   (`.claude/skills/<name>/SKILL.md`, `.agents/skills/<name>/SKILL.md`). OpenAgent brings the
-  packages of the skills that have pages itself (tickets, queue, orchestration, browser,
-  scheduler) and gives each, with its page, its cards and its data, to every project where
+  packages of the skills that have pages itself (tickets, queue, browser, scheduler) and gives each, with its page, its cards and its data, to every project where
   the skill is a default, else to the projects that hold its text; deleting the folder of a
   skill that is no default takes them away. Picked over
   a project's pages coming from its own `package.json`, which needed an install in every
@@ -344,7 +341,7 @@ already made, and lists it in its pull request; for anything else it proposes an
   the project needs. Picked over ticking every group but the ones that need a setup of
   their own, a long list picked for them.
 - When a skill in a project has a newer version, the project's page names it ("The
-  orchestration skill has a newer version") with an "Update" button; the texts are written only on that press,
+  logs skill has a newer version") with an "Update" button; the texts are written only on that press,
   and sent on as a save is. Picked over a count of skills that "have a newer text", which
   said neither which skill nor what a text is, over saying nothing until asked, and over
   writing every text again unasked.

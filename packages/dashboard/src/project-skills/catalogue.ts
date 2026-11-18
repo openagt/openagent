@@ -19,7 +19,7 @@ export interface SkillGroup {
 
 export const GROUPS: readonly SkillGroup[] = [
   { title: 'Tickets and queue', skills: ['tickets', 'queue', 'plan', 'plan-tickets', 'triage', 'update-tickets', 'work-queue'] },
-  { title: 'Agents', skills: ['orchestration', 'logs', 'account-rotation'] },
+  { title: 'Agents', skills: ['logs', 'account-rotation'] },
   { title: 'Pull requests', skills: ['reply'] },
   { title: 'Automations', skills: ['scheduler'] },
   { title: 'Needs its own setup', skills: ['browser', 'discord'] },

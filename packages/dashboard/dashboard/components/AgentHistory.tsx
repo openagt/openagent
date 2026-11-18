@@ -1,7 +1,7 @@
 import { AGENTS_PAGE, PERMISSIONS_PAGE } from '../lib/use-route.js'
 import { RevealedTitle } from './RevealedTitle.js'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Plus, ChevronDown, Bot, ArrowDownUp, Check, Cloud, Laptop, LayoutDashboard, Blocks, FilePen, GitBranch, KeyRound } from 'lucide-react'
+import { Plus, Bot, ArrowDownUp, Check, Cloud, Laptop, LayoutDashboard, Blocks, FilePen, GitBranch, KeyRound } from 'lucide-react'
 import { MACHINE_ICONS } from './MachineMark.js'
 import { PersonMark } from './PersonMark.js'
 import type { ComponentType } from 'react'
@@ -25,7 +25,6 @@ import { DriverLogo } from './driver-logos.js'
 import { modelName, useModels } from '../lib/models.js'
 import { PR_MARKS, type PrState } from '../lib/pr-marks.js'
 import { agentLabel, awaitingName } from '../lib/agent-label.js'
-import { holdsMainAgent, isOpenSubagent, nestRows, taskLabel } from '../lib/subagents.js'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuGroup, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem } from './ui/dropdown-menu.js'
 import { SESSIONS_ID } from '../../src/project-address.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
@@ -275,12 +274,9 @@ export function AgentHistory({
   const differ = (of: (row: Row) => string | undefined) => new Set(rows.map(of)).size > 1
   const telling: Telling = { person: differ(row => row.agent.person?.toLowerCase()), driver: differ(row => driverFromImpl(row.agent.driver)), project: differ(row => row.project) }
 
-  // The rows as a tree: a run started for another run in the list sits under it, as its subagent.
-  // A run listed in "Waiting on you" is not listed again in the Log; one with subagents stays, so they keep their place.
+  // A run listed in "Waiting on you" is not listed again in the Log.
   const waitingListed = new Set(waiting.slice(0, WAITING_SHOWN).flatMap(item => (item.agentId ? [`${item.projectId}:${item.agentId}`] : [])))
-  const tree = nestRows(rows).filter(({ row, subagents }) => subagents.length > 0 || !waitingListed.has(`${row.projectId}:${row.agent.id}`))
-  // Which lists of subagents the reader opened or folded by hand, by the main agent's row.
-  const [folds, setFolds] = useState<Record<string, boolean>>({})
+  const logged = rows.filter(row => !waitingListed.has(`${row.projectId}:${row.agent.id}`))
 
   const hasRecents = rows.length > 0 || showOptimistic
 
@@ -294,25 +290,21 @@ export function AgentHistory({
 
   const models = useModels()
   const pageHref = (segment: string) => hrefOf({ projectId: null, agentId: null, page: segment, ...(scope ? { scope } : {}) })
-  const renderRow = (row: Row, subagent: boolean, status: AgentStatus = row.agent.status, fold?: SubagentsFold) => (
+  const renderRow = (row: Row) => (
     <AgentHistoryRow
-      status={status}
+      status={row.agent.status}
       telling={telling}
-      fold={fold}
-      // A main agent shown as still going is not shown as saving too: one dot, one word.
-      saving={row.agent.saving === true && status === row.agent.status}
-      // A subagent's prompt is its task and then the lines every subagent is told: its row names the task.
-      intent={subagent ? taskLabel(row.agent) : agentLabel(row.agent)}
+      saving={row.agent.saving === true}
+      intent={agentLabel(row.agent)}
       // A name is seconds away: the row holds the place rather than printing the whole prompt and
       // swapping it for the name a moment later.
-      naming={!subagent && awaitingName(row.agent, preferences.nameRuns !== false)}
+      naming={awaitingName(row.agent, preferences.nameRuns !== false)}
       driver={row.agent.driver}
-      // A subagent is its main agent's, whose row says whose.
-      {...(row.agent.person && !subagent ? { person: row.agent.person, account: accountOf(row.projectId, row.agent.person), ...ownMark(row.agent.person) } : {})}
+      {...(row.agent.person ? { person: row.agent.person, account: accountOf(row.projectId, row.agent.person), ...ownMark(row.agent.person) } : {})}
       {...(row.agent.model ? { model: modelName(models?.[driverFromImpl(row.agent.driver) ?? 'claude-code'], row.agent.model) } : {})}
       // On the Overview the project is what tells the rows apart, so the row still names it; a
-      // project's own rail already knows its project, and a subagent is in its main agent's.
-      {...(row.project && !subagent ? { project: row.project } : {})}
+      // project's own rail already knows its project.
+      {...(row.project ? { project: row.project } : {})}
       subtitle={formatRelative(row.agent.startedAt)}
       age={formatSince(row.agent.startedAt)}
       active={row.active}
@@ -471,33 +463,9 @@ export function AgentHistory({
                           />
                         </SidebarMenuItem>
                       )}
-                      {tree.map(({ row, subagents }) => {
-                        // Open while a subagent is not over, or is the page being read; folded to a count once
-                        // all have ended. A click on the count is the reader's own choice and wins.
-                        const open = folds[row.key] ?? subagents.some(sub => isOpenSubagent(sub.agent) || sub.active)
-                        const working = subagents.filter(sub => sub.agent.status === 'running').length
-                        // A main agent whose own turn is over while its job waits on a subagent is still going.
-                        const now = Date.now()
-                        const going = row.agent.status === 'done' && subagents.some(sub => holdsMainAgent(sub.agent, now))
-                        return (
-                          <SidebarMenuItem key={row.key}>
-                            {renderRow(
-                              row,
-                              false,
-                              going ? 'running' : row.agent.status,
-                              subagents.length > 0 ? { count: subagents.length, working, open, onToggle: () => setFolds(f => ({ ...f, [row.key]: !open })) } : undefined,
-                            )}
-                            {subagents.length > 0 && open && (
-                              // The indented sub-list, with the rule the Projects list draws down its group.
-                              <div className="mt-0.5 ml-4 flex flex-col gap-0.5 border-l border-sidebar-border pl-2">
-                                {subagents.map(sub => (
-                                  <div key={sub.key}>{renderRow(sub, true)}</div>
-                                ))}
-                              </div>
-                            )}
-                          </SidebarMenuItem>
-                        )
-                      })}
+                      {logged.map(row => (
+                        <SidebarMenuItem key={row.key}>{renderRow(row)}</SidebarMenuItem>
+                      ))}
                     </SidebarMenu>
                     {/* Nothing while the list is read: it takes a moment, and "No sessions yet." would not be true yet. */}
                     {!hasRecents && listLoaded && (
@@ -720,9 +688,6 @@ const AGE = 'w-7 shrink-0 text-right text-xs text-muted-foreground tabular-nums'
 /** Which of the marks that tell runs apart a list draws: one only where its rows differ in it, else it would say the same on every row. */
 type Telling = { person: boolean; driver: boolean; project: boolean }
 
-/** A main agent's list of subagents, as its row folds it: how many, how many work, and the fold. */
-type SubagentsFold = { count: number; working: number; open: boolean; onToggle: () => void }
-
 // One agent row, one line: a small circle and the session's name, as Claude Code on the web lists
 // its sessions. The row used to be two lines — a status word, the project, the time and the agent's
 // logo above the name — which made the list a column of paragraphs and fitted half as many sessions
@@ -751,7 +716,6 @@ function AgentHistoryRow({
   remoteKind = 'server',
   seenAt,
   startedOn,
-  fold,
   pr,
   unpublished,
   uncommitted,
@@ -764,8 +728,6 @@ function AgentHistoryRow({
   status: AgentStatus
   /** Which of the marks that tell runs apart its list draws; the row's hover and its name say them all. */
   telling: Telling
-  /** The row's subagents, folded or open under it: a count at the row's end, so a row with subagents is no taller than one without. */
-  fold?: SubagentsFold | undefined
   intent: string | undefined
   /** The run's name is on its way: the row shows where it will go, not the prompt it would replace. */
   naming?: boolean
@@ -920,34 +882,6 @@ function AgentHistoryRow({
           up width: a long name never takes the row's title. A project's own rail knows its project
           and shows none. */}
       {project && telling.project && <span className="max-w-[35%] min-w-0 shrink truncate text-xs text-muted-foreground">{project}</span>}
-      {/* The row's subagents: how many, and the fold of their list. A control, so it stays on the
-          row rather than moving into the hover. Inside the row's own link, so it is a span that
-          takes the click for itself. */}
-      {fold && (
-        <span
-          role="button"
-          tabIndex={0}
-          aria-expanded={fold.open}
-          aria-label={`${fold.count} subagent${fold.count === 1 ? '' : 's'}${fold.working > 0 ? ` · ${fold.working} ${runWord('running')}` : ''}`}
-          title={`${fold.count} subagent${fold.count === 1 ? '' : 's'}${fold.working > 0 ? `, ${fold.working} ${runWord('running')}` : ''}`}
-          onClick={e => {
-            e.preventDefault()
-            e.stopPropagation()
-            fold.onToggle()
-          }}
-          onKeyDown={e => {
-            if (e.key !== 'Enter' && e.key !== ' ') return
-            e.preventDefault()
-            e.stopPropagation()
-            fold.onToggle()
-          }}
-          className="focus-ring relative flex shrink-0 items-center gap-0.5 rounded-sm px-1 text-xs font-normal text-muted-foreground transition-colors after:absolute after:-inset-y-1 after:inset-x-0 hover:bg-background hover:text-foreground"
-        >
-          <ChevronDown className={cn('size-3.5 shrink-0 transition-transform', fold.open || '-rotate-90')} aria-hidden />
-          <Bot className="size-3.5 shrink-0" aria-hidden />
-          {fold.count}
-        </span>
-      )}
       {/* Its pull request, just before the logo, so the marks of the rows that have one stand in a
           column too. */}
       {prMark && prSaid && (

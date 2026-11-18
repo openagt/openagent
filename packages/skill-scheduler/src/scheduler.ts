@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 import type { DriverQuota } from '@openagt/agent-driver'
 import { readClaudeQuota } from '@openagt/agent-driver-claude'
 import { accountFolder, personalCodexHome, readCodexUsage } from '@openagt/agent-driver-codex'
-import { gitHostEnv, isPidAlive, lockHolder, readyToRun, resumeDetached, runIdFrom, spawnResume, spawnRun, sweep, withdrawMarker, writeMarker } from '@openagt/agent-runner'
+import { gitHostEnv, isPidAlive, lockHolder, readyToRun, runIdFrom, spawnResume, spawnRun, sweep, withdrawMarker, writeMarker } from '@openagt/agent-runner'
 import { findRun } from '@openagt/skill-logs'
 import { nodeGitRunner, originUrl, pullProjectData, remoteHostOf, type GitRunner } from '@openagt/agent-data'
 import { CHECK_TIMEOUT_MS, GLANCE_MS, NOW_CHECK_TIMEOUT_MS, QUOTA_KEPT_MS, SCHEDULER_LOG, TICK_MS } from './names.js'
@@ -90,7 +90,7 @@ function projectDeps(repo: string, state: State, schedule: Schedule, checkMs: nu
     host,
     now,
     pull: () => pullProjectData(repo, { git, log }),
-    sweep: () => sweep(repo, { host, isAlive: isPidAlive, now, git, log, resume: resumeDetached(repo) }),
+    sweep: () => sweep(repo, { host, isAlive: isPidAlive, now, git, log }),
     atStart: atStartOf(repo, fetchingAsRunsAccount(repo, git)),
     // As the account runs work as at the git host: never the person's own `gh`. With none, nothing is asked.
     check: async (shell, lastRun, switchedOn) => {

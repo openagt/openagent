@@ -80,7 +80,7 @@ test('a record cannot say of its run what only this daemon says: that it runs on
 
 test('a followed run that has a record keeps the record\'s row, in its place, and takes what the machine said since; one with no record is listed only when this computer sent it', () => {
   const mine = { status: 'done', id: 'c', startedAt: '5', updatedAt: '5' } as AgentMeta
-  const record = { status: 'waiting', id: 'a', startedAt: '1', updatedAt: '1', host: 'server-box', target: 'remote', remoteLabel: 'Server', branch: 'agent-a', pr: { number: 7 }, parent: 'p' } as unknown as AgentMeta
+  const record = { status: 'waiting', id: 'a', startedAt: '1', updatedAt: '1', host: 'server-box', target: 'remote', remoteLabel: 'Server', branch: 'agent-a', pr: { number: 7 } } as unknown as AgentMeta
   const followed = [
     { status: 'running', id: 'a', startedAt: '1', updatedAt: '2', target: 'remote', remoteLabel: 'Server', sessionId: 's-2' },
     { status: 'running', id: 'b', startedAt: '3', updatedAt: '3', target: 'remote', remoteLabel: 'Server' },

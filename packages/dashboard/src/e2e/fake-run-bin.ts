@@ -16,10 +16,9 @@
 //             can act on a run that is certainly still working;
 //   "ask"     the first turn ends on a question, so the run ends `waiting`;
 //   "commit"  the run commits a file, so its branch holds work to push;
-//   "agents"  the run starts subagents of both kinds (runs of its own, one of which fails and one
-//             of which asks, and its coding agent's own) and keeps working until it is stopped; "many"
-//             starts more of them;
-//   "fails"   the run fails, as a subagent that cannot do its job does.
+//   "agents"  the run's coding agent starts subagents of its own, one of which fails, and the run
+//             keeps working until it is stopped; "many" starts more of them;
+//   "fails"   the run fails.
 // When `$OPENAGENT_E2E_STARTS_FILE` is set, every `start` and `resume` appends what its
 // environment carried there, one JSON line each: the only place a story can see it.
 import { spawn } from 'node:child_process'
@@ -30,7 +29,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { FakeDriver, QUESTION_TAG, continuationPrompt, logDiaryFile, parseQuestion, startEvent, type DriverEvent, type LogEndStatus, type SessionLog } from '@openagt/agent-driver'
 import { nodeGitRunner } from '@openagt/agent-data'
-import { NAME_FILE_ENV, childEndedLine, givenName, isPublish, type Publish } from '@openagt/agent-runner'
+import { NAME_FILE_ENV, givenName, isPublish, type Publish } from '@openagt/agent-runner'
 import { agentBranchName, attachCheckout, createCheckout, reclaimWorktree, worktreeBranch, worktreePath } from '@openagt/skill-branches'
 import { findRun, parseRunCard, readDiary, writeRun, type AnyDiaryLine, type RunCard } from '@openagt/skill-logs'
 import { agentIdFromStartedAt } from '../agent-id.js'
@@ -48,24 +47,11 @@ function record(entry: Record<string, unknown>): void {
 }
 
 /** The run's own process, detached from the hook line that answers for it. */
-function detach(args: string[], env: NodeJS.ProcessEnv = process.env): void {
-  spawn(process.execPath, [fileURLToPath(import.meta.url), ...args], { cwd: repo, detached: true, stdio: 'ignore', env }).unref()
+function detach(args: string[]): void {
+  spawn(process.execPath, [fileURLToPath(import.meta.url), ...args], { cwd: repo, detached: true, stdio: 'ignore' }).unref()
 }
 
-/**
- * The runs an `agents` run starts for itself: the prompt (the task on the first line, the word that
- * scripts it after), and how many seconds one that ends or fails works first, as real runs take a while.
- */
-const RUN_SUBAGENTS: Array<{ task: string; worksFor?: number }> = [
-  { task: 'Account page tests\n\nhold' },
-  { task: 'Theme switch in the header\n\nhold' },
-  { task: 'Read the theme tokens', worksFor: 12 },
-  { task: 'Visual check in a browser\n\nfails', worksFor: 9 },
-  { task: 'Pick the dark palette\n\nask' },
-]
-/** What the runs of its own run on, on their cards. */
-const RUN_MODEL = 'claude-sonnet-4-5'
-/** Why the subagent that fails failed, as the line its main run is told says it. */
+/** Why a run that fails failed. */
 const FAILURE = 'Chrome did not start'
 /** The subagents an `agents` run's coding agent starts inside its session: its name, whether it is still at work, ended or failed, and how many seconds it works first. */
 const CALL_SUBAGENTS: Array<[string, 'working' | 'ended' | 'failed', number]> = [
@@ -78,11 +64,10 @@ const MORE_SUBAGENTS = ['Order table contrast', 'Dark images for the avatars', '
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
 /**
- * What an `agents` run does before it holds: its prompt, a word on the plan, its coding agent's own
- * subagents (each a `subagent` event and the steps it took), and runs of its own started with it as
- * their parent. A run of its own that ends tells it how, as agent-runner tells a parent: a prompt.
+ * What an `agents` run does before it holds: its prompt, a word on the plan, and its coding agent's
+ * own subagents (each a `subagent` event and the steps it took).
  */
-async function startSubagents(id: string, prompt: string, log: SessionLog, signal: AbortSignal): Promise<() => Promise<void>> {
+async function startSubagents(prompt: string, log: SessionLog, signal: AbortSignal): Promise<() => Promise<void>> {
   const write = (event: DriverEvent) => log.record(event)
   await write(startEvent(prompt, {}))
   // A look of its own first: a thought and two reads, one steps line in the chat.
@@ -99,31 +84,14 @@ async function startSubagents(id: string, prompt: string, log: SessionLog, signa
     await write({ type: 'subagent', id: call, status: 'working', name, role: 'general-purpose', model: 'claude-haiku-4-5', prompt: `${name}.\nSay what you found in one paragraph.` })
     await write({ type: 'action', label: 'Read', detail: 'src/theme/tokens.css', id: `${call}_read`, subagent: call })
   }
-  const runs = RUN_SUBAGENTS.map(({ task, worksFor }, at) => ({ task, worksFor, id: agentIdFromStartedAt(new Date(Date.now() + at).toISOString()) }))
-  // Not the name file of the run that starts them, or each would take that run's name: each is named by its task.
-  const { [NAME_FILE_ENV]: _named, ...env } = process.env
-  for (const { task, worksFor, id: child } of runs) {
-    detach(['run', child], { ...env, PROMPT: task, MODEL: RUN_MODEL, E2E_PARENT: id, ...(worksFor ? { E2E_WORKS_FOR: String(worksFor) } : {}) })
-  }
-  // Each of its own that ends, after the seconds it works; and told of each run that ends on its own, once it has.
+  // Each that ends, after the seconds it works.
   return async () => {
-    const ending = [...calls.entries()].filter(([, [, end]]) => end !== 'working').map(async ([at, [name, end, after]]) => {
+    await Promise.all([...calls.entries()].filter(([, [, end]]) => end !== 'working').map(async ([at, [name, end, after]]) => {
       await sleep(after * 1000)
       if (signal.aborted) return
       await write({ type: 'text', text: `${name}: done.`, subagent: `toolu_${at}` })
       await write({ type: 'subagent', id: `toolu_${at}`, status: end, name })
-    })
-    for (const { task, id: child } of runs.filter(run => !run.task.includes('hold'))) {
-      while (!signal.aborted) {
-        const card = await findRun(repo, child).catch(() => undefined)
-        if (card && card.status !== 'running') {
-          await write(startEvent(childEndedLine({ id: child, status: card.status, ...(task.includes('fails') ? { detail: FAILURE } : {}), ...(card.status === 'waiting' ? { question: QUESTION.title } : {}) }), {}))
-          break
-        }
-        await sleep(200)
-      }
-    }
-    await Promise.all(ending)
+    }))
   }
 }
 
@@ -179,10 +147,9 @@ async function session(id: string, checkout: string, prompt: string, card: Omit<
   let status: LogEndStatus = 'done'
   let lastText = ''
   const fansOut = prompt.includes('agents') && !continued
-  const told = fansOut ? await startSubagents(id, prompt, log, stop.signal) : undefined
+  const told = fansOut ? await startSubagents(prompt, log, stop.signal) : undefined
   const ended = told?.()
   try {
-    await sleep(Number(process.env['E2E_WORKS_FOR'] ?? 0) * 1000)
     if (prompt.includes('fails')) {
       await log.record({ type: 'error', message: FAILURE })
       throw new Error(FAILURE)
@@ -244,9 +211,7 @@ async function main(): Promise<void> {
   if (mode === 'run' && runId) {
     const prompt = process.env['PROMPT'] ?? ''
     const checkout = await createCheckout(repo, { agentId: runId }, git)
-    // A run started for another names it on its card, as agent-runner's `run --parent` does.
-    const parent = process.env['E2E_PARENT']
-    const caller = { pid: process.pid, host: hostname(), workspace: checkout.path, ...publishOf(process.env['PUBLISH'], undefined), ...(parent ? { parent } : {}) }
+    const caller = { pid: process.pid, host: hostname(), workspace: checkout.path, ...publishOf(process.env['PUBLISH'], undefined) }
     // The coding agent named as agent-runner names it, its default when the start named none.
     await session(runId, checkout.path, prompt, { id: runId, startedAt: new Date().toISOString(), intent: prompt, driver: process.env['DRIVER'] ?? 'claude-code', ...(process.env['MODEL'] ? { model: process.env['MODEL'] } : {}), branch: checkout.branch, caller }, false)
     return

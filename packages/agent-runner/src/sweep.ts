@@ -5,7 +5,6 @@ import { listRuns, type LogsDeps, type RunCard } from '@openagt/skill-logs'
 import { endLiveCard, readLiveCard, readLiveDiary } from './live-card.js'
 import { lockHolder, runStderrPath } from './run-lock.js'
 import { recordBranchGone, recordRun, runnerMark, startOf } from './records.js'
-import { childEndedLine, tellParent, type ParentDeps } from './parent.js'
 import { SESSION_FOLDER_STAYS } from './session-folder.js'
 
 /**
@@ -23,10 +22,6 @@ import { SESSION_FOLDER_STAYS } from './session-folder.js'
  * A run whose lock a live process holds is that process's: it is booting, working, recording,
  * reclaiming, or resuming, and the sweep does not touch it.
  *
- * A run this sweep ends, one that died mid-work or never started, tells its parent when its record
- * names one (`parent.ts`): its own process is not there to. A run that had ended by itself told
- * its parent then, or died just before it could; the sweep does not tell again.
- *
  * In the sessions home, the runs with no project, a session's folder is where its run worked: it
  * stays, whatever the run's end, and only a folder whose run's record does not say how it ended yet
  * is looked at, so the sweep does not write every session again that ever ran here.
@@ -39,8 +34,6 @@ export interface SweepDeps {
   git?: GitRunner
   logs?: LogsDeps
   log?: (line: string) => void
-  /** How an ended parent is continued, in its own process; absent, only a working parent is told. */
-  resume?: ParentDeps['resume']
 }
 
 export interface SweepResult {
@@ -56,11 +49,6 @@ export async function sweep(repo: string, deps: SweepDeps): Promise<SweepResult>
   const logs = deps.logs ?? {}
   const result: SweepResult = { recorded: [], reclaimed: [], kept: [] }
   const seen = new Set<string>()
-  const telling: ParentDeps = { host: deps.host, isAlive: deps.isAlive, ...(deps.resume ? { resume: deps.resume } : {}), log: deps.log ?? (() => {}) }
-  const tell = async (card: RunCard, detail: string, branch: string | undefined): Promise<void> => {
-    const parent = runnerMark(card)?.parent
-    if (parent !== undefined) await tellParent(repo, parent, childEndedLine({ id: card.id, status: card.status, detail, ...(branch !== undefined ? { branch } : {}), ...(card.pr ? { pr: card.pr } : {}) }), telling)
-  }
 
   const sessions = await sessionsHomeOf(repo)
   const recorded = await listRuns(repo, {}, logs)
@@ -86,7 +74,6 @@ export async function sweep(repo: string, deps: SweepDeps): Promise<SweepResult>
     }
     if (sessions !== undefined) {
       result.kept.push({ id: card.id, reason: card.status === 'waiting' ? 'waiting' : SESSION_FOLDER_STAYS })
-      if (died) await tell(card, DIED_DETAIL, undefined)
       continue
     }
     if (card.status === 'waiting') {
@@ -98,7 +85,6 @@ export async function sweep(repo: string, deps: SweepDeps): Promise<SweepResult>
       result.reclaimed.push(card.id)
       await recordBranchGone(repo, card, diary, reclaimed.branchesDeleted, logs)
     } else result.kept.push({ id: card.id, reason: reclaimed.reason })
-    if (died) await tell(card, DIED_DETAIL, reclaimed.ok && card.branch !== undefined && reclaimed.branchesDeleted?.includes(card.branch) ? undefined : card.branch)
   }
 
   // Then the branch: a running card of this machine's with nothing on disk never started.
@@ -116,7 +102,6 @@ export async function sweep(repo: string, deps: SweepDeps): Promise<SweepResult>
     const ended: RunCard = { ...card, status, endedAt: at }
     const written = await recordRun(repo, ended, [{ kind: 'ended', status, detail, at }], logs)
     if (written.ok || written.committed) result.recorded.push({ id: card.id, status })
-    await tell(ended, detail, undefined)
   }
   return result
 }

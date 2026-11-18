@@ -14,7 +14,6 @@ import type { ProjectSkillsPick } from './agent.js'
 import { isPidAlive, withRunLock } from './run-lock.js'
 import { runEndedLine } from './ended.js'
 import { askName, isBareCommand, nameRun, type AskedName } from './title.js'
-import { childEndedLine, tellParent, type ParentDeps } from './parent.js'
 import { openSessionFolder, SESSION_FOLDER_STAYS } from './session-folder.js'
 
 /**
@@ -50,10 +49,9 @@ import { openSessionFolder, SESSION_FOLDER_STAYS } from './session-folder.js'
  * The pull request a run's branch has is read back through the git host the project declares
  * (`git-host.ts`); a project with no git host package records none.
  *
- * A run may be started for another run, its parent (`run --parent <id>`), from a branch other
- * than origin's default (`run --base <ref>`), and with its pull request going into one
- * (`run --pr-base <branch>`); all are on its record for its whole life. When it
- * ends, however it ends, its parent is told (`parent.ts`).
+ * A run may be started from a branch other than origin's default (`run --base <ref>`), and with
+ * its pull request going into one (`run --pr-base <branch>`); both are on its record for its whole
+ * life.
  *
  * A run started in the sessions home has no project: it works in a folder of its own there
  * (`session-folder.ts`), with no branch, no pull request and nothing to reclaim, and its record is
@@ -118,10 +116,9 @@ function effortOf(effort: string | undefined): { effort?: string } {
 
 /**
  * This run's card with what only the tool that marked it knew: every field of the marker this
- * process did not build itself, and the same for the writer's own `caller` keys. Orchestration's
- * `title` (the task's name) and its task id come through this way, and so does whatever a later
- * tool writes there — the rule a card is read and written by, that a writer keeps the fields it
- * does not know (#2104), applied to a run writing its own record.
+ * process did not build itself, and the same for the writer's own `caller` keys: whatever the tool
+ * that marked the run wrote there comes through — the rule a card is read and written by, that a
+ * writer keeps the fields it does not know (#2104), applied to a run writing its own record.
  *
  * What this process does know wins: it is running, so its status, its branch, its checkout and its
  * pid are the true ones, and a stale marker never speaks over them.
@@ -139,8 +136,6 @@ function carried(marked: RunCard | undefined, card: RunCard): RunCard {
  */
 export interface RunDeps {
   driver: Driver
-  /** How an ended parent is continued, in its own process; absent, only a working parent is told. */
-  resume?: ParentDeps['resume']
   host?: string
   pid?: number
   /** Whether a pid is a live process here: what the run's lock asks of its holder. */
@@ -165,8 +160,6 @@ interface RunProcess {
   clock: () => string
   logs: LogsDeps
   log: (line: string) => void
-  /** What telling the run's parent needs, when its record names one. */
-  telling: ParentDeps
 }
 
 function runProcess(deps: RunDeps): RunProcess {
@@ -183,7 +176,6 @@ function runProcess(deps: RunDeps): RunProcess {
     clock: () => now().toISOString(),
     logs: deps.logs ?? {},
     log,
-    telling: { host, isAlive, ...(deps.resume ? { resume: deps.resume } : {}), log },
   }
 }
 
@@ -207,8 +199,6 @@ export interface RunRequest {
   publish?: Publish
   /** A text handed to the agent with the prompt, after it (`run --attach`), such as what a scheduler's check found: the record keeps it apart from the prompt, which stays the run's name. */
   attached?: string
-  /** The run this one is started for (`run --parent`): told when this one ends. */
-  parent?: string
   /** The branch the run's fresh branch starts from (`run --base`); origin's default branch when absent. */
   base?: string
   /** The branch the run's pull request goes into (`run --pr-base`); the repository's default branch when absent. */
@@ -259,12 +249,12 @@ export interface RunOutcome {
 }
 
 /**
- * Whether a run is named the moment it starts: not a subagent, whose row is its task, not a run
- * another tool marked, whose marker may carry its name, nor a bare command, named from its report
- * (`title.ts`); and not when the person turned naming off (`OPENAGENT_NAME_RUN=0`).
+ * Whether a run is named the moment it starts: not a run another tool marked, whose marker may
+ * carry its name, nor a bare command, named from its report (`title.ts`); and not when the person
+ * turned naming off (`OPENAGENT_NAME_RUN=0`).
  */
-export function namedAtStart(opts: { prompt: string; marked?: boolean; parent?: string }): boolean {
-  return process.env.OPENAGENT_NAME_RUN !== '0' && !opts.marked && opts.parent === undefined && !isBareCommand(opts.prompt)
+export function namedAtStart(opts: { prompt: string; marked?: boolean }): boolean {
+  return process.env.OPENAGENT_NAME_RUN !== '0' && !opts.marked && !isBareCommand(opts.prompt)
 }
 
 export async function runCommand(repo: string, opts: RunOptions): Promise<RunOutcome> {
@@ -315,16 +305,15 @@ export async function runCommand(repo: string, opts: RunOptions): Promise<RunOut
       const endedAt = here.clock()
       await marking
       await recordRun(repo, { ...marker, status: 'failed', endedAt }, [{ kind: 'ended', status: 'failed', detail, at: endedAt }], here.logs)
-      if (opts.parent !== undefined) await tellParent(repo, opts.parent, childEndedLine({ id, status: 'failed', detail }), here.telling)
       return { id, status: 'failed', checkout: { reclaimed: false, reason: 'no checkout' }, detail }
     }
     // Only a branch this run made: one it was given holds another run's work, begun elsewhere.
     if (checkout.branch !== undefined && opts.branch === undefined) mark = { ...mark, ...(await startCommit(checkout.path, here.git)) }
-    // A run another tool marked carries what only that tool knows: orchestration writes the task's
-    // name as the run's `title` and the task's id under `caller`. This process builds its card from
-    // its own arguments, which never held either, and that card seeds the live card the record is
-    // written from at the end — so without reading the marker back, a run loses those fields the
-    // moment it ends, which is when a person and the tool that started it read them.
+    // A run another tool marked carries what only that tool knows, such as a name it gave the run.
+    // This process builds its card from its own arguments, which never held it, and that card seeds
+    // the live card the record is written from at the end — so without reading the marker back, a
+    // run loses those fields the moment it ends, which is when a person and the tool that started it
+    // read them.
     const marked = opts.marked ? await findRun(repo, id).catch(() => undefined) : undefined
     return session(repo, {
       ...here,
@@ -535,7 +524,7 @@ async function session(repo: string, run: SessionRun): Promise<RunOutcome> {
   }
 }
 
-/** How a session ended: what the run's record, its parent and the reclaim of its checkout go by. */
+/** How a session ended: what the run's record and the reclaim of its checkout go by. */
 interface SessionEnd {
   status: LogEndStatus
   detail: string | undefined
@@ -546,8 +535,6 @@ interface SessionEnd {
   pr: BranchRequest | undefined
   /** The requests the run opened before the one its card names, once it has had any. */
   earlierPrs: BranchRequest[] | undefined
-  /** The agent's answer on its last turn. */
-  lastWords: string
   /** The live record the session kept; none when its agent never started. */
   live: SessionLog | undefined
 }
@@ -566,7 +553,6 @@ async function sessionToEnd(repo: string, run: SessionRun, dir: string, stopped:
   let earlier = earlierPrs(run.card)
   let saidEarlier = earlier.length > 0
   let question: string | undefined
-  let lastWords = ''
   let driverSession: DriverSession | undefined
   try {
     driverSession = await run.driver.start({
@@ -621,7 +607,6 @@ async function sessionToEnd(repo: string, run: SessionRun, dir: string, stopped:
           fresh = false
           lastText = turn.text
           asked = turn.question
-          lastWords = turn.text
           resume = true
         }
       } catch (err) {
@@ -676,21 +661,19 @@ async function sessionToEnd(repo: string, run: SessionRun, dir: string, stopped:
   // The name lands on the card before the record is copied: a run named after that copy would be
   // named only in its checkout, which is removed with the run.
   await naming.done
-  return { status, detail, question, branch, pr, earlierPrs: saidEarlier ? earlier : undefined, lastWords, live: driverSession?.log }
+  return { status, detail, question, branch, pr, earlierPrs: saidEarlier ? earlier : undefined, live: driverSession?.log }
 }
 
 /**
  * The run's short name, asked of a small model beside the first turn (`title.ts`), or as the run
  * began, before its checkout was made, when it was a fresh one no other tool marked (`runCommand`):
  * a run that is being continued was named when it began, and one whose agent never started has
- * nothing to name. A subagent is not named: its row is its task, written by the agent that started
- * it, and an orchestration of a dozen of them would pay for a dozen namings for rows nobody looks
- * for. `OPENAGENT_NAME_RUN=0` is the person's setting, put in this process's environment by whoever
+ * nothing to name. `OPENAGENT_NAME_RUN=0` is the person's setting, put in this process's environment by whoever
  * started it: naming costs money for something only a person looks at, so it can be declined.
  * A bare command is named later, from its agent's report (`fromReport`).
  */
 function nameSession(run: SessionRun, session: DriverSession | undefined, stopped: AbortSignal): { done: Promise<void>; fromReport(status: LogEndStatus, report: string): Promise<void> } {
-  const mayName = process.env.OPENAGENT_NAME_RUN !== '0' && session !== undefined && !run.continued && run.card.title === undefined && runnerMark(run.card)?.parent === undefined
+  const mayName = process.env.OPENAGENT_NAME_RUN !== '0' && session !== undefined && !run.continued && run.card.title === undefined
   let fromReport = mayName && isBareCommand(run.prompt)
   // A fresh run's name was asked for as the run began (`runCommand`): it is dropped when the run will
   // not take it, and stopped with the run.
@@ -751,7 +734,7 @@ function publishLevel(run: SessionRun, session: DriverSession | undefined): { ad
 
 /**
  * What follows the session: the run's record written from what the session kept, the person's line
- * when this end needs them, the run's parent told how it ended, and its checkout reclaimed.
+ * when this end needs them, and its checkout reclaimed.
  */
 async function closeRun(repo: string, run: SessionRun, end: SessionEnd): Promise<RunOutcome> {
   const { status, detail, question, branch, pr, live } = end
@@ -766,14 +749,6 @@ async function closeRun(repo: string, run: SessionRun, end: SessionEnd): Promise
   // The person's line, when this end needs them: a question, or a pull request new to this session.
   await runEndedLine(repo, { id: run.id, prompt: run.card.intent ?? '', status, ...(question !== undefined ? { question } : {}), ...(pr ? { pr } : {}), ...(run.card.pr ? { prBefore: run.card.pr } : {}) }, { log: run.log })
 
-  // The run's parent, when it has one, is told how it ended, once the branch it would be pointed
-  // at is known to have stayed: an empty one goes with the checkout.
-  const parent = runnerMark(run.card)?.parent
-  const tell = async (branchStayed: boolean): Promise<void> => {
-    if (parent === undefined) return
-    const line = childEndedLine({ id: run.id, status, ...(detail !== undefined ? { detail } : {}), ...(question !== undefined ? { question } : {}), ...(branchStayed && branch !== undefined ? { branch } : {}), ...(pr ? { pr } : {}), lastWords: end.lastWords })
-    await tellParent(repo, parent, line, run.telling)
-  }
   const outcome = (checkout: RunOutcome['checkout']): RunOutcome => ({
     id: run.id,
     status,
@@ -788,21 +763,14 @@ async function closeRun(repo: string, run: SessionRun, end: SessionEnd): Promise
   // stays on this machine: nothing is pushed here, publishing is the agent's when it was asked, the person's otherwise. A dirty tree
   // keeps the checkout, and the sweep tries again later. A waiting run keeps it on purpose: the
   // answer resumes the run there.
-  if (status === 'waiting') {
-    await tell(true)
-    return outcome({ reclaimed: false, reason: 'waiting' })
-  }
+  if (status === 'waiting') return outcome({ reclaimed: false, reason: 'waiting' })
   // A session's folder is its work, kept for the person and for the run going on later.
-  if (branch === undefined) {
-    await tell(false)
-    return outcome({ reclaimed: false, reason: SESSION_FOLDER_STAYS })
-  }
+  if (branch === undefined) return outcome({ reclaimed: false, reason: SESSION_FOLDER_STAYS })
   const reclaimed = await reclaimWorktree(repo, run.checkout.path, { birthBranch: agentBranchName(run.id), ...startOf(run.card), git: run.git })
   if (reclaimed.ok) {
     const rewritten = await recordBranchGone(repo, card, diary, reclaimed.branchesDeleted, run.logs)
     if (rewritten && !rewritten.ok && !rewritten.committed) run.log(`[agent-runner] the run's record could not be written: ${rewritten.error}`)
   }
-  await tell(!(reclaimed.ok && reclaimed.branchesDeleted?.includes(branch)))
   return outcome(reclaimed.ok ? { reclaimed: true } : { reclaimed: false, reason: reclaimed.reason })
 }
 

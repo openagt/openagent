@@ -77,7 +77,7 @@ describe('ProjectSkillsLine', () => {
   })
 
   test('a read that fails after one answered keeps the line it drew', async () => {
-    onProjectSkills.mockResolvedValueOnce(skills({ groups: [{ title: 'Subagents', skills: [skill('orchestration', 'newer')] }] })).mockRejectedValue(new Error('EACCES'))
+    onProjectSkills.mockResolvedValueOnce(skills({ groups: [{ title: 'Agents', skills: [skill('logs', 'newer')] }] })).mockRejectedValue(new Error('EACCES'))
     render(<ProjectSkillsLine projectId="p1" />)
     await screen.findByRole('button', { name: 'Update' })
     skillsSaved()
@@ -120,10 +120,10 @@ describe('ProjectSkillsLine', () => {
   })
 
   test('one skill with a newer version is named alone', async () => {
-    onProjectSkills.mockResolvedValue(skills({ groups: [{ title: 'Subagents', skills: [skill('orchestration', 'newer')] }] }))
+    onProjectSkills.mockResolvedValue(skills({ groups: [{ title: 'Agents', skills: [skill('logs', 'newer')] }] }))
     const { container } = render(<ProjectSkillsLine projectId="p1" />)
     await screen.findByRole('button', { name: 'Update' })
-    expect(container.textContent).toContain('The orchestration skill has a newer version.')
+    expect(container.textContent).toContain('The logs skill has a newer version.')
   })
 
   test('skills on this computer only are told with the one press that sends them; once agents have them the card is gone', async () => {

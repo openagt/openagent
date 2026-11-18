@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type MutableRefObject } from 'react'
-import type { AgentDoing, AgentMeta, AgentWorktree, OpenAgentEvent } from '../../src/index.js'
-import { onAgentMainBranch, onAgentsDoing, onGitHostHome, onRetainedWorktrees } from '../rpc/reads.js'
-import { useLoaded, usePolled } from '../lib/use-async.js'
-import { DOING_EVERY_MS, NOTHING_DOING } from '../lib/use-doing.js'
+import type { AgentMeta, AgentWorktree, OpenAgentEvent } from '../../src/index.js'
+import { onAgentMainBranch, onGitHostHome, onRetainedWorktrees } from '../rpc/reads.js'
+import { useLoaded } from '../lib/use-async.js'
 import { handoffSays, useAgentHandoff } from '../lib/use-agent-handoff.js'
 import { useCheckoutStatus } from '../lib/use-checkout-status.js'
 import { agentOutcome, cardOutcome, pendingChoices, shownStatus } from '../lib/live-state.js'
@@ -30,7 +29,6 @@ import { ModuleSlot } from './ModulePageView.js'
 import { useMountedModules } from '../lib/use-modules.js'
 import { Committing, HandoffActions, HandoffSummary, isCommitAsk } from './AgentHandoff.js'
 import { AgentDetails, type AgentDetailsCard } from './AgentDetails.js'
-import { holdsMainAgent } from '../lib/subagents.js'
 import { usePaneOpeners } from '../lib/reveal-change.js'
 import { modelContextWindow, modelName, useModels } from '../lib/models.js'
 import { ContextCircle } from './ContextCircle.js'
@@ -55,8 +53,6 @@ const READY_WAIT_MS = 1_000
 /** How long a queued message stays shown once the agent no longer works and was not stopped: its next turn, which reads it, starts well within this. Unread then, it goes back to the box. */
 const QUEUED_UNREAD_MS = 5_000
 
-const NO_SUBAGENTS: readonly AgentMeta[] = []
-
 export function AgentView({
   projectId,
   agentId,
@@ -79,7 +75,6 @@ export function AgentView({
   onDeleted,
   onBack,
   onProjectRemoved,
-  subagents = NO_SUBAGENTS,
 }: {
   projectId: string
   /** Which run this is (#749). */
@@ -88,8 +83,8 @@ export function AgentView({
   events: OpenAgentEvent[]
   /** Whether the agent is still running; `null` while the daemon's list of agents has not been read, so it is not known yet. */
   live: boolean | null
-  /** What the run's card says, off the runs poll: what the feed cannot carry (the details strip's facts, how the agent was set up, whether it is a subagent, whether its record is being saved). Absent until the card is listed. */
-  card?: (AgentDetailsCard & Pick<AgentMeta, 'status' | 'intent' | 'saving' | 'parent' | 'workspace' | 'branch' | 'base' | 'baseCommit' | 'host' | 'otherHost' | 'publish' | 'prBase' | 'gitAccount' | 'earlierPrs' | 'remoteKind' | 'repos' | 'agent' | 'skillsOn' | 'skillsOff' | 'projectSkills'> & Partial<Pick<AgentMeta, 'endedAt'>>) | undefined
+  /** What the run's card says, off the runs poll: what the feed cannot carry (the details strip's facts, how the agent was set up, whether its record is being saved). Absent until the card is listed. */
+  card?: (AgentDetailsCard & Pick<AgentMeta, 'status' | 'intent' | 'saving' | 'workspace' | 'branch' | 'base' | 'baseCommit' | 'host' | 'otherHost' | 'publish' | 'prBase' | 'gitAccount' | 'earlierPrs' | 'remoteKind' | 'repos' | 'agent' | 'skillsOn' | 'skillsOff' | 'projectSkills'> & Partial<Pick<AgentMeta, 'endedAt'>>) | undefined
   /** What the launcher said about this run as it started it: shown until the run's record says it. */
   picks?: StartPicks | undefined
   /** The session's own name — the same label the rail shows (#1030). It leads the action bar as
@@ -124,23 +119,9 @@ export function AgentView({
   onBack?: (() => void) | undefined
   /** Told once the project is removed from the project's menu in the top bar, to leave its page; absent, no remove is offered. */
   onProjectRemoved?: (() => void) | undefined
-  /** The runs started for this run, oldest first: rows in its chat, and a line above the message box while any works. */
-  subagents?: readonly AgentMeta[]
 }) {
   // The log on screen: the live channel's while the agent works, its archive once it has ended.
   const { archived, shown, active, feedLive } = useAgentFeed(projectId, agentId, live, events, replayed)
-  // What each working subagent is doing now, read only while one works: an ended one's row says how it ended.
-  const workingSubagents = subagents.filter(agent => agent.status === 'running').map(agent => agent.id).join(',')
-  // How many subagents the run's job still waits on: while any, the run is not over, whatever its own turn says.
-  const now = Date.now()
-  const subagentsRunning = subagents.filter(agent => holdsMainAgent(agent, now)).length
-  const { value: doing } = usePolled<Record<string, AgentDoing>>(
-    workingSubagents ? () => onAgentsDoing(projectId, workingSubagents.split(',')) : null,
-    NOTHING_DOING,
-    DOING_EVERY_MS,
-    [projectId, workingSubagents],
-    'previous',
-  )
   // Whether this agent kept its worktree (#737): a failed/stopped run does, a clean one had it
   // removed when it finished. Drives the Remove button, and is cleared locally once removed so
   // the button goes without waiting for a refetch.
@@ -161,8 +142,6 @@ export function AgentView({
   // nothing is read for it and the bar waits.
   const working = live === true
 
-  // A run started for another run: it opens no pull request, its main agent lands its work.
-  const subagent = card?.parent !== undefined
   // What was set up for the agent before it began, off its card: the chat's "Initialized session" line.
   const { workspace, branch, base, driver, model } = card ?? {}
   // An agent just started on a machine has no card listed yet: the machine's name says where it runs.
@@ -237,7 +216,7 @@ export function AgentView({
   const lastPrompt = shownSending ?? [...shown].reverse().find(e => e.kind === 'driver' && e.event.type === 'start')
   const commitAsked = isCommitAsk(typeof lastPrompt === 'string' ? lastPrompt : lastPrompt?.kind === 'driver' && lastPrompt.event.type === 'start' ? lastPrompt.event.prompt : undefined)
   const committing = commitAsked && (going || (live === false && !branchKnown))
-  // How the agent ended (#948), read once for the Resume offer and the wait for subagents below:
+  // How the agent ended (#948), read once for the Resume offer below:
   // its events say it, and until they are read (or when they hold no ending) its card does, so
   // both are right from the first frame.
   const outcome = working ? undefined : (agentOutcome(shown) ?? (card ? cardOutcome(card.status) : undefined))
@@ -272,8 +251,8 @@ export function AgentView({
     if (feedSettled) setSettledFor(agentId)
   }, [feedSettled, agentId])
 
-  // The agent has ended, its subagents too: the next step is offered from here on.
-  const ended = ready && live === false && !going && subagentsRunning === 0
+  // The agent has ended: the next step is offered from here on.
+  const ended = ready && live === false && !going
   // The bar's branch and pull request: the checkout's read, and where it has none, the branch's.
   // The checkout's read answers without them for the moment its folder is being removed, and a bar
   // with no branch went away until the next read.
@@ -380,7 +359,7 @@ export function AgentView({
             summary={
               ready &&
               (showHandoff ? (
-                <HandoffSummary handoff={handoff.handoff} subagent={subagent} />
+                <HandoffSummary handoff={handoff.handoff} />
               ) : (
                 runSlots.map(slots => {
                   const Summary = slots.summary
@@ -393,10 +372,9 @@ export function AgentView({
               ))
             }
             actions={
-              // A run that is working is still writing its branch; the next step is offered once it has ended,
-              // and a run whose subagents still work has not: it goes on as each of them ends.
+              // A run that is working is still writing its branch; the next step is offered once it has ended.
               // Keyed: what a press said, and a merge it armed, are that session's alone.
-              committing ? <Committing /> : ended ? <HandoffActions key={`${projectId}/${agentId}`} projectId={projectId} agentId={agentId} state={handoff} subagent={subagent} onAsked={onSending} /> : undefined
+              committing ? <Committing /> : ended ? <HandoffActions key={`${projectId}/${agentId}`} projectId={projectId} agentId={agentId} state={handoff} onAsked={onSending} /> : undefined
             }
             error={ready && showHandoff ? handoff.error : undefined}
             show={say}
@@ -474,7 +452,6 @@ export function AgentView({
           {...(sentAt !== undefined ? { sendingAt: sentAt } : {})}
           working={feedLive || shownSending !== undefined}
           queued={waiting}
-          waitingOn={!going && live === false && outcome?.ok !== false && !outcome?.waiting ? subagentsRunning : 0}
           {...(feedLive ? {} : { openAt: 'end' as const, emptyLabel: 'This agent has no events.' })}
           // A message just sent to an ended agent: the chat follows its end from the send on, not
           // only once the agent's own line arrives, by which time the chat had grown past the view.
@@ -482,8 +459,6 @@ export function AgentView({
           // A web agent's log dead-ends at the hand-off (#1265): the mirror box rides the tail of
           // the scroller, where "and then…" belongs. Self-nulling for every other target.
           tail={<CloudMirrorRow target={target} events={shown} />}
-          subagents={subagents}
-          doing={doing}
           setup={setup}
           onOpenSubagent={onOpenSubagent}
           onOpenChange={onOpenChange}

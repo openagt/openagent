@@ -10,7 +10,7 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-const working = (key: string, name: string): SubagentRow => ({ key, name, status: 'running', working: true, startedAt: '2026-10-01T10:00:00.000Z' })
+const working = (key: string, name: string): SubagentRow => ({ key, name, status: 'running', working: true, startedAt: '2026-10-01T10:00:00.000Z', call: { id: key, status: 'working', calls: 0 } })
 
 test('the folded line of working subagents is never its chevron alone: a name that leaves stays, unsaid, until the next one is readable', () => {
   vi.useFakeTimers()

@@ -41,8 +41,7 @@ export interface Unpublished {
  * started from another branch is asked apart, from the commit it started at, or that branch's work
  * would count as its own; a run started from the default branch is counted from it, which already
  * leaves out whatever it took in later, so the commit it started at changes nothing and all such
- * runs share one read. A subagent's branch is its main agent's to land, never a person's to push,
- * and a run still working is still writing its branch. A provider that cannot be found, or does not
+ * runs share one read. A run still working is still writing its branch. A provider that cannot be found, or does not
  * answer for every branch asked, throws: "nothing waits" would be a false answer.
  */
 export async function unpublishedRuns(
@@ -53,7 +52,7 @@ export async function unpublishedRuns(
 ): Promise<Map<string, Unpublished>> {
   const finished = agents.flatMap(agent => {
     const branch = agent.branch
-    return branch === undefined || agent.status === 'running' || agent.parent !== undefined ? [] : [{ agent, branch }]
+    return branch === undefined || agent.status === 'running' ? [] : [{ agent, branch }]
   })
   const found = new Map<string, Unpublished>()
   if (finished.length === 0) return found

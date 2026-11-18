@@ -254,12 +254,11 @@ describe('a steps row with its call going on', () => {
 })
 
 describe('LiveLine', () => {
-  test('with no call going on, the line is the word, shimmering, with its seconds', () => {
+  test('with no call going on, the line is its dots and its seconds, no word', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-10-04T10:00:03.000Z'))
-    const { container } = render(<LiveLine word="Working…" since="2026-10-04T10:00:00.000Z" />)
-    expect(screen.getByText('Working…').className).toContain('text-shimmer')
-    expect(screen.getByText('3s')).toBeTruthy()
+    const { container } = render(<LiveLine since="2026-10-04T10:00:00.000Z" />)
+    expect(screen.getByRole('status').textContent).toBe('3s')
     expect(container.querySelector('.dot-wave')).toBeTruthy()
   })
 })

@@ -282,28 +282,28 @@ test('a run in a project with no remote: one that commits nothing loses its empt
 test("a run whose commit another run's pushed branch holds keeps its branch: started from the default branch, or from a base", async () => {
   const repo = await testRepo()
   try {
-    // A main agent commits, a subagent starts from its branch, and the subagent's branch reaches
-    // origin before the main agent's turn ends: origin has the main agent's commit under another name.
-    const withSubagent = (name: string): Driver => ({
+    // The agent commits, and its commit reaches origin under another branch's name before its
+    // turn ends (a branch another run started from this one pushed): origin has it, not this branch.
+    const pushedElsewhere = (name: string): Driver => ({
       id: 'fake',
       start: async opts =>
-        wrap(await new FakeDriver({ turns: [{ text: 'Committed, and started a subagent.' }] }).start(opts), async () => {
+        wrap(await new FakeDriver({ turns: [{ text: 'Committed.' }] }).start(opts), async () => {
           await git(['config', 'user.email', 'agent@example.com'], opts.cwd)
           await git(['config', 'user.name', 'agent'], opts.cwd)
           await writeFile(join(opts.cwd, `${name}.txt`), 'own work\n')
           await git(['add', '-A'], opts.cwd)
           await git(['commit', '-q', '-m', 'Own work'], opts.cwd)
-          await git(['push', '-q', 'origin', `HEAD:refs/heads/agent-sub-of-${name}`], opts.cwd)
+          await git(['push', '-q', 'origin', `HEAD:refs/heads/agent-after-${name}`], opts.cwd)
         }),
     })
-    const main = await runCommand(repo, { prompt: 'Do the plan', driver: withSubagent('main'), now: () => NOW, gitHost: noGitHost })
+    const main = await runCommand(repo, { prompt: 'Do the plan', driver: pushedElsewhere('main'), now: () => NOW, gitHost: noGitHost })
     assert.deepEqual(main.checkout, { reclaimed: true })
     const branch = (await findRun(repo, main.id))?.branch
     assert.equal(branch, `agent-${main.id}`, 'the branch is still on the record')
     assert.match(await git(['show', `refs/heads/${branch}:main.txt`], repo), /own work/, 'and still here')
     await assert.rejects(() => git(['rev-parse', '--verify', `refs/remotes/origin/${branch}`], repo), 'and not pushed: publishing is the person\'s call')
 
-    const based = await runCommand(repo, { prompt: 'Do the rest', base: branch!, driver: withSubagent('based'), now: () => new Date(NOW.getTime() + 60_000), gitHost: noGitHost })
+    const based = await runCommand(repo, { prompt: 'Do the rest', base: branch!, driver: pushedElsewhere('based'), now: () => new Date(NOW.getTime() + 60_000), gitHost: noGitHost })
     assert.deepEqual(based.checkout, { reclaimed: true })
     const basedBranch = (await findRun(repo, based.id))?.branch
     assert.equal(basedBranch, `agent-${based.id}`)

@@ -30,36 +30,32 @@ function AgentRow({ row, onOpen }: { row: SubagentRow; onOpen?: ((key: string) =
       {row.model && <span className="shrink-0 max-sm:hidden">{anyModelName(models, row.model)}</span>}
       {row.working
         ? row.calls !== undefined && (
-            // What it is on now and how many calls it made; its last step whole on a hover.
-            <span className="min-w-0 shrink-0 truncate" title={row.doing}>
+            // What it is on now and how many calls it made.
+            <span className="min-w-0 shrink-0 truncate">
               <Facts facts={[row.tool, `${row.calls} ${row.calls === 1 ? 'call' : 'calls'}`]} />
             </span>
           )
         : row.status !== 'done' && <span className={cn('shrink-0', runTone(row.status))}>{runWord(row.status)}</span>}
       <span className="ml-auto shrink-0 tabular-nums" title={`Started ${new Date(row.startedAt).toLocaleString()}`}>
-        <Facts facts={[row.working ? <Seconds since={row.startedAt} /> : row.endedAt !== undefined && formatElapsed(Date.parse(row.endedAt) - Date.parse(row.startedAt)), row.cost !== undefined && `$${row.cost.toFixed(2)}`]} />
+        <Facts facts={[row.working ? <Seconds since={row.startedAt} /> : row.endedAt !== undefined && formatElapsed(Date.parse(row.endedAt) - Date.parse(row.startedAt))]} />
       </span>
     </button>
   )
 }
 
-/**
- * What a subagent sent its main agent, folded: "Message from subagent". Opened, whose it is and the
- * message. One that did not end well says how, beside the words.
- */
-export function SubagentMessage({ name, text, status, detail }: { name: string; text?: string | undefined; status?: string | undefined; detail?: string | undefined }) {
+/** What a subagent sent its main agent, folded: "Message from subagent". Opened, whose it is and the message. */
+function SubagentMessage({ name, text }: { name: string; text?: string | undefined }) {
   const [open, setOpen] = useState(false)
   const body = text !== undefined && text !== ''
   const words = (
     <>
       <span className="shrink-0">Message from</span>
       <span className="shrink-0 text-foreground">subagent</span>
-      {status !== undefined && status !== 'done' && <span className={cn('shrink-0', runTone(status))}>{runWord(status)}</span>}
     </>
   )
   return (
     <div className="min-w-0 flex-1 font-sans text-sm text-muted-foreground">
-      {body || detail !== undefined ? (
+      {body ? (
         <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open} aria-label="Message from subagent" className="flex max-w-full min-w-0 items-center gap-1.5 py-0.5 text-left hover:text-foreground">
           {words}
           <ChevronRight className={cn('h-3.5 w-3.5 shrink-0 transition-transform', open && 'rotate-90')} aria-hidden />
@@ -69,7 +65,7 @@ export function SubagentMessage({ name, text, status, detail }: { name: string; 
       )}
       {open && (
         <div className="mt-1 flex flex-col gap-1">
-          <div>From: {name}{detail !== undefined && ` (${detail})`}</div>
+          <div>From: {name}</div>
           {body && <div className="text-foreground"><Markdown text={text} /></div>}
         </div>
       )}

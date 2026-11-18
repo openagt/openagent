@@ -31,10 +31,10 @@ test('run --detach spawns the run with its id, to write its own marker, and answ
     assert.equal(await findRun(repo, started.id), undefined, 'nothing written before the id is answered')
     const named = await detachRun(repo, { prompt: 'Read the docs', model: 'opus', now: () => new Date(NOW.getTime() + 1000) }, { spawn: async () => {} })
     assert.equal(named.model, 'opus')
-    // Started for another run, from that run's branch: both reach the spawned run.
-    const children: unknown[] = []
-    const child = await detachRun(repo, { prompt: 'Do task one', parent: started.id, base: 'agent-plan', now: () => new Date(NOW.getTime() + 2000) }, { spawn: async (_repo, run) => { children.push(run) } })
-    assert.deepEqual(children, [{ id: child.id, prompt: 'Do task one', mark: true, driver: 'claude-code', parent: started.id, base: 'agent-plan' }])
+    // Started from another branch: it reaches the spawned run.
+    const based: unknown[] = []
+    const onBranch = await detachRun(repo, { prompt: 'Do task one', base: 'agent-plan', now: () => new Date(NOW.getTime() + 2000) }, { spawn: async (_repo, run) => { based.push(run) } })
+    assert.deepEqual(based, [{ id: onBranch.id, prompt: 'Do task one', mark: true, driver: 'claude-code', base: 'agent-plan' }])
   } finally {
     await removeRepo(repo)
   }
@@ -192,7 +192,7 @@ test('a spawned run is told its tool, and its model only when it has one', () =>
   assert.deepEqual(runArgs({ id: 'r1', prompt: '/work-queue', startedAt: '2026-10-09T10:00:00.000Z' }), ['run', '/work-queue', '--id', 'r1', '--started', '2026-10-09T10:00:00.000Z'])
   assert.deepEqual(runArgs({ id: 'r1', prompt: '/work-queue', publish: 'commit', attached: 'Found:\n["one entry"]' }), ['run', '/work-queue', '--id', 'r1', '--publish', 'commit', '--attach=Found:\n["one entry"]'])
   assert.deepEqual(runArgs({ id: 'r1', prompt: '/work-queue', attached: '- one entry' }), ['run', '/work-queue', '--id', 'r1', '--attach=- one entry'], 'a text that opens with a dash stays the flag\'s own text')
-  assert.deepEqual(runArgs({ id: 'r1', prompt: 'Do task one', parent: 'p1', base: 'agent-p1' }), ['run', 'Do task one', '--id', 'r1', '--parent', 'p1', '--base', 'agent-p1'])
+  assert.deepEqual(runArgs({ id: 'r1', prompt: 'Do task one', base: 'agent-p1' }), ['run', 'Do task one', '--id', 'r1', '--base', 'agent-p1'])
   assert.deepEqual(runArgs({ id: 'r1', prompt: '/reply', branch: 'dark-mode', for: 'https://github.com/o/r/pull/6' }), ['run', '/reply', '--id', 'r1', '--branch', 'dark-mode', '--for', 'https://github.com/o/r/pull/6'])
 })
 

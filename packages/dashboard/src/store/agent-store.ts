@@ -57,21 +57,15 @@ export interface AgentMeta {
   /** Set while that name is being asked for, by the runner on the run's card: a list holds the run's place for it then. */
   naming?: true
   /**
-   * The run this one was started for, by its id: this run is that run's subagent. Written on the
-   * card by the tool that started it; absent on a run a person or a schedule started.
-   */
-  parent?: string
-  /**
    * The branch the run was told to start from, by its name: a person's local branch picked in the
-   * launcher, or, for a subagent, its main agent's branch. Written on the card by the tool that
-   * started it; absent on a run that started from origin's default branch.
+   * launcher. Written on the card by the tool that started it; absent on a run that started from
+   * origin's default branch.
    */
   base?: string
   /**
    * The commit the run's own work begins at: where its branch was made, for a run started from a
-   * branch other than the default one (a subagent starts from its main agent's). Its changes are
-   * measured from it; absent, from the default branch. Written on the card by the tool that
-   * started it.
+   * branch other than the default one. Its changes are measured from it; absent, from the default
+   * branch. Written on the card by the tool that started it.
    */
   baseCommit?: string
   /** The account the run worked as at the git host, written on the card by the tool that runs it; absent on a run recorded before it was kept, or whose git host cannot say. */

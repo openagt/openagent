@@ -131,10 +131,6 @@ test('a run is named by the agent\'s small model: the name on its record, and a 
       'the conversation says where the name came from, once',
     )
 
-    // A subagent is not named: its row is the task its main agent gave it.
-    const child = await runCommand(repo, { prompt: 'check the links', driver, parent: run.id, now: () => new Date(NOW.getTime() + 60_000), gitHost: noGitHost })
-    assert.equal((await findRun(repo, child.id))?.title, undefined)
-
     // Naming turned off by the person: whoever started this process said so in its environment, and
     // the run keeps the words they typed. Nothing is asked of a model, so nothing is paid for.
     const was = process.env.OPENAGENT_NAME_RUN
@@ -318,9 +314,9 @@ test('a run told how hard to think starts its agent that way and keeps it on its
 test('a run marked by another tool keeps that tool\'s own fields on its record, to the end', async () => {
   const repo = await testRepo()
   try {
-    // What `orchestration start` writes before it spawns the run: the task's name as the run's
-    // title, and the task's id under the writer's own key. Neither is an argument of the run.
-    const marker = markerCard({ id: 'sub-1', startedAt: NOW.toISOString(), prompt: 'write about.html', driver: 'fake', mark: { host: 'laptop', pid: 1, parent: 'main-1' } })
+    // What a tool that spawns runs may write before it spawns one: a name for the run as its title,
+    // and keys of its own under its own key. Neither is an argument of the run.
+    const marker = markerCard({ id: 'sub-1', startedAt: NOW.toISOString(), prompt: 'write about.html', driver: 'fake', mark: { host: 'laptop', pid: 1 } })
     await writeMarker(repo, { ...marker, title: 'Write about.html from the README', caller: { ...marker.caller, task: 'write-about-html', retries: 'sub-0' } })
     const run = await runCommand(repo, { prompt: 'write about.html', id: 'sub-1', marked: true, driver: new FakeDriver({ respond: () => 'Done.' }), now: () => NOW, gitHost: noGitHost })
     assert.equal(run.status, 'done')

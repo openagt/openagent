@@ -15,7 +15,7 @@ import { AgentView } from './components/AgentView.js'
 import { ChatShape } from './components/ChatPane.js'
 import { PageShape } from './components/Page.js'
 import { agentLabel, awaitingName } from './lib/agent-label.js'
-import { callSubagents, subagentsOf, taskLabel } from './lib/subagents.js'
+import { callSubagents } from './lib/subagents.js'
 import { PaneLayout, PanesProvider } from './components/Panes.js'
 import { SubagentsPanel } from './components/SubagentsPanel.js'
 import { PagesBar, PhoneBar, PhoneBarCount } from './components/PhoneBar.js'
@@ -463,10 +463,8 @@ export function App() {
   // A session with no record in a list that was read: it was deleted, or never was here. The run
   // just started is exempt only until a list has had it, the beat before its card lands.
   const sessionGone = agentId !== null && !selectedAgent && agentsState === 'fresh' && (agentId !== agentStart.id || agentStart.listed === true)
-  // The runs started for the selected one: rows in its chat.
-  const subagents = useMemo(() => (agentId ? subagentsOf(agents, agentId) : []), [agents, agentId])
-  // Its coding agent's own count too: a run may start no run of its own and still have subagents.
-  const hasSubagents = useMemo(() => subagents.length > 0 || callSubagents(events).length > 0, [subagents, events])
+  // Whether the selected run's coding agent started subagents: they get a pane beside the chat.
+  const hasSubagents = useMemo(() => callSubagents(events).length > 0, [events])
   // The project is off the list: read the list again and leave its page for the Overview of every
   // project at once, since the one it was picked as is gone; "Project removed" is said over it.
   const leaveRemovedProject = () => {
@@ -477,14 +475,8 @@ export function App() {
   // The name the daemon had for the run just started, before the run's record has one.
   const startedTitle = justStarted ? agentStart.title : undefined
   const namesRuns = preferences.nameRuns !== false
-  // What a listed session's page is called, in its heading and its tab: a subagent by its task, as its rows are.
-  const sessionLabel = selectedAgent
-    ? selectedAgent.parent !== undefined
-      ? taskLabel(selectedAgent)
-      : awaitingName(selectedAgent, namesRuns)
-        ? startedTitle
-        : agentLabel(selectedAgent)
-    : undefined
+  // What a listed session's page is called, in its heading and its tab.
+  const sessionLabel = selectedAgent ? (awaitingName(selectedAgent, namesRuns) ? startedTitle : agentLabel(selectedAgent)) : undefined
   // Another computer's project is removed there, not here.
   const removableHere = project?.machine === undefined ? leaveRemovedProject : undefined
   // Before the projects are read, a project's address reads as a page's word. A word no page this
@@ -617,10 +609,9 @@ export function App() {
         live={selectedAgent.status === 'running'}
         card={selectedAgent}
         label={sessionLabel}
-        naming={selectedAgent.parent === undefined && awaitingName(selectedAgent, namesRuns) && startedTitle === undefined}
+        naming={awaitingName(selectedAgent, namesRuns) && startedTitle === undefined}
         target={selectedAgent.target}
         remoteLabel={selectedAgent.remoteLabel}
-        subagents={subagents}
         onDeleted={() => {
           // Its view is about to point at a session that no longer exists; go home and refresh
           // the rail so the row is gone (#1032).
@@ -766,8 +757,8 @@ export function App() {
           context={context}
           toggleContext={toggleContext}
           activity={events.length}
-          // The run's subagents, when it started any, beside the chat.
-          subagents={projectId && agentId && hasSubagents ? <SubagentsPanel projectId={projectId} agentId={agentId} events={events} subagents={subagents} live={selectedAgent?.status === 'running'} onOpenAgent={selectAgent} /> : undefined}
+          // The run's subagents, when its coding agent started any, beside the chat.
+          subagents={projectId && agentId && hasSubagents ? <SubagentsPanel projectId={projectId} agentId={agentId} events={events} live={selectedAgent?.status === 'running'} /> : undefined}
         >
           <PaneLayout>
             <FocusHome as="main" className="flex min-h-0 min-w-0 flex-1 flex-col">

@@ -500,8 +500,6 @@ export async function openAgentPullRequest(
   agent: AgentMeta,
   options: { draft?: boolean; branches?: BranchesFor; gitHost?: GitHostFor; pr?: BranchPrLookup; git?: GitRunner } = {},
 ): Promise<HandoffResult> {
-  // A subagent's work goes to its main agent's branch, and that one opens the pull request.
-  if (agent.parent !== undefined) return { ok: false, error: 'this run is a subagent: its main agent lands its work and opens the pull request' }
   const branch = agent.branch
   if (branch === undefined) return { ok: false, error: 'this session recorded no branch to open a PR from' }
   const branches = options.branches ?? projectBranches

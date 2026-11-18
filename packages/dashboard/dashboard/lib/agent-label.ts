@@ -40,13 +40,13 @@ export const NAMING_WAIT_MS = 60_000
  * holds the place instead of filling it with something it is about to throw away.
  *
  * Only while the run's card says its name is being asked for ({@link AgentMeta.naming}) and it is at
- * work: naming turned off, a run too old, a subagent (never named), a run that already has one, a run
- * no name is asked for (a slash command, named from its report at its end) or whose ask ended without
- * one, and a run that ended or waits on the person (which "Waiting on you" and the Human Queue
- * already name) are answered right away.
+ * work: naming turned off, a run too old, a run that already has one, a run no name is asked for (a
+ * slash command, named from its report at its end) or whose ask ended without one, and a run that
+ * ended or waits on the person (which "Waiting on you" and the Human Queue already name) are
+ * answered right away.
  */
-export function awaitingName(agent: Pick<AgentMeta, 'title' | 'naming' | 'startedAt' | 'parent' | 'status'>, naming: boolean, now = Date.now()): boolean {
-  if (!naming || agent.naming !== true || agent.status !== 'running' || agent.title !== undefined || agent.parent !== undefined) return false
+export function awaitingName(agent: Pick<AgentMeta, 'title' | 'naming' | 'startedAt' | 'status'>, naming: boolean, now = Date.now()): boolean {
+  if (!naming || agent.naming !== true || agent.status !== 'running' || agent.title !== undefined) return false
   const started = Date.parse(agent.startedAt)
   return Number.isFinite(started) && now - started < NAMING_WAIT_MS
 }

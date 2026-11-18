@@ -68,16 +68,16 @@ test('a project has a skill\'s package, its data and its page once it holds the 
     assert.deepEqual(await modules(), ['@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/skill-logs', '@openagt/skill-tickets'])
 
     await skillText(root, '.claude/skills', 'queue')
-    await skillText(root, '.claude/skills', 'orchestration')
+    await skillText(root, '.claude/skills', 'scheduler')
     assert.equal((await providedCommand(root, 'queue'))?.package, '@openagt/skill-queue')
-    assert.deepEqual(await modules(), ['@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/skill-logs', '@openagt/skill-orchestration', '@openagt/skill-queue', '@openagt/skill-tickets'])
+    assert.deepEqual(await modules(), ['@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/skill-logs', '@openagt/skill-queue', '@openagt/skill-scheduler', '@openagt/skill-tickets'])
 
     // A folder with no text in it, and a text under another name, are no skill of ours.
     await rm(join(root, '.agents/skills/tickets/SKILL.md'))
     await skillText(root, '.claude/skills', 'my-tickets')
     assert.deepEqual(await lookupProvided(root, 'tickets'), {})
     await rm(join(root, '.claude/skills/queue'), { recursive: true })
-    assert.deepEqual(await modules(), ['@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/skill-logs', '@openagt/skill-orchestration'])
+    assert.deepEqual(await modules(), ['@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/skill-logs', '@openagt/skill-scheduler'])
   } finally {
     await rm(root, { recursive: true, force: true })
   }
@@ -88,10 +88,10 @@ test('a skill every run gets by default gives every project its package, its dat
   const before = process.env[SKILLS_ENV]
   const require = createRequire(import.meta.url)
   try {
-    process.env[SKILLS_ENV] = ['@openagt/skill-logs', '@openagt/skill-tickets', '@openagt/skill-orchestration'].map(name => dirname(require.resolve(`${name}/package.json`))).join(delimiter)
+    process.env[SKILLS_ENV] = ['@openagt/skill-logs', '@openagt/skill-tickets', '@openagt/skill-scheduler'].map(name => dirname(require.resolve(`${name}/package.json`))).join(delimiter)
     assert.equal((await providedCommand(root, 'tickets'))?.package, '@openagt/skill-tickets')
     assert.deepEqual(await lookupProvided(root, 'queue'), {}, 'a pick that is no default still needs its text')
-    assert.deepEqual((await readProjectModules(root)).map(module => module.package), ['@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/skill-logs', '@openagt/skill-orchestration', '@openagt/skill-tickets'])
+    assert.deepEqual((await readProjectModules(root)).map(module => module.package), ['@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/skill-logs', '@openagt/skill-scheduler', '@openagt/skill-tickets'])
   } finally {
     if (before === undefined) delete process.env[SKILLS_ENV]
     else process.env[SKILLS_ENV] = before

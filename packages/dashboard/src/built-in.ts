@@ -40,7 +40,7 @@ export const COMPUTER_PACKAGES: readonly string[] = ['@openagt/dashboard-devices
  * the launcher already lists a project's commands by, so deleting the skill's folder takes its
  * page away.
  */
-export const PICKED_PACKAGES: readonly string[] = ['@openagt/skill-tickets', '@openagt/skill-queue', '@openagt/skill-orchestration', '@openagt/skill-browser', '@openagt/skill-scheduler']
+export const PICKED_PACKAGES: readonly string[] = ['@openagt/skill-tickets', '@openagt/skill-queue', '@openagt/skill-browser', '@openagt/skill-scheduler']
 
 /** Every name OpenAgent brings itself. */
 export const OWN_PACKAGE_NAMES: readonly string[] = [...BUILT_IN_PACKAGES, ...COMPUTER_PACKAGES, ...PICKED_PACKAGES]

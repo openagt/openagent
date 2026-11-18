@@ -405,17 +405,13 @@ describe('AgentHistory rows', () => {
     expect(screen.getByLabelText('Runs on my-laptop')).toBeTruthy()
   })
 
-  test('the coding agent\'s logo is the last mark of every row, after the machine glyph and the subagents\' count, so the logos stand in one column', () => {
+  test('the coding agent\'s logo is the last mark of every row, after the machine glyph, so the logos stand in one column', () => {
     const main = agent({ id: 'main', target: 'remote', remoteLabel: 'my-laptop', driver: 'codex' })
-    const sub = agent({ id: 'sub', parent: 'main', status: 'done', driver: 'codex' })
-    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[main, sub, agent({ id: 'other', driver: 'claude-code' })]} selectedAgentId={null} onSelect={() => {}} />)
+    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[main, agent({ id: 'other', driver: 'claude-code' })]} selectedAgentId={null} onSelect={() => {}} />)
     const row = screen.getByLabelText('Runs on my-laptop').closest('a')!
     const marks = [...row.querySelectorAll('[aria-label]')].map(mark => mark.getAttribute('aria-label'))
     expect(marks.at(-1)).toBe('Codex')
     expect(marks.indexOf('Runs on my-laptop')).toBeLessThan(marks.indexOf('Codex'))
-    const fold = marks.findIndex(label => label?.startsWith('1 subagent'))
-    expect(fold).toBeGreaterThanOrEqual(0)
-    expect(fold).toBeLessThan(marks.indexOf('Codex'))
   })
 
   test('a run on another machine shows that machine\'s kind as every list of machines draws it: a computer, a server at home, a server', () => {
@@ -622,20 +618,6 @@ describe('whose run a row is', () => {
     expect(onGitHostPeople).toHaveBeenCalledWith('p1', ['ada@x.dev', 'rom@y.dev'])
   })
 
-  test('a subagent has no mark: its main agent says whose it is', async () => {
-    renderRail(
-      <AgentHistory
-        projectId="p1"
-        scope="p1"
-        agents={[agent({ id: 'main', title: 'Main', person: 'ada@x.dev' }), agent({ id: 'sub', title: 'Sub', person: 'ada@x.dev', parent: 'main' }), agent({ id: 'his', title: 'His', person: 'rom@y.dev' })]}
-        selectedAgentId={null}
-        onSelect={() => {}}
-      />,
-    )
-    expect(within(row(/^Main/)).getByRole('img', { name: 'ada@x.dev' })).toBeTruthy()
-    expect(within(row(/^Sub/)).queryByRole('img', { name: 'ada@x.dev' })).toBeNull()
-  })
-
   test("the row of a run just started holds the mark's place, with no one in it yet", () => {
     const listed = [agent({ id: 'a', status: 'done', person: 'ada@x.dev' }), agent({ id: 'b', status: 'done', person: 'rom@y.dev' })]
     const rail = (startTick: number) => <AgentHistory projectId="p1" scope="p1" agents={listed} selectedAgentId="r1" onSelect={() => {}} startTick={startTick} startIntent="add dark mode" startId="r1" />
@@ -643,114 +625,6 @@ describe('whose run a row is', () => {
     rerender(<SidebarProvider>{rail(1)}</SidebarProvider>)
     const standIn = container.querySelector('[data-stand-in]')!
     expect(standIn.querySelector('[aria-hidden="true"][class*="size-5"].rounded-full')).toBeTruthy()
-  })
-})
-
-// A run started for another run is its subagent: it sits under its main agent, not in the list.
-describe('subagents on the rail', () => {
-  const main = agent({ id: 'main', status: 'done', intent: 'split the login work' })
-  const sub = (id: string, over: Partial<AgentMeta> = {}) => agent({ id, parent: 'main', status: 'done', intent: `task ${id}\n\nYou are a subagent: another agent started you.`, ...over })
-
-  test('while a subagent works the list is open under its main agent, each row named by its task', () => {
-    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[sub('c2', { status: 'running' }), sub('c1'), main]} selectedAgentId={null} onSelect={() => {}} />)
-    const fold = screen.getByRole('button', { name: /2 subagents · 1 working/ })
-    expect(fold.getAttribute('title')).toBe('2 subagents, 1 working')
-    expect(fold.getAttribute('aria-expanded')).toBe('true')
-    expect(screen.getByText('task c1')).toBeTruthy()
-    expect(screen.getByText('task c2')).toBeTruthy()
-    expect(screen.queryByText(/You are a subagent/)).toBeNull()
-    // Under the main agent, oldest first, whatever the list's own order.
-    const titles = screen.getAllByText(/^(split the login work|task c\d)$/).map(el => el.textContent)
-    expect(titles).toEqual(['split the login work', 'task c1', 'task c2'])
-  })
-
-  test('a main agent whose own turn is over reads as working while a subagent works, and as done once none does', () => {
-    const { container, rerender } = renderRail(<AgentHistory projectId="p1" scope="p1" agents={[sub('c1', { status: 'running' }), { ...main, saving: true }]} selectedAgentId={null} onSelect={() => {}} />)
-    expect(screen.getAllByLabelText('working')).toHaveLength(2)
-    expect(screen.queryByLabelText('done')).toBeNull()
-    // One circle and one word: not "saving…" as well.
-    expect(screen.queryByLabelText('saving…')).toBeNull()
-    expect(container.querySelectorAll('.motion-safe\\:animate-spin')).toHaveLength(2)
-    rerender(<SidebarProvider><AgentHistory projectId="p1" scope="p1" agents={[sub('c1', { status: 'waiting' }), main]} selectedAgentId={null} onSelect={() => {}} /></SidebarProvider>)
-    expect(screen.queryByLabelText('working')).toBeNull()
-    expect(screen.getByLabelText('done')).toBeTruthy()
-  })
-
-  test('a main agent reads as working for the moment after a subagent ended: it is about to go on', () => {
-    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[sub('c1', { endedAt: new Date().toISOString() }), main]} selectedAgentId={null} onSelect={() => {}} />)
-    expect(screen.getByLabelText('working')).toBeTruthy()
-    cleanup()
-    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[sub('c1', { endedAt: '2026-07-19T16:10:00.000Z' }), main]} selectedAgentId={null} onSelect={() => {}} />)
-    expect(screen.queryByLabelText('working')).toBeNull()
-  })
-
-  test("the count of subagents is on the main agent's own row, and a click on it folds the list without opening the agent", () => {
-    let picked: string | null = null
-    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[sub('c2'), sub('c1'), main]} selectedAgentId={null} onSelect={id => (picked = id)} />)
-    const fold = screen.getByRole('button', { name: '2 subagents' })
-    expect(fold.closest('a')?.textContent).toContain('split the login work')
-    fireEvent.click(fold)
-    expect(screen.getByText('task c1')).toBeTruthy()
-    expect(picked).toBeNull()
-    fireEvent.keyDown(fold, { key: 'Enter' })
-    expect(screen.queryByText('task c1')).toBeNull()
-    expect(picked).toBeNull()
-  })
-
-  test('a main agent that failed or was stopped keeps its own word while a subagent works', () => {
-    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[sub('c1', { status: 'running' }), { ...main, status: 'failed' }]} selectedAgentId={null} onSelect={() => {}} />)
-    expect(screen.getByLabelText('failed')).toBeTruthy()
-    expect(screen.getAllByLabelText('working')).toHaveLength(1)
-  })
-
-  test('a subagent stopped on a question keeps the list open too', () => {
-    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[sub('c1', { status: 'waiting' }), main]} selectedAgentId={null} onSelect={() => {}} />)
-    expect(screen.getByRole('button', { name: '1 subagent' }).getAttribute('aria-expanded')).toBe('true')
-  })
-
-  test('once every subagent has ended the list folds to its count, and a click opens it and folds it again', () => {
-    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[sub('c2'), sub('c1'), main]} selectedAgentId={null} onSelect={() => {}} />)
-    const fold = screen.getByRole('button', { name: '2 subagents' })
-    expect(fold.getAttribute('aria-expanded')).toBe('false')
-    expect(screen.queryByText('task c1')).toBeNull()
-    fireEvent.click(fold)
-    expect(screen.getByText('task c1')).toBeTruthy()
-    fireEvent.click(fold)
-    expect(screen.queryByText('task c1')).toBeNull()
-  })
-
-  test('the reader folding the list of a working subagent wins over it being open by itself', () => {
-    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[sub('c1', { status: 'running' }), main]} selectedAgentId={null} onSelect={() => {}} />)
-    fireEvent.click(screen.getByRole('button', { name: /1 subagent · 1 working/ }))
-    expect(screen.queryByText('task c1')).toBeNull()
-  })
-
-  test('the list of an ended subagent whose page is open is open, and a click on a subagent selects it', () => {
-    let picked: string | null = null
-    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[sub('c2'), sub('c1'), main]} selectedAgentId="c1" onSelect={id => (picked = id)} />)
-    expect(screen.getByRole('button', { name: '2 subagents' }).getAttribute('aria-expanded')).toBe('true')
-    fireEvent.click(screen.getByText('task c2'))
-    expect(picked).toBe('c2')
-  })
-
-  test('a subagent whose main agent is not in the list, and a run with no subagents, are plain rows', () => {
-    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent({ id: 'c9', parent: 'gone', intent: 'orphan task' }), agent({ id: 'solo', intent: 'alone' })]} selectedAgentId={null} onSelect={() => {}} />)
-    expect(screen.getByText('orphan task')).toBeTruthy()
-    expect(screen.queryByRole('button', { name: /^\d+ agents?/ })).toBeNull()
-  })
-
-  test('on the Overview a subagent sits under its main agent of the same project', () => {
-    const recentAgents = [
-      { projectId: 'proj-a', projectName: 'alpha', agent: sub('c1', { status: 'running' }) },
-      { projectId: 'proj-b', projectName: 'beta', agent: agent({ id: 'main', status: 'done', intent: 'other project' }) },
-      { projectId: 'proj-a', projectName: 'alpha', agent: main },
-    ]
-    renderRail(<AgentHistory projectId={null} agents={[]} recentAgents={recentAgents} selectedAgentId={null} onSelect={() => {}} />)
-    expect(screen.getAllByRole('button', { name: /1 subagent/ })).toHaveLength(1)
-    // The subagent's row does not name the project again: it is its main agent's.
-    expect(screen.getAllByRole('link', { name: /alpha/ })).toHaveLength(1)
-    const titles = screen.getAllByText(/^(split the login work|task c1|other project)$/).map(el => el.textContent)
-    expect(titles).toEqual(['other project', 'split the login work', 'task c1'])
   })
 })
 

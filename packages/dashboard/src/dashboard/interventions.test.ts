@@ -247,16 +247,6 @@ test('nothing is waiting when the work already went somewhere (#860)', async () 
   }
 })
 
-test('a subagent is never unpushed work: its branch is its main agent’s to land', async () => {
-  const asked: string[][] = []
-  const { items } = await buildInterventions(
-    [project('a', '/a')],
-    onlyUnpushed([doneMeta({ parent: 'r0' })], counting(branch => waiting({ branch }), asked)),
-  )
-  assert.deepEqual(items, [])
-  assert.deepEqual(asked, [], 'its branch is not even read')
-})
-
 test('a still-running run is not unpushed work (#860)', async () => {
   // It is still writing; the overview already shows it.
   const { items } = await buildInterventions(

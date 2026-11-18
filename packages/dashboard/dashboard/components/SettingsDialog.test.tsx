@@ -5,7 +5,7 @@ import { refreshPreferences } from '../lib/preferences.js'
 import { forgetRemembered } from '../lib/use-async.js'
 import { DaemonDown } from '../lib/use-daemon-health.js'
 import { ModulesContext, byMountOrder, type MountedModules } from '../lib/use-modules.js'
-import { CalendarClock, Network, Smartphone } from 'lucide-react'
+import { CalendarClock, Smartphone, Ticket } from 'lucide-react'
 import { checked, choices, closeList, offered, openList, pick, showing } from '../test-controls.js'
 
 // The reads Settings makes, answered as an empty machine: no saved machines, no editors detected, no
@@ -394,7 +394,7 @@ describe('the Settings list', () => {
   }
   const MODULES = mounted([
     { id: 'devices', title: 'Devices', icon: Smartphone, Section: Given, package: '@openagt/dashboard-devices', projects: [], computer: true },
-    { id: 'orchestration', title: 'Orchestration', icon: Network, Section: Given, package: '@openagt/skill-orchestration', projects: ['p1', 'p2', 'gone'], computer: false },
+    { id: 'tickets', title: 'Tickets', icon: Ticket, Section: Given, package: '@openagt/skill-tickets', projects: ['p1', 'p2', 'gone'], computer: false },
     { id: 'scheduler', title: 'Scheduler', icon: CalendarClock, Section: Broken, package: '@openagt/skill-scheduler', projects: ['p2'], computer: false },
   ])
   const show = (entry: string, scope: string | null = null, item?: string) =>
@@ -409,8 +409,8 @@ describe('the Settings list', () => {
   test("two groups: yours and this computer's, the computer's packages among them; then the picked project's packages", () => {
     show('', 'p1')
     expect(entries('You and this computer')).toEqual(['Profile', 'Appearance', 'Notifications', 'Coding agent', 'Your agent data', 'Repos', 'Claude web', 'Keyboard shortcuts', 'Devices'])
-    // gemstack has orchestration and no scheduler; every project has its skills.
-    expect(entries('Project')).toEqual(['Skills', 'Project agent data', 'Orchestration'])
+    // gemstack has tickets and no scheduler; every project has its skills.
+    expect(entries('Project')).toEqual(['Skills', 'Project agent data', 'Tickets'])
     expect(showing(select('Project'))).toBe('gemstack')
     // Opened on nothing in particular: the first entry.
     expect(title()).toBe('SettingsProfile')
@@ -418,8 +418,8 @@ describe('the Settings list', () => {
   })
 
   test("a package's entry of the picked project is given that project alone, and the computer's none", () => {
-    show('orchestration', 'p1')
-    expect(title()).toBe('SettingsgemstackOrchestration')
+    show('tickets', 'p1')
+    expect(title()).toBe('SettingsgemstackTickets')
     expect(screen.getByText('for: gemstack')).toBeTruthy()
     expect(screen.queryByText(/^Saved to/)).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Devices' }))
@@ -428,10 +428,10 @@ describe('the Settings list', () => {
   })
 
   test('the project select changes the project group, and All projects gives an entry every project that has its package, saying which', async () => {
-    show('orchestration', 'p1')
+    show('tickets', 'p1')
     await pick(select('Project'), 'All projects')
-    expect(entries('Project')).toEqual(['Skills', 'Project agent data', 'Orchestration', 'Scheduler'])
-    expect(title()).toBe('SettingsAll projectsOrchestration')
+    expect(entries('Project')).toEqual(['Skills', 'Project agent data', 'Tickets', 'Scheduler'])
+    expect(title()).toBe('SettingsAll projectsTickets')
     expect(screen.getByText('for: gemstack, other')).toBeTruthy()
     expect(screen.getByText('Saved to 2 projects: gemstack, other.')).toBeTruthy()
     // One that throws breaks only itself.
@@ -447,7 +447,7 @@ describe('the Settings list', () => {
   test('with no project picked in the sidebar, the project group opens on every project', () => {
     show('')
     expect(showing(select('Project'))).toBe('All projects')
-    expect(entries('Project')).toEqual(['Skills', 'Project agent data', 'Orchestration', 'Scheduler'])
+    expect(entries('Project')).toEqual(['Skills', 'Project agent data', 'Tickets', 'Scheduler'])
   })
 
   test('Skills opened for a project is that project\'s, whatever the sidebar has picked; the select changes it', async () => {

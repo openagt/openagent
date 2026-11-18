@@ -22,10 +22,10 @@ function hold(repo: string, id: string, pid: number): Promise<void> {
 const NOW = new Date('2026-09-16T14:30:00.000Z')
 
 /** A checkout with a live card and diary, as a run's session leaves them while it works. */
-async function liveRun(repo: string, id: string, host: string, pid: number, status: RunCard['status'] = 'running', parent?: string, base?: string): Promise<RunCard> {
+async function liveRun(repo: string, id: string, host: string, pid: number, status: RunCard['status'] = 'running', base?: string): Promise<RunCard> {
   const checkout = await createCheckout(repo, { agentId: id, ...(base !== undefined ? { base } : {}) })
   const started = base !== undefined ? { base, baseCommit: (await git(['rev-parse', 'HEAD'], checkout.path)).trim() } : {}
-  const mark = { host, pid, ...(parent !== undefined ? { parent } : {}), ...started }
+  const mark = { host, pid, ...started }
   const card: RunCard = { id, startedAt: '2026-09-16T14:01:00.000Z', status, intent: '/work-queue', driver: 'fake', model: 'opus', branch: checkout.branch, caller: { runner: mark, pid, host, kind: 'prompt' } }
   if (status !== 'running') card.endedAt = '2026-09-16T14:20:00.000Z'
   const dir = liveDir(checkout.path)
@@ -100,7 +100,7 @@ test("a run started from another run's branch that committed nothing: its branch
     await git(['commit', '-q', '-m', 'Plan'], repo)
     await git(['push', '-q', 'origin', 'agent-plan'], repo)
     await git(['checkout', '-q', 'main'], repo)
-    await liveRun(repo, 'sub', 'this-box', 999_999, 'done', undefined, 'agent-plan')
+    await liveRun(repo, 'sub', 'this-box', 999_999, 'done', 'agent-plan')
     const result = await sweep(repo, { host: 'this-box', isAlive: () => false, now: () => NOW })
     assert.deepEqual(result.reclaimed, ['sub'])
     assert.equal((await findRun(repo, 'sub'))?.branch, undefined, 'the record names no branch')
@@ -160,22 +160,3 @@ test('a run being resumed holds its lock: its kept checkout still saying waiting
   }
 })
 
-test('a run the sweep ends tells its parent: one that died mid-work, one that never started; one that had ended by itself is not told again', async () => {
-  const repo = await testRepo()
-  try {
-    await liveRun(repo, 'died', 'this-box', 999_999, 'running', 'p1')
-    await liveRun(repo, 'ended', 'this-box', 999_999, 'done', 'p1')
-    await liveRun(repo, 'orphan', 'this-box', 999_999)
-    await writeMarker(repo, markerCard({ id: 'vanished', startedAt: '2026-09-16T14:02:00.000Z', prompt: 'Do task two', driver: 'fake', mark: { host: 'this-box', pid: 999_999, parent: 'p1' } }))
-    const told: unknown[] = []
-    const result = await sweep(repo, { host: 'this-box', isAlive: () => false, now: () => NOW, resume: async (id, line) => void told.push({ id, line }) })
-    assert.deepEqual(result.recorded.map(r => r.id).sort(), ['died', 'ended', 'orphan', 'vanished'])
-    assert.deepEqual(told, [
-      { id: 'p1', line: { text: 'The run died, started for this run, ended failed: its process died before the run ended.' } },
-      { id: 'p1', line: { text: 'The run vanished, started for this run, ended stopped: its process is gone and left no checkout.' } },
-    ])
-    assert.equal(((await findRun(repo, 'died'))?.caller?.['runner'] as { parent?: string }).parent, 'p1', 'the record keeps the parent')
-  } finally {
-    await removeRepo(repo)
-  }
-})

@@ -1,6 +1,5 @@
 import { AGENT_ENV, Refused, UsageError, errorMessage, inRepo, nodeGitRunner, parseCommandArgs, runCommandLine, runPackageCommand, sessionsHomeOf, PROJECT_SKILLS_ENV, SKILLS_OFF_ENV, SKILLS_ON_ENV, helpRows, helpText, type Command, type GitRunner } from '@openagt/agent-data'
 import { liftSkillRules, projectRoot } from '@openagt/skill-branches'
-import { findRun } from '@openagt/skill-logs'
 import { DRIVER_NAMES, GIT_ACCOUNT_ENV, agentLoginFor, detachResume, detachRun, isDriverName, readyToRun, resumeProject, runProject, type DriverName, type SpawnedResume } from './runner.js'
 import type { RunOutcome, RunRequest } from './run.js'
 import { agentNamed, anySkillPick, runAgent, skillPicksNamed } from './agent.js'
@@ -32,7 +31,6 @@ ${helpRows([
   'Options of run:',
   ['--publish <commit|branch|pr|merge>', 'with --publish, the agent is told, in one sentence after the prompt, how far to take its work when it finishes: commit it, and from there push its branch, open its pull request, or set the request to merge once its checks pass; without it the prompt goes as written, and nothing is committed or published unless the prompt asks'],
   ['--attach <text>', `with --attach, the agent is handed <text> with the prompt, after it and before the --publish sentence, and with no later message; the run's record keeps it apart from the prompt, which alone names the run`],
-  ['--parent <id>', 'with --parent, the run <id> is told when this one ends: which run, how it ended, its last words, as its next prompt'],
   ['--base <ref>', `with --base, the run's branch starts from <ref> instead of origin's default branch; refs/remotes/origin/<branch> is that branch as origin has it, fetched first`],
   ['--pr-base <branch>', `with --pr-base, the --publish sentence names <branch> as the branch its pull request goes into, instead of origin's default branch`],
   ['--branch <name>', `with --branch, the run works on <name>, a branch that exists, such as a person's pull request's, instead of a fresh one`],
@@ -79,7 +77,6 @@ const RUN_FLAGS = {
   publish: { type: 'string' },
   attach: { type: 'string' },
   started: { type: 'string' },
-  parent: { type: 'string' },
   base: { type: 'string' },
   'pr-base': { type: 'string' },
   branch: { type: 'string' },
@@ -103,7 +100,6 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
       if (values.id !== undefined) throw new UsageError('--resume takes no --id: a run continues under its own')
       if (values.attach !== undefined) throw new UsageError('--resume takes no --attach: a text is handed over with a run\'s first prompt only')
       if (values.started !== undefined) throw new UsageError('--resume takes no --started: a run continues from the start its record names')
-      if (values.parent !== undefined) throw new UsageError('--resume takes no --parent: a run continues for the parent its record names')
       if (values.base !== undefined) throw new UsageError('--resume takes no --base: a run continues on its own branch')
       if (values['pr-base'] !== undefined) throw new UsageError('--resume takes no --pr-base: a run continues into the branch its record names')
       if (values.branch !== undefined) throw new UsageError('--resume takes no --branch: a run continues on its own branch')
@@ -132,11 +128,6 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
       throw new Refused({ ok: false, reason: 'not-a-repo', detail: line }, line)
     }) : undefined
     if (values.started !== undefined && (values.id === undefined || Number.isNaN(Date.parse(values.started)))) throw new UsageError('--started is the time a run spawned with --id was asked for, like 2026-10-09T10:00:00.000Z')
-    // A parent this project has no record of is refused while someone is still listening; a run
-    // spawned with its id was asked about already.
-    if (values.parent !== undefined && values.id === undefined && !(await findRun(repo, values.parent))) {
-      throw new Refused({ ok: false, reason: 'no-parent', parent: values.parent }, `no run ${values.parent} in this project`)
-    }
     // The account at the git host picked for this session, by whoever started the run: in the environment ({@link GIT_ACCOUNT_ENV}).
     const gitAccount = process.env[GIT_ACCOUNT_ENV]?.trim() || undefined
     if (gitAccount !== undefined && values.resume !== undefined) throw new UsageError(`${GIT_ACCOUNT_ENV} is for a new run: a run continues as the account its record names`)
@@ -178,7 +169,6 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
       ...(driver !== undefined ? { driver } : {}),
       ...(publish !== undefined ? { publish } : {}),
       ...(values.attach !== undefined ? { attached: values.attach } : {}),
-      ...(values.parent !== undefined ? { parent: values.parent } : {}),
       ...(values.base !== undefined ? { base: values.base } : {}),
       ...(values['pr-base'] !== undefined ? { prBase: values['pr-base'].trim() } : {}),
       ...(values.branch !== undefined ? { branch: values.branch.trim() } : {}),

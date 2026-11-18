@@ -29,7 +29,7 @@ const all = (skills: ProjectSkills): ProjectSkill[] => skills.groups.flatMap(gro
 const count = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`
 
 /**
- * Skills as the subject of a sentence: "The orchestration skill", "The tickets and queue skills",
+ * Skills as the subject of a sentence: "The logs skill", "The tickets and queue skills",
  * and more than three counted ("21 skills"). "skill" is said, since many names are plain words
  * (plan, research, ux) that alone do not say what is meant.
  */

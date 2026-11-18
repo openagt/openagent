@@ -21,7 +21,6 @@ test('a marker is a running card on agent-data, pushed to origin, that the logs 
     assert.equal(found?.intent, '/work-queue')
     assert.deepEqual(runnerMark(found!), mark)
     assert.equal(found?.caller?.['host'], mark.host, 'the machine, where a reader looks for it on a live card too')
-    assert.equal(found?.caller?.['parent'], undefined, 'a run started for no other run names no parent')
     assert.deepEqual(await readDiary(repo, card.id), [])
     assert.match(await git(['log', '-1', '--format=%s', `origin/${DATA_BRANCH}`], repo), /^logs: record run 2026-09-16T14-01-00-000Z/)
   } finally {
@@ -48,12 +47,6 @@ test('the record at the end overwrites the marker: same id, same file, and a wit
   } finally {
     await removeRepo(repo)
   }
-})
-
-test('a run started for another run names its parent beside the host, where a reader of the card looks for it', () => {
-  const card = markerCard({ id: 'c1', startedAt: '2026-09-16T14:01:00.000Z', prompt: 'the task', driver: 'claude-code', mark: { ...mark, parent: 'p1' } })
-  assert.equal(card.caller?.['parent'], 'p1')
-  assert.equal(runnerMark(card)?.parent, 'p1', 'and in the mark, as before')
 })
 
 test('a run told where to start names that branch beside the host, and a run told none names none', () => {

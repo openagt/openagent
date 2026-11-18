@@ -1,4 +1,4 @@
-import type { AgentMeta, OpenAgentEvent } from '../../src/index.js'
+import type { OpenAgentEvent } from '../../src/index.js'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 
@@ -311,13 +311,6 @@ describe('EventList tool calls', () => {
     const woke: OpenAgentEvent = { kind: 'driver', event: { type: 'thinking' }, at: new Date().toISOString() }
     rerender(<EventList events={[prompt, started, { kind: 'driver', event: { type: 'text', text: 'Both run.' }, at: '2026-10-01T10:00:19.000Z' }, over, woke]} working stick={false} />)
     expect(screen.getByRole('status')).toBeTruthy()
-  })
-
-  test('a call that only drove the subagents is no row of the run', () => {
-    const drive: OpenAgentEvent = { kind: 'driver', event: { type: 'action', label: 'Bash', detail: 'npx @openagt/skill-orchestration@0.1 land 2026-11-03T00-52-48-684Z', id: 'c1' } }
-    render(<EventList events={[prompt, drive, { kind: 'driver', event: { type: 'output', id: 'c1', text: 'landed' } }, { kind: 'driver', event: { type: 'text', text: 'It is in.' } }]} stick={false} />)
-    expect(screen.queryByText(/skill-orchestration/)).toBeNull()
-    expect(screen.getByText('It is in.')).toBeTruthy()
   })
 
   test('while the agent thinks the moving line is its dots and seconds, with no word for it, as Claude Code on the web\u2019s is', () => {
@@ -912,71 +905,65 @@ describe('EventList screen rows', () => {
   })
 })
 
-// A run's subagents in its chat: a row where each was started, read off the subagent's card, and
-// the prompt that told the run a subagent ended as a row of the subagent's, not the reader's.
-/** The folded row of what a subagent sent when it ended. */
-const messageRow = () => screen.getByText('Message from')
-
+// A run's subagents in its chat, the ones its coding agent started: a row where each was started,
+// read off the log's `subagent` events, and the call and steps of each no row of the run's.
 describe('EventList subagent rows', () => {
-  const sub = (over: Partial<AgentMeta> = {}): AgentMeta => ({
-    status: 'running',
-    id: '2026-10-01T10-01-00-000Z',
-    startedAt: '2026-10-01T10:01:00.000Z',
-    updatedAt: '2026-10-01T10:01:00.000Z',
-    parent: 'main',
-    intent: 'Validate the form\n\nYou are a subagent: another agent started you.',
-    ...over,
-  })
+  const time = (at: string) => `2026-10-01T10:${at}.000Z`
+  /** A subagent the coding agent starts at `at`: the `Agent` call and the subagent's first event. */
+  const started = (id: string, name: string, at: string, more: { model?: string } = {}): OpenAgentEvent[] => [
+    { kind: 'driver', event: { type: 'action', label: 'Agent', detail: name, id }, at: time(at) },
+    { kind: 'driver', event: { type: 'subagent', id, status: 'working', name, ...more }, at: time(at) },
+  ]
+  /** How it ended, at `at`. */
+  const ended = (id: string, name: string, at: string, status: 'ended' | 'failed' = 'ended'): OpenAgentEvent => ({ kind: 'driver', event: { type: 'subagent', id, status, name }, at: time(at) })
   const events: OpenAgentEvent[] = [
-    { kind: 'driver', event: { type: 'start', prompt: 'split the work' }, at: '2026-10-01T10:00:00.000Z' },
-    { kind: 'driver', event: { type: 'action', label: 'Bash', detail: 'npx orchestration start' }, at: '2026-10-01T10:00:59.000Z' },
-    { kind: 'driver', event: { type: 'text', text: 'I started one subagent.' }, at: '2026-10-01T10:01:05.000Z' },
+    { kind: 'driver', event: { type: 'start', prompt: 'split the work' }, at: time('00:00') },
+    { kind: 'driver', event: { type: 'action', label: 'Bash', detail: 'git status', id: 'b1' }, at: time('00:59') },
+    ...started('toolu_v', 'Validate the form', '01:00', { model: 'claude-sonnet-5-5' }),
+    { kind: 'driver', event: { type: 'text', text: 'I started one subagent.' }, at: time('01:05') },
   ]
 
   test('a working subagent has a row where it was started, saying its task, its model, the tool it is on and how many calls it made', () => {
-    const { container } = render(<EventList events={events} subagents={[sub({ model: 'claude-sonnet-5-5' })]} doing={{ '2026-10-01T10-01-00-000Z': { doing: 'Edit login.ts', tool: 'Edit', calls: 3 } }} stick={false} />)
-    expect(screen.getByText(/Validate the form/)).toBeTruthy()
+    const steps: OpenAgentEvent[] = ['01:01', '01:02', '01:03'].map((at, n) => ({ kind: 'driver', event: { type: 'action', label: 'Edit', detail: 'login.ts', id: `e${n}`, subagent: 'toolu_v' }, at: time(at) }))
+    const { container } = render(<EventList events={[...events.slice(0, 4), ...steps, ...events.slice(4)]} working stick={false} />)
+    expect(screen.getByText('Validate the form')).toBeTruthy()
     expect(screen.getByText('claude-sonnet-5-5')).toBeTruthy()
-    // Its last step whole on a hover; a run of its own has a branch, and says nothing of it here.
-    const doing = screen.getByText('3 calls').closest('[title]')!
-    expect([doing.textContent, doing.getAttribute('title')]).toEqual(['Edit·3 calls', 'Edit login.ts'])
-    expect(screen.queryByText('no branch')).toBeNull()
-    expect(screen.queryByText(/You are a subagent/)).toBeNull()
-    // Between the command that started it and what the agent said next.
+    expect(screen.getByText('3 calls').parentElement!.textContent).toBe('Edit·3 calls')
+    // Between the step before it and what the agent said next.
     const text = container.textContent ?? ''
-    expect(text.indexOf('npx orchestration start')).toBeLessThan(text.indexOf('Validate the form'))
+    expect(text.indexOf('git status')).toBeLessThan(text.indexOf('Validate the form'))
     expect(text.indexOf('Validate the form')).toBeLessThan(text.indexOf('I started one subagent.'))
-    // The agent's reply after the row ends its turn: its time is in the footer under it.
-    expect(container.querySelector('time[datetime="2026-10-01T10:01:05.000Z"]')).toBeTruthy()
   })
 
   test('the row of an ended subagent says how it ended and how long it took, and a click opens the subagent', () => {
     const opened: string[] = []
-    render(<EventList events={events} subagents={[sub({ status: 'failed', endedAt: '2026-10-01T10:03:10.000Z' })]} doing={{ '2026-10-01T10-01-00-000Z': { doing: 'stale', tool: 'Bash', calls: 9 } }} onOpenSubagent={key => opened.push(key)} stick={false} />)
+    render(<EventList events={[...events, ended('toolu_v', 'Validate the form', '03:10', 'failed')]} onOpenSubagent={key => opened.push(key)} stick={false} />)
     expect(screen.getByText('failed')).toBeTruthy()
     expect(screen.getByText('2m 10s')).toBeTruthy()
-    expect(screen.queryByText(/stale|9 calls/)).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Open the subagent: Validate the form' }))
-    expect(opened).toEqual(['run:2026-10-01T10-01-00-000Z'])
+    expect(opened).toEqual(['call:toolu_v'])
   })
 
   test('the subagents started with nothing said between them are one line where the first was started, saying what came of them, opening to a row each; words part them', () => {
     const later: OpenAgentEvent[] = [
-      ...events,
-      { kind: 'driver', event: { type: 'action', label: 'Bash', detail: 'npx orchestration start --task b' }, at: '2026-10-01T10:01:30.000Z' },
-      { kind: 'driver', event: { type: 'text', text: 'And a second one.' }, at: '2026-10-01T10:01:40.000Z' },
-      { kind: 'driver', event: { type: 'start', prompt: 'The run 2026-10-01T10-01-00-000Z, started for this run, ended done.' }, at: '2026-10-01T10:02:00.000Z' },
-      { kind: 'driver', event: { type: 'text', text: 'Landed it.' }, at: '2026-10-01T10:05:00.000Z' },
+      ...events.slice(0, 4),
+      ...started('toolu_d', 'Write the docs', '01:02'),
+      events[4]!,
+      // Started after the agent said something: a group of its own, after those words.
+      ...started('toolu_t', 'Write the tests', '01:35'),
+      { kind: 'driver', event: { type: 'text', text: 'And a second one.' }, at: time('01:40') },
+      ended('toolu_t', 'Write the tests', '01:45'),
+      ended('toolu_v', 'Validate the form', '01:50'),
+      { kind: 'driver', event: { type: 'start', prompt: 'go on' }, at: time('02:00') },
+      ended('toolu_d', 'Write the docs', '02:07'),
+      // Started in the next turn: a group of its own.
+      ...started('toolu_f', 'Fix the typo', '03:00'),
+      ended('toolu_f', 'Fix the typo', '04:00'),
+      { kind: 'driver', event: { type: 'text', text: 'Landed it.' }, at: time('05:00') },
     ]
-    const first = sub({ status: 'done', endedAt: '2026-10-01T10:01:50.000Z', cost: 0.25 })
-    const second = sub({ id: '2026-10-01T10-01-02-000Z', startedAt: '2026-10-01T10:01:02.000Z', status: 'done', endedAt: '2026-10-01T10:02:07.000Z', intent: 'Write the docs', cost: 0.36 })
-    // Started after the agent said something: a group of its own, after those words.
-    const afterWords = sub({ id: '2026-10-01T10-01-35-000Z', startedAt: '2026-10-01T10:01:35.000Z', status: 'done', endedAt: '2026-10-01T10:01:45.000Z', intent: 'Write the tests' })
-    // Started in the next turn: a group of its own.
-    const third = sub({ id: '2026-10-01T10-03-00-000Z', startedAt: '2026-10-01T10:03:00.000Z', status: 'done', endedAt: '2026-10-01T10:04:00.000Z', intent: 'Fix the typo' })
-    const { container } = render(<EventList events={later} subagents={[first, second, afterWords, third]} stick={false} />)
+    const { container } = render(<EventList events={later} stick={false} />)
     fireEvent.click(screen.getByRole('button', { name: 'Ran 2 agents' }))
-    expect(screen.getByText('$0.25').parentElement!.textContent).toBe('50s·$0.25')
+    expect(screen.getByText('50s')).toBeTruthy()
     const text = container.textContent ?? ''
     // Both where the first was started, ahead of what the agent said after them.
     expect(text.indexOf('Ran 2 agents')).toBeLessThan(text.indexOf('Validate the form'))
@@ -985,6 +972,12 @@ describe('EventList subagent rows', () => {
     expect(text.indexOf('Landed it.')).toBeGreaterThan(text.indexOf('Fix the typo'))
     // A subagent alone is its own row, with no line over it.
     expect(screen.queryByText('Ran an agent')).toBeNull()
+  })
+
+  test('a subagent started after the last line is the last row', () => {
+    const { container } = render(<EventList events={[...events, ...started('toolu_l', 'Late task', '09:00')]} working stick={false} />)
+    const text = container.textContent ?? ''
+    expect(text.indexOf('I started one subagent.')).toBeLessThan(text.indexOf('Late task'))
   })
 
   // What a coding agent's own `Agent` call says in the log, beside the call's own row.
@@ -1044,53 +1037,6 @@ describe('EventList subagent rows', () => {
     expect(screen.getByRole('button', { name: 'Open the subagent: Ada' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Open the subagent: Brin' })).toBeTruthy()
     expect(container.textContent).not.toMatch(/collabAgentToolCall/)
-  })
-
-  test('the prompt that told the run its subagent ended is a folded message from the subagent, not a message the reader wrote', () => {
-    const told: OpenAgentEvent = {
-      kind: 'driver',
-      event: { type: 'start', prompt: 'The run 2026-10-01T10-01-00-000Z, started for this run, ended done.\nIts work is on the branch agent-form.' },
-      at: '2026-10-01T10:04:00.000Z',
-    }
-    render(<EventList events={[...events, told]} subagents={[sub({ status: 'done', endedAt: '2026-10-01T10:03:10.000Z' })]} stick={false} />)
-    expect(screen.getAllByLabelText('Your message')).toHaveLength(1)
-    expect(screen.getAllByRole('button', { name: 'Open the subagent: Validate the form' })).toHaveLength(1)
-    expect(screen.queryByText(/Its work is on the branch agent-form/)).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'Message from subagent' }))
-    expect(screen.getByText('From: Validate the form')).toBeTruthy()
-    expect(screen.getByText(/Its work is on the branch agent-form/)).toBeTruthy()
-    expect(screen.queryByText(/started for this run/)).toBeNull()
-  })
-
-  test("right after the reader's own prompt, a subagent's end is still a row of its own, not a second message of the reader's", () => {
-    const typed: OpenAgentEvent = { kind: 'driver', event: { type: 'start', prompt: 'and then?' }, at: '2026-10-01T10:03:30.000Z' }
-    const told: OpenAgentEvent = { kind: 'driver', event: { type: 'start', prompt: 'The run 2026-10-01T10-01-00-000Z, started for this run, ended done.' }, at: '2026-10-01T10:04:00.000Z' }
-    render(<EventList events={[...events, typed, told]} subagents={[sub({ status: 'done', endedAt: '2026-10-01T10:03:10.000Z' })]} stick={false} />)
-    expect(screen.getAllByLabelText('Your message')).toHaveLength(2)
-    expect(messageRow()).toBeTruthy()
-    // It has no time at its end.
-    expect(within(messageRow().closest('[data-message-id]') as HTMLElement).queryByText(/ago$/, { selector: 'span' })).toBeNull()
-  })
-
-  test("a subagent's end right under the row of a subagent just started goes on that run of rows: it holds no time of its own", () => {
-    const told: OpenAgentEvent = { kind: 'driver', event: { type: 'start', prompt: 'The run 2026-10-01T10-03-59-000Z, started for this run, ended done.' }, at: '2026-10-01T10:04:00.000Z' }
-    const quick = sub({ id: '2026-10-01T10-03-59-000Z', startedAt: '2026-10-01T10:03:59.000Z', intent: 'Second task', status: 'done', endedAt: '2026-10-01T10:03:59.900Z' })
-    render(<EventList events={[...events, told]} subagents={[quick]} stick={false} />)
-    expect(messageRow()).toBeTruthy()
-    expect(within(messageRow().closest('[data-message-id]') as HTMLElement).queryByText(/ago$/, { selector: 'span' })).toBeNull()
-  })
-
-  test('the same words about a run that is not a subagent of this one stay a message the reader wrote', () => {
-    const typed: OpenAgentEvent = { kind: 'driver', event: { type: 'start', prompt: 'The run 2026-10-01T10-01-00-000Z, started for this run, ended done.' } }
-    render(<EventList events={[...events, typed]} stick={false} />)
-    expect(screen.getAllByLabelText('Your message')).toHaveLength(2)
-    expect(screen.queryByText((_, el) => el?.tagName === 'SPAN' && el.textContent === 'ended done')).toBeNull()
-  })
-
-  test('a subagent started after the last line is the last row', () => {
-    const { container } = render(<EventList events={events} subagents={[sub({ id: 'late', startedAt: '2026-10-01T10:09:00.000Z', intent: 'Late task' })]} stick={false} />)
-    const text = container.textContent ?? ''
-    expect(text.indexOf('I started one subagent.')).toBeLessThan(text.indexOf('Late task'))
   })
 })
 
@@ -1281,7 +1227,7 @@ describe('EventList scroll anchor', () => {
 })
 
 // What the chat says in place of the line that was above the message box.
-describe('EventList queued messages and the wait for subagents', () => {
+describe('EventList queued messages', () => {
   const ids = () => Array.from(document.querySelectorAll('[data-message-id]')).map(n => n.getAttribute('data-message-id'))
   const prompt: OpenAgentEvent = { kind: 'driver', event: { type: 'start', prompt: 'go' } }
   const said: OpenAgentEvent = { kind: 'driver', event: { type: 'text', text: 'Hello.' } }
@@ -1342,21 +1288,6 @@ describe('EventList queued messages and the wait for subagents', () => {
     const at = order.findIndex(text => text.includes('Also the README.'))
     expect(at).toBeGreaterThan(1)
     expect(order.slice(at + 1).some(text => /Ran|echo/.test(text))).toBe(true)
-  })
-
-  test('an agent that ended its turn while subagents work says how many it waits for, as the moving last line', () => {
-    const { rerender } = render(<EventList events={[prompt, said]} waitingOn={2} stick={false} />)
-    expect(ids()).toEqual(['turn:1', '1', 'waiting-on'])
-    expect(screen.getByRole('status').textContent).toBe('Waiting for 2 subagents')
-    rerender(<EventList events={[prompt, said]} waitingOn={1} stick={false} />)
-    expect(screen.getByRole('status').textContent).toBe('Waiting for 1 subagent')
-    rerender(<EventList events={[prompt, said]} stick={false} />)
-    expect(screen.queryByRole('status')).toBeNull()
-  })
-
-  test('while the agent works the moving line is its own: the wait for subagents is not said too', () => {
-    render(<EventList events={[prompt, said]} working waitingOn={2} stick={false} />)
-    expect(screen.getAllByRole('status').map(n => n.textContent)).toEqual([''])
   })
 })
 

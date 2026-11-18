@@ -202,7 +202,7 @@ test('a branch of one commit is that commit: its subject the title, the rest of 
   assert.deepEqual((calls.at(-1) as unknown[])[2], { title: 'New automation: write the shell line', body: 'Opened from OpenAgent session `r1`.' })
 })
 
-test('a run started from another branch is read from the commit its own work begins at; a subagent is never opened a pull request', async () => {
+test('a run started from another branch is read from the commit its own work begins at', async () => {
   const { branches, gitHost, calls } = fakeBranches({ 'openagent/work': state() })
   const read = await readAgentHandoff('/repo', 'openagent/work', { branches, gitHost, pr: async () => undefined, from: 'b'.repeat(40) })
   assert.equal(read?.exists, true)
@@ -212,10 +212,6 @@ test('a run started from another branch is read from the commit its own work beg
   calls.length = 0
   await openAgentPullRequest('/repo', agent({ baseCommit: 'b'.repeat(40) }), { branches, gitHost })
   assert.deepEqual(calls[0], ['show', 'openagent/work', { from: 'b'.repeat(40) }])
-
-  calls.length = 0
-  assert.deepEqual(await openAgentPullRequest('/repo', agent({ parent: 'r0' }), { branches, gitHost }), { ok: false, error: 'this run is a subagent: its main agent lands its work and opens the pull request' })
-  assert.deepEqual(calls, [], 'nothing pushed, nothing opened')
 })
 
 test('a run’s handoff off its record: its branch from where its own work begins; a landed run by the commit its record kept; a run with neither has none', async () => {

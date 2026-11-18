@@ -25,9 +25,8 @@ export function inCheckout(path: string, workspace: string | undefined): string 
 /**
  * Whether an edit is one of the run's changes at all: a file the agent wrote **outside** its
  * checkout is not. The agents name a file by its whole path, and an agent writes outside its
- * checkout often enough that this is not an edge case — the orchestration skill tells it to save
- * its plan "to a markdown file outside your checkout", so every orchestrated run reports one.
- * Such a row read as a change of the project, named by its bare last part, and opened nothing:
+ * checkout often enough that this is not an edge case: a plan saved beside the checkout, a note
+ * in the home folder. Such a row read as a change of the project, named by its bare last part, and opened nothing:
  * the panes read a file of the project, and a path outside it is refused on purpose.
  *
  * Only an absolute path can be judged this way. A relative one is the checkout's by definition and

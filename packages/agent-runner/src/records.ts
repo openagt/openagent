@@ -45,15 +45,13 @@ export interface RunnerMark extends Lasting {
 }
 
 /**
- * What a mark keeps for the run's whole life, a resume included: its publish level, its parent,
+ * What a mark keeps for the run's whole life, a resume included: its publish level,
  * where it started, where its pull request goes, the account it works as, what it was started for,
  * the repos it has, its agent and the session's picks of skills.
  */
 export interface Lasting {
   /** How far the run takes its work when its agent finishes (`run --publish`): a commit, the branch, its pull request, or the request set to merge; absent, only what its prompt asks. */
   publish?: Publish
-  /** The run this one was started for, told when this one ends (`run --parent`). */
-  parent?: string
   /** What this run's own branch started from (`run --base`): a branch of this clone, or origin's copy of one (`publishedBase`); origin's default branch when absent. */
   base?: string
   /** The branch the run's pull request goes into (`run --pr-base`); the repository's default branch when absent. */
@@ -123,7 +121,6 @@ export function lasting(mark: { [K in keyof Lasting]?: unknown }): Lasting {
   const projectSkills = mark.projectSkills === 'none' ? 'none' : skillNames(mark.projectSkills)
   return {
     ...(isPublish(mark.publish) ? { publish: mark.publish } : {}),
-    ...(typeof mark.parent === 'string' ? { parent: mark.parent } : {}),
     ...(typeof mark.base === 'string' ? { base: mark.base } : {}),
     ...(typeof mark.prBase === 'string' ? { prBase: mark.prBase } : {}),
     ...(typeof mark.gitAccount === 'string' ? { gitAccount: mark.gitAccount } : {}),
@@ -152,7 +149,7 @@ export function markerCard(run: { id: string; startedAt: string; prompt: string;
 }
 
 /**
- * What a reader of the card finds beside `host`, outside this tool's mark: the run's parent, the
+ * What a reader of the card finds beside `host`, outside this tool's mark: the
  * name of the branch it was started from when it was told one, the branch its pull request goes into, the account it worked as at the git host, the commit its own work begins at, which its
  * changes are measured from, and how far it takes its work, which a dashboard shows and offers to
  * change, and what it was started for, which a git host's check reads to find the run a thread has,
@@ -160,7 +157,6 @@ export function markerCard(run: { id: string; startedAt: string; prompt: string;
  */
 export function forReaders(mark: Lasting): Lasting {
   return {
-    ...(mark.parent !== undefined ? { parent: mark.parent } : {}),
     ...(mark.base !== undefined ? { base: publishedBranch(mark.base) ?? mark.base } : {}),
     ...(mark.prBase !== undefined ? { prBase: mark.prBase } : {}),
     ...(mark.gitAccount !== undefined ? { gitAccount: mark.gitAccount } : {}),

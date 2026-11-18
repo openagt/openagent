@@ -1,11 +1,11 @@
-import type { AgentDoing, AgentMeta, ChoiceRequest, OpenAgentEvent } from '../../src/index.js'
+import type { ChoiceRequest, OpenAgentEvent } from '../../src/index.js'
 import { foldScreenRows, formatOpenAgentEvent } from '../../src/client.js'
 import { parseQuestion, QUESTION_TAG } from '@openagt/agent-driver/question'
 import { Fragment, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { Check, ChevronRight, Copy, PencilLine } from 'lucide-react'
 import { pendingChoices } from '../lib/live-state.js'
 import { DaemonDown } from '../lib/use-daemon-health.js'
-import { callSubagents, isAgentsOwn, runRow, endMessage, subagentEnd, subagentEvents, subagentReport, subagentRows, subagentSteps, subagentWait, type SubagentEnd } from '../lib/subagents.js'
+import { callSubagents, isAgentsOwn, subagentEvents, subagentReport, subagentRows, subagentSteps, subagentWait } from '../lib/subagents.js'
 import { answeredQuestion } from '../lib/answered-question.js'
 import { rowWords, type RowWords } from '../lib/row-words.js'
 import { formatAge } from '../lib/format-date.js'
@@ -16,7 +16,7 @@ import { Markdown } from './Markdown.js'
 import { SessionLine, sessionLineEmpty, type SessionSetup } from './SessionLine.js'
 import { ChangedFiles } from './ChangedFiles.js'
 import { turnChanges, type ChangedFile } from '../lib/turn-changes.js'
-import { SubagentMessage, SubagentSteps } from './SubagentLine.js'
+import { SubagentSteps } from './SubagentLine.js'
 import { useSteadyText, useStillWriting } from '../lib/use-steady-text.js'
 import { Caret, LiveLine, ToolCalls, type CallOutput, type ToolStep } from './ToolCalls.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
@@ -48,12 +48,10 @@ import {
 //     on an answer: the agent's last message, or its question, is how such a turn ends. A stopped
 //     or failed end is a row.
 //   - The reply a question follows is shown whole: it is what the question asks about.
-//   - Subagents, of both kinds: the runs started for this one, read off their cards, and the ones
-//     the coding agent started inside its session, read off the log's `subagent` events. The ones
-//     started together are one group where the first was started, each a row that opens the
-//     subagent beside the chat; the call that started one, and everything it said and did, are its
-//     own and no row here. The prompt that told the run a subagent ended is a subagent's row too,
-//     not a message of the user's.
+//   - Subagents: the ones the coding agent started inside its session, read off the log's
+//     `subagent` events. The ones started together are one group where the first was started, each
+//     a row that opens the subagent beside the chat; the call that started one, and everything it
+//     said and did, are its own and no row here.
 // The rows sit in one centered column, as a chat's do, with no label saying each row's kind: the
 // user's turn is a box on the right, and every other row says what it is. The first of a run of
 // same-kind rows carries the time its diary line was written, shown while the pointer is on the
@@ -615,13 +613,9 @@ function ScreenRow({ label, onOpen }: { label: string; onOpen?: (() => void) | u
 // is always there, so nothing moves when it shows.
 const TIME = 'ml-auto shrink-0 pt-0.5 text-xs tabular-nums text-muted-foreground opacity-0 transition-opacity group-hover/row:opacity-100'
 
-/** The grouping key of a row about one of the run's subagents. */
-const SUBAGENT = 'subagent'
 /** How near its end a chat counts as being at it, in pixels: the scroller's own measure. */
 const AT_END = 8
-const NO_SUBAGENTS: readonly AgentMeta[] = []
 const NONE_QUEUED: readonly WaitingMessage[] = []
-const NOTHING_DOING: Record<string, AgentDoing> = {}
 
 /**
  * Whether an event is a row at all. The agent's session id is plumbing, not conversation: the
@@ -714,7 +708,6 @@ export function EventList({
   sendingAt,
   working = false,
   queued = NONE_QUEUED,
-  waitingOn = 0,
   stick = true,
   openAt,
   head,
@@ -725,8 +718,6 @@ export function EventList({
   agentId,
   onSaid,
   focusNext,
-  subagents = NO_SUBAGENTS,
-  doing = NOTHING_DOING,
   setup,
   onOpenSubagent,
   onOpenChange,
@@ -748,8 +739,6 @@ export function EventList({
   /** Messages sent while the agent works that it has not read yet: each a last row of the feed,
    *  with Send now or "Queued" under it, until the agent reads it and it shows where it landed. */
   queued?: readonly WaitingMessage[]
-  /** How many subagents an agent that ended its turn still waits on: a moving last line says so. */
-  waitingOn?: number
   stick?: boolean
   /** Where a non-following log opens; a replay opens at the outcome (#948), not page one. */
   openAt?: 'start' | 'end'
@@ -776,10 +765,6 @@ export function EventList({
   onSaid?: ((text: string) => void) | undefined
   /** Given the focus once a question is answered from its card: the message box. */
   focusNext?: (() => void) | undefined
-  /** The runs started for this run, oldest first: each gets a row where it was started. */
-  subagents?: readonly AgentMeta[]
-  /** What each working subagent is doing now, by id. */
-  doing?: Record<string, AgentDoing>
   /** What was set up for the agent before it began: the "Initialized session" line under the first
    *  prompt (the first row when the log has no prompt). Without it, no such line. */
   setup?: SessionSetup | undefined
@@ -865,18 +850,11 @@ export function EventList({
   const turnBoundary = [...unfolded].reverse().find(isTurnBoundary)
   const sentTurn = lastSent.current !== undefined && turnBoundary !== undefined && turnBoundary !== sent && told.find(e => isTurnBoundary(e) && e !== sent && e.at !== undefined && e.at > lastSent.current!) === turnBoundary
   const turnStart = later(wokeAt, blocked.wokeAt) ?? (sentTurn || (sent !== undefined && turnBoundary === sent) ? lastSent.current : turnBoundary?.at) ?? startedAt ?? unfolded[unfolded.length - 1]?.at
-  // The prompts that told this run one of its subagents ended: SUBAGENT rows, not the reader's own.
-  const ends = new Map<OpenAgentEvent, SubagentEnd>()
-  for (const e of shown) {
-    const end = e.kind === 'driver' && e.event.type === 'start' ? subagentEnd(e.event.prompt, subagents) : undefined
-    if (end) ends.set(e, end)
-  }
   // A row is known by its event's place in the whole log, not among the rows shown: a row that
   // stops being shown (an end the run went on after) then changes no other row's identity, and
   // the scroller keeps its place. A message just sent is the next turn's.
   const idOf = (e: OpenAgentEvent): string => rowIds.get(e) ?? `turn:${turns + 1}`
-  const groupOf = (e: OpenAgentEvent): string => (ends.has(e) ? SUBAGENT : rowGroup(e))
-  const rows = subagentRows(subagents, events, working, doing)
+  const rows = subagentRows(events, working)
   // A prompt or the agent's own words part them: what it started after saying something comes after those words.
   const reports = new Map(calls.flatMap(call => {
     const report = subagentReport(events, call.id)
@@ -961,7 +939,7 @@ export function EventList({
     const message = textOf(e)
     const choiceRow = choiceRows?.rows.get(e)
     if (isTurnBoundary(e)) {
-      if (ends.has(e) || (message !== null && answeredQuestion(message))) continue
+      if (message !== null && answeredQuestion(message)) continue
       if (last) {
         if (changes.ended.has(e)) filesFooters.set(e, { text: last.text, at: last.row.at })
         else footers.set(last.row, last.text)
@@ -1014,13 +992,12 @@ export function EventList({
               const message = steered ?? textOf(e)
               const choiceRow = choiceRows?.rows.get(e)
               const prev = i > 0 ? rows[i - 1] : undefined
-              const end = ends.get(e)
               // The first of a run of same-kind rows carries the run's time. A subagent's row above
-              // this one breaks the run; the row of a subagent's end goes on that run of subagent rows.
-              const chunkHead = !prev || (started.has(i) ? !end : groupOf(prev) !== groupOf(e))
+              // this one breaks the run.
+              const chunkHead = !prev || started.has(i) || rowGroup(prev) !== rowGroup(e)
               const at = e.at
-              // The user's own message: a prompt that is not a subagent's end, or one the agent read as it worked.
-              const own = (isTurnBoundary(e) && !end) || steered !== undefined
+              // The user's own message: a prompt, or one the agent read as it worked.
+              const own = isTurnBoundary(e) || steered !== undefined
               // What the chat says for a row that is none of the above; nothing when the
               // terminal's own line is what it says (row-words.ts).
               const words = rowWords(e)
@@ -1045,16 +1022,13 @@ export function EventList({
                 )}
                 {i === setupAt && setupRow}
                 {startedRows(i)}
-                <MessageScrollerItem messageId={idOf(e)} data-prompt={(own && !answer) || undefined} className={`group/row relative flex items-start gap-2 ${end ? '-mx-1.5 rounded-sm px-1.5' : rowBox(e)} ${answer || inPlace ? 'mt-1 mb-3' : own ? 'mt-3 first:mt-0' : ''}`}>
+                <MessageScrollerItem messageId={idOf(e)} data-prompt={(own && !answer) || undefined} className={`group/row relative flex items-start gap-2 ${rowBox(e)} ${answer || inPlace ? 'mt-1 mb-3' : own ? 'mt-3 first:mt-0' : ''}`}>
                   {answer ? (
                     <Answer {...answer} />
                   ) : inPlace && sentAnswer ? (
                     <Answer {...sentAnswer} />
                   ) : own && message !== null ? (
                     <Prompt text={message} at={at} attached={e.kind === 'driver' && e.event.type === 'start' ? e.event.attached : undefined} fresh={e === sent} />
-                  ) : end ? (
-                    // A subagent ended: what the run was told about it, folded.
-                    <SubagentMessage name={runRow(end.agent, undefined).name} text={endMessage(end.rest)} status={end.status} detail={end.detail} />
                   ) : message !== null ? (
                     // The agent's reply, shown whole, and the last of a finished turn with its footer.
                     footer ? (
@@ -1092,7 +1066,7 @@ export function EventList({
                   )}
                   {/* A line of steps, a message or a subagent's message has no time at its end, as Claude
                       Code's has none: the column it takes would narrow a message being written as it lands. */}
-                  {!own && !end && message === null && chunkHead && at !== undefined && footer === undefined && !steps.has(e) && (
+                  {!own && message === null && chunkHead && at !== undefined && footer === undefined && !steps.has(e) && (
                     <Tooltip>
                       <TooltipTrigger render={<span className={TIME} />}>
                         {formatAge(at)}
@@ -1127,11 +1101,6 @@ export function EventList({
                     under a streaming reply read as a second thing going on. */}
                 {working && !settingUp && !waitsOnItsOwn && current === undefined && <LiveLine since={turnStart} tokens={tokens} />}
               </div>
-            )}
-            {!working && waitingOn > 0 && (
-              <MessageScrollerItem messageId="waiting-on" className="-mx-1.5 flex items-center gap-2 rounded-sm px-1.5">
-                <LiveLine word={`Waiting for ${waitingOn} ${waitingOn === 1 ? 'subagent' : 'subagents'}`} />
-              </MessageScrollerItem>
             )}
             {queued.map(({ id, text, ...waiting }) => (
               <MessageScrollerItem key={`queued-${id}`} messageId={`queued-${id}`} className="-mx-1.5 flex items-start gap-2 rounded-sm px-1.5">

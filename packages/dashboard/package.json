@@ -77,7 +77,6 @@
     "@openagt/skill-browser": "workspace:*",
     "@openagt/skill-github": "workspace:*",
     "@openagt/skill-logs": "workspace:*",
-    "@openagt/skill-orchestration": "workspace:*",
     "@openagt/skill-ask": "workspace:*",
     "@openagt/skill-queue": "workspace:*",
     "@openagt/skill-tickets": "workspace:*",

@@ -346,12 +346,10 @@ function ThoughtLine({ text }: { text: string }) {
 // agent does then, as Claude Code on the web has none ("Thinking" said no more than the dots do);
 // a step going on is said on its own steps row instead (`ToolCalls`), with the seconds after it.
 // The tokens come once the turn has answered something (`tokens`, the caller's to give or not).
-// `word` is for a line that is about something else: waiting on subagents.
-export function LiveLine({ word, since, tokens }: { word?: string | undefined; since?: string | undefined; tokens?: number | undefined }) {
+export function LiveLine({ since, tokens }: { since?: string | undefined; tokens?: number | undefined }) {
   return (
     <div role="status" className="relative flex min-w-0 flex-1 items-center gap-2 font-sans text-sm text-muted-foreground">
       <LiveDots />
-      {word !== undefined && <span className="text-shimmer">{word}</span>}
       {since !== undefined && <Seconds since={since} />}
       {tokens !== undefined && <TokenCount tokens={tokens} />}
     </div>

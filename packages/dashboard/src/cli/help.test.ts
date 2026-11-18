@@ -20,7 +20,6 @@ const PROGRAMS: [pkg: string, args: string[]][] = [
   ['@openagt/skill-discord', []],
   ['@openagt/skill-github', []],
   ['@openagt/skill-logs', []],
-  ['@openagt/skill-orchestration', []],
   ['@openagt/skill-queue', []],
   ['@openagt/skill-scheduler', []],
   ['@openagt/skill-tickets', []],

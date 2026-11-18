@@ -33,13 +33,13 @@ const worked = {
 // The same composition AgentView uses: the verdict and the next step, side by side in one bar.
 // `working`: the run's turn is going, so nothing is read and the answer read before it is dropped.
 // `agentId`: the session shown; the agent view keeps the hook when another one opens.
-function Harness({ subagent = false, working = false, agentId = 'run-1' }: { subagent?: boolean; working?: boolean; agentId?: string }) {
+function Harness({ working = false, agentId = 'run-1' }: { working?: boolean; agentId?: string }) {
   const state = useAgentHandoff('p1', agentId, !working, false, working)
   return (
     <>
-      <HandoffSummary handoff={state.handoff} subagent={subagent} />
+      <HandoffSummary handoff={state.handoff} />
       {state.error && <span>{state.error}</span>}
-      <HandoffActions projectId="p1" agentId={agentId} state={state} subagent={subagent} />
+      <HandoffActions projectId="p1" agentId={agentId} state={state} />
     </>
   )
 }
@@ -136,7 +136,7 @@ describe('run handoff (#799)', () => {
     expect(screen.queryByText('merged')).toBeNull()
   })
 
-  test('uncommitted work gets a Commit button that asks the agent to commit; a subagent, and a branch with nothing left behind, get none', async () => {
+  test('uncommitted work gets a Commit button that asks the agent to commit; a branch with nothing left behind gets none', async () => {
     const left = { ...worked, commits: [], files: [], insertions: 0, deletions: 0, empty: true, pendingFiles: ['index.html'] }
     onAgentHandoff.mockResolvedValue(left)
     render(<Harness />)
@@ -155,12 +155,6 @@ describe('run handoff (#799)', () => {
     onAgentHandoff.mockResolvedValue({ ...left, pendingFiles: [] })
     render(<Harness />)
     await waitFor(() => expect(onAgentHandoff).toHaveBeenCalled())
-    expect(screen.queryByRole('button', { name: 'Commit' })).toBeNull()
-    cleanup()
-
-    onAgentHandoff.mockResolvedValue(left)
-    render(<Harness subagent />)
-    await waitFor(() => expect(screen.getByText('Nothing committed — index.html left uncommitted.')).toBeTruthy())
     expect(screen.queryByRole('button', { name: 'Commit' })).toBeNull()
   })
 
@@ -563,61 +557,6 @@ describe('run handoff (#799)', () => {
     onAgentHandoff.mockResolvedValue({ ...worked, hasRemote: false })
     render(<Harness />)
     await waitFor(() => expect(screen.getByLabelText('1 commit · 1 file')).toBeTruthy())
-  })
-
-  test('a subagent is offered no pull request, no push and no merge: its line says whether its main agent landed it', async () => {
-    onAgentHandoff.mockResolvedValue({ ...worked, pushed: true })
-    render(<Harness subagent />)
-    await waitFor(() => expect(screen.getByText('not landed')).toBeTruthy())
-    // A subagent's work is its main agent's to land, so the chip never says pushed.
-    expect(screen.getByLabelText('1 commit · 1 file')).toBeTruthy()
-    expect(screen.queryByText('not published')).toBeNull()
-    expect(screen.queryByRole('button')).toBeNull()
-    cleanup()
-
-    // Not even where another run would be offered the Merge of its open pull request, or a Push.
-    onAgentHandoff.mockResolvedValue({ ...worked, pr: { number: 7, url: 'u', state: 'OPEN', title: '' } })
-    render(<Harness subagent />)
-    await waitFor(() => expect(screen.getByText('not landed')).toBeTruthy())
-    expect(screen.queryByRole('button')).toBeNull()
-    cleanup()
-    onAgentHandoff.mockResolvedValue({ ...worked, gitHost: false })
-    render(<Harness subagent />)
-    await waitFor(() => expect(screen.getByText('not landed')).toBeTruthy())
-    expect(screen.queryByRole('button')).toBeNull()
-  })
-
-  test('a landed subagent still says what it changed, and that it is landed', async () => {
-    onAgentHandoff.mockResolvedValue({ ...worked, branch: 'a'.repeat(40), landed: true })
-    render(<Harness subagent />)
-    await waitFor(() => expect(screen.getByText('landed')).toBeTruthy())
-    expect(screen.getByLabelText('1 commit · 1 file')).toBeTruthy()
-    expect(screen.queryByRole('button')).toBeNull()
-    cleanup()
-
-    // Its last commit is not on this machine: landed is still the answer, never "branch gone".
-    onAgentHandoff.mockResolvedValue({ ...worked, exists: false, commits: [], files: [], empty: true, landed: true })
-    render(<Harness subagent />)
-    await waitFor(() => expect(screen.getByText('landed')).toBeTruthy())
-    expect(screen.queryByText('branch gone')).toBeNull()
-    expect(screen.queryByText('no changes')).toBeNull()
-    expect(screen.queryByText(/nothing to open a PR from/)).toBeNull()
-  })
-
-  test('a subagent that ended without committing has its uncommitted work named, and its gone branch draws no reason', async () => {
-    onAgentHandoff.mockResolvedValue({ ...worked, commits: [], files: [], empty: true, pendingFiles: ['handtest/one.md'] })
-    render(<Harness subagent />)
-    await waitFor(() => expect(screen.getByText('Nothing committed — handtest/one.md left uncommitted.')).toBeTruthy())
-    // A file was changed and left on disk: "no changes" beside it would say the opposite.
-    expect(screen.queryByText('no changes')).toBeNull()
-    expect(screen.queryByText('not landed')).toBeNull()
-    expect(screen.queryByRole('button')).toBeNull()
-    cleanup()
-
-    onAgentHandoff.mockResolvedValue({ ...worked, exists: false, commits: [], files: [], empty: true })
-    render(<Harness subagent />)
-    await waitFor(() => expect(screen.getByText('branch gone')).toBeTruthy())
-    expect(screen.queryByText(/nothing to open a PR from/)).toBeNull()
   })
 
   test('the bar has something to say for work, landed work and a lost branch, and nothing for an agent that changed nothing', () => {

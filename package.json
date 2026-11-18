@@ -35,7 +35,6 @@
     "@openagt/skill-logs": "workspace:*",
     "@openagt/skill-browser": "workspace:*",
     "@openagt/skill-discord": "workspace:*",
-    "@openagt/skill-orchestration": "workspace:*",
     "@openagt/agent-runner": "workspace:*",
     "@openagt/skill-scheduler": "workspace:*",
     "typescript": "^7.0.2"

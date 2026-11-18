@@ -84,7 +84,7 @@ export async function gitHostRepo(repo: string, repos: SessionRepo[] | undefined
   return repo
 }
 
-/** The command line of a spawned run: the model, the coding agent, the publish level, the attached text, the parent, the base, the pull request's base, the branch and what it is for named only when the run has them, so the run's own defaults apply otherwise. */
+/** The command line of a spawned run: the model, the coding agent, the publish level, the attached text, the base, the pull request's base, the branch and what it is for named only when the run has them, so the run's own defaults apply otherwise. */
 export function runArgs(run: SpawnedRun): string[] {
   const args = ['run', run.prompt, '--id', run.id]
   if (run.startedAt !== undefined) args.push('--started', run.startedAt)
@@ -95,7 +95,6 @@ export function runArgs(run: SpawnedRun): string[] {
   if (run.publish !== undefined) args.push('--publish', run.publish)
   // One argument, flag and text: a text that opens with a dash would read as a flag of its own.
   if (run.attached !== undefined) args.push(`--attach=${run.attached}`)
-  if (run.parent !== undefined) args.push('--parent', run.parent)
   if (run.base !== undefined) args.push('--base', run.base)
   if (run.prBase !== undefined) args.push('--pr-base', run.prBase)
   if (run.branch !== undefined) args.push('--branch', run.branch)
@@ -239,8 +238,7 @@ export interface ProjectRun extends RunRequest {
  * A run of the real project, in this process, on the coding agent named (Claude Code when none is). A
  * scheduler's run comes with its id and its marker already on the branch; a person's run mints its
  * id here and marks itself. The model is the
- * one given; none given, the coding agent starts on its own default. A parent it names that has
- * ended by the time this run ends is continued in a process of its own.
+ * one given; none given, the coding agent starts on its own default.
  */
 export async function runProject(repo: string, opts: ProjectRun, deps: { workAs?: typeof workAs } = {}): Promise<RunOutcome> {
   // What the run is asked, its start, its agent and its log go on to it as they are; the rest is read here.
@@ -268,13 +266,7 @@ export async function runProject(repo: string, opts: ProjectRun, deps: { workAs?
     ...(picks.on !== undefined ? { skillsOn: picks.on } : {}),
     ...(picks.off !== undefined ? { skillsOff: picks.off } : {}),
     ...(picks.project !== undefined ? { projectSkills: picks.project } : {}),
-    resume: resumeDetached(repo),
   })
-}
-
-/** How a run's ended parent is continued: in a process of its own, with the line it is told. */
-export function resumeDetached(repo: string): (id: string, line: { text: string } | { answer: string }) => Promise<void> {
-  return (id, line) => spawnResume(repo, { id, ...line })
 }
 
 /**
@@ -310,7 +302,6 @@ export async function resumeProject(
     driver: (deps.driverFor ?? driverFor)(recorded, opts.id, setup, accounts),
     skills: (where, agent) => basicSkills(where, agent, on, picks),
     ...(as !== undefined ? { gitAccount: as } : {}),
-    resume: resumeDetached(repo),
     ...(opts.log ? { log: opts.log } : {}),
   })
 }

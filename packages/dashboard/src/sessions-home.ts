@@ -2,7 +2,7 @@ import { mkdir, rm, stat } from 'node:fs/promises'
 import { hostname } from 'node:os'
 import { join } from 'node:path'
 import { OPENAGENT_DIR } from '@openagt/agent-data'
-import { DASHBOARD_HOOKS, isPidAlive, resumeDetached, sweep } from '@openagt/agent-runner'
+import { DASHBOARD_HOOKS, isPidAlive, sweep } from '@openagt/agent-runner'
 import { writeHookLines } from './built-in.js'
 
 // The sessions home: where the sessions with no project work, each in a folder of its own
@@ -35,7 +35,7 @@ export async function readySessionsHome(home: string): Promise<string> {
 export function startSessionsSweep(home: string, log: (line: string) => void = console.log): () => void {
   let sweeping: Promise<unknown> = Promise.resolve()
   const once = (): void => {
-    sweeping = sweeping.then(() => sweep(home, { host: hostname(), isAlive: isPidAlive, resume: resumeDetached(home), log })).catch((err: unknown) => log(`[openagent] the sessions home could not be swept: ${err instanceof Error ? err.message : String(err)}`))
+    sweeping = sweeping.then(() => sweep(home, { host: hostname(), isAlive: isPidAlive, log })).catch((err: unknown) => log(`[openagent] the sessions home could not be swept: ${err instanceof Error ? err.message : String(err)}`))
   }
   once()
   const timer = setInterval(once, SWEEP_EVERY_MS)

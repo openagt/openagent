@@ -24,7 +24,7 @@ describe('inCheckout', () => {
 describe('inProject', () => {
   test('a file the agent wrote outside its checkout is no change of the run\'s; a relative path and an unknown checkout are kept', () => {
     expect(inProject(`${WS}/docs/A.md`, WS)).toBe(true)
-    // What the orchestration skill tells every main agent to write: its plan, outside the checkout.
+    // A plan the agent saved beside its checkout.
     expect(inProject('/tmp/agent-2026-10-16T15-21-13-205Z-plan.md', WS)).toBe(false)
     expect(inProject(`${WS}-other/A.md`, WS)).toBe(false)
     expect(inProject('docs/A.md', WS)).toBe(true)

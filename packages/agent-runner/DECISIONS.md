@@ -114,15 +114,11 @@ already made, and lists it in its pull request; for anything else it proposes an
 - A run with no model named starts on the coding agent's own default. Picked over the
   runner reading the scheduler's model: the runner reads no scheduler file, and the
   launcher already says "the CLI's own default".
-- A run can be started for another run: `run --parent <id>` writes the parent on the run's
-  record. The runner still starts nothing on its own: the parent's agent runs the command.
-  Picked over a separate file that maps parents to children: one record per run already
-  says everything about it.
-- When a run with a parent ends, the runner sends the parent one line: which run, how it
-  ended, its last words. The line reaches the parent the way a person's message does: into
-  its inbox while it runs, as a resume once it has ended. Picked over the parent waiting
-  inside a command for its child (a process that waits, and a coding agent's command cannot
-  wait an hour), and over the parent polling the records.
+- A run is never started for another run: a coding agent splits a job with its own
+  subagents (Claude Code's `Agent` tool, Codex's), inside its session. Picked over runs
+  started for a run (`run --parent`), each told to its parent when it ended: the coding
+  agents already do that themselves, and a part needs no checkout, branch or record of its
+  own (#2394).
 - A run starts from the branch it is told, `run --base <ref>`, written on its record. With
   none, origin's default branch, as before. Picked over a run that always starts from the
   default branch: a run started for another run needs what that run has built so far.

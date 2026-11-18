@@ -116,10 +116,7 @@ test('usage errors exit 2 with what was wrong on stderr and nothing on stdout; o
     const noId = await run(repo, 'run', 'Read the docs', '--started', '2026-10-09T10:00:00.000Z')
     assert.equal(noId.code, 2)
     assert.match(noId.err, /--started is the time a run spawned with --id was asked for/)
-    // A run that continues keeps the parent and the branch its record names.
-    const reparented = await run(repo, 'run', '--resume', '2026-09-17T20-00-00-000Z', 'go on', '--parent', 'p1')
-    assert.equal(reparented.code, 2)
-    assert.match(reparented.err, /--resume takes no --parent/)
+    // A run that continues keeps the branch its record names.
     const rebased = await run(repo, 'run', '--resume', '2026-09-17T20-00-00-000Z', 'go on', '--base', 'main')
     assert.equal(rebased.code, 2)
     assert.match(rebased.err, /--resume takes no --base/)
@@ -132,11 +129,6 @@ test('usage errors exit 2 with what was wrong on stderr and nothing on stdout; o
     const both = await run(repo, 'run', 'Fix it', '--branch', 'dark-mode', '--base', 'main')
     assert.equal(both.code, 2)
     assert.match(both.err, /--branch takes no --base/)
-    // A parent this project has no record of: refused before anything starts.
-    const orphan = await run(repo, 'run', '--detach', 'Do task one', '--parent', 'no-such-run')
-    assert.equal(orphan.code, 1)
-    assert.deepEqual(orphan.out, { ok: false, reason: 'no-parent', parent: 'no-such-run' })
-    assert.equal(orphan.err, 'no run no-such-run in this project')
     const outside = await run(elsewhere, 'check')
     assert.equal(outside.code, 1)
     assert.deepEqual(outside.out, { ok: false, reason: 'not-a-repo' })

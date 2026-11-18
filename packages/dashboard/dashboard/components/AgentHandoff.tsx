@@ -23,14 +23,8 @@ import { Facts } from './ui/panel.js'
 // The read is branch-addressed, so it survives the checkout: a clean agent's worktree is removed
 // when it ends.
 
-/**
- * The one-line verdict, in the action bar: what the session left behind, or that it left nothing.
- *
- * A subagent's work goes to its main agent's branch, never to the remote by a person's hand: its
- * line says what it changed, and whether it is landed is said where the next step would be
- * ({@link HandoffActions}).
- */
-export function HandoffSummary({ handoff, subagent = false }: { handoff: AgentHandoff | null; subagent?: boolean }) {
+/** The one-line verdict, in the action bar: what the session left behind, or that it left nothing. */
+export function HandoffSummary({ handoff }: { handoff: AgentHandoff | null }) {
   if (!handoff) return null
   // A landed run's branch is gone on purpose; what it held is read by its last commit, and when
   // this machine does not have that commit there is nothing to count: landed is said beside it.
@@ -54,7 +48,7 @@ export function HandoffSummary({ handoff, subagent = false }: { handoff: AgentHa
   // how many commits, how many files, whether they are on the remote — are the same work in more
   // words, so they are its hover rather than three more things to read on a row that already carries
   // the branch and the next step. The files themselves are a pane away.
-  const held = [commits, files, ...(!subagent && handoff.pushed && !handoff.pr ? ['pushed'] : [])].join(' · ')
+  const held = [commits, files, ...(handoff.pushed && !handoff.pr ? ['pushed'] : [])].join(' · ')
   return (
     <span className="flex shrink-0 items-center whitespace-nowrap" title={held} aria-label={held}>
       <DiffStat added={handoff.insertions} removed={handoff.deletions} className="text-xs font-medium" />
@@ -75,11 +69,6 @@ export function HandoffSummary({ handoff, subagent = false }: { handoff: AgentHa
  * queue (#632) has picked it up by then. What shows is what the PR still needs: the commit of work
  * left uncommitted, the push of commits it does not have, and its merge. Work committed after the
  * PR merged or closed is offered the next one.
- *
- * A subagent is offered none of them: it opens no pull request, and its branch is its main
- * agent's to land. In their place it says whether that happened, landed or not landed, at the end
- * of the bar where it is always in view. What it left uncommitted is still named, since nothing
- * lands that.
  */
 /** What the Commit button says to the agent: it commits its own work, in its own words. */
 const COMMIT_MESSAGE = 'Commit your work.'
@@ -106,7 +95,6 @@ export function HandoffActions(props: {
   projectId: string
   agentId: string
   state: AgentHandoffState
-  subagent?: boolean
   /** The Commit button's ask is on its way to the agent (`null`: it did not go through), so the page shows it at once. */
   onAsked?: ((text: string | null) => void) | undefined
 }) {
@@ -170,7 +158,6 @@ function NextStep({
   projectId,
   agentId,
   state,
-  subagent = false,
   onAsked,
   press,
   armed,
@@ -178,7 +165,6 @@ function NextStep({
   projectId: string
   agentId: string
   state: AgentHandoffState
-  subagent?: boolean
   onAsked?: ((text: string | null) => void) | undefined
   press: Pressed
   /** This PR merges by itself once its checks pass. */
@@ -190,10 +176,6 @@ function NextStep({
   // Each press of the next step: marked so a press that went finds the next one, and off while one goes.
   const step = { 'data-next-step': true, disabled: down, 'aria-disabled': state.busy || undefined }
   if (!handoff) return null
-  if (subagent) {
-    if (handoff.landed) return <Reason>landed</Reason>
-    return handoff.empty ? <Uncommitted paths={handoff.pendingFiles ?? []} /> : <Reason>not landed</Reason>
-  }
   // Merged into the project's main branch on this machine: the work is in, and its branch went with it.
   if (handoff.landed) return <Reason>Merged into the main branch.</Reason>
   // While the PR lookup is still out (#1028), nothing is offered: acting on "not known yet" is
