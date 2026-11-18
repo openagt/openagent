@@ -372,7 +372,7 @@ function isTall(text: string): boolean {
 // Claude Code on the web keeps an answered question. A skipped one says so where the answer would be.
 function Answer({ question, answer }: { question: string; answer?: string | undefined }) {
   return (
-    <div role="group" aria-label="Your answer" className="flex w-full max-w-120 flex-col gap-0.5 rounded-lg px-4 py-2 font-sans text-sm ring-1 ring-border">
+    <div role="group" aria-label="Your answer" className="flex w-full max-w-140 flex-col gap-0.5 rounded-lg px-4 py-2 font-sans text-sm ring-1 ring-border">
       <div className="font-medium text-foreground">{question}</div>
       {answer !== undefined ? <div className="text-muted-foreground">{answer}</div> : <div className="italic text-muted-foreground">Skipped</div>}
     </div>
