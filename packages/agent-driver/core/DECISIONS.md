@@ -54,14 +54,14 @@ already made, and lists it in its pull request; for anything else it proposes an
 ## The adapters
 - Each driver is its own package, `@openagt/agent-driver-<name>`, on the contract `@openagt/agent-driver`
   keeps: the types, the shared process core, the inbox, the question, the log and the
-  fake. A package is one of three kinds: a coding agent on this machine (`claude`,
-  `codex`); a shared place that runs any coding agent's CLI (`github-actions`:
-  dispatching, waiting and reading back are the same whichever agent runs, only the
-  workflow step and the output reader differ); or one vendor's own cloud (later
-  `claude-web`, `codex-web`, which share nothing). They live side by side under
-  `packages/agent-driver/`. A caller installs only what it drives. Picked over one package
-  holding every driver, over one package per agent holding every place, and over one `web`
-  package for both vendors' clouds. Claude Code in a cloud session stays in the product
+  fake. A driver is a coding agent on this machine (`claude`, `codex`), and they live side
+  by side under `packages/agent-driver/`. A place elsewhere that runs a run is a host of
+  it (`run.host`), a plugin of its own: a GitHub Actions runner (`host-github-actions`), or
+  one vendor's own cloud (later `host-claude-web`; a `codex-web` would share nothing with
+  it) (#2394). A caller installs only what it drives. Picked over one package holding every
+  driver, over one package per agent holding every place, over one `web` package for both
+  vendors' clouds, and over a place being a driver beside the coding agents
+  (`agent-driver-github-actions`). Claude Code in a cloud session stays in the product
   until it has a seam apart from the browser bridge.
 - Every adapter takes the same three parts of the person's own setup, `memory`,
   `connectors` and `skills`, and turns each off with its own coding agent's switches. A

@@ -1,7 +1,9 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
+import { mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Driver, DriverSession } from '@openagt/agent-driver'
+import type { RunRequest } from '@openagt/hooks'
 
 // A run's short name, the way Claude Code on the web names a session: "README.md condensing" for
 // "make readme.md shorter". The person's own words are the whole prompt — too long for a list and
@@ -229,4 +231,30 @@ export async function givenName(file: string, signal?: AbortSignal, waitMs = GIV
     await new Promise(resolve => setTimeout(resolve, GIVEN_NAME_EVERY_MS))
   }
   return undefined
+}
+
+/** How long a name handed to a run waits for it there: a run that never comes for it leaves no file behind. */
+const HANDED_NAME_KEPT_MS = 2 * 60_000
+
+/**
+ * How a run started in a process of its own gets its name: not at all, where runs are not named;
+ * from the ask of whoever starts it, handed over in a file the process waits on ({@link givenName});
+ * or by asking itself. `env` is the process's; `started` is called once it is spawned.
+ */
+export function nameHandOver(title: RunRequest['title']): { env: Record<string, string>; started: () => void } {
+  if (title === false) return { env: { OPENAGENT_NAME_RUN: '0' }, started: () => {} }
+  if (title === undefined) return { env: {}, started: () => {} }
+  const file = join(tmpdir(), `openagent-name-${randomUUID()}.json`)
+  return { env: { [NAME_FILE_ENV]: file }, started: () => void title.then(name => handName(file, name), () => handName(file, undefined)) }
+}
+
+/**
+ * Hand the run the name asked for it: written whole, then renamed into place, so the run never
+ * reads half of one. `{}` when none came: the run asks on its own then.
+ */
+async function handName(file: string, title: string | undefined): Promise<void> {
+  await writeFile(`${file}.part`, JSON.stringify(title !== undefined ? { title } : {}))
+    .then(() => rename(`${file}.part`, file))
+    .catch(() => {})
+  setTimeout(() => void rm(file, { force: true }).catch(() => {}), HANDED_NAME_KEPT_MS).unref()
 }

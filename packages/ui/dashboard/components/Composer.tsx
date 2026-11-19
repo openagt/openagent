@@ -28,6 +28,7 @@ import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.j
 import { useMountedModules } from '../lib/use-modules.js'
 import { useMachines, useMachinesRead, tellMachine, type Machine } from '../lib/machines.js'
 import { restoreRunOn, runTarget, useRunOnFallback, useSelectedMachineId, selectMachine } from '../lib/remote-target.js'
+import { selectHost, useRunHosts, useSelectedHost } from '../lib/run-hosts.js'
 import { thisMachineName } from '../lib/this-machine.js'
 import { useMachineStatus } from '../lib/use-machine-status.js'
 import { keepDraft, keptDraft, takePendingDraft } from '../lib/draft-handoff.js'
@@ -195,6 +196,9 @@ export const Composer = forwardRef<ComposerHandle, {
   const onlyHere = !noProject && home === undefined && launcher !== null && launcher.address === undefined
   const onlyThere = home !== undefined && launcher !== null && launcher.address === undefined
   const selectedMachineId = useSelectedMachineId() // #1067: the machine this run targets, if any
+  // The hosts beside this computer the project's modules bring, and the one picked: none for a session with no project.
+  const hosts = useRunHosts(inAgent || noProject ? null : activeProjectId)
+  const selectedHostId = useSelectedHost()
   // The pick saved at the last opening is picked again, once the preferences and the machines are
   // read; one gone, or offline at its first check, is not, and the note under the box says so.
   const preferencesLoaded = usePreferencesLoaded()
@@ -368,11 +372,12 @@ export const Composer = forwardRef<ComposerHandle, {
       onDeleteProject={id => saveProjectPresetList(activeProjectId, projectPresets.filter(p => p.id !== id))}
     />
   )
-  // Where the next run starts (#1052/#1067): this machine or a saved machine. Launcher-only: a
-  // session already runs where it was started. A machine is added where every device is,
-  // Settings › Devices, devices' entry: with devices off there is none, and no machine to pick.
+  // Where the next run starts (#1052/#1067): this machine, a host the project's modules bring, or a
+  // saved machine. Launcher-only: a session already runs where it was started. A machine is added
+  // where every device is, Settings › Devices, devices' entry: with devices off there is none, and
+  // no machine to pick.
   const devices = !modules.loaded || modules.views['settings.section'].some(view => view.id === 'devices')
-  const runOnEl = inAgent || (!devices && machines.length === 0) ? null : (
+  const runOnEl = inAgent || (!devices && machines.length === 0 && hosts.length === 0) ? null : (
     <RunOnMenu
       busy={busy}
       connection={{
@@ -383,10 +388,22 @@ export const Composer = forwardRef<ComposerHandle, {
         home,
         onlyThere,
         // #1067: selecting a machine makes it the run target in place, no navigation.
-        onSelect: (m: Machine) => selectMachine(m.id),
-        onSelectLocal: () => selectMachine(null),
+        onSelect: (m: Machine) => {
+          selectHost(null)
+          selectMachine(m.id)
+        },
+        onSelectLocal: () => {
+          selectHost(null)
+          selectMachine(null)
+        },
         onAddMachine: devices ? () => services.openSettings('devices') : undefined,
         status: machineStatus,
+        hosts,
+        selectedHostId,
+        onSelectHost: (id: string) => {
+          selectMachine(null)
+          selectHost(id)
+        },
       }}
     />
   )

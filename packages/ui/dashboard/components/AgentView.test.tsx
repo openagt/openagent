@@ -4,7 +4,7 @@ import type { ReactNode } from 'react'
 import type { OpenAgentEvent } from '../../src/index.js'
 import { ModulesContext, mountedOf, type MountedView } from '../lib/use-modules.js'
 import { questionCard } from '../test-utils.js'
-import type { UiRunProps } from '../module/index.js'
+import type { UiRunNoticeProps, UiRunProps } from '../module/index.js'
 
 const onAgent = vi.fn(async () => [] as unknown)
 const onRetainedWorktrees = vi.fn(async () => [] as unknown)
@@ -40,6 +40,11 @@ vi.mock('../rpc/control.js', () => ({
 vi.mock('../lib/preferences.js', () => ({
   usePreferences: () => ({}),
   updatePreferences: vi.fn(),
+}))
+// The hosts beside this computer project p1's modules bring, as the daemon would answer them.
+vi.mock('../lib/run-hosts.js', async importOriginal => ({
+  ...(await importOriginal<typeof import('../lib/run-hosts.js')>()),
+  useRunHosts: (projectId: string | null) => (projectId === 'p1' ? [{ id: 'actions', label: 'GitHub Actions' }] : []),
 }))
 
 // The frame around the feed is not under test: the bar and composer reach for git and session
@@ -586,6 +591,27 @@ describe('what the modules add to a run’s page (#817)', () => {
   })
 })
 
+describe("a strip above the chat, a module's word on the run (#2394)", () => {
+  const Notice = ({ agentId, working, host }: UiRunNoticeProps) => <span>notice {agentId} {String(working)} {host ?? 'here'}</span>
+  const withNotice = (ui: ReactNode, projects = ['p1']) => {
+    const modules = mountedOf({ views: { 'chat.notice': [{ place: 'chat.notice', id: 'actions-run', View: Notice, package: '@openagt/host-github-actions', projects }] } })
+    return <ModulesContext.Provider value={modules}>{ui}</ModulesContext.Provider>
+  }
+
+  test('each strip of the modules on in the project is drawn, told the run, whether it works and the host it is on', () => {
+    render(withNotice(view({ live: true, target: 'actions' })))
+    expect(screen.getByText('notice run-1 true actions')).toBeTruthy()
+    cleanup()
+    render(withNotice(view({ live: false, target: 'remote', remoteLabel: 'Studio' })))
+    expect(screen.getByText('notice run-1 false here'), "a saved machine's run is on no host of the project's").toBeTruthy()
+  })
+
+  test('a project without the module gets none of it', () => {
+    render(withNotice(view({ live: true, target: 'actions' }), ['p2']))
+    expect(screen.queryByText(/^notice/)).toBeNull()
+  })
+})
+
 describe('AgentView: what the top bar opens to', () => {
   test('an ended agent with commits: the agent, model and spend strip, and no list of commits or files', async () => {
     onAgent.mockResolvedValue(ARCHIVED)
@@ -927,7 +953,7 @@ describe('a message sent while the agent works', () => {
 })
 
 describe('where the agent runs, for the row above the message box', () => {
-  test('this machine by itself; another machine by the name it was given; the cloud and GitHub Actions by theirs', () => {
+  test("this machine by itself; another machine by the name it was given; the cloud by its own; a host by the name the project's module gives it", () => {
     const runsOn = () => screen.getByTestId('row-runs-on').textContent
     const { rerender } = render(view({ live: true }))
     expect(runsOn()).toBe('This machine')
@@ -941,6 +967,9 @@ describe('where the agent runs, for the row above the message box', () => {
     expect(runsOn()).toBe('Cloud')
     rerender(view({ live: true, target: 'actions' }))
     expect(runsOn()).toBe('GitHub Actions')
+    // A host whose module is no longer on in the project.
+    rerender(view({ live: true, target: 'elsewhere' }))
+    expect(runsOn()).toBe('Another host')
   })
 
   test('a run of a computer that is no saved machine is named by that computer: it did not run on this one', () => {

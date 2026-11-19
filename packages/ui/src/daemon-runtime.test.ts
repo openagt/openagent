@@ -84,6 +84,34 @@ test('onStart refuses in words: an unknown project, a start the host refuses', a
   }
 })
 
+test('a Start picked to run on another host goes to that host, one a module on in the project brings, its options naming it; one the project has not is refused before any host is asked (#2394)', async () => {
+  const home = await project()
+  const env = { XDG_CONFIG_HOME: join(home, 'cfg') }
+  await mkdir(env.XDG_CONFIG_HOME, { recursive: true })
+  const host = fakeHost()
+  const actions = fakeHost({ id: 'actions', label: 'GitHub Actions' })
+  const askedIn: (string | undefined)[] = []
+  const otherHosts = async (project?: ProjectRef): Promise<RunHost[]> => (askedIn.push(project?.dir), [actions])
+  const runtime = createProjectRuntime({ cwd: home, env, host, otherHosts })
+  try {
+    assert.deepEqual(await runtime.onStart('add a --verbose flag', { host: 'actions', model: 'claude-opus-4-8' }), { ok: true, agentId: 'run-1', driver: 'claude-code' })
+    assert.deepEqual(lastStart(actions), { dir: home, prompt: 'add a --verbose flag', options: { host: 'actions', 'agent-driver': { model: 'claude-opus-4-8' }, publish: 'commit' } })
+    assert.deepEqual(askedIn, [home], "the hosts are the project's")
+    // This computer's own host, by its id, is no other host's: its run's options name none.
+    assert.deepEqual(await runtime.onStart('go', { host: host.id }), { ok: true, agentId: 'run-1', driver: 'claude-code' })
+    assert.deepEqual(lastStart(host).options, { publish: 'commit' })
+    assert.deepEqual(await runtime.onStart('go', { host: 'claude-web' }), { ok: false, error: 'No host claude-web is on in this project. Pick another place to run.' })
+    assert.deepEqual(await runtime.onStart('go', { host: 'actions', machine: 'desk' }), { ok: false, error: 'A run goes to a machine or to a host, not both.' })
+    assert.deepEqual(await runtime.onStart('go', { host: '../actions' }), { ok: false, error: 'A host is named by its id.' })
+    assert.deepEqual(await runtime.onStart('go', { host: 'actions' }, SESSIONS_ID), { ok: false, error: 'A session with no project runs on this computer or a machine of yours.' })
+    assert.equal(actions.requests.length, 1)
+    assert.equal(host.requests.length, 1)
+  } finally {
+    await runtime.dispose()
+    await rm(home, { recursive: true, force: true })
+  }
+})
+
 test('a Start goes no further than the project can, the commit with no remote, the branch with a remote and no git host; with no pick it commits, and with Nothing it is given no level', async () => {
   const home = await project()
   const env = { XDG_CONFIG_HOME: join(home, 'cfg') }

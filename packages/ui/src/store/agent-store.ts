@@ -202,12 +202,13 @@ export interface AgentMeta {
    */
   browserStreamPort?: number
   /**
-   * Where this run executes (#1050/#1053/#610): `actions` for a GitHub Actions run, `web` for a
-   * Claude Code cloud session, `remote` when relayed to a saved machine (#1067), absent for a
-   * local run. Persisted so the agent view can tell a burst-mode Actions run from a stalled live
-   * feed, show a cloud agent's session link after a reload, and gate the browser pane off (#1053).
+   * Where this run executes (#1050/#610): `web` for a Claude Code cloud session, `remote` when
+   * relayed to a saved machine (#1067), a host's id for a run on a host beside this computer's
+   * (`run.host`, a GitHub Actions runner's `actions`), absent or `local` for a run on this computer.
+   * Kept on the run's record by the host that runs it, so the run's page names where it is and
+   * draws that host's notice after a reload.
    */
-  target?: 'local' | 'actions' | 'remote' | 'web'
+  target?: string
   /** The saved machine a remote agent (#1067) executes on, by its own name, for the session list + notice after a reload. */
   remoteLabel?: string
   /** What that saved machine is (reached-by-line.ts): the run is drawn with its kind's icon. */

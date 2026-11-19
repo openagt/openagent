@@ -1,8 +1,10 @@
-# The workflow ActionsDriver dispatches (#610): one run is one `prompt()` turn.
+# The workflow @openagt/host-github-actions dispatches (#610, #2394): one run of it is one turn
+# of an OpenAgent run. The package ships this file as its workflow.yml; a project's repository
+# holds a copy as .github/workflows/openagent-agent.yml.
 #
-# The driver cannot learn a run id from the dispatch API (it answers 204 with no body), so
+# The host cannot learn a run id from the dispatch API (it answers 204 with no body), so
 # the correlation id it generates is echoed into `run-name` and into the artifact name. That
-# is how the driver finds its own run, and it is why both must keep interpolating it.
+# is how the host finds its own run, and it is why both must keep interpolating it.
 name: openagent-agent
 run-name: openagent-agent ${{ inputs.correlation_id }}
 
@@ -13,7 +15,7 @@ on:
         description: What the agent should do. Passed to the action verbatim, never through a shell.
         required: true
       correlation_id:
-        description: How the driver finds this run. Must appear in run-name and in the artifact name.
+        description: How the host finds this run. Must appear in run-name and in the artifact name.
         required: true
       model:
         description: Model id, e.g. claude-opus-4-8. Empty means the action's default.
@@ -22,7 +24,7 @@ on:
         description: A prior agent session id to continue instead of starting fresh.
         required: false
       branch:
-        description: Branch to push the run's work to, so the driver can read it back and continue on it (#1085).
+        description: Branch to push the run's work to, so the host can read it back and continue on it (#1085).
         required: false
 
 # The workflow pushes the run branch and the agent may open a PR. `id-token: write` is not
@@ -51,7 +53,7 @@ jobs:
         run: git config agent-data.share true
 
       # Built from environment variables rather than by interpolating ${{ }} into the shell,
-      # so a crafted input cannot become a command. The driver validates them too.
+      # so a crafted input cannot become a command. The host validates them too.
       - name: Compose agent arguments
         id: args
         env:
@@ -77,10 +79,10 @@ jobs:
           prompt: ${{ inputs.prompt }}
           claude_args: ${{ steps.args.outputs.value }}
 
-      # The runner and its checkout vanish when the job ends, so the only way the driver can
+      # The runner and its checkout vanish when the job ends, so the only way the host can
       # read the agent's work (diffs, file contents) or run the next turn on top of it is a
       # branch on origin. The action does not create one for a workflow_dispatch run, so we
-      # push it here, to the name the driver chose. On a person's machine it is the other way
+      # push it here, to the name the host chose. On a person's machine it is the other way
       # round: the agent's branch stays there, and the agent pushes it itself when it is asked to.
       - name: Push the run branch
         if: always()
@@ -126,9 +128,9 @@ jobs:
           set -euo pipefail
           # Not dot-prefixed: upload-artifact@v4 defaults include-hidden-files to false and
           # drops every file under a hidden path segment, so a `.openagent-run/` dir uploads
-          # nothing and the driver finds no artifact to read.
+          # nothing and the host finds no artifact to read.
           mkdir -p openagent-run
-          # An empty array still parses, so a crashed action yields an empty turn, not a driver error.
+          # An empty array still parses, so a crashed action yields an empty turn, not a host error.
           if [ -n "$EXECUTION_FILE" ] && [ -f "$EXECUTION_FILE" ]; then
             cp "$EXECUTION_FILE" openagent-run/execution.json
           else

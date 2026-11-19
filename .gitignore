@@ -20,3 +20,7 @@ test-results/
 # build copies it in, so the npm package ships it too, a command's into its plugin's commands/
 packages/skill-*/SKILL.md
 packages/skill-*/commands/
+
+# The workflow a project adds to run its runs on GitHub Actions is this repository's own; the host's
+# build copies it in, so its npm package ships it
+packages/host-github-actions/workflow.yml

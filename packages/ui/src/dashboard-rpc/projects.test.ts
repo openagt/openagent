@@ -9,7 +9,8 @@ import type { RunHost } from '@openagt/hooks'
 import { fakeHost } from '@openagt/hooks/testing'
 import { projectErrorStore } from '../project-errors.js'
 import { provideTestContext } from './test-context.js'
-import { onCloneCheck, onCommands, onOwnProjects, onProjects, onStartBranches, onStartCheck, sendAddProject, sendRemoveProject, sendShareRecords } from './projects.js'
+import { onCloneCheck, onCommands, onOwnProjects, onProjects, onRunHosts, onStartBranches, onStartCheck, sendAddProject, sendRemoveProject, sendShareRecords } from './projects.js'
+import { SESSIONS_ID } from '../project-address.js'
 import { onProjectAgentData } from './project-agent-data.js'
 import { loginsWiring } from './logins.js'
 
@@ -303,6 +304,30 @@ test("the launcher's check is this computer's host's, for the agent picked, and 
     ])
     provideTestContext({ host: fakeHost() })
     assert.equal(await onStartCheck(id), null, 'a host with no check says nothing')
+  } finally {
+    await restore()
+  }
+})
+
+test('"Run on" offers the hosts beside this computer of the modules on in a project, and the launcher\'s check is the picked host\'s; a session with no project, or a project unknown here, has none (#2394)', async () => {
+  const { dir, restore } = await registered()
+  try {
+    const asked: unknown[] = []
+    const actions: RunHost = {
+      ...fakeHost({ id: 'actions', label: 'GitHub Actions' }),
+      check: async request => (asked.push([request.project?.dir, request.options]), { problems: ['Its repository has no workflow openagent-agent.yml yet.'], warnings: [] }),
+    }
+    const inProject: (string | undefined)[] = []
+    provideTestContext({ host: fakeHost(), otherHosts: async project => (inProject.push(project?.dir), [actions]) })
+    const id = (await listProjects())[0]!.id
+    assert.deepEqual(await onRunHosts(id), [{ id: 'actions', label: 'GitHub Actions' }])
+    assert.deepEqual(inProject, [dir])
+    assert.deepEqual(await onStartCheck(id, 'claude-code', 'actions'), { problems: ['Its repository has no workflow openagent-agent.yml yet.'], warnings: [] })
+    assert.deepEqual(asked, [[dir, { 'agent-driver': { driver: 'claude-code' } }]])
+    assert.equal(await onStartCheck(id, 'claude-code', 'claude-web'), null, 'a host the project has not says nothing: the Start refuses it')
+    assert.deepEqual(await onRunHosts(SESSIONS_ID), [])
+    assert.deepEqual(await onRunHosts('nowhere-1'), [])
+    assert.deepEqual(inProject, [dir, dir, dir], 'a session and an unknown project ask for none')
   } finally {
     await restore()
   }

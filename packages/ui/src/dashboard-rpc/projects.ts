@@ -1,4 +1,4 @@
-import { contextAddProject, contextHost, contextPrepareStart, contextProjectErrors, contextProjects, contextRemote, contextRemoveProject, contextStartedIn, resolveProjectPath } from './context.js'
+import { contextAddProject, contextHost, contextOtherHosts, contextPrepareStart, contextProjectErrors, contextProjects, contextRemote, contextRemoveProject, contextStartedIn, resolveProjectPath } from './context.js'
 import { projectRefAt } from '../distribution-hooks.js'
 import { readProjectSkills } from '@openagt/skills'
 import { DATA_BRANCH, addressOfRemote, errorMessage, isRepoOwner, originDefaultBranch, readRepoOwners, readSharing, repositoryAddress, repositorySpelling, shareProjectData, writeRepoOwners } from '@openagt/agent-data'
@@ -334,23 +334,44 @@ export async function onStartBranches(projectId: string): Promise<StartBranches 
   return { branches: listed.filter(branch => branch !== DATA_BRANCH && `origin/${branch}` !== main) }
 }
 
+/** A host a run may be picked to run on beside this computer's (`run.host`, #2394): its id, and its name in the "Run on" menu. */
+export interface RunHostChoice {
+  id: string
+  label: string
+}
+
+/**
+ * The hosts a run in this project may be picked to run on beside this computer's, those of its
+ * modules that are on there, in the distribution's order: none for a session with no project, or a
+ * project unknown here.
+ */
+export async function onRunHosts(projectId: string): Promise<RunHostChoice[]> {
+  const cwd = projectId === SESSIONS_ID ? undefined : await resolveProjectPath(projectId)
+  if (!cwd) return []
+  const hosts = await contextOtherHosts(await projectRefAt(projectId, cwd)).catch(() => [])
+  return hosts.map(host => ({ id: host.id, label: host.label }))
+}
+
 /**
  * What would stop a run in this project before it spends a checkout, said in the launcher before
- * the Start: this computer's host's check (`run.host`, #2394), given the coding agent picked. A
- * missing CLI or a logged-out one is a problem the run itself would refuse on; a warning is said
- * and blocks nothing. A check that fails is said as a warning: it is a broken check, not a reason
- * to stop. `null` for an unknown project, or a host with no check: nothing to say.
+ * the Start: the check of the host it runs on (`run.host`, #2394), this computer's unless `host`
+ * names another, given the coding agent picked. A missing CLI or a logged-out one is a problem the
+ * run itself would refuse on; a warning is said and blocks nothing. A check that fails is said as a
+ * warning: it is a broken check, not a reason to stop. `null` for an unknown project or host, or a
+ * host with no check: nothing to say.
  */
-export async function onStartCheck(projectId: string, driver?: string): Promise<StartReadiness | null> {
+export async function onStartCheck(projectId: string, driver?: string, host?: string): Promise<StartReadiness | null> {
   const cwd = await resolveProjectPath(projectId)
   if (!cwd) return null
   // The launcher asks this as it opens and at each change of agent: a Start is near, on this agent.
   contextPrepareStart()(projectId, typeof driver === 'string' ? driver : undefined)
-  const host = contextHost()
-  if (!host.check) return null
+  const project = projectId === SESSIONS_ID ? undefined : await projectRefAt(projectId, cwd)
+  const here = contextHost()
+  const checks = typeof host !== 'string' || host === here.id ? here : (await contextOtherHosts(project).catch(() => [])).find(other => other.id === host)
+  if (!checks?.check) return null
   try {
     const options = typeof driver === 'string' ? { 'agent-driver': { driver } } : {}
-    const checked = await host.check(projectId === SESSIONS_ID ? { options } : { project: await projectRefAt(projectId, cwd), options })
+    const checked = await checks.check(project ? { project, options } : { options })
     return { problems: checked.problems, warnings: checked.warnings, ...(checked.fix ? { fix: checked.fix } : {}) }
   } catch (err) {
     return { problems: [], warnings: [errorMessage(err)] }

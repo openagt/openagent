@@ -109,6 +109,12 @@ export interface UiRunProps {
   working: boolean
 }
 
+/** What a strip above a run's chat is given: the run, and the host it runs on. */
+export interface UiRunNoticeProps extends UiRunProps {
+  /** The host the run runs on, by its id (`RunHost.id`): this computer's when absent. */
+  host?: string
+}
+
 /** What a part of the Permissions page is given. */
 export interface UiPermissionsProps {
   /** The shell's line under one account's row, for a part that lists a coding agent's accounts: where the account works, on the person's devices. */
@@ -202,6 +208,8 @@ export interface ViewPlaces {
   }
   /** A few words in the bar above a run's message box, until the run has ended and its branch was read. */
   'chat.summary': { entry: { id: string }; props: UiRunProps }
+  /** A strip above a run's chat, with a word on the run: a host's, on a run it runs, say where the run is and when its news comes. */
+  'chat.notice': { entry: { id: string }; props: UiRunNoticeProps }
   /** An entry in Settings: the module's own settings. */
   'settings.section': {
     entry: {

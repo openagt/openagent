@@ -501,14 +501,15 @@ already made, and lists it in its pull request; for anything else it proposes an
   laptop had hidden.
 
 ## Starting a run
-- A Start goes to this computer's run host, the `run.host` of the modules OpenAgent is
-  distributed with (#2394): `agent-runner`'s, which spawns the run's process with the prompt
-  and the person's picks and answers the new run's id. What is said to a run that ended, a
-  Stop and the launcher's check go to the same host. Adding a project writes nothing into it
-  for its runs. Picked over the project's own `start`, `resume` and `check` lines in its hooks
-  file (#1774), written into every project as it was added, where each pick of the launcher's
-  was a variable a line had to pass on, and a line written before the pick ignored it: what
-  starts a run is the distribution's, and a module changes it.
+- A Start goes to a run host, a `run.host` of the modules OpenAgent is distributed with
+  (#2394): this computer's, `agent-runner`'s, which spawns the run's process with the prompt
+  and the person's picks and answers the new run's id, or one a plugin on in the project
+  brings (`host-github-actions`). What is said to a run, a Stop and the launcher's check go
+  to the run's host. Adding a project writes nothing into it for its runs. Picked over the
+  project's own `start`, `resume` and `check` lines in its hooks file (#1774), written into
+  every project as it was added, where each pick of the launcher's was a variable a line had
+  to pass on, and a line written before the pick ignored it: what starts a run is the
+  distribution's, and a module changes it.
 - A session need not be in a project: with none, it runs in a folder of its own,
   `~/.openagent-sessions/<id>/`, started on this computer's host with no project. It runs on
   this computer, with no branch and nothing to publish. Its address is `/session/<id>`, and `/session` is the "New
@@ -629,9 +630,9 @@ already made, and lists it in its pull request; for anything else it proposes an
   code beside the git host.
 - On screen, a computer that runs agents is a machine. Device is kept for a phone or a
   browser that gets in. Picked over device for both.
-- A run shows where it runs, on this computer or on a saved machine, as one icon with its
-  words on hover, and the same wherever it is listed and however it was started. Picked over
-  showing where it was started from, and over more words in the run's header.
+- A run shows where it runs, on this computer, on a saved machine or on a host, as one icon
+  with its words on hover, and the same wherever it is listed and however it was started.
+  Picked over showing where it was started from, and over more words in the run's header.
 - On a page a phone opened, the computer that runs OpenAgent is named by the address the phone
   reached it at. Picked over "This machine", which the phone's holder reads as the phone.
 

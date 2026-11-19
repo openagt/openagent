@@ -9,6 +9,7 @@ import { usePreferences, usePreferencesLoaded, updatePreferences } from '../lib/
 import { DEFAULT_PRESET, DRIVER_LABELS, isDriverName, machineName, offeredPublishPicks, publishPickIn, reachedThrough } from '../../src/client.js'
 import { useMachines } from '../lib/machines.js'
 import { followProjectHome, runTarget, useSelectedMachineId } from '../lib/remote-target.js'
+import { hostTarget, useRunHosts, useSelectedHost } from '../lib/run-hosts.js'
 import type { StartPicks } from '../lib/started-from.js'
 import { startPicks, useStartAgent } from '../lib/use-start-agent.js'
 import { useProjectLauncher } from '../lib/use-project-launcher.js'
@@ -169,8 +170,11 @@ export function StartAgentForm({
   const machines = useMachines()
   const selectedMachineId = useSelectedMachineId()
   useEffect(() => followProjectHome(home), [projectId, home])
+  // A host the project's modules bring, picked in "Run on" (a GitHub Actions runner): the start names
+  // it by its id, and the daemon starts the run there; no machine is then.
+  const host = hostTarget(useRunHosts(noProject ? null : projectId), useSelectedHost())
   // A session with no project goes to any machine: nothing is cloned, it works in that machine's own folder for them.
-  const machine = runTarget(machines, selectedMachineId, noProject ? { address: SESSIONS_ID } : launcher, home)
+  const machine = host ? undefined : runTarget(machines, selectedMachineId, noProject ? { address: SESSIONS_ID } : launcher, home)
   const atHome = home !== undefined && machine?.id === home
   // A machine that is not where the launcher was read: its own copy is not read at all.
   const foreign = machine !== undefined && !atHome
@@ -211,7 +215,7 @@ export function StartAgentForm({
   const [recheck, setRecheck] = useState(0)
   // A project cloned here first has no check of its own here yet: this computer is asked what the clone and the run would hit.
   const address = launcher?.address
-  const here = useLoaded(machine ? null : clonedHere ? (address !== undefined ? () => onCloneCheck(address, driver) : null) : () => onStartCheck(projectId, driver), null, [projectId, driver, machine === undefined, clonedHere, address, recheck])
+  const here = useLoaded(machine ? null : clonedHere ? (address !== undefined ? () => onCloneCheck(address, driver) : null) : () => (host ? onStartCheck(projectId, driver, host.id) : onStartCheck(projectId, driver)), null, [projectId, driver, machine === undefined, clonedHere, address, recheck, host?.id])
   const [machineEvery, setMachineEvery] = useState(MACHINE_SELDOM_MS)
   const there = usePolled(machine ? () => onMachineStartCheck(projectId, machine.id, driver) : null, null, machineEvery, [projectId, driver, machine?.id]).value
   const readiness = machine ? there : here
@@ -255,13 +259,14 @@ export function StartAgentForm({
 
   const submit = async (text: string) => {
     setNote(STARTING)
-    setSentTo(machine ? machineName(machine) : clonedHere ? hereName() : null)
+    setSentTo(host ? host.label : machine ? machineName(machine) : clonedHere ? hereName() : null)
     const { publish: _publish, ...unpublished } = startPicks(preferences)
     const result = await start(projectId, promptWithContext(text, context), {
       ...(noProject ? unpublished : startPicks(preferences)),
       ...(startFrom ? startFromBase(startFromPick, startFrom.main, startFrom.local) : {}),
       ...(prInto !== undefined ? { prBase: prInto } : {}),
       ...(machine ? { machine: machine.id } : {}),
+      ...(host ? { host: host.id } : {}),
       ...(noProject && !machine && repos.length > 0 ? { repos: repos.map(repo => repo.path) } : {}),
       ...(!noProject && remote && account !== undefined ? { account } : {}),
       ...(presetId !== undefined ? { preset: presetId } : {}),
@@ -277,7 +282,7 @@ export function StartAgentForm({
       // The box keeps the words until the move has taken its picture of them; its draft goes with the page.
       void carryBox(() => {
         keepDraft(`launcher:${projectId}`, '')
-        onAgentStarted?.(text, result.agentId, machine?.label, result.projectId, {
+        onAgentStarted?.(text, result.agentId, host?.label ?? machine?.label, result.projectId, {
           ...(started !== undefined ? { branch: started } : {}),
           ...(!noProject && remote && account !== undefined ? { gitAccount: account } : {}),
           ...(presetId !== undefined ? { preset: presetId } : {}),

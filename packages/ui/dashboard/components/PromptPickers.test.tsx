@@ -20,7 +20,7 @@ vi.mock('../lib/preferences.js', () => ({
 }))
 vi.mock('../lib/editors.js', () => ({ useDetectedEditors: () => [] }))
 const onCommands = vi.hoisted(() => vi.fn())
-vi.mock('../rpc/projects.js', () => ({ onProjects: () => Promise.resolve([]), onCommands }))
+vi.mock('../rpc/projects.js', () => ({ onProjects: () => Promise.resolve([]), onCommands, onRunHosts: async () => [] }))
 vi.mock('../rpc/machines.js', async () => (await import('../test-machines.js')).machinesRpc)
 const accounts = vi.hoisted(() => ({ onAgentAccounts: vi.fn(), sendUseAgentAccountFirst: vi.fn() }))
 vi.mock('../rpc/accounts.js', () => accounts)

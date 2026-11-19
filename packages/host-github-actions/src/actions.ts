@@ -1,49 +1,35 @@
 import { randomUUID } from 'node:crypto'
 import { StreamJsonParser } from '@openagt/agent-driver-claude'
 import { readZip } from './actions-zip.js'
-import { combineFraming, makeEmit, promptSent, startEvent, finishTurn, attachLog, type SessionLog, type Driver, type DriverEvent, type DriverPromptOptions, type DriverSession, type DriverStartOptions, type DriverTurn } from '@openagt/agent-driver'
+import { combineFraming, makeEmit, promptSent, startEvent, finishTurn, attachLog, type SessionLog, type DriverEvent, type DriverPromptOptions, type DriverSession, type DriverStartOptions, type DriverTurn } from '@openagt/agent-driver'
 
 /**
- * A {@link Driver} that runs the agent on **GitHub Actions** instead of on this
- * machine (#610): dispatch a workflow, poll it, read the transcript it uploads.
+ * A run's turns on **GitHub Actions** instead of on this machine (#610, #2394): each prompt is one
+ * run of the project's workflow, dispatched, polled, and its transcript read back once it ends.
  *
- * This is the answer to "drive Claude Code on the web". The routines fire API was
- * the obvious candidate and turned out unusable — the prompt arrives wrapped as
- * untrusted data, and there is no read-back of any kind. The official
- * `anthropics/claude-code-action@v1` has neither problem: the prompt is passed
- * verbatim, and the run publishes its full transcript. Auth is the same
- * subscription posture as everywhere else (#495): a `claude setup-token` OAuth
- * token held by the repo, never an API key of ours.
+ * The routines fire API was the obvious candidate and turned out unusable: the prompt arrives
+ * wrapped as untrusted data, and there is no read-back of any kind. The official
+ * `anthropics/claude-code-action@v1` has neither problem: the prompt is passed verbatim, and the
+ * run publishes its full transcript. Auth is the same subscription posture as everywhere else
+ * (#495): a `claude setup-token` OAuth token held by the repository, never an API key of ours.
  *
- * It fits `Driver`/`DriverSession` as written, with no new methods. What changes is
- * not the shape but the tempo, and those costs are real:
+ * It keeps `DriverSession`'s shape, so the run's events and its log are a local run's. What
+ * changes is the tempo, and those costs are real:
  *
- * - **Minutes, not seconds.** Every `prompt` is a fresh runner and a fresh
- *   checkout. Continuity comes from the branch the previous turn pushed, which the
- *   session tracks and dispatches onto next time.
+ * - **Minutes, not seconds.** Every `prompt` is a fresh runner and a fresh checkout. Continuity
+ *   comes from the branch the previous turn pushed, which the session dispatches onto next time.
  * - **No live stream.** The transcript arrives once, at the end, so the
  *   {@link DriverStartOptions.onEvent} feed replays in a burst rather than trickling.
- * - **Quota is the account's, not the runner's.** Free minutes on a public repo
- *   change nothing about the subscription window every run draws down.
+ * - **Quota is the account's, not the runner's.** Free minutes on a public repo change nothing
+ *   about the subscription window every run draws down.
  *
  * The workspace lives on a runner that is gone by the time we read it, so
- * {@link ActionsSession.readCode} reads from the pushed branch over the contents
- * API rather than from disk.
+ * {@link ActionsSession.readCode} reads from the pushed branch over the contents API rather than
+ * from disk.
  */
-export class ActionsDriver implements Driver {
-  readonly id = 'github-actions'
-  constructor(private readonly opts: ActionsDriverOptions) {}
 
-  start(opts: DriverStartOptions): Promise<DriverSession> {
-    return Promise.resolve(new ActionsSession(this.opts, opts))
-  }
-
-  // No `readQuota`: the quota belongs to whichever account's OAuth token the repo
-  // holds, and we cannot run `/usage` on a runner that has already been torn down.
-}
-
-/** Options for {@link ActionsDriver}. */
-export interface ActionsDriverOptions {
+/** Where a run's turns go, and how they are found again. */
+export interface ActionsOptions {
   /** Repository owner (user or org) that runs the workflow. */
   owner: string
   /** Repository name. */
@@ -64,6 +50,8 @@ export interface ActionsDriverOptions {
   workflow: string
   /** Git ref the first turn runs on. Later turns follow the branch the agent pushed. */
   ref?: string
+  /** The branch the run's earlier turns pushed: this session's turns start on it and push to it. Absent, the first turn pushes to a new one. */
+  branch?: string
   /** How often to poll the run, in ms. Default 5000. */
   pollIntervalMs?: number
   /** Give up on a run after this long, in ms. Default 1 hour (the job cap is 6). */
@@ -78,33 +66,33 @@ export interface ActionsDriverOptions {
   sleep?: (ms: number) => Promise<void>
   /**
    * Unique tag mixed into the correlation id. Default a random token; injected in tests for
-   * a stable id. Without it a fresh driver process restarts the session counter at 1, so
-   * every run's first turn is `actions-1-turn-1` and runs collide (see {@link ActionsSession}).
+   * a stable id. Without it a fresh process restarts the session counter at 1, so every run's
+   * first turn is `actions-1-turn-1` and runs collide (see {@link ActionsSession}).
    */
   runTag?: () => string
   /**
-   * Prefix for the branch each run pushes its work to (#1085). Default `"claude/"`. The
-   * driver names the branch (prefix + session id) and passes it to the workflow, rather than
-   * discovering it after the fact: the action leaves `branch_name` empty for a
-   * `workflow_dispatch` run, so there is nothing to discover.
+   * Prefix for the branch each run pushes its work to (#1085). Default `"claude/"`. The session
+   * names the branch (prefix + session id) and passes it to the workflow, rather than discovering
+   * it after the fact: the action leaves `branch_name` empty for a `workflow_dispatch` run, so
+   * there is nothing to discover.
    */
   branchPrefix?: string
 }
 
-/** The slice of `fetch` this driver uses. */
+/** The slice of `fetch` this client uses. */
 export type FetchLike = (url: string, init?: RequestInit) => Promise<Response>
 
 let sessionCounter = 0
 
-/** A short random tag so correlation ids stay unique across driver processes. */
+/** A short random tag so correlation ids stay unique across processes. */
 const randomRunTag = (): string => randomUUID().slice(0, 8)
 
 /** One Actions-backed session. Each `prompt` is one workflow run. */
 export class ActionsSession implements DriverSession {
   readonly id: string
   readonly cwd: string
-  /** The branch the last run pushed; set once the run reports it, and the next turn builds on it. */
-  private branch: string | undefined
+  /** The branch the last run pushed; set once a run reports it, and the next turn builds on it. */
+  private pushed: string | undefined
   /** The branch this session asks each run to push to. Stable across turns, so they chain. */
   private readonly runBranch: string
   /** The agent's own session id, carried across turns so `resume` can continue it. */
@@ -114,7 +102,7 @@ export class ActionsSession implements DriverSession {
   private readonly startOpts: DriverStartOptions
 
   constructor(
-    private readonly config: ActionsDriverOptions,
+    private readonly config: ActionsOptions,
     startOpts: DriverStartOptions,
   ) {
     const attached = attachLog(startOpts)
@@ -122,10 +110,16 @@ export class ActionsSession implements DriverSession {
     if (attached.log) this.log = attached.log
     this.cwd = startOpts.cwd
     // The counter reads well in logs within one process; the random tag is what keeps the
-    // correlation id unique across processes, since a caller may spawn a fresh one per run.
+    // correlation id unique across processes, since each turn is a process of its own.
     this.id = `actions-${++sessionCounter}-${(config.runTag ?? randomRunTag)()}`
-    this.runBranch = `${config.branchPrefix ?? 'claude/'}${this.id}`
+    this.pushed = config.branch
+    this.runBranch = config.branch ?? `${config.branchPrefix ?? 'claude/'}${this.id}`
     this.lastSessionId = startOpts.resumeSessionId
+  }
+
+  /** The branch the run's work is on, once a turn pushed it. */
+  get branch(): string | undefined {
+    return this.pushed
   }
 
   async prompt(text: string, opts: DriverPromptOptions = {}): Promise<DriverTurn> {
@@ -149,8 +143,9 @@ export class ActionsSession implements DriverSession {
     emit({ type: 'notice', message: `Dispatched ${correlationId} to ${this.config.owner}/${this.config.repo}; waiting for the runner.` })
 
     const run = await this.awaitWorkflowRun(correlationId, emit, opts.signal)
+    if (run === 'stopped') return { text: '', stopped: true }
     const artifact = await this.readRunArtifact(run.id, correlationId)
-    if (artifact.branch) this.branch = artifact.branch
+    if (artifact.branch) this.pushed = artifact.branch
 
     const turn = replayTranscript(artifact.execution, emit)
     if (turn.sessionId) this.lastSessionId = turn.sessionId
@@ -164,10 +159,10 @@ export class ActionsSession implements DriverSession {
    * fetched over the contents API.
    */
   async readCode(path: string): Promise<string> {
-    if (!this.branch) throw new Error('No branch yet: readCode is only available after a run has pushed one.')
+    if (!this.pushed) throw new Error('No branch yet: readCode is only available after a run has pushed one.')
     const encoded = path.split('/').map(encodeURIComponent).join('/')
-    const body = await this.api<{ content?: string; encoding?: string }>(`/repos/${this.owner}/contents/${encoded}?ref=${encodeURIComponent(this.branch)}`)
-    if (typeof body.content !== 'string') throw new Error(`${path} is not a file on ${this.branch}`)
+    const body = await this.api<{ content?: string; encoding?: string }>(`/repos/${this.owner}/contents/${encoded}?ref=${encodeURIComponent(this.pushed)}`)
+    if (typeof body.content !== 'string') throw new Error(`${path} is not a file on ${this.pushed}`)
     return Buffer.from(body.content, body.encoding === 'base64' ? 'base64' : 'utf8').toString('utf8')
   }
 
@@ -185,16 +180,15 @@ export class ActionsSession implements DriverSession {
     if (resume) inputs['resume_session_id'] = assertToken(resume, 'resume session id')
     await this.api(`/repos/${this.owner}/actions/workflows/${encodeURIComponent(this.config.workflow)}/dispatches`, {
       method: 'POST',
-      body: JSON.stringify({ ref: this.branch ?? this.config.ref ?? 'main', inputs }),
+      body: JSON.stringify({ ref: this.pushed ?? this.config.ref ?? 'main', inputs }),
     })
   }
 
-  /** Poll until our run appears and finishes. Identified by the correlation id in its `run-name`. */
-  private async awaitWorkflowRun(
-    correlationId: string,
-    emit: (event: DriverEvent) => void,
-    promptSignal?: AbortSignal,
-  ): Promise<WorkflowRun> {
+  /**
+   * Poll until our run appears and finishes. Identified by the correlation id in its `run-name`.
+   * A Stop ({@link DriverStartOptions.stop}) cancels the run once it is found, and the turn is over.
+   */
+  private async awaitWorkflowRun(correlationId: string, emit: (event: DriverEvent) => void, promptSignal?: AbortSignal): Promise<WorkflowRun | 'stopped'> {
     const now = this.config.now ?? Date.now
     const sleep = this.config.sleep ?? (ms => new Promise<void>(r => setTimeout(r, ms)))
     const interval = this.config.pollIntervalMs ?? 5000
@@ -211,6 +205,13 @@ export class ActionsSession implements DriverSession {
         if (found.status === 'completed') {
           if (found.conclusion !== 'success') throw new Error(`GitHub Actions run concluded "${found.conclusion}": ${found.html_url}`)
           return found
+        }
+      }
+      if (this.startOpts.stop?.aborted) {
+        // A run asked to stop before GitHub made it is found on the next look, and cancelled then.
+        if (found) {
+          await this.api(`/repos/${this.owner}/actions/runs/${found.id}/cancel`, { method: 'POST' }).catch(() => undefined)
+          return 'stopped'
         }
       }
       if (now() >= deadline) throw new Error(`Timed out waiting for the GitHub Actions run (${correlationId}).`)
@@ -248,32 +249,46 @@ export class ActionsSession implements DriverSession {
 
   /** The session-wide signal or the per-prompt one (`DriverPromptOptions.signal`) both stop the poll. */
   private throwIfAborted(promptSignal?: AbortSignal): void {
-    if (this.startOpts.signal?.aborted || promptSignal?.aborted)
-      throw new Error('Session aborted while waiting for the GitHub Actions run.')
+    if (this.startOpts.signal?.aborted || promptSignal?.aborted) throw new Error('Session aborted while waiting for the GitHub Actions run.')
   }
 
   /** A REST call that expects JSON back. */
   private async api<T = unknown>(path: string, init?: RequestInit): Promise<T> {
     const res = await this.request(path, init)
-    if (res.status === 204) return undefined as T
+    if (res.status === 202 || res.status === 204) return undefined as T
     return (await res.json()) as T
   }
 
   /** A REST call, with auth and error handling. */
-  private async request(path: string, init: RequestInit = {}): Promise<Response> {
-    const doFetch = this.config.fetch ?? (globalThis.fetch as FetchLike)
-    const res = await doFetch(`${this.config.apiBase ?? 'https://api.github.com'}${path}`, {
-      ...init,
-      headers: {
-        accept: 'application/vnd.github+json',
-        authorization: `Bearer ${this.config.token}`,
-        'x-github-api-version': '2022-11-28',
-        ...(init.body ? { 'content-type': 'application/json' } : {}),
-        ...init.headers,
-      },
-    })
-    if (!res.ok) throw new Error(`GitHub API ${init.method ?? 'GET'} ${path} failed (${res.status} ${res.statusText}): ${await safeText(res)}`)
-    return res
+  private request(path: string, init: RequestInit = {}): Promise<Response> {
+    return githubRequest(this.config, path, init)
+  }
+}
+
+/** A REST call to GitHub as `config.token`, with error handling: a call that fails throws, saying the call and GitHub's answer. */
+export async function githubRequest(config: Pick<ActionsOptions, 'token' | 'apiBase' | 'fetch'>, path: string, init: RequestInit = {}): Promise<Response> {
+  const doFetch = config.fetch ?? (globalThis.fetch as FetchLike)
+  const res = await doFetch(`${config.apiBase ?? 'https://api.github.com'}${path}`, {
+    ...init,
+    headers: {
+      accept: 'application/vnd.github+json',
+      authorization: `Bearer ${config.token}`,
+      'x-github-api-version': '2022-11-28',
+      ...(init.body ? { 'content-type': 'application/json' } : {}),
+      ...init.headers,
+    },
+  })
+  if (!res.ok) throw new GitHubError(res.status, `GitHub API ${init.method ?? 'GET'} ${path} failed (${res.status} ${res.statusText}): ${await safeText(res)}`)
+  return res
+}
+
+/** A call GitHub answered with an error: its status is how a caller tells "not there" (404) from the rest. */
+export class GitHubError extends Error {
+  constructor(
+    readonly status: number,
+    message: string,
+  ) {
+    super(message)
   }
 }
 
@@ -295,7 +310,7 @@ interface WorkflowRun {
  * difference between running locally and running on a runner is array-vs-JSONL.
  *
  * Events replay in a burst at the end rather than live — that is the honest cost of
- * this driver, and a caller sees the same event stream either way.
+ * this host, and a caller sees the same event stream either way.
  */
 export function replayTranscript(json: string, emit: (event: DriverEvent) => void = () => {}): DriverTurn {
   let messages: unknown

@@ -85,6 +85,12 @@ export interface StartAgentOptions {
    */
   machine?: string
   /**
+   * Where the run runs, by its host's id (`RunHost.id`): one of the hosts beside this computer's of
+   * the modules on in the project, such as a GitHub Actions runner. Absent, this computer, or the
+   * machine picked. Refused with a machine, and for a session with no project.
+   */
+  host?: string
+  /**
    * The repos a session with no project has as context, by their folders on this computer: each is
    * copied into the session's folder. Refused for a project, which works in its own checkout.
    */

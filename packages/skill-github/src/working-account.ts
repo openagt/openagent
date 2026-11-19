@@ -39,6 +39,17 @@ export async function accountNamed(user: string | undefined, cwd: string, gh: Gh
   return { login, dir: accountDir(root, login) }
 }
 
+/**
+ * One of OpenAgent's accounts, `user` when named, else the one runs use, with its token: how work
+ * outside a run reaches GitHub's API as that account (a run on a GitHub Actions runner,
+ * dispatched and read from here). Refused, in words for the person, when OpenAgent has no such
+ * account, or no token GitHub says is its own.
+ */
+export async function accountToken(cwd: string, user: string | undefined, gh: GhRunner, env: NodeJS.ProcessEnv = process.env): Promise<{ login: string; token: string }> {
+  const { login, dir } = await accountNamed(user, cwd, gh, env)
+  return { login, token: await tokenOf(login, dir, cwd, gh) }
+}
+
 function noAccount(): Refused {
   return new Refused({ ok: false, reason: 'no-account' }, `OpenAgent has no GitHub account: add one in OpenAgent's Permissions`)
 }

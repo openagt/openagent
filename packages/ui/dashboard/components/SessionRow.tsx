@@ -1,14 +1,15 @@
-import { Cloud, Folder, GitBranch, Laptop, Workflow, type LucideIcon } from 'lucide-react'
+import { Cloud, Folder, GitBranch, Laptop, type LucideIcon } from 'lucide-react'
 import type { AgentMeta } from '../../src/index.js'
+import { hostOf } from '../lib/run-hosts.js'
 import { MACHINE_ICONS } from './MachineMark.js'
-import { RunOnWords } from './RunOnMenu.js'
+import { HOST_ICON, RunOnWords } from './RunOnMenu.js'
 import { RowAboveBox, RowSaid } from './ui/row-item.js'
 import { RepoChip } from './SessionRepos.js'
 
-/** The icon of where a session runs, as "Run on" has a machine's; the two that are no machine have their own. */
+/** The icon of where a session runs, as "Run on" has a machine's or a host's; a cloud session has its own. */
 function runsOnIcon(target: AgentMeta['target'], kind: AgentMeta['remoteKind']): LucideIcon {
   if (target === 'web') return Cloud
-  if (target === 'actions') return Workflow
+  if (hostOf(target) !== undefined) return HOST_ICON
   return kind ? MACHINE_ICONS[kind] : Laptop
 }
 

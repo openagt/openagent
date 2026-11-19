@@ -22,6 +22,7 @@ export const sendAddRepoFolder = rpc<typeof impl.sendAddRepoFolder>('sendAddRepo
 export const onCommands = rpc<typeof impl.onCommands>('onCommands')
 export const onStartBranches = rpc<typeof impl.onStartBranches>('onStartBranches')
 export const onStartCheck = rpc<typeof impl.onStartCheck>('onStartCheck')
+export const onRunHosts = rpc<typeof impl.onRunHosts>('onRunHosts')
 export const onCloneCheck = rpc<typeof impl.onCloneCheck>('onCloneCheck')
 export const onRepoSources = rpc<typeof impl.onRepoSources>('onRepoSources')
 export const sendAddRepoOwner = rpc<typeof impl.sendAddRepoOwner>('sendAddRepoOwner')

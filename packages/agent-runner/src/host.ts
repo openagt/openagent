@@ -1,10 +1,9 @@
-import { randomUUID } from 'node:crypto'
-import { readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
-import { hostname, tmpdir } from 'node:os'
+import { readFile, stat } from 'node:fs/promises'
+import { hostname } from 'node:os'
 import { join } from 'node:path'
 import { appendInbox, logCardFile, promptLines, takeInbox, type InboxLine, type PromptLine } from '@openagt/agent-driver'
 import { PLUGINS_WITHOUT_ENV, PRESET_ENV, PROJECT_SKILLS_ENV, isSkillName, sessionFolder, sessionsHome, sessionsHomeOf } from '@openagt/agent-data'
-import { LOCAL_HOST, MODULE_NAME, isPresetId, type ProjectRef, type RunFound, type RunHost, type RunInput, type RunOptions, type RunReadiness, type RunRef, type RunRequest, type RunStatus, type RunSummary } from '@openagt/hooks'
+import { LOCAL_HOST, MODULE_NAME, isPresetId, type ProjectRef, type RunFound, type RunHost, type RunInput, type RunOptions, type RunReadiness, type RunRef, type RunStatus, type RunSummary } from '@openagt/hooks'
 import { currentBranch, worktreePath } from '@openagt/skill-branches'
 import { findRun, isRunId, listRuns, parseRunCard, type RunCard } from '@openagt/skill-logs'
 import { handedDownSettings, runPreset } from './preset.js'
@@ -13,7 +12,7 @@ import { isPublish, NO_PUBLISH } from './records.js'
 import { isPidAlive } from './run-lock.js'
 import { presetLoginFor, detachResume, detachRun, DRIVER_NAMES, GIT_ACCOUNT_ENV, isDriverName, readyToRun, spawnResume, spawnRun, type DriverName } from './runner.js'
 import type { RunRequest as AskedRun } from './run.js'
-import { NAME_FILE_ENV } from './title.js'
+import { nameHandOver } from './title.js'
 
 /**
  * This computer's host (`run.host`, #2394): a run started here is a process of its own, detached,
@@ -40,9 +39,6 @@ export interface LocalHostDeps {
 
 /** How long a Stop waits for a run just started to name its process: as long as a page shows a run as starting. */
 const STARTING_MS = 30_000
-
-/** How long a name handed to a run waits for it there: a run that never comes for it leaves no file behind. */
-const HANDED_NAME_KEPT_MS = 2 * 60_000
 
 export function localHost(deps: LocalHostDeps = {}): RunHost {
   const ready = deps.ready ?? ((dir, driver, login) => readyToRun(dir, driver, login !== undefined ? { login } : {}))
@@ -290,28 +286,6 @@ function picks(options: RunOptions): Record<string, string> {
     ...(without !== undefined ? { [PLUGINS_WITHOUT_ENV]: without.join(',') } : {}),
     ...(project !== undefined ? { [PROJECT_SKILLS_ENV]: project === 'all' || project === 'none' ? project : project.join(',') } : {}),
   }
-}
-
-/**
- * How the run gets its name: not at all, where runs are not named; from the ask of whoever starts
- * it, handed over in a file its process waits on (`title.ts`); or by asking itself.
- */
-function nameHandOver(title: RunRequest['title']): { env: Record<string, string>; started: () => void } {
-  if (title === false) return { env: { OPENAGENT_NAME_RUN: '0' }, started: () => {} }
-  if (title === undefined) return { env: {}, started: () => {} }
-  const file = join(tmpdir(), `openagent-name-${randomUUID()}.json`)
-  return { env: { [NAME_FILE_ENV]: file }, started: () => void title.then(name => handName(file, name), () => handName(file, undefined)) }
-}
-
-/**
- * Hand the run the name asked for it: written whole, then renamed into place, so the run never
- * reads half of one. `{}` when none came: the run asks on its own then.
- */
-async function handName(file: string, title: string | undefined): Promise<void> {
-  await writeFile(`${file}.part`, JSON.stringify(title !== undefined ? { title } : {}))
-    .then(() => rename(`${file}.part`, file))
-    .catch(() => {})
-  setTimeout(() => void rm(file, { force: true }).catch(() => {}), HANDED_NAME_KEPT_MS).unref()
 }
 
 /** What a line left in the inbox resumes the run with: the message, with how far it takes the work from there, or the answer. */

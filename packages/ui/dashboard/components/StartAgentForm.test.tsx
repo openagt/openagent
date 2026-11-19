@@ -4,6 +4,7 @@ import { forgetRemembered } from '../lib/use-async.js'
 import { MARKDOWN_RENDER, openMenu } from '../test-utils.js'
 import { ModulesContext, mountedOf } from '../lib/use-modules.js'
 import { keepDraft, keptDraft, takePendingDraft } from '../lib/draft-handoff.js'
+import { resetRunHostsForTest, selectHost } from '../lib/run-hosts.js'
 
 // Everything the form reads goes through a lib module, so the mocks stop at the `rpc/` stubs: an
 // unmocked one reaches for `/_rpc/<name>`, and there is no daemon behind jsdom to answer.
@@ -13,7 +14,9 @@ const onCloneCheck = vi.hoisted(() => vi.fn())
 const onProjects = vi.hoisted(() => vi.fn(async () => [] as unknown[]))
 const onStartBranches = vi.hoisted(() => vi.fn(async () => ({ branches: ['feature-x'] }) as { branches?: string[] }))
 const onRepos = vi.hoisted(() => vi.fn(async () => ({ repos: [] as { path: string; name: string; url?: string }[], canAddFolder: false })))
-vi.mock('../rpc/projects.js', () => ({ onCommands, onStartBranches, onStartCheck, onCloneCheck, onProjects, onRepos, sendAddRepoFolder: vi.fn() }))
+// The hosts beside this computer the project's modules bring: none unless a test says.
+const onRunHosts = vi.hoisted(() => vi.fn(async () => [] as { id: string; label: string }[]))
+vi.mock('../rpc/projects.js', () => ({ onCommands, onStartBranches, onStartCheck, onCloneCheck, onProjects, onRepos, onRunHosts, sendAddRepoFolder: vi.fn() }))
 
 // Mutable so a test can pick the coding agent and the model; reset after each.
 const prefs = vi.hoisted(() => ({ current: {} as Record<string, unknown> }))
@@ -149,6 +152,9 @@ afterEach(() => {
   prefs.current = {}
   prefsLoaded.current = true
   machine.current = null
+  onRunHosts.mockReset()
+  onRunHosts.mockResolvedValue([])
+  resetRunHostsForTest()
 })
 
 const COMMANDS = [{ name: 'work-queue', description: 'Work the agent queue' }]
@@ -520,6 +526,34 @@ describe('StartAgentForm (#1774)', () => {
     await waitFor(() => expect(onAgentStarted).toHaveBeenCalledWith('do the thing', 'r2', 'box', undefined, expect.anything()))
     expect(start).toHaveBeenCalledWith('p1', 'do the thing', { machine: 'd1' })
     expect(onStartCheck).not.toHaveBeenCalled()
+  })
+
+  test("a host picked in \"Run on\" runs the run, over a machine picked before: the check is that host's, the Start names it, and the run's page says it by its name (#2394)", async () => {
+    onCommands.mockResolvedValue({ commands: [], gitHost: true, remote: true, address: 'github.com/acme/shop' })
+    onRunHosts.mockResolvedValue([{ id: 'actions', label: 'GitHub Actions' }])
+    onStartCheck.mockResolvedValue({ problems: ['Its repository has no workflow openagent-agent.yml yet.'], warnings: [] })
+    machine.current = { id: 'd1', url: 'http://box:4200', label: 'box' }
+    selectHost('actions')
+    start.mockResolvedValue({ agentId: 'r4' })
+    const onAgentStarted = vi.fn()
+    render(<StartAgentForm {...props} onAgentStarted={onAgentStarted} />)
+    await waitFor(() => expect(onStartCheck).toHaveBeenCalledWith('p1', undefined, 'actions'))
+    expect((await screen.findByRole('alert')).textContent).toContain('Its repository has no workflow openagent-agent.yml yet.')
+    fireEvent.click(screen.getByText('submit-typed'))
+    await waitFor(() => expect(onAgentStarted).toHaveBeenCalledWith('do the thing', 'r4', 'GitHub Actions', undefined, expect.anything()))
+    expect(start.mock.calls[0]![2]).toMatchObject({ host: 'actions' })
+    expect(start.mock.calls[0]![2]).not.toHaveProperty('machine')
+  })
+
+  test('a host picked on a project that has none is no target: the run starts on this computer', async () => {
+    onCommands.mockResolvedValue({ commands: [], gitHost: true })
+    selectHost('actions')
+    start.mockResolvedValue({ agentId: 'r5' })
+    render(<StartAgentForm {...props} />)
+    await waitFor(() => expect(onStartCheck).toHaveBeenCalledWith('p1', undefined))
+    fireEvent.click(screen.getByText('submit-typed'))
+    await waitFor(() => expect(start).toHaveBeenCalled())
+    expect(start.mock.calls[0]![2]).not.toHaveProperty('host')
   })
 
   test('a project with no repository address runs here only: a machine picked on another project is not its target', async () => {

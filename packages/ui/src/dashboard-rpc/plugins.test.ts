@@ -26,7 +26,7 @@ test("Settings › Plugins lists the distribution's plugins with their rows, the
     const rows = await onProjectPlugins(id)
     assert.deepEqual(
       rows?.map(row => `${row.name} ${row.on ? 'on' : 'off'}`),
-      ['store-git-branch off', 'ask on', 'logs off', 'tickets off', 'queue off', 'browser off', 'scheduled-agents off', 'discord off', 'github-auto-reply off'],
+      ['store-git-branch off', 'ask on', 'logs off', 'tickets off', 'queue off', 'browser off', 'scheduled-agents off', 'discord off', 'github-auto-reply off', 'host-github-actions off'],
       'in the distribution\'s order, ask on as it starts, and the project\'s data not shared',
     )
     assert.ok(rows!.every(row => row.scope === 'project' && row.description.length > 0), 'each says what it is')

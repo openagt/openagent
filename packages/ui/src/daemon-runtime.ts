@@ -2,7 +2,7 @@ import { isAbsolute, join, resolve, sep } from 'node:path'
 import { hostname } from 'node:os'
 import { stat } from 'node:fs/promises'
 import { isDriverName, type ReadyNaming } from '@openagt/agent-runner'
-import { isPresetId, MODULE_NAME, type Hooks, type RunHost, type RunOptions, type RunRequest } from '@openagt/hooks'
+import { isPresetId, MODULE_NAME, type Hooks, type ProjectRef, type RunHost, type RunOptions, type RunRequest } from '@openagt/hooks'
 import { sessionRepos } from '@openagt/skill-branches'
 import { nameStarted } from './started-names.js'
 import { findCheckout, fromDiaryLine, isPidAlive, isRunId, projectBranches, readLiveMetas, resolveAgentDiary, type AgentMeta, type AnyDiaryLine } from './store/index.js'
@@ -80,6 +80,10 @@ function refusedPicks(options: StartAgentOptions, noProject: boolean): string | 
   if (noProject && (options.base !== undefined || options.prBase !== undefined || options.publish !== undefined || options.account !== undefined || options.projectSkills !== undefined)) {
     return 'A session with no project runs with no branch, nothing to publish, no account at a git host and no project skills.'
   }
+  // Another host runs a project's run, on a machine of its own.
+  if (options.host !== undefined && (typeof options.host !== 'string' || !MODULE_NAME.test(options.host))) return 'A host is named by its id.'
+  if (options.host !== undefined && options.machine !== undefined) return 'A run goes to a machine or to a host, not both.'
+  if (noProject && options.host !== undefined) return 'A session with no project runs on this computer or a machine of yours.'
   // Its repos are folders on this computer, copied into its folder here: on a machine there is nothing to copy.
   if (noProject && options.machine !== undefined && options.repos !== undefined) return 'The repos are folders on this computer: a session with them runs here. Pick this computer, or start without them.'
   // A login is one word.
@@ -111,6 +115,8 @@ export interface ProjectRuntimeOptions {
   naming?: ReadyNaming
   /** This computer's host, the distribution's (`distribution-hooks.ts`): where a run started here runs. */
   host: RunHost
+  /** The hosts beside this computer's of the modules on in a project, where a run may be picked to run (`options.host`); none when unsaid. */
+  otherHosts?: (project?: ProjectRef) => Promise<RunHost[]>
   /** Who is told of a project added or removed: the distribution's modules (`app.lifecycle`). */
   lifecycle?: Pick<Hooks, 'projectAdded' | 'projectRemoved'>
 }
@@ -158,7 +164,7 @@ export interface ProjectRuntime {
  * The daemon's per-project runtime (#393). The home `cwd` is the default target: a request with
  * no project id (or the home id) resolves to it without a registry lookup.
  */
-export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = ownLogins, naming, host, lifecycle }: ProjectRuntimeOptions): ProjectRuntime {
+export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = ownLogins, naming, host, otherHosts = async () => [], lifecycle }: ProjectRuntimeOptions): ProjectRuntime {
   const homeId = projectId(resolve(cwd))
 
   // A project id resolves to its repo path via the registry; the home id (or none)
@@ -242,12 +248,17 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
     const repos = options.repos !== undefined ? await sessionRepos(options.repos).then(given => ({ given }), (err: unknown) => ({ error: errorMessage(err) })) : undefined
     if (repos && 'error' in repos) return { ok: false, error: repos.error }
     const driver = options.driver ?? DEFAULT_DRIVER
+    const project = noProject ? undefined : await projectRefAt(targetProjectId ?? homeId, projectCwd)
+    // The host picked to run it, among the project's: one no module on in the project has refuses the Start.
+    const runsOn = options.host === undefined || options.host === host.id ? host : (await otherHosts(project)).find(other => other.id === options.host)
+    if (!runsOn) return { ok: false, error: `No host ${String(options.host)} is on in this project. Pick another place to run.` }
     const name = await nameAsStarted(projectCwd, prompt, driver)
-    const started = await host
+    const started = await runsOn
       .start({
-        ...(noProject ? {} : { project: await projectRefAt(targetProjectId ?? homeId, projectCwd) }),
+        ...(project ? { project } : {}),
         prompt,
-        options: runOptionsOf(options, publish, repos?.given),
+        // A run of another host's says which: its options and its record name it.
+        options: { ...(runsOn !== host ? { host: runsOn.id } : {}), ...runOptionsOf(options, publish, repos?.given) },
         ...name.title,
       })
       .then(({ id }) => ({ ok: true as const, id }), (err: unknown) => ({ ok: false as const, error: errorMessage(err) }))

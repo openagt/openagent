@@ -1,4 +1,4 @@
-import { contextHost, resolveProjectPath } from './context.js'
+import { resolveProjectPath, runHostOf } from './context.js'
 import { findComputerModule, findProjectModule } from '../project-modules.js'
 import { providedDataChanged } from '../store/provided.js'
 import { callModuleFunction, computerHost, functionKind, serverHost, type ModuleCallResult } from '../dashboard/module-host.js'
@@ -51,15 +51,16 @@ export async function callModule(projectId: string | null, pkg: string, name: st
 }
 
 /**
- * Where a run of the project at `root` has its work, as this computer's host says it: each run as a
- * host is asked about it, made once for the call, which may ask about one run more than once.
+ * Where a run of the project at `root` has its work, as its host says it: each run as a host is
+ * asked about it, made once for the call, which may ask about one run more than once.
  */
 function runsFound(projectId: string, root: string): (agentId: string) => Promise<RunFound | undefined> {
   const refs = new Map<string, Promise<RunRef>>()
   return async agentId => {
     let ref = refs.get(agentId)
     if (!ref) refs.set(agentId, (ref = runRefAt(projectId, root, agentId)))
-    return contextHost().find(await ref)
+    const run = await ref
+    return (await runHostOf(run)).find(run)
   }
 }
 

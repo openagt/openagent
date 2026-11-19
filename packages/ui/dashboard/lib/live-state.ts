@@ -54,28 +54,11 @@ export function cardOutcome(status: AgentMeta['status']): AgentOutcome | undefin
 }
 
 /**
- * The GitHub Actions run's live URL, from the `action` event the ActionsDriver emits once it
- * finds its workflow run (#1053): its label is `run <html_url>`. Lets the agent view link through
- * to the live Actions run while the transcript is still burst-replaying at the end. The last
- * match wins, so a multi-turn session points at its most recent agent. Absent until the driver has
- * found the agent (and for any non-Actions target).
- */
-export function actionsRunUrl(events: readonly OpenAgentEvent[]): string | undefined {
-  let url: string | undefined
-  for (const event of events) {
-    if (event.kind !== 'driver' || event.event.type !== 'action') continue
-    const match = /^run (https?:\/\/\S+)$/.exec(event.event.label)
-    if (match) url = match[1]
-  }
-  return url
-}
-
-/**
  * The Claude Code cloud session a `web` run was handed to (#610), from the `action` event the
  * CloudDriver emits once the session exists: its label is `cloud <url>`. Read from the event
- * stream rather than from the agent's meta for the same reason the Actions link is — the events
- * are what a tab opened mid-run replays. The last match wins, so a session that handed off more
- * than once points at its most recent cloud session. Absent until the hand-off has landed.
+ * stream rather than from the agent's meta: the events are what a tab opened mid-run replays. The
+ * last match wins, so a session that handed off more than once points at its most recent cloud
+ * session. Absent until the hand-off has landed.
  */
 export function cloudSession(events: readonly OpenAgentEvent[]): { url: string; id: string } | undefined {
   let found: { url: string; id: string } | undefined

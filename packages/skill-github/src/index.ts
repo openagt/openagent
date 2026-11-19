@@ -11,3 +11,4 @@ export { answersFor, listReplies, parseThreads, repliesArgs, seenArgs, MENTION, 
 export { writeComment, commentArgs, byline, COMMENT_MARK, DIARY_ENV, ASSETS_URL, type Comment } from './comment.js'
 export { HOST, accountsRoot, accountDir, accountLogins, asAccount, ghState, gitConfig, runsAccount, runsAccountDir, useForRuns, picksPath, runEnv, startLogin, loginUnderWay, type AccountFacts, type GhAccount, type GhState, type LoggingIn } from './accounts.js'
 export { jobFiles, jobState, startJob, type JobState } from './job.js'
+export { accountToken } from './working-account.js'

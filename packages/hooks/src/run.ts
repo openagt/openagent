@@ -13,6 +13,8 @@ export type Publish = (typeof PUBLISH_LEVELS)[number]
  * module's slice is declared here when the module moves onto the hooks.
  */
 export interface RunOptions {
+  /** Where the run runs, by its host's id (`RunHost.id`): this computer's when absent. */
+  host?: string
   'agent-driver'?: AgentDriverOptions
   github?: GithubOptions
   'git-branches'?: GitBranchesOptions

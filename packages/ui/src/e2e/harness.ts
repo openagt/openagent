@@ -133,6 +133,8 @@ export async function makeWorld(): Promise<StoryWorld> {
   const quota = { view: { windows: [] } as QuotaView }
   const context = {
     host,
+    // The demo's runs are all this computer's: no host beside it.
+    otherHosts: async () => [],
     startAgent: runtime.onStart,
     addProject: runtime.onAddProject,
     startedIn: runtime.onStartedIn,

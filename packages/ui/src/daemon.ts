@@ -18,7 +18,7 @@ import { bridgeBrowserDir, bridgeBrowserOwner, startBridgeBrowser, type BridgeBr
 import { readySessionsHome, startSessionsSweep } from './sessions-home.js'
 import { distributionHooks, localHostOf } from './distribution-hooks.js'
 import { devicesOn, otherComputers } from './other-computers.js'
-import type { Hooks } from '@openagt/hooks'
+import type { Hooks, ProjectRef, RunHost } from '@openagt/hooks'
 import { sessionsHome } from '@openagt/agent-data'
 import { readSecureAddress, SECURE_PORT, type SecureAddress } from './secure-address.js'
 import { readAllAgents } from './store/index.js'
@@ -119,10 +119,12 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
   // distribution's (#2394).
   const hooks = opts.hooks ?? (await distributionHooks(env))
   const host = await localHostOf(hooks)
+  // The hosts beside it, of the modules on in a project (a GitHub Actions runner): a run may be picked to run on one.
+  const otherHosts = async (project?: ProjectRef): Promise<RunHost[]> => (await hooks.hosts(project)).filter(other => other.id !== host.id)
   // The person's other computers are reached where devices is on (`other-computers.ts`).
   otherComputers.on = () => devicesOn(hooks)
   // A project added or removed is told to the modules (`app.lifecycle`): a scheduler starts or stops with it.
-  const runtime = createProjectRuntime({ cwd, env, naming: new ReadyNaming(), host, lifecycle: hooks })
+  const runtime = createProjectRuntime({ cwd, env, naming: new ReadyNaming(), host, otherHosts, lifecycle: hooks })
   // Known only once the dashboard listens; the bridge browser is told it (#1332).
   let daemonUrl: string | undefined
 
@@ -174,6 +176,7 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
       eventsSource: runtime.remoteEventsSource,
       remote: runtime.remoteAgents,
       host,
+      otherHosts,
       // The bridge browser follows its switch (#1332): on launches it, off closes it, without a restart.
       preferences: registryPreferencesStore(env, written => {
         if (written.bridgeBrowser === true) void bridgeBrowser.start()

@@ -12,7 +12,7 @@ import type { MachinesQueue } from '../dashboard/machine-waiting.js'
 import type { AddProjectResult, RemoveProjectResult, StartAgentOptions, StartAgentResult, StartedInResult } from '../dashboard/types.js'
 import type { BringProject, RelayProject, RemoteTarget } from '../dashboard/remote-run.js'
 import type { MachineRuns } from '../dashboard/machine-runs.js'
-import type { RunHost } from '@openagt/hooks'
+import type { ProjectRef, RunHost, RunRef } from '@openagt/hooks'
 
 /** Wired by the daemon so `sendStart` can reach the daemon's own `startAgent` closure. */
 export type StartAgentHandler = (
@@ -111,8 +111,14 @@ export interface DashboardContext {
   /** The relayed-agent lookup (#1067 slice 2), so a run-scoped RPC can tell a local agent from one
    *  running on a saved machine and forward the call there. */
   remote: RemoteAgents
-  /** This computer's host (`run.host`, #2394): what a person says to a run here, and a Stop, go to it. */
+  /** This computer's host (`run.host`, #2394): where a run starts when no other host is picked. */
   host: RunHost
+  /**
+   * The hosts beside this computer's in a project, of its modules that are on there (`run.host`): a
+   * run may be picked to run on one, and a run one of them has is steered, stopped and read there.
+   * A session with no project names none.
+   */
+  otherHosts: (project?: ProjectRef) => Promise<RunHost[]>
   /** The user-preferences store (#410), over the registry file. */
   preferences: PreferencesStore
   /** The quota source behind the usage panel (#533). */
@@ -190,9 +196,26 @@ export function contextEventsSource(): EventsSource {
   return fromContext('eventsSource')
 }
 
-/** This computer's host (`run.host`, #2394): a run started here is steered, resumed and stopped through it. */
+/** This computer's host (`run.host`, #2394): where a run starts when no other host is picked. */
 export function contextHost(): RunHost {
   return fromContext('host')
+}
+
+/** The hosts a run of `project` may be picked to run on beside this computer's: those of the modules on there. */
+export function contextOtherHosts(project?: ProjectRef): Promise<RunHost[]> {
+  return fromContext('otherHosts')(project)
+}
+
+/**
+ * The host `run` is on, where what a person says to it, a Stop and the reads of its work go: the
+ * first of its project's other hosts that has it, else this computer's. A host that cannot say is
+ * taken to have none of it.
+ */
+export async function runHostOf(run: RunRef): Promise<RunHost> {
+  for (const host of await contextOtherHosts(run.project).catch(() => [])) {
+    if (await host.find(run).catch(() => undefined)) return host
+  }
+  return contextHost()
 }
 
 /**

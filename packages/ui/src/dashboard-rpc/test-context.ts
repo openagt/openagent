@@ -59,6 +59,7 @@ export function testDashboardContext(over: Partial<DashboardContext> = {}): Dash
     eventsSource: () => undefined,
     remote: { target: () => undefined, list: () => [], working: () => false, rekey: () => {}, sent: () => true, home: async () => undefined, follow: async () => {}, machineNames: async () => () => undefined, machineRuns: async () => [], followRuns: () => () => {}, ...NO_ELSEWHERE },
     host: testHost(),
+    otherHosts: async () => [],
     preferences: registryPreferencesStore(),
     quota: defaultQuotaSource(),
     models: { read: async () => ({ 'claude-code': { models: [] }, codex: { models: [] } }), forget: () => {} },

@@ -8,7 +8,7 @@ import { createHooks, DISTRIBUTION_ENV, LOCAL_HOST, distributionItems, loadHande
 
 const DISTRIBUTION = fileURLToPath(new URL('./distribution.js', import.meta.url))
 
-test("the distribution's modules load from its own install, the store's and the run pipeline's, and this computer's host is agent-driver's; ask and notifications-browser are the plugins it starts on, devices, notifications-command and ui-renderer-mermaid among those off, and the git stores are on as their repositories say", async () => {
+test("the distribution's modules load from its own install, the store's and the run pipeline's, and this computer's host is agent-driver's; ask and notifications-browser are the plugins it starts on, devices, notifications-command, ui-renderer-mermaid and host-github-actions among those off, and the git stores are on as their repositories say", async () => {
   const modules = await loadHandedDown({ [DISTRIBUTION_ENV]: DISTRIBUTION })
   assert.deepEqual(modules?.map(entry => entry.module.name), [
     'store-filesystem',
@@ -30,6 +30,7 @@ test("the distribution's modules load from its own install, the store's and the 
     'scheduled-agents',
     'discord',
     'github-auto-reply',
+    'host-github-actions',
   ])
   // #2394: ask and the browser's notifications start on, every other plugin off; a git store keeps its own row, how its repository stands.
   assert.deepEqual(modules!.filter(entry => entry.module.plugin && entry.on).map(entry => entry.module.name), ['notifications-browser', 'ask'])
@@ -37,6 +38,7 @@ test("the distribution's modules load from its own install, the store's and the 
   assert.deepEqual(modules!.find(entry => entry.module.name === 'notifications-command')?.module.plugin, { scope: 'computer' }, 'so is notifications-command')
   assert.deepEqual(modules!.find(entry => entry.module.name === 'notifications-browser')?.module.plugin, { scope: 'person' }, 'notifications-browser is kept per person')
   assert.deepEqual(modules!.find(entry => entry.module.name === 'ui-renderer-mermaid')?.module.plugin, { scope: 'person' }, 'so is ui-renderer-mermaid')
+  assert.deepEqual(modules!.find(entry => entry.module.name === 'host-github-actions')?.module.plugin, { scope: 'project' }, 'host-github-actions is kept per project')
   assert.deepEqual(modules!.filter(entry => entry.module.plugin?.row).map(entry => entry.module.name), ['store-git-repository', 'store-git-branch'])
   assert.deepEqual((await createHooks(modules!).hosts()).map(host => host.id), [LOCAL_HOST])
 })

@@ -1,4 +1,4 @@
-import { Check, Laptop, Plus, type LucideIcon } from 'lucide-react'
+import { Check, Laptop, Plus, Workflow, type LucideIcon } from 'lucide-react'
 import type { Machine } from '../lib/machines.js'
 import type { MachineStatus } from '../lib/use-machine-status.js'
 import { thisMachineName } from '../lib/this-machine.js'
@@ -11,10 +11,11 @@ import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel } from './ui/dropdown-menu.js'
 
 /**
- * Where the next run starts (#1052/#1067): the machine this dashboard is on, or one of the
- * machines saved on it. A machine is a run TARGET, selected in place: picking one does not
- * navigate the browser. The daemon relays the start to it, and that machine starts the run in
- * its own copy of the project. The dashboard is always its own machine's, also when a phone
+ * Where the next run starts (#1052/#1067): the machine this dashboard is on, a host the project's
+ * modules bring (a GitHub Actions runner, `run.host`), or one of the machines saved on it. A
+ * machine or a host is a run TARGET, selected in place: picking one does not navigate the browser.
+ * The daemon starts the run on the host, or relays the start to the machine, which starts the run
+ * in its own copy of the project. The dashboard is always its own machine's, also when a phone
  * shows it: the first row is the computer that runs this OpenAgent, "This machine" on that
  * computer's own screen and its name anywhere else (this-machine.ts).
  *
@@ -46,7 +47,16 @@ export type ConnectionControl = {
   onAddMachine?: (() => void) | undefined
   /** Each machine's online/offline status (#1072); an id absent from the map is still being checked. */
   status: Record<string, MachineStatus>
+  /** The hosts beside this computer the project's modules bring (`run.host`): where a run may be picked to run, on no machine of the person's. */
+  hosts?: readonly { id: string; label: string }[] | undefined
+  /** The host picked as the run target, by its id; null or absent when none is. */
+  selectedHostId?: string | null | undefined
+  /** Select a host as the run target, with no navigation. */
+  onSelectHost?: ((id: string) => void) | undefined
 }
+
+/** The icon of a host that is no machine of the person's. */
+export const HOST_ICON: LucideIcon = Workflow
 
 /** What a saved machine is, as its row says it: what and where, and for another person's computer whose logins a run uses. */
 function wordsOf(machine: Machine): string {
@@ -77,10 +87,13 @@ export function RunOnMenu({ connection, busy }: { connection: ConnectionControl;
     connection.selectedMachineId && !connection.onlyHere && (!connection.onlyThere || connection.selectedMachineId === connection.home)
       ? connection.machines.find(m => m.id === connection.selectedMachineId)
       : undefined
+  const hosts = connection.hosts ?? []
+  // A host picked is the target, where the project has it; a machine is none then.
+  const selectedHost = connection.selectedHostId ? hosts.find(host => host.id === connection.selectedHostId) : undefined
   const here = thisMachineName()
-  const summary = selectedMachine ? machineName(selectedMachine) : here
-  const onThisMachine = !selectedMachine
-  const Icon = onThisMachine ? Laptop : MACHINE_ICONS[machineKind(selectedMachine).kind]
+  const summary = selectedHost ? selectedHost.label : selectedMachine ? machineName(selectedMachine) : here
+  const onThisMachine = !selectedMachine && !selectedHost
+  const Icon = selectedHost ? HOST_ICON : selectedMachine ? MACHINE_ICONS[machineKind(selectedMachine).kind] : Laptop
   return (
     <DropdownMenu>
       <Tooltip>
@@ -92,7 +105,7 @@ export function RunOnMenu({ connection, busy }: { connection: ConnectionControl;
           <RunOnWords icon={Icon} elsewhere={!onThisMachine} label={summary} />
           <RowChevron />
         </TooltipTrigger>
-        <TooltipContent>{`Run on — ${selectedMachine?.label ?? here}`}</TooltipContent>
+        <TooltipContent>{`Run on — ${selectedHost?.label ?? selectedMachine?.label ?? here}`}</TooltipContent>
       </Tooltip>
       {/* The words are at the row's left: the menu opens inward. */}
       <DropdownMenuContent align="start" className="min-w-[19rem] max-w-[22rem]">
@@ -108,6 +121,14 @@ export function RunOnMenu({ connection, busy }: { connection: ConnectionControl;
             />
             {onThisMachine && <Check className="ml-auto mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />}
           </DropdownMenuItem>
+          {/* The project's hosts: a click selects the host as the run target, which runs it on a machine of its own. */}
+          {hosts.map(host => (
+            <DropdownMenuItem key={`host:${host.id}`} className="items-start" onClick={() => connection.onSelectHost?.(host.id)}>
+              <HOST_ICON className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+              <OptionLabel label={host.label} description="Runs this project on a machine of its own." />
+              {selectedHost?.id === host.id && <Check className="ml-auto mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />}
+            </DropdownMenuItem>
+          ))}
           {/* Saved machines: a click SELECTS the machine as the run target (no navigation). */}
           {connection.machines.map(machine => {
             const status = connection.status[machine.id]
@@ -127,7 +148,7 @@ export function RunOnMenu({ connection, busy }: { connection: ConnectionControl;
               >
                 <MachineMark kind={machineKind(machine).kind} online={status === 'online'} className="mt-0.5" />
                 <OptionLabel label={machineName(machine)} description={description} />
-                {selectedMachine?.id === machine.id && <Check className="ml-auto mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />}
+                {!selectedHost && selectedMachine?.id === machine.id && <Check className="ml-auto mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />}
               </DropdownMenuItem>
             )
           })}

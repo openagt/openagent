@@ -140,6 +140,38 @@ describe('the "Run on" pick in the row under the box', () => {
   })
 })
 
+describe("a host the project's modules bring, beside this computer and the machines (#2394)", () => {
+  const ACTIONS = { id: 'actions', label: 'GitHub Actions' }
+
+  test('its row comes after this machine, says it runs the project on a machine of its own, and a click picks it', async () => {
+    const onSelectHost = vi.fn()
+    renderMenu({ hosts: [ACTIONS], onSelectHost })
+    await openMenu(trigger())
+    const items = screen.getAllByRole('menuitem')
+    expect(items).toHaveLength(4)
+    expect(items[0]!.textContent).toContain('This machine')
+    expect(items[1]!.textContent).toBe('GitHub ActionsRuns this project on a machine of its own.')
+    expect(items[1]!.querySelector('svg.lucide-workflow')).toBeTruthy()
+    expect(items[2]!.textContent).toContain('Studio')
+    fireEvent.click(items[1]!)
+    expect(onSelectHost).toHaveBeenCalledWith('actions')
+  })
+
+  test('picked, the words read its name with its mark, the tooltip says it, and the tick is on its row alone', async () => {
+    renderMenu({ hosts: [ACTIONS], selectedHostId: 'actions', selectedMachineId: 'studio' })
+    expect(trigger().textContent).toBe('GitHub Actions')
+    expect(trigger().querySelector('svg.lucide-workflow')).toBeTruthy()
+    expect((await hoverTooltip(trigger())).textContent).toBe('Run on — GitHub Actions')
+    await openMenu(trigger())
+    expect(screen.getAllByRole('menuitem').map(item => item.lastElementChild!.classList.contains('lucide-check'))).toEqual([false, true, false, false])
+  })
+
+  test('a pick that names a host the project has not reads "This machine"', () => {
+    renderMenu({ hosts: [], selectedHostId: 'actions' })
+    expect(trigger().textContent).toBe('This machine')
+  })
+})
+
 describe('a saved machine that is a person\'s own computer, reached by the line it keeps open to this server', () => {
   const row = () => screen.getByRole('menuitem', { name: /^MacBook/ })
 

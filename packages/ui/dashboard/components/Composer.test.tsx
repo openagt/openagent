@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { createRef } from 'react'
 import type { Preferences } from '../../src/index.js'
 import { selectMachine } from '../lib/remote-target.js'
+import { resetRunHostsForTest } from '../lib/run-hosts.js'
 import { hoverTooltip, openMenu } from '../test-utils.js'
 import { Laptop } from 'lucide-react'
 import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
@@ -25,7 +26,9 @@ vi.mock('../lib/editors.js', () => ({ useDetectedEditors: () => [] }))
 // Composer loads its own projects for the `@` picker (#743) and the project's commands for the
 // `/` list; stub the reads.
 const onCommands = vi.hoisted(() => vi.fn())
-vi.mock('../rpc/projects.js', () => ({ onProjects: () => Promise.resolve([]), onCommands }))
+// The hosts beside this computer the project's modules bring: none unless a test says.
+const onRunHosts = vi.hoisted(() => vi.fn(async () => [] as { id: string; label: string }[]))
+vi.mock('../rpc/projects.js', () => ({ onProjects: () => Promise.resolve([]), onCommands, onRunHosts }))
 // The saved machines and their health poll (#1072) are the daemon's, reached over an RPC: a
 // pretend daemon each test seeds, and answers online/offline through, for the "Run on" target (#1073).
 vi.mock('../rpc/machines.js', async () => (await import('../test-machines.js')).machinesRpc)
@@ -112,6 +115,8 @@ beforeEach(async () => {
   sessionStorage.clear()
   localStorage.clear()
   selectMachine(null)
+  resetRunHostsForTest()
+  onRunHosts.mockResolvedValue([])
   await saveMachines() // default: no machine saved
   onCommands.mockReset()
   onCommands.mockResolvedValue({ commands: [{ name: 'work-queue', description: 'Work the agent queue' }], gitHost: true, remote: true, address: 'github.com/acme/shop' })
@@ -155,6 +160,23 @@ describe('Composer (#721)', () => {
     await openMenu(screen.getByRole('button', { name: /^Run on: / }))
     fireEvent.click(await screen.findByRole('menuitem', { name: /Add a machine/ }))
     expect(openSettings).toHaveBeenCalledWith('devices')
+  })
+
+  test(`a host the project's modules bring is offered in "Run on", with devices off too, and picking it or this machine leaves the other unpicked (#2394)`, async () => {
+    onRunHosts.mockResolvedValue([{ id: 'actions', label: 'GitHub Actions' }])
+    render(
+      <ModulesContext.Provider value={mountedOf()}>
+        <Composer files={[]} onSubmit={vi.fn()} busy={false} submitLabel="Send" submitBusyLabel="Sending…" />
+      </ModulesContext.Provider>,
+    )
+    const runOn = await screen.findByRole('button', { name: /^Run on: / })
+    expect(onRunHosts).toHaveBeenCalledWith('p1')
+    await openMenu(runOn)
+    fireEvent.click(screen.getByRole('menuitem', { name: /^GitHub Actions/ }))
+    expect(screen.getByRole('button', { name: /^Run on: / }).textContent).toBe('GitHub Actions')
+    await openMenu(screen.getByRole('button', { name: /^Run on: / }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /^This machine/ }))
+    expect(screen.getByRole('button', { name: /^Run on: / }).textContent).toBe('This machine')
   })
 
   test('in a session (#831) there is no agent/model select, and the rest of the row stays', () => {

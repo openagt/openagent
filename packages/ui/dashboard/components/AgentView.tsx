@@ -22,7 +22,6 @@ import { AgentFeed } from './AgentFeed.js'
 import { IssueLinks } from '../lib/markdown-links.js'
 import { OpenFile } from './ToolCalls.js'
 import { ChatNote, ChatPane } from './ChatPane.js'
-import { ActionsRunNotice } from './ActionsRunNotice.js'
 import { LostStreamNotice } from './LostStreamNotice.js'
 import { CloudMirrorRow, CloudAgentNotice } from './CloudAgentNotice.js'
 import { ModuleSlot } from './ModulePageView.js'
@@ -34,6 +33,7 @@ import { modelContextWindow, modelName, useModels } from '../lib/models.js'
 import { ContextCircle } from './ContextCircle.js'
 import { effortLabel } from '../lib/effort.js'
 import { thisMachineName } from '../lib/this-machine.js'
+import { hostOf, useRunHosts } from '../lib/run-hosts.js'
 import { driverFromImpl } from '../../src/client.js'
 
 // One session's view, whether it is running or finished (#1026).
@@ -95,8 +95,8 @@ export function AgentView({
   naming?: boolean | undefined
   /** The session's project, said in the row above the message box. */
   projectName?: string | null | undefined
-  /** Where the agent executes (#1053/#610): `actions` swaps the live feed for a burst-mode affordance; `remote` is relayed to a machine (#1067); `web` is handed to a Claude Code cloud session. */
-  target?: 'local' | 'actions' | 'remote' | 'web' | undefined
+  /** Where the agent executes: `remote` is relayed to a machine (#1067); `web` is handed to a Claude Code cloud session (#610); any other is a host beside this computer's, by its id (`run.host`). */
+  target?: string | undefined
   /** The machine this agent executes on (#1067), when it is relayed to another one, by the name it
    *  was given: the row above the message box says it. */
   remoteLabel?: string | undefined
@@ -161,9 +161,12 @@ export function AgentView({
   // How full this session's context is: the run's own last reading, against what the agent says
   // the model holds. Either missing, no circle.
   const contextWindow = modelContextWindow(models, picked, model)
-  // Where the agent runs, for the row above the message box: a machine by the name it was given.
-  // A run another computer started, which is no saved machine, is named by that computer: it did not run here.
-  const runsOn = remoteLabel ?? (target === 'web' ? 'Cloud' : target === 'actions' ? 'GitHub Actions' : target === 'remote' ? 'Another machine' : card?.otherHost && card.host ? card.host : thisMachineName())
+  // Where the agent runs, for the row above the message box: a machine by the name it was given, a
+  // host by its own name. A run another computer started, which is no saved machine, is named by
+  // that computer: it did not run here.
+  const host = hostOf(target)
+  const hosts = useRunHosts(host !== undefined ? projectId : null)
+  const runsOn = remoteLabel ?? (target === 'web' ? 'Cloud' : target === 'remote' ? 'Another machine' : host !== undefined ? (hosts.find(one => one.id === host)?.label ?? 'Another host') : card?.otherHost && card.host ? card.host : thisMachineName())
   // The branch it started from, for that row: its card's, or, where the card says it was origin's
   // default branch, the name that has on the computer the run is on. Read once: it never changes.
   const fromMain = startedFromMain(card)
@@ -172,6 +175,8 @@ export function AgentView({
   const [open, setOpen] = useState(false)
   // What the installed modules add to this run's page: a summary in the bar above the message box.
   const summaries = useMountedModules().views['chat.summary'].filter(summary => summary.projects.includes(projectId))
+  // And a strip above the chat: a host's word on a run it runs, say where the run is.
+  const notices = useMountedModules().views['chat.notice'].filter(notice => notice.projects.includes(projectId))
   // What a row of the chat opens in a pane beside it: a changed file, a file a step names
   // ("Read index.html"), a live screen, a subagent.
   const { onOpenChange, onOpenFile, onOpenScreen, onOpenSubagent } = usePaneOpeners(projectId, agentId)
@@ -342,9 +347,11 @@ export function AgentView({
           {/* The always-available session-details strip: agent + spend (#322). What the run changed is
               in the Changes pane, not here. */}
           {open && <AgentDetails events={shown} card={card} {...(checkout?.pr ? { pr: checkout.pr } : {})} />}
-          {/* A GitHub Actions run replays in a burst at the end (#1053), so the live feed looks stalled:
-              say the wait is expected and link through to the live Actions run. */}
-          <ActionsRunNotice target={target} events={shown} live={working} />
+          {notices.map(({ View: Notice, id, package: pkg }) => (
+            <ModuleSlot key={`${pkg}/${id}`} package={pkg} label="run notice">
+              <Notice projectId={projectId} agentId={agentId} working={working} {...(host !== undefined ? { host } : {})} />
+            </ModuleSlot>
+          ))}
           {/* A run handed to Claude Code on the web (#610): the work is happening in a cloud session
               this machine cannot stream, so point at where it is rather than show an empty feed. */}
           <CloudAgentNotice target={target} events={shown} projectId={projectId} agentId={agentId} />

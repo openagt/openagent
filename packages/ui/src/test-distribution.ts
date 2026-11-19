@@ -35,6 +35,7 @@ export const DASHBOARD_PACKAGES: DashboardDistribution = [
   { package: '@openagt/skill-scheduler' },
   { package: '@openagt/skill-discord' },
   { package: '@openagt/skill-reply' },
+  { package: '@openagt/host-github-actions' },
 ]
 
 /**

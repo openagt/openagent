@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import type { OpenAgentEvent } from '../../src/index.js'
-import { pendingChoices, isAgentActive, currentAgentEvents, agentOutcome, cardOutcome, actionsRunUrl, shownStatus } from './live-state.js'
+import { pendingChoices, isAgentActive, currentAgentEvents, agentOutcome, cardOutcome, shownStatus } from './live-state.js'
 
 const choice = (id: string, title: string): OpenAgentEvent => ({
   kind: 'choice',
@@ -159,30 +159,6 @@ describe('agentOutcome', () => {
     expect(agentOutcome(midResume)).toBeUndefined()
     const finishedClean = [...midResume, { kind: 'end', ok: true }] as OpenAgentEvent[]
     expect(agentOutcome(finishedClean)).toEqual({ ok: true, stopped: false })
-  })
-})
-
-describe('actionsRunUrl', () => {
-  const action = (label: string): OpenAgentEvent => ({ kind: 'driver', event: { type: 'action', label } })
-
-  test('extracts the html_url from the ActionsDriver run action', () => {
-    expect(actionsRunUrl([action('run https://github.com/o/r/actions/runs/42')])).toBe(
-      'https://github.com/o/r/actions/runs/42',
-    )
-  })
-
-  test('undefined before the run action has fired', () => {
-    expect(actionsRunUrl([{ kind: 'driver', event: { type: 'start', prompt: 'go' } }])).toBeUndefined()
-  })
-
-  test('a plain tool action is not mistaken for a run url', () => {
-    expect(actionsRunUrl([action('Edit')])).toBeUndefined()
-  })
-
-  test('the most recent run wins across turns', () => {
-    expect(
-      actionsRunUrl([action('run https://github.com/o/r/actions/runs/1'), action('run https://github.com/o/r/actions/runs/2')]),
-    ).toBe('https://github.com/o/r/actions/runs/2')
   })
 })
 

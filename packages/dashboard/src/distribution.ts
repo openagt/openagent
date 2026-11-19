@@ -56,6 +56,9 @@ const DISTRIBUTION: DashboardDistribution = [
   { package: '@openagt/skill-scheduler' },
   { package: '@openagt/skill-discord' },
   { package: '@openagt/skill-reply' },
+  // host-github-actions: "Run on" offers GitHub Actions beside this computer, in a project on
+  // GitHub whose repository has the workflow it brings.
+  { package: '@openagt/host-github-actions' },
 ]
 
 export default DISTRIBUTION

@@ -23,7 +23,7 @@ export function CloudAgentNotice({
   projectId,
   agentId,
 }: {
-  target?: 'local' | 'actions' | 'remote' | 'web' | undefined
+  target?: string | undefined
   events: readonly OpenAgentEvent[]
   /** The agent this notice belongs to: what the question's card is given. */
   projectId: string
@@ -202,7 +202,7 @@ export function CloudMirrorRow({
   target,
   events,
 }: {
-  target?: 'local' | 'actions' | 'remote' | 'web' | undefined
+  target?: string | undefined
   events: readonly OpenAgentEvent[]
 }) {
   const session = target === 'web' ? cloudSession(events) : undefined

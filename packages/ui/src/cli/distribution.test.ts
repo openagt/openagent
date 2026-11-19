@@ -35,6 +35,7 @@ test("the dashboard runs the modules of the distribution handed down, and this c
     'scheduled-agents',
     'discord',
     'github-auto-reply',
+    'host-github-actions',
     'agent-driver',
   ])
   assert.equal((await localHostOf(hooks)).id, LOCAL_HOST)

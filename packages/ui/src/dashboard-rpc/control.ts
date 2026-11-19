@@ -3,7 +3,7 @@ export type { SteerResult }
 import { bridgeQuestions } from '../dashboard/bridge-store.js'
 import { isCloudSessionId } from '../dashboard/bridge-endpoints.js'
 import { openInApp, type OpenTarget, type OpenResult } from '../dashboard/open-in-app.js'
-import { contextBridgeBrowser, contextHost, contextPreferences, contextStartAgent, resolveProjectPath, resolveAgentPath } from './context.js'
+import { contextBridgeBrowser, contextPreferences, contextStartAgent, resolveProjectPath, resolveAgentPath, runHostOf } from './context.js'
 import { runRefAt } from '../distribution-hooks.js'
 import { errorMessage } from '@openagt/agent-data'
 import type { BridgeBrowserAction } from '../bridge-browser.js'
@@ -24,12 +24,13 @@ import type { Preferences } from '../registry.js'
 import { isPublishPick, type PublishPick } from '../publish-levels.js'
 
 // The write side behind the dashboard (#405, #1774). The daemon runs no agent, so every write here
-// reaches a run through this computer's host (`run.host`, #2394): Start, what a person says to a
-// run in their own words, and Stop. Their answer to its question is ask's (its server part).
+// reaches a run through its host (`run.host`, #2394), this computer's unless another host has the
+// run: Start, what a person says to a run in their own words, and Stop. Their answer to its
+// question is ask's (its server part).
 
 /**
- * Stop a live agent (the Stop button), through this computer's host: the run's process asks its
- * agent to end the turn where it is, as Esc does in Claude Code; a message continues it. A run
+ * Stop a live agent (the Stop button), through its host: on this computer, the run's process asks
+ * its agent to end the turn where it is, as Esc does in Claude Code; a message continues it. A run
  * still starting is stopped once its card names its process. A run that has nothing to stop here
  * is answered why.
  */
@@ -38,7 +39,8 @@ export async function sendStop(projectId: string, agentId?: string): Promise<Ste
     const cwd = await resolveProjectPath(projectId)
     if (!cwd || !agentId || !isRunId(agentId)) return { ok: false, error: 'unknown session' }
     try {
-      await contextHost().stop(await runRefAt(projectId, cwd, agentId))
+      const run = await runRefAt(projectId, cwd, agentId)
+      await (await runHostOf(run)).stop(run)
       return { ok: true }
     } catch (err) {
       return { ok: false, error: errorMessage(err) }
