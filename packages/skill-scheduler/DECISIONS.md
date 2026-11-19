@@ -97,8 +97,7 @@ already made, and lists it in its pull request; for anything else it proposes an
   the page says so; its cost is not recorded either, since Codex prices no turn. Picked
   over holding Codex rows back until a reading exists: nothing would start them.
 - How far a scheduled command's runs publish is each person's pick on their own machine, in
-  the state file like the switch; the scheduler's own Automations page shows the pick and
-  changes it. Until a person picks, a run commits its work and pushes nothing. Picked over
+  the state file; the scheduler's own Automations page shows the pick and changes it. Until a person picks, a run commits its work and pushes nothing. Picked over
   a level written beside the command for the whole team, which a person could only
   override: nothing leaves a machine before its own person said so. The page says a level
   as what a run may do ("May commit, pushes nothing"), not as what it will do: a run that
@@ -111,7 +110,7 @@ already made, and lists it in its pull request; for anything else it proposes an
   fixed order behind an empty queue (one command then depends on another, and idle it
   started an agent every 30 minutes). Order is what the numbers say.
 - The skill's pace is where a command starts. Each person may set another for their own
-  machine, in the state file like the switch: an interval in minutes, hours, days, weeks or
+  machine, kept with its switch: an interval in minutes, hours, days, weeks or
   months, or whenever there is work. Picked over the pace being the skill's alone, where
   slowing a command on one machine meant editing a tracked file.
 - A pace in days, weeks or months may name a time of day, in the machine's own time, like a
@@ -120,8 +119,7 @@ already made, and lists it in its pull request; for anything else it proposes an
   looks. This takes back the earlier pick against a clock time (machine-local, and two
   machines fire twice): the pace counts from the last start on any machine, so two machines
   never run the work twice.
-- How many agents of one command work at once is each person's too, in the state file like
-  the pace. The skill's number is where it starts, 1 when the skill gives none. A machine
+- How many agents of one command work at once is each person's too, in the state file. The skill's number is where it starts, 1 when the skill gives none. A machine
   starts another agent only while fewer than its person's number are working, counting the
   agents of every machine that shares the repository. Picked over the number being the
   skill's alone, where letting two agents work on one machine meant editing a tracked file.
@@ -154,9 +152,14 @@ already made, and lists it in its pull request; for anything else it proposes an
   neither the row's publish pick nor what its check found.
 - The state, `.scheduler/state.json`, untracked, per user, hidden through git's
   exclude file the way `.branches/` is: on or off, keep-alive, the model, the spend
-  cushion, this machine's switches, paces, numbers of agents and publish picks, the
-  scheduler's pid, the last tick and what it decided. Nothing the tool knows is only in
-  memory; a restart loses nothing.
+  cushion, this machine's numbers of agents and publish picks, the scheduler's pid, the
+  last tick and what it decided. Nothing the tool knows is only in memory; a restart loses
+  nothing.
+- This machine's switch and pace of each scheduled command are OpenAgent's settings, kept
+  per computer by the project (`scheduled-agents.commands`), not the state file (#2394,
+  decision 9): the queue reads there whether `work-queue` starts by itself, and how often.
+  Picked over a `schedule` hook, through which the scheduler's module told the other
+  modules its schedule.
 - Keep-alive, whether the scheduler outlives what started it, is per user, in the state
   file. Picked over a line in the tracked schedule: in the schedule it would switch on the
   next person's machine the first time they pull.

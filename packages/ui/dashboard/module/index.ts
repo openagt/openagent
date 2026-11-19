@@ -439,7 +439,6 @@ export { useIsMobile, isMobileScreen } from '../lib/use-mobile.js'
 export { Waiting } from '../components/Waiting.js'
 export { useHighlighted, Pieces, type Piece } from '../lib/highlight.js'
 export { useAction } from '../lib/use-action.js'
-export { useSchedule, type Schedule } from '../lib/use-schedule.js'
 export { useFileNames, pathsIn, type FileNames, type NamedFile } from '../lib/use-file-names.js'
 export { ConfirmDialog } from '../components/ui/confirm-dialog.js'
 // The dashboard's keys, as its keyboard shortcuts list names them: a module's are the same.

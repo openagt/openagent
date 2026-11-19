@@ -141,3 +141,63 @@ function presetFrom(value: unknown): Preset | undefined {
     },
   }
 }
+
+/**
+ * How often at most a scheduled command starts on a computer, where a person set it there:
+ * whenever its check finds work, or a wait from its last start (`6h`, `2d`), counted from a time
+ * of day when it has one (`at`, `HH:MM`), since the pick was made (`since`, ISO).
+ */
+export type SchedulePace = { work: true } | { every: string; at?: string; since: string }
+
+/** What a computer keeps of one scheduled command, where a person set it there: when they switched it on, and its pace. */
+export interface ScheduledCommandPicks {
+  /** When it was switched on on this computer, ISO: it is off without. */
+  on?: string
+  pace?: SchedulePace
+}
+
+/** A project's scheduled commands as a computer keeps them, by the command as a person types it without its slash (`work-queue`). */
+export type ScheduledCommands = Record<string, ScheduledCommandPicks>
+
+/**
+ * scheduled-agents' (#2394, decision 9): the scheduled commands this computer runs, by the
+ * project's id, each with when it was switched on here and the pace set here. Kept per computer:
+ * each machine switches its own on. The queue reads whether `work-queue` starts by itself, and how
+ * often. A part that is not valid reads as unset, and the rest stays.
+ */
+export const SCHEDULED_COMMANDS = defineSetting<Record<string, ScheduledCommands>>({
+  key: 'scheduled-agents.commands',
+  scope: 'computer',
+  default: {},
+  parse: value => {
+    if (!isMap(value)) return undefined
+    const projects = Object.entries(value).flatMap(([project, commands]): [string, ScheduledCommands][] => {
+      const kept = isMap(commands) ? Object.entries(commands).flatMap(([command, picks]) => picksFrom(command, picks)) : []
+      return kept.length > 0 ? [[project, Object.fromEntries(kept)]] : []
+    })
+    return Object.fromEntries(projects)
+  },
+})
+
+/** Where a person changes {@link SCHEDULED_COMMANDS}: scheduled-agents' page, by its segment and its name. */
+export const SCHEDULED_COMMANDS_PAGE = { segment: 'automations', label: 'Automations' } as const
+
+/** One command's picks, read strictly: a switch is a time, a pace one of its two readings; a command with neither is none. */
+function picksFrom(command: string, value: unknown): [string, ScheduledCommandPicks][] {
+  if (!isMap(value)) return []
+  const on = typeof value['on'] === 'string' && !Number.isNaN(Date.parse(value['on'])) ? { on: value['on'] } : {}
+  const pace = paceFrom(value['pace'])
+  return on.on !== undefined || pace !== undefined ? [[command, { ...on, ...(pace ? { pace } : {}) }]] : []
+}
+
+function paceFrom(value: unknown): SchedulePace | undefined {
+  if (!isMap(value)) return undefined
+  if (value['work'] === true) return { work: true }
+  const { every, at, since } = value
+  if (typeof every !== 'string' || typeof since !== 'string' || (at !== undefined && typeof at !== 'string')) return undefined
+  return { every, ...(typeof at === 'string' ? { at } : {}), since }
+}
+
+function isMap(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}

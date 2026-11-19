@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { DEFAULT_FAN_OUT_COUNT, DEFAULT_PRIORITY, PRIORITIES, QUEUE_COMMAND, addArgs, addTextArgs, doneArgs, isEntryLine, isPlacedEntry, isWorkingOn, entryHeadline, priorityMeaning, addToQueue, alreadyQueued, entryLabel, fanOut, fanOutLabel, queueLine, readEntries, topEntries, workOnEntryPrompt, type CommandResult } from './module.js'
+import { DEFAULT_FAN_OUT_COUNT, DEFAULT_PRIORITY, PRIORITIES, QUEUE_COMMAND, addArgs, addTextArgs, doneArgs, paceWords, isEntryLine, isPlacedEntry, isWorkingOn, entryHeadline, priorityMeaning, addToQueue, alreadyQueued, entryLabel, fanOut, fanOutLabel, queueLine, readEntries, topEntries, workOnEntryPrompt, type CommandResult } from './module.js'
 
 test('entryLabel shows a leading link\'s text, opens only an absolute http(s) target, and keeps anything else whole', () => {
   assert.deepEqual(entryLabel('[Login page](tickets/2026-08-01_login-page.md) — needs the cookie first'), { text: 'Login page' })
@@ -155,4 +155,15 @@ test('entryHeadline names a typed entry by its words up to the first sentence en
   // A dot, colon or dash inside a word is part of it.
   assert.deepEqual(entryHeadline('  Bump vite to 7.1 and fix src/app.ts:12 re-renders  '), { name: 'Bump vite to 7.1 and fix src/app.ts:12 re-renders' })
   assert.deepEqual(entryHeadline('Ends with a dot.'), { name: 'Ends with a dot.' })
+})
+
+test('the pace a person set for the command that works the queue, in words: whenever there is work, at most every so long, or every so long at a time of day; none for one that does not read', () => {
+  const since = '2026-10-03T08:00:00.000Z'
+  assert.equal(paceWords({ work: true }), 'whenever there is work')
+  assert.equal(paceWords({ every: '6h', since }), 'at most every 6 hours')
+  assert.equal(paceWords({ every: '1h', since }), 'at most every hour')
+  assert.equal(paceWords({ every: '15m', since }), 'at most every 15 minutes')
+  assert.equal(paceWords({ every: '2d', at: '10:00', since }), 'every 2 days at 10:00')
+  assert.equal(paceWords({ every: '1mo', since }), 'at most every month')
+  assert.equal(paceWords({ every: 'often', since }), undefined)
 })

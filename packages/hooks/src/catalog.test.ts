@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { PERSON, SETTINGS_FILE, chainStore, settingsIn } from './index.js'
-import { DEFAULT_PRESET, PERSON_INFO, PRESETS, isPersonName, isPresetName, presetIdOf, presetOf, presetsIn } from './catalog.js'
+import { COMPUTER, PERSON, SETTINGS_FILE, chainStore, settingsIn } from './index.js'
+import { DEFAULT_PRESET, PERSON_INFO, PRESETS, SCHEDULED_COMMANDS, isPersonName, isPresetName, presetIdOf, presetOf, presetsIn } from './catalog.js'
 import { memoryStore } from './testing.js'
 
 test("the person's name and picture: saved with the person, each part read strictly, and none set is the computer's", async () => {
@@ -42,4 +42,20 @@ test('the presets: saved with the person, Default first and built in until chang
   assert.deepEqual(await settings.get(PRESETS), [{ id: 'ok', name: 'Ok', options: {} }, { id: 'quiet', name: 'Quiet', options: { plugins: { without: ['logs'] } } }])
   assert.equal(presetIdOf(' Social Media! '), 'social-media')
   assert.deepEqual([isPresetName('Reviewer'), isPresetName('!!!'), isPresetName('x'.repeat(41))], [true, false, false])
+})
+
+test("the scheduled commands a computer runs: kept on the computer, by project then command, each with its switch and pace read strictly; one with neither is none", async () => {
+  const store = chainStore([memoryStore()])
+  const settings = settingsIn(store)
+  assert.deepEqual(await settings.get(SCHEDULED_COMMANDS), {})
+  const picks = { 'shop-1a2b': { 'work-queue': { on: '2026-10-03T08:00:00.000Z', pace: { work: true as const } }, 'update-tickets': { pace: { every: '1d', at: '10:00', since: '2026-10-03T08:00:00.000Z' } } } }
+  await settings.set(SCHEDULED_COMMANDS, picks)
+  assert.deepEqual(await settings.get(SCHEDULED_COMMANDS), picks)
+  assert.match((await store.read(COMPUTER, SETTINGS_FILE)) ?? '', /"scheduled-agents\.commands"/)
+
+  const saved = (value: unknown) => store.save(COMPUTER, { [SETTINGS_FILE]: JSON.stringify({ 'scheduled-agents.commands': value }) }, 'by hand')
+  await saved({ shop: { 'work-queue': { on: 'yesterday', pace: { every: 6 } }, triage: { on: '2026-10-03T08:00:00.000Z', pace: 'often' } }, empty: { tidy: {} }, other: 'on' })
+  assert.deepEqual(await settings.get(SCHEDULED_COMMANDS), { shop: { triage: { on: '2026-10-03T08:00:00.000Z' } } })
+  await saved([])
+  assert.deepEqual(await settings.get(SCHEDULED_COMMANDS), {})
 })

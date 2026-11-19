@@ -46,7 +46,8 @@
       "default": "./dist/names.js"
     },
     "./SKILL.md": "./SKILL.md",
-    "./dashboard": "./dist/dashboard/dashboard.js"
+    "./dashboard": "./dist/dashboard/dashboard.js",
+    "./server": "./dist/server.js"
   },
   "scripts": {
     "build": "cp ../../skills/queue/SKILL.md SKILL.md && tsc -p tsconfig.build.json && vite build -c dashboard/vite.config.ts",

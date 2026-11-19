@@ -2,7 +2,6 @@ import { afterEach, describe, expect, test } from 'vitest'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { ModuleHostContext, type ModuleHost, type UiProject } from '@openagt/ui/module'
 import { SchedulerCard, offWords } from './SchedulerCard.js'
-import defineScheduler from './index.js'
 import { ON_CLAUDE, STATUS, hostAnswering } from './fixtures.js'
 
 const GEMSTACK = { id: 'p1', name: 'gemstack', gitHost: true }
@@ -143,47 +142,5 @@ describe('the Automations card of the Overview', () => {
     expect(offWords(5, 1)).toBe('5 more are switched off')
     expect(offWords(6, 0)).toBe('All 6 are switched off')
     expect(offWords(1, 0)).toBe('Its one automation is switched off')
-  })
-})
-
-describe('what the module tells the other pages starts by itself', () => {
-  const read = (output: unknown) => defineScheduler.schedule!.read(hostAnswering(() => ({ ok: true, output })).host, GEMSTACK)
-
-  test('each scheduled command with whether it starts by itself now, and for one switched on when it starts next', async () => {
-    expect(defineScheduler.schedule!.page).toBe('automations')
-    expect(await read(RAN)).toEqual([
-      { command: 'post-merge-cleanup', on: true, note: 'Next start in 23h' },
-      { command: 'work-queue', on: false },
-    ])
-  })
-
-  test('a command switched on in a project whose scheduler is not running does not start by itself, and the note says why', async () => {
-    expect(await read({ ...RAN, on: false, running: false })).toEqual([
-      { command: 'post-merge-cleanup', on: false, note: 'The scheduler is off' },
-      { command: 'work-queue', on: false },
-    ])
-  })
-
-  test('a project whose status cannot be read is not said to have nothing: the read fails, with why', async () => {
-    await expect(defineScheduler.schedule!.read(hostAnswering(() => ({ ok: false, error: 'not inside a git repository' })).host, GEMSTACK)).rejects.toThrow('not inside a git repository')
-  })
-
-  test('a command whose coding agent cannot run it does not start by itself, whatever its switch, and the note says why', async () => {
-    const answer = await read({ ...RAN, runsOn: { 'post-merge-cleanup': 'codex' } })
-    expect(answer[0]).toEqual({ command: 'post-merge-cleanup', on: false, note: 'Cannot start on Codex: its skill is not in .agents/skills' })
-  })
-
-  test('a command the last look held back does not start by itself, and the note says why', async () => {
-    const answer = await read({ ...RAN, lastTick: { at: STATUS.lastTick.at, decisions: [{ command: 'post-merge-cleanup', outcome: 'quota: Current week is 99% used' }] } })
-    expect(answer[0]).toEqual({ command: 'post-merge-cleanup', on: false, note: 'Waits for quota: Current week is 99% used' })
-  })
-
-  test('a scheduler that is off says so once, and not again as its last look\'s word', async () => {
-    const { host } = hostAnswering(() => ({ ok: true, output: { ...RAN, on: false, running: false, lastTick: { at: STATUS.lastTick.at, decisions: [], note: 'off' } } }))
-    show(host, [GEMSTACK])
-    expect(await screen.findByText('Scheduler off')).toBeTruthy()
-    expect(screen.getByText(/^Nothing starts by itself/)).toBeTruthy()
-    expect(screen.queryByText(/scheduler is off/i)).toBeNull()
-    expect(screen.queryByText(/last look/)).toBeNull()
   })
 })

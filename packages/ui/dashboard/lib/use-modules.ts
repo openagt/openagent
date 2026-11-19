@@ -27,8 +27,6 @@ export type MountedView<P extends ViewPlace> = Mounted<Extract<UiView, { place: 
 export type MountedAction<P extends ActionPlace> = Mounted<Extract<UiAction, { place: P }>>
 /** The option at `place`, as the shell mounts it. */
 export type MountedOption<P extends OptionPlace> = Mounted<Extract<UiOption, { place: P }>>
-/** What starts by itself, as the shell mounts it: the first module's that says. */
-export type MountedSchedule = Mounted<NonNullable<UiModuleDefinition['schedule']>>
 
 /** The place of an entry that names none: a card, a part of the Overview's line, a Settings entry, an option. */
 export const DEFAULT_ORDER = 50
@@ -49,7 +47,6 @@ export interface MountedModules {
   options: { [P in OptionPlace]: MountedOption<P>[] }
   /** How each kind of content looks: the first module's for a kind. */
   renders: Mounted<UiRender>[]
-  schedule?: MountedSchedule
   /** True once the module list was read and every module in it imported or skipped. */
   loaded: boolean
 }
@@ -72,9 +69,9 @@ function nothingAt(loaded: boolean): MountedModules {
 const NOTHING_MOUNTED: MountedModules = nothingAt(false)
 
 /** What is mounted when the modules bring only `parts`, at their places; loaded unless said. For the shell's tests and the modules'. */
-export function mountedOf(parts: { views?: { [P in ViewPlace]?: MountedView<P>[] }; actions?: { [P in ActionPlace]?: MountedAction<P>[] }; renders?: Mounted<UiRender>[]; schedule?: MountedSchedule; loaded?: boolean } = {}): MountedModules {
+export function mountedOf(parts: { views?: { [P in ViewPlace]?: MountedView<P>[] }; actions?: { [P in ActionPlace]?: MountedAction<P>[] }; renders?: Mounted<UiRender>[]; loaded?: boolean } = {}): MountedModules {
   const nothing = nothingAt(parts.loaded ?? true)
-  return { ...nothing, views: { ...nothing.views, ...parts.views }, actions: { ...nothing.actions, ...parts.actions }, ...(parts.renders ? { renders: parts.renders } : {}), ...(parts.schedule ? { schedule: parts.schedule } : {}) }
+  return { ...nothing, views: { ...nothing.views, ...parts.views }, actions: { ...nothing.actions, ...parts.actions }, ...(parts.renders ? { renders: parts.renders } : {}) }
 }
 
 /** Each module's browser part, imported once per page load, by URL; a module that fails to load is skipped. */
@@ -228,7 +225,6 @@ function mount(loadedModules: { module: DashboardModule; definition: UiModuleDef
     for (const action of definition.hooks['ui.action'] ?? []) actions[action.place]?.push({ ...action, ...of })
     for (const option of definition.hooks['ui.option'] ?? []) options[option.place]?.push({ ...option, ...of })
     for (const render of definition.hooks['ui.render'] ?? []) if (!mounted.renders.some(each => each.kind === render.kind)) mounted.renders.push({ ...render, ...of })
-    if (definition.schedule) mounted.schedule ??= { ...definition.schedule, ...of }
   }
   // Numbers, not a list the shell keeps: a third package sits between two others without the shell knowing it exists.
   for (const place of ['overview.card', 'overview.line', 'settings.section', 'permissions.section'] as const) views[place].sort(byMountOrder)

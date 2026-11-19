@@ -2,6 +2,7 @@
 // are unit-tested like the rest of the package: how a queue entry reads on screen, how the
 // command's lists are read back, what the "Add to queue" action runs for the links a dashboard
 // page hands it, and how the Overview card starts agents on entries.
+import type { SchedulePace } from '@openagt/hooks'
 import type { PlacedEntry } from './queue.js'
 
 /**
@@ -10,6 +11,24 @@ import type { PlacedEntry } from './queue.js'
  * itself, to say whether anything takes from the queue.
  */
 export const QUEUE_COMMAND = 'work-queue'
+
+/** The units a pace's wait is written in (`6h`, `2d`, `1mo`), as a person reads them. */
+const PACE_UNITS: Record<string, string> = { m: 'minute', h: 'hour', d: 'day', w: 'week', mo: 'month' }
+
+/**
+ * How often the command that works the queue starts, in words, from the pace a person set for it:
+ * "whenever there is work", "at most every 6 hours", "every 2 days at 10:00". None for a pace that
+ * does not read as one.
+ */
+export function paceWords(pace: SchedulePace): string | undefined {
+  if ('work' in pace) return 'whenever there is work'
+  const wait = /^([1-9][0-9]*)(mo|m|h|d|w)$/.exec(pace.every)
+  if (!wait) return undefined
+  const count = Number(wait[1])
+  const unit = PACE_UNITS[wait[2]!]!
+  const every = count === 1 ? `every ${unit}` : `every ${count} ${unit}s`
+  return pace.at !== undefined ? `${every} at ${pace.at}` : `at most ${every}`
+}
 
 /** The priorities an entry can be queued at, most urgent first: the sections of the queue file. */
 export const PRIORITIES: readonly number[] = [10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0]

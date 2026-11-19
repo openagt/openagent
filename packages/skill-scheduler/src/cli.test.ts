@@ -4,9 +4,15 @@ import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:
 import { hostname, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { recordRun } from '@openagt/agent-runner'
+import { memorySettings } from '@openagt/hooks/testing'
 import { runCli } from './cli.js'
+import { picksSettings } from './picks.js'
 import { DEFAULT_STATE, readState, statePath, writeState } from './state.js'
 import { removeRepo, testRepo, writeSkill } from './test-repo.js'
+
+// This machine's switches and paces are OpenAgent's settings: kept here as a distribution's store keeps them.
+const settings = memorySettings()
+picksSettings.of = async () => settings
 
 // The contract on top of the functions: JSON on stdout, a line for a person on stderr, and an
 // exit code that says refusal or failure. The commands that spawn or talk to Claude are covered

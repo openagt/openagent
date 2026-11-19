@@ -2,16 +2,17 @@ import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { HostServicesContext, INERT_HOST_SERVICES, type HostServices } from '../../ui/dashboard/lib/host-services.js'
 import { mountedOf, type MountedModules } from '@openagt/ui/module/testing'
-import { forgetRemembered, type UiScheduledCommand } from '@openagt/ui/module'
+import { forgetRemembered } from '@openagt/ui/module'
+import type { Taker } from '../src/server.js'
 import { QueuePage } from './QueuePage.js'
 import { NO_MODULES, fakeHost, renderWithHost, type FakeHost } from './test-host.js'
 import { workOnEntryPrompt } from '../src/module.js'
 import { openMenu, phoneScreen } from '../../ui/dashboard/test-utils.js'
 
-// The page rendered from nothing but this package: a host answering `queue --local --full`, and
-// the queue's own `done` and `add`. What other packages tell it (which commands start by
-// themselves, what a path into the project's files is called) comes through the dashboard's
-// mounted modules, faked here by what such a package would declare.
+// The page rendered from nothing but this package: a host answering `queue --local --full`, the
+// queue's own `done` and `add`, and its server part's `taker`, which reads the scheduler's switch
+// in the settings. What other packages tell it (what a path into the project's files is called)
+// comes through the dashboard's mounted modules, faked here by what such a package would declare.
 
 const alpha = { id: 'p1', name: 'alpha', gitHost: true }
 const PLAN = 'Create tickets/2026-08-01_login-page.plan.md'
@@ -25,20 +26,12 @@ afterEach(() => {
 })
 
 let host: FakeHost
-/** The page over a queue that answers `full`, and takes every `done` and `add`. */
-function show(full: unknown[] = FULL, modules: MountedModules = NO_MODULES, services?: HostServices) {
-  host = fakeHost({ p1: { '--local --full': full } })
+/** The page over a queue that answers `full`, and takes every `done` and `add`; who takes from it is `taker`, unknown without one. */
+function show(full: unknown[] = FULL, modules: MountedModules = NO_MODULES, { services, taker }: { services?: HostServices; taker?: Taker | 'pending' } = {}) {
+  host = fakeHost({ p1: { '--local --full': full } }, taker)
   host.act.mockImplementation(async () => ({ ok: true, output: { ok: true } }))
   const page = <QueuePage projects={[alpha]} projectId={null} path={[]} />
   return renderWithHost(services ? <HostServicesContext.Provider value={services}>{page}</HostServicesContext.Provider> : page, host, modules)
-}
-
-/** A dashboard in which a package schedules commands, as `commands` says of the project. */
-function scheduling(commands: UiScheduledCommand[]): MountedModules {
-  return mountedOf({
-    views: { 'app.page': [{ place: 'app.page', id: 'automations', label: 'Automations', View: () => null, package: 'a-scheduler', projects: ['p1'] }] },
-    schedule: { page: 'automations', read: async () => commands, package: 'a-scheduler', projects: ['p1'] },
-  })
 }
 
 /** The section headings and the entries' names, top to bottom, as the page shows them. */
@@ -92,70 +85,55 @@ describe('QueuePage', () => {
   })
 
   describe('who takes from the queue', () => {
-    test('with no package that starts commands by itself, entries wait for a person, and nothing links anywhere', async () => {
-      show()
-      await screen.findByText('Hot fix')
-      expect(taker()).toBe('Entries wait here until you start them.')
-      expect(screen.queryByRole('link', { name: /Automations/ })).toBeNull()
-    })
+    const since = '2026-10-03T08:00:00.000Z'
 
-    test('the command that works the queue, switched off: entries wait, and the line opens the page that switches it', async () => {
-      const openPage = vi.fn()
-      show(FULL, scheduling([{ command: 'plan-tickets', on: true, note: 'Next start in 3h, if there is work' }, { command: 'work-queue', on: false }]), { ...INERT_HOST_SERVICES, openPage })
+    test("the command that works the queue, switched off on this computer: entries wait, and the line opens the scheduler's page in the project", async () => {
+      show(FULL, NO_MODULES, { taker: { on: false } })
       await waitFor(() => expect(taker()).toBe('Entries wait here until you start them. Change it in Automations.'))
-      fireEvent.click(screen.getByRole('link', { name: 'Automations' }))
-      expect(openPage).toHaveBeenCalledWith('automations')
+      const link = screen.getByRole('link', { name: 'Automations' })
+      expect(link.getAttribute('href')).toBe('/p1/automations')
+      fireEvent.click(link)
+      expect(host.openPage).toHaveBeenCalledWith('automations', [], 'p1')
     })
 
-    test('switched on: an agent takes the first entry nobody claimed, and when it starts next is said in the scheduling package\'s words', async () => {
-      show(FULL, scheduling([{ command: 'work-queue', on: true, note: 'Starts when there is work' }]))
-      await waitFor(() => expect(taker()).toBe('Agents take entries from here by themselves. Starts when there is work. Change it in Automations.'))
+    test('switched on: agents take entries by themselves, at the pace set here when one is', async () => {
+      show(FULL, NO_MODULES, { taker: { on: true } })
+      await waitFor(() => expect(taker()).toBe('Agents take entries from here by themselves. Change it in Automations.'))
+      cleanup()
+      forgetRemembered()
+      localStorage.clear()
+      show(FULL, NO_MODULES, { taker: { on: true, pace: { every: '6h', since } } })
+      await waitFor(() => expect(taker()).toBe('Agents take entries from here by themselves, at most every 6 hours. Change it in Automations.'))
+      cleanup()
+      forgetRemembered()
+      localStorage.clear()
+      show(FULL, NO_MODULES, { taker: { on: true, pace: { work: true } } })
+      await waitFor(() => expect(taker()).toBe('Agents take entries from here by themselves, whenever there is work. Change it in Automations.'))
     })
 
-    test('switched on while nothing starts by itself: the line says off, with why', async () => {
-      show(FULL, scheduling([{ command: 'work-queue', on: false, note: 'The scheduler is off' }]))
-      await waitFor(() => expect(taker()).toBe('Entries wait here until you start them. The scheduler is off. Change it in Automations.'))
-    })
-
-    test('while what starts by itself is not known, the page says nothing of it: not read yet, or a read that failed', async () => {
-      // The installed modules are not known yet.
-      show(FULL, { ...NO_MODULES, loaded: false })
+    test('while who takes from it is not known, not read yet or a read that failed, the page says nothing of it', async () => {
+      show(FULL, NO_MODULES, { taker: 'pending' })
       await screen.findByText('Hot fix')
       expect(screen.queryByRole('status', { name: 'Who takes from the queue' })).toBeNull()
       cleanup()
-      // The scheduling package could not read this project.
-      show(FULL, { ...NO_MODULES, schedule: { page: 'automations', read: async () => Promise.reject(new Error('no')), package: 'a-scheduler', projects: ['p1'] } })
+      show(FULL)
       await screen.findByText('Hot fix')
       await new Promise(resolve => setTimeout(resolve, 20))
       expect(screen.queryByRole('status', { name: 'Who takes from the queue' })).toBeNull()
     })
 
     test('coming back to the page, the line stands from the first frame: what was read last time, until the fresh read lands', async () => {
-      show(FULL, scheduling([{ command: 'work-queue', on: true }]))
+      show(FULL, NO_MODULES, { taker: { on: true } })
       await waitFor(() => expect(taker()).toContain('Agents take entries from here by themselves'))
       cleanup()
-      show(FULL, { ...scheduling([]), schedule: { page: 'automations', read: () => new Promise(() => {}), package: 'a-scheduler', projects: ['p1'] } })
+      show(FULL, NO_MODULES, { taker: 'pending' })
       await screen.findByText('Hot fix')
       expect(taker()).toContain('Agents take entries from here by themselves')
-    })
-
-    test('opening the page again, the line stands from the first frame, also while the installed modules are not known yet', async () => {
-      show(FULL, scheduling([{ command: 'work-queue', on: true }]))
-      await waitFor(() => expect(taker()).toContain('Agents take entries from here by themselves.'))
+      // Opened again, in a new tab: what was read is kept beside the page too.
       cleanup()
       forgetRemembered()
-      show(FULL, { ...NO_MODULES, loaded: false })
+      show(FULL, NO_MODULES, { taker: 'pending' })
       expect(taker()).toContain('Agents take entries from here by themselves.')
-      await waitFor(() => expect(host.runCommand).toHaveBeenCalled())
-      await new Promise(resolve => setTimeout(resolve, 20))
-      expect(taker()).toContain('Agents take entries from here by themselves.')
-    })
-
-    test('a project whose scheduled commands hold none that works the queue has nothing taking from it', async () => {
-      show(FULL, scheduling([{ command: 'plan-tickets', on: true }]))
-      await screen.findByText('Hot fix')
-      await waitFor(() => expect(host.runCommand).toHaveBeenCalled())
-      expect(taker()).toBe('Entries wait here until you start them. Change it in Automations.')
     })
   })
 
@@ -279,11 +257,11 @@ describe('QueuePage', () => {
     test('on a phone a row has one press, its menu, holding its start, the launcher and its removal', async () => {
       const wide = phoneScreen()
       try {
-        show()
+        show(FULL, NO_MODULES, { taker: { on: false } })
         await screen.findByText('Hot fix')
         expect(screen.queryByRole('button', { name: /^Start now: entry/ })).toBeNull()
         // Who takes from the queue said once; the field, then the count and the batch's start, over the entries they start.
-        expect(screen.getAllByRole('status', { name: 'Who takes from the queue' })).toHaveLength(1)
+        await waitFor(() => expect(screen.getAllByRole('status', { name: 'Who takes from the queue' })).toHaveLength(1))
         const field = screen.getByRole('textbox', { name: 'A task to add to the queue' })
         const start = screen.getByRole('button', { name: 'Start 3 agents' })
         const first = screen.getByText('Hand-written on top')
@@ -412,7 +390,7 @@ describe('QueuePage', () => {
     })
 
     test('an empty queue is the same page: who takes from it, the field that takes a task, and one line under it', async () => {
-      show([], scheduling([{ command: 'work-queue', on: false }]))
+      show([], NO_MODULES, { taker: { on: false } })
       expect(await screen.findByText('Nothing queued.')).toBeTruthy()
       expect(field()).toBeTruthy()
       await waitFor(() => expect(taker()).toContain('Change it in Automations.'))
@@ -432,7 +410,7 @@ describe('QueuePage', () => {
     test('an entry that names a file another page opens reads as that page\'s name for it, with the line as written under it, and opens that page', async () => {
       const openPage = vi.fn()
       const names = vi.fn(async () => ({ 'tickets/2026-08-01_login-page.plan.md': { title: 'Plan: Login page', href: 'tickets/2026-08-01_login-page.md' } }))
-      show([{ entry: PLAN, priority: 5 }], naming(names), { ...INERT_HOST_SERVICES, openPage })
+      show([{ entry: PLAN, priority: 5 }], naming(names), { services: { ...INERT_HOST_SERVICES, openPage } })
       const title = await screen.findByRole('button', { name: 'Plan: Login page' })
       expect(names).toHaveBeenCalledWith(expect.objectContaining({ package: 'a-tickets' }), 'p1', ['tickets/2026-08-01_login-page.plan.md'])
       expect(screen.getByText(PLAN)).toBeTruthy()
@@ -484,7 +462,7 @@ describe('QueuePage', () => {
       show(
         [{ entry: '[Upstream bug](https://github.com/x/y/issues/1)' }, { entry: '[Login page](tickets/2026-08-01_login-page.md)' }],
         naming(async () => ({ 'tickets/2026-08-01_login-page.md': { title: 'Login page, as the ticket says' } })),
-        { ...INERT_HOST_SERVICES, openPage },
+        { services: { ...INERT_HOST_SERVICES, openPage } },
       )
       const upstream = await screen.findByRole('link', { name: 'Upstream bug' })
       expect(upstream.getAttribute('href')).toBe('https://github.com/x/y/issues/1')

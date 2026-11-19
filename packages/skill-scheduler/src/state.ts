@@ -5,6 +5,7 @@ import { PUBLISH_LEVELS, type Publish } from '@openagt/agent-runner'
 import { DEFAULT_AGENT, DEFAULT_MODEL, DEFAULT_PUBLISH, DEFAULT_SPEND_OFFSET, STATE_DIR, STATE_FILE, isAgent, isAgents, isTime, type AgentName } from './names.js'
 import { ableAgents, homeAgent, type ScheduledCommand } from './schedule.js'
 import { sinceNow, type PacePick } from './pace.js'
+import { readPicks, samePicks, savePicks } from './picks.js'
 
 /**
  * The tool's state (#1774): one JSON file under `.scheduler/` at the repository root,
@@ -14,8 +15,10 @@ import { sinceNow, type PacePick } from './pace.js'
  *
  * What is here is what would otherwise live in a process's memory: whether the scheduler is on,
  * whether it should outlive whatever started it, the model this user's scheduled runs start on
- * and the spend cushion they take, which scheduled commands this machine switched on, the pace and the number of agents at once a person set for one here, how far this machine's runs of a scheduled command publish where a person picked it, the pid of the scheduler's own process when one runs, and the last tick with what it
- * decided per command. A restart loses nothing.
+ * and the spend cushion they take, the number of agents at once a person set for a command here, how far this machine's runs of a scheduled command publish where a person picked it, the pid of the scheduler's own process when one runs, and the last tick with what it
+ * decided per command. A restart loses nothing. Which commands this machine switched on, and the
+ * pace a person set for one here, are OpenAgent's settings (`picks.ts`): the state as read and
+ * written holds them, and the file does not.
  */
 
 /** What the tick decided for one command. */
@@ -85,11 +88,11 @@ export interface State {
   model: string
   /** How far past the spend boundary a run may still start, in percentage points. */
   spendOffset: number
-  /** The scheduled commands this machine switched on, each with when it was, ISO. Every command starts switched off: a skill that arrives in a project starts no agent by itself. */
+  /** The scheduled commands this machine switched on, each with when it was, ISO, kept in OpenAgent's settings. Every command starts switched off: a skill that arrives in a project starts no agent by itself. */
   switches?: Record<string, string>
   /** This machine's publish pick per command. */
   publishes?: Record<string, PublishPick>
-  /** This machine's pace per command, kept only where a person set one: a command without one runs at its skill's pace. */
+  /** This machine's pace per command, kept in OpenAgent's settings, only where a person set one: a command without one runs at its skill's pace. */
   paces?: Record<string, PacePick>
   /** This machine's number of runs of a command in flight at once, kept only where a person set one: a command without one has its skill's number. */
   agents?: Record<string, number>
@@ -131,26 +134,36 @@ export function statePath(repo: string): string {
   return join(stateDir(repo), STATE_FILE)
 }
 
-/** The state as written, defaults filled in; the default state when there is none or it does not parse. */
+/** The state as written, defaults filled in, with this machine's switches and paces; the default state when there is none or it does not parse. */
 export async function readState(repo: string): Promise<State> {
+  const [file, picks] = await Promise.all([readStateFile(repo), readPicks(repo)])
+  return { ...file, ...picks }
+}
+
+/** What the state file holds: a switch or a pace written into it switches nothing, since this machine's are OpenAgent's settings. */
+async function readStateFile(repo: string): Promise<State> {
   const raw = await readFile(statePath(repo), 'utf8').catch(() => undefined)
   if (raw === undefined) return { ...DEFAULT_STATE }
   try {
     const parsed = JSON.parse(raw) as Partial<State>
-    return { ...DEFAULT_STATE, ...(parsed && typeof parsed === 'object' ? parsed : {}) }
+    const { switches: _switches, paces: _paces, ...kept } = parsed && typeof parsed === 'object' ? parsed : {}
+    return { ...DEFAULT_STATE, ...kept }
   } catch {
     return { ...DEFAULT_STATE }
   }
 }
 
 /**
- * Write the state. The first write also hides the directory from git; that is best-effort, since
- * a repository whose exclude file cannot be written still has a scheduler.
+ * Write the state: its switches and paces to the settings, where they changed from `before` (always,
+ * with none given), the rest to the file. The first write also hides the directory from git; that is
+ * best-effort, since a repository whose exclude file cannot be written still has a scheduler.
  */
-export async function writeState(repo: string, state: State, git: GitRunner = nodeGitRunner()): Promise<void> {
+export async function writeState(repo: string, state: State, git: GitRunner = nodeGitRunner(), before?: State): Promise<void> {
+  const { switches, paces, ...file } = state
+  if (!before || !samePicks(before, state)) await savePicks(repo, { ...(switches ? { switches } : {}), ...(paces ? { paces } : {}) })
   await mkdir(stateDir(repo), { recursive: true })
   await excludeFromGit(repo, `/${STATE_DIR}`, undefined, git).catch(() => {})
-  await writeFile(statePath(repo), JSON.stringify(state, null, 2) + '\n')
+  await writeFile(statePath(repo), JSON.stringify(file, null, 2) + '\n')
 }
 
 /**
@@ -313,7 +326,8 @@ export function withAgent(state: State, command: string, agent: AgentName | unde
 
 /** Read, change, write: one edit of the state. */
 export async function updateState(repo: string, change: (state: State) => State, git?: GitRunner): Promise<State> {
-  const next = change(await readState(repo))
-  await writeState(repo, next, git)
+  const before = await readState(repo)
+  const next = change(before)
+  await writeState(repo, next, git, before)
   return next
 }

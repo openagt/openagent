@@ -356,32 +356,11 @@ export interface UiHooks {
   'ui.render'?: readonly UiRender[]
 }
 
-/** A command that starts by itself in a project, as the module that schedules it says. */
-export interface UiScheduledCommand {
-  /** The command as a person types it, without its slash: `work-queue`. */
-  command: string
-  /** Whether it starts by itself on this computer right now. */
-  on: boolean
-  /** One line on it: when it starts next while it is on, or why it does not start though its switch is on. */
-  note?: string
-}
-
 /** A module's UI part: what its package's `./dashboard` entry default-exports. */
 export interface UiModuleDefinition {
   /** Its name, as its Node part's (`tickets`). */
   name: string
   hooks: UiHooks
-  /**
-   * What starts by itself, for the other modules' pages: which commands, and whether each is on;
-   * the first module's that says. Until the settings catalog holds the scheduler's switches, which
-   * the queue reads there (#2394).
-   */
-  schedule?: {
-    /** The module's own page where a person switches a command on, by its id. */
-    page: string
-    /** One project's commands that can start by themselves. Rejects when they cannot be read. */
-    read(host: UiHost, project: UiProject): Promise<UiScheduledCommand[]>
-  }
 }
 
 /** Type a module's UI part: `export default defineUiModule({ ... })`. */

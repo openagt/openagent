@@ -33,19 +33,19 @@ import {
   useModuleHost,
   useOpenAgentDown,
   usePolled,
-  useSchedule,
   WordsShape,
   type FileNames,
   type ModuleAgent,
   type UiPageProps,
   type UiProject,
-  type Schedule,
 } from '@openagt/ui/module'
+import { SCHEDULED_COMMANDS_PAGE } from '@openagt/hooks'
 import type { PlacedEntry } from '../src/queue.js'
-import { DEFAULT_PRIORITY, PRIORITIES, QUEUE_COMMAND, addTextArgs, doneArgs, entryTarget, fanOutLabel, fanOutPress, isPlacedEntry, entryHeadline, isWorkingOn, priorityMeaning, readEntries, unclaimedEntries, workOnEntryPrompt } from '../src/module.js'
+import { DEFAULT_PRIORITY, PRIORITIES, addTextArgs, paceWords, doneArgs, entryTarget, fanOutLabel, fanOutPress, isPlacedEntry, entryHeadline, isWorkingOn, priorityMeaning, readEntries, unclaimedEntries, workOnEntryPrompt } from '../src/module.js'
 import { AgentOnEntry, entryView } from './entry.js'
 import { useQueueStarts, type QueueStarts } from './starts.js'
 import { BatchCount } from './batch-count.js'
+import { useTakers, type Takers } from './takers.js'
 
 /** One project's queue as read: its entries with their sections and the project's agents at work, or why the command failed. */
 interface ProjectRead {
@@ -114,7 +114,7 @@ export function QueuePage({ projects }: UiPageProps) {
     { remember: `skill-queue:page:${key}`, stored: true },
     runsAgain(undefined),
   )
-  const schedule = useSchedule(projects)
+  const takers = useTakers(projects)
   const names = useFileNames(
     reads.map(read => ({ projectId: read.project.id, paths: (read.entries ?? []).flatMap(placed => pathsIn(placed.entry)) })),
     `skill-queue:page-names:${key}`,
@@ -129,7 +129,7 @@ export function QueuePage({ projects }: UiPageProps) {
   // A phone's bar names the page and hides a description: there the line stands first in the page, and
   // the count and the start stand under the field, over the entries they start (ProjectQueue).
   const phone = useIsMobile()
-  const taker = onlyProject && <TakerLine projectId={onlyProject.id} schedule={schedule} />
+  const taker = onlyProject && <TakerLine projectId={onlyProject.id} takers={takers} />
 
   return (
     <Page
@@ -178,7 +178,7 @@ export function QueuePage({ projects }: UiPageProps) {
                 action={<BatchStart read={read} primary={false} names={names} starts={starts} />}
               >
                 <p className="-mt-1 mb-3 text-sm text-muted-foreground">
-                  <TakerLine projectId={read.project.id} schedule={schedule} />
+                  <TakerLine projectId={read.project.id} takers={takers} />
                 </p>
                 <ProjectQueue read={read} names={names} starts={starts} reload={reload} />
               </Section>
@@ -273,20 +273,20 @@ function ProjectQueue({ read, names, starts, reload, batch, field = true }: { re
 
 /**
  * Whether anything takes from the project's queue by itself, in one sentence under the page's title:
- * read from the command that works the queue, among the commands the project starts by itself, as
- * whichever installed package schedules them says, with the page that changes it. Until that is read
- * the sentence's room is held, unseen, so nothing under it moves when it comes.
+ * the scheduler's switch for the command that works the queue on this computer, and its pace where a
+ * person set one, read from the settings, with the page that changes them. Until that is read the
+ * sentence's room is held, unseen, so nothing under it moves when it comes.
  */
-function TakerLine({ projectId, schedule }: { projectId: string; schedule: Schedule }) {
-  const known = schedule.commands[projectId]
-  const page = schedule.page
-  // The page where what starts by itself is changed, where a package holds one.
-  const change = page && (
+function TakerLine({ projectId, takers }: { projectId: string; takers: Takers }) {
+  const host = useModuleHost()
+  const known = takers[projectId]
+  const { segment, label } = SCHEDULED_COMMANDS_PAGE
+  const change = (
     <>
       {' '}
       Change it in{' '}
-      <a href={page.href} onClick={inPlace(schedule.open)} className="font-medium text-primary pointer-fine:hover:underline">
-        {page.label}
+      <a href={host.pageHref(segment, [], projectId)} onClick={inPlace(() => host.openPage(segment, [], projectId))} className="font-medium text-primary pointer-fine:hover:underline">
+        {label}
       </a>
       .
     </>
@@ -296,16 +296,14 @@ function TakerLine({ projectId, schedule }: { projectId: string; schedule: Sched
   if (known === undefined)
     return (
       <span aria-hidden className="invisible">
-        {WAITS}
-        {page && ` Change it in ${page.label}.`}
+        {WAITS} Change it in {label}.
       </span>
     )
-  const taker = known.find(command => command.command === QUEUE_COMMAND)
   // Said in plain words: the command's name is Automations' to say.
+  const pace = known.on && known.pace ? paceWords(known.pace) : undefined
   return (
     <span role="status" aria-label="Who takes from the queue">
-      {taker?.on ? 'Agents take entries from here by themselves.' : WAITS}
-      {taker?.note !== undefined && ` ${taker.note}.`}
+      {known.on ? `Agents take entries from here by themselves${pace ? `, ${pace}` : ''}.` : WAITS}
       {change}
     </span>
   )

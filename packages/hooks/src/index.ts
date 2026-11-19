@@ -61,7 +61,7 @@ export {
   type StoreBackend,
 } from './store.js'
 export { SETTING_SCOPES, SETTINGS_FILE, defineSetting, settingsIn, enabledSetting, type Setting, type SettingScope, type Settings } from './settings.js'
-export { PERSON_INFO, isPersonName, isPictureAddress, type PersonInfo, PRESETS, DEFAULT_PRESET, builtInDefault, isPresetId, isPresetName, presetIdOf, presetOf, presetsIn, type Preset } from './catalog.js'
+export { PERSON_INFO, isPersonName, isPictureAddress, type PersonInfo, PRESETS, DEFAULT_PRESET, builtInDefault, isPresetId, isPresetName, presetIdOf, presetOf, presetsIn, type Preset, SCHEDULED_COMMANDS, SCHEDULED_COMMANDS_PAGE, type ScheduledCommands, type ScheduledCommandPicks, type SchedulePace } from './catalog.js'
 export type { GitAccess, AccountAccess } from './account.js'
 export type { AppContext, AppLifecycle, AppStart, AttentionFix, AttentionMark, AttentionItem, AttentionArgs, WaitingRun, AppAttention, Attention, AttentionRead } from './app.js'
 export { HOOK_NAMES, MODULE_NAME, defineModule, type NodeHooks, type HookName, type PluginInfo, type OwnRow, type ModuleDefinition } from './module.js'
