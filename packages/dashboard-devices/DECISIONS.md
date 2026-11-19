@@ -11,6 +11,9 @@ already made, and lists it in its pull request; for anything else it proposes an
 - Everything that opens OpenAgent to a network is here, in a package of its own. OpenAgent
   itself listens on its own computer only. Picked over a flag and a shared key inside
   OpenAgent, where every new way in was a change to its core.
+- It is a plugin, `devices`, kept per computer and off until the person switches it on (#2394,
+  decision 32): with it off, the computer has no door and no other computer. Picked over the
+  door and the other computers being OpenAgent's own, there on every computer.
 - Everything that sets a server up over SSH is here too. At the end it saves the server as a
   machine like any other, with the link the server's door gives. Picked over SSH inside
   OpenAgent, which then knew of servers; and over a package of its own beside the door's, where

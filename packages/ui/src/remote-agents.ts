@@ -8,7 +8,8 @@ import type { Waiting } from './dashboard/waiting.js'
 import type { ProjectSummary, ProjectionRead } from './dashboard/projects.js'
 import { MachineRunsKept, RUNS_WAIT_MS, type MachineRuns } from './dashboard/machine-runs.js'
 import { asRecorded, onMachine } from './dashboard/run-rows.js'
-import { isHostName, listMachines, listProjects, machineNamed, nameMachine, noteProjects, noteSeen, noteServer, type MachineRecord } from './registry.js'
+import { isHostName, listProjects, machineNamed, nameMachine, noteProjects, noteSeen, noteServer, type MachineRecord } from './registry.js'
+import { savedMachines } from './other-computers.js'
 import { callerAtPage } from './dashboard/person.js'
 import { machineKind, machineName } from './reached-by-line.js'
 
@@ -90,7 +91,7 @@ export function createRemoteAgents({ env, resolveProject, addressOf, bringHere }
       () => void (asking = undefined),
     ))
   const machineNames = async (): Promise<(host: string) => SavedMachine | undefined> => {
-    const read = async (): Promise<void> => void (machines = await listMachines(env))
+    const read = async (): Promise<void> => void (machines = await savedMachines(env))
     await read()
     for (const url of asked.keys()) if (!machines.some(machine => machine.url === url)) asked.delete(url)
     const now = Date.now()
@@ -169,7 +170,7 @@ export function createRemoteAgents({ env, resolveProject, addressOf, bringHere }
   // so they stay listed while it is off. One whose repository is a project here is listed as this computer's.
   // They are the owner's: a person the owner invited, whose device the door passes to this OpenAgent,
   // is listed none and reaches none of them.
-  const ownMachines = async (): Promise<MachineRecord[]> => (await listMachines(env)).filter(machine => machine.owner === undefined)
+  const ownMachines = async (): Promise<MachineRecord[]> => (await savedMachines(env)).filter(machine => machine.owner === undefined)
   const projectsAsked = new OwnProjectsAsked<MachineRecord>(
     async machine => {
       const said = await machineCall(machine, 'onOwnProjects', [], PROJECTS_ASKED_MS)

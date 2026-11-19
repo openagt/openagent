@@ -42,7 +42,8 @@ export type ConnectionControl = {
   onSelect: (machine: Machine) => void
   /** Clear the selection back to the dashboard's own machine (#1067). */
   onSelectLocal: () => void
-  onAddMachine: () => void
+  /** Add a machine, where the person's devices are; none where there is no such place (devices is off). */
+  onAddMachine?: (() => void) | undefined
   /** Each machine's online/offline status (#1072); an id absent from the map is still being checked. */
   status: Record<string, MachineStatus>
 }
@@ -136,10 +137,12 @@ export function RunOnMenu({ connection, busy }: { connection: ConnectionControl;
             This project has no repository address, so it cannot be sent to another machine.
           </p>
         )}
-        <DropdownMenuItem className="items-start" disabled={busy} onClick={() => connection.onAddMachine()}>
-          <Plus className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
-          <OptionLabel label="Add a machine…" description="Connect a computer, or join with a code." />
-        </DropdownMenuItem>
+        {connection.onAddMachine && (
+          <DropdownMenuItem className="items-start" disabled={busy} onClick={connection.onAddMachine}>
+            <Plus className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+            <OptionLabel label="Add a machine…" description="Connect a computer, or join with a code." />
+          </DropdownMenuItem>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   )

@@ -4,6 +4,9 @@ import { createRef } from 'react'
 import type { Preferences } from '../../src/index.js'
 import { selectMachine } from '../lib/remote-target.js'
 import { hoverTooltip, openMenu } from '../test-utils.js'
+import { Laptop } from 'lucide-react'
+import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
+import { ModulesContext, mountedOf, type MountedView } from '../lib/use-modules.js'
 
 // Preferences are the shared daemon store; stub them so the composer reads a fixed value.
 const updatePreferences = vi.hoisted(() => vi.fn())
@@ -134,6 +137,24 @@ describe('Composer (#721)', () => {
     expect(screen.queryByRole('button', { name: /Start session/ })).toBeNull()
     fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'x' } })
     expect((screen.getByRole('button', { name: /Start session/ }) as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  test('where devices is off, no Settings entry adds a machine: with none saved there is no "Run on"; with devices, "Add a machine…" leads to its entry', async () => {
+    const devices: MountedView<'settings.section'> = { place: 'settings.section', id: 'devices', title: 'Devices', icon: Laptop, order: 90, View: () => null, package: '@openagt/dashboard-devices', projects: [], computer: true }
+    const openSettings = vi.fn()
+    const composer = (sections: MountedView<'settings.section'>[]) => (
+      <HostServicesContext.Provider value={{ ...INERT_HOST_SERVICES, openSettings }}>
+        <ModulesContext.Provider value={mountedOf({ views: { 'settings.section': sections } })}>
+          <Composer files={[]} onSubmit={vi.fn()} busy={false} submitLabel="Send" submitBusyLabel="Sending…" />
+        </ModulesContext.Provider>
+      </HostServicesContext.Provider>
+    )
+    const { rerender } = render(composer([]))
+    expect(screen.queryByRole('button', { name: /^Run on: / })).toBeNull()
+    rerender(composer([devices]))
+    await openMenu(screen.getByRole('button', { name: /^Run on: / }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: /Add a machine/ }))
+    expect(openSettings).toHaveBeenCalledWith('devices')
   })
 
   test('in a session (#831) there is no agent/model select, and the rest of the row stays', () => {

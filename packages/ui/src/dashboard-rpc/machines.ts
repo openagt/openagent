@@ -5,7 +5,7 @@ import { isElsewhereId, lineNameOf } from '../dashboard/elsewhere.js'
 import { isClaudeAccountId, isLoginWord, type MachineLogins } from '../dashboard/machine-logins.js'
 import { errorMessage } from '../error-message.js'
 import { contextRemote, resolveProjectPath } from './context.js'
-import { forgetMachine, isPersonName, listMachines, noteListed, noteName, noteOwner, removeMachine, renameThisComputer, tellMachine, unforgetMachine, type MachineRecord } from '../registry.js'
+import { forgetMachine, isPersonName, noteListed, noteName, noteOwner, removeMachine, renameThisComputer, tellMachine, unforgetMachine, type MachineRecord } from '../registry.js'
 import { sayName } from '../dashboard/machine-call.js'
 import { ownerAsks } from '../dashboard/person.js'
 import { ownName, saveComputerThrough, saveMachine, shown, throughOf } from './save-machine.js'
@@ -17,6 +17,7 @@ import { readinessOf, type StartReadiness } from '../start-readiness.js'
 import type { ModelsView } from '../dashboard/models.js'
 import type { AccountResult, AccountsAgent, AccountsView } from './accounts.js'
 import type { GitHostsView } from './logins.js'
+import { savedMachines } from '../other-computers.js'
 
 // The saved machines, for the dashboard: the other computers a run can be sent to. The list is
 // the daemon's, in the person's home file, so every browser on this computer shows the same
@@ -40,7 +41,7 @@ export type AddMachineResult = { ok: true; machine: Machine } | { ok: false; err
 
 /** The saved machines, newest first. */
 export async function onMachines(): Promise<Machine[]> {
-  return (await listMachines()).map(shown)
+  return (await savedMachines()).map(shown)
 }
 
 /**
@@ -69,10 +70,10 @@ export type RemoveMachineResult = { ok: true } | { ok: false; error: string }
  * removed there, among its devices.
  */
 export async function sendRemoveMachine(id: string): Promise<RemoveMachineResult> {
-  const saved = (await listMachines()).find(machine => machine.id === id)
+  const saved = (await savedMachines()).find(machine => machine.id === id)
   if (saved && contextRemote().working(saved.url)) return { ok: false, error: `An agent is working on ${saved.label}. Stop it, or wait until it ends, then remove the machine.` }
   // The computers saved through it go with it: they are reached with its key, which is taken out there.
-  const through = saved ? throughOf(saved, await listMachines()) : []
+  const through = saved ? throughOf(saved, await savedMachines()) : []
   const busy = through.find(machine => contextRemote().working(machine.url))
   if (busy) return { ok: false, error: `An agent is working on ${busy.label}, through ${saved!.label}. Stop it, or wait until it ends, then remove the machine.` }
   for (const machine of through) await removeMachine(machine.id)
@@ -104,7 +105,7 @@ export type ComputersThrough = { ok: true; computers: ComputerThrough[] } | { ok
  * is no server, and for one saved through a server.
  */
 export async function onComputersThrough(machineId: string): Promise<ComputersThrough> {
-  const saved = await listMachines()
+  const saved = await savedMachines()
   const server = saved.find(machine => machine.id === machineId)
   if (!server) return { ok: false, error: 'That machine is no longer saved.' }
   if (server.url.includes(THROUGH_PATH)) return { ok: true, computers: [] }
@@ -139,7 +140,7 @@ export type MachineLoginsResult = { ok: true; logins: MachineLogins } | { ok: fa
  * a server, or made there. Read through the server when the machine is reached through one.
  */
 export async function onMachineLogins(machineId: string): Promise<MachineLoginsResult> {
-  const machine = (await listMachines()).find(saved => saved.id === machineId)
+  const machine = (await savedMachines()).find(saved => saved.id === machineId)
   if (!machine) return { ok: false, error: 'That machine is no longer saved.' }
   if (machine.owner === undefined) return { ok: false, error: 'That machine is no other person\'s computer.' }
   return remoteLogins(machine)
@@ -150,7 +151,7 @@ export async function onMachineLogins(machineId: string): Promise<MachineLoginsR
  * it, here, so they are no copies, and no server's copy takes their place later.
  */
 export async function sendMachineLogins(machineId: string, given: { github?: unknown; claude?: unknown; claudeAccount?: unknown }): Promise<MachineLoginsResult> {
-  const machine = (await listMachines()).find(saved => saved.id === machineId)
+  const machine = (await savedMachines()).find(saved => saved.id === machineId)
   if (!machine) return { ok: false, error: 'That machine is no longer saved.' }
   if (machine.owner === undefined) return { ok: false, error: 'That machine is no other person\'s computer.' }
   const { github, claude, claudeAccount } = given && typeof given === 'object' ? given : {}
@@ -169,7 +170,7 @@ export async function sendMachineLogins(machineId: string, given: { github?: unk
 export type MachinePerson = { ok: true; said: unknown } | { ok: false; error: string; unknown?: true }
 
 export async function onMachinePerson(machineId: string): Promise<MachinePerson> {
-  const machine = (await listMachines()).find(saved => saved.id === machineId)
+  const machine = (await savedMachines()).find(saved => saved.id === machineId)
   if (!machine) return { ok: false, error: 'That machine is no longer saved.' }
   if (machine.url.includes(THROUGH_PATH)) return { ok: false, error: 'A computer reached through a server says nothing of persons.', unknown: true }
   const asked = await remoteDoor(machine, { what: 'me' })
@@ -181,7 +182,7 @@ export async function onMachinePerson(machineId: string): Promise<MachinePerson>
 
 /** Take one of this person's devices out at a saved machine, by its id there; answers what {@link onMachinePerson} does, as it is after. */
 export async function sendRemoveMachineDevice(machineId: string, deviceId: string): Promise<MachinePerson> {
-  const machine = (await listMachines()).find(saved => saved.id === machineId)
+  const machine = (await savedMachines()).find(saved => saved.id === machineId)
   if (!machine || machine.url.includes(THROUGH_PATH)) return { ok: false, error: 'That machine is no longer saved.' }
   if (!isDeviceId(deviceId)) return { ok: false, error: 'That is no device id.' }
   return remoteDoor(machine, { what: 'remove', id: deviceId })
@@ -193,7 +194,7 @@ export async function sendRemoveMachineDevice(machineId: string, deviceId: strin
  * over SSH. The link works once, and only for a line.
  */
 export async function sendMachineLineLink(machineId: string): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
-  const machine = (await listMachines()).find(saved => saved.id === machineId)
+  const machine = (await savedMachines()).find(saved => saved.id === machineId)
   if (!machine || machine.url.includes(THROUGH_PATH)) return { ok: false, error: 'That machine is no longer saved.' }
   const asked = await remoteDoor(machine, { what: 'line' })
   if (!asked.ok) return asked
@@ -216,7 +217,7 @@ export interface MachineCode {
  * server up. The code works once, for a short time.
  */
 export async function sendMachineCode(machineId: string): Promise<{ ok: true; value: MachineCode } | { ok: false; error: string }> {
-  const machine = (await listMachines()).find(saved => saved.id === machineId)
+  const machine = (await savedMachines()).find(saved => saved.id === machineId)
   if (!machine || machine.url.includes(THROUGH_PATH)) return { ok: false, error: 'That machine is no longer saved.' }
   const asked = await remoteDoor(machine, { what: 'code' })
   if (!asked.ok) return asked
@@ -227,7 +228,7 @@ export async function sendMachineCode(machineId: string): Promise<{ ok: true; va
 
 /** Whether each saved machine answers right now, by id: one short call to each, with this computer's key. */
 export async function onMachinesReachable(): Promise<Record<string, boolean>> {
-  const machines = await listMachines()
+  const machines = await savedMachines()
   const entries = await Promise.all(machines.map(async machine => [machine.id, await pingRemote(machine)] as const))
   return Object.fromEntries(entries)
 }
@@ -261,7 +262,7 @@ export interface MachineVersions {
  */
 export async function onMachineVersions(): Promise<MachineVersions> {
   const machines = await Promise.all(
-    (await listMachines()).map(async machine => {
+    (await savedMachines()).map(async machine => {
       const { version, health, listed: said, name } = await remoteFacts(machine)
       // What it says now is kept; one that does not answer is known by what it said last.
       if (version !== undefined) await noteListed(machine, said ?? []).catch(() => {})
@@ -281,7 +282,7 @@ export async function onMachineVersions(): Promise<MachineVersions> {
  */
 export async function sendRenameMachine(id: string, label: string): Promise<AddMachineResult> {
   if (typeof id !== 'string' || typeof label !== 'string' || !label.trim()) return { ok: false, error: 'Give it a name.' }
-  const machine = (await listMachines()).find(saved => saved.id === id)
+  const machine = (await savedMachines()).find(saved => saved.id === id)
   if (!machine) return { ok: false, error: 'That machine is no longer saved.' }
   const asked = await machineCall(machine, 'sendRenameComputer', [label])
   const said = asked.ok ? (asked.ret as RenameComputerResult | undefined) : undefined
@@ -314,7 +315,7 @@ export async function sendRenameComputer(picked: unknown): Promise<RenameCompute
  */
 export async function sendLetMachineIn(machineId: string, link: string): Promise<{ ok: true } | { ok: false; error: string }> {
   if (typeof link !== 'string' || !parseMachineLink(link)) return { ok: false, error: 'That is no link of this computer\'s door.' }
-  const machine = (await listMachines()).find(saved => saved.id === machineId)
+  const machine = (await savedMachines()).find(saved => saved.id === machineId)
   if (!machine) return { ok: false, error: 'That machine is no longer saved.' }
   if (machine.url.includes(THROUGH_PATH)) return { ok: false, error: `${machine.label} is reached through a server: its runs come here through that server.` }
   const added = await remoteAddMachine(machine, link, await ownName())
@@ -367,7 +368,7 @@ async function projectToSend(projectId: string): Promise<ProjectToSend | undefin
 
 /** A saved machine and a project, as a call there names it: by the project's repository address, or as its own computer names it. */
 async function onMachine(projectId: string, machineId: string): Promise<{ ok: true; machine: MachineRecord; project: ProjectToSend; target: RemoteTarget } | { ok: false; error: string }> {
-  const machine = (await listMachines()).find(saved => saved.id === machineId)
+  const machine = (await savedMachines()).find(saved => saved.id === machineId)
   if (!machine) return { ok: false, error: 'That machine is no longer saved. Pick another place to run.' }
   const project = await projectToSend(projectId)
   if (!project) return { ok: false, error: `unknown project: ${String(projectId)}` }
@@ -402,7 +403,7 @@ export async function onMachineStartCheck(projectId: string, machineId: string, 
  * given one of these. `null` when it does not answer, or runs an OpenAgent that is not asked this.
  */
 export async function onMachineModels(machineId: string): Promise<ModelsView | null> {
-  const machine = (await listMachines()).find(saved => saved.id === machineId)
+  const machine = (await savedMachines()).find(saved => saved.id === machineId)
   if (!machine) return null
   const said = await machineCall(machine, 'onModels', [])
   return said.ok && said.ret !== null && typeof said.ret === 'object' && !Array.isArray(said.ret) ? (said.ret as ModelsView) : null
@@ -414,7 +415,7 @@ export async function onMachineModels(machineId: string): Promise<ModelsView | n
  * asked this.
  */
 export async function onMachineAgentAccounts(machineId: string, agent: AccountsAgent): Promise<AccountsView | null> {
-  const machine = agent === 'claude' || agent === 'codex' ? (await listMachines()).find(saved => saved.id === machineId) : undefined
+  const machine = agent === 'claude' || agent === 'codex' ? (await savedMachines()).find(saved => saved.id === machineId) : undefined
   if (!machine) return null
   const said = await machineCall(machine, 'onAgentAccounts', [agent])
   const view = said.ok ? (said.ret as Partial<AccountsView> | null) : null
@@ -433,7 +434,7 @@ export async function sendMachineRemoveAgentAccount(machineId: string, agent: Ac
 
 /** The git hosts a saved machine's runs push to, with the accounts it has at each, as it says. `null` when it does not answer, or is not asked this. */
 export async function onMachineGitHosts(machineId: string): Promise<GitHostsView | null> {
-  const machine = (await listMachines()).find(saved => saved.id === machineId)
+  const machine = (await savedMachines()).find(saved => saved.id === machineId)
   if (!machine) return null
   const said = await machineCall(machine, 'onGitHosts', [])
   const view = said.ok ? (said.ret as Partial<GitHostsView> | null) : null
@@ -448,7 +449,7 @@ export async function sendMachineGitHostAccount(machineId: string, host: string,
 /** One machine-wide act on a saved machine, answered in its own words, or why it was not. */
 async function actOn(machineId: string, call: [string, unknown[]] | undefined): Promise<AccountResult> {
   if (call === undefined) return { ok: false, error: 'That is no account.' }
-  const machine = (await listMachines()).find(saved => saved.id === machineId)
+  const machine = (await savedMachines()).find(saved => saved.id === machineId)
   if (!machine) return { ok: false, error: 'That machine is no longer saved.' }
   const said = await machineCall(machine, call[0], call[1])
   if (!said.ok) return { ok: false, error: `${machine.label} could not be asked: ${said.error}` }

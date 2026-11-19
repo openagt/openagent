@@ -5,14 +5,18 @@ import { findBroughtModule, findComputerModule, findProjectModule, readComputerM
 import { broughtModuleUrl, computerModuleUrl, moduleUrl, versionedModuleUrl } from '../dashboard/module-serve.js'
 import { providedDataChanged } from '../store/provided.js'
 import { relayOr } from './relay-agent.js'
-import { COMPUTER_ENV, URL_ENV, ownUrlSaid } from '../package-services.js'
-import { computerSaid } from '../dashboard/machine-call.js'
+import { computerSaid, ownUrlSaid } from '../dashboard/machine-call.js'
 import { CALLER_ENV, callerAtPage } from '../dashboard/person.js'
 import { THROUGH_PATH, remoteComputerCommand } from '../dashboard/remote-run.js'
-import { listMachines } from '../registry.js'
 import { pullProjectData } from '@openagt/agent-data'
+import { savedMachines } from '../other-computers.js'
 
 export type { ModuleCommandResult } from '../project-modules.js'
+
+/** How a command of the computer's packages is told which computer this is. */
+const COMPUTER_ENV = 'OPENAGENT_COMPUTER'
+/** How a command of the computer's packages is told where OpenAgent answers on it. */
+const URL_ENV = 'OPENAGENT_URL'
 
 /** One module as the dashboard loads it: where its module is, and which projects have it. */
 export interface DashboardModule {
@@ -140,7 +144,7 @@ export async function runComputerCommand(pkg: string, args: string[], command?: 
 export async function runComputerCommandOn(pkg: string, machineId: string, args: string[], command?: string | null, input?: string | null): Promise<ModuleCommandResult> {
   if (!Array.isArray(args) || args.some(arg => typeof arg !== 'string')) return { ok: false, error: 'arguments must be a list of words' }
   if (!(await findComputerModule(pkg))) return { ok: false, error: `${pkg} is not this computer's` }
-  const machine = (await listMachines()).find(saved => saved.id === machineId)
+  const machine = (await savedMachines()).find(saved => saved.id === machineId)
   if (!machine || machine.url.includes(THROUGH_PATH)) return { ok: false, error: 'That machine is no longer saved.' }
   return remoteComputerCommand(machine, pkg, args, typeof command === 'string' ? command : undefined, typeof input === 'string' ? input : undefined)
 }

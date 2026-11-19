@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { mkdtemp, writeFile, rm, mkdir, readFile, readdir, realpath } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
-import { createHooks, LOCAL_HOST } from '@openagt/hooks'
+import { createHooks, LOCAL_HOST, type AppContext } from '@openagt/hooks'
 import { fakeHost } from '@openagt/hooks/testing'
 import { runDaemon, type DaemonState, type RunDaemonOptions } from './daemon.js'
 import { handDownTestDistribution } from './test-distribution.js'
@@ -103,37 +103,32 @@ test('runDaemon serves the dashboard, and shuts down when the signal aborts', as
   }
 })
 
-test("the services of OpenAgent's own packages run while the daemon does: told its address and its env, and ended while it still answers", async () => {
+test("the modules' own work starts once the dashboard listens, told its address and which computer this is, and stops while it still answers", async () => {
   const cwd = await tmpWorkspace()
   const env = await configEnv(cwd)
   const ac = new AbortController()
-  const started: { packages: string[]; url: string; home: string | undefined; computer: string | undefined }[] = []
+  const started: { url: string | undefined; computer: string | undefined }[] = []
   let answeredAtStop: number | undefined
   let url = ''
+  const lifecycle = {
+    started: (app: AppContext) => void started.push({ url: app.url, computer: app.computer }),
+    stopping: async () => {
+      answeredAtStop = (await fetch(url)).status
+    },
+  }
+  const hooks = createHooks([{ module: { name: 'fake-runs', hooks: { 'run.host': [fakeHost({ id: LOCAL_HOST })], 'app.lifecycle': lifecycle } } }])
   try {
-    const { done, state } = await startDaemon(cwd, {
-      port: 0,
-      signal: ac.signal,
-      env,
-      packageServices: opts => {
-        started.push({ packages: opts.commands.map(command => command.package), url: opts.url, home: opts.env.XDG_CONFIG_HOME, computer: opts.env.OPENAGENT_COMPUTER })
-        return {
-          stop: async () => {
-            answeredAtStop = (await fetch(url)).status
-          },
-        }
-      },
-    })
+    const { done, state } = await startDaemon(cwd, { port: 0, signal: ac.signal, env, hooks })
     url = state.url
     // Started once the dashboard listens, like the open hooks: never a reason the address came late.
-    for (let i = 0; i < 250 && started.length === 0; i++) await new Promise(resolve => setTimeout(resolve, 20))
+    for (let i = 0; i < 250 && started.length === 0; i++) await sleep(20)
     // Told where OpenAgent is and which computer this is: the word the home file keeps, made at this first start.
     const computer = JSON.parse(await readFile(join(env.XDG_CONFIG_HOME!, 'openagent.json'), 'utf8')).computer as string
     assert.match(computer, /^[a-f0-9]{32}$/)
-    assert.deepEqual(started, [{ packages: ['@openagt/dashboard-devices'], url: state.url, home: env.XDG_CONFIG_HOME, computer }])
+    assert.deepEqual(started, [{ url: state.url, computer }])
     ac.abort()
     await done
-    assert.equal(answeredAtStop, 200, 'the services end first, before the dashboard closes')
+    assert.equal(answeredAtStop, 200, "the modules' work stops first, before the dashboard closes")
   } finally {
     ac.abort()
     await rm(cwd, { recursive: true, force: true })

@@ -126,7 +126,8 @@ test("with no project added, the computer's modules are there and run their own 
   try {
     await mkdir(process.env.XDG_CONFIG_HOME, { recursive: true })
     await install(dir, { queue: module('queue') })
-    await withDistribution(dir, [...COMPUTER, '@openagt/dashboard-files', 'queue'], async () => {
+    // The store keeps devices' row, which the tests' distribution starts on.
+    await withDistribution(dir, [...COMPUTER, '@openagt/store-filesystem', '@openagt/dashboard-files', 'queue'], async () => {
       assert.deepEqual(await listed(), [
         { package: '@openagt/dashboard-devices', url: '/_computer-modules/%40openagt%2Fdashboard-devices/dashboard.js', projects: [], computer: true },
         { package: '@openagt/skill-account-rotation', url: '/_computer-modules/%40openagt%2Fskill-account-rotation/dashboard.js', projects: [], computer: true },

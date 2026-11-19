@@ -89,10 +89,18 @@ test("every project keeps its runs' records through the logs package, and shows 
   }
 })
 
-test("the Human Queue, the person's profile, devices and account rotation are the computer's: their parts are there with no project, and no project has them", async () => {
+test("the Human Queue, the person's profile, devices and account rotation are the computer's: their parts are there with no project, and no project has them; devices' only while it is on", async () => {
   assert.deepEqual((await computerPackages()).map(pkg => pkg.name), ['@openagt/ui-card-waiting', '@openagt/user-info', '@openagt/dashboard-devices', '@openagt/skill-account-rotation'])
   assert.deepEqual((await readComputerModules()).map(module => module.package), ['@openagt/dashboard-devices', '@openagt/skill-account-rotation', '@openagt/ui-card-waiting', '@openagt/user-info'])
   assert.deepEqual((await readComputerModules()).map(module => Object.keys(module.bins)), [['devices'], ['account-rotation'], [], []])
+  const hooks = await distributionHooks()
+  await hooks.setEnabled('devices', false)
+  try {
+    assert.deepEqual((await computerPackages()).map(pkg => pkg.name), ['@openagt/ui-card-waiting', '@openagt/user-info', '@openagt/skill-account-rotation'])
+    assert.deepEqual((await readComputerModules()).map(module => module.package), ['@openagt/skill-account-rotation', '@openagt/ui-card-waiting', '@openagt/user-info'])
+  } finally {
+    await hooks.setEnabled('devices', true)
+  }
 })
 
 test("a plugin's package, its data and its page are a project's once the plugin is on there, in that project alone, and no longer once it is off", async () => {

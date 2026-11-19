@@ -32,7 +32,8 @@ const DISTRIBUTION: DashboardDistribution = [
   { package: '@openagt/ui-card-waiting', for: 'computer' },
   // The person's name and picture, Settings › Profile.
   { package: '@openagt/user-info', for: 'computer' },
-  // The door to this computer and its servers, and the accounts its runs use.
+  // devices, a plugin that starts off: the door to this computer, and its other computers and
+  // servers. Then the accounts its runs use.
   { package: '@openagt/dashboard-devices', for: 'computer' },
   { package: '@openagt/skill-account-rotation', for: 'computer' },
   // The plugins: ask starts on, the others are a project's once a person switches them on.

@@ -95,16 +95,6 @@ export async function computerPackages(): Promise<OwnPackage[]> {
   return onPackages('the computer')
 }
 
-/**
- * The services of the computer's packages: a package declares
- * `"openagent": { "service": "<command>" }`, and `<command> serve` runs for as long as OpenAgent
- * runs (`package-services.ts`). Only those packages: a service is this computer's, and any
- * other package is a project's.
- */
-export async function distributionServices(): Promise<ProvidedCommand[]> {
-  return declaring(await computerPackages(), 'service')
-}
-
 /** The directories the commands of the distribution's packages sit in: what a hook line's PATH gains before the project's own installed tools. */
 export async function distributionBinDirs(): Promise<string[]> {
   const dirs = new Set<string>()

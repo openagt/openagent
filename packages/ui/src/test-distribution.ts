@@ -38,8 +38,14 @@ export const DASHBOARD_PACKAGES: DashboardDistribution = [
   { package: '@openagt/skill-work-queue' },
 ]
 
-/** The tests' distribution: `@openagt/dashboard`'s packages, agent-runner's among them. */
-const TEST_DISTRIBUTION: DashboardDistribution = [...DASHBOARD_PACKAGES, { package: '@openagt/agent-runner' }]
+/**
+ * The tests' distribution: `@openagt/dashboard`'s packages, agent-runner's among them, and devices
+ * on: the tests' computer has its door and its other computers, which they exercise.
+ */
+const TEST_DISTRIBUTION: DashboardDistribution = [
+  ...DASHBOARD_PACKAGES.map(item => (!('module' in item) && item.package === '@openagt/dashboard-devices' ? { ...item, on: true } : item)),
+  { package: '@openagt/agent-runner' },
+]
 
 export default TEST_DISTRIBUTION
 

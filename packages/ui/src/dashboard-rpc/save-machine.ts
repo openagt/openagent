@@ -1,7 +1,8 @@
 import { THROUGH_PATH, enterRemote, leaveRemote, remoteComputers, remoteDoor } from '../dashboard/remote-run.js'
 import { errorMessage } from '../error-message.js'
 import { contextRemote } from './context.js'
-import { addMachine, isPersonName, listMachines, thisComputerName, useLoginsOn, type MachineRecord } from '../registry.js'
+import { addMachine, isPersonName, thisComputerName, useLoginsOn, type MachineRecord } from '../registry.js'
+import { otherComputers, savedMachines } from '../other-computers.js'
 import { parseMachineLink } from '../machine-link.js'
 import type { AddMachineResult, Machine } from './machines.js'
 
@@ -28,8 +29,9 @@ export async function ownName(): Promise<string> {
 export async function saveMachine(pasted: string, label?: string, owner?: string): Promise<AddMachineResult> {
   const link = typeof pasted === 'string' ? parseMachineLink(pasted) : null
   if (!link) return { ok: false, error: 'That is not a link another OpenAgent gives: on the other machine, open Settings, find Devices, and press Add device.' }
+  if (!(await otherComputers.on())) return { ok: false, error: 'Devices is off on this computer: switch it on in Settings › Plugins first.' }
   // Asked before the link is spent: the key a run at work is read with is not replaced under it.
-  const saved = (await listMachines()).find(machine => machine.id === link.url)
+  const saved = (await savedMachines()).find(machine => machine.id === link.url)
   if (saved && contextRemote().working(saved.url)) return { ok: false, error: `An agent is working on ${saved.label}. Stop it, or wait until it ends, then add the machine again.` }
   const entered = await enterRemote(link.door, link.code, await ownName(), link.pin)
   if (!entered.ok) return entered
@@ -53,7 +55,7 @@ export async function saveMachine(pasted: string, label?: string, owner?: string
   // The runs that ended there before go on being read, with the new key; the old keys are of no use any more.
   contextRemote().rekey(link.url, entered.key, link.pin)
   // The computers saved through this server are reached with its key: they take the new one too.
-  for (const through of throughOf(added.record, await listMachines())) {
+  for (const through of throughOf(added.record, await savedMachines())) {
     await addMachine({ url: through.url, key: entered.key, door: through.door, label: through.label, ...(link.pin ? { pin: link.pin } : {}) })
     contextRemote().rekey(through.url, entered.key, link.pin)
   }
@@ -63,14 +65,14 @@ export async function saveMachine(pasted: string, label?: string, owner?: string
 
 /** Save a computer on a line at a saved server, through that server. */
 export async function saveComputerThrough(machineId: string, computerId: string): Promise<AddMachineResult> {
-  const server = (await listMachines()).find(machine => machine.id === machineId)
+  const server = (await savedMachines()).find(machine => machine.id === machineId)
   if (!server || server.url.includes(THROUGH_PATH)) return { ok: false, error: 'That server is no longer saved.' }
   const asked = await remoteComputers(server)
   if (!asked.ok) return { ok: false, error: `${server.label} could not be asked for its computers: ${asked.error}` }
   const computer = asked.computers.find(candidate => candidate.id === computerId)
   if (!computer) return { ok: false, error: `${server.label} has no such computer on a line now.` }
   const url = `${server.url}${THROUGH_PATH}${computer.id}`
-  const before = (await listMachines()).find(machine => machine.id === url)
+  const before = (await savedMachines()).find(machine => machine.id === url)
   const { record } = await addMachine({ url, key: server.key, door: `${url}/_devices/enter`, label: `${computer.name} (through ${server.label})`, ...(server.pin ? { pin: server.pin } : {}), ...(computer.owner !== undefined ? { owner: computer.owner } : {}) })
   if (before?.logins) await useLoginsOn(record.id, true)
   return { ok: true, machine: shown(record) }

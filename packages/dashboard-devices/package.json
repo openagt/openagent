@@ -16,14 +16,12 @@
     "dist",
     "bin/devices"
   ],
-  "openagent": {
-    "service": "devices"
-  },
   "bin": {
     "devices": "bin/devices"
   },
   "exports": {
     "./package.json": "./package.json",
+    "./module": "./dist/module.js",
     "./dashboard": "./dist/dashboard/dashboard.js"
   },
   "scripts": {

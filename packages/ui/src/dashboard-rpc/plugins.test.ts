@@ -33,8 +33,8 @@ test("Settings › Plugins lists the distribution's plugins with their rows, the
     assert.deepEqual(rows!.flatMap(row => (row.settings ? [`${row.name} ${row.settings}`] : [])), ['store-git-branch project-agent-data'], 'a git store is switched on its own entry')
     assert.deepEqual(
       (await onComputerPlugins()).map(row => `${row.name} ${row.scope} ${row.on ? 'on' : 'off'} ${row.settings}`),
-      ['store-git-repository computer off agent-data'],
-      'the folder syncs with no repository yet',
+      ['store-git-repository computer off agent-data', 'devices computer on undefined'],
+      'the folder syncs with no repository yet, and the tests have devices on',
     )
 
     assert.deepEqual(await sendSwitchPlugin('tickets', true, id), { ok: true })
@@ -42,6 +42,8 @@ test("Settings › Plugins lists the distribution's plugins with their rows, the
     assert.ok((await packagesOf(shop)).some(pkg => pkg.name === '@openagt/skill-tickets'), 'its package is the project\'s')
     assert.deepEqual(await sendSwitchPlugin('ask', false, id), { ok: true })
     assert.equal((await onProjectPlugins(id))?.find(row => row.name === 'ask')?.on, false)
+    assert.deepEqual(await sendSwitchPlugin('devices', false), { ok: true })
+    assert.equal((await onComputerPlugins()).find(row => row.name === 'devices')?.on, false, 'one kept per computer is switched with no project')
 
     assert.deepEqual(await sendSwitchPlugin('tickets', true), { ok: false, error: 'tickets is switched in a project.' })
     assert.deepEqual(await sendSwitchPlugin('tickets', true, 'nowhere-1'), { ok: false, error: 'That project is not on this computer.' })

@@ -5,7 +5,8 @@ import { computerName } from '../computer-name.js'
 import { dirname, join } from 'node:path'
 import { mintClaude, type Mint } from '@openagt/agent-driver-claude'
 import { codexWho, loginCodex, personalCodexHome, accountFolder, type CodexLogin, type CodexLoginOptions, type CodexWho } from '@openagt/agent-driver-codex'
-import { listMachines, readPreferences, type MachineRecord, type Preferences } from '../registry.js'
+import { readPreferences, type MachineRecord, type Preferences } from '../registry.js'
+import { savedMachines } from '../other-computers.js'
 import { machineCall, remoteFacts, type MachineAccess } from './remote-run.js'
 import { markOf } from './machine-logins.js'
 import { isKind, isWord, type CopiedKind, type CopiedLogin, type GivenLogin, type UsageWindow } from './copied-logins.js'
@@ -113,7 +114,7 @@ export const syncWiring: {
   now: () => number
 } = {
   env: process.env,
-  machines: () => listMachines(syncWiring.env),
+  machines: () => savedMachines(syncWiring.env),
   facts: machine => remoteFacts(machine),
   call: (machine, fn, args) => machineCall(machine, fn, args),
   local: () => localLogins(syncWiring.env),

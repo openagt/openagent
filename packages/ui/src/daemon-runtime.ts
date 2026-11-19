@@ -19,7 +19,8 @@ import { copyLoginsTo, loginsAreThere, ownLogins, type OwnLogins } from './dashb
 import { screenInDiary } from './dashboard/screen.js'
 import { gitUserOf, onMachine } from './dashboard/run-rows.js'
 import { tailAgentEvents } from './dashboard-rpc/events-tail.js'
-import { addProject, listMachines, listProjects, readPreferences, removeProject, type MachineRecord } from './registry.js'
+import { addProject, listProjects, readPreferences, removeProject, type MachineRecord } from './registry.js'
+import { savedMachines } from './other-computers.js'
 import { errorMessage, fileBranchRepo, installProject, projectKey, projectNameOf, repositoryAddress, sessionsHome, writeSharing, isSkillName, projectId } from '@openagt/agent-data'
 import { publishedBranch } from '@openagt/agent-data/names'
 import { branchesOnOrigin } from './dashboard/start-branch.js'
@@ -284,7 +285,7 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
   // because a branch of this machine names nothing there (it drops both too).
   const sendToMachine = async (prompt: string, options: StartAgentOptions, id: string, project: { id: string; name: string; address: string; cwd?: string }): Promise<StartAgentResult> => {
     const { machine: _id, base: _thisMachines, prBase: _thisMachinesToo, repos: _folders, ...forwarded } = options
-    const machine = (await listMachines(env)).find(saved => saved.id === id)
+    const machine = (await savedMachines(env)).find(saved => saved.id === id)
     if (!machine) return { ok: false, error: 'That machine is no longer saved. Pick another place to run.' }
     const target = targetOf(machine, project.address)
     // Another person's computer: a run there uses this person's own logins, which this server

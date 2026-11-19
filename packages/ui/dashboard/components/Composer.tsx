@@ -25,6 +25,7 @@ import { DriverModelMenu, type DriverOption } from './DriverModelMenu.js'
 import { RunOnMenu } from './RunOnMenu.js'
 import { PERMISSIONS_PAGE } from '../lib/use-route.js'
 import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
+import { useMountedModules } from '../lib/use-modules.js'
 import { useMachines, useMachinesRead, tellMachine, type Machine } from '../lib/machines.js'
 import { restoreRunOn, runTarget, useRunOnFallback, useSelectedMachineId, selectMachine } from '../lib/remote-target.js'
 import { thisMachineName } from '../lib/this-machine.js'
@@ -164,6 +165,7 @@ export const Composer = forwardRef<ComposerHandle, {
   ref,
 ) {
   const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
+  const modules = useMountedModules()
   const [prompt, setPrompt] = useState('')
   const [addingPreset, setAddingPreset] = useState(false)
   const editorRef = useRef<PromptEditorHandle>(null)
@@ -367,8 +369,10 @@ export const Composer = forwardRef<ComposerHandle, {
     />
   )
   // Where the next run starts (#1052/#1067): this machine or a saved machine. Launcher-only: a
-  // session already runs where it was started.
-  const runOnEl = inAgent ? null : (
+  // session already runs where it was started. A machine is added where every device is,
+  // Settings › Devices, devices' entry: with devices off there is none, and no machine to pick.
+  const devices = !modules.loaded || modules.views['settings.section'].some(view => view.id === 'devices')
+  const runOnEl = inAgent || (!devices && machines.length === 0) ? null : (
     <RunOnMenu
       busy={busy}
       connection={{
@@ -381,8 +385,7 @@ export const Composer = forwardRef<ComposerHandle, {
         // #1067: selecting a machine makes it the run target in place, no navigation.
         onSelect: (m: Machine) => selectMachine(m.id),
         onSelectLocal: () => selectMachine(null),
-        // A machine is added where every device is: Settings › Devices.
-        onAddMachine: () => services.openSettings('devices'),
+        onAddMachine: devices ? () => services.openSettings('devices') : undefined,
         status: machineStatus,
       }}
     />

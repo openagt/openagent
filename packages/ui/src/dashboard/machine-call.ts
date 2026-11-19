@@ -83,6 +83,18 @@ export function computerSaid(): string | undefined {
   return computer
 }
 
+let ownUrl: string | undefined
+
+/** Say where this OpenAgent answers, once it listens: what its packages' commands are told too. */
+export function sayOwnUrl(url: string | undefined): void {
+  ownUrl = url
+}
+
+/** Where this OpenAgent answers, as it was said; nothing before it listens. */
+export function ownUrlSaid(): string | undefined {
+  return ownUrl
+}
+
 /**
  * The word this computer says to one machine's door, made from the word it keeps and that door's
  * address: each door hears another word, so one that a machine learned says nothing at any other.

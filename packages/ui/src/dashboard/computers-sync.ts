@@ -1,4 +1,5 @@
-import { forgetMachine, listForgotten, listMachines, thisComputerName, type ForgottenMachine, type MachineRecord } from '../registry.js'
+import { forgetMachine, listForgotten, thisComputerName, type ForgottenMachine, type MachineRecord } from '../registry.js'
+import { savedMachines } from '../other-computers.js'
 import { THROUGH_PATH, machineCall } from './remote-run.js'
 
 /**
@@ -134,7 +135,7 @@ export const computersWiring: {
   now: () => number
 } = {
   env: process.env,
-  machines: () => listMachines(computersWiring.env),
+  machines: () => savedMachines(computersWiring.env),
   forgotten: () => listForgotten(computersWiring.env),
   call: (machine, fn, args) => machineCall(machine, fn, args, 20_000),
   door: async () => (await import('../dashboard-rpc/computers.js')).ownDoor(),

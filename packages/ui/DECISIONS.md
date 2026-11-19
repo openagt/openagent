@@ -368,11 +368,11 @@ already made, and lists it in its pull request; for anything else it proposes an
   verdict about them. Picked over reading only through the package's command, a new process
   for every read of a tree that polls every 8 seconds and an opened file read again every few
   seconds.
-- A package that is the computer's may bring a service: a command of its own
-  that OpenAgent runs for as long as it runs itself, and tells its own address. Picked
-  over a line in each project's hooks file, which is a project's and shared with its team,
-  where a service is one computer's; and over running it inside OpenAgent's own process,
-  where a fault in it is a fault in OpenAgent.
+- A module may run a process of its own, devices' door, from its `app.lifecycle` (#2394): for
+  as long as OpenAgent runs and the module is on, told OpenAgent's own address. Picked over a
+  line in each project's hooks file, which is a project's and shared with its team, where such
+  a process is one computer's; and over running it inside OpenAgent's own process, where a
+  fault in it is a fault in OpenAgent.
 - The chat says in its own words what the terminal says with its glyphs: how a run ended,
   what it reported, where its work is, what the model's quota is doing. A grey word for what
   happened, and the thing it happened to beside it, as a tool call's row reads. Picked over

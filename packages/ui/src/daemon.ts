@@ -11,18 +11,17 @@ import { projectErrorStore } from './project-errors.js'
 import { resolveDashboardBundle } from './dashboard/bundle.js'
 import { resolveWebsite } from './dashboard/website.js'
 import { ensureBridgeToken, ensureComputerId, listProjects, readPreferences, registryPreferencesStore, thisComputerName } from './registry.js'
-import { sayComputer, sayName } from './dashboard/machine-call.js'
+import { sayComputer, sayName, sayOwnUrl } from './dashboard/machine-call.js'
 import { bridgeSessionsFrom } from './dashboard/bridge-sessions.js'
 import { bridgeQuestions } from './dashboard/bridge-store.js'
 import { bridgeBrowserDir, bridgeBrowserOwner, startBridgeBrowser, type BridgeBrowser, type BridgeBrowserOptions } from './bridge-browser.js'
 import { runProjectHooks } from './project-hooks.js'
 import { readySessionsHome, startSessionsSweep } from './sessions-home.js'
 import { distributionHooks, localHostOf } from './distribution-hooks.js'
+import { devicesOn, otherComputers } from './other-computers.js'
 import type { Hooks } from '@openagt/hooks'
 import { sessionsHome } from '@openagt/agent-data'
 import { readSecureAddress, SECURE_PORT, type SecureAddress } from './secure-address.js'
-import { distributionServices } from './distribution-packages.js'
-import { COMPUTER_ENV, sayOwnUrl, startPackageServices, type PackageServices, type PackageServicesOptions } from './package-services.js'
 import { readAllAgents } from './store/index.js'
 import type { StartedProject } from './dashboard/types.js'
 import type { BridgeSession } from './dashboard/bridge-endpoints.js'
@@ -82,8 +81,6 @@ export interface RunDaemonOptions {
   onProject?: (project: StartedProject) => void
   /** How the bridge browser is launched (#1332); default the real Chrome for Testing. For tests. */
   bridgeBrowser?: (opts: BridgeBrowserOptions) => Promise<BridgeBrowser>
-  /** How the services of OpenAgent's own packages are started; default each as its own process. For tests. */
-  packageServices?: (opts: PackageServicesOptions) => PackageServices
   /** How long the teardown after Ctrl+C may take; default {@link SHUTDOWN_DEADLINE_MS}. For tests. */
   shutdownDeadlineMs?: number
   /** The modules the dashboard runs, loaded; its distribution's when unsaid (`distribution-hooks.ts`). For tests. */
@@ -111,8 +108,8 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
   // another origin, behind a key of its own. The key may not exist yet, hence ensure, not read.
   const bridgeOn = (await readPreferences(env)).bridge === true
   const bridgeToken = bridgeOn ? await ensureBridgeToken(env) : undefined
-  // Which computer this is, said to every machine it gets into and to its own packages' services:
-  // a machine lists this computer once by it. A home file that cannot be written says nothing.
+  // Which computer this is, said to every machine it gets into and to the modules: a machine
+  // lists this computer once by it. A home file that cannot be written says nothing.
   const computer = await ensureComputerId(env).catch(() => undefined)
   sayComputer(computer)
   sayName(await thisComputerName(env))
@@ -121,7 +118,10 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
   // A run's name is asked of a naming session kept waiting for it (agent-runner's `ReadyNaming`), so
   // the page has it about a second after Start. A run starts on this computer's host, the
   // distribution's (#2394).
-  const host = await localHostOf(opts.hooks ?? (await distributionHooks()))
+  const hooks = opts.hooks ?? (await distributionHooks())
+  const host = await localHostOf(hooks)
+  // The person's other computers are reached where devices is on (`other-computers.ts`).
+  otherComputers.on = () => devicesOn(hooks)
   const runtime = createProjectRuntime({ cwd, env, naming: new ReadyNaming(), host })
   // Known only once the dashboard listens; the bridge browser is told it (#1332).
   let daemonUrl: string | undefined
@@ -239,9 +239,11 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
   const sessions = await readySessionsHome(sessionsHome(env))
   const stopSessionsSweep = startSessionsSweep(sessions)
 
-  // The services of OpenAgent's own packages: each runs for as long as the daemon does, and is
-  // told the daemon's address.
-  const packageServices = (opts.packageServices ?? startPackageServices)({ commands: await distributionServices().catch(() => []), url: dashboard.url, env: computer !== undefined ? { ...env, [COMPUTER_ENV]: computer } : env, log: console.log })
+  // The modules' own work (`app.lifecycle`), devices' door among it: each module on starts it,
+  // told where OpenAgent answers and which computer this is, and a plugin kept per computer starts
+  // and stops with its switch from then on.
+  const lifecycle = new AbortController()
+  await hooks.started({ signal: lifecycle.signal, url: dashboard.url, ...(computer !== undefined ? { computer } : {}) })
 
   // Everything that runs in the background beside serving the dashboard: the data sync and the
   // cloud sweeps.
@@ -262,9 +264,10 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
   stopComputersSync()
 
   await stopWithin(opts.shutdownDeadlineMs ?? SHUTDOWN_DEADLINE_MS, async step => {
-    step("the services of OpenAgent's own packages")
-    await packageServices.stop()
-    // The dashboard goes first after them: the port is free again, and an open tab sees the
+    step("the modules' own work")
+    lifecycle.abort()
+    await hooks.stopping()
+    // The dashboard goes first after it: the port is free again, and an open tab sees the
     // dashboard is gone, while what is left stops behind it.
     step('the dashboard')
     await dashboard.close()

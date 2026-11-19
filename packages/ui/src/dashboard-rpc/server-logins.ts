@@ -1,10 +1,11 @@
-import { listMachines, thisComputerName, useLoginsOn } from '../registry.js'
+import { thisComputerName, useLoginsOn } from '../registry.js'
 import { readPersonalFolder } from '@openagt/agent-data'
 import { machineCall } from '../dashboard/remote-run.js'
 import { personalFolderShown } from '../personal-folder-shown.js'
 import { allowLogins, serverLogins, settleLeft, syncLogins, type ServerLogins } from '../dashboard/logins-sync.js'
 import type { CopiedKind } from '../dashboard/copied-logins.js'
 import type { AccountResult } from './accounts.js'
+import { savedMachines } from '../other-computers.js'
 
 // The servers of the person's that use this computer's logins, as the Permissions page shows them
 // (`logins-sync.ts` keeps them up to them): how each of this computer's accounts stands there, the
@@ -49,7 +50,7 @@ export async function sendSettleLogin(machineId: string, which: { kind: CopiedKi
  * Asked once, as the server is set up; the server keeps syncing by itself from then on.
  */
 export async function sendSyncPersonalFolderOn(machineId: string): Promise<AccountResult> {
-  const machine = (await listMachines()).find(saved => saved.id === machineId)
+  const machine = (await savedMachines()).find(saved => saved.id === machineId)
   if (!machine) return { ok: false, error: 'That server is no longer saved.' }
   const own = await readPersonalFolder()
   const remote = personalFolderShown(own).remote

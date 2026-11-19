@@ -3,7 +3,7 @@ import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { GitAccess } from './account.js'
-import type { AppContext, AttentionArgs, AttentionRead } from './app.js'
+import type { AppContext, AppStart, AttentionArgs, AttentionRead } from './app.js'
 import { HOOK_NAMES, MODULE_NAME, type HookName, type ModuleDefinition, type OwnRow } from './module.js'
 import { runPipeline, type OrderedStep, type PipelineResult } from './pipeline.js'
 import type { ProjectRef } from './project.js'
@@ -87,8 +87,12 @@ export interface Hooks {
   gitAccess(remote: string): Promise<GitAccess | undefined>
   /** What needs the person, every module's items in the distribution's order, and whether every module answered. */
   attention(args: AttentionArgs): Promise<AttentionRead>
-  /** The app started: each module on starts its own work, with `signal` aborting when the app stops. */
-  started(signal: AbortSignal): Promise<void>
+  /**
+   * The app started: each module on starts its own work, its signal aborting when the app stops.
+   * From then on, a plugin kept per person or per computer starts when it is switched on, and
+   * stops when it is switched off; one kept per project starts with the app wherever it is on.
+   */
+  started(app: AppStart): Promise<void>
   /** The app is stopping: the modules started, the last first. */
   stopping(): Promise<void>
   projectAdded(project: ProjectRef): Promise<void>
@@ -153,8 +157,9 @@ export function createHooks(entries: readonly DistributionEntry[], opts: HooksOp
     return kept
   }
 
-  let appSignal = new AbortController().signal
-  let live: ModuleDefinition[] = []
+  let app: AppStart | undefined
+  /** The modules started, in the order they were, each with what aborts its signal. */
+  const live = new Map<ModuleDefinition, AbortController>()
   const appContext = (module: ModuleDefinition): AppContext => ({
     projects: async () => {
       const all = (await opts.projects?.()) ?? []
@@ -165,9 +170,36 @@ export function createHooks(entries: readonly DistributionEntry[], opts: HooksOp
     store,
     settings,
     get signal() {
-      return appSignal
+      return live.get(module)?.signal ?? app?.signal ?? new AbortController().signal
     },
+    ...(app !== undefined ? { url: app.url } : {}),
+    ...(app?.computer !== undefined ? { computer: app.computer } : {}),
   })
+  const startOne = async (module: ModuleDefinition, start: AppStart): Promise<void> => {
+    const stop = new AbortController()
+    start.signal.addEventListener('abort', () => stop.abort(), { once: true })
+    live.set(module, stop)
+    const lifecycle = module.hooks['app.lifecycle']
+    if (!lifecycle?.started) return
+    try {
+      await lifecycle.started(appContext(module))
+    } catch (error) {
+      report(module.name, 'app.lifecycle.started', error)
+    }
+  }
+  const stopOne = async (module: ModuleDefinition): Promise<void> => {
+    const stop = live.get(module)
+    if (!stop) return
+    live.delete(module)
+    stop.abort()
+    const lifecycle = module.hooks['app.lifecycle']
+    if (!lifecycle?.stopping) return
+    try {
+      await lifecycle.stopping()
+    } catch (error) {
+      report(module.name, 'app.lifecycle.stopping', error)
+    }
+  }
 
   const steps = async (run: { project?: ProjectRef; options: RunOptions }): Promise<OrderedStep[]> => {
     const all = (await onModules(run.project, run.options, 'run.step')).flatMap(module =>
@@ -189,8 +221,12 @@ export function createHooks(entries: readonly DistributionEntry[], opts: HooksOp
       const module = byName.get(name)
       if (module?.plugin?.row) throw new Error(`${name} keeps its own row: it is switched on its Settings entry`)
       const setting = switches.get(name)
-      if (!setting) throw new Error(module ? `${name} is a core module, always on` : `No module is named ${name}`)
+      if (!module || !setting) throw new Error(module ? `${name} is a core module, always on` : `No module is named ${name}`)
       await settings.set(setting, on, project)
+      // Once the app started, one kept per person or per computer starts or stops with its switch.
+      if (!app || app.signal.aborted || setting.scope === 'project') return
+      if (on && !live.has(module)) await startOne(module, app)
+      if (!on) await stopOne(module)
     },
     steps,
     run: async ctx => runPipeline(await steps({ ...(ctx.project ? { project: ctx.project } : {}), options: ctx.options }), ctx),
@@ -244,33 +280,16 @@ export function createHooks(entries: readonly DistributionEntry[], opts: HooksOp
       )
       return { items: said.flatMap(items => items ?? []), whole: said.every(items => items !== undefined) }
     },
-    async started(signal) {
-      appSignal = signal
-      live = []
+    async started(start) {
+      app = start
       for (const module of modules) {
         // A plugin kept per project starts wherever it is: its projects() says where it is on.
         if (module.plugin && module.plugin.scope !== 'project' && !(await enabled(module.name))) continue
-        live.push(module)
-        const lifecycle = module.hooks['app.lifecycle']
-        if (!lifecycle?.started) continue
-        try {
-          await lifecycle.started(appContext(module))
-        } catch (error) {
-          report(module.name, 'app.lifecycle.started', error)
-        }
+        await startOne(module, start)
       }
     },
     async stopping() {
-      for (const module of [...live].reverse()) {
-        const lifecycle = module.hooks['app.lifecycle']
-        if (!lifecycle?.stopping) continue
-        try {
-          await lifecycle.stopping()
-        } catch (error) {
-          report(module.name, 'app.lifecycle.stopping', error)
-        }
-      }
-      live = []
+      for (const module of [...live.keys()].reverse()) await stopOne(module)
     },
     async projectAdded(project) {
       for (const module of await onModules(project, undefined, 'app.lifecycle')) {

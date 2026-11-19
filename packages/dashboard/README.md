@@ -19,8 +19,9 @@ whose each is and which plugins start on, and the `openagent` command, which ser
 ([`@openagt/ui`](../ui/README.md)) with them. A project installs none of them.
 
 The core modules are always on. A plugin has an Enabled row each, switched in **Settings ›
-Plugins**: `ask` starts on, every other plugin starts off (the tickets, the queue, the logs, the
-browser, the scheduler, Discord and the commands that move a ticket to work). The two git stores
+Plugins**: `ask` starts on, every other plugin starts off (devices, which is the door to this
+computer and your other computers, the tickets, the queue, the logs, the browser, the scheduler,
+Discord and the commands that move a ticket to work). The two git stores
 are on as their repositories stand: your folder's sync with a repository of yours, set in
 **Settings › Your agent data**, and a project's data on its own repository, set in the project's
 **Project agent data**. A run gets the skills of the core modules (github's on a GitHub project)

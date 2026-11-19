@@ -2,22 +2,20 @@ import { contextRemote } from './context.js'
 import { runComputerCommand } from './modules.js'
 import { saveMachine } from './save-machine.js'
 import { computersWiring, forgetHere, ownComputersOf, reachedAtAddress, removedSince, type OwnComputers, type OwnDoor } from '../dashboard/computers-sync.js'
-import { listForgotten, listMachines, removeMachine, type MachineRecord } from '../registry.js'
+import { listForgotten, removeMachine, type MachineRecord } from '../registry.js'
 import { THROUGH_PATH, leaveRemote } from '../dashboard/remote-run.js'
 import { parseMachineLink } from '../machine-link.js'
+import { DEVICES_PACKAGE, savedMachines } from '../other-computers.js'
 
 // What the person's computers ask each other to keep the same computers on all of them
 // (computers-sync.ts): what one has, a computer handed to it, and what the person removed.
-
-/** The package whose door this computer is reached at. */
-const DEVICES = '@openagt/dashboard-devices'
 
 /** A host as a URL carries it: an IPv6 number in brackets. */
 const urlHost = (host: string): string => (host.includes(':') ? `[${host}]` : host)
 
 /** Where this computer's own door is reached at an address, when it is: a server's, or its name on Tailscale; and its id at each server it keeps a line to. */
 export async function ownDoor(): Promise<OwnDoor> {
-  const said = await runComputerCommand(DEVICES, ['status'])
+  const said = await runComputerCommand(DEVICES_PACKAGE, ['status'])
   if (!said.ok || !said.output || typeof said.output !== 'object') return { lines: [] }
   const { listening, https, tailscale, lines } = said.output as Record<string, unknown>
   const at = (value: unknown): string | undefined => {
@@ -34,7 +32,7 @@ export async function ownDoor(): Promise<OwnDoor> {
 
 /** A link one more device of the person's gets in with at this computer's own door: only at an address. */
 export async function ownCode(): Promise<string | undefined> {
-  const said = await runComputerCommand(DEVICES, ['add'])
+  const said = await runComputerCommand(DEVICES_PACKAGE, ['add'])
   const url = said.ok && said.output && typeof said.output === 'object' ? (said.output as Record<string, unknown>).url : undefined
   return typeof url === 'string' && url.startsWith('https://') ? url : undefined
 }
@@ -44,7 +42,7 @@ export async function ownCode(): Promise<string | undefined> {
  * here, for another computer of theirs that brings itself up to them: never another person's.
  */
 export async function onOwnComputers(): Promise<OwnComputers> {
-  const [machines, forgotten, door] = await Promise.all([listMachines(), listForgotten(), computersWiring.door().catch((): OwnDoor => ({ lines: [] }))])
+  const [machines, forgotten, door] = await Promise.all([savedMachines(), listForgotten(), computersWiring.door().catch((): OwnDoor => ({ lines: [] }))])
   return {
     ...(door.address ? { door: door.address } : {}),
     computers: machines
@@ -64,7 +62,7 @@ export type AddComputerResult = { ok: true } | { ok: false; error: string }
 export async function sendAddComputer(link: unknown, label: unknown, added: unknown): Promise<AddComputerResult> {
   const parsed = typeof link === 'string' ? parseMachineLink(link) : null
   if (!parsed || !reachedAtAddress({ url: parsed.url })) return { ok: false, error: 'That is no link of a computer reached at its address.' }
-  const [door, forgotten, machines] = await Promise.all([computersWiring.door().catch((): OwnDoor => ({ lines: [] })), listForgotten(), listMachines()])
+  const [door, forgotten, machines] = await Promise.all([computersWiring.door().catch((): OwnDoor => ({ lines: [] })), listForgotten(), savedMachines()])
   if (door.address === parsed.url) return { ok: false, error: 'That is this computer.' }
   const removal = forgotten.find(gone => gone.url === parsed.url)
   if (removal && removedSince(typeof added === 'string' ? added : undefined, removal.at)) return { ok: false, error: 'The person removed that computer here.' }
@@ -82,7 +80,7 @@ export async function sendForgetComputers(gone: unknown): Promise<{ ok: true }> 
 
 /** Take a computer out here, the ones saved through it with it, and this computer out there: not while a run is at work on any of them. */
 async function removeHere(machine: MachineRecord): Promise<boolean> {
-  const saved = await listMachines()
+  const saved = await savedMachines()
   const through = saved.filter(candidate => candidate.url.startsWith(`${machine.url}${THROUGH_PATH}`))
   if ([machine, ...through].some(one => contextRemote().working(one.url))) return false
   for (const one of through) await removeMachine(one.id)

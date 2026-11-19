@@ -292,7 +292,7 @@ test("the app's life: modules start where they are on and stop the last first; a
     errors,
   )
   await hooks.setEnabled('github-auto-reply', true, P2)
-  await hooks.started(new AbortController().signal)
+  await hooks.started({ signal: new AbortController().signal, url: 'http://127.0.0.1:4200' })
   await hooks.projectAdded({ id: 'p3', name: 'Three', dir: '/projects/three' })
   await hooks.projectRemoved(P1)
   await hooks.stopping()
@@ -310,6 +310,46 @@ test("the app's life: modules start where they are on and stop the last first; a
     'projects stopping',
   ])
   assert.deepEqual(messages(errors), ['scheduled-agents app.lifecycle.started: no clock'])
+})
+
+test('once the app started, a plugin kept per person or per computer starts and stops with its switch, its signal aborted as it stops; one kept per project does not', async () => {
+  const seen: string[] = []
+  const signals: AbortSignal[] = []
+  const lifecycle = (name: string): AppLifecycle => ({
+    started: app => {
+      signals.push(app.signal)
+      seen.push(`${name} started at ${app.url} as ${app.computer}`)
+    },
+    stopping: () => void seen.push(`${name} stopping`),
+  })
+  const hooks = hooksOf([
+    { module: defineModule({ name: 'projects', hooks: { 'app.lifecycle': lifecycle('projects') } }) },
+    { module: defineModule({ name: 'devices', plugin: { scope: 'computer' }, hooks: { 'app.lifecycle': lifecycle('devices') } }) },
+    { module: defineModule({ name: 'discord', plugin: { scope: 'person' }, hooks: { 'app.lifecycle': lifecycle('discord') } }), on: true },
+    { module: defineModule({ name: 'tickets', plugin: { scope: 'project' }, hooks: { 'app.lifecycle': lifecycle('tickets') } }) },
+  ])
+  await hooks.setEnabled('devices', false)
+  const app = new AbortController()
+  await hooks.started({ signal: app.signal, url: 'http://127.0.0.1:4200', computer: 'c1' })
+  await hooks.setEnabled('devices', true)
+  await hooks.setEnabled('devices', true)
+  await hooks.setEnabled('tickets', true, P1)
+  await hooks.setEnabled('discord', false)
+  assert.deepEqual(seen.splice(0), [
+    'projects started at http://127.0.0.1:4200 as c1',
+    'discord started at http://127.0.0.1:4200 as c1',
+    'tickets started at http://127.0.0.1:4200 as c1',
+    'devices started at http://127.0.0.1:4200 as c1',
+    'discord stopping',
+  ])
+  assert.deepEqual(signals.map(signal => signal.aborted), [false, true, false, false], "discord's signal is aborted: it was switched off")
+  app.abort()
+  await hooks.stopping()
+  assert.deepEqual(seen, ['devices stopping', 'tickets stopping', 'projects stopping'], 'the last started stops first')
+  assert.deepEqual(signals.map(signal => signal.aborted), [true, true, true, true])
+  await hooks.setEnabled('devices', false)
+  await hooks.setEnabled('devices', true)
+  assert.deepEqual(seen, ['devices stopping', 'tickets stopping', 'projects stopping'], 'nothing starts once the app stopped')
 })
 
 test("a distribution is loaded from its packages' ./module entries, through the import it passes", async () => {
