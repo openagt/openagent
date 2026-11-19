@@ -5,19 +5,22 @@
 // `publish`, `add`, `edit` and `remove` to save; `show` to open an automation, `try` and `write-line`
 // for its shell line, and `now` to start a row at once.
 import { CalendarClock } from 'lucide-react'
-import { defineModule } from '@openagt/ui/module'
+import { defineUiModule } from '@openagt/ui/module'
 import { AutomationsPage } from './AutomationsPage.js'
 import { SchedulerCard } from './SchedulerCard.js'
 import { SchedulerSettings } from './SchedulerSettings.js'
-import { cannotRun, heldBy, loosestSpendOffset, readSchedulers, saveSpendOffset, schedulerStopped, startsNext } from './schedulers.js'
+import { StopLine } from './StopLine.js'
+import { cannotRun, heldBy, readSchedulers, schedulerStopped, startsNext } from './schedulers.js'
 
-export default defineModule({
-  pages: [{ segment: 'automations', label: 'Automations', icon: CalendarClock, Page: AutomationsPage }],
-  cards: [{ id: 'scheduler', label: 'Automations', order: 90, Card: SchedulerCard }],
-  settings: [{ id: 'scheduler', title: 'Scheduler', icon: CalendarClock, order: 20, Section: SchedulerSettings }],
-  usageLimit: {
-    read: async (host, projects) => loosestSpendOffset(await readSchedulers(host, projects)),
-    save: saveSpendOffset,
+export default defineUiModule({
+  name: 'scheduled-agents',
+  hooks: {
+    'ui.view': [
+      { place: 'app.page', id: 'automations', label: 'Automations', icon: CalendarClock, View: AutomationsPage },
+      { place: 'overview.card', id: 'scheduler', label: 'Automations', order: 90, View: SchedulerCard },
+      { place: 'settings.section', id: 'scheduler', title: 'Scheduler', icon: CalendarClock, order: 20, View: SchedulerSettings },
+      { place: 'usage.line', id: 'stop-line', View: StopLine },
+    ],
   },
   // What starts by itself, for the pages of other packages: a queue says whether anything takes from it.
   schedule: {

@@ -252,7 +252,7 @@ export function OnboardingChecklist({
   // While the projects are not read: the queue's and the tickets' steps hold their places before the last step exactly
   // where the sidebar's pages say a project has the Queue or the Tickets, as the same packages bring the page and the
   // step. Until those pages are known (a browser's first visit) the frame is not drawn.
-  const listed = (segment: string) => listedPages?.some(page => page.segment === segment && page.projects.length > 0) === true
+  const listed = (segment: string) => listedPages?.some(page => page.id === segment && page.projects.length > 0) === true
   const coming = [...(listed('queue') ? [{ key: 'todos', done: false }] : []), ...(listed('tickets') ? [{ key: 'tickets', done: false }] : [])]
   const frame: { key: string; label?: string; description?: ReactNode; done: boolean }[] = steps.flatMap(step => [
     ...(data === null && step.key === 'browser-notification' ? coming : []),

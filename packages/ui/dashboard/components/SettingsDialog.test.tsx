@@ -4,7 +4,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { refreshPreferences } from '../lib/preferences.js'
 import { forgetRemembered } from '../lib/use-async.js'
 import { DaemonDown } from '../lib/use-daemon-health.js'
-import { ModulesContext, byMountOrder, type MountedModules } from '../lib/use-modules.js'
+import { ModulesContext, byMountOrder, mountedOf, type MountedModules, type MountedView } from '../lib/use-modules.js'
 import { CalendarClock, Smartphone, Ticket } from 'lucide-react'
 import { checked, choices, closeList, offered, openList, pick, showing } from '../test-controls.js'
 
@@ -381,7 +381,7 @@ describe('Settings › Appearance', () => {
 })
 
 describe('the Settings list', () => {
-  const mounted = (settings: MountedModules['settings']): MountedModules => ({ pages: [], cards: [], linkActions: [], panels: [], runSlots: [], settings, everyPage: [], loaded: true })
+  const mounted = (sections: MountedView<'settings.section'>[]): MountedModules => mountedOf({ views: { 'settings.section': sections } })
   const PROJECTS = [
     { id: 'p1', name: 'gemstack', gitHost: true },
     { id: 'p2', name: 'other', gitHost: true },
@@ -393,9 +393,9 @@ describe('the Settings list', () => {
     throw new Error('boom')
   }
   const MODULES = mounted([
-    { id: 'devices', title: 'Devices', icon: Smartphone, Section: Given, package: '@openagt/dashboard-devices', projects: [], computer: true },
-    { id: 'tickets', title: 'Tickets', icon: Ticket, Section: Given, package: '@openagt/skill-tickets', projects: ['p1', 'p2', 'gone'], computer: false },
-    { id: 'scheduler', title: 'Scheduler', icon: CalendarClock, Section: Broken, package: '@openagt/skill-scheduler', projects: ['p2'], computer: false },
+    { place: 'settings.section', id: 'devices', title: 'Devices', icon: Smartphone, View: Given, package: '@openagt/dashboard-devices', projects: [], computer: true },
+    { place: 'settings.section', id: 'tickets', title: 'Tickets', icon: Ticket, View: Given, package: '@openagt/skill-tickets', projects: ['p1', 'p2', 'gone'] },
+    { place: 'settings.section', id: 'scheduler', title: 'Scheduler', icon: CalendarClock, View: Broken, package: '@openagt/skill-scheduler', projects: ['p2'] },
   ])
   const show = (entry: string, scope: string | null = null, item?: string) =>
     render(

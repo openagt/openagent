@@ -27,7 +27,8 @@ import { usePinnedPage } from './lib/use-pinned-page.js'
 import { NotFound } from './components/NotFound.js'
 import { ProjectRemovedReport } from './components/RemoveProjectDialog.js'
 import { ModulePageView, ModuleSlot } from './components/ModulePageView.js'
-import { useListedPages, useModules, ModulesContext } from './lib/use-modules.js'
+import { useListedPages, useModules, ModulesContext, type ListedPage } from './lib/use-modules.js'
+import type { UiIcon } from './module/index.js'
 import { HostServicesContext, useSteadyServices } from './lib/host-services.js'
 import { DAEMON_SERVICES } from './lib/daemon-services.js'
 import { startPicks } from './lib/use-start-agent.js'
@@ -66,6 +67,11 @@ const EMPTY_INTERVENTIONS: ProjectionRead<Intervention> = { items: [], whole: []
 /** Stable initial for the activity poll (#627), so it does not churn on every render. */
 const EMPTY_ACTIVITY: ProjectionRead<Activity> = { items: [], whole: [] }
 
+
+/** A module's page as the sidebar, the bar of pages and the jump list draw it: by its address word. */
+function barPage({ id, label, icon }: ListedPage): { segment: string; label: string; icon?: UiIcon } {
+  return { segment: id, label, ...(icon !== undefined ? { icon } : {}) }
+}
 /** The dashboard's own pages, by the name a phone's bar gives each, as it gives a module's page its label, and the icon the sidebar and the jump draw for it. */
 const OWN_PAGES = new Map([
   [AGENTS_PAGE, { label: 'Agents', icon: Bot }],
@@ -131,11 +137,12 @@ export function App() {
   // Read again when a project is added from the sidebar or removed from its project home: which
   // project has which module changes then.
   const modules = useModules(projectsKey)
-  const { pages: modulePages, loaded: modulesLoaded } = modules
+  const { loaded: modulesLoaded } = modules
+  const modulePages = modules.views['app.page']
   // A project's address is its name unless another project or a page has it: what the address
   // names is known once both are read, and until then nothing is said to be missing.
   const projectIds = projects.map(p => p.id).join('\n')
-  const pageWords = modulePages.map(page => page.segment).join('\n')
+  const pageWords = modulePages.map(page => page.id).join('\n')
   const addresses = useMemo(() => projectAddresses(projectIds ? projectIds.split('\n') : [], pageWords ? pageWords.split('\n') : []), [projectIds, pageWords])
   const addressesRead = projectsState !== 'unknown' && modulesLoaded
   // How each project is named where it is listed: two clones called `shop` say which folder each is in.
@@ -164,7 +171,7 @@ export function App() {
   // The modules' pages the dashboard has: every one, or with a project picked only the pages of the
   // packages that project has. The sidebar lists these, and a URL names a page only among these.
   const shownPages = useMemo(() => (scope ? modulePages.filter(page => page.projects.includes(scope)) : modulePages), [modulePages, scope])
-  const modulePage = pageSegment ? shownPages.find(page => page.segment === pageSegment) : undefined
+  const modulePage = pageSegment ? shownPages.find(page => page.id === pageSegment) : undefined
   // The sidebar's rows of them, there from the first frame: the last load's until the modules are imported.
   const listedPages = useListedPages(modules)
 
@@ -191,7 +198,7 @@ export function App() {
       if (next === null) return navigate(here, { keepQuery: true })
       if (here.projectId !== next) return navigate(here.agentId === null ? { projectId: next, agentId: null, scope: next } : { projectId: null, agentId: null, scope: next })
     }
-    const mounted = modulePages.find(page => page.segment === here.page)
+    const mounted = modulePages.find(page => page.id === here.page)
     if (next !== null && mounted && !mounted.projects.includes(next)) return navigate({ projectId: null, agentId: null, scope: next })
     const { pagePath, ...page } = here
     navigate({ ...page, ...(next !== null ? { scope: next } : {}) }, { keepQuery: !pagePath?.length })
@@ -447,7 +454,7 @@ export function App() {
   // they are known, so nothing moves; with the daemon not answering it draws the rest without them.
   const sidebarPages = useMemo(() => {
     const known = listedPages ?? (healthy ? null : [])
-    return known && scope ? known.filter(page => page.projects.includes(scope)) : known
+    return known && (scope ? known.filter(page => page.projects.includes(scope)) : known).map(barPage)
   }, [listedPages, healthy, scope])
 
   // Route the main pane: the Overview dashboard when no project is selected (#471); else the
@@ -483,7 +490,7 @@ export function App() {
   // browser listed may be a project's: its page waits as its shape, the launcher's, or with a run's
   // id after it a session's. Any other page word waits as its page's frame until its code is in.
   const [run, ...pastRun] = route.pagePath ?? []
-  const listedPage = listedPages?.find(page => page.segment === pageSegment)
+  const listedPage = listedPages?.find(page => page.id === pageSegment)
   const projectWord = pageSegment !== null && projectsState === 'unknown' && route.scope === undefined && !OWN_PAGES.has(pageSegment) && !listedPage
   const projectShape = !projectWord ? null : run === undefined ? <ProjectHomeShape /> : pastRun.length === 0 && startedAtFromAgentId(run) !== undefined ? <ChatShape /> : null
   const renderMain = () => {
@@ -496,7 +503,7 @@ export function App() {
       // until the projects are read too a project's name reads as a page's word.
       if (!addressesRead) return projectWord ? projectShape : <PageShape title={listedPage?.label} />
       // A page another project's package adds is not the picked project's.
-      const elsewhere = scope !== null && modulePages.some(page => page.segment === pageSegment)
+      const elsewhere = scope !== null && modulePages.some(page => page.id === pageSegment)
       return (
         <NotFound
           title="No such page"
@@ -786,15 +793,15 @@ export function App() {
         />
       )}
       {/* What a module of this computer's draws over every page: a popup it raises itself. */}
-      {modules.everyPage.map(({ EveryPage, package: pkg }) => (
-        <ModuleSlot key={pkg} package={pkg} label={`${pkg} popup`}>
-          <EveryPage />
+      {modules.views['app.overlay'].map(({ View, id, package: pkg }) => (
+        <ModuleSlot key={`${pkg}:${id}`} package={pkg} label={`${pkg} popup`}>
+          <View />
         </ModuleSlot>
       ))}
       <JumpPalette
         waiting={interventions}
         runs={pageRuns}
-        pages={[...shownPages, ...[...OWN_PAGES].map(([segment, page]) => ({ segment, ...page }))]}
+        pages={[...shownPages.map(barPage), ...[...OWN_PAGES].map(([segment, page]) => ({ segment, ...page }))]}
         projects={projects}
         scope={scope}
         here={route}

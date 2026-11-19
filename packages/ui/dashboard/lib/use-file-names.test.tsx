@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import { HostServicesContext, INERT_HOST_SERVICES } from './host-services.js'
-import { ModulesContext, type MountedModules } from './use-modules.js'
+import { ModulesContext, mountedOf, type MountedModules } from './use-modules.js'
 import { pathsIn, useFileNames } from './use-file-names.js'
 import { useSchedule } from './use-schedule.js'
 
-const NOTHING: MountedModules = { pages: [], cards: [], linkActions: [], panels: [], runSlots: [], settings: [], everyPage: [], loaded: true }
+const NOTHING: MountedModules = mountedOf()
 
 afterEach(cleanup)
 
@@ -35,7 +35,7 @@ describe('useFileNames', () => {
   test('the page that owns a path\'s first segment is asked for its name, through its own package, only in a project that has it; the name opens that page', async () => {
     const openPage = vi.fn()
     const names = vi.fn(async (_host: unknown, _projectId: string, paths: string[]) => Object.fromEntries(paths.map(path => [path, { title: `Title of ${path}` }])))
-    const modules: MountedModules = { ...NOTHING, pages: [{ segment: 'tickets', label: 'Tickets', Page: () => null, package: 'a-tickets', projects: ['p1'], names }] }
+    const modules = mountedOf({ views: { 'app.page': [{ place: 'app.page', id: 'tickets', label: 'Tickets', View: () => null, package: 'a-tickets', projects: ['p1'], names }] } })
     render(
       <HostServicesContext.Provider value={{ ...INERT_HOST_SERVICES, openPage }}>
         <ModulesContext.Provider value={modules}>
@@ -52,13 +52,14 @@ describe('useFileNames', () => {
 
   test('a name may open another path than the one asked about; a path no page names, or a page that fails, has no name', async () => {
     const openPage = vi.fn()
-    const modules: MountedModules = {
-      ...NOTHING,
-      pages: [
-        { segment: 'tickets', label: 'Tickets', Page: () => null, package: 'a-tickets', projects: ['p1'], names: async () => ({ 'tickets/a.plan.md': { title: 'Plan: A', href: 'tickets/a.md' } }) },
-        { segment: 'docs', label: 'Docs', Page: () => null, package: 'a-docs', projects: ['p1'], names: async () => Promise.reject(new Error('no')) },
-      ],
-    }
+    const modules = mountedOf({
+      views: {
+        'app.page': [
+          { place: 'app.page', id: 'tickets', label: 'Tickets', View: () => null, package: 'a-tickets', projects: ['p1'], names: async () => ({ 'tickets/a.plan.md': { title: 'Plan: A', href: 'tickets/a.md' } }) },
+          { place: 'app.page', id: 'docs', label: 'Docs', View: () => null, package: 'a-docs', projects: ['p1'], names: async () => Promise.reject(new Error('no')) },
+        ],
+      },
+    })
     const { rerender } = render(
       <HostServicesContext.Provider value={{ ...INERT_HOST_SERVICES, openPage }}>
         <ModulesContext.Provider value={modules}>
@@ -102,7 +103,7 @@ describe('useSchedule', () => {
     )
 
   test('until the installed modules are known, nothing is known of any project: no project is said to have nothing starting', async () => {
-    show({ ...NOTHING, loaded: false })
+    show(mountedOf({ loaded: false }))
     await new Promise(resolve => setTimeout(resolve, 20))
     expect(screen.getByRole('button').textContent).toBe('no page: {}')
   })
@@ -116,11 +117,10 @@ describe('useSchedule', () => {
     const openPage = vi.fn()
     const read = vi.fn(async () => [{ command: 'work-queue', on: true, note: 'Starts when there is work' }])
     show(
-      {
-        ...NOTHING,
-        pages: [{ segment: 'automations', label: 'Automations', Page: () => null, package: 'a-scheduler', projects: ['p1'] }],
+      mountedOf({
+        views: { 'app.page': [{ place: 'app.page', id: 'automations', label: 'Automations', View: () => null, package: 'a-scheduler', projects: ['p1'] }] },
         schedule: { page: 'automations', read, package: 'a-scheduler', projects: ['p1'] },
-      },
+      }),
       openPage,
     )
     const shown = screen.getByRole('button')

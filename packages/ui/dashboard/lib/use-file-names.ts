@@ -8,7 +8,7 @@ import { usePolled } from './use-async.js'
 // What the paths into a project's files that a page shows are called. A queue entry may name
 // `tickets/2026-01-01_x.md`; the page that shows the entry knows nothing of tickets, and a file
 // path is no name a person reads. By the link convention (`data-link.ts`) the path's first segment
-// names the page that opens it, so that page's module is asked for the name (`ModulePage.names`),
+// names the page that opens it, so that page's module is asked for the name (its `app.page` view's `names`),
 // and the dashboard, which installed both, puts the two together.
 
 /** A path that has a name: what to show for it, and how to open it. */
@@ -49,7 +49,8 @@ const NOTHING: Record<string, ReadName> = {}
  * for the next visit, as the list the paths come from is: they show from the first frame.
  */
 export function useFileNames(asked: readonly { projectId: string; paths: readonly string[] }[], remember: string): FileNames {
-  const { pages, loaded: mounted } = useMountedModules()
+  const { views, loaded: mounted } = useMountedModules()
+  const pages = views['app.page']
   const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
   const key = asked.map(({ projectId, paths }) => `${projectId}\n${[...paths].sort().join('\n')}`).join('\n\n')
   const naming = pages.filter(page => page.names !== undefined)
@@ -63,7 +64,7 @@ export function useFileNames(asked: readonly { projectId: string; paths: readonl
           naming
             .filter(page => page.projects.includes(projectId))
             .map(async page => {
-              const own = paths.filter(path => dataLinkParts(path)?.segment === page.segment)
+              const own = paths.filter(path => dataLinkParts(path)?.segment === page.id)
               if (own.length === 0) return
               const answer = await page.names!(moduleHost({ ...services, package: page.package }), projectId, own).catch(() => ({}))
               for (const path of own) {

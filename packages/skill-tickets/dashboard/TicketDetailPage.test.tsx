@@ -3,7 +3,7 @@ import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/re
 import { openMenu } from '../../ui/dashboard/test-utils.js'
 import type { ReactElement } from 'react'
 import { forgetRemembered, type ModuleAgent } from '@openagt/ui/module'
-import type { MountedModules } from '@openagt/ui/module/testing'
+import { mountedOf, type MountedAction, type MountedModules } from '@openagt/ui/module/testing'
 import { fakeHost, renderWithHost, type FakeHost } from './test-host.js'
 import { TicketDetailPage } from './TicketDetailPage.js'
 import { planTicketPrompt, workOnTicketPrompt } from '../src/module.js'
@@ -21,16 +21,8 @@ const sendReleaseTicketLock = { mockResolvedValue: (value: { ok: true } | { ok: 
 // The one link action an installed module offers here (#1774): a queue package's "Add to queue",
 // present in project p1. Its `run` is the spy the queueing tests read.
 const addToQueue = vi.fn()
-const modules = (projects: string[] = ['p1']): MountedModules => ({
-  pages: [],
-  cards: [],
-  linkActions: [{ label: 'Add to queue', doneLabel: 'Queued', run: addToQueue, package: '@x/queue', projects }],
-  panels: [],
-  runSlots: [],
-  settings: [],
-  everyPage: [],
-  loaded: true,
-})
+const queueAction = (projects: string[]): MountedAction<'link.menu'> => ({ place: 'link.menu', id: 'add-to-queue', label: 'Add to queue', doneLabel: 'Queued', run: addToQueue, package: '@x/queue', projects })
+const modules = (projects: string[] = ['p1'], action = queueAction(projects)): MountedModules => mountedOf({ actions: { 'link.menu': [action] } })
 const render = (ui: ReactElement, mounted: MountedModules = modules()) => {
   const slug = (ui.props as { slug: string }).slug
   host = fakeHost(shown ? { p1: { [`show ${slug} --local`]: { ok: true, ticket: shown } } } : {}, { p1: agents })
@@ -155,7 +147,7 @@ describe('TicketDetailPage (#1144)', () => {
     await queue('Add to queue: work')
     // The title as the link, pointing back at the ticket's file, its priority as a number on the
     // queue's own 0–10 scale.
-    await waitFor(() => expect(addToQueue).toHaveBeenCalledWith(expect.anything(), 'p1', [{ text: 'Do the thing', href: 'tickets/2026-07-20_do-the-thing.md', priority: 8 }]))
+    await waitFor(() => expect(addToQueue).toHaveBeenCalledWith(expect.anything(), { projectId: 'p1', links: [{ text: 'Do the thing', href: 'tickets/2026-07-20_do-the-thing.md', priority: 8 }] }))
   })
 
   test('a ticket with no priority is handed over at 5, the middle of the scale', async () => {
@@ -163,7 +155,7 @@ describe('TicketDetailPage (#1144)', () => {
     addToQueue.mockResolvedValue({ ok: true })
     render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
     await queue('Add to queue: work')
-    await waitFor(() => expect(addToQueue).toHaveBeenCalledWith(expect.anything(), 'p1', [{ text: 'Do the thing', href: 'tickets/2026-07-20_do-the-thing.md', priority: 5 }]))
+    await waitFor(() => expect(addToQueue).toHaveBeenCalledWith(expect.anything(), { projectId: 'p1', links: [{ text: 'Do the thing', href: 'tickets/2026-07-20_do-the-thing.md', priority: 5 }] }))
   })
 
   test('a ticket with no plan queues the ask for its plan, not the work', async () => {
@@ -173,7 +165,7 @@ describe('TicketDetailPage (#1144)', () => {
     expect(await screen.findByRole('button', { name: 'Plan now' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Start work' })).toBeNull()
     await queue('Add to queue: plan')
-    await waitFor(() => expect(addToQueue).toHaveBeenCalledWith(expect.anything(), 'p1', [{ text: 'Create tickets/2026-07-20_do-the-thing.plan.md', priority: 8 }]))
+    await waitFor(() => expect(addToQueue).toHaveBeenCalledWith(expect.anything(), { projectId: 'p1', links: [{ text: 'Create tickets/2026-07-20_do-the-thing.plan.md', priority: 8 }] }))
   })
 
   test('a queued ticket says so and cannot be queued twice', async () => {
@@ -190,8 +182,8 @@ describe('TicketDetailPage (#1144)', () => {
 
   test('a ticket already on the queue opens as Queued, its menu item off: the module reads it so', async () => {
     onTicket.mockResolvedValue(ticket())
-    const onQueue = { ...modules().linkActions[0]!, done: async () => (link: { text: string }) => link.text === 'Create tickets/2026-07-20_do-the-thing.plan.md' }
-    render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />, { ...modules(), linkActions: [onQueue] })
+    const onQueue = { ...queueAction(['p1']), done: async () => (link: { text: string }) => link.text === 'Create tickets/2026-07-20_do-the-thing.plan.md' }
+    render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />, modules(['p1'], onQueue))
     expect((await screen.findByRole('button', { name: 'Queued: plan' })).getAttribute('aria-disabled')).toBe('true')
     expect(addToQueue).not.toHaveBeenCalled()
   })

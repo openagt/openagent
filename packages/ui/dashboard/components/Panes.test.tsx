@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { act, cleanup, fireEvent, render as rtlRender, screen, waitFor, within } from '@testing-library/react'
 import { hoverTooltip, openMenu, phoneScreen } from '../test-utils.js'
 import type { ComponentProps, ReactElement, ReactNode } from 'react'
-import { ModulesContext, type MountedModules, type MountedPanel } from '../lib/use-modules.js'
-import type { ModulePanelProps } from '../module/index.js'
+import { ModulesContext, mountedOf, type MountedModules, type MountedView } from '../lib/use-modules.js'
+import type { UiPaneProps } from '../module/index.js'
 
 // The panes read the project's documents themselves (#1146), so the top bar can tell a project
 // with some from one with none. Stub the read: the default project has one.
@@ -21,10 +21,11 @@ const { forgetRevealedChanges, revealChange, revealFile, revealScreen, revealSub
 const Icon = () => <svg aria-hidden />
 // The installed modules' panes, as the Files module and the browser skill bring them: each shows what it was given.
 const shown = vi.fn()
-const FILES: MountedPanel = { id: 'files', label: 'Files', icon: Icon, files: true, Panel: (props: ModulePanelProps) => (shown(props), <div>the files</div>), package: '@openagt/dashboard-files', projects: ['p1'] }
-const CHANGES: MountedPanel = { id: 'changes', label: 'Changes', icon: Icon, changes: true, Panel: (props: ModulePanelProps) => <div>changes: {props.reveal?.path ?? 'none asked'}</div>, package: '@openagt/dashboard-changes', projects: ['p1'] }
-const BROWSER: MountedPanel = { id: 'browser', label: 'Browser', icon: Icon, screen: true, Panel: () => <div>the browser</div>, package: '@openagt/skill-browser', projects: ['p1'] }
-const mounted = (panels: MountedPanel[]): MountedModules => ({ pages: [], cards: [], linkActions: [], panels, runSlots: [], settings: [], everyPage: [], loaded: true })
+type MountedPanel = MountedView<'chat.pane'>
+const FILES: MountedPanel = { place: 'chat.pane', id: 'files', label: 'Files', icon: Icon, files: true, View: (props: UiPaneProps) => (shown(props), <div>the files</div>), package: '@openagt/dashboard-files', projects: ['p1'] }
+const CHANGES: MountedPanel = { place: 'chat.pane', id: 'changes', label: 'Changes', icon: Icon, changes: true, View: (props: UiPaneProps) => <div>changes: {props.reveal?.path ?? 'none asked'}</div>, package: '@openagt/dashboard-changes', projects: ['p1'] }
+const BROWSER: MountedPanel = { place: 'chat.pane', id: 'browser', label: 'Browser', icon: Icon, screen: true, View: () => <div>the browser</div>, package: '@openagt/skill-browser', projects: ['p1'] }
+const mounted = (panes: MountedPanel[]): MountedModules => mountedOf({ views: { 'chat.pane': panes } })
 
 const base = { projectId: 'p1', agentId: 'r1', enabled: true, files: [] as string[], context: new Set<string>(), toggleContext: () => {} }
 
@@ -226,7 +227,7 @@ describe('what a module\'s pane is given', () => {
   test('the project, the run, how far its feed is, and the Context\'s files alone', () => {
     render(<Page files={['a.ts', 'b.ts']} context={new Set(['a.ts', '/some/project'])} activity={7} />)
     fireEvent.click(icon('Files'))
-    const props = shown.mock.lastCall![0] as ModulePanelProps
+    const props = shown.mock.lastCall![0] as UiPaneProps
     expect(props.projectId).toBe('p1')
     expect(props.agentId).toBe('r1')
     expect(props.activity).toBe(7)
@@ -237,13 +238,13 @@ describe('what a module\'s pane is given', () => {
   test('on the "New agent session" page it is given no run', () => {
     render(<Page agentId={null} activity={7} />)
     fireEvent.click(icon('Files'))
-    const props = shown.mock.lastCall![0] as ModulePanelProps
+    const props = shown.mock.lastCall![0] as UiPaneProps
     expect(props.agentId).toBeUndefined()
     expect(props.activity).toBeUndefined()
   })
 
   test('a pane that throws breaks only itself', () => {
-    const broken: MountedPanel = { ...FILES, Panel: () => { throw new Error('boom') } }
+    const broken: MountedPanel = { ...FILES, View: () => { throw new Error('boom') } }
     vi.spyOn(console, 'error').mockImplementation(() => {})
     render(<Page />, [broken, BROWSER])
     fireEvent.click(icon('Files'))
@@ -466,7 +467,7 @@ describe('a file asked for from the chat', () => {
     fireEvent.click(icon('Changes'))
     act(() => revealFile('p1/r1', '/home/user/project/index.html'))
     expect(cards()).toEqual(['Changes', 'Files'])
-    expect((shown.mock.lastCall![0] as ModulePanelProps).show).toMatchObject({ path: '/home/user/project/index.html' })
+    expect((shown.mock.lastCall![0] as UiPaneProps).show).toMatchObject({ path: '/home/user/project/index.html' })
     expect(within(card('Changes')).getByText('changes: none asked')).toBeTruthy()
   })
 

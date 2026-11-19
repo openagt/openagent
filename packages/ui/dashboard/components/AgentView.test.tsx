@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import type { OpenAgentEvent } from '../../src/index.js'
-import { ModulesContext, type MountedModules } from '../lib/use-modules.js'
-import type { ModuleRunProps } from '../module/index.js'
+import { ModulesContext, mountedOf, type MountedView } from '../lib/use-modules.js'
+import type { UiRunProps } from '../module/index.js'
 
 const onAgent = vi.fn(async () => [] as unknown)
 const onRetainedWorktrees = vi.fn(async () => [] as unknown)
@@ -536,11 +536,8 @@ describe('a changed file\'s row in the chat', () => {
     { kind: 'driver', event: { type: 'text', text: 'Done.' } },
     { kind: 'end', ok: true },
   ] as OpenAgentEvent[]
-  const withPanels = (ui: ReactNode, panels: MountedModules['panels']) => {
-    const modules: MountedModules = { pages: [], cards: [], linkActions: [], panels, runSlots: [], settings: [], everyPage: [], loaded: true }
-    return <ModulesContext.Provider value={modules}>{ui}</ModulesContext.Provider>
-  }
-  const panel = (over: object) => ({ id: 'changes', label: 'Changes', icon: () => null, Panel: () => null, package: '@openagt/dashboard-changes', projects: ['p1'], ...over })
+  const withPanels = (ui: ReactNode, panes: MountedView<'chat.pane'>[]) => <ModulesContext.Provider value={mountedOf({ views: { 'chat.pane': panes } })}>{ui}</ModulesContext.Provider>
+  const panel = (over: object) => ({ place: 'chat.pane' as const, id: 'changes', label: 'Changes', icon: () => null, View: () => null, package: '@openagt/dashboard-changes', projects: ['p1'], ...over })
 
   test('with a pane that lists changes, a click asks this agent\'s page for the file by its path in the checkout', async () => {
     const { useRevealedChange, forgetRevealedChanges } = await import('../lib/reveal-change.js')
@@ -565,9 +562,9 @@ describe('a changed file\'s row in the chat', () => {
 })
 
 describe('what the modules add to a run’s page (#817)', () => {
-  const Summary = ({ agentId, working }: ModuleRunProps) => <span>summary {agentId} {String(working)}</span>
+  const Summary = ({ agentId, working }: UiRunProps) => <span>summary {agentId} {String(working)}</span>
   const withSlots = (ui: ReactNode, projects = ['p1']) => {
-    const modules: MountedModules = { pages: [], cards: [], linkActions: [], panels: [], runSlots: [{ summary: Summary, package: '@openagt/dashboard-changes', projects }], settings: [], everyPage: [], loaded: true }
+    const modules = mountedOf({ views: { 'chat.summary': [{ place: 'chat.summary', id: 'changes', View: Summary, package: '@openagt/dashboard-changes', projects }] } })
     return <ModulesContext.Provider value={modules}>{ui}</ModulesContext.Provider>
   }
 

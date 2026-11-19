@@ -156,7 +156,7 @@ export function routeOf(projectId: string | null, path: readonly string[]): Modu
   return plan === 'plan' ? { view: 'plan', projectId, file } : { view: 'unknown' }
 }
 
-/** What a path under the tickets directory is called, for a page that shows the path: OpenAgent's `ModuleFileName`, by structure. */
+/** What a path under the tickets directory is called, for a page that shows the path: OpenAgent's `UiFileName`, by structure. */
 export interface NamedPath {
   title: string
   /** The path opened for it, when it is not the path itself. */
@@ -196,7 +196,7 @@ export function namesOf(paths: readonly string[], tickets: readonly { file: stri
   return named
 }
 
-/** A link as the module hands it to the dashboard's link actions: OpenAgent's `ModuleLink`, by structure. */
+/** A link as the module hands it to the dashboard's link actions: OpenAgent's `UiLink`, by structure. */
 export interface TicketAsLink {
   text: string
   href?: string

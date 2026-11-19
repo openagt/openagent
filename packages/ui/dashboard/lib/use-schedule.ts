@@ -1,5 +1,5 @@
 import { useContext } from 'react'
-import { moduleHost, type ModuleProject, type ModuleScheduledCommand } from '../module/index.js'
+import { moduleHost, type UiProject, type UiScheduledCommand } from '../module/index.js'
 import { HostServicesContext, INERT_HOST_SERVICES } from './host-services.js'
 import { useMountedModules } from './use-modules.js'
 import { usePolled } from './use-async.js'
@@ -17,25 +17,26 @@ export interface Schedule {
    * scheduling module is in. A project whose answer is not known, not read yet or a read that
    * failed, has no entry: a page then says nothing of it, since "nothing starts" would be a guess.
    */
-  commands: Record<string, ModuleScheduledCommand[]>
+  commands: Record<string, UiScheduledCommand[]>
   /** Open the page where a person switches a command on. */
   open(): void
 }
 
-const UNKNOWN: Record<string, ModuleScheduledCommand[]> = {}
+const UNKNOWN: Record<string, UiScheduledCommand[]> = {}
 
 /** The commands that start by themselves in `projects`, read every 10 seconds. */
-export function useSchedule(projects: readonly ModuleProject[]): Schedule {
-  const { schedule, pages, loaded: mounted } = useMountedModules()
+export function useSchedule(projects: readonly UiProject[]): Schedule {
+  const { schedule, views, loaded: mounted } = useMountedModules()
+  const pages = views['app.page']
   const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
   const ids = projects.map(p => p.id).join(',')
-  const { value: commands } = usePolled<Record<string, ModuleScheduledCommand[]>>(
+  const { value: commands } = usePolled<Record<string, UiScheduledCommand[]>>(
     async () => {
       // Which modules are installed is not known yet: neither is what starts, so what was read last time stands.
       if (!mounted) throw new Error('the modules are not in yet')
       const host = schedule ? moduleHost({ ...services, package: schedule.package }) : undefined
       const read = await Promise.all(
-        projects.map(async (project): Promise<[string, ModuleScheduledCommand[]] | undefined> => {
+        projects.map(async (project): Promise<[string, UiScheduledCommand[]] | undefined> => {
           if (!schedule || !host || !schedule.projects.includes(project.id)) return [project.id, []]
           return schedule.read(host, project).then(
             listed => [project.id, listed],
@@ -54,6 +55,6 @@ export function useSchedule(projects: readonly ModuleProject[]): Schedule {
   // What was read for other projects is not this page's: only the projects asked about are answered.
   const asked = Object.fromEntries(projects.flatMap(project => (commands[project.id] ? [[project.id, commands[project.id]!]] : [])))
   if (!schedule) return { commands: asked, open: () => {} }
-  const label = pages.find(page => page.segment === schedule.page)?.label ?? schedule.page
+  const label = pages.find(page => page.id === schedule.page)?.label ?? schedule.page
   return { page: { segment: schedule.page, label, href: services.pageHref(schedule.page) }, commands: asked, open: () => services.openPage(schedule.page) }
 }

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Input, MAX_SPEND_OFFSET, inPlace, SettingsRow, SettingsRowShapes, SettingsSection, Slot, useModuleHost, useOpenAgentDown, usePolled, type ModuleSettingsProps } from '@openagt/ui/module'
+import { Input, MAX_SPEND_OFFSET, inPlace, SettingsRow, SettingsRowShapes, SettingsSection, Slot, useModuleHost, useOpenAgentDown, usePolled, type UiSettingsProps } from '@openagt/ui/module'
 import { loosestSpendOffset, notAsked, offsetsThatDiffer, readSchedulers, schedulersKey, saveSpendOffset, typedOffset, type SchedulerRow } from './schedulers.js'
 
 // Settings › Scheduler: how far past the quota boundary scheduled work may still start. Each
@@ -12,7 +12,7 @@ const EMPTY: SchedulerRow[] = []
 /** How long the offset rests before it is saved: typing a number is several changes, each a command per project. */
 const OFFSET_SAVE_DELAY_MS = 500
 
-export function SchedulerSettings({ projects }: ModuleSettingsProps) {
+export function SchedulerSettings({ projects }: UiSettingsProps) {
   const host = useModuleHost()
   const key = projects.map(p => p.id).join(',')
   const schedulers = usePolled(() => readSchedulers(host, projects), EMPTY, 10_000, [key], { remember: schedulersKey(key) })

@@ -24,6 +24,10 @@ already made, and lists it in its pull request; for anything else it proposes an
   first fetch went as the person's own login, and over each step of the run asking a module
   for git access of its own.
 - A hook's name starts with its area: `run.`, `store.`, `account.`, `app.`, `ui.`.
+- The UI has four hooks, each taking a place: `ui.view` (a component), `ui.action` (something
+  to do), `ui.option` (something to pick in a shared menu) and `ui.render` (how a kind of
+  content looks). `hooks` types each place's props, so a new place needs no new hook. Picked
+  over a hook per place.
 - A hook is code the loader calls, or an answer that must be fresh (what needs the person). A
   fact a module owns and other modules read is a setting, declared in the catalog here and
   saved through the store. Picked over a hook per fact (`people`, `schedule`, `linkName`).

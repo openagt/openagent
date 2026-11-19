@@ -20,7 +20,7 @@ import {
   useNarrow,
   usePolled,
   Waiting,
-  type ModulePanelProps,
+  type UiPaneProps,
 } from '@openagt/ui/module'
 import type { AgentTree } from '../src/tree.js'
 import { projectKey, treeKey } from './keys.js'
@@ -169,7 +169,7 @@ function FilesHeader({ page, tabs, active, tree, onOpen, onSearch, onShowTree }:
 /** Narrower than this, the pane has room for the tree or the file, not both. */
 const NARROW = 520
 
-export function FilesPane({ projectId, agentId, activity, show, context }: ModulePanelProps) {
+export function FilesPane({ projectId, agentId, activity, show, context }: UiPaneProps) {
   const host = useModuleHost()
   const page = `${projectId}/${agentId ?? ''}`
   const { tabs, active, source } = useOpenFiles(page)

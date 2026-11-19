@@ -1,4 +1,4 @@
-import { LinePart, counted, useModuleHost, type ModuleCardProps } from '@openagt/ui/module'
+import { LinePart, counted, useModuleHost, type UiCardProps } from '@openagt/ui/module'
 import { entryView } from './entry.js'
 import { useQueueReads } from './reads.js'
 
@@ -8,7 +8,7 @@ import { useQueueReads } from './reads.js'
  * waits for nothing. Drawn by the shell only where a project has this package, so an Overview with no
  * queue says nothing of one.
  */
-export function QueuePart({ projects }: ModuleCardProps) {
+export function QueuePart({ projects }: UiCardProps) {
   const host = useModuleHost()
   const { reads, state, names } = useQueueReads(projects)
   const waiting = reads.map(read => read.entries.filter(entry => !entryView(read.project.id, entry, names).done))

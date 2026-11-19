@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import { Check, ChevronDown, Copy, Info, MoreHorizontal, Plus } from 'lucide-react'
-import { Button, useAskOn, ClaudeLogo, CodexLogo, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, GaugeFace, Input, Panel, PanelGroup, Skeleton, Slot, Tooltip, TooltipContent, TooltipTrigger, cn, useModuleHost, useOpenAgentDown, usePolled, WordsShape, type ModuleCardProps, type ModuleHost } from '@openagt/ui/module'
+import { Button, useAskOn, ClaudeLogo, CodexLogo, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, GaugeFace, Input, Panel, PanelGroup, Skeleton, Slot, Tooltip, TooltipContent, TooltipTrigger, cn, useModuleHost, useOpenAgentDown, usePolled, WordsShape, type UiCardProps, type ModuleHost } from '@openagt/ui/module'
 
 // The accounts each coding agent's runs try, in order: how full each one is, whether it is at a
 // limit, adding one: the command's own sign-in, which goes on by itself while the card follows it,
@@ -289,7 +289,7 @@ function AddAccount({ agent, now, failed, from, field, onChanged, onClose }: { a
 /** An open row, and the press that waits for a yes in it: taking an account off is a sign-in to undo. */
 type Opened = { asking?: 'remove' | 'logout' }
 
-function AgentAccounts({ agent, accounts, usage, reading, where, onPress, busy }: { agent: (typeof AGENTS)[number]; accounts: Account[]; usage: Usage[]; reading: boolean; where: ModuleCardProps['accountWhere']; onPress: (args: string[]) => void; busy: boolean }) {
+function AgentAccounts({ agent, accounts, usage, reading, where, onPress, busy }: { agent: (typeof AGENTS)[number]; accounts: Account[]; usage: Usage[]; reading: boolean; where: UiCardProps['accountWhere']; onPress: (args: string[]) => void; busy: boolean }) {
   // One row is open at a time.
   const [open, setOpen] = useState<{ name: string } & Opened>()
   const now = Date.now()
@@ -356,7 +356,7 @@ function AccountRow({
   next: boolean
   /** First in the order already. */
   first: boolean
-  where: ModuleCardProps['accountWhere']
+  where: UiCardProps['accountWhere']
   /** Undefined while the row is closed. */
   open: Opened | undefined
   onOpen: (open: Opened | undefined) => void
@@ -467,7 +467,7 @@ function AccountRow({
   )
 }
 
-export function AccountsCard({ accountWhere }: ModuleCardProps) {
+export function AccountsCard({ accountWhere }: UiCardProps) {
   const host = useModuleHost()
   const { value: list, state, reload } = usePolled<Read<Account, Listed> | undefined>(() => read<Account, Listed>(host, 'list'), undefined, LIST_EVERY_MS, [], { remember: 'account-rotation:list', stored: true })
   const { value: usage, reload: reloadUsage } = usePolled<Read<Usage> | undefined>(() => read<Usage>(host, 'usage'), undefined, USAGE_EVERY_MS, [], { remember: 'account-rotation:usage', stored: true })

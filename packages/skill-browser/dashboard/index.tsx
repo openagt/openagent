@@ -2,18 +2,13 @@
 // beside the chat: the browser the session's agent opened, live, with its address bar, taking the
 // person's clicks and typing. What it shows is the stream the browser's own process writes
 // (`../src/stream.ts`), asked of OpenAgent, which asks the computer the session runs on.
-import { defineModule } from '@openagt/ui/module'
+import { defineUiModule } from '@openagt/ui/module'
 import { Globe } from 'lucide-react'
 import { BrowserPanel } from './BrowserPanel.js'
 
-export default defineModule({
-  panels: [
-    {
-      id: 'browser',
-      label: 'Browser',
-      icon: Globe,
-      screen: true,
-      Panel: BrowserPanel,
-    },
-  ],
+export default defineUiModule({
+  name: 'browser',
+  hooks: {
+    'ui.view': [{ place: 'chat.pane', id: 'browser', label: 'Browser', icon: Globe, screen: true, View: BrowserPanel }],
+  },
 })

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
-import type { LinkAction } from '@openagt/ui/module'
-import type { MountedModules } from '@openagt/ui/module/testing'
+import type { UiAction } from '@openagt/ui/module'
+import { mountedOf, type MountedModules } from '@openagt/ui/module/testing'
 import { HotTicketsCard } from './HotTicketsCard.js'
 import { priorityTone } from './lib/ticket-priority.js'
 import { fakeHost, renderWithHost, NO_MODULES, type Answers, type FakeHost } from './test-host.js'
@@ -127,11 +127,11 @@ describe('HotTicketsCard', () => {
   })
 
   test('a claim whose run stopped is gone on with in its run, or let go: the claim is lifted, whoever holds it, and the card reads again; it offers no link action meanwhile', async () => {
-    const run = vi.fn<LinkAction['run']>(async () => ({ ok: true as const }))
+    const run = vi.fn<UiAction['run']>(async () => ({ ok: true as const }))
     render(
       { p1: { 'list --local': [ticket('left.md', { locked: true, lockedBy: 'run-3' })], 'release left.md --force': { ok: true } }, p2: { 'list --local': [] } },
       { p1: [{ id: 'run-3', status: 'stopped', startedAt: '2026-08-01T00:00:00.000Z' }] },
-      { ...NO_MODULES, linkActions: [{ label: 'Add to queue', doneLabel: 'Queued', run, package: '@x/queue', projects: ['p1'] }] },
+      mountedOf({ actions: { 'link.menu': [{ place: 'link.menu', id: 'add-to-queue', label: 'Add to queue', doneLabel: 'Queued', run, package: '@x/queue', projects: ['p1'] }] } }),
     )
     await screen.findByText('left')
     expect(screen.queryByRole('button', { name: 'Add to queue' })).toBeNull()
@@ -144,11 +144,11 @@ describe('HotTicketsCard', () => {
   })
 
   test('a claimed ticket in review stays in Claimed but offers no link action', async () => {
-    const run = vi.fn<LinkAction['run']>(async () => ({ ok: true as const }))
+    const run = vi.fn<UiAction['run']>(async () => ({ ok: true as const }))
     render(
       { p1: { 'list --local': [ticket('held.md', { locked: true, lockedBy: 'someone', pr: { label: '#12', url: 'u' } }), ticket('urgent.md', { priority: '8' })] }, p2: { 'list --local': [] } },
       {},
-      { ...NO_MODULES, linkActions: [{ label: 'Add to queue', doneLabel: 'Queued', run, package: '@x/queue', projects: ['p1'] }] },
+      mountedOf({ actions: { 'link.menu': [{ place: 'link.menu', id: 'add-to-queue', label: 'Add to queue', doneLabel: 'Queued', run, package: '@x/queue', projects: ['p1'] }] } }),
     )
     expect(await screen.findByText('held')).toBeTruthy()
     // Only the ready ticket's row offers the action.
@@ -162,18 +162,17 @@ describe('HotTicketsCard', () => {
     expect(screen.queryByRole('button', { name: /Add to queue/ })).toBeNull()
     cleanup()
 
-    const run = vi.fn<LinkAction['run']>(async () => ({ ok: true as const }))
-    render(answers, {}, { ...NO_MODULES, linkActions: [{ label: 'Add to queue', doneLabel: 'Queued', run, package: '@x/queue', projects: ['p1'] }] })
+    const run = vi.fn<UiAction['run']>(async () => ({ ok: true as const }))
+    render(answers, {}, mountedOf({ actions: { 'link.menu': [{ place: 'link.menu', id: 'add-to-queue', label: 'Add to queue', doneLabel: 'Queued', run, package: '@x/queue', projects: ['p1'] }] } }))
     fireEvent.click(await screen.findByRole('button', { name: 'Add to queue' }))
     await waitFor(() => expect(run).toHaveBeenCalledTimes(1))
-    expect(run.mock.calls[0]![1]).toBe('p1')
-    expect(run.mock.calls[0]![2]).toEqual([{ text: 'urgent', href: 'tickets/urgent.md', priority: 8 }])
+    expect(run.mock.calls[0]![1]).toEqual({ projectId: 'p1', links: [{ text: 'urgent', href: 'tickets/urgent.md', priority: 8 }] })
     expect(await screen.findByRole('button', { name: 'Queued' })).toBeTruthy()
   })
 
   test('a row\'s press shows beside its priority, never over it: the press sits just before the row\'s end', async () => {
-    const run = vi.fn<LinkAction['run']>(async () => ({ ok: true as const }))
-    render({ p1: { 'list --local': [ticket('urgent.md', { priority: '8' })] }, p2: { 'list --local': [] } }, {}, { ...NO_MODULES, linkActions: [{ label: 'Add to queue', doneLabel: 'Queued', run, package: '@x/queue', projects: ['p1'] }] })
+    const run = vi.fn<UiAction['run']>(async () => ({ ok: true as const }))
+    render({ p1: { 'list --local': [ticket('urgent.md', { priority: '8' })] }, p2: { 'list --local': [] } }, {}, mountedOf({ actions: { 'link.menu': [{ place: 'link.menu', id: 'add-to-queue', label: 'Add to queue', doneLabel: 'Queued', run, package: '@x/queue', projects: ['p1'] }] } }))
     const press = await screen.findByRole('button', { name: 'Add to queue' })
     const fact = screen.getByText(/^Priority 8/)
     expect(press.compareDocumentPosition(fact) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()

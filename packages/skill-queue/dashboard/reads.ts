@@ -1,9 +1,9 @@
-import { pathsIn, runsAgain, useFileNames, usePolled, useModuleHost, type FileNames, type ModuleAgent, type ModuleProject, type ReadState } from '@openagt/ui/module'
+import { pathsIn, runsAgain, useFileNames, usePolled, useModuleHost, type FileNames, type ModuleAgent, type UiProject, type ReadState } from '@openagt/ui/module'
 import { isEntryLine, readEntries } from '../src/module.js'
 
 /** One project's open entries as read, or why the command failed, and its agents at work. */
 export interface ProjectRead {
-  project: ModuleProject
+  project: UiProject
   entries: string[]
   /** The project's agents that are working now or waiting on the person: an entry one of them was asked is being worked on. */
   working: ModuleAgent[]
@@ -17,7 +17,7 @@ const NOTHING_READ: ProjectRead[] = []
  * read, no fetch: cheap enough to follow the queue closely. The AI Queue card and the queue's tile
  * read it alike, with what the files the entries name are called.
  */
-export function useQueueReads(projects: ModuleProject[]): { reads: ProjectRead[]; state: ReadState; names: FileNames } {
+export function useQueueReads(projects: UiProject[]): { reads: ProjectRead[]; state: ReadState; names: FileNames } {
   const host = useModuleHost()
   const key = projects.map(p => p.id).join(',')
   const { value: reads, state } = usePolled<ProjectRead[]>(

@@ -11,7 +11,7 @@ vi.mock('../rpc/server-logins.js', () => servers)
 
 const { AddedAccountsUsage, freeIn } = await import('./AgentAccounts.js')
 const { AccountsList } = await import('./Accounts.js')
-const { ModulesContext } = await import('../lib/use-modules.js')
+const { ModulesContext, mountedOf } = await import('../lib/use-modules.js')
 
 const HOUR = 60 * 60_000
 const NOW = Date.parse('2026-10-22T12:00:00Z')
@@ -186,10 +186,10 @@ describe('Agent accounts', () => {
 
   test("Settings draws the skill's own card, the Overview's; a skill that did not load says so", async () => {
     views(TWO)
-    const nothing = { pages: [], cards: [], linkActions: [], panels: [], runSlots: [], settings: [], everyPage: [], loaded: true }
-    const card = { id: 'accounts', label: 'Accounts', package: '@openagt/skill-account-rotation', projects: [], computer: true, Card: () => <p>The skill's card</p> }
+    const nothing = mountedOf()
+    const card = { place: 'overview.card' as const, id: 'accounts', label: 'Accounts', package: '@openagt/skill-account-rotation', projects: [], computer: true as const, View: () => <p>The skill's card</p> }
     const { unmount } = render(
-      <ModulesContext.Provider value={{ ...nothing, cards: [card] }}>
+      <ModulesContext.Provider value={mountedOf({ views: { 'overview.card': [card] } })}>
         <AccountsList />
       </ModulesContext.Provider>,
     )

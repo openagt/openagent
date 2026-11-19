@@ -5,8 +5,8 @@ import type { WorkspaceDoc } from '../../src/index.js'
 import { DocsPanel } from './DocsPanel.js'
 import { ModuleSlot } from './ModulePageView.js'
 import { PaneHeaderContext } from './PaneHeader.js'
-import { useMountedModules, type MountedPanel } from '../lib/use-modules.js'
-import type { ModuleContext, ModulePanelProps } from '../module/index.js'
+import { useMountedModules, type MountedView } from '../lib/use-modules.js'
+import type { UiContext, UiPaneProps } from '../module/index.js'
 import { Button } from './ui/button.js'
 import { cn } from '../lib/utils.js'
 import { usePolled } from '../lib/use-async.js'
@@ -40,7 +40,7 @@ import { useNarrow } from '../lib/use-narrow.js'
 // the column of panes beside it reaches the window's top.
 
 /** A pane's own id among the page's: a module's by its package and the id it gave, the dashboard's own by name. */
-const panelId = (panel: MountedPanel): string => `${panel.package}/${panel.id}`
+const panelId = (panel: MountedView<'chat.pane'>): string => `${panel.package}/${panel.id}`
 const DOCS = 'docs'
 const SUBAGENTS = 'subagents'
 
@@ -56,7 +56,7 @@ interface Pane {
   label: string
   icon: ComponentType<{ className?: string }>
   /** The module's panel; absent on the dashboard's own panes. */
-  panel?: MountedPanel
+  panel?: MountedView<'chat.pane'>
 }
 
 interface PanesValue {
@@ -70,7 +70,7 @@ interface PanesValue {
   open: Pane[]
   /** The open pane that fills the page. */
   expanded: string | undefined
-  panelProps: ModulePanelProps | undefined
+  panelProps: UiPaneProps | undefined
   reveal: RevealedChange | undefined
   show: RevealedFile | undefined
   docs: WorkspaceDoc[]
@@ -170,7 +170,8 @@ export function PanesProvider({
   // The modules' panes for this project: every one is offered, since the top bar cannot tell a
   // module's pane is empty without rendering it; an empty one says so inside. The dashboard's own
   // Docs pane is earned by content (#1146): one that can only say "nothing yet" is not offered.
-  const { panels: mounted, loaded: modulesLoaded } = useMountedModules()
+  const { views, loaded: modulesLoaded } = useMountedModules()
+  const mounted = views['chat.pane']
   const page = panesPage(shown ?? '', agentId)
   const subagentAsked = useRevealedSubagent(page)
   const hasSubagents = subagents !== undefined
@@ -221,8 +222,8 @@ export function PanesProvider({
   // The Context as a module's pane sees it: its files only, never the project paths the
   // launcher's project checkboxes also put in it (#661).
   const contextFiles = useMemo(() => new Set(files.filter(f => context.has(f))), [files, context])
-  const moduleContext = useMemo<ModuleContext>(() => ({ files: contextFiles, toggle: toggleContext }), [contextFiles, toggleContext])
-  const panelProps = useMemo<ModulePanelProps | undefined>(
+  const moduleContext = useMemo<UiContext>(() => ({ files: contextFiles, toggle: toggleContext }), [contextFiles, toggleContext])
+  const panelProps = useMemo<UiPaneProps | undefined>(
     () => (shown ? { projectId: shown, ...(agentId ? { agentId, ...(activity !== undefined ? { activity } : {}) } : {}), context: moduleContext } : undefined),
     [shown, agentId, activity, moduleContext],
   )
@@ -359,7 +360,7 @@ function PaneCard({ pane, over = false }: { pane: Pane; /** Laid over the chat: 
           ) : pane.panel && panelProps ? (
             <ModuleSlot package={pane.panel.package} label={`${pane.label} pane`}>
               <PaneHeaderContext.Provider value={slots}>
-                <pane.panel.Panel {...panelProps} {...(pane.panel.changes && reveal ? { reveal } : {})} {...(pane.panel.files && show ? { show } : {})} />
+                <pane.panel.View {...panelProps} {...(pane.panel.changes && reveal ? { reveal } : {})} {...(pane.panel.files && show ? { show } : {})} />
               </PaneHeaderContext.Provider>
             </ModuleSlot>
           ) : (

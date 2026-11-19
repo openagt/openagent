@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { createElement, useContext, useRef, useState } from 'react'
 import { openMenu, phoneScreen } from './test-utils.js'
-import { useModuleHost, useOpenAgentDown, type ModuleCardProps, type ModuleDefinition, type ModulePageProps } from './module/index.js'
+import { defineUiModule, useModuleHost, useOpenAgentDown, type UiCardProps, type UiPageProps, type UiView } from './module/index.js'
 import { forgetRemembered } from './lib/use-async.js'
 import { holdEntry } from './lib/use-route.js'
 import { HostServicesContext } from './lib/host-services.js'
@@ -74,9 +74,9 @@ const { Dialog } = await import('./components/ui/dialog.js')
 
 const PROJECT = { id: 'app-abc', path: '/work/app', name: 'app', activated: true }
 
-/** A module's browser part the loader imports like a real one: a data URL whose default export is `definition`. */
-function moduleModule(key: string, definition: ModuleDefinition): string {
-  ;(globalThis as Record<string, unknown>)[key] = definition
+/** A module's browser part the loader imports like a real one: a data URL whose default export is a definition that fills `views`. */
+function moduleModule(key: string, ...views: UiView[]): string {
+  ;(globalThis as Record<string, unknown>)[key] = defineUiModule({ name: key, hooks: { 'ui.view': views } })
   return `data:text/javascript,export default globalThis[${JSON.stringify(key)}]`
 }
 
@@ -139,7 +139,7 @@ describe('module pages in the shell (#1774)', () => {
       const host = useModuleHost()
       return createElement('div', null, createElement('button', { onClick: () => host.openPage('permissions') }, 'open Permissions'), createElement('button', { onClick: () => host.openPage('agents') }, 'open Agents'))
     }
-    answerShell([{ package: '@acme/door', url: moduleModule('__doorOpensPages', { everyPage: Opens }), projects: [], computer: true }])
+    answerShell([{ package: '@acme/door', url: moduleModule('__doorOpensPages', { place: 'app.overlay', id: 'overlay', View: Opens }), projects: [], computer: true }])
     window.history.replaceState(null, '', '/app/overview')
     render(<App />)
     fireEvent.click(await screen.findByRole('button', { name: 'open Permissions' }))
@@ -161,7 +161,7 @@ describe('module pages in the shell (#1774)', () => {
       const host = useModuleHost()
       return createElement('button', { onClick: () => host.openSettings('devices', 'd3') }, 'open Devices')
     }
-    answerShell([{ package: '@acme/door', url: moduleModule('__doorOpensSettings', { everyPage: Opens }), projects: [], computer: true }])
+    answerShell([{ package: '@acme/door', url: moduleModule('__doorOpensSettings', { place: 'app.overlay', id: 'overlay', View: Opens }), projects: [], computer: true }])
     window.history.replaceState(null, '', '/?view=wide')
     render(<App />)
     const entries = window.history.length
@@ -175,11 +175,11 @@ describe('module pages in the shell (#1774)', () => {
   })
 
   test("a pick a module's page keeps in its address takes the place of the address it had: the page reads it, and Back steps over it", async () => {
-    function ListPage({ path }: ModulePageProps) {
+    function ListPage({ path }: UiPageProps) {
       const host = useModuleHost()
       return createElement('button', { onClick: () => host.adjustPage(['failed'], 'sort=new') }, `the list at ${path.join('/') || 'all'}`)
     }
-    answerShell([{ package: '@acme/list', url: moduleModule('__listAdjusted', { pages: [{ segment: 'list', label: 'List', Page: ListPage }] }), projects: [PROJECT.id] }])
+    answerShell([{ package: '@acme/list', url: moduleModule('__listAdjusted', { place: 'app.page', id: 'list', label: 'List', View: ListPage }), projects: [PROJECT.id] }])
     window.history.replaceState(null, '', '/list')
     render(<App />)
     const entries = window.history.length
@@ -189,13 +189,13 @@ describe('module pages in the shell (#1774)', () => {
   })
 
   test("a module's page goes back to the list it was opened from as that list was left, by Back; reached another way, it opens the list", async () => {
-    function ListPage({ path }: ModulePageProps) {
+    function ListPage({ path }: UiPageProps) {
       const host = useModuleHost()
       return path.length === 0
         ? createElement('button', { onClick: () => host.openPage('list', ['a'], PROJECT.id) }, 'open item a')
         : createElement('button', { onClick: () => host.backToPage('list') }, 'back to the list')
     }
-    answerShell([{ package: '@acme/list', url: moduleModule('__listModule', { pages: [{ segment: 'list', label: 'List', Page: ListPage }] }), projects: [PROJECT.id] }])
+    answerShell([{ package: '@acme/list', url: moduleModule('__listModule', { place: 'app.page', id: 'list', label: 'List', View: ListPage }), projects: [PROJECT.id] }])
     window.history.replaceState(null, '', '/list?sort=new')
     render(<App />)
     fireEvent.click(await screen.findByRole('button', { name: 'open item a' }))
@@ -212,7 +212,7 @@ describe('module pages in the shell (#1774)', () => {
   })
 
   test("a module's page opened beside the item the list opened, and back again, goes back to that list as it was left, by Back as many entries", async () => {
-    function ListPage({ path }: ModulePageProps) {
+    function ListPage({ path }: UiPageProps) {
       const host = useModuleHost()
       if (path.length === 0) return createElement('button', { onClick: () => host.openPage('list', ['a'], PROJECT.id) }, 'open item a')
       const other = path.length === 1 ? ['a', 'tab'] : ['a']
@@ -223,7 +223,7 @@ describe('module pages in the shell (#1774)', () => {
         createElement('button', { onClick: () => host.backToPage('list') }, 'back to the list'),
       )
     }
-    answerShell([{ package: '@acme/list', url: moduleModule('__listBeside', { pages: [{ segment: 'list', label: 'List', Page: ListPage }] }), projects: [PROJECT.id] }])
+    answerShell([{ package: '@acme/list', url: moduleModule('__listBeside', { place: 'app.page', id: 'list', label: 'List', View: ListPage }), projects: [PROJECT.id] }])
     window.history.replaceState(null, '', '/list?sort=new')
     render(<App />)
     fireEvent.click(await screen.findByRole('button', { name: 'open item a' }))
@@ -242,7 +242,7 @@ describe('module pages in the shell (#1774)', () => {
       const host = useModuleHost()
       return createElement('button', { onClick: () => host.openAgent(PROJECT.id, '3-a') }, 'open a run')
     }
-    answerShell([{ package: '@acme/door', url: moduleModule('__doorOpensRun', { everyPage: OpensRun }), projects: [], computer: true }])
+    answerShell([{ package: '@acme/door', url: moduleModule('__doorOpensRun', { place: 'app.overlay', id: 'overlay', View: OpensRun }), projects: [], computer: true }])
     window.history.replaceState(null, '', '/?settings=')
     render(<App />)
     fireEvent.click(await screen.findByRole('button', { name: 'hold a change' }))
@@ -258,10 +258,10 @@ describe('module pages in the shell (#1774)', () => {
   })
 
   test('a module\'s page gets a sidebar row and its own URL, where no project is selected', async () => {
-    function LogsPage({ projects }: ModulePageProps) {
+    function LogsPage({ projects }: UiPageProps) {
       return createElement('p', null, `runs of ${projects.map(p => p.name).join(', ')}`)
     }
-    answerShell([{ package: '@acme/logs', url: moduleModule('__logsModule', { pages: [{ segment: 'logs', label: 'Logs', Page: LogsPage }] }), projects: [PROJECT.id] }])
+    answerShell([{ package: '@acme/logs', url: moduleModule('__logsModule', { place: 'app.page', id: 'logs', label: 'Logs', View: LogsPage }), projects: [PROJECT.id] }])
     // A page no module claims: its main pane reads nothing, so the stub needs no answers for it.
     window.history.replaceState(null, '', '/elsewhere')
     render(<App />)
@@ -280,8 +280,8 @@ describe('module pages in the shell (#1774)', () => {
       return createElement('p', null, `a popup of ${useModuleHost().package}`)
     }
     answerShell([
-      { package: '@acme/door', url: moduleModule('__doorPopup', { everyPage: Popup }), projects: [], computer: true },
-      { package: '@acme/logs', url: moduleModule('__logsPopup', { everyPage: Popup }), projects: [PROJECT.id] },
+      { package: '@acme/door', url: moduleModule('__doorPopup', { place: 'app.overlay', id: 'overlay', View: Popup }), projects: [], computer: true },
+      { package: '@acme/logs', url: moduleModule('__logsPopup', { place: 'app.overlay', id: 'overlay', View: Popup }), projects: [PROJECT.id] },
     ])
     render(<App />)
     expect(await screen.findByText('a popup of @acme/door')).toBeTruthy()
@@ -308,7 +308,7 @@ describe('module pages in the shell (#1774)', () => {
   })
 
   test("on a phone the bar names the dashboard's own pages, as it names a module's", async () => {
-    answerShell([{ package: '@acme/logs', url: moduleModule('__phoneLogs', { pages: [{ segment: 'logs', label: 'Logs', Page: () => null }] }), projects: [PROJECT.id] }])
+    answerShell([{ package: '@acme/logs', url: moduleModule('__phoneLogs', { place: 'app.page', id: 'logs', label: 'Logs', View: () => null }), projects: [PROJECT.id] }])
     const wide = phoneScreen()
     try {
       for (const [path, name] of [['/logs', 'Logs'], ['/agents', 'Agents'], ['/permissions', 'Permissions']]) {
@@ -325,11 +325,11 @@ describe('module pages in the shell (#1774)', () => {
   })
 
   test("on a phone a page under a module's page has a back arrow in its bar, up to that page; the page itself has none", async () => {
-    function ListPage({ path }: ModulePageProps) {
+    function ListPage({ path }: UiPageProps) {
       const host = useModuleHost()
       return path.length === 0 ? createElement('button', { onClick: () => host.openPage('list', ['a'], PROJECT.id) }, 'open item a') : createElement('p', null, `item ${path.join('/')}`)
     }
-    answerShell([{ package: '@acme/list', url: moduleModule('__listPhoneBack', { pages: [{ segment: 'list', label: 'List', Page: ListPage }] }), projects: [PROJECT.id] }])
+    answerShell([{ package: '@acme/list', url: moduleModule('__listPhoneBack', { place: 'app.page', id: 'list', label: 'List', View: ListPage }), projects: [PROJECT.id] }])
     const wide = phoneScreen()
     try {
       // Opened cold: nothing behind it, so the arrow opens the list.
@@ -378,11 +378,11 @@ describe('module pages in the shell (#1774)', () => {
 
   test('the page talks to its own package\'s commands through the host', async () => {
     const { useModuleHost } = await import('./module/index.js')
-    function Runs({ projects }: ModulePageProps) {
+    function Runs({ projects }: UiPageProps) {
       const host = useModuleHost()
       return createElement('button', { onClick: () => void host.runCommand(projects[0]!.id, ['--limit', '5']) }, 'read')
     }
-    answerShell([{ package: '@acme/logs', url: moduleModule('__runsModule', { pages: [{ segment: 'runs', label: 'Runs', Page: Runs }] }), projects: [PROJECT.id] }])
+    answerShell([{ package: '@acme/logs', url: moduleModule('__runsModule', { place: 'app.page', id: 'runs', label: 'Runs', View: Runs }), projects: [PROJECT.id] }])
     window.history.replaceState(null, '', '/runs')
     render(<App />)
     fireEvent.click(await screen.findByText('read'))
@@ -437,7 +437,7 @@ describe('a first visit, the projects not read yet', () => {
     // The modules not read either: the pages this browser listed on its last visit are what is known.
     let answerModules = (_modules: unknown[]) => {}
     answers.set('onModules', () => new Promise(resolve => (answerModules = resolve)))
-    localStorage.setItem('openagent:listed-pages', JSON.stringify([{ segment: 'logs', label: 'Logs', projects: [PROJECT.id] }]))
+    localStorage.setItem('openagent:listed-pages', JSON.stringify([{ id: 'logs', label: 'Logs', projects: [PROJECT.id] }]))
     try {
       window.history.replaceState(null, '', '/logs')
       render(<App />)
@@ -446,7 +446,7 @@ describe('a first visit, the projects not read yet', () => {
       expect(await within(main).findByRole('status', {}, { timeout: 2000 })).toBeTruthy()
       answer()
       const Runs = () => createElement('p', null, 'the runs')
-      await act(async () => answerModules([{ package: '@acme/logs', url: moduleModule('__listedLogs', { pages: [{ segment: 'logs', label: 'Logs', Page: Runs }] }), projects: [PROJECT.id] }]))
+      await act(async () => answerModules([{ package: '@acme/logs', url: moduleModule('__listedLogs', { place: 'app.page', id: 'logs', label: 'Logs', View: Runs }), projects: [PROJECT.id] }]))
       expect(await screen.findByText('the runs')).toBeTruthy()
       expect(within(screen.getByRole('main')).queryByRole('status')).toBeNull()
     } finally {
@@ -494,11 +494,11 @@ describe('module cards on the Overview (#1818)', () => {
 
   test("a package's card is drawn on the Overview, given the projects that have the package, inside its host", async () => {
     const { useModuleHost } = await import('./module/index.js')
-    function QueueCard({ projects }: ModuleCardProps) {
+    function QueueCard({ projects }: UiCardProps) {
       const host = useModuleHost()
       return createElement('p', null, `${host.package} card for ${projects.map(p => p.name).join(', ')}`)
     }
-    answerOverview([{ package: '@acme/queue', url: moduleModule('__queueCard', { cards: [{ id: 'queue', label: 'queue', Card: QueueCard }] }), projects: [PROJECT.id] }])
+    answerOverview([{ package: '@acme/queue', url: moduleModule('__queueCard', { place: 'overview.card', id: 'queue', label: 'queue', View: QueueCard }), projects: [PROJECT.id] }])
     window.history.replaceState(null, '', '/')
     render(<App />)
     expect(await screen.findByText('@acme/queue card for app')).toBeTruthy()
@@ -541,7 +541,7 @@ describe('module cards on the Overview (#1818)', () => {
     answerOverview([
       // Code that never finishes coming.
       { package: '@acme/slow', url: 'data:text/javascript,await new Promise(() => {}); export default {}', projects: [PROJECT.id] },
-      { package: '@acme/queue', url: moduleModule('__quickCard', { cards: [{ id: 'queue', label: 'queue', Card: QueueCard }] }), projects: [PROJECT.id] },
+      { package: '@acme/queue', url: moduleModule('__quickCard', { place: 'overview.card', id: 'queue', label: 'queue', View: QueueCard }), projects: [PROJECT.id] },
     ])
     window.history.replaceState(null, '', '/')
     render(<App />)
@@ -647,7 +647,7 @@ describe('module cards on the Overview (#1818)', () => {
       function Popup() {
         return createElement('p', null, `the popup's saves: ${useOpenAgentDown() ? 'off' : 'on'}`)
       }
-      answerShell([{ package: '@acme/door', url: moduleModule('__downPopup', { everyPage: Popup }), projects: [], computer: true }])
+      answerShell([{ package: '@acme/door', url: moduleModule('__downPopup', { place: 'app.overlay', id: 'overlay', View: Popup }), projects: [], computer: true }])
       window.history.replaceState(null, '', '/?settings=scheduler')
       render(<App />)
       expect(await screen.findByText('its saves: on')).toBeTruthy()
@@ -663,21 +663,21 @@ describe('module cards on the Overview (#1818)', () => {
   })
 
   test("a card of this computer's package is on the Overview though no project has the package", async () => {
-    answerOverview([{ package: '@acme/devices', url: moduleModule('__devicesCard', { cards: [{ id: 'devices', label: 'Devices', Card: () => createElement('p', null, 'devices card') }] }), projects: [], computer: true }])
+    answerOverview([{ package: '@acme/devices', url: moduleModule('__devicesCard', { place: 'overview.card', id: 'devices', label: 'Devices', View: () => createElement('p', null, 'devices card') }), projects: [], computer: true }])
     window.history.replaceState(null, '', '/')
     render(<App />)
     expect(await screen.findByText('devices card')).toBeTruthy()
   })
 
   test('cards come out by order, then by package name; a card that throws shows only its own error', async () => {
-    const card = (text: string) => ({ Card: () => createElement('p', null, text) })
+    const card = (text: string) => ({ View: () => createElement('p', null, text) })
     function Boom(): never {
       throw new Error('kaboom')
     }
     answerOverview([
-      { package: '@acme/tickets', url: moduleModule('__ticketsCard', { cards: [{ id: 'hot', label: 'hot', order: 20, ...card('tickets card') }] }), projects: [PROJECT.id] },
-      { package: '@acme/queue', url: moduleModule('__queueCard2', { cards: [{ id: 'queue', label: 'queue', order: 10, ...card('queue card') }, { id: 'boom', label: 'boom', order: 10, Card: Boom }] }), projects: [PROJECT.id] },
-      { package: '@acme/audit', url: moduleModule('__auditCard', { cards: [{ id: 'audit', label: 'audit', ...card('audit card') }] }), projects: [PROJECT.id] },
+      { package: '@acme/tickets', url: moduleModule('__ticketsCard', { place: 'overview.card', id: 'hot', label: 'hot', order: 20, ...card('tickets card') }), projects: [PROJECT.id] },
+      { package: '@acme/queue', url: moduleModule('__queueCard2', { place: 'overview.card', id: 'queue', label: 'queue', order: 10, ...card('queue card') }, { place: 'overview.card', id: 'boom', label: 'boom', order: 10, View: Boom }), projects: [PROJECT.id] },
+      { package: '@acme/audit', url: moduleModule('__auditCard', { place: 'overview.card', id: 'audit', label: 'audit', ...card('audit card') }), projects: [PROJECT.id] },
     ])
     window.history.replaceState(null, '', '/')
     render(<App />)
@@ -692,7 +692,7 @@ describe('module cards on the Overview (#1818)', () => {
 
   test('a card may start a run without landing on it; by default the dashboard lands on the run', async () => {
     const { useModuleHost } = await import('./module/index.js')
-    function Starter({ projects }: ModuleCardProps) {
+    function Starter({ projects }: UiCardProps) {
       const host = useModuleHost()
       return createElement(
         'div',
@@ -701,7 +701,7 @@ describe('module cards on the Overview (#1818)', () => {
         createElement('button', { onClick: () => void host.startRun(projects[0]!.id, 'work the queue') }, 'start and go'),
       )
     }
-    answerOverview([{ package: '@acme/queue', url: moduleModule('__starterCard', { cards: [{ id: 'starter', label: 'starter', Card: Starter }] }), projects: [PROJECT.id] }])
+    answerOverview([{ package: '@acme/queue', url: moduleModule('__starterCard', { place: 'overview.card', id: 'starter', label: 'starter', View: Starter }), projects: [PROJECT.id] }])
     answers.set('sendStart', () => ({ ok: true, agentId: '9-r' }))
     window.history.replaceState(null, '', '/')
     render(<App />)
@@ -715,11 +715,11 @@ describe('module cards on the Overview (#1818)', () => {
 
   test('a run just started shows its name, in the header too, as soon as the daemon has it: before its row is in the list', async () => {
     const { useModuleHost } = await import('./module/index.js')
-    function Starter({ projects }: ModuleCardProps) {
+    function Starter({ projects }: UiCardProps) {
       const host = useModuleHost()
       return createElement('button', { onClick: () => void host.startRun(projects[0]!.id, 'fix the flaky login test') }, 'start')
     }
-    answerOverview([{ package: '@acme/queue', url: moduleModule('__namedStarterCard', { cards: [{ id: 'starter', label: 'starter', Card: Starter }] }), projects: [PROJECT.id] }])
+    answerOverview([{ package: '@acme/queue', url: moduleModule('__namedStarterCard', { place: 'overview.card', id: 'starter', label: 'starter', View: Starter }), projects: [PROJECT.id] }])
     answers.set('sendStart', () => ({ ok: true, agentId: '9-n' }))
     answers.set('onStartedName', () => 'Fix flaky login test')
     window.history.replaceState(null, '', '/')
@@ -733,11 +733,11 @@ describe('module cards on the Overview (#1818)', () => {
   })
   test('a run just started is starting until a list has had it; then a list without it says no such session, as after a delete and Back', async () => {
     const { useModuleHost } = await import('./module/index.js')
-    function Starter({ projects }: ModuleCardProps) {
+    function Starter({ projects }: UiCardProps) {
       const host = useModuleHost()
       return createElement('button', { onClick: () => void host.startRun(projects[0]!.id, 'tidy up') }, 'start')
     }
-    answerOverview([{ package: '@acme/queue', url: moduleModule('__goneStarterCard', { cards: [{ id: 'starter', label: 'starter', Card: Starter }] }), projects: [PROJECT.id] }])
+    answerOverview([{ package: '@acme/queue', url: moduleModule('__goneStarterCard', { place: 'overview.card', id: 'starter', label: 'starter', View: Starter }), projects: [PROJECT.id] }])
     answers.set('sendStart', () => ({ ok: true, agentId: '9-d' }))
     const run = { id: '9-d', status: 'done', startedAt: '2026-07-19T16:05:44.756Z', updatedAt: '2026-07-19T16:06:21.000Z', intent: 'tidy up' }
     let listed: unknown[] = []
@@ -761,13 +761,13 @@ describe('the project select (#1513)', () => {
   const url = () => window.location.pathname + window.location.search
 
   function answerTwo(): void {
-    function LogsPage({ projects }: ModulePageProps) {
+    function LogsPage({ projects }: UiPageProps) {
       return createElement('p', null, `runs of ${projects.map(p => p.name).join(', ')}`)
     }
-    function QueueCard({ projects }: ModuleCardProps) {
+    function QueueCard({ projects }: UiCardProps) {
       return createElement('p', null, `card for ${projects.map(p => p.name).join(', ')}`)
     }
-    answerShell([{ package: '@acme/logs', url: moduleModule('__scopeModule', { pages: [{ segment: 'logs', label: 'Logs', Page: LogsPage }], cards: [{ id: 'queue', label: 'queue', Card: QueueCard }] }), projects: [PROJECT.id, OTHER.id] }])
+    answerShell([{ package: '@acme/logs', url: moduleModule('__scopeModule', { place: 'app.page', id: 'logs', label: 'Logs', View: LogsPage }, { place: 'overview.card', id: 'queue', label: 'queue', View: QueueCard }), projects: [PROJECT.id, OTHER.id] }])
     answers.set('onProjects', () => [PROJECT, OTHER])
     answers.set('onQuota', () => null)
     answers.set('onDocs', () => [])
@@ -996,11 +996,11 @@ describe('the project select (#1513)', () => {
   /** The two projects, with a Tickets page that only `app` has, beside the Logs page both have. */
   function answerTwoWithTickets(): void {
     answerTwo()
-    function TicketsPage({ projects }: ModulePageProps) {
+    function TicketsPage({ projects }: UiPageProps) {
       return createElement('p', null, `tickets of ${projects.map(p => p.name).join(', ')}`)
     }
     const logs = (answers.get('onModules')!() as unknown[])[0]
-    answers.set('onModules', () => [logs, { package: '@acme/tickets', url: moduleModule('__ticketsModule', { pages: [{ segment: 'tickets', label: 'Tickets', Page: TicketsPage }] }), projects: [PROJECT.id] }])
+    answers.set('onModules', () => [logs, { package: '@acme/tickets', url: moduleModule('__ticketsModule', { place: 'app.page', id: 'tickets', label: 'Tickets', View: TicketsPage }), projects: [PROJECT.id] }])
   }
 
   test('with a project picked the sidebar lists only the pages that project has; all projects lists every page', async () => {
@@ -1040,11 +1040,11 @@ describe('the project select (#1513)', () => {
 
   test('with a project picked the Overview draws only the cards of the packages that project has', async () => {
     answerTwo()
-    function HotCard({ projects }: ModuleCardProps) {
+    function HotCard({ projects }: UiCardProps) {
       return createElement('p', null, `hot tickets of ${projects.map(p => p.name).join(', ') || 'no project'}`)
     }
     const both = (answers.get('onModules')!() as unknown[])[0]
-    answers.set('onModules', () => [both, { package: '@acme/tickets', url: moduleModule('__hotCard', { cards: [{ id: 'hot', label: 'hot', Card: HotCard }] }), projects: [PROJECT.id] }])
+    answers.set('onModules', () => [both, { package: '@acme/tickets', url: moduleModule('__hotCard', { place: 'overview.card', id: 'hot', label: 'hot', View: HotCard }), projects: [PROJECT.id] }])
     render(<App />)
     expect(await screen.findByText('hot tickets of app')).toBeTruthy()
     expect(screen.getByText('card for app, site')).toBeTruthy()
@@ -1261,7 +1261,7 @@ describe('the shell on a phone', () => {
   test('on a phone the Overview in the bar of pages counts what waits on the person, with the modules\' pages beside it', async () => {
     const wide = phoneScreen()
     try {
-      answerShell([{ package: '@acme/logs', url: moduleModule('__phoneBarLogs', { pages: [{ segment: 'logs', label: 'Logs', Page: () => null }] }), projects: [PROJECT.id] }])
+      answerShell([{ package: '@acme/logs', url: moduleModule('__phoneBarLogs', { place: 'app.page', id: 'logs', label: 'Logs', View: () => null }), projects: [PROJECT.id] }])
       answers.set('onInterventions', () => ({ items: [{ projectId: PROJECT.id, projectName: 'app', kind: 'awaiting', title: 'Pick a name', agentId: 'r1' }], whole: [PROJECT.id] }))
       render(<App />)
       const pages = await screen.findByRole('navigation', { name: 'Pages' })
@@ -1288,7 +1288,7 @@ describe('the shell on a phone', () => {
       render(<App />)
       const pages = await screen.findByRole('navigation', { name: 'Pages' })
       expect(within(pages).queryAllByRole('link')).toEqual([])
-      await act(async () => answerModules([{ package: '@acme/logs', url: moduleModule('__firstBarLogs', { pages: [{ segment: 'logs', label: 'Logs', Page: () => null }] }), projects: [PROJECT.id] }]))
+      await act(async () => answerModules([{ package: '@acme/logs', url: moduleModule('__firstBarLogs', { place: 'app.page', id: 'logs', label: 'Logs', View: () => null }), projects: [PROJECT.id] }]))
       await waitFor(() => expect(within(pages).getAllByRole('link').map(link => link.textContent)).toEqual(['Overview', 'Logs', 'New']))
     } finally {
       wide()

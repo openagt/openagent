@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { configureFirst } from '../../ui/dashboard/test-utils.js'
 import { forgetRemembered } from '@openagt/ui/module'
-import type { MountedModules } from '@openagt/ui/module/testing'
+import { mountedOf, type MountedModules } from '@openagt/ui/module/testing'
 import { workOnTicketPrompt } from '../src/module.js'
 import { fakeHost, renderWithHost, type Answers, type FakeHost } from './test-host.js'
 import { TicketsPage } from './TicketsPage.js'
@@ -20,16 +20,8 @@ const onAllTickets = { mockResolvedValue: (value: Group[]) => (groups = value) }
 // present in every project of these stories. Its `run` is the spy the selection's adds are read by:
 // one call per project, the links in the shown order.
 const addToQueue = vi.fn()
-const modules = (projects: string[] = ['p1', 'p2']): MountedModules => ({
-  pages: [],
-  cards: [],
-  linkActions: [{ label: 'Add to queue', doneLabel: 'Queued', run: addToQueue, package: '@x/queue', projects }],
-  panels: [],
-  runSlots: [],
-  settings: [],
-  everyPage: [],
-  loaded: true,
-})
+const modules = (projects: string[] = ['p1', 'p2']): MountedModules =>
+  mountedOf({ actions: { 'link.menu': [{ place: 'link.menu', id: 'add-to-queue', label: 'Add to queue', doneLabel: 'Queued', run: addToQueue, package: '@x/queue', projects }] } })
 const render = (mounted: MountedModules = modules()) => {
   const answers: Answers = {}
   for (const g of groups) answers[g.projectId] = { 'list --local': g.tickets, 'meta --local': {} }
@@ -62,7 +54,7 @@ const controls = async () => {
 }
 
 /** The links one `addToQueue` call was handed, for the project it was called on. */
-const handed = (projectId: string) => addToQueue.mock.calls.filter(call => call[1] === projectId).map(call => call[2])
+const handed = (projectId: string) => addToQueue.mock.calls.filter(call => call[1].projectId === projectId).map(call => call[1].links)
 const link = (title: string, file: string, priority = 5) => ({ text: title, href: `tickets/${file}`, priority })
 const plan = (file: string, priority = 5) => ({ text: `Create tickets/${file.replace(/\.md$/, '')}.plan.md`, priority })
 /** Ticks the rows of these titles, as a person does. */
@@ -533,7 +525,7 @@ describe("TicketsPage queues the selection", () => {
   test('every ticked ticket on the queue already: the ticket add rests as Queued, and their plans are not offered beside it', async () => {
     twoTickets()
     const mounted = modules()
-    mounted.linkActions = [{ ...mounted.linkActions[0]!, done: async () => () => true }]
+    mounted.actions['link.menu'] = [{ ...mounted.actions['link.menu'][0]!, done: async () => () => true }]
     render(mounted)
     await screen.findByText('First')
     tick('First', 'Second')
@@ -555,7 +547,7 @@ describe("TicketsPage queues the selection", () => {
   test('one ticked ticket not on the queue yet: both adds are offered', async () => {
     twoTickets()
     const mounted = modules()
-    mounted.linkActions = [{ ...mounted.linkActions[0]!, done: async () => link => link.href === 'tickets/a.md' }]
+    mounted.actions['link.menu'] = [{ ...mounted.actions['link.menu'][0]!, done: async () => link => link.href === 'tickets/a.md' }]
     render(mounted)
     await screen.findByText('First')
     tick('First', 'Second')
@@ -575,7 +567,7 @@ describe("TicketsPage queues the selection", () => {
     await controls()
     // The queue reads b's plan as on it already.
     const queued = modules()
-    queued.linkActions[0]!.done = async () => link => link.text === plan('b.md').text
+    queued.actions['link.menu'][0]!.done = async () => link => link.text === plan('b.md').text
     render(queued)
     await screen.findByText('First')
     tick('First', 'Second', 'Third')

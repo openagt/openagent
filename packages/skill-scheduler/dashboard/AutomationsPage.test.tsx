@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { ModuleHostContext, forgetRemembered, type ModuleCommandResult, type ModuleHost, type ModuleProject } from '@openagt/ui/module'
+import { ModuleHostContext, forgetRemembered, type ModuleCommandResult, type ModuleHost, type UiProject } from '@openagt/ui/module'
 import { OpenAgentDown, fakeHost } from '@openagt/ui/module/testing'
 import { AutomationsPage } from './AutomationsPage.js'
 import { CodeWords } from './CodeWords.js'
@@ -19,7 +19,7 @@ vi.mock('../../ui/dashboard/rpc/models.js', () => ({
 const GEMSTACK = { id: 'p1', name: 'gemstack', gitHost: true }
 const OTHER = { id: 'p2', name: 'other', gitHost: false }
 
-function show(host: ModuleHost, projects: ModuleProject[] = [GEMSTACK]) {
+function show(host: ModuleHost, projects: UiProject[] = [GEMSTACK]) {
   return render(
     <ModuleHostContext.Provider value={host}>
       <AutomationsPage projects={projects} projectId={null} path={[]} />

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Button, Input, RadioGroup, RadioGroupOption, cn, useKeptDraft, useOpenAgentDown, type ModuleCommandResult, type ModuleProject } from '@openagt/ui/module'
+import { Button, Input, RadioGroup, RadioGroupOption, cn, useKeptDraft, useOpenAgentDown, type ModuleCommandResult, type UiProject } from '@openagt/ui/module'
 import { EMPTY_DRAFT, addArgs, draftProblem, draftSentence, isUntouched, nameProblem, ownPaceArgs, savedFile, savedWords, whereHint, type AutomationDraft, type OwnPace } from './automation-form.js'
 import { FormFoot, LineFields, PHONE_FIELD, PaceFields, PromptField, SaveWords, Section } from './fields.js'
 import { DEFAULT_AGENT } from '../src/names.js'
@@ -23,7 +23,7 @@ export function AutomationForm({
   onClose,
   onSaved,
 }: {
-  project: ModuleProject
+  project: UiProject
   /** Whether the project's scheduler is on and running: else a row switched on does not start yet. */
   schedulerRuns: boolean
   /** Run one command of the scheduler in the project, in turn with the page's other saves. */

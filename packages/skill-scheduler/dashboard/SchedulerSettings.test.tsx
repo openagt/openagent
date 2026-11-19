@@ -1,13 +1,13 @@
 import { afterEach, describe, expect, test } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { ModuleHostContext, type ModuleCommandResult, type ModuleHost, type ModuleProject } from '@openagt/ui/module'
+import { ModuleHostContext, type ModuleCommandResult, type ModuleHost, type UiProject } from '@openagt/ui/module'
 import { SchedulerSettings } from './SchedulerSettings.js'
 import { STATUS, hostAnswering } from './fixtures.js'
 
 const GEMSTACK = { id: 'p1', name: 'gemstack', gitHost: true }
 const OTHER = { id: 'p2', name: 'other', gitHost: false }
 
-function show(host: ModuleHost, projects: ModuleProject[] = [GEMSTACK]) {
+function show(host: ModuleHost, projects: UiProject[] = [GEMSTACK]) {
   return render(
     <ModuleHostContext.Provider value={host}>
       <SchedulerSettings projects={projects} />

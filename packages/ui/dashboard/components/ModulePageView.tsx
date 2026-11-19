@@ -1,7 +1,7 @@
 import { Component, useMemo, type ReactNode } from 'react'
 import type { ProjectSummary } from '../../src/index.js'
-import { ModuleHostContext, moduleHost, type ModuleProject } from '../module/index.js'
-import type { MountedPage } from '../lib/use-modules.js'
+import { ModuleHostContext, moduleHost, type UiProject } from '../module/index.js'
+import type { MountedView } from '../lib/use-modules.js'
 import { useHostServices } from '../lib/host-services.js'
 
 /** A module's piece that throws shows this instead of taking the whole dashboard down. */
@@ -38,7 +38,7 @@ export function ModuleSlot({ package: pkg, label, children }: { package: string;
 }
 
 /** The projects a module's piece is given: of the projects handed in (every registered one, or the picked one alone), the ones that have its package, by id and name, each with whether it has a git host package. Empty when none has it: the Overview then draws no card. */
-export function projectsHaving(ids: readonly string[], projects: readonly ProjectSummary[]): ModuleProject[] {
+export function projectsHaving(ids: readonly string[], projects: readonly ProjectSummary[]): UiProject[] {
   return ids.flatMap(id => {
     const project = projects.find(p => p.id === id)
     return project ? [{ id: project.id, name: project.name, gitHost: project.gitHost }] : []
@@ -46,10 +46,10 @@ export function projectsHaving(ids: readonly string[], projects: readonly Projec
 }
 
 /** One module page in the main pane (#1774): the page, given the projects that have its package and the picked one, in its slot. */
-export function ModulePageView({ page, projects, projectId, path }: { page: MountedPage; projects: ProjectSummary[]; projectId: string | null; path: string[] }) {
-  const Page = page.Page
+export function ModulePageView({ page, projects, projectId, path }: { page: MountedView<'app.page'>; projects: ProjectSummary[]; projectId: string | null; path: string[] }) {
+  const Page = page.View
   return (
-    <ModuleSlot key={page.segment} package={page.package} label={`${page.label} page`}>
+    <ModuleSlot key={page.id} package={page.package} label={`${page.label} page`}>
       <Page projects={projectsHaving(page.projects, projects)} projectId={projectId} path={path} />
     </ModuleSlot>
   )

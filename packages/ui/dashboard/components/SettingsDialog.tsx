@@ -5,7 +5,7 @@ import { DRIVERS, DRIVER_LABELS, isDriverName } from '../../src/client.js'
 import { driverOptions, useModels } from '../lib/models.js'
 import type { DriverOption } from './DriverModelMenu.js'
 import type { ProjectSummary } from '../../src/index.js'
-import { useMountedModules, type MountedSettings } from '../lib/use-modules.js'
+import { useMountedModules, type MountedView } from '../lib/use-modules.js'
 import { SettingsCrumbContext, type SettingsCrumb } from '../lib/settings-crumb.js'
 import { SettingsHoldContext } from '../lib/settings-hold.js'
 import { PERMISSIONS_PAGE, holdEntry } from '../lib/use-route.js'
@@ -85,7 +85,7 @@ export function SettingsDialog({
   scope: string | null
   projects: ProjectSummary[]
 }) {
-  const { settings: mounted } = useMountedModules()
+  const mounted = useMountedModules().views['settings.section']
   // Chosen here rather than by `max-md:` classes: a package's stylesheet, loaded after the
   // dashboard's, sets `.flex` again and would beat a class that hides a flex box on a phone.
   const phone = useIsMobile()
@@ -118,8 +118,8 @@ export function SettingsDialog({
     held.current = now ? holdEntry(step => setLeaving(() => step)) : null
   }, [])
   const leave = (step: () => void): void => (held.current ? setLeaving(() => step) : step())
-  const moduleEntry = (section: MountedSettings, of: ProjectSummary[]): Entry => {
-    const Body = section.Section
+  const moduleEntry = (section: MountedView<'settings.section'>, of: ProjectSummary[]): Entry => {
+    const Body = section.View
     return {
       id: section.id,
       title: section.title,

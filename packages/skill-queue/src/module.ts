@@ -87,7 +87,7 @@ export function entryLabel(entry: string): EntryLabel {
   return /^https?:\/\//.test(target) ? { text, url: target } : { text }
 }
 
-/** A link as a dashboard page hands it to an action: OpenAgent's `ModuleLink`, by structure. */
+/** A link as a dashboard page hands it to an action: OpenAgent's `UiLink`, by structure. */
 export interface LinkToQueue {
   text: string
   href?: string

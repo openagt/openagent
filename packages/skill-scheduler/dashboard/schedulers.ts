@@ -1,4 +1,4 @@
-import { MAX_SPEND_OFFSET, type ModuleCommandResult, type ModuleHost, type ModuleProject } from '@openagt/ui/module'
+import { MAX_SPEND_OFFSET, type ModuleCommandResult, type UiHost, type UiProject } from '@openagt/ui/module'
 import type { PublishPick, TickDecision } from '../src/state.js'
 import { QUOTA_UNREAD } from '../src/quota-boundary.js'
 import { AGENTS, AGENT_LABELS, AGENT_SKILLS_DIR, DEFAULT_AGENT, DEFAULT_PUBLISH, isAgent, isAgents, isTime, type AgentName } from '../src/names.js'
@@ -160,7 +160,7 @@ export function unlistedWords(unreadable: UnreadableSchedule): string {
 
 /** One project's scheduler, as its `status` answered. */
 export interface SchedulerRow {
-  project: ModuleProject
+  project: UiProject
   /** Why the status could not be read; the rest is then empty. */
   error?: string
   /** Whether ticks start agents. */
@@ -203,7 +203,7 @@ const UNREADABLE = 'unreadable schedule: '
 const UNLISTED = 'unlisted automation: '
 
 /** A project's row from what `status` printed: each scheduled command as the project's files say it now, with this machine's switch and picks and the last tick's decision folded in, and the skills whose schedule cannot be read. */
-export function schedulerRow(project: ModuleProject, output: unknown): SchedulerRow {
+export function schedulerRow(project: UiProject, output: unknown): SchedulerRow {
   const state = record(output)
   const tick = record(state['lastTick'])
   const switches = record(state['switches'])
@@ -279,7 +279,7 @@ export function schedulersKey(projectIds: string): string {
 }
 
 /** Every project's scheduler, one row per project in the order given: `scheduler status` run in each. */
-export function readSchedulers(host: ModuleHost, projects: readonly ModuleProject[]): Promise<SchedulerRow[]> {
+export function readSchedulers(host: UiHost, projects: readonly UiProject[]): Promise<SchedulerRow[]> {
   return Promise.all(
     projects.map(async project => {
       const answer = await host.runCommand(project.id, ['status'])
@@ -318,7 +318,7 @@ export function notAsked(err: unknown): { ok: false; error: string } {
 }
 
 /** Save the spend offset in every project: `scheduler offset -- <points>`, the `--` so a negative value is no flag. Each failing project is named. */
-export async function saveSpendOffset(host: ModuleHost, projects: readonly ModuleProject[], points: number): Promise<Saved> {
+export async function saveSpendOffset(host: UiHost, projects: readonly UiProject[], points: number): Promise<Saved> {
   const answers = await Promise.all(projects.map(async project => ({ project, answer: await host.runCommand(project.id, ['offset', '--', String(points)]) })))
   const failed = answers.flatMap(({ project, answer }) => (answer.ok ? [] : [`${project.name}: ${answer.error}`]))
   return failed.length ? { ok: false, error: failed.join('; ') } : { ok: true }

@@ -32,7 +32,7 @@ import {
   useNarrow,
   usePolled,
   Waiting,
-  type ModulePanelProps,
+  type UiPaneProps,
   Facts,
 } from '@openagt/ui/module'
 import type { AgentCommit, FileMark } from '../src/run.js'
@@ -408,7 +408,7 @@ function CommitList({ commits, picked, open, onOpen, onPick }: { commits: AgentC
   )
 }
 
-export function ChangesPanel({ projectId, agentId, activity, reveal }: ModulePanelProps) {
+export function ChangesPanel({ projectId, agentId, activity, reveal }: UiPaneProps) {
   const host = useModuleHost()
   const page = `${projectId}/${agentId ?? ''}`
   const settings = useChangesSettings()

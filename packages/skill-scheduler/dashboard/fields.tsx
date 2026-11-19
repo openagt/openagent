@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { Plus } from 'lucide-react'
-import { Button, Input, Label, RadioGroup, RadioGroupItem, RadioGroupOption, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Textarea, cn, useModuleHost, type ModuleProject } from '@openagt/ui/module'
+import { Button, Input, Label, RadioGroup, RadioGroupItem, RadioGroupOption, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Textarea, cn, useModuleHost, type UiProject } from '@openagt/ui/module'
 import type { PublishPick } from '../src/state.js'
 import { AGENTS, AGENT_LABELS, AGENT_SKILLS_DIR, DEFAULT_AGENT, MAX_AGENTS, type AgentName } from '../src/names.js'
 import { MAX_COUNT, PACE_UNITS, takesTimeOfDay, type PaceUnit } from '../src/pace.js'
@@ -92,7 +92,7 @@ export function PromptField({ prompt, autoFocus, onChange }: { prompt: string; a
  * written line too. Most automations run by time alone, so until a row has a line, or the person
  * asks for one, the fields fold behind one press, and what it does and when it runs lead the form.
  */
-export function LineFields({ project, said, agent, onChange }: { project: ModuleProject; said: Said; agent: AgentName; onChange: (change: Partial<Said>) => void }) {
+export function LineFields({ project, said, agent, onChange }: { project: UiProject; said: Said; agent: AgentName; onChange: (change: Partial<Said>) => void }) {
   const host = useModuleHost()
   const [shown, setShown] = useState(said.when.trim() !== '' || said.waitsFor.trim() !== '')
   const waitsFor = useRef<HTMLInputElement>(null)

@@ -4,7 +4,8 @@ import { vi, type Mock } from 'vitest'
 import { PaneHeaderContext } from '../components/PaneHeader.js'
 import { SidebarProvider, useSidebar } from '../components/ui/sidebar.js'
 import { DaemonDown } from '../lib/use-daemon-health.js'
-import { ModulesContext, type MountedModules } from '../lib/use-modules.js'
+import { ModulesContext, mountedOf, type MountedModules } from '../lib/use-modules.js'
+export { mountedOf } from '../lib/use-modules.js'
 import { ModuleHostContext, type ModuleCommandResult, type ModuleHost } from './index.js'
 
 // What a module's tests need of the dashboard, faked (`@openagt/ui/module/testing`, which
@@ -12,6 +13,7 @@ import { ModuleHostContext, type ModuleCommandResult, type ModuleHost } from './
 // it. A service the host gains is faked here once, instead of in every module's tests.
 
 export type { MountedModules }
+export type { MountedAction, MountedView } from '../lib/use-modules.js'
 
 /** The host with every service a spy, so a test reads what was asked of it: `host.openPage.mock.calls`. */
 export type FakeHost = { [K in keyof ModuleHost]: ModuleHost[K] extends (...args: infer A) => infer R ? Mock<(...args: A) => R> : ModuleHost[K] }
@@ -76,7 +78,7 @@ export function answering(command: string, answers: Answers): (projectId: string
 }
 
 /** No other module is installed. */
-export const NO_MODULES: MountedModules = { pages: [], cards: [], linkActions: [], panels: [], runSlots: [], settings: [], everyPage: [], loaded: true }
+export const NO_MODULES: MountedModules = mountedOf()
 
 /**
  * Render `ui` as the dashboard draws a module: inside `host`, beside the installed `modules` (none

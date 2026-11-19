@@ -1,6 +1,6 @@
 import { useMemo, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react'
 import { Check, ChevronRight, Search } from 'lucide-react'
-import { ContextMenu, ContextMenuTrigger, DropdownMenuContent, FileIcon, MiddleCut, DropdownMenuItem, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, Input, cn, treeRow, type ModuleContext } from '@openagt/ui/module'
+import { ContextMenu, ContextMenuTrigger, DropdownMenuContent, FileIcon, MiddleCut, DropdownMenuItem, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, Input, cn, treeRow, type UiContext } from '@openagt/ui/module'
 
 // The Files pane's tree (#492): a lazy, collapsible tree built from the flat list of paths, with
 // "Filter files…" over it. As in Claude Code on the web: one click on a file opens it as a
@@ -122,7 +122,7 @@ export function FileTree({ files, caption, shown, context, filter, onOpen }: {
   caption?: string | undefined
   /** The file the pane shows: its row is lit. */
   shown?: string | undefined
-  context: ModuleContext
+  context: UiContext
   /** "Filter files…", for the pane's search to put the cursor in. */
   filter?: RefObject<HTMLInputElement | null>
   onOpen: (path: string, keep: boolean) => void

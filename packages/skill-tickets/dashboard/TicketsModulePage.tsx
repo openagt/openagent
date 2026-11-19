@@ -1,4 +1,4 @@
-import { useModuleHost, type ModulePageProps } from '@openagt/ui/module'
+import { useModuleHost, type UiPageProps } from '@openagt/ui/module'
 import { routeOf } from '../src/module.js'
 import { TicketsPage } from './TicketsPage.js'
 import { TicketDetailPage } from './TicketDetailPage.js'
@@ -13,7 +13,7 @@ import { TicketPageShell, TicketPageNote } from './TicketPageShell.js'
  * project) is that ticket's page; `plan` after it is its plan; `new` is a ticket written by hand.
  * Anything else says so, with the way back.
  */
-export function TicketsModulePage({ projects, projectId, path }: ModulePageProps) {
+export function TicketsModulePage({ projects, projectId, path }: UiPageProps) {
   const route = routeOf(projectId, path)
   if (route.view === 'list') return <TicketsPage projects={projects} />
   if (route.view === 'new') return <NewTicketPage projectId={route.projectId} />

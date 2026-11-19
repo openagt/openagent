@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { ProjectSummary, QuotaView } from '../../src/index.js'
-import type { ModuleHost, ModuleProject } from '../module/index.js'
-import { ModulesContext, type MountedModules, type MountedUsageLimit } from '../lib/use-modules.js'
+import { useModuleHost, usePolled, useSpendOffset, type ModuleHost, type UiProject, type UiUsageLineProps } from '../module/index.js'
+import { ModulesContext, mountedOf, type MountedView } from '../lib/use-modules.js'
 import { hoverTooltip } from '../test-utils.js'
 
 
@@ -15,9 +15,24 @@ function mainFigureTrigger(): HTMLElement {
 // The stop line a module puts on the bar: what its read answers, and its save, as the tests set them.
 const sendSpendOffset = vi.fn(async (_points: number): Promise<{ ok: true } | { ok: false; error: string }> => ({ ok: true }))
 let savedOffset = 0
-const readOffset = vi.fn(async (_host: ModuleHost, _projects: ModuleProject[]): Promise<number | undefined> => savedOffset)
-const usageLimit: MountedUsageLimit = { package: '@openagt/skill-scheduler', projects: ['p1'], read: readOffset, save: (_host, _projects, points) => sendSpendOffset(points) }
-const NOTHING: MountedModules = { pages: [], cards: [], linkActions: [], panels: [], runSlots: [], settings: [], everyPage: [], loaded: true }
+const readOffset = vi.fn(async (_host: ModuleHost, _projects: UiProject[]): Promise<number | undefined> => savedOffset)
+
+/** A module's usage line, as the scheduler's draws one: the offset its read answers, on the shell's bar, whose handle saves through its save. */
+function StopLine({ projects, Bar }: UiUsageLineProps) {
+  const host = useModuleHost()
+  const key = projects.map(p => p.id).join(',')
+  const { value: saved } = usePolled<number | undefined>(() => readOffset(host, projects), undefined, 10_000, [host.package, key], { remember: `usage-limit:${host.package}:${key}`, stored: true })
+  const [offset, setOffset, error] = useSpendOffset(saved, sendSpendOffset)
+  return (
+    <>
+      <Bar {...(offset !== undefined ? { offset, onChangeOffset: setOffset } : {})} />
+      {error && <p role="alert">The limit was not saved: {error}</p>}
+    </>
+  )
+}
+const STOP_LINE: MountedView<'usage.line'> = { place: 'usage.line', id: 'stop-line', View: StopLine, package: '@openagt/skill-scheduler', projects: ['p1'] }
+const NOTHING = mountedOf()
+const WITH_LINE = mountedOf({ views: { 'usage.line': [STOP_LINE] } })
 const PROJECTS: ProjectSummary[] = [
   { id: 'p1', path: '/p1', name: 'gemstack', activated: true, gitHost: true },
   { id: 'p2', path: '/p2', name: 'other', activated: true, gitHost: false },
@@ -37,7 +52,7 @@ const { Quota } = await import('./Quota.js')
 /** The panel with a module's stop line on its bar, once the module's first read has put the handle there. */
 async function show() {
   const shown = render(
-    <ModulesContext.Provider value={{ ...NOTHING, usageLimit }}>
+    <ModulesContext.Provider value={WITH_LINE}>
       <Quota projects={PROJECTS} />
     </ModulesContext.Provider>,
   )
@@ -104,7 +119,7 @@ describe("Quota's stop line is a module's", () => {
     view = reading(20)
     readOffset.mockImplementationOnce(async () => undefined)
     render(
-      <ModulesContext.Provider value={{ ...NOTHING, usageLimit }}>
+      <ModulesContext.Provider value={WITH_LINE}>
         <Quota projects={PROJECTS} />
       </ModulesContext.Provider>,
     )

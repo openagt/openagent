@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { X } from 'lucide-react'
-import { Button, Empty, LinkActions, Page, PanelShape, Section, Slot, cn, runsAgain, usePolled, useAction, useIsMobile, useLinkActions, useModuleHost, type ProjectLinks, type ModuleLink, type ModuleProject, type LinkActionOffer } from '@openagt/ui/module'
+import { Button, Empty, LinkActions, Page, PanelShape, Section, Slot, cn, runsAgain, usePolled, useAction, useIsMobile, useLinkActions, useModuleHost, type ProjectLinks, type UiLink, type UiProject, type LinkActionOffer } from '@openagt/ui/module'
 import { heldBack, holderAgent, planLink, ticketLink, withHolder } from '../src/module.js'
 import { holdingRun } from './lib/holding-run.js'
 import type { ProjectTickets, WorkspaceTicket } from './lib/types.js'
@@ -35,7 +35,7 @@ function initialView(): TicketsView {
 const keyOf = (row: { projectId: string; ticket: { file: string } }) => `${row.projectId}/${row.ticket.file}`
 
 /** The backlog of the picked project or of every project, in one view the URL carries. */
-export function TicketsPage({ projects }: { projects: ModuleProject[] }) {
+export function TicketsPage({ projects }: { projects: UiProject[] }) {
   const host = useModuleHost()
   const phone = useIsMobile()
   const key = projects.map(p => p.id).join(',')
@@ -304,7 +304,7 @@ function QueueAdds({ rows, disabled }: { rows: readonly TicketRow[]; disabled: b
 }
 
 /** Each ticket as a link (the ticket, or the ask for its plan), grouped by project in the shown order. */
-function linksByProject(rows: readonly { projectId: string; ticket: WorkspaceTicket }[], asLink: (ticket: WorkspaceTicket) => ModuleLink): ProjectLinks[] {
+function linksByProject(rows: readonly { projectId: string; ticket: WorkspaceTicket }[], asLink: (ticket: WorkspaceTicket) => UiLink): ProjectLinks[] {
   const groups: ProjectLinks[] = []
   for (const { projectId, ticket } of rows) {
     const group = groups.find(g => g.projectId === projectId)

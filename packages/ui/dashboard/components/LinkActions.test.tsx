@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { ModulesContext, type MountedLinkAction, type MountedModules } from '../lib/use-modules.js'
+import { ModulesContext, mountedOf, type MountedAction, type MountedModules } from '../lib/use-modules.js'
 import { forgetRemembered } from '../lib/use-async.js'
 
 const runModuleCommand = vi.hoisted(() => vi.fn())
@@ -8,8 +8,12 @@ vi.mock('../rpc/modules.js', () => ({ runModuleCommand }))
 
 const { LinkActions } = await import('./LinkActions.js')
 
+type MountedLinkAction = MountedAction<'link.menu'>
+
 /** One mounted action, the queue module's shape, whose `run` is a spy answering `result`. */
 const mounted = (run: MountedLinkAction['run'], over: Partial<MountedLinkAction> = {}): MountedLinkAction => ({
+  place: 'link.menu',
+  id: 'add-to-queue',
   label: 'Add to queue',
   doneLabel: 'Queued',
   run,
@@ -18,7 +22,7 @@ const mounted = (run: MountedLinkAction['run'], over: Partial<MountedLinkAction>
   ...over,
 })
 
-const modules = (linkActions: MountedLinkAction[]): MountedModules => ({ pages: [], cards: [], linkActions, panels: [], runSlots: [], settings: [], everyPage: [], loaded: true })
+const modules = (actions: MountedLinkAction[]): MountedModules => mountedOf({ actions: { 'link.menu': actions } })
 
 const LINK = { text: 'Do the thing', href: 'tickets/t.md', priority: 7 }
 
@@ -81,9 +85,8 @@ describe('LinkActions', () => {
     press.focus()
     fireEvent.click(press)
     await waitFor(() => expect(run).toHaveBeenCalledTimes(2))
-    expect(run.mock.calls[0]![1]).toBe('p1')
-    expect(run.mock.calls[0]![2]).toEqual([LINK, { text: 'Second' }])
-    expect(run.mock.calls[1]![1]).toBe('p2')
+    expect(run.mock.calls[0]![1]).toEqual({ projectId: 'p1', links: [LINK, { text: 'Second' }] })
+    expect(run.mock.calls[1]![1]).toEqual({ projectId: 'p2', links: [{ text: 'Third', href: 'tickets/c.md', priority: 5 }] })
     // The host runs only the module's own package's commands.
     runModuleCommand.mockResolvedValue({ ok: true, output: null })
     await run.mock.calls[0]![0].runCommand('p1', ['add', 'x'])
@@ -127,7 +130,7 @@ describe('LinkActions', () => {
     )
     expect(targets).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: 'Add to queue' }))
-    await waitFor(() => expect(run).toHaveBeenCalledWith(expect.anything(), 'p1', [{ text: 'late' }]))
+    await waitFor(() => expect(run).toHaveBeenCalledWith(expect.anything(), { projectId: 'p1', links: [{ text: 'late' }] }))
   })
 
   test('while the action runs, the button says its busy word', async () => {

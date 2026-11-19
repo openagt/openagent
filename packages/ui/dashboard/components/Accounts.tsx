@@ -62,14 +62,14 @@ export function AccountsList() {
 
 /** The skill's card, as the Overview draws it. While the modules load, it waits in the room of its emptiest answer: its heading and one sentence. */
 function RotationCard() {
-  const { cards, loaded } = useMountedModules()
-  const card = cards.find(each => each.package === ACCOUNT_ROTATION && each.id === 'accounts')
+  const { views, loaded } = useMountedModules()
+  const card = views['overview.card'].find(each => each.package === ACCOUNT_ROTATION && each.id === 'accounts')
   return (
     <Slot of={{ value: card, state: card || loaded ? 'fresh' : 'unknown' }} shape={<CardShape />}>
       {card =>
         card ? (
           <ModuleSlot package={card.package} label="accounts card">
-            <card.Card projects={[]} accountWhere={account => <AccountWhere account={{ kind: account.agent, own: account.own, name: account.name }} />} />
+            <card.View projects={[]} accountWhere={account => <AccountWhere account={{ kind: account.agent, own: account.own, name: account.name }} />} />
           </ModuleSlot>
         ) : (
           <p className="text-sm text-danger">The accounts card did not load.</p>

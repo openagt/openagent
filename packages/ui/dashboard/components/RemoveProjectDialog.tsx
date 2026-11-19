@@ -39,7 +39,7 @@ export function RemoveProjectDialog({
   const cancel = useRef<HTMLButtonElement>(null)
   const label = useContext(ProjectLabelsContext).get(projectId)
   // Only a project that has the scheduler has one to stop.
-  const scheduled = useMountedModules().pages.some(page => page.package === '@openagt/skill-scheduler' && page.projects.includes(projectId))
+  const scheduled = useMountedModules().views['app.page'].some(page => page.package === '@openagt/skill-scheduler' && page.projects.includes(projectId))
 
   // Each time it opens the box is unticked and an old error is gone: the menu opens it from
   // outside, so the dialog is not told through its own open-change.

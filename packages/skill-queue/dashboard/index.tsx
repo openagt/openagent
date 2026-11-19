@@ -5,17 +5,20 @@
 // run in each project by the dashboard: the module reads exactly what an agent reads with
 // `npx @openagt/skill-queue@0.1`, and writes exactly the line an agent writes with `npx @openagt/skill-queue@0.1 add`.
 import { ListTodo } from 'lucide-react'
-import { defineModule } from '@openagt/ui/module'
+import { defineUiModule } from '@openagt/ui/module'
 import { QueuePage } from './QueuePage.js'
 import { QueueCard } from './QueueCard.js'
 import { QueuePart } from './QueuePart.js'
 import { ADD_TO_QUEUE } from './add-to-queue.js'
 
-export default defineModule({
-  pages: [{ segment: 'queue', label: 'Queue', icon: ListTodo, Page: QueuePage }],
-  cards: [
-    { id: 'queued', label: 'In the queue', order: 3, line: true, Card: QueuePart },
-    { id: 'queue', label: 'AI Queue', order: 8, width: '2/3', minWidth: '1/2', Card: QueueCard },
-  ],
-  linkActions: [ADD_TO_QUEUE],
+export default defineUiModule({
+  name: 'queue',
+  hooks: {
+    'ui.view': [
+      { place: 'app.page', id: 'queue', label: 'Queue', icon: ListTodo, View: QueuePage },
+      { place: 'overview.line', id: 'queued', label: 'In the queue', order: 3, View: QueuePart },
+      { place: 'overview.card', id: 'queue', label: 'AI Queue', order: 8, width: '2/3', minWidth: '1/2', View: QueueCard },
+    ],
+    'ui.action': [ADD_TO_QUEUE],
+  },
 })

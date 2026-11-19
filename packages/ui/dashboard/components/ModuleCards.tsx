@@ -19,32 +19,33 @@ export interface OverviewCard {
 }
 
 /**
- * The cards the installed packages declare (#1818), for the Overview to lay out: each in its own
- * slot, given the projects that have its package, in the order the shell mounted them (by `order`,
- * then package). A project's card is listed only when one of the projects handed in has its
- * package: with one project picked, the cards of the packages that project does not have are not,
- * and before the projects are first read none is. A card of this computer's (its devices) is
- * always listed. Each is known by its package and its own id. A card that is a part of the line
- * under the title (`line`) is listed apart, by its order. `loaded` once every package's code is in.
+ * The views the installed modules put on the Overview (#1818, #2394), for it to lay out: its
+ * cards (`overview.card`) and the parts of the line under its title (`overview.line`), each in its
+ * own slot, given the projects that have its package, in the order the shell mounted them (by
+ * `order`, then package). A project's view is listed only when one of the projects handed in has
+ * its package: with one project picked, the views of the packages that project does not have are
+ * not, and before the projects are first read none is. A view of this computer's (its devices) is
+ * always listed. Each is known by its package and its own id. `loaded` once every package's code is in.
  */
 export function useModuleCards(projects: ProjectSummary[]): { cards: OverviewCard[]; line: OverviewCard[]; loaded: boolean } {
-  const { cards, loaded } = useMountedModules()
-  const listed = cards.flatMap(card => {
-    const Card = card.Card
-    // A card of this computer's is about the computer: it is on every Overview, given every project shown.
-    const having = card.computer ? projectsHaving(projects.map(project => project.id), projects) : projectsHaving(card.projects, projects)
-    if (having.length === 0 && !card.computer) return []
+  const { views, loaded } = useMountedModules()
+  const listed = [...views['overview.card'], ...views['overview.line']].flatMap(view => {
+    const View = view.View
+    // A view of this computer's is about the computer: it is on every Overview, given every project shown.
+    const having = view.computer ? projectsHaving(projects.map(project => project.id), projects) : projectsHaving(view.projects, projects)
+    if (having.length === 0 && !view.computer) return []
+    const line = view.place === 'overview.line'
     return [
       {
-        id: `${card.package}/${card.id}`,
-        label: card.label,
-        order: card.order ?? 50,
-        width: card.width ?? '1/2',
-        minWidth: card.minWidth ?? '1/3',
-        line: card.line === true,
+        id: `${view.package}/${view.id}`,
+        label: view.label,
+        order: view.order ?? 50,
+        width: (!line && view.width) || '1/2',
+        minWidth: (!line && view.minWidth) || '1/3',
+        line,
         node: (
-          <ModuleSlot package={card.package} label={`${card.id} card`}>
-            <Card projects={having} />
+          <ModuleSlot package={view.package} label={`${view.id} card`}>
+            <View projects={having} />
           </ModuleSlot>
         ),
       },

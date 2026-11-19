@@ -1,4 +1,4 @@
-import { GaugeFace, PageLink, Panel, PanelGroup, PanelRow, PanelShape, Slot, MachineMark, Tooltip, TooltipContent, TooltipTrigger, formatAge, machineKind, machineName, usePolled, useModuleHost, type Health, type MachineKind, type ModuleCardProps, type ModuleMachines } from '@openagt/ui/module'
+import { GaugeFace, PageLink, Panel, PanelGroup, PanelRow, PanelShape, Slot, MachineMark, Tooltip, TooltipContent, TooltipTrigger, formatAge, machineKind, machineName, usePolled, useModuleHost, type Health, type MachineKind, type UiCardProps, type ModuleMachines } from '@openagt/ui/module'
 import { Smartphone } from 'lucide-react'
 import { loadStatus, type Answer, type DoorStatus } from './devices.js'
 import { isComputer } from './model.js'
@@ -15,7 +15,7 @@ import { olderThan } from './parts.js'
 /** How often the card asks again: each time is one call to each saved machine. */
 const EVERY_MS = 30_000
 
-export function DevicesCard(_props: ModuleCardProps) {
+export function DevicesCard(_props: UiCardProps) {
   const host = useModuleHost()
   // Kept for the next visit: the page opens with the last machines and devices, faded until they are read again.
   const { value: machines, state } = usePolled<ModuleMachines | undefined>(() => host.machines(), undefined, EVERY_MS, [], { remember: 'devices:machines', stored: true })

@@ -1,7 +1,7 @@
 import { useContext, useEffect, useState, type ReactNode } from 'react'
 import { Check, Loader2 } from 'lucide-react'
-import { moduleHost, type LinkActionResult, type ModuleLink } from '../module/index.js'
-import { useMountedModules, type MountedLinkAction } from '../lib/use-modules.js'
+import { moduleHost, type UiActionResult, type UiLink } from '../module/index.js'
+import { useMountedModules, type MountedAction } from '../lib/use-modules.js'
 import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
 import { DaemonDown } from '../lib/use-daemon-health.js'
 import { usePolled } from '../lib/use-async.js'
@@ -15,12 +15,12 @@ import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 // two together. A project without such a package shows nothing here at all.
 
 /** No action read as done on anything yet. */
-const NOTHING_DONE: Record<string, (link: ModuleLink) => boolean> = {}
+const NOTHING_DONE: Record<string, (link: UiLink) => boolean> = {}
 
 /** The links one project's worth of a click acts on. */
 export interface ProjectLinks {
   projectId: string
-  links: ModuleLink[]
+  links: UiLink[]
 }
 
 /** The links a click acts on: known up front, or resolved at click time (a page that first reads what is already there). */
@@ -36,7 +36,7 @@ export interface LinkActionOffer {
   busyLabel?: string | undefined
   /** What the action says once done: "Queued". */
   doneLabel?: string | undefined
-  icon?: MountedLinkAction['icon']
+  icon?: MountedAction<'link.menu'>['icon']
   /** The module reads it done on every link of the targets already: a ticket already on the queue. */
   done: boolean
   /** How many links of the targets the module does not read as done, what a click adds: 0 for targets read only on click. */
@@ -55,17 +55,17 @@ export interface LinkActionOffer {
 export function useLinkActions(
   projects: readonly string[],
   known?: LinkTargets,
-): { actions: LinkActionOffer[]; run: (key: string, targets: LinkTargets) => Promise<LinkActionResult> } {
-  const { linkActions } = useMountedModules()
+): { actions: LinkActionOffer[]; run: (key: string, targets: LinkTargets) => Promise<UiActionResult> } {
+  const linkActions = useMountedModules().actions['link.menu']
   const services = useContext(HostServicesContext)
   const mounted = linkActions.filter(action => projects.some(id => action.projects.includes(id)))
-  const keyOf = (action: MountedLinkAction) => `${action.package}\n${action.label}`
+  const keyOf = (action: MountedAction<'link.menu'>) => `${action.package}\n${action.id}`
 
   // What the actions are done on already: one read per action and project, shared by its buttons.
   const groups = known === undefined || typeof known === 'function' ? [] : known.filter(group => group.links.length > 0)
   const asked = mounted.filter(action => action.done)
   const readKey = [...asked.map(keyOf), ...groups.map(group => group.projectId)].join('\n')
-  const { value: doneOn } = usePolled<Record<string, (link: ModuleLink) => boolean>>(
+  const { value: doneOn } = usePolled<Record<string, (link: UiLink) => boolean>>(
     asked.length === 0 || groups.length === 0
       ? null
       : async () => {
@@ -75,7 +75,7 @@ export function useLinkActions(
                 .filter(group => action.projects.includes(group.projectId))
                 .map(async ({ projectId }) => {
                   const host = moduleHost({ ...(services ?? INERT_HOST_SERVICES), package: action.package })
-                  const isDone = await action.done!(host, projectId).catch(() => undefined)
+                  const isDone = await action.done!(host, { projectId }).catch(() => undefined)
                   return isDone ? [[`${keyOf(action)}\n${projectId}`, isDone] as const] : []
                 }),
             ),
@@ -87,7 +87,7 @@ export function useLinkActions(
     [readKey],
     { remember: `link-done:${readKey}` },
   )
-  const offer = (action: MountedLinkAction): LinkActionOffer => {
+  const offer = (action: MountedAction<'link.menu'>): LinkActionOffer => {
     const mine = groups.filter(group => action.projects.includes(group.projectId))
     const left = mine.reduce((sum, { projectId, links }) => sum + links.filter(link => !(doneOn[`${keyOf(action)}\n${projectId}`]?.(link) ?? false)).length, 0)
     const total = mine.reduce((sum, { links }) => sum + links.length, 0)
@@ -95,10 +95,10 @@ export function useLinkActions(
   }
 
   const actions = mounted.map(offer)
-  const run = async (key: string, targets: LinkTargets): Promise<LinkActionResult> => {
+  const run = async (key: string, targets: LinkTargets): Promise<UiActionResult> => {
     const action = mounted.find(candidate => keyOf(candidate) === key)
     if (!action) return { ok: false, error: 'That action is no longer offered here.' }
-    let result: LinkActionResult = { ok: true }
+    let result: UiActionResult = { ok: true }
     try {
       const groups = typeof targets === 'function' ? await targets() : targets
       // An action acts: its commands are marked so, and the dashboard reads back what they wrote at once.
@@ -107,7 +107,7 @@ export function useLinkActions(
       // the first failure ends the batch with its reason.
       for (const { projectId, links } of groups) {
         if (!action.projects.includes(projectId) || links.length === 0) continue
-        result = await action.run(host, projectId, links)
+        result = await action.run(host, { projectId, links })
         if (!result.ok) break
       }
     } catch (err) {

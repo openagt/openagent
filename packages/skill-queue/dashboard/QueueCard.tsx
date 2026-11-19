@@ -1,5 +1,5 @@
 import { FastForward, Play } from 'lucide-react'
-import { PageLink, Panel, PanelGroup, PanelNote, PanelRow, PartDescription, Slot, StartAgentButton, useIsMobile, useModuleHost, WordsShape, type FileNames, type ModuleCardProps } from '@openagt/ui/module'
+import { PageLink, Panel, PanelGroup, PanelNote, PanelRow, PartDescription, Slot, StartAgentButton, useIsMobile, useModuleHost, WordsShape, type FileNames, type UiCardProps } from '@openagt/ui/module'
 import { fanOutLabel, fanOutPress, unclaimedEntries, workOnEntryPrompt } from '../src/module.js'
 import { EntryTitle, entryView } from './entry.js'
 import { useQueueStarts, type QueueStarts } from './starts.js'
@@ -23,7 +23,7 @@ import { useQueueReads, type ProjectRead } from './reads.js'
 /** How many of a project's free entries the card shows: the next few, the rest on the Queue page. */
 const SHOWN = 3
 
-export function QueueCard({ projects }: ModuleCardProps) {
+export function QueueCard({ projects }: UiCardProps) {
   const host = useModuleHost()
   const { reads, state, names } = useQueueReads(projects)
   const starts = useQueueStarts(host)

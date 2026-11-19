@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'vitest'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
-import { ModuleHostContext, type ModuleHost, type ModuleProject } from '@openagt/ui/module'
+import { ModuleHostContext, type ModuleHost, type UiProject } from '@openagt/ui/module'
 import { SchedulerCard, offWords } from './SchedulerCard.js'
 import defineScheduler from './index.js'
 import { ON_CLAUDE, STATUS, hostAnswering } from './fixtures.js'
@@ -8,7 +8,7 @@ import { ON_CLAUDE, STATUS, hostAnswering } from './fixtures.js'
 const GEMSTACK = { id: 'p1', name: 'gemstack', gitHost: true }
 const OTHER = { id: 'p2', name: 'other', gitHost: false }
 
-function show(host: ModuleHost, projects: ModuleProject[] = [GEMSTACK, OTHER]) {
+function show(host: ModuleHost, projects: UiProject[] = [GEMSTACK, OTHER]) {
   return render(
     <ModuleHostContext.Provider value={host}>
       <SchedulerCard projects={projects} />

@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { HostServicesContext, INERT_HOST_SERVICES, type HostServices } from '../../ui/dashboard/lib/host-services.js'
-import type { MountedModules } from '@openagt/ui/module/testing'
-import { forgetRemembered, type ModuleScheduledCommand } from '@openagt/ui/module'
+import { mountedOf, type MountedModules } from '@openagt/ui/module/testing'
+import { forgetRemembered, type UiScheduledCommand } from '@openagt/ui/module'
 import { QueuePage } from './QueuePage.js'
 import { NO_MODULES, fakeHost, renderWithHost, type FakeHost } from './test-host.js'
 import { workOnEntryPrompt } from '../src/module.js'
@@ -34,12 +34,11 @@ function show(full: unknown[] = FULL, modules: MountedModules = NO_MODULES, serv
 }
 
 /** A dashboard in which a package schedules commands, as `commands` says of the project. */
-function scheduling(commands: ModuleScheduledCommand[]): MountedModules {
-  return {
-    ...NO_MODULES,
-    pages: [{ segment: 'automations', label: 'Automations', Page: () => null, package: 'a-scheduler', projects: ['p1'] }],
+function scheduling(commands: UiScheduledCommand[]): MountedModules {
+  return mountedOf({
+    views: { 'app.page': [{ place: 'app.page', id: 'automations', label: 'Automations', View: () => null, package: 'a-scheduler', projects: ['p1'] }] },
     schedule: { page: 'automations', read: async () => commands, package: 'a-scheduler', projects: ['p1'] },
-  }
+  })
 }
 
 /** The section headings and the entries' names, top to bottom, as the page shows them. */
@@ -422,7 +421,7 @@ describe('QueuePage', () => {
 
   describe('what an entry reads as', () => {
     /** A dashboard in which the page at `tickets` names its files. */
-    const naming = (names: NonNullable<MountedModules['pages'][number]['names']>): MountedModules => ({ ...NO_MODULES, pages: [{ segment: 'tickets', label: 'Tickets', Page: () => null, package: 'a-tickets', projects: ['p1'], names }] })
+    const naming = (names: NonNullable<MountedModules['views']['app.page'][number]['names']>): MountedModules => mountedOf({ views: { 'app.page': [{ place: 'app.page', id: 'tickets', label: 'Tickets', View: () => null, package: 'a-tickets', projects: ['p1'], names }] } })
 
     test('with no page that names it, an entry that names a file reads as written, and opens nothing', async () => {
       show([{ entry: PLAN, priority: 5 }])
@@ -518,7 +517,7 @@ describe('QueuePage', () => {
 
   test('a second visit names the entries from the first frame: the names read last time stand until the fresh read lands, or until the page that names them is in', async () => {
     const named = { 'tickets/2026-08-01_login-page.plan.md': { title: 'Plan: Login page', href: 'tickets/2026-08-01_login-page.md' } }
-    const tickets = (names: () => Promise<typeof named>): MountedModules => ({ ...NO_MODULES, pages: [{ segment: 'tickets', label: 'Tickets', Page: () => null, package: 'a-tickets', projects: ['p1'], names }] })
+    const tickets = (names: () => Promise<typeof named>): MountedModules => mountedOf({ views: { 'app.page': [{ place: 'app.page', id: 'tickets', label: 'Tickets', View: () => null, package: 'a-tickets', projects: ['p1'], names }] } })
     show([{ entry: PLAN, priority: 5 }], tickets(async () => named))
     await screen.findByRole('button', { name: 'Plan: Login page' })
     cleanup()

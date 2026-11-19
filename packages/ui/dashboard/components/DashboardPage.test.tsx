@@ -423,7 +423,7 @@ describe('the Overview', () => {
   test("before the packages' code is in, their part of the line waits in its place, and the part that comes takes it", async () => {
     modules.loaded = false
     // The sidebar's pages say a shown project has the Queue: its part will stand there.
-    listed = [{ segment: 'queue', label: 'Queue', projects: ['p2'] }]
+    listed = [{ id: 'queue', label: 'Queue', projects: ['p2'] }]
     const { rerender } = show()
     const line = (await screen.findByText('no agent working')).closest('p')!
     expect(line.textContent).toBe('·nothing needs you·no agent working·Loading…·your agents')
@@ -441,7 +441,7 @@ describe('the Overview', () => {
 
   test("before the packages' code is in, no place waits for the queue's part where the sidebar's pages say no shown project has the Queue; while they say nothing yet, the parts after its place wait", async () => {
     modules.loaded = false
-    listed = [{ segment: 'queue', label: 'Queue', projects: ['p2'] }, { segment: 'logs', label: 'Logs', projects: ['p1'] }]
+    listed = [{ id: 'queue', label: 'Queue', projects: ['p2'] }, { id: 'logs', label: 'Logs', projects: ['p1'] }]
     show('p1')
     const line = (await screen.findByText('no agent working')).closest('p')!
     expect(line.textContent).toBe('·nothing needs you·no agent working·your agents')

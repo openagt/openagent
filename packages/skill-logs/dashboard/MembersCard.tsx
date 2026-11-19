@@ -1,4 +1,4 @@
-import { Facts, PageLink, Panel, PanelGroup, PanelNote, PartDescription, PersonMark, PanelShape, RunMark, Slot, Tooltip, TooltipContent, TooltipTrigger, formatAge, formatDateTime, personName, personSaid, runWord, useModuleHost, usePolled, type ModuleCardProps, type ModuleHostPerson } from '@openagt/ui/module'
+import { Facts, PageLink, Panel, PanelGroup, PanelNote, PartDescription, PersonMark, PanelShape, RunMark, Slot, Tooltip, TooltipContent, TooltipTrigger, formatAge, formatDateTime, personName, personSaid, runWord, useModuleHost, usePolled, type UiCardProps, type ModuleHostPerson } from '@openagt/ui/module'
 import { membersOf, peopleWithRuns, type Member, type PersonActivity } from '../src/people.js'
 
 // The Overview's Members card: who worked in the projects shown in the last 30 days, from `logs
@@ -37,7 +37,7 @@ function Going({ status, count }: { status: 'running' | 'waiting'; count: number
   )
 }
 
-export function MembersCard({ projects }: ModuleCardProps) {
+export function MembersCard({ projects }: UiCardProps) {
   const host = useModuleHost()
   const key = projects.map(project => project.id).join(',')
   const { value: members, state } = usePolled<Shown[]>(

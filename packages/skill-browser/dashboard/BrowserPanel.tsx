@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent, type PointerEvent, type ReactNode, type RefObject } from 'react'
 import { ArrowLeft, ArrowRight, ChevronDown, ChevronUp, CornerDownRight, MousePointer2, RotateCw } from 'lucide-react'
-import { Button, Input, PaneNote, useModuleHost, type ModulePanelProps } from '@openagt/ui/module'
+import { Button, Input, PaneNote, useModuleHost, type UiPaneProps } from '@openagt/ui/module'
 import { KEPT_LINES } from '../src/console.js'
 import type { ScreenInput } from '../src/screen.js'
 import { ACTED, CONSOLE, CURSOR, FRAME, jpegSize, MAX_SELECTION, readActed, readConsoleLine, readCursor, readSelection, readState, SELECTED, STATE, streamReader, type ActedPoint, type ConsoleLevel, type ConsoleLine, type Cursor } from '../src/stream.js'
@@ -29,7 +29,7 @@ const CONSOLE_OPEN_KEY = 'oa.browser-console'
  * says how many errors the page has. The stream is held only while the pane is on screen: a
  * closed pane, or a page in the background asks the session's computer for nothing.
  */
-export function BrowserPanel({ projectId, agentId, activity }: ModulePanelProps) {
+export function BrowserPanel({ projectId, agentId, activity }: UiPaneProps) {
   const host = useModuleHost()
   const canvas = useRef<HTMLCanvasElement>(null)
   const { live, address, setAddress, editing, lines, cursor, agent, picture, selected } = useScreen(projectId, agentId, activity, canvas)

@@ -37,8 +37,8 @@ import {
   WordsShape,
   type FileNames,
   type ModuleAgent,
-  type ModulePageProps,
-  type ModuleProject,
+  type UiPageProps,
+  type UiProject,
   type Schedule,
 } from '@openagt/ui/module'
 import type { PlacedEntry } from '../src/queue.js'
@@ -49,7 +49,7 @@ import { BatchCount } from './batch-count.js'
 
 /** One project's queue as read: its entries with their sections and the project's agents at work, or why the command failed. */
 interface ProjectRead {
-  project: ModuleProject
+  project: UiProject
   entries?: PlacedEntry[]
   /** The project's agents that are working now or waiting on the person: an entry one of them was asked is being worked on. */
   working: ModuleAgent[]
@@ -89,7 +89,7 @@ function sections(entries: PlacedEntry[], working: ModuleAgent[]): { priority: n
  * page opens reads as that page's name for it. A project whose command fails is named with the
  * command's own reason, and the other projects still show.
  */
-export function QueuePage({ projects }: ModulePageProps) {
+export function QueuePage({ projects }: UiPageProps) {
   const host = useModuleHost()
   const key = projects.map(p => p.id).join(',')
   const {
@@ -335,7 +335,7 @@ function origin(entry: string): string | undefined {
  * first, then run" where it can be started, and its removal. A free entry has "Start now" before it, and
  * on a phone, where a row has one press, "Start now" is the menu's first item.
  */
-function EntryRow({ project, placed, names, starts, reload, onRemoved }: { project: ModuleProject; placed: Numbered; names: FileNames; starts: QueueStarts; reload: () => Promise<void>; onRemoved: () => void }) {
+function EntryRow({ project, placed, names, starts, reload, onRemoved }: { project: UiProject; placed: Numbered; names: FileNames; starts: QueueStarts; reload: () => Promise<void>; onRemoved: () => void }) {
   const host = useModuleHost()
   const phone = useIsMobile()
   const down = useOpenAgentDown()
@@ -432,7 +432,7 @@ function EntryRow({ project, placed, names, starts, reload, onRemoved }: { proje
  * of (said in the pick's title), and the press, through `queue add`. Under it, only after a press that
  * added nothing, why.
  */
-function AddEntry({ project, reload }: { project: ModuleProject; reload: () => Promise<void> }) {
+function AddEntry({ project, reload }: { project: UiProject; reload: () => Promise<void> }) {
   const host = useModuleHost()
   const [text, setText] = useState('')
   const [priority, setPriority] = useState(DEFAULT_PRIORITY)

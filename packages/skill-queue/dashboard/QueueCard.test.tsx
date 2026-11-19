@@ -2,8 +2,8 @@ import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
 import { QueueCard } from './QueueCard.js'
 import { HostServicesContext, INERT_HOST_SERVICES } from '../../ui/dashboard/lib/host-services.js'
-import type { MountedModules } from '@openagt/ui/module/testing'
-import { NO_MODULES, fakeHost, renderWithHost, type FakeHost } from './test-host.js'
+import { mountedOf, type MountedModules } from '@openagt/ui/module/testing'
+import { fakeHost, renderWithHost, type FakeHost } from './test-host.js'
 import { workOnEntryPrompt } from '../src/module.js'
 import { configureFirst } from '../../ui/dashboard/test-utils.js'
 
@@ -159,7 +159,7 @@ describe('QueueCard', () => {
   test('with a page installed that names the file an entry points at, the entry reads as that name and opens that page', async () => {
     const openPage = vi.fn()
     host = fakeHost({ p1: { '--local': ['Create tickets/2026-08-01_login-page.plan.md'] }, p2: { '--local': [] } })
-    const modules: MountedModules = { ...NO_MODULES, pages: [{ segment: 'tickets', label: 'Tickets', Page: () => null, package: 'a-tickets', projects: ['p1'], names: async () => ({ 'tickets/2026-08-01_login-page.plan.md': { title: 'Plan: Login page', href: 'tickets/2026-08-01_login-page.md' } }) }] }
+    const modules: MountedModules = mountedOf({ views: { 'app.page': [{ place: 'app.page', id: 'tickets', label: 'Tickets', View: () => null, package: 'a-tickets', projects: ['p1'], names: async () => ({ 'tickets/2026-08-01_login-page.plan.md': { title: 'Plan: Login page', href: 'tickets/2026-08-01_login-page.md' } }) }] } })
     renderWithHost(
       <HostServicesContext.Provider value={{ ...INERT_HOST_SERVICES, openPage }}>
         <QueueCard projects={[alpha, beta]} />
@@ -175,7 +175,7 @@ describe('QueueCard', () => {
 
   test('an entry whose file is there already (a plan already written) offers no start, and the fan-out leaves it out', async () => {
     host = fakeHost({ p1: { '--local': ['Create tickets/2026-08-01_login-page.plan.md', 'Tidy the loader'] }, p2: { '--local': [] } })
-    const modules: MountedModules = { ...NO_MODULES, pages: [{ segment: 'tickets', label: 'Tickets', Page: () => null, package: 'a-tickets', projects: ['p1'], names: async () => ({ 'tickets/2026-08-01_login-page.plan.md': { title: 'Plan: Login page', href: 'tickets/2026-08-01_login-page.md', done: { ask: 'Create tickets/2026-08-01_login-page.plan.md', title: 'Plan: Login page · already written' } } }) }] }
+    const modules: MountedModules = mountedOf({ views: { 'app.page': [{ place: 'app.page', id: 'tickets', label: 'Tickets', View: () => null, package: 'a-tickets', projects: ['p1'], names: async () => ({ 'tickets/2026-08-01_login-page.plan.md': { title: 'Plan: Login page', href: 'tickets/2026-08-01_login-page.md', done: { ask: 'Create tickets/2026-08-01_login-page.plan.md', title: 'Plan: Login page · already written' } } }) }] } })
     renderWithHost(<QueueCard projects={[alpha, beta]} />, host, modules)
     await screen.findByRole('button', { name: 'Plan: Login page · already written' })
     expect(screen.getAllByRole('button', { name: 'Start an agent working on this entry' })).toHaveLength(1)
@@ -186,7 +186,7 @@ describe('QueueCard', () => {
   test('an entry that names a plan already written but asks something else of it is work: it offers a start, and the fan-out takes it', async () => {
     const review = 'Review tickets/2026-08-01_login-page.plan.md for accessibility issues'
     host = fakeHost({ p1: { '--local': [review] }, p2: { '--local': [] } })
-    const modules: MountedModules = { ...NO_MODULES, pages: [{ segment: 'tickets', label: 'Tickets', Page: () => null, package: 'a-tickets', projects: ['p1'], names: async () => ({ 'tickets/2026-08-01_login-page.plan.md': { title: 'Plan: Login page', href: 'tickets/2026-08-01_login-page.md', done: { ask: 'Create tickets/2026-08-01_login-page.plan.md', title: 'Plan: Login page · already written' } } }) }] }
+    const modules: MountedModules = mountedOf({ views: { 'app.page': [{ place: 'app.page', id: 'tickets', label: 'Tickets', View: () => null, package: 'a-tickets', projects: ['p1'], names: async () => ({ 'tickets/2026-08-01_login-page.plan.md': { title: 'Plan: Login page', href: 'tickets/2026-08-01_login-page.md', done: { ask: 'Create tickets/2026-08-01_login-page.plan.md', title: 'Plan: Login page · already written' } } }) }] } })
     renderWithHost(<QueueCard projects={[alpha, beta]} />, host, modules)
     // Named as the plan it asks about: "already written" would say it is done.
     await screen.findByRole('button', { name: 'Plan: Login page' })

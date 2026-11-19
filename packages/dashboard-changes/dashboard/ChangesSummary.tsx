@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { DiffStat, useModuleHost, type ModuleRunProps } from '@openagt/ui/module'
+import { DiffStat, useModuleHost, type UiRunProps } from '@openagt/ui/module'
 import type { FileChange } from '../src/diff.js'
 import { readCounts } from './reads.js'
 
@@ -13,7 +13,7 @@ import { readCounts } from './reads.js'
 // run left it (#1030) rather than blanking.
 
 /** How many files the working run has touched, and how many lines, in the bar above the message box (#1023). */
-export function ChangesSummary({ projectId, agentId, working }: ModuleRunProps) {
+export function ChangesSummary({ projectId, agentId, working }: UiRunProps) {
   const host = useModuleHost()
   // The changes last read, with the run they are of: the page swaps runs without a remount, and
   // one run's count must never show as the next one's.

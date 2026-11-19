@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { ArrowUp, Bot, CirclePause, Clock, WifiOff, type LucideIcon } from 'lucide-react'
-import { Button, Card, Facts, LinkActions, PageLink, Panel, PanelGroup, PanelNote, Skeleton, Slot, cn, formatDateTime, inPlace, runSaid, usePolled, useModuleHost, useOpenAgentDown, type ModuleCardProps, type ModuleProject, type ReadState } from '@openagt/ui/module'
+import { Button, Card, Facts, LinkActions, PageLink, Panel, PanelGroup, PanelNote, Skeleton, Slot, cn, formatDateTime, inPlace, runSaid, usePolled, useModuleHost, useOpenAgentDown, type UiCardProps, type UiProject, type ReadState } from '@openagt/ui/module'
 import { claimState, heldBack, holderAgent, hotLane, ticketLink, withHolder, type ClaimState, type HotLane } from '../src/module.js'
 import { holdingRun } from './lib/holding-run.js'
 import { listTickets } from './lib/list.js'
@@ -20,7 +20,7 @@ type CardLane = ClaimState | Exclude<HotLane, 'claimed'>
 
 /** One ticket on the card, tagged with its project and lane, and the run holding it when one does. */
 interface HotTicket {
-  project: ModuleProject
+  project: UiProject
   lane: CardLane
   ticket: WorkspaceTicket
   /** The run holding it: how it stands, and, while its computer does not answer, which computer and when it was last seen. */
@@ -30,7 +30,7 @@ interface HotTicket {
 /** What one read of every project answered: the hot tickets, and the projects whose command failed. */
 interface Read {
   hot: HotTicket[]
-  errors: { project: ModuleProject; error: string }[]
+  errors: { project: UiProject; error: string }[]
 }
 
 const NOTHING_READ: Read = { hot: [], errors: [] }
@@ -47,7 +47,7 @@ const LANES: { key: CardLane; heading: string }[] = [
 /** How a holder's run ended, as a stale claim's row says it. */
 const ENDED: Record<string, string> = { stopped: 'Run stopped', failed: 'Run failed', done: 'Run ended' }
 
-export function HotTicketsCard({ projects }: ModuleCardProps) {
+export function HotTicketsCard({ projects }: UiCardProps) {
   const host = useModuleHost()
   const key = projects.map(p => p.id).join(',')
   const { value: read, state, reload } = usePolled<Read>(

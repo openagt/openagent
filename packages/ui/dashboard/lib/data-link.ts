@@ -4,7 +4,7 @@ import { isPageSegment } from '../../src/project-address.js'
 // page's link may point at a path inside the project's repository, such as
 // `tickets/2026-01-01_x.md`. The dashboard has no page of its own for such a path: the page is a
 // module's, if any installed package brings one, and the dashboard names no module. So the
-// convention, documented on `ModulePageProps`: the path's first segment names the page, which
+// convention, documented on `UiPageProps`: the path's first segment names the page, which
 // opens in that project with the rest as its own path — `/<project>/tickets/2026-01-01_x.md`
 // (`use-file-names.ts`).
 

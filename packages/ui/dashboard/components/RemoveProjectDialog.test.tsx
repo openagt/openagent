@@ -1,7 +1,7 @@
 import { afterEach, expect, test, vi } from 'vitest'
 import { useState } from 'react'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { ModulesContext, type MountedModules } from '../lib/use-modules.js'
+import { ModulesContext, mountedOf } from '../lib/use-modules.js'
 
 vi.mock('../rpc/projects.js', () => ({ sendRemoveProject: vi.fn(async () => ({ ok: true })) }))
 const { ProjectRemovedReport, RemoveProjectDialog } = await import('./RemoveProjectDialog.js')
@@ -51,7 +51,7 @@ test('Done puts the keyboard on the project picker, where the next project is pi
 })
 
 test('its scheduler stops is said only for a project that has the scheduler', () => {
-  const scheduler: MountedModules = { pages: [{ segment: 'automations', label: 'Automations', Page: () => null, package: '@openagt/skill-scheduler', projects: ['p1'] }], cards: [], linkActions: [], panels: [], runSlots: [], settings: [], everyPage: [], loaded: true }
+  const scheduler = mountedOf({ views: { 'app.page': [{ place: 'app.page', id: 'automations', label: 'Automations', View: () => null, package: '@openagt/skill-scheduler', projects: ['p1'] }] } })
   const { unmount } = render(
     <ModulesContext.Provider value={scheduler}>
       <RemoveProjectDialog projectId="p1" open onOpenChange={vi.fn()} onRemoved={vi.fn()} />

@@ -1,11 +1,10 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { CircleHelp, TriangleAlert } from 'lucide-react'
 import type { DriverQuotaWindow, ProjectSummary, QuotaBoundary, QuotaView } from '../../src/index.js'
 import { MAX_SPEND_OFFSET } from '../../src/client.js'
 import { useQuota } from '../lib/quota.js'
-import { useModuleHost, type ModuleProject, type UsageLimitSaved } from '../module/index.js'
-import { useMountedModules, type MountedUsageLimit } from '../lib/use-modules.js'
-import { usePolled } from '../lib/use-async.js'
+import type { UiActionResult } from '../module/index.js'
+import { useMountedModules } from '../lib/use-modules.js'
 import { PanelGroup } from './ui/panel.js'
 import { Card } from './ui/card.js'
 import { Slot, WordsShape } from './ui/slot.js'
@@ -435,7 +434,7 @@ const OFFSET_WRITE_DELAY_MS = 500
  * module's read catches up with it, which is the point at which the two agree anyway. A save that
  * fails says why, and the handle follows the module's value again.
  */
-function useSpendOffset(serverOffset: number | undefined, save: (offset: number) => Promise<UsageLimitSaved>): [number | undefined, (offset: number) => void, string | undefined] {
+export function useSpendOffset(serverOffset: number | undefined, save: (offset: number) => Promise<UiActionResult>): [number | undefined, (offset: number) => void, string | undefined] {
   const [local, setLocal] = useState(serverOffset)
   const [error, setError] = useState<string | undefined>()
   // What we last wrote, while the poll is still behind it. `null` means "follow the server".
@@ -470,27 +469,19 @@ function useSpendOffset(serverOffset: number | undefined, save: (offset: number)
   ]
 }
 
-/** The bar with a module's stop line: the offset the module reads, every 10 seconds, and the handle that saves a new one through it. Rendered inside the module's slot. */
-function LimitedWeekBar({ limit, projects, boundary, percentUsed, others }: { limit: MountedUsageLimit; projects: ModuleProject[]; boundary: QuotaBoundary; percentUsed: number; others: DriverQuotaWindow[] }) {
-  const host = useModuleHost()
-  const key = projects.map(p => p.id).join(',')
-  const { value: saved } = usePolled<number | undefined>(() => limit.read(host, projects), undefined, 10_000, [limit.package, key], { remember: `usage-limit:${limit.package}:${key}`, stored: true })
-  const [offset, setOffset, error] = useSpendOffset(saved, points => limit.save(host, projects, points))
-  return (
-    <>
-      <WeekBar boundary={boundary} percentUsed={percentUsed} {...(offset !== undefined ? { offset, onChangeOffset: setOffset } : {})} others={others} />
-      {error && (
-        <p role="alert" className="text-xs text-danger">
-          The limit was not saved: {error}
-        </p>
-      )}
-    </>
-  )
+/** The week's bar as a module's usage line draws it: what the bar shows comes through the context, so the component stays the same from render to render and a drag on its handle is never cut short. */
+const WeekBarData = createContext<{ boundary: QuotaBoundary; percentUsed: number; others: DriverQuotaWindow[] } | null>(null)
+
+/** The week's bar, with the stop line a module's usage line (`usage.line`) puts on it. */
+function ModuleWeekBar({ offset, onChangeOffset }: { offset?: number; onChangeOffset?: (points: number) => void }) {
+  const data = useContext(WeekBarData)
+  if (!data) return null
+  return <WeekBar {...data} {...(offset !== undefined ? { offset } : {})} {...(onChangeOffset ? { onChangeOffset } : {})} />
 }
 
 export function Quota({ projects }: { projects: ProjectSummary[] }) {
   const view = useQuota()
-  const { usageLimit } = useMountedModules()
+  const line = useMountedModules().views['usage.line'][0]
   // Why the own login has no reading says nothing while runs use other accounts with readings of their own: a server's runs use the person's own computer's.
   const others = (useAgentAccounts('claude').view?.accounts ?? []).filter(account => !account.own)
   const { state: claude } = useAgentState('claude-code')
@@ -541,10 +532,12 @@ export function Quota({ projects }: { projects: ProjectSummary[] }) {
                     a reset phrasing the parser didn't know just made the panel quietly plainer, and nothing
                     anywhere said the boundary was gone. Quote the text that failed: it is the bug report. */}
                 {view?.boundary && week ? (
-                  usageLimit ? (
-                    <ModuleSlot package={usageLimit.package} label="usage limit">
-                      <LimitedWeekBar limit={usageLimit} projects={projectsHaving(usageLimit.projects, projects)} boundary={view.boundary} percentUsed={week.percentUsed} others={windows} />
-                    </ModuleSlot>
+                  line ? (
+                    <WeekBarData.Provider value={{ boundary: view.boundary, percentUsed: week.percentUsed, others: windows }}>
+                      <ModuleSlot package={line.package} label="usage limit">
+                        <line.View projects={projectsHaving(line.projects, projects)} Bar={ModuleWeekBar} />
+                      </ModuleSlot>
+                    </WeekBarData.Provider>
                   ) : (
                     <WeekBar boundary={view.boundary} percentUsed={week.percentUsed} others={windows} />
                   )

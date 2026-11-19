@@ -91,7 +91,7 @@ export function DashboardPage({
   // Every card the Overview can show here, each with the widths it stands at; the person's layout
   // for this page (the picked project's, else all projects') orders them, sizes them, and hides some.
   const { cards: moduleCards, line: moduleLine, loaded: modulesLoaded } = useModuleCards(shownProjects)
-  const queueComing = !modulesLoaded && moduleLine.length === 0 && listedPages?.some(page => page.segment === 'queue' && shownProjects.some(project => page.projects.includes(project.id))) === true
+  const queueComing = !modulesLoaded && moduleLine.length === 0 && listedPages?.some(page => page.id === 'queue' && shownProjects.some(project => page.projects.includes(project.id))) === true
   // Until the pages are known (a browser's first visit) nor any package's part is in, whether the queue's part comes is
   // not known: the parts after its place wait, so a part coming in before them pushes nothing.
   const placeKnown = modulesLoaded || moduleLine.length > 0 || listedPages !== null

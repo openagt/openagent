@@ -1,7 +1,7 @@
 {
   "name": "@openagt/hooks",
   "version": "0.1.0",
-  "description": "OpenAgent's hooks: the contracts every module plugs in through (the run pipeline, coding agents, where runs live, skills, the store, accounts, the app's life, what needs the person), the run options, the settings catalog, and the loader that calls them in order. No features of its own.",
+  "description": "OpenAgent's hooks: the contracts every module plugs in through (the run pipeline, coding agents, where runs live, skills, the store, accounts, the app's life, what needs the person, and the UI's places), the run options, the settings catalog, and the loader that calls them in order. No features of its own.",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -23,6 +23,10 @@
     "./testing": {
       "types": "./dist/testing.d.ts",
       "default": "./dist/testing.js"
+    },
+    "./ui": {
+      "types": "./dist/ui.d.ts",
+      "default": "./dist/ui.js"
     }
   },
   "scripts": {
@@ -36,7 +40,8 @@
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "@types/react": "^19.2.0"
   },
   "publishConfig": {
     "access": "public"

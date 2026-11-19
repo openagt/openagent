@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Button, PageLink, Panel, PanelGroup, PartDescription, Skeleton, Slot, Tooltip, TooltipContent, TooltipTrigger, cn, formatAge, inPlace, formatDateTime, useModuleHost, useOpenAgentDown, usePolled, type ModuleCardProps, type ModuleProject } from '@openagt/ui/module'
+import { Button, PageLink, Panel, PanelGroup, PartDescription, Skeleton, Slot, Tooltip, TooltipContent, TooltipTrigger, cn, formatAge, inPlace, formatDateTime, useModuleHost, useOpenAgentDown, usePolled, type UiCardProps, type UiProject } from '@openagt/ui/module'
 import { CodeWords } from './CodeWords.js'
 import { cannotRun, heldBy, notAsked, readSchedulers, schedulersKey, rowTitle, schedulerStatus, schedulerStopped, startedNow, startsNext, unlistedWords, type Answered, type SchedulerCommand, type SchedulerRow } from './schedulers.js'
 
@@ -25,7 +25,7 @@ export function offWords(off: number, on: number): string | undefined {
   return off === 1 ? '1 more is switched off' : `${off} more are switched off`
 }
 
-export function SchedulerCard({ projects }: ModuleCardProps) {
+export function SchedulerCard({ projects }: UiCardProps) {
   const host = useModuleHost()
   const key = projects.map(p => p.id).join(',')
   // One read with the Automations page and Settings under the same key, kept for the next visit.
@@ -124,7 +124,7 @@ export function SchedulerCard({ projects }: ModuleCardProps) {
  * started opens from it. Under the pointer, "Run now" starts one at once, and what it answered
  * stays on the row: the run it started, or why none did.
  */
-function OnRow({ project, command, stopped, lookedAt, onOpenRun, reload }: { project: ModuleProject; command: SchedulerCommand; stopped: boolean; /** When the scheduler last looked: the start its look made was then. */ lookedAt: string | undefined; onOpenRun: (run: string) => void; reload: () => Promise<void> }) {
+function OnRow({ project, command, stopped, lookedAt, onOpenRun, reload }: { project: UiProject; command: SchedulerCommand; stopped: boolean; /** When the scheduler last looked: the start its look made was then. */ lookedAt: string | undefined; onOpenRun: (run: string) => void; reload: () => Promise<void> }) {
   const host = useModuleHost()
   const down = useOpenAgentDown()
   const [busy, setBusy] = useState(false)

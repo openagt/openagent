@@ -115,8 +115,8 @@ export function usePaneOpeners(projectId: string, agentId: string): {
   onOpenScreen: (() => void) | undefined
   onOpenSubagent: (key: string) => void
 } {
-  const { panels } = useMountedModules()
-  const takes = (kind: 'changes' | 'files' | 'screen'): boolean => panels.some(panel => panel[kind] && panel.projects.includes(projectId))
+  const panes = useMountedModules().views['chat.pane']
+  const takes = (kind: 'changes' | 'files' | 'screen'): boolean => panes.some(pane => pane[kind] && pane.projects.includes(projectId))
   const listsChanges = takes('changes')
   const showsFiles = takes('files')
   const showsScreen = takes('screen')

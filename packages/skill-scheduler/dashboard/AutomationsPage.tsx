@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Facts, Page, Panel, PanelGroup, PanelShape, RunMark, Skeleton, Slot, Switch, WordsShape, Tooltip, TooltipContent, TooltipTrigger, Button, cn, formatAge, formatDateTime, inPlace, useCodingAgents, useIsMobile, useModuleHost, useOpenAgentDown, usePolled, type ModuleCommandResult, type ModuleHost, type ModuleProject } from '@openagt/ui/module'
-import type { ModulePageProps } from '@openagt/ui/module'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Facts, Page, Panel, PanelGroup, PanelShape, RunMark, Skeleton, Slot, Switch, WordsShape, Tooltip, TooltipContent, TooltipTrigger, Button, cn, formatAge, formatDateTime, inPlace, useCodingAgents, useIsMobile, useModuleHost, useOpenAgentDown, usePolled, type ModuleCommandResult, type ModuleHost, type UiProject } from '@openagt/ui/module'
+import type { UiPageProps } from '@openagt/ui/module'
 import { MoreHorizontal, Play, Plus } from 'lucide-react'
 import { AutomationForm } from './AutomationForm.js'
 import { CodeWords, Command } from './CodeWords.js'
@@ -40,7 +40,7 @@ const NOTHING_SCHEDULED = 'no skill of this project schedules a command'
 /** How long a running scheduler may go without a look before its line says so: two ticks missed. */
 const LATE = 3 * TICK_MS
 
-export function AutomationsPage({ projects }: ModulePageProps) {
+export function AutomationsPage({ projects }: UiPageProps) {
   const host = useModuleHost()
   const down = useOpenAgentDown()
   const phone = useIsMobile()
@@ -107,13 +107,13 @@ export function AutomationsPage({ projects }: ModulePageProps) {
   // Saves go one at a time: each is a command that reads the state file, changes it and writes it
   // back. A command that could not even be asked is a save not taken, and the next one still runs.
   const queue = useRef<Promise<unknown>>(Promise.resolve())
-  const run = (project: ModuleProject, args: string[]): Promise<ModuleCommandResult> => {
+  const run = (project: UiProject, args: string[]): Promise<ModuleCommandResult> => {
     const answered = queue.current.then(() => host.runCommand(project.id, args).catch(notAsked))
     queue.current = answered
     return answered
   }
   /** A command asked without waiting for the saves: one that takes seconds and writes nothing a save reads. */
-  const ask = (project: ModuleProject, args: string[]): Promise<ModuleCommandResult> => host.runCommand(project.id, args).catch(notAsked)
+  const ask = (project: UiProject, args: string[]): Promise<ModuleCommandResult> => host.runCommand(project.id, args).catch(notAsked)
   /** One save or start of a row's own: the row is held until what it did has been read back, so it never shows the old value as if nothing had happened. */
   const save = async (id: string, pending: Promise<ModuleCommandResult>, answered: (answer: ModuleCommandResult) => Answered | undefined): Promise<void> => {
     hold(id)
@@ -126,7 +126,7 @@ export function AutomationsPage({ projects }: ModulePageProps) {
   }
 
   /** Start one run of a row at once (`scheduler now`): its button says so until the run is started, or why none was. */
-  const startNow = async (id: string, project: ModuleProject, command: string): Promise<void> => {
+  const startNow = async (id: string, project: UiProject, command: string): Promise<void> => {
     setStarting(current => [...current, id])
     await save(id, ask(project, ['now', command]), startedNow)
     setStarting(current => current.filter((_, index) => index !== current.indexOf(id)))
@@ -137,7 +137,7 @@ export function AutomationsPage({ projects }: ModulePageProps) {
    * refuses a file changed by hand): its words are then the panel's to change, and when it cannot
    * be read the panel says why and leaves them alone. Nothing opens over a change not saved yet.
    */
-  const open = async (id: string, project: ModuleProject, scheduled: SchedulerCommand): Promise<void> => {
+  const open = async (id: string, project: UiProject, scheduled: SchedulerCommand): Promise<void> => {
     const mine = ++asked.current
     setSaid(current => (current?.id === id ? undefined : current))
     if (!scheduled.editable) {
@@ -158,7 +158,7 @@ export function AutomationsPage({ projects }: ModulePageProps) {
    * A project's "New automation": the page's one primary when it shows one project, a quieter press beside each project's
    * name when it shows several. Drawn from the first frame on a one-project page, and pressed once its scheduler is read.
    */
-  const newButton = (project: ModuleProject, primary: boolean, read = true): ReactNode =>
+  const newButton = (project: UiProject, primary: boolean, read = true): ReactNode =>
     creating !== project.id && (
       <Button
         ref={button => {
@@ -554,7 +554,7 @@ function SkillsLink() {
  * publish, left to the panel while it is open, which says them as they would be. Its other picks are its Edit
  * panel's. One line, cut, under a mouse; wrapped whole on a phone.
  */
-function Stands({ host, project, scheduled, stopped, picks }: { host: ModuleHost; project: ModuleProject; scheduled: SchedulerCommand; /** Why nothing starts by itself in its project, while that is so ({@link schedulerStopped}). */ stopped: string | undefined; /** Whether its picks are said: not while its panel is open. */ picks: boolean }) {
+function Stands({ host, project, scheduled, stopped, picks }: { host: ModuleHost; project: UiProject; scheduled: SchedulerCommand; /** Why nothing starts by itself in its project, while that is so ({@link schedulerStopped}). */ stopped: string | undefined; /** Whether its picks are said: not while its panel is open. */ picks: boolean }) {
   const last = scheduled.lastRun
   const idle = scheduled.on && stopped !== undefined && cannotRun(scheduled) === undefined
   const decision = idle ? `Does not start: ${stopped.charAt(0).toLowerCase()}${stopped.slice(1)}` : decided(scheduled)

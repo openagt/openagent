@@ -171,7 +171,7 @@ export function AgentView({
   const startedFrom = startedFromBranch(card, mainBranch) ?? picks?.branch
   const [open, setOpen] = useState(false)
   // What the installed modules add to this run's page: a summary in the bar above the message box.
-  const runSlots = useMountedModules().runSlots.filter(slots => slots.projects.includes(projectId))
+  const summaries = useMountedModules().views['chat.summary'].filter(summary => summary.projects.includes(projectId))
   // What a row of the chat opens in a pane beside it: a changed file, a file a step names
   // ("Read index.html"), a live screen, a subagent.
   const { onOpenChange, onOpenFile, onOpenScreen, onOpenSubagent } = usePaneOpeners(projectId, agentId)
@@ -361,14 +361,11 @@ export function AgentView({
               (showHandoff ? (
                 <HandoffSummary handoff={handoff.handoff} />
               ) : (
-                runSlots.map(slots => {
-                  const Summary = slots.summary
-                  return Summary ? (
-                    <ModuleSlot key={slots.package} package={slots.package} label="run summary">
-                      <Summary projectId={projectId} agentId={agentId} working={working} />
-                    </ModuleSlot>
-                  ) : null
-                })
+                summaries.map(({ View: Summary, id, package: pkg }) => (
+                  <ModuleSlot key={`${pkg}/${id}`} package={pkg} label="run summary">
+                    <Summary projectId={projectId} agentId={agentId} working={working} />
+                  </ModuleSlot>
+                ))
               ))
             }
             actions={
