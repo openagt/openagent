@@ -163,17 +163,17 @@ export interface Preferences {
    * unset preference keeps them firing; a user turns them off explicitly.
    */
   notifyHumanIntervention?: boolean
-  /** The model to run on (#628), e.g. `opus` / `sonnet`, handed to the project's start hook. Absent = the hook's own default. */
+  /** The model to run on (#628), e.g. `opus` / `sonnet`, handed to the run. Absent = the coding agent's own default. */
   model?: string
   /**
    * How hard that model may think, by the coding agent's own names (`low`, `medium`, `high`, …),
-   * handed to the project's start hook. Absent = the agent's own default. Kept whatever the model:
+   * handed to the run. Absent = the agent's own default. Kept whatever the model:
    * a model that does not take one simply never shows it, and the pick stays for the one that does.
    */
   effort?: string
-  /** Which coding agent a run starts on (#650): `claude-code` or `codex`, handed to the project's start hook. Absent = the hook's own default. */
+  /** Which coding agent a run starts on (#650): `claude-code` or `codex`, handed to the run. Absent = the run's own default, Claude Code. */
   driver?: string
-  /** How far a run started from the dashboard publishes its work: `nothing`, or the level handed to the project's start hook, `commit`, `branch`, `pr` or `merge`. The launcher's menu shows it and writes it. Absent = none saved: the daemon decides where a Start goes. */
+  /** How far a run started from the dashboard publishes its work: `nothing`, or the level handed to the run, `commit`, `branch`, `pr` or `merge`. The launcher's menu shows it and writes it. Absent = none saved: the daemon decides where a Start goes. */
   publish?: PublishPick
   /**
    * Where an agent started from the launcher starts, per project, by its id: "My local branch",

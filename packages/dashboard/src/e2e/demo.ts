@@ -1,5 +1,6 @@
 // The demo (see README.md): the real dashboard, started by its CLI as a person starts it, on a
-// throwaway home with fixture projects whose start and resume lines run the scripted fake run.
+// throwaway home with fixture projects, handed the distribution whose host scripts the runs
+// (`distribution.ts`).
 // Every page and every flow of the product, offline, free, and the same each time: `pnpm demo`
 // serves it to a person, and the browser smoke tests drive it.
 import { spawn } from 'node:child_process'
@@ -10,10 +11,13 @@ import { basename, join, resolve } from 'node:path'
 import { createInterface } from 'node:readline'
 import { fileURLToPath } from 'node:url'
 import { projectId } from '@openagt/agent-data'
+import { DISTRIBUTION_ENV } from '@openagt/hooks'
 import type { AgentMeta, AgentStatus } from '../store/index.js'
-import { makeFixtureRepo, writeFakeRunHooks } from './fixture.js'
+import { makeFixtureRepo } from './fixture.js'
 
 const CLI = fileURLToPath(new URL('../../dist/cli/bin.js', import.meta.url))
+/** The demo's distribution: the dashboard's own, its runs scripted. */
+const DISTRIBUTION = fileURLToPath(new URL('./distribution.js', import.meta.url))
 
 /** A project of the demo, as the dashboard has it. */
 export interface DemoProject {
@@ -89,13 +93,10 @@ export async function startDemo(options: DemoOptions = {}): Promise<Demo> {
   ] as const) {
     await makeFixtureRepo(cwd, files, skills, { user: DEMO_USER, origin: join(home, '.origins', `${basename(cwd)}.git`) })
   }
-  // The project to add starts scripted runs too: its lines are there before a person adds it, and the add keeps them.
-  await writeFakeRunHooks(toAdd)
-
   const env: NodeJS.ProcessEnv = Object.fromEntries(Object.entries(process.env).filter(([name]) => !handedToAgents(name)))
   // Its temporary folder in the home too, so what the dashboard leaves there goes with it.
   await mkdir(join(home, 'tmp'))
-  Object.assign(env, { HOME: home, XDG_CONFIG_HOME: join(home, '.config'), TMPDIR: join(home, 'tmp') })
+  Object.assign(env, { HOME: home, XDG_CONFIG_HOME: join(home, '.config'), TMPDIR: join(home, 'tmp'), [DISTRIBUTION_ENV]: DISTRIBUTION })
   // Started in the home, which is no repository, so the CLI adds no project of its own. A process
   // group of its own: a Ctrl+C at the terminal reaches only the demo, which stops the runs first.
   const cli = spawn(process.execPath, [CLI, '--port', String(options.port ?? 0)], { cwd: home, env, stdio: ['ignore', 'pipe', 'pipe'], detached: true })
@@ -192,7 +193,6 @@ export async function startDemo(options: DemoOptions = {}): Promise<Demo> {
     // Its records go to its remote, as a team's do.
     const shared = await call<{ ok: boolean; error?: string }>('sendShareRecords', id, true)
     if (!shared.ok) throw new Error(`could not share the demo project's records: ${shared.error}`)
-    await writeFakeRunHooks(shop)
     if (options.seed) {
       for (const { prompt, until } of SEEDED) {
         const started = await call<{ ok: true; agentId: string } | { ok: false; error: string }>('sendStart', id, prompt, {})

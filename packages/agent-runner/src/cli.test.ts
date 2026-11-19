@@ -141,7 +141,7 @@ test('usage errors exit 2 with what was wrong on stderr and nothing on stdout; o
 
 test('a text may open with a dash: only one of the command\'s own flags is a flag, a flag that takes a text takes the next argument whole, and everything else is handed over as a text', async () => {
   const options = { detach: { type: 'boolean' }, model: { type: 'string' }, attach: { type: 'string' }, answer: { type: 'string' } } as const
-  // The start line of a project's hook file, with a prompt typed as a list.
+  // A detached start whose prompt is typed as a list.
   assert.deepEqual(withTextsApart(['--detach', '- fix the tests', '--model', 'opus', '--attach', '- then tidy'], options), ['--detach', '--model=opus', '--attach=- then tidy', '--', '- fix the tests'])
   // A text that opens like a flag and goes on, and a lone dash: texts. One word behind a dash that is no flag of the command stays where the reader refuses it.
   assert.deepEqual(withTextsApart(['--force push it', '-x y', '-', '--model=fast'], options), ['--model=fast', '--', '--force push it', '-x y', '-'])

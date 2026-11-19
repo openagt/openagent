@@ -13,8 +13,8 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuGro
 /**
  * Where the next run starts (#1052/#1067): the machine this dashboard is on, or one of the
  * machines saved on it. A machine is a run TARGET, selected in place: picking one does not
- * navigate the browser. The daemon relays the start to it, and that machine runs the start hook
- * of its own copy of the project. The dashboard is always its own machine's, also when a phone
+ * navigate the browser. The daemon relays the start to it, and that machine starts the run in
+ * its own copy of the project. The dashboard is always its own machine's, also when a phone
  * shows it: the first row is the computer that runs this OpenAgent, "This machine" on that
  * computer's own screen and its name anywhere else (this-machine.ts).
  *
@@ -103,7 +103,7 @@ export function RunOnMenu({ connection, busy }: { connection: ConnectionControl;
             <Laptop className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
             <OptionLabel
               label={here}
-              description={connection.noProject ? 'Runs here, in a folder of its own.' : connection.home === undefined ? "Runs here, through this project's start hook." : connection.onlyThere ? 'It has no repository address to clone it here from.' : 'Cloned here first, then runs here.'}
+              description={connection.noProject ? 'Runs here, in a folder of its own.' : connection.home === undefined ? 'Runs here, in this project.' : connection.onlyThere ? 'It has no repository address to clone it here from.' : 'Cloned here first, then runs here.'}
             />
             {onThisMachine && <Check className="ml-auto mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />}
           </DropdownMenuItem>

@@ -34,52 +34,32 @@ the command cannot start one at all.
 
 ## How it works
 
-OpenAgent runs no coding agent and makes no model call. Starting an agent is running
-**one shell line the project itself names** — its `start` hook, in the project's own
-`.openagent/hooks.yml`:
-
-```yaml
-start: agent-runner run --detach "$PROMPT" ${DRIVER:+--driver "$DRIVER"} ${MODEL:+--model "$MODEL"} ${EFFORT:+--effort "$EFFORT"} ${PUBLISH:+--publish "$PUBLISH"} ${BASE:+--base "$BASE"} ${PR_BASE:+--pr-base "$PR_BASE"} ${REPOS:+--repos "$REPOS"}
-resume: agent-runner run --detach --resume "$RUN_ID" ${TEXT:+"$TEXT"} ${ANSWER:+--answer "$ANSWER"} ${PUBLISH:+--publish "$PUBLISH"}
-check: agent-runner check ${DRIVER:+--driver "$DRIVER"}
-```
-
-The line is given the prompt and the user's picks in its environment, and answers one JSON
-document whose `id` names the agent it began, and whose `driver` may name the coding agent that
-runs it. From there the agent belongs to whatever that
-line started. Adding a project writes these three lines into the file, so a new project, an
-empty folder included, starts an agent with nothing typed by hand. They are a default: a line
-already there is kept, and any of them can be changed or deleted. A line finds its tools in the
-packages the dashboard brings first, `agent-runner` and `scheduler` among them, then in the project's installed ones;
-nothing is downloaded to run a line. A project with no `start` line cannot start an agent from
-the dashboard, and the dashboard says so. `npx @openagt/skill-scheduler@0.1 init`, run in the project, writes
-the scheduler's `open` and `close` lines (they start it when the dashboard opens and stop it
-when it closes), keeping any line already there. The file's keys are `open`, `close`, `start`, `resume` and `check`; any other key
-is refused and the whole file ignored.
+OpenAgent runs no coding agent and makes no model call. A Start goes to **this computer's run
+host**, the `run.host` of the modules OpenAgent is distributed with (#2394): `agent-runner`'s,
+which spawns the run's own process in the project with the prompt and the person's picks. From
+there the run belongs to that process. A distribution names its modules in one file, which the
+dashboard hands down to every run it starts (`OPENAGENT_DISTRIBUTION`); the demo's adds a host
+whose runs are scripted.
 
 The launcher's branch menu above the box says which branch the agent starts from: the
 project's main branch, fetched first; **My local branch**, the branch the project's folder is
 on, with its commits that are not pushed (edits that are not committed are not carried); or
 another of the branches origin has now, fetched first. The pick is saved per project. The local
-pick puts the branch's name in `BASE`, and another of origin's its full name
-(`refs/remotes/origin/<branch>`), so the line can tell them apart; `agent-runner` fetches it. The
-menu is shown only when the `start` line mentions `$BASE`: a project whose line was written
-before the menu existed gets it by adding `${BASE:+--base "$BASE"}` to the line.
+pick names the branch, and another of origin's its full name (`refs/remotes/origin/<branch>`),
+so the run can tell them apart; `agent-runner` fetches it. The menu is shown for a project with
+a remote whose folder is on a branch.
 
-A run started from another branch origin has opens its pull request into that branch: the
-launcher puts its name in `PR_BASE`, unless the Auto menu says main. The Auto menu's section "The
-pull request goes into" is shown only when the `start` line mentions `$PR_BASE`: an older line
-gets it by adding `${PR_BASE:+--pr-base "$PR_BASE"}`. Without it the pull request goes to main.
+A run started from another branch origin has opens its pull request into that branch, unless the
+Auto menu says main. Otherwise the pull request goes to main.
 
 A session with no project may have repos as context, picked with **Add repo** beside "No project":
-their folders reach the line in `REPOS`, one per line, and `agent-runner` copies each into the
-session's folder. The sessions home's lines are OpenAgent's own, written fresh each time it starts.
+`agent-runner` copies each into the session's folder.
 
 The session's agent (the **Agent** menu under the box) and its GitHub account (the control at
-the right) reach the run through its environment, `OPENAGENT_AGENT` and `OPENAGENT_GIT_ACCOUNT`,
-never on the line: `agent-runner` reads them as the line's own child. An agent is a name, skills
-and accounts, a file in `~/.openagent/agents/`, edited on the Agents page; the skills it can be
-given are handed down with the default ones (`OPENAGENT_SKILL_CATALOGUE`).
+the right) go with the Start: `agent-runner` hands them to the run's process in its environment,
+`OPENAGENT_AGENT` and `OPENAGENT_GIT_ACCOUNT`. An agent is a name, skills and accounts, a file in
+`~/.openagent/agents/`, edited on the Agents page; the skills it can be given are handed down with
+the default ones (`OPENAGENT_SKILL_CATALOGUE`).
 
 The **Skills** menu under the box picks, for this session alone, which skills the run gets: its
 agent's ticked, any other carried skill tickable, and which of the project's own skills stay in
@@ -89,10 +69,16 @@ agent's skills less the ones off plus the ones on, and leaves the project skills
 the run's checkout with git's sparse checkout, nothing committed. The record keeps the picks, and
 a resume goes on with them.
 
-The `check` line is what the launcher runs before a Start, with the picked coding agent in
-`DRIVER`: it answers one JSON document with `problems` (a coding agent not installed or logged
-out: said in red) and `warnings` (said in amber), each line naming its own fix. A project
-with no `check` line shows nothing there.
+Before a Start, the launcher asks the host's check, for the picked coding agent: its
+`problems` (a coding agent not installed or logged out) are said in red and its `warnings` in
+amber, each line naming its own fix.
+
+A project's `.openagent/hooks.yml` holds the shell lines that run as the dashboard opens and as
+it closes: the scheduler's, which ticking its skill writes (`npx @openagt/skill-scheduler@0.1
+init` in the project writes them too), until the scheduler starts and stops with the app as a
+module of its own. A line finds its tools in the packages the dashboard brings first, then in the
+project's installed ones; nothing is downloaded to run a line. The file's keys are `open` and
+`close`; any other key is refused and the whole file ignored.
 
 A package's own settings are no hook. The scheduler's are the scheduler package's own part of
 the dashboard: its Automations page holds a switch, a pace, a number of agents at once and a
@@ -112,7 +98,7 @@ Steering goes back the same way, never over a channel:
   tool reads while the agent works: the agent reads it at its next step, or, sent with ⌘Enter,
   when its turn ends.
 - **What you say to an agent that has ended** — your words, or your answer to the question it
-  stopped on — runs the project's `resume` hook, which continues that same agent.
+  stopped on — goes to the run's host, which continues that same agent.
 - **Stop** is a signal to the process the agent's card names: the agent ends its turn where it is,
   and a message continues it.
 

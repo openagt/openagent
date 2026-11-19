@@ -247,8 +247,7 @@ already made, and lists it in its pull request; for anything else it proposes an
   a small two-tone set of our own.
 - The packages every project wants are built in: OpenAgent depends on them and uses them
   for every project through the same contract as any package (a module by its
-  `./dashboard` export, a provider of a kind of data and the writer of its hook lines by
-  its `openagent` key). They are Changes, Files, the runner, the packages that read a
+  `./dashboard` export, a provider of a kind of data by its `openagent` key). They are Changes, Files, the runner, the packages that read a
   project's runs and checkouts, and the GitHub package, so an empty folder starts an
   agent, shows it, and can be put on GitHub. A built-in git host is a project's only when the
   project's remote is on that host: it was not chosen by the project, so it does not
@@ -550,20 +549,17 @@ already made, and lists it in its pull request; for anything else it proposes an
   laptop had hidden.
 
 ## Starting a run
-- A Start runs the project's own `start` line, in the project's hooks file, and the line
-  answers the new run's id. The daemon runs what the line says and calls no tool by name.
-  Picked over the daemon calling the tool itself: the person picks what starts their runs,
-  and a project that starts its runs some other way is not a special case.
-- Adding a project has every package that writes hook lines write its own into the project's
-  hooks file: the project's packages, then the built-in ones, the runner's `start`, `resume`
-  and `check` among them. So a new project starts an agent with nothing typed by hand. The
-  lines are a default: a line already there is kept, and the person can change or delete any
-  of them. Picked over the launcher telling the person which command to run, which left an
-  empty folder unable to start.
+- A Start goes to this computer's run host, the `run.host` of the modules OpenAgent is
+  distributed with (#2394): `agent-runner`'s, which spawns the run's process with the prompt
+  and the person's picks and answers the new run's id. What is said to a run that ended, a
+  Stop and the launcher's check go to the same host. Adding a project writes nothing into it
+  for its runs. Picked over the project's own `start`, `resume` and `check` lines in its hooks
+  file (#1774), written into every project as it was added, where each pick of the launcher's
+  was a variable a line had to pass on, and a line written before the pick ignored it: what
+  starts a run is the distribution's, and a module changes it.
 - A session need not be in a project: with none, it runs in a folder of its own,
-  `~/.openagent-sessions/<id>/`, started, resumed and checked by the hook lines of that home,
-  which the daemon writes there as it writes a project's. It runs on this computer, with no
-  branch and nothing to publish. Its address is `/session/<id>`, and `/session` is the "New
+  `~/.openagent-sessions/<id>/`, started on this computer's host with no project. It runs on
+  this computer, with no branch and nothing to publish. Its address is `/session/<id>`, and `/session` is the "New
   agent session" page with no project; the Log lists it with the projects' runs. Picked over
   every session belonging to a project, where a person with no project could start nothing.
 - A repo is any Git repository a quick look through the home folder, and the folders the
@@ -586,13 +582,15 @@ already made, and lists it in its pull request; for anything else it proposes an
   Picked over a worktree of each repo, which leaves branches and checkouts in a folder that
   is no project, and over a clone from the repo's address, which needs a login and the
   network for what is already on the computer.
-- A hook line finds its tools in the packages OpenAgent brings first, then in the
+- A hook line (the `open` and `close` lines a project's hooks file still holds, the
+  scheduler's until it starts and stops with the app, #2394) finds its tools in the packages
+  OpenAgent brings first, then in the
   project's installed packages. Nothing is downloaded to run a line. Picked over `npx`
   in the lines, which downloads whatever package holds the name on npm when the project
   has not installed it, and over the project's installed copy first, where a line ran
   one copy of a tool and the tool's page went through another.
-- The line gets the prompt, and the coding agent, the model and how far to publish when the
-  person picked them; anything else is the line's own business. The publish pick is one menu
+- A Start hands the run the prompt, and the coding agent, the model and how far to publish
+  when the person picked them; anything else is the run's own business. The publish pick is one menu
   beside Start: Off, Commit, Publish branch, Open PR, Merge on green. Off adds nothing to the
   person's message: whether the agent then commits is its own, by the branches skill in its
   checkout, where Commit asks for it. Picked over the name "Nothing", which promised that
@@ -605,7 +603,7 @@ already made, and lists it in its pull request; for anything else it proposes an
   became the thing to maintain.
 - Until a person picks in that menu, a run commits its work and pushes nothing. Picked over
   Publish branch until then, which put on the remote a branch nobody asked to publish.
-- The line also gets the branch to start from, picked in the launcher's branch menu. The menu
+- A Start also hands the run the branch to start from, picked in the launcher's branch menu. The menu
   lists the project's main branch first, the agent's default, fetched first; then "My local
   branch", the branch the project's folder is on, as this machine has it, commits that are not
   pushed included, the only way to start from those; then every other branch origin has, with
@@ -620,22 +618,18 @@ already made, and lists it in its pull request; for anything else it proposes an
 - A run started from a branch other than the main branch opens its pull request into that
   branch, or into the main branch when the Auto menu says so; the button reads the target,
   "Auto: Open PR → login-page", and the handoff's Open PR uses the same one. The section shows
-  only at Open PR and Merge on green, for a branch origin has, on a start line that passes it on.
+  only at Open PR and Merge on green, for a branch origin has.
   A local branch origin does not have goes to the main branch. Picked over always the main
   branch, whose pull request carried the start branch's commits with the agent's.
 - A published pick starts from origin's copy, fetched at the Start, even where a local branch
   of that name differs. A pick that has since gone from origin refuses the Start, and says so.
   Picked over starting from the main branch instead, which would be a silent swap, and over
   this clone's last copy, which is not the branch as it stands.
-- The menu is shown only where the pick is obeyed: the project's start line passes the branch
-  on, the repository has a remote, the folder is on a branch, and the run is on this machine.
-  Picked over a menu shown everywhere, which on a start line written before the pick existed
-  would be a pick that silently does nothing. Picked over rewriting a person's start line.
-- A branch name that could be read as an option on the line's command line refuses the Start.
+- The menu is shown only where the pick is obeyed: the repository has a remote, the folder is
+  on a branch, and the run is on this machine. Picked over a menu shown everywhere, where a pick
+  could silently do nothing.
+- A branch name that could be read as an option on the run's command line refuses the Start.
   Picked over dropping it and starting from the main branch, which would be a silent swap.
-- A project with no `start` line cannot start a run from the dashboard, and the launcher
-  says so and names the file. Picked over a built-in fallback: the hooks file is the one
-  place that says what starts a run.
 - No cap on a person's runs: the click is the brake. Picked over the one-run-per-checkout
   guard, which existed because runs shared a working tree and they no longer do.
 - What would stop a run is said above the message box, over the page, with the press that
@@ -697,9 +691,9 @@ already made, and lists it in its pull request; for anything else it proposes an
   reached it at. Picked over "This machine", which the phone's holder reads as the phone.
 
 ## Saying something to a run
-- What a person says reaches a run through what the run's tool reads: a line in the run's
-  inbox file while the run works, the project's `resume` line once it has ended. Picked
-  over a channel of ours that every tool would have to learn.
+- What a person says reaches a run through its host: a line in the run's inbox file while
+  the run works, a resume once it has ended (#2394). Picked over a channel of ours that every
+  tool would have to learn.
 - A run that ends while the line is on its way has its line taken back out of the inbox
   and resumed instead. Picked over leaving it for a run that will never read it.
 - A message sent while the agent works goes as Claude Code's chat sends it: Enter hands it

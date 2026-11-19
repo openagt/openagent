@@ -1,7 +1,6 @@
 // A fixture project as the E2E stories and the demo stand it up (see README.md): a real git repo
-// with an `origin`, the tickets and queue skills (and more for the demo), and, once it is added to a dashboard, start
-// and resume lines that run `fake-run-bin.js`, so a Start goes the whole production way offline, and a check line that
-// says nothing is in its way.
+// with an `origin`, and the tickets and queue skills (and more for the demo). Its runs are the
+// scripted host's (`fake-runs.ts`), so a Start goes the whole production way offline.
 import { copyFile, mkdir, writeFile } from 'node:fs/promises'
 import { execFile } from 'node:child_process'
 import { dirname, join, resolve } from 'node:path'
@@ -10,7 +9,6 @@ import { promisify } from 'node:util'
 import { withFileBranch, DATA_BRANCH } from '@openagt/agent-data'
 import { TICKETS_DIR } from '@openagt/skill-tickets'
 import { QUEUE_FILE } from '@openagt/skill-queue'
-import { PROJECT_HOOKS_FILE } from '../project-hooks.js'
 
 /**
  * The skills a fixture project can hold, by the name of each one's folder, with the package whose
@@ -90,21 +88,5 @@ export async function makeFixtureRepo(cwd: string, files: Record<string, string>
   await git(cwd, 'remote', 'add', 'origin', origin)
 }
 
-/** The tool the fixture's hook lines run: a stand-in for a real run's, with a scripted agent. */
+/** A run's process as the scripted host spawns it (`fake-runs.ts`): a stand-in for agent-runner's, with a scripted agent. */
 export const FAKE_RUN = fileURLToPath(new URL('./fake-run-bin.js', import.meta.url))
-
-/** What the fixture's check line prints: nothing stands in the way of a scripted start, which needs no CLI and no login. */
-const NOTHING_WRONG = JSON.stringify({ problems: [], warnings: [] })
-
-/**
- * Give a fixture project its start, resume and check lines, and only those: this machine's file,
- * under the directory adding the project ignores. Written after the add, over the defaults the add
- * writes there; or before it, for a project a person adds later: an add keeps every line already
- * there, so the project starts scripted runs from its first Start, never a real coding agent. The
- * check is the shell's own `echo`: a launcher asks it each time it opens, and nothing is started for it.
- */
-export async function writeFakeRunHooks(cwd: string): Promise<void> {
-  const run = (mode: string) => `${mode}: node ${JSON.stringify(FAKE_RUN)} ${mode}\n`
-  await mkdir(dirname(join(cwd, PROJECT_HOOKS_FILE)), { recursive: true })
-  await writeFile(join(cwd, PROJECT_HOOKS_FILE), `${run('start')}${run('resume')}check: ${JSON.stringify(`echo '${NOTHING_WRONG}'`)}\n`)
-}

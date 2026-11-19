@@ -1,7 +1,7 @@
 // The world behind the backend E2E story tests (see README.md): the daemon's business logic wired
-// exactly as `runDaemon` wires it, against throwaway state. Every fixture project's hooks file
-// names `fake-run-bin.js` as its start and resume lines, so a Start goes the whole production
-// way (the RPC, the hook, a detached run writing the files the dashboard reads) offline.
+// exactly as `runDaemon` wires it, against throwaway state, on the scripted host (`fake-runs.ts`),
+// so a Start goes the whole production way (the RPC, the host, a detached run writing the files
+// the dashboard reads) offline.
 import { mkdtempSync } from 'node:fs'
 import { readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -12,7 +12,8 @@ import { projectId } from '@openagt/agent-data'
 import { registryPreferencesStore } from '../registry.js'
 import { fromDiaryLine, projectBranches, projectRuns, resolveAgentDiary, type AgentMeta, type AgentStatus, type AnyDiaryLine } from '../store/index.js'
 import { worktreePath } from '@openagt/skill-branches'
-import { makeFixtureRepo, writeFakeRunHooks } from './fixture.js'
+import { makeFixtureRepo } from './fixture.js'
+import { fakeRunHost, STARTS_FILE_ENV, type HostCall } from './fake-runs.js'
 import { tailAgentEvents } from '../dashboard-rpc/events-tail.js'
 import { sendAddProject, sendShareRecords } from '../dashboard-rpc/projects.js'
 import { sendStart, sendStop } from '../dashboard-rpc/control.js'
@@ -61,8 +62,8 @@ export interface StoryWorld {
    * is what keeps each story's calls addressing its own world rather than the last one's.
    */
   rpc<A extends unknown[], R>(fn: (...args: A) => R): (...args: A) => R
-  /** What every start and resume hook line of this world was handed in its environment, oldest first. */
-  hookCalls(): Promise<HookCall[]>
+  /** What every start and resume of this world was handed, oldest first. */
+  hostCalls(): Promise<HostCall[]>
   /**
    * Create a real git repo (initial commit included) and register it through the same
    * `sendAddProject` RPC the dashboard's Add-project dialog calls.
@@ -106,19 +107,6 @@ export async function waitFor<T>(
   }
 }
 
-/** One start or resume hook line's environment, as `fake-run-bin.js` recorded it. */
-export interface HookCall {
-  hook: 'start' | 'resume'
-  id: string
-  prompt?: string
-  driver?: string
-  model?: string
-  publish?: string
-  base?: string
-  text?: string
-  answer?: string
-}
-
 /** Let a run whose prompt said "hold" go on to its first turn. */
 export async function release(project: StoryProject, agentId: string): Promise<void> {
   await writeFile(join(worktreePath(project.cwd, agentId), '.openagent', 'go'), '')
@@ -131,13 +119,15 @@ export async function release(project: StoryProject, agentId: string): Promise<v
  */
 export async function makeWorld(): Promise<StoryWorld> {
   const home = mkdtempSync(join(tmpdir(), 'openagent-e2e-home-'))
-  const startsFile = join(home, 'hook-calls.jsonl')
-  process.env.OPENAGENT_E2E_STARTS_FILE = startsFile
+  const startsFile = join(home, 'host-calls.jsonl')
+  process.env[STARTS_FILE_ENV] = startsFile
 
-  const runtime = createProjectRuntime({ cwd: home, env: process.env })
+  const host = fakeRunHost()
+  const runtime = createProjectRuntime({ cwd: home, env: process.env, host })
 
   const quota = { view: { windows: [] } as QuotaView }
   const context = {
+    host,
     startAgent: runtime.onStart,
     addProject: runtime.onAddProject,
     startedIn: runtime.onStartedIn,
@@ -174,12 +164,12 @@ export async function makeWorld(): Promise<StoryWorld> {
     quota,
     rpc,
 
-    async hookCalls() {
+    async hostCalls() {
       const raw = await readFile(startsFile, 'utf8').catch(() => '')
       return raw
         .split('\n')
         .filter(line => line.trim())
-        .map(line => JSON.parse(line) as HookCall)
+        .map(line => JSON.parse(line) as HostCall)
     },
 
     async addProject(files = {}) {
@@ -191,7 +181,6 @@ export async function makeWorld(): Promise<StoryWorld> {
       // Its records go to its remote, as a team's do.
       const shared = await rpc(sendShareRecords)(projectId(resolve(cwd)), true)
       if (!shared.ok) throw new Error(`could not share the fixture repo's records: ${shared.error}`)
-      await writeFakeRunHooks(cwd)
       return { id: projectId(resolve(cwd)), cwd }
     },
 
@@ -267,7 +256,7 @@ export async function makeWorld(): Promise<StoryWorld> {
         ).catch(() => {})
       }
       await runtime.dispose().catch(() => {})
-      delete process.env.OPENAGENT_E2E_STARTS_FILE
+      delete process.env[STARTS_FILE_ENV]
       await rm(home, { recursive: true, force: true }).catch(() => {})
       for (const repo of repos) await rm(repo, { recursive: true, force: true }).catch(() => {})
     },

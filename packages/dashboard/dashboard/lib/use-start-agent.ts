@@ -7,9 +7,9 @@ import { useAction } from './use-action.js'
 type StartArgs = Parameters<typeof sendStart>
 
 /**
- * The person's picks a start carries to the project's start hook; an unset one is left to the
- * hook's own default. The publish pick is carried as saved, and not at all when none was made: the
- * daemon that starts the run decides the pick in force.
+ * The person's picks a start carries to the run; an unset one is left to the run's own default.
+ * The publish pick is carried as saved, and not at all when none was made: the daemon that starts
+ * the run decides the pick in force.
  */
 export function startPicks(preferences: Preferences): { driver?: string; model?: string; effort?: string; publish?: PublishPick } {
   return {
@@ -21,7 +21,7 @@ export function startPicks(preferences: Preferences): { driver?: string; model?:
 }
 
 // Starting a run, for every surface that does (the launcher, the tickets' and the queue's
-// buttons): the project's start hook answers the new run's id, or says in words why there is
+// buttons): the computer's run host answers the new run's id, or says in words why there is
 // none, and neither surface hand-rolls the busy/error/finally scaffold useAction owns.
 //
 // A run sent to a machine that does not have the project yet: the machine clones it, once, and

@@ -33,7 +33,7 @@ ${helpRows([
 
 ${helpText("The dashboard listens on this computer only. A phone, or another computer's OpenAgent, gets in from Settings › Devices.")}
 
-${helpText("Everything else is the dashboard: it shows a project's runs from their files, and starts one through the project's own start hook (.openagent/hooks.yml), which names the tool that runs it.")}`
+${helpText("Everything else is the dashboard: it shows a project's runs from their files, and starts one on this computer's run host, the module OpenAgent is distributed with that runs it.")}`
 
 /** What the CLI itself accepts: three options, no verbs (D4). */
 export interface CliArgs {
@@ -50,7 +50,7 @@ export interface CliArgs {
  * Three options and nothing else: `--port` because it is the one thing a browser cannot be asked
  * and a dashboard cannot serve about itself; `--help` and `--version` because a command with
  * options owes the user both. The command runs no agent (#1774): a run is started
- * from the dashboard, by the project's own start hook.
+ * from the dashboard, on this computer's run host (#2394).
  */
 export function parseArgs(argv: string[]): CliArgs {
   const opts: CliArgs = { help: false, version: false }

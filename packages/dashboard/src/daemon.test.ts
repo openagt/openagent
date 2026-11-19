@@ -3,6 +3,8 @@ import { test } from 'node:test'
 import { mkdtemp, writeFile, rm, mkdir, readFile, readdir, realpath } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
+import { createHooks, LOCAL_HOST } from '@openagt/hooks'
+import { fakeHost } from '@openagt/hooks/testing'
 import { runDaemon, type DaemonState, type RunDaemonOptions } from './daemon.js'
 
 /**
@@ -43,7 +45,7 @@ async function callRpc(url: string, name: string, args: unknown[]): Promise<unkn
   const text = await res.text()
   return text ? (JSON.parse(text) as { ret?: unknown }).ret : undefined
 }
-type StartResult = { ok: true; agentId: string } | { ok: false; error: string }
+type StartResult = { ok: true; agentId: string; driver?: string } | { ok: false; error: string }
 // The home project's id: what the browser sends for the daemon's own workspace, which the
 // daemon resolves back to `cwd` (see `resolveProject`).
 const homeId = (cwd: string): string => projectId(resolve(cwd))
@@ -190,30 +192,34 @@ test("a project's open hooks run once the dashboard listens, its close hooks at 
   }
 })
 
-test('a Start runs the project\'s own start hook with the prompt and the picks, and answers the id the hook answered (#1774)', async () => {
+test("a Start goes to this computer's host, of the modules the daemon runs, with the prompt and the picks, and answers the id the host answered (#2394)", async () => {
   const cwd = await realpath(await tmpWorkspace())
   const env = await configEnv(cwd)
-  // The daemon names no tool: whatever the line is, it gets the prompt and the picks in its
-  // environment, and the id it prints is the run's.
-  await writeFile(
-    join(cwd, OPENAGENT_DIR, 'hooks.yml'),
-    `start: 'printf "%s|%s|%s" "$PROMPT" "$DRIVER" "\${MODEL-unset}" > started.txt; echo "{\\"id\\":\\"run-42\\"}"'\n`,
-  )
+  // The daemon names no tool: the host of its distribution starts the run.
+  const host = fakeHost({ id: LOCAL_HOST })
+  const hooks = createHooks([{ module: { name: 'fake-runs', hooks: { 'run.host': [host] } } }])
   const ac = new AbortController()
   try {
-    const { done, state } = await startDaemon(cwd, { port: 0, signal: ac.signal, env })
-    assert.deepEqual(await sendStart(state.url, cwd, '/work-queue now', { driver: 'codex' }), { ok: true, agentId: 'run-42' })
-    assert.equal(await readFile(join(cwd, 'started.txt'), 'utf8'), '/work-queue now|codex|unset')
+    const { done, state } = await startDaemon(cwd, { port: 0, signal: ac.signal, env, hooks })
+    assert.deepEqual(await sendStart(state.url, cwd, '/work-queue now', { driver: 'codex' }), { ok: true, agentId: 'run-1', driver: 'codex' })
+    assert.deepEqual(host.requests.map(request => [request.project?.dir, request.prompt, request.options['agent-driver']]), [[cwd, '/work-queue now', { driver: 'codex' }]])
     assert.deepEqual(await sendStart(state.url, cwd, '   '), { ok: false, error: 'a non-empty prompt is required' })
     assert.deepEqual(await callRpc(state.url, 'sendStart', ['no-such-project', 'x']), { ok: false, error: 'unknown project: no-such-project' })
-
-    // Without the line there is nothing to start a run with, and the daemon says so.
-    await writeFile(join(cwd, OPENAGENT_DIR, 'hooks.yml'), 'open:\n  - "true"\n')
-    assert.deepEqual(await sendStart(state.url, cwd, 'Read the docs'), { ok: false, error: 'this project has no start hook' })
+    assert.equal(host.requests.length, 1)
     ac.abort()
     await done
   } finally {
     ac.abort()
+    await rm(cwd, { recursive: true, force: true })
+  }
+})
+
+test("a daemon whose modules have no host for this computer does not start: it would start no run", async () => {
+  const cwd = await realpath(await tmpWorkspace())
+  const env = await configEnv(cwd)
+  try {
+    await assert.rejects(runDaemon(cwd, { port: 0, env, hooks: createHooks([]) }), /no host for this computer/)
+  } finally {
     await rm(cwd, { recursive: true, force: true })
   }
 })
@@ -278,7 +284,7 @@ test('the folder the caller names is added once the dashboard listens, as Add pr
     const address = id.slice(0, id.lastIndexOf('-')) // the folder's name, as the id writes it
     assert.deepEqual(told, [{ id, path: folder, added: true, address }, { id, path: folder, added: false, address }])
     assert.deepEqual((await listProjects(env)).map(project => project.id), [id])
-    assert.match(await readFile(join(folder, OPENAGENT_DIR, 'hooks.yml'), 'utf8'), /^start: agent-runner /m, 'added with the hook lines Add project writes')
+    await assert.rejects(readFile(join(folder, OPENAGENT_DIR, 'hooks.yml'), 'utf8'), 'added with no hook lines: its runs start on the host')
   } finally {
     for (const [key, value] of Object.entries(before)) {
       if (value === undefined) delete process.env[key]

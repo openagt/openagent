@@ -1,7 +1,8 @@
 // `@openagt/hooks/testing`: fakes of the hooks, so a module is tested alone: a store kept in
 // memory, a host whose runs a test drives, and a run's context for a step.
 import { StoreOrder } from './order.js'
-import type { RunContext, RunEvent, RunHost, RunInput, RunRequest, RunStatus, RunSummary } from './run.js'
+import type { InboxLine } from '@openagt/agent-driver'
+import type { RunContext, RunEvent, RunHost, RunInput, RunRef, RunRequest, RunStatus, RunSummary } from './run.js'
 import { settingsIn } from './settings.js'
 import { chainStore, changesOf, checkPath, isUnder, messageOf, scopeKey, type Scope, type Store, type StoreBackend } from './store.js'
 
@@ -78,8 +79,10 @@ export interface FakeHost extends RunHost {
   /** Every start asked, in order. */
   readonly requests: readonly RunRequest[]
   readonly resumed: readonly { id: string; input: RunInput }[]
-  readonly steered: readonly { id: string; text: string }[]
+  /** The lines said to a working run, in order. */
+  readonly steered: readonly { id: string; line: InboxLine }[]
   readonly stopped: readonly { id: string; force: boolean }[]
+  events(run: RunRef, signal: AbortSignal): AsyncIterable<RunEvent>
   /** A run's next event: its streams get it. */
   emit(id: string, event: RunEvent): void
   /** A run ends: its streams end after the events they have not read yet. */
@@ -90,7 +93,7 @@ export function fakeHost(opts: { id?: string; label?: string } = {}): FakeHost {
   const runs = new Map<string, { summary: RunSummary; events: RunEvent[]; waiting: Set<() => void> }>()
   const requests: RunRequest[] = []
   const resumed: { id: string; input: RunInput }[] = []
-  const steered: { id: string; text: string }[] = []
+  const steered: { id: string; line: InboxLine }[] = []
   const stopped: { id: string; force: boolean }[] = []
   let next = 1
   const runOf = (id: string) => {
@@ -107,6 +110,12 @@ export function fakeHost(opts: { id?: string; label?: string } = {}): FakeHost {
     run.summary = { ...run.summary, status, endedAt: new Date().toISOString() }
     wake(run)
   }
+  const resume = async ({ id }: RunRef, input: RunInput): Promise<void> => {
+    const run = runOf(id)
+    resumed.push({ id, input })
+    const { endedAt: _, ...rest } = run.summary
+    run.summary = { ...rest, status: 'working' }
+  }
   return {
     id: opts.id ?? 'fake',
     label: opts.label ?? 'A fake host',
@@ -117,21 +126,17 @@ export function fakeHost(opts: { id?: string; label?: string } = {}): FakeHost {
     async start(request) {
       requests.push(request)
       const id = `run-${next++}`
-      const summary: RunSummary = { id, status: 'working', startedAt: new Date().toISOString(), prompt: request.prompt, ...(request.project !== undefined ? { project: request.project } : {}) }
+      const summary: RunSummary = { id, status: 'working', startedAt: new Date().toISOString(), prompt: request.prompt, ...(request.project !== undefined ? { project: request.project.id } : {}) }
       runs.set(id, { summary, events: [], waiting: new Set() })
       return { id }
     },
-    async resume(id, input) {
-      const run = runOf(id)
-      resumed.push({ id, input })
-      const { endedAt: _, ...rest } = run.summary
-      run.summary = { ...rest, status: 'working' }
+    resume,
+    async steer(run, line) {
+      if (runOf(run.id).summary.status === 'working') steered.push({ id: run.id, line })
+      else if (line.kind === 'message') await resume(run, { text: line.text })
+      else if (line.kind === 'answer') await resume(run, { answer: line.answer })
     },
-    async steer(id, text) {
-      runOf(id)
-      steered.push({ id, text })
-    },
-    async stop(id, stopOpts) {
+    async stop({ id }, stopOpts) {
       stopped.push({ id, force: stopOpts?.force ?? false })
       end(id, 'stopped')
     },
@@ -139,9 +144,9 @@ export function fakeHost(opts: { id?: string; label?: string } = {}): FakeHost {
       return [...runs.values()]
         .reverse()
         .map(run => run.summary)
-        .filter(summary => project === undefined || summary.project === project)
+        .filter(summary => summary.project === project?.id)
     },
-    async *events(id, signal) {
+    async *events({ id }, signal) {
       const run = runOf(id)
       let read = 0
       for (;;) {

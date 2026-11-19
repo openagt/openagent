@@ -293,14 +293,19 @@ export interface DistributionPackage {
   on?: boolean
 }
 
+/** What a distribution lists: a module's package, or a module already loaded (a demo's fakes). */
+export type DistributionItem = DistributionPackage | DistributionEntry
+
 /**
- * A distribution's modules, from their packages: each one's `./module` entry, imported with
- * `load`. The distribution passes its own `import`, so the packages resolve from its dependencies:
- * they are not this package's.
+ * A distribution's modules, from what it lists: a package's `./module` entry, imported with
+ * `load`, or a module as it is given. The distribution passes its own `import`, so the packages
+ * resolve from its dependencies: they are not this package's.
  */
-export async function loadModules(packages: readonly DistributionPackage[], load: (specifier: string) => Promise<unknown>): Promise<DistributionEntry[]> {
+export async function loadModules(items: readonly DistributionItem[], load: (specifier: string) => Promise<unknown>): Promise<DistributionEntry[]> {
   return Promise.all(
-    packages.map(async ({ package: name, on }): Promise<DistributionEntry> => {
+    items.map(async (item): Promise<DistributionEntry> => {
+      if ('module' in item) return item
+      const { package: name, on } = item
       const exported = await load(`${name}/module`)
       const module = typeof exported === 'object' && exported !== null ? (exported as { default?: unknown }).default : undefined
       if (typeof module !== 'object' || module === null || typeof (module as { name?: unknown }).name !== 'string') {
@@ -311,14 +316,14 @@ export async function loadModules(packages: readonly DistributionPackage[], load
   )
 }
 
-/** Load a distribution's modules from their packages ({@link loadModules}). */
-export async function loadDistribution(packages: readonly DistributionPackage[], load: (specifier: string) => Promise<unknown>, opts: HooksOptions = {}): Promise<Hooks> {
-  return createHooks(await loadModules(packages, load), opts)
+/** Load a distribution's modules from what it lists ({@link loadModules}). */
+export async function loadDistribution(items: readonly DistributionItem[], load: (specifier: string) => Promise<unknown>, opts: HooksOptions = {}): Promise<Hooks> {
+  return createHooks(await loadModules(items, load), opts)
 }
 
 /**
  * Where a distribution hands itself down to the processes it starts, such as a run's own: the
- * path of its file, which default-exports its packages.
+ * path of its file, which default-exports what it lists ({@link DistributionItem}).
  */
 export const DISTRIBUTION_ENV = 'OPENAGENT_DISTRIBUTION'
 
@@ -331,7 +336,7 @@ export async function loadHandedDown(env: NodeJS.ProcessEnv = process.env): Prom
   const file = env[DISTRIBUTION_ENV]
   if (!file) return undefined
   const exported = ((await import(pathToFileURL(file).href)) as { default?: unknown }).default
-  if (!Array.isArray(exported)) throw new Error(`${file} default-exports no distribution: a list of its packages`)
+  if (!Array.isArray(exported)) throw new Error(`${file} default-exports no distribution: a list of its packages and modules`)
   const require = createRequire(file)
-  return loadModules(exported as DistributionPackage[], specifier => import(pathToFileURL(require.resolve(specifier)).href))
+  return loadModules(exported as DistributionItem[], specifier => import(pathToFileURL(require.resolve(specifier)).href))
 }

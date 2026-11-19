@@ -526,7 +526,7 @@ describe('Remove project, in the project’s menu', () => {
     await waitFor(() => expect(dialog.textContent).toMatch(/This deletes, on this machine/))
     expect(dialog.textContent).not.toMatch(/Nothing in the folder is deleted/)
     expect(dialog.textContent).toMatch(/Your files and your commits stay\./)
-    expect(dialog.textContent).toMatch(/hooks\.yml, the project’s start lines/)
+    expect(dialog.textContent).toMatch(/hooks\.yml, the lines run as the dashboard opens and closes/)
     expect(dialog.textContent).toMatch(/An agent that waits for your answer cannot be\s+continued after this/)
     expect(dialog.textContent).toMatch(/A tool that\s+worked in the project removes its own files too/)
     expect(dialog.textContent).toMatch(/A scheduler\s+you set to keep running is not stopped/)

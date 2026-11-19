@@ -1,8 +1,8 @@
 /**
  * The driver vocabulary (#542), node-free so every surface shares one copy: the registry's
  * preference sanitizer and the dashboard bundle. The names are agent-driver's own, the ones a
- * run's card carries, so the pick handed to a project's start hook as `DRIVER` and the record
- * that comes back say the same word. The dashboard's per-driver UI table is keyed by
+ * run's card carries, so the pick handed to a run and the record that comes back say the same
+ * word. The dashboard's per-driver UI table is keyed by
  * {@link DriverName}, so a missing entry there is a compile error, not a silent gap.
  */
 

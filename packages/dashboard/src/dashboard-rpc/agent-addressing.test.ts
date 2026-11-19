@@ -13,9 +13,9 @@ import { addProject } from '../registry.js'
 import { DATA_BRANCH, fileBranchPath, nodeGitRunner, projectId as idFor } from '@openagt/agent-data'
 import { worktreePath, addWorktree, agentBranchName } from '@openagt/skill-branches'
 import { OPENAGENT_DIR } from '../openagent-dir.js'
-import { RUN_INBOX_FILE } from '../dashboard/run-inbox.js'
-import { PROJECT_HOOKS_FILE } from '../project-hooks.js'
-import { NO_ELSEWHERE, provideTestContext } from './test-context.js'
+import { INBOX_FILE } from '@openagt/agent-runner'
+import { writeRun } from '@openagt/skill-logs'
+import { NO_ELSEWHERE, RESUMED_FILE, provideTestContext } from './test-context.js'
 import { elsewhereId } from '../dashboard/elsewhere.js'
 import { STARTING_AT_MOST_MS } from '../starting.js'
 
@@ -28,10 +28,10 @@ import { STARTING_AT_MOST_MS } from '../starting.js'
 
 const QUESTION = { kind: 'question', title: 'Which way?', options: [{ id: 'a', label: 'Left' }, { id: 'b', label: 'Right' }] }
 
-/** A project with one run in a checkout of its own. Returns its ids and the two candidate inbox paths. */
+/** A project with one run in a checkout of its own, and its record unless `record` is false. Returns its ids and the two candidate inbox paths. */
 async function projectWithWorktreeAgent(
   owner: { pid: number; host: string } = { pid: 0, host: 'elsewhere' },
-  run: { status?: string; diary?: unknown[]; hooks?: string } = {},
+  run: { status?: string; diary?: unknown[]; record?: boolean } = {},
 ): Promise<{
   dir: string
   projectId: string
@@ -54,19 +54,15 @@ async function projectWithWorktreeAgent(
   const worktree = worktreePath(dir, agentId)
   await mkdir(join(worktree, OPENAGENT_DIR), { recursive: true })
   // The run's card is what readLiveMetas discovers, and its id is what the caller addresses.
-  await writeFile(
-    join(worktree, OPENAGENT_DIR, `${agentId}.json`),
-    JSON.stringify({ id: agentId, startedAt: '2026-07-19T10:00:00.000Z', status: run.status ?? 'running', caller: owner }),
-  )
+  const card = { id: agentId, startedAt: '2026-07-19T10:00:00.000Z', status: run.status ?? 'running', caller: owner }
+  await writeFile(join(worktree, OPENAGENT_DIR, `${agentId}.json`), JSON.stringify(card))
   await writeFile(join(worktree, OPENAGENT_DIR, `${agentId}.jsonl`), (run.diary ?? []).map(line => JSON.stringify(line) + '\n').join(''))
-  if (run.hooks !== undefined) {
-    await mkdir(join(dir, OPENAGENT_DIR), { recursive: true })
-    await writeFile(join(dir, PROJECT_HOOKS_FILE), run.hooks)
-  }
 
   const previous = process.env.XDG_CONFIG_HOME
   process.env.XDG_CONFIG_HOME = join(dir, 'cfg')
   await mkdir(process.env.XDG_CONFIG_HOME, { recursive: true })
+  // Its record, as its tool keeps it, in the project's data under this config home: what a resume is refused without.
+  if (run.record !== false) assert.ok((await writeRun(dir, card as Parameters<typeof writeRun>[1], [])).ok, 'the record landed')
   await addProject(dir, new Date().toISOString())
   // The context every RPC reads (D3). In tests it is a global that outlives an await,
   // unlike the request-scoped one a real serve() provides.
@@ -76,17 +72,14 @@ async function projectWithWorktreeAgent(
     dir,
     projectId: idFor(dir),
     agentId,
-    agentInbox: join(worktree, OPENAGENT_DIR, RUN_INBOX_FILE),
-    rootInbox: join(dir, OPENAGENT_DIR, RUN_INBOX_FILE),
+    agentInbox: join(worktree, OPENAGENT_DIR, INBOX_FILE),
+    rootInbox: join(dir, OPENAGENT_DIR, INBOX_FILE),
     restore: () => {
       if (previous === undefined) delete process.env.XDG_CONFIG_HOME
       else process.env.XDG_CONFIG_HOME = previous
     },
   }
 }
-
-/** A resume line that writes down what it was handed and answers the run's id. */
-const RESUME_HOOK = `resume: 'printf "%s|%s|%s\\n" "$RUN_ID" "\${TEXT-}" "\${ANSWER-}" >> resumed.txt; echo "{\\"id\\":\\"$RUN_ID\\"}"'\n`
 
 const entries = async (path: string): Promise<unknown[]> =>
   (await readFile(path, 'utf8').catch(() => ''))
@@ -168,7 +161,9 @@ test('sendStop for a run that never writes its card waits as long as a start may
     let returnedAfter: number | undefined
     let answered: unknown
     void sendStop(ctx.projectId, '2026-07-19T11-00-00-000Z').then(said => ((answered = said), (returnedAfter = Date.now() - pressed)))
-    while (returnedAfter === undefined && Date.now() - pressed < STARTING_AT_MOST_MS + 5000) {
+    // Ticked until it returns, for as long as the real clock allows: each of the host's looks reads git, however long that takes.
+    const ticking = performance.now()
+    while (returnedAfter === undefined && performance.now() - ticking < 30_000) {
       await pause(20)
       mock.timers.tick(250)
     }
@@ -185,7 +180,7 @@ test('sendStop for a run that never writes its card waits as long as a start may
 
 test('a message and an answer to a working run are lines in the inbox of the run\'s own checkout (#749/#1774)', async () => {
   // The card names this test process, so the run reads as working; its diary holds the question.
-  const ctx = await projectWithWorktreeAgent({ pid: process.pid, host: hostname() }, { diary: [QUESTION], hooks: RESUME_HOOK })
+  const ctx = await projectWithWorktreeAgent({ pid: process.pid, host: hostname() }, { diary: [QUESTION] })
   try {
     assert.deepEqual(await sendMessage(ctx.projectId, '  also add tests ', ctx.agentId), { ok: true })
     assert.deepEqual(await sendChoice(ctx.projectId, 'await-choices', 'b', ctx.agentId), { ok: true })
@@ -194,7 +189,7 @@ test('a message and an answer to a working run are lines in the inbox of the run
       { kind: 'answer', question: 'Which way?', answer: 'Right' },
     ])
     assert.deepEqual(await entries(ctx.rootInbox), [])
-    assert.equal(await readFile(join(ctx.dir, 'resumed.txt'), 'utf8').catch(() => ''), '', 'a working run is not resumed')
+    assert.equal(await readFile(join(ctx.dir, RESUMED_FILE), 'utf8').catch(() => ''), '', 'a working run is not resumed')
     assert.deepEqual(await sendMessage(ctx.projectId, '   ', ctx.agentId), { ok: true }, 'an empty message is dropped')
     assert.equal((await entries(ctx.agentInbox)).length, 2)
   } finally {
@@ -203,23 +198,23 @@ test('a message and an answer to a working run are lines in the inbox of the run
   }
 })
 
-test('a message and an answer to an ended run go through the project\'s resume hook; without the hook they are refused in words (#1774)', async () => {
-  const waiting = await projectWithWorktreeAgent({ pid: 2 ** 22 - 1, host: hostname() }, { status: 'waiting', diary: [QUESTION, { kind: 'ended', status: 'waiting' }], hooks: RESUME_HOOK })
+test("a message and an answer to an ended run resume it through this computer's host; a run this project has no record of is refused in words", async () => {
+  const waiting = await projectWithWorktreeAgent({ pid: 2 ** 22 - 1, host: hostname() }, { status: 'waiting', diary: [QUESTION, { kind: 'ended', status: 'waiting' }] })
   try {
     assert.deepEqual(await sendChoice(waiting.projectId, 'await-choices', 'a', waiting.agentId), { ok: true })
     assert.deepEqual(await sendMessage(waiting.projectId, 'go on', waiting.agentId), { ok: true })
-    assert.equal(await readFile(join(waiting.dir, 'resumed.txt'), 'utf8'), `${waiting.agentId}||Left\n${waiting.agentId}|go on|\n`)
+    assert.equal(await readFile(join(waiting.dir, RESUMED_FILE), 'utf8'), `${waiting.agentId}||Left\n${waiting.agentId}|go on|\n`)
     assert.deepEqual(await entries(waiting.agentInbox), [], 'nothing waits in an inbox nobody reads')
   } finally {
     waiting.restore()
     await rm(waiting.dir, { recursive: true, force: true })
   }
-  const noHook = await projectWithWorktreeAgent({ pid: 2 ** 22 - 1, host: hostname() }, { status: 'done' })
+  const noRecord = await projectWithWorktreeAgent({ pid: 2 ** 22 - 1, host: hostname() }, { status: 'done', record: false })
   try {
-    assert.deepEqual(await sendMessage(noHook.projectId, 'go on', noHook.agentId), { ok: false, error: 'this project has no resume hook' })
+    assert.deepEqual(await sendMessage(noRecord.projectId, 'go on', noRecord.agentId), { ok: false, error: `no run ${noRecord.agentId} in this project` })
   } finally {
-    noHook.restore()
-    await rm(noHook.dir, { recursive: true, force: true })
+    noRecord.restore()
+    await rm(noRecord.dir, { recursive: true, force: true })
   }
 })
 
@@ -480,9 +475,9 @@ test('sendOpenPullRequest opens the pull request as a draft when asked to, and a
   }
 })
 
-test('a run on a saved machine reads the same in the project\'s list and in every project\'s, by the machine\'s name; and a message typed on it goes to the machine, not to this computer\'s resume line', async () => {
+test('a run on a saved machine reads the same in the project\'s list and in every project\'s, by the machine\'s name; and a message typed on it goes to the machine, not to this computer\'s host', async () => {
   // Its record came through the project's shared records: started on the machine's own page, this computer never sent it.
-  const ctx = await projectWithWorktreeAgent({ pid: 0, host: 'server-box' }, { status: 'waiting', hooks: RESUME_HOOK })
+  const ctx = await projectWithWorktreeAgent({ pid: 0, host: 'server-box' }, { status: 'waiting' })
   // The machine: it takes the calls about its run.
   const got: { fn: string; args: unknown[]; project: string }[] = []
   const machine = createServer((req, res) => {
@@ -525,8 +520,8 @@ test('a run on a saved machine reads the same in the project\'s list and in ever
     assert.deepEqual(await sendMessage(ctx.projectId, 'go on', ctx.agentId), { ok: true })
     assert.deepEqual(asked, [`${ctx.projectId} ${ctx.agentId}`])
     assert.deepEqual(got, [{ fn: 'sendMessage', args: [ctx.projectId, 'go on', ctx.agentId], project: 'github.com/acme/shop' }])
-    // This computer's own resume line was not run, and nothing was put in an inbox here.
-    await assert.rejects(stat(join(ctx.dir, 'resumed.txt')), { code: 'ENOENT' })
+    // This computer resumed nothing, and nothing was put in an inbox here.
+    await assert.rejects(stat(join(ctx.dir, RESUMED_FILE)), { code: 'ENOENT' })
     await assert.rejects(stat(ctx.agentInbox), { code: 'ENOENT' })
   } finally {
     ctx.restore()
@@ -537,7 +532,7 @@ test('a run on a saved machine reads the same in the project\'s list and in ever
 })
 
 test('a call that arrived from another computer is run here whatever the run\'s record says; with the machine down a read is answered from the record, and a message is not delivered here in its place', async () => {
-  const ctx = await projectWithWorktreeAgent({ pid: 0, host: 'server-box' }, { status: 'waiting', hooks: RESUME_HOOK, diary: [{ kind: 'said', text: 'kept in the record' }] })
+  const ctx = await projectWithWorktreeAgent({ pid: 0, host: 'server-box' }, { status: 'waiting', diary: [{ kind: 'said', text: 'kept in the record' }] })
   // A machine nobody answers at.
   const down = { url: 'http://127.0.0.1:1', key: 'id.key', project: 'github.com/acme/shop' }
   let asked = 0
@@ -561,14 +556,14 @@ test('a call that arrived from another computer is run here whatever the run\'s 
     const events = await onAgent(ctx.projectId, ctx.agentId)
     assert.equal(JSON.stringify(events).includes('kept in the record'), true)
     assert.deepEqual(await sendMessage(ctx.projectId, 'go on', ctx.agentId), { ok: false, error: 'could not reach the machine' })
-    await assert.rejects(stat(join(ctx.dir, 'resumed.txt')), { code: 'ENOENT' })
+    await assert.rejects(stat(join(ctx.dir, RESUMED_FILE)), { code: 'ENOENT' })
     assert.equal(asked, 2)
 
     // The same message, come in from another computer: this one is the run's, and no machine is asked.
     assert.deepEqual(await asArrived(() => sendMessage(ctx.projectId, 'go on', ctx.agentId)), { ok: true })
     assert.deepEqual(await dispatchRelayRpc(ctx.projectId, 'sendMessage', ['their-id-for-the-project', 'and on', ctx.agentId]), { ok: true })
     assert.equal(asked, 2)
-    assert.equal(await readFile(join(ctx.dir, 'resumed.txt'), 'utf8'), `${ctx.agentId}|go on|\n${ctx.agentId}|and on|\n`)
+    assert.equal(await readFile(join(ctx.dir, RESUMED_FILE), 'utf8'), `${ctx.agentId}|go on|\n${ctx.agentId}|and on|\n`)
   } finally {
     ctx.restore()
     await rm(ctx.dir, { recursive: true, force: true })
@@ -576,12 +571,12 @@ test('a call that arrived from another computer is run here whatever the run\'s 
 })
 
 test('a run another computer started, which is no saved machine, is not continued from here: a message and an answer are refused with where it runs, and nothing is resumed', async () => {
-  const ctx = await projectWithWorktreeAgent({ pid: 0, host: 'ubuntu-s-1vcpu-2gb-fra1' }, { status: 'waiting', hooks: RESUME_HOOK, diary: [QUESTION, { kind: 'ended', status: 'waiting' }] })
+  const ctx = await projectWithWorktreeAgent({ pid: 0, host: 'ubuntu-s-1vcpu-2gb-fra1' }, { status: 'waiting', diary: [QUESTION, { kind: 'ended', status: 'waiting' }] })
   try {
     const refused = { ok: false, error: 'This run is on ubuntu-s-1vcpu-2gb-fra1. Continue it there.' }
     assert.deepEqual(await sendMessage(ctx.projectId, 'go on', ctx.agentId), refused)
     assert.deepEqual(await sendChoice(ctx.projectId, 'await-choices', 'a', ctx.agentId), refused)
-    await assert.rejects(stat(join(ctx.dir, 'resumed.txt')), { code: 'ENOENT' })
+    await assert.rejects(stat(join(ctx.dir, RESUMED_FILE)), { code: 'ENOENT' })
   } finally {
     ctx.restore()
     await rm(ctx.dir, { recursive: true, force: true })
@@ -589,7 +584,7 @@ test('a run another computer started, which is no saved machine, is not continue
 })
 
 test('a machine that refuses what would change a run, and says why, is answered in its own words; nothing is done here in its place', async () => {
-  const ctx = await projectWithWorktreeAgent({ pid: 0, host: 'server-box' }, { status: 'waiting', hooks: RESUME_HOOK, diary: [{ kind: 'said', text: 'kept in the record' }] })
+  const ctx = await projectWithWorktreeAgent({ pid: 0, host: 'server-box' }, { status: 'waiting', diary: [{ kind: 'said', text: 'kept in the record' }] })
   // A computer that only lets its server watch: it refuses a call that acts, in words for the person.
   const WHY = 'This computer only lets its server watch. Turn on "From anywhere" through this server in its Settings, under Devices.'
   const machine = createServer((req, res) => {
@@ -605,7 +600,7 @@ test('a machine that refuses what would change a run, and says why, is answered 
     assert.deepEqual(await sendMessage(ctx.projectId, 'go on', ctx.agentId), { ok: false, error: WHY })
     assert.deepEqual(await sendOpenPullRequest(ctx.projectId, ctx.agentId), { ok: false, error: WHY })
     assert.deepEqual(await sendStop(ctx.projectId, ctx.agentId), { ok: false, error: WHY })
-    await assert.rejects(stat(join(ctx.dir, 'resumed.txt')), { code: 'ENOENT' })
+    await assert.rejects(stat(join(ctx.dir, RESUMED_FILE)), { code: 'ENOENT' })
     await assert.rejects(stat(ctx.agentInbox), { code: 'ENOENT' })
   } finally {
     ctx.restore()

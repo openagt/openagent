@@ -210,7 +210,7 @@ describe('the page opened from somewhere else than the computer it is on', () =>
     expect((await hoverTooltip(trigger())).textContent).toBe('Run on — 165.245.244.10')
     await openMenu(trigger())
     const items = screen.getAllByRole('menuitem')
-    expect(items[0]!.textContent).toBe('165.245.244.10Runs here, through this project\'s start hook.')
+    expect(items[0]!.textContent).toBe('165.245.244.10Runs here, in this project.')
     fireEvent.click(items[0]!)
     cleanup()
 

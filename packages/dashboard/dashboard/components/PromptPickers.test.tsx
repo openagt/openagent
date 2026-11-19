@@ -76,7 +76,7 @@ beforeEach(async () => {
   machinesRpc.onMachineModels.mockResolvedValue(null)
   machinesRpc.onMachineAgentAccounts.mockResolvedValue(null)
   machinesRpc.onMachineGitHosts.mockResolvedValue(null)
-  onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: true, remote: true, address: 'github.com/acme/shop' })
+  onCommands.mockResolvedValue({ commands: [], gitHost: true, remote: true, address: 'github.com/acme/shop' })
   models.onModels.mockResolvedValue(MODELS)
   accounts.onAgentAccounts.mockImplementation(async (agent: string) => (agent === 'claude' ? CLAUDE : { now: 0, computer: 'mac', accounts: [] }))
   accounts.sendUseAgentAccountFirst.mockResolvedValue({ ok: true })

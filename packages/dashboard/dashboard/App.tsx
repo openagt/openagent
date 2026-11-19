@@ -78,7 +78,7 @@ interface StartedRun {
   tick: number
   /** What the run was asked. */
   intent: string
-  /** The id the project's start hook answered (#761): the URL already points there, and this is
+  /** The id the run's host answered (#761): the URL already points there, and this is
    *  what tells the main pane that a session missing from the list is starting, not gone. */
   id: string | null
   projectId: string | null

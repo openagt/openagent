@@ -1,15 +1,14 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { chmod, mkdtemp, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises'
-import { execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { delimiter, dirname, join } from 'node:path'
-import { PROJECT_HOOKS_FILE, parseProjectHooks, readProjectHooks, runCheckHook, runProjectHooks, runResumeHook, runStartHook, startLineTakesBase, startLineTakesPrBase } from './project-hooks.js'
+import { PROJECT_HOOKS_FILE, parseProjectHooks, readProjectHooks, runProjectHooks } from './project-hooks.js'
 import { OPENAGENT_DIR } from './openagent-dir.js'
-import { initHooks } from '@openagt/agent-runner'
+import { builtInBinDirs } from './built-in.js'
 
-// The hooks file and the runner (#1774), for real: `sh -c` in a throwaway project, the lines
-// leaving traces in files the assertions read back.
+// The hooks file and its open and close lines (#1774), for real: `sh -c` in a throwaway project,
+// the lines leaving traces in files the assertions read back.
 
 async function project(hooks?: string): Promise<string> {
   const cwd = await realpath(await mkdtemp(join(tmpdir(), 'openagent-hooks-')))
@@ -26,15 +25,12 @@ test('the file: open and close lists of shell lines; missing means none; the wro
   })
   assert.deepEqual(parseProjectHooks('open:\n  - echo one\n  - echo two\n'), { open: ['echo one', 'echo two'], close: [] })
   assert.deepEqual(parseProjectHooks('open:\nclose:\n'), { open: [], close: [] })
-  assert.throws(() => parseProjectHooks('- echo hi\n'), /hooks\.yml must be a YAML map; the keys are open, close, start, resume and check$/)
-  assert.throws(() => parseProjectHooks('opne:\n  - echo hi\n'), /unknown key "opne"; the keys are open, close, start, resume and check$/)
+  assert.throws(() => parseProjectHooks('- echo hi\n'), /hooks\.yml must be a YAML map; the keys are open and close$/)
+  assert.throws(() => parseProjectHooks('opne:\n  - echo hi\n'), /unknown key "opne"; the keys are open and close$/)
   assert.throws(() => parseProjectHooks('open: echo hi\n'), /"open" must be a list of shell lines/)
   assert.throws(() => parseProjectHooks('close:\n  - 3\n'), /"close" must be a list of shell lines/)
-  assert.deepEqual(parseProjectHooks('start: npx agent-runner run --detach "$PROMPT"\nresume:\n'), { open: [], close: [], start: 'npx agent-runner run --detach "$PROMPT"' })
-  assert.throws(() => parseProjectHooks('start:\n  - echo hi\n'), /"start" must be one shell line/)
-  assert.throws(() => parseProjectHooks('resume: 3\n'), /"resume" must be one shell line/)
-  // A scheduler setting is no hook of the dashboard's: its line is an unknown key like any other.
-  for (const key of ['offset', 'switch', 'publish']) assert.throws(() => parseProjectHooks(`${key}: echo hi\n`), new RegExp(`unknown key "${key}"`))
+  // A run starts through the host, a scheduler setting is no hook of the dashboard's: each is an unknown key like any other.
+  for (const key of ['start', 'resume', 'check', 'offset', 'switch', 'publish']) assert.throws(() => parseProjectHooks(`${key}: echo hi\n`), new RegExp(`unknown key "${key}"`))
 
   const none = await project()
   const broken = await project('open: [\n')
@@ -101,148 +97,21 @@ test('no file runs nothing and logs nothing; a broken file logs why it was ignor
   }
 })
 
-test('a start line that names the coding agent of its run is taken at its word; a name that is no word is none', async () => {
-  const answering = (answer: string): Promise<string> => project(`start: 'echo ${JSON.stringify(answer).replaceAll("'", "''")}'\n`)
-  const named = await answering('{"id":"run-2","driver":"codex"}')
-  const odd = await answering('{"id":"run-3","driver":7}')
-  const empty = await answering('{"id":"run-4","driver":""}')
+test("a line reaches its tool with nothing installed in the project: a tool of OpenAgent's is the copy the dashboard brings, even beside the project's own, and any other is the project's", async () => {
+  const cwd = await project('open:\n  - command -v scheduler >> hooks.log\n  - command -v their-tool >> hooks.log\n')
   try {
-    assert.deepEqual(await runStartHook(named, { prompt: 'x' }), { ok: true, id: 'run-2', driver: 'codex' })
-    assert.deepEqual(await runStartHook(odd, { prompt: 'x' }), { ok: true, id: 'run-3' })
-    assert.deepEqual(await runStartHook(empty, { prompt: 'x' }), { ok: true, id: 'run-4' })
-  } finally {
-    for (const cwd of [named, odd, empty]) await rm(cwd, { recursive: true, force: true })
-  }
-})
-
-test('naming a run off, the session\'s account at the git host, its agent and its picks of skills reach the run\'s own tool through the environment, with no line of any hooks.yml changed', async () => {
-  // The line below never mentions them: the run's tool is the line's own child and reads them there.
-  const cwd = await project(`start: 'printf "%s %s %s %s %s %s\\n" "\${OPENAGENT_NAME_RUN-unset}" "\${OPENAGENT_GIT_ACCOUNT-unset}" "\${OPENAGENT_AGENT-unset}" "\${OPENAGENT_SKILLS_ON-unset}" "\${OPENAGENT_SKILLS_OFF-unset}" "\${OPENAGENT_PROJECT_SKILLS-unset}" >> named.txt; echo "{\\"ok\\":true,\\"id\\":\\"run-1\\"}"'\n`)
-  try {
-    assert.deepEqual(await runStartHook(cwd, { prompt: 'x' }), { ok: true, id: 'run-1' })
-    assert.deepEqual(await runStartHook(cwd, { prompt: 'x', nameRun: false }), { ok: true, id: 'run-1' })
-    assert.deepEqual(await runStartHook(cwd, { prompt: 'x', nameRun: true, account: 'octo-agent', agent: 'reviewer', skillsOn: ['review', 'ux'], skillsOff: ['github'], projectSkills: 'none' }), { ok: true, id: 'run-1' })
-    assert.deepEqual(await runStartHook(cwd, { prompt: 'x', projectSkills: ['deploy', 'lint'] }), { ok: true, id: 'run-1' })
-    assert.equal(await readFile(join(cwd, 'named.txt'), 'utf8'), 'unset unset unset unset unset unset\n0 unset unset unset unset unset\nunset octo-agent reviewer review,ux github none\nunset unset unset unset unset deploy,lint\n')
-  } finally {
-    await rm(cwd, { recursive: true, force: true })
-  }
-})
-
-test('the start line gets the prompt and the picks in its environment, and the id it answers on stdout comes back', async () => {
-  const cwd = await project(`start: 'printf "%s|%s|%s|%s|%s|%s|%s\\n" "$PROMPT" "$DRIVER" "\${MODEL-unset}" "\${PUBLISH-unset}" "\${BASE-unset}" "\${PR_BASE-unset}" "\${REPOS-unset}" >> started.txt; echo "{\\"ok\\":true,\\"id\\":\\"run-1\\"}"'\n`)
-  try {
-    assert.deepEqual(await runStartHook(cwd, { prompt: '/work-queue "now"', driver: 'codex' }), { ok: true, id: 'run-1' })
-    assert.deepEqual(await runStartHook(cwd, { prompt: 'Fix it', publish: 'merge', base: 'my-branch', prBase: 'login-page' }), { ok: true, id: 'run-1' })
-    assert.deepEqual(await runStartHook(cwd, { prompt: 'Read', repos: ['/a/one', '/b/two'] }), { ok: true, id: 'run-1' })
-    assert.equal(await readFile(join(cwd, 'started.txt'), 'utf8'), '/work-queue "now"|codex|unset|unset|unset|unset|unset\nFix it||unset|merge|my-branch|login-page|unset\nRead||unset|unset|unset|unset|/a/one\n/b/two\n')
-  } finally {
-    await rm(cwd, { recursive: true, force: true })
-  }
-})
-
-test('a start line takes the pull request\'s branch when it mentions PR_BASE, in either spelling; BASE is another thing', () => {
-  assert.equal(startLineTakesPrBase('agent-runner run "$PROMPT" ${PR_BASE:+--pr-base "$PR_BASE"}'), true)
-  assert.equal(startLineTakesPrBase('./start.sh "$PR_BASE"'), true)
-  assert.equal(startLineTakesPrBase('agent-runner run "$PROMPT" ${BASE:+--base "$BASE"}'), false)
-  assert.equal(startLineTakesBase('./start.sh "$PR_BASE"'), false)
-})
-
-test('a start line takes the branch to start from when it mentions BASE, in either spelling, and no other variable counts', () => {
-  assert.equal(startLineTakesBase('agent-runner run --detach "$PROMPT" ${BASE:+--base "$BASE"}'), true)
-  assert.equal(startLineTakesBase('./start.sh "$PROMPT" "$BASE"'), true)
-  assert.equal(startLineTakesBase('./start.sh "$PROMPT" "${BASE}"'), true)
-  assert.equal(startLineTakesBase('agent-runner run --detach "$PROMPT" ${PUBLISH:+--publish "$PUBLISH"}'), false)
-  assert.equal(startLineTakesBase('./start.sh "$BASELINE" "${BASE_DIR}" --base main'), false)
-})
-
-test('the resume line gets the run and the text or the answer, and a new level with the text when there is one', async () => {
-  const cwd = await project(`resume: 'printf "%s|%s|%s|%s" "$RUN_ID" "\${TEXT-unset}" "\${ANSWER-unset}" "\${PUBLISH-unset}" >> resumed.txt; echo "{\\"id\\":\\"$RUN_ID\\"}"'\n`)
-  try {
-    assert.deepEqual(await runResumeHook(cwd, { runId: 'run-1', text: 'go on' }), { ok: true, id: 'run-1' })
-    assert.deepEqual(await runResumeHook(cwd, { runId: 'run-2', answer: 'Yes' }), { ok: true, id: 'run-2' })
-    assert.deepEqual(await runResumeHook(cwd, { runId: 'run-3', text: 'ship it', publish: 'pr' }), { ok: true, id: 'run-3' })
-    assert.equal(await readFile(join(cwd, 'resumed.txt'), 'utf8'), 'run-1|go on|unset|unsetrun-2|unset|Yes|unsetrun-3|ship it|unset|pr')
-  } finally {
-    await rm(cwd, { recursive: true, force: true })
-  }
-})
-
-test('no start line, a broken file, a failing line, a line that answers no id, a line that hangs: each is an error in words', async () => {
-  const none = await project('open:\n  - echo hi\n')
-  const broken = await project('start: [\n')
-  const failing = await project('start: echo "the project has no such command" >&2; exit 1\n')
-  const mute = await project('start: echo done\n')
-  const hanging = await project('start: sleep 30\n')
-  try {
-    assert.deepEqual(await runStartHook(none, { prompt: 'x' }), { ok: false, error: 'this project has no start hook' })
-    assert.deepEqual(await runResumeHook(none, { runId: 'r', text: 'x' }), { ok: false, error: 'this project has no resume hook' })
-    const said = await runStartHook(broken, { prompt: 'x' })
-    assert.ok(!said.ok && /^ignoring .*hooks\.yml/.test(said.error), JSON.stringify(said))
-    assert.deepEqual(await runStartHook(failing, { prompt: 'x' }), { ok: false, error: "This project's start line, in .openagent/hooks.yml, failed. It said: “the project has no such command”" })
-    assert.deepEqual(await runStartHook(mute, { prompt: 'x' }), { ok: false, error: "This project's start line, in .openagent/hooks.yml, failed. It answered no run id." })
-    assert.deepEqual(await runStartHook(hanging, { prompt: 'x' }, { timeoutMs: 300 }), { ok: false, error: "This project's start line, in .openagent/hooks.yml, failed. It ended: timed out after 0s." })
-  } finally {
-    for (const dir of [none, broken, failing, mute, hanging]) await rm(dir, { recursive: true, force: true })
-  }
-})
-
-test('the check line gets the picked agent and answers its problems and warnings; no line, a failing line and a wrong answer are each an answer in words', async () => {
-  const cwd = await project(`check: 'printf "{\\"problems\\":[\\"%s is missing\\"],\\"warnings\\":[]}" "\${DRIVER:-default}"'\n`)
-  const none = await project('start: echo hi\n')
-  const failing = await project('check: echo "not inside a git repository" >&2; exit 1\n')
-  const mute = await project('check: echo "{}"\n')
-  try {
-    assert.deepEqual(await runCheckHook(cwd, { driver: 'codex' }), { ok: true, problems: ['codex is missing'], warnings: [] })
-    assert.deepEqual(await runCheckHook(cwd, {}), { ok: true, problems: ['default is missing'], warnings: [] })
-    assert.deepEqual(await runCheckHook(none, {}), { ok: false, error: 'this project has no check hook', noHook: true })
-    assert.deepEqual(await runCheckHook(failing, {}), { ok: false, error: "This project's check line, in .openagent/hooks.yml, failed. It said: “not inside a git repository”" })
-    assert.deepEqual(await runCheckHook(mute, {}), { ok: false, error: "This project's check line, in .openagent/hooks.yml, failed. It answered no problems and warnings." })
-  } finally {
-    for (const dir of [cwd, none, failing, mute]) await rm(dir, { recursive: true, force: true })
-  }
-})
-
-test('a check answers the press that fixes one of its problems, naming that line; a fix that names no problem said is none', async () => {
-  const cwd = await project('check: cat answer.json\n')
-  const answer = (fix: Record<string, unknown>) => writeFile(join(cwd, 'answer.json'), JSON.stringify({ problems: ['`claude` is not logged in.', 'another'], warnings: [], fix }))
-  try {
-    await answer({ kind: 'log-in', command: 'claude auth login', problem: '`claude` is not logged in.' })
-    assert.deepEqual(await runCheckHook(cwd, {}), { ok: true, problems: ['`claude` is not logged in.', 'another'], warnings: [], fix: { kind: 'log-in', command: 'claude auth login', problem: '`claude` is not logged in.' } })
-    for (const fix of [{ kind: 'log-in', command: 'claude auth login' }, { kind: 'log-in', command: 'claude auth login', problem: 'not said' }, { kind: 'reboot', command: 'x', problem: 'another' }]) {
-      await answer(fix)
-      assert.deepEqual(await runCheckHook(cwd, {}), { ok: true, problems: ['`claude` is not logged in.', 'another'], warnings: [] }, JSON.stringify(fix))
-    }
-  } finally {
-    await rm(cwd, { recursive: true, force: true })
-  }
-})
-
-test('a line reaches its tool with nothing installed in the project: the dashboard brings the runner, and the project\'s own copy goes first', async () => {
-  // An empty folder with the runner's own lines, as adding a project writes them: no package.json, no node_modules.
-  const cwd = await project()
-  try {
-    execFileSync('git', ['init', '-q'], { cwd })
-    const written = await initHooks(cwd)
-    assert.ok(written.ok && written.added.includes('start') && written.added.includes('check'), JSON.stringify(written))
-    assert.ok(!(await readFile(join(cwd, PROJECT_HOOKS_FILE), 'utf8')).includes('npx'), 'no line asks npx for a package by name')
-    // A PATH with node and the shell's tools and no runner on it: the line still finds the dashboard's copy.
-    const bare = ['/usr/bin', '/bin', dirname(process.execPath)].join(delimiter)
-    const checked = await runCheckHook(cwd, {}, { env: { ...process.env, PATH: bare } })
-    assert.ok(checked.ok, JSON.stringify(checked))
-
-    // The project installed a copy of its own: the dashboard's still answers, the one its pages go through too.
+    // The project installed a copy of the scheduler and a tool of its own: no package.json, nothing else.
     await mkdir(join(cwd, 'node_modules', '.bin'), { recursive: true })
-    const own = join(cwd, 'node_modules', '.bin', 'agent-runner')
-    await writeFile(own, '#!/bin/sh\necho \'{"problems":["the project\'"\'"\'s own copy answered"],"warnings":[]}\'\n')
-    await chmod(own, 0o755)
-    assert.deepEqual(await runCheckHook(cwd, {}, { env: { ...process.env, PATH: bare } }), checked)
-    // A tool that is not OpenAgent's is the project's installed one.
-    const other = join(cwd, 'node_modules', '.bin', 'their-tool')
-    await writeFile(other, '#!/bin/sh\necho \'{"problems":["their tool answered"],"warnings":[]}\'\n')
-    await chmod(other, 0o755)
-    await writeFile(join(cwd, PROJECT_HOOKS_FILE), 'check: their-tool\n')
-    assert.deepEqual(await runCheckHook(cwd, {}, { env: { ...process.env, PATH: bare } }), { ok: true, problems: ['their tool answered'], warnings: [] })
+    for (const tool of ['scheduler', 'their-tool']) {
+      await writeFile(join(cwd, 'node_modules', '.bin', tool), '#!/bin/sh\n')
+      await chmod(join(cwd, 'node_modules', '.bin', tool), 0o755)
+    }
+    // A PATH with node and the shell's tools and no tool of OpenAgent's on it.
+    const bare = ['/usr/bin', '/bin', dirname(process.execPath)].join(delimiter)
+    await runProjectHooks(cwd, 'open', { env: { ...process.env, PATH: bare } })
+    const [scheduler, theirs] = (await readFile(join(cwd, 'hooks.log'), 'utf8')).trim().split('\n')
+    assert.ok((await builtInBinDirs()).includes(dirname(scheduler!)), `${scheduler} is the dashboard's copy`)
+    assert.equal(theirs, join(cwd, 'node_modules', '.bin', 'their-tool'))
   } finally {
     await rm(cwd, { recursive: true, force: true })
   }

@@ -3,20 +3,23 @@ import { join } from 'node:path'
 import { logDiaryFile, takeInbox } from '@openagt/agent-driver'
 import { findRun, type AnyDiaryLine, type RunCard } from '@openagt/skill-logs'
 import { defineModule, RunOrder, type RunContext, type RunOutcome } from '@openagt/hooks'
+import { localHost } from './host.js'
 import { legOf, type EarlierLeg, type Leg } from './leg.js'
 import { hideLiveDir, inboxPath, liveDir, readLiveCard, readLiveDiary } from './live-card.js'
 import { forReaders, recordBranchGone, recordRun } from './records.js'
 import { detailOf, effortOf, modelOf, sessionTurns } from './session.js'
 
 /**
- * agent-driver, the module (#2394), as far as the run engine of this package is it: the agent's
- * turns, opening the run's live record first; the record saved from what the session kept, with
- * where the work ended up, as the run's facts say; and the record said again without the branch
- * the reclaim deleted. Its steps work on the leg of the run this process runs (`leg.ts`).
+ * agent-driver, the module (#2394), as far as the run engine of this package is it: this computer
+ * as the host runs are started on (`host.ts`); and a run's steps, which work on the leg of the run
+ * this process runs (`leg.ts`): the agent's turns, opening the run's live record first; the record
+ * saved from what the session kept, with where the work ended up, as the run's facts say; and the
+ * record said again without the branch the reclaim deleted.
  */
 const agentDriver = defineModule({
   name: 'agent-driver',
   hooks: {
+    'run.host': [localHost()],
     'run.step': [
       { order: RunOrder.RUN, name: 'run the agent', run: runAgent },
       { order: RunOrder.RECORD, name: 'save the record', run: saveRecord },

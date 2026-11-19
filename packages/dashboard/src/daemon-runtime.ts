@@ -1,8 +1,9 @@
 import { isAbsolute, join, resolve, sep } from 'node:path'
-import { hostname, tmpdir } from 'node:os'
-import { randomUUID } from 'node:crypto'
-import { rename, rm, stat, writeFile } from 'node:fs/promises'
+import { hostname } from 'node:os'
+import { stat } from 'node:fs/promises'
 import { isDriverName, type ReadyNaming } from '@openagt/agent-runner'
+import type { RunHost, RunOptions, RunRequest } from '@openagt/hooks'
+import { sessionRepos } from '@openagt/skill-branches'
 import { nameStarted } from './started-names.js'
 import { findCheckout, fromDiaryLine, isPidAlive, isRunId, projectBranches, readLiveMetas, resolveAgentDiary, type AgentMeta, type AnyDiaryLine } from './store/index.js'
 import { OPENAGENT_DIR } from './openagent-dir.js'
@@ -19,12 +20,12 @@ import { screenInDiary } from './dashboard/screen.js'
 import { gitUserOf, onMachine } from './dashboard/run-rows.js'
 import { tailAgentEvents } from './dashboard-rpc/events-tail.js'
 import { addProject, listMachines, listProjects, readPreferences, removeProject, type MachineRecord } from './registry.js'
-import { writeHookLines } from './built-in.js'
-import { fileBranchRepo, installProject, isAgentId, projectKey, projectNameOf, repositoryAddress, sessionsHome, writeSharing, isSkillName, projectId } from '@openagt/agent-data'
+import { errorMessage, fileBranchRepo, installProject, isAgentId, projectKey, projectNameOf, repositoryAddress, sessionsHome, writeSharing, isSkillName, projectId } from '@openagt/agent-data'
 import { publishedBranch } from '@openagt/agent-data/names'
 import { branchesOnOrigin } from './dashboard/start-branch.js'
 import { removeProjectFiles } from './remove-files.js'
-import { runProjectHooks, runStartHook, type StartHookInput } from './project-hooks.js'
+import { runProjectHooks } from './project-hooks.js'
+import { projectRefAt } from './distribution-hooks.js'
 import { publishLevelOf, publishPickIn } from './publish-levels.js'
 import { isBranchName } from './branch-name.js'
 import { hasRemote } from './has-remote.js'
@@ -38,8 +39,8 @@ import { readySessionsHome } from './sessions-home.js'
  * and remove a project, and stream a run here back to the machine that sent it. What this
  * computer knows of the runs on the person's other computers is remote-agents.ts's. Split from
  * daemon.ts so that file reads as the daemon's lifecycle (ports, boot, shutdown). The daemon runs
- * no agent itself (#1774): a Start is the project's own `start` hook line, and the run it begins
- * belongs to whatever tool that line names.
+ * no agent itself: a Start here goes to this computer's host (`run.host`, #2394), the module of
+ * the distribution that gives it, and the run belongs to that module.
  */
 
 /** How long a project folder's repository address is trusted before git is asked again. */
@@ -55,37 +56,23 @@ const MAX_KEPT = 32
 /** How much of a failed clone's reason is kept and told: git passes on what the other side said. */
 const MAX_REASON = 600
 
-/** The coding agent a Start goes to when none was picked: the start hook's own default (agent-runner's). */
+/** The coding agent a Start goes to when none was picked: this computer's host's own default (agent-runner's). */
 const DEFAULT_DRIVER = 'claude-code'
 
-/** How long a name handed to a run waits for it: a start line of another tool never takes it. */
-const HANDED_NAME_KEPT_MS = 2 * 60_000
-
-/** A run's name as it is asked while the run starts: what the start line is given of it, and what follows once the line answered. */
+/** A run's name as it is asked while the run starts: what the host is given of it, and what follows once it answered. */
 interface StartName {
-  /** Whether the run is named at all, and the file it finds the name asked here in. */
-  input: Pick<StartHookInput, 'nameRun' | 'nameFile'>
-  /** The line started the run: the name, once in, is handed to it and shown for it. */
+  /** The name being asked, or `false` when runs are not named: the person's setting. */
+  title: Pick<RunRequest, 'title'>
+  /** The host started the run: the name, once in, is shown for it. */
   started: (agentId: string) => void
-  /** The line started nothing: the name is not asked for any more. */
+  /** The host started nothing: the name is not asked for any more. */
   failed: () => void
 }
 
 /**
- * Hand the run the name asked for it: written whole, then renamed into place, so the run never
- * reads half of one. `{}` when none came: the run asks on its own then.
- */
-async function handName(file: string, title: string | undefined): Promise<void> {
-  await writeFile(`${file}.part`, JSON.stringify(title !== undefined ? { title } : {}))
-    .then(() => rename(`${file}.part`, file))
-    .catch(() => {})
-  setTimeout(() => void rm(file, { force: true }).catch(() => {}), HANDED_NAME_KEPT_MS).unref()
-}
-
-/**
- * Why a Start's picks are refused before anything is asked of the project, or nothing: a pick
- * reaches the start line's environment, so only what reads as the thing it names goes there. The
- * branches are checked once the run is known to start here: a machine picked to run on is sent none.
+ * Why a Start's picks are refused before anything is asked of the project, or nothing: only what
+ * reads as the thing it names goes on to the host. The branches are checked once the run is known
+ * to start here: a machine picked to run on is sent none.
  */
 function refusedPicks(options: StartAgentOptions, noProject: boolean): string | undefined {
   // A session with no project: with no branch, and nothing committed or published; the repos it
@@ -95,15 +82,15 @@ function refusedPicks(options: StartAgentOptions, noProject: boolean): string | 
   }
   // Its repos are folders on this computer, copied into its folder here: on a machine there is nothing to copy.
   if (noProject && options.machine !== undefined && options.repos !== undefined) return 'The repos are folders on this computer: a session with them runs here. Pick this computer, or start without them.'
-  // The login reaches the run's environment: one word, as a login is.
+  // A login is one word.
   if (options.account !== undefined && !(typeof options.account === 'string' && /^\S+$/.test(options.account))) return 'An account is named by its login.'
   if (options.agent !== undefined && !isAgentId(options.agent)) return 'An agent is named by its id.'
-  // The picks of skills reach the environment as lists of names: only names go there.
+  // The picks of skills are lists of names.
   const skillList = (value: unknown): value is string[] => Array.isArray(value) && value.length > 0 && value.every(isSkillName)
   if ((options.skillsOn !== undefined && !skillList(options.skillsOn)) || (options.skillsOff !== undefined && !skillList(options.skillsOff))) return 'Skills are named by their names.'
   if (options.projectSkills !== undefined && options.projectSkills !== 'none' && !skillList(options.projectSkills)) return 'Project skills are none, or named by their names.'
   if (!noProject && options.repos !== undefined) return 'Repos are added to a session with no project: a project works in its own checkout.'
-  // The folders reach the line one per line: only whole paths go there.
+  // A repo is a whole path, and the run's process is handed them one per line.
   if (options.repos !== undefined && !(Array.isArray(options.repos) && options.repos.every(folder => typeof folder === 'string' && isAbsolute(folder) && !folder.includes('\n')))) {
     return 'A repo is named by the path of its folder on this computer.'
   }
@@ -122,6 +109,8 @@ export interface ProjectRuntimeOptions {
   logins?: (env: NodeJS.ProcessEnv) => Promise<OwnLogins>
   /** The naming sessions kept waiting for runs started here; without, each run asks for its own name. */
   naming?: ReadyNaming
+  /** This computer's host, the distribution's (`distribution-hooks.ts`): where a run started here runs. */
+  host: RunHost
 }
 
 /** The per-project surface the dashboard drives, plus its teardown. */
@@ -167,7 +156,7 @@ export interface ProjectRuntime {
  * The daemon's per-project runtime (#393). The home `cwd` is the default target: a request with
  * no project id (or the home id) resolves to it without a registry lookup.
  */
-export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = ownLogins, naming }: ProjectRuntimeOptions): ProjectRuntime {
+export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = ownLogins, naming, host }: ProjectRuntimeOptions): ProjectRuntime {
   const homeId = projectId(resolve(cwd))
 
   // A project id resolves to its repo path via the registry; the home id (or none)
@@ -210,9 +199,8 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
   // runs it follows there (remote-agents.ts): the lookup the dashboard's RPCs consult.
   const remote = createRemoteAgents({ env, resolveProject, addressOf, bringHere: (address, bring) => bringProject(address, bring) })
 
-  // Start (#1774): the project's own `start` hook line, which answers the id of the run it began.
-  // The daemon names no tool and holds nothing about the run: no slot, no cap (a person's click is
-  // the brake), no process to stop at shutdown. A project without the line cannot start a run here.
+  // Start: this computer's host, which answers the id of the run it began. The daemon holds nothing
+  // about the run: no slot, no cap (a person's click is the brake), no process to stop at shutdown.
   const onStart = async (prompt: string, options: StartAgentOptions = {}, targetProjectId?: string): Promise<StartAgentResult> => {
     if (isElsewhereId(targetProjectId)) return startElsewhere(prompt, options, targetProjectId)
     // A session with no project runs in a folder of its own in the sessions home, on this computer.
@@ -221,8 +209,8 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
     if (refused !== undefined) return { ok: false, error: refused }
     const projectCwd = noProject ? await readySessionsHome(sessionsHome(env)) : await resolveProject(targetProjectId)
     if (!projectCwd) return { ok: false, error: `unknown project: ${targetProjectId}` }
-    // Run on a saved machine (#1067): forward the start to its daemon, which runs the hook of its
-    // own copy of this project, and relay the run's events back. The project is named by its
+    // Run on a saved machine (#1067): forward the start to its daemon, which starts it in its own
+    // copy of this project, and relay the run's events back. The project is named by its
     // repository's address, the one name both machines have for it.
     if (options.machine !== undefined) {
       // A session with no project is named by the sessions' own id: the machine works in its own sessions home.
@@ -231,7 +219,7 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
       if (!project) return { ok: false, error: 'This project has no repository address, so it cannot be sent to another machine.' }
       return sendToMachine(prompt, options, options.machine, { id: targetProjectId ?? homeId, name: await projectNameOf(projectCwd), address: project, cwd: projectCwd })
     }
-    // The branch to start from ends up on the line's command line: only a branch name goes there.
+    // The branch to start from ends up on the run's command line: only a branch name goes there.
     // Refused, not dropped: a run started from the main branch instead would be a silent swap.
     if (options.base !== undefined && !isBranchName(options.base)) return { ok: false, error: `not a branch name: ${String(options.base)}` }
     if (options.prBase !== undefined && !isBranchName(options.prBase)) return { ok: false, error: `not a branch name: ${String(options.prBase)}` }
@@ -248,31 +236,27 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
     // it goes as far as the project does with no pull request: its branch pushed, or its work
     // committed where there is no remote.
     const publish = noProject ? undefined : publishLevelOf(publishPickIn(options.publish, (await projectGitHost(projectCwd).catch(() => undefined)) !== undefined, await hasRemote(projectCwd)))
-    const name = await nameAsStarted(projectCwd, prompt, options.driver ?? DEFAULT_DRIVER)
-    const started = await runStartHook(projectCwd, {
-      prompt,
-      ...name.input,
-      ...(options.driver !== undefined ? { driver: options.driver } : {}),
-      ...(options.model !== undefined ? { model: options.model } : {}),
-      ...(options.effort !== undefined ? { effort: options.effort } : {}),
-      ...(publish !== undefined ? { publish } : {}),
-      ...(options.base !== undefined ? { base: options.base } : {}),
-      ...(options.prBase !== undefined ? { prBase: options.prBase } : {}),
-      ...(options.repos !== undefined ? { repos: options.repos } : {}),
-      ...(options.account !== undefined ? { account: options.account } : {}),
-      ...(options.agent !== undefined ? { agent: options.agent } : {}),
-      ...(options.skillsOn !== undefined ? { skillsOn: options.skillsOn } : {}),
-      ...(options.skillsOff !== undefined ? { skillsOff: options.skillsOff } : {}),
-      ...(options.projectSkills !== undefined ? { projectSkills: options.projectSkills } : {}),
-    })
-    // The line made a checkout (or is about to): the project's checkouts are read again on the
+    // A session's repos, each under the name it has in the session's folder: one that is no repository refuses the Start.
+    const repos = options.repos !== undefined ? await sessionRepos(options.repos).then(given => ({ given }), (err: unknown) => ({ error: errorMessage(err) })) : undefined
+    if (repos && 'error' in repos) return { ok: false, error: repos.error }
+    const driver = options.driver ?? DEFAULT_DRIVER
+    const name = await nameAsStarted(projectCwd, prompt, driver)
+    const started = await host
+      .start({
+        ...(noProject ? {} : { project: await projectRefAt(targetProjectId ?? homeId, projectCwd) }),
+        prompt,
+        options: runOptionsOf(options, publish, repos?.given),
+        ...name.title,
+      })
+      .then(({ id }) => ({ ok: true as const, id }), (err: unknown) => ({ ok: false as const, error: errorMessage(err) }))
+    // The host made a checkout (or is about to): the project's checkouts are read again on the
     // next look rather than a few seconds from now, so the new run's page finds its own.
     if (started.ok) {
       projectBranches.changed(projectCwd)
       ownRunsWatch.poke(projectCwd)
       name.started(started.id)
     } else name.failed()
-    return started.ok ? { ok: true, agentId: started.id, ...(started.driver !== undefined ? { driver: started.driver } : {}) } : { ok: false, error: started.error }
+    return started.ok ? { ok: true, agentId: started.id, driver } : { ok: false, error: started.error }
   }
 
   // The run's name, asked as the run is started rather than once its process is up: of a naming
@@ -282,21 +266,20 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
   // starts is named exactly as one a person starts is.
   const nameAsStarted = async (projectCwd: string, prompt: string, driver: string): Promise<StartName> => {
     const nameRun = (await readPreferences(env)).nameRuns !== false
-    if (naming === undefined || !nameRun || !isDriverName(driver) || !naming.names(prompt, driver)) return { input: nameRun ? {} : { nameRun: false }, started: () => {}, failed: () => {} }
-    const nameFile = join(tmpdir(), `openagent-name-${randomUUID()}.json`)
+    if (naming === undefined || !nameRun || !isDriverName(driver) || !naming.names(prompt, driver)) return { title: nameRun ? {} : { title: false }, started: () => {}, failed: () => {} }
     const stop = new AbortController()
     const name = naming.name(projectCwd, prompt, driver, stop.signal)
     return {
-      input: { nameFile },
+      title: { title: name },
       started: id => {
         nameStarted(id, name)
-        void name.then(title => handName(nameFile, title)).then(() => ownRunsWatch.poke(projectCwd))
+        void name.then(() => ownRunsWatch.poke(projectCwd))
       },
       failed: () => stop.abort(),
     }
   }
 
-  // Send a start to a saved machine, which runs the hook of its own copy of the project and is
+  // Send a start to a saved machine, which starts the run in its own copy of the project and is
   // followed from here. `machine` is stripped so the other side does not relay onward, and `base`
   // because a branch of this machine names nothing there (it drops both too).
   const sendToMachine = async (prompt: string, options: StartAgentOptions, id: string, project: { id: string; name: string; address: string; cwd?: string }): Promise<StartAgentResult> => {
@@ -404,10 +387,6 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
       const written = await writeSharing(abs, shared).then(() => undefined, (err: unknown) => (err instanceof Error ? err.message : String(err)))
       if (written !== undefined) return { ok: false, error: written }
     }
-    // Each package that writes hook lines writes its own (the built-in runner's start, resume and
-    // check among them), so the new project starts an agent with nothing typed by hand. A writer
-    // keeps every line already there, so adding a project again only fills what is missing.
-    for (const failed of await writeHookLines(abs)) console.log(`[openagent] hook lines (${abs}): ${failed}`)
     await addProject(abs, new Date().toISOString(), env).catch(() => {})
     // The project's open hooks (#1774): a project added while the daemon runs is a project the
     // boot never saw, so its open lines run now, the way they would have at boot.
@@ -549,4 +528,28 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
   }
 
   return { onStart, onAddProject, onStartedIn, onRemoveProject, onPrepareStart, remoteEventsSource: remote.events, projectAt, bringProject, tailRelayEvents, remoteAgents: remote.agents, screenOf, dispose }
+}
+
+/** A Start's picks as the run's options: one slice per module that acts on them (#2394). */
+function runOptionsOf(options: StartAgentOptions, publish: RunOptions['publish'], repos: { name: string; from: string }[] | undefined): RunOptions {
+  const agentDriver = {
+    ...(options.driver !== undefined ? { driver: options.driver } : {}),
+    ...(options.model !== undefined ? { model: options.model } : {}),
+    ...(options.effort !== undefined ? { effort: options.effort } : {}),
+    ...(options.agent !== undefined ? { agent: options.agent } : {}),
+  }
+  const branches = { ...(options.base !== undefined ? { base: options.base } : {}), ...(repos !== undefined && repos.length > 0 ? { repos } : {}) }
+  const github = { ...(options.prBase !== undefined ? { prBase: options.prBase } : {}), ...(options.account !== undefined ? { account: options.account } : {}) }
+  const skills = {
+    ...(options.skillsOn !== undefined ? { on: options.skillsOn } : {}),
+    ...(options.skillsOff !== undefined ? { off: options.skillsOff } : {}),
+    ...(options.projectSkills !== undefined ? { project: options.projectSkills } : {}),
+  }
+  return {
+    ...(Object.keys(agentDriver).length > 0 ? { 'agent-driver': agentDriver } : {}),
+    ...(publish !== undefined ? { publish } : {}),
+    ...(Object.keys(branches).length > 0 ? { 'git-branches': branches } : {}),
+    ...(Object.keys(github).length > 0 ? { github } : {}),
+    ...(Object.keys(skills).length > 0 ? { skills } : {}),
+  }
 }

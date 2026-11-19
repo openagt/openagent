@@ -19,7 +19,7 @@ test('the pick in force: Commit until one is saved; a pull request pick is Publi
   assert.equal(publishPickIn('nothing', false), 'nothing')
 })
 
-test('Off hands the start hook no level; every other pick is its own level', () => {
+test('Off hands the run no level; every other pick is its own level', () => {
   assert.equal(publishLevelOf('nothing'), undefined)
   assert.equal(publishLevelOf('commit'), 'commit')
   assert.equal(publishLevelOf('branch'), 'branch')

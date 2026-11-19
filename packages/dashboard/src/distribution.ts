@@ -1,8 +1,8 @@
 import type { DistributionPackage } from '@openagt/hooks'
 
 /**
- * The modules a run goes through, as OpenAgent's runs load them (#2394): the dashboard hands this
- * file down to every process it starts (`cli/distribution.ts`), a run's own among them, which
+ * The modules OpenAgent runs (#2394): the dashboard loads them (`distribution-hooks.ts`), and hands
+ * this file down to every process it starts (`cli/distribution.ts`), a run's own among them, which
  * loads each package's `./module` from here. Until the dashboard is the distribution itself, with
  * every module listed, it lists the modules of the run pipeline that have a package.
  */
@@ -11,7 +11,7 @@ const DISTRIBUTION: readonly DistributionPackage[] = [
   { package: '@openagt/skill-branches' },
   // github: the run's pull request read back.
   { package: '@openagt/skill-github' },
-  // agent-driver: the agent's turns and the run's record.
+  // agent-driver: this computer's host, the agent's turns and the run's record.
   { package: '@openagt/agent-runner' },
 ]
 

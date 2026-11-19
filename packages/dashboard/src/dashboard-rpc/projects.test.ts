@@ -5,8 +5,8 @@ import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { addProject, listProjects } from '../registry.js'
-import { PROJECT_HOOKS_FILE } from '../project-hooks.js'
-import { OPENAGENT_DIR } from '../openagent-dir.js'
+import type { RunHost } from '@openagt/hooks'
+import { fakeHost } from '@openagt/hooks/testing'
 import { projectErrorStore } from '../project-errors.js'
 import { provideTestContext } from './test-context.js'
 import { onCloneCheck, onCommands, onOwnProjects, onProjects, onStartBranches, onStartCheck, sendAddProject, sendRemoveProject, sendShareRecords } from './projects.js'
@@ -99,8 +99,6 @@ test('a command is waiting for the branch the launcher\'s pick starts agents fro
   try {
     provideTestContext()
     const id = (await listProjects())[0]!.id
-    await mkdir(join(dir, OPENAGENT_DIR), { recursive: true })
-    await writeFile(join(dir, PROJECT_HOOKS_FILE), 'start: agent-runner run --detach "$PROMPT" ${BASE:+--base "$BASE"}\n')
     git(origin, 'init', '-q', '--bare', '-b', 'main')
     git(dir, 'init', '-q', '-b', 'main')
     git(dir, 'commit', '-q', '--allow-empty', '-m', 'first')
@@ -129,10 +127,6 @@ test('a command is waiting for the branch the launcher\'s pick starts agents fro
     assert.deepEqual(await waits({ kind: 'local' }), { 'on-feature': 'mine', 'on-mine': undefined, uncommitted: 'mine' })
     assert.deepEqual(await waits({ kind: 'published', branch: 'feature-x' }), { 'on-feature': undefined, 'on-mine': 'feature-x', uncommitted: 'feature-x' })
     assert.deepEqual(await waits({ kind: 'published', branch: '--upload-pack=x' }), { 'on-feature': 'main', 'on-mine': 'main', uncommitted: 'main' }, 'a word that is no branch name is no pick')
-
-    // A pick the start line would not obey says nothing about where agents start.
-    await writeFile(join(dir, PROJECT_HOOKS_FILE), 'start: agent-runner run --detach "$PROMPT"\n')
-    assert.deepEqual(await waits({ kind: 'local' }), { 'on-feature': 'main', 'on-mine': 'main', uncommitted: 'main' })
   } finally {
     await restore()
     await rm(origin, { recursive: true, force: true })
@@ -140,21 +134,17 @@ test('a command is waiting for the branch the launcher\'s pick starts agents fro
 })
 
 // The launcher's branch menu is offered only where the pick would be obeyed: a real
-// repository, its start line and its branches changed one step at a time.
-test('onCommands names the two branches an agent can start from only when the start line passes BASE on, the repository has a remote and the folder is on a branch', async () => {
+// repository, its branches changed one step at a time.
+test('onCommands names the two branches an agent can start from only when the repository has a remote and the folder is on a branch', async () => {
   const { dir, restore } = await registered()
   const git = (...args: string[]): string => execFileSync('git', args, { cwd: dir, encoding: 'utf8', env: { ...process.env, GIT_AUTHOR_NAME: 'T', GIT_AUTHOR_EMAIL: 't@example.com', GIT_COMMITTER_NAME: 'T', GIT_COMMITTER_EMAIL: 't@example.com' } })
-  const hooks = (line: string) => writeFile(join(dir, PROJECT_HOOKS_FILE), `start: ${line}\n`)
-  const TAKES = `agent-runner run --detach "$PROMPT" \${BASE:+--base "$BASE"}`
   try {
     provideTestContext()
     const id = (await listProjects())[0]!.id
     const startFrom = async () => (await onCommands(id))?.startFrom
-    await mkdir(join(dir, OPENAGENT_DIR), { recursive: true })
     git('init', '-q', '-b', 'main')
     git('commit', '-q', '--allow-empty', '-m', 'first')
     git('checkout', '-q', '-b', 'my/work')
-    await hooks(TAKES)
     assert.equal(await startFrom(), undefined, 'no remote: one place to start from, nothing to pick')
     assert.equal((await onCommands(id))?.address, undefined, 'no remote: no name another machine knows the project by')
 
@@ -165,25 +155,11 @@ test('onCommands names the two branches an agent can start from only when the st
     git('checkout', '-q', 'main')
     assert.deepEqual(await startFrom(), { main: 'main', local: 'main' }, 'on the default branch itself: the local one may hold commits that are not pushed')
 
-    await hooks('agent-runner run --detach "$PROMPT" ${PUBLISH:+--publish "$PUBLISH"}')
-    assert.equal(await startFrom(), undefined, 'a line that does not pass BASE on: a pick would do nothing')
-    await hooks('./start.sh "$PROMPT" "$BASE"')
-    assert.deepEqual(await startFrom(), { main: 'main', local: 'main' }, 'a person\'s own line that names $BASE takes the pick')
-    await hooks('./start.sh "$PROMPT" "$BASELINE"')
-    assert.equal(await startFrom(), undefined, 'another variable whose name begins the same is not BASE')
-
-    await hooks('./start.sh "$PROMPT" "$BASE"')
-    assert.equal((await onCommands(id))?.prBase, false, 'a line that does not pass it on is offered no target')
-    await hooks('./start.sh "$PROMPT" "$BASE" "$PR_BASE"')
-    assert.equal((await onCommands(id))?.prBase, true)
-
-    await hooks(TAKES)
     git('checkout', '-q', '--detach')
     assert.equal(await startFrom(), undefined, 'the folder is on no branch')
 
-    await rm(join(dir, PROJECT_HOOKS_FILE))
     git('checkout', '-q', 'main')
-    assert.deepEqual(await onCommands(id), { commands: [], startHook: false, gitHost: false, remote: true, prBase: false, address: 'example.com/x' })
+    assert.deepEqual(await onCommands(id), { commands: [], gitHost: false, remote: true, address: 'example.com/x', startFrom: { main: 'main', local: 'main' } })
     assert.equal(await onCommands('no-such-project'), null)
   } finally {
     await restore()
@@ -303,20 +279,30 @@ test("this computer's projects, as another computer of the person's asks for the
   }
 })
 
-test('the launcher\'s check is a Start drawing near: the run\'s naming session is started for its project and agent', async () => {
+test("the launcher's check is this computer's host's, for the agent picked, and a Start drawing near: the run's naming session is started for its project and agent", async () => {
   const { dir, restore } = await registered()
   try {
     const near: [string, string | undefined][] = []
-    provideTestContext({ prepareStart: (projectId, driver) => void near.push([projectId, driver]) })
+    const asked: unknown[] = []
+    const host: RunHost = {
+      ...fakeHost(),
+      check: async request => {
+        asked.push([request.project?.dir, request.options])
+        if (request.options['agent-driver']?.driver === 'codex') throw new Error('the check broke')
+        return { problems: ['Claude Code is not logged in.'], warnings: [], fix: { kind: 'log-in', command: 'claude login', problem: 'Claude Code is not logged in.' }, ownLoggedOut: true }
+      },
+    }
+    provideTestContext({ prepareStart: (projectId, driver) => void near.push([projectId, driver]), host })
     const id = (await listProjects())[0]!.id
-    await mkdir(join(dir, OPENAGENT_DIR), { recursive: true })
-    await writeFile(join(dir, PROJECT_HOOKS_FILE), `check: 'echo "{\\"problems\\":[],\\"warnings\\":[]}"'\n`)
-    assert.deepEqual(await onStartCheck(id, 'codex'), { problems: [], warnings: [] })
-    await onStartCheck(id)
+    assert.deepEqual(await onStartCheck(id), { problems: ['Claude Code is not logged in.'], warnings: [], fix: { kind: 'log-in', command: 'claude login', problem: 'Claude Code is not logged in.' } })
+    assert.deepEqual(await onStartCheck(id, 'codex'), { problems: [], warnings: ['the check broke'] }, 'a check that breaks is said, and stops nothing')
+    assert.deepEqual(asked, [[dir, {}], [dir, { 'agent-driver': { driver: 'codex' } }]])
     assert.deepEqual(near, [
-      [id, 'codex'],
       [id, undefined],
+      [id, 'codex'],
     ])
+    provideTestContext({ host: fakeHost() })
+    assert.equal(await onStartCheck(id), null, 'a host with no check says nothing')
   } finally {
     await restore()
   }

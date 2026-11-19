@@ -1,15 +1,14 @@
-// The tool behind the E2E stories' start and resume hooks (see README.md): a stand-in for
-// whatever a project's hooks.yml names. The harness writes the fixture project's hooks file as
+// A run's process in the E2E stories and the demo (see README.md): the scripted host
+// (`fake-runs.ts`) spawns it detached, as agent-runner's host spawns agent-runner's run, with
 //
-//   start:  node <this file> start
-//   resume: node <this file> resume
+//   node <this file> run <id>        a fresh run: PROMPT, DRIVER, MODEL, PUBLISH in its environment
+//   node <this file> continue <id>   a resume: TEXT or ANSWER, and PUBLISH
 //
-// and this process does what such a tool does, offline: `start` and `resume` answer the run's id
-// on stdout at once and leave the run to a detached process of their own; that process makes the
-// run's checkout, drives agent-driver's scripted FakeDriver with the real session log and the
-// real inbox, records the run on the data branch through the `logs` skill, and reclaims the
-// checkout by the branches rule. So every file the dashboard reads is written by the same code a
-// real run writes it with; only the coding agent is scripted.
+// and it does what agent-runner's run does, offline: it makes the run's checkout, drives
+// agent-driver's scripted FakeDriver with the real session log and the real inbox, records the
+// run on the data branch through the `logs` skill, and reclaims the checkout by the branches
+// rule. So every file the dashboard reads is written by the same code a real run writes it with;
+// only the coding agent is scripted.
 //
 // The prompt scripts the agent, by the words in it:
 //   "hold"    the run waits for `<checkout>/.openagent/go` before its first turn, so a story
@@ -19,20 +18,14 @@
 //   "agents"  the run's coding agent starts subagents of its own, one of which fails, and the run
 //             keeps working until it is stopped; "many" starts more of them;
 //   "fails"   the run fails.
-// When `$OPENAGENT_E2E_STARTS_FILE` is set, every `start` and `resume` appends what its
-// environment carried there, one JSON line each: the only place a story can see it.
-import { spawn } from 'node:child_process'
-import { appendFileSync } from 'node:fs'
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { hostname } from 'node:os'
 import { join } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { FakeDriver, QUESTION_TAG, continuationPrompt, logDiaryFile, parseQuestion, startEvent, type DriverEvent, type LogEndStatus, type SessionLog } from '@openagt/agent-driver'
 import { nodeGitRunner } from '@openagt/agent-data'
 import { NAME_FILE_ENV, givenName, isPublish, type Publish } from '@openagt/agent-runner'
 import { agentBranchName, attachCheckout, createCheckout, reclaimWorktree, worktreeBranch, worktreePath } from '@openagt/skill-branches'
 import { findRun, parseRunCard, readDiary, writeRun, type AnyDiaryLine, type RunCard } from '@openagt/skill-logs'
-import { agentIdFromStartedAt } from '../agent-id.js'
 import { OPENAGENT_DIR } from '../openagent-dir.js'
 
 const QUESTION = { title: 'Which way?', options: [{ label: 'Left', detail: 'the short way' }, { label: 'Right' }], recommended: 'Left' }
@@ -40,16 +33,6 @@ const QUESTION = { title: 'Which way?', options: [{ label: 'Left', detail: 'the 
 const [mode, runId] = process.argv.slice(2)
 const repo = process.cwd()
 const git = nodeGitRunner()
-
-function record(entry: Record<string, unknown>): void {
-  const file = process.env['OPENAGENT_E2E_STARTS_FILE']
-  if (file) appendFileSync(file, JSON.stringify(entry) + '\n')
-}
-
-/** The run's own process, detached from the hook line that answers for it. */
-function detach(args: string[]): void {
-  spawn(process.execPath, [fileURLToPath(import.meta.url), ...args], { cwd: repo, detached: true, stdio: 'ignore' }).unref()
-}
 
 /** Why a run that fails failed. */
 const FAILURE = 'Chrome did not start'
@@ -95,7 +78,7 @@ async function startSubagents(prompt: string, log: SessionLog, signal: AbortSign
   }
 }
 
-/** How far the run takes its work, on its card as agent-runner keeps it: the level its hook was given, none for `nothing`, else the one it had. */
+/** How far the run takes its work, on its card as agent-runner keeps it: the level it was given, none for `nothing`, else the one it had. */
 function publishOf(given: string | undefined, had: unknown): { publish?: Publish } {
   if (isPublish(given)) return { publish: given }
   return given === undefined && isPublish(had) ? { publish: had } : {}
@@ -189,25 +172,6 @@ async function session(id: string, checkout: string, prompt: string, card: Omit<
 }
 
 async function main(): Promise<void> {
-  if (mode === 'start') {
-    const id = agentIdFromStartedAt(new Date().toISOString())
-    record({ hook: 'start', id, prompt: process.env['PROMPT'], driver: process.env['DRIVER'], model: process.env['MODEL'], publish: process.env['PUBLISH'], base: process.env['BASE'] })
-    if ((process.env['PROMPT'] ?? '').includes('refuse')) {
-      process.stderr.write('the project has no such command\n')
-      process.exitCode = 1
-      return
-    }
-    detach(['run', id])
-    process.stdout.write(JSON.stringify({ ok: true, id }) + '\n')
-    return
-  }
-  if (mode === 'resume') {
-    const id = process.env['RUN_ID'] ?? ''
-    record({ hook: 'resume', id, text: process.env['TEXT'], answer: process.env['ANSWER'], publish: process.env['PUBLISH'] })
-    detach(['continue', id])
-    process.stdout.write(JSON.stringify({ ok: true, id }) + '\n')
-    return
-  }
   if (mode === 'run' && runId) {
     const prompt = process.env['PROMPT'] ?? ''
     const checkout = await createCheckout(repo, { agentId: runId }, git)

@@ -1,6 +1,6 @@
 // What the browser smoke stories share (smoke-*.test.ts, see README.md): the demo's real dashboard
 // in a real browser, for the flows a person goes through most. The page as it is laid out and run,
-// its calls to the daemon over HTTP, the project's hooks, a run's own files: what the jsdom tests (no
+// its calls to the daemon over HTTP, the run host, a run's own files: what the jsdom tests (no
 // layout, the calls stubbed) and the backend stories (the calls made directly) each stop short of.
 // A flow that fails leaves a screenshot in test-results/. Skipped on a machine with no Chrome; the
 // demo needs `pnpm build`.

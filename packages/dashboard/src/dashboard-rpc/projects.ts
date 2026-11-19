@@ -1,9 +1,11 @@
-import { contextAddProject, contextPrepareStart, contextProjectErrors, contextProjects, contextRemote, contextRemoveProject, contextStartedIn, resolveProjectPath } from './context.js'
+import { contextAddProject, contextHost, contextPrepareStart, contextProjectErrors, contextProjects, contextRemote, contextRemoveProject, contextStartedIn, resolveProjectPath } from './context.js'
+import { projectRefAt } from '../distribution-hooks.js'
 import { readProjectCommands, type ProjectCommand } from '../project-commands.js'
-import { DATA_BRANCH, addressOfRemote, isRepoOwner, originDefaultBranch, readRepoOwners, readSharing, repositoryAddress, repositorySpelling, shareProjectData, writeRepoOwners } from '@openagt/agent-data'
+import { DATA_BRANCH, addressOfRemote, errorMessage, isRepoOwner, originDefaultBranch, readRepoOwners, readSharing, repositoryAddress, repositorySpelling, shareProjectData, writeRepoOwners } from '@openagt/agent-data'
 import { readHosted, refreshHosted, type HostedRepo } from './hosted-repos.js'
 import { cloneAccountFor, originHost, remoteAccount } from './send-as.js'
-import { readProjectHooks, runCheckHook, startLineTakesBase, startLineTakesPrBase, type StartReadiness } from '../project-hooks.js'
+import type { StartReadiness } from '../start-readiness.js'
+import { SESSIONS_ID } from '../project-address.js'
 import { hasRemote } from '../has-remote.js'
 import { openagentVersion } from '../version.js'
 import { currentBranch } from '../dashboard/git-status.js'
@@ -258,11 +260,9 @@ export async function sendAddRepoFolder(): Promise<{ ok: true; added: boolean } 
   return { ok: true, added: true }
 }
 
-/** What the launcher offers for a project: its commands, and whether a run can be started here at all. */
+/** What the launcher offers for a project: its commands, and how far its runs can go. */
 export interface ProjectLauncher {
   commands: ProjectCommand[]
-  /** Whether the project's `.openagent/hooks.yml` has a `start` line; without one Start is off. */
-  startHook: boolean
   /** Whether one of the project's packages provides a git host; without one no pull request can be opened, so the publish menu stops at the branch. */
   gitHost: boolean
   /** Whether the project's repository has an `origin` remote; without one nothing can be published, so the publish menu stops at the commit. */
@@ -272,26 +272,24 @@ export interface ProjectLauncher {
   /**
    * What the launcher's branch menu always lists: `main`, the name of origin's default branch, and
    * `local`, the branch the project's folder is on now. Absent where a pick could not be obeyed:
-   * the start line does not pass `BASE` on, the repository has no remote, or the folder is on no
-   * branch. The rest of the menu is {@link onStartBranches}.
+   * the repository has no remote, or the folder is on no branch. The rest of the menu is
+   * {@link onStartBranches}.
    */
   startFrom?: { main: string; local: string }
-  /** Whether the start line passes `PR_BASE` on: without it the launcher offers no branch for the pull request to go into. */
-  prBase: boolean
 }
 
 /**
- * The project's commands (#1774), read off its skills folders, whether it has a start hook, whether
- * it has a git host, and the branches an agent can start from. `from` is the person's pick of those
+ * The project's commands (#1774), read off its skills folders, whether it has a git host, and the
+ * branches an agent can start from. `from` is the person's pick of those
  * branches: a command is waiting for the branch agents will start from. `null` when the project is
  * unknown here.
  */
 export async function onCommands(projectId: string, from?: StartFromPick): Promise<ProjectLauncher | null> {
   const cwd = await resolveProjectPath(projectId)
   if (!cwd) return null
-  const [commands, hooks, gitHost, remote, address, main, local] = await Promise.all([readProjectCommands(cwd), readProjectHooks(cwd), projectGitHost(cwd).catch(() => undefined), hasRemote(cwd), repositoryAddress(cwd), originDefaultBranch(cwd), currentBranch(cwd)])
+  const [commands, gitHost, remote, address, main, local] = await Promise.all([readProjectCommands(cwd), projectGitHost(cwd).catch(() => undefined), hasRemote(cwd), repositoryAddress(cwd), originDefaultBranch(cwd), currentBranch(cwd)])
   // Both read locally, never fetched. `HEAD` is a folder on no branch: there is no local branch to start from.
-  const startFrom = hooks.start !== undefined && startLineTakesBase(hooks.start) && remote && main !== undefined && local !== undefined && local !== 'HEAD' ? { main: main.slice('origin/'.length), local } : undefined
+  const startFrom = remote && main !== undefined && local !== undefined && local !== 'HEAD' ? { main: main.slice('origin/'.length), local } : undefined
   // A skill written into the folder reaches agents once it is on the branch they start from: until then its command is said to be waiting.
   const pick = startFrom ? startFromPick(from) : undefined
   const { waiting } = await waitingSkills(cwd, commands.map(command => command.name), pick)
@@ -299,7 +297,7 @@ export async function onCommands(projectId: string, from?: StartFromPick): Promi
     const waits = waiting.get(command.name)
     return waits ? { ...command, waiting: waits.branch } : command
   })
-  return { commands: listed, startHook: hooks.start !== undefined, gitHost: gitHost !== undefined, remote, prBase: hooks.start !== undefined && startLineTakesPrBase(hooks.start), ...(address ? { address } : {}), ...(startFrom ? { startFrom } : {}) }
+  return { commands: listed, gitHost: gitHost !== undefined, remote, ...(address ? { address } : {}), ...(startFrom ? { startFrom } : {}) }
 }
 
 /** The other branches the launcher's menu lists; `branches` is absent where origin could not be read. */
@@ -323,26 +321,31 @@ export async function onStartBranches(projectId: string): Promise<StartBranches 
 
 /**
  * What would stop a run in this project before it spends a checkout, said in the launcher before
- * the Start: the project's `check` hook, given the coding agent picked. A missing CLI or a
- * logged-out one is a problem the run itself would refuse on; a warning is said and blocks nothing.
- * A check line that fails is said as a warning: it is a broken check, not a reason to stop.
- * `null` for an unknown project or one without a check hook: nothing to say.
+ * the Start: this computer's host's check (`run.host`, #2394), given the coding agent picked. A
+ * missing CLI or a logged-out one is a problem the run itself would refuse on; a warning is said
+ * and blocks nothing. A check that fails is said as a warning: it is a broken check, not a reason
+ * to stop. `null` for an unknown project, or a host with no check: nothing to say.
  */
 export async function onStartCheck(projectId: string, driver?: string): Promise<StartReadiness | null> {
   const cwd = await resolveProjectPath(projectId)
   if (!cwd) return null
   // The launcher asks this as it opens and at each change of agent: a Start is near, on this agent.
   contextPrepareStart()(projectId, typeof driver === 'string' ? driver : undefined)
-  const checked = await runCheckHook(cwd, driver !== undefined ? { driver } : {})
-  if (checked.ok) return { problems: checked.problems, warnings: checked.warnings, ...(checked.fix ? { fix: checked.fix } : {}) }
-  return checked.noHook ? null : { problems: [], warnings: [checked.error] }
+  const host = contextHost()
+  if (!host.check) return null
+  try {
+    const options = typeof driver === 'string' ? { 'agent-driver': { driver } } : {}
+    const checked = await host.check(projectId === SESSIONS_ID ? { options } : { project: await projectRefAt(projectId, cwd), options })
+    return { problems: checked.problems, warnings: checked.warnings, ...(checked.fix ? { fix: checked.fix } : {}) }
+  } catch (err) {
+    return { problems: [], warnings: [errorMessage(err)] }
+  }
 }
 
 /**
  * What would stop a run of a project this computer clones first, asked before it does: its coding
- * agent, installed and logged in, and whether its logins read the repository at the address. A
- * computer that does not have the project yet has no check hook of it to run. `as` is what the
- * asker calls this computer, so the words read right on its page.
+ * agent, installed and logged in, and whether its logins read the repository at the address. `as`
+ * is what the asker calls this computer, so the words read right on its page.
  */
 export async function onCloneCheck(address: string, driver?: string, as?: string): Promise<StartReadiness> {
   const ready = await loginsWiring.ready(typeof driver === 'string' && isDriverName(driver) ? driver : 'claude-code')

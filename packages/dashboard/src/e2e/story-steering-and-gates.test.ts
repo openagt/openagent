@@ -5,9 +5,9 @@ import { onInterventions, onAgents, onAgent, onRetainedWorktrees, onAgentWorktre
 import { sendChoice, sendMessage, sendStop, sendDeleteAgent, sendRemoveWorktree } from '../dashboard-rpc/control.js'
 
 // The steering stories (README.md): everything the user does TO a run — answer its question, say
-// something to it, stop it — reaches the run through what its tool reads: the inbox file in the
-// run's checkout while it works, the project's resume hook once it has ended, a signal to the
-// pid on its card. The observable answer comes back through the run's own diary.
+// something to it, stop it — reaches the run through its host, which goes through what the run
+// reads: the inbox file in the run's checkout while it works, a resume once it has ended, a signal
+// to the pid on its card. The observable answer comes back through the run's own diary.
 
 test('answer a waiting run’s question from the Human Queue; the answer resumes the same run (#304/#1455/#1774)', async () => {
   const world = await makeWorld()
@@ -37,11 +37,11 @@ test('answer a waiting run’s question from the Human Queue; the answer resumes
     // A pick that is not one of the question's options is refused, and nothing is resumed.
     assert.deepEqual(await rpc(sendChoice)(project.id, gate.id, 'no-such-option', agentId), { ok: false, error: 'every pick must be one of the question\'s options' })
 
-    // The user picks an option: the project's resume hook gets the run and the chosen label, and
+    // The user picks an option: the host resumes the run with the chosen label, and
     // the same run goes on to done, under the same id, in the same diary.
     const right = gate.options.find(o => o.label === 'Right')!
     assert.deepEqual(await rpc(sendChoice)(project.id, gate.id, right.id, agentId), { ok: true })
-    assert.deepEqual((await world.hookCalls()).at(-1), { hook: 'resume', id: agentId, answer: 'Right' })
+    assert.deepEqual((await world.hostCalls()).at(-1), { call: 'resume', id: agentId, answer: 'Right' })
     await world.waitAgent(project, agentId, 'done')
     await world.waitRetired(project, agentId)
     const replay = await rpc(onAgent)(project.id, agentId)
@@ -63,28 +63,28 @@ test('say something to a working run: the message is its next turn; said to an e
     const agentId = await world.startAgent(project, 'hold: build the dashboard page')
     await world.waitAgent(project, agentId, 'running')
 
-    // Said while the run is certainly working: the line waits in the run's inbox, no hook runs,
+    // Said while the run is certainly working: the line waits in the run's inbox, nothing is resumed,
     // and the run takes it when its turn ends, as a turn of its own.
     assert.deepEqual(await rpc(sendMessage)(project.id, 'Also add a logout button', agentId), { ok: true })
-    assert.equal((await world.hookCalls()).filter(call => call.hook === 'resume').length, 0)
+    assert.equal((await world.hostCalls()).filter(call => call.call === 'resume').length, 0)
     await release(project, agentId)
     await world.waitAgent(project, agentId, 'done')
     await world.waitRetired(project, agentId)
     const first = await rpc(onAgent)(project.id, agentId)
     assert.ok(first.some(e => e.kind === 'driver' && e.event.type === 'text' && e.event.text.includes('Also add a logout button')), 'the message became a turn')
 
-    // Said once the run has ended: the project's resume hook continues the same run with the text.
+    // Said once the run has ended: the host resumes the same run with the text.
     assert.deepEqual(await rpc(sendMessage)(project.id, 'One more thing', agentId), { ok: true })
-    assert.deepEqual((await world.hookCalls()).at(-1), { hook: 'resume', id: agentId, text: 'One more thing' })
+    assert.deepEqual((await world.hostCalls()).at(-1), { call: 'resume', id: agentId, text: 'One more thing' })
     await waitFor(async () => {
       const events = await rpc(onAgent)(project.id, agentId)
       return events.some(e => e.kind === 'driver' && e.event.type === 'text' && e.event.text.includes('One more thing')) ? true : undefined
     }, 'the resumed turn to reach the run\'s diary')
-    // With the session's "Auto" changed, the new level goes with the words to the resume line.
+    // With the session's "Auto" changed, the new level goes with the words to the resume.
     await world.waitAgent(project, agentId, 'done')
     await world.waitRetired(project, agentId)
     assert.deepEqual(await rpc(sendMessage)(project.id, 'Ship it', agentId, 'pr'), { ok: true })
-    assert.deepEqual((await world.hookCalls()).at(-1), { hook: 'resume', id: agentId, text: 'Ship it', publish: 'pr' })
+    assert.deepEqual((await world.hostCalls()).at(-1), { call: 'resume', id: agentId, text: 'Ship it', publish: 'pr' })
     assert.deepEqual(await rpc(sendMessage)(project.id, 'Ship it', agentId, 'push' as never), { ok: false, error: 'unknown publish level' })
     assert.equal((await rpc(onAgents)(project.id)).filter(r => r.id === agentId).length, 1, 'one run, one row')
   } finally {
@@ -128,7 +128,7 @@ test('a Stop pressed while the run is still starting stops it once its card name
   const rpc = world.rpc
   try {
     const project = await world.addProject()
-    // The start line answered the run's id; the run is still making its checkout, so no card names its pid yet.
+    // The host answered the run's id; the run is still making its checkout, so no card names its pid yet.
     const agentId = await world.startAgent(project, 'hold: long experiment')
     assert.deepEqual(await rpc(sendStop)(project.id, agentId), { ok: true })
     await world.waitAgent(project, agentId, 'stopped')

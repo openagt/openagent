@@ -505,7 +505,7 @@ describe('AgentComposer sending to an ended run', () => {
     await waitFor(() => expect(sendMessage).toHaveBeenLastCalledWith('p1', 'hello', 'run-1', null, { id: expect.any(String) }))
   })
 
-  test('sent to an ended run, the menu goes back to what the record says: a resume line that cannot take the level must not read as changed', async () => {
+  test('sent to an ended run, the menu goes back to what the record says: a resume that never records the level must not read as changed', async () => {
     sendMessage.mockResolvedValue({ ok: true })
     render(<AgentComposer projectId="p1" agentId="run-1" live={false} files={[]} publish="commit" />)
     fireEvent.click(screen.getByText('pick Open PR'))

@@ -3,7 +3,6 @@ import { liftSkillRules, projectRoot, sessionRepos } from '@openagt/skill-branch
 import { DRIVER_NAMES, GIT_ACCOUNT_ENV, agentLoginFor, detachResume, detachRun, isDriverName, readyToRun, resumeProject, runProject, type DriverName, type SpawnedResume } from './runner.js'
 import type { RunOutcome, RunRequest } from './run.js'
 import { agentNamed, anySkillPick, runAgent, skillPicksNamed } from './agent.js'
-import { initHooks } from './init.js'
 import { cleanup } from './cleanup.js'
 import { everyBasicSkill } from './basic-skills.js'
 import { isPublish, NO_PUBLISH, PUBLISH_LEVELS } from './records.js'
@@ -19,13 +18,12 @@ export const USAGE = `usage: agent-runner <command>
 
 ${helpRows([
   ['run <prompt> [--model <id>] [--effort <level>] [--driver <claude-code|codex>] [<option>…]', `one run of <prompt> in its own checkout, now, recorded; on Claude Code unless --driver says Codex, on the coding agent's own default model unless --model names one`],
-  ['run --detach <prompt>', `the same run in its own process, answered at once with its id: what a dashboard's start hook runs`],
+  ['run --detach <prompt>', `the same run in its own process, answered at once with its id`],
   ['run --resume <id> [<text>] [--answer <label>] [--publish <commit|branch|pr|merge|nothing>]', `continue an ended run: the same record, its session resumed; the text as the next prompt, or the answer to the question it ended on; with --publish, the run takes its work that far from here on, or, with nothing, only as far as its prompts ask; at its record's level without it`],
-  ['run --detach --resume <id> …', `the same continuing in its own process, answered at once: what a dashboard's resume hook runs`],
+  ['run --detach --resume <id> …', `the same continuing in its own process, answered at once`],
   ['run --resume <id> … --by <who>', `kept on the run's record with the time, until its next resume: a scheduler's row that resumed it, which counts the run as its own`],
-  ['check [--driver <claude-code|codex>]', `whether a run can start here: the coding agent's CLI installed and logged in, and its warnings; what a dashboard's check hook runs`],
+  ['check [--driver <claude-code|codex>]', `whether a run can start here: the coding agent's CLI installed and logged in, and its warnings; what this computer's host answers before a Start`],
   ['git-host <command> [<arg>…]', `run a command of the project's git host, whichever package is it, and print what it printed: a skill's check reads pull requests with no host named (git-host replies); refused where the project has no git host`],
-  ['init', `this tool's lines in the dashboard's .openagent/hooks.yml, so its Start works; a line already there is kept`],
   ['cleanup', `remove what this tool left in the project: the runs' locks and stderr files, then .agent-runner/ and the rule hiding it from git once it is empty; config.yml is yours and stays; refused while a run's process is alive; the command a dashboard asks for when a project is removed with its files`],
   'Options of run:',
   ['--publish <commit|branch|pr|merge>', 'with --publish, the agent is told, in one sentence after the prompt, how far to take its work when it finishes: commit it, and from there push its branch, open its pull request, or set the request to merge once its checks pass; without it the prompt goes as written, and nothing is committed or published unless the prompt asks'],
@@ -209,15 +207,6 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
     const result = await runPackageCommand(repo, command, args)
     if (!result.ok) throw new Refused({ ok: false, reason: 'git-host', detail: result.error }, result.error)
     return result.output
-  },
-
-  async init(args, io, git) {
-    parseWithTexts(args, {}, 0)
-    const repo = await project(io.cwd, git)
-    const outcome = await initHooks(repo)
-    if (outcome.ok) return outcome
-    const line = outcome.reason === 'no-dashboard' ? 'no .openagent/ here: add the project in the dashboard first' : `${outcome.file}: ${outcome.detail ?? 'unreadable'}`
-    throw new Refused(outcome, line)
   },
 
   async cleanup(args, io, git) {

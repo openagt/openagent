@@ -13,8 +13,6 @@ import type { StartPicks } from '../lib/started-from.js'
 import { startPicks, useStartAgent } from '../lib/use-start-agent.js'
 import { useProjectLauncher } from '../lib/use-project-launcher.js'
 import { useLoaded, usePolled } from '../lib/use-async.js'
-import { useAction } from '../lib/use-action.js'
-import { sendOpenInApp } from '../rpc/control.js'
 import { Button } from './ui/button.js'
 import { PERMISSIONS_PAGE } from '../lib/use-route.js'
 import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
@@ -49,14 +47,12 @@ const MACHINE_SELDOM_MS = 60_000
 /** How often another person's computer is asked which of this person's logins it has, while one is picked. */
 const THEIR_LOGINS_MS = 8_000
 
-// Start a run in the selected project (#405, #1774): a free-text box, where `/` lists the project's
-// commands, and Start, which is the project's own start hook (posted over `sendStart`). The editor +
-// control row are the shared Composer (#721); this form owns the submit.
-// A project without a start hook cannot start a run from here, and the form says how to add one:
-// the scheduler's `init` writes its lines, or a person writes a `start:` line of their own.
+// Start a run in the selected project (#405): a free-text box, where `/` lists the project's
+// commands, and Start (posted over `sendStart`), which the daemon hands to the computer's run host
+// (#2394). The editor + control row are the shared Composer (#721); this form owns the submit.
 // What would stop the run (a coding agent not installed or logged out) is said before the Start,
-// from the project's check hook: this computer's, or, with a machine picked, the machine's own,
-// asked there. The line a press fixes is said with its press inside: logging the agent in here, or
+// from the host's check: this computer's, or, with a machine picked, the machine's own, asked
+// there. The line a press fixes is said with its press inside: logging the agent in here, or
 // this computer's logins on the machine. All of it is said above the box, over the page, where
 // the Start's own line is: the box does not move when it comes or goes.
 // The Context picker (#439/#314) narrows the run's focus to other projects and to files: the
@@ -65,15 +61,15 @@ const THEIR_LOGINS_MS = 8_000
 // first, then the project's name, then the branch the agent starts from.
 // That branch is a menu: the project's main branch (origin's default branch, fetched fresh), "My
 // local branch", the branch the project's folder is on, as committed on this machine, or another
-// of origin's branches, fetched fresh. The pick is saved per project. It reaches the start hook as
-// `BASE`: the local branch's name, or origin's copy of the branch by its full name; the main branch
-// hands it none. The pick is drawn only where it is obeyed: the daemon offers it only when the
-// project's start line passes `BASE` on, and a machine has its own branches, so with a machine
-// picked there is none and the Start names no branch.
+// of origin's branches, fetched fresh. The pick is saved per project. It reaches the run as the
+// branch its checkout is made from: the local branch's name, or origin's copy of the branch by its
+// full name; the main branch names none. The pick is drawn only where it is obeyed: the daemon
+// offers it only for a project with a remote whose folder is on a branch, and a machine has its own
+// branches, so with a machine picked there is none and the Start names no branch.
 // The "Auto" menu, under the box at the left (the model menu is at the right): what the agent
 // does by itself when it finishes. Its button reads the picks, so nothing is hidden.
 // In it, how far the run takes its work: Off, Commit, Publish branch, Open PR, Merge on green.
-// The level is handed to the start hook as `PUBLISH`; Off hands it none. Until the person
+// The level goes with the Start; Off sends none. Until the person
 // picks, the button shows the pick the daemon will start the run at: Commit, which pushes
 // nothing. Saved, so the pick holds for every next run. A project with no git host package
 // is offered Off, Commit and Publish branch only, and one with no remote Off and Commit.
@@ -138,8 +134,6 @@ export function StartAgentForm({
   // The machine the last start was sent to, by its name: what the form says it is cloning on.
   const [sentTo, setSentTo] = useState<string | null>(null)
   const { busy, cloning, error, reset, start } = useStartAgent(projectId)
-  // A refusal of the project's start line: no prompt changes it, and the project opens in the editor from it.
-  const hooksRefused = error?.includes('.openagent/hooks.yml') === true
   const composerRef = useRef<ComposerHandle>(null)
   const phone = useIsMobile()
   // A refused start gives the prompt the focus once the box is on again, however Start was pressed:
@@ -165,8 +159,8 @@ export function StartAgentForm({
   }
 
   // The machine this run targets (#1067), if one is picked in "Run on": the start names it by its
-  // id, and the daemon, which holds its key, sends the run there (runTarget). A machine runs the
-  // start hook of its own copy of the project, so this copy's lack of one does not block it.
+  // id, and the daemon, which holds its key, sends the run there (runTarget), where it starts in
+  // that machine's own copy of the project.
   //
   // A project only another computer has is that computer's: it is picked when the project is
   // opened, and the launcher read is that computer's own, so on it the run starts as on a project
@@ -181,7 +175,6 @@ export function StartAgentForm({
   // A machine that is not where the launcher was read: its own copy is not read at all.
   const foreign = machine !== undefined && !atHome
   const clonedHere = home !== undefined && machine === undefined
-  const noStartHook = launcher !== null && !launcher.startHook && !foreign && !clonedHere
   // Whether a pull request can be opened here: unknown until the launcher is read, and a machine's
   // own project is not read at all, so both are offered every pick; the daemon that starts the run
   // holds a pull request pick to the branch where its project has no git host.
@@ -206,8 +199,8 @@ export function StartAgentForm({
   // new pick of the branch to start from starts over. Whether origin has "My local branch" is read
   // from origin, as the branch menu's list is: this clone's copies keep branches origin deleted.
   const [mainFor, setMainFor] = useState<string | null>(null)
-  const localOnOrigin = useLoaded<string[] | undefined>(launcher?.prBase && startFrom && startFromPick?.kind === 'local' ? () => onStartBranches(projectId).then(read => read?.branches, () => undefined) : null, undefined, [projectId, launcher?.prBase, startFrom !== undefined, startFromPick?.kind])
-  const prBranch = launcher?.prBase && startFrom ? prTargetBranch(startFromPick, startFrom.main, startFrom.local, localOnOrigin) : undefined
+  const localOnOrigin = useLoaded<string[] | undefined>(startFrom && startFromPick?.kind === 'local' ? () => onStartBranches(projectId).then(read => read?.branches, () => undefined) : null, undefined, [projectId, startFrom !== undefined, startFromPick?.kind])
+  const prBranch = startFrom ? prTargetBranch(startFromPick, startFrom.main, startFrom.local, localOnOrigin) : undefined
   const prInto = prBranch !== undefined && mainFor !== prBranch ? prBranch : undefined
   const prTarget = prBranch !== undefined && startFrom ? { into: prInto ?? startFrom.main, picks: [prBranch, startFrom.main], onPick: (branch: string) => setMainFor(branch === prBranch ? null : prBranch) } : undefined
 
@@ -361,20 +354,17 @@ export function StartAgentForm({
           typed.current = value
           if (!value.trim() && note) setNote(null)
           // Editing after a failed start: the red error described the old attempt, drop it (#948).
-          // One about the project's start line stays until the next Start.
-          if (error && !hooksRefused) reset()
+          if (error) reset()
         }}
         onPreset={loaded}
         busy={busy}
-        canSubmit={!noStartHook}
         submitLabel="Start agent"
         submitBusyLabel="Starting…"
         // Feedback right where the action is (#948): above the box, over the page, so the box never moves.
         notes={
           <>
             {/* A start that hit what the check says, or the missing logins, says nothing the boxes below do not. */}
-            {/* A refusal of this computer's hooks.yml: the project opens in the editor from here as from its menu. */}
-            {error && missingThere.length === 0 && !readiness?.problems.length && <Refusal {...said(error)} {...(!machine && !clonedHere && hooksRefused ? { actions: <OpenInEditor projectId={projectId} /> } : {})} />}
+            {error && missingThere.length === 0 && !readiness?.problems.length && <Refusal {...said(error)} />}
             {machine && missingThere.length > 0 && (
               <Refusal
                 title={`Your ${missingThere.join(' and ')} ${missingThere.length === 1 ? 'login is' : 'logins are'} not on ${name} yet.`}
@@ -423,16 +413,6 @@ export function StartAgentForm({
                 </span>
               </p>
             ))}
-            {noStartHook && (
-              <Refusal
-                title="This project has no start hook."
-                detail={
-                  <>
-                    Add a <code className="font-mono">start:</code> line to <code className="font-mono">.openagent/hooks.yml</code>.
-                  </>
-                }
-              />
-            )}
             {note === STARTING && startingSaid && !error && (
               // The chat's own first line (`SessionLine.tsx`), in its words and its look: the page that
               // opens a moment later goes on saying it. A machine that does not have the project yet
@@ -470,24 +450,6 @@ function carryBox(update: () => void): Promise<void> {
 function hereName(): string {
   const name = thisMachineName()
   return name === 'This machine' ? 'this computer' : name
-}
-
-/** The project in the person's editor, the project menu's own press: said when it opened, and why when it did not. */
-function OpenInEditor({ projectId }: { projectId: string }) {
-  const { busy, error, run } = useAction()
-  const [opened, setOpened] = useState(false)
-  return (
-    <>
-      <Button type="button" size="sm" loading={busy} onClick={() => void run(() => sendOpenInApp(projectId, 'editor'), 'Failed to open.').then(outcome => setOpened(outcome.ok))}>
-        Open in your editor
-      </Button>
-      {error ? (
-        <span role="status" className="text-xs text-danger">{`Your editor did not open: ${error}`}</span>
-      ) : (
-        opened && <span role="status" className="text-xs text-muted-foreground">Opened in your editor.</span>
-      )}
-    </>
-  )
 }
 
 /**

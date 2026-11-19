@@ -1,3 +1,7 @@
+import { appendFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import { localHost } from '@openagt/agent-runner'
+import type { RunHost } from '@openagt/hooks'
 import { setDashboardContext, type DashboardContext, type RemoteAgents } from './context.js'
 import { registryPreferencesStore } from '../registry.js'
 import { defaultQuotaSource } from '../dashboard/quota.js'
@@ -16,6 +20,25 @@ export const NO_ELSEWHERE: Pick<RemoteAgents, 'elsewhere' | 'elsewhereRuns' | 'f
   },
 }
 
+/** What a resume in a test is written down as, one line per resume in the project's {@link RESUMED_FILE}: the run, its text and its answer. */
+export const RESUMED_FILE = 'resumed.txt'
+
+/**
+ * This computer's host as a test has it: agent-runner's own, the runs' processes stood in for. A
+ * start is refused, as no coding agent may start in a test; a resume is written down in the
+ * project's {@link RESUMED_FILE}, `<id>|<text>|<answer>`, once the host found the run's record.
+ */
+export function testHost(): RunHost {
+  return localHost({
+    spawnRun: async () => {
+      throw new Error('not wired in this test')
+    },
+    spawnResume: async (repo, run) => appendFile(join(repo, RESUMED_FILE), `${run.id}|${run.text ?? ''}|${run.answer ?? ''}\n`),
+    ready: async () => ({ problems: [], warnings: [] }),
+    loginFor: async () => undefined,
+  })
+}
+
 /**
  * What the dashboard host wires (D3), as a test would have it: every capability present, the two
  * that start work refusing, and the reads answering empty. There is one host and it wires every
@@ -32,6 +55,7 @@ export function testDashboardContext(over: Partial<DashboardContext> = {}): Dash
     removeProject: () => ({ ok: false, error: 'not wired in this test' }),
     eventsSource: () => undefined,
     remote: { target: () => undefined, list: () => [], working: () => false, rekey: () => {}, sent: () => true, home: async () => undefined, follow: async () => {}, machineNames: async () => () => undefined, machineRuns: async () => [], followRuns: () => () => {}, ...NO_ELSEWHERE },
+    host: testHost(),
     preferences: registryPreferencesStore(),
     quota: defaultQuotaSource(),
     models: { read: async () => ({ 'claude-code': { models: [] }, codex: { models: [] } }), forget: () => {} },

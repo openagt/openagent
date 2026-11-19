@@ -14,7 +14,7 @@ import type { BridgeStartInput, BridgeStartRequest } from './bridge-starts.js'
  *
  * Nothing sets {@link DAEMON_URL_ENV} today (#1774): web runs left the launcher when the daemon
  * stopped running agents, so the only caller of these routes is gone until web runs return, and
- * then whatever line a project's start hook names will have to carry the URL. The extension's
+ * then the run host will have to hand the run the URL. The extension's
  * side of the queue is live either way, which is why these routes stay.
  */
 

@@ -93,10 +93,10 @@ describe('useStartAgent', () => {
   })
 
   test('any other refusal is shown as it is, and clones nothing', async () => {
-    sendStart.mockResolvedValue({ ok: false, error: 'the start hook: claude is not logged in' })
+    sendStart.mockResolvedValue({ ok: false, error: 'Claude Code is not logged in.' })
     const { result } = renderHook(() => useStartAgent())
     await act(async () => void (await result.current.start('p1', 'go', ON_STUDIO)))
-    expect(result.current.error).toBe('the start hook: claude is not logged in')
+    expect(result.current.error).toBe('Claude Code is not logged in.')
     await act(async () => void (await result.current.start('p1', 'go')))
     expect(sendProjectToMachine).not.toHaveBeenCalled()
     expect(sendProjectHere).not.toHaveBeenCalled()

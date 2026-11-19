@@ -8,7 +8,7 @@ import { declaring, SKILLS_DIRS, SKILLS_ENV, lookupProvidedCommand, packageBins,
  * The packages OpenAgent brings, by name: dependencies of OpenAgent itself, resolved from its
  * own install, so a project installs nothing for them and an empty folder starts an agent and
  * shows it. Each comes through the same contract as any package: a module by its `./dashboard`
- * export, a provider of a kind of data and the writer of its hook lines by its `openagent` key.
+ * export, a provider of a kind of data by its `openagent` key.
  * These three lists are the one place OpenAgent names a package. One of these names among a
  * project's own dependencies is not read: OpenAgent's copy, and the rules below for which
  * project has it, are the only ones.
@@ -183,23 +183,6 @@ export async function providedCommand(root: string, kind: string): Promise<Provi
 /** Whether `command` comes from a package OpenAgent brings: one the project did not install. */
 export function isBuiltIn(command: ProvidedCommand): boolean {
   return OWN_PACKAGE_NAMES.includes(command.package)
-}
-
-/**
- * Have every package that writes hook lines write its own into the project at `root`: a package
- * declares `"openagent": { "hooks": "<command>" }`, and `<command> init`, run in the project,
- * writes its lines into the project's hooks file, keeping every line already there. The project's
- * own packages are asked, then the ones OpenAgent brings to it. Answers one line per package
- * that could not write, in words.
- */
-export async function writeHookLines(root: string): Promise<string[]> {
-  const packages = [...(await ownPackages(root)), ...(await builtInPackagesOf(root))]
-  const failed: string[] = []
-  for (const command of declaring(packages, 'hooks')) {
-    const result = await runPackageCommand(root, command, ['init'])
-    if (!result.ok) failed.push(`${command.package}: ${result.error}`)
-  }
-  return failed
 }
 
 /**

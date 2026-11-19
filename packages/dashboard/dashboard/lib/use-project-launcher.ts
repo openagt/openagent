@@ -4,9 +4,9 @@ import { usePolled } from './use-async.js'
 import { usePreferences } from './preferences.js'
 
 /**
- * What the launcher offers for a project: its commands, and whether it has a start hook. `null`
- * until it is read, and for no project: a surface says "no start hook" only once it knows. Read
- * again every few seconds: a skill written into the project's folder, here or in a terminal, is a
+ * What the launcher offers for a project: its commands, the branches an agent can start from, and
+ * how far a run can publish. `null` until it is read, and for no project. Read again every few
+ * seconds: a skill written into the project's folder, here or in a terminal, is a
  * command from then on, and one that reached the branch agents start from stops waiting.
  *
  * A command is waiting for the branch the person starts agents from, so the read names their pick.

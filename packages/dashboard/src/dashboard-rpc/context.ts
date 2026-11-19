@@ -12,6 +12,7 @@ import type { MachinesQueue } from '../dashboard/machine-interventions.js'
 import type { AddProjectResult, RemoveProjectResult, StartAgentOptions, StartAgentResult, StartedInResult } from '../dashboard/types.js'
 import type { BringProject, RelayProject, RemoteTarget } from '../dashboard/remote-run.js'
 import type { MachineRuns } from '../dashboard/machine-runs.js'
+import type { RunHost } from '@openagt/hooks'
 
 /** Wired by the daemon so `sendStart` can reach the daemon's own `startAgent` closure. */
 export type StartAgentHandler = (
@@ -110,6 +111,8 @@ export interface DashboardContext {
   /** The relayed-agent lookup (#1067 slice 2), so a run-scoped RPC can tell a local agent from one
    *  running on a saved machine and forward the call there. */
   remote: RemoteAgents
+  /** This computer's host (`run.host`, #2394): what a person says to a run here, and a Stop, go to it. */
+  host: RunHost
   /** The user-preferences store (#410), over the registry file. */
   preferences: PreferencesStore
   /** The quota source behind the usage panel (#533). */
@@ -185,6 +188,11 @@ export async function resolveAgentPath(projectId: string, agentId?: string): Pro
  */
 export function contextEventsSource(): EventsSource {
   return fromContext('eventsSource')
+}
+
+/** This computer's host (`run.host`, #2394): a run started here is steered, resumed and stopped through it. */
+export function contextHost(): RunHost {
+  return fromContext('host')
 }
 
 /**

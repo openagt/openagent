@@ -145,8 +145,6 @@ export const Composer = forwardRef<ComposerHandle, {
   inAgent?: boolean | undefined
   /** Inside a session: the row above the box, which says what the launcher's row picks. */
   sessionRow?: ReactNode
-  /** Off when nothing can be started here (the project has no start hook): the submit stays disabled. */
-  canSubmit?: boolean | undefined
   /** Occupies the submit slot while the box is empty (#1455): the session page's Stop while the
    *  run is live, its Resume once stopped — so Start/Stop/Resume and the send ↑ are one slot,
    *  like Claude Code's composer. Typing swaps it for the arrow (a live send still queues), and
@@ -162,7 +160,7 @@ export const Composer = forwardRef<ComposerHandle, {
   /** The box takes the caret when it opens. */
   autoFocus?: boolean | undefined
 }>(function Composer(
-  { files, addContext, removeContext, startsAt, controls, controlsEnd, sessionModel, sessionContext, onSubmit, onPromptChange, onPreset, busy, submitLabel, submitBusyLabel, placeholder, inAgent = false, sessionRow, canSubmit = true, idleControl, home, notes, draftKey, autoFocus = false },
+  { files, addContext, removeContext, startsAt, controls, controlsEnd, sessionModel, sessionContext, onSubmit, onPromptChange, onPreset, busy, submitLabel, submitBusyLabel, placeholder, inAgent = false, sessionRow, idleControl, home, notes, draftKey, autoFocus = false },
   ref,
 ) {
   const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
@@ -246,7 +244,7 @@ export const Composer = forwardRef<ComposerHandle, {
   const down = useContext(DaemonDown)
   // What holds a send, whatever the box holds: the one list the arrow and the keyboard both read.
   // #1073: a keyboard submit is held too when the target machine is offline.
-  const held = busy || targetOffline || untold || down || !canSubmit
+  const held = busy || targetOffline || untold || down
 
   useImperativeHandle(ref, () => ({
     clear: () => {

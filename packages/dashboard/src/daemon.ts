@@ -16,7 +16,9 @@ import { bridgeSessionsFrom } from './dashboard/bridge-sessions.js'
 import { bridgeQuestions } from './dashboard/bridge-store.js'
 import { bridgeBrowserDir, bridgeBrowserOwner, startBridgeBrowser, type BridgeBrowser, type BridgeBrowserOptions } from './bridge-browser.js'
 import { runProjectHooks } from './project-hooks.js'
-import { prepareSessionsHome, startSessionsSweep } from './sessions-home.js'
+import { readySessionsHome, startSessionsSweep } from './sessions-home.js'
+import { loadHooks, localHostOf } from './distribution-hooks.js'
+import type { Hooks } from '@openagt/hooks'
 import { sessionsHome } from '@openagt/agent-data'
 import { readSecureAddress, SECURE_PORT, type SecureAddress } from './secure-address.js'
 import { builtInServices } from './built-in.js'
@@ -34,9 +36,9 @@ import { dispatchMachineRpc, dispatchRelayRpc, isRelayReadCall } from './dashboa
 /**
  * The dashboard process (#302). It is a pure projection of files: a run's tool keeps the run's
  * card and diary in the run's checkout, and the dashboard *tails* them, pushing each new line to
- * connected browsers. No run<->dashboard IPC: the files are the seam. The daemon runs no agent
- * (#1774): a Start is the project's own `start` hook line, and what a person says to a run goes
- * into the run's inbox file, or through the `resume` hook line once the run has ended.
+ * connected browsers. No run<->dashboard IPC: the files are the seam. The daemon runs no agent:
+ * a Start, and what a person says to a run, go to this computer's host (`run.host`, #2394), which
+ * starts the run's own process, and reaches it through its inbox file, or resumes it once it has ended.
  *
  * It runs in the foreground and only in the foreground: Ctrl-C closes the dashboard. A run is
  * not the daemon's process, so it goes on to its end. There is no detached mode, so there is no
@@ -84,6 +86,8 @@ export interface RunDaemonOptions {
   packageServices?: (opts: PackageServicesOptions) => PackageServices
   /** How long the teardown after Ctrl+C may take; default {@link SHUTDOWN_DEADLINE_MS}. For tests. */
   shutdownDeadlineMs?: number
+  /** The modules the dashboard runs, loaded; its distribution's when unsaid (`distribution-hooks.ts`). For tests. */
+  hooks?: Hooks
 }
 
 /** How long the teardown after Ctrl+C may take before the daemon ends without what is still running. */
@@ -115,8 +119,10 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
   // Everything the dashboard drives per project (a run's start, project install, the machine
   // relay) lives in the runtime, so this body stays about the daemon's own lifecycle.
   // A run's name is asked of a naming session kept waiting for it (agent-runner's `ReadyNaming`), so
-  // the page has it about a second after Start.
-  const runtime = createProjectRuntime({ cwd, env, naming: new ReadyNaming() })
+  // the page has it about a second after Start. A run starts on this computer's host, the
+  // distribution's (#2394).
+  const host = await localHostOf(opts.hooks ?? (await loadHooks()))
+  const runtime = createProjectRuntime({ cwd, env, naming: new ReadyNaming(), host })
   // Known only once the dashboard listens; the bridge browser is told it (#1332).
   let daemonUrl: string | undefined
 
@@ -167,6 +173,7 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
       // machine (slice 2).
       eventsSource: runtime.remoteEventsSource,
       remote: runtime.remoteAgents,
+      host,
       // The bridge browser follows its switch (#1332): on launches it, off closes it, without a restart.
       preferences: registryPreferencesStore(env, written => {
         if (written.bridgeBrowser === true) void bridgeBrowser.start()
@@ -227,9 +234,9 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
   for (const record of listed) {
     await runProjectHooks(record.path, 'open', { log: console.log })
   }
-  // The sessions with no project: their home's hook lines written, as a project's are when it is
-  // added, and a session whose process died swept, as a project's scheduler sweeps its runs.
-  const sessions = await prepareSessionsHome(sessionsHome(env))
+  // The sessions with no project: their home made, and a session whose process died swept, as a
+  // project's scheduler sweeps its runs.
+  const sessions = await readySessionsHome(sessionsHome(env))
   const stopSessionsSweep = startSessionsSweep(sessions)
 
   // The services of OpenAgent's own packages: each runs for as long as the daemon does, and is

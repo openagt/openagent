@@ -1,18 +1,17 @@
-import { readFile, rm, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
 import { isMap, isScalar, isSeq, parseDocument, type YAMLSeq } from 'yaml'
 import { OPENAGENT_DIR } from '@openagt/agent-data'
-import { writeHookLines, type InitOutcome } from '@openagt/agent-runner'
 
 /**
  * `init`: this tool's lines written into a dashboard's hooks file, so the scheduler runs while the
- * dashboard is open. The tool writes
- * its own lines: the dashboard names no tool. The lines that start, resume and check a run are
- * `agent-runner`'s, written by its own `init`. The writer is `agent-runner`'s too, with its rule: a
- * person's file is never overwritten, a list gains a line only when it lacks it.
+ * dashboard is open. The tool writes its own lines: the dashboard names no tool. A person's file
+ * is never overwritten: a list gains a line only when it lacks it. Its `open` and `close` lines are
+ * all the file holds since runs start through the dashboard's run host (#2394); they go when the
+ * scheduler starts and stops with the app (`app.lifecycle`, #2394's step 6).
  *
- * The lines name the tool bare, with no `npx`, like `agent-runner`'s: the dashboard brings this
- * tool and puts it on a line's PATH, so nothing is fetched from npm to run one. With `npx`, a
+ * The lines name the tool bare, with no `npx`: the dashboard brings this tool and puts it on a
+ * line's PATH, so nothing is fetched from npm to run one. With `npx`, a
  * project that installed nothing would get the unrelated package that holds the name `scheduler`
  * on npm.
  *
@@ -22,7 +21,7 @@ import { writeHookLines, type InitOutcome } from '@openagt/agent-runner'
  */
 
 /** The lines, in the order a new file lists them: `open` and `close`, each a list. */
-const HOOK_LINES: Readonly<Record<string, string | readonly string[]>> = {
+const HOOK_LINES: Readonly<Record<string, readonly string[]>> = {
   open: ['scheduler start'],
   close: ['scheduler stop --unless-keep-alive'],
 }
@@ -32,7 +31,9 @@ const TOOL = { name: '@openagt/skill-scheduler', commands: ['scheduler'] }
 
 const HOOKS_FILE = `${OPENAGENT_DIR}/hooks.yml`
 
-export type { InitOutcome }
+export type InitOutcome =
+  | { ok: true; file: string; added: string[]; kept: string[] }
+  | { ok: false; reason: 'no-dashboard' | 'unreadable'; file: string; detail?: string }
 
 /** What taking the lines out answered: the keys that lost a line, or why the file could not be changed. */
 export type RemoveOutcome = { ok: true; file: string; removed: string[] } | { ok: false; reason: 'unreadable'; file: string; detail?: string }
@@ -103,4 +104,44 @@ export async function removeHooks(repo: string): Promise<RemoveOutcome> {
   if (doc.contents.items.length === 0 && !/^\s*#/m.test(raw)) await rm(file)
   else await writeFile(file, doc.toString({ lineWidth: 0 }))
   return { ok: true, file, removed }
+}
+
+/**
+ * Write `lines` into `<repo>/.openagent/hooks.yml`, each key a list of lines. The dashboard's
+ * directory must be there already (the dashboard makes it when the project is added, and hides it
+ * from git); without it nothing is written. `added` names the keys that gained a line, `kept` the
+ * ones a person set otherwise.
+ */
+async function writeHookLines(repo: string, lines: Readonly<Record<string, readonly string[]>>): Promise<InitOutcome> {
+  const file = join(repo, HOOKS_FILE)
+  if (!(await stat(join(repo, OPENAGENT_DIR)).then(found => found.isDirectory(), () => false))) return { ok: false, reason: 'no-dashboard', file }
+  const raw = await readFile(file, 'utf8').catch(() => '')
+  const doc = parseDocument(raw)
+  const error = doc.errors[0]
+  if (error) return { ok: false, reason: 'unreadable', file, detail: error.message.split('\n')[0] ?? error.message }
+  // An empty file, or one of comments only, is an empty map.
+  if (doc.contents === null) doc.contents = doc.createNode({}) as unknown as typeof doc.contents
+  if (!isMap(doc.contents)) return { ok: false, reason: 'unreadable', file, detail: 'the file is not a YAML map' }
+  const added: string[] = []
+  const kept: string[] = []
+  for (const [key, list] of Object.entries(lines)) {
+    const present = doc.get(key, true)
+    if (present == null) {
+      doc.set(key, doc.createNode([...list]))
+      added.push(key)
+    } else if (isSeq(present)) {
+      const seq = present as YAMLSeq
+      const there = seq.items.map(item => lineOf(item).trim())
+      const missing = list.filter(line => !there.includes(line))
+      for (const line of missing) seq.add(doc.createNode(line))
+      if (missing.length > 0) added.push(key)
+    } else {
+      kept.push(key)
+    }
+  }
+  if (added.length > 0) {
+    await mkdir(dirname(file), { recursive: true })
+    await writeFile(file, doc.toString({ lineWidth: 0 }))
+  }
+  return { ok: true, file, added, kept }
 }

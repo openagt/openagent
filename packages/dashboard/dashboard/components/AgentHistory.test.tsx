@@ -374,7 +374,7 @@ describe('AgentHistory (#785)', () => {
   })
 
   test('a run the list already holds when its start comes back gets no starting row, running or ended', () => {
-    // The start hook takes seconds, and the list polls every 2s: the run's own row is often there
+    // A start takes seconds, and the list polls every 2s: the run's own row is often there
     // before the start reports its id. That row is the run; a stand-in beside it would be a second one.
     const running = agent({ id: 'run-7', status: 'running', intent: 'hi' })
     const { container, rerender } = renderRail(

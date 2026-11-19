@@ -38,8 +38,8 @@ export interface AgentMeta {
   /** What the run cost so far in US dollars, summed over its `usage` events; absent until one says. The skill's card field. */
   cost?: number
   /**
-   * The OS pid of the process running this run, on {@link host} — whatever process the project's
-   * start hook began. Recorded on the card so Stop has something to signal, and so a reader can
+   * The OS pid of the process running this run, on {@link host} — whatever process the run's host
+   * began. Recorded on the card so Stop has something to signal, and so a reader can
    * tell a run that is working from one whose process died without recording an ending (#716).
    */
   pid?: number

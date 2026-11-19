@@ -19,7 +19,7 @@ afterEach(() => {
 
 describe('useProjectLauncher', () => {
   test('a command is read for the pick of this project, and a new pick is read at once, with the last answer standing until it lands', async () => {
-    onCommands.mockResolvedValueOnce({ commands: [{ name: 'plan', waiting: 'main' }], startHook: true })
+    onCommands.mockResolvedValueOnce({ commands: [{ name: 'plan', waiting: 'main' }] })
     prefs.current = { startFrom: { other: { kind: 'local' } } }
     const { result, rerender } = renderHook(({ id }) => useProjectLauncher(id), { initialProps: { id: 'p1' } })
     expect(result.current).toBeNull()
@@ -32,12 +32,12 @@ describe('useProjectLauncher', () => {
     rerender({ id: 'p1' })
     await waitFor(() => expect(onCommands).toHaveBeenLastCalledWith('p1', FEATURE))
     expect(result.current?.commands, 'the row above the box does not blink').toEqual([{ name: 'plan', waiting: 'main' }])
-    await act(async () => land({ commands: [{ name: 'plan' }], startHook: true }))
+    await act(async () => land({ commands: [{ name: 'plan' }] }))
     expect(result.current?.commands).toEqual([{ name: 'plan' }])
   })
 
   test("another project's answer is never shown for this one", async () => {
-    onCommands.mockResolvedValueOnce({ commands: [{ name: 'plan' }], startHook: true })
+    onCommands.mockResolvedValueOnce({ commands: [{ name: 'plan' }] })
     const { result, rerender } = renderHook(({ id }) => useProjectLauncher(id), { initialProps: { id: 'p1' } })
     await waitFor(() => expect(result.current).not.toBeNull())
     onCommands.mockReturnValueOnce(new Promise(() => {}))

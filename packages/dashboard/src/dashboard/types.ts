@@ -113,8 +113,8 @@ export interface StartAgentOptions {
 }
 
 /**
- * The outcome of a Start attempt (#345): the id of the run the project's start hook began, or why
- * there is none. `driver` is the coding agent the hook said runs it: what another computer that
+ * The outcome of a Start attempt (#345): the id of the run the run's host began, or why there is
+ * none. `driver` is the coding agent that runs it: what another computer that
  * follows the run shows, since the run's record stays on this one. `notThere` marks the one
  * refusal a page can do something about: the machine the run was sent to does not have the
  * project yet, and can clone it. `projectId` is the project the run started in, when it is not the

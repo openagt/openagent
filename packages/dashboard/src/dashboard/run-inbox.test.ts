@@ -1,51 +1,39 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { addWorktree, agentBranchName, worktreePath } from '@openagt/skill-branches'
-import { nodeGitRunner } from '@openagt/agent-data'
-import { OPENAGENT_DIR } from '../openagent-dir.js'
-import { PROJECT_HOOKS_FILE } from '../project-hooks.js'
-import { RUN_INBOX_FILE, sayToRun } from './run-inbox.js'
+import { basename, join } from 'node:path'
+import { fakeHost } from '@openagt/hooks/testing'
+import { provideTestContext } from '../dashboard-rpc/test-context.js'
+import { SESSIONS_ID } from '../project-address.js'
+import { sayToRun } from './run-inbox.js'
 
-// The one case the RPC tests cannot stage: a run that ends while a line is on its way to it.
+// What a person says to a run goes to this computer's host, with the run and its project; what
+// the host refuses is said in its words. The host's own way with a working run and an ended one
+// is agent-runner's (`host.test.ts`).
 
-const RUN = '2026-07-19T10-00-00-000Z'
-
-test('a line written to a run that ended meanwhile is taken back out of the inbox and resumes the run instead (#1774)', async () => {
-  const cwd = await realpath(await mkdtemp(join(tmpdir(), 'openagent-run-inbox-')))
-  const checkout = worktreePath(cwd, RUN)
-  const inbox = join(checkout, OPENAGENT_DIR, RUN_INBOX_FILE)
+test('a line goes to the host with the run and its project, and a session with no project names none', async () => {
+  const dir = await realpath(await mkdtemp(join(tmpdir(), 'openagent-run-inbox-')))
+  const host = fakeHost()
+  provideTestContext({ host })
   try {
-    // A real checkout in a real repository: the run's inbox is found through the project's branches provider (#1774).
-    const git = nodeGitRunner()
-    await git(['init', '-q'], cwd)
-    await git(['config', 'user.email', 't@t'], cwd)
-    await git(['config', 'user.name', 't'], cwd)
-    await writeFile(join(cwd, 'README'), 'x\n')
-    await git(['add', '-A'], cwd)
-    await git(['commit', '-q', '-m', 'init'], cwd)
-    await addWorktree(cwd, { agentId: RUN, branch: agentBranchName(RUN) }, git)
-    await mkdir(join(checkout, OPENAGENT_DIR), { recursive: true })
-    await mkdir(join(cwd, OPENAGENT_DIR), { recursive: true })
-    await writeFile(join(cwd, PROJECT_HOOKS_FILE), `resume: 'printf "%s|%s|%s|%s\\n" "$RUN_ID" "\${TEXT-}" "\${ANSWER-}" "\${PUBLISH-}" >> resumed.txt; echo "{\\"id\\":\\"$RUN_ID\\"}"'\n`)
-    // An earlier line the run never took waits there too: it goes first, in order.
-    await writeFile(inbox, JSON.stringify({ kind: 'answer', question: 'Which way?', answer: 'Left' }) + '\n')
-
-    // Working when the line is written, ended when looked at again.
-    const answers = [true, false]
-    // The message carries a new level, which goes with it to the resume line.
-    const said = await sayToRun(cwd, RUN, { kind: 'message', text: 'also add tests', publish: 'pr' }, { isWorking: async () => answers.shift() ?? false })
-    assert.deepEqual(said, { ok: true })
-    assert.equal(await readFile(join(cwd, 'resumed.txt'), 'utf8'), `${RUN}||Left|\n${RUN}|also add tests||pr\n`)
-    assert.equal(await readFile(inbox, 'utf8').catch(() => ''), '', 'nothing is left in an inbox nobody reads')
-
-    // Still working when looked at again: the line stays in the inbox, and nothing is resumed.
-    assert.deepEqual(await sayToRun(cwd, RUN, { kind: 'message', text: 'one more', publish: 'nothing' }, { isWorking: async () => true }), { ok: true })
-    assert.deepEqual((await readFile(inbox, 'utf8')).trim().split('\n').map(line => JSON.parse(line) as unknown), [{ kind: 'message', text: 'one more', publish: 'nothing' }], 'the level goes in the line, for the run to read')
-    assert.equal((await readFile(join(cwd, 'resumed.txt'), 'utf8')).split('\n').filter(Boolean).length, 2)
+    const { id } = await host.start({ prompt: 'fix it', options: {} })
+    assert.deepEqual(await sayToRun('shop', dir, id, { kind: 'message', text: 'also add tests', publish: 'pr' }), { ok: true })
+    assert.deepEqual(host.steered, [{ id, line: { kind: 'message', text: 'also add tests', publish: 'pr' } }])
+    const asked: unknown[] = []
+    provideTestContext({ host: { ...host, steer: async (run, line) => void asked.push([run, line]) } })
+    await sayToRun(SESSIONS_ID, dir, id, { kind: 'now' })
+    await sayToRun('shop', dir, id, { kind: 'now' })
+    assert.deepEqual(asked, [
+      [{ id }, { kind: 'now' }],
+      [{ id, project: { id: 'shop', name: basename(dir), dir } }, { kind: 'now' }],
+    ])
   } finally {
-    await rm(cwd, { recursive: true, force: true })
+    await rm(dir, { recursive: true, force: true })
   }
+})
+
+test('what the host refuses is said in its own words', async () => {
+  provideTestContext({ host: { ...fakeHost(), steer: async () => { throw new Error('no run r1 in this project') } } })
+  assert.deepEqual(await sayToRun('shop', '/work/shop', 'r1', { kind: 'message', text: 'go on' }), { ok: false, error: 'no run r1 in this project' })
 })

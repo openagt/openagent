@@ -6,13 +6,12 @@ import { makeWorld, waitFor, release, git } from './harness.js'
 import { onAgent, onAgents, onAgentHandoff, onAgentWorktree, onRetainedWorktrees, onActivity, onRecentAgents } from '../dashboard-rpc/reads.js'
 import { onCommands } from '../dashboard-rpc/projects.js'
 import { sendStart } from '../dashboard-rpc/control.js'
-import { PROJECT_HOOKS_FILE } from '../project-hooks.js'
 
 // The run lifecycle stories (README.md): what a user sees between clicking Start and reading the
-// recorded run's row — through the same RPCs the dashboard calls, the project's own start hook,
-// and a real detached run process with the fake driver in the agent seat.
+// recorded run's row — through the same RPCs the dashboard calls, this computer's run host, and a
+// real detached run process with the fake driver in the agent seat.
 
-test('start a run through the project\'s start hook, watch it live, and read the recorded row when it ends', async () => {
+test("start a run on this computer's host, watch it live, and read the recorded row when it ends", async () => {
   const world = await makeWorld()
   const rpc = world.rpc
   try {
@@ -20,12 +19,12 @@ test('start a run through the project\'s start hook, watch it live, and read the
     const agentId = await world.startAgent(project, 'Add a login page and commit it', { driver: 'codex', model: 'gpt-5', publish: 'merge', base: 'main' })
     const tail = await world.tailAgent(project, agentId)
 
-    // The hook line got the prompt and the person's picks in its environment, and the id it
-    // answered is the run's. The run is detached, so the recorded call is the only place this
-    // contract is observable. The project has no git host package, so no pull request can be
-    // opened: the level picked, merge, is handed over as the furthest the project goes, the branch.
-    const call = (await world.hookCalls())[0]!
-    assert.deepEqual(call, { hook: 'start', id: agentId, prompt: 'Add a login page and commit it', driver: 'codex', model: 'gpt-5', publish: 'branch', base: 'main' })
+    // The run's process got the prompt and the person's picks, and the id the host answered is the
+    // run's. The run is detached, so the recorded call is the only place this contract is
+    // observable. The project has no git host package, so no pull request can be opened: the
+    // level picked, merge, is handed over as the furthest the project goes, the branch.
+    const call = (await world.hostCalls())[0]!
+    assert.deepEqual(call, { call: 'start', id: agentId, prompt: 'Add a login page and commit it', driver: 'codex', model: 'gpt-5', publish: 'branch', base: 'main' })
 
     // The feed is the run's own diary, tailed from the moment of the Start, before the run's
     // checkout exists: the agent's reply, then the end.
@@ -137,21 +136,16 @@ test('a checkout git can no longer read, as one being removed, still answers wit
   }
 })
 
-test('a project without a start hook cannot start a run, and a hook that fails says why (#1774)', async () => {
+test("a start the host refuses says why, and nothing is started", async () => {
   const world = await makeWorld()
   const rpc = world.rpc
   try {
     const project = await world.addProject()
-    // The launcher reads whether the project has the line, to switch Start off with the reason.
-    assert.equal((await rpc(onCommands)(project.id))?.startHook, true)
-    assert.equal((await rpc(onCommands)(project.id))?.gitHost, false, 'and whether a pull request can be opened here, for its publish menu')
+    // The launcher reads whether a pull request can be opened here, for its publish menu.
+    assert.equal((await rpc(onCommands)(project.id))?.gitHost, false)
 
-    // The tool's own refusal: its last line on stderr is what the person reads.
-    assert.deepEqual(await rpc(sendStart)(project.id, 'refuse this one'), { ok: false, error: "This project's start line, in .openagent/hooks.yml, failed. It said: “the project has no such command”" })
-
-    await rm(join(project.cwd, PROJECT_HOOKS_FILE))
-    assert.equal((await rpc(onCommands)(project.id))?.startHook, false)
-    assert.deepEqual(await rpc(sendStart)(project.id, 'Add a login page'), { ok: false, error: 'this project has no start hook' })
+    // The host's own refusal is what the person reads.
+    assert.deepEqual(await rpc(sendStart)(project.id, 'refuse this one'), { ok: false, error: 'the project has no such command' })
     assert.deepEqual(await rpc(onAgents)(project.id), [], 'nothing was started')
   } finally {
     await world.close()

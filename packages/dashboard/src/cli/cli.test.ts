@@ -53,7 +53,7 @@ test('parseArgs flags unknown options and bad values', () => {
   assert.equal(parseArgs(['--port', '65535']).port, 65535)
   assert.match(parseArgs(['--host', '0.0.0.0']).error!, /unknown option: --host/) // the first unreadable thing is the one told
   // Every flag that configured a run is gone: the command runs no agent, and what a run needs
-  // is the project's start hook's business (#1774).
+  // is the run host's business (#2394).
   for (const gone of ['--agent', '--scope', '--max-passes', '--max-cost', '--permission-mode', '--driver', '--run-on']) {
     assert.match(parseArgs([gone]).error!, /unknown option/, gone)
   }

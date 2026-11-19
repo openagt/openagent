@@ -1,4 +1,4 @@
-import type { Driver, DriverEvent } from '@openagt/agent-driver'
+import type { Driver, DriverEvent, DriverReadiness, InboxLine } from '@openagt/agent-driver'
 import type { ProjectRef } from './project.js'
 import type { Settings } from './settings.js'
 import type { Store } from './store.js'
@@ -28,6 +28,8 @@ export interface AgentDriverOptions {
   driver?: string
   model?: string
   effort?: string
+  /** The agent the run is on, by its id: its skills and accounts. Until presets replace agents (#2394's step 5). */
+  agent?: string
   /** The Claude accounts the run's turns take, in order, as the Permissions page names them. */
   claude?: string[]
   /** The Codex accounts, the same way. */
@@ -52,8 +54,12 @@ export interface GitBranchesOptions {
   repos?: { name: string; from: string }[]
 }
 
-/** skills' slice: which of the project's own skills the run gets. */
+/** skills' slice: the skills the run gets beside its agent's, and which of the project's own. */
 export interface SkillsOptions {
+  /** Skills the run gets on top of its agent's, by name. */
+  on?: string[]
+  /** Skills of its agent's the run goes without, by name. */
+  off?: string[]
   /** None, or the ones named; every one when absent. A named skill the project does not have is not there. */
   project?: 'none' | string[]
 }
@@ -110,6 +116,8 @@ export type RunStatus = 'working' | RunOutcome['status']
 export interface RunInput {
   text?: string
   answer?: string
+  /** With a message: how far the run takes its work from it on, when the person changed it: a level, or `nothing`. */
+  publish?: Publish | 'nothing'
 }
 
 /**
@@ -180,15 +188,30 @@ export type RunEvent = DriverEvent
 
 /** Starting a run, as a host is asked it. */
 export interface RunRequest {
-  /** The project, by the registry's id; none for a session with no project. */
-  project?: string
+  /** The project the run is in; none for a session with no project. */
+  project?: ProjectRef
   prompt: string
   options: RunOptions
+  /**
+   * The run's short name, as whoever starts the run is already asking for it, so the run does not
+   * ask again; `false` where runs are not named (the person's setting). The host has it named when absent.
+   */
+  title?: Promise<string | undefined> | false
 }
+
+/** A run, as a host is asked about it: its id, and the project it is in; none for a session with no project. */
+export interface RunRef {
+  id: string
+  project?: ProjectRef
+}
+
+/** What stands in the way of a run on a host: problems stop it, warnings do not, and a fix a press can run. */
+export type RunReadiness = DriverReadiness
 
 /** A run, as a host lists it. */
 export interface RunSummary {
   id: string
+  /** The project it is in, by its id; none for a session with no project. */
   project?: string
   status: RunStatus
   startedAt: string
@@ -198,25 +221,39 @@ export interface RunSummary {
   prompt: string
 }
 
-/** Where runs live and are read: this computer by default; plugins add another computer, a GitHub Actions runner, a cloud session. */
+/** This computer's host, agent-driver's, by its id: where a run runs when no other host is picked. */
+export const LOCAL_HOST = 'here'
+
+/**
+ * Where runs live and are read: this computer by default; plugins add another computer, a GitHub
+ * Actions runner, a cloud session. What a host refuses (a run that already ended, a coding agent
+ * that cannot start) throws, its message in words for the person.
+ */
 export interface RunHost {
   /** What a run's options and records name it by. */
   id: string
   /** Its name in the "Run on" picker. */
   label: string
+  /** What would stop a run started here with these options, asked before the Start. */
+  check?(request: Pick<RunRequest, 'project' | 'options'>): Promise<RunReadiness>
+  /** Start a run, answered as soon as the run has its id: the run goes on on its own. */
   start(request: RunRequest): Promise<{ id: string }>
   /** Go on with a run that ended or stopped on a question. */
-  resume(id: string, input: RunInput): Promise<void>
-  /** Send a working run a message, read between two of its agent's steps. */
-  steer(id: string, text: string): Promise<void>
-  /** Stop a working run: politely, letting the agent finish its step; with `force`, at once. */
-  stop(id: string, opts?: { force?: boolean }): Promise<void>
-  /** The runs it has, one project's or every one's, newest first. */
-  list(project?: string): Promise<RunSummary[]>
-  /** A run's events from its start, then each one as it comes, until the run ends or `signal` aborts. */
-  events(id: string, signal: AbortSignal): AsyncIterable<RunEvent>
+  resume(run: RunRef, input: RunInput): Promise<void>
+  /**
+   * Say one line to a run: a working run takes it between two of its agent's steps, or when its
+   * turn ends for a line sent for later; a run that has ended goes on with a message or an answer,
+   * as `resume` does.
+   */
+  steer(run: RunRef, line: InboxLine): Promise<void>
+  /** Stop a working run: politely, letting the agent end its turn where it is; with `force`, at once. */
+  stop(run: RunRef, opts?: { force?: boolean }): Promise<void>
+  /** The runs it has in a project, or with no project, newest first. */
+  list(project?: ProjectRef): Promise<RunSummary[]>
+  /** A run's events from its start, then each one as it comes, until the run ends or `signal` aborts. The panes read a run through its host from #2394's step 5. */
+  events?(run: RunRef, signal: AbortSignal): AsyncIterable<RunEvent>
   /** A file of the run's checkout, by its path there; none when there is no such file. */
-  file?(id: string, path: string): Promise<string | undefined>
+  file?(run: RunRef, path: string): Promise<string | undefined>
   /** What the run changed, as a unified diff from where its branch started; none for a run with no checkout. */
-  diff?(id: string): Promise<string | undefined>
+  diff?(run: RunRef): Promise<string | undefined>
 }

@@ -12,6 +12,8 @@ import type { AgentMeta } from './store/index.js'
 import { ReadyNaming } from '@openagt/agent-runner'
 import { readyPrompt, type Driver } from '@openagt/agent-driver'
 import { PROJECT_HOOKS_FILE } from './project-hooks.js'
+import type { RunHost, RunOptions } from '@openagt/hooks'
+import { fakeHost, type FakeHost } from '@openagt/hooks/testing'
 import { OPENAGENT_DIR } from './openagent-dir.js'
 import { addMachine, addProject, listMachines, listProjects, removeProject, tellMachine } from './registry.js'
 import type { OpenAgentEvent } from './events.js'
@@ -21,34 +23,36 @@ import { SESSIONS_ID } from './project-address.js'
 import { addWorktree, agentBranchName, worktreePath } from '@openagt/skill-branches'
 import { DATA_BRANCH, SHARE_SETTING, excludeFromGit, readSharing, withFileBranch, writeSharing } from '@openagt/agent-data'
 
-// A Start, as the daemon does it (#1774): the project's own start hook line, nothing else. The
-// relay half of onStart has its own loopback test (dashboard/remote-run.integration.test.ts).
+// A Start, as the daemon does it: this computer's host (`run.host`, #2394), asked with the run's
+// options. The relay half of onStart has its own loopback test (dashboard/remote-run.integration.test.ts).
 
-async function project(hooks?: string): Promise<string> {
+async function project(): Promise<string> {
   const cwd = await realpath(await mkdtemp(join(tmpdir(), 'openagent-runtime-')))
   await mkdir(join(cwd, OPENAGENT_DIR), { recursive: true })
-  if (hooks !== undefined) await writeFile(join(cwd, PROJECT_HOOKS_FILE), hooks)
   return cwd
 }
 
-const START = `start: 'printf "%s|%s|%s" "$PROMPT" "\${DRIVER-unset}" "\${MODEL-unset}" > started.txt; echo "{\\"id\\":\\"run-7\\"}"'\n`
+/** What the host was asked last: the project's folder, the prompt, and the run's options. */
+function lastStart(host: FakeHost): { dir?: string; prompt?: string; options?: RunOptions } {
+  const request = host.requests.at(-1)
+  return { ...(request?.project ? { dir: request.project.dir } : {}), ...(request ? { prompt: request.prompt, options: request.options } : {}) }
+}
 
-test('onStart runs the start hook of the project addressed, home or registered, and answers the run the hook began', async () => {
-  const home = await project(START)
-  const other = await project(START)
+test("onStart starts the run on this computer's host, in the project addressed, home or registered, and answers the run it began", async () => {
+  const home = await project()
+  const other = await project()
   const env = { XDG_CONFIG_HOME: join(home, 'cfg') }
   await mkdir(env.XDG_CONFIG_HOME, { recursive: true })
   const record = await addProject(other, new Date().toISOString(), env)
-  const runtime = createProjectRuntime({ cwd: home, env })
+  const host = fakeHost()
+  const runtime = createProjectRuntime({ cwd: home, env, host })
   try {
-    assert.deepEqual(await runtime.onStart('/work-queue', { driver: 'codex', model: 'gpt-5' }), { ok: true, agentId: 'run-7' })
-    assert.equal(await readFile(join(home, 'started.txt'), 'utf8'), '/work-queue|codex|gpt-5')
-    // No picks made: the line's own defaults apply, so neither variable is set.
-    assert.deepEqual(await runtime.onStart('Read the docs', {}, record.id), { ok: true, agentId: 'run-7' })
-    assert.equal(await readFile(join(other, 'started.txt'), 'utf8'), 'Read the docs|unset|unset')
-    // A line that says which coding agent runs its run: the answer passes it on.
-    await writeFile(join(other, PROJECT_HOOKS_FILE), `start: 'echo "{\\"id\\":\\"run-8\\",\\"driver\\":\\"claude-code\\"}"'\n`)
-    assert.deepEqual(await runtime.onStart('Read the docs', {}, record.id), { ok: true, agentId: 'run-8', driver: 'claude-code' })
+    assert.deepEqual(await runtime.onStart('/work-queue', { driver: 'codex', model: 'gpt-5', effort: 'high' }), { ok: true, agentId: 'run-1', driver: 'codex' })
+    assert.deepEqual(lastStart(host), { dir: home, prompt: '/work-queue', options: { 'agent-driver': { driver: 'codex', model: 'gpt-5', effort: 'high' }, publish: 'commit' } })
+    // No picks made: the host's own defaults apply, and the answer names the coding agent it is on.
+    assert.deepEqual(await runtime.onStart('Read the docs', {}, record.id), { ok: true, agentId: 'run-2', driver: 'claude-code' })
+    assert.deepEqual(lastStart(host), { dir: other, prompt: 'Read the docs', options: { publish: 'commit' } })
+    assert.equal(host.requests[1]?.project?.id, record.id)
   } finally {
     await runtime.dispose()
     await rm(home, { recursive: true, force: true })
@@ -56,16 +60,15 @@ test('onStart runs the start hook of the project addressed, home or registered, 
   }
 })
 
-test('onStart refuses in words: an unknown project, a project with no start line, a line that fails', async () => {
-  const home = await project('open:\n  - "true"\n')
+test('onStart refuses in words: an unknown project, a start the host refuses', async () => {
+  const home = await project()
   const env = { XDG_CONFIG_HOME: join(home, 'cfg') }
   await mkdir(env.XDG_CONFIG_HOME, { recursive: true })
-  const runtime = createProjectRuntime({ cwd: home, env })
+  const host: RunHost = { ...fakeHost(), start: async () => { throw new Error('Codex is not installed.') } }
+  const runtime = createProjectRuntime({ cwd: home, env, host })
   try {
     assert.deepEqual(await runtime.onStart('x', {}, 'no-such-project'), { ok: false, error: 'unknown project: no-such-project' })
-    assert.deepEqual(await runtime.onStart('x'), { ok: false, error: 'this project has no start hook' })
-    await writeFile(join(home, PROJECT_HOOKS_FILE), 'start: echo "codex is not installed" >&2; exit 1\n')
-    assert.deepEqual(await runtime.onStart('x'), { ok: false, error: "This project's start line, in .openagent/hooks.yml, failed. It said: “codex is not installed”" })
+    assert.deepEqual(await runtime.onStart('x'), { ok: false, error: 'Codex is not installed.' })
   } finally {
     await runtime.dispose()
     await rm(home, { recursive: true, force: true })
@@ -73,70 +76,71 @@ test('onStart refuses in words: an unknown project, a project with no start line
 })
 
 test('a Start goes no further than the project can, the commit with no remote, the branch with a remote and no git host; with no pick it commits, and with Nothing it is given no level', async () => {
-  const PUBLISH = `start: 'printf "%s" "\${PUBLISH-unset}" > started.txt; echo "{\\"id\\":\\"run-8\\"}"'\n`
-  const home = await project(PUBLISH)
+  const home = await project()
   const env = { XDG_CONFIG_HOME: join(home, 'cfg') }
   await mkdir(env.XDG_CONFIG_HOME, { recursive: true })
-  const runtime = createProjectRuntime({ cwd: home, env })
+  const host = fakeHost()
+  const runtime = createProjectRuntime({ cwd: home, env, host })
+  const level = (): unknown => lastStart(host).options?.publish
   try {
     execFileSync('git', ['init', '-q'], { cwd: home })
-    assert.deepEqual(await runtime.onStart('Fix it', { publish: 'merge' }), { ok: true, agentId: 'run-8' })
-    assert.equal(await readFile(join(home, 'started.txt'), 'utf8'), 'commit', 'no remote: the commit')
+    assert.deepEqual(await runtime.onStart('Fix it', { publish: 'merge' }), { ok: true, agentId: 'run-1', driver: 'claude-code' })
+    assert.equal(level(), 'commit', 'no remote: the commit')
     // No pick saved: the daemon starts the run at the commit, which pushes nothing.
-    assert.deepEqual(await runtime.onStart('Fix it'), { ok: true, agentId: 'run-8' })
-    assert.equal(await readFile(join(home, 'started.txt'), 'utf8'), 'commit', 'no pick, no remote: the commit')
-    // Off is a pick: the line is given no level.
-    assert.deepEqual(await runtime.onStart('Fix it', { publish: 'nothing' }), { ok: true, agentId: 'run-8' })
-    assert.equal(await readFile(join(home, 'started.txt'), 'utf8'), 'unset', 'Off saved: no level')
+    await runtime.onStart('Fix it')
+    assert.equal(level(), 'commit', 'no pick, no remote: the commit')
+    // Off is a pick: the run is given no level.
+    await runtime.onStart('Fix it', { publish: 'nothing' })
+    assert.equal(level(), undefined, 'Off saved: no level')
     execFileSync('git', ['remote', 'add', 'origin', 'https://example.com/x.git'], { cwd: home })
-    assert.deepEqual(await runtime.onStart('Fix it', { publish: 'merge' }), { ok: true, agentId: 'run-8' })
-    assert.equal(await readFile(join(home, 'started.txt'), 'utf8'), 'branch', 'a remote and no git host: the branch')
-    assert.deepEqual(await runtime.onStart('Fix it'), { ok: true, agentId: 'run-8' })
-    assert.equal(await readFile(join(home, 'started.txt'), 'utf8'), 'commit', 'no pick, a remote: the commit all the same')
-    assert.deepEqual(await runtime.onStart('Fix it', { publish: 'commit' }), { ok: true, agentId: 'run-8' })
-    assert.equal(await readFile(join(home, 'started.txt'), 'utf8'), 'commit', 'Commit saved: the commit, the remote or not')
+    await runtime.onStart('Fix it', { publish: 'merge' })
+    assert.equal(level(), 'branch', 'a remote and no git host: the branch')
+    await runtime.onStart('Fix it')
+    assert.equal(level(), 'commit', 'no pick, a remote: the commit all the same')
+    await runtime.onStart('Fix it', { publish: 'commit' })
+    assert.equal(level(), 'commit', 'Commit saved: the commit, the remote or not')
   } finally {
     await runtime.dispose()
     await rm(home, { recursive: true, force: true })
   }
 })
 
-test('a Start hands the line the branch to start from, and refuses a word that is no branch name before the line runs', async () => {
-  const BASE = `start: 'printf "%s" "\${BASE-unset}" > started.txt; echo "{\\"id\\":\\"run-9\\"}"'\n`
-  const home = await project(BASE)
+test('a Start hands the host the branch to start from, and refuses a word that is no branch name before the host is asked', async () => {
+  const home = await project()
   const env = { XDG_CONFIG_HOME: join(home, 'cfg') }
   await mkdir(env.XDG_CONFIG_HOME, { recursive: true })
-  const runtime = createProjectRuntime({ cwd: home, env })
+  const host = fakeHost()
+  const runtime = createProjectRuntime({ cwd: home, env, host })
   try {
-    assert.deepEqual(await runtime.onStart('Fix it', { base: 'my/branch' }), { ok: true, agentId: 'run-9' })
-    assert.equal(await readFile(join(home, 'started.txt'), 'utf8'), 'my/branch')
-    assert.deepEqual(await runtime.onStart('Fix it'), { ok: true, agentId: 'run-9' })
-    assert.equal(await readFile(join(home, 'started.txt'), 'utf8'), 'unset', 'no pick: the line is given no branch')
-    await rm(join(home, 'started.txt'))
+    await runtime.onStart('Fix it', { base: 'my/branch', prBase: 'develop' })
+    assert.deepEqual([lastStart(host).options?.['git-branches'], lastStart(host).options?.github], [{ base: 'my/branch' }, { prBase: 'develop' }])
+    await runtime.onStart('Fix it')
+    assert.equal(lastStart(host).options?.['git-branches'], undefined, 'no pick: the run is given no branch')
     assert.deepEqual(await runtime.onStart('Fix it', { base: '--upload-pack=x' }), { ok: false, error: 'not a branch name: --upload-pack=x' })
     assert.deepEqual(await runtime.onStart('Fix it', { base: '' }), { ok: false, error: 'not a branch name: ' })
     assert.deepEqual(await runtime.onStart('Fix it', { prBase: '--upload-pack=x' }), { ok: false, error: 'not a branch name: --upload-pack=x' })
-    await assert.rejects(readFile(join(home, 'started.txt'), 'utf8'), 'the line did not run')
+    assert.equal(host.requests.length, 2, 'the host was not asked')
   } finally {
     await runtime.dispose()
     await rm(home, { recursive: true, force: true })
   }
 })
 
-test('a Start hands the run the session\'s account at the git host, its agent and its picks of skills through the environment, never on the line, and refuses what is no login, no agent id or no skill name before the line runs', async () => {
-  const ACCOUNT = `start: 'printf "%s %s %s %s %s" "\${OPENAGENT_GIT_ACCOUNT-unset}" "\${OPENAGENT_AGENT-unset}" "\${OPENAGENT_SKILLS_ON-unset}" "\${OPENAGENT_SKILLS_OFF-unset}" "\${OPENAGENT_PROJECT_SKILLS-unset}" > started.txt; echo "{\\"id\\":\\"run-9\\"}"'\n`
-  const home = await project(ACCOUNT)
+test("a Start hands the host the session's account at the git host, its agent and its picks of skills, and refuses what is no login, no agent id or no skill name before the host is asked", async () => {
+  const home = await project()
   const env = { XDG_CONFIG_HOME: join(home, 'cfg') }
   await mkdir(env.XDG_CONFIG_HOME, { recursive: true })
-  const runtime = createProjectRuntime({ cwd: home, env })
+  const host = fakeHost()
+  const runtime = createProjectRuntime({ cwd: home, env, host })
   try {
-    assert.deepEqual(await runtime.onStart('Fix it', { account: 'octo-agent', agent: 'reviewer', skillsOn: ['review', 'ux'], skillsOff: ['github'], projectSkills: ['deploy', 'lint'] }), { ok: true, agentId: 'run-9' })
-    assert.equal(await readFile(join(home, 'started.txt'), 'utf8'), 'octo-agent reviewer review,ux github deploy,lint')
-    assert.deepEqual(await runtime.onStart('Fix it', { projectSkills: 'none' }), { ok: true, agentId: 'run-9' })
-    assert.equal(await readFile(join(home, 'started.txt'), 'utf8'), 'unset unset unset unset none')
-    assert.deepEqual(await runtime.onStart('Fix it'), { ok: true, agentId: 'run-9' })
-    assert.equal(await readFile(join(home, 'started.txt'), 'utf8'), 'unset unset unset unset unset', 'no pick: the run goes as the computer\'s account, on the default agent, with its skills and every project skill')
-    await rm(join(home, 'started.txt'))
+    await runtime.onStart('Fix it', { account: 'octo-agent', agent: 'reviewer', skillsOn: ['review', 'ux'], skillsOff: ['github'], projectSkills: ['deploy', 'lint'] })
+    const { options } = lastStart(host)
+    assert.deepEqual([options?.github, options?.['agent-driver'], options?.skills], [{ account: 'octo-agent' }, { agent: 'reviewer' }, { on: ['review', 'ux'], off: ['github'], project: ['deploy', 'lint'] }])
+    await runtime.onStart('Fix it', { projectSkills: 'none' })
+    assert.deepEqual(lastStart(host).options?.skills, { project: 'none' })
+    await runtime.onStart('Fix it')
+    assert.deepEqual(lastStart(host).options, { publish: 'commit' }, "no pick: the run goes as the computer's account, on the default agent, with its skills and every project skill")
+    const asked = host.requests.length
     const notALogin = { ok: false, error: 'An account is named by its login.' }
     assert.deepEqual(await runtime.onStart('Fix it', { account: 'octo agent' }), notALogin)
     assert.deepEqual(await runtime.onStart('Fix it', { account: '' }), notALogin)
@@ -151,21 +155,22 @@ test('a Start hands the run the session\'s account at the git host, its agent an
     const notProjectSkills = { ok: false, error: 'Project skills are none, or named by their names.' }
     assert.deepEqual(await runtime.onStart('Fix it', { projectSkills: 'all' as unknown as 'none' }), notProjectSkills)
     assert.deepEqual(await runtime.onStart('Fix it', { projectSkills: [] }), notProjectSkills)
-    await assert.rejects(readFile(join(home, 'started.txt'), 'utf8'), 'the line did not run')
+    assert.equal(host.requests.length, asked, 'the host was not asked')
   } finally {
     await runtime.dispose()
     await rm(home, { recursive: true, force: true })
   }
 })
 
-test('a Start from a branch of origin\'s hands the line origin\'s copy; one gone from origin, or an origin that cannot be read, refuses in plain words before the line runs', async () => {
-  const BASE = `start: 'printf "%s" "\${BASE-unset}" > started.txt; echo "{\\"id\\":\\"run-9\\"}"'\n`
-  const home = await project(BASE)
+test("a Start from a branch of origin's hands the host origin's copy; one gone from origin, or an origin that cannot be read, refuses in plain words before the host is asked", async () => {
+  const home = await project()
   const env = { XDG_CONFIG_HOME: join(home, 'cfg') }
   await mkdir(env.XDG_CONFIG_HOME, { recursive: true })
   const origin = await realpath(await mkdtemp(join(tmpdir(), 'openagent-origin-')))
-  const runtime = createProjectRuntime({ cwd: home, env })
+  const host = fakeHost()
+  const runtime = createProjectRuntime({ cwd: home, env, host })
   const git = (cwd: string, ...args: string[]) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', ...args], { cwd })
+  const base = (): unknown => lastStart(host).options?.['git-branches']?.base
   try {
     git(origin, 'init', '-q', '--bare', '-b', 'main')
     git(home, 'init', '-q', '-b', 'main')
@@ -174,19 +179,18 @@ test('a Start from a branch of origin\'s hands the line origin\'s copy; one gone
     git(home, 'push', '-q', 'origin', 'main', 'main:feature/x')
     // This clone's copy outlives the branch, as it does in any clone: origin is what is asked.
     git(home, 'fetch', '-q', 'origin')
-    assert.deepEqual(await runtime.onStart('Fix it', { base: publishedBase('feature/x') }), { ok: true, agentId: 'run-9' })
-    assert.equal(await readFile(join(home, 'started.txt'), 'utf8'), publishedBase('feature/x'))
-    await rm(join(home, 'started.txt'))
+    assert.deepEqual(await runtime.onStart('Fix it', { base: publishedBase('feature/x') }), { ok: true, agentId: 'run-1', driver: 'claude-code' })
+    assert.equal(base(), publishedBase('feature/x'))
 
     git(origin, 'update-ref', '-d', 'refs/heads/feature/x')
     assert.deepEqual(await runtime.onStart('Fix it', { base: publishedBase('feature/x') }), { ok: false, error: 'The branch feature/x is no longer on origin. Pick another branch to start from.' })
     git(home, 'remote', 'set-url', 'origin', join(origin, 'nowhere'))
     assert.deepEqual(await runtime.onStart('Fix it', { base: publishedBase('main') }), { ok: false, error: 'Could not read the branch main from origin. Check the connection, or pick another branch to start from.' })
-    await assert.rejects(readFile(join(home, 'started.txt'), 'utf8'), 'the line did not run')
+    assert.equal(host.requests.length, 1, 'the host was not asked')
 
     // The local pick asks nothing of origin: it starts where the origin cannot be read too.
-    assert.deepEqual(await runtime.onStart('Fix it', { base: 'main' }), { ok: true, agentId: 'run-9' })
-    assert.equal(await readFile(join(home, 'started.txt'), 'utf8'), 'main')
+    await runtime.onStart('Fix it', { base: 'main' })
+    assert.equal(base(), 'main')
   } finally {
     await runtime.dispose()
     await rm(home, { recursive: true, force: true })
@@ -194,23 +198,20 @@ test('a Start from a branch of origin\'s hands the line origin\'s copy; one gone
   }
 })
 
-test('adding a project writes the runner\'s start, resume and check lines, an empty folder included, and keeps a line already there', async () => {
+test('adding a project makes it one, an empty folder included, and writes no hook lines: runs start through the host', async () => {
   const folder = await realpath(await mkdtemp(join(tmpdir(), 'openagent-add-')))
   const cfg = await realpath(await mkdtemp(join(tmpdir(), 'openagent-add-cfg-')))
   // The add's git reads the process's own environment, and a new folder's first commit needs an author.
   const env = { XDG_CONFIG_HOME: cfg, GIT_AUTHOR_NAME: 'Test', GIT_AUTHOR_EMAIL: 'test@example.com', GIT_COMMITTER_NAME: 'Test', GIT_COMMITTER_EMAIL: 'test@example.com' }
   const before = Object.fromEntries(Object.keys(env).map(key => [key, process.env[key]]))
   Object.assign(process.env, env)
-  const runtime = createProjectRuntime({ cwd: folder, env })
+  const runtime = createProjectRuntime({ cwd: folder, env, host: fakeHost() })
   try {
     assert.deepEqual(await runtime.onAddProject(folder, false), { ok: true, alreadyActivated: false })
     // The person's answer on the agents' records is written with the add: kept on this machine.
     assert.equal(await readSharing(folder), false)
-    const written = await readFile(join(folder, PROJECT_HOOKS_FILE), 'utf8')
-    for (const key of ['start', 'resume', 'check']) assert.match(written, new RegExp(`^${key}: agent-runner `, 'm'))
+    await assert.rejects(readFile(join(folder, PROJECT_HOOKS_FILE), 'utf8'), 'no hooks file')
 
-    // The person's own line stays; adding the project again fills only what is missing.
-    await writeFile(join(folder, PROJECT_HOOKS_FILE), 'start: my-own-tool "$PROMPT"\n')
     // A yes is to the remote that is there: this folder has none, so the records stay kept.
     assert.deepEqual(await runtime.onAddProject(folder, true), { ok: true, alreadyActivated: true, noRemote: true })
     assert.equal(await readSharing(folder), false)
@@ -218,9 +219,6 @@ test('adding a project writes the runner\'s start, resume and check lines, an em
     execFileSync('git', ['remote', 'add', 'origin', join(cfg, 'origin.git')], { cwd: folder })
     assert.deepEqual(await runtime.onAddProject(folder, true), { ok: true, alreadyActivated: true })
     assert.equal(await readSharing(folder), true)
-    const again = await readFile(join(folder, PROJECT_HOOKS_FILE), 'utf8')
-    assert.match(again, /^start: my-own-tool "\$PROMPT"$/m)
-    assert.match(again, /^resume: agent-runner /m)
   } finally {
     await runtime.dispose()
     for (const [key, value] of Object.entries(before)) {
@@ -239,7 +237,7 @@ test('starting inside a folder not on the list adds it and leaves the repository
   const env = { XDG_CONFIG_HOME: cfg, GIT_AUTHOR_NAME: 'Test', GIT_AUTHOR_EMAIL: 'test@example.com', GIT_COMMITTER_NAME: 'Test', GIT_COMMITTER_EMAIL: 'test@example.com' }
   const before = Object.fromEntries(Object.keys(env).map(key => [key, process.env[key]]))
   Object.assign(process.env, env)
-  const runtime = createProjectRuntime({ cwd: cfg, env })
+  const runtime = createProjectRuntime({ cwd: cfg, env, host: fakeHost() })
   try {
     // A clone whose person said yes before: its folder moved, so it is not on the list any more.
     execFileSync('git', ['init', '-q'], { cwd: folder })
@@ -269,7 +267,7 @@ test('removing a project runs its close hooks and takes it off the list, and del
   const before = Object.fromEntries(Object.keys(env).map(key => [key, process.env[key]]))
   Object.assign(process.env, env)
   // The daemon runs elsewhere: the project is not its own start folder.
-  const runtime = createProjectRuntime({ cwd: cfg, env })
+  const runtime = createProjectRuntime({ cwd: cfg, env, host: fakeHost() })
   try {
     assert.deepEqual(await runtime.onAddProject(folder, false), { ok: true, alreadyActivated: false })
     const [project] = await listProjects(env)
@@ -308,7 +306,7 @@ test('a project with an agent at work is not removed, a card left "running" by a
   const env = { XDG_CONFIG_HOME: cfg, GIT_AUTHOR_NAME: 'Test', GIT_AUTHOR_EMAIL: 'test@example.com', GIT_COMMITTER_NAME: 'Test', GIT_COMMITTER_EMAIL: 'test@example.com' }
   const before = Object.fromEntries(Object.keys(env).map(key => [key, process.env[key]]))
   Object.assign(process.env, env)
-  const runtime = createProjectRuntime({ cwd: cfg, env })
+  const runtime = createProjectRuntime({ cwd: cfg, env, host: fakeHost() })
   try {
     assert.deepEqual(await runtime.onAddProject(folder, false), { ok: true, alreadyActivated: false })
     const [project] = await listProjects(env)
@@ -371,7 +369,7 @@ test('removing a project with its files: OpenAgent\'s own go, each named; the pe
   const env = { XDG_CONFIG_HOME: cfg, GIT_AUTHOR_NAME: 'Test', GIT_AUTHOR_EMAIL: 'test@example.com', GIT_COMMITTER_NAME: 'Test', GIT_COMMITTER_EMAIL: 'test@example.com' }
   const before = Object.fromEntries(Object.keys(env).map(key => [key, process.env[key]]))
   Object.assign(process.env, env)
-  const runtime = createProjectRuntime({ cwd: cfg, env })
+  const runtime = createProjectRuntime({ cwd: cfg, env, host: fakeHost() })
   const git = (...args: string[]): string => execFileSync('git', args, { cwd: folder, encoding: 'utf8' })
   try {
     await usedProject(runtime, folder)
@@ -424,7 +422,7 @@ test('removing a project with its files keeps what is not OpenAgent\'s to delete
   const env = { XDG_CONFIG_HOME: cfg, GIT_AUTHOR_NAME: 'Test', GIT_AUTHOR_EMAIL: 'test@example.com', GIT_COMMITTER_NAME: 'Test', GIT_COMMITTER_EMAIL: 'test@example.com' }
   const before = Object.fromEntries(Object.keys(env).map(key => [key, process.env[key]]))
   Object.assign(process.env, env)
-  const runtime = createProjectRuntime({ cwd: cfg, env })
+  const runtime = createProjectRuntime({ cwd: cfg, env, host: fakeHost() })
   const git = (...args: string[]): string => execFileSync('git', args, { cwd: folder, encoding: 'utf8' })
   try {
     await usedProject(runtime, folder)
@@ -451,7 +449,7 @@ test('removing a project with its files keeps what is not OpenAgent\'s to delete
       { path: `branch ${DATA_BRANCH}`, reason: `another project on the list uses it: ${second}` },
       { path: '.openagent/custom-presets.json', reason: 'git tracks it' },
     ])
-    assert.deepEqual(cleanup?.removed, ['.branches/agent-worked', '.agent-runner/runs', '.openagent/.gitignore', '.openagent/hooks.yml'])
+    assert.deepEqual(cleanup?.removed, ['.branches/agent-worked', '.agent-runner/runs', '.openagent/.gitignore'])
     assert.equal(await readFile(join(folder, '.branches', 'agent-idle', 'draft.txt'), 'utf8'), 'draft\n')
     assert.equal(await readFile(join(folder, '.agent-runner', 'config.yml'), 'utf8'), 'ended: say done\n')
     assert.equal(await readFile(join(folder, '.branches', DATA_BRANCH, 'card.json'), 'utf8'), '{}\n', 'the records the other project reads are whole')
@@ -476,7 +474,7 @@ test('removing a project with its files while a run of this machine is still ali
   const env = { XDG_CONFIG_HOME: cfg, GIT_AUTHOR_NAME: 'Test', GIT_AUTHOR_EMAIL: 'test@example.com', GIT_COMMITTER_NAME: 'Test', GIT_COMMITTER_EMAIL: 'test@example.com' }
   const before = Object.fromEntries(Object.keys(env).map(key => [key, process.env[key]]))
   Object.assign(process.env, env)
-  const runtime = createProjectRuntime({ cwd: cfg, env })
+  const runtime = createProjectRuntime({ cwd: cfg, env, host: fakeHost() })
   try {
     await usedProject(runtime, folder)
     // A run that holds its lock and has no card yet: still booting, so the dashboard's own check sees no agent at work.
@@ -491,7 +489,7 @@ test('removing a project with its files while a run of this machine is still ali
       { path: '.openagent', reason: 'a clean-up before it did not finish' },
     ])
     assert.equal(await readFile(join(folder, '.branches', DATA_BRANCH, 'card.json'), 'utf8'), '{}\n', 'the records are whole')
-    assert.match(await readFile(join(folder, PROJECT_HOOKS_FILE), 'utf8'), /^start:/m, 'and so are the project\'s start lines')
+    assert.equal(await readFile(join(folder, OPENAGENT_DIR, '.gitignore'), 'utf8').then(() => true, () => false), true, "and so is the dashboard's directory")
     assert.deepEqual((await readdir(join(folder, '.agent-runner', 'runs'))).sort(), ['booting.lock', 'r1.stderr'])
   } finally {
     await runtime.dispose()
@@ -522,7 +520,7 @@ test('a relayed call\'s project is this machine\'s own, found by its repository\
   const first = await clone(base, 'shop', 'https://github.com/Acme/Shop.git')
   const second = await clone(base, 'shop-again', 'git@github.com:acme/shop.git')
   for (const dir of [other, local, first, second]) await addProject(dir, at, env)
-  const runtime = createProjectRuntime({ cwd: other, env })
+  const runtime = createProjectRuntime({ cwd: other, env, host: fakeHost() })
   try {
     // Two folders cloned from one repository: the one added first, and the same one on every call,
     // so a run's later calls reach the project it started in.
@@ -560,7 +558,7 @@ test('a relayed run\'s events are read from the project the call names, not from
   await writeFile(join(worktree, OPENAGENT_DIR, `${agentId}.json`), JSON.stringify({ id: agentId, startedAt: '2026-07-19T10:00:00.000Z', status: 'running', caller: { pid: process.pid, host: hostname() } }))
   await writeFile(join(worktree, OPENAGENT_DIR, `${agentId}.jsonl`), JSON.stringify({ kind: 'said', text: 'from the shop' }) + '\n')
   await addProject(shop, new Date().toISOString(), env)
-  const runtime = createProjectRuntime({ cwd: home, env })
+  const runtime = createProjectRuntime({ cwd: home, env, host: fakeHost() })
   // What is expected is waited for until it is there, however busy the computer is; what must
   // not come is given the time it would take.
   const read = (project: string, expected = false): Promise<OpenAgentEvent[]> =>
@@ -619,7 +617,7 @@ test('a run started on another machine is followed only under an id that is a ru
   await new Promise<void>(resolve => machine.listen(0, '127.0.0.1', resolve))
   const url = `http://127.0.0.1:${(machine.address() as AddressInfo).port}`
   await addMachine({ url, key: 'id.key', door: `${url}/_devices/enter`, label: 'Server' }, env)
-  const runtime = createProjectRuntime({ cwd: shop, env })
+  const runtime = createProjectRuntime({ cwd: shop, env, host: fakeHost() })
   try {
     const start = () => runtime.onStart('go', { machine: url })
     assert.deepEqual(await start(), { ok: true, agentId: 'run-on-the-machine' })
@@ -684,8 +682,8 @@ test('a run sent to another person\'s computer first has the server\'s logins co
   await addMachine({ url, key: 'line', door: `${url}/_devices/enter`, label: 'rom-desktop', owner: 'rom' }, env)
   // This server's own logins, as its user's gh and its service say them: never this test computer's.
   const logins = async (said: NodeJS.ProcessEnv) => ({ github: 'gho_mine123', ...(said.CLAUDE_CODE_OAUTH_TOKEN ? { claude: said.CLAUDE_CODE_OAUTH_TOKEN } : {}) })
-  const runtime = createProjectRuntime({ cwd: shop, env, logins })
-  const laptop = createProjectRuntime({ cwd: shop, env: { ...env, OPENAGENT_SERVER: '' }, logins })
+  const runtime = createProjectRuntime({ cwd: shop, env, logins, host: fakeHost() })
+  const laptop = createProjectRuntime({ cwd: shop, env: { ...env, OPENAGENT_SERVER: '' }, logins, host: fakeHost() })
   try {
     // Nothing is copied before the person said OK to the line that says it is.
     assert.deepEqual(await runtime.onStart('go', { machine: url }), { ok: false, error: "Your own logins are used on rom's computer for a run there: say OK to that above the message box first." })
@@ -773,7 +771,7 @@ test('a run whose record names a saved machine\'s computer is that machine\'s, w
   const machine = await machineAt(() => said)
   const { url } = machine
   await addMachine({ url, key: 'id.key', door: `${url}/_devices/enter`, label: 'Server' }, env)
-  let runtime = createProjectRuntime({ cwd: join(base, 'shop'), env })
+  let runtime = createProjectRuntime({ cwd: join(base, 'shop'), env, host: fakeHost() })
   const closing = [machine.close]
   try {
     const { home, follow, list, machineNames, working } = runtime.remoteAgents
@@ -818,7 +816,7 @@ test('a run whose record names a saved machine\'s computer is that machine\'s, w
       said = name
       for (const res of open.splice(0)) res.end()
       await runtime.dispose()
-      runtime = createProjectRuntime({ cwd: join(base, 'shop'), env })
+      runtime = createProjectRuntime({ cwd: join(base, 'shop'), env, host: fakeHost() })
     }
     await again('renamed-box')
     assert.equal(await named(runtime.remoteAgents, 'renamed-box', 'Server'), 'Server')
@@ -839,7 +837,7 @@ test('a run whose record names a saved machine\'s computer is that machine\'s, w
     closing.push(twin.close)
     await addMachine({ url: twin.url, key: 'id.twin', door: `${twin.url}/_devices/enter`, label: 'Twin' }, env)
     await runtime.dispose()
-    runtime = createProjectRuntime({ cwd: join(base, 'shop'), env })
+    runtime = createProjectRuntime({ cwd: join(base, 'shop'), env, host: fakeHost() })
     assert.equal(await named(runtime.remoteAgents, 'server-box', undefined), undefined)
     assert.equal(await runtime.remoteAgents.home(shop, ON_SERVER), undefined)
 
@@ -893,7 +891,7 @@ test("a saved machine is asked for its own runs over its relay, and a run of its
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
   const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
   await addMachine({ url, key: 'id.key', door: `${url}/_devices/enter`, label: 'Laptop' }, env)
-  const runtime = createProjectRuntime({ cwd: dir, env })
+  const runtime = createProjectRuntime({ cwd: dir, env, host: fakeHost() })
   try {
     const [laptop] = await runtime.remoteAgents.machineRuns(dir)
     assert.deepEqual([laptop!.host, laptop!.answered, laptop!.runs.map(run => run.id)], ['laptop-box', true, [ONLY_THERE]])
@@ -949,7 +947,7 @@ test("a run a saved machine's Human Queue names, which no record here has, is th
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
   const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
   await addMachine({ url, key: 'id.key', door: `${url}/_devices/enter`, label: 'Server' }, env)
-  const runtime = createProjectRuntime({ cwd: dir, env })
+  const runtime = createProjectRuntime({ cwd: dir, env, host: fakeHost() })
   try {
     // The machine said its projects, as the page's lists ask them.
     for (let i = 0; i < 40 && !(await listMachines(env))[0]!.projects; i++) {
@@ -984,24 +982,22 @@ function readyNaming(title: string): ReadyNaming {
   return new ReadyNaming({ setup: async () => ({ key: 'one', driver }) })
 }
 
-test('a Start is named here as the run starts: the page asks for the name, and the run is handed it in a file', async () => {
-  const home = await project(`start: 'printf "%s" "\${OPENAGENT_NAME_FILE-unset}" > name-file.txt; echo "{\\"id\\":\\"2026-11-03T18-00-00-000Z\\"}"'\n`)
+test('a Start is named here as the run starts: the page asks for the name, and the host is handed it as it is asked', async () => {
+  const home = await project()
   const env = { XDG_CONFIG_HOME: join(home, 'cfg') }
   await mkdir(env.XDG_CONFIG_HOME, { recursive: true })
-  const runtime = createProjectRuntime({ cwd: home, env, naming: readyNaming('Fix flaky login test') })
+  const host = fakeHost()
+  const runtime = createProjectRuntime({ cwd: home, env, naming: readyNaming('Fix flaky login test'), host })
   try {
-    assert.deepEqual(await runtime.onStart('fix the flaky login test', { driver: 'claude-code' }), { ok: true, agentId: '2026-11-03T18-00-00-000Z' })
-    assert.equal(await startedName('2026-11-03T18-00-00-000Z'), 'Fix flaky login test', 'what the page asks for')
-    const file = await readFile(join(home, 'name-file.txt'), 'utf8')
-    assert.notEqual(file, 'unset')
-    for (let i = 0; i < 50; i++) if (await readFile(file, 'utf8').catch(() => undefined)) break
-    else await new Promise(resolve => setTimeout(resolve, 10))
-    assert.deepEqual(JSON.parse(await readFile(file, 'utf8')), { title: 'Fix flaky login test' }, 'what the run takes')
-    await rm(file, { force: true })
+    assert.deepEqual(await runtime.onStart('fix the flaky login test', { driver: 'claude-code' }), { ok: true, agentId: 'run-1', driver: 'claude-code' })
+    assert.equal(await startedName('run-1'), 'Fix flaky login test', 'what the page asks for')
+    const title = host.requests[0]?.title
+    assert.ok(title instanceof Promise)
+    assert.equal(await title, 'Fix flaky login test', 'what the run takes')
 
     // A bare command is named from its report, by the run: nothing is handed over.
     await runtime.onStart('/work-queue', { driver: 'claude-code' })
-    assert.equal(await readFile(join(home, 'name-file.txt'), 'utf8'), 'unset')
+    assert.equal(host.requests[1]?.title, undefined)
   } finally {
     await runtime.dispose()
     forgetStartedNames()

@@ -45,9 +45,11 @@ already made, and lists it in its pull request; for anything else it proposes an
 - One process per run, one-shot: `agent-runner run <prompt>` needs no scheduler, and the
   scheduler's tick spawns the same thing with the id and the marker already made. Picked
   over the scheduler holding pids: nothing to lose on a restart.
-- `run --detach` writes the marker and spawns the run's process the way a scheduler's tick does,
-  answering the id at once: the line a dashboard's start hook runs. Picked over the
-  dashboard spawning the run's process itself, which would name the tool and hold a pid.
+- This computer's host (`run.host`, the agent-driver module's) starts a run as `run --detach`
+  does: it writes the marker and spawns the run's process the way a scheduler's tick does,
+  answering the id at once. Picked over the dashboard spawning the run's process itself,
+  which would name the tool and hold a pid, and over a start line in the project's
+  `.openagent/hooks.yml` (#2394).
 - The run is a checkout from the branches package, a session from `@openagt/agent-driver`, the
   prompt once, and the agent's own loop to the end. No system prompt, no gates, no
   steering: the command's skill file is the whole instruction. Picked over carrying
@@ -163,10 +165,10 @@ already made, and lists it in its pull request; for anything else it proposes an
   exits 0 for a result, 1 for a refusal or a failure, 2 for a command line that cannot be
   read: the skills' contract, so a person and a dashboard read it the same way.
 - `run --detach --resume <id>` continues an ended run in its own process and answers its
-  id at once: the line a dashboard's resume hook runs, the sibling of `run --detach`. A
-  run this project has no record of is refused while someone is still listening; anything
-  after that is the resumed run's own record. Picked over the hook running the resume in
-  the foreground, which would hold the dashboard's request open for the whole turn.
+  id at once, the sibling of `run --detach`, as this computer's host resumes a run. A run
+  this project has no record of is refused while someone is still listening; anything
+  after that is the resumed run's own record. Picked over resuming in the foreground,
+  which would hold the person's request open for the whole turn.
 - `agent-runner cleanup` removes what the tool left in a project, and is what a dashboard
   runs when a project is removed with its files. Picked over a dashboard deleting
   `.agent-runner` itself.

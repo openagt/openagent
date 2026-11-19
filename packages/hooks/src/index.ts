@@ -27,8 +27,11 @@ export {
   type RunAgent,
   type RunEvent,
   type RunRequest,
+  type RunRef,
+  type RunReadiness,
   type RunSummary,
   type RunHost,
+  LOCAL_HOST,
 } from './run.js'
 export {
   PERSON,
@@ -56,4 +59,4 @@ export type { GitAccess, AccountAccess } from './account.js'
 export type { AppContext, AppLifecycle, AttentionFix, AttentionItem, AttentionArgs, AppAttention, Attention } from './app.js'
 export { HOOK_NAMES, MODULE_NAME, defineModule, type NodeHooks, type HookName, type PluginInfo, type ModuleDefinition } from './module.js'
 export { runPipeline, type OrderedStep, type StepError, type PipelineResult } from './pipeline.js'
-export { createHooks, loadModules, loadDistribution, loadHandedDown, DISTRIBUTION_ENV, type DistributionEntry, type DistributionPackage, type HandlerError, type HooksOptions, type GivenSkill, type Hooks } from './loader.js'
+export { createHooks, loadModules, loadDistribution, loadHandedDown, DISTRIBUTION_ENV, type DistributionEntry, type DistributionPackage, type DistributionItem, type HandlerError, type HooksOptions, type GivenSkill, type Hooks } from './loader.js'

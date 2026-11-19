@@ -111,7 +111,7 @@ beforeEach(async () => {
   selectMachine(null)
   await saveMachines() // default: no machine saved
   onCommands.mockReset()
-  onCommands.mockResolvedValue({ commands: [{ name: 'work-queue', description: 'Work the agent queue' }], startHook: true, gitHost: true, remote: true, address: 'github.com/acme/shop' })
+  onCommands.mockResolvedValue({ commands: [{ name: 'work-queue', description: 'Work the agent queue' }], gitHost: true, remote: true, address: 'github.com/acme/shop' })
 })
 afterEach(cleanup)
 
@@ -210,16 +210,6 @@ describe('Composer (#721)', () => {
     fireEvent.change(screen.getByLabelText('prompt'), { target: { value: '/work-queue now' } })
     fireEvent.click(screen.getByRole('button', { name: 'Send' }))
     expect(onSubmit).toHaveBeenCalledWith('/work-queue now', { later: false })
-  })
-
-  test('canSubmit={false} keeps the submit off, by click and by shortcut', () => {
-    const { onSubmit } = renderComposer({ canSubmit: false })
-    fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'ship it' } })
-    const submit = screen.getByRole('button', { name: 'Send' })
-    expect(submit.hasAttribute('disabled')).toBe(true)
-    fireEvent.click(submit)
-    fireEvent.click(screen.getByText('editor-submit'))
-    expect(onSubmit).not.toHaveBeenCalled()
   })
 
   // #1139: a draft carried across a navigation lands in sessionStorage; the launcher seeds it into
@@ -577,7 +567,7 @@ describe('the rows around the box', () => {
 
   test('in a project with no repository address the pick reads "This machine" whatever was picked before, and an offline machine does not block the Start', async () => {
     // Its origin is a folder on this disk: a remote, and still no name another machine knows it by.
-    onCommands.mockResolvedValue({ commands: [], startHook: true, gitHost: false, remote: true })
+    onCommands.mockResolvedValue({ commands: [], gitHost: false, remote: true })
     await saveMachines(STUDIO_MACHINE)
     daemon.reachable = { [STUDIO]: false }
     selectMachine(STUDIO)

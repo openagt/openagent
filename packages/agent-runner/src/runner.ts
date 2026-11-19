@@ -40,8 +40,8 @@ export function isDriverName(name: string): name is DriverName {
  * Whether a run on `driver` can start on this machine, asked before it spends a checkout: the
  * coding agent's CLI is installed and logged in (a problem when not: the session would die
  * before its first turn). Warnings: running as root, and on Codex, skills in `~/.agents/skills`
- * it cannot keep out and `memory` on that does nothing while `skills` is off. What a dashboard's check hook runs, and what a
- * person's run and a scheduler's tick refuse on. The git host is asked whether the account runs
+ * it cannot keep out and `memory` on that does nothing while `skills` is off. What this computer's
+ * host checks before a Start (`host.ts`), and what a person's run and a scheduler's tick refuse on. The git host is asked whether the account runs
  * work as there can be used, `login` when one is named: a project with no git host package runs
  * fine, and one with no account there is refused.
  */
@@ -116,6 +116,8 @@ export interface SpawnedRun extends RunRequest {
   driver?: DriverName
   /** The account it starts on, of its agent's, by name: put in its environment ({@link ACCOUNT_ENV}). */
   account?: string
+  /** What the run's process finds in its environment beside what this one has: the picks its command line does not carry. */
+  env?: Readonly<Record<string, string>>
 }
 
 /** A resume spawned in its own process: the text or the answer it continues with, and who resumes it, when that is a scheduler's row. */
@@ -153,7 +155,7 @@ export function resumeArgs(run: SpawnedResume): string[] {
 export async function spawnRun(repo: string, run: SpawnedRun): Promise<void> {
   await acquireRunLock(repo, run.id, { pid: process.pid, isAlive: isPidAlive })
   try {
-    const child = await spawnDetached(repo, run.id, runArgs(run), run.account)
+    const child = await spawnDetached(repo, run.id, runArgs(run), run.account, run.env)
     await handOverRunLock(repo, run.id, process.pid, child)
   } catch (err) {
     await releaseRunLock(repo, run.id, process.pid)
@@ -166,8 +168,8 @@ export async function spawnResume(repo: string, run: SpawnedResume): Promise<voi
   await spawnDetached(repo, run.id, resumeArgs(run), run.account)
 }
 
-/** Spawn a detached process of this tool for the run `id`; resolves with its pid once it is spawned. */
-async function spawnDetached(repo: string, id: string, args: string[], account?: string): Promise<number> {
+/** Spawn a detached process of this tool for the run `id`, with `env` on top of this one's; resolves with its pid once it is spawned. */
+async function spawnDetached(repo: string, id: string, args: string[], account?: string, env: Readonly<Record<string, string>> = {}): Promise<number> {
   const stderrPath = runStderrPath(repo, id)
   mkdirSync(dirname(stderrPath), { recursive: true })
   const fd = openSync(stderrPath, 'a')
@@ -175,7 +177,7 @@ async function spawnDetached(repo: string, id: string, args: string[], account?:
     cwd: repo,
     detached: true,
     stdio: ['ignore', 'ignore', fd],
-    env: { ...process.env, [AGENT_ID_ENV]: id, ...(account !== undefined ? { [ACCOUNT_ENV]: account } : {}) },
+    env: { ...process.env, ...env, [AGENT_ID_ENV]: id, ...(account !== undefined ? { [ACCOUNT_ENV]: account } : {}) },
   })
   closeSync(fd)
   child.unref()
@@ -187,13 +189,13 @@ async function spawnDetached(repo: string, id: string, args: string[], account?:
 }
 
 /**
- * A person's run, answered at once: the run's process spawned detached, the id returned. What a
- * dashboard's start hook runs: it needs the id back now, not when the agent ends. The run's process
- * writes its own marker: pushing it takes seconds, and the page waits on the id.
+ * A person's run, answered at once: the run's process spawned detached, the id returned. How this
+ * computer's host starts a run (`host.ts`): the page needs the id back now, not when the agent
+ * ends. The run's process writes its own marker: pushing it takes seconds, and the page waits on the id.
  */
 export async function detachRun(
   repo: string,
-  opts: RunRequest & { driver?: DriverName; now?: () => Date },
+  opts: RunRequest & { driver?: DriverName; now?: () => Date; env?: Readonly<Record<string, string>> },
   deps: { spawn?: typeof spawnRun } = {},
 ): Promise<{ id: string; driver: DriverName; model?: string }> {
   const { now = () => new Date(), driver = 'claude-code', ...request } = opts
@@ -203,8 +205,8 @@ export async function detachRun(
 }
 
 /**
- * An ended run continued in its own process, and answered at once: what a dashboard's resume
- * hook runs. A run this project has no record of is refused here, while someone is still
+ * An ended run continued in its own process, and answered at once: how this computer's host
+ * resumes a run (`host.ts`). A run this project has no record of is refused here, while someone is still
  * listening; everything after is the resumed run's own record.
  */
 export async function detachResume(

@@ -160,8 +160,8 @@ export function AgentComposer({
   // The "Auto" menu, as the launcher's (his pick): how far the run takes its work. A pick goes with
   // the next message and holds from it on. Sent to a working run, it shows until the run's record
   // says it, which is when its turn ends and it takes the message. Sent to an ended run, the menu
-  // goes back to what the record says at once: the project's resume line is what hands the level
-  // on, and one written before it did keeps the old level, which must not read as changed.
+  // goes back to what the record says at once: a resume that fails before its run records the new
+  // level keeps the old one, which must not read as changed.
   // Picked back to what the record says, there is nothing to send.
   const launcher = useProjectLauncher(projectId)
   const recorded: PublishPick = isPublishPick(publish) ? publish : 'nothing'

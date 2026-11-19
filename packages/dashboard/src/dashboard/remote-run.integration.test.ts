@@ -20,13 +20,14 @@ import { addMachine, addProject } from '../registry.js'
 import type { StartAgentOptions, StartAgentResult } from './types.js'
 import type { OpenAgentEvent } from '../events.js'
 import type { HandoffResult } from './agent-handoff.js'
+import { fakeHost, type FakeHost } from '@openagt/hooks/testing'
 
 // The real two-daemon proof for "run on a saved machine" (#1067). Two HTTP servers stand up on
 // loopback, each with a home file of its own: machine A (the person's own, a real project runtime)
 // relays a start to machine B (a dashboard whose Start is stubbed so no run actually begins). Both
 // have the same repository in a different folder, cloned a different way, and B has a second
-// project besides. We assert the run is created in B's copy of THAT project, that A ran no hook
-// of its own, and that B's events stream back through A's relayed-run source in order. That is
+// project besides. We assert the run is created in B's copy of THAT project, that A started no run
+// on its own host, and that B's events stream back through A's relayed-run source in order. That is
 // the whole path minus the final same-origin RPC hop on A, which server.test.ts covers on its own,
 // and minus what B opened to the network, which is another package's: A calls B's OpenAgent as
 // that would, once it has let A in.
@@ -71,8 +72,9 @@ async function collectUntil(stream: AsyncIterable<OpenAgentEvent>, stopKind: str
 const B_RUN = 'remote-run-1'
 
 interface TwoMachines {
-  /** Machine A's runtime, and the env its home file is read through. */
+  /** Machine A's runtime, the host its own runs would start on, and the env its home file is read through. */
   a: ProjectRuntime
+  aHost: FakeHost
   envA: NodeJS.ProcessEnv
   /** A's copy of the shop, a second project of A's with no remote, and the id A saved B under. */
   shopA: string
@@ -110,7 +112,7 @@ async function twoMachines(opts: { shopOnB?: boolean; machineCalls?: (fn: string
   await addProject(otherB, at, envB)
   if (opts.shopOnB !== false) await addProject(shopB, at, envB)
   const bClones: TwoMachines['bClones'] = []
-  const runtimeB = createProjectRuntime({ cwd: otherB, env: envB, clone: from => new Promise<Cloned>(land => bClones.push({ from, land })) })
+  const runtimeB = createProjectRuntime({ cwd: otherB, env: envB, host: fakeHost(), clone: from => new Promise<Cloned>(land => bClones.push({ from, land })) })
 
   // B's Start is stubbed to record the call and emit a short event stream, so the relay path is
   // exercised without spawning a real agent.
@@ -143,10 +145,12 @@ async function twoMachines(opts: { shopOnB?: boolean; machineCalls?: (fn: string
   await addProject(shopA, at, envA)
   await addProject(localOnlyA, at, envA)
   const machineB = (await addMachine({ url: b.url, key: KEY, door: `${b.url}/_devices/enter`, label: 'Studio' }, envA)).record.id
-  const a = createProjectRuntime({ cwd: shopA, env: envA })
+  const aHost = fakeHost()
+  const a = createProjectRuntime({ cwd: shopA, env: envA, host: aHost })
 
   return {
     a,
+    aHost,
     envA,
     shopA,
     localOnlyA,
@@ -188,6 +192,7 @@ test('a run started on a saved machine lands in that machine\'s own copy of the 
     assert.equal(m.bStarts[0]!.options.machine, undefined) // stripped before forwarding, no onward relay
     assert.equal(m.bStarts[0]!.options.base, undefined) // a branch of this machine names nothing on the other
     assert.equal(m.bStarts[0]!.options.model, 'opus') // the rest of the picks arrive
+    assert.equal(m.aHost.requests.length, 0, 'A started no run of its own')
 
     // The relayed agent keeps a local list row on A (#1077), under A's project, so a dashboard reload
     // re-opens it instead of losing it: a remote stub carrying B's agent id, the machine's name, and

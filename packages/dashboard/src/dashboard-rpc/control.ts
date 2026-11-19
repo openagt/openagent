@@ -3,13 +3,14 @@ export type { SteerResult }
 import { bridgeQuestions } from '../dashboard/bridge-store.js'
 import { isCloudSessionId } from '../dashboard/bridge-endpoints.js'
 import { openInApp, type OpenTarget, type OpenResult } from '../dashboard/open-in-app.js'
-import { contextBridgeBrowser, contextPreferences, contextStartAgent, resolveProjectPath, resolveAgentPath } from './context.js'
+import { contextBridgeBrowser, contextHost, contextPreferences, contextStartAgent, resolveProjectPath, resolveAgentPath } from './context.js'
+import { runRefAt } from '../distribution-hooks.js'
+import { errorMessage } from '@openagt/agent-data'
 import type { BridgeBrowserAction } from '../bridge-browser.js'
 import { isArrived, relayOr } from './relay-agent.js'
 import { hostname } from 'node:os'
-import { findAgent, isPidAlive, isRunId, loadAgentEvents, projectRuns, type AgentMeta } from '../store/index.js'
+import { findAgent, isRunId, loadAgentEvents, projectRuns, type AgentMeta } from '../store/index.js'
 import { withAgentLock } from '../agent-locks.js'
-import { STARTING_AT_MOST_MS } from '../starting.js'
 import { removeProjectWorktree, deleteProjectAgent } from '../worktrees.js'
 import { mergeAgentPr, openAgentPullRequest, mergeAgentBranch, pushAgentBranch, type HandoffResult } from '../dashboard/agent-handoff.js'
 import { pendingChoices } from '../open-choices.js'
@@ -36,49 +37,26 @@ function agentLockKey(cwd: string, agentId: string): string {
 }
 
 // The write side behind the dashboard (#405, #1774). The daemon runs no agent, so every write here
-// reaches a run through what the run's tool reads: Start is the project's `start` hook line; what
-// a person says to a run (their words, their answer to its question) is a line in the run's inbox
-// file while the run works, and the project's `resume` hook line once it has ended; Stop is a
-// signal to the pid the run's card names. OpenAgent names no tool in any of them.
+// reaches a run through this computer's host (`run.host`, #2394): Start, what a person says to a
+// run (their words, their answer to its question), and Stop.
 
 /**
- * Stop a live agent (the Stop button): SIGINT to the process the run's own card names, when it is
- * this machine's and alive. The run's tool asks its agent to end the turn where it is, as Esc does
- * in Claude Code; a message continues it. The card is the file the dashboard shows the run from, and its pid is
- * whoever runs the agent; OpenAgent names no tool. A run still starting is stopped once its card
- * names its pid. Nothing else: a run without a live pid here has nothing to stop, and is answered why.
+ * Stop a live agent (the Stop button), through this computer's host: the run's process asks its
+ * agent to end the turn where it is, as Esc does in Claude Code; a message continues it. A run
+ * still starting is stopped once its card names its process. A run that has nothing to stop here
+ * is answered why.
  */
 export async function sendStop(projectId: string, agentId?: string): Promise<SteerResult> {
   return relayOr(agentId, 'sendStop', [projectId, agentId], async (): Promise<SteerResult> => {
     const cwd = await resolveProjectPath(projectId)
-    if (!cwd || !agentId) return { ok: false, error: 'unknown session' }
-    const meta = await cardOnceUp(cwd, agentId)
-    if (!meta || (meta.status === 'running' && meta.pid === undefined)) return { ok: false, error: 'It has not started yet.' }
-    if (meta.status !== 'running') return { ok: false, error: 'It had already ended.' }
-    if (meta.host !== hostname()) return { ok: false, error: `This run is on ${meta.host ?? 'another computer'}.` }
-    if (meta.pid === undefined || !isPidAlive(meta.pid)) return { ok: false, error: 'Its process had already ended.' }
+    if (!cwd || !agentId || !isRunId(agentId)) return { ok: false, error: 'unknown session' }
     try {
-      process.kill(meta.pid, 'SIGINT')
-    } catch {
-      // Gone between the probe and the signal.
-      return { ok: false, error: 'Its process had already ended.' }
+      await contextHost().stop(await runRefAt(projectId, cwd, agentId))
+      return { ok: true }
+    } catch (err) {
+      return { ok: false, error: errorMessage(err) }
     }
-    return { ok: true }
   }, { ok: false, error: 'could not reach the machine' })
-}
-
-/**
- * The run's card once it names the run's process, or its card or record says it ended. A run just
- * started has neither yet: a Stop pressed then waits for it, as long as the page shows the run as
- * starting, rather than being lost while the run goes on. A run whose card never comes is left as it is.
- */
-async function cardOnceUp(cwd: string, agentId: string): Promise<AgentMeta | undefined> {
-  const deadline = Date.now() + STARTING_AT_MOST_MS
-  for (;;) {
-    const meta = await findAgent(cwd, agentId)
-    if ((meta && (meta.status !== 'running' || meta.pid !== undefined)) || Date.now() >= deadline) return meta
-    await new Promise(resolve => setTimeout(resolve, 250))
-  }
 }
 
 /**
@@ -125,7 +103,7 @@ export async function sendChoice(projectId: string, id: string, pick: string | s
       const elsewhere = await startedElsewhere(cwd, agentId)
       if (elsewhere) return elsewhere
       const answer = labels.length ? labels.join(', ') : '(none)'
-      const said = await sayToRun(cwd, agentId, { kind: 'answer', question: question.title, answer })
+      const said = await sayToRun(projectId, cwd, agentId, { kind: 'answer', question: question.title, answer })
       if (said.ok) answersGiven.set(run, new Map(answersGiven.get(run)).set(id, answer))
       return said
     })
@@ -160,8 +138,8 @@ export async function sendBridgeAnswerCancel(sessionId: string): Promise<void> {
  * conversation. A run that is working reads them at its next step, as Claude Code's chat does,
  * or, sent `later`, when its turn ends; an ended run is resumed with them. Empty messages are
  * dropped. `publish`, when the person changed the session's "Auto" pick, is how far the run takes
- * its work from these words on, `nothing` for no level; the run's tool reads it, from the inbox
- * line or the resume line's `PUBLISH`. `id` names the message for {@link withdrawMessage} and for
+ * its work from these words on, `nothing` for no level: the run reads it from the inbox line, or
+ * its host resumes it with it. `id` names the message for {@link withdrawMessage} and for
  * the run's word that it landed.
  */
 export async function sendMessage(projectId: string, text: string, agentId?: string, publish?: PublishPick | null, sent?: { id?: string; later?: boolean }): Promise<SteerResult> {
@@ -178,7 +156,7 @@ export async function sendMessage(projectId: string, text: string, agentId?: str
   return relayOr(agentId, 'sendMessage', passed, async (): Promise<SteerResult> => {
     const cwd = await resolveProjectPath(projectId)
     if (!cwd || !agentId || !isRunId(agentId)) return { ok: false, error: 'unknown session' }
-    return (await startedElsewhere(cwd, agentId)) ?? sayToRun(cwd, agentId, { kind: 'message', text: message, ...(level !== undefined ? { publish: level } : {}), ...(id !== undefined ? { id } : {}), ...(later ? { later: true as const } : {}) })
+    return (await startedElsewhere(cwd, agentId)) ?? sayToRun(projectId, cwd, agentId, { kind: 'message', text: message, ...(level !== undefined ? { publish: level } : {}), ...(id !== undefined ? { id } : {}), ...(later ? { later: true as const } : {}) })
   }, { ok: false, error: 'could not reach the machine' })
 }
 
@@ -191,7 +169,7 @@ export async function withdrawMessage(projectId: string, agentId: string, id: st
   return relayOr(agentId, 'withdrawMessage', [projectId, agentId, id], async (): Promise<SteerResult> => {
     const cwd = await resolveProjectPath(projectId)
     if (!cwd || !isRunId(agentId)) return { ok: false, error: 'unknown session' }
-    return sayToRun(cwd, agentId, { kind: 'cancel', id })
+    return sayToRun(projectId, cwd, agentId, { kind: 'cancel', id })
   }, { ok: false, error: 'could not reach the machine' })
 }
 
@@ -203,7 +181,7 @@ export async function sendNow(projectId: string, agentId: string): Promise<Steer
   return relayOr(agentId, 'sendNow', [projectId, agentId], async (): Promise<SteerResult> => {
     const cwd = await resolveProjectPath(projectId)
     if (!cwd || !isRunId(agentId)) return { ok: false, error: 'unknown session' }
-    return sayToRun(cwd, agentId, { kind: 'now' })
+    return sayToRun(projectId, cwd, agentId, { kind: 'now' })
   }, { ok: false, error: 'could not reach the machine' })
 }
 

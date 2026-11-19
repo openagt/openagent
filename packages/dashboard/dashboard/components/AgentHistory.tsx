@@ -201,7 +201,7 @@ export function AgentHistory({
   // The handover: the row this one stands in for has landed once the list holds the run the start
   // reported — whatever its status.
   //
-  // Waiting for a run that was not in the list when the start came back was wrong: the start hook
+  // Waiting for a run that was not in the list when the start came back was wrong: a start
   // takes seconds, so the list often held the new run already. It counted as an old run, the
   // stand-in never handed over, and it showed again beside the run's own row once that stopped
   // running, until the deadline below swept it.
