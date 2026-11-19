@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { Button, Empty, Facts, FilterChips, MiddleCut, Page, PanelGroup, PanelGroups, PanelRow, PanelShape, PersonMark, RunMark, Skeleton, Slot, WordsShape, formatDateTime, formatDuration, needsWord, personSaid, runName, runLineTone, useCodingAgents, useGitHostPeople, useIsMobile, runsAgain, runWord, useModuleHost, usePolled, type CodingAgent, type ModuleAgent, type ModuleHostPerson, type ModulePageProps, type ModuleProject, type ReadState } from '@openagt/dashboard/module'
+import { Button, Empty, Facts, FilterChips, MiddleCut, Page, PanelGroup, PanelGroups, PanelRow, PanelShape, PersonMark, RunMark, Skeleton, Slot, WordsShape, formatDateTime, formatDuration, needsWord, personSaid, runName, runLineTone, useCodingAgents, useGitHostPeople, useIsMobile, runsAgain, runWord, useModuleHost, usePolled, type CodingAgent, type ModuleAgent, type ModuleHostPerson, type ModulePageProps, type ModuleProject, type ReadState } from '@openagt/ui/module'
 import type { RunCard } from '../src/run.js'
 
 /** How many runs each project lists: the command's own default page is 20; the page shows more. */

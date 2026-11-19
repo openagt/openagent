@@ -5,7 +5,7 @@
 // `publish`, `add`, `edit` and `remove` to save; `show` to open an automation, `try` and `write-line`
 // for its shell line, and `now` to start a row at once.
 import { CalendarClock } from 'lucide-react'
-import { defineModule } from '@openagt/dashboard/module'
+import { defineModule } from '@openagt/ui/module'
 import { AutomationsPage } from './AutomationsPage.js'
 import { SchedulerCard } from './SchedulerCard.js'
 import { SchedulerSettings } from './SchedulerSettings.js'

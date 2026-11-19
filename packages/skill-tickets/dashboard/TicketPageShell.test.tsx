@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { SidebarHidden } from '@openagt/dashboard/module/testing'
+import { SidebarHidden } from '@openagt/ui/module/testing'
 import { TicketPageShell } from './TicketPageShell.js'
 
 afterEach(cleanup)

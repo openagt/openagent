@@ -1,5 +1,5 @@
 import { Fragment } from 'react'
-import { CopyButton } from '@openagt/dashboard/module'
+import { CopyButton } from '@openagt/ui/module'
 
 /** A web address in a sentence, without the punctuation that ends the sentence. */
 const ADDRESS = /(https:\/\/[^\s<>"]*[^\s<>".,;:!?)])/

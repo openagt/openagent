@@ -3,7 +3,7 @@
 // as long as its checkout, branch or merge commit exists, and the files opened from them, or from
 // a file's name in the chat. Its data is its own server part's reads
 // (`../src/server.ts`).
-import { defineModule } from '@openagt/dashboard/module'
+import { defineModule } from '@openagt/ui/module'
 import { FolderIcon } from 'lucide-react'
 import { FilesPane } from './FilesPane.js'
 

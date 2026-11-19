@@ -1,4 +1,4 @@
-import { Pieces, cn, useHighlighted } from '@openagt/dashboard/module'
+import { Pieces, cn, useHighlighted } from '@openagt/ui/module'
 import type { FileContent } from '../src/read.js'
 
 /** Said under a file cut at the pane's cap, rendered or not. */

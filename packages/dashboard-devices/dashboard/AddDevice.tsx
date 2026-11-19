@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { ChevronRight, Monitor, Server, Ticket } from 'lucide-react'
-import { Button, RadioGroup, SettingsItem, SettingsItems, SettingsRow, buttonVariants, useOpenAgentDown, type ModuleMachine } from '@openagt/dashboard/module'
+import { Button, RadioGroup, SettingsItem, SettingsItems, SettingsRow, buttonVariants, useOpenAgentDown, type ModuleMachine } from '@openagt/ui/module'
 import { addDevice, findComputers, readPersonThere, setSwitch, type Answer, type FoundComputer, type Given } from './devices.js'
 import { askLink, installDone } from './servers.js'
 import { CodeCard, Joined, NoCodeYet, PhoneCode, RanOut, Waiting, clock, useCode } from './codes.js'

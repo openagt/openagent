@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Laptop, Loader2 } from 'lucide-react'
-import { Button, Checkbox, Dialog, useModuleHost, useOpenAgentDown } from '@openagt/dashboard/module'
+import { Button, Checkbox, Dialog, useModuleHost, useOpenAgentDown } from '@openagt/ui/module'
 import { Joined, Waiting } from './codes.js'
 import { addDevice, answerAsk, askComputer, cancelAsk, hearAnswer, loadAsks, type AskHere, type AskedThere, type FoundComputer } from './devices.js'
 import { Presses, PressRow, Problem } from './parts.js'

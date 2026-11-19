@@ -1,4 +1,4 @@
-import type { ModuleHost } from '@openagt/dashboard/module'
+import type { ModuleHost } from '@openagt/ui/module'
 import { readDeviceRows, readPersonRows, runDevices, text, type Answer, type DeviceRow, type PersonRow } from './devices.js'
 
 // What the section shows of this computer's servers: the answer of `devices server status`, read

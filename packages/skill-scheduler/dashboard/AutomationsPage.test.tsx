@@ -1,15 +1,15 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { ModuleHostContext, forgetRemembered, type ModuleCommandResult, type ModuleHost, type ModuleProject } from '@openagt/dashboard/module'
-import { OpenAgentDown, fakeHost } from '@openagt/dashboard/module/testing'
+import { ModuleHostContext, forgetRemembered, type ModuleCommandResult, type ModuleHost, type ModuleProject } from '@openagt/ui/module'
+import { OpenAgentDown, fakeHost } from '@openagt/ui/module/testing'
 import { AutomationsPage } from './AutomationsPage.js'
 import { CodeWords } from './CodeWords.js'
 import { ANY_AGENT, ON_CLAUDE, STATUS, hostAnswering } from './fixtures.js'
-import { openMenu, phoneScreen } from '../../dashboard/dashboard/test-utils.js'
-import { checked, choices, offered, openList, pick, queryRadio, radio, radioNames, showing } from '../../dashboard/dashboard/test-controls.js'
+import { openMenu, phoneScreen } from '../../ui/dashboard/test-utils.js'
+import { checked, choices, offered, openList, pick, queryRadio, radio, radioNames, showing } from '../../ui/dashboard/test-controls.js'
 
 // The coding agents' own lists, as the dashboard asked them: what a row's agent and model are picked from, and named by.
-vi.mock('../../dashboard/dashboard/rpc/models.js', () => ({
+vi.mock('../../ui/dashboard/rpc/models.js', () => ({
   onModels: vi.fn(async () => ({
     'claude-code': { models: [{ id: 'opus', name: 'Opus 5.5' }, { id: 'haiku', name: 'Haiku 5.5' }] },
     codex: { models: [{ id: 'gpt-5.5', name: 'GPT-5.5' }] },
@@ -1816,7 +1816,7 @@ describe('what a row runs on', () => {
   })
 
   test("why an agent lists no model is said in its own words, what it puts in backticks set as code", async () => {
-    const { onModels } = await import('../../dashboard/dashboard/rpc/models.js')
+    const { onModels } = await import('../../ui/dashboard/rpc/models.js')
     vi.mocked(onModels).mockResolvedValueOnce({ 'claude-code': { models: [], error: '`claude` could not start: spawn claude ENOENT' }, codex: { models: [] } })
     show(runs().host)
     await screen.findByRole('region', { name: 'gemstack' })

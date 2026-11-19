@@ -1,6 +1,6 @@
 import { vi } from 'vitest'
-import type { ModuleCommandResult } from '@openagt/dashboard/module'
-import { fakeHost } from '@openagt/dashboard/module/testing'
+import type { ModuleCommandResult } from '@openagt/ui/module'
+import { fakeHost } from '@openagt/ui/module/testing'
 
 // What the module's tests share: a fake dashboard host, and what the command prints.
 

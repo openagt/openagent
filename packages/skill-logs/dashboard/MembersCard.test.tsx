@@ -1,7 +1,7 @@
 import { afterEach, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
-import { ModuleHostContext, type ModuleAgent, type ModuleHost, type ModuleHostPerson } from '@openagt/dashboard/module'
-import { fakeHost, type FakeHost } from '@openagt/dashboard/module/testing'
+import { ModuleHostContext, type ModuleAgent, type ModuleHost, type ModuleHostPerson } from '@openagt/ui/module'
+import { fakeHost, type FakeHost } from '@openagt/ui/module/testing'
 import { MembersCard } from './MembersCard.js'
 
 // The Overview's Members card, from `logs people` in each project and the git host's accounts

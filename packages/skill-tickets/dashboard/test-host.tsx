@@ -1,7 +1,7 @@
-import type { ModuleAgent } from '@openagt/dashboard/module'
-import { answering, fakeHost as hostFor, type Answers, type FakeHost } from '@openagt/dashboard/module/testing'
+import type { ModuleAgent } from '@openagt/ui/module'
+import { answering, fakeHost as hostFor, type Answers, type FakeHost } from '@openagt/ui/module/testing'
 
-export { NO_MODULES, renderWithHost, type Answers, type FakeHost } from '@openagt/dashboard/module/testing'
+export { NO_MODULES, renderWithHost, type Answers, type FakeHost } from '@openagt/ui/module/testing'
 
 // The dashboard as a tickets page sees it, faked: the module's commands answered by a table of
 // the tickets command's outputs, and each project's agents as `agents` lists them.

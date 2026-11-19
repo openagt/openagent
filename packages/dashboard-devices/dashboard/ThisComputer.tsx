@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { Laptop, Pencil } from 'lucide-react'
-import { Button, Section, SettingsRow, Switch, buttonVariants, useOpenAgentDown } from '@openagt/dashboard/module'
+import { Button, Section, SettingsRow, Switch, buttonVariants, useOpenAgentDown } from '@openagt/ui/module'
 import { setSwitch, setTailscale } from './devices.js'
 import { reach, sharedReach } from './servers.js'
 import { hasDoor, hasServer } from './model.js'

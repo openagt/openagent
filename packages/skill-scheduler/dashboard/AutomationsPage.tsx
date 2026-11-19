@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Facts, Page, Panel, PanelGroup, PanelShape, RunMark, Skeleton, Slot, Switch, WordsShape, Tooltip, TooltipContent, TooltipTrigger, Button, cn, formatAge, formatDateTime, inPlace, useCodingAgents, useIsMobile, useModuleHost, useOpenAgentDown, usePolled, type ModuleCommandResult, type ModuleHost, type ModuleProject } from '@openagt/dashboard/module'
-import type { ModulePageProps } from '@openagt/dashboard/module'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Facts, Page, Panel, PanelGroup, PanelShape, RunMark, Skeleton, Slot, Switch, WordsShape, Tooltip, TooltipContent, TooltipTrigger, Button, cn, formatAge, formatDateTime, inPlace, useCodingAgents, useIsMobile, useModuleHost, useOpenAgentDown, usePolled, type ModuleCommandResult, type ModuleHost, type ModuleProject } from '@openagt/ui/module'
+import type { ModulePageProps } from '@openagt/ui/module'
 import { MoreHorizontal, Play, Plus } from 'lucide-react'
 import { AutomationForm } from './AutomationForm.js'
 import { CodeWords, Command } from './CodeWords.js'

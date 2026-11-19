@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useModuleHost, usePolled, type ModuleHost, type ModuleMachines } from '@openagt/dashboard/module'
+import { useModuleHost, usePolled, type ModuleHost, type ModuleMachines } from '@openagt/ui/module'
 import { failed, loadStatus, readPersonThere, type Answer, type DoorStatus } from './devices.js'
 import { addThrough, askLink, connect, forget, installDone, loadDevices, loadServers, loadShared, markAdded, ownGithub, reach, type DevicesRead, type OwnGithub, type ServerRow, type ServersRead, type SharedRow, type StepState } from './servers.js'
 import { hasDoor, itemsOf, onTailscale, type Item, type PersonRead, type Sources } from './model.js'

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
-import { forgetRemembered, type ModuleCommandResult } from '@openagt/dashboard/module'
-import { fakeHost, renderWithHost } from '@openagt/dashboard/module/testing'
+import { forgetRemembered, type ModuleCommandResult } from '@openagt/ui/module'
+import { fakeHost, renderWithHost } from '@openagt/ui/module/testing'
 import { AccountsCard } from './AccountsCard.js'
 
 const HOUR = 3_600_000

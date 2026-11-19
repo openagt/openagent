@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { ModuleHostContext, type ModuleCommandResult, type ModuleComputerThrough, type ModuleHost, type ModuleMachine, type ModuleMachines } from '@openagt/dashboard/module'
-import { OpenAgentDown, fakeHost } from '@openagt/dashboard/module/testing'
+import { ModuleHostContext, type ModuleCommandResult, type ModuleComputerThrough, type ModuleHost, type ModuleMachine, type ModuleMachines } from '@openagt/ui/module'
+import { OpenAgentDown, fakeHost } from '@openagt/ui/module/testing'
 import { DevicesSettings } from './DevicesSettings.js'
-import { SettingsHoldContext } from '../../dashboard/dashboard/lib/settings-hold.js'
+import { SettingsHoldContext } from '../../ui/dashboard/lib/settings-hold.js'
 import { WARNING } from './ThisComputer.js'
 
 // Settings › Devices, this computer's side: how devices reach it, the start page, and every

@@ -15,7 +15,7 @@ import {
   useModuleHost,
   useOpenAgentDown,
   PagePresses,
-} from '@openagt/dashboard/module'
+} from '@openagt/ui/module'
 import { claimState, heldBack } from '../src/module.js'
 import { TICKETS_DIR } from '../src/names.js'
 import type { WorkspaceTicketDetail } from './lib/types.js'

@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { SECURE_PORT } from '@openagt/dashboard/secure-address'
+import { SECURE_PORT } from '@openagt/ui/secure-address'
 import { LOOPBACK_ADDRESS } from './address.js'
 import { adminInstallScript, adminUninstallScript, dashboardPlist, portPlist, portRule } from './mac.js'
 

@@ -1,5 +1,5 @@
 import { ChevronsUpDown } from 'lucide-react'
-import { Pieces, Skeleton, cn, useHighlighted } from '@openagt/dashboard/module'
+import { Pieces, Skeleton, cn, useHighlighted } from '@openagt/ui/module'
 import type { FileDiff } from '../src/diff.js'
 import { MAX_PREVIEW_LINES } from '../src/confined.js'
 

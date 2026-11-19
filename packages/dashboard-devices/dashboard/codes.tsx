@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Check, CircleCheck, Copy, ExternalLink, Loader2, RotateCw } from 'lucide-react'
-import { Button, Dialog, Input, QrCode, Skeleton, Slot, StepNumber, useOpenAgentDown } from '@openagt/dashboard/module'
+import { Button, Dialog, Input, QrCode, Skeleton, Slot, StepNumber, useOpenAgentDown } from '@openagt/ui/module'
 import { failed, type Answer, type Given } from './devices.js'
 import { CodeStrip, LinkPress, Presses, PressRow, Problem } from './parts.js'
 

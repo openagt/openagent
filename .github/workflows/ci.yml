@@ -19,18 +19,18 @@ jobs:
           - name: typecheck
             run: pnpm typecheck
           - name: dashboard browser tests
-            run: pnpm -C packages/dashboard test:dashboard
+            run: pnpm -C packages/ui test:dashboard
           - name: dashboard node tests
-            run: pnpm -C packages/dashboard test:node
+            run: pnpm -C packages/ui test:node
           # The browser extension the dashboard ships (packages/chrome-extension, no package of its own).
           - name: chrome extension check
-            run: pnpm -C packages/dashboard test:extension
+            run: pnpm -C packages/ui test:extension
           # --no-bail: a red package does not stop the next one either.
           - name: agent packages tests
             run: pnpm -r --workspace-concurrency=1 --no-bail --filter @openagt/agent-runner --filter @openagt/skill-scheduler run test
           # Every other package, named by what it is not: a new package's tests run here.
           - name: other packages tests
-            run: pnpm -r --workspace-concurrency=1 --no-bail --filter '!@openagt/dashboard' --filter '!@openagt/agent-runner' --filter '!@openagt/skill-scheduler' run test
+            run: pnpm -r --workspace-concurrency=1 --no-bail --filter '!@openagt/ui' --filter '!@openagt/agent-runner' --filter '!@openagt/skill-scheduler' run test
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

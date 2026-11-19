@@ -1,4 +1,4 @@
-import { reachedByLine, type ModuleMachine } from '@openagt/dashboard/module'
+import { reachedByLine, type ModuleMachine } from '@openagt/ui/module'
 import { idsOf, type DeviceRow, type DoorStatus, type PersonThere } from './devices.js'
 import type { DevicesRead, ServerRow } from './servers.js'
 

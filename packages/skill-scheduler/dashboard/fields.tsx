@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { Plus } from 'lucide-react'
-import { Button, Input, Label, RadioGroup, RadioGroupItem, RadioGroupOption, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Textarea, cn, useModuleHost, type ModuleProject } from '@openagt/dashboard/module'
+import { Button, Input, Label, RadioGroup, RadioGroupItem, RadioGroupOption, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Textarea, cn, useModuleHost, type ModuleProject } from '@openagt/ui/module'
 import type { PublishPick } from '../src/state.js'
 import { AGENTS, AGENT_LABELS, AGENT_SKILLS_DIR, DEFAULT_AGENT, MAX_AGENTS, type AgentName } from '../src/names.js'
 import { MAX_COUNT, PACE_UNITS, takesTimeOfDay, type PaceUnit } from '../src/pace.js'

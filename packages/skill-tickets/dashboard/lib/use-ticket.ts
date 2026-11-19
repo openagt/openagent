@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { runsAgain, usePolled, useModuleHost, type ReadState } from '@openagt/dashboard/module'
+import { runsAgain, usePolled, useModuleHost, type ReadState } from '@openagt/ui/module'
 import { holderAgent, readShown, withHolder } from '../../src/module.js'
 import { sessionsOf, type TicketSession } from '../TicketSessions.js'
 import { holdingRun } from './holding-run.js'

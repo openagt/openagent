@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { ChevronLeft, Ellipsis, House, Loader2, Monitor, Plus, Server, Smartphone, Tablet, UserPlus, UserRound } from 'lucide-react'
-import { Badge, Button, ConfirmDialog, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Input, RowShapes, Section, SettingsItem, SettingsItems, SettingsRow, SettingsRowShapes, SettingsSection, Slot, formatDateTime, formatRelative, useOpenAgentDown, usePolled, useSettingsCrumb } from '@openagt/dashboard/module'
+import { Badge, Button, ConfirmDialog, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Input, RowShapes, Section, SettingsItem, SettingsItems, SettingsRow, SettingsRowShapes, SettingsSection, Slot, formatDateTime, formatRelative, useOpenAgentDown, usePolled, useSettingsCrumb } from '@openagt/ui/module'
 import { addDevice, keepPerson, loadMine, myName, nameOwner, removeDevice, removeMine, removePerson, renameDevice, setTailscale, type Answer, type DeviceRow, type DoorStatus, type LineRow, type PersonRow, type PersonThere } from './devices.js'
 import { installFailed, removeDevice as removeServerDevice } from './servers.js'
 import { ADDING, AddDevice, isAdding, useJoined, type Adding } from './AddDevice.js'

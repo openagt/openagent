@@ -6,7 +6,7 @@ import { enterPage, howToGetIn, notInPage, type DoorKind } from './pages.js'
 
 const KINDS: DoorKind[] = ['wifi', 'server', 'tailscale', 'tailscale-server']
 const PAGES = [...KINDS.map(kind => notInPage(kind)), ...KINDS.map(kind => enterPage('/_door/enter', 'n0nce', kind))]
-const dashboardFile = (path: string): string => readFileSync(fileURLToPath(new URL(`../../../dashboard/dashboard/${path}`, import.meta.url)), 'utf8')
+const dashboardFile = (path: string): string => readFileSync(fileURLToPath(new URL(`../../../ui/dashboard/${path}`, import.meta.url)), 'utf8')
 
 /** The custom properties a CSS block sets, by name. */
 function propertiesOf(block: string): Map<string, string> {

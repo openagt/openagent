@@ -17,8 +17,8 @@
     "resolveJsonModule": true,
     "allowImportingTsExtensions": true,
     "paths": {
-      "@openagt/dashboard/module": ["../../dashboard/dashboard/module/index.ts"],
-      "@openagt/dashboard/module/testing": ["../../dashboard/dashboard/module/testing.tsx"]
+      "@openagt/ui/module": ["../../ui/dashboard/module/index.ts"],
+      "@openagt/ui/module/testing": ["../../ui/dashboard/module/testing.tsx"]
     }
   },
   "include": ["**/*.ts", "**/*.tsx"]

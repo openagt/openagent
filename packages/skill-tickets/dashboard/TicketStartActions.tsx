@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Check, ClipboardPlus, ListPlus, Play } from 'lucide-react'
-import { Button, StartAgentButton, Tooltip, TooltipContent, TooltipTrigger, cn, useLinkActions, type StartMenuItem } from '@openagt/dashboard/module'
+import { Button, StartAgentButton, Tooltip, TooltipContent, TooltipTrigger, cn, useLinkActions, type StartMenuItem } from '@openagt/ui/module'
 import { planLink, planTicketPrompt, ticketLink, workOnTicketPrompt } from '../src/module.js'
 
 /**

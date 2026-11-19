@@ -1,4 +1,4 @@
-import type { ModuleHost } from '@openagt/dashboard/module'
+import type { ModuleHost } from '@openagt/ui/module'
 import { readListed } from '../../src/module.js'
 import type { Ticket } from '../../src/tickets.js'
 

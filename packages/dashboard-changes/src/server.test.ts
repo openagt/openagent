@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { after, before, test } from 'node:test'
-import type { ModuleServerHost, RunFacts } from '@openagt/dashboard/module-server'
+import type { ModuleServerHost, RunFacts } from '@openagt/ui/module-server'
 import server from './server.js'
 
 let dir: string

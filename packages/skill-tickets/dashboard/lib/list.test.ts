@@ -1,5 +1,5 @@
 import { expect, test, vi } from 'vitest'
-import type { ModuleHost } from '@openagt/dashboard/module'
+import type { ModuleHost } from '@openagt/ui/module'
 import { listTickets, ticketsChanged } from './list.js'
 
 const ticket = { file: 'a.md', title: 'a', summary: '', date: '2026-08-01T00:00:00.000Z', planned: false }

@@ -1,4 +1,4 @@
-import { Facts, PageLink, Panel, PanelGroup, PanelNote, PartDescription, PersonMark, PanelShape, RunMark, Slot, Tooltip, TooltipContent, TooltipTrigger, formatAge, formatDateTime, personName, personSaid, runWord, useModuleHost, usePolled, type ModuleCardProps, type ModuleHostPerson } from '@openagt/dashboard/module'
+import { Facts, PageLink, Panel, PanelGroup, PanelNote, PartDescription, PersonMark, PanelShape, RunMark, Slot, Tooltip, TooltipContent, TooltipTrigger, formatAge, formatDateTime, personName, personSaid, runWord, useModuleHost, usePolled, type ModuleCardProps, type ModuleHostPerson } from '@openagt/ui/module'
 import { membersOf, peopleWithRuns, type Member, type PersonActivity } from '../src/people.js'
 
 // The Overview's Members card: who worked in the projects shown in the last 30 days, from `logs

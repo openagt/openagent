@@ -1,4 +1,4 @@
-import { List, Row, StateCell, formatAge, runSaid, type ModuleAgent, type WorkState } from '@openagt/dashboard/module'
+import { List, Row, StateCell, formatAge, runSaid, type ModuleAgent, type WorkState } from '@openagt/ui/module'
 import { holderAgent, planAgentFor, workAgentFor } from '../src/module.js'
 import { holdingRun } from './lib/holding-run.js'
 

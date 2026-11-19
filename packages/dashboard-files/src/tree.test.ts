@@ -4,7 +4,7 @@ import { mkdtemp, rm, writeFile, unlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { after, before, test } from 'node:test'
-import type { ModuleServerHost } from '@openagt/dashboard/module-server'
+import type { ModuleServerHost } from '@openagt/ui/module-server'
 import { readAgentFileContent, readAgentTree, resolveAgentFiles } from './tree.js'
 
 let dir: string

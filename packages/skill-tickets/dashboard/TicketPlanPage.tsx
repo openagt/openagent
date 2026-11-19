@@ -1,4 +1,4 @@
-import { Markdown, Slot, useModuleHost } from '@openagt/dashboard/module'
+import { Markdown, Slot, useModuleHost } from '@openagt/ui/module'
 import { planBody } from '../src/module.js'
 import { TicketPageShell, TicketPageNote, TicketPageShape } from './TicketPageShell.js'
 import { TicketFacts, TicketHeader } from './TicketHeader.js'

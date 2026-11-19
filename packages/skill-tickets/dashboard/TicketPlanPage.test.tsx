@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, test } from 'vitest'
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
-import { forgetRemembered, type ModuleAgent } from '@openagt/dashboard/module'
+import { forgetRemembered, type ModuleAgent } from '@openagt/ui/module'
 import { planTicketPrompt, workOnTicketPrompt } from '../src/module.js'
 import { fakeHost, renderWithHost, type FakeHost } from './test-host.js'
 import { TicketPlanPage } from './TicketPlanPage.js'
 import { TicketDetailPage } from './TicketDetailPage.js'
-import { openMenu } from '../../dashboard/dashboard/test-utils.js'
+import { openMenu } from '../../ui/dashboard/test-utils.js'
 
 afterEach(() => {
   cleanup()

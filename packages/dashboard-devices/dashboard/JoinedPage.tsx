@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Server } from 'lucide-react'
-import { Button, ConfirmDialog, SettingsItem, SettingsItems, useAskOn, useOpenAgentDown, usePolled } from '@openagt/dashboard/module'
+import { Button, ConfirmDialog, SettingsItem, SettingsItems, useAskOn, useOpenAgentDown, usePolled } from '@openagt/ui/module'
 import { idsOf, readPersonThere, type Answer, type DeviceRow } from './devices.js'
 import { loadOther, otherLogin, sharedForget, type OtherLogin, type OtherRow } from './servers.js'
 import { hasDoor, throughOf, type JoinedItem, type OtherItem } from './model.js'

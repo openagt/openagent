@@ -1,5 +1,5 @@
 import { FastForward, Play } from 'lucide-react'
-import { PageLink, Panel, PanelGroup, PanelNote, PanelRow, PartDescription, Slot, StartAgentButton, useIsMobile, useModuleHost, WordsShape, type FileNames, type ModuleCardProps } from '@openagt/dashboard/module'
+import { PageLink, Panel, PanelGroup, PanelNote, PanelRow, PartDescription, Slot, StartAgentButton, useIsMobile, useModuleHost, WordsShape, type FileNames, type ModuleCardProps } from '@openagt/ui/module'
 import { fanOutLabel, fanOutPress, unclaimedEntries, workOnEntryPrompt } from '../src/module.js'
 import { EntryTitle, entryView } from './entry.js'
 import { useQueueStarts, type QueueStarts } from './starts.js'

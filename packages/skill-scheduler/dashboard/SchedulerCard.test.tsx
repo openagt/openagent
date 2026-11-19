@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'vitest'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
-import { ModuleHostContext, type ModuleHost, type ModuleProject } from '@openagt/dashboard/module'
+import { ModuleHostContext, type ModuleHost, type ModuleProject } from '@openagt/ui/module'
 import { SchedulerCard, offWords } from './SchedulerCard.js'
 import defineScheduler from './index.js'
 import { ON_CLAUDE, STATUS, hostAnswering } from './fixtures.js'

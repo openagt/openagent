@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Monitor, Server } from 'lucide-react'
-import { Button, ConfirmDialog, Input, SettingsRow, Switch, useOpenAgentDown } from '@openagt/dashboard/module'
+import { Button, ConfirmDialog, Input, SettingsRow, Switch, useOpenAgentDown } from '@openagt/ui/module'
 import { addDevice, removeDevice } from './devices.js'
 import { hasDoor, reachedAt, type ComputerItem } from './model.js'
 import { ComputersThrough } from './ServerPage.js'

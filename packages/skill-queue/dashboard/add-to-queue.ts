@@ -1,5 +1,5 @@
 import { ListPlus } from 'lucide-react'
-import type { LinkAction } from '@openagt/dashboard/module'
+import type { LinkAction } from '@openagt/ui/module'
 import { addToQueue, alreadyQueued, isEntryLine, readEntries } from '../src/module.js'
 
 /**

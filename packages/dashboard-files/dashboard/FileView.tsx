@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { Code, Eye, FolderIcon } from 'lucide-react'
-import { Button, FileLinks, Markdown, PaneNote, PathCut, Skeleton, Slot, Tooltip, TooltipContent, TooltipTrigger, useModuleHost, usePolled } from '@openagt/dashboard/module'
+import { Button, FileLinks, Markdown, PaneNote, PathCut, Skeleton, Slot, Tooltip, TooltipContent, TooltipTrigger, useModuleHost, usePolled } from '@openagt/ui/module'
 import type { FileContent } from '../src/read.js'
 import { readContent } from './reads.js'
 import { contentKey } from './keys.js'

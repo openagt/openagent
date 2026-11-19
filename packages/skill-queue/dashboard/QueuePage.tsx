@@ -40,7 +40,7 @@ import {
   type ModulePageProps,
   type ModuleProject,
   type Schedule,
-} from '@openagt/dashboard/module'
+} from '@openagt/ui/module'
 import type { PlacedEntry } from '../src/queue.js'
 import { DEFAULT_PRIORITY, PRIORITIES, QUEUE_COMMAND, addTextArgs, doneArgs, entryTarget, fanOutLabel, fanOutPress, isPlacedEntry, entryHeadline, isWorkingOn, priorityMeaning, readEntries, unclaimedEntries, workOnEntryPrompt } from '../src/module.js'
 import { AgentOnEntry, entryView } from './entry.js'

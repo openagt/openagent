@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ChevronRight, CircleCheck, House, Laptop, Loader2, Server, UserPlus, UserRound } from 'lucide-react'
-import { Button, Checkbox, ConfirmDialog, Dialog, Facts, RowShapes, SettingsItem, SettingsItems, SettingsRow, Slot, Switch, cn, useOpenAgentDown, usePolled, type ModuleAccountsAgent, type ModuleComputersThrough, type ModuleHost, type ModuleMachine, type ModuleMachineAccount } from '@openagt/dashboard/module'
+import { Button, Checkbox, ConfirmDialog, Dialog, Facts, RowShapes, SettingsItem, SettingsItems, SettingsRow, Slot, Switch, cn, useOpenAgentDown, usePolled, type ModuleAccountsAgent, type ModuleComputersThrough, type ModuleHost, type ModuleMachine, type ModuleMachineAccount } from '@openagt/ui/module'
 import { idsOf, myName, type Answer, type DeviceRow } from './devices.js'
 import { installDone, installFailed, nameOwner, removeDevice, removePerson, setPeople, setWho, askLink, type ServerRow } from './servers.js'
 import { labelOf, type ServerItem } from './model.js'

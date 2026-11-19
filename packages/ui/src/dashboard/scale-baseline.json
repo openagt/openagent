@@ -1,0 +1,28 @@
+{
+  "ui/dashboard/components/AgentDetails.tsx": {
+    "text-muted-foreground/70": 4
+  },
+  "ui/dashboard/components/AgentView.tsx": {
+    "py-2.5": 1
+  },
+  "ui/dashboard/components/ContextFiles.tsx": {
+    "rounded": 1
+  },
+  "ui/dashboard/components/FadeWhileStale.tsx": {
+    "duration-300": 1
+  },
+  "ui/dashboard/components/Markdown.tsx": {
+    "leading-[22px]": 1,
+    "space-y-2.5": 1,
+    "text-[0.9em]": 2
+  },
+  "ui/dashboard/components/ToolCalls.tsx": {
+    "max-h-[400px]": 1
+  },
+  "ui/dashboard/components/prompt-editor/SuggestionList.tsx": {
+    "rounded": 1
+  },
+  "ui/dashboard/components/ui/resizable.tsx": {
+    "group-aria-[orientation=horizontal]/handle:h-[3px]": 1
+  }
+}

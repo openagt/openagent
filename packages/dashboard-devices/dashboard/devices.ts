@@ -1,4 +1,4 @@
-import type { ModuleHost } from '@openagt/dashboard/module'
+import type { ModuleHost } from '@openagt/ui/module'
 
 // What the section shows: the answer of `devices status`, read forgivingly, and the three
 // things a person does, each one of the package's own commands. The devices are this computer's,

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Markdown, Slot, useModuleHost, type ModuleHost } from '@openagt/dashboard/module'
+import { Markdown, Slot, useModuleHost, type ModuleHost } from '@openagt/ui/module'
 import { claimState, ticketBody } from '../src/module.js'
 import { readTicketFile } from '../src/ticket-file.js'
 import { TicketPageShell, TicketPageNote, TicketPageShape } from './TicketPageShell.js'

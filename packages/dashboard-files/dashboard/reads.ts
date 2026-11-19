@@ -1,4 +1,4 @@
-import type { ModuleHost } from '@openagt/dashboard/module'
+import type { ModuleHost } from '@openagt/ui/module'
 import type { AgentTree } from '../src/tree.js'
 import type { FileContent } from '../src/read.js'
 

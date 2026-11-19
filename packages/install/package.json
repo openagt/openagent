@@ -37,7 +37,8 @@
   },
   "dependencies": {
     "@openagt/agent-data": "workspace:*",
-    "@openagt/dashboard": "workspace:*"
+    "@openagt/dashboard": "workspace:*",
+    "@openagt/ui": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

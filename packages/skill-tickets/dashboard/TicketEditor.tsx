@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { Button, Input, Label, Textarea, useModuleHost } from '@openagt/dashboard/module'
+import { Button, Input, Label, Textarea, useModuleHost } from '@openagt/ui/module'
 import { newTicketFile, topicsIn, writeTicketFile, type TicketFields } from '../src/ticket-file.js'
 import { listTickets, ticketsChanged } from './lib/list.js'
 import { focusTitleOnceShown } from './TicketHeader.js'

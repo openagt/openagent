@@ -1,4 +1,4 @@
-import { runName, type ModuleAgent } from '@openagt/dashboard/module'
+import { runName, type ModuleAgent } from '@openagt/ui/module'
 import type { HoldingRun } from '../../src/module.js'
 
 /** The run behind a claim, named as every list of runs names it ({@link runName}). */

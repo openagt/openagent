@@ -1,7 +1,7 @@
 import { afterEach, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { ModuleHostContext, forgetRemembered, type ModuleAgent } from '@openagt/dashboard/module'
-import { fakeHost, type FakeHost } from '@openagt/dashboard/module/testing'
+import { ModuleHostContext, forgetRemembered, type ModuleAgent } from '@openagt/ui/module'
+import { fakeHost, type FakeHost } from '@openagt/ui/module/testing'
 import { LogsPage, dayOf } from './LogsPage.js'
 
 // The Logs page: every run of the projects shown, newest first, in one list cut by day, each day

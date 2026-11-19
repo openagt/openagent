@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { ModuleHost } from '@openagt/dashboard/module'
+import type { ModuleHost } from '@openagt/ui/module'
 import { DEFAULT_FAN_OUT_COUNT, fanOut, topEntries, workOnEntryPrompt } from '../src/module.js'
 
 // The two ways to start agents on the queue, shared by the Queue page and the Overview's card, so

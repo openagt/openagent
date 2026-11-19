@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { X } from 'lucide-react'
-import { Button, Empty, LinkActions, Page, PanelShape, Section, Slot, cn, runsAgain, usePolled, useAction, useIsMobile, useLinkActions, useModuleHost, type ProjectLinks, type ModuleLink, type ModuleProject, type LinkActionOffer } from '@openagt/dashboard/module'
+import { Button, Empty, LinkActions, Page, PanelShape, Section, Slot, cn, runsAgain, usePolled, useAction, useIsMobile, useLinkActions, useModuleHost, type ProjectLinks, type ModuleLink, type ModuleProject, type LinkActionOffer } from '@openagt/ui/module'
 import { heldBack, holderAgent, planLink, ticketLink, withHolder } from '../src/module.js'
 import { holdingRun } from './lib/holding-run.js'
 import type { ProjectTickets, WorkspaceTicket } from './lib/types.js'

@@ -1,4 +1,4 @@
-import type { ModuleReadInput, ModuleServer, ModuleServerHost } from '@openagt/dashboard/module-server'
+import type { ModuleReadInput, ModuleServer, ModuleServerHost } from '@openagt/ui/module-server'
 import { listFiles } from './list.js'
 import { readFileContent, type FileContent } from './read.js'
 import { readAgentFileContent, readAgentTree, resolveAgentFiles, type AgentTree } from './tree.js'

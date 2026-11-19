@@ -1,6 +1,6 @@
 import { Fragment, type ReactNode } from 'react'
 import { ChevronRight } from 'lucide-react'
-import { MiddleCut, PageColumn, ShowSidebarButton, Skeleton, cn } from '@openagt/dashboard/module'
+import { MiddleCut, PageColumn, ShowSidebarButton, Skeleton, cn } from '@openagt/ui/module'
 
 // The frame every page under the tickets list sits in (#1144, #685): the breadcrumb back to the
 // list, then the page's own content, in the column every page has. A page under a list needs the

@@ -6,7 +6,7 @@
 // that asks to connect. On the Overview, a card of this computer and its servers: whether each answers,
 // and how much of its memory and disk is in use.
 import { MonitorSmartphone } from 'lucide-react'
-import { defineModule } from '@openagt/dashboard/module'
+import { defineModule } from '@openagt/ui/module'
 import { DevicesSettings } from './DevicesSettings.js'
 import { DevicesCard } from './DevicesCard.js'
 import { AskPopup } from './Pairing.js'

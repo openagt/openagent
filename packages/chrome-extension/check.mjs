@@ -4,7 +4,7 @@
 // What this does NOT prove is the only thing left: whether claude.ai's real DOM puts the block
 // somewhere these strategies reach. That is what loading the extension answers.
 //
-//   node check.mjs      (after a repo pnpm install: jsdom comes from the dashboard's dependencies)
+//   node check.mjs      (after a repo pnpm install: jsdom comes from ui's dependencies)
 
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -12,11 +12,11 @@ import { fileURLToPath } from 'node:url'
 import { createRequire } from 'node:module'
 
 const here = dirname(fileURLToPath(import.meta.url))
-// jsdom belongs to the dashboard (its dev dependency); this
+// jsdom belongs to ui, the package that ships the extension (its dev dependency); this
 // directory deliberately has no package.json of its own, so resolve through the package that
 // actually depends on it.
 const require_ = createRequire(import.meta.url)
-const { JSDOM } = require_(require_.resolve('jsdom', { paths: [join(here, '../dashboard')] }))
+const { JSDOM } = require_(require_.resolve('jsdom', { paths: [join(here, '../ui')] }))
 
 const block = JSON.stringify(
   {

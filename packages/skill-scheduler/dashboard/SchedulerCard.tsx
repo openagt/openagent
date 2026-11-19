@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Button, PageLink, Panel, PanelGroup, PartDescription, Skeleton, Slot, Tooltip, TooltipContent, TooltipTrigger, cn, formatAge, inPlace, formatDateTime, useModuleHost, useOpenAgentDown, usePolled, type ModuleCardProps, type ModuleProject } from '@openagt/dashboard/module'
+import { Button, PageLink, Panel, PanelGroup, PartDescription, Skeleton, Slot, Tooltip, TooltipContent, TooltipTrigger, cn, formatAge, inPlace, formatDateTime, useModuleHost, useOpenAgentDown, usePolled, type ModuleCardProps, type ModuleProject } from '@openagt/ui/module'
 import { CodeWords } from './CodeWords.js'
 import { cannotRun, heldBy, notAsked, readSchedulers, schedulersKey, rowTitle, schedulerStatus, schedulerStopped, startedNow, startsNext, unlistedWords, type Answered, type SchedulerCommand, type SchedulerRow } from './schedulers.js'
 

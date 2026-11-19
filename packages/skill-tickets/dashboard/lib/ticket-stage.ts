@@ -1,4 +1,4 @@
-import { runSaid } from '@openagt/dashboard/module'
+import { runSaid } from '@openagt/ui/module'
 import { claimState, heldBack } from '../../src/module.js'
 import type { WorkspaceTicket } from './types.js'
 

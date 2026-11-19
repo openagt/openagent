@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { CircleCheck, CircleX, Loader2, PlugZap } from 'lucide-react'
-import { Button, Checkbox, Facts, Input, RadioGroup, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, cn, useOpenAgentDown, usePolled } from '@openagt/dashboard/module'
+import { Button, Checkbox, Facts, Input, RadioGroup, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, cn, useOpenAgentDown, usePolled } from '@openagt/ui/module'
 import type { Answer } from './devices.js'
 import { installDone, installFailed, testConnection, type ServerRow, type Tested } from './servers.js'
 import { CopyButton } from './codes.js'

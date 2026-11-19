@@ -1,6 +1,6 @@
 {
   "extends": "../../tsconfig.base.json",
-  "compilerOptions": { "outDir": "dist", "rootDir": "src", "paths": { "@openagt/dashboard/module-server": ["../dashboard/src/module-server.d.ts"] } },
+  "compilerOptions": { "outDir": "dist", "rootDir": "src", "paths": { "@openagt/ui/module-server": ["../ui/src/module-server.d.ts"] } },
   "include": ["src"],
   "exclude": ["src/**/*.test.ts"]
 }

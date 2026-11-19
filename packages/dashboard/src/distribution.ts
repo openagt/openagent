@@ -1,10 +1,10 @@
 import type { DistributionPackage } from '@openagt/hooks'
 
 /**
- * The modules OpenAgent runs (#2394): the dashboard loads them (`distribution-hooks.ts`), and hands
- * this file down to every process it starts (`cli/distribution.ts`), a run's own among them, which
- * loads each package's `./module` from here. Until the dashboard is the distribution itself, with
- * every module listed, it lists the modules of the run pipeline that have a package.
+ * The modules OpenAgent runs (#2394): its `openagent` command serves the dashboard with them
+ * (`bin.ts`), and hands this file down to every process the dashboard starts, a run's own among
+ * them, which loads each package's `./module` from here, resolved from this package's install.
+ * For now, the modules of the run pipeline.
  */
 const DISTRIBUTION: readonly DistributionPackage[] = [
   // git-branches: the run's checkout, its branch read back, the checkout reclaimed.

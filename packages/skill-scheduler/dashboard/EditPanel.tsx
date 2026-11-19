@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Button, useOpenAgentDown, type ModuleCommandResult, type ModuleProject } from '@openagt/dashboard/module'
+import { Button, useOpenAgentDown, type ModuleCommandResult, type ModuleProject } from '@openagt/ui/module'
 import type { PublishPick } from '../src/state.js'
 import { MAX_AGENTS, OWN_AUTOMATIONS_DIR, type AgentName } from '../src/names.js'
 import { parseInterval, parseTimeOfDay } from '../src/pace.js'

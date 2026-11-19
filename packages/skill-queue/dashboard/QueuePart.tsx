@@ -1,4 +1,4 @@
-import { LinePart, counted, useModuleHost, type ModuleCardProps } from '@openagt/dashboard/module'
+import { LinePart, counted, useModuleHost, type ModuleCardProps } from '@openagt/ui/module'
 import { entryView } from './entry.js'
 import { useQueueReads } from './reads.js'
 

@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import { hostname } from 'node:os'
 import { nodeGitRunner, originDefaultBranch, type GitRunner } from '@openagt/agent-data'
-import type { MergeLookup, ModuleServerHost } from '@openagt/dashboard/module-server'
+import type { MergeLookup, ModuleServerHost } from '@openagt/ui/module-server'
 import { listCommitFiles, listFiles } from './list.js'
 import { fileContent, readFileContent, safeRepoPath, type FileContent } from './read.js'
 

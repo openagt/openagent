@@ -1,7 +1,7 @@
 import { afterEach, expect, test, vi } from 'vitest'
 import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
 import { QueuePart } from './QueuePart.js'
-import { fakeHost as hostFor } from '@openagt/dashboard/module/testing'
+import { fakeHost as hostFor } from '@openagt/ui/module/testing'
 import { NO_MODULES, fakeHost, renderWithHost } from './test-host.js'
 
 // The queue's part of the Overview's line: how many entries wait, over how many projects on a hover; it opens the Queue page.

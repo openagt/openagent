@@ -1,6 +1,6 @@
 // The skill's UI: the package's `./dashboard` export. One card, built only on the `account-rotation`
 // command, so it shows on the dashboard's Overview what an agent sees through the same command.
-import { defineModule } from '@openagt/dashboard/module'
+import { defineModule } from '@openagt/ui/module'
 import { AccountsCard } from './AccountsCard.js'
 
 export default defineModule({

@@ -1,4 +1,4 @@
-import { useModuleHost, type ModulePageProps } from '@openagt/dashboard/module'
+import { useModuleHost, type ModulePageProps } from '@openagt/ui/module'
 import { routeOf } from '../src/module.js'
 import { TicketsPage } from './TicketsPage.js'
 import { TicketDetailPage } from './TicketDetailPage.js'

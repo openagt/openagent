@@ -5,8 +5,8 @@ import { request } from 'node:https'
 import { createRequire } from 'node:module'
 import { connect } from 'node:net'
 import { dirname, join, sep } from 'node:path'
-import { joinRunningDashboard } from '@openagt/dashboard/join-dashboard'
-import { CERTIFICATE_FILE, KEY_FILE, readSecureAddress, secureAddressDir } from '@openagt/dashboard/secure-address'
+import { joinRunningDashboard } from '@openagt/ui/join-dashboard'
+import { CERTIFICATE_FILE, KEY_FILE, readSecureAddress, secureAddressDir } from '@openagt/ui/secure-address'
 import { ADDRESS, CERTIFICATE_CONFIG, CERTIFICATE_DAYS, LOOPBACK_ADDRESS } from './address.js'
 import { linux } from './linux.js'
 import { mac } from './mac.js'
@@ -61,12 +61,12 @@ export function inCheckout(path: string): boolean {
  * version is installed to a folder of OpenAgent's own.
  */
 async function lastingDashboard(manifest: string, app: string, io: InstallIO): Promise<string> {
-  if (inCheckout(manifest)) return join(dirname(manifest), 'dist', 'cli', 'bin.js')
+  if (inCheckout(manifest)) return join(dirname(manifest), 'dist', 'bin.js')
   const { version } = JSON.parse(await readFile(manifest, 'utf8')) as { version: string }
   io.out(`◆ installing OpenAgent v${version} in ${app}`)
   await mkdir(app, { recursive: true })
   await run('npm', ['install', '--prefix', app, '--no-fund', '--no-audit', `@openagt/dashboard@${version}`])
-  return join(app, 'node_modules', '@openagt', 'dashboard', 'dist', 'cli', 'bin.js')
+  return join(app, 'node_modules', '@openagt', 'dashboard', 'dist', 'bin.js')
 }
 
 /** The certificate for {@link ADDRESS}, and whether this run made it: one is made on this computer when there is none for it. */

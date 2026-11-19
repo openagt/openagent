@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
-import { ModuleHostContext, type ModuleHost } from '@openagt/dashboard/module'
-import { fakeHost } from '@openagt/dashboard/module/testing'
+import { ModuleHostContext, type ModuleHost } from '@openagt/ui/module'
+import { fakeHost } from '@openagt/ui/module/testing'
 import { ACTED, CONSOLE, CURSOR, FRAME, PULSE, SELECTED, STATE, streamPart, type ConsoleLine } from '../src/stream.js'
 import { BrowserPanel } from './BrowserPanel.js'
 

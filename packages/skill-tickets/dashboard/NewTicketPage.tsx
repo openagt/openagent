@@ -1,4 +1,4 @@
-import { useModuleHost } from '@openagt/dashboard/module'
+import { useModuleHost } from '@openagt/ui/module'
 import { TicketEditor } from './TicketEditor.js'
 import { TicketPageShell } from './TicketPageShell.js'
 

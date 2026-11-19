@@ -5,7 +5,7 @@
 // run in each project by the dashboard: the module reads exactly what an agent reads with
 // `npx @openagt/skill-queue@0.1`, and writes exactly the line an agent writes with `npx @openagt/skill-queue@0.1 add`.
 import { ListTodo } from 'lucide-react'
-import { defineModule } from '@openagt/dashboard/module'
+import { defineModule } from '@openagt/ui/module'
 import { QueuePage } from './QueuePage.js'
 import { QueueCard } from './QueueCard.js'
 import { QueuePart } from './QueuePart.js'

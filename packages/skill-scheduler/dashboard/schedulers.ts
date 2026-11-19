@@ -1,4 +1,4 @@
-import { MAX_SPEND_OFFSET, type ModuleCommandResult, type ModuleHost, type ModuleProject } from '@openagt/dashboard/module'
+import { MAX_SPEND_OFFSET, type ModuleCommandResult, type ModuleHost, type ModuleProject } from '@openagt/ui/module'
 import type { PublishPick, TickDecision } from '../src/state.js'
 import { QUOTA_UNREAD } from '../src/quota-boundary.js'
 import { AGENTS, AGENT_LABELS, AGENT_SKILLS_DIR, DEFAULT_AGENT, DEFAULT_PUBLISH, isAgent, isAgents, isTime, type AgentName } from '../src/names.js'

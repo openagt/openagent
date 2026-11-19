@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Input, MAX_SPEND_OFFSET, inPlace, SettingsRow, SettingsRowShapes, SettingsSection, Slot, useModuleHost, useOpenAgentDown, usePolled, type ModuleSettingsProps } from '@openagt/dashboard/module'
+import { Input, MAX_SPEND_OFFSET, inPlace, SettingsRow, SettingsRowShapes, SettingsSection, Slot, useModuleHost, useOpenAgentDown, usePolled, type ModuleSettingsProps } from '@openagt/ui/module'
 import { loosestSpendOffset, notAsked, offsetsThatDiffer, readSchedulers, schedulersKey, saveSpendOffset, typedOffset, type SchedulerRow } from './schedulers.js'
 
 // Settings › Scheduler: how far past the quota boundary scheduled work may still start. Each

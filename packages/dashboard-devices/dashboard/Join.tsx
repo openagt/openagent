@@ -1,5 +1,5 @@
 import { useId, useRef, useState, type ClipboardEvent, type FormEvent } from 'react'
-import { Button, Checkbox, Input, useOpenAgentDown } from '@openagt/dashboard/module'
+import { Button, Checkbox, Input, useOpenAgentDown } from '@openagt/ui/module'
 import { hasDoor } from './model.js'
 import { Presses, Problem, useFlowHold } from './parts.js'
 import { sharedReach } from './servers.js'

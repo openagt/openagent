@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent, type PointerEvent, type ReactNode, type RefObject } from 'react'
 import { ArrowLeft, ArrowRight, ChevronDown, ChevronUp, CornerDownRight, MousePointer2, RotateCw } from 'lucide-react'
-import { Button, Input, PaneNote, useModuleHost, type ModulePanelProps } from '@openagt/dashboard/module'
+import { Button, Input, PaneNote, useModuleHost, type ModulePanelProps } from '@openagt/ui/module'
 import { KEPT_LINES } from '../src/console.js'
 import type { ScreenInput } from '../src/screen.js'
 import { ACTED, CONSOLE, CURSOR, FRAME, jpegSize, MAX_SELECTION, readActed, readConsoleLine, readCursor, readSelection, readState, SELECTED, STATE, streamReader, type ActedPoint, type ConsoleLevel, type ConsoleLine, type Cursor } from '../src/stream.js'

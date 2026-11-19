@@ -1,4 +1,4 @@
-import { Stepper, Tooltip, TooltipContent, TooltipTrigger } from '@openagt/dashboard/module'
+import { Stepper, Tooltip, TooltipContent, TooltipTrigger } from '@openagt/ui/module'
 
 /** How many agents a project's batch starts, typed or stepped, from one to `max`: the Queue page's and the card's, joined to the press it counts for. */
 export function BatchCount({ count, max, onChange, className }: { count: number; max: number; onChange: (count: number) => void; className?: string }) {

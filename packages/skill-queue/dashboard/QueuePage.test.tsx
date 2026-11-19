@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
-import { HostServicesContext, INERT_HOST_SERVICES, type HostServices } from '../../dashboard/dashboard/lib/host-services.js'
-import type { MountedModules } from '@openagt/dashboard/module/testing'
-import { forgetRemembered, type ModuleScheduledCommand } from '@openagt/dashboard/module'
+import { HostServicesContext, INERT_HOST_SERVICES, type HostServices } from '../../ui/dashboard/lib/host-services.js'
+import type { MountedModules } from '@openagt/ui/module/testing'
+import { forgetRemembered, type ModuleScheduledCommand } from '@openagt/ui/module'
 import { QueuePage } from './QueuePage.js'
 import { NO_MODULES, fakeHost, renderWithHost, type FakeHost } from './test-host.js'
 import { workOnEntryPrompt } from '../src/module.js'
-import { openMenu, phoneScreen } from '../../dashboard/dashboard/test-utils.js'
+import { openMenu, phoneScreen } from '../../ui/dashboard/test-utils.js'
 
 // The page rendered from nothing but this package: a host answering `queue --local --full`, and
 // the queue's own `done` and `add`. What other packages tell it (which commands start by

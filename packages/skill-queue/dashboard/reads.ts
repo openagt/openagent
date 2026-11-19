@@ -1,4 +1,4 @@
-import { pathsIn, runsAgain, useFileNames, usePolled, useModuleHost, type FileNames, type ModuleAgent, type ModuleProject, type ReadState } from '@openagt/dashboard/module'
+import { pathsIn, runsAgain, useFileNames, usePolled, useModuleHost, type FileNames, type ModuleAgent, type ModuleProject, type ReadState } from '@openagt/ui/module'
 import { isEntryLine, readEntries } from '../src/module.js'
 
 /** One project's open entries as read, or why the command failed, and its agents at work. */

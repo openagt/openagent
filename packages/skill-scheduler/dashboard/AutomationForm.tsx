@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Button, Input, RadioGroup, RadioGroupOption, cn, useKeptDraft, useOpenAgentDown, type ModuleCommandResult, type ModuleProject } from '@openagt/dashboard/module'
+import { Button, Input, RadioGroup, RadioGroupOption, cn, useKeptDraft, useOpenAgentDown, type ModuleCommandResult, type ModuleProject } from '@openagt/ui/module'
 import { EMPTY_DRAFT, addArgs, draftProblem, draftSentence, isUntouched, nameProblem, ownPaceArgs, savedFile, savedWords, whereHint, type AutomationDraft, type OwnPace } from './automation-form.js'
 import { FormFoot, LineFields, PHONE_FIELD, PaceFields, PromptField, SaveWords, Section } from './fields.js'
 import { DEFAULT_AGENT } from '../src/names.js'

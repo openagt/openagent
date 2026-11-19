@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'vitest'
 import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
-import { openMenu } from '../../dashboard/dashboard/test-utils.js'
+import { openMenu } from '../../ui/dashboard/test-utils.js'
 import { fakeHost, renderWithHost } from './test-host.js'
 import { NewTicketPage } from './NewTicketPage.js'
 import { TicketDetailPage } from './TicketDetailPage.js'

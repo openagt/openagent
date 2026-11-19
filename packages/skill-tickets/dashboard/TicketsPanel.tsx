@@ -18,7 +18,7 @@ import {
   useIsMobile,
   useLoaded,
   useModuleHost,
-} from '@openagt/dashboard/module'
+} from '@openagt/ui/module'
 import { NEW_TICKET, UPDATE_TICKETS_PROMPT, heldBack, readMeta, type TicketsMeta } from '../src/module.js'
 import { QueuedMark, TicketStartActions, useQueuedAsk } from './TicketStartActions.js'
 import type { WorkspaceTicket } from './lib/types.js'

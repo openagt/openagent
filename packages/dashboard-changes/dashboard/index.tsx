@@ -3,7 +3,7 @@
 // run's, kept after its work is merged, or the project folder's own. And, on a working run's page,
 // the count of files it has changed so far, in the bar above the message box. Its data is its own
 // server part's reads (`../src/server.ts`).
-import { defineModule } from '@openagt/dashboard/module'
+import { defineModule } from '@openagt/ui/module'
 import { FileDiff } from 'lucide-react'
 import { ChangesPanel } from './ChangesPanel.js'
 import { ChangesSummary } from './ChangesSummary.js'

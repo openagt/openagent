@@ -1,4 +1,4 @@
-import type { ModuleHost } from '@openagt/dashboard/module'
+import type { ModuleHost } from '@openagt/ui/module'
 import type { AgentCommit, FileMark } from '../src/run.js'
 import type { RunChanges } from '../src/server.js'
 import type { FileChange, FileDiff } from '../src/diff.js'

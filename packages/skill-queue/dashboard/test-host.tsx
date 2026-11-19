@@ -1,6 +1,6 @@
-import { answering, fakeHost as hostFor, type Answers, type FakeHost } from '@openagt/dashboard/module/testing'
+import { answering, fakeHost as hostFor, type Answers, type FakeHost } from '@openagt/ui/module/testing'
 
-export { NO_MODULES, renderWithHost, type FakeHost } from '@openagt/dashboard/module/testing'
+export { NO_MODULES, renderWithHost, type FakeHost } from '@openagt/ui/module/testing'
 
 // The dashboard as the queue's card and page see it, faked: the module's commands answered by a
 // table of the queue command's outputs, and every run started given an id of its own.

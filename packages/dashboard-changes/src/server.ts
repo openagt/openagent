@@ -1,4 +1,4 @@
-import type { ModuleReadInput, ModuleServer, ModuleServerHost } from '@openagt/dashboard/module-server'
+import type { ModuleReadInput, ModuleServer, ModuleServerHost } from '@openagt/ui/module-server'
 import { readFileStatuses, type FileGitStatus } from './status.js'
 import { CONTEXT_LINES } from './confined.js'
 import { WHOLE_FILE, readFileChanges, readFileDiff, type FileChange, type FileDiff } from './diff.js'

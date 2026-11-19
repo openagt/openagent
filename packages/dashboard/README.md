@@ -14,8 +14,9 @@ cd ~/code/my-repo
 openagent          # serves the dashboard at http://127.0.0.1:4200
 ```
 
-This package is OpenAgent: the server, its pages and the command that serves them and hands
-every run the skills it gets by default.
+This package is OpenAgent as it ships: the modules it runs (`src/distribution.ts`), and the
+`openagent` command, which serves the dashboard ([`@openagt/ui`](../ui/README.md)) with them and
+hands every run the skills it gets by default.
 
 ## The command is three options and no verbs
 
@@ -118,10 +119,11 @@ needs only its lines carried home.
 
 ## Layout
 
-- `src/` — the CLI, the daemon, the hooks, the reading of a project's agents, and the server
-  side of the dashboard. Node only.
-- `dashboard/` — the browser app: a Vite SPA the daemon serves as static files,
-  talking back over plain HTTP. See [its README](./dashboard/README.md).
+- `src/distribution.ts` — the modules OpenAgent runs, a package or a module each, handed down to
+  every process the dashboard starts.
+- `src/bin.ts` — `openagent`: `@openagt/ui`'s command, serving them.
+
+The dashboard itself, its server and its command are [`@openagt/ui`](../ui/README.md).
 
 ## Status
 

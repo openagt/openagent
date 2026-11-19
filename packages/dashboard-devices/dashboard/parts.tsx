@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState, type ComponentType, type FormEvent, type ReactNode, type RefObject } from 'react'
 import { ChevronRight, Circle, CircleArrowUp, CircleCheck, CircleX, Loader2, Pencil } from 'lucide-react'
-import { Badge, Button, Facts, Input, RadioGroupOption, Section, SettingsFoot, SettingsItem, SettingsRow, cn, formatDateTime, formatRelative, useOpenAgentDown, useSettingsHold } from '@openagt/dashboard/module'
+import { Badge, Button, Facts, Input, RadioGroupOption, Section, SettingsFoot, SettingsItem, SettingsRow, cn, formatDateTime, formatRelative, useOpenAgentDown, useSettingsHold } from '@openagt/ui/module'
 import type { DeviceRow } from './devices.js'
 import type { StepState } from './servers.js'
 

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { ModuleHostContext, type ModuleCommandResult, type ModuleHost } from '@openagt/dashboard/module'
-import { OpenAgentDown, fakeHost } from '@openagt/dashboard/module/testing'
+import { ModuleHostContext, type ModuleCommandResult, type ModuleHost } from '@openagt/ui/module'
+import { OpenAgentDown, fakeHost } from '@openagt/ui/module/testing'
 import { AskPopup } from './Pairing.js'
 
 // The popup over every page: a computer on this Wi-Fi asks to connect.

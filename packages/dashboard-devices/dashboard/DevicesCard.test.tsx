@@ -1,7 +1,7 @@
 import { afterEach, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
-import { ModuleHostContext, forgetRemembered, type ModuleHost, type ModuleMachine, type ModuleMachines } from '@openagt/dashboard/module'
-import { fakeHost, type FakeHost } from '@openagt/dashboard/module/testing'
+import { ModuleHostContext, forgetRemembered, type ModuleHost, type ModuleMachine, type ModuleMachines } from '@openagt/ui/module'
+import { fakeHost, type FakeHost } from '@openagt/ui/module/testing'
 import { DevicesCard } from './DevicesCard.js'
 
 // The Overview's Devices card: this computer and its saved machines, each with whether it answers

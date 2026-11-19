@@ -4,7 +4,7 @@ import { mkdtemp, rm, writeFile, unlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { after, before, test } from 'node:test'
-import type { ModuleServerHost } from '@openagt/dashboard/module-server'
+import type { ModuleServerHost } from '@openagt/ui/module-server'
 import { readAgentChanges as readChanges, readAgentCommitChanges as readCommitChanges, readAgentCommitFileDiff, readAgentCommits, readAgentFileDiff, resolveAgentWork, type AgentChanges, type FileMark } from './run.js'
 
 /** Marks without their line counts: what most cases here are about. One case checks the counts. */

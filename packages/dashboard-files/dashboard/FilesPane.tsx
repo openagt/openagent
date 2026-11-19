@@ -21,7 +21,7 @@ import {
   usePolled,
   Waiting,
   type ModulePanelProps,
-} from '@openagt/dashboard/module'
+} from '@openagt/ui/module'
 import type { AgentTree } from '../src/tree.js'
 import { projectKey, treeKey } from './keys.js'
 import { readProject, readTree } from './reads.js'

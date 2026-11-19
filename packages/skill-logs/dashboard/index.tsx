@@ -4,7 +4,7 @@
 // command's own output, run in each project by the dashboard: the module reads exactly what an
 // agent reads with `npx @openagt/skill-logs@0.1`.
 import { ScrollText } from 'lucide-react'
-import { defineModule } from '@openagt/dashboard/module'
+import { defineModule } from '@openagt/ui/module'
 import { LogsPage } from './LogsPage.js'
 import { MembersCard } from './MembersCard.js'
 

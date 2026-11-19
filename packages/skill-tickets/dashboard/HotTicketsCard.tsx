@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { ArrowUp, Bot, CirclePause, Clock, WifiOff, type LucideIcon } from 'lucide-react'
-import { Button, Card, Facts, LinkActions, PageLink, Panel, PanelGroup, PanelNote, Skeleton, Slot, cn, formatDateTime, inPlace, runSaid, usePolled, useModuleHost, useOpenAgentDown, type ModuleCardProps, type ModuleProject, type ReadState } from '@openagt/dashboard/module'
+import { Button, Card, Facts, LinkActions, PageLink, Panel, PanelGroup, PanelNote, Skeleton, Slot, cn, formatDateTime, inPlace, runSaid, usePolled, useModuleHost, useOpenAgentDown, type ModuleCardProps, type ModuleProject, type ReadState } from '@openagt/ui/module'
 import { claimState, heldBack, holderAgent, hotLane, ticketLink, withHolder, type ClaimState, type HotLane } from '../src/module.js'
 import { holdingRun } from './lib/holding-run.js'
 import { listTickets } from './lib/list.js'

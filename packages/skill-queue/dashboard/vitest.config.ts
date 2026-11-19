@@ -1,3 +1,3 @@
-import { moduleTests } from '../../dashboard/dashboard/module/vite.ts'
+import { moduleTests } from '../../ui/dashboard/module/vite.ts'
 
 export default moduleTests(import.meta.url)

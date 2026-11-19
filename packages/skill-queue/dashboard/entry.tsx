@@ -1,4 +1,4 @@
-import { Tooltip, TooltipContent, TooltipTrigger, cn, formatDuration, pathsIn, useModuleHost, type FileNames, type ModuleAgent } from '@openagt/dashboard/module'
+import { Tooltip, TooltipContent, TooltipTrigger, cn, formatDuration, pathsIn, useModuleHost, type FileNames, type ModuleAgent } from '@openagt/ui/module'
 import { entryLabel } from '../src/module.js'
 
 // How one queue entry reads, on the Queue page and on the Overview's card alike. An entry is a

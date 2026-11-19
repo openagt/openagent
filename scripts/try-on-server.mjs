@@ -122,7 +122,7 @@ rm -rf "$NM/@openagt/dashboard.old"
 mv "$NEW" "$NM/@openagt/dashboard"
 rm -rf "$NM/@openagt/dashboard.old" "$STAGE"
 # npm links the command at an install, and this is none: the tree came by copy.
-ln -sf ../lib/node_modules/@openagt/dashboard/dist/cli/bin.js $ROOT/node/bin/openagent
+ln -sf ../lib/node_modules/@openagt/dashboard/dist/bin.js $ROOT/node/bin/openagent
 ln -sf $ROOT/node/bin/openagent /usr/local/bin/openagent
 systemctl restart openagent
 for unit in $(systemctl list-units --type=service --state=active --plain --no-legend 'openagent-person@*' | awk '{print $1}'); do systemctl restart "$unit"; done

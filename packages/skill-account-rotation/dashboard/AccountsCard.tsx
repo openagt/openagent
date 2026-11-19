@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import { Check, ChevronDown, Copy, Info, MoreHorizontal, Plus } from 'lucide-react'
-import { Button, useAskOn, ClaudeLogo, CodexLogo, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, GaugeFace, Input, Panel, PanelGroup, Skeleton, Slot, Tooltip, TooltipContent, TooltipTrigger, cn, useModuleHost, useOpenAgentDown, usePolled, WordsShape, type ModuleCardProps, type ModuleHost } from '@openagt/dashboard/module'
+import { Button, useAskOn, ClaudeLogo, CodexLogo, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, GaugeFace, Input, Panel, PanelGroup, Skeleton, Slot, Tooltip, TooltipContent, TooltipTrigger, cn, useModuleHost, useOpenAgentDown, usePolled, WordsShape, type ModuleCardProps, type ModuleHost } from '@openagt/ui/module'
 
 // The accounts each coding agent's runs try, in order: how full each one is, whether it is at a
 // limit, adding one: the command's own sign-in, which goes on by itself while the card follows it,
