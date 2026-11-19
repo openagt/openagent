@@ -4,20 +4,21 @@ import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { after, before, test } from 'node:test'
-import type { ModuleServerHost, RunFacts } from '@openagt/ui/module-server'
-import server from './server.js'
+import type { RpcHost, RunFound } from '@openagt/hooks/rpc'
+import * as server from './server.js'
 
 let dir: string
 let root: string
 const git = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim()
 
-/** The host for the project at `root` whose runs have the given facts. */
-const host = (runs: Record<string, RunFacts> = {}): ModuleServerHost => ({
+/** The host for the project at `root` whose runs are known so. */
+const host = (runs: Record<string, RunFound> = {}): RpcHost => ({
   root,
   run: async id => runs[id],
   mergeCommit: async () => ({ pending: false }),
 })
-const read = (name: string, input: Record<string, unknown>, runs?: Record<string, RunFacts>) => server.reads[name]!(host(runs), input)
+/** A call of function `name`, with an input as a page may send it: anything. */
+const read = (name: 'project' | 'tree' | 'content', input: Record<string, unknown>, runs?: Record<string, RunFound>) => server[name](host(runs), input as never)
 
 before(async () => {
   dir = await realpath(await mkdtemp(join(tmpdir(), 'files-server-')))

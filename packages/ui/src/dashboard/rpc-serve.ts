@@ -6,6 +6,7 @@ import { setDashboardContext, type DashboardContext } from '../dashboard-rpc/con
 import { RPC_HANDLERS, RPC_EVENT_STREAM } from '../dashboard-rpc/index.js'
 import { followRunsChanged } from '../dashboard-rpc/runs-changed.js'
 import { ELSEWHERE_FORWARDED } from '../dashboard-rpc/relay-dispatch.js'
+import { callModule } from '../dashboard-rpc/module-calls.js'
 import { isElsewhereId } from './elsewhere.js'
 import { errorMessage } from '../error-message.js'
 import { PERSON_HEADER, asCaller } from './person.js'
@@ -83,6 +84,21 @@ function ownCertificateNames(req: IncomingMessage): string[] {
 
 /** Where the dashboard's RPCs live. One prefix, so the static handler can decline it by path. */
 export const RPC_PREFIX = '/_rpc'
+
+/**
+ * The module and the function a call's path names past {@link RPC_PREFIX}, `<module>/<name>`, the
+ * module by its package's name, encoded as one segment (`%40openagt%2Fdashboard-files/tree`);
+ * undefined for any other path, one of the dashboard's own RPCs (`<name>`) among them.
+ */
+export function moduleCallOf(path: string): { pkg: string; name: string } | undefined {
+  const at = path.lastIndexOf('/')
+  if (at <= 0 || at === path.length - 1) return undefined
+  try {
+    return { pkg: decodeURIComponent(path.slice(0, at)), name: decodeURIComponent(path.slice(at + 1)) }
+  } catch {
+    return undefined
+  }
+}
 
 /** Read a request body, bounded so a bad caller cannot make the daemon buffer without limit. */
 async function readBody(req: IncomingMessage, limit = 4 * 1024 * 1024): Promise<string> {
@@ -184,9 +200,10 @@ const CHANGES_ALIVE_MS = 25_000
 
 /**
  * Mount the dashboard's RPC surface (#405) on the daemon's `node:http` server: `POST /_rpc/<name>`
- * for the calls, `GET /_rpc/events` for the live stream, `GET /_rpc/changes` for when to read the
- * runs again. It runs in the daemon process, so `sendStart` reaches the daemon's own `startAgent`
- * through the wired {@link DashboardContext}.
+ * for the calls, `POST /_rpc/<module>/<name>` for a module's functions (`@openagt/hooks/rpc`), sent
+ * `[projectId, input]`, `GET /_rpc/events` for the live stream, `GET /_rpc/changes` for when to
+ * read the runs again. It runs in the daemon process, so `sendStart` reaches the daemon's own
+ * `startAgent` through the wired {@link DashboardContext}.
  *
  * Cross-origin POSTs are rejected (CSRF: a page on evil.com must not steer or start a session), as
  * are requests carrying someone else's `Host` (DNS rebinding: the same page must not reach us by
@@ -228,8 +245,9 @@ export function makeRpcMount(context: DashboardContext): (req: IncomingMessage, 
         await asCaller(req.headers[PERSON_HEADER], async () => serveChangesStream(req, res))
         return true
       }
-      const handler = RPC_HANDLERS[name]
-      if (req.method !== 'POST' || !handler) {
+      const moduleCall = moduleCallOf(name)
+      const handler = moduleCall ? undefined : RPC_HANDLERS[name]
+      if (req.method !== 'POST' || (!moduleCall && !handler)) {
         await sendJson(req, res, 404, { error: `no such RPC: ${name}` })
         return true
       }
@@ -243,8 +261,11 @@ export function makeRpcMount(context: DashboardContext): (req: IncomingMessage, 
         await sendJson(req, res, 400, { error: 'the request body must be a JSON array of arguments' })
         return true
       }
+      // A module's function is called as the relay names it, with the module and the function the path says.
+      const [fn, fnArgs] = moduleCall ? ['callModule', [args[0], moduleCall.pkg, moduleCall.name, args[1]]] : [name, args]
+      const local = moduleCall ? () => callModule(...(fnArgs as Parameters<typeof callModule>)) : () => Promise.resolve(handler!(...(args as never[])))
       // A call about another computer's project is that computer's to answer (elsewhere.ts).
-      const call = isElsewhereId(args[0]) && ELSEWHERE_FORWARDED.has(name) ? () => context.remote.forward(args[0] as string, name, args) : () => Promise.resolve(handler(...(args as never[])))
+      const call = isElsewhereId(fnArgs[0]) && ELSEWHERE_FORWARDED.has(fn) ? () => context.remote.forward(fnArgs[0] as string, fn, fnArgs) : local
       await sendJson(req, res, 200, { ret: await asCaller(req.headers[PERSON_HEADER], call) })
     } catch (err) {
       // An RPC that throws is a failed call, not a dead daemon: answer it and stay up. Without

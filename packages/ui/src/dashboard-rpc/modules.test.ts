@@ -6,7 +6,8 @@ import { join } from 'node:path'
 import { projectId } from '@openagt/agent-data'
 import { addProject } from '../registry.js'
 import { projectQueue } from '../store/queue.js'
-import { onModules, readModule, runComputerCommand, runModuleCommand } from './modules.js'
+import { onModules, runComputerCommand, runModuleCommand } from './modules.js'
+import { callModule } from './module-calls.js'
 import { asCaller } from '../dashboard/person.js'
 import { setDashboardContext } from './context.js'
 import { NO_ELSEWHERE, provideTestContext, testDashboardContext } from './test-context.js'
@@ -172,7 +173,7 @@ test('a module\'s action may write what OpenAgent reads through a provider: the 
   }
 })
 
-test('a module reads through its own server part, in its own project; nothing else is read', async () => {
+test("a module calls its own server part's functions, in its own project; nothing else is called", async () => {
   const dir = await realpath(await mkdtemp(join(tmpdir(), 'openagent-modules-read-')))
   const previous = process.env.XDG_CONFIG_HOME
   process.env.XDG_CONFIG_HOME = join(dir, 'cfg')
@@ -181,7 +182,7 @@ test('a module reads through its own server part, in its own project; nothing el
     await install(dir, {
       reader: {
         manifest: { exports: { './dashboard': './w.js', './server': './s.mjs' } },
-        files: { 'w.js': 'export default {}', 's.mjs': 'export default { reads: { where: async (host, input) => ({ root: host.root, input }) } }' },
+        files: { 'w.js': 'export default {}', 's.mjs': `import { read } from ${JSON.stringify(import.meta.resolve('@openagt/hooks/rpc'))}\nexport const where = read(async (host, input) => ({ root: host.root, input }))\n` },
       },
       logs: module('logs'),
     })
@@ -190,13 +191,13 @@ test('a module reads through its own server part, in its own project; nothing el
     await addProject(a, '2026-09-19T00:00:00.000Z')
 
     await withDistribution(dir, ['reader', 'logs', '@openagt/dashboard-files'], async () => {
-      assert.deepEqual(await readModule(projectId(a), 'reader', 'where', { path: 'x' }), { ok: true, output: { root: a, input: { path: 'x' } } })
-      assert.deepEqual(await readModule(projectId(a), 'logs', 'where', {}), { ok: false, error: 'logs has no server part' })
-      assert.deepEqual(await readModule(projectId(a), 'nothing', 'where', {}), { ok: false, error: 'nothing is no module of this project' })
-      assert.deepEqual(await readModule('nowhere-1', 'reader', 'where', {}), { ok: false, error: 'unknown project' })
+      assert.deepEqual(await callModule(projectId(a), 'reader', 'where', { path: 'x' }), { ok: true, output: { root: a, input: { path: 'x' } } })
+      assert.deepEqual(await callModule(projectId(a), 'logs', 'where', {}), { ok: false, error: 'logs has no server part' })
+      assert.deepEqual(await callModule(projectId(a), 'nothing', 'where', {}), { ok: false, error: 'nothing is no module of this project' })
+      assert.deepEqual(await callModule('nowhere-1', 'reader', 'where', {}), { ok: false, error: 'unknown project' })
       // The Files module reads the project's own files: none that git sees, in a folder that is no repository.
       await writeFile(join(a, 'hello.txt'), 'hi')
-      const files = await readModule(projectId(a), '@openagt/dashboard-files', 'project', {})
+      const files = await callModule(projectId(a), '@openagt/dashboard-files', 'project', {})
       assert.equal(files.ok, true)
       assert.ok(files.ok && Array.isArray(files.output))
     })

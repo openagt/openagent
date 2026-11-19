@@ -223,6 +223,9 @@ importers:
       '@openagt/agent-data':
         specifier: workspace:*
         version: link:../agent-data
+      '@openagt/hooks':
+        specifier: workspace:*
+        version: link:../hooks
     devDependencies:
       '@tailwindcss/vite':
         specifier: ^4.0.0
@@ -330,6 +333,9 @@ importers:
       '@openagt/agent-data':
         specifier: workspace:*
         version: link:../agent-data
+      '@openagt/hooks':
+        specifier: workspace:*
+        version: link:../hooks
     devDependencies:
       '@tailwindcss/vite':
         specifier: ^4.0.0

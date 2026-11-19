@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import { hostname } from 'node:os'
 import { nodeGitRunner, originDefaultBranch, type GitRunner } from '@openagt/agent-data'
-import type { MergeLookup, ModuleServerHost } from '@openagt/ui/module-server'
+import type { MergeLookup, RpcHost } from '@openagt/hooks/rpc'
 import { readFileStatuses, type FileGitStatus } from './status.js'
 import { CONTEXT_LINES, safeRepoPath } from './confined.js'
 import { parseNumstat, readFileChanges, readFileDiff, type FileDiff } from './diff.js'
@@ -132,7 +132,7 @@ async function inDefaultBranch(ask: (args: string[]) => Promise<string>, tip: st
  * has their last commit, or, for a branch, its pull request merged at that very commit (a squash
  * leaves the branch outside the default branch; a commit made after the merge is not merged).
  */
-export async function resolveAgentWork(host: Pick<ModuleServerHost, 'root' | 'run' | 'mergeCommit'>, agentId: string, git: GitRunner = nodeGitRunner(), thisHost: string = hostname()): Promise<AgentWorkAt> {
+export async function resolveAgentWork(host: Pick<RpcHost, 'root' | 'run' | 'mergeCommit'>, agentId: string, git: GitRunner = nodeGitRunner(), thisHost: string = hostname()): Promise<AgentWorkAt> {
   const root = host.root
   const ask = asker(git, root)
   const run = await host.run(agentId).catch(() => undefined)

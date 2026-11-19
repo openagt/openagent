@@ -46,6 +46,11 @@ already made, and lists it in its pull request; for anything else it proposes an
   in the core that every module's work hangs on.
 - A module's UI part is an entry of its own, apart from its Node part, so a run's process
   never loads React.
+- A module's server part exports functions, each wrapped as `read` or `act`, and its UI part
+  calls them through a client typed by the server file, so a function renamed on one side is a
+  type error on the other. This RPC is a utility, not a hook: nothing is ordered, and there are
+  never two implementations. A computer that lets its server only watch calls the reads alone.
+  Picked over the package's `package.json` listing which of its commands only read (`reads`).
 
 ## The store
 - A store backend wraps the one below it in the chain: it keeps the scopes it owns and passes

@@ -24,8 +24,8 @@ as: the version the dashboard says, and checks npm for, is that package's.
 - `dashboard/` — the browser app: a Vite SPA the daemon serves as static files, talking back over
   plain HTTP. See [its README](./dashboard/README.md).
 - `dashboard/module/` — what the dashboard offers a module's browser part
-  (`@openagt/ui/module`); `src/module-server.d.ts`, what it offers a module's server part
-  (`@openagt/ui/module-server`).
+  (`@openagt/ui/module`), its typed client of the module's server part among them. A server
+  part's functions are `@openagt/hooks/rpc`'s `read` and `act`, served at `/_rpc/<module>/<name>`.
 
 ## Status
 

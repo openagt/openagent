@@ -4,7 +4,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { BranchesFor, BranchesSource, Checkout } from '../store/branches.js'
-import { callModuleRead, serverHost, MAX_READ_INPUT, type ServerHostDeps } from './module-host.js'
+import { callModuleFunction, functionKind, serverHost, MAX_CALL_INPUT, type ServerHostDeps } from './module-host.js'
 
 const listing = (checkouts: Checkout[]): BranchesFor => async () => ({ list: async () => checkouts }) as unknown as BranchesSource
 
@@ -17,7 +17,7 @@ function deps(checkouts: Checkout[], records: Record<string, { status?: string; 
   }
 }
 
-test('a run’s facts: its checkout, its record, and whether it ended here having changed nothing', async () => {
+test('what is known of a run: its checkout, its record, and whether it ended here having changed nothing', async () => {
   const host = serverHost('/p', deps([{ id: 'run-a', path: '/p/.branches/agent-a' } as Checkout], {
     'run-a': { status: 'running', host: 'this-machine', branch: 'agent-a' },
     'run-b': { status: 'done', host: 'this-machine', branch: 'agent-b' },
@@ -32,7 +32,7 @@ test('a run’s facts: its checkout, its record, and whether it ended here havin
   assert.equal(await host.run('run-z'), undefined, 'no checkout and no record: no run')
 })
 
-test('a run’s facts carry the commit its own work begins at and the commit it was landed at; a landed run did not change nothing', async () => {
+test('what is known of a run carries the commit its own work begins at and the commit it was landed at; a landed run did not change nothing', async () => {
   const host = serverHost('/p', deps([], {
     'run-b': { status: 'running', host: 'this-machine', base: 'my-branch' },
     'run-s': { status: 'done', host: 'this-machine', branch: 'agent-s', baseCommit: 'b'.repeat(40) },
@@ -57,29 +57,36 @@ test('a merge lookup says "still asking" only while the git host has not answere
   assert.deepEqual(await serverHost('/p', { prs: async () => Promise.reject(new Error('offline')) }).mergeCommit('b', 1), { pending: false })
 })
 
-test('a read is called with the host and the input, and whatever goes wrong answers an error', async () => {
+test('a function is called with the host and the input, and whatever goes wrong answers an error; whether it reads or acts is its own word', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'module-host-'))
   try {
     const file = join(dir, 'server.mjs')
-    await writeFile(file, `export default { reads: {
-      echo: async (host, input) => ({ root: host.root, input }),
-      nothing: async () => undefined,
-      throws: async () => { throw new Error('broken read') },
-      hangs: () => new Promise(() => {}),
-    } }`)
+    await writeFile(
+      file,
+      `import { act, read } from ${JSON.stringify(import.meta.resolve('@openagt/hooks/rpc'))}
+export const echo = read(async (host, input) => ({ root: host.root, input }))
+export const nothing = read(async () => undefined)
+export const throws = read(async () => { throw new Error('broken read') })
+export const hangs = read(() => new Promise(() => {}))
+export const claim = act(async (host, input) => ({ claimed: input.id }))
+export const plain = async () => 'not wrapped'
+export default { echo }`,
+    )
     const host = serverHost('/p', deps([], {}))
-    assert.deepEqual(await callModuleRead(file, 'echo', host, { agentId: 'run-a', path: 'x' }), { ok: true, output: { root: '/p', input: { agentId: 'run-a', path: 'x' } } })
-    assert.deepEqual(await callModuleRead(file, 'nothing', host, {}), { ok: true, output: null })
-    assert.deepEqual(await callModuleRead(file, 'throws', host, {}), { ok: false, error: 'broken read' })
-    assert.deepEqual(await callModuleRead(file, 'hangs', host, {}, 20), { ok: false, error: 'the read hangs took too long' })
-    assert.deepEqual(await callModuleRead(file, 'missing', host, {}), { ok: false, error: 'the module has no read missing' })
-    assert.deepEqual(await callModuleRead(file, 'toString', host, {}), { ok: false, error: 'the module has no read toString' })
-    assert.deepEqual(await callModuleRead(file, 'echo', host, ['x']), { ok: false, error: 'a read takes an object' })
-    assert.deepEqual(await callModuleRead(file, 'echo', host, { big: 'x'.repeat(MAX_READ_INPUT) }), { ok: false, error: 'the read input is too large' })
+    assert.deepEqual(await callModuleFunction(file, 'echo', host, { agentId: 'run-a', path: 'x' }), { ok: true, output: { root: '/p', input: { agentId: 'run-a', path: 'x' } } })
+    assert.deepEqual(await callModuleFunction(file, 'claim', host, { id: 't1' }), { ok: true, output: { claimed: 't1' } })
+    assert.deepEqual(await callModuleFunction(file, 'nothing', host, {}), { ok: true, output: null })
+    assert.deepEqual(await callModuleFunction(file, 'throws', host, {}), { ok: false, error: 'broken read' })
+    assert.deepEqual(await callModuleFunction(file, 'hangs', host, {}, 20), { ok: false, error: 'the call hangs took too long' })
+    // What the file exports beside its functions is none of them: a plain function, its default, a name off the prototype.
+    for (const name of ['missing', 'plain', 'default', 'toString']) assert.deepEqual(await callModuleFunction(file, name, host, {}), { ok: false, error: `the module has no function ${name}` })
+    assert.deepEqual(await callModuleFunction(file, 'echo', host, ['x']), { ok: false, error: 'a call takes an object' })
+    assert.deepEqual(await callModuleFunction(file, 'echo', host, { big: 'x'.repeat(MAX_CALL_INPUT) }), { ok: false, error: 'the call input is too large' })
+    assert.deepEqual(await Promise.all(['echo', 'claim', 'plain', 'missing'].map(name => functionKind(file, name))), ['read', 'act', undefined, undefined])
 
     const broken = join(dir, 'broken.mjs')
-    await writeFile(broken, 'export default 42')
-    assert.deepEqual(await callModuleRead(broken, 'echo', host, {}), { ok: false, error: 'the module’s server part did not load' })
+    await writeFile(broken, 'export const echo = ')
+    assert.deepEqual(await callModuleFunction(broken, 'echo', host, {}), { ok: false, error: 'the module’s server part did not load' })
   } finally {
     await rm(dir, { recursive: true, force: true })
   }

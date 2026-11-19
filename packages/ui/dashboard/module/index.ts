@@ -15,11 +15,12 @@ import type { Health } from '../../src/health.js'
 import { createContext, useContext } from 'react'
 import type { AgentStatus } from '../../src/index.js'
 import type { ModuleAgent, ModuleAgentsWanted } from '../../src/dashboard/module-agents.js'
-import { readModule, runComputerCommand, runComputerCommandOn, runModuleCommand } from '../rpc/modules.js'
-import type { ModuleCommandResult, ModuleReadResult } from '../rpc/modules.js'
+import { callModule, runComputerCommand, runComputerCommandOn, runModuleCommand } from '../rpc/modules.js'
+import type { ModuleCallResult, ModuleCommandResult } from '../rpc/modules.js'
+import type { RpcClient } from '@openagt/hooks/rpc'
 import { DaemonDown } from '../lib/use-daemon-health.js'
 
-export type { ModuleCommandResult, ModuleReadResult, AgentStatus, Health, ModuleAgent, ModuleAgentsWanted }
+export type { ModuleCallResult, ModuleCommandResult, AgentStatus, Health, ModuleAgent, ModuleAgentsWanted }
 export type * from '@openagt/hooks/ui'
 export { defineUiModule } from '@openagt/hooks/ui'
 
@@ -60,11 +61,13 @@ export interface ModuleHost {
    */
   runComputerCommandOn(machineId: string, args: string[], command?: string): Promise<ModuleCommandResult>
   /**
-   * Call one of the module's own server reads (its package's `./server`) in one project, with
-   * `input`, a JSON object; `input.agentId` names the run the read is about, when it is about one.
-   * Answered in the daemon's own process, so it suits a read made every few seconds.
+   * Call one of the functions of the module's own server part (its package's `./server`, each a
+   * `read` or an `act` of `@openagt/hooks/rpc`) in one project, with `input`, a JSON object;
+   * `input.agentId` names the run the call is about, when it is about one. Answered in the
+   * daemon's own process, so it suits a read made every few seconds. {@link rpcClient} types it by
+   * the server file.
    */
-  read(projectId: string, name: string, input?: Record<string, unknown>): Promise<ModuleReadResult>
+  call(projectId: string, name: string, input: object): Promise<ModuleCallResult>
   /** Open one agent's page in the dashboard: its live feed while it runs, its record after. */
   openAgent(projectId: string, agentId: string): void
   /** The address of one agent's page: a link's `href`, for a link that also opens in a new tab. */
@@ -276,7 +279,7 @@ export type ModuleMachinePerson = { ok: true; said: unknown } | { ok: false; err
 export type MachineRemoved = { ok: true } | { ok: false; error: string }
 
 /** What the dashboard knows about the module it is serving: every service but the commands and the reads, which it binds to the package. */
-export type ModuleHostBase = Omit<ModuleHost, 'runCommand' | 'act' | 'runComputerCommand' | 'runComputerCommandOn' | 'read'>
+export type ModuleHostBase = Omit<ModuleHost, 'runCommand' | 'act' | 'runComputerCommand' | 'runComputerCommandOn' | 'call'>
 
 /**
  * The host for one module: the dashboard's services, and its commands bound to the module's own
@@ -290,8 +293,34 @@ export function moduleHost(base: ModuleHostBase, opts: { acts?: boolean } = {}):
     act: (projectId, args, command, input) => runModuleCommand(projectId, base.package, args, command, true, input),
     runComputerCommand: (args, command, input) => runComputerCommand(base.package, args, command, input),
     runComputerCommandOn: (machineId, args, command) => runComputerCommandOn(base.package, machineId, args, command),
-    read: (projectId, name, input = {}) => readModule(projectId, base.package, name, input),
+    call: (projectId, name, input) => callModule(base.package, name, projectId, input),
   }
+}
+
+/**
+ * The client of the module's own server part, typed by its file:
+ * `rpcClient<typeof import('../src/server.js')>(host)`. Each of the file's functions, called in a
+ * project with its input, answers what the function answers, and throws why when the call fails,
+ * so a polled read keeps the last answer it had.
+ */
+export function rpcClient<Server>(host: Pick<ModuleHost, 'call'>): RpcClient<Server> {
+  const functions = new Map<string, (projectId: string, input: object) => Promise<unknown>>()
+  return new Proxy({} as RpcClient<Server>, {
+    get(_target, name) {
+      // Never a promise: a client handed on through `await` is the client, not a call of `then`.
+      if (typeof name !== 'string' || name === 'then') return undefined
+      let fn = functions.get(name)
+      if (!fn) {
+        fn = async (projectId, input) => {
+          const result = await host.call(projectId, name, input)
+          if (!result.ok) throw new Error(result.error)
+          return result.output
+        }
+        functions.set(name, fn)
+      }
+      return fn
+    },
+  })
 }
 
 /** Set by the dashboard around every module piece it renders, with the module's whole host; a test of a module page provides one here. */

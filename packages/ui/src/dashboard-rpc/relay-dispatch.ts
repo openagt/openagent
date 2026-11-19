@@ -1,6 +1,8 @@
 import { onProjectFiles, onGitStatus, onAgentWorktree, onAgentMainBranch, onAgentHandoff, onAgent, onStartedName, onOwnRuns, onOwnInterventions, onDocs, onAgentsDoing, onRetainedWorktrees, onGitHostHome, onRepositoryOffer } from './reads.js'
-import { readModule, runModuleCommand } from './modules.js'
+import { runModuleCommand } from './modules.js'
+import { callModule } from './module-calls.js'
 import { commandReads, findProjectModule } from '../project-modules.js'
+import { functionKind } from '../dashboard/module-host.js'
 import { resolveProjectPath } from './context.js'
 import { sendStop, sendChoice, sendMessage, withdrawMessage, sendNow, sendOpenPullRequest, sendPush, sendMerge, sendMergeBranch, sendStart } from './control.js'
 import { asArrived } from './relay-agent.js'
@@ -29,15 +31,16 @@ import { onPersonalFolder, sendSyncPersonalFolder } from './personal-folder.js'
 type RelayFn = (...args: unknown[]) => Promise<unknown>
 // Each entry is a read or an act, and this is the one place that says which: a computer that only
 // lets its server watch answers the reads and refuses the acts (relay-endpoints.ts). An entry goes
-// in one of the two lists, so nothing is relayed that was not classed. `readModule` is a read for
-// as long as a module's read changes nothing, which is what a module's read is.
+// in one of the two lists, so nothing is relayed that was not classed. A module's command and a
+// module's function are acts, but for the ones this computer's own copy of the module says only
+// read (isRelayReadCall).
 //
 // Besides a run's own calls, a project's: what the person's other computer lists of a project only
 // this computer has (elsewhere.ts) is read here, and a run of it is started here, by the same
 // guarded start a run sent here gets: on this computer, never sent on. What destroys a run's
 // history or checkout, or changes how the project keeps its records, is still no other computer's to do.
-const RELAY_READS = { onProjectFiles, readModule, onGitStatus, onAgentWorktree, onAgentMainBranch, onAgentHandoff, onAgent, onStartedName, onOwnRuns, onStartCheck, onCommands, onStartBranches, onDocs, onAgentsDoing, onRetainedWorktrees, onGitHostHome, onRepositoryOffer, onProjectSkills }
-const RELAY_ACTS = { sendStop, sendChoice, sendMessage, withdrawMessage, sendNow, sendOpenPullRequest, sendPush, sendMerge, sendMergeBranch, sendStart: startHere, runModuleCommand }
+const RELAY_READS = { onProjectFiles, onGitStatus, onAgentWorktree, onAgentMainBranch, onAgentHandoff, onAgent, onStartedName, onOwnRuns, onStartCheck, onCommands, onStartBranches, onDocs, onAgentsDoing, onRetainedWorktrees, onGitHostHome, onRepositoryOffer, onProjectSkills }
+const RELAY_ACTS = { sendStop, sendChoice, sendMessage, withdrawMessage, sendNow, sendOpenPullRequest, sendPush, sendMerge, sendMergeBranch, sendStart: startHere, runModuleCommand, callModule }
 // Null-prototype, like RPC_HANDLERS (R1): the key is a request-controlled string, so a plain object
 // would answer `constructor`/`toString`/`valueOf` off Object.prototype and invoke them as handlers.
 const RELAY_FNS = Object.assign(Object.create(null) as Record<string, RelayFn>, RELAY_READS, RELAY_ACTS) as unknown as Record<string, RelayFn>
@@ -64,17 +67,20 @@ export function isRelayRead(fn: string): boolean {
 }
 
 /**
- * Whether one relayed call only reads, here: a read by its name, or a module's command that its
- * package says only reads, as this computer's own copy of the module says it. The caller's word
- * for it counts for nothing: a server holding this computer's key could call any command a read.
+ * Whether one relayed call only reads, here: a read by its name, a module's command that its
+ * package says only reads, or a module's function wrapped as a read, as this computer's own copy
+ * of the module says it. The caller's word for it counts for nothing: a server holding this
+ * computer's key could call any command a read.
  */
 export async function isRelayReadCall(projectId: string, fn: string, args: readonly unknown[]): Promise<boolean> {
   if (isRelayRead(fn)) return true
-  if (fn !== 'runModuleCommand') return false
-  const [, pkg, commandArgs, command] = args
-  const root = typeof pkg === 'string' && Array.isArray(commandArgs) ? await resolveProjectPath(projectId) : undefined
+  if (fn !== 'runModuleCommand' && fn !== 'callModule') return false
+  const [, pkg, second, command] = args
+  const root = typeof pkg === 'string' ? await resolveProjectPath(projectId) : undefined
   const module = root ? await findProjectModule(root, pkg as string).catch(() => undefined) : undefined
-  return module !== undefined && commandReads(module, commandArgs as unknown[], typeof command === 'string' ? command : undefined)
+  if (!module) return false
+  if (fn === 'callModule') return typeof second === 'string' && module.server !== undefined && (await functionKind(module.server, second)) === 'read'
+  return Array.isArray(second) && commandReads(module, second as unknown[], typeof command === 'string' ? command : undefined)
 }
 
 /**

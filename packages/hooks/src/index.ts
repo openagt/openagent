@@ -1,7 +1,8 @@
 // `@openagt/hooks`: every contract a module plugs into OpenAgent through, and the loader that
 // calls them. A module's Node part default-exports `defineModule({ name, hooks })` from its
 // package's `./module` entry; a distribution lists the modules, and `loadDistribution` loads them.
-// Its UI part's hooks, the places of the shell they fill, are `@openagt/hooks/ui` (`./ui.ts`).
+// Its UI part's hooks, the places of the shell they fill, are `@openagt/hooks/ui` (`./ui.ts`), and
+// its server part's functions, which the UI part calls, `@openagt/hooks/rpc` (`./rpc.ts`).
 export { RunOrder, StoreOrder } from './order.js'
 export type { ProjectRef } from './project.js'
 export {

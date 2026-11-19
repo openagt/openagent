@@ -18,8 +18,7 @@
     "allowImportingTsExtensions": true,
     "paths": {
       "@openagt/ui/module": ["../../ui/dashboard/module/index.ts"],
-      "@openagt/ui/module/testing": ["../../ui/dashboard/module/testing.tsx"],
-      "@openagt/ui/module-server": ["../../ui/src/module-server.d.ts"]
+      "@openagt/ui/module/testing": ["../../ui/dashboard/module/testing.tsx"]
     }
   },
   "include": ["**/*.ts", "**/*.tsx"]

@@ -17,8 +17,8 @@ export function asArrived<T>(call: () => Promise<T>): Promise<T> {
 /** Whether the call being run came in from another computer. */
 export const isArrived = (): boolean => arrived.getStore() === true
 
-/** A call that only reads: answered from what this computer holds when the machine cannot be asked. */
-const isRead = (fn: string): boolean => fn.startsWith('on') || fn === 'readModule'
+/** A call that only reads, by its name: answered from what this computer holds when the machine cannot be asked. */
+const isRead = (fn: string): boolean => fn.startsWith('on')
 /** What a read answers of a run it does not know: nothing, or an empty list. */
 const isNothing = (said: unknown): boolean => said === null || said === undefined || (Array.isArray(said) && said.length === 0)
 
@@ -32,7 +32,8 @@ const isNothing = (said: unknown): boolean => said === null || said === undefine
  * is answered from what this computer holds of the run, its record when it has one, and
  * anything that would change the run answers `unreachable`: it is never done here in the
  * machine's place. A machine that refused and said why (one that only lets its server watch) is
- * answered in its own words, where `unreachable` has words of its own to replace.
+ * answered in its own words, where `unreachable` has words of its own to replace. Whether the call
+ * only reads is said by its name, unless `reads` says it of this one call (a module's function).
  */
 export async function relayOr<T>(
   agentId: string | undefined,
@@ -40,6 +41,7 @@ export async function relayOr<T>(
   args: unknown[],
   local: () => Promise<T>,
   unreachable: T,
+  reads: boolean = isRead(fn),
 ): Promise<T> {
   if (arrived.getStore()) return local()
   // Every relayed call names its project first: the machine a run runs on is found by its record there.
@@ -50,13 +52,13 @@ export async function relayOr<T>(
   try {
     const said = (await relayRpc(target, fn, args)) as T
     // A machine that knows nothing of the run, one whose name another computer shares, answers a read with nothing: this computer's own record of the run may say more.
-    if (isRead(fn) && isNothing(said)) {
+    if (reads && isNothing(said)) {
       const kept = await mine()
       return isNothing(kept) ? said : kept
     }
     return said
   } catch (err) {
-    if (isRead(fn)) return mine()
+    if (reads) return mine()
     return err instanceof MachineRefusal && unreachable !== null && typeof unreachable === 'object' && 'error' in unreachable ? { ...unreachable, error: err.message } : unreachable
   }
 }

@@ -413,10 +413,11 @@ already made, and lists it in its pull request; for anything else it proposes an
   saves the offset through its own command. With no such module the bar shows the account
   only. Picked over OpenAgent reading the scheduler's state file and writing through an
   `offset` hook line, and over dropping the handle, which lost dragging on the bar.
-- A module may bring a server part (`./server`) that the daemon calls in its own process,
-  given the project's folder and the facts about a run, never a verdict about them. Picked
-  over reading only through the package's command, a new process for every read of a tree
-  that polls every 8 seconds and an opened file read again every few seconds.
+- A module may bring a server part (`./server`), functions the daemon calls in its own process
+  at `/_rpc/<module>/<name>`, given the project's folder and the facts about a run, never a
+  verdict about them. Picked over reading only through the package's command, a new process
+  for every read of a tree that polls every 8 seconds and an opened file read again every few
+  seconds.
 - A package that is the computer's may bring a service: a command of its own
   that OpenAgent runs for as long as it runs itself, and tells its own address. Picked
   over a line in each project's hooks file, which is a project's and shared with its team,

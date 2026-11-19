@@ -1,37 +1,29 @@
-import type { ModuleHost } from '@openagt/ui/module'
-import type { AgentCommit, FileMark } from '../src/run.js'
-import type { RunChanges } from '../src/server.js'
-import type { FileChange, FileDiff } from '../src/diff.js'
+import { rpcClient, type ModuleHost } from '@openagt/ui/module'
 
-// The module's reads, typed: each asks the module's own server part (`../src/server.ts`) through
-// the dashboard, and throws the reason when the read answers an error, so a polled read keeps the
-// last answer it had rather than showing an empty list.
+// The module's calls of its own server part (`../src/server.ts`), typed by it. Each throws the
+// reason when the call answers an error, so a polled read keeps the last answer it had rather than
+// showing an empty list.
 
-async function read<T>(host: ModuleHost, projectId: string, name: string, input: Record<string, unknown>): Promise<T> {
-  const result = await host.read(projectId, name, input)
-  if (!result.ok) throw new Error(result.error)
-  return result.output as T
-}
+const server = (host: ModuleHost) => rpcClient<typeof import('../src/server.js')>(host)
 
 /** What is changed in the project's own folder and not committed. */
-export const readProject = (host: ModuleHost, projectId: string) => read<Record<string, FileMark>>(host, projectId, 'project', {})
+export const readProject = (host: ModuleHost, projectId: string) => server(host).project(projectId, {})
 
 /** What a run changed, wherever its work is now. */
-export const readRun = (host: ModuleHost, projectId: string, agentId: string) => read<RunChanges>(host, projectId, 'run', { agentId })
+export const readRun = (host: ModuleHost, projectId: string, agentId: string) => server(host).run(projectId, { agentId })
 
 /**
  * One changed file's diff: the run's (in one of its commits, when `commit` names one), or the
  * project folder's. `whole` asks for every line of the file, not only those around its changes.
  */
 export const readDiff = (host: ModuleHost, projectId: string, path: string, agentId?: string, commit?: string, whole = false) =>
-  read<FileDiff | null>(host, projectId, 'diff', { path, ...(agentId !== undefined ? { agentId, ...(commit !== undefined ? { commit } : {}) } : {}), ...(whole ? { whole } : {}) })
+  server(host).diff(projectId, { path, ...(agentId !== undefined ? { agentId, ...(commit !== undefined ? { commit } : {}) } : {}), ...(whole ? { whole } : {}) })
 
 /** The commits of a run's work, newest first. */
-export const readCommits = (host: ModuleHost, projectId: string, agentId: string) => read<AgentCommit[]>(host, projectId, 'commits', { agentId })
+export const readCommits = (host: ModuleHost, projectId: string, agentId: string) => server(host).commits(projectId, { agentId })
 
 /** What one commit of a run's work changed; null when it is not one of the run's commits. */
-export const readCommit = (host: ModuleHost, projectId: string, agentId: string, commit: string) =>
-  read<Record<string, FileMark> | null>(host, projectId, 'commit', { agentId, commit })
+export const readCommit = (host: ModuleHost, projectId: string, agentId: string, commit: string) => server(host).commit(projectId, { agentId, commit })
 
 /** What a working run has changed so far in its checkout, with line counts. */
-export const readCounts = (host: ModuleHost, projectId: string, agentId: string) => read<FileChange[]>(host, projectId, 'counts', { agentId })
+export const readCounts = (host: ModuleHost, projectId: string, agentId: string) => server(host).counts(projectId, { agentId })

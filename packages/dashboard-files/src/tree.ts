@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import { hostname } from 'node:os'
 import { nodeGitRunner, originDefaultBranch, type GitRunner } from '@openagt/agent-data'
-import type { MergeLookup, ModuleServerHost } from '@openagt/ui/module-server'
+import type { MergeLookup, RpcHost } from '@openagt/hooks/rpc'
 import { listCommitFiles, listFiles } from './list.js'
 import { fileContent, readFileContent, safeRepoPath, type FileContent } from './read.js'
 
@@ -63,7 +63,7 @@ async function defaultBranch(ask: (args: string[]) => Promise<string>): Promise<
  * as, else the commit its record kept when it was landed, else, for a run the host says changed
  * nothing, the default branch, else gone.
  */
-export async function resolveAgentFiles(host: Pick<ModuleServerHost, 'root' | 'run' | 'mergeCommit'>, agentId: string, git: GitRunner = nodeGitRunner(), thisHost: string = hostname()): Promise<AgentFilesAt> {
+export async function resolveAgentFiles(host: Pick<RpcHost, 'root' | 'run' | 'mergeCommit'>, agentId: string, git: GitRunner = nodeGitRunner(), thisHost: string = hostname()): Promise<AgentFilesAt> {
   const root = host.root
   const ask = asker(git, root)
   const run = await host.run(agentId).catch(() => undefined)

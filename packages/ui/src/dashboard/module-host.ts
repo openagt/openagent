@@ -3,11 +3,11 @@ import { findAgent, findCheckout, isRunId, projectBranches, type BranchesFor } f
 import { leftNothing } from './agent-handoff.js'
 import { cachedPrsForBranch, type LinkedPr } from './pull-requests.js'
 import type { Cached } from './cache.js'
-import type { MergeLookup, ModuleRead, ModuleReadInput, ModuleServer, ModuleServerHost, RunFacts } from '../module-server.js'
+import { rpcKind, type MergeLookup, type RpcFunction, type RpcHost, type RpcKind, type RunFound } from '@openagt/hooks/rpc'
 
-// The daemon's side of a module's server part: the host a read is given (a project's folder and
-// the facts about its runs) and the one way a read is called. The facts are the core's; what a
-// module makes of them is its own.
+// The daemon's side of a module's server part (`@openagt/hooks/rpc`): the host a function is given
+// (a project's folder and what is known of its runs) and the one way a function is called. What is
+// known is the core's; what a module makes of it is its own.
 
 /** What {@link serverHost} reads through; each defaults to the production reader. */
 export interface ServerHostDeps {
@@ -18,11 +18,11 @@ export interface ServerHostDeps {
   prs?: (root: string, branch: string) => Promise<Cached<LinkedPr[]>>
 }
 
-/** The host a read of the project at `root` is given. */
-export function serverHost(root: string, deps: ServerHostDeps = {}): ModuleServerHost {
+/** The host a function called in the project at `root` is given. */
+export function serverHost(root: string, deps: ServerHostDeps = {}): RpcHost {
   return {
     root,
-    async run(agentId: string): Promise<RunFacts | undefined> {
+    async run(agentId: string): Promise<RunFound | undefined> {
       if (typeof agentId !== 'string' || !isRunId(agentId)) return undefined
       const checkout = await findCheckout(root, agentId, deps.branches ?? projectBranches)
       const agent = await (deps.agent ?? findAgent)(root, agentId).catch(() => undefined)
@@ -54,17 +54,14 @@ export function serverHost(root: string, deps: ServerHostDeps = {}): ModuleServe
   }
 }
 
-/** Each server part, imported once per daemon, by its file. */
-const imported = new Map<string, Promise<ModuleServer | undefined>>()
+/** The functions of each server part, by name, imported once per daemon, by its file: every export it wraps as a read or an act. */
+const imported = new Map<string, Promise<Map<string, RpcFunction> | undefined>>()
 
-function load(file: string): Promise<ModuleServer | undefined> {
+function load(file: string): Promise<Map<string, RpcFunction> | undefined> {
   let loading = imported.get(file)
   if (!loading) {
     loading = import(pathToFileURL(file).href).then(
-      (module: { default?: unknown }) => {
-        const server = module.default as Partial<ModuleServer> | undefined
-        return server && typeof server === 'object' && server.reads && typeof server.reads === 'object' ? (server as ModuleServer) : undefined
-      },
+      (module: Record<string, unknown>) => new Map(Object.entries(module).flatMap(([name, value]) => (rpcKind(value) ? [[name, value as RpcFunction]] : []))),
       () => undefined,
     )
     imported.set(file, loading)
@@ -72,35 +69,41 @@ function load(file: string): Promise<ModuleServer | undefined> {
   return loading
 }
 
-/** How large the input of one read may be, as JSON: what a page asks with, never a payload. */
-export const MAX_READ_INPUT = 16 * 1024
-/** How long one read may take before it answers an error instead. */
-export const READ_TIMEOUT_MS = 20_000
+/** Whether function `name` of the server part at `file` only reads or changes something; undefined when the part has no such function. */
+export async function functionKind(file: string, name: string): Promise<RpcKind | undefined> {
+  return rpcKind((await load(file))?.get(name))
+}
 
-/** What a read answered: its JSON, or why there is none. */
-export type ModuleReadResult = { ok: true; output: unknown } | { ok: false; error: string }
+/** How large the input of one call may be, as JSON: what a page asks with, never a payload. */
+export const MAX_CALL_INPUT = 16 * 1024
+/** How long one call may take before it answers an error instead. */
+export const CALL_TIMEOUT_MS = 20_000
+
+/** What a call answered: its JSON, or why there is none. */
+export type ModuleCallResult = { ok: true; output: unknown } | { ok: false; error: string }
 
 /**
- * Call read `name` of the server part at `file` with `host` and `input`. Refused: a part that did
- * not load, a read it does not have, an input that is not an object or is too large. A read that
- * throws or runs past {@link READ_TIMEOUT_MS} answers an error; nothing a read does stops the daemon.
+ * Call function `name` of the server part at `file` with `host` and `input`. Refused: a part that
+ * did not load, a function it does not have, an input that is not an object or is too large. A
+ * function that throws or runs past {@link CALL_TIMEOUT_MS} answers an error; nothing a function
+ * does stops the daemon.
  */
-export async function callModuleRead(file: string, name: string, host: ModuleServerHost, input: unknown, timeoutMs = READ_TIMEOUT_MS): Promise<ModuleReadResult> {
-  if (!input || typeof input !== 'object' || Array.isArray(input)) return { ok: false, error: 'a read takes an object' }
-  if (JSON.stringify(input).length > MAX_READ_INPUT) return { ok: false, error: 'the read input is too large' }
-  const server = await load(file)
-  if (!server) return { ok: false, error: 'the module’s server part did not load' }
-  const read: ModuleRead | undefined = Object.hasOwn(server.reads, name) ? server.reads[name] : undefined
-  if (typeof read !== 'function') return { ok: false, error: `the module has no read ${name}` }
+export async function callModuleFunction(file: string, name: string, host: RpcHost, input: unknown, timeoutMs = CALL_TIMEOUT_MS): Promise<ModuleCallResult> {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return { ok: false, error: 'a call takes an object' }
+  if (JSON.stringify(input).length > MAX_CALL_INPUT) return { ok: false, error: 'the call input is too large' }
+  const functions = await load(file)
+  if (!functions) return { ok: false, error: 'the module’s server part did not load' }
+  const fn = functions.get(name)
+  if (!fn) return { ok: false, error: `the module has no function ${name}` }
   let timer: NodeJS.Timeout | undefined
-  const timeout = new Promise<ModuleReadResult>(resolve => {
-    timer = setTimeout(() => resolve({ ok: false, error: `the read ${name} took too long` }), timeoutMs)
+  const timeout = new Promise<ModuleCallResult>(resolve => {
+    timer = setTimeout(() => resolve({ ok: false, error: `the call ${name} took too long` }), timeoutMs)
   })
   try {
     return await Promise.race([
-      read(host, input as ModuleReadInput).then(
-        (output): ModuleReadResult => ({ ok: true, output: output ?? null }),
-        (error: unknown): ModuleReadResult => ({ ok: false, error: error instanceof Error ? error.message : String(error) }),
+      fn(host, input).then(
+        (output): ModuleCallResult => ({ ok: true, output: output ?? null }),
+        (error: unknown): ModuleCallResult => ({ ok: false, error: error instanceof Error ? error.message : String(error) }),
       ),
       timeout,
     ])

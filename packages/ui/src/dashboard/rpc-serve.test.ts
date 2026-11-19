@@ -100,6 +100,35 @@ test('a call reaches its handler and comes back as JSON', async () => {
   }
 })
 
+test("a module's function is called at /_rpc/<module>/<name> with the project and its input, another computer's project's at that computer; the page's own RPCs take no module", async () => {
+  const forwarded: [string, string, unknown[]][] = []
+  const base = testDashboardContext()
+  const server = await mounted({
+    remote: {
+      ...base.remote,
+      ...NO_ELSEWHERE,
+      forward: async (project, fn, args) => {
+        forwarded.push([project, fn, args])
+        return { ok: true, output: 'by the laptop' }
+      },
+    },
+  })
+  const files = `${encodeURIComponent('@openagt/dashboard-files')}/tree`
+  const there = elsewhereId('shop-1abc', 'http://127.0.0.1:4210')
+  try {
+    // A project this computer does not know: the call's own refusal, travelling back.
+    assert.deepEqual(JSON.parse((await call(server.url, files, ['nowhere-1', { agentId: 'run-1' }])).body), { ret: { ok: false, error: 'unknown project' } })
+    // Another computer's project: passed on as the relay names the call, with the module and the function the path says.
+    assert.deepEqual(JSON.parse((await call(server.url, files, [there, { agentId: 'run-1' }])).body), { ret: { ok: true, output: 'by the laptop' } })
+    assert.deepEqual(forwarded, [[there, 'callModule', [there, '@openagt/dashboard-files', 'tree', { agentId: 'run-1' }]]])
+    // The page's own RPCs are reached by their name alone: the call of a module's function is none of them, and a path with a bad escape names no module.
+    assert.equal((await call(server.url, 'callModule', ['p1', '@openagt/dashboard-files', 'tree', {}])).status, 404)
+    assert.equal((await call(server.url, '%zz/tree', ['p1', {}])).status, 404)
+  } finally {
+    await server.close()
+  }
+})
+
 test("a call about another computer's project goes to that computer, as it is; a start, and any call about a project of this computer's, run here", async () => {
   const forwarded: [string, string, unknown[]][] = []
   const base = testDashboardContext()
