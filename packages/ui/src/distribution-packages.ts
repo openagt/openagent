@@ -1,49 +1,31 @@
-import { readFile, stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import type { CleanupReport } from './dashboard/types.js'
-import { DISTRIBUTION_ENV, distributionItems, packageDirOf, type DistributionEntry, type DistributionPackage } from '@openagt/hooks'
-import { declaring, SKILLS_DIRS, packageBins, readManifest, runPackageCommand, type ProjectPackage, type ProvidedCommand, type ProvidedCommandLookup } from '@openagt/agent-data'
+import { DISTRIBUTION_ENV, distributionItems, packageDirOf, type DistributionEntry, type DistributionPackage, type Hooks, type ModuleDefinition, type PluginInfo, type ProjectRef } from '@openagt/hooks'
+import { declaring, packageBins, projectId, readManifest, runPackageCommand, type ProjectPackage, type ProvidedCommand, type ProvidedCommandLookup } from '@openagt/agent-data'
+import { distributionHooks, projectRefAt } from './distribution-hooks.js'
 
 /**
  * The packages the dashboard brings (#2394): the ones its distribution lists, resolved from the
  * distribution's own install (`@openagt/dashboard`'s), so a project installs nothing for them and
  * an empty folder starts an agent and shows it. Each comes through the same contract: a module
- * by its `./dashboard` export, a provider of a kind of data by its `openagent` key, a skill by its
- * `SKILL.md`. Nothing in `ui` names a package, and a project's own dependencies bring none.
+ * by its `./dashboard` export, a provider of a kind of data by its `openagent` key. A plugin's
+ * package is there only where its Enabled row is on (`@openagt/hooks`). Nothing in `ui` names a
+ * package, and a project's own dependencies bring none.
  */
 
-/**
- * A package of the dashboard's distribution: a package as `@openagt/hooks` lists it, and whose
- * its pages, cards and commands are, until each plugin has its Enabled row (#2394).
- */
+/** A package of the dashboard's distribution: a package as `@openagt/hooks` lists it, and whose it is. */
 export interface DashboardPackage extends DistributionPackage {
-  /**
-   * Who has it: every project when unsaid. `picked`: a project once it picked the package's
-   * skill, which it has when every run gets the skill or when the project holds its text where
-   * the coding agents read it (`.claude/skills/<name>/SKILL.md`, `.agents/skills/<name>/SKILL.md`),
-   * so deleting the skill's folder takes its page away. `computer`: this computer and no project,
-   * with no project added; what it keeps is in the person's home folder.
-   */
-  for?: 'picked' | 'computer'
-  /** Its pages and cards show only in a project that picked its skill, though every project has its commands. */
-  pages?: 'picked'
-  /** Every run gets its skill, with nothing written in the project. */
-  skill?: 'every run'
+  /** `computer`: this computer and no project, with no project added; what it keeps is in the person's home folder. Every project's when unsaid. */
+  for?: 'computer'
 }
 
 /** What the dashboard's distribution lists: its packages, and modules as they are given (a demo's fakes). */
 export type DashboardDistribution = readonly (DashboardPackage | DistributionEntry)[]
 
-/** One of the distribution's packages, resolved, with the skill it is when it is one. */
+/** One of the distribution's packages, resolved. */
 export interface OwnPackage extends ProjectPackage {
-  /** The `name` in the front matter of the package's `SKILL.md`; absent for a package that is no skill. */
-  skill?: string
-  /** Whose it is: every project's, a project's once it picked it, or this computer's. */
-  of: 'every project' | 'a pick' | 'the computer'
-  /** Its pages and cards are a project's only once it picked it ({@link DashboardPackage.pages}). */
-  pagesPicked: boolean
-  /** Every run gets its skill. */
-  everyRun: boolean
+  /** Whose it is: every project's, or this computer's. */
+  of: 'every project' | 'the computer'
 }
 
 /** The distribution's packages as read last, by the file they were read off. */
@@ -59,6 +41,16 @@ export function distributionPackages(env: NodeJS.ProcessEnv = process.env): Prom
   return read.packages
 }
 
+/** The distribution's plugins, in its order, each with what its package says it is. */
+export async function distributionPlugins(): Promise<{ module: ModuleDefinition & { plugin: PluginInfo }; description: string }[]> {
+  const hooks = await distributionHooks()
+  return (await distributionPackages()).flatMap(pkg => {
+    const module = hooks.ofPackage(pkg.name)
+    if (!module?.plugin) return []
+    return [{ module: module as ModuleDefinition & { plugin: PluginInfo }, description: typeof pkg.manifest.description === 'string' ? pkg.manifest.description : '' }]
+  })
+}
+
 async function readPackages(file: string): Promise<OwnPackage[]> {
   const packages: OwnPackage[] = []
   for (const item of (await distributionItems(file)) as DashboardDistribution) {
@@ -66,59 +58,44 @@ async function readPackages(file: string): Promise<OwnPackage[]> {
     const dir = await packageDirOf(file, item.package)
     const manifest = await readManifest(join(dir, 'package.json'))
     if (!manifest) throw new Error(`${item.package}, which the distribution ${file} lists, has no package.json that reads`)
-    const skill = /^name:[ \t]*([a-z0-9][a-z0-9-]*)[ \t]*$/m.exec(/^---\r?\n([\s\S]*?)\r?\n---/.exec(await readFile(join(dir, 'SKILL.md'), 'utf8').catch(() => ''))?.[1] ?? '')?.[1]
-    const of = item.for === 'picked' ? 'a pick' : item.for === 'computer' ? 'the computer' : 'every project'
-    packages.push({ name: item.package, dir, manifest, of, pagesPicked: item.pages === 'picked', everyRun: item.skill === 'every run', ...(skill !== undefined ? { skill } : {}) })
+    packages.push({ name: item.package, dir, manifest, of: item.for === 'computer' ? 'the computer' : 'every project' })
   }
   return packages
 }
 
+/** Whether a package is on: one with no module, or a core module's, always; a plugin's where its Enabled row is on, in `project` for one kept per project. */
+async function isOn(hooks: Hooks, pkg: OwnPackage, project?: ProjectRef): Promise<boolean> {
+  const module = hooks.ofPackage(pkg.name)
+  return !module?.plugin || (await hooks.enabled(module.name, project))
+}
+
 /**
- * The packages of the distribution the project at `root` has: the ones every project has, and
- * each picked one the project has by its rule ({@link DashboardPackage.for}). Read off the
- * project's files each time, so a skill written or deleted a moment ago counts at once. None of
- * the computer's: no project has those.
+ * The packages of the distribution the project at `root` has: every project's, a plugin's where
+ * it is on in the project. Read each time, so a plugin switched a moment ago counts at once.
+ * None of the computer's: no project has those.
  */
 export async function packagesOf(root: string): Promise<OwnPackage[]> {
+  const hooks = await distributionHooks()
+  const project = await projectRefAt(projectId(root), root)
   const packages: OwnPackage[] = []
-  for (const pkg of await distributionPackages()) {
-    if (pkg.of === 'the computer') continue
-    if (pkg.of === 'a pick' && !(await picked(root, pkg))) continue
-    packages.push(pkg)
-  }
+  for (const pkg of await distributionPackages()) if (pkg.of === 'every project' && (await isOn(hooks, pkg, project))) packages.push(pkg)
   return packages
 }
 
-/** Whether the project at `root` shows the pages and cards of `name`, one of the packages it has: always, but for one whose pages are a pick it did not pick. */
-export async function showsPages(root: string, name: string): Promise<boolean> {
-  const pkg = (await distributionPackages()).find(own => own.name === name)
-  if (!pkg?.pagesPicked) return true
-  return picked(root, pkg)
-}
-
-/** Whether the project at `root` has the skill of `pkg`: every run gets it, or the project holds its text. */
-async function picked(root: string, pkg: OwnPackage): Promise<boolean> {
-  return pkg.everyRun || (pkg.skill !== undefined && (await holdsSkill(root, pkg.skill)))
-}
-
-/** Whether the project holds the text of the skill `name`, in one of the folders the coding agents read. */
-async function holdsSkill(root: string, name: string): Promise<boolean> {
-  for (const dir of SKILLS_DIRS) if (await stat(join(root, dir, name, 'SKILL.md')).then(s => s.isFile(), () => false)) return true
-  return false
-}
-
 /**
- * Every package of the distribution a project can have, the picked ones too, whatever a project
- * holds: the copy a module's page is served from on a computer where no project of its own has
- * the module.
+ * Every package of the distribution a project can have, a plugin's off everywhere too: the copy a
+ * module's page is served from on a computer where no project of its own has the module.
  */
 export async function projectsPackages(): Promise<OwnPackage[]> {
-  return (await distributionPackages()).filter(pkg => pkg.of !== 'the computer')
+  return (await distributionPackages()).filter(pkg => pkg.of === 'every project')
 }
 
-/** The packages that are this computer's ({@link DashboardPackage.for}). */
+/** The packages that are this computer's ({@link DashboardPackage.for}), a plugin's where it is on. */
 export async function computerPackages(): Promise<OwnPackage[]> {
-  return (await distributionPackages()).filter(pkg => pkg.of === 'the computer')
+  const hooks = await distributionHooks()
+  const packages: OwnPackage[] = []
+  for (const pkg of await distributionPackages()) if (pkg.of === 'the computer' && (await isOn(hooks, pkg))) packages.push(pkg)
+  return packages
 }
 
 /**
@@ -141,12 +118,18 @@ export async function distributionBinDirs(): Promise<string[]> {
 }
 
 /**
+ * The kinds every project reads whatever its plugins say: the runs' records, which agent-driver
+ * keeps, read through logs' command until agent-driver reads them itself.
+ */
+const EVERY_PROJECT_KINDS: readonly string[] = ['runs']
+
+/**
  * What provides `kind` in the project at `root`: the one package it has that declares it
  * (`"openagent": { "<kind>": "<command>" }`). Two that both do are the distribution's mistake,
  * which the project's banner says.
  */
 export async function lookupProvided(root: string, kind: string): Promise<ProvidedCommandLookup> {
-  const providers = declaring(await packagesOf(root), kind)
+  const providers = declaring(EVERY_PROJECT_KINDS.includes(kind) ? await projectsPackages() : await packagesOf(root), kind)
   if (providers.length === 1) return { command: providers[0]! }
   if (providers.length === 0) return {}
   return { problem: `${providers.length} packages of the distribution provide ${kind}: ${providers.map(p => p.package).join(', ')}` }

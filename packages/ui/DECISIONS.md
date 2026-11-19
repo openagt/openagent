@@ -9,17 +9,18 @@ already made, and lists it in its pull request; for anything else it proposes an
 
 ## The command
 - OpenAgent is run as its distribution, `@openagt/dashboard`, by the one command it brings,
-  `openagent`: this package's, serving the distribution's modules (#2394). The skills every run
-  gets by default are named in the distribution, and only there, and the runner links the skills
-  it is handed. Picked over a package of its own for the command and that list
-  (`@openagt/start`), a second name in front of the dashboard; and over the list staying in the
-  runner.
-- The defaults are what an agent needs in any project to work at all: ask, and github on a
-  GitHub project. Every other skill is the project's own (#2394): the tickets, the queue, the
-  logs and account rotation too. A new project shows only the
-  pages of the skills it has. Picked over the skills with pages coming with every run,
-  which gave a new project Tickets, Queue and Logs pages it never asked for; and over every
-  skill of the list, each one more description in every agent's context.
+  `openagent`: this package's, serving the distribution's modules (#2394). The distribution
+  names the modules, and only it, with the plugins it starts on; a run's skills are its
+  modules'. Picked over a package of its own for the command and that list
+  (`@openagt/start`), a second name in front of the dashboard; and over the list of the skills
+  every run gets staying in the runner.
+- A new project has what an agent needs in any project to work at all: the core modules, with
+  github's skill on a GitHub project, and ask, the one plugin the distribution starts on (#2394,
+  decisions 18 and 31). Every other plugin starts off, in every project, until the person
+  switches it on: the tickets, the queue, the logs, the browser, the scheduler. A new project
+  shows only the pages of the plugins on in it. Picked over the skills with pages coming with
+  every run, which gave a new project Tickets, Queue and Logs pages it never asked for; and over
+  every skill of the list, each one more description in every agent's context.
 - The dashboard carries only the skills its own pages, buttons and automations are built on:
   the tickets and the queue with the automations that move a ticket to work (plan,
   plan-tickets, triage, update-tickets, work-queue), the logs, account
@@ -241,20 +242,21 @@ already made, and lists it in its pull request; for anything else it proposes an
   project's only when the project's remote is on that host: no project chose it, so it does
   not answer for a project on another host. Picked over each project installing them itself,
   which left a project with nothing installed unable to start an agent or to see one.
-- A project has a skill when every run gets it by default (the distribution names those), or
-  when the skill's text is in the project, where the coding agents read it
-  (`.claude/skills/<name>/SKILL.md`, `.agents/skills/<name>/SKILL.md`). OpenAgent brings the
-  packages of the skills that have pages itself (tickets, queue, browser, scheduler) and gives each, with its page, its cards and its data, to every project where
-  the skill is a default, else to the projects that hold its text; deleting the folder of a
-  skill that is no default takes them away. Picked over
-  a project's pages coming from its own `package.json`, which needed an install in every
-  project, and which a project without Node could not have.
-- The logs package is every project's: it keeps the runs' records, which the Log lists. Its
-  Logs page and its Members card are a project's only once the project holds the logs
-  skill's text, like any picked skill's page. Picked over the Logs page on every project,
-  which a new project showed without asking.
+- A plugin is a project's while its Enabled row is on there (#2394, decision 31): its page, its
+  cards, its data, and its skills, which reach the project's runs and are never written into the
+  project. A row starts as the distribution starts the plugin, and is kept where the plugin
+  works: per project for the tickets, per computer for the devices. Picked over a project
+  having a plugin while its skill's text was in the project (`.claude/skills/<name>`,
+  `.agents/skills/<name>`), where picking one wrote files into the person's repository and
+  deleting the folder took its pages away; and over a project's pages coming from its own
+  `package.json`, which needed an install in every project, and which a project without Node
+  could not have.
+- The logs are a plugin (#2394): the Logs page, the Members card and the logs skill are a
+  project's while it is on there. The runs' records, which the Log lists, are every project's,
+  whatever its plugins. Picked over the Logs page on every project, which a new project showed
+  without asking.
 - The distribution names the packages OpenAgent brings, and says of each whose it is: every
-  project's, a project's once it picked the package's skill, or the computer's (#2394).
+  project's or the computer's, and a plugin's is wherever its Enabled row has it on (#2394).
   Nothing else in OpenAgent names a package, and a project's own dependencies are not read.
   Picked over three lists in the dashboard's code, and over a project's own copy winning,
   which gave one package two ways into a project.
@@ -265,23 +267,22 @@ already made, and lists it in its pull request; for anything else it proposes an
   a server is when it was just connected, with no way to let a phone in; and over a
   starter project made on every server, one nobody asked for.
 - "Add project" stays small: it writes no skill. The launcher's row under the box then has
-  "Skills", after Auto, whose menu ends in that project's skills in Settings. Picked over "Add project"
+  "Skills", after Auto, whose menu ends in that project's plugins and skills in Settings. Picked over "Add project"
   writing the skills itself, which put files into every project a person adds. The control was picked over a line of its own on the
   project's page ("This project has 4 of 25 skills", with an "Add skills" button), which
   stood there also when it had nothing to offer, and over an item in the project's ⋮ menu,
   where it was not seen.
 - The "Skills" menu under the box picks the skills one session gets, as the account beside it
-  is picked: the skills every run gets ticked, each tickable off; every other skill OpenAgent
-  carries under "More skills", in groups, tickable on; the project's own
-  skills all, none or each, as its preset has them until the session picks; nothing saved, so
-  the next session starts from the skills every run gets and its preset's project skills. The
-  picks reach the run in its environment with the preset and the account, its record keeps
-  them, and a resume applies them again; the session page says them in the item's hover, off.
-  A session with no project has the first part alone. Picked over a pick saved like the
-  model's, which Rom's design ruled out: the preset is the lasting set, the session the
-  exception. The skills every run does not get are the ones under "More skills" rather than
-  one long list: twenty-five skills under the box read as the overwhelming list of the first
-  skills picker.
+  is picked (#2394): the plugins on in the project that give its runs something, each ticked,
+  tickable off, so the session goes without its skills and its steps; the project's own skills
+  all, none or each; both as the session's preset has them until the session picks. Nothing is
+  saved, so the next session starts from its preset's. The picks reach the run in its
+  environment with the preset and the account, its record keeps them, and a resume applies them
+  again; the session page says them in the item's hover, off. A session with no project has the
+  first part alone. A plugin is switched on in Settings, not in the menu. Picked over a pick
+  saved like the model's, which Rom's design ruled out: the preset is the lasting set, the
+  session the exception. Picked over "More skills", every other skill OpenAgent carries,
+  tickable on for one session: a plugin's Enabled row is the source of truth (decision 31).
 - A project's scheduler starts with the dashboard by its two lines in the project's hooks file,
   which is this machine's and outside git. While they are not there, the Automations page says
   the scheduler is off and names the two commands that start it. Picked over a switch on that
@@ -408,11 +409,11 @@ already made, and lists it in its pull request; for anything else it proposes an
 - A preset (#2394) is a name and a saved set of run options, made once on the Presets page and
   used in any project or none, kept with the person through the store, so every computer of
   theirs has it: the page lists them, Default first, and edits each in a dialog over the page,
-  as a new one is made: its accounts among the ones the Permissions page knows, and whether its
-  runs get the project's own skills. The dialog scrolls under its title with Save and Cancel
-  always in view, and a click beside it closes nothing: a form that long is not lost to a
-  stray click (before, the editor took the card's place in the list, which moved the page
-  under the person). The session's preset is the "Preset" menu first under the box, saved like
+  as a new one is made: its accounts among the ones the Permissions page knows, the plugins its
+  runs go without (#2394, decision 37), and whether they get the project's own skills. The
+  dialog scrolls under its title with Save and Cancel always in view, and a click beside it
+  closes nothing: a form that long is not lost to a stray click (before, the editor took the
+  card's place in the list, which moved the page under the person). The session's preset is the "Preset" menu first under the box, saved like
   the model; its GitHub account is what the account control shows until the person picks
   another for the session. The run's record keeps the preset, and the session's box says it
   where the launcher's menu is. A preset that names no GitHub account is on "None — whatever

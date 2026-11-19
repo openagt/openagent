@@ -1,6 +1,7 @@
 import { isSkillName } from '@openagt/agent-data'
 import { DEFAULT_PRESET, PRESETS, isPresetId, isPresetName, presetIdOf, presetsIn, type Preset, type RunOptions } from '@openagt/hooks'
 import { distributionSettings } from '../distribution-hooks.js'
+import { distributionPlugins } from '../distribution-packages.js'
 import { onAgentAccounts, type AccountResult, type AccountRow } from './accounts.js'
 import { onGitHosts } from './logins.js'
 import { presetLoginsOn, syncLogins, type PresetLoginsOn } from '../dashboard/logins-sync.js'
@@ -13,7 +14,8 @@ export type { PresetLoginsOn } from '../dashboard/logins-sync.js'
 // so every computer of theirs has the same presets. The page lists them, edits them in a dialog,
 // makes new ones and removes them; Default is edited like the others and never removed or
 // renamed. What a preset can name is what this computer knows: OpenAgent's own GitHub accounts
-// here, and the Claude and Codex accounts of the Permissions page.
+// here, the Claude and Codex accounts of the Permissions page, and the distribution's plugins its
+// runs go without.
 
 /** The host the GitHub skill answers for, whose accounts a preset names. */
 const GITHUB = 'github.com'
@@ -27,6 +29,8 @@ export interface PresetsView {
   claude: PresetAccountChoice[]
   /** The Codex accounts, the same way. */
   codex: PresetAccountChoice[]
+  /** The plugins a preset's runs can go without, by name: the distribution's that give runs a skill or a step, in its order. */
+  plugins: string[]
 }
 
 /** A coding agent's account a preset can name. */
@@ -39,13 +43,14 @@ export interface PresetAccountChoice {
 
 /** Every preset, and what one can name. */
 export async function onPresetsList(): Promise<PresetsView> {
-  const [saved, hosts, claude, codex] = await Promise.all([savedPresets(), onGitHosts(), onAgentAccounts('claude'), onAgentAccounts('codex')])
+  const [saved, hosts, claude, codex, plugins] = await Promise.all([savedPresets(), onGitHosts(), onAgentAccounts('claude'), onAgentAccounts('codex'), distributionPlugins()])
   const provider = hosts.hosts.find(row => row.host === GITHUB)?.provider
   return {
     presets: presetsIn(saved),
     ...(provider ? { github: { host: GITHUB, accounts: provider.accounts.filter(account => account.ok).map(account => account.login) } } : {}),
     claude: claude.accounts.map(accountChoice),
     codex: codex.accounts.map(accountChoice),
+    plugins: plugins.flatMap(({ module }) => (module.hooks['run.skills'] || module.hooks['run.step'] ? [module.name] : [])),
   }
 }
 
@@ -62,7 +67,7 @@ function accountChoice(account: AccountRow): PresetAccountChoice {
 export interface PresetChange {
   id?: string
   name: string
-  /** Its run options, the ones a preset holds: its accounts, and which of the project's own skills its runs get. */
+  /** Its run options, the ones a preset holds: its accounts, the plugins its runs go without, and which of the project's own skills they get. */
   options: RunOptions
 }
 
@@ -110,10 +115,13 @@ async function presetOptions(given: RunOptions): Promise<RunOptions | string> {
   }
   const project = given.skills?.project
   if (project !== undefined && project !== 'none' && !(Array.isArray(project) && project.length > 0 && project.every(isSkillName))) return "A preset's project skills are none, or named by their names."
+  const without = given.plugins?.without
+  if (without !== undefined && !(Array.isArray(without) && without.every(name => typeof name === 'string' && view.plugins.includes(name)))) return 'That plugin is not one a run gets anything from.'
   return {
     ...(account !== undefined ? { github: { account } } : {}),
     ...(Object.keys(driver).length > 0 ? { 'agent-driver': driver } : {}),
     ...(project !== undefined ? { skills: { project } } : {}),
+    ...(without !== undefined && without.length > 0 ? { plugins: { without: [...new Set(without)] } } : {}),
   }
 }
 

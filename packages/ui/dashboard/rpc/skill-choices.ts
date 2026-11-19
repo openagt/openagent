@@ -3,6 +3,6 @@ import { rpc } from '../lib/rpc.js'
 
 export type * from '../../src/dashboard-rpc/skill-choices.js'
 
-// The skills a session can pick under the message box: every run's, the others carried, and the project's own.
+// What a session picks under the message box: the plugins on in its project it can go without, and the project's own skills.
 export const onSkillChoices = rpc<typeof impl.onSkillChoices>('onSkillChoices')
 export const onProjectSkillNames = rpc<typeof impl.onProjectSkillNames>('onProjectSkillNames')

@@ -135,6 +135,9 @@ importers:
       '@openagt/skill-github':
         specifier: workspace:*
         version: link:../skill-github
+      '@openagt/skills':
+        specifier: workspace:*
+        version: link:../skills
       '@types/node':
         specifier: ^20.0.0
         version: 20.19.43
@@ -557,6 +560,9 @@ importers:
       '@openagt/agent-data':
         specifier: workspace:*
         version: link:../agent-data
+      '@openagt/hooks':
+        specifier: workspace:*
+        version: link:../hooks
     devDependencies:
       '@tailwindcss/vite':
         specifier: ^4.0.0
@@ -606,6 +612,9 @@ importers:
       '@openagt/agent-data':
         specifier: workspace:*
         version: link:../agent-data
+      '@openagt/hooks':
+        specifier: workspace:*
+        version: link:../hooks
     devDependencies:
       '@types/node':
         specifier: ^20.0.0
@@ -638,6 +647,9 @@ importers:
       '@openagt/agent-data':
         specifier: workspace:*
         version: link:../agent-data
+      '@openagt/hooks':
+        specifier: workspace:*
+        version: link:../hooks
     devDependencies:
       '@tailwindcss/vite':
         specifier: ^4.0.0
@@ -691,6 +703,9 @@ importers:
       '@openagt/agent-data':
         specifier: workspace:*
         version: link:../agent-data
+      '@openagt/hooks':
+        specifier: workspace:*
+        version: link:../hooks
     devDependencies:
       '@tailwindcss/vite':
         specifier: ^4.0.0
@@ -754,6 +769,9 @@ importers:
       '@openagt/agent-runner':
         specifier: workspace:*
         version: link:../agent-runner
+      '@openagt/hooks':
+        specifier: workspace:*
+        version: link:../hooks
       '@openagt/skill-account-rotation':
         specifier: workspace:*
         version: link:../skill-account-rotation
@@ -815,6 +833,9 @@ importers:
       '@openagt/agent-data':
         specifier: workspace:*
         version: link:../agent-data
+      '@openagt/hooks':
+        specifier: workspace:*
+        version: link:../hooks
     devDependencies:
       '@tailwindcss/vite':
         specifier: ^4.0.0
@@ -873,6 +894,9 @@ importers:
       '@openagt/hooks':
         specifier: workspace:*
         version: link:../hooks
+      '@openagt/skill-branches':
+        specifier: workspace:*
+        version: link:../skill-branches
       yaml:
         specifier: ^2.5.0
         version: 2.9.0

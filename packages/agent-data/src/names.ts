@@ -43,22 +43,6 @@ export function publishedBranch(base: string): string | undefined {
 export const OPENAGENT_DIR = '.openagent'
 
 /**
- * The environment variable that names the skills every run gets: the directories of their
- * packages, joined by the path delimiter. Set by the command that starts OpenAgent
- * (`@openagt/dashboard`), which owns the list, and inherited by every process OpenAgent starts: a
- * hook line, the runner, the scheduler, an agent and the runs its subagents start. Unset, a run
- * gets none of them.
- */
-export const SKILLS_ENV = 'OPENAGENT_SKILLS'
-
-/**
- * The environment variable that names every skill OpenAgent carries, beside the ones every run
- * gets: the directories of their packages, joined by the path delimiter. Set with {@link SKILLS_ENV}
- * by the same command, so a run a session gave one more skill finds its text and its package here.
- */
-export const SKILL_CATALOGUE_ENV = 'OPENAGENT_SKILL_CATALOGUE'
-
-/**
  * The environment variable that names a running agent by its run's id, set by whoever starts the
  * run (the runner) for the agent's whole life: a ticket's claim names the agent by it, and a main
  * agent's subagents are found by it. Unlike its branch, which is renamed once the agent names its
@@ -74,15 +58,13 @@ export const AGENT_ID_ENV = 'AGENT_ID'
 export const PRESET_ENV = 'OPENAGENT_PRESET'
 
 /**
- * The environment variables that change the skills one run gets, a session's picks beside the
- * message box: {@link SKILLS_ON_ENV} names skills it gets on top of the ones every run gets, and
- * {@link SKILLS_OFF_ENV} ones of those it does not get, each a comma-separated list of names;
+ * The environment variables that change what one run gets, a session's picks beside the message
+ * box: {@link PLUGINS_WITHOUT_ENV} names the enabled plugins it goes without, comma-separated, and
  * {@link PROJECT_SKILLS_ENV} says which of the project's own skills stay in its checkout: `all`
  * (unset too), `none`, or their names comma-separated. Set by whoever starts the run; a resumed
  * run goes on with what its record kept.
  */
-export const SKILLS_ON_ENV = 'OPENAGENT_SKILLS_ON'
-export const SKILLS_OFF_ENV = 'OPENAGENT_SKILLS_OFF'
+export const PLUGINS_WITHOUT_ENV = 'OPENAGENT_PLUGINS_WITHOUT'
 export const PROJECT_SKILLS_ENV = 'OPENAGENT_PROJECT_SKILLS'
 
 /** Whether a word is a skill's name, as its text's front matter names it: `tickets`, `plan-tickets`. */

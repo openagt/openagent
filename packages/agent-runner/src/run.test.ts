@@ -6,17 +6,16 @@ import { join } from 'node:path'
 import { AgentExitError, FakeDriver, type Driver, type FakeDriverSession } from '@openagt/agent-driver'
 import { worktreePath } from '@openagt/skill-branches'
 import { findRun } from '@openagt/skill-logs'
+import type { ModuleDefinition } from '@openagt/hooks'
 import { readLiveCard } from './live-card.js'
 import { lockHolder } from './run-lock.js'
 import { runCommand } from './run.js'
 import { markerCard, writeMarker } from './records.js'
 import { sweep } from './sweep.js'
 import { NAME_FILE_ENV } from './title.js'
-import { git, handDownBasicSkills, readUntimedDiary, removeRepo, testRepo } from './test-repo.js'
+import { git, readUntimedDiary, removeRepo, testRepo } from './test-repo.js'
 import { NOW, fakeGitHost, wrap, QUESTION, committingDriver, testModules } from './run-test-support.js'
 
-// A run as OpenAgent starts it: with the basic skills handed down.
-handDownBasicSkills()
 
 // One run end to end on a real repository, with the agent faked: the marker, the checkout, the
 // live card the session keeps, the record with what the agent said and cost, the reclaim; a run
@@ -160,15 +159,20 @@ test('a fresh run is named while its checkout is made, not after its agent has s
           if (text.includes('Name this coding session')) askedToName()
         }),
     }
-    // The checkout waits on its skills: here, until the name was asked for, which only a run that
-    // asks first gets to before its checkout is made. A run that asked after its agent started
-    // would never get there, and the wait gives up.
+    // The run's first step waits on its skills, asked of its modules before it: here, until the name
+    // was asked for, which only a run that asks first gets to before its checkout is made. A run
+    // that asked after its agent started would never get there, and the wait gives up.
     let namedFirst = false
-    const skills = async () => {
-      namedFirst = await Promise.race([naming.then(() => true), new Promise<boolean>(resolve => setTimeout(() => resolve(false), 5_000))])
-      return []
+    const slow: ModuleDefinition = {
+      name: 'slow-skills',
+      hooks: {
+        'run.skills': async () => {
+          namedFirst = await Promise.race([naming.then(() => true), new Promise<boolean>(resolve => setTimeout(() => resolve(false), 5_000))])
+          return []
+        },
+      },
     }
-    const run = await runCommand(repo, { prompt: 'make readme.md shorter', driver, skills, now: () => NOW, modules: testModules() })
+    const run = await runCommand(repo, { prompt: 'make readme.md shorter', driver, now: () => NOW, modules: testModules({ also: [slow] }) })
     assert.equal(run.status, 'done')
     assert.equal(namedFirst, true)
     assert.equal((await findRun(repo, run.id))?.title, 'Readme condensing')

@@ -23,6 +23,15 @@ already made, and lists it in its pull request; for anything else it proposes an
   openagt/openagent` in a terminal writes the texts for any agent. Picked over
   `npx @openagt/init`, a second list with ticks to keep in step with the dashboard's.
 
+- The project skills a run does not get are left out of its checkout by git's sparse checkout,
+  right after the worktree is made and before the skills are linked, so the index keeps them,
+  nothing is committed about them, and the project's other checkouts have them. Which skills
+  the project has is asked of that checkout, not of the project's folder: the checkout starts
+  from origin's branch, and a folder behind or ahead of it would leave the wrong ones out. A
+  resumed run's checkout is made again the same way. Picked over deleting the files from the
+  checkout, which the agent's next `git add -A` would commit as a removal, and over editing
+  what the project tracks, which is the project's and not one session's.
+
 ## The Skills page
 - The Skills page installs nothing (#2394, decision 24): Settings › Skills lists each
   project's own skills. Picked over a page of ticks that wrote the skills' texts into the

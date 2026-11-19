@@ -8,7 +8,6 @@ import { accountsPath, addAccount } from '@openagt/skill-account-rotation'
 import { accountsWiring } from './accounts.js'
 import { loginsWiring } from './logins.js'
 import { onPresetLogins, onPresetsList, sendCopyPresetLogins, sendRemovePreset, sendSavePreset } from './presets.js'
-import { onSkillChoices } from './skill-choices.js'
 import { provideTestContext } from './test-context.js'
 import { handDownTestDistribution } from '../test-distribution.js'
 
@@ -55,6 +54,8 @@ test('the presets and the accounts this computer knows; a preset saved, edited, 
     assert.deepEqual(view.github, { host: 'github.com', accounts: ['octo', 'octo-agent'] }, 'a login GitHub no longer takes is not offered, and one more is added at the host')
     assert.ok(view.claude.some(account => account.id === 'Dani'))
     assert.deepEqual(view.claude.filter(account => account.loggedOut).length, 1, "this computer's own login, not logged in here, says so")
+    assert.ok(view.plugins.includes('ask') && view.plugins.includes('logs'), 'the plugins a run gets a skill or a step from, wherever they are on')
+    assert.equal(view.plugins.includes('store-git-repository'), false, 'not one a run gets nothing from')
 
     // Saved under the id its name gives, with the person; a second name that gives that id is refused, naming the preset that has it.
     const saved = await sendSavePreset({ name: 'Social Media', options: { github: { account: 'octo-agent' }, 'agent-driver': { claude: ['Dani'], model: 'opus' }, skills: { project: 'none' } } })
@@ -65,7 +66,9 @@ test('the presets and the accounts this computer knows; a preset saved, edited, 
     view = await onPresetsList()
     assert.deepEqual(view.presets.map(preset => preset.id), ['default', 'social-media'])
     // Edited under its own id, renamed too; Default keeps its name.
-    assert.deepEqual(await sendSavePreset({ id: 'social-media', name: 'Social', options: {} }), { ok: true, id: 'social-media' })
+    assert.deepEqual(await sendSavePreset({ id: 'social-media', name: 'Social', options: { plugins: { without: ['logs', 'ask', 'logs'] } } }), { ok: true, id: 'social-media' })
+    assert.deepEqual((await onPresetsList()).presets[1], { id: 'social-media', name: 'Social', options: { plugins: { without: ['logs', 'ask'] } } }, 'the plugins its runs go without')
+    assert.deepEqual(await sendSavePreset({ id: 'social-media', name: 'Social', options: { plugins: { without: [] } } }), { ok: true, id: 'social-media' })
     assert.deepEqual((await onPresetsList()).presets[1], { id: 'social-media', name: 'Social', options: {} })
     assert.deepEqual(await sendSavePreset({ id: 'default', name: 'Default', options: { github: { account: 'octo' } } }), { ok: true, id: 'default' })
     assert.deepEqual((await onPresetsList()).presets[0], { id: 'default', name: 'Default', options: { github: { account: 'octo' } } })
@@ -76,6 +79,8 @@ test('the presets and the accounts this computer knows; a preset saved, edited, 
     assert.match((await sendSavePreset({ name: 'Odd', options: { github: { account: 'stale' } } }) as { error: string }).error, /no GitHub account stale/)
     assert.match((await sendSavePreset({ name: 'Odd', options: { 'agent-driver': { claude: ['Nobody'] } } }) as { error: string }).error, /not on this computer/)
     assert.match((await sendSavePreset({ name: 'Odd', options: { skills: { project: ['Not A Skill'] } } }) as { error: string }).error, /none, or named by their names/)
+    assert.match((await sendSavePreset({ name: 'Odd', options: { plugins: { without: ['store-git-repository'] } } }) as { error: string }).error, /not one a run gets anything from/)
+    assert.match((await sendSavePreset({ name: 'Odd', options: { plugins: { without: ['nothing-here'] } } }) as { error: string }).error, /not one a run gets anything from/)
     assert.match((await sendSavePreset({ id: 'gone', name: 'Gone', options: {} }) as { error: string }).error, /gone/)
     assert.equal((await sendSavePreset({ name: '!!!', options: {} })).ok, false)
 
@@ -84,14 +89,6 @@ test('the presets and the accounts this computer knows; a preset saved, edited, 
     assert.equal((await sendRemovePreset('default')).ok, false)
     assert.equal((await sendRemovePreset('../x')).ok, false)
   }))
-
-test("the skills a session picks from: every run's, each saying what it is, and the others the distribution carries, in the catalogue's groups", async () => {
-  const choices = await onSkillChoices()
-  assert.deepEqual(choices.everyRun.map(skill => skill.name), ['github', 'ask'])
-  assert.ok(choices.everyRun.every(skill => skill.description.length > 0), 'each says what it is')
-  assert.ok(choices.more.some(group => group.skills.some(skill => skill.name === 'reply')), 'the catalogue is there')
-  assert.ok(choices.more.every(group => group.skills.length > 0 && group.skills.every(skill => !['github', 'ask'].includes(skill.name))), 'no group is empty, and none has a skill every run gets')
-})
 
 test('a server copies the presets\' accounts to no device: it says none, and refuses the press', async () => {
   const before = process.env['OPENAGENT_SERVER']

@@ -32,6 +32,10 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
+    "./module": {
+      "types": "./dist/plugin.d.ts",
+      "default": "./dist/plugin.js"
+    },
     "./names": {
       "types": "./dist/names.d.ts",
       "default": "./dist/names.js"
@@ -47,7 +51,8 @@
     "clean": "rm -rf dist dist-test SKILL.md"
   },
   "dependencies": {
-    "@openagt/agent-data": "workspace:*"
+    "@openagt/agent-data": "workspace:*",
+    "@openagt/hooks": "workspace:*"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.0.0",

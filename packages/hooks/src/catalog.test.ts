@@ -27,7 +27,7 @@ test('the presets: saved with the person, Default first and built in until chang
   const store = chainStore([memoryStore()])
   const settings = settingsIn(store)
   assert.deepEqual(presetsIn(await settings.get(PRESETS)), [{ id: DEFAULT_PRESET, name: 'Default', options: {} }])
-  const reviewer = { id: 'reviewer', name: 'Reviewer', options: { github: { account: 'ada-agent' }, 'agent-driver': { claude: ['Work'] }, skills: { project: 'none' as const } } }
+  const reviewer = { id: 'reviewer', name: 'Reviewer', options: { github: { account: 'ada-agent' }, 'agent-driver': { claude: ['Work'] }, skills: { project: 'none' as const }, plugins: { without: ['logs', 'tickets'] } } }
   const writer = { id: 'writer', name: 'Writer', options: {} }
   await settings.set(PRESETS, [writer, reviewer, { id: DEFAULT_PRESET, name: 'Default', options: { 'agent-driver': { codex: ['Home'] } } }])
   const all = presetsIn(await settings.get(PRESETS))
@@ -38,8 +38,8 @@ test('the presets: saved with the person, Default first and built in until chang
   assert.equal(presetOf(all, undefined).id, DEFAULT_PRESET)
 
   // What is not a preset, or not an option one holds, is left out.
-  await store.save(PERSON, { [SETTINGS_FILE]: JSON.stringify({ 'presets.saved': [{ id: 'Bad Id', name: 'x', options: {} }, { id: 'ok', name: ' Ok ', options: { github: { account: 7 }, model: 'x', skills: { project: ['a', 3] } } }] }) }, 'by hand')
-  assert.deepEqual(await settings.get(PRESETS), [{ id: 'ok', name: 'Ok', options: {} }])
+  await store.save(PERSON, { [SETTINGS_FILE]: JSON.stringify({ 'presets.saved': [{ id: 'Bad Id', name: 'x', options: {} }, { id: 'ok', name: ' Ok ', options: { github: { account: 7 }, model: 'x', skills: { project: ['a', 3] }, plugins: { without: ['Not A Plugin'] } } }, { id: 'quiet', name: 'Quiet', options: { plugins: { without: ['logs', 'Not A Plugin'] } } }] }) }, 'by hand')
+  assert.deepEqual(await settings.get(PRESETS), [{ id: 'ok', name: 'Ok', options: {} }, { id: 'quiet', name: 'Quiet', options: { plugins: { without: ['logs'] } } }])
   assert.equal(presetIdOf(' Social Media! '), 'social-media')
   assert.deepEqual([isPresetName('Reviewer'), isPresetName('!!!'), isPresetName('x'.repeat(41))], [true, false, false])
 })

@@ -3,8 +3,8 @@ import { readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { hostname, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { appendInbox, logCardFile, promptLines, takeInbox, type InboxLine, type PromptLine } from '@openagt/agent-driver'
-import { PRESET_ENV, PROJECT_SKILLS_ENV, SKILLS_OFF_ENV, SKILLS_ON_ENV, isSkillName, sessionFolder, sessionsHome, sessionsHomeOf } from '@openagt/agent-data'
-import { LOCAL_HOST, isPresetId, type ProjectRef, type RunFound, type RunHost, type RunInput, type RunOptions, type RunReadiness, type RunRef, type RunRequest, type RunStatus, type RunSummary } from '@openagt/hooks'
+import { PLUGINS_WITHOUT_ENV, PRESET_ENV, PROJECT_SKILLS_ENV, isSkillName, sessionFolder, sessionsHome, sessionsHomeOf } from '@openagt/agent-data'
+import { LOCAL_HOST, MODULE_NAME, isPresetId, type ProjectRef, type RunFound, type RunHost, type RunInput, type RunOptions, type RunReadiness, type RunRef, type RunRequest, type RunStatus, type RunSummary } from '@openagt/hooks'
 import { currentBranch, worktreePath } from '@openagt/skill-branches'
 import { findRun, isRunId, listRuns, parseRunCard, type RunCard } from '@openagt/skill-logs'
 import { handedDownSettings, runPreset } from './preset.js'
@@ -258,10 +258,9 @@ function refuse(project: ProjectRef | undefined, options: RunOptions): void {
   if (options.github?.account !== undefined && !/^\S+$/.test(options.github.account)) throw new Error('An account is named by its login.')
   const preset = options.presets?.preset
   if (preset !== undefined && !isPresetId(preset)) throw new Error('A preset is named by its id.')
-  const { on, off, project: kept } = options.skills ?? {}
-  for (const list of [on, off, kept === 'all' || kept === 'none' ? undefined : kept]) {
-    if (list !== undefined && !list.every(isSkillName)) throw new Error('Skills are named by their names.')
-  }
+  const kept = options.skills?.project
+  if (kept !== undefined && kept !== 'all' && kept !== 'none' && !kept.every(isSkillName)) throw new Error('Skills are named by their names.')
+  if (options.plugins?.without?.every(name => MODULE_NAME.test(name)) === false) throw new Error('Plugins are named by their names.')
 }
 
 /** What the run's own process is asked on its command line (`runArgs`). */
@@ -279,15 +278,16 @@ function asked(options: RunOptions): Omit<AskedRun, 'prompt'> {
   }
 }
 
-/** The picks the run's own process reads off its environment: the account it works as, its preset, and the session's skills. */
+/** The picks the run's own process reads off its environment: the account it works as, its preset, the plugins it goes without and the project's skills it gets. */
 function picks(options: RunOptions): Record<string, string> {
   const preset = options.presets?.preset
-  const { on, off, project } = options.skills ?? {}
+  const without = options.plugins?.without
+  const project = options.skills?.project
   return {
     ...(options.github?.account !== undefined ? { [GIT_ACCOUNT_ENV]: options.github.account } : {}),
     ...(preset !== undefined ? { [PRESET_ENV]: preset } : {}),
-    ...(on !== undefined ? { [SKILLS_ON_ENV]: on.join(',') } : {}),
-    ...(off !== undefined ? { [SKILLS_OFF_ENV]: off.join(',') } : {}),
+    // Set, even to nothing: a session that goes without none of them, where its preset leaves some out.
+    ...(without !== undefined ? { [PLUGINS_WITHOUT_ENV]: without.join(',') } : {}),
     ...(project !== undefined ? { [PROJECT_SKILLS_ENV]: project === 'all' || project === 'none' ? project : project.join(',') } : {}),
   }
 }

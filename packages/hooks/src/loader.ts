@@ -16,6 +16,8 @@ export interface DistributionEntry {
   module: ModuleDefinition
   /** For a plugin: it starts enabled, until a person switches it off. */
   on?: boolean
+  /** The package the module is the Node part of, when the distribution lists it by its package. */
+  package?: string
 }
 
 /** A handler that threw: the loader went on without what it would have given. */
@@ -43,9 +45,10 @@ export interface GivenSkill extends RunSkill {
 /**
  * A distribution's modules, loaded: the one way anything calls a module's hooks. A plugin's hooks
  * are called only where it is on: its Enabled row on (per person, per computer, or in the
- * project), and, for a run, not among the plugins the run goes without. A core module is always
- * on. The store's chain is the exception: every backend is in it, since the Enabled rows are
- * read through the store.
+ * project; one kept per project is as the distribution starts it where no project is named, such
+ * as a session with no project), and, for a run, not among the plugins the run goes without. A
+ * core module is always on. The store's chain is the exception: every backend is in it, since
+ * the Enabled rows are read through the store.
  *
  * A handler that throws is told to `onError`, and the others go on: one module never takes the
  * app down. A run step that throws is no such handler: it fails the run (`run`).
@@ -57,6 +60,8 @@ export interface Hooks {
   readonly store: Store
   readonly settings: Settings
   module(name: string): ModuleDefinition | undefined
+  /** The module the distribution's package `name` is the Node part of; none for a package without one. */
+  ofPackage(name: string): ModuleDefinition | undefined
   /** Whether a module is on: always for a core module; for a plugin, its Enabled row, in `project` for one kept per project. */
   enabled(name: string, project?: ProjectRef): Promise<boolean>
   /** Switch a plugin's Enabled row, in `project` for one kept per project. */
@@ -65,8 +70,12 @@ export interface Hooks {
   steps(run: { project?: ProjectRef; options: RunOptions }): Promise<OrderedStep[]>
   /** Run a run's steps, as {@link runPipeline} does. */
   run(ctx: RunContext): Promise<PipelineResult>
-  /** The skills the modules on for a run give it. A second skill of a name already given is left out, and told to `onError`. */
-  skills(args: SkillArgs): Promise<GivenSkill[]>
+  /**
+   * The skills the modules on for a run give it; with `every`, every module's, the plugins that
+   * are off too: what a clean-up takes back the rules hiding their links for. A second skill of a
+   * name already given is left out, and told to `onError`.
+   */
+  skills(args: SkillArgs, opts?: { every?: boolean }): Promise<GivenSkill[]>
   /** The coding agents, by their ids; a second one of an id is left out. */
   agents(): Promise<RunAgent[]>
   /** Where runs can run, in a project when one is named; a second host of an id is left out. */
@@ -88,6 +97,7 @@ export function createHooks(entries: readonly DistributionEntry[], opts: HooksOp
   check(entries)
   const modules = entries.map(entry => entry.module)
   const byName = new Map(modules.map(module => [module.name, module]))
+  const byPackage = new Map(entries.flatMap(entry => (entry.package !== undefined ? [[entry.package, entry.module]] : [])))
   const switches = new Map<string, Setting<boolean>>()
   for (const { module, on } of entries) if (module.plugin) switches.set(module.name, enabledSetting(module.name, module.plugin.scope, on ?? false))
   const store = chainStore(
@@ -105,7 +115,8 @@ export function createHooks(entries: readonly DistributionEntry[], opts: HooksOp
     if (!module) return false
     const setting = switches.get(name)
     if (!setting) return true
-    if (setting.scope === 'project' && project === undefined) return false
+    // Kept per project, where no project is named (a session with no project): no project keeps a row for it, so it is as the distribution starts it.
+    if (setting.scope === 'project' && project === undefined) return setting.default
     try {
       return await settings.get(setting, project)
     } catch (error) {
@@ -164,6 +175,7 @@ export function createHooks(entries: readonly DistributionEntry[], opts: HooksOp
     store,
     settings,
     module: name => byName.get(name),
+    ofPackage: name => byPackage.get(name),
     enabled,
     async setEnabled(name, on, project) {
       const setting = switches.get(name)
@@ -172,9 +184,9 @@ export function createHooks(entries: readonly DistributionEntry[], opts: HooksOp
     },
     steps,
     run: async ctx => runPipeline(await steps({ ...(ctx.project ? { project: ctx.project } : {}), options: ctx.options }), ctx),
-    async skills(args) {
+    async skills(args, opts = {}) {
       const given: { module: string; item: GivenSkill }[] = []
-      for (const module of await onModules(args.project, args.options)) {
+      for (const module of opts.every ? modules : await onModules(args.project, args.options)) {
         const hook = module.hooks['run.skills']
         if (!hook) continue
         try {
@@ -326,7 +338,7 @@ export async function loadModules(
       if (typeof module !== 'object' || module === null || typeof (module as { name?: unknown }).name !== 'string') {
         throw new Error(`${name}/module default-exports no module: export default defineModule({ ... })`)
       }
-      return on === undefined ? { module: module as ModuleDefinition } : { module: module as ModuleDefinition, on }
+      return { module: module as ModuleDefinition, package: name, ...(on !== undefined ? { on } : {}) }
     }),
   )
   return entries.filter(entry => entry !== undefined)

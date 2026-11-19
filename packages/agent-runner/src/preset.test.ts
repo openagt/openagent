@@ -2,14 +2,15 @@ import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { PRESET_ENV, PROJECT_SKILLS_ENV, SKILLS_OFF_ENV, SKILLS_ON_ENV } from '@openagt/agent-data'
+import { createRequire } from 'node:module'
+import { dirname, join } from 'node:path'
+import { PLUGINS_WITHOUT_ENV, PRESET_ENV, PROJECT_SKILLS_ENV } from '@openagt/agent-data'
 import { PRESETS, chainStore, settingsIn } from '@openagt/hooks'
 import { memorySettings } from '@openagt/hooks/testing'
 import { accountsPath, addAccount } from '@openagt/skill-account-rotation'
-import { anySkillPick, presetNamed, runPreset, skillPicksNamed } from './preset.js'
+import { anyPick, presetNamed, runPreset, sessionPicksNamed } from './preset.js'
 import { accountsOn, presetLoginFor } from './runner.js'
-import { git, handDownBasicSkills, removeRepo, testRepo } from './test-repo.js'
+import { git, handDownDistribution, removeRepo, testRepo } from './test-repo.js'
 
 test('the preset a run is on is read off the environment by its id; Default is none; a word that is no id is refused', () => {
   assert.equal(presetNamed({}), undefined)
@@ -19,14 +20,15 @@ test('the preset a run is on is read off the environment by its id; Default is n
   assert.throws(() => presetNamed({ [PRESET_ENV]: 'Not An Id' }), /no preset id/)
 })
 
-test('a session\'s picks of skills are read off the environment: names on, names off, which of the project\'s stay; nothing set is no pick; a word that is no skill name is refused', () => {
-  assert.deepEqual(skillPicksNamed({}), {})
-  assert.equal(anySkillPick(skillPicksNamed({ [PROJECT_SKILLS_ENV]: ' ', [SKILLS_ON_ENV]: ' ' })), false, 'blank is nothing said')
-  assert.deepEqual(skillPicksNamed({ [PROJECT_SKILLS_ENV]: 'all' }), { project: 'all' }, 'every project skill, over the preset\'s')
-  assert.deepEqual(skillPicksNamed({ [SKILLS_ON_ENV]: 'review, tickets,review', [SKILLS_OFF_ENV]: 'github', [PROJECT_SKILLS_ENV]: 'none' }), { on: ['review', 'tickets'], off: ['github'], project: 'none' })
-  assert.deepEqual(skillPicksNamed({ [PROJECT_SKILLS_ENV]: 'deploy,lint' }), { project: ['deploy', 'lint'] })
-  assert.throws(() => skillPicksNamed({ [SKILLS_OFF_ENV]: 'Not A Skill' }), /OPENAGENT_SKILLS_OFF is no list of skill names: Not A Skill/)
-  assert.throws(() => skillPicksNamed({ [PROJECT_SKILLS_ENV]: '../x' }), /OPENAGENT_PROJECT_SKILLS is no list/)
+test("a session's picks are read off the environment: the plugins it goes without, which of the project's skills stay; nothing set is no pick, but the plugins set to nothing are none of them; a word that is no plugin's or skill's name is refused", () => {
+  assert.deepEqual(sessionPicksNamed({}), {})
+  assert.equal(anyPick(sessionPicksNamed({ [PROJECT_SKILLS_ENV]: ' ' })), false, 'blank is nothing said')
+  assert.deepEqual(sessionPicksNamed({ [PLUGINS_WITHOUT_ENV]: '' }), { without: [] }, "the plugins set to nothing: none of them, over the preset's")
+  assert.deepEqual(sessionPicksNamed({ [PROJECT_SKILLS_ENV]: 'all' }), { project: 'all' }, "every project skill, over the preset's")
+  assert.deepEqual(sessionPicksNamed({ [PLUGINS_WITHOUT_ENV]: 'ask, tickets,ask', [PROJECT_SKILLS_ENV]: 'none' }), { without: ['ask', 'tickets'], project: 'none' })
+  assert.deepEqual(sessionPicksNamed({ [PROJECT_SKILLS_ENV]: 'deploy,lint' }), { project: ['deploy', 'lint'] })
+  assert.throws(() => sessionPicksNamed({ [PLUGINS_WITHOUT_ENV]: 'Not A Plugin' }), /OPENAGENT_PLUGINS_WITHOUT is no list of plugin names: Not A Plugin/)
+  assert.throws(() => sessionPicksNamed({ [PROJECT_SKILLS_ENV]: '../x' }), /OPENAGENT_PROJECT_SKILLS is no list of skill names/)
 })
 
 test('the preset named is read through the store; one this computer does not have is Default, said; none named is Default; a store that cannot be read has only Default', async () => {
@@ -59,11 +61,11 @@ test('a preset\'s Claude and Codex accounts apply where this computer has them: 
   }
 })
 
-handDownBasicSkills()
-
-test('a preset\'s GitHub account applies where the project has a git host; in a session with no project, or a project on another host, the run goes as no account', async () => {
+test("a preset's GitHub account applies where the project has a git host; in a session with no project, or a project on another host, the run goes as no account", async () => {
   const repo = await testRepo()
   const home = await mkdtemp(join(tmpdir(), 'oa-sessions-'))
+  // The git host is the distribution's github, as OpenAgent hands its distribution down to a run.
+  const handBack = await handDownDistribution(home, { '@openagt/skill-github': dirname(createRequire(import.meta.url).resolve('@openagt/skill-github/package.json')) })
   try {
     await git(['remote', 'set-url', 'origin', 'git@github.com:someone/project.git'], repo)
     assert.equal(await presetLoginFor(repo, { options: { github: { account: 'octo-agent' } } }), 'octo-agent')
@@ -72,6 +74,7 @@ test('a preset\'s GitHub account applies where the project has a git host; in a 
     assert.equal(await presetLoginFor(repo, { options: { github: { account: 'octo-agent' } } }), undefined, 'not on GitHub')
     assert.equal(await presetLoginFor(home, { options: { github: { account: 'octo-agent' } } }), undefined, 'no project at all')
   } finally {
+    handBack()
     await removeRepo(repo)
     await rm(home, { recursive: true, force: true })
   }

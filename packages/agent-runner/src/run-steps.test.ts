@@ -11,11 +11,9 @@ import { findRun } from '@openagt/skill-logs'
 import { resumeRun, runCommand } from './run.js'
 import { STOPPED_DETAIL } from './session.js'
 import { BUILT_IN_MODULES } from './steps/modules.js'
-import { git, handDownBasicSkills, readUntimedDiary, removeRepo, testRepo } from './test-repo.js'
+import { git, readUntimedDiary, removeRepo, testRepo } from './test-repo.js'
 import { NOW, committingDriver, fakeGithub, testModules } from './run-test-support.js'
 
-// A run as OpenAgent starts it: with the basic skills handed down.
-handDownBasicSkills()
 
 // A run is one pipeline of its modules' steps (`steps/`): what prepares it, the agent's turns, and
 // what finishes it whatever its end.

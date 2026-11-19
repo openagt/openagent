@@ -1,7 +1,7 @@
 {
   "name": "@openagt/skill-plan-tickets",
   "version": "0.1.0",
-  "description": "The plan-tickets command for coding agents: queue a plan for the open tickets that have none or an outdated one, unattended. A skill file only, no code.",
+  "description": "The plan-tickets command for coding agents: queue a plan for the open tickets that have none or an outdated one, unattended. A skill file and the plugin module that gives it to runs.",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -12,8 +12,13 @@
     "access": "public"
   },
   "files": [
-    "SKILL.md"
+    "SKILL.md",
+    "module.mjs"
   ],
+  "exports": {
+    "./module": "./module.mjs",
+    "./package.json": "./package.json"
+  },
   "scripts": {
     "build": "cp ../../skills/plan-tickets/SKILL.md SKILL.md",
     "prepack": "cp ../../skills/plan-tickets/SKILL.md SKILL.md",

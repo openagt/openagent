@@ -20,6 +20,8 @@ export const SKILLS_DIRS = ['.claude/skills', '.agents/skills'] as const
 export interface PackageManifest {
   name?: unknown
   version?: unknown
+  /** What the package says it is, in a sentence or two. */
+  description?: unknown
   exports?: unknown
   bin?: unknown
   openagent?: unknown

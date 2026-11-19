@@ -7,8 +7,7 @@ import { ClaudeCodeDriver, claudeCodeReady } from '@openagt/agent-driver-claude'
 import { CodexDriver, codexReady } from '@openagt/agent-driver-codex'
 import { findRun } from '@openagt/skill-logs'
 import { readPersonal } from './config.js'
-import { runPreset, type SkillPicks } from './preset.js'
-import { basicSkills } from './basic-skills.js'
+import { runPreset, type SessionPicks } from './preset.js'
 import { gitHostCommand, gitHostEnv } from './git-host.js'
 import { namedAtStart, resumeRun, runCommand, runIdFrom, type RunOutcome, type RunRequest } from './run.js'
 import { askName } from './title.js'
@@ -205,8 +204,8 @@ export interface ProjectRun extends RunRequest {
   gitAccount?: string
   /** The preset the run is on, by its id; Default when absent. */
   preset?: string
-  /** The session's picks of skills. */
-  skills?: SkillPicks
+  /** The session's picks: the plugins the run goes without, the project's skills it gets. */
+  picks?: SessionPicks
   log?: (line: string) => void
 }
 
@@ -219,7 +218,7 @@ export interface ProjectRun extends RunRequest {
 export async function runProject(repo: string, opts: ProjectRun, deps: { modules?: readonly DistributionEntry[] } = {}): Promise<RunOutcome> {
   const modules = deps.modules ?? (await distributionModules())
   // What the run is asked, its start, its preset and its log go on to it as they are; the rest is read here.
-  const { id: given, mark, driver = 'claude-code', gitAccount, skills: picks = {}, ...rest } = opts
+  const { id: given, mark, driver = 'claude-code', gitAccount, picks = {}, ...rest } = opts
   const id = given ?? runIdFrom(new Date().toISOString())
   const log = rest.log ?? (() => {})
   const setup = await readPersonal(repo, log)
@@ -240,10 +239,8 @@ export async function runProject(repo: string, opts: ProjectRun, deps: { modules
     marked,
     driver: driverFor(driver, id, setup, accounts),
     presetOptions: preset.options,
-    skills: (where, agent) => basicSkills(where, agent, picks),
     ...(asked !== undefined ? { gitAccount: asked } : {}),
-    ...(picks.on !== undefined ? { skillsOn: picks.on } : {}),
-    ...(picks.off !== undefined ? { skillsOff: picks.off } : {}),
+    ...(picks.without !== undefined ? { pluginsWithout: picks.without } : {}),
     ...(picks.project !== undefined ? { projectSkills: picks.project } : {}),
   })
 }
@@ -266,9 +263,8 @@ export async function resumeProject(
   const log = opts.log ?? (() => {})
   const setup = await readPersonal(repo, log)
   const previous = card ? runnerMark(card) : undefined
-  // The preset the record names, as it stands now, under the session's picks again: its accounts on this computer.
+  // The preset the record names, as it stands now: its accounts on this computer. The session's picks are the record's (`run.ts` optionsOf).
   const preset = await runPreset(previous?.preset, createHooks(modules).settings, log)
-  const picks: SkillPicks = { ...(previous?.skillsOn !== undefined ? { on: previous.skillsOn } : {}), ...(previous?.skillsOff !== undefined ? { off: previous.skillsOff } : {}), ...(previous?.projectSkills !== undefined ? { project: previous.projectSkills } : {}) }
   const accounts = accountsOn(preset)
   return resumeRun(repo, {
     id: opts.id,
@@ -281,7 +277,6 @@ export async function resumeProject(
     ...(opts.publish !== undefined ? { publish: publishChange(opts.publish) ?? null } : {}),
     driver: (deps.driverFor ?? driverFor)(recorded, opts.id, setup, accounts),
     presetOptions: preset.options,
-    skills: (where, agent) => basicSkills(where, agent, picks),
     ...(opts.log ? { log: opts.log } : {}),
   })
 }

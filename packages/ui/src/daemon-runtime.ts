@@ -2,7 +2,7 @@ import { isAbsolute, join, resolve, sep } from 'node:path'
 import { hostname } from 'node:os'
 import { stat } from 'node:fs/promises'
 import { isDriverName, type ReadyNaming } from '@openagt/agent-runner'
-import { isPresetId, type RunHost, type RunOptions, type RunRequest } from '@openagt/hooks'
+import { isPresetId, MODULE_NAME, type RunHost, type RunOptions, type RunRequest } from '@openagt/hooks'
 import { sessionRepos } from '@openagt/skill-branches'
 import { nameStarted } from './started-names.js'
 import { findCheckout, fromDiaryLine, isPidAlive, isRunId, projectBranches, readLiveMetas, resolveAgentDiary, type AgentMeta, type AnyDiaryLine } from './store/index.js'
@@ -85,9 +85,9 @@ function refusedPicks(options: StartAgentOptions, noProject: boolean): string | 
   // A login is one word.
   if (options.account !== undefined && !(typeof options.account === 'string' && /^\S+$/.test(options.account))) return 'An account is named by its login.'
   if (options.preset !== undefined && !isPresetId(options.preset)) return 'A preset is named by its id.'
-  // The picks of skills are lists of names.
+  // The picks are lists of names.
   const skillList = (value: unknown): value is string[] => Array.isArray(value) && value.length > 0 && value.every(isSkillName)
-  if ((options.skillsOn !== undefined && !skillList(options.skillsOn)) || (options.skillsOff !== undefined && !skillList(options.skillsOff))) return 'Skills are named by their names.'
+  if (options.pluginsWithout !== undefined && !(Array.isArray(options.pluginsWithout) && options.pluginsWithout.every(name => typeof name === 'string' && MODULE_NAME.test(name)))) return 'Plugins are named by their names.'
   if (options.projectSkills !== undefined && options.projectSkills !== 'all' && options.projectSkills !== 'none' && !skillList(options.projectSkills)) return 'Project skills are all, none, or named by their names.'
   if (!noProject && options.repos !== undefined) return 'Repos are added to a session with no project: a project works in its own checkout.'
   // A repo is a whole path, and the run's process is handed them one per line.
@@ -539,17 +539,13 @@ function runOptionsOf(options: StartAgentOptions, publish: RunOptions['publish']
   }
   const branches = { ...(options.base !== undefined ? { base: options.base } : {}), ...(repos !== undefined && repos.length > 0 ? { repos } : {}) }
   const github = { ...(options.prBase !== undefined ? { prBase: options.prBase } : {}), ...(options.account !== undefined ? { account: options.account } : {}) }
-  const skills = {
-    ...(options.skillsOn !== undefined ? { on: options.skillsOn } : {}),
-    ...(options.skillsOff !== undefined ? { off: options.skillsOff } : {}),
-    ...(options.projectSkills !== undefined ? { project: options.projectSkills } : {}),
-  }
   return {
     ...(Object.keys(agentDriver).length > 0 ? { 'agent-driver': agentDriver } : {}),
     ...(publish !== undefined ? { publish } : {}),
     ...(Object.keys(branches).length > 0 ? { 'git-branches': branches } : {}),
     ...(Object.keys(github).length > 0 ? { github } : {}),
-    ...(Object.keys(skills).length > 0 ? { skills } : {}),
+    ...(options.projectSkills !== undefined ? { skills: { project: options.projectSkills } } : {}),
+    ...(options.pluginsWithout !== undefined ? { plugins: { without: options.pluginsWithout } } : {}),
     ...(options.preset !== undefined ? { presets: { preset: options.preset } } : {}),
   }
 }

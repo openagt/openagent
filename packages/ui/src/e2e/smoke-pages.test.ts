@@ -28,7 +28,7 @@ test("Settings › Skills, its package's entry, lists the project's own skills, 
     const list = page.getByRole('dialog').getByRole('list', { name: `Skills of ${demo().project.name}` })
     await list.waitFor()
     // The skills the demo's project committed, each on the branch its runs start from.
-    for (const name of ['logs', 'queue', 'scheduler', 'tickets']) await list.getByRole('listitem').filter({ hasText: name }).first().waitFor()
+    for (const name of ['deploy', 'release-notes']) await list.getByRole('listitem').filter({ hasText: name }).first().waitFor()
     assert.equal(await list.getByText(/^Not on .* yet$/).count(), 0)
     assert.equal(await page.getByRole('dialog').getByRole('checkbox').count(), 0)
   })

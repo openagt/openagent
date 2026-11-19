@@ -1,10 +1,10 @@
-import { PRESET_ENV, Refused, UsageError, errorMessage, inRepo, nodeGitRunner, parseCommandArgs, runCommandLine, runPackageCommand, sessionsHomeOf, PROJECT_SKILLS_ENV, SKILLS_OFF_ENV, SKILLS_ON_ENV, helpRows, helpText, type Command, type GitRunner } from '@openagt/agent-data'
-import { liftSkillRules, projectRoot, sessionRepos } from '@openagt/skill-branches'
+import { PLUGINS_WITHOUT_ENV, PRESET_ENV, Refused, UsageError, errorMessage, inRepo, nodeGitRunner, parseCommandArgs, runCommandLine, runPackageCommand, sessionsHomeOf, PROJECT_SKILLS_ENV, helpRows, helpText, type Command, type GitRunner } from '@openagt/agent-data'
+import { createHooks, loadHandedDown } from '@openagt/hooks'
+import { liftSkillRules, projectRoot, sessionRepos, skillLink } from '@openagt/skill-branches'
 import { DRIVER_NAMES, GIT_ACCOUNT_ENV, detachResume, detachRun, isDriverName, presetLoginFor, readyToRun, resumeProject, runProject, type DriverName, type SpawnedResume } from './runner.js'
-import type { RunOutcome, RunRequest } from './run.js'
-import { anySkillPick, handedDownSettings, presetNamed, runPreset, skillPicksNamed } from './preset.js'
+import { projectOf, type RunOutcome, type RunRequest } from './run.js'
+import { anyPick, handedDownSettings, presetNamed, runPreset, sessionPicksNamed } from './preset.js'
 import { cleanup } from './cleanup.js'
-import { everyBasicSkill } from './basic-skills.js'
 import { isPublish, NO_PUBLISH, PUBLISH_LEVELS } from './records.js'
 import { gitHostCommand } from './git-host.js'
 
@@ -37,9 +37,9 @@ ${helpRows([
 
 ${helpText(`In the sessions home (~/.openagent-sessions, or $XDG_CONFIG_HOME/openagent-sessions) a run has no project: it works in a folder of its own there, <home>/<id>, with no git, kept when it ends; its record is kept with the other sessions' in the personal folder, and --publish, --base, --pr-base and --branch are refused. Each repo given with --repos is a clone in it, <home>/<id>/<repo's folder name>, on a new branch agent-<id>, its origin the repo's own (none when the repo has none); the run's record names them, and a resumed run goes on with the same ones. --repos is refused in a project.`)}
 
-${helpText(`A run is on a preset (a name and a saved set of run options, kept with the person in their folder), the one OPENAGENT_PRESET names, else Default; its options are the run's where the session picked none: at the git host its login, unless OPENAGENT_GIT_ACCOUNT names the pick for that session, on Claude and Codex the accounts it names that this computer has, and the project's own skills it names. The record keeps the preset and the login, and a resumed run goes on with them, on the preset as it stands then. An account this computer cannot use at the git host stops the run before it starts, naming it.`)}
+${helpText(`A run is on a preset (a name and a saved set of run options, kept with the person in their folder), the one OPENAGENT_PRESET names, else Default; its options are the run's where the session picked none: at the git host its login, unless OPENAGENT_GIT_ACCOUNT names the pick for that session, on Claude and Codex the accounts it names that this computer has, the plugins it goes without and the project's own skills it names. The record keeps the preset and the login, and a resumed run goes on with them, on the preset as it stands then. An account this computer cannot use at the git host stops the run before it starts, naming it.`)}
 
-${helpText(`A session's picks of skills, for that run alone: OPENAGENT_SKILLS_ON names skills it gets on top of the ones every run gets, and OPENAGENT_SKILLS_OFF ones of those it does not get, each names separated by commas; OPENAGENT_PROJECT_SKILLS says which of the project's own skills (.agents/skills/<name>, .claude/skills/<name>) stay in its checkout: all, none, or their names separated by commas, the others left out of that checkout by git's sparse checkout, nothing committed; unset, its preset's, and all when that names none. The record keeps the picks, and a resumed run goes on with them.`)}
+${helpText(`A session's picks, for that run alone: OPENAGENT_PLUGINS_WITHOUT names enabled plugins it goes without, their names separated by commas, so it gets none of their skills and none of their steps: set to nothing, none of them; unset, its preset's; OPENAGENT_PROJECT_SKILLS says which of the project's own skills (.agents/skills/<name>, .claude/skills/<name>) stay in its checkout: all, none, or their names separated by commas, the others left out of that checkout by git's sparse checkout, nothing committed; unset, its preset's, and all when that names none. The record keeps the picks, and a resumed run goes on with them.`)}
 
 ${helpText(`When a run ends waiting on a question, or ends done with a pull request it did not have, the \`ended:\` line in the project's .agent-runner/config.yml runs, if there is one, in the project's root, with MESSAGE (one line for a person), RUN_ID, STATUS, QUESTION and PR_URL in its environment. The file is this machine's: keep it out of git (this tool hides .agent-runner/ from git once a run has started here). A run's coding agent loads the person's own setup, as when started by hand; in the same file, each part is left out with its own line under \`personal:\`, so a run does the same job on every machine:`)}
 ${helpRows([
@@ -131,10 +131,10 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
     // The preset the run is on, by its id, in the environment too ({@link PRESET_ENV}); a resumed run goes on with the one its record names.
     const preset = fromEnvironment(presetNamed)
     if (process.env[PRESET_ENV]?.trim() && values.resume !== undefined) throw new UsageError(`${PRESET_ENV} is for a new run: a run continues on the preset its record names`)
-    // The session's picks of skills, in the environment the same way; a resumed run goes on with the ones its record keeps.
-    const skills = fromEnvironment(skillPicksNamed)
-    if (anySkillPick(skills) && values.resume !== undefined) throw new UsageError(`${SKILLS_ON_ENV}, ${SKILLS_OFF_ENV} and ${PROJECT_SKILLS_ENV} are for a new run: a run continues with the skills its record names`)
-    if (skills.project !== undefined && noProject) throw new UsageError(`${PROJECT_SKILLS_ENV} is for a run in a project: a session with no project has no project skills`)
+    // The session's picks, in the environment the same way; a resumed run goes on with the ones its record keeps.
+    const picks = fromEnvironment(sessionPicksNamed)
+    if (anyPick(picks) && values.resume !== undefined) throw new UsageError(`${PLUGINS_WITHOUT_ENV} and ${PROJECT_SKILLS_ENV} are for a new run: a run continues with the picks its record names`)
+    if (picks.project !== undefined && noProject) throw new UsageError(`${PROJECT_SKILLS_ENV} is for a run in a project: a session with no project has no project skills`)
     // A person's run is refused before it spends a checkout when its coding agent cannot start;
     // a scheduler asks the same before it marks, and a resumed run's agent already ran once here.
     if (values.resume === undefined && values.id === undefined) {
@@ -179,7 +179,7 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
     return answered(
       await runProject(repo, {
         ...asked,
-        ...(anySkillPick(skills) ? { skills } : {}),
+        ...(anyPick(picks) ? { picks } : {}),
         ...(values.id !== undefined ? { id: values.id } : {}),
         ...(values.started !== undefined ? { startedAt: new Date(values.started).toISOString() } : {}),
         ...(values.mark ? { mark: true } : {}),
@@ -214,8 +214,10 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
     const repo = await project(io.cwd, git)
     const outcome = await cleanup(repo, { git })
     if (outcome.ok) {
-      // The rules that hid the basic skills' links: this tool had them linked, so it takes them back.
-      await liftSkillRules(repo, await everyBasicSkill(), git)
+      // The rules that hid the links of the skills the runs here got: whichever modules were on for them, every module's.
+      const project = await projectOf(repo, git)
+      const given = await createHooks((await loadHandedDown()) ?? []).skills(project ? { project } : {}, { every: true })
+      await liftSkillRules(repo, await Promise.all(given.map(skillLink)), git)
       return outcome
     }
     throw new Refused(outcome, `a run is still working here (${outcome.runs.join(', ')}): stop it first`)

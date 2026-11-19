@@ -15,9 +15,14 @@ openagent          # serves the dashboard at http://127.0.0.1:4200
 ```
 
 This package is OpenAgent as it ships: the packages it runs, listed in `src/distribution.ts` with
-whose each is, and the `openagent` command, which serves the dashboard
-([`@openagt/ui`](../ui/README.md)) with them and hands every run the skills the list gives every
-run. A project installs none of them.
+whose each is and which plugins start on, and the `openagent` command, which serves the dashboard
+([`@openagt/ui`](../ui/README.md)) with them. A project installs none of them.
+
+The core modules are always on. A plugin has an Enabled row each, switched in **Settings ›
+Plugins**: `ask` starts on, every other plugin starts off (the tickets, the queue, the logs, the
+browser, the scheduler, Discord and the commands that move a ticket to work). A run gets the
+skills of the core modules (github's on a GitHub project) and of the plugins on in its project,
+linked into its checkout; nothing is written into the project.
 
 ## The command is three options and no verbs
 
@@ -60,26 +65,25 @@ A session with no project may have repos as context, picked with **Add repo** be
 The session's preset (the **Preset** menu under the box) and its GitHub account (the control at
 the right) go with the Start: `agent-runner` hands them to the run's process in its environment,
 `OPENAGENT_PRESET` and `OPENAGENT_GIT_ACCOUNT`. A preset is a name and a saved set of run options
-(its accounts, and the project skills its runs get), kept with the person and edited on the
-Presets page; the run reads it as it starts, and again when it resumes.
+(its accounts, the plugins its runs go without, and the project skills they get), kept with the
+person and edited on the Presets page; the run reads it as it starts, and again when it resumes.
 
 The **Skills** menu under the box picks, for this session alone, which skills the run gets: the
-ones every run gets ticked, any other carried skill tickable (handed down beside them,
-`OPENAGENT_SKILL_CATALOGUE`), and which of the project's own skills stay in its checkout. The
-picks go the same way, in `OPENAGENT_SKILLS_ON`, `OPENAGENT_SKILLS_OFF` (names, comma-separated)
-and `OPENAGENT_PROJECT_SKILLS` (`all`, `none` or names; unset, the preset's): `agent-runner` links
-the skills every run gets less the ones off plus the ones on, and leaves the project skills not
-picked out of the run's checkout with git's sparse checkout, nothing committed. The record keeps
-the picks, and a resume goes on with them.
+plugins on in the project, each ticked, tickable off, and which of the project's own skills stay
+in its checkout, both as the preset has them until the session picks. The picks go the same way,
+in `OPENAGENT_PLUGINS_WITHOUT` (names, comma-separated; set to nothing, none of them) and
+`OPENAGENT_PROJECT_SKILLS` (`all`, `none` or names), the preset's where one is unset: the run
+gets none of the skills or steps of a plugin it goes without, and the project skills not picked
+are left out of its checkout with git's sparse checkout, nothing committed. The record keeps the
+picks, and a resume goes on with them.
 
 Before a Start, the launcher asks the host's check, for the picked coding agent: its
 `problems` (a coding agent not installed or logged out) are said in red and its `warnings` in
 amber, each line naming its own fix.
 
 A project's `.openagent/hooks.yml` holds the shell lines that run as the dashboard opens and as
-it closes: the scheduler's, which ticking its skill writes (`npx @openagt/skill-scheduler@0.1
-init` in the project writes them too), until the scheduler starts and stops with the app as a
-module of its own. A line finds its tools in the packages the dashboard brings first, then in the
+it closes: the scheduler's, which `npx @openagt/skill-scheduler@0.1 init` in the project writes,
+until the scheduler starts and stops with the app as a module of its own. A line finds its tools in the packages the dashboard brings first, then in the
 project's installed ones; nothing is downloaded to run a line. The file's keys are `open` and
 `close`; any other key is refused and the whole file ignored.
 

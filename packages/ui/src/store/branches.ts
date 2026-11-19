@@ -349,7 +349,7 @@ export function sessionFolders(home: string): BranchesSource {
 /**
  * The production {@link BranchesReader}: the project's provider, looked up among the packages the project has (`distribution-packages.ts`),
  * one source per project kept while the same command provides — so the cache holds across the
- * many reads of one poll, and a project whose provider changes (a skill picked or dropped) is read
+ * many reads of one poll, and a project whose provider changes (a plugin switched on or off) is read
  * the new way within {@link CACHE_MS}. `changed(root)` forgets that project's reads, so the next read runs
  * the command again: a run just started there, or a module's command just ran, and a checkout may
  * have come or gone. `changed(root, pkg)` forgets them only when that package is the one providing.

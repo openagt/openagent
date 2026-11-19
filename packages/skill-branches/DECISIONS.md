@@ -222,5 +222,5 @@ ending.
   worktree alone, everything else in, set right after the worktree is added and again when a
   kept checkout is relinked. The index keeps the paths, so the checkout is clean and a commit
   from it changes nothing about them, and the project's other checkouts have them. What a
-  caller leaves out is its own business: a run's tool leaves out the project skills a session
-  did not pick. Picked over deleting the files, which the agent's next commit would carry.
+  caller leaves out is its own business: the skills module leaves out the project skills a
+  session did not pick. Picked over deleting the files, which the agent's next commit would carry.

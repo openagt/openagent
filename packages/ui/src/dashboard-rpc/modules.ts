@@ -1,6 +1,6 @@
 import { homedir } from 'node:os'
 import { contextProjects, contextRemote, resolveProjectPath } from './context.js'
-import { findBroughtModule, findComputerModule, findProjectModule, readComputerModules, readProjectPages, runModuleCommand as runCommand, type ModuleCommandResult } from '../project-modules.js'
+import { findBroughtModule, findComputerModule, findProjectModule, readComputerModules, readProjectModules, runModuleCommand as runCommand, type ModuleCommandResult } from '../project-modules.js'
 import { broughtModuleUrl, computerModuleUrl, moduleUrl, versionedModuleUrl } from '../dashboard/module-serve.js'
 import { providedDataChanged } from '../store/provided.js'
 import { relayOr } from './relay-agent.js'
@@ -40,7 +40,7 @@ export async function onModules(): Promise<DashboardModule[]> {
     byPackage.set(module.package, { package: module.package, url: await versionedModuleUrl(computerModuleUrl(module), module), projects: [], computer: true })
   }
   for (const project of await contextProjects().list()) {
-    const modules = await readProjectPages(project.path).catch(() => [])
+    const modules = await readProjectModules(project.path).catch(() => [])
     for (const module of modules) {
       const known = byPackage.get(module.package)
       if (known) known.projects.push(project.id)

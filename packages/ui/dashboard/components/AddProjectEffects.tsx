@@ -16,9 +16,9 @@ export function AddProjectEffects() {
           choose to share them
         </li>
         <li>
-          gives each agent four basic skills in its own copy, hidden from git: <code className={code}>branches</code>,{' '}
-          <code className={code}>logs</code>, <code className={code}>question</code>, and <code className={code}>github</code> when the
-          project is on GitHub
+          gives each agent its skills in its own copy, hidden from git: <code className={code}>branches</code>,{' '}
+          <code className={code}>github</code> when the project is on GitHub, and those of the plugins on in it,{' '}
+          <code className={code}>ask</code> to start with
         </li>
       </ul>
       <p>Agents work in their own copies, on their own branches. Your files and your branch stay as they are.</p>

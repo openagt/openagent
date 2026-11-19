@@ -1,3 +1,4 @@
+import { MODULE_NAME } from './module.js'
 import type { RunOptions } from './run.js'
 import { defineSetting } from './settings.js'
 
@@ -128,6 +129,7 @@ function presetFrom(value: unknown): Preset | undefined {
   const codex = names(slice('agent-driver')['codex'])
   const project = slice('skills')['project']
   const skills = project === 'none' ? 'none' : names(project)
+  const without = names(slice('plugins')['without'])?.filter(one => MODULE_NAME.test(one))
   return {
     id,
     name: name.trim(),
@@ -135,6 +137,7 @@ function presetFrom(value: unknown): Preset | undefined {
       ...(account !== undefined ? { github: { account } } : {}),
       ...(claude || codex ? { 'agent-driver': { ...(claude ? { claude } : {}), ...(codex ? { codex } : {}) } } : {}),
       ...(skills !== undefined ? { skills: { project: skills } } : {}),
+      ...(without !== undefined && without.length > 0 ? { plugins: { without } } : {}),
     },
   }
 }

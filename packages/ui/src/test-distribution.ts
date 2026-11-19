@@ -7,33 +7,34 @@ import type { DashboardDistribution, DashboardPackage } from './distribution-pac
 /**
  * The packages `@openagt/dashboard`'s distribution lists, but agent-runner, whose module a demo
  * gives a run host of its own: what this package's demo and tests run, resolved from this
- * package's install (its devDependencies), with whose each is as the dashboard says it.
+ * package's install (its devDependencies), with whose each is, and which plugin starts on, as the
+ * dashboard says it.
  */
 export const DASHBOARD_PACKAGES: DashboardDistribution = [
   { package: '@openagt/store-filesystem' },
   { package: '@openagt/store-git-repository' },
   { package: '@openagt/skill-branches' },
-  { package: '@openagt/skill-github', skill: 'every run' },
+  { package: '@openagt/skill-github' },
   { package: '@openagt/skills' },
   { package: '@openagt/dashboard-changes' },
   { package: '@openagt/dashboard-files' },
   { package: '@openagt/ui-card-waiting', for: 'computer' },
-  { package: '@openagt/skill-logs', pages: 'picked' },
   { package: '@openagt/user-info', for: 'computer' },
   { package: '@openagt/dashboard-devices', for: 'computer' },
   { package: '@openagt/skill-account-rotation', for: 'computer' },
-  { package: '@openagt/skill-tickets', for: 'picked' },
-  { package: '@openagt/skill-queue', for: 'picked' },
-  { package: '@openagt/skill-browser', for: 'picked' },
-  { package: '@openagt/skill-scheduler', for: 'picked' },
-  { package: '@openagt/skill-ask', for: 'picked', skill: 'every run' },
-  { package: '@openagt/skill-discord', for: 'picked' },
-  { package: '@openagt/skill-plan', for: 'picked' },
-  { package: '@openagt/skill-plan-tickets', for: 'picked' },
-  { package: '@openagt/skill-reply', for: 'picked' },
-  { package: '@openagt/skill-triage', for: 'picked' },
-  { package: '@openagt/skill-update-tickets', for: 'picked' },
-  { package: '@openagt/skill-work-queue', for: 'picked' },
+  { package: '@openagt/skill-ask', on: true },
+  { package: '@openagt/skill-logs' },
+  { package: '@openagt/skill-tickets' },
+  { package: '@openagt/skill-queue' },
+  { package: '@openagt/skill-browser' },
+  { package: '@openagt/skill-scheduler' },
+  { package: '@openagt/skill-discord' },
+  { package: '@openagt/skill-plan' },
+  { package: '@openagt/skill-plan-tickets' },
+  { package: '@openagt/skill-reply' },
+  { package: '@openagt/skill-triage' },
+  { package: '@openagt/skill-update-tickets' },
+  { package: '@openagt/skill-work-queue' },
 ]
 
 /** The tests' distribution: `@openagt/dashboard`'s packages, agent-runner's among them. */
@@ -53,7 +54,7 @@ export function handDownTestDistribution(env: NodeJS.ProcessEnv = process.env): 
 
 /** The tests' distribution's packages, less the ones named: for a test whose own package stands in for one of them. */
 export function testPackagesBut(...left: readonly string[]): DashboardPackage[] {
-  return TEST_DISTRIBUTION.flatMap(item => ('package' in item && !left.includes(item.package) ? [item] : []))
+  return TEST_DISTRIBUTION.flatMap(item => (!('module' in item) && !left.includes(item.package) ? [item] : []))
 }
 
 /**

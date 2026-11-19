@@ -4,16 +4,18 @@ import { execFileSync } from 'node:child_process'
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
+import { projectId } from '@openagt/agent-data'
 import { DISTRIBUTION_ENV } from '@openagt/hooks'
 import { computerPackages, distributionBinDirs, distributionPackages, lookupProvided, packagesOf, providedCommand, runCleanups, type DashboardPackage } from './distribution-packages.js'
-import { readComputerModules, readProjectModules, readProjectPages } from './project-modules.js'
+import { distributionHooks, projectRefAt } from './distribution-hooks.js'
+import { readComputerModules, readProjectModules } from './project-modules.js'
 import { providedGitHost } from './store/git-host.js'
 import TEST_DISTRIBUTION, { handDownTestDistribution } from './test-distribution.js'
 
 handDownTestDistribution()
 
 /** The packages the tests' distribution lists, by name, in its order. */
-const LISTED = TEST_DISTRIBUTION.flatMap(item => ('package' in item ? [item.package] : []))
+const LISTED = TEST_DISTRIBUTION.flatMap(item => ('module' in item ? [] : [item.package]))
 
 /** A throwaway folder, its path with symlinks resolved. */
 const scratch = async (name: string): Promise<string> => realpath(await mkdtemp(join(tmpdir(), `openagent-${name}-`)))
@@ -23,16 +25,15 @@ const scratch = async (name: string): Promise<string> => realpath(await mkdtemp(
  * `node_modules`, with a command (`bin/<name>`) running `script` and the package.json `fields`.
  * Handed down for the time of `run`.
  */
-async function withPackages(packages: { entry: DashboardPackage; fields?: Record<string, unknown>; script?: string; skill?: string }[], run: () => Promise<void>): Promise<void> {
+async function withPackages(packages: { entry: DashboardPackage; fields?: Record<string, unknown>; script?: string }[], run: () => Promise<void>): Promise<void> {
   const dir = await scratch('distribution')
   const before = process.env[DISTRIBUTION_ENV]
   try {
-    for (const { entry, fields = {}, script = '', skill } of packages) {
+    for (const { entry, fields = {}, script = '' } of packages) {
       const pkg = join(dir, 'node_modules', entry.package)
       await mkdir(join(pkg, 'bin'), { recursive: true })
       await writeFile(join(pkg, 'package.json'), JSON.stringify({ name: entry.package, version: '1.0.0', bin: { [entry.package]: `bin/${entry.package}` }, ...fields }))
       await writeFile(join(pkg, 'bin', entry.package), script)
-      if (skill !== undefined) await writeFile(join(pkg, 'SKILL.md'), `---\nname: ${skill}\n---\nThe ${skill} skill.\n`)
     }
     const file = join(dir, 'distribution.mjs')
     await writeFile(file, `export default ${JSON.stringify(packages.map(({ entry }) => entry))}\n`)
@@ -45,10 +46,9 @@ async function withPackages(packages: { entry: DashboardPackage; fields?: Record
   }
 }
 
-/** A skill's text in a project, as init writes it: the folder named after the skill, with its `SKILL.md`. */
-async function skillText(root: string, dir: string, name: string): Promise<void> {
-  await mkdir(join(root, dir, name), { recursive: true })
-  await writeFile(join(root, dir, name, 'SKILL.md'), `---\nname: ${name}\n---\nThe ${name} skill.\n`)
+/** Switch the plugin `name` on in the project at `root`, or off, as Settings › Plugins does. */
+async function switchPlugin(root: string, name: string, on = true): Promise<void> {
+  await (await distributionHooks()).setEnabled(name, on, await projectRefAt(projectId(root), root))
 }
 
 test("every package the distribution lists is read from its install, in its order, and their commands have a directory each", async () => {
@@ -58,32 +58,31 @@ test("every package the distribution lists is read from its install, in its orde
   assert.deepEqual(await distributionPackages({}), [], 'no distribution handed down: no package')
 })
 
-test("a project with nothing installed gets its runs, its branches and a repository to create from the distribution's packages, and nothing it has no package for", async () => {
+test("a project with nothing installed gets its runs, its branches and a repository to create from the distribution's packages, and nothing of a plugin that is off", async () => {
   const root = await scratch('packages')
   try {
-    assert.equal((await providedCommand(root, 'runs'))?.package, '@openagt/skill-logs')
+    assert.equal((await providedCommand(root, 'runs'))?.package, '@openagt/skill-logs', "the runs' records, whatever logs says")
     assert.equal((await providedCommand(root, 'branches'))?.package, '@openagt/skill-branches')
     assert.deepEqual(await lookupProvided(root, 'tickets'), {})
     assert.equal((await providedCommand(root, 'repository'))?.package, '@openagt/skill-github', 'the package that can create its repository')
     assert.deepEqual(
       (await packagesOf(root)).map(pkg => pkg.name),
-      ['@openagt/store-filesystem', '@openagt/store-git-repository', '@openagt/skill-branches', '@openagt/skill-github', '@openagt/skills', '@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/skill-logs', '@openagt/skill-ask', '@openagt/agent-runner'],
-      "every project's, and the picked skill every run gets; none of the other picks, none of the computer's",
+      ['@openagt/store-filesystem', '@openagt/skill-branches', '@openagt/skill-github', '@openagt/skills', '@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/skill-ask', '@openagt/agent-runner'],
+      "every project's core packages, and the plugin that starts on; none of the others, none of the computer's",
     )
-    assert.deepEqual((await readProjectModules(root)).map(module => module.package), ['@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/skill-logs', '@openagt/skills'])
+    assert.deepEqual((await readProjectModules(root)).map(module => module.package), ['@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/skills'])
   } finally {
     await rm(root, { recursive: true, force: true })
   }
 })
 
-test("every project keeps its runs' records through the logs package, and shows its Logs page only once it picked the logs skill", async () => {
+test("every project keeps its runs' records through the logs package, and shows its Logs page once logs is on there", async () => {
   const root = await scratch('logs')
-  const pages = async (): Promise<string[]> => (await readProjectPages(root)).map(module => module.package)
+  const modules = async (): Promise<string[]> => (await readProjectModules(root)).map(module => module.package)
   try {
-    assert.deepEqual(await pages(), ['@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/skills'])
-    assert.ok((await readProjectModules(root)).some(module => module.package === '@openagt/skill-logs'), 'its commands still run there')
-    await skillText(root, '.agents/skills', 'logs')
-    assert.deepEqual(await pages(), ['@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/skill-logs', '@openagt/skills'])
+    assert.deepEqual(await modules(), ['@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/skills'])
+    await switchPlugin(root, 'logs')
+    assert.deepEqual(await modules(), ['@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/skill-logs', '@openagt/skills'])
     assert.equal((await providedCommand(root, 'runs'))?.package, '@openagt/skill-logs')
   } finally {
     await rm(root, { recursive: true, force: true })
@@ -96,60 +95,43 @@ test("the Human Queue, the person's profile, devices and account rotation are th
   assert.deepEqual((await readComputerModules()).map(module => Object.keys(module.bins)), [['devices'], ['account-rotation'], [], []])
 })
 
-test("a project has a skill's package, its data and its page once it holds the skill's text, in either folder, and no longer once the folder is deleted", async () => {
-  const root = await scratch('text')
+test("a plugin's package, its data and its page are a project's once the plugin is on there, in that project alone, and no longer once it is off", async () => {
+  const root = await scratch('plugin')
+  const other = await scratch('other')
   const modules = async (): Promise<string[]> => (await readProjectModules(root)).map(module => module.package)
   try {
     assert.deepEqual(await lookupProvided(root, 'tickets'), {})
-    await skillText(root, '.agents/skills', 'tickets')
+    await switchPlugin(root, 'tickets')
     assert.equal((await providedCommand(root, 'tickets'))?.package, '@openagt/skill-tickets')
-    assert.deepEqual(await lookupProvided(root, 'queue'), {}, 'a skill the project does not hold stays out')
-    assert.deepEqual(await modules(), ['@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/skill-logs', '@openagt/skill-tickets', '@openagt/skills'])
+    assert.deepEqual(await lookupProvided(other, 'tickets'), {}, "another project's row is its own")
+    assert.deepEqual(await lookupProvided(root, 'queue'), {}, 'a plugin that is off stays out')
+    assert.deepEqual(await modules(), ['@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/skill-tickets', '@openagt/skills'])
 
-    await skillText(root, '.claude/skills', 'queue')
-    await skillText(root, '.claude/skills', 'scheduler')
+    await switchPlugin(root, 'queue')
+    await switchPlugin(root, 'scheduled-agents')
     assert.equal((await providedCommand(root, 'queue'))?.package, '@openagt/skill-queue')
-    assert.deepEqual(await modules(), ['@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/skill-logs', '@openagt/skill-queue', '@openagt/skill-scheduler', '@openagt/skill-tickets', '@openagt/skills'])
+    assert.deepEqual(await modules(), ['@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/skill-queue', '@openagt/skill-scheduler', '@openagt/skill-tickets', '@openagt/skills'])
 
-    // A folder with no text in it, and a text under another name, are no skill of ours.
-    await rm(join(root, '.agents/skills/tickets/SKILL.md'))
-    await skillText(root, '.claude/skills', 'my-tickets')
+    await switchPlugin(root, 'tickets', false)
+    await switchPlugin(root, 'queue', false)
     assert.deepEqual(await lookupProvided(root, 'tickets'), {})
-    await rm(join(root, '.claude/skills/queue'), { recursive: true })
-    assert.deepEqual(await modules(), ['@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/skill-logs', '@openagt/skill-scheduler', '@openagt/skills'])
+    assert.deepEqual(await modules(), ['@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/skill-scheduler', '@openagt/skills'])
+    await switchPlugin(root, 'ask', false)
+    assert.ok(!(await packagesOf(root)).some(pkg => pkg.name === '@openagt/skill-ask'), 'one that starts on goes off the same way')
   } finally {
     await rm(root, { recursive: true, force: true })
+    await rm(other, { recursive: true, force: true })
   }
 })
 
-test('a picked package whose skill every run gets is every project\'s, with no text in the project; a pick that is no such skill still needs its text', async () => {
-  const root = await scratch('every-run')
-  try {
-    await withPackages(
-      [
-        { entry: { package: 'my-tickets', for: 'picked', skill: 'every run' }, fields: { openagent: { tickets: 'my-tickets' } }, skill: 'my-tickets' },
-        { entry: { package: 'my-queue', for: 'picked' }, fields: { openagent: { queue: 'my-queue' } }, skill: 'my-queue' },
-      ],
-      async () => {
-        assert.equal((await providedCommand(root, 'tickets'))?.package, 'my-tickets')
-        assert.deepEqual(await lookupProvided(root, 'queue'), {})
-        await skillText(root, '.claude/skills', 'my-queue')
-        assert.equal((await providedCommand(root, 'queue'))?.package, 'my-queue')
-      },
-    )
-  } finally {
-    await rm(root, { recursive: true, force: true })
-  }
-})
-
-test("the scheduler is a project's once it holds the scheduler's skill text, and not by a hook line that runs it", async () => {
+test("the scheduler is a project's once scheduled-agents is on there, and not by a hook line that runs it", async () => {
   const root = await scratch('tool')
   const has = async (): Promise<boolean> => (await packagesOf(root)).some(pkg => pkg.name === '@openagt/skill-scheduler')
   try {
     await mkdir(join(root, '.openagent'))
     await writeFile(join(root, '.openagent', 'hooks.yml'), 'open:\n  - scheduler start\nclose:\n  - scheduler stop --unless-keep-alive\n')
     assert.equal(await has(), false, 'its lines alone')
-    await skillText(root, '.agents/skills', 'scheduler')
+    await switchPlugin(root, 'scheduled-agents')
     assert.equal(await has(), true)
     assert.ok((await readProjectModules(root)).some(module => module.package === '@openagt/skill-scheduler'), 'its page comes with it')
   } finally {
@@ -171,11 +153,11 @@ test("a project's own dependencies bring nothing: neither a copy of the distribu
     await writeFile(join(own, 'bin', 'mine'), '')
     await writeFile(join(own, 'd.js'), 'export default {}')
     await writeFile(join(root, 'package.json'), JSON.stringify({ dependencies: { 'my-logs': '1.0.0' }, devDependencies: { '@openagt/skill-tickets': '9.9.9' }, openagent: { runs: 'my-logs' } }))
-    assert.deepEqual(await lookupProvided(root, 'tickets'), {}, 'listed and installed, with no text: not the project\'s')
+    assert.deepEqual(await lookupProvided(root, 'tickets'), {}, "listed and installed, with its plugin off: not the project's")
     assert.equal((await providedCommand(root, 'runs'))?.package, '@openagt/skill-logs', 'nor what its package.json names')
     assert.ok(!(await readProjectModules(root)).some(module => module.package === 'my-logs' || module.package === '@openagt/skill-tickets'))
 
-    await skillText(root, '.claude/skills', 'tickets')
+    await switchPlugin(root, 'tickets')
     const command = await providedCommand(root, 'tickets')
     assert.equal(command?.package, '@openagt/skill-tickets')
     assert.ok(!command!.bin.startsWith(root), "the distribution's copy runs, not the one in the project")
@@ -222,7 +204,7 @@ test("every package of the distribution that declares a clean-up is asked, one t
     execFileSync('git', ['init', '-q'], { cwd: root })
     await withPackages(
       [
-        { entry: { package: 'tidy', for: 'picked' }, fields: { openagent: { cleanup: 'tidy' } }, script: `require('node:fs').writeFileSync('asked.txt', process.argv.slice(2).join(' ')); console.log(JSON.stringify({ ok: true, removed: ['.tidy'], kept: [{ path: '.tidy-notes', reason: 'yours' }] }))` },
+        { entry: { package: 'tidy' }, fields: { openagent: { cleanup: 'tidy' } }, script: `require('node:fs').writeFileSync('asked.txt', process.argv.slice(2).join(' ')); console.log(JSON.stringify({ ok: true, removed: ['.tidy'], kept: [{ path: '.tidy-notes', reason: 'yours' }] }))` },
         { entry: { package: 'busy' }, fields: { openagent: { cleanup: 'busy' } }, script: `console.log(JSON.stringify({ ok: false, reason: 'running' })); console.error('a run is still working here'); process.exit(1)` },
         { entry: { package: 'odd', for: 'computer' }, fields: { openagent: { cleanup: 'odd' } }, script: `console.log(JSON.stringify({ ok: true, removed: 'everything' }))` },
       ],

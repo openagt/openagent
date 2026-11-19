@@ -35,21 +35,30 @@ const onMachineStartCheck = vi.hoisted(() => vi.fn())
 const onMachineLogins = vi.hoisted(() => vi.fn())
 vi.mock('../rpc/machines.js', () => ({ onMachineStartCheck, onMachineLogins }))
 // The presets as read, and the menu as a press that picks the second one.
-const presetsList = vi.hoisted(() => ({ presets: [{ id: 'default', name: 'Default', options: {} }, { id: 'reviewer', name: 'Reviewer', options: { github: { account: 'octo-agent' }, skills: { project: 'none' } } }] }))
+const presetsList = vi.hoisted(() => ({
+  presets: [
+    { id: 'default', name: 'Default', options: {} },
+    { id: 'reviewer', name: 'Reviewer', options: { github: { account: 'octo-agent' }, skills: { project: 'none' } } },
+    { id: 'lean', name: 'Lean', options: { plugins: { without: ['logs'] } } },
+  ],
+}))
 vi.mock('./PresetsPage.js', () => ({ usePresetsList: () => ({ view: presetsList, reload: async () => {} }) }))
 vi.mock('./PresetMenu.js', () => ({
   PresetMenu: ({ picked, onPick }: { picked: string | undefined; onPick: (id: string) => void }) => (
     <button type="button" onClick={() => onPick('reviewer')}>{`preset:${picked ?? ''}`}</button>
   ),
 }))
-// The skills this session gets: a press that picks some, and what it was given.
+// What this session gets: a press that picks some, a double press that ticks every plugin on, and what it was given.
 vi.mock('./SkillsMenu.js', () => ({
-  presetPicks: (preset: { options: { skills?: { project?: 'all' | 'none' | string[] } } } | undefined) => {
+  presetPicks: (preset: { options: { plugins?: { without?: string[] }; skills?: { project?: 'all' | 'none' | string[] } } } | undefined) => {
+    const without = preset?.options.plugins?.without ?? []
     const project = preset?.options.skills?.project
-    return project === undefined || project === 'all' ? { on: [], off: [] } : { on: [], off: [], project }
+    return project === undefined || project === 'all' ? { without } : { without, project }
   },
-  SkillsMenu: ({ projectId, picks, onChange }: { projectId: string | undefined; picks: { on: string[]; off: string[]; project?: 'none' | string[] }; onChange: (picks: { on: string[]; off: string[]; project?: 'none' | string[] }) => void }) => (
-    <button type="button" onClick={() => onChange({ on: ['review'], off: ['github'], project: 'none' })}>{`skills:${projectId ?? 'no project'}:${picks.on.join('+')}/${picks.off.join('+')}/${picks.project === undefined ? 'all' : picks.project === 'none' ? 'none' : picks.project.join('+')}`}</button>
+  SkillsMenu: ({ projectId, picks, onChange }: { projectId: string | undefined; picks: { without: string[]; project?: 'none' | string[] }; onChange: (picks: { without: string[]; project?: 'none' | string[] }) => void }) => (
+    <button type="button" onClick={() => onChange({ without: ['ask', 'tickets'], project: 'none' })} onDoubleClick={() => onChange({ ...picks, without: [] })}>
+      {`skills:${projectId ?? 'no project'}:${picks.without.join('+')}/${picks.project === undefined ? 'all' : picks.project === 'none' ? 'none' : picks.project.join('+')}`}
+    </button>
   ),
 }))
 // The computer's account, and a press that picks another for this session.
@@ -307,7 +316,7 @@ describe('StartAgentForm (#1774)', () => {
     const below = screen.getByTestId('controls')
     const end = screen.getByTestId('controls-end')
     await waitFor(() => expect(end.contains(autoMenu())).toBe(true))
-    expect(within(below).getAllByRole('button').map(button => button.textContent)).toEqual(['preset:default', 'skills:p1://all', 'Context'])
+    expect(within(below).getAllByRole('button').map(button => button.textContent)).toEqual(['preset:default', 'skills:p1:/all', 'Context'])
     expect(within(end).getAllByRole('button').map(button => button.textContent)).toEqual(['pick-octo-agent', 'Auto: Commit'])
   })
 
@@ -593,22 +602,22 @@ describe('StartAgentForm (#1774)', () => {
     expect(screen.queryByRole('alert')).toBeNull()
   })
 
-  test('the skills picked for this session go with the Start and to the run\'s page; none picked, nothing is sent; the next session starts from none again', async () => {
+  test("the plugins this session goes without and its project skills go with the Start and to the run's page; none picked, nothing is sent; the next session starts from none again", async () => {
     onCommands.mockResolvedValue({ commands: [], gitHost: true, remote: true, address: 'github.com/acme/shop' })
     start.mockResolvedValue({ agentId: 'r1' })
     const onAgentStarted = vi.fn()
     render(<StartAgentForm {...props} projectName="gemstack" onAgentStarted={onAgentStarted} />)
-    fireEvent.click(await screen.findByText('skills:p1://all'))
-    expect(screen.getByText('skills:p1:review/github/none')).toBeTruthy()
+    fireEvent.click(await screen.findByText('skills:p1:/all'))
+    expect(screen.getByText('skills:p1:ask+tickets/none')).toBeTruthy()
     fireEvent.click(screen.getByText('submit-typed'))
     await waitFor(() => expect(onAgentStarted).toHaveBeenCalled())
-    expect(start.mock.lastCall![2]).toMatchObject({ skillsOn: ['review'], skillsOff: ['github'], projectSkills: 'none' })
-    expect(onAgentStarted.mock.lastCall![4]).toMatchObject({ skillsOn: ['review'], skillsOff: ['github'], projectSkills: 'none' })
-    expect(screen.getByText('skills:p1://all')).toBeTruthy()
+    expect(start.mock.lastCall![2]).toMatchObject({ pluginsWithout: ['ask', 'tickets'], projectSkills: 'none' })
+    expect(onAgentStarted.mock.lastCall![4]).toMatchObject({ pluginsWithout: ['ask', 'tickets'], projectSkills: 'none' })
+    expect(screen.getByText('skills:p1:/all')).toBeTruthy()
     fireEvent.click(screen.getByText('submit-typed'))
     await waitFor(() => expect(start).toHaveBeenCalledTimes(2))
     const sent = start.mock.lastCall![2] as Record<string, unknown>
-    expect('skillsOn' in sent || 'skillsOff' in sent || 'projectSkills' in sent).toBe(false)
+    expect('pluginsWithout' in sent || 'projectSkills' in sent).toBe(false)
   })
 
   test('on a preset set to never pick up project skills, the session starts from none and the Start says so; the next session starts from none again', async () => {
@@ -617,11 +626,28 @@ describe('StartAgentForm (#1774)', () => {
     prefs.current = { ...prefs.current, preset: 'reviewer' }
     render(<StartAgentForm {...props} projectName="gemstack" />)
     await screen.findByText('preset:reviewer')
-    expect(await screen.findByText('skills:p1://none')).toBeTruthy()
+    expect(await screen.findByText('skills:p1:/none')).toBeTruthy()
     fireEvent.click(screen.getByText('submit-typed'))
     await waitFor(() => expect(start).toHaveBeenCalled())
     expect(start.mock.lastCall![2]).toMatchObject({ preset: 'reviewer', projectSkills: 'none' })
-    expect(screen.getByText('skills:p1://none')).toBeTruthy()
+    expect(screen.getByText('skills:p1:/none')).toBeTruthy()
+  })
+
+  test('on a preset that leaves plugins out, the session starts without them and the Start says so; every plugin ticked on again goes as none of them, over the preset\'s', async () => {
+    onCommands.mockResolvedValue({ commands: [], gitHost: true, remote: true, address: 'github.com/acme/shop' })
+    start.mockResolvedValue({ agentId: 'r1' })
+    prefs.current = { ...prefs.current, preset: 'lean' }
+    render(<StartAgentForm {...props} projectName="gemstack" />)
+    await screen.findByText('preset:lean')
+    expect(await screen.findByText('skills:p1:logs/all')).toBeTruthy()
+    fireEvent.click(screen.getByText('submit-typed'))
+    await waitFor(() => expect(start).toHaveBeenCalled())
+    expect(start.mock.lastCall![2]).toMatchObject({ preset: 'lean', pluginsWithout: ['logs'] })
+    fireEvent.doubleClick(await screen.findByText('skills:p1:logs/all'))
+    expect(screen.getByText('skills:p1:/all')).toBeTruthy()
+    fireEvent.click(screen.getByText('submit-typed'))
+    await waitFor(() => expect(start).toHaveBeenCalledTimes(2))
+    expect(start.mock.lastCall![2]).toMatchObject({ preset: 'lean', pluginsWithout: [] })
   })
 
   test('a machine that takes no logins of this computer\'s sends the person to the Permissions page', async () => {

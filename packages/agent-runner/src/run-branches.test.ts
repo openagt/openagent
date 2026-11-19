@@ -7,11 +7,9 @@ import { findRun, patchRun, readDiary } from '@openagt/skill-logs'
 import { resumeRun, runCommand } from './run.js'
 import { addedLine, PUBLISH_LINES } from './session.js'
 import { recordRun, runnerMark } from './records.js'
-import { git, handDownBasicSkills, removeRepo, testRepo } from './test-repo.js'
+import { git, removeRepo, testRepo } from './test-repo.js'
 import { NOW, wrap, QUESTION, ticking, testModules } from './run-test-support.js'
 
-// A run as OpenAgent starts it: with the basic skills handed down.
-handDownBasicSkills()
 
 // Where a run's work starts and goes, on a real repository with the agent faked: a branch given to
 // it, the start it writes down, the base it starts from and the pull request's branch, the sentence

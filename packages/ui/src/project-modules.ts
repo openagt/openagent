@@ -1,7 +1,7 @@
 import { realpath, stat } from 'node:fs/promises'
 import { dirname, join, normalize, sep } from 'node:path'
 import { packageBins, runPackageCommand, type PackageCommandResult, type ProjectPackage } from '@openagt/agent-data'
-import { computerPackages, packagesOf, projectsPackages, showsPages } from './distribution-packages.js'
+import { computerPackages, packagesOf, projectsPackages } from './distribution-packages.js'
 
 /**
  * A package that adds UI (#1774): its browser part, named by its `exports["./dashboard"]`, and
@@ -153,9 +153,8 @@ export async function runModuleCommand(
 
 /**
  * The modules a project has: the ones among the distribution's packages it has
- * (`distribution-packages.ts`), each whose package.json exports `./dashboard` to a file that
- * exists inside the package; a picked skill's page where the project holds the skill's text.
- * Sorted by name.
+ * (`distribution-packages.ts`: a plugin's where it is on in the project), each whose package.json
+ * exports `./dashboard` to a file that exists inside the package. Sorted by name.
  */
 export async function readProjectModules(root: string): Promise<ProjectModule[]> {
   const modules: ProjectModule[] = []
@@ -164,17 +163,6 @@ export async function readProjectModules(root: string): Promise<ProjectModule[]>
     if (module) modules.push(module)
   }
   return modules.sort((a, b) => a.package.localeCompare(b.package))
-}
-
-/**
- * The modules whose pages and cards the project shows: {@link readProjectModules}, less those whose
- * pages are a pick the project did not make (`distribution-packages.ts`). Their commands still run
- * there.
- */
-export async function readProjectPages(root: string): Promise<ProjectModule[]> {
-  const modules: ProjectModule[] = []
-  for (const module of await readProjectModules(root)) if (await showsPages(root, module.package)) modules.push(module)
-  return modules
 }
 
 /** The one module of this project that `name` names, or undefined. */

@@ -79,9 +79,8 @@ export interface AgentMeta {
   repos?: { name: string; from: string }[]
   /** The preset the run is on, by its id, written on the card by the tool that runs it; absent, Default. */
   preset?: string
-  /** The session's picks of skills, written on the card by the tool that runs it: names on top of the ones every run gets, names of those left out, which of the project's own stayed in its checkout (`all`, `none`, or names; absent, its preset's). */
-  skillsOn?: string[]
-  skillsOff?: string[]
+  /** The session's picks, written on the card by the tool that runs it: the plugins it went without, by name, which of the project's own skills stayed in its checkout (`all`, `none`, or names); each its preset's when absent. */
+  pluginsWithout?: string[]
   projectSkills?: 'all' | 'none' | string[]
   /**
    * How far the run takes its work when its agent finishes: `commit`, `branch`, `pr` or `merge`,

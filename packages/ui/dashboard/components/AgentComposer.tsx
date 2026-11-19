@@ -70,8 +70,7 @@ export function AgentComposer({
   preset,
   gitHost,
   gitAccount,
-  skillsOn,
-  skillsOff,
+  pluginsWithout,
   projectSkills,
 }: {
   projectId: string
@@ -115,9 +114,8 @@ export function AgentComposer({
   gitHost?: GitHostHome | null | undefined
   /** The account the run worked as there, as its record says. */
   gitAccount?: string | undefined
-  /** The session's picks of skills, as its record says: on top of the ones every run gets, left out of those, which of the project's own stayed. */
-  skillsOn?: string[] | undefined
-  skillsOff?: string[] | undefined
+  /** The session's picks, as its record says: the plugins it went without, which of the project's own skills stayed. */
+  pluginsWithout?: string[] | undefined
   projectSkills?: 'all' | 'none' | string[] | undefined
 }) {
   const composerRef = useRef<ComposerHandle>(null)
@@ -304,7 +302,7 @@ export function AgentComposer({
         controls={
           <>
             <PresetOff preset={preset} />
-            <SkillsOff projectId={projectId === SESSIONS_ID ? undefined : projectId} preset={preset} skillsOn={skillsOn} skillsOff={skillsOff} projectSkills={projectSkills} />
+            <SkillsOff projectId={projectId === SESSIONS_ID ? undefined : projectId} preset={preset} pluginsWithout={pluginsWithout} projectSkills={projectSkills} />
             {projectId !== SESSIONS_ID && contextSet && <ProjectContextMenu projectId={projectId} context={contextSet.context} busy={busy} onToggle={contextSet.toggle} />}
             {controls}
           </>

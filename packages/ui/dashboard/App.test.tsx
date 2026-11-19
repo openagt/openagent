@@ -93,8 +93,8 @@ function answerShell(modules: unknown[]): void {
   answers.set('onRecentAgents', () => [])
   answers.set('onAgents', () => [])
   answers.set('onOverview', () => ({ active: [] }))
-  answers.set('onPresetsList', () => ({ presets: [], claude: [], codex: [] }))
-  answers.set('onSkillChoices', () => ({ everyRun: [], more: [] }))
+  answers.set('onPresetsList', () => ({ presets: [], claude: [], codex: [], plugins: [] }))
+  answers.set('onSkillChoices', () => ({ core: [], plugins: [] }))
   answers.set('onAgentUpdates', () => [])
   // The Overview draws its cards once the person's layout is read.
   answers.set('onPreferences', () => ({}))

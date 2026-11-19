@@ -417,9 +417,9 @@ describe('the Settings list', () => {
 
   test("two groups: yours and this computer's, the computer's packages among them; then the picked project's packages", () => {
     show('', 'p1')
-    expect(entries('You and this computer')).toEqual(['Profile', 'Appearance', 'Notifications', 'Coding agent', 'Your agent data', 'Repos', 'Claude web', 'Keyboard shortcuts', 'Devices'])
-    // gemstack has tickets and no scheduler; every project has its skills, whose entry says it goes first.
-    expect(entries('Project')).toEqual(['Skills', 'Project agent data', 'Tickets', 'List'])
+    expect(entries('You and this computer')).toEqual(['Profile', 'Appearance', 'Notifications', 'Coding agent', 'Plugins', 'Your agent data', 'Repos', 'Claude web', 'Keyboard shortcuts', 'Devices'])
+    // gemstack has tickets and no scheduler; every project has its skills, whose entry says it goes first, and its plugins.
+    expect(entries('Project')).toEqual(['Skills', 'Plugins', 'Project agent data', 'Tickets', 'List'])
     expect(showing(select('Project'))).toBe('gemstack')
     // Opened on nothing in particular: the first entry.
     expect(title()).toBe('SettingsProfile')
@@ -439,7 +439,7 @@ describe('the Settings list', () => {
   test('the project select changes the project group, and All projects gives an entry every project that has its package, saying which', async () => {
     show('tickets', 'p1')
     await pick(select('Project'), 'All projects')
-    expect(entries('Project')).toEqual(['Skills', 'Project agent data', 'Tickets', 'Scheduler', 'List'])
+    expect(entries('Project')).toEqual(['Skills', 'Plugins', 'Project agent data', 'Tickets', 'Scheduler', 'List'])
     expect(title()).toBe('SettingsAll projectsTickets')
     expect(screen.getByText('for: gemstack, other')).toBeTruthy()
     expect(screen.getByText('Saved to 2 projects: gemstack, other.')).toBeTruthy()
@@ -452,7 +452,7 @@ describe('the Settings list', () => {
     expect(screen.getByText('The Scheduler settings failed: boom')).toBeTruthy()
     expect(screen.getByText('Saved to one project: other.')).toBeTruthy()
     await pick(select('Project'), 'plain')
-    expect(entries('Project')).toEqual(['Skills', 'Project agent data'])
+    expect(entries('Project')).toEqual(['Skills', 'Plugins', 'Project agent data'])
     // The entry it was on is not plain's: the first entry shows.
     expect(title()).toBe('SettingsProfile')
   })
@@ -460,7 +460,7 @@ describe('the Settings list', () => {
   test('with no project picked in the sidebar, the project group opens on every project', () => {
     show('')
     expect(showing(select('Project'))).toBe('All projects')
-    expect(entries('Project')).toEqual(['Skills', 'Project agent data', 'Tickets', 'Scheduler', 'List'])
+    expect(entries('Project')).toEqual(['Skills', 'Plugins', 'Project agent data', 'Tickets', 'Scheduler', 'List'])
   })
 
   test("a project's entry opened for a project (Skills, from the box's menu) is that project's, whatever the sidebar has picked; the select changes it", async () => {
@@ -600,7 +600,7 @@ describe('the Settings list', () => {
         <SettingsDialog entry="profile" onEntry={() => {}} onClose={onClose} scope={null} projects={[]} />
       </ModulesContext.Provider>,
     )
-    expect(entries('You and this computer')).toEqual(['Profile', 'Appearance', 'Notifications', 'Coding agent', 'Your agent data', 'Plain', 'Lights', 'Repos', 'Claude web', 'Keyboard shortcuts'])
+    expect(entries('You and this computer')).toEqual(['Profile', 'Appearance', 'Notifications', 'Coding agent', 'Plugins', 'Your agent data', 'Plain', 'Lights', 'Repos', 'Claude web', 'Keyboard shortcuts'])
   })
 
   test('opened with no entry, a computer shows the first and its address says so; a phone shows the list, whose address is none', () => {

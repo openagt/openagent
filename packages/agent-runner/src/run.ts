@@ -13,7 +13,8 @@ import { BUILT_IN_MODULES } from './steps/modules.js'
 
 /**
  * One run (#1774): one pipeline of steps (`@openagt/hooks`' `run.step`), each the part of a module
- * of the run's distribution: the checkout from git-branches, the run's skills linked into it, the
+ * of the run's distribution: the checkout from git-branches, the run's skills linked into it (the
+ * ones its modules give it, `run.skills`, asked before its first step), the
  * agent's session with the prompt once and the agent's own loop to the end (`session.ts`), then
  * where the work went read back, the record saved (`module.ts`), the checkout reclaimed and the
  * person told. A step that prepares the run and fails ends it failed, recorded with what went
@@ -110,9 +111,8 @@ export interface RunOptions extends RunRequest, RunDeps, OnPreset {
   gitAccount?: string
   /** The preset the run is on, by its id (`OPENAGENT_PRESET`), kept on its mark; Default when absent. */
   preset?: string
-  /** The session's picks of skills, kept on its mark (`preset.ts` SkillPicks): skills on top of the ones every run gets, ones of those left out, which of the project's own stay in its checkout. */
-  skillsOn?: string[]
-  skillsOff?: string[]
+  /** The session's picks, kept on its mark (`preset.ts` SessionPicks): the enabled plugins it goes without, which of the project's own skills stay in its checkout. */
+  pluginsWithout?: string[]
   projectSkills?: ProjectSkillsPick
 }
 
@@ -277,25 +277,27 @@ function recordedFacts(card: RunCard, mark: RunnerMark): RunFacts {
 
 /**
  * The run's options, one slice per module, as the run was asked them and its record keeps them,
- * over its preset's: the project's skills it gets, where the session picked none. (Its accounts
- * were the preset's already, where the session picked none: the driver is made on them, and the
- * account at the git host is the record's.)
+ * over its preset's: the plugins it goes without and the project's skills it gets, where the
+ * session picked none. (Its accounts were the preset's already, where the session picked none:
+ * the driver is made on them, and the account at the git host is the record's.)
  */
 function optionsOf(mark: RunnerMark, branch: string | undefined, preset: ModuleOptions = {}): ModuleOptions {
   const branches = { ...(mark.base !== undefined ? { base: mark.base } : {}), ...(branch !== undefined ? { branch } : {}), ...(mark.repos !== undefined ? { repos: mark.repos } : {}) }
   const github = { ...(mark.prBase !== undefined ? { prBase: mark.prBase } : {}), ...(mark.gitAccount !== undefined ? { account: mark.gitAccount } : {}) }
+  const without = mark.pluginsWithout ?? preset.plugins?.without
   const project = mark.projectSkills ?? preset.skills?.project
   return {
     ...(mark.publish !== undefined ? { publish: mark.publish } : {}),
     ...(Object.keys(branches).length > 0 ? { 'git-branches': branches } : {}),
     ...(Object.keys(github).length > 0 ? { github } : {}),
     ...(project !== undefined ? { skills: { project } } : {}),
+    ...(without !== undefined ? { plugins: { without } } : {}),
     ...(mark.preset !== undefined ? { presets: { preset: mark.preset } } : {}),
   }
 }
 
 /** The project a run in `dir` is in, as the hooks name it; none for a run in the sessions home, which has no project. */
-async function projectOf(dir: string, git: GitRunner): Promise<ProjectRef | undefined> {
+export async function projectOf(dir: string, git: GitRunner): Promise<ProjectRef | undefined> {
   if ((await sessionsHomeOf(dir)) !== undefined) return undefined
   const remote = await repositoryAddress(dir, git)
   return { id: projectId(dir), name: await projectNameOf(dir, git), dir, ...(remote !== undefined ? { remote } : {}) }
@@ -332,13 +334,17 @@ async function runLeg(given: Omit<Leg, 'killed'>, start: LegStart): Promise<RunO
   try {
     const hooks = createHooks([...start.modules, ...BUILT_IN_MODULES])
     const project = await projectOf(leg.repo, leg.here.git)
+    const options = optionsOf(leg.mark, start.branch, start.preset)
+    // The skills the modules on for this run give it, for the agent it is on: the skills module links them where it works.
+    const skills = await hooks.skills({ ...(project ? { project } : {}), agent: leg.driver, options })
     const ctx = withLeg(
       {
         id: leg.id,
         ...(project ? { project } : {}),
         prompt: leg.prompt,
-        options: optionsOf(leg.mark, start.branch, start.preset),
+        options,
         ...(start.resume ? { resume: start.resume } : {}),
+        skills,
         context: [],
         env: {},
         facts: start.facts,

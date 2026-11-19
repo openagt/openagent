@@ -241,14 +241,14 @@ export function StartAgentForm({
   // The git host account picked for this session, when the person picked one; the preset's, else the computer's, otherwise.
   const [pickedAccount, setPickedAccount] = useState<string | undefined>()
   useEffect(() => setPickedAccount(undefined), [projectId, machine?.id])
-  // The skills picked for this session, beside the ones every run gets and the project's: what its preset starts from, until the person picks.
+  // The plugins this session goes without and the project skills it gets: what its preset starts from, until the person picks.
   const [skillPicks, setSkillPicks] = useState<SkillPicks>(() => presetPicks(onPreset))
   const presetProject = onPreset?.options.skills?.project
-  useEffect(() => setSkillPicks(presetPicks(onPreset)), [projectId, onPreset?.id, JSON.stringify(presetProject)])
+  const presetWithout = onPreset?.options.plugins?.without
+  useEffect(() => setSkillPicks(presetPicks(onPreset)), [projectId, onPreset?.id, JSON.stringify(presetProject), JSON.stringify(presetWithout)])
+  // None left out, and every project skill, are said where the preset names its own: the session's pick goes over the preset's.
   const pickedSkills = {
-    ...(skillPicks.on.length > 0 ? { skillsOn: skillPicks.on } : {}),
-    ...(skillPicks.off.length > 0 ? { skillsOff: skillPicks.off } : {}),
-    // Every project skill is said where the preset names its own: the session's pick goes over the preset's.
+    ...(skillPicks.without.length > 0 || presetWithout !== undefined ? { pluginsWithout: skillPicks.without } : {}),
     ...(noProject ? {} : skillPicks.project !== undefined ? { projectSkills: skillPicks.project } : presetProject !== undefined && presetProject !== 'all' ? { projectSkills: 'all' as const } : {}),
   }
   const account = useSessionAccount(address, machine?.id, pickedAccount ?? onPreset?.options.github?.account)

@@ -3,9 +3,11 @@ import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { FakeDriver, promptSent, type Driver, type DriverSession, type DriverStartOptions, type FakeDriverSession } from '@openagt/agent-driver'
 import type { GitRunner } from '@openagt/agent-data'
-import type { DistributionEntry, PullRequest } from '@openagt/hooks'
+import { loadModules, type DistributionEntry, type ModuleDefinition, type PullRequest, type StoreBackend } from '@openagt/hooks'
+import { memoryStore } from '@openagt/hooks/testing'
 import { gitBranchesModule } from '@openagt/skill-branches/module'
 import { githubModule, type GithubDeps } from '@openagt/skill-github/module'
+import { skillsModule } from '@openagt/skills/module'
 import agentDriver from './module.js'
 import { git } from './test-repo.js'
 
@@ -128,15 +130,24 @@ export function fakeGithub(accounts: Record<string, Record<string, string>>): Gi
   }
 }
 
+/** The plugins whose skills every test's run gets, on as OpenAgent's distribution starts them, loaded by their packages as it loads them. */
+const PLUGINS = await loadModules([{ package: '@openagt/skill-logs', on: true }, { package: '@openagt/skill-ask', on: true }], specifier => import(specifier))
+
 /**
- * The modules a test's run goes through, as OpenAgent's distribution lists them for a run:
- * git-branches and github, each with what the test stands in for, and agent-driver.
+ * The modules a test's run goes through, as OpenAgent's distribution lists them for a run: a store
+ * kept in memory (the person's settings: the plugins' Enabled rows, the presets), git-branches and
+ * github, each with what the test stands in for, the skills module, agent-driver, the plugins
+ * logs and ask, and any module of the test's own.
  */
-export function testModules(deps: { gitHost?: GitHost; git?: GitRunner; github?: GithubAccounts } = {}): DistributionEntry[] {
+export function testModules(deps: { gitHost?: GitHost; git?: GitRunner; github?: GithubAccounts; store?: StoreBackend; also?: ModuleDefinition[] } = {}): DistributionEntry[] {
   const gitHost = deps.gitHost ?? noGitHost
   return [
+    { module: { name: 'test-store', hooks: { 'store.backend': deps.store ?? memoryStore() } } },
     { module: gitBranchesModule(deps.git ? { git: deps.git } : {}) },
     { module: githubModule({ ...(deps.github ?? noGithub), requestOfBranch: (dir, branch) => gitHost.requestOfBranch(dir, branch) }) },
+    { module: skillsModule() },
     { module: agentDriver },
+    ...PLUGINS,
+    ...(deps.also ?? []).map(module => ({ module })),
   ]
 }

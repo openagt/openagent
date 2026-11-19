@@ -189,6 +189,7 @@ export function fakeRun(given: Partial<Omit<RunContext, 'store' | 'settings'>> &
     prompt: '',
     options: {},
     context: [],
+    skills: [],
     env: {},
     facts: {},
     signal: new AbortController().signal,

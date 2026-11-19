@@ -40,6 +40,15 @@ test("it works as the run's account first of all, and reads the pull request bac
   )
 })
 
+test("a run in a project on GitHub gets the module's skill, with its command; one elsewhere, or with no project, does not", async () => {
+  const skills = githubModule({ onGithub: async dir => dir === SHOP.dir }).hooks['run.skills']!
+  const [skill, ...more] = await skills({ project: SHOP })
+  assert.deepEqual([skill?.name, skill?.command, more], ['github', 'github', []])
+  assert.match(String(skill?.dir), /skill-github\/$/, "the package's own folder, its SKILL.md in it")
+  assert.deepEqual(await skills({ project: { ...SHOP, dir: '/projects/on-gitlab' } }), [])
+  assert.deepEqual(await skills({}), [])
+})
+
 /** The account step, with the repositories that are on GitHub and the accounts OpenAgent has; what it was asked goes in `asked`. */
 function accountStep(onGithub: string[], accounts: Record<string, string>, runs: string | undefined, asked: string[] = []) {
   return stepOf("work as the run's account", {

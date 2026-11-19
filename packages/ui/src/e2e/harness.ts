@@ -14,10 +14,11 @@ import { projectId } from '@openagt/agent-data'
 import { registryPreferencesStore } from '../registry.js'
 import { fromDiaryLine, projectBranches, projectRuns, resolveAgentDiary, type AgentMeta, type AgentStatus, type AnyDiaryLine } from '../store/index.js'
 import { worktreePath } from '@openagt/skill-branches'
-import { makeFixtureRepo } from './fixture.js'
+import { FIXTURE_PLUGINS, makeFixtureRepo } from './fixture.js'
 import { fakeRunHost, STARTS_FILE_ENV, type HostCall } from './fake-runs.js'
 import { tailAgentEvents } from '../dashboard-rpc/events-tail.js'
 import { sendAddProject, sendShareRecords } from '../dashboard-rpc/projects.js'
+import { sendSwitchPlugin } from '../dashboard-rpc/plugins.js'
 import { sendStart, sendStop } from '../dashboard-rpc/control.js'
 import { onAgents } from '../dashboard-rpc/reads.js'
 import type { OpenAgentEvent } from '../events.js'
@@ -182,10 +183,15 @@ export async function makeWorld(): Promise<StoryWorld> {
       await makeFixtureRepo(cwd, files)
       const added = await rpc(sendAddProject)(cwd)
       if (!added.ok) throw new Error(`could not register the fixture repo: ${added.error}`)
+      const id = projectId(resolve(cwd))
       // Its records go to its remote, as a team's do.
-      const shared = await rpc(sendShareRecords)(projectId(resolve(cwd)), true)
+      const shared = await rpc(sendShareRecords)(id, true)
       if (!shared.ok) throw new Error(`could not share the fixture repo's records: ${shared.error}`)
-      return { id: projectId(resolve(cwd)), cwd }
+      for (const plugin of FIXTURE_PLUGINS) {
+        const switched = await rpc(sendSwitchPlugin)(plugin, true, id)
+        if (!switched.ok) throw new Error(`could not switch ${plugin} on in the fixture repo: ${switched.error}`)
+      }
+      return { id, cwd }
     },
 
     async startAgent(project, prompt, options = {}) {

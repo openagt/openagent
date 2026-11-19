@@ -1,7 +1,7 @@
 {
   "name": "@openagt/skill-reply",
   "version": "0.1.3",
-  "description": "The reply command for coding agents: an agent whose pull request got a maintainer's comment, a red check or a conflict after it ended is woken on its own conversation to answer it. A skill file only, no code.",
+  "description": "The reply command for coding agents: an agent whose pull request got a maintainer's comment, a red check or a conflict after it ended is woken on its own conversation to answer it. A skill file and the plugin module that gives it to runs.",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -12,8 +12,13 @@
     "access": "public"
   },
   "files": [
-    "SKILL.md"
+    "SKILL.md",
+    "module.mjs"
   ],
+  "exports": {
+    "./module": "./module.mjs",
+    "./package.json": "./package.json"
+  },
   "scripts": {
     "build": "cp ../../skills/reply/SKILL.md SKILL.md",
     "prepack": "cp ../../skills/reply/SKILL.md SKILL.md",

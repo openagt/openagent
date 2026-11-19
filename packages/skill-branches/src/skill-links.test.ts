@@ -3,9 +3,10 @@ import { test } from 'node:test'
 import { join } from 'node:path'
 import { mkdir, mkdtemp, readFile, readlink, realpath, rm, symlink, unlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
+import { pathToFileURL } from 'node:url'
 import { nodeGitRunner } from '@openagt/agent-data'
 import { createCheckout, relinkCheckout } from './checkout.js'
-import { HARNESS_SKILL_DIRS, linkSkill, SKILL_DIR, SKILL_NAME, skillLinkPaths } from './skill-links.js'
+import { HARNESS_SKILL_DIRS, linkSkill, SKILL_DIR, SKILL_NAME, skillLink, skillLinkPaths } from './skill-links.js'
 
 const git = nodeGitRunner()
 
@@ -174,5 +175,20 @@ test('a link of the package\'s that points at an install that is gone is made ag
     assert.equal(await readlink(theirs), '../nowhere')
   } finally {
     await rm(repo, { recursive: true, force: true })
+  }
+})
+
+test("a module's skill is linked as its folder alone; one that teaches a command, with its package and that command; a package with no such command, without it", async () => {
+  const base = await realpath(await mkdtemp(join(tmpdir(), 'skill-link-')))
+  try {
+    const dir = join(base, 'ask')
+    await mkdir(join(dir, 'bin'), { recursive: true })
+    await writeFile(join(dir, 'package.json'), JSON.stringify({ name: '@openagt/skill-ask', bin: { ask: 'bin/ask' } }))
+    await writeFile(join(dir, 'bin', 'ask'), '#!/bin/sh\n')
+    assert.deepEqual(await skillLink({ name: 'ask', dir }), { name: 'ask', dir })
+    assert.deepEqual(await skillLink({ name: 'ask', dir, command: 'nothing' }), { name: 'ask', dir })
+    assert.deepEqual(await skillLink({ name: 'ask', dir: pathToFileURL(`${dir}/`), command: 'ask' }), { name: 'ask', dir, package: { name: '@openagt/skill-ask', dir, bins: { ask: join(dir, 'bin', 'ask') } } })
+  } finally {
+    await rm(base, { recursive: true, force: true })
   }
 })

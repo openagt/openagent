@@ -2,9 +2,7 @@ import { hostname } from 'node:os'
 import type { Driver, SessionLog } from '@openagt/agent-driver'
 import { nodeGitRunner, type GitRunner } from '@openagt/agent-data'
 import type { AnyDiaryLine, LogsDeps, RunCard } from '@openagt/skill-logs'
-import type { SkillLink } from '@openagt/skill-branches'
 import type { DistributionEntry, RunContext } from '@openagt/hooks'
-import { basicSkills } from './basic-skills.js'
 import { isPidAlive } from './run-lock.js'
 import type { RunnerMark } from './records.js'
 import type { AskedName } from './title.js'
@@ -23,10 +21,8 @@ export interface RunDeps {
   /** Whether a pid is a live process here: what the run's lock asks of its holder. */
   isAlive?: (pid: number) => boolean
   now?: () => Date
-  /** The git the skills are linked with. */
+  /** The git this process reads the run's project with. */
   git?: GitRunner
-  /** The skills linked into the checkout beside the branches skill, for the run's agent; the basic ones (`basic-skills.ts`) when absent. */
-  skills?: (repo: string, agent: { ownQuestionTool?: boolean }) => Promise<readonly SkillLink[]>
   logs?: LogsDeps
   log?: (line: string) => void
 }
@@ -37,7 +33,6 @@ export interface RunProcess {
   pid: number
   isAlive: (pid: number) => boolean
   git: GitRunner
-  skills: (repo: string, agent: { ownQuestionTool?: boolean }) => Promise<readonly SkillLink[]>
   clock: () => string
   logs: LogsDeps
   log: (line: string) => void
@@ -50,7 +45,6 @@ export function runProcess(deps: RunDeps): RunProcess {
     pid: deps.pid ?? process.pid,
     isAlive: deps.isAlive ?? isPidAlive,
     git: deps.git ?? nodeGitRunner(),
-    skills: deps.skills ?? basicSkills,
     clock: () => now().toISOString(),
     logs: deps.logs ?? {},
     log: deps.log ?? (() => {}),

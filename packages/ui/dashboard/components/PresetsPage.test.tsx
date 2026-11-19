@@ -32,6 +32,7 @@ const VIEW = {
   github: { host: 'github.com', accounts: ['octo', 'octo-agent'] },
   claude: [{ id: 'This computer', name: 'Claude login on Studio' }, { id: 'Dani', name: 'Dani' }],
   codex: [],
+  plugins: ['ask', 'logs', 'tickets'],
 }
 
 beforeEach(() => {
@@ -88,13 +89,28 @@ describe('the Presets page', () => {
     expect(within(rows[1]!).getByRole('button', { name: 'Remove Reviewer' })).toBeTruthy()
   })
 
-  test('a new preset: its name, typed at once, its accounts picked, every project skill ticked already; saved as the dashboard’s call, and the list read again', async () => {
+  test('a preset that leaves plugins out says which; its editor has them ticked off, and one ticked on again is no longer left out', async () => {
+    rpc.onPresetsList.mockResolvedValue({ ...VIEW, presets: [DEFAULT, { ...REVIEWER, options: { ...REVIEWER.options, plugins: { without: ['logs', 'tickets'] } } }] })
+    render(<PresetsPage />)
+    const rows = await presetRows()
+    expect(rows[1]!.querySelector('.text-faint-foreground')?.textContent).toBe('@octo-agent on GitHub·Claude: Dani·Without logs and tickets·No project skills')
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Reviewer' }))
+    const editor = screen.getByRole('dialog', { name: 'Editing Reviewer' })
+    expect(['ask', 'logs', 'tickets'].map(name => within(editor).getByRole('checkbox', { name: `Plugin ${name}` }).getAttribute('aria-checked'))).toEqual(['true', 'false', 'false'])
+    expect(within(editor).getByText(/Its sessions go without logs and tickets/)).toBeTruthy()
+    fireEvent.click(within(editor).getByRole('checkbox', { name: 'Plugin logs' }))
+    fireEvent.click(within(editor).getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(rpc.sendSavePreset).toHaveBeenCalledWith({ id: 'reviewer', name: 'Reviewer', options: { ...REVIEWER.options, plugins: { without: ['tickets'] } } }))
+  })
+
+  test('a new preset: its name, typed at once, its accounts picked, every plugin and every project skill ticked already; saved as the dashboard’s call, and the list read again', async () => {
     render(<PresetsPage />)
     fireEvent.click(await newPresetPress())
     const editor = screen.getByRole('dialog', { name: 'New preset' })
     // What is typed first goes to the name.
     await waitFor(() => expect(document.activeElement).toBe(within(editor).getByLabelText('Name')))
     expect(within(editor).getByRole('checkbox', { name: 'Project skills' }).getAttribute('aria-checked')).toBe('true')
+    expect(within(editor).getAllByRole('checkbox', { name: /^Plugin / }).map(tick => tick.getAttribute('aria-checked'))).toEqual(['true', 'true', 'true'])
     fireEvent.change(within(editor).getByLabelText('Name'), { target: { value: 'Social Media' } })
     fireEvent.click(within(editor).getByLabelText('Claude account Dani'))
     fireEvent.click(within(editor).getByRole('button', { name: 'Save' }))

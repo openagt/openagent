@@ -8,7 +8,7 @@ import { FakeDriver, type AccountRotation, type Driver, type DriverTurn } from '
 import { ClaudeCodeDriver } from '@openagt/agent-driver-claude'
 import { CodexDriver } from '@openagt/agent-driver-codex'
 import { accountsPath, addAccount } from '@openagt/skill-account-rotation'
-import { PRESETS, chainStore, settingsIn, type DistributionEntry } from '@openagt/hooks'
+import { PRESETS, RunOrder, chainStore, settingsIn, type DistributionEntry, type RunContext } from '@openagt/hooks'
 import { memoryStore } from '@openagt/hooks/testing'
 import { markerCard, writeMarker } from './records.js'
 import { runCommand } from './run.js'
@@ -161,11 +161,11 @@ test('a resumed run continues on the tool its record names, and a Codex run with
       addAccount('Dani', 'x', accountsPath('claude'))
       // The computer's own account at GitHub is another one by the time the run resumes.
       const github = fakeGithub({ 'octo-computer': { GH_TOKEN: 'tok-computer' }, 'octo-one': { GH_TOKEN: 'tok-one' } })
-      const modules: DistributionEntry[] = [...testModules({ github }), { module: { name: 'test-store', hooks: { 'store.backend': store } } }]
-      const first = await runCommand(repo, { prompt: 'Read the docs', driver: codex('Read.'), host: 'this-box', pid: 4242, now: () => NOW, modules, gitAccount: 'octo-one', preset: 'reviewer', skillsOff: ['ask'], projectSkills: 'none' })
+      const modules: DistributionEntry[] = testModules({ github, store })
+      const first = await runCommand(repo, { prompt: 'Read the docs', driver: codex('Read.'), host: 'this-box', pid: 4242, now: () => NOW, modules, gitAccount: 'octo-one', preset: 'reviewer', pluginsWithout: ['ask'], projectSkills: 'none' })
       assert.equal(first.status, 'done')
       assert.equal((await findRun(repo, first.id))?.caller?.['preset'], 'reviewer')
-      assert.deepEqual((await findRun(repo, first.id))?.caller?.['skillsOff'], ['ask'], 'the session\'s picks of skills are on the record')
+      assert.deepEqual((await findRun(repo, first.id))?.caller?.['pluginsWithout'], ['ask'], "the session's picks are on the record")
       assert.equal((await findRun(repo, first.id))?.caller?.['projectSkills'], 'none')
       const asked: string[] = []
       const second = await resumeProject(repo, { id: first.id, text: 'And the tests?' }, { driverFor: (name, _id, setup, as) => { asked.push(`${name} ${JSON.stringify(setup)} ${JSON.stringify(as)}`); return codex('Read too.') }, modules })
@@ -174,7 +174,7 @@ test('a resumed run continues on the tool its record names, and a Codex run with
       assert.deepEqual(github.workedAs, ['octo-one', 'octo-one'], 'the resume goes on as the account the record names, not whatever the computer\'s pick is by then')
       assert.equal((await findRun(repo, first.id))?.caller?.['gitAccount'], 'octo-one')
       assert.equal((await findRun(repo, first.id))?.caller?.['preset'], 'reviewer', 'the preset stays on the record')
-      assert.deepEqual((await findRun(repo, first.id))?.caller?.['skillsOff'], ['ask'], 'and so do the picks')
+      assert.deepEqual((await findRun(repo, first.id))?.caller?.['pluginsWithout'], ['ask'], 'and so do the picks')
       assert.equal((await findRun(repo, first.id))?.caller?.['projectSkills'], 'none')
     } finally {
       if (homeBefore === undefined) delete process.env.XDG_CONFIG_HOME
@@ -182,6 +182,40 @@ test('a resumed run continues on the tool its record names, and a Codex run with
       await rm(home, { recursive: true, force: true })
     }
     assert.deepEqual(startedWith, [{ token: 'tok-one' }, { token: 'tok-one' }], 'no model named at the start nor at the resume: Codex runs on its own default')
+  } finally {
+    await removeRepo(repo)
+  }
+})
+
+test("a run goes without the plugins its preset leaves out, where the session picked none; the session's pick goes over them, none of them too", async () => {
+  const repo = await testRepo()
+  try {
+    const store = memoryStore()
+    await settingsIn(chainStore([store])).set(PRESETS, [{ id: 'quiet', name: 'Quiet', options: { plugins: { without: ['logs'] } } }])
+    const seen: { without: readonly string[] | undefined; skills: string[] }[] = []
+    const looking = { name: 'looking', hooks: { 'run.step': [{ order: RunOrder.CONTEXT, name: 'look', run: (ctx: RunContext) => void seen.push({ without: ctx.options.plugins?.without, skills: ctx.skills.map(skill => skill.name) }) }] } }
+    const modules = testModules({ store, also: [looking] })
+    const codex = (): Driver => ({ id: 'codex', start: opts => new FakeDriver({ turns: [{ text: 'Read.' }], sessionId: 's-codex' }).start(opts) })
+    // Started as `runProject` starts it, on the preset's options as the store keeps them.
+    const run = (at: number, picks: { pluginsWithout?: string[] }) =>
+      runCommand(repo, { prompt: 'Read the docs', driver: codex(), host: 'this-box', pid: 4242, now: () => new Date(NOW.getTime() + at), modules, preset: 'quiet', presetOptions: { plugins: { without: ['logs'] } }, ...picks })
+    const onPreset = await run(0, {})
+    const none = await run(1000, { pluginsWithout: [] })
+    const ask = await run(2000, { pluginsWithout: ['ask'] })
+    // A resume reads the preset its record names through the store.
+    await resumeProject(repo, { id: onPreset.id, text: 'And the tests?' }, { driverFor: codex, modules })
+    assert.deepEqual(
+      seen.map(({ without, skills }) => ({ without, logs: skills.includes('logs'), ask: skills.includes('ask') })),
+      [
+        { without: ['logs'], logs: false, ask: true },
+        { without: [], logs: true, ask: true },
+        { without: ['ask'], logs: true, ask: false },
+        { without: ['logs'], logs: false, ask: true },
+      ],
+    )
+    assert.equal((await findRun(repo, onPreset.id))?.caller?.['pluginsWithout'], undefined, "the preset's, not the session's: its record names no pick")
+    assert.deepEqual((await findRun(repo, none.id))?.caller?.['pluginsWithout'], [], 'the pick of none is on the record')
+    assert.deepEqual((await findRun(repo, ask.id))?.caller?.['pluginsWithout'], ['ask'])
   } finally {
     await removeRepo(repo)
   }

@@ -1,50 +1,54 @@
-import { readFile } from 'node:fs/promises'
-import { join } from 'node:path'
-import { projectSkillNames } from '@openagt/agent-runner'
-import { distributionPackages, type OwnPackage } from '../distribution-packages.js'
-import { descriptionOf, GROUPS } from '../skill-catalogue.js'
+import type { ProjectRef } from '@openagt/hooks'
+import { projectSkillNames } from '@openagt/skills'
+import { distributionHooks, projectRefAt } from '../distribution-hooks.js'
+import { SESSIONS_ID } from '../project-address.js'
 import { resolveProjectPath } from './context.js'
 
-// What a session can pick under the message box, in the Skills menu: the skills every run gets,
-// each of which it can go without, and every other skill the distribution carries, in the menu's
-// groups, which it can take on top; then the project's own skills, all, none or each. A run links
-// the same lists, handed down to it (`cli/skills.ts`).
+// What a session picks under the message box, in the Skills menu: which of the plugins on in its
+// project it goes without, so it gets none of their skills nor their steps; then the project's own
+// skills, all, none or each. A run asks its modules for the same skills (`run.skills`), the plugins
+// it goes without left out.
 
-/** One skill a session can pick. */
-export interface SkillChoice {
+/** A plugin a session can go without. */
+export interface PluginChoice {
+  /** The plugin, by its module's name: what a session goes without. */
   name: string
-  /** The one line the skill's text says of itself. */
-  description: string
+  /** The skills it gives the project's runs, by name; none for one that gives them steps alone. */
+  skills: string[]
 }
 
 export interface SkillChoices {
-  /** The skills every run gets, in the distribution's order. */
-  everyRun: SkillChoice[]
-  /** The other skills carried, in the menu's groups. */
-  more: { title: string; skills: SkillChoice[] }[]
-}
-
-/** A package's skill as a session picks it: its name, and what its text says of itself. */
-async function choiceOf(pkg: OwnPackage & { skill: string }): Promise<SkillChoice> {
-  return { name: pkg.skill, description: descriptionOf(await readFile(join(pkg.dir, 'SKILL.md'), 'utf8').catch(() => '')) }
-}
-
-/** The skills every run gets, and the others a session can take on top. */
-export async function onSkillChoices(): Promise<SkillChoices> {
-  const packages = (await distributionPackages()).filter((pkg): pkg is OwnPackage & { skill: string } => pkg.skill !== undefined)
-  const everyRun = await Promise.all(packages.filter(pkg => pkg.everyRun).map(choiceOf))
-  const named = new Set(everyRun.map(skill => skill.name))
-  const more = await Promise.all(
-    GROUPS.map(async group => ({
-      title: group.title,
-      skills: await Promise.all(group.skills.filter(name => !named.has(name)).flatMap(name => packages.filter(pkg => pkg.skill === name).slice(0, 1)).map(choiceOf)),
-    })),
-  )
-  return { everyRun, more: more.filter(group => group.skills.length > 0) }
+  /** The skills the project's runs get from its core modules, which no session goes without: github's, on GitHub. */
+  core: string[]
+  /** The plugins on in the project that give its runs a skill or a step, in the distribution's order. */
+  plugins: PluginChoice[]
 }
 
 /**
- * The project's own skills, by name, as a run's checkout has them (`agent-runner`'s, which leaves
+ * What a session in the project `projectId` picks from ({@link SESSIONS_ID}: a session with no
+ * project, which gets the plugins kept per project as the distribution starts them). `null` when
+ * the project is unknown here.
+ */
+export async function onSkillChoices(projectId: string): Promise<SkillChoices | null> {
+  let project: ProjectRef | undefined
+  if (projectId !== SESSIONS_ID) {
+    const cwd = await resolveProjectPath(projectId)
+    if (!cwd) return null
+    project = await projectRefAt(projectId, cwd)
+  }
+  const hooks = await distributionHooks()
+  const where = project ? { project } : {}
+  const [given, steps] = await Promise.all([hooks.skills(where), hooks.steps({ ...where, options: {} })])
+  const plugins = hooks.modules.flatMap(module => {
+    if (!module.plugin) return []
+    const skills = given.filter(skill => skill.module === module.name).map(skill => skill.name)
+    return skills.length > 0 || steps.some(step => step.module === module.name) ? [{ name: module.name, skills }] : []
+  })
+  return { core: given.filter(skill => !hooks.module(skill.module)?.plugin).map(skill => skill.name), plugins }
+}
+
+/**
+ * The project's own skills, by name, as a run's checkout has them (`@openagt/skills`', which leaves
  * out the ones a session does not pick): what the Skills menu lists and counts. `null` when the
  * project is unknown here.
  */

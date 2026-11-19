@@ -55,7 +55,8 @@
     "@types/node": "^20.0.0",
     "typescript": "^7.0.2",
     "@openagt/skill-github": "workspace:*",
-    "@openagt/skill-ask": "workspace:*"
+    "@openagt/skill-ask": "workspace:*",
+    "@openagt/skills": "workspace:*"
   },
   "publishConfig": {
     "access": "public"

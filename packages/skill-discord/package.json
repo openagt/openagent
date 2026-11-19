@@ -29,6 +29,10 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
+    "./module": {
+      "types": "./dist/plugin.d.ts",
+      "default": "./dist/plugin.js"
+    },
     "./SKILL.md": "./SKILL.md"
   },
   "scripts": {
@@ -39,7 +43,8 @@
     "clean": "rm -rf dist dist-test SKILL.md"
   },
   "dependencies": {
-    "@openagt/agent-data": "workspace:*"
+    "@openagt/agent-data": "workspace:*",
+    "@openagt/hooks": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

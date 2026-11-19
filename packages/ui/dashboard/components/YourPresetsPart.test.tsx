@@ -19,7 +19,7 @@ afterEach(() => {
 
 describe('the Overview line\'s part on the person\'s presets', () => {
   test('how many presets, by name on its hover, and their page a press away', async () => {
-    onPresetsList.mockResolvedValue({ presets: [{ id: 'default', name: 'Default', options: {} }, { id: 'reviewer', name: 'Reviewer', options: {} }], claude: [], codex: [] })
+    onPresetsList.mockResolvedValue({ presets: [{ id: 'default', name: 'Default', options: {} }, { id: 'reviewer', name: 'Reviewer', options: {} }], claude: [], codex: [], plugins: [] })
     render(<YourPresetsPart />)
     const part = await screen.findByRole('link', { name: '2 presets' })
     expect(part.getAttribute('title')).toBe('Default, Reviewer')

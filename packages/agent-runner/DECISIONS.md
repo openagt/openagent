@@ -21,12 +21,13 @@ already made, and lists it in its pull request; for anything else it proposes an
   modules of the distribution that starts the run, handed down to the run's process
   (`@openagt/hooks`, #2394). It never depends on OpenAgent; OpenAgent brings it, as one
   of its packages.
-- The runner reads no schedule: a run is the prompt it is given. It names no skill: the
-  skills every run gets are handed to it by the package that started OpenAgent
-  (`@openagt/dashboard`), and a git host's among them only where the project is on that host.
-  Their texts are linked into each agent's checkout, hidden from git like the branches
-  skill, each with its command when it has one, so an agent in any project can ask the
-  person a question and open a pull request with nothing committed.
+- The runner reads no schedule: a run is the prompt it is given. It names no skill: a run's
+  skills are its modules' (`run.skills`, #2394), the modules of the distribution that started
+  OpenAgent (`@openagt/dashboard`): every core module's, a git host's only where the project is
+  on that host, and those of the plugins on in the project. Their texts are linked into each
+  agent's checkout, hidden from git like the branches skill, each with its command when it has
+  one, so an agent in any project can ask the person a question and open a pull request with
+  nothing committed.
   A project's own copy of one is left alone. Picked over every skill coming from the
   project's own committed files, where a person who cannot change the default branch got
   agents that could not ask a question; and over the runner naming them itself, where the
@@ -196,15 +197,7 @@ already made, and lists it in its pull request; for anything else it proposes an
   is every account of the computer's: a preset made on another computer runs here without them.
   Picked over accounts named per project, which were kept on one computer for a repository
   that is the same everywhere: whose account a session uses is a pick made for that session.
-- A session's picks of skills are the run's, in its environment with its preset: the skills on
-  top of the ones every run gets, the ones of those left out, and which of the project's own
-  skills stay in its checkout, over its preset's. The run links the defaults less the ones off
-  plus the ones on, by the same rules as the defaults alone; the project skills not picked are left out of the run's
-  checkout by git's sparse checkout, right after the worktree is made and before the skills are
-  linked, so the index keeps them, nothing is committed about them, and the project's other
-  checkouts have them. Which skills the project has is asked of that checkout, not of the
-  project's folder: the checkout starts from origin's branch, and a folder behind or ahead of
-  it would leave the wrong ones out. The record keeps the picks and a resumed run goes on with them, its
-  checkout made again the same way. Picked over deleting the files from the checkout, which
-  the agent's next `git add -A` would commit as a removal, and over the runner editing what
-  the project tracks, which is the project's and not one session's.
+- A session's picks are the run's, in its environment with its preset, each over its preset's
+  (#2394, decision 37): the enabled plugins it goes without, none of whose skills or steps it
+  gets, and which of the project's own skills stay in its checkout. The record keeps the picks
+  and a resumed run goes on with them.

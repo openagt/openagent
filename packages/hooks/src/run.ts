@@ -53,12 +53,8 @@ export interface GitBranchesOptions {
   repos?: { name: string; from: string }[]
 }
 
-/** skills' slice: the skills the run gets beside the ones every run gets, and which of the project's own. */
+/** skills' slice: which of the project's own skills the run gets. The modules' skills are their plugins' to switch (`PluginsOptions`). */
 export interface SkillsOptions {
-  /** Skills the run gets on top of the ones every run gets, by name. */
-  on?: string[]
-  /** Skills every run gets that this one goes without, by name. */
-  off?: string[]
   /**
    * Which of the project's own skills the run gets: every one, none, or the ones named. Absent, its
    * preset's, and every one when that names none. A named skill the project does not have is not there.
@@ -68,7 +64,7 @@ export interface SkillsOptions {
 
 /** The loader's own slice. */
 export interface PluginsOptions {
-  /** The enabled plugins this run goes without: the loader calls none of their run hooks for it. A core module named here is still on. */
+  /** The enabled plugins this run goes without, by name: the loader calls none of their run hooks for it, so it gets none of their skills. A core module named here is still on. */
   without?: string[]
 }
 
@@ -145,6 +141,8 @@ export interface RunContext {
   readonly resume?: RunInput
   /** The folder the agent works in, set at `RunOrder.WORKSPACE`. */
   workspace?: string
+  /** The skills the run's modules give it (`run.skills`), the plugins it goes without left out: linked where it works at `RunOrder.SKILLS`. */
+  readonly skills: readonly RunSkill[]
   /** Sentences the prompt gets before the agent starts, added by the steps before `RunOrder.RUN`. */
   readonly context: string[]
   /**
@@ -186,8 +184,8 @@ export interface RunSkill {
 export interface SkillArgs {
   /** The project the run is in; none for a session with no project. */
   project?: ProjectRef
-  /** The coding agent the run is on, by its id (`claude-code`): one with its own ask tool needs no skill that teaches asking. */
-  driver?: string
+  /** The coding agent the run is on (`claude-code`): one with its own ask tool needs no skill that teaches asking. */
+  agent?: Pick<RunAgent, 'id' | 'ownQuestionTool'>
   options?: RunOptions
 }
 

@@ -1,7 +1,7 @@
 {
   "name": "@openagt/skills",
   "version": "0.0.1",
-  "description": "A project's own skills in OpenAgent: the Skills page in Settings, which lists them and installs nothing, and what the message box offers as commands.",
+  "description": "The skills module of OpenAgent: the skills a run gets, linked where its coding agent works; a project's own skills, which Settings › Skills lists and installs nothing of, and what the message box offers as commands.",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -23,6 +23,10 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
+    "./module": {
+      "types": "./dist/module.d.ts",
+      "default": "./dist/module.js"
+    },
     "./dashboard": "./dist/dashboard/dashboard.js",
     "./server": "./dist/server.js",
     "./package.json": "./package.json"
@@ -37,6 +41,7 @@
   "dependencies": {
     "@openagt/agent-data": "workspace:*",
     "@openagt/hooks": "workspace:*",
+    "@openagt/skill-branches": "workspace:*",
     "yaml": "^2.5.0"
   },
   "devDependencies": {

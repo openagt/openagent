@@ -10,11 +10,9 @@ import { acquireRunLock, releaseRunLock } from './run-lock.js'
 import { resumeRun, runCommand } from './run.js'
 import { AFRESH_NOTICE, earlierWorkLine, PUBLISH_LINES, STOPPED_DETAIL } from './session.js'
 import { recordRun, runnerMark } from './records.js'
-import { handDownBasicSkills, readUntimedDiary, removeRepo, testRepo } from './test-repo.js'
+import { readUntimedDiary, removeRepo, testRepo } from './test-repo.js'
 import { NOW, fakeGitHost, fakeGithub, wrap, QUESTION, committingDriver, ticking, testModules, type GitHost } from './run-test-support.js'
 
-// A run as OpenAgent starts it: with the basic skills handed down.
-handDownBasicSkills()
 
 // A run after its first turn, on a real repository with the agent faked: stopped by a signal, ended
 // waiting and resumed with the answer, continued in a fresh conversation, the lines its inbox holds,

@@ -9,7 +9,9 @@ import { accountNamed, tokenOf } from './working-account.js'
 /**
  * github, the module (#2394): the account a run works as on GitHub, first of its steps, and the
  * pull request its branch has, read back once the branch is, into the run's facts
- * (`RunFacts.github`), which the run's record keeps.
+ * (`RunFacts.github`), which the run's record keeps. Its skill, with the command it teaches, is in
+ * every run of a project on GitHub: its text says the project's pull requests are there, which is
+ * wrong anywhere else.
  */
 
 /** One of OpenAgent's GitHub accounts, as a run works as it: its login, and what the run's environment gets for it. */
@@ -35,6 +37,7 @@ export function githubModule(deps: GithubDeps = {}): ModuleDefinition {
   return defineModule({
     name: 'github',
     hooks: {
+      'run.skills': async ({ project }) => (project && (await onGithub(project.dir)) ? [{ name: 'github', dir: new URL('../', import.meta.url), command: 'github' }] : []),
       'run.step': [
         { order: RunOrder.ACCOUNTS, name: "work as the run's account", run: ctx => workAsAccount(ctx, onGithub, workAs) },
         { order: RunOrder.RECORD - 10, name: 'read the pull request back', run: ctx => readRequest(ctx, requestOfBranch) },

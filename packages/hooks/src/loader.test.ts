@@ -60,6 +60,7 @@ test("a run's steps go by order; at the same order, by the distribution's order,
 test('a plugin is off until its Enabled row is on, in the scope it keeps the row; a core module is always on', async () => {
   const hooks = hooksOf([
     { module: defineModule({ name: 'tickets', plugin: { scope: 'project' }, hooks: {} }) },
+    { module: defineModule({ name: 'queue', plugin: { scope: 'project' }, hooks: {} }), on: true },
     { module: defineModule({ name: 'devices', plugin: { scope: 'computer' }, hooks: {} }) },
     { module: defineModule({ name: 'ask', plugin: { scope: 'computer' }, hooks: {} }), on: true },
     { module: defineModule({ name: 'github', hooks: {} }) },
@@ -69,11 +70,15 @@ test('a plugin is off until its Enabled row is on, in the scope it keeps the row
   assert.equal(await hooks.enabled('devices'), false)
   assert.equal(await hooks.enabled('tickets', P1), false)
   await hooks.setEnabled('tickets', true, P1)
+  await hooks.setEnabled('queue', false, P1)
   await hooks.setEnabled('devices', true)
   await hooks.setEnabled('ask', false)
   assert.equal(await hooks.enabled('tickets', P1), true)
   assert.equal(await hooks.enabled('tickets', P2), false, 'each project has its own row')
-  assert.equal(await hooks.enabled('tickets'), false, 'a plugin kept per project is on in no project unless one is named')
+  assert.equal(await hooks.enabled('queue', P1), false)
+  assert.equal(await hooks.enabled('queue', P2), true)
+  assert.equal(await hooks.enabled('tickets'), false, 'a plugin kept per project, where no project is named, is as the distribution starts it: off')
+  assert.equal(await hooks.enabled('queue'), true, 'or on')
   assert.equal(await hooks.enabled('devices'), true)
   assert.equal(await hooks.enabled('ask'), false)
   assert.equal(await hooks.enabled('nothing'), false)
@@ -112,6 +117,7 @@ test('a run goes without the plugins its options name: none of their steps, skil
   assert.deepEqual(await hooks.attention(every), { items: [{ kind: 'setup', scope: 'project', words: 'Chrome is missing', module: 'browser' }], whole: true })
   assert.deepEqual(await hooks.attention(without), { items: [], whole: true })
   assert.deepEqual((await hooks.steps({ project: P2, options: {} })).map(step => step.name), ['account'], 'the browser is off in p2')
+  assert.deepEqual((await hooks.skills({ project: P2 }, { every: true })).map(skill => skill.name), ['github', 'browser'], "a clean-up asks every module's skills, a plugin that is off too")
 })
 
 test('a second skill, coding agent or host of one name is left out and told; a handler that throws is told, and the others are still asked', async () => {
@@ -256,6 +262,8 @@ test("a distribution is loaded from its packages' ./module entries, through the 
     ['store-filesystem', 'github', 'tickets'],
   )
   assert.equal(await hooks.enabled('tickets', P1), true)
+  assert.equal(hooks.ofPackage('@openagt/tickets')?.name, 'tickets', 'a package is known by the module it is')
+  assert.equal(hooks.ofPackage('@openagt/dashboard-files'), undefined)
   await assert.rejects(loadDistribution([{ package: '@openagt/nothing' }], load), /Cannot find @openagt\/nothing\/module/)
   await assert.rejects(loadDistribution([{ package: '@openagt/bare' }], async () => ({ default: 42 })), /@openagt\/bare\/module default-exports no module/)
 })

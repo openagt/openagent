@@ -5,7 +5,7 @@ import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promi
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { logCardFile, type InboxLine } from '@openagt/agent-driver'
-import { PRESET_ENV, PROJECT_SKILLS_ENV, SKILLS_OFF_ENV, SKILLS_ON_ENV, sessionFolder, sessionsHome } from '@openagt/agent-data'
+import { PLUGINS_WITHOUT_ENV, PRESET_ENV, PROJECT_SKILLS_ENV, sessionFolder, sessionsHome } from '@openagt/agent-data'
 import { LOCAL_HOST, type ProjectRef, type RunHost, type RunReadiness } from '@openagt/hooks'
 import { worktreePath } from '@openagt/skill-branches'
 import { patchRun } from '@openagt/skill-logs'
@@ -66,7 +66,8 @@ test("a start is this computer's: the run's process is spawned with what it was 
         publish: 'pr',
         'git-branches': { base: 'origin/develop' },
         github: { prBase: 'develop', account: 'octo-bot' },
-        skills: { on: ['plan'], off: ['ask'], project: 'none' },
+        skills: { project: 'none' },
+        plugins: { without: ['ask', 'tickets'] },
       },
       title: false,
     })
@@ -80,11 +81,13 @@ test("a start is this computer's: the run's process is spawned with what it was 
     assert.deepEqual(run?.env, {
       [GIT_ACCOUNT_ENV]: 'octo-bot',
       [PRESET_ENV]: 'reviewer',
-      [SKILLS_ON_ENV]: 'plan',
-      [SKILLS_OFF_ENV]: 'ask',
+      [PLUGINS_WITHOUT_ENV]: 'ask,tickets',
       [PROJECT_SKILLS_ENV]: 'none',
       OPENAGENT_NAME_RUN: '0',
     })
+    // None of them, over a preset that leaves some out: the variable is set, to nothing.
+    await here.start({ project, prompt: 'fix the logout', options: { plugins: { without: [] } }, title: false })
+    assert.equal(runs[1]?.env?.[PLUGINS_WITHOUT_ENV], '')
   } finally {
     await removeRepo(repo)
   }
@@ -122,7 +125,8 @@ test('a start that cannot make a run is refused before anything is spawned: a pi
     await assert.rejects(here.start({ project, prompt: 'x', options: { 'git-branches': { repos: [{ name: 'a', from: '/a' }] } } }), /The repos are for a session with no project/)
     await assert.rejects(here.start({ project, prompt: 'x', options: { 'agent-driver': { driver: 'cursor' } } }), /No coding agent is named cursor/)
     await assert.rejects(here.start({ project, prompt: 'x', options: { presets: { preset: '../me' } } }), /A preset is named by its id/)
-    await assert.rejects(here.start({ project, prompt: 'x', options: { skills: { on: ['a skill'] } } }), /Skills are named by their names/)
+    await assert.rejects(here.start({ project, prompt: 'x', options: { skills: { project: ['a skill'] } } }), /Skills are named by their names/)
+    await assert.rejects(here.start({ project, prompt: 'x', options: { plugins: { without: ['A Plugin'] } } }), /Plugins are named by their names/)
     await assert.rejects(here.start({ project, prompt: 'x', options: { 'agent-driver': { driver: 'codex' } } }), /^Error: Codex is not logged in\.$/)
     assert.equal(runs.length, 0)
     assert.deepEqual(await here.check!({ project, options: { 'agent-driver': { driver: 'codex' } } }), { problems: ['Codex is not logged in.'], warnings: [] })

@@ -1,9 +1,10 @@
-import { runPackageCommand, type ProvidedCommand } from '@openagt/agent-data'
-import { basicGitHosts } from './basic-skills.js'
+import { join } from 'node:path'
+import { declaring, readManifest, runPackageCommand, type ProjectPackage, type ProvidedCommand } from '@openagt/agent-data'
+import { DISTRIBUTION_ENV, distributionItems, packageDirOf } from '@openagt/hooks'
 
 /**
- * The project's git host (#1820), reached by declaration: the package among the skills its
- * distribution hands down (`basic-skills.ts`) that declares `"openagent": { "git-host": "<command>" }`
+ * The project's git host (#1820), reached by declaration: the package of the distribution handed
+ * down to this process ({@link DISTRIBUTION_ENV}) that declares `"openagent": { "git-host": "<command>" }`
  * and answers for the project there, and this tool runs that command the way the dashboard runs
  * any provided command. The project's own packages bring none (#2394). Nothing here names a git
  * host or a package.
@@ -14,10 +15,31 @@ import { basicGitHosts } from './basic-skills.js'
 
 const NO_GIT_HOST = 'this project has no git host package'
 
-/** The command of the project's git host: the first of the skills handed down whose git host answers for the project. */
+/** The git hosts of the distribution as read last, by the file they were read off. */
+let read: { file: string; hosts: Promise<ProvidedCommand[]> } | undefined
+
+/** The git host commands the distribution handed down declares, read once per distribution; none when none was handed down, or it cannot be read. */
+function distributionGitHosts(env: NodeJS.ProcessEnv = process.env): Promise<ProvidedCommand[]> {
+  const file = env[DISTRIBUTION_ENV] ?? ''
+  if (read?.file !== file) read = { file, hosts: file ? gitHostsOf(file).catch(() => []) : Promise.resolve([]) }
+  return read.hosts
+}
+
+async function gitHostsOf(file: string): Promise<ProvidedCommand[]> {
+  const packages: ProjectPackage[] = []
+  for (const item of await distributionItems(file)) {
+    if ('module' in item) continue
+    const dir = await packageDirOf(file, item.package)
+    const manifest = await readManifest(join(dir, 'package.json'))
+    if (manifest) packages.push({ name: item.package, dir, manifest })
+  }
+  return declaring(packages, 'git-host')
+}
+
+/** The command of the project's git host: the first of the distribution's git hosts that answers for the project (its `home` command). */
 export async function gitHostCommand(repo: string): Promise<ProvidedCommand | undefined> {
-  const [host] = await basicGitHosts(repo).catch(() => [])
-  return host
+  for (const host of await distributionGitHosts()) if ((await runPackageCommand(repo, host, ['home'])).ok) return host
+  return undefined
 }
 
 /**

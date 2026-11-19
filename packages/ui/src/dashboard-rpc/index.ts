@@ -22,6 +22,7 @@ import * as personalFolder from './personal-folder.js'
 import * as projectAgentData from './project-agent-data.js'
 import * as presets from './presets.js'
 import * as skillChoices from './skill-choices.js'
+import * as plugins from './plugins.js'
 import * as backup from './backup.js'
 import { streamAgentEvents } from './events.js'
 
@@ -43,7 +44,7 @@ export type RpcHandler = (...args: never[]) => unknown
 export const RPC_HANDLERS: Record<string, RpcHandler> = Object.assign(
   Object.create(null) as Record<string, RpcHandler>,
   Object.fromEntries(
-    [reads, control, projects, preferences, quota, models, machines, modules, person, people, accounts, logins, copiedLogins, serverLogins, personalFolder, projectAgentData, presets, skillChoices, backup]
+    [reads, control, projects, preferences, quota, models, machines, modules, person, people, accounts, logins, copiedLogins, serverLogins, personalFolder, projectAgentData, presets, skillChoices, plugins, backup]
       .flatMap(module => Object.entries(module))
       .filter((entry): entry is [string, RpcHandler] => typeof entry[1] === 'function'),
   ),

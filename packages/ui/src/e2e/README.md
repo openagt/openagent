@@ -26,10 +26,11 @@ calls them: what each flow leaves on disk, and what the reads then say. No brows
 ## The demo: `pnpm demo`
 
 The real dashboard, started by its built CLI on a throwaway home (`demo.ts`) and handed the
-distribution whose host scripts the runs (`distribution.ts`): a project "shop" with
-two tickets, a working, a waiting and a done run, and the Logs and Automations pages, and a project "blog" to add
-from the picker, whose runs are scripted too. Walk any flow by
-hand. Ctrl+C stops the runs and the dashboard, and removes the home.
+distribution whose host scripts the runs (`distribution.ts`): a project "shop", its tickets,
+queue, logs and scheduled-agents plugins switched on, with two skills of its own, two tickets, a
+working, a waiting and a done run, and the Logs and Automations pages; and a project "blog" to
+add from the picker, whose runs are scripted too, its plugins as a new project's. Walk any flow
+by hand. Ctrl+C stops the runs and the dashboard, and removes the home.
 
 ## The browser smoke stories: `smoke-*.test.ts`
 

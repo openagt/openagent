@@ -1,9 +1,9 @@
-import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
-import { createRequire } from 'node:module'
+import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { delimiter, dirname, join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { strict as assert } from 'node:assert'
-import { DATA_BRANCH, nodeGitRunner, SKILLS_ENV, writeSharing } from '@openagt/agent-data'
+import { DATA_BRANCH, nodeGitRunner, writeSharing } from '@openagt/agent-data'
+import { DISTRIBUTION_ENV } from '@openagt/hooks'
 import { readDiary, type AnyDiaryLine } from '@openagt/skill-logs'
 
 /**
@@ -14,13 +14,28 @@ import { readDiary, type AnyDiaryLine } from '@openagt/skill-logs'
 
 export const git = nodeGitRunner()
 
+/** How many distributions this process's tests handed down: each is a file of its own, since a distribution is read once per file. */
+let handedDown = 0
+
 /**
- * Hand this process the basic skills as `@openagt/dashboard` hands them to OpenAgent: logs, question
- * and github, from this package's own install.
+ * Hand down to this process a distribution of the packages in `packages`, by name, each the folder
+ * given, installed under `dir`'s `node_modules`: as OpenAgent hands its own down to a run's
+ * process. Answers what hands back the distribution handed down before.
  */
-export function handDownBasicSkills(): void {
-  const require = createRequire(import.meta.url)
-  process.env[SKILLS_ENV] = ['@openagt/skill-logs', '@openagt/skill-ask', '@openagt/skill-github'].map(name => dirname(require.resolve(`${name}/package.json`))).join(delimiter)
+export async function handDownDistribution(dir: string, packages: Record<string, string>): Promise<() => void> {
+  for (const [name, from] of Object.entries(packages)) {
+    const at = join(dir, 'node_modules', name)
+    await mkdir(dirname(at), { recursive: true })
+    await symlink(from, at)
+  }
+  const file = join(dir, `distribution-${++handedDown}.mjs`)
+  await writeFile(file, `export default ${JSON.stringify(Object.keys(packages).map(name => ({ package: name })))}\n`)
+  const before = process.env[DISTRIBUTION_ENV]
+  process.env[DISTRIBUTION_ENV] = file
+  return () => {
+    if (before === undefined) delete process.env[DISTRIBUTION_ENV]
+    else process.env[DISTRIBUTION_ENV] = before
+  }
 }
 
 export const RETRIED_RM = { recursive: true, force: true, maxRetries: 10 } as const

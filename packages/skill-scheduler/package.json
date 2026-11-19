@@ -35,6 +35,10 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
+    "./module": {
+      "types": "./dist/plugin.d.ts",
+      "default": "./dist/plugin.js"
+    },
     "./dashboard": "./dist/dashboard/dashboard.js"
   },
   "scripts": {
@@ -53,7 +57,8 @@
     "@openagt/agent-driver": "workspace:*",
     "@openagt/agent-runner": "workspace:*",
     "yaml": "^2.5.0",
-    "@openagt/skill-account-rotation": "workspace:*"
+    "@openagt/skill-account-rotation": "workspace:*",
+    "@openagt/hooks": "workspace:*"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.0.0",

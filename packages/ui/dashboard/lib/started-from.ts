@@ -24,9 +24,8 @@ export interface StartPicks {
   repos?: { name: string; from: string }[]
   /** The preset the run is on, by its id. */
   preset?: string
-  /** The session's picks of skills: names on top of the ones every run gets, names of those left out, which of the project's own stay (`all`, `none`, or names; absent, its preset's). */
-  skillsOn?: string[]
-  skillsOff?: string[]
+  /** The session's picks: the plugins it goes without, by name, which of the project's own skills stay (`all`, `none`, or names; absent, its preset's). */
+  pluginsWithout?: string[]
   projectSkills?: 'all' | 'none' | string[]
 }
 

@@ -100,14 +100,12 @@ export interface StartAgentOptions {
    * person. Absent, Default. The run's record keeps it, and a resume goes on with it.
    */
   preset?: string
-  /** Skills the session gets on top of the ones every run gets, by name: the "Skills" menu's picks for this session. Absent, none. */
-  skillsOn?: string[]
-  /** Skills every run gets that the session does not get, by name. Absent, none. */
-  skillsOff?: string[]
+  /** The plugins on in the project the session goes without, by name: the "Skills" menu's picks for this session, none of them for an empty list. Absent, its preset's. */
+  pluginsWithout?: string[]
   /**
    * Which of the project's own skills stay in the session's checkout: `all`, `none`, or their
    * names. Absent, its preset's, and every one when that names none. Refused for a session with no
-   * project. The run's record keeps these three, and a resume goes on with them.
+   * project. The run's record keeps these two, and a resume goes on with them.
    */
   projectSkills?: 'all' | 'none' | string[]
 }

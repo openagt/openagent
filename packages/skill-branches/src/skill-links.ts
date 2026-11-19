@@ -1,7 +1,8 @@
-import { readFile, writeFile } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { readFile, realpath, writeFile } from 'node:fs/promises'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { nodeGitRunner, type GitRunner, excludeFromGit } from '@openagt/agent-data'
+import { nodeGitRunner, packageBins, readManifest, type GitRunner, excludeFromGit } from '@openagt/agent-data'
+import type { RunSkill } from '@openagt/hooks'
 import { nodeLinkFs } from './worktree-deps.js'
 import { entryExists, linkPackage, packageLinkPaths, type PackageLink } from './command-link.js'
 import { CLI_BIN_DIR } from './bin-dir.js'
@@ -41,6 +42,21 @@ export interface SkillLink {
   dir: string
   /** The package the skill's text calls by its full name, when the skill has a command: linked with its commands (`command-link.ts`). */
   package?: PackageLink
+}
+
+/**
+ * A module's skill (`run.skills`), as it is linked: its folder, and, for one that teaches a
+ * command, its package with that command, so the text's `npx <package>` runs the copy linked in
+ * the checkout, with nothing downloaded. One whose package has no such command is linked without it.
+ */
+export async function skillLink(skill: RunSkill): Promise<SkillLink> {
+  const given = resolve(typeof skill.dir === 'string' ? skill.dir : fileURLToPath(skill.dir))
+  const dir = await realpath(given).catch(() => given)
+  if (skill.command === undefined) return { name: skill.name, dir }
+  const manifest = await readManifest(join(dir, 'package.json'))
+  const name = typeof manifest?.name === 'string' ? manifest.name : undefined
+  const bin = name !== undefined ? packageBins(name, manifest?.bin, dir)[skill.command] : undefined
+  return name === undefined || bin === undefined ? { name: skill.name, dir } : { name: skill.name, dir, package: { name, dir, bins: { [skill.command]: bin } } }
 }
 
 /**

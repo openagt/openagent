@@ -1,5 +1,5 @@
 import { isSkillName, type FileBranchWrite } from '@openagt/agent-data'
-import { isPresetId } from '@openagt/hooks'
+import { isPresetId, MODULE_NAME } from '@openagt/hooks'
 import type { ProjectSkillsPick } from './preset.js'
 import { publishedBranch } from '@openagt/agent-data/names'
 import { deleteRun, writeRun, type AnyDiaryLine, type LogsDeps, type RunCard } from '@openagt/skill-logs'
@@ -49,7 +49,7 @@ export interface RunnerMark extends Lasting {
 /**
  * What a mark keeps for the run's whole life, a resume included: its publish level,
  * where it started, where its pull request goes, the account it works as, what it was started for,
- * the repos it has, its agent and the session's picks of skills.
+ * the repos it has, its agent and the session's picks: the plugins it goes without, the project's skills it gets.
  */
 export interface Lasting {
   /** How far the run takes its work when its agent finishes (`run --publish`): a commit, the branch, its pull request, or the request set to merge; absent, only what its prompt asks. */
@@ -68,10 +68,8 @@ export interface Lasting {
   repos?: SessionRepo[]
   /** The preset the run is on, by its id (`OPENAGENT_PRESET`): each leg runs on its options as it stands then; Default when absent. */
   preset?: string
-  /** Skills the run gets on top of the ones every run gets (`OPENAGENT_SKILLS_ON`): the session's pick. */
-  skillsOn?: string[]
-  /** Skills every run gets that this one goes without (`OPENAGENT_SKILLS_OFF`): the session's pick. */
-  skillsOff?: string[]
+  /** The enabled plugins the run goes without (`OPENAGENT_PLUGINS_WITHOUT`), by name: the session's pick, none of them for an empty list; its preset's when absent. */
+  pluginsWithout?: string[]
   /** Which of the project's own skills stay in the run's checkout (`OPENAGENT_PROJECT_SKILLS`), the session's pick: every one, none, or the ones named; its preset's when absent, and every one when that names none. */
   projectSkills?: ProjectSkillsPick
 }
@@ -103,15 +101,17 @@ export function earlierPrs(card: RunCard): { number: number; url: string }[] {
   return prs.flatMap(pr => (pr && typeof pr === 'object' && typeof pr.number === 'number' && typeof pr.url === 'string' ? [{ number: pr.number as number, url: pr.url as string }] : []))
 }
 
-/** A list of skill names, as a mark keeps one; nothing for anything else, or an empty list. */
-const skillNames = (value: unknown): string[] | undefined => (Array.isArray(value) && value.length > 0 && value.every(isSkillName) ? (value as string[]) : undefined)
+/** A list of names, as a mark keeps one, each one `isName` says is one; nothing for anything else, or an empty list. */
+const namesOf = (value: unknown, isName: (name: unknown) => boolean): string[] | undefined => (Array.isArray(value) && value.length > 0 && value.every(isName) ? (value as string[]) : undefined)
+const isPluginName = (name: unknown): boolean => typeof name === 'string' && MODULE_NAME.test(name)
+/** The plugins a mark says the run goes without: an empty list too, a pick of none over its preset's. */
+const pluginsOf = (value: unknown): string[] | undefined => (Array.isArray(value) && value.every(isPluginName) ? (value as string[]) : undefined)
 
 /** What `mark` keeps for the run's whole life ({@link Lasting}), as far as each is what it should be: anything else there is left out. */
 export function lasting(mark: { [K in keyof Lasting]?: unknown }): Lasting {
   const repos = reposOf(mark.repos)
-  const skillsOn = skillNames(mark.skillsOn)
-  const skillsOff = skillNames(mark.skillsOff)
-  const projectSkills = mark.projectSkills === 'all' || mark.projectSkills === 'none' ? mark.projectSkills : skillNames(mark.projectSkills)
+  const pluginsWithout = pluginsOf(mark.pluginsWithout)
+  const projectSkills = mark.projectSkills === 'all' || mark.projectSkills === 'none' ? mark.projectSkills : namesOf(mark.projectSkills, isSkillName)
   return {
     ...(isPublish(mark.publish) ? { publish: mark.publish } : {}),
     ...(typeof mark.base === 'string' ? { base: mark.base } : {}),
@@ -121,8 +121,7 @@ export function lasting(mark: { [K in keyof Lasting]?: unknown }): Lasting {
     ...(typeof mark.for === 'string' ? { for: mark.for } : {}),
     ...(repos !== undefined && repos.length > 0 ? { repos } : {}),
     ...(isPresetId(mark.preset) ? { preset: mark.preset } : {}),
-    ...(skillsOn ? { skillsOn } : {}),
-    ...(skillsOff ? { skillsOff } : {}),
+    ...(pluginsWithout ? { pluginsWithout } : {}),
     ...(projectSkills !== undefined ? { projectSkills } : {}),
   }
 }
@@ -158,8 +157,7 @@ export function forReaders(mark: Lasting): Lasting {
     ...(mark.for !== undefined ? { for: mark.for } : {}),
     ...(mark.repos !== undefined ? { repos: mark.repos } : {}),
     ...(mark.preset !== undefined ? { preset: mark.preset } : {}),
-    ...(mark.skillsOn !== undefined ? { skillsOn: mark.skillsOn } : {}),
-    ...(mark.skillsOff !== undefined ? { skillsOff: mark.skillsOff } : {}),
+    ...(mark.pluginsWithout !== undefined ? { pluginsWithout: mark.pluginsWithout } : {}),
     ...(mark.projectSkills !== undefined ? { projectSkills: mark.projectSkills } : {}),
   }
 }

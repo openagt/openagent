@@ -1,5 +1,5 @@
-import { PRESET_ENV, PROJECT_SKILLS_ENV, SKILLS_OFF_ENV, SKILLS_ON_ENV, isSkillName } from '@openagt/agent-data'
-import { DEFAULT_PRESET, PRESETS, createHooks, isPresetId, loadHandedDown, presetOf, type Preset, type Settings } from '@openagt/hooks'
+import { PLUGINS_WITHOUT_ENV, PRESET_ENV, PROJECT_SKILLS_ENV, isSkillName } from '@openagt/agent-data'
+import { DEFAULT_PRESET, MODULE_NAME, PRESETS, createHooks, isPresetId, loadHandedDown, presetOf, type Preset, type Settings, type SkillsOptions } from '@openagt/hooks'
 
 /**
  * The preset a run is on (#2394): a name and a saved set of run options, kept with the person (the
@@ -33,38 +33,39 @@ export async function handedDownSettings(env: NodeJS.ProcessEnv = process.env): 
 }
 
 /** Which of the project's own skills a run gets: every one, none, or the ones named; its preset's when absent. */
-export type ProjectSkillsPick = 'all' | 'none' | string[]
+export type ProjectSkillsPick = NonNullable<SkillsOptions['project']>
 
 /**
- * A session's picks of the skills its run gets, made beside the message box for that run alone
- * and kept on its record: skills on top of the ones every run gets, ones of those left out, and
- * which of the project's own skills stay in its checkout, over its preset's. Named in the
- * environment with the preset ({@link SKILLS_ON_ENV}, {@link SKILLS_OFF_ENV}, {@link PROJECT_SKILLS_ENV}).
+ * A session's picks for its run, made beside the message box for that run alone and kept on its
+ * record, over its preset's: the enabled plugins it goes without, so it gets none of their skills
+ * nor their steps, and which of the project's own skills stay in its checkout. Named in the
+ * environment with the preset ({@link PLUGINS_WITHOUT_ENV}, {@link PROJECT_SKILLS_ENV}).
  */
-export interface SkillPicks {
-  on?: string[]
-  off?: string[]
+export interface SessionPicks {
+  /** The plugins the run goes without, by name: none of them for an empty list. */
+  without?: string[]
   project?: ProjectSkillsPick
 }
 
-/** The picks named for this run in the environment; none where nothing is set. A word that is no skill name refuses. */
-export function skillPicksNamed(env: NodeJS.ProcessEnv = process.env): SkillPicks {
-  const names = (variable: string): string[] | undefined => {
-    const value = env[variable]?.trim()
-    if (!value) return undefined
-    const list = value.split(',').map(name => name.trim()).filter(Boolean)
-    const odd = list.find(name => !isSkillName(name))
-    if (odd !== undefined) throw new Error(`${variable} is no list of skill names: ${odd}`)
+/**
+ * The picks named for this run in the environment; none where nothing is set. The plugins'
+ * variable set to nothing is a pick too: the run goes without none of them, whatever its preset
+ * leaves out. A word that is no plugin's or skill's name refuses.
+ */
+export function sessionPicksNamed(env: NodeJS.ProcessEnv = process.env): SessionPicks {
+  const names = (variable: string, isName: (name: string) => boolean, what: string): string[] => {
+    const list = (env[variable] ?? '').split(',').map(name => name.trim()).filter(Boolean)
+    const odd = list.find(name => !isName(name))
+    if (odd !== undefined) throw new Error(`${variable} is no list of ${what} names: ${odd}`)
     return [...new Set(list)]
   }
-  const on = names(SKILLS_ON_ENV)
-  const off = names(SKILLS_OFF_ENV)
+  const without = env[PLUGINS_WITHOUT_ENV] !== undefined ? names(PLUGINS_WITHOUT_ENV, name => MODULE_NAME.test(name), 'plugin') : undefined
   const project = env[PROJECT_SKILLS_ENV]?.trim()
-  const kept = !project ? undefined : project === 'all' || project === 'none' ? project : names(PROJECT_SKILLS_ENV)!
-  return { ...(on ? { on } : {}), ...(off ? { off } : {}), ...(kept !== undefined ? { project: kept } : {}) }
+  const kept = !project ? undefined : project === 'all' || project === 'none' ? project : names(PROJECT_SKILLS_ENV, isSkillName, 'skill')
+  return { ...(without ? { without } : {}), ...(kept !== undefined ? { project: kept } : {}) }
 }
 
 /** Whether any pick is made. */
-export function anySkillPick(picks: SkillPicks): boolean {
-  return picks.on !== undefined || picks.off !== undefined || picks.project !== undefined
+export function anyPick(picks: SessionPicks): boolean {
+  return picks.without !== undefined || picks.project !== undefined
 }

@@ -12,6 +12,7 @@ import { asCaller } from '../dashboard/person.js'
 import { setDashboardContext } from './context.js'
 import { NO_ELSEWHERE, provideTestContext, testDashboardContext } from './test-context.js'
 import { testPackagesBut, withDistribution } from '../test-distribution.js'
+import { distributionHooks, projectRefAt } from '../distribution-hooks.js'
 
 // The host's capabilities, wired as the daemon wires them (D3); a test that needs other ones wires its own.
 provideTestContext()
@@ -29,13 +30,14 @@ async function install(dir: string, packages: Record<string, { manifest: Record<
   }
 }
 
-/** A project folder, holding the text of each skill named, so it picked it. */
-async function project(dir: string, picks: readonly string[] = []): Promise<void> {
+/** A project folder. */
+async function project(dir: string): Promise<void> {
   await mkdir(dir, { recursive: true })
-  for (const name of picks) {
-    await mkdir(join(dir, '.claude', 'skills', name), { recursive: true })
-    await writeFile(join(dir, '.claude', 'skills', name, 'SKILL.md'), `---\nname: ${name}\n---\n`)
-  }
+}
+
+/** Switch the plugin `name` on in the project at `dir`, as Settings › Plugins does. */
+async function switchOn(dir: string, name: string): Promise<void> {
+  await (await distributionHooks()).setEnabled(name, true, await projectRefAt(projectId(dir), dir))
 }
 
 /** The computer's packages of the tests' distribution, as it lists them. */
@@ -43,7 +45,13 @@ const COMPUTER = testPackagesBut().filter(pkg => pkg.for === 'computer')
 
 const module = (bin: string) => ({
   manifest: { exports: { './dashboard': './w.js' }, bin: { [bin]: `bin/${bin}` } },
-  files: { 'w.js': 'export default {}', [`bin/${bin}`]: `console.log(JSON.stringify(${JSON.stringify(bin)}))`, 'SKILL.md': `---\nname: ${bin}\n---\n` },
+  files: { 'w.js': 'export default {}', [`bin/${bin}`]: `console.log(JSON.stringify(${JSON.stringify(bin)}))` },
+})
+
+/** A module whose package is a plugin's, kept per project: a project has it once the plugin is on there. */
+const plugin = (bin: string) => ({
+  manifest: { exports: { './dashboard': './w.js', './module': './module.mjs' }, bin: { [bin]: `bin/${bin}` } },
+  files: { ...module(bin).files, 'module.mjs': `export default { name: ${JSON.stringify(bin)}, plugin: { scope: 'project' }, hooks: {} }` },
 })
 
 /** A queue provider that is also a module: `--local` prints its file; `add` appends to it. */
@@ -73,16 +81,17 @@ test('the dashboard\'s modules are every registered project\'s, one per package,
   process.env.XDG_CONFIG_HOME = join(dir, 'cfg')
   try {
     await mkdir(process.env.XDG_CONFIG_HOME, { recursive: true })
-    await install(dir, { logs: module('logs'), queue: module('queue'), plain: { manifest: { bin: { plain: 'bin/plain' } }, files: { 'bin/plain': 'console.log("1")' } } })
+    await install(dir, { logs: module('logs'), queue: plugin('queue'), plain: { manifest: { bin: { plain: 'bin/plain' } }, files: { 'bin/plain': 'console.log("1")' } } })
     const a = join(dir, 'a')
     const b = join(dir, 'b')
     await project(a)
-    await project(b, ['queue'])
+    await project(b)
     await addProject(a, '2026-09-19T00:00:00.000Z')
     await addProject(b, '2026-09-19T00:00:01.000Z')
 
-    await withDistribution(dir, [...COMPUTER, '@openagt/dashboard-changes', '@openagt/dashboard-files', 'logs', 'plain', { package: 'queue', for: 'picked' }], async () => {
-      // The computer's modules (Devices, the accounts, the Human Queue, Profile) come first, and are no project's. Then the ones every project has, from the first; then queue, which only the project that picked its skill has.
+    await withDistribution(dir, [...COMPUTER, '@openagt/store-filesystem', '@openagt/dashboard-changes', '@openagt/dashboard-files', 'logs', 'plain', 'queue'], async () => {
+      await switchOn(b, 'queue')
+      // The computer's modules (Devices, the accounts, the Human Queue, Profile) come first, and are no project's. Then the ones every project has, from the first; then queue, which only the project it is on in has.
       assert.deepEqual(await listed(), [
         { package: '@openagt/dashboard-devices', url: '/_computer-modules/%40openagt%2Fdashboard-devices/dashboard.js', projects: [], computer: true },
         { package: '@openagt/skill-account-rotation', url: '/_computer-modules/%40openagt%2Fskill-account-rotation/dashboard.js', projects: [], computer: true },
@@ -224,11 +233,11 @@ test("another computer's project has the pages its computer said, from a copy he
     await addProject(a, '2026-09-19T00:00:00.000Z')
     const theirs = { id: 'shop-1~abc', path: '/Users/ada/shop', name: 'shop', activated: true, gitHost: true, machine: 'http://127.0.0.1:4210', modules: ['logs', '@openagt/skill-queue', '@openagt/dashboard-devices', 'left-pad'] }
     setDashboardContext(testDashboardContext({ remote: { ...testDashboardContext().remote, ...NO_ELSEWHERE, elsewhere: async () => [theirs] } }))
-    await withDistribution(dir, [...COMPUTER, 'logs', { package: '@openagt/skill-queue', for: 'picked' }], async () => {
+    await withDistribution(dir, [...COMPUTER, '@openagt/store-filesystem', 'logs', '@openagt/skill-queue'], async () => {
       const modules = await listed()
       // A package a project here has: its page is that one, for theirs too.
       assert.deepEqual(modules.find(m => m.package === 'logs')?.projects, [projectId(a), 'shop-1~abc'])
-      // One no project here has (none picked its skill), that the distribution brings: from the distribution's own copy.
+      // One no project here has (its plugin is on in none), that the distribution brings: from the distribution's own copy.
       assert.deepEqual(modules.find(m => m.package === '@openagt/skill-queue'), { package: '@openagt/skill-queue', url: '/_brought-modules/%40openagt%2Fskill-queue/dashboard.js', projects: ['shop-1~abc'] })
       // The computer's own modules are no project's, and a package with no copy here brings nothing.
       assert.deepEqual(modules.find(m => m.package === '@openagt/dashboard-devices')?.projects, [])

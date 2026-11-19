@@ -12,7 +12,7 @@ import { createInterface } from 'node:readline'
 import { fileURLToPath } from 'node:url'
 import { projectId } from '@openagt/agent-data'
 import type { AgentMeta, AgentStatus } from '../store/index.js'
-import { makeFixtureRepo } from './fixture.js'
+import { FIXTURE_PLUGINS, makeFixtureRepo } from './fixture.js'
 
 /** The demo's `openagent`: the dashboard's command with the demo's distribution, its runs scripted. */
 const CLI = fileURLToPath(new URL('./openagent-bin.js', import.meta.url))
@@ -56,6 +56,9 @@ export interface DemoOptions {
 /** What the demo's project holds: two tickets on its data branch, for the Tickets page. */
 const SHOP_FILES: Record<string, string> = {
   'README.md': '# shop\n\nThe demo project: a small web shop.\n',
+  // Two skills of its own, committed as a project keeps them: Settings › Skills lists them, and they are commands in the box.
+  '.claude/skills/deploy/SKILL.md': '---\nname: deploy\ndescription: Deploy the shop to its server, when the person asks to ship it.\n---\n\n# Deploy\n\nBuild the shop, then copy the build to its server.\n',
+  '.claude/skills/release-notes/SKILL.md': '---\nname: release-notes\ndescription: Write the release notes of the next version from the pull requests merged since the last one.\n---\n\n# Release notes\n\nOne line per merged pull request, newest first.\n',
   'tickets/2026-08-01_login-page.md': 'priority: 8\n\n# Login page\n\n## TLDR\n\nAdd a login page with session cookies.\n',
   'tickets/2026-08-02_dark-mode.md': '# Dark mode\n\n## TLDR\n\nHonor prefers-color-scheme.\n',
 }
@@ -69,6 +72,9 @@ const SEEDED: Array<{ prompt: string; until: AgentStatus[] }> = [
 
 const DEMO_USER = { name: 'Demo', email: 'demo@example.invalid' }
 
+/** The plugins the demo's project has on: the ones with a page of their own, and the fixture's. */
+const SHOP_PLUGINS = [...FIXTURE_PLUGINS, 'logs', 'scheduled-agents']
+
 /** The variables an OpenAgent run hands its agent: an agent running the demo must not hand them on to it. */
 const handedToAgents = (name: string): boolean => name.startsWith('OPENAGENT_') || name === 'AGENT_ID'
 
@@ -81,15 +87,14 @@ export async function startDemo(options: DemoOptions = {}): Promise<Demo> {
   await mkdir(toAdd, { recursive: true })
   // The person the dashboard names is the home's git user: "Demo", not whoever runs the demo.
   await writeFile(join(home, '.gitconfig'), `[user]\n\tname = ${DEMO_USER.name}\n\temail = ${DEMO_USER.email}\n`)
-  // The project the dashboard has holds every skill with a page of its own, so each page can be walked.
   // Every commit is the demo's person's, so nobody else is among the project's members; and each
   // origin stands outside its project's folder, in a hidden one the picker does not look into, so
   // the project's files are its own alone.
-  for (const [cwd, files, skills] of [
-    [shop, SHOP_FILES, ['tickets', 'queue', 'logs', 'scheduler']],
-    [toAdd, { 'README.md': '# blog\n\nThe project to add from the dashboard.\n' }, ['tickets', 'queue']],
+  for (const [cwd, files] of [
+    [shop, SHOP_FILES],
+    [toAdd, { 'README.md': '# blog\n\nThe project to add from the dashboard.\n' }],
   ] as const) {
-    await makeFixtureRepo(cwd, files, skills, { user: DEMO_USER, origin: join(home, '.origins', `${basename(cwd)}.git`) })
+    await makeFixtureRepo(cwd, files, { user: DEMO_USER, origin: join(home, '.origins', `${basename(cwd)}.git`) })
   }
   const env: NodeJS.ProcessEnv = Object.fromEntries(Object.entries(process.env).filter(([name]) => !handedToAgents(name)))
   // Its temporary folder in the home too, so what the dashboard leaves there goes with it.
@@ -191,6 +196,11 @@ export async function startDemo(options: DemoOptions = {}): Promise<Demo> {
     // Its records go to its remote, as a team's do.
     const shared = await call<{ ok: boolean; error?: string }>('sendShareRecords', id, true)
     if (!shared.ok) throw new Error(`could not share the demo project's records: ${shared.error}`)
+    // It has on every plugin with a page of its own, so each page can be walked.
+    for (const plugin of SHOP_PLUGINS) {
+      const switched = await call<{ ok: boolean; error?: string }>('sendSwitchPlugin', plugin, true, id)
+      if (!switched.ok) throw new Error(`could not switch ${plugin} on in the demo project: ${switched.error}`)
+    }
     if (options.seed) {
       for (const { prompt, until } of SEEDED) {
         const started = await call<{ ok: true; agentId: string } | { ok: false; error: string }>('sendStart', id, prompt, {})

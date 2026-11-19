@@ -1,6 +1,6 @@
 import { useCallback, useContext, useEffect, useId, useRef, useState, type ComponentType, type ReactNode } from 'react'
 import { Dialog as BaseDialog } from '@base-ui/react/dialog'
-import { ArrowLeft, Bell, Bot, ChevronRight, ChevronsUpDown, Database, FolderGit2, Globe, Keyboard, Layers, Palette, X, FolderSearch } from 'lucide-react'
+import { ArrowLeft, Bell, Blocks, Bot, ChevronRight, ChevronsUpDown, Database, FolderGit2, Globe, Keyboard, Layers, Palette, X, FolderSearch } from 'lucide-react'
 import { DRIVERS, DRIVER_LABELS, isDriverName } from '../../src/client.js'
 import { driverOptions, useModels } from '../lib/models.js'
 import type { DriverOption } from './DriverModelMenu.js'
@@ -23,6 +23,7 @@ import { REPO_SOURCES_ENTRY, RepoSourcesSettings } from './RepoSourcesSettings.j
 import { PickProject } from './PickProject.js'
 import { ProjectDot } from './ProjectPicker.js'
 import { PROJECT_AGENT_DATA_ENTRY, ProjectAgentDataSettings } from './ProjectAgentDataSettings.js'
+import { COMPUTER_PLUGINS_ENTRY, ComputerPluginsSettings, PLUGINS_ENTRY, ProjectPluginsSettings } from './PluginsSettings.js'
 import { BridgeBrowserSettings } from './BridgeBrowserSettings.js'
 import { ModuleSlot, projectsHaving } from './ModulePageView.js'
 import { ConfirmDialog } from './ui/confirm-dialog.js'
@@ -45,9 +46,10 @@ import { SettingsFootContext, SettingsSection, SettingsSelectRow as SelectRow, T
 // The list has two groups, by whose the settings are. First, with no title: the dashboard's own
 // (how it looks, what it tells you, which agent runs) and the entries of the packages that are
 // the computer's (Profile, Devices), in one order by number: the dashboard's own stand at 20 to
-// 80, so a package's entry goes before them, between two, or after them. Then "Project": the entries
-// of the packages a project has (its Skills first), each saved in that project's own folder, and the
-// project's agent data, in one order the same way. That group shows the project picked in the
+// 80, so a package's entry goes before them, between two, or after them; the plugins kept per person
+// or per computer, switched on and off, among them. Then "Project": the entries of the packages a
+// project has (its Skills first), each saved in that project's own folder, its plugins, switched on
+// and off, and the project's agent data, in one order the same way. That group shows the project picked in the
 // sidebar, and its own select changes it without leaving Settings; with "All projects" an entry is
 // every project's that has its package, and a change saves to each. The agent data is one project's
 // at a time: with "All projects" that page asks for one.
@@ -147,7 +149,12 @@ export function SettingsDialog({
     body: project ? <Page projectId={project.id} /> : <PickProject words={words} projects={projects} onPick={setPicked} />,
   })
   const ownForProject: Entry[] =
-    projects.length > 0 ? [oneProject(PROJECT_AGENT_DATA_ENTRY, 50, 'Project agent data', Database, ProjectAgentDataSettings, 'Each project keeps its agent data in one place, your folder or its own repository. Pick a project.')] : []
+    projects.length > 0
+      ? [
+          oneProject(PLUGINS_ENTRY, 15, 'Plugins', Blocks, ProjectPluginsSettings, 'Each project switches its plugins on and off. Pick a project.'),
+          oneProject(PROJECT_AGENT_DATA_ENTRY, 50, 'Project agent data', Database, ProjectAgentDataSettings, 'Each project keeps its agent data in one place, your folder or its own repository. Pick a project.'),
+        ]
+      : []
   const projectEntries = [...ownForProject, ...forProject.map(section => moduleEntry(section, project ? [project] : projects))].sort(byOrder)
   const shown = [...yours, ...projectEntries].find(e => e.id === entry)
   const current = shown ?? yours[0]!
@@ -450,6 +457,13 @@ function useOwnEntries(): Entry[] {
           />
         </SettingsSection>
       ),
+    },
+    {
+      id: COMPUTER_PLUGINS_ENTRY,
+      order: 45,
+      title: 'Plugins',
+      icon: Blocks,
+      body: <ComputerPluginsSettings />,
     },
     {
       id: AGENT_DATA_ENTRY,
