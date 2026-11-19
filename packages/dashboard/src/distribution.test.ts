@@ -26,12 +26,7 @@ test("the distribution's modules load from its own install, the store's and the 
     'browser',
     'scheduled-agents',
     'discord',
-    'plan',
-    'plan-tickets',
     'github-auto-reply',
-    'triage',
-    'update-tickets',
-    'work-queue',
   ])
   // #2394: ask starts on, every other plugin off; a git store keeps its own row, how its repository stands.
   assert.deepEqual(modules!.filter(entry => entry.module.plugin && entry.on).map(entry => entry.module.name), ['ask'])

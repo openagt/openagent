@@ -70,3 +70,42 @@ already made, and lists it in its pull request; for anything else it proposes an
   without landing. Picked over a card in the dashboard fed by the queue provider, which drew
   an empty queue for a project with no queue package. The card names no tickets: a queued
   ticket reads as its title and opens nothing here.
+
+## The commands
+- The commands about the queue ship inside it (#2394, decision 25): `work-queue`, a skill of
+  its own that the plugin gives a project's runs where it is on, its text in
+  `skills/work-queue/` like the capability skills'. Picked over one package per command,
+  `@openagt/skill-<command>`, each installed and switched on by itself, which let a project
+  have a command without the data it is about.
+- Two kinds of skill: capability skills (`branches`, `tickets`, `queue`, `logs`, `github`),
+  each a SKILL.md and a command, each saying how to do one thing; and command skills, each a
+  SKILL.md only, each a job that composes capabilities. A command may name its own plugin's
+  skill and command (#2394, decision 25), and assumes no other capability; where the job is
+  broken without one, it says so in capability words and stops. The check of its `schedule`, in the front
+  matter, is the one place that names other commands: the scheduler runs it and the agent is
+  never given it. Picked over a command naming every capability it uses, which would tie the
+  job to their packages. A capability never names another skill.
+- A command is marked `disable-model-invocation`: a person or a runner fires it, the agent
+  never picks it on its own.
+
+## work-queue
+- A runner fires a command by its name, `/work-queue`; the agent's harness expands the
+  skill. The command's words are the rules of the job — one task, commit, publish as far
+  as whoever started the run said; the pull request naming the ticket it closes, then
+  mark done, the `PR:` line and the release are the ticketing system's own rule for queued
+  work — never a skill's name or command. Picked over the run that started the agent
+  publishing for it: the agent pushes through the branches skill and opens the pull
+  request through the git host's skill, both already in its checkout. Picked over marking
+  done before the publish: a publish that failed lost the task. Picked over closing the
+  ticket at commit time: a pull request closed unmerged lost the ticket.
+- A ticket with nothing to do until something outside the work happens gets a `Waiting:`
+  line, and its entry is marked done; the agent never closes it. Picked over closing the
+  ticket to stop it coming back.
+- The agent takes the first open entry and claims its ticket first; an entry whose ticket
+  someone else holds is left for them, and the agent takes the next one. Picked over
+  stopping at a held claim.
+- The schedule starts `work-queue` only while an entry names no claimed ticket. Picked
+  over a run on every tick that finds every entry held and stops.
+- A task whose whole work is changing other tickets closes its own ticket; a plan leaves
+  its ticket open. Picked over leaving every ticket without a pull request open: a
+  finished ticket left open is queued again.

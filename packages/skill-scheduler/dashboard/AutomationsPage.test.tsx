@@ -161,7 +161,7 @@ describe('the Automations page: its rows', () => {
   })
 
   test("a command a plugin's skill schedules is in a group of its own, after the project's skills", async () => {
-    const withPlugin = { ...STATUS, schedule: [...STATUS.schedule, { command: 'update-tickets', every: '15m', agent: 'claude-code', able: ['claude-code', 'codex'], plugin: 'update-tickets' }] }
+    const withPlugin = { ...STATUS, schedule: [...STATUS.schedule, { command: 'update-tickets', every: '15m', agent: 'claude-code', able: ['claude-code', 'codex'], plugin: 'tickets' }] }
     const { host } = hostAnswering(() => ({ ok: true, output: withPlugin }))
     show(host)
     const gemstack = await screen.findByRole('region', { name: 'gemstack' })

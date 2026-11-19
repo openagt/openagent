@@ -31,7 +31,7 @@ npx @openagt/dashboard
 
 It opens the dashboard in your browser, on your project. Every agent you start gets the skills of OpenAgent's core modules (github's on a GitHub project) and of the plugins on in your project, with nothing written in your project; a skill of your own with the same name takes one's place. Each plugin is switched on or off in Settings › Plugins: ask starts on, the others (the tickets, the queue, the logs, the browser, the scheduler…) start off.
 
-A project's own skills are files in it, which the dashboard lists in Settings › Skills; the Skills button under the message box picks the ones a run gets, and the plugins it goes without. The [`skills`](./skills) folder has the skills the dashboard's plugins bring (tickets, the queue, automations, logs) and more (code reviews, research, ticket suggestions), for any agent. Add any of them to the project with [`skills`](https://github.com/vercel-labs/skills) and commit them:
+A project's own skills are files in it, which the dashboard lists in Settings › Skills; the Skills button under the message box picks the ones a run gets, and the plugins it goes without. The [`skills`](./skills) folder has the skills the dashboard's plugins bring (the tickets with the commands about them, ticket suggestions among them; the queue with work-queue; the logs) and more (code reviews, research), for any agent. Add any of them to the project with [`skills`](https://github.com/vercel-labs/skills) and commit them:
 
 ```bash
 npx skills add openagt/openagent

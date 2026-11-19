@@ -183,12 +183,6 @@ importers:
       '@openagt/skill-logs':
         specifier: workspace:*
         version: link:../skill-logs
-      '@openagt/skill-plan':
-        specifier: workspace:*
-        version: link:../skill-plan
-      '@openagt/skill-plan-tickets':
-        specifier: workspace:*
-        version: link:../skill-plan-tickets
       '@openagt/skill-queue':
         specifier: workspace:*
         version: link:../skill-queue
@@ -201,15 +195,6 @@ importers:
       '@openagt/skill-tickets':
         specifier: workspace:*
         version: link:../skill-tickets
-      '@openagt/skill-triage':
-        specifier: workspace:*
-        version: link:../skill-triage
-      '@openagt/skill-update-tickets':
-        specifier: workspace:*
-        version: link:../skill-update-tickets
-      '@openagt/skill-work-queue':
-        specifier: workspace:*
-        version: link:../skill-work-queue
       '@openagt/skills':
         specifier: workspace:*
         version: link:../skills
@@ -747,10 +732,6 @@ importers:
         specifier: ^4.1.10
         version: 4.1.10(@types/node@20.19.43)(jsdom@29.1.1)(vite@8.1.4(@types/node@20.19.43)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
 
-  packages/skill-plan: {}
-
-  packages/skill-plan-tickets: {}
-
   packages/skill-queue:
     dependencies:
       '@openagt/agent-data':
@@ -932,12 +913,6 @@ importers:
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(@types/node@20.19.43)(jsdom@29.1.1)(vite@8.1.4(@types/node@20.19.43)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
-
-  packages/skill-triage: {}
-
-  packages/skill-update-tickets: {}
-
-  packages/skill-work-queue: {}
 
   packages/skills:
     dependencies:
@@ -1210,12 +1185,6 @@ importers:
       '@openagt/skill-logs':
         specifier: workspace:*
         version: link:../skill-logs
-      '@openagt/skill-plan':
-        specifier: workspace:*
-        version: link:../skill-plan
-      '@openagt/skill-plan-tickets':
-        specifier: workspace:*
-        version: link:../skill-plan-tickets
       '@openagt/skill-queue':
         specifier: workspace:*
         version: link:../skill-queue
@@ -1225,15 +1194,6 @@ importers:
       '@openagt/skill-tickets':
         specifier: workspace:*
         version: link:../skill-tickets
-      '@openagt/skill-triage':
-        specifier: workspace:*
-        version: link:../skill-triage
-      '@openagt/skill-update-tickets':
-        specifier: workspace:*
-        version: link:../skill-update-tickets
-      '@openagt/skill-work-queue':
-        specifier: workspace:*
-        version: link:../skill-work-queue
       '@openagt/store-filesystem':
         specifier: workspace:*
         version: link:../store-filesystem

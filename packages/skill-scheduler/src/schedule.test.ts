@@ -197,24 +197,24 @@ test("the skills the plugins on in the project give its runs schedule commands t
   }
   try {
     const skills = [
-      { name: 'work-queue', dir: await write(packages, 'work-queue', 'schedule:\n  when: npx queue\n'), plugin: 'work-queue' },
-      { name: 'update-tickets', dir: await write(join(packages, 'tickets'), 'update-tickets', 'schedule:\n  every: 15m\n'), plugin: 'update-tickets' },
+      { name: 'work-queue', dir: await write(packages, 'work-queue', 'schedule:\n  when: npx queue\n'), plugin: 'queue' },
+      { name: 'update-tickets', dir: await write(join(packages, 'tickets'), 'update-tickets', 'schedule:\n  every: 15m\n'), plugin: 'tickets' },
       // A plugin's skill that schedules nothing, and one whose folder holds no skill file: neither gives a command.
       { name: 'tickets', dir: await write(packages, 'tickets', ''), plugin: 'tickets' },
       { name: 'gone', dir: join(packages, 'gone'), plugin: 'gone' },
     ]
     const plugins = async (at: string) => {
       assert.equal(at, repo, "asked of the project's folder")
-      return { skills, unreadable: [{ skill: "the triage plugin's skills", reason: 'no skills today' }] }
+      return { skills, unreadable: [{ skill: "the browser plugin's skills", reason: 'no skills today' }] }
     }
     // The project's own copy of update-tickets is the project's.
     await write(join(repo, CLAUDE), 'update-tickets', 'schedule:\n  every: 1h\n')
     assert.deepEqual(await readSchedule(repo, plugins), {
       commands: [
         { name: 'update-tickets', every: parseInterval('1h')!, cap: 1, dir: CLAUDE, dirs: [CLAUDE] },
-        { name: 'work-queue', when: 'npx queue', cap: 1, dir: CLAUDE, dirs: [CLAUDE, AGENTS], plugin: 'work-queue' },
+        { name: 'work-queue', when: 'npx queue', cap: 1, dir: CLAUDE, dirs: [CLAUDE, AGENTS], plugin: 'queue' },
       ],
-      unreadable: [{ skill: "the triage plugin's skills", reason: 'no skills today' }],
+      unreadable: [{ skill: "the browser plugin's skills", reason: 'no skills today' }],
     })
     const queue = (await readSchedule(repo, plugins)).commands.find(c => c.name === 'work-queue')!
     assert.deepEqual(ableAgents(queue), AGENT_NAMES, 'linked into the checkout of a run on either agent')
@@ -223,7 +223,7 @@ test("the skills the plugins on in the project give its runs schedule commands t
     await writeFile(join(repo, OWN_AUTOMATIONS_DIR, 'work-queue.md'), skill('work-queue', 'schedule:\n  every: 1d\n'))
     const clashed = await readSchedule(repo, plugins)
     assert.deepEqual(clashed.commands.map(c => c.name), ['update-tickets'])
-    assert.match(clashed.unreadable.find(u => u.own)!.reason, /^the work-queue plugin's skill has this name too, so neither is listed/)
+    assert.match(clashed.unreadable.find(u => u.own)!.reason, /^the queue plugin's skill has this name too, so neither is listed/)
   } finally {
     await rm(repo, { recursive: true, force: true })
     await rm(packages, { recursive: true, force: true })

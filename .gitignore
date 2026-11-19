@@ -17,5 +17,6 @@ dist-test/
 test-results/
 
 # A skill's text lives in skills/<name>/SKILL.md, where `npx skills add` finds it; its package's
-# build copies it in, so the npm package ships it too
+# build copies it in, so the npm package ships it too, a command's into its plugin's commands/
 packages/skill-*/SKILL.md
+packages/skill-*/commands/

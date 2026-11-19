@@ -30,12 +30,7 @@ export const DASHBOARD_PACKAGES: DashboardDistribution = [
   { package: '@openagt/skill-browser' },
   { package: '@openagt/skill-scheduler' },
   { package: '@openagt/skill-discord' },
-  { package: '@openagt/skill-plan' },
-  { package: '@openagt/skill-plan-tickets' },
   { package: '@openagt/skill-reply' },
-  { package: '@openagt/skill-triage' },
-  { package: '@openagt/skill-update-tickets' },
-  { package: '@openagt/skill-work-queue' },
 ]
 
 /**

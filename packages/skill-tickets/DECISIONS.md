@@ -125,3 +125,77 @@ already made, and lists it in its pull request; for anything else it proposes an
   because only a person removes the line once the wait is over. Picked over a separate
   Waiting card (one more box for a short list) and over no list at all (a waiting ticket is
   forgotten). A ticket in review gets no lane: its open pull request is listed already.
+
+## The commands
+- The commands about the tickets ship inside them (#2394, decision 25): `plan`,
+  `plan-tickets`, `triage`, `update-tickets` and `suggest-tickets-to-work-on`, each a skill
+  of its own that the plugin gives a project's runs where it is on, its text in
+  `skills/<command>/` like the capability skills'. Picked over one package per command,
+  `@openagt/skill-<command>`, each installed and switched on by itself, which let a project
+  have a command without the data it is about.
+- Two kinds of skill: capability skills (`branches`, `tickets`, `queue`, `logs`, `github`),
+  each a SKILL.md and a command, each saying how to do one thing; and command skills, each a
+  SKILL.md only, each a job that composes capabilities. A command may name its own plugin's
+  skill and command (#2394, decision 25), and assumes no other capability; where the job is
+  broken without one, it says so in capability words and stops. The check of its `schedule`, in the front
+  matter, is the one place that names other commands: the scheduler runs it and the agent is
+  never given it. Picked over a command naming every capability it uses, which would tie the
+  job to their packages. A capability never names another skill.
+- A command is marked `disable-model-invocation`: a person or a runner fires it, the agent
+  never picks it on its own.
+
+## plan
+- The plan command ends on the ticket and its plan, the ways to do the work and the one
+  it recommends; a person reads the plan and queues the ticket. Picked over the agent
+  queuing or working its own ticket, and over the alternatives the old system prompt had
+  every agent show before every change: the options are weighed once, in the plan.
+
+## plan-tickets
+- A runner fires a command by its name, `/plan-tickets`; the agent's harness expands the
+  skill. The command's words are the rules of the job, in numbers read off the ticket
+  listing — a ticket needs a plan when it has none or an outdated one, and is neither held
+  nor in review nor waiting nor on the queue; at most ten a run, highest priority first,
+  then oldest; one entry per ticket, `Create tickets/<name>.plan.md`, at the ticket's own
+  priority; no plan written by this agent — never a skill's name or command. Picked over
+  the agent ranking the tickets and picking each priority after reading them, which two
+  runs never did the same way; and over one agent per ticket with a claim: the queue is
+  the fan-out, and the queued work writes each plan one at a time.
+
+## triage
+- One triage command with a mode word, `/triage quick` and `/triage consensual`, and both
+  modes when the word is missing; each mode is a scheduled command of its own, with its own
+  pace and its own switch. Picked over two commands one sentence apart (the same job
+  written twice), and over one scheduled command running both modes (significant work would
+  then be queued wherever quick wins are, with no switch of its own).
+- The command's words are the rules of the job, in numbers two runs agree on, read off the
+  ticket listing: a quick win is a planned ticket with effort 2 or less and uncertainty 2
+  or less; consensual work is a planned ticket with uncertainty 3 or less that is no quick
+  win; a plan without both numbers qualifies for nothing; a ticket on the queue, held, in
+  review, waiting or whose plan is outdated is skipped; every pick goes on the queue at
+  the ticket's priority, lowest effort first; only queue, never do, so a human can still
+  veto on the queue. Picked over "low effort and no uncertainty" and "significant,
+  consensual", which one run read as uncertainty 0 (never met) and another as uncertainty
+  3; over bumping quick wins one above their priority, which contradicted the rule every
+  ticket is queued by; and over skipping a ticket whose plan records a decision not to do
+  the work, which no plan key marks and two runs read differently (such a ticket is closed
+  by hand).
+
+## update-tickets
+- A runner fires a command by its name, `/update-tickets`; the agent's harness expands the
+  skill. The command's words are the rules of the job — note the time before fetching and
+  record it after, so nothing edited meanwhile is missed; only what changed since the last
+  import; one ticket per issue, updated in place, closed when the issue is; the tickets
+  named by the pull requests merged since the last import closed too, which is how a
+  ticket closes at its merge; an error in capability words when the tracker cannot be
+  reached, or tickets exist with no last-import time — never a skill's name or command; no
+  import time recorded when anything fails, so the next run fetches the same changes
+  again.
+- The project's schedule starts `update-tickets` only when an issue changed since the last
+  import, or a pull request merged since then has a line `Closes tickets/` followed by a
+  file name, or when no import time is recorded and there are no tickets: a first import.
+  Picked over starting it on any merged pull request, which ran the job about
+  forty times a week to change nothing.
+- An open issue with no ticket gets one only when it was opened or reopened since the last
+  import. Picked over giving one to every changed open issue with no ticket, which brings
+  back a ticket closed on purpose and makes one for every old issue a comment or a bot
+  touches.

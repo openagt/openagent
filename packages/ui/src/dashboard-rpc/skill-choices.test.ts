@@ -24,14 +24,14 @@ test("a session picks from the plugins on in its project that give its runs a sk
     assert.deepEqual(await onSkillChoices(SESSIONS_ID), { core: [], plugins: [{ name: 'ask', skills: ['ask'] }] }, 'ask starts on')
     assert.equal(await onSkillChoices('nowhere-1'), null, 'a project unknown here')
 
-    // A project on GitHub, with tickets on: github's skill is every run's there, tickets' a pick beside ask's.
+    // A project on GitHub, with tickets on: github's skill is every run's there, tickets' a pick beside ask's, with the commands about the tickets.
     const shop = join(dir, 'shop')
     await mkdir(shop)
     execFileSync('git', ['init', '-q'], { cwd: shop })
     execFileSync('git', ['remote', 'add', 'origin', 'git@github.com:o/shop.git'], { cwd: shop })
     await addProject(shop, '2026-09-19T00:00:00.000Z')
     await (await distributionHooks()).setEnabled('tickets', true, await projectRefAt(projectId(shop), shop))
-    assert.deepEqual(await onSkillChoices(projectId(shop)), { core: ['github'], plugins: [{ name: 'ask', skills: ['ask'] }, { name: 'tickets', skills: ['tickets'] }] })
+    assert.deepEqual(await onSkillChoices(projectId(shop)), { core: ['github'], plugins: [{ name: 'ask', skills: ['ask'] }, { name: 'tickets', skills: ['tickets', 'plan', 'plan-tickets', 'triage', 'update-tickets', 'suggest-tickets-to-work-on'] }] })
   } finally {
     if (previous === undefined) delete process.env.XDG_CONFIG_HOME
     else process.env.XDG_CONFIG_HOME = previous

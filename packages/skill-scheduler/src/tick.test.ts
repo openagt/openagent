@@ -218,7 +218,7 @@ test("a command that would start and whose skill is not where a run's checkout s
 })
 
 test("a command of a plugin's skill starts with nothing asked of where a run's checkout starts: the run links the plugin's skill into its checkout itself", async () => {
-  const plugin = { dirs: [CLAUDE, CODEX], plugin: 'work-queue' }
+  const plugin = { dirs: [CLAUDE, CODEX], plugin: 'queue' }
   const { deps: d, seen } = deps({ commands: [command('work-queue', { when: 'npx queue', ...plugin })], atStart: async file => assert.fail(`asked where ${file} is`) })
   const record = await tick(d)
   assert.match(record.decisions[0]!.outcome, /^started /)
