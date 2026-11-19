@@ -95,8 +95,6 @@ export interface Leg {
   card: RunCard
   /** The live record the agent's session keeps; none until its agent has started. */
   live?: SessionLog
-  /** The question the last turn asked, when the run ended waiting. */
-  question?: string
   /** The record as this leg wrote it. */
   recorded?: { card: RunCard; diary: AnyDiaryLine[] }
 }

@@ -8,7 +8,7 @@ import { createHooks, DISTRIBUTION_ENV, LOCAL_HOST, distributionItems, loadHande
 
 const DISTRIBUTION = fileURLToPath(new URL('./distribution.js', import.meta.url))
 
-test("the distribution's modules load from its own install, the store's and the run pipeline's, and this computer's host is agent-driver's; ask is the one plugin it starts on, devices among those off, and the git stores are on as their repositories say", async () => {
+test("the distribution's modules load from its own install, the store's and the run pipeline's, and this computer's host is agent-driver's; ask is the one plugin it starts on, devices and notifications-command among those off, and the git stores are on as their repositories say", async () => {
   const modules = await loadHandedDown({ [DISTRIBUTION_ENV]: DISTRIBUTION })
   assert.deepEqual(modules?.map(entry => entry.module.name), [
     'store-filesystem',
@@ -19,6 +19,7 @@ test("the distribution's modules load from its own install, the store's and the 
     'skills',
     'agent-driver',
     'devices',
+    'notifications-command',
     'ask',
     'logs',
     'tickets',
@@ -31,6 +32,7 @@ test("the distribution's modules load from its own install, the store's and the 
   // #2394: ask starts on, every other plugin off; a git store keeps its own row, how its repository stands.
   assert.deepEqual(modules!.filter(entry => entry.module.plugin && entry.on).map(entry => entry.module.name), ['ask'])
   assert.deepEqual(modules!.find(entry => entry.module.name === 'devices')?.module.plugin, { scope: 'computer' }, 'devices is kept per computer')
+  assert.deepEqual(modules!.find(entry => entry.module.name === 'notifications-command')?.module.plugin, { scope: 'computer' }, 'so is notifications-command')
   assert.deepEqual(modules!.filter(entry => entry.module.plugin?.row).map(entry => entry.module.name), ['store-git-repository', 'store-git-branch'])
   assert.deepEqual((await createHooks(modules!).hosts()).map(host => host.id), [LOCAL_HOST])
 })

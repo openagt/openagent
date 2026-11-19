@@ -9,7 +9,6 @@ import type { ProjectSkillsPick } from './preset.js'
 import { withRunLock } from './run-lock.js'
 import { askName, isBareCommand, type AskedName } from './title.js'
 import { detailOf, modelOf } from './session.js'
-import { BUILT_IN_MODULES } from './steps/modules.js'
 
 /**
  * One run (#1774): one pipeline of steps (`@openagt/hooks`' `run.step`), each the part of a module
@@ -332,7 +331,7 @@ async function runLeg(given: Omit<Leg, 'killed'>, start: LegStart): Promise<RunO
   process.on('SIGINT', onSignal)
   process.on('SIGTERM', onSignal)
   try {
-    const hooks = createHooks([...start.modules, ...BUILT_IN_MODULES])
+    const hooks = createHooks(start.modules)
     const project = await projectOf(leg.repo, leg.here.git)
     const options = optionsOf(leg.mark, start.branch, start.preset)
     // The skills the modules on for this run give it, for the agent it is on: the skills module links them where it works.
@@ -341,7 +340,8 @@ async function runLeg(given: Omit<Leg, 'killed'>, start: LegStart): Promise<RunO
       {
         id: leg.id,
         ...(project ? { project } : {}),
-        prompt: leg.prompt,
+        // The run's first prompt, also on a resume: what continues it is the agent's (`leg.prompt`).
+        prompt: leg.card.intent ?? leg.prompt,
         options,
         ...(start.resume ? { resume: start.resume } : {}),
         skills,

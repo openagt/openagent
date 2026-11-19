@@ -12,7 +12,8 @@ already made, and lists it in its pull request; for anything else it proposes an
   no Discord. Picked over the dashboard's own poster, with its watchers, its settings and
   its stored credentials.
 - It posts what it is given and decides nothing: when to post is whoever calls it, the
-  runner's `ended:` line or an agent asked to. Picked over a skill that watches runs.
+  person's command of the notifications-command plugin or an agent asked to. Picked over a
+  skill that watches runs.
 - The webhook is set per machine by a person (`discord setup <webhook>`), outside the
   project; `DISCORD_WEBHOOK` in the environment wins. Picked over a file in the project:
   anyone holding the URL can post to the channel.

@@ -22,8 +22,9 @@ test("the dashboard runs the modules of the distribution handed down, and this c
     'git-branches',
     'github',
     'skills',
-    // The plugins, ask the one on until a person switches another on: devices, kept per computer, first.
+    // The plugins, ask the one on until a person switches another on: devices and notifications-command, kept per computer, first.
     'devices',
+    'notifications-command',
     'ask',
     'logs',
     'tickets',

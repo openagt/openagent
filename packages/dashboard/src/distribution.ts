@@ -36,6 +36,9 @@ const DISTRIBUTION: DashboardDistribution = [
   // servers. Then the accounts its runs use.
   { package: '@openagt/dashboard-devices', for: 'computer' },
   { package: '@openagt/skill-account-rotation', for: 'computer' },
+  // notifications-command, a plugin that starts off: the person's command, run when a run on this
+  // computer needs them.
+  { package: '@openagt/notifications-command', for: 'computer' },
   // The plugins: ask starts on, the others are a project's once a person switches them on.
   { package: '@openagt/skill-ask', on: true },
   { package: '@openagt/skill-logs' },

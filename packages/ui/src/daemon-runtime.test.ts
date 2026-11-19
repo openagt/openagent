@@ -447,7 +447,7 @@ test('removing a project with its files keeps what is not OpenAgent\'s to delete
     git('commit', '-q', '-m', 'presets')
     // Work an agent left uncommitted, and the person's own settings for the runner.
     await writeFile(join(folder, '.branches', 'agent-idle', 'draft.txt'), 'draft\n')
-    await writeFile(join(folder, '.agent-runner', 'config.yml'), 'ended: say done\n')
+    await writeFile(join(folder, '.agent-runner', 'config.yml'), 'personal:\n  memory: off\n')
     // A second checkout of the same repository, on the list as a project of its own.
     git('worktree', 'add', '-q', '-b', 'second', second)
     assert.deepEqual(await runtime.onAddProject(second, false), { ok: true, alreadyActivated: false })
@@ -466,7 +466,7 @@ test('removing a project with its files keeps what is not OpenAgent\'s to delete
     ])
     assert.deepEqual(cleanup?.removed, ['.branches/agent-worked', '.agent-runner/runs', '.openagent/.gitignore'])
     assert.equal(await readFile(join(folder, '.branches', 'agent-idle', 'draft.txt'), 'utf8'), 'draft\n')
-    assert.equal(await readFile(join(folder, '.agent-runner', 'config.yml'), 'utf8'), 'ended: say done\n')
+    assert.equal(await readFile(join(folder, '.agent-runner', 'config.yml'), 'utf8'), 'personal:\n  memory: off\n')
     assert.equal(await readFile(join(folder, '.branches', DATA_BRANCH, 'card.json'), 'utf8'), '{}\n', 'the records the other project reads are whole')
     assert.equal(git('status', '--porcelain').trim(), '', 'what stays is still hidden from git')
     assert.deepEqual((await listProjects(env)).map(listed => listed.path), [second])

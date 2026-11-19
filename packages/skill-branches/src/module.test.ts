@@ -76,7 +76,7 @@ test('a run given a branch works on it and writes down no start of its own; one 
     const ctx = fakeRun({ id: 'run2', project: p, options: { 'git-branches': { branch: 'their-work' } } })
     await checkout.run(ctx)
     assert.deepEqual(ctx.facts['git-branches'], { branch: 'their-work' })
-    ctx.outcome = { status: 'waiting' }
+    ctx.outcome = { status: 'waiting', question: 'Ship it?' }
     await reclaim.run(ctx)
     assert.deepEqual(factsOf(ctx)?.reclaimed, { reclaimed: false, reason: 'waiting' })
     assert.equal(await exists(worktreePath(p.dir, 'run2')), true)

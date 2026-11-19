@@ -148,19 +148,6 @@ already made, and lists it in its pull request; for anything else it proposes an
   shape), and over dying at once (the agent's processes would outlive the run, and the
   sweep would record it `failed`).
 
-## When a run needs a person
-- When a run ends waiting on a question, or ends done with a pull request it did not have,
-  the runner runs a line the person wrote: `ended:` in `.agent-runner/config.yml`, with one
-  line for a person in `MESSAGE`. The runner names no service; what the line does is the
-  person's. Picked over the agent posting (it can forget, and a dead run posts nothing) and
-  over the dashboard watching the runs (nothing posts while no dashboard is open).
-- The line is per machine, out of git, beside the run locks. Picked over a committed file:
-  where to post is set per machine, and a teammate's machine should not post to your
-  channel.
-- A question and a new pull request only. A run that fails, is stopped, or ends done with
-  nothing to review runs no line. Picked over a line on every end: the line is for what
-  waits on a person.
-
 ## The command line
 - Every command prints one JSON document on stdout, one line for a person on stderr, and
   exits 0 for a result, 1 for a refusal or a failure, 2 for a command line that cannot be

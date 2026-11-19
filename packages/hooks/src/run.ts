@@ -112,8 +112,8 @@ export interface GithubFacts {
   earlierPrs?: PullRequest[]
 }
 
-/** How a run ended, as its finishing steps read it. */
-export type RunOutcome = { status: 'done' | 'waiting' | 'stopped' } | { status: 'failed'; error: string }
+/** How a run ended, as its finishing steps read it: one that waits, waits on the question its last turn asked. */
+export type RunOutcome = { status: 'done' | 'stopped' } | { status: 'waiting'; question: string } | { status: 'failed'; error: string }
 
 /** Where a run stands: working, or how it ended. */
 export type RunStatus = 'working' | RunOutcome['status']
@@ -134,7 +134,7 @@ export interface RunContext {
   readonly id: string
   /** The project the run is in; none for a session with no project. */
   readonly project?: ProjectRef
-  /** What the person asked. */
+  /** What the person asked: the run's first prompt, also on a resume, which brings its own (`resume`). */
   readonly prompt: string
   readonly options: RunOptions
   /** What a resume brings; none on the run's first start. */

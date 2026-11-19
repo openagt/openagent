@@ -24,14 +24,14 @@ test('the steps run in the order given, the turns set the outcome, and the finis
       step(RunOrder.SKILLS, 'skills link', ctx => void done.push(`skills into ${ctx.workspace}`)),
       step(RunOrder.RUN, 'agent-driver turns', ctx => {
         done.push('turns')
-        ctx.outcome = { status: 'waiting' }
+        ctx.outcome = { status: 'waiting', question: 'Ship it?' }
       }),
       step(RunOrder.RECORD, 'agent-driver record', ctx => void done.push(`record ${ctx.outcome?.status}`)),
     ],
     ctx,
   )
   assert.deepEqual(done, ['worktree', 'skills into /work/run-1', 'turns', 'record waiting'])
-  assert.deepEqual(result, { outcome: { status: 'waiting' }, errors: [] })
+  assert.deepEqual(result, { outcome: { status: 'waiting', question: 'Ship it?' }, errors: [] })
 })
 
 test('turns that set no outcome leave the run done', async () => {

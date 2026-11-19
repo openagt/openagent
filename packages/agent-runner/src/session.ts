@@ -92,7 +92,6 @@ export async function sessionTurns(leg: Leg, workspace: string, dir: string, sto
   const resumeSessionId = leg.earlier?.sessionId
   const inbox = inboxPath(workspace)
   let end: RunOutcome = { status: 'done' }
-  let question: string | undefined
   let driverSession: DriverSession | undefined
   try {
     driverSession = await leg.driver.start({
@@ -123,7 +122,6 @@ export async function sessionTurns(leg: Leg, workspace: string, dir: string, sto
     let attached = leg.attached
     while (driverSession) {
       end = { status: 'done' }
-      question = undefined
       let failure: unknown
       let lastText = ''
       let asked: Question | undefined
@@ -163,8 +161,8 @@ export async function sessionTurns(leg: Leg, workspace: string, dir: string, sto
       else if (end.status === 'done' && asking) {
         // The last turn asked and nothing waited in the inbox: the run ends here, waiting, and
         // keeps its checkout for the answer to resume it.
-        question = (asked ?? asking.questionIn(lastText))?.title
-        if (question !== undefined) end = { status: 'waiting' }
+        const question = (asked ?? asking.questionIn(lastText))?.title
+        if (question !== undefined) end = { status: 'waiting', question }
       }
       await naming.fromReport(end.status, lastText)
 
@@ -190,7 +188,6 @@ export async function sessionTurns(leg: Leg, workspace: string, dir: string, sto
   // The name lands on the card before the record is copied: a run named after that copy would be
   // named only in its checkout, which is removed with the run.
   await naming.done
-  if (question !== undefined) leg.question = question
   return end
 }
 

@@ -110,6 +110,7 @@
     "@openagt/dashboard-changes": "workspace:*",
     "@openagt/dashboard-devices": "workspace:*",
     "@openagt/dashboard-files": "workspace:*",
+    "@openagt/notifications-command": "workspace:*",
     "@openagt/skill-ask": "workspace:*",
     "@openagt/skill-browser": "workspace:*",
     "@openagt/skill-discord": "workspace:*",

@@ -20,7 +20,7 @@ The channel is the one whose webhook this machine was given, by a person: `npx @
 
 ## A message when a run needs you
 
-A tool that runs coding agents may run a line of the person's when a run ends, with the message in `$MESSAGE`. This is the line:
+OpenAgent can run a command of the person's when a run needs them, with the message in `$MESSAGE`: its notifications-command plugin, the command typed in Settings › Notification command. This is the command:
 
 ```
 npx @openagt/skill-discord@0.1 send "$MESSAGE"

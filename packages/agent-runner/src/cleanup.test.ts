@@ -48,7 +48,7 @@ test('the settings file is the person\'s and stays, with the directory and the r
   const repo = await testRepo()
   try {
     await ranOnce(repo, 'r1')
-    await writeFile(join(repo, '.agent-runner', 'config.yml'), 'ended: say done\n')
+    await writeFile(join(repo, '.agent-runner', 'config.yml'), 'personal:\n  memory: off\n')
     await writeFile(join(repo, '.agent-runner', 'notes.txt'), 'mine\n')
 
     assert.deepEqual(await cleanup(repo), {
@@ -60,7 +60,7 @@ test('the settings file is the person\'s and stays, with the directory and the r
       ],
     })
     assert.deepEqual((await readdir(join(repo, '.agent-runner'))).sort(), ['config.yml', 'notes.txt'])
-    assert.equal(await readFile(join(repo, '.agent-runner', 'config.yml'), 'utf8'), 'ended: say done\n')
+    assert.equal(await readFile(join(repo, '.agent-runner', 'config.yml'), 'utf8'), 'personal:\n  memory: off\n')
     assert.match(await excludeOf(repo), /^\/\.agent-runner$/m, 'what stays is still hidden from git')
     assert.equal((await git(['status', '--porcelain'], repo)).trim(), '')
   } finally {
@@ -161,7 +161,7 @@ test('the rule hiding the directory is the repository\'s: it stays while another
     const other = join(repo, '..', 'other')
     await git(['worktree', 'add', '-q', '-b', 'other', other], repo)
     await mkdir(join(other, '.agent-runner'))
-    await writeFile(join(other, '.agent-runner', 'config.yml'), 'ended: say done\n')
+    await writeFile(join(other, '.agent-runner', 'config.yml'), 'personal:\n  memory: off\n')
     await ranOnce(repo, 'r1')
     assert.deepEqual(await cleanup(repo), { ok: true, removed: ['.agent-runner/runs', '.agent-runner'], kept: [] })
     assert.equal(await excludeOf(repo), '/.agent-runner\n', 'the other checkout\'s directory is still hidden')

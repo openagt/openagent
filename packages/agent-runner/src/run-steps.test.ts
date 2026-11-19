@@ -10,7 +10,6 @@ import { worktreePath } from '@openagt/skill-branches'
 import { findRun } from '@openagt/skill-logs'
 import { resumeRun, runCommand } from './run.js'
 import { STOPPED_DETAIL } from './session.js'
-import { BUILT_IN_MODULES } from './steps/modules.js'
 import { git, readUntimedDiary, removeRepo, testRepo } from './test-repo.js'
 import { NOW, committingDriver, fakeGithub, testModules } from './run-test-support.js'
 
@@ -21,8 +20,8 @@ import { NOW, committingDriver, fakeGithub, testModules } from './run-test-suppo
 /** An agent that must never start: the run ends before its turns. */
 const unstarted = (started: { yes: boolean }): Driver => ({ id: 'fake', start: async opts => ((started.yes = true), new FakeDriver({ turns: [{ text: 'Done.' }] }).start(opts)) })
 
-test("a run's steps, in their order: its account, its checkout and skills, how it asks the person, the agent's turns, then where the work went, the record, the reclaim and the person's line", async () => {
-  const steps = await createHooks([...testModules(), ...BUILT_IN_MODULES]).steps({ options: {} })
+test("a run's steps, in their order: its account, its checkout and skills, how it asks the person, the agent's turns, then where the work went, the record and the reclaim", async () => {
+  const steps = await createHooks(testModules()).steps({ options: {} })
   assert.deepEqual(
     steps.map(step => `${step.module}: ${step.name}`),
     [
@@ -37,7 +36,6 @@ test("a run's steps, in their order: its account, its checkout and skills, how i
       'agent-driver: save the record',
       'git-branches: reclaim the checkout',
       'agent-driver: record the branch gone',
-      'notifications-command: run the ended line',
     ],
   )
 })

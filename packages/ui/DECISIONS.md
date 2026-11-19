@@ -115,8 +115,9 @@ already made, and lists it in its pull request; for anything else it proposes an
   Picked over stripping the package's prefix here, which was OpenAgent knowing how the
   package names a branch.
 - Notifications are the browser's only: they alert in the open tab. Posting to a
-  channel is a skill's, fired by the tool that runs the agent when a run ends. Picked over
-  the dashboard's Discord watchers, which posted only while the dashboard was running.
+  channel is a skill's, fired when a run needs the person by the notifications-command
+  plugin's step, which runs with the run. Picked over the dashboard's Discord watchers,
+  which posted only while the dashboard was running.
 - The themes keep Claude Code's levels in Everforest's colors. Dark is Everforest's hue a
   step darker than its dimmest background, as dark as Claude Code's: the page near-black,
   the sidebar and panes a step above it, fills and lines close to them. Light is near-white
