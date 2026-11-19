@@ -77,12 +77,12 @@ export interface AgentMeta {
    * it: each one's name, which its copy's folder in the session's folder has, and the folder it was copied from.
    */
   repos?: { name: string; from: string }[]
-  /** The agent the run is on, by its id, written on the card by the tool that runs it; absent, the default agent. */
-  agent?: string
-  /** The session's picks of skills, written on the card by the tool that runs it: names on top of its agent's, names of its agent's left out, which of the project's own stayed in its checkout (`none`, or names; absent, every one). */
+  /** The preset the run is on, by its id, written on the card by the tool that runs it; absent, Default. */
+  preset?: string
+  /** The session's picks of skills, written on the card by the tool that runs it: names on top of the ones every run gets, names of those left out, which of the project's own stayed in its checkout (`all`, `none`, or names; absent, its preset's). */
   skillsOn?: string[]
   skillsOff?: string[]
-  projectSkills?: 'none' | string[]
+  projectSkills?: 'all' | 'none' | string[]
   /**
    * How far the run takes its work when its agent finishes: `commit`, `branch`, `pr` or `merge`,
    * the level it was started at or last given. Written on the card by the tool that runs it;

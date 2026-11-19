@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { skillsSaved } from '../lib/skills-saved.js'
 import { forgetRemembered } from '../lib/use-async.js'
@@ -6,38 +6,45 @@ import { hoverTooltip, openMenu } from '../test-utils.js'
 
 const onProjectSkills = vi.hoisted(() => vi.fn())
 vi.mock('../rpc/skills.js', () => ({ onProjectSkills }))
-vi.mock('../rpc/agents.js', () => ({ onAgentsList: async () => ({ agents: [{ id: 'default', name: 'Default', skills: ['ask', 'github', 'readability'], accounts: {}, projectSkills: true }], skills: [], claude: [], codex: [] }) }))
+// Every run gets ask and readability; github and ux are the others carried.
+const CHOICES = vi.hoisted(() => ({
+  everyRun: [{ name: 'ask', description: '' }, { name: 'readability', description: '' }],
+  more: [{ title: 'Code reviews', skills: [{ name: 'github', description: '' }, { name: 'ux', description: '' }] }],
+}))
+const onSkillChoices = vi.hoisted(() => vi.fn())
+vi.mock('../rpc/skill-choices.js', () => ({ onSkillChoices }))
+vi.mock('../rpc/presets.js', () => ({ onPresetsList: async () => ({ presets: [{ id: 'default', name: 'Default', options: {} }, { id: 'quiet', name: 'Quiet', options: { skills: { project: 'none' } } }], claude: [], codex: [] }) }))
 const openSettings = vi.hoisted(() => vi.fn())
 vi.mock('../lib/host-services.js', async importOriginal => {
   const actual = await importOriginal<typeof import('../lib/host-services.js')>()
   return { ...actual, INERT_HOST_SERVICES: { ...actual.INERT_HOST_SERVICES, openSettings } }
 })
 
-const { NO_PICKS, SkillsMenu, SkillsOff, agentPicks, sessionSkills, skillPicksSaid } = await import('./SkillsMenu.js')
+const { NO_PICKS, SkillsMenu, SkillsOff, presetPicks, sessionSkills, skillPicksSaid } = await import('./SkillsMenu.js')
+
+beforeEach(() => {
+  onSkillChoices.mockResolvedValue(CHOICES)
+})
 
 afterEach(() => {
   cleanup()
   forgetRemembered()
   localStorage.clear()
   onProjectSkills.mockReset()
+  onSkillChoices.mockReset()
 })
 
-const REVIEWER = { id: 'reviewer', name: 'Reviewer', skills: ['ask', 'readability'], accounts: {}, projectSkills: true }
-const GROUPS = [
-  { title: 'Every agent starts with', skills: [{ name: 'ask', description: '' }, { name: 'github', description: '' }] },
-  { title: 'Code reviews', skills: [{ name: 'readability', description: '' }, { name: 'ux', description: '' }] },
-]
 const PROJECT = { groups: [{ title: 'Tickets and queue', skills: [{ name: 'tickets', standing: 'current', waiting: false }, { name: 'queue', standing: 'absent', waiting: false }] }], uncommitted: [], git: true, local: false, held: ['tickets', 'plan'] }
 
 function renderMenu(over: Partial<Parameters<typeof SkillsMenu>[0]> = {}) {
   const onChange = vi.fn()
-  render(<SkillsMenu projectId="p1" agent={REVIEWER} groups={GROUPS} picks={NO_PICKS} onChange={onChange} busy={false} {...over} />)
+  render(<SkillsMenu projectId="p1" picks={NO_PICKS} onChange={onChange} busy={false} {...over} />)
   return onChange
 }
 const checked = (name: string) => screen.getByRole('menuitemcheckbox', { name }).getAttribute('aria-checked')
 
 describe('the Skills menu under the launcher\'s box', () => {
-  test('the button holds its place while the project\'s skills are read, with no count: it never draws the agent\'s count alone and then changes it', async () => {
+  test('the button holds its place while the project\'s skills are read, with no count: it never draws the others\' count alone and then changes it', async () => {
     let read: (v: unknown) => void = () => {}
     onProjectSkills.mockReturnValue(new Promise(resolve => (read = resolve)))
     renderMenu()
@@ -49,13 +56,13 @@ describe('the Skills menu under the launcher\'s box', () => {
     expect(await screen.findByRole('button', { name: 'Skills: 4' })).toBeTruthy()
   })
 
-  test('the button counts what the session gets: its agent\'s skills and the project\'s; the menu ticks the agent\'s, lists the project\'s, and opens its Skills page', async () => {
+  test('the button counts what the session gets: the skills every run gets and the project\'s; the menu ticks the former, lists the project\'s, and opens its Skills page', async () => {
     onProjectSkills.mockResolvedValue(PROJECT)
     renderMenu()
     const trigger = await screen.findByRole('button', { name: 'Skills: 4' })
-    expect((await hoverTooltip(trigger)).textContent).toBe("This session gets its agent's skills, and every project skill")
+    expect((await hoverTooltip(trigger)).textContent).toBe('This session gets the skills every run gets, and every project skill')
     await openMenu(trigger)
-    expect(screen.getByText("Reviewer's skills, this session")).toBeTruthy()
+    expect(screen.getByText('Skills, this session')).toBeTruthy()
     expect(checked('ask')).toBe('true')
     expect(checked('readability')).toBe('true')
     expect(screen.queryByRole('menuitemcheckbox', { name: 'ux' })).toBeNull()
@@ -69,7 +76,7 @@ describe('the Skills menu under the launcher\'s box', () => {
     expect(openSettings).toHaveBeenCalledWith('skills', 'p1')
   })
 
-  test('an agent\'s skill unticked is off for this session; one of the others ticked is on; a tick on one that is on takes it back', async () => {
+  test('a skill every run gets, unticked, is off for this session; one of the others ticked is on; a tick on one that is on takes it back', async () => {
     onProjectSkills.mockResolvedValue(PROJECT)
     const onChange = renderMenu()
     await openMenu(await screen.findByRole('button', { name: 'Skills: 4' }))
@@ -109,7 +116,7 @@ describe('the Skills menu under the launcher\'s box', () => {
     expect(fromOne).toHaveBeenLastCalledWith({ on: [], off: [] })
   })
 
-  test('a session with no project has the agent part alone; a project with no skills yet says so', async () => {
+  test('a session with no project has the first part alone; a project with no skills yet says so', async () => {
     renderMenu({ projectId: undefined })
     await openMenu(await screen.findByRole('button', { name: 'Skills: 2' }))
     expect(screen.queryByText('Project skills')).toBeNull()
@@ -123,22 +130,10 @@ describe('the Skills menu under the launcher\'s box', () => {
     expect(screen.queryByRole('menuitemradio', { name: 'All' })).toBeNull()
   })
 
-  test('a skill the agent has and the project holds too is counted once', async () => {
+  test('a skill every run gets that the project holds too is counted once', async () => {
     onProjectSkills.mockResolvedValue({ ...PROJECT, held: ['ask', 'plan'] })
     renderMenu()
     expect(await screen.findByRole('button', { name: 'Skills: 3' })).toBeTruthy()
-  })
-
-  test('a session opened again after a reload has its Skills from the first frame, so nothing after it in the row moves', async () => {
-    onProjectSkills.mockResolvedValue({ held: ['tickets'] })
-    render(<SkillsOff projectId="p1" agent="default" />)
-    await skillsSaid(4)
-    cleanup()
-    // The reload: the page's memory gone, this browser's store as the last load left it, the reads not answered yet.
-    forgetRemembered()
-    onProjectSkills.mockReturnValue(new Promise(() => {}))
-    render(<SkillsOff projectId="p1" agent="default" />)
-    expect(screen.getByText((_, el) => el?.getAttribute('tabindex') === '0' && el.textContent!.startsWith('Skills: 4.'))).toBeTruthy()
   })
 
   test('a save on the Skills page is counted at once', async () => {
@@ -150,30 +145,34 @@ describe('the Skills menu under the launcher\'s box', () => {
     expect(await screen.findByRole('button', { name: 'Skills: 5' })).toBeTruthy()
   })
 
-  test('nothing until the agents are read', () => {
+  test('nothing until the skills to pick from are read', () => {
     onProjectSkills.mockResolvedValue(PROJECT)
-    renderMenu({ agent: undefined })
+    onSkillChoices.mockReturnValue(new Promise(() => {}))
+    renderMenu()
     expect(screen.queryByRole('button')).toBeNull()
   })
 })
 
 describe('what the picks say', () => {
-  test('a session starts from no pick on its agent, and from no project skill on one set to never pick them up', () => {
-    expect(agentPicks(REVIEWER)).toBe(NO_PICKS)
-    expect(agentPicks(undefined)).toBe(NO_PICKS)
-    expect(agentPicks({ projectSkills: false })).toEqual({ on: [], off: [], project: 'none' })
+  test('a session starts from no pick on its preset, and from the project skills it names', () => {
+    expect(presetPicks(undefined)).toBe(NO_PICKS)
+    expect(presetPicks({ options: {} })).toBe(NO_PICKS)
+    expect(presetPicks({ options: { skills: { project: 'all' } } })).toBe(NO_PICKS)
+    expect(presetPicks({ options: { skills: { project: 'none' } } })).toEqual({ on: [], off: [], project: 'none' })
+    expect(presetPicks({ options: { skills: { project: ['tickets'] } } })).toEqual({ on: [], off: [], project: ['tickets'] })
   })
 
-  test('the skills a session gets of its agent\'s: the agent\'s less the ones off, then the ones on', () => {
-    expect(sessionSkills(REVIEWER, NO_PICKS)).toEqual(['ask', 'readability'])
-    expect(sessionSkills(REVIEWER, { on: ['ux', 'ask'], off: ['readability'] })).toEqual(['ask', 'ux'])
-    expect(sessionSkills(undefined, { on: ['ux'], off: [] })).toEqual(['ux'])
+  test('the skills a session gets of the ones every run gets: those less the ones off, then the ones on', () => {
+    expect(sessionSkills(['ask', 'readability'], NO_PICKS)).toEqual(['ask', 'readability'])
+    expect(sessionSkills(['ask', 'readability'], { on: ['ux', 'ask'], off: ['readability'] })).toEqual(['ask', 'ux'])
+    expect(sessionSkills([], { on: ['ux'], off: [] })).toEqual(['ux'])
   })
 
   test('in words, for a hover', () => {
-    expect(skillPicksSaid({})).toBe("its agent's skills, and every project skill")
-    expect(skillPicksSaid({ skillsOn: ['ux'], skillsOff: ['ask', 'github'], projectSkills: 'none' })).toBe("its agent's skills with ux, without ask, github, and no project skill")
-    expect(skillPicksSaid({ projectSkills: ['tickets', 'plan'] })).toBe("its agent's skills, and the project skills tickets, plan")
+    expect(skillPicksSaid({})).toBe('the skills every run gets, and every project skill')
+    expect(skillPicksSaid({ projectSkills: 'all' })).toBe('the skills every run gets, and every project skill')
+    expect(skillPicksSaid({ skillsOn: ['ux'], skillsOff: ['ask', 'github'], projectSkills: 'none' })).toBe('the skills every run gets with ux, without ask, github, and no project skill')
+    expect(skillPicksSaid({ projectSkills: ['tickets', 'plan'] })).toBe('the skills every run gets, and the project skills tickets, plan')
   })
 })
 
@@ -189,42 +188,53 @@ const skillsSaid = (count: number) => screen.findByText((_, el) => el?.getAttrib
 describe("the session page's Skills, as words", () => {
   test('words the keyboard stops on, counted as the launcher counts, their hover saying what the session got', async () => {
     onProjectSkills.mockResolvedValue({ held: ['tickets', 'queue'] })
-    render(<SkillsOff projectId="p1" agent={undefined} skillsOff={['github']} projectSkills={['tickets']} />)
-    // The default agent's three less github, and one of the project's two.
-    const said = await skillsSaid(3)
+    render(<SkillsOff projectId="p1" preset={undefined} skillsOff={['readability']} projectSkills={['tickets']} />)
+    // The two every run gets less readability, and one of the project's two.
+    const said = await skillsSaid(2)
     expect(said.tabIndex).toBe(0)
     expect(screen.queryByRole('button')).toBeNull()
-    expect((await hoverTooltip(said)).textContent).toBe("This session got its agent's skills without github, and the project skills tickets")
+    expect((await hoverTooltip(said)).textContent).toBe('This session got the skills every run gets without readability, and the project skills tickets')
     cleanup()
-    render(<SkillsOff projectId={undefined} agent="default" skillsOn={['plan']} />)
-    const alone = await skillsSaid(4)
-    expect((await hoverTooltip(alone)).textContent).toBe("This session got its agent's skills with plan, and no project skill")
+    render(<SkillsOff projectId={undefined} preset="default" skillsOn={['plan']} />)
+    const alone = await skillsSaid(3)
+    expect((await hoverTooltip(alone)).textContent).toBe('This session got the skills every run gets with plan, and no project skill')
   })
 
-  test('a skill its agent has and the project holds too is counted once, as the launcher counts it', async () => {
-    onProjectSkills.mockResolvedValue({ held: ['ask', 'tickets'] })
-    render(<SkillsOff projectId="p1" agent="default" />)
+  test("a session that picked no project skills got its preset's", async () => {
+    onProjectSkills.mockResolvedValue({ held: ['tickets', 'queue'] })
+    render(<SkillsOff projectId="p1" preset="quiet" />)
+    const said = await skillsSaid(2)
+    expect((await hoverTooltip(said)).textContent).toBe('This session got the skills every run gets, and no project skill')
+    cleanup()
+    render(<SkillsOff projectId="p1" preset="quiet" projectSkills="all" />)
     expect(await skillsSaid(4)).toBeTruthy()
+  })
+
+  test('a skill every run gets that the project holds too is counted once, as the launcher counts it', async () => {
+    onProjectSkills.mockResolvedValue({ held: ['ask', 'tickets'] })
+    render(<SkillsOff projectId="p1" preset="default" />)
+    expect(await skillsSaid(3)).toBeTruthy()
   })
 
   test('a session opened again after a reload has its Skills from the first frame, so nothing after it in the row moves', async () => {
     onProjectSkills.mockResolvedValue({ held: ['tickets'] })
-    render(<SkillsOff projectId="p1" agent="default" />)
-    await skillsSaid(4)
+    render(<SkillsOff projectId="p1" preset="default" />)
+    await skillsSaid(3)
     cleanup()
     // The reload: the page's memory gone, this browser's store as the last load left it, the reads not answered yet.
     forgetRemembered()
     onProjectSkills.mockReturnValue(new Promise(() => {}))
-    render(<SkillsOff projectId="p1" agent="default" />)
-    expect(screen.getByText((_, el) => el?.getAttribute('tabindex') === '0' && el.textContent!.startsWith('Skills: 4.'))).toBeTruthy()
+    onSkillChoices.mockReturnValue(new Promise(() => {}))
+    render(<SkillsOff projectId="p1" preset="default" />)
+    expect(screen.getByText((_, el) => el?.getAttribute('tabindex') === '0' && el.textContent!.startsWith('Skills: 3.'))).toBeTruthy()
   })
 
   test('a save on the Skills page is counted at once', async () => {
     onProjectSkills.mockResolvedValue({ held: ['tickets'] })
-    render(<SkillsOff projectId="p1" agent="default" />)
-    await skillsSaid(4)
+    render(<SkillsOff projectId="p1" preset="default" />)
+    await skillsSaid(3)
     onProjectSkills.mockResolvedValue({ held: ['tickets', 'queue'] })
     skillsSaved()
-    expect(await skillsSaid(5)).toBeTruthy()
+    expect(await skillsSaid(4)).toBeTruthy()
   })
 })

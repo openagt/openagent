@@ -3,15 +3,15 @@ import { readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { hostname, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { appendInbox, logCardFile, promptLines, takeInbox, type InboxLine, type PromptLine } from '@openagt/agent-driver'
-import { AGENT_ENV, PROJECT_SKILLS_ENV, SKILLS_OFF_ENV, SKILLS_ON_ENV, isAgentId, isSkillName, sessionFolder, sessionsHome, sessionsHomeOf } from '@openagt/agent-data'
-import { LOCAL_HOST, type ProjectRef, type RunHost, type RunInput, type RunOptions, type RunReadiness, type RunRef, type RunRequest, type RunStatus, type RunSummary } from '@openagt/hooks'
+import { PRESET_ENV, PROJECT_SKILLS_ENV, SKILLS_OFF_ENV, SKILLS_ON_ENV, isSkillName, sessionFolder, sessionsHome, sessionsHomeOf } from '@openagt/agent-data'
+import { LOCAL_HOST, isPresetId, type ProjectRef, type RunHost, type RunInput, type RunOptions, type RunReadiness, type RunRef, type RunRequest, type RunStatus, type RunSummary } from '@openagt/hooks'
 import { worktreePath } from '@openagt/skill-branches'
 import { findRun, listRuns, parseRunCard, type RunCard } from '@openagt/skill-logs'
-import { runAgent } from './agent.js'
+import { handedDownSettings, runPreset } from './preset.js'
 import { inboxPath, liveDir } from './live-card.js'
 import { isPublish, NO_PUBLISH } from './records.js'
 import { isPidAlive } from './run-lock.js'
-import { agentLoginFor, detachResume, detachRun, DRIVER_NAMES, GIT_ACCOUNT_ENV, isDriverName, readyToRun, spawnResume, spawnRun, type DriverName } from './runner.js'
+import { presetLoginFor, detachResume, detachRun, DRIVER_NAMES, GIT_ACCOUNT_ENV, isDriverName, readyToRun, spawnResume, spawnRun, type DriverName } from './runner.js'
 import type { RunRequest as AskedRun } from './run.js'
 import { NAME_FILE_ENV } from './title.js'
 
@@ -29,8 +29,8 @@ export interface LocalHostDeps {
   spawnResume?: typeof spawnResume
   /** Whether a run on `driver` can start here, working as `login` at the git host when one is named. */
   ready?: (dir: string, driver: DriverName, login?: string) => Promise<RunReadiness>
-  /** The account at the git host a run of `agent` works as when it names none: its agent's. */
-  loginFor?: (dir: string, agent: string | undefined) => Promise<string | undefined>
+  /** The account at the git host a run on `preset` works as when it names none: its preset's. */
+  loginFor?: (dir: string, preset: string | undefined) => Promise<string | undefined>
   isAlive?: (pid: number) => boolean
   /** This computer's name, as the cards of its runs say it. */
   host?: string
@@ -46,7 +46,7 @@ const HANDED_NAME_KEPT_MS = 2 * 60_000
 
 export function localHost(deps: LocalHostDeps = {}): RunHost {
   const ready = deps.ready ?? ((dir, driver, login) => readyToRun(dir, driver, login !== undefined ? { login } : {}))
-  const loginFor = deps.loginFor ?? (async (dir, agent) => agentLoginFor(dir, await runAgent(agent)))
+  const loginFor = deps.loginFor ?? (async (dir, preset) => presetLoginFor(dir, await runPreset(preset, await handedDownSettings())))
   const isAlive = deps.isAlive ?? isPidAlive
   const here = deps.host ?? hostname()
   const startingMs = deps.startingMs ?? STARTING_MS
@@ -99,7 +99,7 @@ export function localHost(deps: LocalHostDeps = {}): RunHost {
       const dir = placeOf(project)
       const driver = driverOf(options)
       // A run is refused before it spends a checkout when its coding agent cannot start, or the account it works as cannot be used here.
-      const login = options.github?.account ?? (await loginFor(dir, options['agent-driver']?.agent))
+      const login = options.github?.account ?? (await loginFor(dir, options.presets?.preset))
       const readiness = await ready(dir, driver, login)
       if (readiness.problems.length > 0) throw new Error(readiness.problems.join(' '))
       const name = nameHandOver(title)
@@ -197,10 +197,10 @@ function refuse(project: ProjectRef | undefined, options: RunOptions): void {
   if (project && branches.repos !== undefined) throw new Error('The repos are for a session with no project: a run in a project works in its own checkout.')
   if (branches.branch !== undefined && branches.base !== undefined) throw new Error('A run given a branch to work on starts from no other.')
   if (options.github?.account !== undefined && !/^\S+$/.test(options.github.account)) throw new Error('An account is named by its login.')
-  const agent = options['agent-driver']?.agent
-  if (agent !== undefined && !isAgentId(agent)) throw new Error('An agent is named by its id.')
+  const preset = options.presets?.preset
+  if (preset !== undefined && !isPresetId(preset)) throw new Error('A preset is named by its id.')
   const { on, off, project: kept } = options.skills ?? {}
-  for (const list of [on, off, kept === 'none' ? undefined : kept]) {
+  for (const list of [on, off, kept === 'all' || kept === 'none' ? undefined : kept]) {
     if (list !== undefined && !list.every(isSkillName)) throw new Error('Skills are named by their names.')
   }
 }
@@ -220,16 +220,16 @@ function asked(options: RunOptions): Omit<AskedRun, 'prompt'> {
   }
 }
 
-/** The picks the run's own process reads off its environment: the account it works as, its agent, and the session's skills. */
+/** The picks the run's own process reads off its environment: the account it works as, its preset, and the session's skills. */
 function picks(options: RunOptions): Record<string, string> {
-  const agent = options['agent-driver']?.agent
+  const preset = options.presets?.preset
   const { on, off, project } = options.skills ?? {}
   return {
     ...(options.github?.account !== undefined ? { [GIT_ACCOUNT_ENV]: options.github.account } : {}),
-    ...(agent !== undefined ? { [AGENT_ENV]: agent } : {}),
+    ...(preset !== undefined ? { [PRESET_ENV]: preset } : {}),
     ...(on !== undefined ? { [SKILLS_ON_ENV]: on.join(',') } : {}),
     ...(off !== undefined ? { [SKILLS_OFF_ENV]: off.join(',') } : {}),
-    ...(project !== undefined ? { [PROJECT_SKILLS_ENV]: project === 'none' ? 'none' : project.join(',') } : {}),
+    ...(project !== undefined ? { [PROJECT_SKILLS_ENV]: project === 'all' || project === 'none' ? project : project.join(',') } : {}),
   }
 }
 

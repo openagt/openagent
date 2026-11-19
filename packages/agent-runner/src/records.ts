@@ -1,5 +1,6 @@
 import { isSkillName, type FileBranchWrite } from '@openagt/agent-data'
-import type { ProjectSkillsPick } from './agent.js'
+import { isPresetId } from '@openagt/hooks'
+import type { ProjectSkillsPick } from './preset.js'
 import { publishedBranch } from '@openagt/agent-data/names'
 import { deleteRun, writeRun, type AnyDiaryLine, type LogsDeps, type RunCard } from '@openagt/skill-logs'
 import type { SessionRepo } from '@openagt/skill-branches'
@@ -65,13 +66,13 @@ export interface Lasting {
   for?: string
   /** The repos a session with no project has as context (`run --repos`), each a copy in its folder. */
   repos?: SessionRepo[]
-  /** The agent the run is on, by its id (`OPENAGENT_AGENT`): its skills and accounts; the default agent when absent. */
-  agent?: string
-  /** Skills the run gets on top of its agent's (`OPENAGENT_SKILLS_ON`): the session's pick. */
+  /** The preset the run is on, by its id (`OPENAGENT_PRESET`): each leg runs on its options as it stands then; Default when absent. */
+  preset?: string
+  /** Skills the run gets on top of the ones every run gets (`OPENAGENT_SKILLS_ON`): the session's pick. */
   skillsOn?: string[]
-  /** Skills of its agent's the run does not get (`OPENAGENT_SKILLS_OFF`): the session's pick. */
+  /** Skills every run gets that this one goes without (`OPENAGENT_SKILLS_OFF`): the session's pick. */
   skillsOff?: string[]
-  /** Which of the project's own skills stay in the run's checkout (`OPENAGENT_PROJECT_SKILLS`): none, or the ones named; every one when absent. */
+  /** Which of the project's own skills stay in the run's checkout (`OPENAGENT_PROJECT_SKILLS`), the session's pick: every one, none, or the ones named; its preset's when absent, and every one when that names none. */
   projectSkills?: ProjectSkillsPick
 }
 
@@ -110,7 +111,7 @@ export function lasting(mark: { [K in keyof Lasting]?: unknown }): Lasting {
   const repos = reposOf(mark.repos)
   const skillsOn = skillNames(mark.skillsOn)
   const skillsOff = skillNames(mark.skillsOff)
-  const projectSkills = mark.projectSkills === 'none' ? 'none' : skillNames(mark.projectSkills)
+  const projectSkills = mark.projectSkills === 'all' || mark.projectSkills === 'none' ? mark.projectSkills : skillNames(mark.projectSkills)
   return {
     ...(isPublish(mark.publish) ? { publish: mark.publish } : {}),
     ...(typeof mark.base === 'string' ? { base: mark.base } : {}),
@@ -119,7 +120,7 @@ export function lasting(mark: { [K in keyof Lasting]?: unknown }): Lasting {
     ...(typeof mark.baseCommit === 'string' ? { baseCommit: mark.baseCommit } : {}),
     ...(typeof mark.for === 'string' ? { for: mark.for } : {}),
     ...(repos !== undefined && repos.length > 0 ? { repos } : {}),
-    ...(typeof mark.agent === 'string' && mark.agent ? { agent: mark.agent } : {}),
+    ...(isPresetId(mark.preset) ? { preset: mark.preset } : {}),
     ...(skillsOn ? { skillsOn } : {}),
     ...(skillsOff ? { skillsOff } : {}),
     ...(projectSkills !== undefined ? { projectSkills } : {}),
@@ -156,7 +157,7 @@ export function forReaders(mark: Lasting): Lasting {
     ...(mark.publish !== undefined ? { publish: mark.publish } : {}),
     ...(mark.for !== undefined ? { for: mark.for } : {}),
     ...(mark.repos !== undefined ? { repos: mark.repos } : {}),
-    ...(mark.agent !== undefined ? { agent: mark.agent } : {}),
+    ...(mark.preset !== undefined ? { preset: mark.preset } : {}),
     ...(mark.skillsOn !== undefined ? { skillsOn: mark.skillsOn } : {}),
     ...(mark.skillsOff !== undefined ? { skillsOff: mark.skillsOff } : {}),
     ...(mark.projectSkills !== undefined ? { projectSkills: mark.projectSkills } : {}),

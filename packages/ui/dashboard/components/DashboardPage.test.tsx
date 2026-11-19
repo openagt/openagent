@@ -20,7 +20,7 @@ vi.mock('./OnboardingChecklist.js', async () => {
   }
 })
 vi.mock('./SkillsCard.js', () => ({ SkillsCard: () => <div>skills</div> }))
-vi.mock('./YourAgentsPart.js', () => ({ YourAgentsPart: () => <span>your agents</span> }))
+vi.mock('./YourPresetsPart.js', () => ({ YourPresetsPart: () => <span>your presets</span> }))
 const modules = vi.hoisted(() => ({ loaded: true, gone: false, line: [] as { id: string; order: number; node: unknown }[] }))
 vi.mock('./ModuleCards.js', async () => {
   const { Section } = await import('./ui/section.js')
@@ -426,17 +426,17 @@ describe('the Overview', () => {
     listed = [{ id: 'queue', label: 'Queue', projects: ['p2'] }]
     const { rerender } = show()
     const line = (await screen.findByText('no agent working')).closest('p')!
-    expect(line.textContent).toBe('·nothing needs you·no agent working·Loading…·your agents')
+    expect(line.textContent).toBe('·nothing needs you·no agent working·Loading…·your presets')
     // A phone shows it too, beside Customize.
     expect(line.className).not.toContain('sr-only')
     modules.line = [{ id: '@x/queue/queued', order: 3, node: <span>nothing queued</span> }]
     rerender(overview())
-    expect(line.textContent).toBe('·nothing needs you·no agent working·nothing queued·your agents')
+    expect(line.textContent).toBe('·nothing needs you·no agent working·nothing queued·your presets')
     // Every package in, none with a part: the line is its own parts only.
     modules.loaded = true
     modules.line = []
     rerender(overview())
-    expect(line.textContent).toBe('·nothing needs you·no agent working·your agents')
+    expect(line.textContent).toBe('·nothing needs you·no agent working·your presets')
   })
 
   test("before the packages' code is in, no place waits for the queue's part where the sidebar's pages say no shown project has the Queue; while they say nothing yet, the parts after its place wait", async () => {
@@ -444,7 +444,7 @@ describe('the Overview', () => {
     listed = [{ id: 'queue', label: 'Queue', projects: ['p2'] }, { id: 'logs', label: 'Logs', projects: ['p1'] }]
     show('p1')
     const line = (await screen.findByText('no agent working')).closest('p')!
-    expect(line.textContent).toBe('·nothing needs you·no agent working·your agents')
+    expect(line.textContent).toBe('·nothing needs you·no agent working·your presets')
     cleanup()
     // A browser's first visit: no page known, no place held, and what stands after it waits until a part or the pages come.
     listed = null
@@ -453,7 +453,7 @@ describe('the Overview', () => {
     expect(firstVisit.textContent).toBe('·nothing needs you·no agent working')
     modules.line = [{ id: '@x/queue/queued', order: 3, node: <span>nothing queued</span> }]
     rerender(overview())
-    expect(firstVisit.textContent).toBe('·nothing needs you·no agent working·nothing queued·your agents')
+    expect(firstVisit.textContent).toBe('·nothing needs you·no agent working·nothing queued·your presets')
   })
 
   test('the Human Queue says it is loading before its read, not that nothing waits', async () => {

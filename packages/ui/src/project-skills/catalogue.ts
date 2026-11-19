@@ -66,8 +66,12 @@ async function readCarried(): Promise<Map<string, CarriedSkill>> {
     const pkg = packages.find(each => each.skill === name)
     if (!pkg) throw new Error(`the Skills page lists ${name}, a skill the distribution carries none of`)
     const text = await readFile(join(pkg.dir, 'SKILL.md'), 'utf8')
-    const description = /^description:[ \t]*(.*)$/m.exec(text)?.[1]?.trim().replace(/^"(.*)"$/, '$1') ?? ''
-    skills.set(name, { name, package: pkg.name, version: typeof pkg.manifest.version === 'string' ? pkg.manifest.version : '0.0.0', text, description })
+    skills.set(name, { name, package: pkg.name, version: typeof pkg.manifest.version === 'string' ? pkg.manifest.version : '0.0.0', text, description: descriptionOf(text) })
   }
   return skills
+}
+
+/** The `description` a skill's text gives in its front matter, in one line; none, empty. */
+export function descriptionOf(text: string): string {
+  return /^description:[ \t]*(.*)$/m.exec(text)?.[1]?.trim().replace(/^"(.*)"$/, '$1') ?? ''
 }

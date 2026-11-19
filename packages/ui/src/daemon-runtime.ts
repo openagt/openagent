@@ -2,7 +2,7 @@ import { isAbsolute, join, resolve, sep } from 'node:path'
 import { hostname } from 'node:os'
 import { stat } from 'node:fs/promises'
 import { isDriverName, type ReadyNaming } from '@openagt/agent-runner'
-import type { RunHost, RunOptions, RunRequest } from '@openagt/hooks'
+import { isPresetId, type RunHost, type RunOptions, type RunRequest } from '@openagt/hooks'
 import { sessionRepos } from '@openagt/skill-branches'
 import { nameStarted } from './started-names.js'
 import { findCheckout, fromDiaryLine, isPidAlive, isRunId, projectBranches, readLiveMetas, resolveAgentDiary, type AgentMeta, type AnyDiaryLine } from './store/index.js'
@@ -20,7 +20,7 @@ import { screenInDiary } from './dashboard/screen.js'
 import { gitUserOf, onMachine } from './dashboard/run-rows.js'
 import { tailAgentEvents } from './dashboard-rpc/events-tail.js'
 import { addProject, listMachines, listProjects, readPreferences, removeProject, type MachineRecord } from './registry.js'
-import { errorMessage, fileBranchRepo, installProject, isAgentId, projectKey, projectNameOf, repositoryAddress, sessionsHome, writeSharing, isSkillName, projectId } from '@openagt/agent-data'
+import { errorMessage, fileBranchRepo, installProject, projectKey, projectNameOf, repositoryAddress, sessionsHome, writeSharing, isSkillName, projectId } from '@openagt/agent-data'
 import { publishedBranch } from '@openagt/agent-data/names'
 import { branchesOnOrigin } from './dashboard/start-branch.js'
 import { removeProjectFiles } from './remove-files.js'
@@ -84,11 +84,11 @@ function refusedPicks(options: StartAgentOptions, noProject: boolean): string | 
   if (noProject && options.machine !== undefined && options.repos !== undefined) return 'The repos are folders on this computer: a session with them runs here. Pick this computer, or start without them.'
   // A login is one word.
   if (options.account !== undefined && !(typeof options.account === 'string' && /^\S+$/.test(options.account))) return 'An account is named by its login.'
-  if (options.agent !== undefined && !isAgentId(options.agent)) return 'An agent is named by its id.'
+  if (options.preset !== undefined && !isPresetId(options.preset)) return 'A preset is named by its id.'
   // The picks of skills are lists of names.
   const skillList = (value: unknown): value is string[] => Array.isArray(value) && value.length > 0 && value.every(isSkillName)
   if ((options.skillsOn !== undefined && !skillList(options.skillsOn)) || (options.skillsOff !== undefined && !skillList(options.skillsOff))) return 'Skills are named by their names.'
-  if (options.projectSkills !== undefined && options.projectSkills !== 'none' && !skillList(options.projectSkills)) return 'Project skills are none, or named by their names.'
+  if (options.projectSkills !== undefined && options.projectSkills !== 'all' && options.projectSkills !== 'none' && !skillList(options.projectSkills)) return 'Project skills are all, none, or named by their names.'
   if (!noProject && options.repos !== undefined) return 'Repos are added to a session with no project: a project works in its own checkout.'
   // A repo is a whole path, and the run's process is handed them one per line.
   if (options.repos !== undefined && !(Array.isArray(options.repos) && options.repos.every(folder => typeof folder === 'string' && isAbsolute(folder) && !folder.includes('\n')))) {
@@ -536,7 +536,6 @@ function runOptionsOf(options: StartAgentOptions, publish: RunOptions['publish']
     ...(options.driver !== undefined ? { driver: options.driver } : {}),
     ...(options.model !== undefined ? { model: options.model } : {}),
     ...(options.effort !== undefined ? { effort: options.effort } : {}),
-    ...(options.agent !== undefined ? { agent: options.agent } : {}),
   }
   const branches = { ...(options.base !== undefined ? { base: options.base } : {}), ...(repos !== undefined && repos.length > 0 ? { repos } : {}) }
   const github = { ...(options.prBase !== undefined ? { prBase: options.prBase } : {}), ...(options.account !== undefined ? { account: options.account } : {}) }
@@ -551,5 +550,6 @@ function runOptionsOf(options: StartAgentOptions, publish: RunOptions['publish']
     ...(Object.keys(branches).length > 0 ? { 'git-branches': branches } : {}),
     ...(Object.keys(github).length > 0 ? { github } : {}),
     ...(Object.keys(skills).length > 0 ? { skills } : {}),
+    ...(options.preset !== undefined ? { presets: { preset: options.preset } } : {}),
   }
 }

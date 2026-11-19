@@ -1,4 +1,4 @@
-export { AGENT_ENV, AGENT_ID_ENV, BRANCHES_DIR, DATA_BRANCH, OPENAGENT_DIR, PROJECT_SKILLS_ENV, SKILLS_ENV, SKILLS_OFF_ENV, SKILLS_ON_ENV, SKILL_CATALOGUE_ENV, isSkillName } from './names.js'
+export { AGENT_ID_ENV, BRANCHES_DIR, DATA_BRANCH, OPENAGENT_DIR, PRESET_ENV, PROJECT_SKILLS_ENV, SKILLS_ENV, SKILLS_OFF_ENV, SKILLS_ON_ENV, SKILL_CATALOGUE_ENV, isSkillName } from './names.js'
 export { installProject, nodeInstallFs, FIRST_COMMIT_MESSAGE, type InstallResult, type InstallDeps, type InstallFs } from './install.js'
 export { gitignorePath, openagentGitignore } from './openagent-gitignore.js'
 export {
@@ -45,7 +45,6 @@ export {
   type BranchReader,
 } from './file-branch.js'
 export { SESSIONS_DIR, sessionsHome, sessionFolder, sessionsHomeOf, runsRootOf, listSessionFolders } from './sessions.js'
-export { AGENTS_DIR, DEFAULT_AGENT, DEFAULT_AGENT_SKILLS, agentIdOf, agentsDir, builtInDefault, isAgentId, isAgentName, listAgents, readAgent, removeAgent, writeAgent, type AgentAccounts, type AgentRecord } from './agents.js'
 export { REPO_OWNERS_FILE, isRepoOwner, readRepoOwners, writeRepoOwners } from './repo-owners.js'
 export { NoRemoteAccountError, accountGit, clearRemoteAccount, noAccountSentence, readRemoteAccount, remoteHostOf, writeRemoteAccount, type RemoteAccount } from './remote-account.js'
 export { addressOfRemote, spellingOfRemote } from './repository-address.js'

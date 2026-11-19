@@ -1,5 +1,5 @@
 import { nodeGitRunner, type GitRunner } from '@openagt/agent-data'
-import type { ProjectSkillsPick } from './agent.js'
+import type { ProjectSkillsPick } from './preset.js'
 
 /**
  * The project's own skills (Rom's design, the session's picks): the texts a project tracks under
@@ -30,7 +30,7 @@ export async function projectSkillNames(repo: string, git: GitRunner = nodeGitRu
  * not what the project's folder happens to hold.
  */
 export async function leftOutSkillPaths(checkout: string, pick: ProjectSkillsPick | undefined, git: GitRunner = nodeGitRunner()): Promise<string[]> {
-  if (pick === undefined) return []
+  if (pick === undefined || pick === 'all') return []
   const kept = new Set(pick === 'none' ? [] : pick)
   return (await projectSkillNames(checkout, git)).filter(name => !kept.has(name)).flatMap(name => PROJECT_SKILL_DIRS.map(dir => `${dir}/${name}`))
 }

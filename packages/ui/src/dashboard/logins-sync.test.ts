@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { accountsWiring } from '../dashboard-rpc/accounts.js'
 import { copiedWiring } from '../dashboard-rpc/copied-logins.js'
 import { RPC_HANDLERS } from '../dashboard-rpc/index.js'
-import { agentLoginsOn, allowLogins, localLogins, serverLogins, settleLeft, syncLogins, syncWiring, type LocalLogin } from './logins-sync.js'
+import { presetLoginsOn, allowLogins, localLogins, serverLogins, settleLeft, syncLogins, syncWiring, type LocalLogin } from './logins-sync.js'
 import { readCopied } from './copied-logins.js'
 import type { MachineRecord, Preferences } from '../registry.js'
 import { readAccounts } from '@openagt/skill-account-rotation'
@@ -23,7 +23,7 @@ const machine = (logins: boolean): MachineRecord => ({ id: 'https://203.0.113.5'
 
 interface Rig {
   local: LocalLogin[]
-  agentLogins: string[]
+  presetLogins: string[]
   prefs: Preferences
   patched: unknown[]
   saved: MachineRecord[]
@@ -39,7 +39,7 @@ async function withRig(body: (rig: Rig) => Promise<void>): Promise<void> {
   const accountsBefore = { ...accountsWiring }
   const copiedBefore = { ...copiedWiring }
   const serverPath = (agent: 'claude' | 'codex'): string => join(dir, `server-${agent}.json`)
-  const rig: Rig = { local: [], agentLogins: [], prefs: {}, patched: [], saved: [machine(true)], calls: [], serverPath }
+  const rig: Rig = { local: [], presetLogins: [], prefs: {}, patched: [], saved: [machine(true)], calls: [], serverPath }
   Object.assign(accountsWiring, { path: serverPath, now: () => 0, codexDir: () => join(dir, 'codex') })
   Object.assign(copiedWiring, {
     server: () => true,
@@ -57,7 +57,7 @@ async function withRig(body: (rig: Rig) => Promise<void>): Promise<void> {
       return handler ? { ok: true, ret: await handler(...args) } : { ok: false, error: `no ${fn}` }
     },
     local: async () => rig.local,
-    agentLogins: async () => rig.agentLogins,
+    presetLogins: async () => rig.presetLogins,
     usage: async () => [{ kind: 'claude', source: 'own', windows: [{ label: 'week', percent: 62 }], at: 5 }],
     computer: () => 'Suleimans-MacBook-Pro',
     preferences: async () => rig.prefs,
@@ -244,12 +244,12 @@ test('the person\'s settings follow to the server: all at first, then only what 
     assert.equal(rig.patched.length, 2)
   }))
 
-test('a GitHub account an agent names goes to every device of the person\'s: a server not told to use this computer\'s logins and a computer that is no server alike; one no agent names does not; how it stands is said per device, and a device that does not answer as not reached', () =>
+test('a GitHub account a preset names goes to every device of the person\'s: a server not told to use this computer\'s logins and a computer that is no server alike; one no preset names does not; how it stands is said per device, and a device that does not answer as not reached', () =>
   withRig(async rig => {
-    const agentOcto: LocalLogin = { ...octo, runs: false }
+    const presetOcto: LocalLogin = { ...octo, runs: false }
     const other: LocalLogin = { kind: 'git', host: 'github.com', source: 'other', name: 'other', who: 'other', secret: async () => 'gho_other' }
-    rig.local = [dani, agentOcto, other]
-    rig.agentLogins = ['octo']
+    rig.local = [dani, presetOcto, other]
+    rig.presetLogins = ['octo']
     const laptop: MachineRecord = { id: 'https://laptop.local:4200', label: 'Laptop', url: 'https://laptop.local:4200', key: 'k', door: 'https://laptop.local:4200/_devices/enter' }
     rig.saved = [machine(false), laptop]
     let facts: Record<string, { server?: true; version?: string }> = { [machine(false).id]: { server: true }, [laptop.id]: { version: '1.2.3' } }
@@ -257,21 +257,21 @@ test('a GitHub account an agent names goes to every device of the person\'s: a s
     // The server, not told, is sent nothing of this computer's other logins; the laptop is no server; both get octo.
     const servers = await syncLogins()
     assert.deepEqual(servers.map(server => [server.machineId, server.on, server.logins]), [[machine(false).id, false, []]])
-    assert.deepEqual((await agentLoginsOn()).map(device => [device.label, device.reachable, device.github]), [['203.0.113.5', true, { octo: { state: 'there' } }], ['Laptop', true, { octo: { state: 'there' } }]])
-    assert.deepEqual(readCopied().map(login => [login.kind, login.name, login.from]), [['git', 'octo', 'Suleimans-MacBook-Pro']], 'other, which no agent names, and the Claude login stay here')
+    assert.deepEqual((await presetLoginsOn()).map(device => [device.label, device.reachable, device.github]), [['203.0.113.5', true, { octo: { state: 'there' } }], ['Laptop', true, { octo: { state: 'there' } }]])
+    assert.deepEqual(readCopied().map(login => [login.kind, login.name, login.from]), [['git', 'octo', 'Suleimans-MacBook-Pro']], 'other, which no preset names, and the Claude login stay here')
     // What is there already is not handed over again.
     rig.calls.length = 0
     await syncLogins()
     assert.ok(!rig.calls.includes('sendCopiedLogin'))
     // A login that cannot be read here says why; a device that stops answering is not reached, its states kept.
-    rig.local = [{ ...agentOcto, who: 'octo-2', secret: async () => Promise.reject(new Error("the login gh keeps for octo is octo-agent's on GitHub")) }]
+    rig.local = [{ ...presetOcto, who: 'octo-2', secret: async () => Promise.reject(new Error("the login gh keeps for octo is octo-agent's on GitHub")) }]
     facts = { [machine(false).id]: { server: true }, [laptop.id]: {} }
     await syncLogins()
-    assert.deepEqual((await agentLoginsOn()).map(device => [device.label, device.reachable, device.github['octo']]), [['203.0.113.5', true, { state: 'failed', error: "the login gh keeps for octo is octo-agent's on GitHub" }], ['Laptop', false, { state: 'there' }]])
+    assert.deepEqual((await presetLoginsOn()).map(device => [device.label, device.reachable, device.github['octo']]), [['203.0.113.5', true, { state: 'failed', error: "the login gh keeps for octo is octo-agent's on GitHub" }], ['Laptop', false, { state: 'there' }]])
     // A device no longer saved leaves the list.
     rig.saved = [laptop]
     facts = { [laptop.id]: { version: '1.2.3' } }
-    rig.local = [agentOcto]
+    rig.local = [presetOcto]
     await syncLogins()
-    assert.deepEqual((await agentLoginsOn()).map(device => device.label), ['Laptop'])
+    assert.deepEqual((await presetLoginsOn()).map(device => device.label), ['Laptop'])
   }))

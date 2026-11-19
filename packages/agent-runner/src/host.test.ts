@@ -4,7 +4,7 @@ import { spawn } from 'node:child_process'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { logCardFile, type InboxLine } from '@openagt/agent-driver'
-import { AGENT_ENV, PROJECT_SKILLS_ENV, SKILLS_OFF_ENV, SKILLS_ON_ENV } from '@openagt/agent-data'
+import { PRESET_ENV, PROJECT_SKILLS_ENV, SKILLS_OFF_ENV, SKILLS_ON_ENV } from '@openagt/agent-data'
 import { LOCAL_HOST, type ProjectRef, type RunHost, type RunReadiness } from '@openagt/hooks'
 import { worktreePath } from '@openagt/skill-branches'
 import { localHost, type LocalHostDeps } from './host.js'
@@ -58,7 +58,8 @@ test("a start is this computer's: the run's process is spawned with what it was 
       project,
       prompt: 'fix the login',
       options: {
-        'agent-driver': { driver: 'codex', model: 'gpt-5', effort: 'high', agent: 'reviewer' },
+        'agent-driver': { driver: 'codex', model: 'gpt-5', effort: 'high' },
+        presets: { preset: 'reviewer' },
         publish: 'pr',
         'git-branches': { base: 'origin/develop' },
         github: { prBase: 'develop', account: 'octo-bot' },
@@ -75,7 +76,7 @@ test("a start is this computer's: the run's process is spawned with what it was 
     )
     assert.deepEqual(run?.env, {
       [GIT_ACCOUNT_ENV]: 'octo-bot',
-      [AGENT_ENV]: 'reviewer',
+      [PRESET_ENV]: 'reviewer',
       [SKILLS_ON_ENV]: 'plan',
       [SKILLS_OFF_ENV]: 'ask',
       [PROJECT_SKILLS_ENV]: 'none',
@@ -117,7 +118,7 @@ test('a start that cannot make a run is refused before anything is spawned: a pi
     await assert.rejects(here.start({ prompt: 'x', options: { 'git-branches': { base: 'main' } } }), /A session with no project has no git/)
     await assert.rejects(here.start({ project, prompt: 'x', options: { 'git-branches': { repos: [{ name: 'a', from: '/a' }] } } }), /The repos are for a session with no project/)
     await assert.rejects(here.start({ project, prompt: 'x', options: { 'agent-driver': { driver: 'cursor' } } }), /No coding agent is named cursor/)
-    await assert.rejects(here.start({ project, prompt: 'x', options: { 'agent-driver': { agent: '../me' } } }), /An agent is named by its id/)
+    await assert.rejects(here.start({ project, prompt: 'x', options: { presets: { preset: '../me' } } }), /A preset is named by its id/)
     await assert.rejects(here.start({ project, prompt: 'x', options: { skills: { on: ['a skill'] } } }), /Skills are named by their names/)
     await assert.rejects(here.start({ project, prompt: 'x', options: { 'agent-driver': { driver: 'codex' } } }), /^Error: Codex is not logged in\.$/)
     assert.equal(runs.length, 0)

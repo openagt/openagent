@@ -88,7 +88,8 @@ function answerShell(modules: unknown[]): void {
   answers.set('onRecentAgents', () => [])
   answers.set('onAgents', () => [])
   answers.set('onOverview', () => ({ active: [] }))
-  answers.set('onAgentsList', () => ({ agents: [], skills: [], claude: [], codex: [] }))
+  answers.set('onPresetsList', () => ({ presets: [], claude: [], codex: [] }))
+  answers.set('onSkillChoices', () => ({ everyRun: [], more: [] }))
   answers.set('onAgentUpdates', () => [])
   // The Overview draws its cards once the person's layout is read.
   answers.set('onPreferences', () => ({}))
@@ -137,7 +138,7 @@ describe('module pages in the shell (#1774)', () => {
   test("a module opens the dashboard's own pages in the project the address picks, every project where none is, and the page it is on adds no entry", async () => {
     function Opens() {
       const host = useModuleHost()
-      return createElement('div', null, createElement('button', { onClick: () => host.openPage('permissions') }, 'open Permissions'), createElement('button', { onClick: () => host.openPage('agents') }, 'open Agents'))
+      return createElement('div', null, createElement('button', { onClick: () => host.openPage('permissions') }, 'open Permissions'), createElement('button', { onClick: () => host.openPage('presets') }, 'open Presets'))
     }
     answerShell([{ package: '@acme/door', url: moduleModule('__doorOpensPages', { place: 'app.overlay', id: 'overlay', View: Opens }), projects: [], computer: true }])
     window.history.replaceState(null, '', '/app/overview')
@@ -147,13 +148,13 @@ describe('module pages in the shell (#1774)', () => {
     const entries = window.history.length
     fireEvent.click(screen.getByRole('button', { name: 'open Permissions' }))
     expect(window.history.length).toBe(entries)
-    fireEvent.click(screen.getByRole('button', { name: 'open Agents' }))
-    expect(window.location.pathname).toBe('/app/agents')
+    fireEvent.click(screen.getByRole('button', { name: 'open Presets' }))
+    expect(window.location.pathname).toBe('/app/presets')
     cleanup()
     window.history.replaceState(null, '', '/')
     render(<App />)
-    fireEvent.click(await screen.findByRole('button', { name: 'open Agents' }))
-    expect(window.location.pathname).toBe('/agents')
+    fireEvent.click(await screen.findByRole('button', { name: 'open Presets' }))
+    expect(window.location.pathname).toBe('/presets')
   })
 
   test('a module opens a Settings entry over the page it is on, its own query kept, as a step Back undoes; from inside Settings, in place', async () => {
@@ -311,7 +312,7 @@ describe('module pages in the shell (#1774)', () => {
     answerShell([{ package: '@acme/logs', url: moduleModule('__phoneLogs', { place: 'app.page', id: 'logs', label: 'Logs', View: () => null }), projects: [PROJECT.id] }])
     const wide = phoneScreen()
     try {
-      for (const [path, name] of [['/logs', 'Logs'], ['/agents', 'Agents'], ['/permissions', 'Permissions']]) {
+      for (const [path, name] of [['/logs', 'Logs'], ['/presets', 'Presets'], ['/permissions', 'Permissions']]) {
         window.history.replaceState(null, '', path)
         render(<App />)
         // The name alone: the page's count stands beside it in the bar once the page has read it. Read in the wait: the first
@@ -458,10 +459,10 @@ describe('a first visit, the projects not read yet', () => {
     holdProjects()
     const wide = phoneScreen()
     try {
-      window.history.replaceState(null, '', '/agents')
+      window.history.replaceState(null, '', '/presets')
       render(<App />)
       // The bar holds the page's name alone.
-      expect(document.querySelector('[data-phone-bar]')!.textContent).toBe('Agents')
+      expect(document.querySelector('[data-phone-bar]')!.textContent).toBe('Presets')
     } finally {
       wide()
     }

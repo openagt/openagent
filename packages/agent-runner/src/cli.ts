@@ -1,8 +1,8 @@
-import { AGENT_ENV, Refused, UsageError, errorMessage, inRepo, nodeGitRunner, parseCommandArgs, runCommandLine, runPackageCommand, sessionsHomeOf, PROJECT_SKILLS_ENV, SKILLS_OFF_ENV, SKILLS_ON_ENV, helpRows, helpText, type Command, type GitRunner } from '@openagt/agent-data'
+import { PRESET_ENV, Refused, UsageError, errorMessage, inRepo, nodeGitRunner, parseCommandArgs, runCommandLine, runPackageCommand, sessionsHomeOf, PROJECT_SKILLS_ENV, SKILLS_OFF_ENV, SKILLS_ON_ENV, helpRows, helpText, type Command, type GitRunner } from '@openagt/agent-data'
 import { liftSkillRules, projectRoot, sessionRepos } from '@openagt/skill-branches'
-import { DRIVER_NAMES, GIT_ACCOUNT_ENV, agentLoginFor, detachResume, detachRun, isDriverName, readyToRun, resumeProject, runProject, type DriverName, type SpawnedResume } from './runner.js'
+import { DRIVER_NAMES, GIT_ACCOUNT_ENV, detachResume, detachRun, isDriverName, presetLoginFor, readyToRun, resumeProject, runProject, type DriverName, type SpawnedResume } from './runner.js'
 import type { RunOutcome, RunRequest } from './run.js'
-import { agentNamed, anySkillPick, runAgent, skillPicksNamed } from './agent.js'
+import { anySkillPick, handedDownSettings, presetNamed, runPreset, skillPicksNamed } from './preset.js'
 import { cleanup } from './cleanup.js'
 import { everyBasicSkill } from './basic-skills.js'
 import { isPublish, NO_PUBLISH, PUBLISH_LEVELS } from './records.js'
@@ -37,9 +37,9 @@ ${helpRows([
 
 ${helpText(`In the sessions home (~/.openagent-sessions, or $XDG_CONFIG_HOME/openagent-sessions) a run has no project: it works in a folder of its own there, <home>/<id>, with no git, kept when it ends; its record is kept with the other sessions' in the personal folder, and --publish, --base, --pr-base and --branch are refused. Each repo given with --repos is a clone in it, <home>/<id>/<repo's folder name>, on a new branch agent-<id>, its origin the repo's own (none when the repo has none); the run's record names them, and a resumed run goes on with the same ones. --repos is refused in a project.`)}
 
-${helpText(`A run is on an agent (~/.openagent/agents/<id>.json: a name, skills, accounts), the one OPENAGENT_AGENT names, else the default agent; its skills are linked into the checkout like the default ones, and its accounts are the run's: at the git host its login, unless OPENAGENT_GIT_ACCOUNT names the pick for that session, and on Claude and Codex the accounts it names that this computer has. The record keeps the agent and the login, and a resumed run goes on with them. An account this computer cannot use at the git host stops the run before it starts, naming it.`)}
+${helpText(`A run is on a preset (a name and a saved set of run options, kept with the person in their folder), the one OPENAGENT_PRESET names, else Default; its options are the run's where the session picked none: at the git host its login, unless OPENAGENT_GIT_ACCOUNT names the pick for that session, on Claude and Codex the accounts it names that this computer has, and the project's own skills it names. The record keeps the preset and the login, and a resumed run goes on with them, on the preset as it stands then. An account this computer cannot use at the git host stops the run before it starts, naming it.`)}
 
-${helpText(`A session's picks of skills, for that run alone: OPENAGENT_SKILLS_ON names skills its agent lacks that it gets too, and OPENAGENT_SKILLS_OFF skills of its agent's it does not get, each names separated by commas; OPENAGENT_PROJECT_SKILLS says which of the project's own skills (.agents/skills/<name>, .claude/skills/<name>) stay in its checkout: all (unset too), none, or their names separated by commas, the others left out of that checkout by git's sparse checkout, nothing committed. The record keeps the picks, and a resumed run goes on with them.`)}
+${helpText(`A session's picks of skills, for that run alone: OPENAGENT_SKILLS_ON names skills it gets on top of the ones every run gets, and OPENAGENT_SKILLS_OFF ones of those it does not get, each names separated by commas; OPENAGENT_PROJECT_SKILLS says which of the project's own skills (.agents/skills/<name>, .claude/skills/<name>) stay in its checkout: all, none, or their names separated by commas, the others left out of that checkout by git's sparse checkout, nothing committed; unset, its preset's, and all when that names none. The record keeps the picks, and a resumed run goes on with them.`)}
 
 ${helpText(`When a run ends waiting on a question, or ends done with a pull request it did not have, the \`ended:\` line in the project's .agent-runner/config.yml runs, if there is one, in the project's root, with MESSAGE (one line for a person), RUN_ID, STATUS, QUESTION and PR_URL in its environment. The file is this machine's: keep it out of git (this tool hides .agent-runner/ from git once a run has started here). A run's coding agent loads the person's own setup, as when started by hand; in the same file, each part is left out with its own line under \`personal:\`, so a run does the same job on every machine:`)}
 ${helpRows([
@@ -128,9 +128,9 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
     // The account at the git host picked for this session, by whoever started the run: in the environment ({@link GIT_ACCOUNT_ENV}).
     const gitAccount = process.env[GIT_ACCOUNT_ENV]?.trim() || undefined
     if (gitAccount !== undefined && values.resume !== undefined) throw new UsageError(`${GIT_ACCOUNT_ENV} is for a new run: a run continues as the account its record names`)
-    // The agent the run is on, by its id, in the environment too ({@link AGENT_ENV}); a resumed run goes on with the one its record names.
-    const agent = fromEnvironment(agentNamed)
-    if (process.env[AGENT_ENV]?.trim() && values.resume !== undefined) throw new UsageError(`${AGENT_ENV} is for a new run: a run continues on the agent its record names`)
+    // The preset the run is on, by its id, in the environment too ({@link PRESET_ENV}); a resumed run goes on with the one its record names.
+    const preset = fromEnvironment(presetNamed)
+    if (process.env[PRESET_ENV]?.trim() && values.resume !== undefined) throw new UsageError(`${PRESET_ENV} is for a new run: a run continues on the preset its record names`)
     // The session's picks of skills, in the environment the same way; a resumed run goes on with the ones its record keeps.
     const skills = fromEnvironment(skillPicksNamed)
     if (anySkillPick(skills) && values.resume !== undefined) throw new UsageError(`${SKILLS_ON_ENV}, ${SKILLS_OFF_ENV} and ${PROJECT_SKILLS_ENV} are for a new run: a run continues with the skills its record names`)
@@ -138,8 +138,8 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
     // A person's run is refused before it spends a checkout when its coding agent cannot start;
     // a scheduler asks the same before it marks, and a resumed run's agent already ran once here.
     if (values.resume === undefined && values.id === undefined) {
-      // The session's account, or its agent's: an account this computer cannot use stops the run here, naming it.
-      const login = gitAccount ?? (await agentLoginFor(repo, await runAgent(agent, io.stderr)))
+      // The session's account, or its preset's: an account this computer cannot use stops the run here, naming it.
+      const login = gitAccount ?? (await presetLoginFor(repo, await runPreset(preset, await handedDownSettings(), io.stderr)))
       const ready = await readyToRun(repo, driver ?? 'claude-code', login !== undefined ? { login } : {})
       if (ready.problems.length > 0) throw new Refused({ ok: false, reason: 'not-ready', ...ready }, ready.problems.join(' '))
     }
@@ -184,7 +184,7 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
         ...(values.started !== undefined ? { startedAt: new Date(values.started).toISOString() } : {}),
         ...(values.mark ? { mark: true } : {}),
         ...(gitAccount !== undefined ? { gitAccount } : {}),
-        ...(agent !== undefined ? { agent } : {}),
+        ...(preset !== undefined ? { preset } : {}),
         log: io.stderr,
       }),
     )

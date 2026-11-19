@@ -21,7 +21,7 @@ vi.mock('../rpc/machines.js', async () => (await import('../test-machines.js')).
 vi.mock('../lib/use-project-launcher.js', async importOriginal => ({ ...(await importOriginal<object>()), useProjectLauncher: () => ({ gitHost: true, remote: true }) }))
 vi.mock('./AutoMenu.js', () => ({ AutoMenu: () => null }))
 vi.mock('./ContextMenu.js', () => ({ ProjectContextMenu: ({ context }: { context: Set<string> }) => <span data-testid="context">{[...context].join(', ')}</span> }))
-vi.mock('./AgentMenu.js', () => ({ AgentOff: () => null }))
+vi.mock('./PresetMenu.js', () => ({ PresetOff: () => null }))
 vi.mock('./SkillsMenu.js', () => ({ SkillsOff: () => null }))
 vi.mock('./GitHosts.js', () => ({ GitHostOff: () => null }))
 import { saveMachines } from '../test-machines.js'

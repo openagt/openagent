@@ -2,7 +2,8 @@ import { accentOf, isCodeFont, isDocumentFont, isFont, isPalette, type Accent, t
 import { sanitizeOverviewLayouts, type OverviewLayouts } from './overview-layout.js'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { randomBytes } from 'node:crypto'
-import { DEFAULT_AGENT, isAgentId, projectId } from '@openagt/agent-data'
+import { projectId } from '@openagt/agent-data'
+import { DEFAULT_PRESET, isPresetId } from '@openagt/hooks'
 import { isBranchName } from './branch-name.js'
 import { isDriverName } from './driver-names.js'
 import { isPublishPick, type PublishPick } from './publish-levels.js'
@@ -182,10 +183,10 @@ export interface Preferences {
    */
   startFrom?: Record<string, StartFromPick>
   /**
-   * The agent a run started from the launcher is on, by its id (`~/.openagent/agents/<id>.json`).
-   * The launcher's "Agent" pick writes it. **Absent = the default agent.**
+   * The preset a run started from the launcher is on, by its id. The launcher's "Preset" pick
+   * writes it. **Absent = Default.**
    */
-  agent?: string
+  preset?: string
   /**
    * Where a run started from the launcher goes: a saved machine, by its id. The "Run on" pick
    * writes it, and the page picks it again at its next opening. **Absent = this machine.** A
@@ -416,9 +417,9 @@ function sanitizePreferences(value: unknown): Preferences {
   // `publish` is constrained to the picks the launcher's menu lists.
   if (isPublishPick(input['publish'])) preferences.publish = input['publish']
   // `runOn` names a saved machine by its id, which is its address; a blank one is this machine, the absent entry.
-  // `agent` names an agent by its id; the default agent is the absent entry.
-  const agent = typeof input['agent'] === 'string' ? input['agent'].trim() : ''
-  if (isAgentId(agent) && agent !== DEFAULT_AGENT) preferences.agent = agent
+  // `preset` names a preset by its id; Default is the absent entry.
+  const preset = typeof input['preset'] === 'string' ? input['preset'].trim() : ''
+  if (isPresetId(preset) && preset !== DEFAULT_PRESET) preferences.preset = preset
   const runOn = typeof input['runOn'] === 'string' ? input['runOn'].trim() : ''
   if (/^https?:\/\/\S+$/.test(runOn) && runOn.length <= 2048) preferences.runOn = runOn
   const startFrom = sanitizeStartFrom(input['startFrom'])

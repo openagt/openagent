@@ -276,17 +276,17 @@ already made, and lists it in its pull request; for anything else it proposes an
   stood there also when it had nothing to offer, and over an item in the project's ⋮ menu,
   where it was not seen.
 - The "Skills" menu under the box picks the skills one session gets, as the account beside it
-  is picked: its agent's ticked, each tickable off; every other skill OpenAgent carries under
-  "More skills", in the Agents page's groups, tickable on; the project's own skills all, none
-  or each; nothing saved, so the next session starts from its agent's list and every project
-  skill. The picks reach the run in its environment with the agent and the account, its record
-  keeps them, and a resume applies them again; the session page says them in the item's
-  hover, off. A session with no project has the agent part alone. Picked over the skills
-  being the agent's alone, where one session that needs one skill more or one less would
-  need an agent made for it, and over a pick saved like the model's, which Rom's design
-  ruled out: the agent is the lasting set, the session the exception. The skills left out of
-  the agent's list are the ones under "More skills" rather than one long list: twenty-five
-  skills under the box read as the overwhelming list of the first skills picker.
+  is picked: the skills every run gets ticked, each tickable off; every other skill OpenAgent
+  carries under "More skills", in the Skills page's groups, tickable on; the project's own
+  skills all, none or each, as its preset has them until the session picks; nothing saved, so
+  the next session starts from the skills every run gets and its preset's project skills. The
+  picks reach the run in its environment with the preset and the account, its record keeps
+  them, and a resume applies them again; the session page says them in the item's hover, off.
+  A session with no project has the first part alone. Picked over a pick saved like the
+  model's, which Rom's design ruled out: the preset is the lasting set, the session the
+  exception. The skills every run does not get are the ones under "More skills" rather than
+  one long list: twenty-five skills under the box read as the overwhelming list of the first
+  skills picker.
 - OpenAgent has no command of its own to give a project skills: the Skills page in the
   dashboard, or `npx skills add openagt/openagent` in a terminal, which writes the same
   texts for any agent. Picked over `npx @openagt/init`, a second list with ticks to keep in
@@ -322,7 +322,7 @@ already made, and lists it in its pull request; for anything else it proposes an
   host is not named like an agent's own (`-agent`), the page says to make one with limited
   access. Picked over the accounts being one entry among the Settings.
 - An account at a git host is added in one dialog, the same wherever one is added: "Add" at the
-  title of the git hosts' card, the Overview's first step, an agent's accounts on the Agents
+  title of the git hosts' card, the Overview's first step, a preset's accounts on the Presets
   page, the account under the message box, "Back up as". It installs the host's tool where it
   is missing, shows the code to type at the host, says the advice of an account of the agents'
   own, and closes on the account once it is there, which is then the one picked where it was
@@ -450,28 +450,29 @@ already made, and lists it in its pull request; for anything else it proposes an
   went, and over the last update as the default, Claude Code's, which moves a row while a
   person talks to it.
 
-## The agents
-- An agent (Rom's design) is a name, a set of skills and a set of accounts, made once on the
-  Agents page and used in any project or none: the page lists them, the default first, and edits
-  each in a dialog over the page, as a new one is made, its skills ticked from the list the
-  Skills page has, plus the two every agent starts with, its accounts among the ones the
-  Permissions page knows. The dialog scrolls under its title with Save and Cancel always in
-  view, and a click beside it closes nothing: a form that long is not lost to a stray click
-  (before, the editor took the card's place in the list, which moved the page under the person). The session's agent is
-  the "Agent" menu first under the box, saved like the model; its GitHub account is what the
-  account control shows until the person picks another for the session. The run's record keeps
-  the agent, and the session's box says it where the launcher's menu is. An agent that names
-  no GitHub account is on "None — whatever the computer uses", one plain item: the computer's
-  account repeated in it read as a duplicate of the account's own item. Picked over an agent
-  as a skill or a module, which Rom ruled out, and over agents per project: a project is
-  context, an agent is who works.
-- An agent's GitHub account goes to every device of the person's, server or not, told to use
-  this computer's logins or not: as soon as the agent is saved, and every minute after, through
-  the same sync that keeps a server up to this computer's logins; a device added later gets it
-  on its next minute. A git host's token goes as it is, so no press is needed, and a device that
-  is no server takes a git host's copy alone. The Agents page says where it is, and "Copy again"
-  is for one that failed. Picked over the switch per server, which stays for the coding agents'
-  logins: an agent is the same on every device, and its account is what makes it one.
+## The presets
+- A preset (#2394) is a name and a saved set of run options, made once on the Presets page and
+  used in any project or none, kept with the person through the store, so every computer of
+  theirs has it: the page lists them, Default first, and edits each in a dialog over the page,
+  as a new one is made: its accounts among the ones the Permissions page knows, and whether its
+  runs get the project's own skills. The dialog scrolls under its title with Save and Cancel
+  always in view, and a click beside it closes nothing: a form that long is not lost to a
+  stray click (before, the editor took the card's place in the list, which moved the page
+  under the person). The session's preset is the "Preset" menu first under the box, saved like
+  the model; its GitHub account is what the account control shows until the person picks
+  another for the session. The run's record keeps the preset, and the session's box says it
+  where the launcher's menu is. A preset that names no GitHub account is on "None — whatever
+  the computer uses", one plain item: the computer's account repeated in it read as a
+  duplicate of the account's own item. Picked over presets per project: a project is context,
+  a preset is how its runs work, anywhere.
+- A preset's GitHub account goes to every device of the person's, server or not, told to use
+  this computer's logins or not: as soon as the preset is saved, and every minute after,
+  through the same sync that keeps a server up to this computer's logins; a device added later
+  gets it on its next minute. A git host's token goes as it is, so no press is needed, and a
+  device that is no server takes a git host's copy alone. The Presets page says where it is,
+  and "Copy again" is for one that failed. Picked over the switch per server, which stays for
+  the coding agents' logins: a preset is the same on every device, and its account is what
+  makes it one.
 
 ## What runs log in with
 - Settings has one page for it, Accounts: the coding agents' cards, then the git hosts', each

@@ -61,18 +61,18 @@ test('usage errors exit 2 with what was wrong on stderr and nothing on stdout; o
     } finally {
       delete process.env['OPENAGENT_GIT_ACCOUNT']
     }
-    // So is the agent: a resumed run goes on with the one its record names; and a word that is no agent id is refused.
-    process.env['OPENAGENT_AGENT'] = 'reviewer'
+    // So is the preset: a resumed run goes on with the one its record names; and a word that is no preset id is refused.
+    process.env['OPENAGENT_PRESET'] = 'reviewer'
     try {
       const reassigned = await run(repo, 'run', '--detach', '--resume', '2026-09-17T20-00-00-000Z', 'go on')
       assert.equal(reassigned.code, 2)
-      assert.match(reassigned.err, /OPENAGENT_AGENT is for a new run/)
-      process.env['OPENAGENT_AGENT'] = 'Not An Id'
+      assert.match(reassigned.err, /OPENAGENT_PRESET is for a new run/)
+      process.env['OPENAGENT_PRESET'] = 'Not An Id'
       const misnamed = await run(repo, 'run', 'Read the docs')
       assert.equal(misnamed.code, 2)
-      assert.match(misnamed.err, /no agent id/)
+      assert.match(misnamed.err, /no preset id/)
     } finally {
-      delete process.env['OPENAGENT_AGENT']
+      delete process.env['OPENAGENT_PRESET']
     }
     // And the session's picks of skills: a resumed run goes on with the ones its record keeps; a word that is no skill name is refused.
     process.env['OPENAGENT_SKILLS_ON'] = 'review'

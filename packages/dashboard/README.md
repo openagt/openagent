@@ -57,19 +57,20 @@ Auto menu says main. Otherwise the pull request goes to main.
 A session with no project may have repos as context, picked with **Add repo** beside "No project":
 `agent-runner` copies each into the session's folder.
 
-The session's agent (the **Agent** menu under the box) and its GitHub account (the control at
+The session's preset (the **Preset** menu under the box) and its GitHub account (the control at
 the right) go with the Start: `agent-runner` hands them to the run's process in its environment,
-`OPENAGENT_AGENT` and `OPENAGENT_GIT_ACCOUNT`. An agent is a name, skills and accounts, a file in
-`~/.openagent/agents/`, edited on the Agents page; the skills it can be given are handed down with
-the default ones (`OPENAGENT_SKILL_CATALOGUE`).
+`OPENAGENT_PRESET` and `OPENAGENT_GIT_ACCOUNT`. A preset is a name and a saved set of run options
+(its accounts, and the project skills its runs get), kept with the person and edited on the
+Presets page; the run reads it as it starts, and again when it resumes.
 
-The **Skills** menu under the box picks, for this session alone, which skills the run gets: its
-agent's ticked, any other carried skill tickable, and which of the project's own skills stay in
-its checkout. The picks go the same way, in `OPENAGENT_SKILLS_ON`, `OPENAGENT_SKILLS_OFF` (names,
-comma-separated) and `OPENAGENT_PROJECT_SKILLS` (`all`, `none` or names): `agent-runner` links the
-agent's skills less the ones off plus the ones on, and leaves the project skills not picked out of
-the run's checkout with git's sparse checkout, nothing committed. The record keeps the picks, and
-a resume goes on with them.
+The **Skills** menu under the box picks, for this session alone, which skills the run gets: the
+ones every run gets ticked, any other carried skill tickable (handed down beside them,
+`OPENAGENT_SKILL_CATALOGUE`), and which of the project's own skills stay in its checkout. The
+picks go the same way, in `OPENAGENT_SKILLS_ON`, `OPENAGENT_SKILLS_OFF` (names, comma-separated)
+and `OPENAGENT_PROJECT_SKILLS` (`all`, `none` or names; unset, the preset's): `agent-runner` links
+the skills every run gets less the ones off plus the ones on, and leaves the project skills not
+picked out of the run's checkout with git's sparse checkout, nothing committed. The record keeps
+the picks, and a resume goes on with them.
 
 Before a Start, the launcher asks the host's check, for the picked coding agent: its
 `problems` (a coding agent not installed or logged out) are said in red and its `warnings` in

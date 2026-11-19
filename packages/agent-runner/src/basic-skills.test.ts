@@ -6,7 +6,7 @@ import { lstat, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:f
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { createCheckout, HARNESS_SKILL_DIRS, skillLinkPaths } from '@openagt/skill-branches'
-import { basicSkills, carriedSkillNames, everyBasicSkill } from './basic-skills.js'
+import { basicSkills, everyBasicSkill } from './basic-skills.js'
 import { runCli } from './cli.js'
 import { gitHostCommand } from './git-host.js'
 import { SKILL_CATALOGUE_ENV, SKILLS_ENV } from '@openagt/agent-data'
@@ -175,7 +175,7 @@ test('a run\'s git host is the one among the skills handed down that answers for
   }
 })
 
-test('an agent\'s skills: picked by name among the defaults and the catalogue handed down, in the agent\'s order, a name nothing carries skipped; the rules for the git host\'s and the asking skill still hold', async () => {
+test('every run gets the defaults handed down; a session picks some of them off and more of the catalogue on, a name nothing carries skipped; the rules for the git host\'s and the asking skill still hold', async () => {
   const repo = await testRepo()
   const catalogue = await mkdtemp(join(tmpdir(), 'oa-catalogue-'))
   const before = process.env[SKILL_CATALOGUE_ENV]
@@ -190,15 +190,14 @@ test('an agent\'s skills: picked by name among the defaults and the catalogue ha
     await writeFile(join(catalogue, 'loose', 'SKILL.md'), '---\nname: loose\n---\n')
     process.env[SKILL_CATALOGUE_ENV] = [dir, join(catalogue, 'loose')].join(delimiter)
     await git(['remote', 'set-url', 'origin', 'git@github.com:someone/project.git'], repo)
-    assert.deepEqual(await carriedSkillNames(), ['logs', 'ask', 'github', 'review'], 'the defaults first, then the catalogue')
-    assert.deepEqual((await basicSkills(repo)).map(skill => skill.name), ['logs', 'ask', 'github'], 'no agent: the defaults')
-    assert.deepEqual((await basicSkills(repo, {}, { skills: ['review', 'github', 'nothing-carries-this'] })).map(skill => skill.name), ['review', 'github'])
-    assert.deepEqual((await basicSkills(repo, { ownQuestionTool: true }, { skills: ['ask', 'review'] })).map(skill => skill.name), ['review'], 'an agent with a question tool of its own gets no ask')
-    assert.deepEqual((await basicSkills(repo, {}, { skills: ['ask', 'github'] }, { off: ['github'], on: ['review', 'ask', 'nothing-carries-this'] })).map(skill => skill.name), ['ask', 'review'], 'the session\'s picks: the agent\'s less the ones off, the ones on after them, once each')
-    assert.deepEqual((await basicSkills(repo, {}, { skills: ['ask'] }, { project: 'none' })).map(skill => skill.name), ['ask'], 'the project\'s own skills are another matter')
+    assert.deepEqual((await basicSkills(repo)).map(skill => skill.name), ['logs', 'ask', 'github'], 'no pick: the defaults')
+    assert.deepEqual((await basicSkills(repo, {}, { on: ['review', 'github', 'nothing-carries-this'] })).map(skill => skill.name), ['logs', 'ask', 'github', 'review'], 'one on after them, once each')
+    assert.deepEqual((await basicSkills(repo, { ownQuestionTool: true }, { on: ['review'] })).map(skill => skill.name), ['logs', 'github', 'review'], 'a coding agent with a question tool of its own gets no ask')
+    assert.deepEqual((await basicSkills(repo, {}, { off: ['github', 'logs'], on: ['review', 'ask', 'nothing-carries-this'] })).map(skill => skill.name), ['ask', 'review'], 'the defaults less the ones off, the ones on after them')
+    assert.deepEqual((await basicSkills(repo, {}, { project: 'none' })).map(skill => skill.name), ['logs', 'ask', 'github'], 'the project\'s own skills are another matter')
     await git(['remote', 'set-url', 'origin', 'https://gitlab.com/someone/project.git'], repo)
-    assert.deepEqual((await basicSkills(repo, {}, { skills: ['github', 'review'] })).map(skill => skill.name), ['review'], 'the git host\'s skill only where it answers for the project')
-    assert.deepEqual((await basicSkills(repo, {}, { skills: [] })).map(skill => skill.name), [], 'an agent with no skill gets none')
+    assert.deepEqual((await basicSkills(repo, {}, { on: ['review'] })).map(skill => skill.name), ['logs', 'ask', 'review'], 'the git host\'s skill only where it answers for the project')
+    assert.deepEqual((await basicSkills(repo, {}, { off: ['logs', 'ask', 'github'] })).map(skill => skill.name), [], 'a session that picks each one off gets none')
     assert.ok((await everyBasicSkill()).some(skill => skill.name === 'review'), 'a cleanup knows the catalogue\'s too')
   } finally {
     if (before === undefined) delete process.env[SKILL_CATALOGUE_ENV]

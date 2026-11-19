@@ -212,5 +212,5 @@ export function useRoute(projects: ProjectAddresses): {
 /** The dashboard's own page of every account OpenAgent works with, at `/permissions`. */
 export const PERMISSIONS_PAGE = 'permissions'
 
-/** The dashboard's own page of the agents, each a name, skills and accounts, at `/agents`. */
-export const AGENTS_PAGE = 'agents'
+/** The dashboard's own page of the presets, each a name and a saved set of run options, at `/presets`. */
+export const PRESETS_PAGE = 'presets'

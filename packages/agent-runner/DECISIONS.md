@@ -173,33 +173,33 @@ already made, and lists it in its pull request; for anything else it proposes an
   runs when a project is removed with its files. Picked over a dashboard deleting
   `.agent-runner` itself.
 
-## Agents and accounts
-- A run is on an agent: a name, a set of skills and a set of accounts, one file in the person's
-  folder (`agent-data`), named in the run's environment by whoever started it, the default
-  agent when nobody did. Its skills are linked into the checkout as the default ones are, picked
-  by name among every skill the package that started OpenAgent carries (handed down beside the
-  defaults); its accounts are the run's. The record keeps the agent, and a resumed run goes on
-  with it as it stands then. Picked over the runner reading an agent's file by a path of its
-  own, or the dashboard resolving the skills per run: a scheduler's runs name no agent and are
-  on the default one, so its edits reach them with nothing restarted.
+## Presets and accounts
+- A run is on a preset (#2394): a name and a saved set of run options, kept with the person
+  through the store (the catalog's `presets.saved`), named in the run's environment by whoever
+  started it, Default when nobody did. Its options are the run's where the session picked
+  none: its accounts, and which of the project's own skills stay in its checkout. The basic
+  skills are every run's, the defaults the package that started OpenAgent hands down. The
+  record keeps the preset, and each leg of the run, a resume too, is on it as it stands then.
+  Picked over the dashboard resolving a preset's options per run: a scheduler's runs name no
+  preset and are on Default, so its edits reach them with nothing restarted.
 - The account a run works as at the git host is the session's: the one whoever started the run
-  picked for it, in the run's environment, else its agent's, else the computer's. The git host's
+  picked for it, in the run's environment, else its preset's, else the computer's. The git host's
   module works as it at the run's first step (`RunOrder.ACCOUNTS`, #2394): the account's
   environment is the run's (`ctx.env`), handed to the agent and this process's own until the leg
   ends, so the run's marker, its checkout's fetch and its record go as that account too. The
   record keeps the login it worked as, and a resumed run goes on as it, never as whatever the
   computer's pick is by then. An account this computer cannot use stops the run before it
-  starts, naming it (the host's check); one that goes by then fails the run at that step. An
-  agent's account applies only where the project has a git host: in a session with no project,
+  starts, naming it (the host's check); one that goes by then fails the run at that step. A
+  preset's account applies only where the project has a git host: in a session with no project,
   or a project on another host, the run goes as no account rather than refused. On
-  Claude and Codex an agent's accounts apply where this computer has them, and none of them here
-  is every account of the computer's: an agent made on another computer runs here without them.
+  Claude and Codex a preset's accounts apply where this computer has them, and none of them here
+  is every account of the computer's: a preset made on another computer runs here without them.
   Picked over accounts named per project, which were kept on one computer for a repository
   that is the same everywhere: whose account a session uses is a pick made for that session.
-- A session's picks of skills are the run's, in its environment with its agent: the skills on
-  top of its agent's, the ones of its agent's left out, and which of the project's own skills
-  stay in its checkout. The run links its agent's list less the ones off plus the ones on, by
-  the same rules as the agent's alone; the project skills not picked are left out of the run's
+- A session's picks of skills are the run's, in its environment with its preset: the skills on
+  top of the ones every run gets, the ones of those left out, and which of the project's own
+  skills stay in its checkout, over its preset's. The run links the defaults less the ones off
+  plus the ones on, by the same rules as the defaults alone; the project skills not picked are left out of the run's
   checkout by git's sparse checkout, right after the worktree is made and before the skills are
   linked, so the index keeps them, nothing is committed about them, and the project's other
   checkouts have them. Which skills the project has is asked of that checkout, not of the

@@ -46,11 +46,11 @@ test('Remove in "Remove project" keeps the keyboard while it waits and takes no 
   })
 })
 
-test("Save in the agent editor keeps the keyboard while it waits and takes no second press", needsChrome, async () => {
+test("Save in the preset editor keeps the keyboard while it waits and takes no second press", needsChrome, async () => {
   await flow('waiting-save', async page => {
-    const save = hold(page, 'sendSaveAgent')
-    await page.getByRole('link', { name: 'Agents', exact: true }).click()
-    await page.getByRole('button', { name: 'New agent' }).click()
+    const save = hold(page, 'sendSavePreset')
+    await page.getByRole('link', { name: 'Presets', exact: true }).click()
+    await page.getByRole('button', { name: 'New preset' }).click()
     await page.getByRole('dialog').getByRole('textbox').first().fill('Reviewer')
     await waits(page, save, () => page.getByRole('dialog').getByRole('button', { name: 'Save' }).click(), /Saving…/)
   })

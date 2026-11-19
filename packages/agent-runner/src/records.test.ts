@@ -70,10 +70,11 @@ test('the mark keeps the publish level a run was given, and drops a word that is
   assert.equal(runnerMark({ ...card, caller: { runner: { ...mark, publish: 'push' } } })?.publish, undefined)
 })
 
-test('a session\'s picks of skills last on the mark, for its readers too; every project skill is nothing kept, and a list that is no skill names is dropped', () => {
-  assert.deepEqual(lasting({ skillsOn: ['review'], skillsOff: ['github'], projectSkills: 'none' }), { skillsOn: ['review'], skillsOff: ['github'], projectSkills: 'none' })
+test('a session\'s picks of skills last on the mark, for its readers too, its preset with them; every project skill is a pick, over its preset\'s; a list that is no skill names, or a word that is no preset id, is dropped', () => {
+  assert.deepEqual(lasting({ skillsOn: ['review'], skillsOff: ['github'], projectSkills: 'none', preset: 'reviewer' }), { skillsOn: ['review'], skillsOff: ['github'], projectSkills: 'none', preset: 'reviewer' })
   assert.deepEqual(lasting({ projectSkills: ['deploy', 'lint'] }), { projectSkills: ['deploy', 'lint'] })
-  assert.deepEqual(lasting({ skillsOn: [], skillsOff: ['Not A Skill'], projectSkills: 'all' }), {})
+  assert.deepEqual(lasting({ projectSkills: 'all' }), { projectSkills: 'all' })
+  assert.deepEqual(lasting({ skillsOn: [], skillsOff: ['Not A Skill'], projectSkills: 'some', preset: '../me' }), {})
   const card = markerCard({ id: '2026-09-16T14-01-00-000Z', startedAt: '2026-09-16T14:01:00.000Z', prompt: 'Review', driver: 'claude-code', mark: { ...mark, skillsOff: ['github'], projectSkills: 'none' } })
   assert.deepEqual(card.caller?.['skillsOff'], ['github'])
   assert.equal(card.caller?.['projectSkills'], 'none')

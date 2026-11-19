@@ -12,7 +12,8 @@ import { isKind, isWord, type CopiedKind, type CopiedLogin, type GivenLogin, typ
 import { onAgentAccounts } from '../dashboard-rpc/accounts.js'
 import { gitHostPackages, onGitHosts } from '../dashboard-rpc/logins.js'
 import { accountsPath, OWN_NAME, readAccounts } from '@openagt/skill-account-rotation'
-import { listAgents } from '@openagt/agent-data'
+import { PRESETS } from '@openagt/hooks'
+import { distributionSettings } from '../distribution-hooks.js'
 
 /**
  * A computer's side of a server that uses its logins (`copied-logins.ts` is the server's side).
@@ -33,9 +34,9 @@ import { listAgents } from '@openagt/agent-data'
  * The person's settings follow the same way: what they change here is changed there, the next
  * minute. A setting changed on the server's own page stays, until the same one changes here.
  *
- * An agent's GitHub account (Rom's design: an agent is the same on every device) goes further:
- * to every saved device of the person's, server or not, told to use this computer's logins or
- * not, as soon as the agent is saved and every minute after. A git host's token goes as it is.
+ * A preset's GitHub account (a preset is the same on every device) goes further: to every saved
+ * device of the person's, server or not, told to use this computer's logins or not, as soon as
+ * the preset is saved and every minute after. A git host's token goes as it is.
  */
 
 /** One of this computer's accounts, as a server gets it. */
@@ -99,8 +100,8 @@ export const syncWiring: {
   call: (machine: MachineAccess, fn: string, args: unknown[]) => Promise<{ ok: true; ret: unknown } | { ok: false; error: string }>
   /** This computer's own logins. */
   local: () => Promise<LocalLogin[]>
-  /** The GitHub logins the agents name. */
-  agentLogins: () => Promise<string[]>
+  /** The GitHub logins the presets name. */
+  presetLogins: () => Promise<string[]>
   /** How full each of this computer's accounts is, as its own page reads it. */
   usage: () => Promise<{ kind: CopiedKind; source: string; windows: UsageWindow[]; at: number }[]>
   /** This computer's settings. */
@@ -116,7 +117,7 @@ export const syncWiring: {
   facts: machine => remoteFacts(machine),
   call: (machine, fn, args) => machineCall(machine, fn, args),
   local: () => localLogins(syncWiring.env),
-  agentLogins: async () => (await listAgents()).flatMap(agent => (agent.accounts.github !== undefined ? [agent.accounts.github] : [])),
+  presetLogins: async () => (await (await distributionSettings()).get(PRESETS)).flatMap(preset => (preset.options.github?.account !== undefined ? [preset.options.github.account] : [])),
   usage: ownUsage,
   preferences: () => readPreferences(syncWiring.env),
   mint: mintClaude,
@@ -321,8 +322,8 @@ async function hand(machine: MachineRecord, login: LocalLogin, secret: string): 
   return outcome(await syncWiring.call(access(machine), 'sendCopiedLogin', [given, secret]))
 }
 
-/** How an agent's GitHub accounts stand on one device of the person's. */
-export interface AgentLoginsOn {
+/** How the presets' GitHub accounts stand on one device of the person's. */
+export interface PresetLoginsOn {
   machineId: string
   label: string
   /** It answered when last asked; not reached, the states are as last read. */
@@ -331,27 +332,27 @@ export interface AgentLoginsOn {
   github: Record<string, { state: 'there' | 'failed'; error?: string }>
 }
 
-/** How the agents' GitHub accounts stand on each device, as last read. */
-const agentsLast = new Map<string, AgentLoginsOn>()
+/** How the presets' GitHub accounts stand on each device, as last read. */
+const presetsLast = new Map<string, PresetLoginsOn>()
 
 /**
- * Bring one device up to the GitHub accounts the agents name: each this computer has, handed
+ * Bring one device up to the GitHub accounts the presets name: each this computer has, handed
  * over where the device lacks it or has another under that login. The device may be a server
  * that uses none of this computer's other logins, or a computer of the person's.
  */
-async function syncAgentLogins(machine: MachineRecord, agentLogins: LocalLogin[]): Promise<AgentLoginsOn> {
+async function syncPresetLogins(machine: MachineRecord, presetLogins: LocalLogin[]): Promise<PresetLoginsOn> {
   const base = { machineId: machine.id, label: machine.label }
-  const github: AgentLoginsOn['github'] = {}
-  if (agentLogins.length === 0) return { ...base, reachable: true, github }
+  const github: PresetLoginsOn['github'] = {}
+  if (presetLogins.length === 0) return { ...base, reachable: true, github }
   const said = await syncWiring.call(access(machine), 'onCopiedLogins', [])
-  if (!said.ok) return { ...base, reachable: false, github: agentsLast.get(machine.id)?.github ?? {} }
+  if (!said.ok) return { ...base, reachable: false, github: presetsLast.get(machine.id)?.github ?? {} }
   const there = readThere(said.ret)
   if (typeof there === 'string') {
-    for (const login of agentLogins) github[login.source] = { state: 'failed', error: there }
+    for (const login of presetLogins) github[login.source] = { state: 'failed', error: there }
     return { ...base, reachable: true, github }
   }
   const me = syncWiring.computer()
-  for (const login of agentLogins) {
+  for (const login of presetLogins) {
     const has = there.find(other => other.from === me && !other.kept && same(other, login))
     if (has?.who === login.who) {
       github[login.source] = { state: 'there' }
@@ -367,15 +368,15 @@ async function syncAgentLogins(machine: MachineRecord, agentLogins: LocalLogin[]
   return { ...base, reachable: true, github }
 }
 
-/** This computer's GitHub logins that an agent names: what goes to every device. */
-async function agentGitLogins(local: LocalLogin[]): Promise<LocalLogin[]> {
-  const named = new Set(await syncWiring.agentLogins().catch((): string[] => []))
+/** This computer's GitHub logins that a preset names: what goes to every device. */
+async function presetGitLogins(local: LocalLogin[]): Promise<LocalLogin[]> {
+  const named = new Set(await syncWiring.presetLogins().catch((): string[] => []))
   return local.filter(login => login.kind === 'git' && login.host === 'github.com' && login.secret !== undefined && named.has(login.source))
 }
 
 /**
  * Bring every server that uses this computer's logins up to them, and every device of the
- * person's up to the GitHub accounts the agents name; note how each stands. A saved machine that
+ * person's up to the GitHub accounts the presets name; note how each stands. A saved machine that
  * is no server of the person's is left out of the servers' list.
  */
 export async function syncLogins(): Promise<ServerLogins[]> {
@@ -383,7 +384,7 @@ export async function syncLogins(): Promise<ServerLogins[]> {
   const servers: ServerLogins[] = []
   let local: LocalLogin[] | undefined
   let usage: Awaited<ReturnType<typeof syncWiring.usage>> | undefined
-  let forAgents: LocalLogin[] | undefined
+  let forPresets: LocalLogin[] | undefined
   for (const machine of machines) {
     const facts = await syncWiring.facts(access(machine))
     const answered = facts.server === true || facts.version !== undefined
@@ -397,7 +398,7 @@ export async function syncLogins(): Promise<ServerLogins[]> {
         last.set(machine.id, kept)
         servers.push(kept)
       }
-      if (agentsLast.has(machine.id)) agentsLast.set(machine.id, { ...agentsLast.get(machine.id)!, reachable: false })
+      if (presetsLast.has(machine.id)) presetsLast.set(machine.id, { ...presetsLast.get(machine.id)!, reachable: false })
       continue
     }
     missed.delete(machine.id)
@@ -408,19 +409,19 @@ export async function syncLogins(): Promise<ServerLogins[]> {
       last.set(machine.id, server)
       servers.push(server)
     } else last.delete(machine.id)
-    // The agents' GitHub accounts go to every device, server or not, told or not.
-    forAgents ??= await agentGitLogins(local)
-    agentsLast.set(machine.id, await syncAgentLogins(machine, forAgents))
+    // The presets' GitHub accounts go to every device, server or not, told or not.
+    forPresets ??= await presetGitLogins(local)
+    presetsLast.set(machine.id, await syncPresetLogins(machine, forPresets))
   }
   for (const id of last.keys()) if (!machines.some(machine => machine.id === id)) last.delete(id)
-  for (const id of agentsLast.keys()) if (!machines.some(machine => machine.id === id)) agentsLast.delete(id)
+  for (const id of presetsLast.keys()) if (!machines.some(machine => machine.id === id)) presetsLast.delete(id)
   return servers
 }
 
-/** How the agents' GitHub accounts stand on each device of the person's, as last read: read anew when none were read yet. */
-export async function agentLoginsOn(): Promise<AgentLoginsOn[]> {
-  if (agentsLast.size === 0) await syncLogins()
-  return [...agentsLast.values()]
+/** How the presets' GitHub accounts stand on each device of the person's, as last read: read anew when none were read yet. */
+export async function presetLoginsOn(): Promise<PresetLoginsOn[]> {
+  if (presetsLast.size === 0) await syncLogins()
+  return [...presetsLast.values()]
 }
 
 /** How long a server that does not answer is shown as it last was: a missed ping is no reason to change the page. */

@@ -1,14 +1,15 @@
 import { useContext } from 'react'
 import { Check, Puzzle, Settings2 } from 'lucide-react'
-import type { AgentRecord, AgentsView } from '../rpc/agents.js'
+import type { Preset } from '../rpc/presets.js'
+import { onSkillChoices, type SkillChoices } from '../rpc/skill-choices.js'
 import { onProjectSkills } from '../rpc/skills.js'
 import { skillsAgain } from '../lib/skills-saved.js'
-import { useLoaded } from '../lib/use-async.js'
+import { useLoaded, usePolled } from '../lib/use-async.js'
 import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
 import { SKILLS_ENTRY } from './ProjectSkills.js'
 import { RowChevron, RowSaid, rowButtonClass, rowWideClass } from './ui/row-item.js'
-import { useAgentsList } from './AgentsPage.js'
-import { DEFAULT_AGENT } from '../../src/client.js'
+import { usePresetsList } from './PresetsPage.js'
+import { DEFAULT_PRESET } from '../../src/client.js'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip.js'
 import {
   DropdownMenu,
@@ -26,15 +27,16 @@ import {
   DropdownMenuTrigger,
 } from './ui/dropdown-menu.js'
 
-// The "Skills" menu under the launcher's box (Rom's design, the session's picks): what the session
-// gets, for this session alone, as the account beside it is picked. Its agent's skills ticked,
-// each one tickable off; every other skill OpenAgent carries under "More skills", in the groups
-// the Agents page has, tickable on; then the project's own skills, all, none or each; then the
-// project's Skills page. The picks go with the Start in the run's environment and its record
-// keeps them, so a resume applies them again. The pick is not saved: the next session starts
-// from its agent's list and every project skill. A session with no project has no project skills.
+// The "Skills" menu under the launcher's box (the session's picks): what the session gets, for
+// this session alone, as the account beside it is picked. The skills every run gets ticked, each
+// one tickable off; every other skill OpenAgent carries under "More skills", in the Skills page's
+// groups, tickable on; then the project's own skills, all, none or each, as its preset has them
+// until the session picks; then the project's Skills page. The picks go with the Start in the
+// run's environment and its record keeps them, so a resume applies them again. The pick is not
+// saved: the next session starts from the skills every run gets and its preset's project skills.
+// A session with no project has no project skills.
 
-/** The session's picks: skills on top of its agent's, skills of its agent's left out, which of the project's own stay (absent: every one). */
+/** The session's picks: skills on top of the ones every run gets, ones of those left out, which of the project's own stay (absent: every one). */
 export interface SkillPicks {
   on: string[]
   off: string[]
@@ -43,36 +45,44 @@ export interface SkillPicks {
 
 export const NO_PICKS: SkillPicks = { on: [], off: [] }
 
-/** The picks a session starts from on its agent: none, or no project skill for an agent set to never pick them up (the session still overrides). */
-export function agentPicks(agent: Pick<AgentRecord, 'projectSkills'> | undefined): SkillPicks {
-  return agent?.projectSkills === false ? { on: [], off: [], project: 'none' } : NO_PICKS
+/** The picks a session starts from on its preset: none, or the project skills the preset names (the session still overrides). */
+export function presetPicks(preset: Pick<Preset, 'options'> | undefined): SkillPicks {
+  const project = preset?.options.skills?.project
+  return project === undefined || project === 'all' ? NO_PICKS : { on: [], off: [], project }
 }
 
-/** The names of the skills the session gets of its agent's and the picks: the agent's less the ones off, then the ones on. */
-export function sessionSkills(agent: Pick<AgentRecord, 'skills'> | undefined, picks: SkillPicks): string[] {
-  const own = agent?.skills ?? []
-  return [...own.filter(name => !picks.off.includes(name)), ...picks.on.filter(name => !own.includes(name))]
+/** The names of the skills the session gets of the ones every run gets: those less the ones off, then the ones on. */
+export function sessionSkills(everyRun: readonly string[], picks: Pick<SkillPicks, 'on' | 'off'>): string[] {
+  return [...everyRun.filter(name => !picks.off.includes(name)), ...picks.on.filter(name => !everyRun.includes(name))]
 }
 
 /** The project's skills the session gets, among the ones it holds. */
-function projectKept(held: readonly string[], project: SkillPicks['project']): string[] {
-  return project === undefined ? [...held] : project === 'none' ? [] : held.filter(name => project.includes(name))
+function projectKept(held: readonly string[], project: 'all' | 'none' | readonly string[] | undefined): string[] {
+  return project === undefined || project === 'all' ? [...held] : project === 'none' ? [] : held.filter(name => project.includes(name))
 }
 
-/** How many skills the session gets: a project skill of the same name takes the agent's one's place, so the session has it once. */
-function skillCount(ofAgent: readonly string[], kept: readonly string[]): number {
-  return new Set([...ofAgent, ...kept]).size
+/** How many skills the session gets: a project skill of the same name takes the place of one every run gets, so the session has it once. */
+function skillCount(own: readonly string[], kept: readonly string[]): number {
+  return new Set([...own, ...kept]).size
 }
 
-/** What the session's picks say, in a few words for a hover: what differs from its agent's list and from every project skill. */
-export function skillPicksSaid(picks: { skillsOn?: readonly string[] | undefined; skillsOff?: readonly string[] | undefined; projectSkills?: 'none' | readonly string[] | undefined }): string {
+/** What the session's picks say, in a few words for a hover: what differs from the skills every run gets and from every project skill. */
+export function skillPicksSaid(picks: { skillsOn?: readonly string[] | undefined; skillsOff?: readonly string[] | undefined; projectSkills?: 'all' | 'none' | readonly string[] | undefined }): string {
   const parts = [
     ...(picks.skillsOn?.length ? [`with ${picks.skillsOn.join(', ')}`] : []),
     ...(picks.skillsOff?.length ? [`without ${picks.skillsOff.join(', ')}`] : []),
   ]
-  const agents = `its agent's skills${parts.length > 0 ? ` ${parts.join(', ')}` : ''}`
-  const project = picks.projectSkills === undefined ? 'every project skill' : picks.projectSkills === 'none' ? 'no project skill' : `the project skills ${picks.projectSkills.join(', ')}`
-  return `${agents}, and ${project}`
+  const own = `the skills every run gets${parts.length > 0 ? ` ${parts.join(', ')}` : ''}`
+  const project = picks.projectSkills === undefined || picks.projectSkills === 'all' ? 'every project skill' : picks.projectSkills === 'none' ? 'no project skill' : `the project skills ${picks.projectSkills.join(', ')}`
+  return `${own}, and ${project}`
+}
+
+/** How often the skills to pick from are read again: they are the distribution's, which changes only with OpenAgent. */
+const CHOICES_MS = 5 * 60_000
+
+/** The skills a session picks from, kept in this browser so the menu and its count land whole. */
+export function useSkillChoices(): SkillChoices | undefined {
+  return usePolled<SkillChoices | undefined>(onSkillChoices, undefined, CHOICES_MS, [], { remember: 'skill-choices', stored: true }).value
 }
 
 /**
@@ -85,35 +95,30 @@ function useProjectSkills(projectId: string | undefined) {
 
 export function SkillsMenu({
   projectId,
-  agent,
-  groups,
   picks,
   onChange,
   busy,
 }: {
   /** The project, for its own skills and its Skills page; none for a session with no project. */
   projectId: string | undefined
-  /** The agent the session is on, read; nothing until it is. */
-  agent: AgentRecord | undefined
-  /** Every skill OpenAgent carries, in the Agents page's groups. */
-  groups: AgentsView['skills'] | undefined
   picks: SkillPicks
   onChange: (picks: SkillPicks) => void
   busy: boolean
 }) {
   const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
+  const choices = useSkillChoices()
   const project = useProjectSkills(projectId)
   const held = project?.held ?? []
-  if (!agent || !groups) return null
-  // Counted only once the project's skills are read: a count of the agent's alone would be drawn, then change. Till
+  if (!choices) return null
+  // Counted only once the project's skills are read: a count of the others alone would be drawn, then change. Till
   // then the item holds its place, a digit's room kept for the count, so nothing after it moves when it lands.
   const reading = projectId !== undefined && project === null
-  const own = agent.skills
-  const ofAgent = sessionSkills(agent, picks)
+  const own = choices.everyRun.map(skill => skill.name)
+  const gets = sessionSkills(own, picks)
   const listed = [...own, ...picks.on.filter(name => !own.includes(name))]
   const kept = projectKept(held, picks.project)
-  const count = skillCount(ofAgent, projectId !== undefined ? kept : [])
-  const toggleOfAgent = (name: string) => {
+  const count = skillCount(gets, projectId !== undefined ? kept : [])
+  const toggleListed = (name: string) => {
     if (own.includes(name)) onChange({ ...picks, off: picks.off.includes(name) ? picks.off.filter(one => one !== name) : [...picks.off, name] })
     else onChange({ ...picks, on: picks.on.filter(one => one !== name) })
   }
@@ -122,7 +127,7 @@ export function SkillsMenu({
     const { project: _all, ...rest } = picks
     onChange(next.length === held.length ? rest : { ...rest, project: next.length === 0 ? 'none' : next })
   }
-  const more = groups.map(group => ({ title: group.title, skills: group.skills.filter(skill => !listed.includes(skill.name)) })).filter(group => group.skills.length > 0)
+  const more = choices.more.map(group => ({ title: group.title, skills: group.skills.filter(skill => !listed.includes(skill.name)) })).filter(group => group.skills.length > 0)
   const said = `This session gets ${skillPicksSaid({ skillsOn: picks.on, skillsOff: picks.off, ...(projectId !== undefined ? { projectSkills: picks.project } : { projectSkills: 'none' }) })}`
   return (
     <DropdownMenu>
@@ -139,9 +144,9 @@ export function SkillsMenu({
       </Tooltip>
       <DropdownMenuContent align="start" className="min-w-[16rem]">
         <DropdownMenuGroup>
-          <DropdownMenuLabel>{`${agent.name}'s skills, this session`}</DropdownMenuLabel>
+          <DropdownMenuLabel>Skills, this session</DropdownMenuLabel>
           {listed.map(name => (
-            <DropdownMenuCheckboxItem key={name} checked={ofAgent.includes(name)} onCheckedChange={() => toggleOfAgent(name)}>
+            <DropdownMenuCheckboxItem key={name} checked={gets.includes(name)} onCheckedChange={() => toggleListed(name)}>
               <span className="truncate">{name}</span>
             </DropdownMenuCheckboxItem>
           ))}
@@ -213,17 +218,19 @@ export function SkillsMenu({
 
 /**
  * The session page's "Skills", in the launcher's place, as words, not a press: a session keeps the
- * skills it started with, counted as the launcher counts them, which their hover says as its record keeps them.
- * Drawn once the agents and the project's skills are read, so the count lands whole.
+ * skills it started with, counted as the launcher counts them, which their hover says as its record
+ * keeps them; the project's own as its preset has them where the session picked none. Drawn once
+ * the skills to pick from, the presets and the project's skills are read, so the count lands whole.
  */
-export function SkillsOff({ projectId, agent, skillsOn, skillsOff, projectSkills }: { projectId: string | undefined; agent: string | undefined; skillsOn?: string[] | undefined; skillsOff?: string[] | undefined; projectSkills?: 'none' | string[] | undefined }) {
-  const { view } = useAgentsList()
+export function SkillsOff({ projectId, preset, skillsOn, skillsOff, projectSkills }: { projectId: string | undefined; preset: string | undefined; skillsOn?: string[] | undefined; skillsOff?: string[] | undefined; projectSkills?: 'all' | 'none' | string[] | undefined }) {
+  const choices = useSkillChoices()
+  const { view } = usePresetsList()
   const project = useProjectSkills(projectId)
-  if (!view || (projectId !== undefined && project === null)) return null
-  const record = view.agents.find(one => one.id === (agent ?? DEFAULT_AGENT))
-  const count = skillCount(sessionSkills(record, { on: skillsOn ?? [], off: skillsOff ?? [] }), projectId !== undefined ? projectKept(project?.held ?? [], projectSkills) : [])
+  if (!choices || !view || (projectId !== undefined && project === null)) return null
+  const got = projectSkills ?? view.presets.find(one => one.id === (preset ?? DEFAULT_PRESET))?.options.skills?.project
+  const count = skillCount(sessionSkills(choices.everyRun.map(skill => skill.name), { on: skillsOn ?? [], off: skillsOff ?? [] }), projectId !== undefined ? projectKept(project?.held ?? [], got) : [])
   return (
-    <RowSaid tip={`This session got ${skillPicksSaid({ skillsOn, skillsOff, projectSkills: projectId === undefined ? 'none' : projectSkills })}`}>
+    <RowSaid tip={`This session got ${skillPicksSaid({ skillsOn, skillsOff, projectSkills: projectId === undefined ? 'none' : got })}`}>
       <Puzzle className="size-4 shrink-0" aria-hidden />
       <span className="truncate">
         <span className={rowWideClass}>Skills: </span>

@@ -84,7 +84,7 @@ export function AgentView({
   /** Whether the agent is still running; `null` while the daemon's list of agents has not been read, so it is not known yet. */
   live: boolean | null
   /** What the run's card says, off the runs poll: what the feed cannot carry (the details strip's facts, how the agent was set up, whether its record is being saved). Absent until the card is listed. */
-  card?: (AgentDetailsCard & Pick<AgentMeta, 'status' | 'intent' | 'saving' | 'workspace' | 'branch' | 'base' | 'baseCommit' | 'host' | 'otherHost' | 'publish' | 'prBase' | 'gitAccount' | 'earlierPrs' | 'remoteKind' | 'repos' | 'agent' | 'skillsOn' | 'skillsOff' | 'projectSkills'> & Partial<Pick<AgentMeta, 'endedAt'>>) | undefined
+  card?: (AgentDetailsCard & Pick<AgentMeta, 'status' | 'intent' | 'saving' | 'workspace' | 'branch' | 'base' | 'baseCommit' | 'host' | 'otherHost' | 'publish' | 'prBase' | 'gitAccount' | 'earlierPrs' | 'remoteKind' | 'repos' | 'preset' | 'skillsOn' | 'skillsOff' | 'projectSkills'> & Partial<Pick<AgentMeta, 'endedAt'>>) | undefined
   /** What the launcher said about this run as it started it: shown until the run's record says it. */
   picks?: StartPicks | undefined
   /** The session's own name — the same label the rail shows (#1030). It leads the action bar as
@@ -410,7 +410,7 @@ export function AgentView({
             publish={card ? card.publish : picks?.publish}
             prBase={card?.prBase ?? picks?.prBase}
             row={row}
-            agent={card?.agent ?? picks?.agent}
+            preset={card?.preset ?? picks?.preset}
             gitHost={gitHostHome}
             gitAccount={card?.gitAccount ?? picks?.gitAccount}
             // The picks as the record keeps them; the launcher's until it is there.

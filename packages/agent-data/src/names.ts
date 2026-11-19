@@ -54,7 +54,7 @@ export const SKILLS_ENV = 'OPENAGENT_SKILLS'
 /**
  * The environment variable that names every skill OpenAgent carries, beside the ones every run
  * gets: the directories of their packages, joined by the path delimiter. Set with {@link SKILLS_ENV}
- * by the same command, so a run on an agent that names a skill finds its text and its package here.
+ * by the same command, so a run a session gave one more skill finds its text and its package here.
  */
 export const SKILL_CATALOGUE_ENV = 'OPENAGENT_SKILL_CATALOGUE'
 
@@ -67,19 +67,19 @@ export const SKILL_CATALOGUE_ENV = 'OPENAGENT_SKILL_CATALOGUE'
 export const AGENT_ID_ENV = 'AGENT_ID'
 
 /**
- * The environment variable that names the agent a run is on, by its id (`agents/<id>.json` in the
- * personal folder): set by whoever starts the run, for that run; unset, the run is on the default
- * agent. A scheduler's runs name none.
+ * The environment variable that names the preset a run is on, by its id (the catalog's
+ * `presets.saved`): set by whoever starts the run, for that run; unset, the run is on Default. A
+ * scheduler's runs name none.
  */
-export const AGENT_ENV = 'OPENAGENT_AGENT'
+export const PRESET_ENV = 'OPENAGENT_PRESET'
 
 /**
  * The environment variables that change the skills one run gets, a session's picks beside the
- * message box: {@link SKILLS_ON_ENV} names skills its agent lacks that it gets too, and
- * {@link SKILLS_OFF_ENV} skills of its agent's it does not get, each a comma-separated list of
- * names; {@link PROJECT_SKILLS_ENV} says which of the project's own skills stay in its checkout:
- * `all` (unset too), `none`, or their names comma-separated. Set by whoever starts the run; a
- * resumed run goes on with what its record kept.
+ * message box: {@link SKILLS_ON_ENV} names skills it gets on top of the ones every run gets, and
+ * {@link SKILLS_OFF_ENV} ones of those it does not get, each a comma-separated list of names;
+ * {@link PROJECT_SKILLS_ENV} says which of the project's own skills stay in its checkout: `all`
+ * (unset too), `none`, or their names comma-separated. Set by whoever starts the run; a resumed
+ * run goes on with what its record kept.
  */
 export const SKILLS_ON_ENV = 'OPENAGENT_SKILLS_ON'
 export const SKILLS_OFF_ENV = 'OPENAGENT_SKILLS_OFF'

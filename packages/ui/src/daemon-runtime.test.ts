@@ -129,34 +129,36 @@ test('a Start hands the host the branch to start from, and refuses a word that i
   }
 })
 
-test("a Start hands the host the session's account at the git host, its agent and its picks of skills, and refuses what is no login, no agent id or no skill name before the host is asked", async () => {
+test("a Start hands the host the session's account at the git host, its preset and its picks of skills, and refuses what is no login, no preset id or no skill name before the host is asked", async () => {
   const home = await project()
   const env = { XDG_CONFIG_HOME: join(home, 'cfg') }
   await mkdir(env.XDG_CONFIG_HOME, { recursive: true })
   const host = fakeHost()
   const runtime = createProjectRuntime({ cwd: home, env, host })
   try {
-    await runtime.onStart('Fix it', { account: 'octo-agent', agent: 'reviewer', skillsOn: ['review', 'ux'], skillsOff: ['github'], projectSkills: ['deploy', 'lint'] })
+    await runtime.onStart('Fix it', { account: 'octo-agent', preset: 'reviewer', skillsOn: ['review', 'ux'], skillsOff: ['github'], projectSkills: ['deploy', 'lint'] })
     const { options } = lastStart(host)
-    assert.deepEqual([options?.github, options?.['agent-driver'], options?.skills], [{ account: 'octo-agent' }, { agent: 'reviewer' }, { on: ['review', 'ux'], off: ['github'], project: ['deploy', 'lint'] }])
+    assert.deepEqual([options?.github, options?.presets, options?.skills], [{ account: 'octo-agent' }, { preset: 'reviewer' }, { on: ['review', 'ux'], off: ['github'], project: ['deploy', 'lint'] }])
     await runtime.onStart('Fix it', { projectSkills: 'none' })
     assert.deepEqual(lastStart(host).options?.skills, { project: 'none' })
+    await runtime.onStart('Fix it', { projectSkills: 'all' })
+    assert.deepEqual(lastStart(host).options?.skills, { project: 'all' }, 'every project skill, over its preset\'s')
     await runtime.onStart('Fix it')
-    assert.deepEqual(lastStart(host).options, { publish: 'commit' }, "no pick: the run goes as the computer's account, on the default agent, with its skills and every project skill")
+    assert.deepEqual(lastStart(host).options, { publish: 'commit' }, "no pick: the run goes as the computer's account, on Default, with the skills every run gets and its preset's project skills")
     const asked = host.requests.length
     const notALogin = { ok: false, error: 'An account is named by its login.' }
     assert.deepEqual(await runtime.onStart('Fix it', { account: 'octo agent' }), notALogin)
     assert.deepEqual(await runtime.onStart('Fix it', { account: '' }), notALogin)
     assert.deepEqual(await runtime.onStart('Fix it', { account: 42 as unknown as string }), notALogin)
-    const notAnAgent = { ok: false, error: 'An agent is named by its id.' }
-    assert.deepEqual(await runtime.onStart('Fix it', { agent: 'Not An Id' }), notAnAgent)
-    assert.deepEqual(await runtime.onStart('Fix it', { agent: '../x' }), notAnAgent)
+    const notAPreset = { ok: false, error: 'A preset is named by its id.' }
+    assert.deepEqual(await runtime.onStart('Fix it', { preset: 'Not An Id' }), notAPreset)
+    assert.deepEqual(await runtime.onStart('Fix it', { preset: '../x' }), notAPreset)
     const notSkills = { ok: false, error: 'Skills are named by their names.' }
     assert.deepEqual(await runtime.onStart('Fix it', { skillsOn: ['Not A Skill'] }), notSkills)
     assert.deepEqual(await runtime.onStart('Fix it', { skillsOff: [] }), notSkills)
     assert.deepEqual(await runtime.onStart('Fix it', { skillsOff: 'github' as unknown as string[] }), notSkills)
-    const notProjectSkills = { ok: false, error: 'Project skills are none, or named by their names.' }
-    assert.deepEqual(await runtime.onStart('Fix it', { projectSkills: 'all' as unknown as 'none' }), notProjectSkills)
+    const notProjectSkills = { ok: false, error: 'Project skills are all, none, or named by their names.' }
+    assert.deepEqual(await runtime.onStart('Fix it', { projectSkills: 'some' as unknown as 'none' }), notProjectSkills)
     assert.deepEqual(await runtime.onStart('Fix it', { projectSkills: [] }), notProjectSkills)
     assert.equal(host.requests.length, asked, 'the host was not asked')
   } finally {

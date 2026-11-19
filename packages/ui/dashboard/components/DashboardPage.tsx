@@ -23,7 +23,7 @@ import type { ListedPage } from '../lib/use-modules.js'
 import { Page } from './Page.js'
 import { overlayOpen, pressed } from '../lib/shortcut.js'
 import { LinePart, NEEDS_YOU_ID, WORKING_ID, counted, scrollToPart } from './LinePart.js'
-import { YourAgentsPart } from './YourAgentsPart.js'
+import { YourPresetsPart } from './YourPresetsPart.js'
 import { useIsMobile } from '../lib/use-mobile.js'
 
 /**
@@ -128,7 +128,7 @@ export function DashboardPage({
     // Customize press and the page under it), and a place no part takes would shorten it.
     ...(queueComing ? [{ id: 'packages', order: PACKAGES_PLACE, node: <LinePart reading shape="4 queued">{null}</LinePart> }] : moduleLine),
     // The person's agents (Rom's design: an agent is a name, skills and accounts): how many, by name, a press from their page.
-    ...(placeKnown ? [{ id: 'your-agents', order: 4, node: <YourAgentsPart /> }] : []),
+    ...(placeKnown ? [{ id: 'your-presets', order: 4, node: <YourPresetsPart /> }] : []),
   ].sort((one, other) => one.order - other.order)
   const cards: OverviewCard[] = [
     {

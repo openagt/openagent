@@ -1,20 +1,19 @@
 import { readFile, realpath } from 'node:fs/promises'
 import { delimiter, join } from 'node:path'
-import { declaring, packageBins, readManifest, runPackageCommand, SKILL_CATALOGUE_ENV, SKILLS_ENV, type AgentRecord, type ProjectPackage, type ProvidedCommand } from '@openagt/agent-data'
+import { declaring, packageBins, readManifest, runPackageCommand, SKILL_CATALOGUE_ENV, SKILLS_ENV, type ProjectPackage, type ProvidedCommand } from '@openagt/agent-data'
 import type { SkillLink } from '@openagt/skill-branches'
-import type { SkillPicks } from './agent.js'
+import type { SkillPicks } from './preset.js'
 
 /**
- * The basic skills (#2023): the ones a run gets with nothing committed in the project, its
- * agent's. Each one's text is linked into the agent's checkout, hidden from git, beside the
+ * The basic skills (#2023): the ones a run gets with nothing committed in the project. Each one's text is linked into the agent's checkout, hidden from git, beside the
  * branches skill the checkout already carries, and with it the skill's package and command, so
  * the text's `npx @openagt/skill-logs@0.1` runs that very copy. A project that tracks its own
  * copy of one keeps it: an entry already in the checkout is left alone.
  *
  * This tool names no skill: the package that started OpenAgent owns the lists and hands them
- * down, in {@link SKILLS_ENV} the directories of the packages of the skills a run gets when no
- * agent says otherwise, in {@link SKILL_CATALOGUE_ENV} those of every skill it carries, which an
- * agent picks from by name; a run started by hand, with nothing set, gets none. A git host's
+ * down, in {@link SKILLS_ENV} the directories of the packages of the skills every run gets, in
+ * {@link SKILL_CATALOGUE_ENV} those of every skill it carries, which a session picks more from by
+ * name; a run started by hand, with nothing set, gets none. A git host's
  * skill is linked only where its package answers the project's page there (its `home` command):
  * its text says the project's pull requests are on that host, which is wrong anywhere else.
  */
@@ -79,21 +78,15 @@ export async function everyBasicSkill(): Promise<SkillLink[]> {
   return (await lists()).carried.map(skill => skill.link)
 }
 
-/** The names of every skill carried, in the lists' order: what an agent can be given. */
-export async function carriedSkillNames(): Promise<string[]> {
-  return (await lists()).carried.map(skill => skill.link.name)
-}
-
 /**
- * The basic skills of the project at `repo`, for a run on `on`: the agent's, by name, among the
- * skills carried, the defaults when it is on no agent; less the session's `picks.off`, plus its
- * `picks.on`, after them in their order; a git host's only where it answers for the project, and
- * one that teaches asking only for a coding agent with no question tool of its own. A name the
- * agent or a pick has that nothing carried is no skill here.
+ * The basic skills of the project at `repo`: the defaults, every run's, less the session's
+ * `picks.off`, plus its `picks.on` among the skills carried, after them in their order; a git
+ * host's only where it answers for the project, and one that teaches asking only for a coding
+ * agent with no question tool of its own. A name a pick has that nothing carried is no skill here.
  */
-export async function basicSkills(repo: string, agent: { ownQuestionTool?: boolean } = {}, on?: Pick<AgentRecord, 'skills'>, picks: SkillPicks = {}): Promise<SkillLink[]> {
+export async function basicSkills(repo: string, agent: { ownQuestionTool?: boolean } = {}, picks: SkillPicks = {}): Promise<SkillLink[]> {
   const { defaults, carried } = await lists()
-  const own = on ? on.skills : defaults.map(skill => skill.link.name)
+  const own = defaults.map(skill => skill.link.name)
   const off = new Set(picks.off ?? [])
   const names = [...own.filter(name => !off.has(name)), ...(picks.on ?? []).filter(name => !own.includes(name))]
   const picked = names.flatMap(name => carried.filter(skill => skill.link.name === name))

@@ -20,6 +20,7 @@ export interface RunOptions {
   /** The Auto menu's pick, which git-branches and github act on: how far the run takes its work; absent, only what its prompt asks. */
   publish?: Publish
   plugins?: PluginsOptions
+  presets?: PresetsOptions
 }
 
 /** agent-driver's slice: the coding agent, its model and effort, and the accounts its turns take. */
@@ -28,9 +29,7 @@ export interface AgentDriverOptions {
   driver?: string
   model?: string
   effort?: string
-  /** The agent the run is on, by its id: its skills and accounts. Until presets replace agents (#2394's step 5). */
-  agent?: string
-  /** The Claude accounts the run's turns take, in order, as the Permissions page names them. */
+  /** The Claude accounts the run's turns take, in order, as the Permissions page names them; every one of the computer's when none of them is on it. */
   claude?: string[]
   /** The Codex accounts, the same way. */
   codex?: string[]
@@ -54,20 +53,29 @@ export interface GitBranchesOptions {
   repos?: { name: string; from: string }[]
 }
 
-/** skills' slice: the skills the run gets beside its agent's, and which of the project's own. */
+/** skills' slice: the skills the run gets beside the ones every run gets, and which of the project's own. */
 export interface SkillsOptions {
-  /** Skills the run gets on top of its agent's, by name. */
+  /** Skills the run gets on top of the ones every run gets, by name. */
   on?: string[]
-  /** Skills of its agent's the run goes without, by name. */
+  /** Skills every run gets that this one goes without, by name. */
   off?: string[]
-  /** None, or the ones named; every one when absent. A named skill the project does not have is not there. */
-  project?: 'none' | string[]
+  /**
+   * Which of the project's own skills the run gets: every one, none, or the ones named. Absent, its
+   * preset's, and every one when that names none. A named skill the project does not have is not there.
+   */
+  project?: 'all' | 'none' | string[]
 }
 
 /** The loader's own slice. */
 export interface PluginsOptions {
   /** The enabled plugins this run goes without: the loader calls none of their run hooks for it. A core module named here is still on. */
   without?: string[]
+}
+
+/** presets' slice: the preset the run is on, whose options it gets under the ones picked for it. */
+export interface PresetsOptions {
+  /** The preset, by its id; Default when absent. */
+  preset?: string
 }
 
 /**
