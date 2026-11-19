@@ -1,10 +1,10 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { act, read, rpcKind, type ComputerRpcClient, type RpcClient, type RpcComputerHost, type RpcHost } from './rpc.js'
-import { memorySettings } from './testing.js'
+import { memorySettings, rpcHost } from './testing.js'
 
 const SETTINGS = memorySettings()
-const HOST: RpcHost = { settings: SETTINGS, root: '/work/shop', run: async () => undefined, mergeCommit: async () => ({ pending: false }) }
+const HOST: RpcHost = rpcHost({ settings: SETTINGS, root: '/work/shop', run: async () => undefined, mergeCommit: async () => ({ pending: false }) })
 
 // A module's server part, as a UI part's client is typed by it.
 const server = {

@@ -246,6 +246,12 @@ export interface DriverPromptOptions {
    * send carries it. The `start` event names it apart from the prompt, like the added sentence.
    */
   attached?: string
+  /**
+   * The question a turn's last message ends on, as the caller reads it (the block a skill taught
+   * the agent), for a turn whose agent asked with no tool of its own; absent, a message asks
+   * nothing. The turn reports it as it reports a question asked with the agent's own tool.
+   */
+  questionIn?: (text: string) => Question | undefined
 }
 
 /** The outcome of one {@link DriverSession.prompt} turn. */

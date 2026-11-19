@@ -9,16 +9,38 @@ import { callModuleFunction, functionKind, serverHost, MAX_CALL_INPUT, type Serv
 const SETTINGS = memorySettings()
 
 /** A project whose runs' host knows nothing of any run: what a call about none is given. */
-const NO_RUNS: ServerHostDeps = { find: async () => undefined }
+const NO_RUNS: ServerHostDeps = {
+  find: async () => undefined,
+  questions: async () => [],
+  say: async () => {
+    throw new Error('unknown session')
+  },
+}
 
 test("where a run has its work is its host's to say, asked by the run's id; a string that is no run's id is never asked about", async () => {
   const asked: string[] = []
   const found = { checkout: '/p/.branches/agent-a', record: { status: 'running', branch: 'agent-a' }, changedNothing: false }
-  const host = serverHost('/p', SETTINGS, { find: async agentId => (asked.push(agentId), agentId === '2026-09-16T14-01-00-000Z' ? found : undefined) })
+  const host = serverHost('/p', SETTINGS, { ...NO_RUNS, find: async agentId => (asked.push(agentId), agentId === '2026-09-16T14-01-00-000Z' ? found : undefined) })
   assert.deepEqual(await host.run('2026-09-16T14-01-00-000Z'), found)
   assert.equal(await host.run('2026-09-16T14-05-00-000Z'), undefined)
   assert.equal(await host.run('../etc'), undefined)
   assert.deepEqual(asked, ['2026-09-16T14-01-00-000Z', '2026-09-16T14-05-00-000Z'])
+})
+
+test("a run's open questions and a line said to it go through its host, by the run's id; a string that is no run's id is asked nothing and told nothing", async () => {
+  const run = '2026-09-16T14-01-00-000Z'
+  const question = { id: '2026-09-16T14:02:00.000Z', title: 'Which one?', options: [{ id: 'a', label: 'A' }] }
+  const said: [string, unknown][] = []
+  const host = serverHost('/p', SETTINGS, {
+    ...NO_RUNS,
+    questions: async agentId => (agentId === run ? [question] : []),
+    say: async (agentId, line) => void said.push([agentId, line]),
+  })
+  assert.deepEqual(await host.questions(run), [question])
+  assert.deepEqual(await host.questions('../etc'), [])
+  await host.say(run, { kind: 'answer', question: 'Which one?', answer: 'A' })
+  await assert.rejects(host.say('../etc', { kind: 'answer', question: 'Which one?', answer: 'A' }), /unknown session/)
+  assert.deepEqual(said, [[run, { kind: 'answer', question: 'Which one?', answer: 'A' }]])
 })
 
 test('a merge lookup says "still asking" only while the git host has not answered at all', async () => {

@@ -5,7 +5,7 @@ import { bridgeChoiceRequest } from '../../src/client.js'
 import { onBridgeQuestion, onBridgeEvents, onBridgeAnswer } from '../rpc/reads.js'
 import { sendBridgeAnswer, sendBridgeAnswerCancel } from '../rpc/control.js'
 import { cloudSession } from '../lib/live-state.js'
-import { QuestionPanel } from './QuestionPanel.js'
+import { AskedQuestion } from './AskedQuestion.js'
 import { CopyButton } from './ui/copy-button.js'
 import { buttonVariants } from './ui/button.js'
 
@@ -77,9 +77,9 @@ export function CloudAgentNotice({
 
 /**
  * How a pick reaches a Claude web session (#1237/#1554): queued on the daemon for the extension,
- * which types the continuation into the session's composer. Shaped for `QuestionPanel.send`, so the
- * bridged question is the same panel a local one gets; the RPC's `{ok:false}` is thrown so the
- * panel's action hook shows the reason. The option ids are the labels (see `bridgeChoiceRequest`).
+ * which types the continuation into the session's composer. Shaped for the question card's `send`,
+ * so the bridged question is the same card a local one gets; the RPC's `{ok:false}` is thrown so
+ * the card shows the reason. The option ids are the labels (see `bridgeChoiceRequest`).
  */
 function bridgeSend(sessionId: string): (pick: string | string[]) => Promise<void> {
   return async pick => {
@@ -90,9 +90,9 @@ function bridgeSend(sessionId: string): (pick: string | string[]) => Promise<voi
 
 /**
  * The question the session is parked on, once the browser bridge has reported one (#1237),
- * rendered as the gate it is (#1554): the same panel a local agent's question gets, every answer
- * going through the bridge instead of the path a local agent's answer takes. The link out stays as
- * the manual path for whoever prefers to answer over there.
+ * rendered as the gate it is (#1554): the same card a local agent's question gets, where the module
+ * that asks is on, every answer going through the bridge instead of the path a local agent's answer
+ * takes. The link out stays as the manual path for whoever prefers to answer over there.
  */
 function ParkedQuestion({
   question,
@@ -118,7 +118,7 @@ function ParkedQuestion({
         </p>
       )}
       {/* Not `active`: the keys belong to a question in the chat, and to the message box. */}
-      <QuestionPanel key={question.title} projectId={projectId} agentId={agentId} choice={bridgeChoiceRequest(question)} send={bridgeSend(sessionId)} />
+      <AskedQuestion key={question.title} projectId={projectId} agentId={agentId} question={bridgeChoiceRequest(question)} send={bridgeSend(sessionId)} />
       <a href={url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 px-4 py-2 text-sm text-primary hover:underline">
         Answer it in the session
         <ExternalLink className="size-3.5" aria-hidden />

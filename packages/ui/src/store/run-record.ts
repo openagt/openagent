@@ -100,7 +100,7 @@ function eventOf(line: AnyDiaryLine): OpenAgentEvent | undefined {
       const { kind: _kind, title, header, options, recommended, multi, file } = line
       return {
         kind: 'choice',
-        id: 'await-choices',
+        id: 'question',
         title: String(title ?? 'Which option?'),
         ...(typeof header === 'string' ? { header } : {}),
         options: Array.isArray(options) ? (options as ChoiceOption[]) : [],

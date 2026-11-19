@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { after, before, test } from 'node:test'
 import type { RpcHost } from '@openagt/hooks/rpc'
-import { memorySettings } from '@openagt/hooks/testing'
+import { memorySettings, rpcHost } from '@openagt/hooks/testing'
 import { readAgentChanges as readChanges, readAgentCommitChanges as readCommitChanges, readAgentCommitFileDiff, readAgentCommits, readAgentFileDiff, resolveAgentWork, type AgentChanges, type FileMark } from './run.js'
 
 const SETTINGS = memorySettings()
@@ -26,7 +26,8 @@ let root: string
 const git = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim()
 
 /** The host for a run that has a checkout at `path`, and the record given, when one is. */
-const inCheckout = (path: string, record?: { baseCommit?: string }): RpcHost => ({
+const inCheckout = (path: string, record?: { baseCommit?: string }): RpcHost =>
+  rpcHost({
   settings: SETTINGS,
   root,
   run: async () => ({ checkout: path, ...(record ? { record } : {}), changedNothing: false }),
@@ -42,7 +43,7 @@ type Pr = { number: number; mergeCommit?: string } & Record<string, unknown>
  * or `failed` on this machine, with no pull request, and was not landed.
  */
 function deps(agent: { status?: string; host?: string; branch?: string; pr?: { number: number }; base?: string; baseCommit?: string; landed?: string }, prs: { value?: Pr[]; pending?: boolean } = {}): RpcHost {
-  return {
+  return rpcHost({
     settings: SETTINGS,
     root,
     run: async () => ({
@@ -54,7 +55,7 @@ function deps(agent: { status?: string; host?: string; branch?: string; pr?: { n
       const pr = prs.value?.find(pr => pr.number === number)
       return pr?.mergeCommit ? { pending: false, commit: pr.mergeCommit, ...(typeof pr['headRefOid'] === 'string' ? { head: pr['headRefOid'] } : {}) } : { pending: false }
     },
-  }
+  })
 }
 
 /** Where the run with no checkout that `host` describes has its work. */
@@ -201,7 +202,7 @@ test('no checkout, no branch and no merge commit on this machine: gone', async (
 })
 
 test('a run starting here has changed nothing yet; one running elsewhere is pending', async () => {
-  const unknown: RpcHost = { settings: SETTINGS, root, run: async () => undefined, mergeCommit: async () => ({ pending: false }) }
+  const unknown: RpcHost = rpcHost({ settings: SETTINGS, root, run: async () => undefined, mergeCommit: async () => ({ pending: false }) })
   assert.deepEqual(await resolve(unknown), { source: 'starting' }, 'the page opened before the run wrote its record')
   assert.deepEqual(await resolve(deps({ status: 'running', host: 'this-machine' })), { source: 'starting' }, 'recorded, its checkout not made yet')
   assert.deepEqual(await resolve(deps({ status: 'running', host: 'other-machine', branch: 'agent-not-here' })), { source: 'pending' }, 'running elsewhere, its branch not here yet')
@@ -209,7 +210,8 @@ test('a run starting here has changed nothing yet; one running elsewhere is pend
 })
 
 test('a run whose record names a branch to start from that is not here is pending: it will fail on it, and a later read says so', async () => {
-  const recorded = (record: { status: string; host: string; base?: string }): RpcHost => ({ settings: SETTINGS, root, run: async () => ({ record, changedNothing: false }), mergeCommit: async () => ({ pending: false }) })
+  const recorded = (record: { status: string; host: string; base?: string }): RpcHost =>
+  rpcHost({ settings: SETTINGS, root, run: async () => ({ record, changedNothing: false }), mergeCommit: async () => ({ pending: false }) })
   assert.deepEqual(await resolve(recorded({ status: 'running', host: 'this-machine', base: 'main' })), { source: 'starting' })
   assert.deepEqual(await resolve(recorded({ status: 'running', host: 'this-machine', base: 'deleted-branch' })), { source: 'pending' })
   assert.deepEqual(await resolve(recorded({ status: 'running', host: 'other-machine', base: 'main' })), { source: 'pending' }, 'starting elsewhere: that machine’s branch, not this one’s')
@@ -217,7 +219,8 @@ test('a run whose record names a branch to start from that is not here is pendin
 
 test('a checkout reclaimed since it was listed is no source: its branch is read, else pending, never an empty list or a start', async () => {
   const gone = join(dir, 'reclaimed-checkout')
-  const withGone = (record?: { status?: string; host?: string; branch?: string }): RpcHost => ({
+  const withGone = (record?: { status?: string; host?: string; branch?: string }): RpcHost =>
+  rpcHost({
     settings: SETTINGS,
     root,
     run: async () => ({ checkout: gone, ...(record ? { record } : {}), changedNothing: false }),

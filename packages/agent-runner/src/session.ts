@@ -1,6 +1,6 @@
-import { AgentExitError, ConversationGoneError, parseQuestion, promptLines, promptOf, takeInbox, type DriverPromptOptions, type DriverSession, type DriverTurn, type LogEndStatus, type PromptLine, type Question } from '@openagt/agent-driver'
+import { AgentExitError, ConversationGoneError, promptLines, promptOf, takeInbox, type DriverPromptOptions, type DriverSession, type DriverTurn, type LogEndStatus, type PromptLine, type Question } from '@openagt/agent-driver'
 import { errorMessage } from '@openagt/agent-data'
-import type { RunOutcome } from '@openagt/hooks'
+import type { RunAsking, RunOutcome } from '@openagt/hooks'
 import type { Leg } from './leg.js'
 import { inboxPath } from './live-card.js'
 import { publishChange, type Publish } from './records.js'
@@ -18,8 +18,10 @@ import { isBareCommand, nameRun } from './title.js'
  *
  * What reaches the agent from outside comes through the session's inbox: a message written while a
  * turn runs reaches the agent at its next step, and a line still waiting when a turn ends becomes
- * the next turn; when the last turn ended on a question and nothing waited, the run ends
- * `waiting`, and the answer continues it.
+ * the next turn. A run that asks the person (`RunContext.asking`, ask's) reads the question a turn's
+ * message ends on as its module writes one; when the last turn ended on a question, the agent's
+ * tool's or its message's, and nothing waited, the run ends `waiting`, and the answer continues
+ * it. A run that does not ask just ends, as done: the person replies with a message.
  */
 
 /** How long naming a run from its report may hold its end up: the small model answers in a few seconds. */
@@ -81,9 +83,10 @@ function queued(line: PromptLine): Queued {
 /**
  * The agent's session in `workspace`, from its start to the end of the last turn this process owes
  * it, its live record kept in `dir`: how the run ended. A signal to stop asks the agent to end its
- * turn where it is; `leg.killed` ends its process tree at once.
+ * turn where it is; `leg.killed` ends its process tree at once. `asking` is how the run asks the
+ * person, when it does.
  */
-export async function sessionTurns(leg: Leg, workspace: string, dir: string, stopped: AbortSignal, env: Readonly<Record<string, string>>): Promise<RunOutcome> {
+export async function sessionTurns(leg: Leg, workspace: string, dir: string, stopped: AbortSignal, env: Readonly<Record<string, string>>, asking?: RunAsking): Promise<RunOutcome> {
   const { id: _id, status: _status, endedAt: _endedAt, ...startCard } = leg.card
   const continued = leg.earlier !== undefined
   const resumeSessionId = leg.earlier?.sessionId
@@ -133,7 +136,13 @@ export async function sessionTurns(leg: Leg, workspace: string, dir: string, sto
           const last = i === queue.length - 1
           const handed = attached
           attached = undefined
-          const sent = { ...(last ? { inbox, onInboxLine: level.onInboxLine } : {}), ...(resume ? { resume: true } : {}), ...(handed !== undefined ? { attached: handed } : {}), ...level.added() }
+          const sent = {
+            ...(last ? { inbox, onInboxLine: level.onInboxLine } : {}),
+            ...(resume ? { resume: true } : {}),
+            ...(handed !== undefined ? { attached: handed } : {}),
+            ...(asking ? { questionIn: asking.questionIn } : {}),
+            ...level.added(),
+          }
           const session = driverSession
           const turn = fresh
             ? await afresh(session, leg, prompt, sent)
@@ -151,10 +160,10 @@ export async function sessionTurns(leg: Leg, workspace: string, dir: string, sto
         failure = err
       }
       if (stopped.aborted) end = { status: 'stopped' }
-      else if (end.status === 'done') {
+      else if (end.status === 'done' && asking) {
         // The last turn asked and nothing waited in the inbox: the run ends here, waiting, and
         // keeps its checkout for the answer to resume it.
-        question = (asked ?? parseQuestion(lastText))?.title
+        question = (asked ?? asking.questionIn(lastText))?.title
         if (question !== undefined) end = { status: 'waiting' }
       }
       await naming.fromReport(end.status, lastText)

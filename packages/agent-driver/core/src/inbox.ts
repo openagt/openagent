@@ -1,7 +1,7 @@
 import { appendFile, mkdir, readFile, rename, rm } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import type { DriverPromptOptions, DriverSession, DriverTurn } from './types.js'
-import { continuationPrompt, parseQuestion, type Question } from './question.js'
+import { continuationPrompt, type Question } from './question.js'
 import { promptSent } from './session-support.js'
 
 /**
@@ -102,7 +102,8 @@ export function promptOf(line: PromptLine): string {
 }
 
 /**
- * The end of a turn, for every driver: the question the turn ended on is reported as an event,
+ * The end of a turn, for every driver: the question the turn ended on, asked with the agent's own
+ * tool or written in its message as the caller reads one (`questionIn`), is reported as an event,
  * and the inbox, when the prompt names one, is drained into further turns of the same session.
  * Resolves with the last turn.
  */
@@ -112,7 +113,7 @@ export async function finishTurn(
   opts: DriverPromptOptions,
   emit: (event: { type: 'question'; question: Question }) => void,
 ): Promise<DriverTurn> {
-  const question = turn.question ?? parseQuestion(turn.text)
+  const question = turn.question ?? opts.questionIn?.(turn.text)
   if (question) emit({ type: 'question', question })
   // A turn stopped on purpose goes no further: what reached it meanwhile is the person's to send again.
   if (!opts.inbox || turn.stopped) return turn

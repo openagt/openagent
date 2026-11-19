@@ -1,5 +1,6 @@
 import { homedir } from 'node:os'
 import { contextProjects, contextRemote, resolveProjectPath } from './context.js'
+import { SESSIONS_ID } from '../project-address.js'
 import { findBroughtModule, findComputerModule, findProjectModule, readComputerModules, readProjectModules, runModuleCommand as runCommand, type ModuleCommandResult } from '../project-modules.js'
 import { broughtModuleUrl, computerModuleUrl, moduleUrl, versionedModuleUrl } from '../dashboard/module-serve.js'
 import { providedDataChanged } from '../store/provided.js'
@@ -21,6 +22,8 @@ export interface DashboardModule {
   url: string
   /** The registered projects whose packages include it, in the registry's order; none for one of the computer's, whose commands run in no project. */
   projects: string[]
+  /** Set for one the sessions with no project have: a module of every project's, or a plugin they have as the distribution starts it. */
+  sessions?: true
   /** Set for one of the computer's packages: what it keeps is the person's, in their home folder, and no project's. */
   computer?: true
 }
@@ -28,7 +31,7 @@ export interface DashboardModule {
 /**
  * Every module the dashboard loads (#1774), one per package. First the computer's, which are
  * there with no project added. Then every module whose pages a registered project shows, with
- * the projects that show them: with no project picked the sidebar and the pages are every
+ * the projects that show them, and those the sessions with no project have: with no project picked the sidebar and the pages are every
  * project's, and the dashboard narrows them itself to a picked project's. A package several
  * projects install is loaded once, from
  * the first of them in the registry's order; its page then reads each project through that
@@ -46,6 +49,17 @@ export async function onModules(): Promise<DashboardModule[]> {
       if (known) known.projects.push(project.id)
       else byPackage.set(module.package, { package: module.package, url: await versionedModuleUrl(moduleUrl(project.id, module), module), projects: [project.id] })
     }
+  }
+  // The sessions with no project have what a project has where nobody switched a plugin, from the
+  // first project that has it, else from OpenAgent's own copy.
+  const sessions = await contextProjects()
+    .resolvePath(SESSIONS_ID)
+    .catch(() => undefined)
+  for (const module of sessions !== undefined ? await readProjectModules(sessions).catch(() => []) : []) {
+    const known = byPackage.get(module.package)
+    if (known?.computer) continue
+    if (known) known.sessions = true
+    else byPackage.set(module.package, { package: module.package, url: await versionedModuleUrl(broughtModuleUrl(module), module), projects: [], sessions: true })
   }
   // Another computer's projects have the pages their computer said they have, from a copy of the
   // module here: a project's of this computer's, else OpenAgent's own. One with no copy here has none.

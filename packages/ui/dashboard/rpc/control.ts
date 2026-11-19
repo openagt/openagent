@@ -11,7 +11,6 @@ export type * from '../../src/dashboard-rpc/control.js'
 // file's path; the transport addresses calls by name now, so the path carries no meaning.
 
 export const sendStop = rpc<typeof impl.sendStop>('sendStop')
-export const sendChoice = rpc<typeof impl.sendChoice>('sendChoice')
 export const sendBridgeAnswer = rpc<typeof impl.sendBridgeAnswer>('sendBridgeAnswer')
 export const sendBridgeAnswerCancel = rpc<typeof impl.sendBridgeAnswerCancel>('sendBridgeAnswerCancel')
 export const sendBridgeBrowser = rpc<typeof impl.sendBridgeBrowser>('sendBridgeBrowser')

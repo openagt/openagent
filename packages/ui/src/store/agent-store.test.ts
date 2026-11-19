@@ -155,7 +155,7 @@ test('loadAgentEvents replays a run\'s diary as OpenAgent\'s events: the checkou
   fs.files.set(liveAt('r1', 'jsonl'), recorded + '{"kind":"question","title":"Which way?","options":[{"id":"a","label":"Left"}]}\n{"kind":"ended","status":"waiting"}\n{"kind":"sa')
   const live = await loadAgentEvents(CWD, 'r1', fs, runs, branches)
   assert.deepEqual(live?.slice(4), [
-    { kind: 'choice', id: 'await-choices', title: 'Which way?', options: [{ id: 'a', label: 'Left' }] },
+    { kind: 'choice', id: 'question', title: 'Which way?', options: [{ id: 'a', label: 'Left' }] },
     { kind: 'end', ok: false, waiting: true },
   ])
 

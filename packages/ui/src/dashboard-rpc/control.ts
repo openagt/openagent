@@ -1,4 +1,4 @@
-import { sayToRun, type SteerResult } from '../dashboard/run-inbox.js'
+import { agentLockKey, sayToRun, startedElsewhere, type SteerResult } from '../dashboard/run-inbox.js'
 export type { SteerResult }
 import { bridgeQuestions } from '../dashboard/bridge-store.js'
 import { isCloudSessionId } from '../dashboard/bridge-endpoints.js'
@@ -7,13 +7,11 @@ import { contextBridgeBrowser, contextHost, contextPreferences, contextStartAgen
 import { runRefAt } from '../distribution-hooks.js'
 import { errorMessage } from '@openagt/agent-data'
 import type { BridgeBrowserAction } from '../bridge-browser.js'
-import { isArrived, relayOr } from './relay-agent.js'
-import { hostname } from 'node:os'
-import { findAgent, isRunId, loadAgentEvents, projectRuns, type AgentMeta } from '../store/index.js'
+import { relayOr } from './relay-agent.js'
+import { findAgent, isRunId, projectRuns, type AgentMeta } from '../store/index.js'
 import { withAgentLock } from '../agent-locks.js'
 import { removeProjectWorktree, deleteProjectAgent } from '../worktrees.js'
 import { mergeAgentPr, openAgentPullRequest, mergeAgentBranch, pushAgentBranch, type HandoffResult } from '../dashboard/agent-handoff.js'
-import { pendingChoices } from '../open-choices.js'
 import { createRepository, type CreateRepositoryResult } from '../store/repository.js'
 import { providedDataChanged } from '../store/provided.js'
 import type {
@@ -25,20 +23,9 @@ import type {
 import type { Preferences } from '../registry.js'
 import { isPublishPick, type PublishPick } from '../publish-levels.js'
 
-/**
- * The key every action on one run locks under (`agent-locks.ts`): a Remove, a Delete and an Open
- * PR on the same run each run their own git; serialized, whichever runs second finds the state
- * the first one left and acts on that. The project and the run's id, not the checkout's path:
- * the path is the branches provider's to know, and an Open PR on a run whose checkout is gone
- * still locks the run.
- */
-function agentLockKey(cwd: string, agentId: string): string {
-  return `${cwd}\0${agentId}`
-}
-
 // The write side behind the dashboard (#405, #1774). The daemon runs no agent, so every write here
 // reaches a run through this computer's host (`run.host`, #2394): Start, what a person says to a
-// run (their words, their answer to its question), and Stop.
+// run in their own words, and Stop. Their answer to its question is ask's (its server part).
 
 /**
  * Stop a live agent (the Stop button), through this computer's host: the run's process asks its
@@ -60,60 +47,9 @@ export async function sendStop(projectId: string, agentId?: string): Promise<Ste
 }
 
 /**
- * Why a run is not continued from here: one another computer started, which is no saved machine,
- * is only read. Continued here it would move to this computer under its id, with this
- * computer's logins and none of its conversation. A call another computer passed on was sent
- * to the run's own computer already, and is not asked.
- */
-async function startedElsewhere(cwd: string, agentId: string): Promise<SteerResult | undefined> {
-  if (isArrived()) return undefined
-  const host = (await findAgent(cwd, agentId).catch(() => undefined))?.host
-  return host !== undefined && host !== hostname() ? { ok: false, error: `This run is on ${host}. Continue it there.` } : undefined
-}
-
-/** The answer each question still open was given, by the run's lock key and the question's id. */
-const answersGiven = new Map<string, Map<string, string>>()
-
-/**
- * Answer the question a run stopped on (#304, #1774). `pick` is one option id, or the chosen
- * subset of a multi-select; the answer handed to the run is the chosen labels, read off the
- * question as the run's own diary holds it, so only what the agent offered can be answered.
- * Answered once, a question takes no second answer, from any tab or device, until the run goes on
- * from it: the resumed run writes its first line seconds later, and until then the diary still
- * holds the question open.
- */
-export async function sendChoice(projectId: string, id: string, pick: string | string[], agentId?: string): Promise<SteerResult> {
-  return relayOr(agentId, 'sendChoice', [projectId, id, pick, agentId], async (): Promise<SteerResult> => {
-    const cwd = await resolveProjectPath(projectId)
-    if (!cwd || !agentId || !isRunId(agentId)) return { ok: false, error: 'unknown session' }
-    const run = agentLockKey(cwd, agentId)
-    return withAgentLock(run, async (): Promise<SteerResult> => {
-      const open = pendingChoices((await loadAgentEvents(cwd, agentId).catch(() => undefined)) ?? [])
-      const held = answersGiven.get(run)
-      for (const asked of held?.keys() ?? []) if (!open.some(choice => choice.id === asked)) held?.delete(asked)
-      if (held?.size === 0) answersGiven.delete(run)
-      const question = open.find(choice => choice.id === id)
-      if (!question) return { ok: false, error: 'that question is no longer open' }
-      const given = held?.get(id)
-      if (given !== undefined) return { ok: false, error: `Already answered: ${given}` }
-      const picked = [pick].flat()
-      const labels = question.options.filter(option => picked.includes(option.id)).map(option => option.label)
-      if (labels.length !== picked.length) return { ok: false, error: 'every pick must be one of the question\'s options' }
-      if (!question.multi && labels.length !== 1) return { ok: false, error: 'pick exactly one option' }
-      const elsewhere = await startedElsewhere(cwd, agentId)
-      if (elsewhere) return elsewhere
-      const answer = labels.length ? labels.join(', ') : '(none)'
-      const said = await sayToRun(projectId, cwd, agentId, { kind: 'answer', question: question.title, answer })
-      if (said.ok) answersGiven.set(run, new Map(answersGiven.get(run)).set(id, answer))
-      return said
-    })
-  }, { ok: false, error: 'could not reach the machine' })
-}
-
-/**
  * Queue the user's pick for the question a Claude web session is parked on (#1237).
  *
- * Not a line for a run like {@link sendChoice}: a cloud agent has no run here to hand it to, so
+ * Not a line for a run, as an answer to a run's question is (ask's): a cloud agent has no run here to hand it to, so
  * the pick goes to the bridge store, where the browser extension collects it, types
  * it into the session's composer and submits. Only labels of the currently parked question are
  * accepted — one, or a multi-select's subset — and the daemon composes the text typed from them,

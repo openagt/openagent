@@ -1,17 +1,20 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useState, type ComponentType } from 'react'
 import { flushSync } from 'react-dom'
+import { RENDER_KINDS } from '@openagt/hooks/ui'
 import { onModules, type DashboardModule } from '../rpc/modules.js'
-import type { ActionPlace, OptionPlace, UiAction, UiModuleDefinition, UiOption, UiRender, UiView, ViewPlace } from '../module/index.js'
+import type { ActionPlace, OptionPlace, RenderKind, RenderKinds, UiAction, UiModuleDefinition, UiOption, UiRender, UiTextRender, UiView, ViewPlace } from '../module/index.js'
 import { usePolled } from './use-async.js'
-import { isPageSegment } from '../../src/project-address.js'
+import { isPageSegment, SESSIONS_ID } from '../../src/project-address.js'
 
 /**
- * Where a thing a module brings came from: its package, the projects that have it, and whether
- * the package is this computer's (its devices) rather than a project's.
+ * Where a thing a module brings came from: its package, the projects that have it, whether the
+ * sessions with no project have it too, and whether the package is this computer's (its devices)
+ * rather than a project's.
  */
 interface Of {
   package: string
   projects: string[]
+  sessions?: true
   computer?: true
 }
 
@@ -69,9 +72,9 @@ function nothingAt(loaded: boolean): MountedModules {
 const NOTHING_MOUNTED: MountedModules = nothingAt(false)
 
 /** What is mounted when the modules bring only `parts`, at their places; loaded unless said. For the shell's tests and the modules'. */
-export function mountedOf(parts: { views?: { [P in ViewPlace]?: MountedView<P>[] }; actions?: { [P in ActionPlace]?: MountedAction<P>[] }; schedule?: MountedSchedule; loaded?: boolean } = {}): MountedModules {
+export function mountedOf(parts: { views?: { [P in ViewPlace]?: MountedView<P>[] }; actions?: { [P in ActionPlace]?: MountedAction<P>[] }; renders?: Mounted<UiRender>[]; schedule?: MountedSchedule; loaded?: boolean } = {}): MountedModules {
   const nothing = nothingAt(parts.loaded ?? true)
-  return { ...nothing, views: { ...nothing.views, ...parts.views }, actions: { ...nothing.actions, ...parts.actions }, ...(parts.schedule ? { schedule: parts.schedule } : {}) }
+  return { ...nothing, views: { ...nothing.views, ...parts.views }, actions: { ...nothing.actions, ...parts.actions }, ...(parts.renders ? { renders: parts.renders } : {}), ...(parts.schedule ? { schedule: parts.schedule } : {}) }
 }
 
 /** Each module's browser part, imported once per page load, by URL; a module that fails to load is skipped. */
@@ -211,7 +214,7 @@ function mount(loadedModules: { module: DashboardModule; definition: UiModuleDef
   const options = mounted.options as Record<OptionPlace, Mounted<UiOption>[]>
   for (const { module, definition } of loadedModules) {
     if (!definition) continue
-    const of: Of = { package: module.package, projects: module.projects, ...(module.computer ? { computer: true as const } : {}) }
+    const of: Of = { package: module.package, projects: module.projects, ...(module.sessions ? { sessions: true as const } : {}), ...(module.computer ? { computer: true as const } : {}) }
     for (const view of definition.hooks['ui.view'] ?? []) {
       const at = views[view.place]
       if (!at) continue
@@ -231,6 +234,42 @@ function mount(loadedModules: { module: DashboardModule; definition: UiModuleDef
   for (const place of ['overview.card', 'overview.line', 'settings.section', 'permissions.section'] as const) views[place].sort(byMountOrder)
   for (const place of OPTION_PLACES) options[place].sort(byMountOrder)
   return mounted
+}
+
+/** How content of a kind drawn from props of its own looks, as the shell mounted it. */
+export type MountedRender<K extends RenderKind> = Mounted<{ kind: K; Render: ComponentType<RenderKinds[K]> }>
+
+/**
+ * How content of `kind` looks in the project `projectId` (the sessions with no project at
+ * {@link SESSIONS_ID}): the first module's that is on there and draws it, or none.
+ */
+export function renderFor<K extends RenderKind>({ renders }: MountedModules, kind: K, projectId: string): MountedRender<K> | undefined {
+  const render = renders.find(each => each.kind === kind && (each.projects.includes(projectId) || (projectId === SESSIONS_ID && each.sessions === true)))
+  return render as MountedRender<K> | undefined
+}
+
+/**
+ * How a fenced block of `language` looks: the first module's that names its language; none, or
+ * one with no `Render` (content the module shows elsewhere), for a block drawn as code.
+ */
+export function blockRender({ renders }: MountedModules, language: string): Mounted<UiTextRender> | undefined {
+  if ((RENDER_KINDS as readonly string[]).includes(language)) return undefined
+  return renders.find(each => each.kind === language) as Mounted<UiTextRender> | undefined
+}
+
+/** The languages of the fenced blocks a module shows elsewhere, which the chat leaves out where it does: ask's question block. */
+export function blocksShownElsewhere({ renders }: MountedModules): string[] {
+  return renders.flatMap(each => (!(RENDER_KINDS as readonly string[]).includes(each.kind) && !each.Render ? [each.kind] : []))
+}
+
+/**
+ * A text without its fenced blocks of `languages`: closed ones, and one still being written, which
+ * has no closing fence yet, so what it holds never scrolls by while the agent types it.
+ */
+export function withoutBlocks(text: string, languages: readonly string[]): string {
+  if (languages.length === 0) return text.trim()
+  const tags = languages.map(language => language.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')
+  return text.replace(new RegExp('```(?:' + tags + ')\\b[\\s\\S]*?(```|$)', 'g'), '').trim()
 }
 
 /**

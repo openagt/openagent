@@ -1,7 +1,9 @@
 // `@openagt/hooks/testing`: fakes of the hooks, so a module is tested alone: a store kept in
-// memory, a host whose runs a test drives, and a run's context for a step.
+// memory, a host whose runs a test drives, a run's context for a step, and the host a server
+// part's function is handed.
 import { StoreOrder } from './order.js'
 import type { InboxLine } from '@openagt/agent-driver'
+import type { RpcHost } from './rpc.js'
 import type { RunContext, RunEvent, RunFound, RunHost, RunInput, RunRef, RunRequest, RunStatus, RunSummary } from './run.js'
 import { settingsIn, type Settings } from './settings.js'
 import { chainStore, changesOf, checkPath, isUnder, messageOf, scopeKey, type Scope, type Store, type StoreBackend } from './store.js'
@@ -196,5 +198,24 @@ export function fakeRun(given: Partial<Omit<RunContext, 'store' | 'settings'>> &
     ...given,
     store,
     settings: settingsIn(store),
+  }
+}
+
+/**
+ * The host a function of a project's module is handed, for the module's server tests: the project
+ * at `/work/project`, settings in memory, and no run, merge or question known, and every line said
+ * refused, unless `given` says how it answers.
+ */
+export function rpcHost(given: Partial<RpcHost> = {}): RpcHost {
+  return {
+    settings: memorySettings(),
+    root: '/work/project',
+    run: async () => undefined,
+    mergeCommit: async () => ({ pending: false }),
+    questions: async () => [],
+    say: async () => {
+      throw new Error('no run of this test takes a line')
+    },
+    ...given,
   }
 }

@@ -1,15 +1,7 @@
-import { useContext, useEffect, useId, useRef, useState, type ReactNode } from 'react'
-import { Radio } from '@base-ui/react/radio'
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { Check } from 'lucide-react'
-import type { ChoiceRequest } from '../../src/index.js'
-import { sendChoice, sendMessage } from '../rpc/control.js'
-import { useAction } from '../lib/use-action.js'
-import { DaemonDown } from '../lib/use-daemon-health.js'
-import { cn } from '../lib/utils.js'
-import { RadioGroup } from './ui/radio-group.js'
-import { answerPrompt, skipPrompt } from '../lib/answered-question.js'
-import { MOD_KEY, pressed, typedInto } from '../lib/shortcut.js'
-import { isMobileScreen } from '../lib/use-mobile.js'
+import { cn, isMobileScreen, MOD_KEY, pressed, Radio, RadioGroup, typedInto, useAction, useModuleHost, useOpenAgentDown, type UiQuestionProps } from '@openagt/ui/module'
+import { sendAnswer, type Answer } from './calls.js'
 
 /** The pick that is no option: the person's own words, typed in the "Other" row. */
 const OTHER = Symbol('other')
@@ -57,47 +49,21 @@ function Choice({ multi, value, on, disabled, onPick, hoverOutside, children }: 
   )
 }
 
-// The question an agent's turn ended on, in the chat under what the agent said, the way Claude
-// Code on the web asks: a card with the title on a grey band, one row per option (a ring, its
-// label, its description), an "Other" row to answer in one's own words, and Skip / Submit. The
-// number keys pick, as before, with no number drawn. An option's pick goes over the control RPC,
-// which hands the chosen labels to the agent; "Other" and Skip go as a message in the same
-// sentence's shape, so the chat draws every answer, a skip too, as the question and what was said
-// to it. The card goes the moment the answer is taken, and the chat shows it then: the agent's own
-// line comes seconds later, once it is going again. A caller whose agent is not reached that way (a
-// cloud session) gives `send`: the pick goes through it, and the card offers the options only.
-// Mount it with `key={choice.id}` so a question asked again starts fresh. `active` binds the keys.
-export function QuestionPanel({
-  projectId,
-  agentId,
-  choice,
-  active = false,
-  focused = false,
-  onSaid,
-  focusNext,
-  send,
-}: {
-  projectId: string
-  agentId: string
-  choice: ChoiceRequest
-  /** The one question the keys answer: the number keys pick, ⌘ or Ctrl + Enter submits. */
-  active?: boolean
-  /** The question the page opened on: its pick takes the focus as it shows, where the screen is no phone's. */
-  focused?: boolean
-  /** Told what the answer said to the agent, so the chat can show it at once. */
-  onSaid?: ((text: string) => void) | undefined
-  /** Given the focus once the answer is taken, when it was in the card and the screen is no phone's: the message box. */
-  focusNext?: (() => void) | undefined
-  /**
-   * Where the pick goes instead of the usual call: the picked option, or the checked ones. With
-   * it the card has no "Other" row and no Skip: the bridge types only a parked question's own
-   * labels into a cloud session, never free text, so it would refuse both.
-   */
-  send?: ((pick: string | string[]) => Promise<unknown>) | undefined
-}) {
+// The question a run stopped on, in the chat under what the agent said, the way Claude Code on the
+// web asks (ask's `ui.render` of kind `question`): a card with the title on a grey band, one row
+// per option (a ring, its label, its description), an "Other" row to answer in one's own words,
+// and Skip / Submit. The number keys pick, as before, with no number drawn. Every answer goes to
+// the module's own server part, which says it to the run in the same sentence's shape, so the chat
+// draws every answer, a skip too, as the question and what was said to it. The card goes the
+// moment the answer is taken, and the chat shows it then: the agent's own line comes seconds
+// later, once it is going again. A caller whose agent is not reached that way (a cloud session)
+// gives `send`: the pick goes through it, and the card offers the options only. The chat mounts
+// it with a key of the question's, so a question asked again starts fresh. `active` binds the keys.
+export function QuestionCard({ projectId, agentId, question: choice, active = false, focused = false, onSaid, focusNext, send }: UiQuestionProps) {
+  const host = useModuleHost()
   const { busy, error, run } = useAction()
   // OpenAgent is not answering: no answer can be sent, and what is picked and typed stays.
-  const down = useContext(DaemonDown)
+  const down = useOpenAgentDown()
   // Sent and accepted by the daemon: the card goes, and the chat shows the answer. A refusal is
   // shown in the daemon's own words, and the controls come back.
   const [sent, setSent] = useState(false)
@@ -113,21 +79,18 @@ export function QuestionPanel({
 
   // Taken, the card goes and the chat is told what the agent was sent, to show it at once. The
   // focus in the card goes on, read as it is pressed: the card's buttons are off while it sends.
-  const deliver = (fn: () => Promise<unknown>, said?: string) => {
+  const deliver = (fn: () => Promise<unknown>) => {
     const handOn = card.current?.contains(document.activeElement) === true && !isMobileScreen()
     void run(fn, 'Could not send your answer — try again.').then(outcome => {
       if (!outcome.ok) return
       setSent(true)
-      if (said !== undefined) onSaid?.(said)
+      const said = (outcome.value as { said?: unknown } | undefined)?.said
+      if (typeof said === 'string') onSaid?.(said)
       if (handOn) focusNext?.()
     })
   }
-  const answer = (pick: string | string[]) => {
-    if (send) return deliver(() => send(pick))
-    const labels = choice.options.filter(o => [pick].flat().includes(o.id)).map(o => o.label)
-    deliver(() => sendChoice(projectId, choice.id, pick, agentId), answerPrompt(choice.title, labels.length ? labels.join(', ') : '(none)'))
-  }
-  const say = (text: string) => deliver(() => sendMessage(projectId, text, agentId), text)
+  const say = (answer: Answer) => deliver(() => sendAnswer(host, projectId, agentId, choice.id, answer))
+  const answer = (pick: string | string[]) => (send ? deliver(() => send(pick)) : say({ picked: pick }))
 
   // "Other" picked needs its words; everything else can always be sent.
   const otherPicked = choice.multi ? otherOn : picked === OTHER
@@ -135,11 +98,11 @@ export function QuestionPanel({
   const submit = () => {
     if (busy || down || !ready) return
     if (choice.multi) {
-      // Words in "Other" go with the checked options' labels, as one message: the agent reads both.
-      if (otherOn) return say(answerPrompt(choice.title, [...choice.options.filter(o => checked.has(o.id)).map(o => o.label), words].join(', ')))
+      // Words in "Other" go with the checked options, as one answer: the agent reads both.
+      if (otherOn) return say({ picked: [...checked], words })
       return answer([...checked])
     }
-    if (picked === OTHER) return say(answerPrompt(choice.title, words))
+    if (picked === OTHER) return say({ words })
     if (picked !== undefined) answer(picked)
   }
   const pickOther = () => {
@@ -262,7 +225,7 @@ export function QuestionPanel({
           {error ?? (busy ? 'Sending your answer…' : '')}
         </span>
         {!send && (
-          <button type="button" disabled={busy || down} onClick={() => say(skipPrompt(choice.title))} className="h-7 rounded-md bg-foreground/15 px-3 text-sm hover:bg-foreground/20 disabled:opacity-60">
+          <button type="button" disabled={busy || down} onClick={() => say({ skip: true })} className="h-7 rounded-md bg-foreground/15 px-3 text-sm hover:bg-foreground/20 disabled:opacity-60">
             Skip
           </button>
         )}

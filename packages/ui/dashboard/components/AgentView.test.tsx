@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import type { ReactNode } from 'react'
 import type { OpenAgentEvent } from '../../src/index.js'
 import { ModulesContext, mountedOf, type MountedView } from '../lib/use-modules.js'
+import { questionCard } from '../test-utils.js'
 import type { UiRunProps } from '../module/index.js'
 
 const onAgent = vi.fn(async () => [] as unknown)
@@ -33,7 +34,6 @@ vi.mock('../rpc/control.js', () => ({
   sendBridgeAnswer: vi.fn(async () => null),
   sendBridgeAnswerCancel: vi.fn(async () => null),
   sendStart: vi.fn(async () => null),
-  sendChoice: vi.fn(async () => ({ ok: true })),
 }))
 // The page's parts read the preferences module, whose RPC reads must not fetch a daemon that is
 // not there.
@@ -601,48 +601,39 @@ describe('AgentView: what the top bar opens to', () => {
   })
 })
 
-// The question an agent stopped on is asked above the message box, not in the chat.
+// The question an agent stopped on is asked in the chat, by the card of the module that asks (ask's, a stand-in here).
 describe('a question the agent stopped on', () => {
   const asked = [
     { kind: 'driver', event: { type: 'start', prompt: 'Pick a database' } },
     { kind: 'driver', event: { type: 'text', text: 'Two would do.' } },
-    { kind: 'choice', id: 'await-choices', title: 'Which database?', options: [{ id: 'pg', label: 'Postgres' }, { id: 'lite', label: 'SQLite' }], recommended: 'pg' },
+    { kind: 'choice', id: 'question', title: 'Which database?', options: [{ id: 'pg', label: 'Postgres' }, { id: 'lite', label: 'SQLite' }], recommended: 'pg' },
     { kind: 'end', ok: false, waiting: true },
   ] as OpenAgentEvent[]
+  const withAsk = (ui: ReactNode) => <ModulesContext.Provider value={questionCard().modules}>{ui}</ModulesContext.Provider>
 
   test('it is a card in the chat, the only place it is asked', async () => {
     onAgent.mockResolvedValue(asked)
-    render(view({ events: asked }))
+    render(withAsk(view({ events: asked })))
     const card = await screen.findByRole('region', { name: 'Which database?' })
     expect(screen.getByLabelText('Agent output').contains(card)).toBe(true)
     expect(screen.getAllByRole('region', { name: 'Which database?' })).toHaveLength(1)
-    expect(within(card).getByRole('radio', { name: /Postgres/ })).toBeTruthy()
+    expect(within(card).getByRole('button', { name: /Postgres/ })).toBeTruthy()
   })
 
-  test('an answer in one\'s own words shows in the chat at once, as the question and the words, and the card goes', async () => {
+  test('an answer the card took shows in the chat at once, as the question and the answer, before the agent is going again, and the card goes', async () => {
     onAgent.mockResolvedValue(asked)
-    render(view({ events: asked }))
-    fireEvent.click(await screen.findByRole('radio', { name: 'Other' }))
-    fireEvent.change(screen.getByLabelText('Your own answer'), { target: { value: 'MySQL' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
-    await waitFor(() => expect(sendMessage).toHaveBeenCalledWith('p1', 'You paused to ask: "Which database?". The user chose: MySQL. Continue with that decision.', 'run-1'))
-    await waitFor(() => expect(screen.getByRole('group', { name: 'Your answer' }).textContent).toBe('Which database?MySQL'))
-    expect(screen.queryByRole('region', { name: 'Which database?' })).toBeNull()
-  })
-
-  test('a picked option shows in the chat at once, before the agent is going again', async () => {
-    onAgent.mockResolvedValue(asked)
-    render(view({ events: asked }))
-    fireEvent.click(await screen.findByRole('radio', { name: /SQLite/ }))
-    fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
+    render(withAsk(view({ events: asked })))
+    fireEvent.click(await screen.findByRole('button', { name: /SQLite/ }))
     await waitFor(() => expect(screen.getByRole('group', { name: 'Your answer' }).textContent).toBe('Which database?SQLite'))
     expect(screen.queryByRole('region', { name: 'Which database?' })).toBeNull()
+    // The card's module said it to the run: the page sends no message of its own.
+    expect(sendMessage).not.toHaveBeenCalled()
   })
 
   test('once the agent has gone on, the card is gone', async () => {
     const on = [...asked, { kind: 'driver', event: { type: 'start', prompt: 'MySQL' } }] as OpenAgentEvent[]
     onAgent.mockResolvedValue(on)
-    render(view({ events: on, live: true }))
+    render(withAsk(view({ events: on, live: true })))
     await waitFor(() => expect(screen.getAllByLabelText('Your message')).toHaveLength(2))
     expect(screen.queryByRole('region', { name: 'Which database?' })).toBeNull()
   })

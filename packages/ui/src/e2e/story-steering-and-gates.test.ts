@@ -2,12 +2,14 @@ import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { makeWorld, waitFor, release } from './harness.js'
 import { onWaiting, onAgents, onAgent, onRetainedWorktrees, onAgentWorktree } from '../dashboard-rpc/reads.js'
-import { sendChoice, sendMessage, sendStop, sendDeleteAgent, sendRemoveWorktree } from '../dashboard-rpc/control.js'
+import { sendMessage, sendStop, sendDeleteAgent, sendRemoveWorktree } from '../dashboard-rpc/control.js'
+import { callModule } from '../dashboard-rpc/module-calls.js'
 
-// The steering stories (README.md): everything the user does TO a run — answer its question, say
-// something to it, stop it — reaches the run through its host, which goes through what the run
-// reads: the inbox file in the run's checkout while it works, a resume once it has ended, a signal
-// to the pid on its card. The observable answer comes back through the run's own diary.
+// The steering stories (README.md): everything the user does TO a run — answer its question (through
+// ask's server part), say something to it, stop it — reaches the run through its host, which goes
+// through what the run reads: the inbox file in the run's checkout while it works, a resume once
+// it has ended, a signal to the pid on its card. The observable answer comes back through the run's
+// own diary.
 
 test('answer a waiting run’s question from the Human Queue; the answer resumes the same run (#304/#1455/#1774)', async () => {
   const world = await makeWorld()
@@ -34,13 +36,18 @@ test('answer a waiting run’s question from the Human Queue; the answer resumes
     assert.equal(waiting.detail, 'Which way?')
     assert.equal(waiting.id, `${agentId}:${gate.id}`)
 
-    // A pick that is not one of the question's options is refused, and nothing is resumed.
-    assert.deepEqual(await rpc(sendChoice)(project.id, gate.id, 'no-such-option', agentId), { ok: false, error: 'every pick must be one of the question\'s options' })
+    // The answer is ask's, as its card sends it: a pick that is not one of the question's options
+    // is refused, and nothing is resumed.
+    const answer = async (picked: string) => {
+      const called = await rpc(callModule)(project.id, '@openagt/skill-ask', 'answer', { agentId, question: gate.id, picked })
+      return called.ok ? called.output : called
+    }
+    assert.deepEqual(await answer('no-such-option'), { ok: false, error: 'every pick must be one of the question\'s options' })
 
     // The user picks an option: the host resumes the run with the chosen label, and
     // the same run goes on to done, under the same id, in the same diary.
     const right = gate.options.find(o => o.label === 'Right')!
-    assert.deepEqual(await rpc(sendChoice)(project.id, gate.id, right.id, agentId), { ok: true })
+    assert.deepEqual(await answer(right.id), { ok: true, said: 'You paused to ask: "Which way?". The user chose: Right. Continue with that decision.' })
     assert.deepEqual((await world.hostCalls()).at(-1), { call: 'resume', id: agentId, answer: 'Right' })
     await world.waitAgent(project, agentId, 'done')
     await world.waitRetired(project, agentId)
@@ -49,7 +56,7 @@ test('answer a waiting run’s question from the Human Queue; the answer resumes
 
     // Answered means gone from the Human Queue, and the question no longer open to a second answer.
     assert.equal((await rpc(onWaiting)()).items.some(item => item.words === 'Needs answer' && item.run === agentId), false)
-    assert.deepEqual(await rpc(sendChoice)(project.id, gate.id, right.id, agentId), { ok: false, error: 'that question is no longer open' })
+    assert.deepEqual(await answer(right.id), { ok: false, error: 'that question is no longer open' })
   } finally {
     await world.close()
   }

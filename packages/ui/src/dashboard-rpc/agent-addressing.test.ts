@@ -5,7 +5,8 @@ import type { AddressInfo } from 'node:net'
 import { join } from 'node:path'
 import { mkdtemp, rm, mkdir, writeFile, readFile, realpath, stat } from 'node:fs/promises'
 import { hostname, tmpdir } from 'node:os'
-import { sendStop, sendMessage, sendChoice, sendRemoveWorktree, sendOpenPullRequest } from './control.js'
+import { sendStop, sendMessage, sendRemoveWorktree, sendOpenPullRequest } from './control.js'
+import { callModule } from './module-calls.js'
 import { onRetainedWorktrees, onAgents, onRecentAgents, onAgent } from './reads.js'
 import { asArrived } from './relay-agent.js'
 import { dispatchRelayRpc } from './relay-dispatch.js'
@@ -28,6 +29,17 @@ import { STARTING_AT_MOST_MS } from '../starting.js'
 // registry is never touched.
 
 const QUESTION = { kind: 'question', title: 'Which way?', options: [{ id: 'a', label: 'Left' }, { id: 'b', label: 'Right' }] }
+
+/**
+ * The answer ask's card sends to a run's question, called as the page calls it: done, or why not,
+ * in the words ask's server part or the call said it.
+ */
+async function answer(run: { projectId: string; agentId: string }, question: string, picked: string | string[]): Promise<{ ok: true } | { ok: false; error: string }> {
+  const called = await callModule(run.projectId, '@openagt/skill-ask', 'answer', { agentId: run.agentId, question, picked })
+  if (!called.ok) return called
+  const answered = called.output as { ok: true } | { ok: false; error: string }
+  return answered.ok ? { ok: true } : answered
+}
 
 /** A project with one run in a checkout of its own, and its record unless `record` is false. Returns its ids and the two candidate inbox paths. */
 async function projectWithWorktreeAgent(
@@ -184,7 +196,7 @@ test('a message and an answer to a working run are lines in the inbox of the run
   const ctx = await projectWithWorktreeAgent({ pid: process.pid, host: hostname() }, { diary: [QUESTION] })
   try {
     assert.deepEqual(await sendMessage(ctx.projectId, '  also add tests ', ctx.agentId), { ok: true })
-    assert.deepEqual(await sendChoice(ctx.projectId, 'await-choices', 'b', ctx.agentId), { ok: true })
+    assert.deepEqual(await answer(ctx, 'question', 'b'), { ok: true })
     assert.deepEqual(await entries(ctx.agentInbox), [
       { kind: 'message', text: 'also add tests' },
       { kind: 'answer', question: 'Which way?', answer: 'Right' },
@@ -202,7 +214,7 @@ test('a message and an answer to a working run are lines in the inbox of the run
 test("a message and an answer to an ended run resume it through this computer's host; a run this project has no record of is refused in words", async () => {
   const waiting = await projectWithWorktreeAgent({ pid: 2 ** 22 - 1, host: hostname() }, { status: 'waiting', diary: [QUESTION, { kind: 'ended', status: 'waiting' }] })
   try {
-    assert.deepEqual(await sendChoice(waiting.projectId, 'await-choices', 'a', waiting.agentId), { ok: true })
+    assert.deepEqual(await answer(waiting, 'question', 'a'), { ok: true })
     assert.deepEqual(await sendMessage(waiting.projectId, 'go on', waiting.agentId), { ok: true })
     assert.equal(await readFile(join(waiting.dir, RESUMED_FILE), 'utf8'), `${waiting.agentId}||Left\n${waiting.agentId}|go on|\n`)
     assert.deepEqual(await entries(waiting.agentInbox), [], 'nothing waits in an inbox nobody reads')
@@ -219,20 +231,22 @@ test("a message and an answer to an ended run resume it through this computer's 
   }
 })
 
-test('a question takes one answer: a second, pressed at once in another tab, is refused with the first', async () => {
+test('a question takes one answer: a second, pressed at once in another tab, is refused with the one taken', async () => {
   const asked = { ...QUESTION, at: '2026-07-19T10:01:00.000Z' }
   const ctx = await projectWithWorktreeAgent({ pid: process.pid, host: hostname() }, { diary: [asked] })
   try {
-    const [first, second] = await Promise.all([sendChoice(ctx.projectId, asked.at, 'a', ctx.agentId), sendChoice(ctx.projectId, asked.at, 'b', ctx.agentId)])
-    assert.deepEqual(first, { ok: true })
-    assert.deepEqual(second, { ok: false, error: 'Already answered: Left' })
-    assert.deepEqual(await sendChoice(ctx.projectId, asked.at, 'b', ctx.agentId), { ok: false, error: 'Already answered: Left' })
-    assert.deepEqual(await entries(ctx.agentInbox), [{ kind: 'answer', question: 'Which way?', answer: 'Left' }])
+    // Whichever reaches the run first is taken.
+    const [left, right] = await Promise.all([answer(ctx, asked.at, 'a'), answer(ctx, asked.at, 'b')])
+    const taken = left.ok ? 'Left' : 'Right'
+    assert.deepEqual([left, right].filter(one => one.ok), [{ ok: true }])
+    assert.deepEqual([left, right].find(one => !one.ok), { ok: false, error: `Already answered: ${taken}` })
+    assert.deepEqual(await answer(ctx, asked.at, 'b'), { ok: false, error: `Already answered: ${taken}` })
+    assert.deepEqual(await entries(ctx.agentInbox), [{ kind: 'answer', question: 'Which way?', answer: taken }])
     // The run went on and asked again: the new question is its own, and takes its answer.
     const again = { ...QUESTION, title: 'Which colour?', at: '2026-07-19T10:05:00.000Z' }
     await writeFile(join(worktreePath(ctx.dir, ctx.agentId), OPENAGENT_DIR, `${ctx.agentId}.jsonl`), [asked, { kind: 'said', text: 'Going left.' }, again].map(line => JSON.stringify(line) + '\n').join(''))
-    assert.deepEqual(await sendChoice(ctx.projectId, asked.at, 'b', ctx.agentId), { ok: false, error: 'that question is no longer open' })
-    assert.deepEqual(await sendChoice(ctx.projectId, again.at, 'b', ctx.agentId), { ok: true })
+    assert.deepEqual(await answer(ctx, asked.at, 'b'), { ok: false, error: 'that question is no longer open' })
+    assert.deepEqual(await answer(ctx, again.at, 'b'), { ok: true })
   } finally {
     ctx.restore()
     await rm(ctx.dir, { recursive: true, force: true })
@@ -243,10 +257,10 @@ test('an answer must be to the question the run\'s diary holds open, by its own 
   const ctx = await projectWithWorktreeAgent({ pid: process.pid, host: hostname() }, { diary: [QUESTION, { kind: 'said', text: 'going on' }] })
   try {
     // The agent went on after the question: it is no longer open.
-    assert.deepEqual(await sendChoice(ctx.projectId, 'await-choices', 'a', ctx.agentId), { ok: false, error: 'that question is no longer open' })
+    assert.deepEqual(await answer(ctx, 'question', 'a'), { ok: false, error: 'that question is no longer open' })
     await writeFile(join(worktreePath(ctx.dir, ctx.agentId), OPENAGENT_DIR, `${ctx.agentId}.jsonl`), JSON.stringify(QUESTION) + '\n')
-    assert.deepEqual(await sendChoice(ctx.projectId, 'await-choices', 'zzz', ctx.agentId), { ok: false, error: 'every pick must be one of the question\'s options' })
-    assert.deepEqual(await sendChoice(ctx.projectId, 'await-choices', ['a', 'b'], ctx.agentId), { ok: false, error: 'pick exactly one option' })
+    assert.deepEqual(await answer(ctx, 'question', 'zzz'), { ok: false, error: 'every pick must be one of the question\'s options' })
+    assert.deepEqual(await answer(ctx, 'question', ['a', 'b']), { ok: false, error: 'pick exactly one option' })
     assert.deepEqual(await entries(ctx.agentInbox), [])
   } finally {
     ctx.restore()
@@ -579,7 +593,7 @@ test('a run another computer started, which is no saved machine, is not continue
   try {
     const refused = { ok: false, error: 'This run is on ubuntu-s-1vcpu-2gb-fra1. Continue it there.' }
     assert.deepEqual(await sendMessage(ctx.projectId, 'go on', ctx.agentId), refused)
-    assert.deepEqual(await sendChoice(ctx.projectId, 'await-choices', 'a', ctx.agentId), refused)
+    assert.deepEqual(await answer(ctx, 'question', 'a'), refused)
     await assert.rejects(stat(join(ctx.dir, RESUMED_FILE)), { code: 'ENOENT' })
   } finally {
     ctx.restore()

@@ -290,12 +290,63 @@ export type OptionPlace = keyof OptionPlaces
 /** Something to pick in a shared menu. */
 export type UiOption = { [P in OptionPlace]: { place: P; id: string; order?: number } & OptionPlaces[P] }[OptionPlace]
 
-/** How a kind of content looks: markdown, a mermaid block, a tool call, a question, a screen. */
-export interface UiRender {
-  /** The kind it draws: `markdown`, or a fenced block's language (`mermaid`). */
-  kind: string
-  Render: ComponentType<{ content: string }>
+/** A question as its card asks it: what it asks, its options, and the id its answer names it by. */
+export interface UiQuestion {
+  id: string
+  title: string
+  options: readonly { id: string; label: string; detail?: string; default?: boolean }[]
+  /** The option picked as the card opens, for a question with one pick. */
+  recommended?: string
+  /** Any number of options may be picked, those `default` checked as it opens. */
+  multi?: boolean
 }
+
+/** What a question's card is given: the question, the run that asks it, and how the chat it is in takes the answer. */
+export interface UiQuestionProps {
+  /** The project the run is in: where the card's answer is called. */
+  projectId: string
+  agentId: string
+  question: UiQuestion
+  /** The one question the keys answer: the number keys pick, ⌘ or Ctrl + Enter submits. */
+  active?: boolean
+  /** The question the page opened on: its pick takes the focus as it shows, where the screen is no phone's. */
+  focused?: boolean
+  /** Told what the answer said to the agent, so the chat can show it at once. */
+  onSaid?: ((text: string) => void) | undefined
+  /** Given the focus once the answer is taken, when it was in the card and the screen is no phone's: the message box. */
+  focusNext?: (() => void) | undefined
+  /**
+   * Where the pick goes instead of the module's own answer: the picked option, or the checked
+   * ones. With it the card offers the options alone: a session elsewhere takes no words of the
+   * person's, nor a skip.
+   */
+  send?: ((pick: string | string[]) => Promise<unknown>) | undefined
+}
+
+/** The kinds of content drawn from props of their own rather than from a text, by kind: what each one's `Render` is given. */
+export interface RenderKinds {
+  /** A question a run stopped on, asked in the chat under what the agent said. */
+  question: UiQuestionProps
+}
+
+export type RenderKind = keyof RenderKinds
+
+/** The kinds {@link RenderKinds} names: a fenced block of one of these languages is code, and none of them. */
+export const RENDER_KINDS: readonly RenderKind[] = ['question']
+
+/** How a text of a kind looks: `markdown`, or a fenced block of one language (`mermaid`), its content the block's. */
+export interface UiTextRender {
+  kind: string
+  /**
+   * Its look; none for content the module shows elsewhere: the chat leaves a block of it out of a
+   * message whose question it asks, the card under the message asking it (ask's question block),
+   * and draws it as written anywhere else, so a block nothing came of is seen as it is.
+   */
+  Render?: ComponentType<{ content: string }>
+}
+
+/** How a kind of content looks: markdown, a mermaid block, a tool call, a question, a screen. */
+export type UiRender = { [K in RenderKind]: { kind: K; Render: ComponentType<RenderKinds[K]> } }[RenderKind] | UiTextRender
 
 /** The hooks a module's UI part fills, by name. */
 export interface UiHooks {

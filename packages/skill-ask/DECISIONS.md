@@ -7,6 +7,18 @@ belongs in the code and its tests, not here; a choice made while implementing is
 implementer's judgment, not a decision. An AI writes a bullet only for a pick a person
 already made, and lists it in its pull request; for anything else it proposes and asks.
 
+## The plugin
+- `ask` is a plugin, on until a person switches it off (#2394, decision 18): its skill,
+  reading its block, the question's card in the chat, sending the answer and "Needs
+  answer" are its own. Without it, a run that asks just ends, and the person replies with
+  a message. Picked over the question as the driver's contract and the dashboard's own
+  card, answer and "Needs answer", which every project had.
+
+## The answer
+- An answer is checked against the question the run's diary holds open, and handed over as
+  the option's label. Picked over passing the pick through: only what the agent offered
+  can be answered, and the agent reads words, not ids.
+
 ## Asking the person
 - A skill teaches the agent the `await-choices` block: `ask`, one SKILL.md the agent
   picks by itself when a choice is the person's. Picked over the runner adding a line to

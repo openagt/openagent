@@ -102,9 +102,9 @@ describe('the table holds every key the dashboard takes', () => {
     expect(unmatched).toEqual([])
   })
 
-  test('every shortcut in the table is taken by a handler, but the new line, which the message box’s editor takes itself', () => {
+  test('every shortcut in the table is taken by a handler, but the new line, which the message box’s editor takes itself, and a question’s, which the card of the module that asks takes (ask’s)', () => {
     const all = Object.values(SOURCES).join('\n')
     const untaken = (Object.keys(SHORTCUTS) as ShortcutId[]).filter(id => !new RegExp(`(pressed\\([^)]*|useShortcut\\()'${id}'`).test(all))
-    expect(untaken).toEqual(['newLine'])
+    expect(untaken).toEqual(['newLine', 'pick', 'answer'])
   })
 })

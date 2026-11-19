@@ -28,11 +28,11 @@ already made, and lists it in its pull request; for anything else it proposes an
   on the record, not a state in a process.
 
 ## The question
-- The question is the fenced `await-choices` block OpenAgent's agents already end a
-  turn with, now the driver's contract and parsed here alone; the words that teach an
-  agent when to ask are the caller's. Picked over a format of the driver's own (a second
-  parser and a second thing for agents to learn) and over no format (a question in free
-  text has no options, so nobody-there cannot take the recommended one).
+- The driver says that a turn ended on a question, and which: the one its coding agent's
+  own tool asked, or the one the caller reads in the turn's last message. The block an
+  agent with no such tool writes, and reading it, are the `ask` plugin's (#2394, decision
+  18). Picked over the `await-choices` block as the driver's contract, parsed here: without
+  `ask`, a run that asks just ends, and the person replies with a message.
 
 ## The log
 - The log is written in the run record's shape, a card and a diary, as data the driver

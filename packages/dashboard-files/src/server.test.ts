@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { after, before, test } from 'node:test'
 import type { RunFound } from '@openagt/hooks'
 import type { RpcHost } from '@openagt/hooks/rpc'
-import { memorySettings } from '@openagt/hooks/testing'
+import { memorySettings, rpcHost } from '@openagt/hooks/testing'
 import * as server from './server.js'
 
 const SETTINGS = memorySettings()
@@ -16,7 +16,8 @@ let root: string
 const git = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim()
 
 /** The host for the project at `root` whose runs are known so. */
-const host = (runs: Record<string, RunFound> = {}): RpcHost => ({
+const host = (runs: Record<string, RunFound> = {}): RpcHost =>
+  rpcHost({
   settings: SETTINGS,
   root,
   run: async id => runs[id],

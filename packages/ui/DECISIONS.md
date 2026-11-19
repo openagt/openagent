@@ -654,10 +654,8 @@ already made, and lists it in its pull request; for anything else it proposes an
 - A question the agent waits on is a card in the chat, right under what the agent said, and
   is answered there; the turn's copy and time go under the card. Picked over a panel above
   the message box with an "Asking" line in the chat, which put an empty line and a gap
-  between the agent's words and its question.
-- An answer is checked against the question the run's diary holds open, and handed over as
-  the option's label. Picked over passing the pick through: only what the agent offered
-  can be answered, and the agent reads words, not ids.
+  between the agent's words and its question. The card is the `ask` plugin's (`ui.render`,
+  #2394).
 - Stop is a signal to the process the run's card names, whoever runs it. Picked over a
   message to the run: a stop that has to be read is not a stop.
 - Stop is Claude Code's: a square in the message box, Esc its key, and the turn ends where

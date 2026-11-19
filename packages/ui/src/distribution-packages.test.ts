@@ -70,7 +70,7 @@ test("a project with nothing installed gets its runs, its branches and a reposit
       ['@openagt/store-filesystem', '@openagt/skill-branches', '@openagt/skill-github', '@openagt/skills', '@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/skill-ask', '@openagt/agent-runner'],
       "every project's core packages, and the plugin that starts on; none of the others, none of the computer's",
     )
-    assert.deepEqual((await readProjectModules(root)).map(module => module.package), ['@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/skills'])
+    assert.deepEqual((await readProjectModules(root)).map(module => module.package), ['@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/skill-ask', '@openagt/skills'])
   } finally {
     await rm(root, { recursive: true, force: true })
   }
@@ -80,9 +80,9 @@ test("every project keeps its runs' records through the logs package, and shows 
   const root = await scratch('logs')
   const modules = async (): Promise<string[]> => (await readProjectModules(root)).map(module => module.package)
   try {
-    assert.deepEqual(await modules(), ['@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/skills'])
+    assert.deepEqual(await modules(), ['@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/skill-ask', '@openagt/skills'])
     await switchPlugin(root, 'logs')
-    assert.deepEqual(await modules(), ['@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/skill-logs', '@openagt/skills'])
+    assert.deepEqual(await modules(), ['@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/skill-ask', '@openagt/skill-logs', '@openagt/skills'])
     assert.equal((await providedCommand(root, 'runs'))?.package, '@openagt/skill-logs')
   } finally {
     await rm(root, { recursive: true, force: true })
@@ -105,19 +105,20 @@ test("a plugin's package, its data and its page are a project's once the plugin 
     assert.equal((await providedCommand(root, 'tickets'))?.package, '@openagt/skill-tickets')
     assert.deepEqual(await lookupProvided(other, 'tickets'), {}, "another project's row is its own")
     assert.deepEqual(await lookupProvided(root, 'queue'), {}, 'a plugin that is off stays out')
-    assert.deepEqual(await modules(), ['@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/skill-tickets', '@openagt/skills'])
+    assert.deepEqual(await modules(), ['@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/skill-ask', '@openagt/skill-tickets', '@openagt/skills'])
 
     await switchPlugin(root, 'queue')
     await switchPlugin(root, 'scheduled-agents')
     assert.equal((await providedCommand(root, 'queue'))?.package, '@openagt/skill-queue')
-    assert.deepEqual(await modules(), ['@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/skill-queue', '@openagt/skill-scheduler', '@openagt/skill-tickets', '@openagt/skills'])
+    assert.deepEqual(await modules(), ['@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/skill-ask', '@openagt/skill-queue', '@openagt/skill-scheduler', '@openagt/skill-tickets', '@openagt/skills'])
 
     await switchPlugin(root, 'tickets', false)
     await switchPlugin(root, 'queue', false)
     assert.deepEqual(await lookupProvided(root, 'tickets'), {})
-    assert.deepEqual(await modules(), ['@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/skill-scheduler', '@openagt/skills'])
+    assert.deepEqual(await modules(), ['@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/skill-ask', '@openagt/skill-scheduler', '@openagt/skills'])
     await switchPlugin(root, 'ask', false)
     assert.ok(!(await packagesOf(root)).some(pkg => pkg.name === '@openagt/skill-ask'), 'one that starts on goes off the same way')
+    assert.deepEqual(await modules(), ['@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/skill-scheduler', '@openagt/skills'])
   } finally {
     await rm(root, { recursive: true, force: true })
     await rm(other, { recursive: true, force: true })

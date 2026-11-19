@@ -1,5 +1,5 @@
 import type { ProjectRef } from './project.js'
-import type { RunOptions } from './run.js'
+import type { RunOptions, RunQuestion } from './run.js'
 import type { Settings } from './settings.js'
 import type { Store } from './store.js'
 
@@ -65,10 +65,26 @@ export interface AttentionItem {
   fix?: AttentionFix
 }
 
-/** What a module is asked what needs the person with: the project shown, and the run options picked when there are some. */
+/**
+ * What a module is asked what needs the person with: the project shown, the run options picked
+ * when there are some, and, with a project, its runs that wait on the person.
+ */
 export interface AttentionArgs {
   project?: ProjectRef
   options?: RunOptions
+  /** The project's runs that ended waiting on the person, newest first, each with what it waits on. */
+  waiting?: () => Promise<WaitingRun[]>
+}
+
+/** A run that ended waiting on the person, as a module that says what needs them reads it. */
+export interface WaitingRun {
+  id: string
+  /** What every list names it by: its short name, else what it was asked; none for a run that has neither yet. */
+  name?: string
+  /** When it ended, ISO. */
+  endedAt?: string
+  /** The questions it still waits on, in the order asked: the last is the one it asks now. */
+  questions: RunQuestion[]
 }
 
 /** What needs the person, as one module sees it. */

@@ -2,18 +2,23 @@ import { pathToFileURL } from 'node:url'
 import { isRunId } from '../store/index.js'
 import { cachedPrsForBranch, type LinkedPr } from './pull-requests.js'
 import type { Cached } from './cache.js'
-import type { RunFound, Settings } from '@openagt/hooks'
+import type { InboxLine } from '@openagt/agent-driver'
+import type { RunFound, RunQuestion, Settings } from '@openagt/hooks'
 import { rpcKind, type MergeLookup, type RpcComputerHost, type RpcFunction, type RpcHost, type RpcKind } from '@openagt/hooks/rpc'
 
 // The daemon's side of a module's server part (`@openagt/hooks/rpc`): the host a function is given
-// (the settings; for a project's module, the project's folder and where its runs have their work)
-// and the one way a function is called. Where a run's work is, is its host's to say; what a module
+// (the settings; for a project's module, the project's folder, where its runs have their work, the
+// questions they wait on, and a line said to one) and the one way a function is called. Where a run's work is, is its host's to say; what a module
 // makes of it is its own.
 
-/** What {@link serverHost} reads through. */
+/** What {@link serverHost} reads and says through. */
 export interface ServerHostDeps {
   /** Where a run of the project has its work, as the run's host says it (`RunHost.find`). */
   find: (agentId: string) => Promise<RunFound | undefined>
+  /** The questions a run of the project still waits on, as its events say. */
+  questions: (agentId: string) => Promise<RunQuestion[]>
+  /** Say one line to a run of the project through its host; throws why it is not said. */
+  say: (agentId: string, line: InboxLine) => Promise<void>
   /** The project's pull requests from a branch, as the git host last said; the production reader when absent. */
   prs?: (root: string, branch: string) => Promise<Cached<LinkedPr[]>>
 }
@@ -23,7 +28,7 @@ export function computerHost(settings: Settings): RpcComputerHost {
   return { settings }
 }
 
-/** The host a function called in the project at `root` is given. A string that is no run's id is never asked about. */
+/** The host a function called in the project at `root` is given. A string that is no run's id is never asked about, nor said anything. */
 export function serverHost(root: string, settings: Settings, deps: ServerHostDeps): RpcHost {
   return {
     settings,
@@ -31,6 +36,14 @@ export function serverHost(root: string, settings: Settings, deps: ServerHostDep
     async run(agentId: string): Promise<RunFound | undefined> {
       if (typeof agentId !== 'string' || !isRunId(agentId)) return undefined
       return deps.find(agentId)
+    },
+    async questions(agentId: string): Promise<RunQuestion[]> {
+      if (typeof agentId !== 'string' || !isRunId(agentId)) return []
+      return deps.questions(agentId)
+    },
+    async say(agentId: string, line: InboxLine): Promise<void> {
+      if (typeof agentId !== 'string' || !isRunId(agentId)) throw new Error('unknown session')
+      return deps.say(agentId, line)
     },
     async mergeCommit(branch: string, number: number): Promise<MergeLookup> {
       const read = await (deps.prs ?? cachedPrsForBranch)(root, branch).catch((): Cached<LinkedPr[]> => ({ value: undefined, pending: false }))

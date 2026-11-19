@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { FileLinks, IssueLinks, Markdown } from './Markdown.js'
+import { ModulesContext, mountedOf } from '../lib/use-modules.js'
 
 afterEach(cleanup)
 
@@ -216,6 +217,31 @@ describe('Markdown lists', () => {
   test('the text after a list is not part of it', () => {
     render(<Markdown text={'- one\n- two\nAfter.'} />)
     expect(screen.getByText('After.').closest('li')).toBeNull()
+  })
+})
+
+describe('Markdown fenced blocks a module draws (ui.render)', () => {
+  const Diagram = ({ content }: { content: string }) => <figure aria-label="diagram">{content}</figure>
+  const modules = mountedOf({
+    renders: [
+      { kind: 'mermaid', Render: Diagram, package: 'mermaid', projects: ['p1'] },
+      { kind: 'await-choices', package: 'ask', projects: ['p1'] },
+    ],
+  })
+  const withModules = (text: string) => render(<ModulesContext.Provider value={modules}>{<Markdown text={text} />}</ModulesContext.Provider>)
+
+  test("a block of a language a module draws is the module's, given the block's lines, closed or still being written", () => {
+    withModules('Before.\n\n```mermaid\ngraph TD\n  a --> b\n```\n\nAfter.')
+    expect(screen.getByRole('figure', { name: 'diagram' }).textContent).toBe('graph TD\n  a --> b')
+    expect(document.querySelector('pre')).toBeNull()
+    cleanup()
+    withModules('```mermaid\ngraph')
+    expect(screen.getByRole('figure', { name: 'diagram' }).textContent).toBe('graph')
+  })
+
+  test('a block a module shows elsewhere, where it is written, is code: it is seen as it is', () => {
+    withModules('```await-choices\n{ "title": "Which?" }\n```')
+    expect(document.querySelector('pre')!.textContent).toBe('{ "title": "Which?" }')
   })
 })
 

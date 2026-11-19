@@ -1,6 +1,8 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { createHooks, defineModule, type AttentionItem, type Hooks } from '@openagt/hooks'
+import { createHooks, defineModule, type AttentionItem, type Hooks, type WaitingRun } from '@openagt/hooks'
+import { memoryStore } from '@openagt/hooks/testing'
+import ask from '@openagt/skill-ask/module'
 import { buildWaiting, waitingKey, type Waiting, type WaitingDeps } from './waiting.js'
 import { forgetStartedNames, nameStarted } from '../started-names.js'
 import type { OpenPr } from './pull-requests.js'
@@ -14,6 +16,9 @@ const project = (id: string, path: string): ProjectSummary => ({ id, path, name:
 
 /** A distribution with no module that says anything waits: only the shell's own sources. */
 const noModules = async (): Promise<Hooks> => createHooks([])
+
+/** A distribution where ask is on, as it starts: a run waiting on its question is ask's to say. */
+const withAsk = async (): Promise<Hooks> => createHooks([{ module: defineModule({ name: 'memory', hooks: { 'store.backend': memoryStore() } }) }, { module: ask, on: true }], { onError: () => {} })
 
 /** What waits on the person in `projects`, with the modules of `deps.hooks`, none unless said. */
 const build = (projects: ProjectSummary[], deps: WaitingDeps = {}) => buildWaiting(projects, { hooks: noModules, ...deps })
@@ -105,11 +110,11 @@ const waitingOn = (id: string, title: string): OpenAgentEvent[] => [
   { kind: 'end', ok: false, waiting: true },
 ]
 
-test('build adds an awaiting item for a run waiting on the question it ended on (#636/#1774)', async () => {
+test("a run waiting on the question it ended on is ask's to say, given the project's runs that wait (#636/#1774)", async () => {
   const liveAgents = async (cwd: string): Promise<LiveAgent[]> => (cwd === '/a' ? [live(runningAgentMeta({ status: 'waiting', title: 'Auth store caching' }))] : [])
   const read: string[] = []
   const events = async (cwd: string, agentId: string) => (read.push(`${cwd} ${agentId}`), waitingOn('gate-1', 'Cache the auth store?'))
-  const { items } = await build([project('a', '/a'), project('b', '/b')], { prs: noPrs, liveAgents, events })
+  const { items } = await build([project('a', '/a'), project('b', '/b')], { prs: noPrs, liveAgents, events, hooks: withAsk })
 
   assert.equal(items.length, 1)
   assert.deepEqual(items[0], {
@@ -127,6 +132,41 @@ test('build adds an awaiting item for a run waiting on the question it ended on 
     projectName: 'a',
   })
   assert.deepEqual(read, ['/a r1'], "only the waiting run's diary is read")
+  // Where ask is off, nothing says it: the run just ended, and the person replies with a message.
+  assert.deepEqual((await build([project('a', '/a')], { prs: noPrs, liveAgents, events })).items, [])
+})
+
+test('a module is given the runs of its project that wait, newest first, each with its name, when it ended and the questions it still waits on; their diaries read only when it asks', async () => {
+  const given: WaitingRun[][] = []
+  const asking = (read: boolean) => async (): Promise<Hooks> =>
+    createHooks([{ module: defineModule({ name: 'watcher', hooks: { 'app.attention': async ({ waiting }) => (read && given.push(await waiting!()), []) } }) }], { onError: () => {} })
+  const liveAgents = async (): Promise<LiveAgent[]> => [
+    live(runningAgentMeta({ id: 'r1', status: 'waiting', title: 'Older', startedAt: '2026-07-15T00:00:00Z', endedAt: '2026-07-15T01:00:00Z' })),
+    live(runningAgentMeta({ id: 'r2', status: 'running' })),
+    live(runningAgentMeta({ id: 'r3', status: 'waiting', startedAt: '2026-07-16T00:00:00Z', updatedAt: '2026-07-16T02:00:00Z' })),
+  ]
+  const read: string[] = []
+  const events = async (_: string, agentId: string) => (read.push(agentId), agentId === 'r1' ? waitingOn('gate-1', 'Ship it?') : undefined)
+  await build([project('a', '/a')], { prs: noPrs, liveAgents, events, hooks: asking(true) })
+  assert.deepEqual(given, [
+    [
+      // No name yet, and a diary that cannot be read: it waits on no question it can be asked; it ended when its record last changed.
+      { id: 'r3', endedAt: '2026-07-16T02:00:00Z', questions: [] },
+      { id: 'r1', name: 'Older', endedAt: '2026-07-15T01:00:00Z', questions: [{ id: 'gate-1', title: 'Ship it?', options: [{ id: 'yes', label: 'Yes' }, { id: 'no', label: 'No' }] }] },
+    ],
+  ])
+  read.length = 0
+  await build([project('a', '/a')], { prs: noPrs, liveAgents, events, hooks: asking(false) })
+  assert.deepEqual(read, [], 'a module that does not ask reads no diary')
+})
+
+test('runs that cannot be read are no runs that wait: the module asking about them fails, and its project is not read whole', async () => {
+  const liveAgents = async (): Promise<LiveAgent[]> => {
+    throw new Error('disk gone')
+  }
+  const { items, whole } = await build([project('a', '/a')], { prs: noPrs, liveAgents, hooks: withAsk })
+  assert.deepEqual(items, [])
+  assert.deepEqual(whole, [])
 })
 
 test('a run just started goes by the name asked for it, as the sidebar names it, until its record has one', async () => {
@@ -134,7 +174,7 @@ test('a run just started goes by the name asked for it, as the sidebar names it,
   await new Promise(resolve => setImmediate(resolve))
   try {
     const liveAgents = async (): Promise<LiveAgent[]> => [live(runningAgentMeta({ status: 'waiting', intent: 'please look at how the auth store caches its reads and decide' }))]
-    const { items } = await build([project('a', '/a')], { prs: noPrs, liveAgents, events: async () => waitingOn('gate-1', 'q?') })
+    const { items } = await build([project('a', '/a')], { prs: noPrs, liveAgents, events: async () => waitingOn('gate-1', 'q?'), hooks: withAsk })
     assert.equal(items[0]?.title, 'Auth store caching')
   } finally {
     forgetStartedNames()
@@ -144,12 +184,12 @@ test('a run just started goes by the name asked for it, as the sidebar names it,
 test('build adds no awaiting item for a run that is not waiting, or whose diary shows no open question', async () => {
   const events = async () => waitingOn('gate-1', 'stale')
   const running = async (): Promise<LiveAgent[]> => [live(runningAgentMeta())]
-  assert.deepEqual((await build([project('a', '/a')], { prs: noPrs, liveAgents: running, events })).items, [])
+  assert.deepEqual((await build([project('a', '/a')], { prs: noPrs, liveAgents: running, events, hooks: withAsk })).items, [])
   const waiting = async (): Promise<LiveAgent[]> => [live(runningAgentMeta({ status: 'waiting' }))]
   const answered = async (): Promise<OpenAgentEvent[]> => [...waitingOn('gate-1', 'q?'), { kind: 'driver', event: { type: 'start', prompt: 'Yes' } }]
-  assert.deepEqual((await build([project('a', '/a')], { prs: noPrs, liveAgents: waiting, events: answered })).items, [])
+  assert.deepEqual((await build([project('a', '/a')], { prs: noPrs, liveAgents: waiting, events: answered, hooks: withAsk })).items, [])
   const unreadable = async () => undefined
-  assert.deepEqual((await build([project('a', '/a')], { prs: noPrs, liveAgents: waiting, events: unreadable })).items, [])
+  assert.deepEqual((await build([project('a', '/a')], { prs: noPrs, liveAgents: waiting, events: unreadable, hooks: withAsk })).items, [])
 })
 
 test('build surfaces PRs and awaiting runs together, newest first', async () => {
@@ -157,7 +197,7 @@ test('build surfaces PRs and awaiting runs together, newest first', async () => 
     cwd === '/a' ? [{ number: 5, title: 'pr', url: 'u5', isDraft: false, createdAt: '2026-07-10T00:00:00Z' }] : []
   const liveAgents = async (cwd: string): Promise<LiveAgent[]> =>
     cwd === '/b' ? [live(runningAgentMeta({ status: 'waiting', updatedAt: '2026-07-16T00:00:00Z' }))] : []
-  const { items } = await build([project('a', '/a'), project('b', '/b')], { prs, liveAgents, events: async () => waitingOn('g', 'q?') })
+  const { items } = await build([project('a', '/a'), project('b', '/b')], { prs, liveAgents, events: async () => waitingOn('g', 'q?'), hooks: withAsk })
   assert.deepEqual(items.map(i => i.words), ['Needs answer', 'Needs merge']) // the question is newer
 })
 
@@ -165,10 +205,10 @@ test("an item's key is its project, its module, and its own id there, else what 
   const item = (over: Partial<Waiting>): Waiting => ({ kind: 'waiting', module: 'github', scope: 'project', words: 'Needs merge', projectId: 'a', projectName: 'a', ...over })
   assert.equal(waitingKey(item({ id: 'https://gh/pr/1' })), 'a:github:https://gh/pr/1')
   assert.equal(waitingKey(item({ module: 'tickets', scope: 'run', run: 'r1' })), 'a:tickets:run:r1')
-  // Every agent's first gate is `await-choices`, so two agents parked in one project would share
+  // A question with no time of its own has the id `question` in every run, so two agents parked in one project would share
   // an identity without the run in the question's id — and the dedupe would announce only one of them.
   const parked = item({ module: 'ask', scope: 'run' })
-  assert.notEqual(waitingKey({ ...parked, run: 'r1', id: 'r1:await-choices' }), waitingKey({ ...parked, run: 'r2', id: 'r2:await-choices' }))
+  assert.notEqual(waitingKey({ ...parked, run: 'r1', id: 'r1:question' }), waitingKey({ ...parked, run: 'r2', id: 'r2:question' }))
 })
 
 // #860: a finished agent whose branch still holds unpushed, unmerged commits.

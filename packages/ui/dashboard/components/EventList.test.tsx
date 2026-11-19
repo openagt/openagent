@@ -1,6 +1,10 @@
 import type { OpenAgentEvent } from '../../src/index.js'
+import type { ReactElement, ReactNode } from 'react'
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render as rendered, screen, waitFor, within } from '@testing-library/react'
+import { continuationPrompt } from '@openagt/agent-driver/question'
+import { ModulesContext } from '../lib/use-modules.js'
+import { questionCard } from '../test-utils.js'
 
 /** What a reader gets of an element: its words less the ones fading out of it (CrossFade). */
 const shownText = (el: Element): string | null => {
@@ -12,9 +16,21 @@ const shownText = (el: Element): string | null => {
 // The session line names the model as the daemon lists it; no daemon here, so the list never answers.
 vi.mock('../rpc/models.js', () => ({ onModels: () => new Promise(() => {}) }))
 
-const { EventList, askedReplies, quietEnds, withEarlyQuestion, withoutQuestionBlock } = await import('./EventList.js')
+const { EventList, askedReplies, quietEnds, replyBeforeEnd } = await import('./EventList.js')
 
-afterEach(cleanup)
+// Every list here is in a page where ask is on, as the distribution starts it: its card asks a
+// question (a stand-in, which keeps what it was given), and the chat leaves its block out of the
+// message whose question the card asks.
+let card = questionCard()
+const render = (ui: ReactElement) => {
+  const { modules } = card
+  return rendered(ui, { wrapper: ({ children }: { children: ReactNode }) => <ModulesContext.Provider value={modules}>{children}</ModulesContext.Provider> })
+}
+
+afterEach(() => {
+  cleanup()
+  card = questionCard()
+})
 
 // The conversation view: the user's prompt is a grey box on the right, the agent's reply renders
 // as Markdown, no row wears a label saying its kind, and a long prompt is cut short behind "Show more".
@@ -370,20 +386,26 @@ describe('EventList question and answer', () => {
   const asked: OpenAgentEvent[] = [
     { kind: 'driver', event: { type: 'start', prompt: 'Ask me which color' } },
     { kind: 'driver', event: { type: 'text', text: 'Which color do you prefer?\n\n```await-choices\n{ "title": "Which color do you prefer?" }\n```' } },
-    { kind: 'choice', id: 'await-choices', title: 'Which color do you prefer?', options: [{ id: 'opt:0', label: 'Red' }, { id: 'opt:1', label: 'Blue' }] },
+    { kind: 'choice', id: 'question', title: 'Which color do you prefer?', options: [{ id: 'opt:0', label: 'Red' }, { id: 'opt:1', label: 'Blue' }] },
     { kind: 'end', ok: false, waiting: true },
   ] as OpenAgentEvent[]
   const resumed = (prompt: string): OpenAgentEvent[] =>
     [...asked, { kind: 'driver', event: { type: 'start', prompt } }, { kind: 'driver', event: { type: 'text', text: 'Red it is.' } }, { kind: 'end', ok: true }] as OpenAgentEvent[]
 
-  test('a question that waits is its card in the chat, with its choices, answered there', () => {
+  test("a question that waits is the card of the module that asks, in the chat, with its choices, answered there", () => {
     render(<EventList events={asked} projectId="p1" agentId="r1" stick={false} />)
-    const card = screen.getByRole('region', { name: 'Which color do you prefer?' })
-    expect(within(card).getByRole('radio', { name: 'Red' })).toBeTruthy()
-    expect(within(card).getByRole('radio', { name: 'Blue' })).toBeTruthy()
-    expect(within(card).getByRole('button', { name: /Submit/ })).toBeTruthy()
-    // The keys are the newest question's: the button promises one.
-    expect(within(card).getByRole('button', { name: /Submit/ }).textContent).toMatch(/^Submit(⌘|Ctrl)↵$/)
+    const region = screen.getByRole('region', { name: 'Which color do you prefer?' })
+    expect(within(region).getByRole('button', { name: 'Red' })).toBeTruthy()
+    expect(within(region).getByRole('button', { name: 'Blue' })).toBeTruthy()
+    // The card answers the run, in its project; the keys are the newest question's.
+    expect(card.given.at(-1)).toMatchObject({ projectId: 'p1', agentId: 'r1', active: true, question: { id: 'question', title: 'Which color do you prefer?' } })
+  })
+
+  test('where no module draws questions, a question that waits is said in words, and the person replies with a message', () => {
+    rendered(<EventList events={asked} projectId="p1" agentId="r1" stick={false} />)
+    const region = screen.getByRole('region', { name: 'Which color do you prefer?' })
+    expect(within(region).getByText('Red')).toBeTruthy()
+    expect(within(region).queryByRole('button')).toBeNull()
   })
 
   test('under a question the run waits on, the live line says nothing: the card is what waits', () => {
@@ -468,7 +490,7 @@ describe('EventList question and answer', () => {
   test('an agent that asks twice under one id: each answered question is said once, by its box', () => {
     const second: OpenAgentEvent[] = [
       ...resumed('You paused to ask: "Which color do you prefer?". The user chose: Red. Continue with that decision.'),
-      { kind: 'choice', id: 'await-choices', title: 'Which size?', options: [{ id: 'opt:0', label: 'Small' }] },
+      { kind: 'choice', id: 'question', title: 'Which size?', options: [{ id: 'opt:0', label: 'Small' }] },
       { kind: 'end', ok: false, waiting: true },
       { kind: 'driver', event: { type: 'start', prompt: 'You paused to ask: "Which size?". The user chose: Small. Continue with that decision.' } },
     ] as OpenAgentEvent[]
@@ -700,9 +722,8 @@ describe('EventList choice rows', () => {
   const resolved = (id = 'gate-1'): OpenAgentEvent => ({ kind: 'choice-resolved', id, picked: 'work', by: 'user' })
 
   test('a turn that ended on a question the person answered has no copy and time under what was said before it: the answer stands where the card was', async () => {
-    const { answerPrompt } = await import('../lib/answered-question.js')
     const said: OpenAgentEvent = { kind: 'driver', event: { type: 'text', text: 'Here is the plan.' } }
-    const answered: OpenAgentEvent = { kind: 'driver', event: { type: 'start', prompt: answerPrompt('Start the next backlog item?', 'Work on it') } }
+    const answered: OpenAgentEvent = { kind: 'driver', event: { type: 'start', prompt: continuationPrompt('Start the next backlog item?', 'Work on it') } }
     const first: OpenAgentEvent = { kind: 'driver', event: { type: 'start', prompt: 'Plan the next item' } }
     render(<EventList events={[first, said, gate(), answered, { kind: 'driver', event: { type: 'text', text: 'On it.' } }]} stick={false} projectId="p1" agentId="r1" />)
     expect(screen.getByRole('group', { name: 'Your answer' }).textContent).toBe('Start the next backlog item?Work on it')
@@ -711,11 +732,10 @@ describe('EventList choice rows', () => {
   })
 
   test('an answer just given stands where the card was, and the agent\'s own line of it lands in that same place: nothing comes at the end and goes back up', async () => {
-    const { answerPrompt } = await import('../lib/answered-question.js')
     const first: OpenAgentEvent = { kind: 'driver', event: { type: 'start', prompt: 'Plan the next item' } }
     const said: OpenAgentEvent = { kind: 'driver', event: { type: 'text', text: 'Here is the plan.' } }
     const waiting: OpenAgentEvent = { kind: 'end', ok: false, waiting: true }
-    const answer = answerPrompt('Start the next backlog item?', 'Work on it')
+    const answer = continuationPrompt('Start the next backlog item?', 'Work on it')
     const order = () => [...document.querySelectorAll('[data-message-id]')].map(row => (row.querySelector('[aria-label="Your answer"]') ? 'answer' : (row.textContent ?? '').slice(0, 9)))
     const { rerender } = render(<EventList events={[first, said, gate(), waiting]} sending={answer} stick={false} projectId="p1" agentId="r1" />)
     expect(screen.queryByRole('region', { name: 'Start the next backlog item?' })).toBeNull()
@@ -736,7 +756,7 @@ describe('EventList choice rows', () => {
     const rows = document.querySelectorAll('[data-message-id]')
     expect(rows).toHaveLength(2)
     expect(within(rows[1] as HTMLElement).getByRole('region', { name: 'Start the next backlog item?' })).toBeTruthy()
-    expect(within(rows[1] as HTMLElement).getByRole('radio', { name: /Work on it/ })).toBeTruthy()
+    expect(within(rows[1] as HTMLElement).getByRole('button', { name: /Work on it/ })).toBeTruthy()
   })
 
   test('with no agent to answer to, an open gate is its text', () => {
@@ -1089,7 +1109,7 @@ describe('EventList replies a question follows', () => {
   const long = 'The plan is saved. '.repeat(10)
   const prompt: OpenAgentEvent = { kind: 'driver', event: { type: 'start', prompt: 'plan it' } }
   const reply = (text: string): OpenAgentEvent => ({ kind: 'driver', event: { type: 'text', text } })
-  const choice = { kind: 'choice', id: 'await-choices', title: 'Start?', options: [{ id: 'a', label: 'Approve' }] } as OpenAgentEvent
+  const choice = { kind: 'choice', id: 'question', title: 'Start?', options: [{ id: 'a', label: 'Approve' }] } as OpenAgentEvent
 
   test('the reply a question follows is the last reply before the question in its turn', () => {
     const early = reply(long + 'early')
@@ -1105,7 +1125,7 @@ describe('EventList replies a question follows', () => {
 describe('EventList hides the block a question is written in', () => {
   const prompt: OpenAgentEvent = { kind: 'driver', event: { type: 'start', prompt: 'ask me' } }
   const reply = (text: string): OpenAgentEvent => ({ kind: 'driver', event: { type: 'text', text } })
-  const choice = { kind: 'choice', id: 'await-choices', title: 'Which color?', options: [{ id: 'a', label: 'Blue' }] } as OpenAgentEvent
+  const choice = { kind: 'choice', id: 'question', title: 'Which color?', options: [{ id: 'a', label: 'Blue' }] } as OpenAgentEvent
   const block = '```await-choices\n{ "title": "Which color?", "options": [{ "label": "Blue" }] }\n```'
 
   test('the reply a question follows shows its words and not the block', () => {
@@ -1120,46 +1140,37 @@ describe('EventList hides the block a question is written in', () => {
     expect(screen.queryByText('agent')).toBeNull()
   })
 
-  test('a block no question came of stays as written: it is how the reader sees it did not parse', () => {
+  test('a block no question came of stays as written, once its turn is over: it is how the reader sees it did not parse', () => {
     const broken = '```await-choices\n{ "title": "Which color?", "options": [ }\n```'
-    render(<EventList events={[prompt, reply(`Pick one.\n\n${broken}`)]} stick={false} />)
+    render(<EventList events={[prompt, reply(`Pick one.\n\n${broken}`), { kind: 'end', ok: true } as OpenAgentEvent]} stick={false} />)
     expect(screen.getByText(/"title"/)).toBeTruthy()
   })
 
-  test('a pick made on the question as it is written stays once the run says it, under an id of its own', () => {
-    const two = '```await-choices\n{ "title": "Which color?", "options": [{ "label": "Red" }, { "label": "Blue" }] }\n```'
-    const asking = reply(`Pick one.\n\n${two}`)
-    const { rerender } = render(<EventList events={[prompt, asking]} projectId="p1" agentId="r1" stick={false} />)
-    fireEvent.click(screen.getByRole('radio', { name: 'Blue' }))
-    const said = { kind: 'choice', id: '2026-11-15T10:00:00.000Z', at: '2026-11-15T10:00:00.000Z', title: 'Which color?', options: [{ id: 'opt:0', label: 'Red' }, { id: 'opt:1', label: 'Blue' }] } as OpenAgentEvent
-    rerender(<EventList events={[prompt, asking, said]} projectId="p1" agentId="r1" stick={false} />)
-    expect(screen.getByRole('radio', { name: 'Blue' }).getAttribute('aria-checked')).toBe('true')
-  })
-
-  test('a last message that is a question is one the moment it is written, before the run says it', () => {
+  test("the last message of a turn not over yet leaves its block out: the run says the question it asks a moment later", () => {
     const asking = reply(`Pick one.\n\n${block}`)
-    const early = withEarlyQuestion([prompt, asking])
-    // The question the run will say, under the id it will say it with.
-    expect(early).toEqual([prompt, asking, { kind: 'choice', id: 'await-choices', title: 'Which color?', options: [{ id: 'opt:0', label: 'Blue' }] }])
     render(<EventList events={[prompt, asking]} stick={false} />)
     expect(screen.getByText('Pick one.')).toBeTruthy()
     expect(screen.queryByText(/"title"/)).toBeNull()
-    // Once the run said it, it is said once.
-    expect(withEarlyQuestion([prompt, asking, choice])).toEqual([prompt, asking, choice])
-    // Things that only count or time the turn do not hide it; an empty message after it neither.
+    // Things that only count or time the turn do not end it; an empty message after it neither.
     const usage = { kind: 'usage', costUsd: 0.1 } as OpenAgentEvent
-    expect(withEarlyQuestion([prompt, asking, usage, reply(' ')])).toHaveLength(5)
+    expect(replyBeforeEnd([prompt, asking, usage, reply(' ')])).toBe(asking)
   })
 
-  test('a block the agent went on from, or a turn that ended without asking, is no question', () => {
+  test('a block the agent went on from, or one of a turn that is over, is no question to come', () => {
     const asking = reply(block)
     const step: OpenAgentEvent = { kind: 'driver', event: { type: 'action', label: 'Bash', detail: 'ls' } }
-    expect(withEarlyQuestion([prompt, asking, step])).toHaveLength(3)
-    expect(withEarlyQuestion([prompt, asking, { kind: 'end', ok: true } as OpenAgentEvent])).toHaveLength(3)
+    expect(replyBeforeEnd([prompt, asking, step])).toBeUndefined()
+    expect(replyBeforeEnd([prompt, asking, { kind: 'end', ok: true } as OpenAgentEvent])).toBeUndefined()
     // A subagent's message is not the agent's last word.
-    expect(withEarlyQuestion([prompt, { kind: 'driver', event: { type: 'text', text: block, subagent: 'toolu_1' } }])).toHaveLength(2)
-    // Nor a question of a turn before.
-    expect(withEarlyQuestion([prompt, asking, choice, { kind: 'driver', event: { type: 'start', prompt: 'Blue' } } as OpenAgentEvent])).toHaveLength(4)
+    expect(replyBeforeEnd([prompt, { kind: 'driver', event: { type: 'text', text: block, subagent: 'toolu_1' } }])).toBeUndefined()
+    // Once the question came, the message is the one it follows; nor is one of a turn before.
+    expect(replyBeforeEnd([prompt, asking, choice])).toBeUndefined()
+    expect(replyBeforeEnd([prompt, asking, choice, { kind: 'driver', event: { type: 'start', prompt: 'Blue' } } as OpenAgentEvent])).toBeUndefined()
+  })
+
+  test('where ask is off, no block is left out: nothing asks its question', () => {
+    rendered(<EventList events={[prompt, reply(`Pick one, please.\n\n${block}\n`), choice]} stick={false} />)
+    expect(screen.getByText(/"title"/)).toBeTruthy()
   })
 
   test('the message being written never shows the block, closed or not, and the words before it stay', () => {
@@ -1169,7 +1180,6 @@ describe('EventList hides the block a question is written in', () => {
     expect(screen.queryByText(/"title"/)).toBeNull()
     rerender(<EventList events={[prompt]} writing={'```await-choices\n{ "title": "Whi'} working stick={false} />)
     expect(screen.queryByText(/"title"/)).toBeNull()
-    expect(withoutQuestionBlock(`a\n${block}\nb`)).toBe('a\n\nb')
   })
 })
 

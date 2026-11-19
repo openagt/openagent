@@ -91,15 +91,15 @@ test('the dashboard\'s modules are every registered project\'s, one per package,
 
     await withDistribution(dir, [...COMPUTER, '@openagt/store-filesystem', '@openagt/dashboard-changes', '@openagt/dashboard-files', 'logs', 'plain', 'queue'], async () => {
       await switchOn(b, 'queue')
-      // The computer's modules (Devices, the accounts, the Human Queue, Profile) come first, and are no project's. Then the ones every project has, from the first; then queue, which only the project it is on in has.
+      // The computer's modules (Devices, the accounts, the Human Queue, Profile) come first, and are no project's. Then the ones every project has, from the first, which the sessions with no project have too; then queue, which only the project it is on in has.
       assert.deepEqual(await listed(), [
         { package: '@openagt/dashboard-devices', url: '/_computer-modules/%40openagt%2Fdashboard-devices/dashboard.js', projects: [], computer: true },
         { package: '@openagt/skill-account-rotation', url: '/_computer-modules/%40openagt%2Fskill-account-rotation/dashboard.js', projects: [], computer: true },
         { package: '@openagt/ui-card-waiting', url: '/_computer-modules/%40openagt%2Fui-card-waiting/dashboard.js', projects: [], computer: true },
         { package: '@openagt/user-info', url: '/_computer-modules/%40openagt%2Fuser-info/dashboard.js', projects: [], computer: true },
-        { package: '@openagt/dashboard-changes', url: `/_modules/${projectId(a)}/%40openagt%2Fdashboard-changes/dashboard.js`, projects: [projectId(a), projectId(b)] },
-        { package: '@openagt/dashboard-files', url: `/_modules/${projectId(a)}/%40openagt%2Fdashboard-files/dashboard.js`, projects: [projectId(a), projectId(b)] },
-        { package: 'logs', url: `/_modules/${projectId(a)}/logs/w.js`, projects: [projectId(a), projectId(b)] },
+        { package: '@openagt/dashboard-changes', url: `/_modules/${projectId(a)}/%40openagt%2Fdashboard-changes/dashboard.js`, projects: [projectId(a), projectId(b)], sessions: true },
+        { package: '@openagt/dashboard-files', url: `/_modules/${projectId(a)}/%40openagt%2Fdashboard-files/dashboard.js`, projects: [projectId(a), projectId(b)], sessions: true },
+        { package: 'logs', url: `/_modules/${projectId(a)}/logs/w.js`, projects: [projectId(a), projectId(b)], sessions: true },
         { package: 'queue', url: `/_modules/${projectId(b)}/queue/w.js`, projects: [projectId(b)] },
       ])
 
@@ -116,7 +116,7 @@ test('the dashboard\'s modules are every registered project\'s, one per package,
   }
 })
 
-test('with no project added, the computer\'s modules are there and run their own commands; no other package runs so, and none of them runs in a project', async () => {
+test("with no project added, the computer's modules are there and run their own commands, and the sessions with no project have theirs, OpenAgent's own copy; no other package runs so, and none of the computer's runs in a project", async () => {
   const dir = await realpath(await mkdtemp(join(tmpdir(), 'openagent-modules-rpc-')))
   const previous = process.env.XDG_CONFIG_HOME
   process.env.XDG_CONFIG_HOME = join(dir, 'cfg')
@@ -132,6 +132,8 @@ test('with no project added, the computer\'s modules are there and run their own
         { package: '@openagt/skill-account-rotation', url: '/_computer-modules/%40openagt%2Fskill-account-rotation/dashboard.js', projects: [], computer: true },
         { package: '@openagt/ui-card-waiting', url: '/_computer-modules/%40openagt%2Fui-card-waiting/dashboard.js', projects: [], computer: true },
         { package: '@openagt/user-info', url: '/_computer-modules/%40openagt%2Fuser-info/dashboard.js', projects: [], computer: true },
+        { package: '@openagt/dashboard-files', url: '/_brought-modules/%40openagt%2Fdashboard-files/dashboard.js', projects: [], sessions: true },
+        { package: 'queue', url: '/_brought-modules/queue/w.js', projects: [], sessions: true },
       ])
       // The door's own command, answering what it keeps for this computer: nobody is in, and it is shut.
       assert.deepEqual(await runComputerCommand('@openagt/dashboard-devices', ['status']), { ok: true, output: { on: false, listening: false, devices: [], lines: [], persons: [] } })

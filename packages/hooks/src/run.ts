@@ -1,4 +1,4 @@
-import type { Driver, DriverEvent, DriverReadiness, InboxLine } from '@openagt/agent-driver'
+import type { Driver, DriverEvent, DriverReadiness, InboxLine, Question } from '@openagt/agent-driver'
 import type { ProjectRef } from './project.js'
 import type { Settings } from './settings.js'
 import type { Store } from './store.js'
@@ -153,12 +153,34 @@ export interface RunContext {
   readonly env: Record<string, string>
   /** What each module found out about the run (github's pull request, git-branches' branch): kept on its record. */
   readonly facts: RunFacts
+  /**
+   * How the run asks the person, set before `RunOrder.RUN` by the module that asks (ask): a turn
+   * that ends on a question then ends the run `waiting`, its question waiting for the answer that
+   * resumes it. Without it, a turn that asks just ends the run: the person replies with a message.
+   */
+  asking?: RunAsking
   /** How the run ended: set by the agent's turns, read by the finishing steps. */
   outcome?: RunOutcome
   /** Aborted when the run is asked to stop. */
   readonly signal: AbortSignal
   readonly store: Store
   readonly settings: Settings
+}
+
+/** How a run asks the person: what the module that asks set on its context (`RunContext.asking`). */
+export interface RunAsking {
+  /**
+   * The question a turn's last message ends on, written the module's way (ask's `await-choices`
+   * block); none for a message that asks nothing. A question the agent asked with a tool of its
+   * own is the turn's already.
+   */
+  questionIn(text: string): Question | undefined
+}
+
+/** A question a run stopped on, as its record holds it: the agent's question, with the id an answer names it by. */
+export interface RunQuestion extends Question {
+  /** Its id in the run: the time it was asked, so a run's second question is not its first. */
+  id: string
 }
 
 /** A step of the run pipeline. */

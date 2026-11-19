@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render as renderAlone, screen, waitFor } from '@testing-library/react'
+import type { ReactElement } from 'react'
 import type { OpenAgentEvent } from '../../src/index.js'
+import { ModulesContext } from '../lib/use-modules.js'
+import { questionCard } from '../test-utils.js'
 
 // The component reads the bridge over three RPCs; unmocked they fetch `/_rpc/<name>`, which no
 // daemon answers behind jsdom, so each read hangs or throws instead of returning a fixture.
@@ -10,8 +13,7 @@ const onBridgeAnswer = vi.fn(async () => null as unknown)
 vi.mock('../rpc/reads.js', () => ({ onBridgeQuestion, onBridgeEvents, onBridgeAnswer }))
 const sendBridgeAnswer = vi.fn(async () => ({ ok: true }) as { ok: boolean; error?: string })
 const sendBridgeAnswerCancel = vi.fn(async () => undefined)
-const sendChoice = vi.fn(async () => undefined)
-vi.mock('../rpc/control.js', () => ({ sendBridgeAnswer, sendBridgeAnswerCancel, sendChoice }))
+vi.mock('../rpc/control.js', () => ({ sendBridgeAnswer, sendBridgeAnswerCancel }))
 
 const { CloudAgentNotice, CloudMirrorRow, scrubMirrorText } = await import('./CloudAgentNotice.js')
 
@@ -26,8 +28,16 @@ afterEach(() => {
   sendBridgeAnswer.mockReset()
   sendBridgeAnswer.mockResolvedValue({ ok: true })
   sendBridgeAnswerCancel.mockReset()
-  sendChoice.mockReset()
 })
+
+/** The card of the module that asks, a stand-in, on in project `p`: what it was given is `card.given`. */
+let card = questionCard(['p'])
+afterEach(() => {
+  card = questionCard(['p'])
+})
+const render = (ui: ReactElement) => renderAlone(<ModulesContext.Provider value={card.modules}>{ui}</ModulesContext.Provider>)
+/** What the card was last given. */
+const lastGiven = () => card.given.at(-1)!
 
 const URL = 'https://claude.ai/code/session_01ABCdefGHIjklMNO?from=cli&m=0'
 const handOff = (url = URL): OpenAgentEvent => ({ kind: 'driver', event: { type: 'action', label: `cloud ${url}` } })
@@ -77,29 +87,31 @@ describe('CloudAgentNotice (#610)', () => {
 })
 
 describe('the parked question the bridge reports (#1237)', () => {
-  test('shows the question and its options once the bridge has one', async () => {
-    onBridgeQuestion.mockResolvedValue(QUESTION)
-    render(<CloudAgentNotice target="web" events={[handOff()]} projectId="p" agentId="a" />)
-    await waitFor(() => expect(screen.getByText(QUESTION.title)).toBeTruthy())
-    // The card a local agent's question gets (#1554), with the options only: the bridge types
-    // nothing but the question's own labels, so there is no "Other" row and no Skip.
-    expect(screen.getByRole('region', { name: QUESTION.title })).toBeTruthy()
-    expect(screen.getByRole('radio', { name: /One page, both routes/ }).textContent).toBe('One page, both routesRecommendedlists every project')
-    expect(screen.getByRole('radio', { name: /Cross-project only/ }).getAttribute('aria-checked')).toBe('false')
-    expect(screen.queryByRole('radio', { name: 'Other' })).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Skip' })).toBeNull()
-    expect(screen.getByRole('button', { name: 'Submit' })).toBeTruthy()
-  })
-
-  test('its number keys are not bound: they belong to a question in the chat', async () => {
+  test("shows the question once the bridge has one, as the card of the module that asks, every pick going through the bridge", async () => {
     onBridgeQuestion.mockResolvedValue(QUESTION)
     render(<CloudAgentNotice target="web" events={[handOff()]} projectId="p" agentId="a" />)
     await screen.findByRole('region', { name: QUESTION.title })
-    fireEvent.keyDown(window, { key: '2' })
-    expect(screen.getByRole('radio', { name: /Cross-project only/ }).getAttribute('aria-checked')).toBe('false')
-    fireEvent.keyDown(window, { key: 'Enter', ctrlKey: true })
-    expect(sendBridgeAnswer).not.toHaveBeenCalled()
-    expect(screen.queryByText(/Number keys pick/)).toBeNull()
+    // The card a local agent's question gets (#1554), with the options only: the bridge types
+    // nothing but the question's own labels, so the card is given where they go.
+    const given = lastGiven()
+    expect(given.question.options.map(option => [option.id, option.label, option.detail])).toEqual([
+      ['One page, both routes', 'One page, both routes', 'lists every project'],
+      ['Cross-project only', 'Cross-project only', undefined],
+    ])
+    expect(given.question.recommended).toBe('One page, both routes')
+    expect(given.send).toBeTypeOf('function')
+    // Not the question the keys answer: they belong to a question in the chat, and to the message box.
+    expect(given.active).toBeFalsy()
+  })
+
+  test("where no module that asks is on in the project, the question is in words: it is answered in the session", async () => {
+    onBridgeQuestion.mockResolvedValue(QUESTION)
+    card = questionCard(['another-project'])
+    render(<CloudAgentNotice target="web" events={[handOff()]} projectId="p" agentId="a" />)
+    const asked = await screen.findByRole('region', { name: QUESTION.title })
+    expect(asked.textContent).toBe('Where should the tickets page live?One page, both routes — lists every projectCross-project only')
+    expect(card.given).toEqual([])
+    expect(screen.getByRole('link', { name: /Answer it in the session/i })).toBeTruthy()
   })
 
   test('is asked for by cloud session id, which is what the bridge can see', async () => {
@@ -137,14 +149,11 @@ describe('answering from the dashboard (#1237)', () => {
     state: 'queued' as const,
   }
 
-  test('a picked option goes through the bridge on Submit, never the local answer path (#1554)', async () => {
+  test('a picked option goes through the bridge, by its label (#1554)', async () => {
     onBridgeQuestion.mockResolvedValue(QUESTION)
     render(<CloudAgentNotice target="web" events={[handOff()]} projectId="p" agentId="a" />)
-    fireEvent.click(await screen.findByRole('radio', { name: /Cross-project only/i }))
-    expect(sendBridgeAnswer).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Cross-project only' }))
     await waitFor(() => expect(sendBridgeAnswer).toHaveBeenCalledWith('session_01ABCdefGHIjklMNO', ['Cross-project only']))
-    expect(sendChoice).not.toHaveBeenCalled()
   })
 
   test('a multi-select posts the checked subset as labels (#1554)', async () => {
@@ -156,17 +165,17 @@ describe('answering from the dashboard (#1237)', () => {
     })
     render(<CloudAgentNotice target="web" events={[handOff()]} projectId="p" agentId="a" />)
     await screen.findByRole('region', { name: QUESTION.title })
-    fireEvent.click(screen.getByRole('checkbox', { name: /Tests/ }))
-    fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
-    await waitFor(() => expect(sendBridgeAnswer).toHaveBeenCalledWith('session_01ABCdefGHIjklMNO', ['Lint', 'Tests']))
+    expect(lastGiven().question.multi).toBe(true)
+    await lastGiven().send!(['Lint', 'Tests'])
+    expect(sendBridgeAnswer).toHaveBeenCalledWith('session_01ABCdefGHIjklMNO', ['Lint', 'Tests'])
   })
 
-  test('a refused pick shows the daemon\'s reason on the panel', async () => {
+  test("a refused pick throws the daemon's reason, which the card shows", async () => {
     onBridgeQuestion.mockResolvedValue(QUESTION)
     sendBridgeAnswer.mockResolvedValue({ ok: false, error: 'that session has no parked question' })
     render(<CloudAgentNotice target="web" events={[handOff()]} projectId="p" agentId="a" />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Submit' }))
-    await waitFor(() => expect(screen.getByText(/that session has no parked question/)).toBeTruthy())
+    await screen.findByRole('region', { name: QUESTION.title })
+    await expect(lastGiven().send!('Cross-project only')).rejects.toThrow('that session has no parked question')
   })
 
   test('a queued answer shows as on its way, and can still be withdrawn', async () => {
@@ -175,7 +184,7 @@ describe('answering from the dashboard (#1237)', () => {
     render(<CloudAgentNotice target="web" events={[handOff()]} projectId="p" agentId="a" />)
     await waitFor(() => expect(screen.getByText(/Sending .Cross-project only./i)).toBeTruthy())
     // The question card yields to the sending state, so a second pick cannot race the first.
-    expect(screen.queryByText(QUESTION.title)).toBeNull()
+    expect(screen.queryByRole('region', { name: QUESTION.title })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: /Cancel/i }))
     await waitFor(() => expect(sendBridgeAnswerCancel).toHaveBeenCalledWith('session_01ABCdefGHIjklMNO'))
   })
@@ -192,7 +201,7 @@ describe('answering from the dashboard (#1237)', () => {
     onBridgeAnswer.mockResolvedValue({ ...ANSWER, state: 'failed', note: 'no composer on the page' })
     render(<CloudAgentNotice target="web" events={[handOff()]} projectId="p" agentId="a" />)
     await waitFor(() => expect(screen.getByText(/failed: no composer on the page/i)).toBeTruthy())
-    expect(screen.getByText(QUESTION.title)).toBeTruthy()
+    expect(screen.getByRole('region', { name: QUESTION.title })).toBeTruthy()
   })
 })
 

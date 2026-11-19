@@ -2,7 +2,7 @@ import type { ChoiceRequest } from '../events.js'
 
 // The shape of a question the browser bridge carries (#1237), and its projection onto the gate
 // panel (#1554). Node-free on purpose: the dashboard client renders a bridged question through
-// the same `QuestionPanel` a local gate gets, so it needs the projection at runtime, and the
+// the same question card a local gate gets, so it needs the projection at runtime, and the
 // endpoint/store modules it would otherwise come from pull in node:crypto and node:http.
 
 /** One answer a bridged question offers: the same fields an `await-choices` option carries. */

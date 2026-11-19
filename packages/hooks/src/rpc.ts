@@ -5,7 +5,8 @@
 // {@link ComputerRpcClient}), so renaming a function on one side is a type error on the other.
 // Whether a function only reads is its own word: a computer that lets its server only watch calls
 // the reads alone.
-import type { RunFound } from './run.js'
+import type { InboxLine } from '@openagt/agent-driver'
+import type { RunFound, RunQuestion } from './run.js'
 import type { Settings } from './settings.js'
 
 /** Where a pull request stands on the git host: still being asked, or answered (with its merge commit when merged, and the last commit of the branch it merged, when the git host says it). */
@@ -24,6 +25,14 @@ export interface RpcHost extends RpcComputerHost {
   run(agentId: string): Promise<RunFound | undefined>
   /** The commit pull request `number` of `branch` merged as, as the project's git host says. */
   mergeCommit(branch: string, number: number): Promise<MergeLookup>
+  /** The questions one run of the project still waits on, in the order asked: none for a run waiting on none, or an id that names no run. */
+  questions(agentId: string): Promise<RunQuestion[]>
+  /**
+   * Say one line to a run of the project, through its host (`RunHost.steer`): a working run takes
+   * it between two of its agent's steps, an ended one goes on with it. Throws, in words for the
+   * person, where it cannot be said: a run another computer started, say.
+   */
+  say(agentId: string, line: InboxLine): Promise<void>
 }
 
 /** Whether a function only reads, or changes something. */

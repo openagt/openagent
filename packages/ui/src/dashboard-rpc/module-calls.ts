@@ -5,7 +5,10 @@ import { callModuleFunction, computerHost, functionKind, serverHost, type Module
 import { distributionSettings, runRefAt } from '../distribution-hooks.js'
 import { relayOr } from './relay-agent.js'
 import { pullProjectData } from '@openagt/agent-data'
-import type { RunFound, RunRef } from '@openagt/hooks'
+import type { RunFound, RunQuestion, RunRef } from '@openagt/hooks'
+import { loadAgentEvents } from '../store/index.js'
+import { pendingChoices } from '../open-choices.js'
+import { sayForModule } from '../dashboard/run-inbox.js'
 
 // A module's functions (`@openagt/hooks/rpc`), which the page calls at `/_rpc/<module>/<name>`
 // (rpc-serve.ts) and no other way: this file is none of the RPCs the page calls by name.
@@ -33,7 +36,12 @@ export async function callModule(projectId: string | null, pkg: string, name: st
     if (!root) return { ok: false, error: 'unknown project' }
     if (!module) return { ok: false, error: `${pkg} is no module of this project` }
     if (!module.server) return { ok: false, error: `${pkg} has no server part` }
-    const result = await callModuleFunction(module.server, name, serverHost(root, await distributionSettings(), { find: runsFound(projectId, root) }), input)
+    const host = serverHost(root, await distributionSettings(), {
+      find: runsFound(projectId, root),
+      questions: agentId => runQuestions(root, agentId),
+      say: (agentId, line) => sayForModule(projectId, root, agentId, line),
+    })
+    const result = await callModuleFunction(module.server, name, host, input)
     if (kind === 'act') {
       await pullProjectData(root, { log: () => {} }).catch(() => {})
       providedDataChanged(root, pkg)
@@ -53,6 +61,11 @@ function runsFound(projectId: string, root: string): (agentId: string) => Promis
     if (!ref) refs.set(agentId, (ref = runRefAt(projectId, root, agentId)))
     return contextHost().find(await ref)
   }
+}
+
+/** The questions run `agentId` of the project at `root` still waits on, read off its events by the rule every surface reads them by. */
+async function runQuestions(root: string, agentId: string): Promise<RunQuestion[]> {
+  return pendingChoices((await loadAgentEvents(root, agentId).catch(() => undefined)) ?? []).map(question => ({ ...question, options: [...question.options] }))
 }
 
 /**

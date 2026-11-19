@@ -1,17 +1,17 @@
 import type { ChoiceRequest, OpenAgentEvent } from '../../src/index.js'
 import { foldScreenRows, formatOpenAgentEvent } from '../../src/client.js'
-import { parseQuestion, QUESTION_TAG } from '@openagt/agent-driver/question'
+import { answeredQuestion } from '@openagt/agent-driver/question'
 import { Fragment, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { Check, ChevronRight, Copy, PencilLine } from 'lucide-react'
 import { pendingChoices } from '../lib/live-state.js'
 import { DaemonDown } from '../lib/use-daemon-health.js'
 import { callSubagents, isAgentsOwn, subagentEvents, subagentReport, subagentRows, subagentSteps, subagentWait } from '../lib/subagents.js'
-import { answeredQuestion } from '../lib/answered-question.js'
 import { rowWords, type RowWords } from '../lib/row-words.js'
 import { formatAge } from '../lib/format-date.js'
 import { cn } from '../lib/utils.js'
 import { AnsweredChoice } from './AnsweredChoice.js'
-import { QuestionPanel } from './QuestionPanel.js'
+import { AskedQuestion } from './AskedQuestion.js'
+import { blocksShownElsewhere, useMountedModules, withoutBlocks } from '../lib/use-modules.js'
 import { Markdown } from './Markdown.js'
 import { SessionLine, sessionLineEmpty, type SessionSetup } from './SessionLine.js'
 import { ChangedFiles } from './ChangedFiles.js'
@@ -39,8 +39,8 @@ import {
 //   - The agent's steps between two messages (`driver` `action` and `thought`): one folded line
 //     for the whole run of them (ToolCalls), opening to one line per step.
 //   - Choice gates, when the log knows its project: an open gate is the question's card, answered
-//     in place (QuestionPanel), when the log knows its agent too; a resolved one collapses to the
-//     AnsweredChoice ✓ card and hides its "✓ chose" line.
+//     in place (AskedQuestion: the module that asks draws it), when the log knows its agent too; a
+//     resolved one collapses to the AnsweredChoice ✓ card and hides its "✓ chose" line.
 //   - Screens: the newest open `screen` line at an address, before the run's end, is live: its
 //     line opens the pane that shows the screen. An earlier one stays its one
 //     line of text, and an `ended` one is hidden.
@@ -158,12 +158,12 @@ function PassedChoice({ choice, footer }: { choice: ChoiceRequest; footer?: Reac
   )
 }
 
-/**
- * The gate a question is to the chat: its own id, or, for a question of the run's diary (whose id
- * is its line's time), the one gate every question of a run is, the early card's too.
- */
+/** The one gate every question of a run's diary is to the chat. */
+const RUN_GATE = 'question'
+
+/** The gate a question is to the chat: its own id, or, for a question of the run's diary (whose id is its line's time), the run's one gate. */
 function chatGate(choice: { id: string; at?: string | undefined }): string {
-  return choice.id === choice.at ? QUESTION_TAG : choice.id
+  return choice.id === choice.at ? RUN_GATE : choice.id
 }
 
 /** A question's row: answered through its gate (`pick`), passed by with a message instead (`passed`), or still waiting for its answer. */
@@ -217,26 +217,22 @@ function foldChoiceRows(events: OpenAgentEvent[]): {
 }
 
 /**
- * The question a turn ends on, the moment its message is written. The run says it only when the
- * agent's process is done, about a second later, and until then the message would show its block
- * as raw JSON. Read with the run's own parser, so it is the same question, at the same gate, and
- * the run's own line of it takes its place without a change. Only a turn's last message, with
- * nothing after it: a block the agent went on from is not what the run will ask.
+ * The message a question may yet follow: a turn's last message, while the turn has not ended, with
+ * nothing after it but what counts or times the turn. The run says the question its block asks only
+ * once the agent's process is done, about a second later; till then its block is left out as it is
+ * once the question came. A turn that ended without one shows its block as written: nothing came of it.
  */
-export function withEarlyQuestion(events: OpenAgentEvent[]): OpenAgentEvent[] {
+export function replyBeforeEnd(events: readonly OpenAgentEvent[]): OpenAgentEvent | undefined {
   for (let at = events.length - 1; at >= 0; at--) {
     const e = events[at]!
-    if (e.kind === 'choice' || e.kind === 'end' || isTurnBoundary(e)) return events
+    if (e.kind === 'choice' || e.kind === 'end' || isTurnBoundary(e)) return undefined
     if (e.kind !== 'driver' || ('subagent' in e.event && e.event.subagent !== undefined)) continue
-    if (e.event.type === 'action') return events
+    if (e.event.type === 'action') return undefined
     // A message with no words (Codex ends some turns with one) is not the turn's last word.
     if (e.event.type !== 'text' || e.event.text.trim() === '') continue
-    const question = parseQuestion(e.event.text)
-    if (question === undefined) return events
-    const asked: OpenAgentEvent = { kind: 'choice', id: QUESTION_TAG, ...question }
-    return [...events.slice(0, at + 1), asked, ...events.slice(at + 1)]
+    return e
   }
-  return events
+  return undefined
 }
 
 /**
@@ -266,15 +262,6 @@ export function askedReplies(events: readonly OpenAgentEvent[]): Set<OpenAgentEv
     else if (e.kind === 'choice' && reply) asked.add(reply)
   }
   return asked
-}
-
-/**
- * A reply without the block its question is written in (the fenced `await-choices` block, JSON):
- * the question's card, the row under the reply, shows the question. A block still being written
- * has no closing fence yet and goes too, so the JSON never scrolls by while the agent types it.
- */
-export function withoutQuestionBlock(text: string): string {
-  return text.replace(/```await-choices\b[\s\S]*?(```|$)/g, '').trim()
 }
 
 // The agent's reply: whole, as Markdown, in the page's own font rather than the log's. The message
@@ -702,7 +689,7 @@ function OpenAtReply({ messageId, viewport }: { messageId: string; viewport: Ref
 }
 
 export function EventList({
-  events: given,
+  events,
   writing = '',
   sending,
   sendingAt,
@@ -777,7 +764,8 @@ export function EventList({
    *  row is a line of text. */
   onOpenScreen?: (() => void) | undefined
 }) {
-  const events = useMemo(() => withEarlyQuestion(given), [given])
+  // The fenced blocks a module shows elsewhere: ask's question block, which its card asks.
+  const elsewhere = blocksShownElsewhere(useMountedModules())
   const choiceRows = useMemo(() => (projectId ? foldChoiceRows(events) : undefined), [projectId, events])
   const screenRows = useMemo(() => foldScreenRows(events), [events])
   const passed = useMemo(() => quietEnds(events), [events])
@@ -808,14 +796,15 @@ export function EventList({
   const kept = inTurns(events, answeredInPlace ? undefined : sent).filter(e => shownAsRow(e) && !choiceRows?.hidden.has(e) && !screenRows.hidden.has(e) && !theirs.has(e))
   // Every event and the message just sent: what the turn going on is read off.
   const told = sent === undefined ? events : [...events, sent]
-  // The text of a row's message: the reply a question follows, without the question's block.
+  // The text of a row's message: the reply a question follows, or may yet, without the question's block.
+  const unended = useMemo(() => replyBeforeEnd(events), [events])
   const textOf = (e: OpenAgentEvent): string | null => {
     const text = messageText(e)
-    return text !== null && asked.has(e) ? withoutQuestionBlock(text) : text
+    return text !== null && (asked.has(e) || e === unended) ? withoutBlocks(text, elsewhere) : text
   }
   // A reply that was only its question's block is no row: the card under it is the question.
   // A run of the agent's steps is one row, its first.
-  const written = withoutQuestionBlock(writing)
+  const written = withoutBlocks(writing, elsewhere)
   // The question's card comes after the words above it, not while they are still being typed.
   const typing = useStillWriting() || written !== ''
   const unfolded = kept.filter(e => !passed.has(e) && textOf(e) !== '')
@@ -1046,7 +1035,7 @@ export function EventList({
                   ) : choiceRow && choiceRow.pick === undefined && projectId !== undefined && agentId !== undefined ? (
                     // The question the agent waits on, answered here, under what it said.
                     typing ? null : <div className="mt-1 flex min-w-0 flex-1 flex-col gap-2">
-                      <QuestionPanel key={`${agentId}:${chatGate(choiceRow.choice)}`} projectId={projectId} agentId={agentId} choice={choiceRow.choice} active={e === asking} focused={e === openedOn.current} onSaid={onSaid} focusNext={focusNext} />
+                      <AskedQuestion key={`${agentId}:${chatGate(choiceRow.choice)}`} projectId={projectId} agentId={agentId} question={choiceRow.choice} active={e === asking} focused={e === openedOn.current} onSaid={onSaid} focusNext={focusNext} />
                       {footer}
                     </div>
                   ) : choiceRow?.pick !== undefined ? (

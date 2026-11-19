@@ -21,7 +21,7 @@ import { NOW, committingDriver, fakeGithub, testModules } from './run-test-suppo
 /** An agent that must never start: the run ends before its turns. */
 const unstarted = (started: { yes: boolean }): Driver => ({ id: 'fake', start: async opts => ((started.yes = true), new FakeDriver({ turns: [{ text: 'Done.' }] }).start(opts)) })
 
-test("a run's steps, in their order: its account, its checkout and skills, the agent's turns, then where the work went, the record, the reclaim and the person's line", async () => {
+test("a run's steps, in their order: its account, its checkout and skills, how it asks the person, the agent's turns, then where the work went, the record, the reclaim and the person's line", async () => {
   const steps = await createHooks([...testModules(), ...BUILT_IN_MODULES]).steps({ options: {} })
   assert.deepEqual(
     steps.map(step => `${step.module}: ${step.name}`),
@@ -30,6 +30,7 @@ test("a run's steps, in their order: its account, its checkout and skills, the a
       "agent-driver: work in the run's environment",
       'git-branches: make the checkout',
       'skills: link the skills',
+      'ask: ask the person',
       'agent-driver: run the agent',
       'git-branches: read the branch back',
       'github: read the pull request back',

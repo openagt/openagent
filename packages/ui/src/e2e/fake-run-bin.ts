@@ -21,7 +21,8 @@
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { hostname } from 'node:os'
 import { join } from 'node:path'
-import { FakeDriver, QUESTION_TAG, continuationPrompt, logDiaryFile, parseQuestion, startEvent, type DriverEvent, type LogEndStatus, type SessionLog } from '@openagt/agent-driver'
+import { FakeDriver, continuationPrompt, logDiaryFile, startEvent, type DriverEvent, type LogEndStatus, type SessionLog } from '@openagt/agent-driver'
+import { parseQuestion, QUESTION_TAG } from '@openagt/skill-ask/question'
 import { nodeGitRunner } from '@openagt/agent-data'
 import { NAME_FILE_ENV, givenName, isPublish, type Publish } from '@openagt/agent-runner'
 import { agentBranchName, attachCheckout, createCheckout, reclaimWorktree, worktreeBranch, worktreePath } from '@openagt/skill-branches'
@@ -150,7 +151,8 @@ async function session(id: string, checkout: string, prompt: string, card: Omit<
       await git(['commit', '-q', '-m', 'the run\'s work'], checkout)
     }
     // Its prompt is in its log already, from before it held.
-    if (!fansOut) lastText = (await driverSession.prompt(prompt, { inbox: join(dir, 'inbox.jsonl'), ...(continued ? { resume: true } : {}) })).text
+    // The run asks as one with ask on asks: its message's block is its question.
+    if (!fansOut) lastText = (await driverSession.prompt(prompt, { inbox: join(dir, 'inbox.jsonl'), questionIn: parseQuestion, ...(continued ? { resume: true } : {}) })).text
   } catch {
     status = 'failed'
   }

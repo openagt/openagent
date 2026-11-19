@@ -192,7 +192,7 @@ describe('the chat\'s rows and the message box over their end', () => {
     const plan = (text: string) => [
       { kind: 'driver', event: { type: 'start', prompt: 'Plan it' } },
       said(text),
-      { kind: 'choice', id: 'await-choices', title: 'Go ahead?', options: [{ id: 'opt:0', label: 'Yes' }, { id: 'opt:1', label: 'No' }] },
+      { kind: 'choice', id: 'question', title: 'Go ahead?', options: [{ id: 'opt:0', label: 'Yes' }, { id: 'opt:1', label: 'No' }] },
       { kind: 'end', ok: false, waiting: true },
     ] as OpenAgentEvent[]
     const reply = (text: string) => screen.getByText(text).closest<HTMLElement>('[data-message-id]')!

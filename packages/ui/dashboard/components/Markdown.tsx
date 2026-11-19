@@ -5,6 +5,8 @@ import { cn } from '../lib/utils.js'
 import { ImageIcon } from 'lucide-react'
 import { CopyButton } from './ui/copy-button.js'
 import { Checkbox } from './ui/checkbox.js'
+import { blockRender, useMountedModules } from '../lib/use-modules.js'
+import { ModuleSlot } from './ModulePageView.js'
 
 // A tiny, dependency-free Markdown renderer for an agent's replies, the surfaced PLAN/TODO docs
 // and the agent's pushed views (#441). Builds React nodes (never injects HTML), so agent-written
@@ -106,6 +108,23 @@ function diffLineClass(line: string): string | undefined {
   if (line.startsWith('-') && !line.startsWith('---')) return 'text-danger'
   if (line.startsWith('@@')) return 'text-muted-foreground'
   return undefined
+}
+
+/**
+ * A fenced block as the module that draws its language draws it (`ui.render`: a mermaid block's
+ * diagram), in that module's slot; else as code, a block of content a module shows elsewhere too
+ * (the chat leaves those out where they are shown). Drawn both when its closing fence arrives and
+ * when the doc ends mid-fence.
+ */
+function FencedBlock(props: { lines: string[]; language: string; document: boolean; wrap?: boolean }) {
+  const render = blockRender(useMountedModules(), props.language)
+  const Render = render?.Render
+  if (!render || !Render) return <CodeBlock {...props} />
+  return (
+    <ModuleSlot package={render.package} label={`${props.language} block`}>
+      <Render content={props.lines.join('\n')} />
+    </ModuleSlot>
+  )
 }
 
 /**
@@ -508,7 +527,7 @@ function renderBlocks(lines: string[], look: Look, depth = 0): ReactNode[] {
         flushTable()
         code = { lines: [], language: fence[1]!.toLowerCase() }
       } else {
-        blocks.push(<CodeBlock key={key++} lines={code.lines} language={code.language} document={document} wrap={wrap} />)
+        blocks.push(<FencedBlock key={key++} lines={code.lines} language={code.language} document={document} wrap={wrap} />)
         code = null
       }
       continue
@@ -583,7 +602,7 @@ function renderBlocks(lines: string[], look: Look, depth = 0): ReactNode[] {
     blocks.push(<p key={key++}>{inlineLines(paragraph)}</p>)
   }
   flushTable()
-  if (code !== null) blocks.push(<CodeBlock key={key++} lines={code.lines} language={code.language} document={document} wrap={wrap} />)
+  if (code !== null) blocks.push(<FencedBlock key={key++} lines={code.lines} language={code.language} document={document} wrap={wrap} />)
   return blocks
 }
 

@@ -277,6 +277,26 @@ test('a question asked with the agent’s own tool ends the run waiting as a wri
   }
 })
 
+test('a run that goes without ask waits on nothing its agent asks: its turn ends it done, and the person replies with a message', async () => {
+  const repo = await testRepo()
+  try {
+    // A question asked with the agent's own tool is still how its turn ended: the diary has it.
+    const question = { title: 'Which colour?', options: [{ id: 'opt:0', label: 'Blue' }] }
+    const tool = await runCommand(repo, { prompt: '/paint', driver: new FakeDriver({ turns: [{ text: 'One thing first.', question }] }), now: () => NOW, modules: testModules(), pluginsWithout: ['ask'] })
+    assert.equal(tool.status, 'done')
+    assert.deepEqual(tool.checkout, { reclaimed: true })
+    const diary = await readUntimedDiary(repo, tool.id)
+    assert.deepEqual(diary.find(l => l.kind === 'question'), { kind: 'question', ...question })
+    assert.deepEqual(diary.at(-1), { kind: 'ended', status: 'done' })
+    // A block the agent wrote is words, where no module reads one.
+    const written = await runCommand(repo, { prompt: '/plan', driver: new FakeDriver({ turns: [{ text: QUESTION }] }), now: () => new Date(NOW.getTime() + 60_000), modules: testModules(), pluginsWithout: ['ask'] })
+    assert.equal(written.status, 'done')
+    assert.equal((await readUntimedDiary(repo, written.id)).some(l => l.kind === 'question'), false)
+  } finally {
+    await removeRepo(repo)
+  }
+})
+
 test('a resumed run whose conversation its coding agent no longer has goes on in a fresh one: the same run, its record saying where, its agent pointed at its record and pull request first', async () => {
   const repo = await testRepo()
   try {
