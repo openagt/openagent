@@ -1,4 +1,6 @@
+import { readFile, realpath } from 'node:fs/promises'
 import { createRequire } from 'node:module'
+import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { GitAccess } from './account.js'
 import type { AppContext, Attention, AttentionArgs } from './app.js'
@@ -286,7 +288,11 @@ function check(entries: readonly DistributionEntry[]): void {
   }
 }
 
-/** A module's package, as a distribution lists it: its `./module` entry default-exports the module. */
+/**
+ * A package, as a distribution lists it. Its Node part, when it has one, is its `./module` entry,
+ * which default-exports the module; a package with only a UI part (`./dashboard`) or a skill's
+ * text has none, and those parts are read by what uses them, such as the dashboard.
+ */
 export interface DistributionPackage {
   package: string
   /** For a plugin: it starts enabled, until a person switches it off. */
@@ -299,13 +305,19 @@ export type DistributionItem = DistributionPackage | DistributionEntry
 /**
  * A distribution's modules, from what it lists: a package's `./module` entry, imported with
  * `load`, or a module as it is given. The distribution passes its own `import`, so the packages
- * resolve from its dependencies: they are not this package's.
+ * resolve from its dependencies: they are not this package's. A package `hasModule` says has no
+ * Node part brings no module.
  */
-export async function loadModules(items: readonly DistributionItem[], load: (specifier: string) => Promise<unknown>): Promise<DistributionEntry[]> {
-  return Promise.all(
-    items.map(async (item): Promise<DistributionEntry> => {
+export async function loadModules(
+  items: readonly DistributionItem[],
+  load: (specifier: string) => Promise<unknown>,
+  hasModule: (name: string) => boolean = () => true,
+): Promise<DistributionEntry[]> {
+  const entries = await Promise.all(
+    items.map(async (item): Promise<DistributionEntry | undefined> => {
       if ('module' in item) return item
       const { package: name, on } = item
+      if (!hasModule(name)) return undefined
       const exported = await load(`${name}/module`)
       const module = typeof exported === 'object' && exported !== null ? (exported as { default?: unknown }).default : undefined
       if (typeof module !== 'object' || module === null || typeof (module as { name?: unknown }).name !== 'string') {
@@ -314,6 +326,7 @@ export async function loadModules(items: readonly DistributionItem[], load: (spe
       return on === undefined ? { module: module as ModuleDefinition } : { module: module as ModuleDefinition, on }
     }),
   )
+  return entries.filter(entry => entry !== undefined)
 }
 
 /** Load a distribution's modules from what it lists ({@link loadModules}). */
@@ -330,13 +343,38 @@ export const DISTRIBUTION_ENV = 'OPENAGENT_DISTRIBUTION'
 /**
  * The modules of the distribution handed down in `env` ({@link DISTRIBUTION_ENV}), each package
  * resolved from the distribution file's own place, as the distribution resolves it; none when
- * none was handed down.
+ * none was handed down. A package whose `exports` has no `./module` has no Node part.
  */
 export async function loadHandedDown(env: NodeJS.ProcessEnv = process.env): Promise<DistributionEntry[] | undefined> {
   const file = env[DISTRIBUTION_ENV]
   if (!file) return undefined
+  const items = await distributionItems(file)
+  const withModule = new Set<string>()
+  for (const item of items) {
+    if ('module' in item) continue
+    const { exports } = JSON.parse(await readFile(join(await packageDirOf(file, item.package), 'package.json'), 'utf8')) as { exports?: unknown }
+    if (typeof exports === 'object' && exports !== null && Object.hasOwn(exports, './module')) withModule.add(item.package)
+  }
+  const require = createRequire(file)
+  return loadModules(items, specifier => import(pathToFileURL(require.resolve(specifier)).href), name => withModule.has(name))
+}
+
+/** What the distribution file at `file` lists: its default export. Throws for a file that exports no list. */
+export async function distributionItems(file: string): Promise<readonly DistributionItem[]> {
   const exported = ((await import(pathToFileURL(file).href)) as { default?: unknown }).default
   if (!Array.isArray(exported)) throw new Error(`${file} default-exports no distribution: a list of its packages and modules`)
-  const require = createRequire(file)
-  return loadModules(exported as DistributionItem[], specifier => import(pathToFileURL(require.resolve(specifier)).href))
+  return exported as DistributionItem[]
+}
+
+/**
+ * Where the package `name` is installed, as the distribution file at `file` resolves it: its
+ * directory, symlinks resolved, found whatever the package's `exports` lets through. Throws for
+ * a package that is not installed there.
+ */
+export async function packageDirOf(file: string, name: string): Promise<string> {
+  for (const dir of createRequire(file).resolve.paths(name) ?? []) {
+    const found = await realpath(join(dir, name)).catch(() => undefined)
+    if (found !== undefined && (await readFile(join(found, 'package.json')).then(() => true, () => false))) return found
+  }
+  throw new Error(`${name}, which the distribution ${file} lists, is not installed beside it`)
 }

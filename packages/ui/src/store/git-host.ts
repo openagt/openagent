@@ -1,16 +1,16 @@
 import { runPackageCommand, type ProvidedCommand } from '@openagt/agent-data'
-import { isBuiltIn, providedCommand } from '../built-in.js'
+import { providedCommand } from '../distribution-packages.js'
 
 /**
  * The project's git host, as OpenAgent reads and acts on it (#1820): the pull requests of the
  * project, opening one, landing one, and the project's page there. OpenAgent names no git host
- * and runs no git host tool: a project's git host comes from whichever of its packages declares that it
- * provides it — `"openagent": { "git-host": "<command>" }` in the package's own package.json — and
- * OpenAgent asks by running that command. Swap the package for another that answers the same
- * command line and prints the same shapes, and nothing here changes. No package declares it: the
- * project has no git host, so no pull requests, and a finished run's last step is the push. A
- * built-in package's git host is the project's only when it answers the project's page there: a
- * project whose remote is on another host, or that has no remote, has none.
+ * and runs no git host tool: a project's git host comes from whichever of the distribution's packages
+ * declares that it provides it — `"openagent": { "git-host": "<command>" }` in the package's own
+ * package.json — and OpenAgent asks by running that command. Swap the package for another that
+ * answers the same command line and prints the same shapes, and nothing here changes. No package
+ * declares it: the project has no git host, so no pull requests, and a finished run's last step is
+ * the push. The git host is the project's only when it answers the project's page there: a project
+ * whose remote is on another host, or that has no remote, has none.
  *
  * The command line a provider answers, each printing one JSON document and exiting 0 (a refusal
  * exits 1 with its reason on stderr):
@@ -174,9 +174,9 @@ function commandGitHost(root: string, command: ProvidedCommand): GitHostSource {
 }
 
 /**
- * The production {@link GitHostReader}: the project's provider, looked up among the packages the project has (`built-in.ts`), one
- * source per project kept while the same command provides, so a project that installs, swaps or
- * drops its git host is read the new way within {@link CACHE_MS}. `changed(root)` forgets the
+ * The production {@link GitHostReader}: the project's provider, looked up among the packages the project has (`distribution-packages.ts`), one
+ * source per project kept while the same command provides, so a project whose git host changes is
+ * read the new way within {@link CACHE_MS}. `changed(root)` forgets the
  * project, so the next ask looks its provider up again; `changed(root, pkg)` only when that package is the one providing.
  */
 export function providedGitHost(now: () => number = Date.now): GitHostReader {
@@ -185,9 +185,9 @@ export function providedGitHost(now: () => number = Date.now): GitHostReader {
     let known = sources.get(root)
     if (!known || now() - known.at >= CACHE_MS) {
       let command = await providedCommand(root, 'git-host').catch(() => undefined)
-      // A built-in git host is one the project did not choose: it is the project's only when it
-      // knows the project's page there (the origin remote is on that host).
-      if (command && isBuiltIn(command) && !(await commandGitHost(root, command).home())) command = undefined
+      // The project did not choose its git host: it is the project's only when it knows the
+      // project's page there (the origin remote is on that host).
+      if (command && !(await commandGitHost(root, command).home())) command = undefined
       const same = known?.command && command && known.command.bin === command.bin
       known = { at: now(), ...(command ? { command, source: same ? known!.source! : commandGitHost(root, command) } : {}) }
       sources.set(root, known)

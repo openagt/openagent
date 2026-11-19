@@ -1,4 +1,4 @@
-import { lookupProvided } from '../built-in.js'
+import { lookupProvided } from '../distribution-packages.js'
 import { projectBranches } from './branches.js'
 import { projectGitHost } from './git-host.js'
 import { projectQueue } from './queue.js'

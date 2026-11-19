@@ -8,10 +8,11 @@ import { join } from 'node:path'
 import { moduleUrl, PAGE_SHEET_PATH, servePageSheet, versionedModuleUrl } from './module-serve.js'
 import { dashboardStylesVersion } from './page-styles.js'
 import type { ProjectsProvider } from './projects.js'
+import { handDownDistribution } from '../test-distribution.js'
 
 const VOCABULARY = new URL('../../dashboard/module/theme.css', import.meta.url)
 
-/** A daemon serving the page sheet of a bundle whose class list is `dashboard`, with a project of the modules `modules` names (package → class list, own rules). */
+/** A daemon serving the page sheet of a bundle whose class list is `dashboard`, with a distribution of the modules `modules` names (package → class list, own rules), which a project has. */
 async function daemon(dashboard: string[], modules: Record<string, { classes: string[]; rules?: string }>) {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'openagent-page-sheet-')))
   const bundle = join(root, 'bundle')
@@ -21,11 +22,11 @@ async function daemon(dashboard: string[], modules: Record<string, { classes: st
   await writeFile(join(bundle, 'vocabulary.css'), vocabulary)
   await writeFile(join(bundle, 'classes.txt'), classes)
   const project = join(root, 'project')
+  const installed = join(root, 'node_modules')
   const urls: Record<string, string> = {}
   await mkdir(project)
-  await writeFile(join(project, 'package.json'), JSON.stringify({ dependencies: Object.fromEntries(Object.keys(modules).map(name => [name, '1'])) }))
   for (const [name, { classes, rules }] of Object.entries(modules)) {
-    const dir = join(project, 'node_modules', name)
+    const dir = join(installed, name)
     await mkdir(join(dir, 'dist'), { recursive: true })
     await writeFile(join(dir, 'package.json'), JSON.stringify({ name, exports: { './dashboard': './dist/dashboard.js' } }))
     await writeFile(join(dir, 'dist', 'dashboard.js'), 'export default {}')
@@ -33,6 +34,7 @@ async function daemon(dashboard: string[], modules: Record<string, { classes: st
     if (rules !== undefined) await writeFile(join(dir, 'dist', 'styles.css'), rules)
     urls[name] = await versionedModuleUrl(moduleUrl('app-abc', { package: name, entry: 'dashboard.js' }), { dir: join(dir, 'dist'), entry: 'dashboard.js' })
   }
+  const handBack = await handDownDistribution(root, Object.keys(modules))
   const projects: ProjectsProvider = { list: async () => [], resolvePath: async id => (id === 'app-abc' ? project : undefined) }
   const server = createServer((req, res) => void servePageSheet(req, res, bundle, projects))
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
@@ -42,8 +44,10 @@ async function daemon(dashboard: string[], modules: Record<string, { classes: st
     urls,
     /** The page sheet's answer for the dashboard's version `v` and the modules named. */
     sheet: (names: string[], v = dashboardStylesVersion(vocabulary, classes)) => fetch(`${base}${PAGE_SHEET_PATH}?${new URLSearchParams([['v', v], ...names.map((name): [string, string] => ['m', urls[name]!])])}`),
-    project,
+    /** Where the modules are installed. */
+    installed,
     close: async () => {
+      handBack()
       await new Promise(resolve => server.close(resolve))
       await rm(root, { recursive: true, force: true })
     },
@@ -125,7 +129,7 @@ test('the page sheet is kept for good when every version it names is the one on 
     assert.equal(kept.headers.get('cache-control'), 'public, max-age=31536000, immutable')
 
     assert.equal((await at.sheet(['@acme/tickets'], 'another-build')).headers.get('cache-control'), 'no-cache', 'another build of the dashboard')
-    await writeFile(join(at.project, 'node_modules', '@acme/tickets', 'dist', 'dashboard.js'), 'export default { rebuilt: true }')
+    await writeFile(join(at.installed, '@acme/tickets', 'dist', 'dashboard.js'), 'export default { rebuilt: true }')
     const rebuilt = await at.sheet(['@acme/tickets'])
     assert.equal(rebuilt.headers.get('cache-control'), 'no-cache', 'a module rebuilt since')
     const tag = rebuilt.headers.get('etag')

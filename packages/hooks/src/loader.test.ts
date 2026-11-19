@@ -259,20 +259,30 @@ test("a distribution is loaded from its packages' ./module entries, through the 
   await assert.rejects(loadDistribution([{ package: '@openagt/bare' }], async () => ({ default: 42 })), /@openagt\/bare\/module default-exports no module/)
 })
 
-test("a distribution handed down is loaded from its file, each package resolved from the file's own place, and a module it lists as it is", async () => {
+test("a distribution handed down is loaded from its file, each package resolved from the file's own place, a package with no Node part skipped, and a module it lists as it is", async () => {
   const dir = await mkdtemp(join(tmpdir(), 'hooks-distribution-'))
   try {
     const thing = join(dir, 'node_modules', '@openagt', 'thing')
     await mkdir(thing, { recursive: true })
     await writeFile(join(thing, 'package.json'), JSON.stringify({ name: '@openagt/thing', type: 'module', exports: { './module': './module.js' } }))
     await writeFile(join(thing, 'module.js'), "export default { name: 'thing', hooks: {} }\n")
+    // A package with a UI part alone, and one with a skill's text alone: no Node part to load.
+    const pane = join(dir, 'node_modules', '@openagt', 'pane')
+    await mkdir(pane, { recursive: true })
+    await writeFile(join(pane, 'package.json'), JSON.stringify({ name: '@openagt/pane', type: 'module', exports: { './dashboard': './dashboard.js', './package.json': './package.json' } }))
+    const skill = join(dir, 'node_modules', '@openagt', 'skill')
+    await mkdir(skill, { recursive: true })
+    await writeFile(join(skill, 'package.json'), JSON.stringify({ name: '@openagt/skill' }))
     const file = join(dir, 'distribution.mjs')
-    await writeFile(file, "export default [{ package: '@openagt/thing' }, { module: { name: 'fake-runs', hooks: {} } }]\n")
+    await writeFile(file, "export default [{ package: '@openagt/thing' }, { package: '@openagt/pane' }, { package: '@openagt/skill' }, { module: { name: 'fake-runs', hooks: {} } }]\n")
     assert.deepEqual((await loadHandedDown({ [DISTRIBUTION_ENV]: file }))?.map(entry => entry.module.name), ['thing', 'fake-runs'])
     assert.equal(await loadHandedDown({}), undefined, 'none handed down')
     const wrong = join(dir, 'wrong.mjs')
     await writeFile(wrong, 'export default 42\n')
     await assert.rejects(loadHandedDown({ [DISTRIBUTION_ENV]: wrong }), /wrong\.mjs default-exports no distribution/)
+    const missing = join(dir, 'missing.mjs')
+    await writeFile(missing, "export default [{ package: '@openagt/missing' }]\n")
+    await assert.rejects(loadHandedDown({ [DISTRIBUTION_ENV]: missing }), /@openagt\/missing, which the distribution .*missing\.mjs lists, is not installed beside it/)
   } finally {
     await rm(dir, { recursive: true, force: true })
   }

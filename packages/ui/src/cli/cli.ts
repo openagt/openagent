@@ -9,6 +9,8 @@ import { openInBrowser } from './browser.js'
 import { openagentPackage, openagentVersion } from '../version.js'
 import { helpRows, helpText, unknownWord, usageError } from '@openagt/agent-data'
 
+export type { DashboardDistribution, DashboardPackage } from '../distribution-packages.js'
+
 /** Where the CLI writes. Injectable so tests capture output. */
 export interface CliIO {
   out: (line: string) => void
@@ -88,8 +90,9 @@ export function portOf(value: string | undefined): number | undefined {
 /** What a distribution runs this command with: its `openagent` is this one, serving its modules. */
 export interface CliOptions {
   /**
-   * The path of the distribution's file (`@openagt/dashboard`'s `distribution.js`): the modules
-   * OpenAgent runs, and the package OpenAgent is installed as, whose version it says.
+   * The path of the distribution's file (`@openagt/dashboard`'s `distribution.js`), which
+   * default-exports its {@link DashboardDistribution}: the packages and modules OpenAgent runs.
+   * The package above it is the one OpenAgent is installed as, whose version it says.
    */
   distribution: string
   io?: CliIO

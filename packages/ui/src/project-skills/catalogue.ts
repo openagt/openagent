@@ -1,6 +1,7 @@
-import { readFile, realpath } from 'node:fs/promises'
-import { createRequire } from 'node:module'
-import { dirname, join } from 'node:path'
+import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import { DISTRIBUTION_ENV } from '@openagt/hooks'
+import { distributionPackages } from '../distribution-packages.js'
 
 /**
  * The skills a project can pick on the dashboard's Skills page (#2023), in its groups. None is
@@ -8,8 +9,8 @@ import { dirname, join } from 'node:path'
  * default are not here (the branches skill, and the ones its command names): they come with every
  * run, with nothing written in the project.
  *
- * Each skill's text is its own package's `SKILL.md`, read from this package's install, so the
- * dashboard carries the texts of the versions it was published with.
+ * Each skill's text is its own package's `SKILL.md`, the package of the distribution whose skill
+ * it is, so the dashboard carries the texts of the versions its distribution was published with.
  */
 
 export interface SkillGroup {
@@ -48,23 +49,25 @@ export interface CarriedSkill {
   description: string
 }
 
-let carried: Promise<Map<string, CarriedSkill>> | undefined
+/** The texts as read last, by the distribution they were read off. */
+let carried: { file: string; skills: Promise<Map<string, CarriedSkill>> } | undefined
 
-/** Every skill of the list with its text, read once from this package's own install. */
+/** Every skill of the list with its text, read once per distribution from its packages. Throws for a skill of the list the distribution carries none of. */
 export function carriedSkills(): Promise<Map<string, CarriedSkill>> {
-  return (carried ??= readCarried())
+  const file = process.env[DISTRIBUTION_ENV] ?? ''
+  if (carried?.file !== file) carried = { file, skills: readCarried() }
+  return carried.skills
 }
 
 async function readCarried(): Promise<Map<string, CarriedSkill>> {
-  const require = createRequire(import.meta.url)
+  const packages = await distributionPackages()
   const skills = new Map<string, CarriedSkill>()
   for (const name of SKILL_NAMES) {
-    const pkg = `@openagt/skill-${name}`
-    const dir = await realpath(dirname(require.resolve(`${pkg}/package.json`)))
-    const manifest = JSON.parse(await readFile(join(dir, 'package.json'), 'utf8')) as { version: string }
-    const text = await readFile(join(dir, 'SKILL.md'), 'utf8')
+    const pkg = packages.find(each => each.skill === name)
+    if (!pkg) throw new Error(`the Skills page lists ${name}, a skill the distribution carries none of`)
+    const text = await readFile(join(pkg.dir, 'SKILL.md'), 'utf8')
     const description = /^description:[ \t]*(.*)$/m.exec(text)?.[1]?.trim().replace(/^"(.*)"$/, '$1') ?? ''
-    skills.set(name, { name, package: pkg, version: manifest.version, text, description })
+    skills.set(name, { name, package: pkg.name, version: typeof pkg.manifest.version === 'string' ? pkg.manifest.version : '0.0.0', text, description })
   }
   return skills
 }

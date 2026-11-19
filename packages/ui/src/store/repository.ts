@@ -1,5 +1,5 @@
 import { runPackageCommand } from '@openagt/agent-data'
-import { providedCommand } from '../built-in.js'
+import { providedCommand } from '../distribution-packages.js'
 
 /**
  * Creating a project's repository on a host, for a project that lives on this machine only. Like

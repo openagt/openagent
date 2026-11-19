@@ -5,6 +5,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { parseBranchesAhead, parseBranchStates, parseCheckouts, providedBranches } from './branches.js'
 import { sessionsHome } from '@openagt/agent-data'
+import { DISTRIBUTION_ENV } from '@openagt/hooks'
+import { handDownTestDistribution } from '../test-distribution.js'
+
+handDownTestDistribution()
 
 // The branches contract (#1774): a project's package declares `"openagent": { "branches": "<command>" }`
 // and OpenAgent reads its checkouts, a branch's state, and moves them, by running that command.
@@ -27,10 +31,14 @@ else if (args[0] === 'remove') { if (args[1] === 'kept') { process.stderr.write(
 const ROW = { agentId: 'run-1', path: '/p/.branches/agent-run-1', branch: 'agent-run-1' }
 const STATE = { branch: 'agent-run-1', exists: true, base: 'origin/main', commits: [{ sha: 'abc', subject: 'a' }], files: [{ path: 'a.ts', insertions: 1, deletions: 0, binary: false }], hasRemote: true, pushed: false, merged: false, pendingFiles: [] }
 
-/** A project whose package.json lists `deps`, each installed under node_modules with its own package.json. */
+/**
+ * A throwaway project, and a distribution of `deps` handed down to this process: each installed
+ * under the project's node_modules with its own package.json, every project's.
+ */
 async function project(deps: Record<string, Record<string, unknown>>): Promise<string> {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'openagent-branches-')))
-  await writeFile(join(root, 'package.json'), JSON.stringify({ devDependencies: Object.fromEntries(Object.keys(deps).map(name => [name, '*'])) }))
+  await writeFile(join(root, 'distribution.mjs'), `export default ${JSON.stringify(Object.keys(deps).map(name => ({ package: name })))}\n`)
+  process.env[DISTRIBUTION_ENV] = join(root, 'distribution.mjs')
   for (const [name, manifest] of Object.entries(deps)) {
     const dir = join(root, 'node_modules', name)
     await mkdir(dir, { recursive: true })
@@ -47,11 +55,12 @@ const BRANCHES = { branches: { bin: { branches: 'provider.cjs' }, openagent: { b
 const calls = async (root: string, pkg: string): Promise<string[]> =>
   (await readFile(join(root, 'node_modules', pkg, 'calls.log'), 'utf8').catch(() => '')).split('\n').filter(Boolean)
 
-test('a project with no branches provider of its own is read by the built-in one; one with a provider is read and moved through its command line', async () => {
+test('a project with no branches provider has no branches; one with a provider is read and moved through its command line', async () => {
   const none = await project({ plain: { bin: { plain: 'provider.cjs' } } })
+  const noneHas = await providedBranches()(none)
   const root = await project(BRANCHES)
   try {
-    assert.ok(await providedBranches()(none), 'the built-in branches package')
+    assert.equal(noneHas, undefined)
     const branches = (await providedBranches()(root))!
     assert.ok(branches)
     assert.deepEqual(await branches.list(), [{ id: 'run-1', path: ROW.path, branch: ROW.branch }])

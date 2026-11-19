@@ -21,7 +21,7 @@ import { loadHooks, localHostOf } from './distribution-hooks.js'
 import type { Hooks } from '@openagt/hooks'
 import { sessionsHome } from '@openagt/agent-data'
 import { readSecureAddress, SECURE_PORT, type SecureAddress } from './secure-address.js'
-import { builtInServices } from './built-in.js'
+import { distributionServices } from './distribution-packages.js'
 import { COMPUTER_ENV, sayOwnUrl, startPackageServices, type PackageServices, type PackageServicesOptions } from './package-services.js'
 import { readAllAgents } from './store/index.js'
 import type { StartedProject } from './dashboard/types.js'
@@ -241,7 +241,7 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
 
   // The services of OpenAgent's own packages: each runs for as long as the daemon does, and is
   // told the daemon's address.
-  const packageServices = (opts.packageServices ?? startPackageServices)({ commands: await builtInServices().catch(() => []), url: dashboard.url, env: computer !== undefined ? { ...env, [COMPUTER_ENV]: computer } : env, log: console.log })
+  const packageServices = (opts.packageServices ?? startPackageServices)({ commands: await distributionServices().catch(() => []), url: dashboard.url, env: computer !== undefined ? { ...env, [COMPUTER_ENV]: computer } : env, log: console.log })
 
   // Everything that runs in the background beside serving the dashboard: the data sync and the
   // cloud sweeps.

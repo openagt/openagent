@@ -4,7 +4,7 @@ import { originUrl, runPackageCommand, type ProvidedCommand } from '@openagt/age
 import type { DriverFix, DriverReadiness } from '@openagt/agent-driver'
 import { claudeCodeReady } from '@openagt/agent-driver-claude'
 import { codexReady } from '@openagt/agent-driver-codex'
-import { providedCommand } from '../built-in.js'
+import { providedCommand } from '../distribution-packages.js'
 import { isDriverName, type DriverName } from '../driver-names.js'
 import { readPreferences } from '../registry.js'
 import { accountsWiring, type AccountResult } from './accounts.js'

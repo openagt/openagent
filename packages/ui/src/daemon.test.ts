@@ -6,6 +6,9 @@ import { basename, join, resolve } from 'node:path'
 import { createHooks, LOCAL_HOST } from '@openagt/hooks'
 import { fakeHost } from '@openagt/hooks/testing'
 import { runDaemon, type DaemonState, type RunDaemonOptions } from './daemon.js'
+import { handDownTestDistribution } from './test-distribution.js'
+
+handDownTestDistribution()
 
 /**
  * Start a daemon and wait until it reports where it bound. The CLI is foreground-only, so there

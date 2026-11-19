@@ -106,19 +106,11 @@ export async function basicSkills(repo: string, agent: { ownQuestionTool?: boole
   return skills
 }
 
-/**
- * The basic packages that answer as the git host of the project at `repo`: what a run reads its
- * pull request back through in a project that installed no git host of its own.
- */
-export async function basicGitHosts(repo: string): Promise<ProjectPackage[]> {
-  const hosts: ProjectPackage[] = []
-  for (const { pkg, gitHost } of (await lists()).carried) {
-    if (gitHost && (await runPackageCommand(repo, gitHost, ['home'])).ok) hosts.push(pkg)
+/** The git host commands of the skills handed down that answer for the project at `repo` (its `home` command). */
+export async function basicGitHosts(repo: string): Promise<ProvidedCommand[]> {
+  const hosts: ProvidedCommand[] = []
+  for (const { gitHost } of (await lists()).carried) {
+    if (gitHost && (await runPackageCommand(repo, gitHost, ['home'])).ok) hosts.push(gitHost)
   }
   return hosts
-}
-
-/** The names of the basic skills' packages: a project's own copy of one is never read as its git host. */
-export async function basicPackageNames(): Promise<string[]> {
-  return (await lists()).carried.map(skill => skill.pkg.name)
 }

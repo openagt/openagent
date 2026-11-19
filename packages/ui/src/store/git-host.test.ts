@@ -4,6 +4,10 @@ import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promi
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { parseRequests, providedGitHost } from './git-host.js'
+import { DISTRIBUTION_ENV } from '@openagt/hooks'
+import { handDownTestDistribution } from '../test-distribution.js'
+
+handDownTestDistribution()
 
 // The git host contract (#1820): a project's package declares `"openagent": { "git-host": "<command>" }`
 // and OpenAgent reads the project's pull requests, opens one, lands one and finds the
@@ -29,10 +33,14 @@ else if (args[0] === 'home') answer('home.json')
 
 const REQUEST = { number: 7, url: 'https://x/pull/7', state: 'open', title: 'T', draft: false, branch: 'agent-run-1', head: 'abc', createdAt: '2026-09-01T00:00:00Z' }
 
-/** A project whose package.json lists `deps`, each installed under node_modules with its own package.json. */
+/**
+ * A throwaway project, and a distribution of `deps` handed down to this process: each installed
+ * under the project's node_modules with its own package.json, every project's.
+ */
 async function project(deps: Record<string, Record<string, unknown>>): Promise<string> {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'openagent-git host-')))
-  await writeFile(join(root, 'package.json'), JSON.stringify({ devDependencies: Object.fromEntries(Object.keys(deps).map(name => [name, '*'])) }))
+  await writeFile(join(root, 'distribution.mjs'), `export default ${JSON.stringify(Object.keys(deps).map(name => ({ package: name })))}\n`)
+  process.env[DISTRIBUTION_ENV] = join(root, 'distribution.mjs')
   for (const [name, manifest] of Object.entries(deps)) {
     const dir = join(root, 'node_modules', name)
     await mkdir(dir, { recursive: true })
@@ -54,9 +62,10 @@ const calls = async (root: string, pkg: string): Promise<string[]> =>
 
 test('a project with no git host package has no git host; one with a provider is read and moved through its command line', async () => {
   const none = await project({ plain: { bin: { plain: 'provider.cjs' } } })
+  const noneHas = await providedGitHost()(none)
   const root = await project(GIT_HOST)
   try {
-    assert.equal(await providedGitHost()(none), undefined)
+    assert.equal(noneHas, undefined)
     const gitHost = (await providedGitHost()(root))!
     assert.ok(gitHost)
     assert.deepEqual(await gitHost.requests(), { ok: true, requests: [REQUEST, { ...REQUEST, number: 6, state: 'merged', mergedAt: '2026-09-02T00:00:00Z', mergeCommit: 'm6' }] }, 'a row without the facts a request needs is no request')
@@ -69,6 +78,8 @@ test('a project with no git host package has no git host; one with a provider is
     assert.deepEqual(await gitHost.merge(8), { ok: false, error: 'pull request 8 is merged, not open' }, "a refusal is the provider's own line")
     assert.deepEqual(await gitHost.home(), { url: 'https://github.com/o/r', name: 'GitHub' })
     assert.deepEqual(await calls(root, 'github'), [
+      // Asked first for the project's page there: the git host is the project's only when it knows it.
+      'home',
       'requests',
       'requests --branch agent-run-1 --state open --since 2026-09-01T00:00:00Z',
       'requests --branch unreachable',
@@ -94,9 +105,11 @@ test('the provider is looked up again after the window, or when changed() says s
     assert.equal(await reader(root), first, 'the same source within the window')
     clock += 6_000
     assert.equal(await reader(root), first, 'the same command still provides: the same source')
-    await writeFile(join(root, 'package.json'), JSON.stringify({ devDependencies: {} }))
+    // The project's remote moved off the host: the provider no longer knows the project's page there.
+    await writeFile(join(root, 'node_modules', 'github', 'home.json'), JSON.stringify({ ok: false }))
+    assert.equal(await reader(root), first, 'within the window, the source known')
     reader.changed(root)
-    assert.equal(await reader(root), undefined, 'the package dropped: no git host')
+    assert.equal(await reader(root), undefined, 'looked up again: a git host that knows no page of the project is none of its')
   } finally {
     await rm(root, { recursive: true, force: true })
   }

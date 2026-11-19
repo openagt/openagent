@@ -1,12 +1,11 @@
-import { readProvidedCommand, runPackageCommand, type ProvidedCommand } from '@openagt/agent-data'
-import { basicGitHosts, basicPackageNames } from './basic-skills.js'
+import { runPackageCommand, type ProvidedCommand } from '@openagt/agent-data'
+import { basicGitHosts } from './basic-skills.js'
 
 /**
- * The project's git host (#1820), reached by declaration: whichever package declares
- * `"openagent": { "git-host": "<command>" }` answers, and this tool runs that command the way the
- * dashboard runs any provided command. A package the project installed for it comes first; else
- * the git host among the basic skills every run gets, where it answers for the project
- * (`basic-skills.ts`), so a project with nothing installed has one too. Nothing here names a git
+ * The project's git host (#1820), reached by declaration: the package among the skills its
+ * distribution hands down (`basic-skills.ts`) that declares `"openagent": { "git-host": "<command>" }`
+ * and answers for the project there, and this tool runs that command the way the dashboard runs
+ * any provided command. The project's own packages bring none (#2394). Nothing here names a git
  * host or a package.
  *
  * What this tool asks of it: the account a run works as there. The pull request a run's branch
@@ -15,9 +14,10 @@ import { basicGitHosts, basicPackageNames } from './basic-skills.js'
 
 const NO_GIT_HOST = 'this project has no git host package'
 
-/** The command of the project's git host: its own package's, else a basic skill's, the basic skills' names never read from the project. */
+/** The command of the project's git host: the first of the skills handed down whose git host answers for the project. */
 export async function gitHostCommand(repo: string): Promise<ProvidedCommand | undefined> {
-  return readProvidedCommand(repo, 'git-host', await basicGitHosts(repo).catch(() => []), await basicPackageNames()).catch(() => undefined)
+  const [host] = await basicGitHosts(repo).catch(() => [])
+  return host
 }
 
 /**

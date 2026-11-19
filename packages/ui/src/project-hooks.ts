@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
 import { basename, delimiter, join } from 'node:path'
 import { parse as parseYaml } from 'yaml'
-import { builtInBinDirs } from './built-in.js'
+import { distributionBinDirs } from './distribution-packages.js'
 import { errorMessage } from './error-message.js'
 import { OPENAGENT_DIR } from './openagent-dir.js'
 
@@ -119,7 +119,7 @@ export async function runProjectHooks(cwd: string, kind: HookKind, opts: RunHook
  * project's, and nothing is a package fetched by name.
  */
 async function hookEnv(cwd: string, env: NodeJS.ProcessEnv): Promise<NodeJS.ProcessEnv> {
-  return { ...env, PATH: [...(await builtInBinDirs()), join(cwd, 'node_modules', '.bin'), env['PATH']].filter(Boolean).join(delimiter) }
+  return { ...env, PATH: [...(await distributionBinDirs()), join(cwd, 'node_modules', '.bin'), env['PATH']].filter(Boolean).join(delimiter) }
 }
 
 /** One line through the shell: how it ended, in words, and what it said on stderr. */

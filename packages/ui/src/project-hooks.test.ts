@@ -5,7 +5,10 @@ import { tmpdir } from 'node:os'
 import { delimiter, dirname, join } from 'node:path'
 import { PROJECT_HOOKS_FILE, parseProjectHooks, readProjectHooks, runProjectHooks } from './project-hooks.js'
 import { OPENAGENT_DIR } from './openagent-dir.js'
-import { builtInBinDirs } from './built-in.js'
+import { distributionBinDirs } from './distribution-packages.js'
+import { handDownTestDistribution } from './test-distribution.js'
+
+handDownTestDistribution()
 
 // The hooks file and its open and close lines (#1774), for real: `sh -c` in a throwaway project,
 // the lines leaving traces in files the assertions read back.
@@ -110,7 +113,7 @@ test("a line reaches its tool with nothing installed in the project: a tool of O
     const bare = ['/usr/bin', '/bin', dirname(process.execPath)].join(delimiter)
     await runProjectHooks(cwd, 'open', { env: { ...process.env, PATH: bare } })
     const [scheduler, theirs] = (await readFile(join(cwd, 'hooks.log'), 'utf8')).trim().split('\n')
-    assert.ok((await builtInBinDirs()).includes(dirname(scheduler!)), `${scheduler} is the dashboard's copy`)
+    assert.ok((await distributionBinDirs()).includes(dirname(scheduler!)), `${scheduler} is the dashboard's copy`)
     assert.equal(theirs, join(cwd, 'node_modules', '.bin', 'their-tool'))
   } finally {
     await rm(cwd, { recursive: true, force: true })

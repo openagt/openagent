@@ -4,6 +4,10 @@ import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promi
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { parseQueueEntries, providedQueue } from './queue.js'
+import { DISTRIBUTION_ENV } from '@openagt/hooks'
+import { handDownTestDistribution } from '../test-distribution.js'
+
+handDownTestDistribution()
 
 // The queue contract (#1774): a project's package declares `"openagent": { "queue": "<command>" }`
 // and OpenAgent reads the queue by running `<command> --local`. Real processes: a tiny
@@ -17,10 +21,14 @@ appendFileSync(join(__dirname, 'calls.log'), process.argv.slice(2).join(' ') + '
 process.stdout.write(readFileSync(join(__dirname, 'queue.json'), 'utf8'))
 `
 
-/** A project whose package.json lists `deps`, each installed under node_modules with its own package.json. */
+/**
+ * A throwaway project, and a distribution of `deps` handed down to this process: each installed
+ * under the project's node_modules with its own package.json, every project's.
+ */
 async function project(deps: Record<string, Record<string, unknown>>, queue = '["- one", "two"]'): Promise<string> {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'openagent-queue-')))
-  await writeFile(join(root, 'package.json'), JSON.stringify({ devDependencies: Object.fromEntries(Object.keys(deps).map(name => [name, '*'])) }))
+  await writeFile(join(root, 'distribution.mjs'), `export default ${JSON.stringify(Object.keys(deps).map(name => ({ package: name })))}\n`)
+  process.env[DISTRIBUTION_ENV] = join(root, 'distribution.mjs')
   for (const [name, manifest] of Object.entries(deps)) {
     const dir = join(root, 'node_modules', name)
     await mkdir(dir, { recursive: true })
@@ -36,9 +44,10 @@ const calls = async (root: string, pkg: string): Promise<string[]> =>
 
 test('a project with no queue provider has no queue; one with a provider is read through `<command> --local`', async () => {
   const none = await project({ plain: { bin: { plain: 'provider.cjs' } } })
+  const noneHas = await providedQueue()(none)
   const root = await project({ queue: { bin: { queue: 'provider.cjs' }, openagent: { queue: 'queue' } } })
   try {
-    assert.equal(await providedQueue()(none), undefined)
+    assert.equal(noneHas, undefined)
     const queue = await providedQueue()(root)
     assert.ok(queue)
     assert.deepEqual(await queue.list(), ['- one', 'two'])

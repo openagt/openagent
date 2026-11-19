@@ -7,6 +7,9 @@ import { join } from 'node:path'
 import { applyChange } from '../project-skills/change.js'
 import type { GitHostSource } from '../store/git-host.js'
 import { sendSkills, SKILLS_BRANCH } from './send-skills.js'
+import { handDownTestDistribution } from '../test-distribution.js'
+
+handDownTestDistribution()
 
 // The skills sent where agents start from, against real git: a folder, and a bare repository as
 // its remote, which a hook can make refuse a push to main the way a protected branch does.

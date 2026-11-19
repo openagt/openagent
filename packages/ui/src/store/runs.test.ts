@@ -3,10 +3,11 @@ import { test } from 'node:test'
 import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { readProvidedCommand } from '@openagt/agent-data'
+import { DISTRIBUTION_ENV } from '@openagt/hooks'
+import { providedCommand } from '../distribution-packages.js'
 import { parseRunCard, providedRuns } from './runs.js'
 
-// The finished-runs contract (#1774): a project's package declares `"openagent": { "runs": "<command>" }`
+// The finished-runs contract (#1774): a package of the distribution declares `"openagent": { "runs": "<command>" }`
 // and OpenAgent reads finished runs by running that command. These tests use real processes:
 // a tiny provider script that logs each call it answers, in a throwaway project.
 
@@ -35,10 +36,14 @@ if (args[0] === 'show') {
 }
 `
 
-/** A project whose package.json lists `deps`, each installed under node_modules with its own package.json. */
+/**
+ * A throwaway project, and a distribution of `deps` handed down to this process: each installed
+ * under the project's node_modules with its own package.json, every project's.
+ */
 async function project(deps: Record<string, Record<string, unknown>>): Promise<string> {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'openagent-runs-')))
-  await writeFile(join(root, 'package.json'), JSON.stringify({ devDependencies: Object.fromEntries(Object.keys(deps).map(name => [name, '*'])) }))
+  await writeFile(join(root, 'distribution.mjs'), `export default ${JSON.stringify(Object.keys(deps).map(name => ({ package: name })))}\n`)
+  process.env[DISTRIBUTION_ENV] = join(root, 'distribution.mjs')
   for (const [name, manifest] of Object.entries(deps)) {
     const dir = join(root, 'node_modules', name)
     await mkdir(dir, { recursive: true })
@@ -52,21 +57,20 @@ async function project(deps: Record<string, Record<string, unknown>>): Promise<s
 const calls = async (root: string, pkg: string): Promise<string[]> =>
   (await readFile(join(root, 'node_modules', pkg, 'calls.log'), 'utf8').catch(() => '')).split('\n').filter(Boolean)
 
-test('the runs provider is the dependency that declares it, naming one of its own commands; none declares it, the built-in one provides', async () => {
+test('the runs provider is the package of the distribution that declares it, naming one of its own commands; with none, the project has no runs', async () => {
   const root = await project({
     plain: { bin: { plain: 'provider.cjs' } },
     'wrong-bin': { bin: { a: 'provider.cjs' }, openagent: { runs: 'b' } },
     logs: { bin: { records: 'provider.cjs' }, openagent: { runs: 'records' } },
   })
   try {
-    const found = await readProvidedCommand(root, 'runs')
+    const found = await providedCommand(root, 'runs')
     assert.equal(found?.package, 'logs', 'a declaration naming no command of the package is skipped')
     assert.equal(found?.name, 'records')
-    assert.equal(await readProvidedCommand(root, 'tickets'), undefined, 'another kind: nobody declares it')
+    assert.equal(await providedCommand(root, 'tickets'), undefined, 'another kind: nobody declares it')
     const none = await project({ plain: { bin: { plain: 'provider.cjs' } } })
     try {
-      assert.equal(await readProvidedCommand(none, 'runs'), undefined, 'none of the project\'s own packages')
-      assert.ok(await providedRuns()(none), 'no package of its own: the built-in logs package reads its runs')
+      assert.equal(await providedRuns()(none), undefined, 'no package of the distribution reads its runs')
     } finally {
       await rm(none, { recursive: true, force: true })
     }

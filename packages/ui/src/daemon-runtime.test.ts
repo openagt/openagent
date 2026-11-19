@@ -22,6 +22,9 @@ import { publishedBase } from '@openagt/agent-data/names'
 import { SESSIONS_ID } from './project-address.js'
 import { addWorktree, agentBranchName, worktreePath } from '@openagt/skill-branches'
 import { DATA_BRANCH, SHARE_SETTING, excludeFromGit, readSharing, withFileBranch, writeSharing } from '@openagt/agent-data'
+import { handDownTestDistribution } from './test-distribution.js'
+
+handDownTestDistribution()
 
 // A Start, as the daemon does it: this computer's host (`run.host`, #2394), asked with the run's
 // options. The relay half of onStart has its own loopback test (dashboard/remote-run.integration.test.ts).

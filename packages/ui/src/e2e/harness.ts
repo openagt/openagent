@@ -6,6 +6,8 @@ import { mkdtempSync } from 'node:fs'
 import { readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { DISTRIBUTION_ENV } from '@openagt/hooks'
 import { setDashboardContext } from '../dashboard-rpc/context.js'
 import { createProjectRuntime, type ProjectRuntime } from '../daemon-runtime.js'
 import { projectId } from '@openagt/agent-data'
@@ -121,6 +123,8 @@ export async function makeWorld(): Promise<StoryWorld> {
   const home = mkdtempSync(join(tmpdir(), 'openagent-e2e-home-'))
   const startsFile = join(home, 'host-calls.jsonl')
   process.env[STARTS_FILE_ENV] = startsFile
+  // The demo's distribution, as its openagent hands it down: the packages the dashboard reads.
+  process.env[DISTRIBUTION_ENV] = fileURLToPath(new URL('./distribution.js', import.meta.url))
 
   const host = fakeRunHost()
   const runtime = createProjectRuntime({ cwd: home, env: process.env, host })

@@ -7,6 +7,10 @@ import { deleteProjectAgent, removeProjectWorktree } from './worktrees.js'
 import { nodeGitRunner } from '@openagt/agent-data'
 import { runFiles, writeRun } from '@openagt/skill-logs'
 import { addWorktree, agentBranchName } from '@openagt/skill-branches'
+import { handDownTestDistribution } from './test-distribution.js'
+
+handDownTestDistribution()
+
 // The dashboard's side of reclaiming a checkout: when it may be asked for, and whose refusal is answered. The rule itself lives in the branches package, the project's branches provider here (#1774), and is tested there.
 // Against real git, because "was the diff actually destroyed" is not a question a fake answers.
 

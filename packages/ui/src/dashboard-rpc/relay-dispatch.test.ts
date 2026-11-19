@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { projectId } from '@openagt/agent-data'
 import { addProject } from '../registry.js'
+import { withDistribution } from '../test-distribution.js'
 import type { StartAgentOptions } from '../dashboard/types.js'
 
 // The machine-side whitelist dispatcher (#1067 slice 2): a daemon that relayed an agent here calls one of a
@@ -144,22 +145,24 @@ test("a relayed module command is a read when this computer's own copy of the mo
   try {
     provideTestContext()
     const shop = join(dir, 'shop')
-    const tool = join(shop, 'node_modules', 'tool')
+    const tool = join(dir, 'node_modules', 'tool')
     await mkdir(tool, { recursive: true })
-    await writeFile(join(shop, 'package.json'), JSON.stringify({ dependencies: { tool: '1' } }))
+    await mkdir(shop)
     await writeFile(join(tool, 'package.json'), JSON.stringify({ name: 'tool', exports: { './dashboard': './w.js' }, bin: { tool: 'bin/tool' }, openagent: { reads: { tool: ['list'] } } }))
     await writeFile(join(tool, 'w.js'), 'export default {}')
     await addProject(shop, '2026-10-27T00:00:00.000Z')
     const here = projectId(shop)
-    // The caller's own project id comes first and is no matter: the call is read in the project here.
-    assert.equal(await isRelayReadCall(here, 'runModuleCommand', ['callers-id', 'tool', ['list']]), true)
-    assert.equal(await isRelayReadCall(here, 'runModuleCommand', ['callers-id', 'tool', ['add', 'x'], undefined, false]), false)
-    assert.equal(await isRelayReadCall(here, 'runModuleCommand', ['callers-id', 'nope', ['list']]), false)
-    assert.equal(await isRelayReadCall('nowhere-1', 'runModuleCommand', ['callers-id', 'tool', ['list']]), false)
-    assert.equal(await isRelayReadCall(here, 'runModuleCommand', ['callers-id', 'tool', 'list']), false)
-    // A read by its name, and any other act.
-    assert.equal(await isRelayReadCall(here, 'onGitStatus', []), true)
-    assert.equal(await isRelayReadCall(here, 'sendStop', ['callers-id', 'tool', ['list']]), false)
+    await withDistribution(dir, ['tool'], async () => {
+      // The caller's own project id comes first and is no matter: the call is read in the project here.
+      assert.equal(await isRelayReadCall(here, 'runModuleCommand', ['callers-id', 'tool', ['list']]), true)
+      assert.equal(await isRelayReadCall(here, 'runModuleCommand', ['callers-id', 'tool', ['add', 'x'], undefined, false]), false)
+      assert.equal(await isRelayReadCall(here, 'runModuleCommand', ['callers-id', 'nope', ['list']]), false)
+      assert.equal(await isRelayReadCall('nowhere-1', 'runModuleCommand', ['callers-id', 'tool', ['list']]), false)
+      assert.equal(await isRelayReadCall(here, 'runModuleCommand', ['callers-id', 'tool', 'list']), false)
+      // A read by its name, and any other act.
+      assert.equal(await isRelayReadCall(here, 'onGitStatus', []), true)
+      assert.equal(await isRelayReadCall(here, 'sendStop', ['callers-id', 'tool', ['list']]), false)
+    })
   } finally {
     if (previous === undefined) delete process.env.XDG_CONFIG_HOME
     else process.env.XDG_CONFIG_HOME = previous

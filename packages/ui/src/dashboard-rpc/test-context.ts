@@ -6,6 +6,9 @@ import { setDashboardContext, type DashboardContext, type RemoteAgents } from '.
 import { registryPreferencesStore } from '../registry.js'
 import { defaultQuotaSource } from '../dashboard/quota.js'
 import type { DashboardOptions } from '../dashboard/server.js'
+import { handDownTestDistribution } from '../test-distribution.js'
+
+handDownTestDistribution()
 
 /** No other computer of the person's: what a test that builds its own `remote` spreads in when it is about none. */
 export const NO_ELSEWHERE: Pick<RemoteAgents, 'elsewhere' | 'elsewhereRuns' | 'followElsewhereRuns' | 'elsewhereHome' | 'bringHere' | 'forward' | 'machinesQueue'> = {

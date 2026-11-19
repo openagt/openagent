@@ -10,9 +10,10 @@ already made, and lists it in its pull request; for anything else it proposes an
 ## The command
 - OpenAgent is run as its distribution, `@openagt/dashboard`, by the one command it brings,
   `openagent`: this package's, serving the distribution's modules (#2394). The skills every run
-  gets by default are named here, and only here, and the runner links the skills it is handed.
-  Picked over a package of its own for the command and that list (`@openagt/start`), a second
-  name in front of the dashboard; and over the list staying in the runner.
+  gets by default are named in the distribution, and only there, and the runner links the skills
+  it is handed. Picked over a package of its own for the command and that list
+  (`@openagt/start`), a second name in front of the dashboard; and over the list staying in the
+  runner.
 - A project's own skill takes a default's place by having its name: the project's
   `.claude/skills/<name>` or `.agents/skills/<name>`, committed on the branch an agent
   starts from. Picked over a skill saying which default it does in a line of its own, a
@@ -98,16 +99,11 @@ already made, and lists it in its pull request; for anything else it proposes an
   ("Ran 2 agents, received a message"); open, a panel with a row each. A message one sent is
   folded too. Picked over a block of rows always in view, which read as a log and pushed the
   agent's words down.
-- Which package provides a kind of data when several installed packages declare it: the
-  project's own package.json says, under the same `openagent` key with the package's name
-  as the value; several and no line means nothing provides it, and the project's banner
-  says why. Picked over the first in dependency order, taken silently, and over routing by
-  the remote's host.
-- A skill's text names its package in its front matter, `package: "<name>@<range>"`, and a
-  project that holds the text with no package installed (`npx skills add` copies the text
-  alone) has the package fetched the way `npx` fetches one: what it declares comes through
-  the same `openagent` key as an installed one's. Picked over the text carrying the command
-  itself, which would have been a second way to declare, for the git host alone.
+- Which package provides a kind of data is the distribution's to say, the same for every
+  project: when two of the packages a project has both declare it, neither provides it, and
+  the project's banner says why (#2394). Picked over the project's own package.json naming
+  one, and over a skill's text naming a package to fetch for a project that holds the text
+  alone.
 - An Overview card belongs to the package whose data it shows: a module declares its cards
   and OpenAgent draws them, in the order the cards name, only where a project has the
   package. Picked over OpenAgent's own cards fed by the providers, which showed an empty
@@ -201,11 +197,12 @@ already made, and lists it in its pull request; for anything else it proposes an
   would carry the person's data).
 - The dashboard grows by modules: a package that adds to the dashboard (pages, Overview
   cards, link actions, panes beside the chat, a run's summary, Settings sections) is a module;
-  a skill that brings pages is a module that is also a skill. A module is one OpenAgent
-  brings itself, or a package among a project's dependencies, whoever wrote it. The
-  Files pane is the first module that is no skill. Picked over keeping Files a folder
-  inside OpenAgent, which gave it a boundary but taught the module contract nothing, and
-  named module over widget.
+  a skill that brings pages is a module that is also a skill. A module is one of the
+  distribution's packages, whoever wrote it, and none comes from a project's own
+  dependencies (#2394). The Files pane is the first module that is no skill. Picked over
+  keeping Files a folder inside OpenAgent, which gave it a boundary but taught the module
+  contract nothing, and named module over widget; and over a project's own dependencies
+  bringing modules too.
 - A skill works alone through its commands; its UI is a dashboard module, with no page of its
   own. Picked over a separate `skill-ui` package with a standalone page, and over a contract
   package beside the dashboard.
@@ -245,15 +242,15 @@ already made, and lists it in its pull request; for anything else it proposes an
   Everforest themes, which told the kinds apart less, and over Claude Code's hues everywhere.
 - A file's icon is Material Icon Theme's. Picked over vscode-icons, Catppuccin's outlines, and
   a small two-tone set of our own.
-- The packages every project wants are built in: OpenAgent depends on them and uses them
-  for every project through the same contract as any package (a module by its
-  `./dashboard` export, a provider of a kind of data by its `openagent` key). They are Changes, Files, the runner, the packages that read a
-  project's runs and checkouts, and the GitHub package, so an empty folder starts an
-  agent, shows it, and can be put on GitHub. A built-in git host is a project's only when the
-  project's remote is on that host: it was not chosen by the project, so it does not
-  answer for a project on another host. Picked over each project installing them itself,
+- The packages every project wants are the distribution's, installed with it, and used for
+  every project through the same contract as any package (a module by its `./dashboard`
+  export, a provider of a kind of data by its `openagent` key). They are Changes, Files, the
+  runner, the packages that read a project's runs and checkouts, and the GitHub package, so
+  an empty folder starts an agent, shows it, and can be put on GitHub. A git host is a
+  project's only when the project's remote is on that host: no project chose it, so it does
+  not answer for a project on another host. Picked over each project installing them itself,
   which left a project with nothing installed unable to start an agent or to see one.
-- A project has a skill when every run gets it by default (the command names those), or
+- A project has a skill when every run gets it by default (the distribution names those), or
   when the skill's text is in the project, where the coding agents read it
   (`.claude/skills/<name>/SKILL.md`, `.agents/skills/<name>/SKILL.md`). OpenAgent brings the
   packages of the skills that have pages itself (tickets, queue, browser, scheduler) and gives each, with its page, its cards and its data, to every project where
@@ -265,11 +262,11 @@ already made, and lists it in its pull request; for anything else it proposes an
   Logs page and its Members card are a project's only once the project holds the logs
   skill's text, like any picked skill's page. Picked over the Logs page on every project,
   which a new project showed without asking.
-- Three lists name the packages OpenAgent brings, the ones every project has, the ones
-  a project picks and the ones that are the computer's, and nothing else in OpenAgent
-  names a package. One of those names among a project's own dependencies is not read:
-  OpenAgent's copy and its rule are the only ones. Picked over a project's own copy
-  winning, which gave one package two ways into a project.
+- The distribution names the packages OpenAgent brings, and says of each whose it is: every
+  project's, a project's once it picked the package's skill, or the computer's (#2394).
+  Nothing else in OpenAgent names a package, and a project's own dependencies are not read.
+  Picked over three lists in the dashboard's code, and over a project's own copy winning,
+  which gave one package two ways into a project.
 - The door to this computer and the servers it installed OpenAgent on are the
   computer's, not a project's: their entries in Settings are there with no project
   added, and their commands run in no project. Picked over giving them to every project

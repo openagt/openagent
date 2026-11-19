@@ -1,5 +1,5 @@
 import { callPackageCommand, type ProvidedCommand } from '@openagt/agent-data'
-import { providedCommand } from '../built-in.js'
+import { providedCommand } from '../distribution-packages.js'
 
 /**
  * The tickets, as OpenAgent reads them (#1774). OpenAgent keeps no ticket and imports no
@@ -96,10 +96,10 @@ function commandTickets(root: string, command: ProvidedCommand, now: () => numbe
 }
 
 /**
- * The production {@link TicketsReader}: the project's provider, looked up among the packages the project has (`built-in.ts`), one
+ * The production {@link TicketsReader}: the project's provider, looked up among the packages the project has (`distribution-packages.ts`), one
  * source per project kept while the same command provides — so the cache holds across the many
- * reads of one poll, and a project that installs, swaps or drops its provider is read the new way
- * within {@link CACHE_MS}. `changed(root)` forgets that project's read, so the next read runs the
+ * reads of one poll, and a project whose provider changes (a skill picked or dropped) is read the
+ * new way within {@link CACHE_MS}. `changed(root)` forgets that project's read, so the next read runs the
  * command again: a module's command just ran there, and may have written. `changed(root, pkg)`
  * forgets it only when that package is the one providing: another package's command did not write it.
  */

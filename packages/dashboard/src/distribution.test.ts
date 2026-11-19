@@ -4,7 +4,7 @@ import { execFile } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
-import { createHooks, DISTRIBUTION_ENV, LOCAL_HOST, loadHandedDown } from '@openagt/hooks'
+import { createHooks, DISTRIBUTION_ENV, LOCAL_HOST, distributionItems, loadHandedDown, packageDirOf } from '@openagt/hooks'
 
 const DISTRIBUTION = fileURLToPath(new URL('./distribution.js', import.meta.url))
 
@@ -15,6 +15,15 @@ test("the distribution's modules load from its own install, the run pipeline's, 
     ['git-branches', 'github', 'agent-driver'],
   )
   assert.deepEqual((await createHooks(modules!).hosts()).map(host => host.id), [LOCAL_HOST])
+})
+
+test('every package the distribution lists is one of its own dependencies, installed beside it', async () => {
+  const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8')) as { dependencies: Record<string, string> }
+  for (const item of await distributionItems(DISTRIBUTION)) {
+    if ('module' in item) continue
+    assert.ok(Object.hasOwn(pkg.dependencies, item.package), `${item.package} is a dependency`)
+    assert.ok(await packageDirOf(DISTRIBUTION, item.package))
+  }
 })
 
 test("openagent is the dashboard's command serving this distribution: the version it says is this package's", async () => {

@@ -10,14 +10,13 @@ import { onModules, readModule, runComputerCommand, runModuleCommand } from './m
 import { asCaller } from '../dashboard/person.js'
 import { setDashboardContext } from './context.js'
 import { NO_ELSEWHERE, provideTestContext, testDashboardContext } from './test-context.js'
+import { testPackagesBut, withDistribution } from '../test-distribution.js'
 
 // The host's capabilities, wired as the daemon wires them (D3); a test that needs other ones wires its own.
 provideTestContext()
 
-/** A project with a package.json and installed packages, each `{ exports, bin }` plus files. */
-async function project(dir: string, packages: Record<string, { manifest: Record<string, unknown>; files?: Record<string, string> }>): Promise<void> {
-  await mkdir(dir, { recursive: true })
-  await writeFile(join(dir, 'package.json'), JSON.stringify({ dependencies: Object.fromEntries(Object.keys(packages).map(name => [name, '1'])) }))
+/** Packages installed under `dir`'s `node_modules`, each `{ exports, bin }` plus files: what a test's distribution lists ({@link withDistribution}). */
+async function install(dir: string, packages: Record<string, { manifest: Record<string, unknown>; files?: Record<string, string> }>): Promise<void> {
   for (const [name, { manifest, files = {} }] of Object.entries(packages)) {
     const pkgDir = join(dir, 'node_modules', name)
     await mkdir(pkgDir, { recursive: true })
@@ -29,9 +28,21 @@ async function project(dir: string, packages: Record<string, { manifest: Record<
   }
 }
 
+/** A project folder, holding the text of each skill named, so it picked it. */
+async function project(dir: string, picks: readonly string[] = []): Promise<void> {
+  await mkdir(dir, { recursive: true })
+  for (const name of picks) {
+    await mkdir(join(dir, '.claude', 'skills', name), { recursive: true })
+    await writeFile(join(dir, '.claude', 'skills', name, 'SKILL.md'), `---\nname: ${name}\n---\n`)
+  }
+}
+
+/** The computer's packages of the tests' distribution, as it lists them. */
+const COMPUTER = testPackagesBut().filter(pkg => pkg.for === 'computer')
+
 const module = (bin: string) => ({
   manifest: { exports: { './dashboard': './w.js' }, bin: { [bin]: `bin/${bin}` } },
-  files: { 'w.js': 'export default {}', [`bin/${bin}`]: `console.log(JSON.stringify(${JSON.stringify(bin)}))` },
+  files: { 'w.js': 'export default {}', [`bin/${bin}`]: `console.log(JSON.stringify(${JSON.stringify(bin)}))`, 'SKILL.md': `---\nname: ${bin}\n---\n` },
 })
 
 /** A queue provider that is also a module: `--local` prints its file; `add` appends to it. */
@@ -61,28 +72,31 @@ test('the dashboard\'s modules are every registered project\'s, one per package,
   process.env.XDG_CONFIG_HOME = join(dir, 'cfg')
   try {
     await mkdir(process.env.XDG_CONFIG_HOME, { recursive: true })
+    await install(dir, { logs: module('logs'), queue: module('queue'), plain: { manifest: { bin: { plain: 'bin/plain' } }, files: { 'bin/plain': 'console.log("1")' } } })
     const a = join(dir, 'a')
     const b = join(dir, 'b')
-    await project(a, { logs: module('logs'), plain: { manifest: { bin: { plain: 'bin/plain' } }, files: { 'bin/plain': 'console.log("1")' } } })
-    await project(b, { logs: module('logs'), queue: module('queue') })
+    await project(a)
+    await project(b, ['queue'])
     await addProject(a, '2026-09-19T00:00:00.000Z')
     await addProject(b, '2026-09-19T00:00:01.000Z')
 
-    // The computer's module (the Devices and Machines sections) comes first, and is no project's. Then the built-in modules (Changes, Files), which are every project's, from the first; the logs package's page is no project's that did not pick its skill; then the projects' own.
-    assert.deepEqual(await listed(), [
-      { package: '@openagt/dashboard-devices', url: '/_computer-modules/%40openagt%2Fdashboard-devices/dashboard.js', projects: [], computer: true },
-      { package: '@openagt/skill-account-rotation', url: '/_computer-modules/%40openagt%2Fskill-account-rotation/dashboard.js', projects: [], computer: true },
-      { package: '@openagt/dashboard-changes', url: `/_modules/${projectId(a)}/%40openagt%2Fdashboard-changes/dashboard.js`, projects: [projectId(a), projectId(b)] },
-      { package: '@openagt/dashboard-files', url: `/_modules/${projectId(a)}/%40openagt%2Fdashboard-files/dashboard.js`, projects: [projectId(a), projectId(b)] },
-      { package: 'logs', url: `/_modules/${projectId(a)}/logs/w.js`, projects: [projectId(a), projectId(b)] },
-      { package: 'queue', url: `/_modules/${projectId(b)}/queue/w.js`, projects: [projectId(b)] },
-    ])
+    await withDistribution(dir, [...COMPUTER, '@openagt/dashboard-changes', '@openagt/dashboard-files', 'logs', 'plain', { package: 'queue', for: 'picked' }], async () => {
+      // The computer's modules (the Devices and Machines sections) come first, and are no project's. Then the ones every project has, from the first; then queue, which only the project that picked its skill has.
+      assert.deepEqual(await listed(), [
+        { package: '@openagt/dashboard-devices', url: '/_computer-modules/%40openagt%2Fdashboard-devices/dashboard.js', projects: [], computer: true },
+        { package: '@openagt/skill-account-rotation', url: '/_computer-modules/%40openagt%2Fskill-account-rotation/dashboard.js', projects: [], computer: true },
+        { package: '@openagt/dashboard-changes', url: `/_modules/${projectId(a)}/%40openagt%2Fdashboard-changes/dashboard.js`, projects: [projectId(a), projectId(b)] },
+        { package: '@openagt/dashboard-files', url: `/_modules/${projectId(a)}/%40openagt%2Fdashboard-files/dashboard.js`, projects: [projectId(a), projectId(b)] },
+        { package: 'logs', url: `/_modules/${projectId(a)}/logs/w.js`, projects: [projectId(a), projectId(b)] },
+        { package: 'queue', url: `/_modules/${projectId(b)}/queue/w.js`, projects: [projectId(b)] },
+      ])
 
-    assert.deepEqual(await runModuleCommand(projectId(b), 'queue', []), { ok: true, output: 'queue' })
-    // A package the project has but that brings no module, a module of another project, an unknown project: refused.
-    assert.deepEqual(await runModuleCommand(projectId(a), 'plain', []), { ok: false, error: 'plain brings no module to this project' })
-    assert.deepEqual(await runModuleCommand(projectId(a), 'queue', []), { ok: false, error: 'queue brings no module to this project' })
-    assert.deepEqual(await runModuleCommand('nowhere-1', 'logs', []), { ok: false, error: 'unknown project' })
+      assert.deepEqual(await runModuleCommand(projectId(b), 'queue', []), { ok: true, output: 'queue' })
+      // A package the project has but that brings no module, a module of another project, an unknown project: refused.
+      assert.deepEqual(await runModuleCommand(projectId(a), 'plain', []), { ok: false, error: 'plain brings no module to this project' })
+      assert.deepEqual(await runModuleCommand(projectId(a), 'queue', []), { ok: false, error: 'queue brings no module to this project' })
+      assert.deepEqual(await runModuleCommand('nowhere-1', 'logs', []), { ok: false, error: 'unknown project' })
+    })
   } finally {
     if (previous === undefined) delete process.env.XDG_CONFIG_HOME
     else process.env.XDG_CONFIG_HOME = previous
@@ -99,27 +113,30 @@ test('with no project added, the computer\'s modules are there and run their own
   delete process.env.OPENAGENT_SERVER
   try {
     await mkdir(process.env.XDG_CONFIG_HOME, { recursive: true })
-    assert.deepEqual(await listed(), [
-      { package: '@openagt/dashboard-devices', url: '/_computer-modules/%40openagt%2Fdashboard-devices/dashboard.js', projects: [], computer: true },
-      { package: '@openagt/skill-account-rotation', url: '/_computer-modules/%40openagt%2Fskill-account-rotation/dashboard.js', projects: [], computer: true },
-    ])
-    // The door's own command, answering what it keeps for this computer: nobody is in, and it is shut.
-    assert.deepEqual(await runComputerCommand('@openagt/dashboard-devices', ['status']), { ok: true, output: { on: false, listening: false, devices: [], lines: [], persons: [] } })
-    assert.deepEqual(await runComputerCommand('@openagt/dashboard-devices', ['server', 'status']), { ok: true, output: { servers: [] } })
-    assert.deepEqual(await runComputerCommand('@openagt/dashboard-devices', ['status'], 'servers'), { ok: false, error: '@openagt/dashboard-devices has no command servers' })
-    // A command is told when a person the owner invited asks, and decides what such a person may do: no computer of theirs is let in here.
-    assert.deepEqual(await runComputerCommand('@openagt/dashboard-devices', ['allow', 'a1b2c3d4e5f6']), { ok: false, error: 'That computer is no longer asking.' })
-    assert.deepEqual(await asCaller(encodeURIComponent('Rom Ö'), () => runComputerCommand('@openagt/dashboard-devices', ['allow', 'a1b2c3d4e5f6'])), { ok: false, error: "Only this computer's owner lets a computer in." })
-    // What a command reads on standard input is handed over as it is.
-    assert.deepEqual(await runComputerCommand('@openagt/dashboard-devices', ['ask-cancel', 'http://127.0.0.1:9', '-'], null, ''), { ok: false, error: 'no secret on standard input' })
-    assert.deepEqual(await runComputerCommand('@openagt/dashboard-files', []), { ok: false, error: "@openagt/dashboard-files is not this computer's" })
-    assert.deepEqual(await runComputerCommand('queue', []), { ok: false, error: "queue is not this computer's" })
+    await install(dir, { queue: module('queue') })
+    await withDistribution(dir, [...COMPUTER, '@openagt/dashboard-files', 'queue'], async () => {
+      assert.deepEqual(await listed(), [
+        { package: '@openagt/dashboard-devices', url: '/_computer-modules/%40openagt%2Fdashboard-devices/dashboard.js', projects: [], computer: true },
+        { package: '@openagt/skill-account-rotation', url: '/_computer-modules/%40openagt%2Fskill-account-rotation/dashboard.js', projects: [], computer: true },
+      ])
+      // The door's own command, answering what it keeps for this computer: nobody is in, and it is shut.
+      assert.deepEqual(await runComputerCommand('@openagt/dashboard-devices', ['status']), { ok: true, output: { on: false, listening: false, devices: [], lines: [], persons: [] } })
+      assert.deepEqual(await runComputerCommand('@openagt/dashboard-devices', ['server', 'status']), { ok: true, output: { servers: [] } })
+      assert.deepEqual(await runComputerCommand('@openagt/dashboard-devices', ['status'], 'servers'), { ok: false, error: '@openagt/dashboard-devices has no command servers' })
+      // A command is told when a person the owner invited asks, and decides what such a person may do: no computer of theirs is let in here.
+      assert.deepEqual(await runComputerCommand('@openagt/dashboard-devices', ['allow', 'a1b2c3d4e5f6']), { ok: false, error: 'That computer is no longer asking.' })
+      assert.deepEqual(await asCaller(encodeURIComponent('Rom Ö'), () => runComputerCommand('@openagt/dashboard-devices', ['allow', 'a1b2c3d4e5f6'])), { ok: false, error: "Only this computer's owner lets a computer in." })
+      // What a command reads on standard input is handed over as it is.
+      assert.deepEqual(await runComputerCommand('@openagt/dashboard-devices', ['ask-cancel', 'http://127.0.0.1:9', '-'], null, ''), { ok: false, error: 'no secret on standard input' })
+      assert.deepEqual(await runComputerCommand('@openagt/dashboard-files', []), { ok: false, error: "@openagt/dashboard-files is not this computer's" })
+      assert.deepEqual(await runComputerCommand('queue', []), { ok: false, error: "queue is not this computer's" })
 
-    const a = join(dir, 'a')
-    await project(a, { queue: module('queue') })
-    await addProject(a, '2026-09-19T00:00:00.000Z')
-    assert.deepEqual(await runComputerCommand('queue', []), { ok: false, error: "queue is not this computer's" })
-    assert.deepEqual(await runModuleCommand(projectId(a), '@openagt/dashboard-devices', ['status']), { ok: false, error: '@openagt/dashboard-devices brings no module to this project' })
+      const a = join(dir, 'a')
+      await project(a)
+      await addProject(a, '2026-09-19T00:00:00.000Z')
+      assert.deepEqual(await runComputerCommand('queue', []), { ok: false, error: "queue is not this computer's" })
+      assert.deepEqual(await runModuleCommand(projectId(a), '@openagt/dashboard-devices', ['status']), { ok: false, error: '@openagt/dashboard-devices brings no module to this project' })
+    })
   } finally {
     if (previous === undefined) delete process.env.XDG_CONFIG_HOME
     else process.env.XDG_CONFIG_HOME = previous
@@ -134,17 +151,20 @@ test('a module\'s action may write what OpenAgent reads through a provider: the 
   process.env.XDG_CONFIG_HOME = join(dir, 'cfg')
   try {
     await mkdir(process.env.XDG_CONFIG_HOME, { recursive: true })
+    await install(dir, { queue: queueModule })
     const a = join(dir, 'a')
-    await project(a, { queue: queueModule })
+    await project(a)
     await addProject(a, '2026-09-19T00:00:00.000Z')
-    const queue = (await projectQueue(a))!
-    assert.deepEqual(await queue.list(), [], 'read once: cached for the window')
-    assert.deepEqual(await runModuleCommand(projectId(a), 'queue', ['add', 'ship it'], undefined, true), { ok: true, output: { ok: true } })
-    assert.deepEqual(await queue.list(), ['ship it'], 'the module wrote through its action, and OpenAgent forgot its read')
-    // Another writer adds an entry; the page then reads the queue through the package's command.
-    await writeFile(join(a, 'node_modules', 'queue', 'queue.json'), JSON.stringify(['ship it', 'and this']))
-    assert.deepEqual(await runModuleCommand(projectId(a), 'queue', ['--local']), { ok: true, output: ['ship it', 'and this'] })
-    assert.deepEqual(await queue.list(), ['ship it'], 'a read wrote nothing: what OpenAgent read stays, until its window ends')
+    await withDistribution(dir, ['queue'], async () => {
+      const queue = (await projectQueue(a))!
+      assert.deepEqual(await queue.list(), [], 'read once: cached for the window')
+      assert.deepEqual(await runModuleCommand(projectId(a), 'queue', ['add', 'ship it'], undefined, true), { ok: true, output: { ok: true } })
+      assert.deepEqual(await queue.list(), ['ship it'], 'the module wrote through its action, and OpenAgent forgot its read')
+      // Another writer adds an entry; the page then reads the queue through the package's command.
+      await writeFile(join(dir, 'node_modules', 'queue', 'queue.json'), JSON.stringify(['ship it', 'and this']))
+      assert.deepEqual(await runModuleCommand(projectId(a), 'queue', ['--local']), { ok: true, output: ['ship it', 'and this'] })
+      assert.deepEqual(await queue.list(), ['ship it'], 'a read wrote nothing: what OpenAgent read stays, until its window ends')
+    })
   } finally {
     if (previous === undefined) delete process.env.XDG_CONFIG_HOME
     else process.env.XDG_CONFIG_HOME = previous
@@ -158,25 +178,28 @@ test('a module reads through its own server part, in its own project; nothing el
   process.env.XDG_CONFIG_HOME = join(dir, 'cfg')
   try {
     await mkdir(process.env.XDG_CONFIG_HOME, { recursive: true })
-    const a = join(dir, 'a')
-    await project(a, {
+    await install(dir, {
       reader: {
         manifest: { exports: { './dashboard': './w.js', './server': './s.mjs' } },
         files: { 'w.js': 'export default {}', 's.mjs': 'export default { reads: { where: async (host, input) => ({ root: host.root, input }) } }' },
       },
       logs: module('logs'),
     })
+    const a = join(dir, 'a')
+    await project(a)
     await addProject(a, '2026-09-19T00:00:00.000Z')
 
-    assert.deepEqual(await readModule(projectId(a), 'reader', 'where', { path: 'x' }), { ok: true, output: { root: a, input: { path: 'x' } } })
-    assert.deepEqual(await readModule(projectId(a), 'logs', 'where', {}), { ok: false, error: 'logs has no server part' })
-    assert.deepEqual(await readModule(projectId(a), 'nothing', 'where', {}), { ok: false, error: 'nothing is no module of this project' })
-    assert.deepEqual(await readModule('nowhere-1', 'reader', 'where', {}), { ok: false, error: 'unknown project' })
-    // The built-in Files module reads the project's own files: none that git sees, in a folder that is no repository.
-    await writeFile(join(a, 'hello.txt'), 'hi')
-    const files = await readModule(projectId(a), '@openagt/dashboard-files', 'project', {})
-    assert.equal(files.ok, true)
-    assert.ok(files.ok && Array.isArray(files.output))
+    await withDistribution(dir, ['reader', 'logs', '@openagt/dashboard-files'], async () => {
+      assert.deepEqual(await readModule(projectId(a), 'reader', 'where', { path: 'x' }), { ok: true, output: { root: a, input: { path: 'x' } } })
+      assert.deepEqual(await readModule(projectId(a), 'logs', 'where', {}), { ok: false, error: 'logs has no server part' })
+      assert.deepEqual(await readModule(projectId(a), 'nothing', 'where', {}), { ok: false, error: 'nothing is no module of this project' })
+      assert.deepEqual(await readModule('nowhere-1', 'reader', 'where', {}), { ok: false, error: 'unknown project' })
+      // The Files module reads the project's own files: none that git sees, in a folder that is no repository.
+      await writeFile(join(a, 'hello.txt'), 'hi')
+      const files = await readModule(projectId(a), '@openagt/dashboard-files', 'project', {})
+      assert.equal(files.ok, true)
+      assert.ok(files.ok && Array.isArray(files.output))
+    })
   } finally {
     if (previous === undefined) delete process.env.XDG_CONFIG_HOME
     else process.env.XDG_CONFIG_HOME = previous
@@ -184,25 +207,28 @@ test('a module reads through its own server part, in its own project; nothing el
   }
 })
 
-test("another computer's project has the pages its computer said, from a copy here: a project's of this computer's, else OpenAgent's own; one with no copy here has none", async () => {
+test("another computer's project has the pages its computer said, from a copy here: a project's of this computer's, else the distribution's own; one with no copy here has none", async () => {
   const dir = await realpath(await mkdtemp(join(tmpdir(), 'openagent-modules-elsewhere-')))
   const previous = process.env.XDG_CONFIG_HOME
   process.env.XDG_CONFIG_HOME = join(dir, 'cfg')
   try {
     await mkdir(process.env.XDG_CONFIG_HOME, { recursive: true })
+    await install(dir, { logs: module('logs') })
     const a = join(dir, 'a')
-    await project(a, { logs: module('logs') })
+    await project(a)
     await addProject(a, '2026-09-19T00:00:00.000Z')
     const theirs = { id: 'shop-1~abc', path: '/Users/ada/shop', name: 'shop', activated: true, gitHost: true, machine: 'http://127.0.0.1:4210', modules: ['logs', '@openagt/skill-queue', '@openagt/dashboard-devices', 'left-pad'] }
     setDashboardContext(testDashboardContext({ remote: { ...testDashboardContext().remote, ...NO_ELSEWHERE, elsewhere: async () => [theirs] } }))
-    const modules = await listed()
-    // A package a project here has: its page is that one, for theirs too.
-    assert.deepEqual(modules.find(m => m.package === 'logs')?.projects, [projectId(a), 'shop-1~abc'])
-    // One no project here has, that OpenAgent brings: from OpenAgent's own copy.
-    assert.deepEqual(modules.find(m => m.package === '@openagt/skill-queue'), { package: '@openagt/skill-queue', url: '/_brought-modules/%40openagt%2Fskill-queue/dashboard.js', projects: ['shop-1~abc'] })
-    // The computer's own modules are no project's, and a package with no copy here brings nothing.
-    assert.deepEqual(modules.find(m => m.package === '@openagt/dashboard-devices')?.projects, [])
-    assert.equal(modules.find(m => m.package === 'left-pad'), undefined)
+    await withDistribution(dir, [...COMPUTER, 'logs', { package: '@openagt/skill-queue', for: 'picked' }], async () => {
+      const modules = await listed()
+      // A package a project here has: its page is that one, for theirs too.
+      assert.deepEqual(modules.find(m => m.package === 'logs')?.projects, [projectId(a), 'shop-1~abc'])
+      // One no project here has (none picked its skill), that the distribution brings: from the distribution's own copy.
+      assert.deepEqual(modules.find(m => m.package === '@openagt/skill-queue'), { package: '@openagt/skill-queue', url: '/_brought-modules/%40openagt%2Fskill-queue/dashboard.js', projects: ['shop-1~abc'] })
+      // The computer's own modules are no project's, and a package with no copy here brings nothing.
+      assert.deepEqual(modules.find(m => m.package === '@openagt/dashboard-devices')?.projects, [])
+      assert.equal(modules.find(m => m.package === 'left-pad'), undefined)
+    })
   } finally {
     setDashboardContext(testDashboardContext())
     if (previous === undefined) delete process.env.XDG_CONFIG_HOME

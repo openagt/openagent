@@ -14,9 +14,10 @@ cd ~/code/my-repo
 openagent          # serves the dashboard at http://127.0.0.1:4200
 ```
 
-This package is OpenAgent as it ships: the modules it runs (`src/distribution.ts`), and the
-`openagent` command, which serves the dashboard ([`@openagt/ui`](../ui/README.md)) with them and
-hands every run the skills it gets by default.
+This package is OpenAgent as it ships: the packages it runs, listed in `src/distribution.ts` with
+whose each is, and the `openagent` command, which serves the dashboard
+([`@openagt/ui`](../ui/README.md)) with them and hands every run the skills the list gives every
+run. A project installs none of them.
 
 ## The command is three options and no verbs
 

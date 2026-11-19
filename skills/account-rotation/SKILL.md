@@ -1,7 +1,6 @@
 ---
 name: account-rotation
 description: Add, list, remove or reorder the Claude Code and Codex accounts that coding agent runs use, when the person asks you to.
-package: "@openagt/skill-account-rotation@0.1"
 ---
 
 # Account rotation

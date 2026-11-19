@@ -4,6 +4,10 @@ import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promi
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { parseTickets, providedTickets } from './tickets.js'
+import { DISTRIBUTION_ENV } from '@openagt/hooks'
+import { handDownTestDistribution } from '../test-distribution.js'
+
+handDownTestDistribution()
 
 // The tickets contract (#1774): a project's package declares `"openagent": { "tickets": "<command>" }`
 // and OpenAgent reads the tickets by running `<command> list --local`. Real processes: a tiny
@@ -19,10 +23,14 @@ process.stdout.write(readFileSync(join(__dirname, 'tickets.json'), 'utf8'))
 
 const ROW = { file: '2026-01-01_a.md', title: 'A', summary: 'the first', date: '2026-01-01T00:00:00.000Z', planned: false, priority: '8' }
 
-/** A project whose package.json lists `deps`, each installed under node_modules with its own package.json. */
+/**
+ * A throwaway project, and a distribution of `deps` handed down to this process: each installed
+ * under the project's node_modules with its own package.json, every project's.
+ */
 async function project(deps: Record<string, Record<string, unknown>>, tickets = JSON.stringify([ROW])): Promise<string> {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'openagent-tickets-')))
-  await writeFile(join(root, 'package.json'), JSON.stringify({ devDependencies: Object.fromEntries(Object.keys(deps).map(name => [name, '*'])) }))
+  await writeFile(join(root, 'distribution.mjs'), `export default ${JSON.stringify(Object.keys(deps).map(name => ({ package: name })))}\n`)
+  process.env[DISTRIBUTION_ENV] = join(root, 'distribution.mjs')
   for (const [name, manifest] of Object.entries(deps)) {
     const dir = join(root, 'node_modules', name)
     await mkdir(dir, { recursive: true })
@@ -38,9 +46,10 @@ const calls = async (root: string, pkg: string): Promise<string[]> =>
 
 test('a project with no tickets provider has no tickets; one with a provider is read through `<command> list --local`', async () => {
   const none = await project({ plain: { bin: { plain: 'provider.cjs' } } })
+  const noneHas = await providedTickets()(none)
   const root = await project({ tickets: { bin: { tickets: 'provider.cjs' }, openagent: { tickets: 'tickets' } } })
   try {
-    assert.equal(await providedTickets()(none), undefined)
+    assert.equal(noneHas, undefined)
     const tickets = await providedTickets()(root)
     assert.ok(tickets)
     assert.deepEqual(await tickets.list(), [ROW])

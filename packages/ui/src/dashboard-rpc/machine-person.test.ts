@@ -8,6 +8,9 @@ import { join } from 'node:path'
 import { onMachinePerson, sendMachineCode, sendMachineLineLink, sendRemoveMachineDevice } from './machines.js'
 import { runComputerCommandOn } from './modules.js'
 import { addMachine } from '../registry.js'
+import { handDownTestDistribution } from '../test-distribution.js'
+
+handDownTestDistribution()
 
 // A computer several people use, as this computer meets it through its door: the door says who
 // this computer's person is there, takes one of their devices out, gives a link for a line, and

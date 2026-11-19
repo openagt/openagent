@@ -2,7 +2,7 @@ import { lstat, readdir, rm, rmdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { DATA_BRANCH, clearSharing, nodeGitRunner, removeFileBranch, removePersonalData, SHARE_SETTING, type GitRunner } from '@openagt/agent-data'
 import { OPENAGENT_DIR } from './openagent-dir.js'
-import { runCleanups } from './built-in.js'
+import { runCleanups } from './distribution-packages.js'
 import { errorMessage } from './error-message.js'
 import type { CleanupReport } from './dashboard/types.js'
 

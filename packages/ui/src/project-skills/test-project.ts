@@ -3,6 +3,9 @@ import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
+import { handDownTestDistribution } from '../test-distribution.js'
+
+handDownTestDistribution()
 
 // A folder made a repository by a test has no identity of its own to commit under, and a
 // machine may have none either (GitHub's runner): the tests bring one, as a person's machine does.

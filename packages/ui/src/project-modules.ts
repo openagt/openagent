@@ -1,12 +1,12 @@
 import { realpath, stat } from 'node:fs/promises'
 import { dirname, join, normalize, sep } from 'node:path'
 import { packageBins, runPackageCommand, type PackageCommandResult, type ProjectPackage } from '@openagt/agent-data'
-import { broughtToProjects, builtInPackagesOf, computerPackages, ownPackages, showsPages } from './built-in.js'
+import { computerPackages, packagesOf, projectsPackages, showsPages } from './distribution-packages.js'
 
 /**
  * A package that adds UI (#1774): its browser part, named by its `exports["./dashboard"]`, and
- * optionally its server part, named by `exports["./server"]`. Any package that exports
- * `./dashboard` is a module, whoever wrote it.
+ * optionally its server part, named by `exports["./server"]`. Any package of the distribution
+ * that exports `./dashboard` is a module, whoever wrote it.
  */
 export interface ProjectModule {
   /** The package's name. */
@@ -152,14 +152,14 @@ export async function runModuleCommand(
 }
 
 /**
- * The modules a project has: each of its dependencies whose package.json exports `./dashboard` to
- * a file that exists inside the package, plus the modules among the packages OpenAgent brings to
- * this project (`built-in.ts`): a skill's page where the project holds the skill's text. Sorted
- * by name.
+ * The modules a project has: the ones among the distribution's packages it has
+ * (`distribution-packages.ts`), each whose package.json exports `./dashboard` to a file that
+ * exists inside the package; a picked skill's page where the project holds the skill's text.
+ * Sorted by name.
  */
 export async function readProjectModules(root: string): Promise<ProjectModule[]> {
   const modules: ProjectModule[] = []
-  for (const pkg of [...(await ownPackages(root)), ...(await builtInPackagesOf(root))]) {
+  for (const pkg of await packagesOf(root)) {
     const module = await readModule(pkg)
     if (module) modules.push(module)
   }
@@ -167,9 +167,9 @@ export async function readProjectModules(root: string): Promise<ProjectModule[]>
 }
 
 /**
- * The modules whose pages and cards the project shows: {@link readProjectModules}, less the logs
- * package's where the project did not pick its skill (`built-in.ts`). The others' commands still
- * run there.
+ * The modules whose pages and cards the project shows: {@link readProjectModules}, less those whose
+ * pages are a pick the project did not make (`distribution-packages.ts`). Their commands still run
+ * there.
  */
 export async function readProjectPages(root: string): Promise<ProjectModule[]> {
   const modules: ProjectModule[] = []
@@ -183,8 +183,9 @@ export async function findProjectModule(root: string, name: string): Promise<Pro
 }
 
 /**
- * The modules that are this computer's and no project's: the ones among the packages OpenAgent
- * brings for the computer (`built-in.ts`). They are there with no project added. Sorted by name.
+ * The modules that are this computer's and no project's: the ones among the distribution's
+ * packages for the computer (`distribution-packages.ts`). They are there with no project added.
+ * Sorted by name.
  */
 export async function readComputerModules(): Promise<ProjectModule[]> {
   const modules: ProjectModule[] = []
@@ -201,11 +202,11 @@ export async function findComputerModule(name: string): Promise<ProjectModule | 
 }
 
 /**
- * The module of a package OpenAgent brings to projects, from OpenAgent's own copy: the page of
- * another computer's project, on a computer where no project of its own has it. Undefined for any
- * other package.
+ * The module of a package of the distribution a project can have, from the distribution's own
+ * copy: the page of another computer's project, on a computer where no project of its own has it.
+ * Undefined for any other package.
  */
 export async function findBroughtModule(name: string): Promise<ProjectModule | undefined> {
-  const pkg = (await broughtToProjects()).find(brought => brought.name === name)
+  const pkg = (await projectsPackages()).find(brought => brought.name === name)
   return pkg ? readModule(pkg) : undefined
 }

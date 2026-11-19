@@ -5,6 +5,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { OpenAgentEvent } from '../events.js'
 import { partialReader, tailEvents, tailAgentEvents, type TailTarget } from './events-tail.js'
+import { handDownTestDistribution } from '../test-distribution.js'
+
+handDownTestDistribution()
 
 const line = (message: string): string => JSON.stringify({ kind: 'log', message } satisfies OpenAgentEvent) + '\n'
 const sleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms))

@@ -1,7 +1,6 @@
 ---
 name: github
 description: "The project's git host is GitHub: how to open your pull request when you are asked to, how to comment on an issue or a pull request, how to land a pull request, and how to read and close the project's issues."
-package: "@openagt/skill-github@0.1"
 ---
 
 # GitHub

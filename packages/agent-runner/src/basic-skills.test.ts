@@ -80,11 +80,9 @@ test('a checkout holds each basic skill where every harness looks, with its comm
       assert.equal(await realpath(join(path, 'node_modules', skill.package.name)), await realpath(skill.package.dir))
       // The range the text names is the one the linked copy is in: a copy outside it would send `npx` to npm.
       const text = await readFile(join(skill.dir, 'SKILL.md'), 'utf8')
-      const manifest: { version: string; openagent?: unknown } = JSON.parse(await readFile(join(skill.package.dir, 'package.json'), 'utf8'))
+      const manifest: { version: string } = JSON.parse(await readFile(join(skill.package.dir, 'package.json'), 'utf8'))
       const range = `${skill.package.name}@${manifest.version.split('.').slice(0, 2).join('.')}`
       assert.ok(text.includes(`npx ${range}`), `${skill.name}'s text names the range ${manifest.version} is in`)
-      // A package that declares what it provides is named by its text, for a project that holds the text alone.
-      if (manifest.openagent) assert.match(text, new RegExp(`^package: "${range}"$`, 'm'), `${skill.name}'s text names its package`)
     }
     assert.equal((await git(['status', '--porcelain'], path)).trim(), '', 'the links are not the agent\'s work')
     assert.equal((await git(['status', '--porcelain'], repo)).trim(), '', 'nor the project\'s')
@@ -148,16 +146,16 @@ test('cleanup takes the rules of the basic skills\' packages back once no agent 
   }
 })
 
-test('a run\'s git host is the package the project installed for it, else the runner\'s own where the project is on that host; the runner\'s own names in the project\'s package.json are not read', async () => {
+test('a run\'s git host is the one among the skills handed down that answers for the project there; the project\'s own packages bring none', async () => {
   const repo = await testRepo()
   try {
     const { mkdir, writeFile } = await import('node:fs/promises')
     assert.equal(await gitHostCommand(repo), undefined, 'a remote that is a folder: no git host')
     await git(['remote', 'set-url', 'origin', 'git@github.com:someone/project.git'], repo)
     const own = await gitHostCommand(repo)
-    assert.equal(own?.package, '@openagt/skill-github', 'nothing installed in the project: the runner\'s own')
+    assert.equal(own?.package, '@openagt/skill-github', 'the one handed down')
 
-    // The project lists the runner's own package, at a copy of its own: that copy is not read.
+    // The project lists the same package, at a copy of its own: that copy is not read.
     const listed = join(repo, 'node_modules', '@openagt', 'skill-github')
     await mkdir(listed, { recursive: true })
     await writeFile(join(listed, 'package.json'), JSON.stringify({ name: '@openagt/skill-github', bin: { github: 'cli.cjs' }, openagent: { 'git-host': 'github' } }))
@@ -165,13 +163,13 @@ test('a run\'s git host is the package the project installed for it, else the ru
     await writeFile(join(repo, 'package.json'), JSON.stringify({ name: 'project', devDependencies: { '@openagt/skill-github': '*' } }))
     assert.equal((await gitHostCommand(repo))?.bin, own!.bin)
 
-    // A git host the project installed itself comes first.
+    // Nor is a git host the project installed itself.
     const other = join(repo, 'node_modules', 'other-host')
     await mkdir(other, { recursive: true })
     await writeFile(join(other, 'package.json'), JSON.stringify({ name: 'other-host', bin: { 'other-host': 'cli.cjs' }, openagent: { 'git-host': 'other-host' } }))
     await writeFile(join(other, 'cli.cjs'), '')
     await writeFile(join(repo, 'package.json'), JSON.stringify({ name: 'project', devDependencies: { '@openagt/skill-github': '*', 'other-host': '*' } }))
-    assert.equal((await gitHostCommand(repo))?.package, 'other-host')
+    assert.equal((await gitHostCommand(repo))?.bin, own!.bin)
   } finally {
     await removeRepo(repo)
   }

@@ -1,8 +1,9 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { SKILLS_ENV } from '@openagt/agent-data'
 import { runCli, withTextsApart } from './cli.js'
 import { removeRepo, testRepo } from './test-repo.js'
 
@@ -173,23 +174,32 @@ test('a text may open with a dash: only one of the command\'s own flags is a fla
   }
 })
 
-test('git-host runs a command of the package the project declares as its git host and prints what it printed; a project with none, and a command that fails, are refused', async () => {
+test('git-host runs a command of the git host among the skills handed down, where it answers for the project, and prints what it printed; a project with none, and a command that fails, are refused', async () => {
   const repo = await testRepo()
+  const dir = await mkdtemp(join(tmpdir(), 'git-host-fake-'))
+  const before = process.env[SKILLS_ENV]
   try {
+    delete process.env[SKILLS_ENV]
     const none = await run(repo, 'git-host', 'replies')
     assert.deepEqual({ code: none.code, out: none.out }, { code: 1, out: { ok: false, reason: 'no-git-host' } })
     assert.equal((await run(repo, 'git-host')).code, 2, 'no command to run')
 
-    const dir = join(repo, 'node_modules', 'git-host-fake')
-    await mkdir(dir, { recursive: true })
+    // A skill of every run whose package is a git host, which knows the project's page there.
     await writeFile(join(dir, 'package.json'), JSON.stringify({ name: 'git-host-fake', bin: { 'git-host-fake': 'cli.cjs' }, openagent: { 'git-host': 'git-host-fake' } }))
-    await writeFile(join(dir, 'cli.cjs'), "const args = process.argv.slice(2)\nif (args[0] === 'replies') process.stdout.write(JSON.stringify([{ run: 'r1', text: args.slice(1).join(' ') }]))\nelse { process.stderr.write('gh: not logged in\\n'); process.exit(1) }\n")
-    await writeFile(join(repo, 'package.json'), JSON.stringify({ name: 'project', devDependencies: { 'git-host-fake': '*' } }))
+    await writeFile(join(dir, 'SKILL.md'), '---\nname: git-host-fake\n---\n')
+    await writeFile(
+      join(dir, 'cli.cjs'),
+      "const args = process.argv.slice(2)\nif (args[0] === 'home') process.stdout.write(JSON.stringify({ url: 'https://host.example/project', name: 'Host' }))\nelse if (args[0] === 'replies') process.stdout.write(JSON.stringify([{ run: 'r1', text: args.slice(1).join(' ') }]))\nelse { process.stderr.write('gh: not logged in\\n'); process.exit(1) }\n",
+    )
+    process.env[SKILLS_ENV] = dir
     const replies = await run(repo, 'git-host', 'replies', '--since', 'then')
     assert.deepEqual({ code: replies.code, out: replies.out }, { code: 0, out: [{ run: 'r1', text: '--since then' }] }, 'its own flags are its own')
     const failed = await run(repo, 'git-host', 'requests')
     assert.deepEqual({ code: failed.code, out: failed.out, err: failed.err }, { code: 1, out: { ok: false, reason: 'git-host', detail: 'gh: not logged in' }, err: 'gh: not logged in' })
   } finally {
+    if (before === undefined) delete process.env[SKILLS_ENV]
+    else process.env[SKILLS_ENV] = before
+    await rm(dir, { recursive: true, force: true })
     await removeRepo(repo)
   }
 })

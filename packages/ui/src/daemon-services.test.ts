@@ -8,6 +8,9 @@ import { promisify } from 'node:util'
 import { checkProviders, syncProjectData } from './daemon-services.js'
 import { projectErrorStore } from './project-errors.js'
 import { writeSharing } from '@openagt/agent-data'
+import { handDownTestDistribution, withDistribution } from './test-distribution.js'
+
+handDownTestDistribution()
 
 const git = promisify(execFile)
 
@@ -73,24 +76,21 @@ test('a project whose data branch cannot reach a remote carries a data-sync erro
  * package.json is a state the user must fix, shown as the project's `provider` error; the line
  * clears it at the next turn.
  */
-test('a project where two packages provide the same kind carries a provider error until its package.json names one (#1820)', async () => {
+test('a project for which two packages of the distribution provide the same kind carries a provider error, and none once one does (#1820)', async () => {
   const project = await mkdtemp(join(tmpdir(), 'openagent-providers-'))
   try {
-    const manifest = (named?: Record<string, string>) => JSON.stringify({ devDependencies: { a: '*', b: '*' }, ...(named ? { openagent: named } : {}) })
-    await writeFile(join(project, 'package.json'), manifest())
     for (const name of ['a', 'b']) {
       await mkdir(join(project, 'node_modules', name), { recursive: true })
       await writeFile(join(project, 'node_modules', name, 'package.json'), JSON.stringify({ name, bin: { [name]: 'cmd.cjs' }, openagent: { tickets: name } }))
       await writeFile(join(project, 'node_modules', name, 'cmd.cjs'), '')
     }
     const errors = projectErrorStore()
-    await checkProviders(project, errors)
+    await withDistribution(project, ['a', 'b'], () => checkProviders(project, errors))
     const [unsettled] = errors.list(project)
     assert.equal(unsettled?.code, 'provider')
-    assert.equal(unsettled?.message, '2 packages provide tickets: a, b; name one under "openagent" in package.json')
+    assert.equal(unsettled?.message, '2 packages of the distribution provide tickets: a, b')
 
-    await writeFile(join(project, 'package.json'), manifest({ tickets: 'b' }))
-    await checkProviders(project, errors)
+    await withDistribution(project, ['b'], () => checkProviders(project, errors))
     assert.deepEqual(errors.list(project), [])
   } finally {
     await rm(project, { recursive: true, force: true })

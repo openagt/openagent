@@ -1,7 +1,6 @@
 ---
 name: branches
 description: Where your work goes (a branch named agent-<name>), how to name it, what must be true before you finish, and how to push it when you are asked to.
-package: "@openagt/skill-branches@0.1"
 ---
 
 # Branch management

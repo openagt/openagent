@@ -2,7 +2,7 @@ import { readPersonalFolder, readRemoteAccount, readSharing, shareProjectDataAs 
 import { accountsByHost, originHost, remoteAccount, type SendAsHost } from './send-as.js'
 import { resolveProjectPath } from './context.js'
 import { hasRemote } from '../has-remote.js'
-import { providedCommand } from '../built-in.js'
+import { providedCommand } from '../distribution-packages.js'
 import { projectQueue } from '../store/queue.js'
 import { projectRuns } from '../store/runs.js'
 import { projectTickets } from '../store/tickets.js'

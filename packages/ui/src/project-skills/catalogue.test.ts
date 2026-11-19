@@ -2,6 +2,9 @@ import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { carriedSkills, GROUPS, SKILL_NAMES } from './catalogue.js'
 import { olderThan, stamped, unstamped } from './skill-file.js'
+import { handDownTestDistribution } from '../test-distribution.js'
+
+handDownTestDistribution()
 
 test('the list holds 13 skills in five groups, and none every run gets by default', async () => {
   assert.equal(SKILL_NAMES.length, 13)

@@ -3,8 +3,11 @@ import { test } from 'node:test'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { builtInServices } from './built-in.js'
+import { distributionServices } from './distribution-packages.js'
 import { startPackageServices } from './package-services.js'
+import { handDownTestDistribution } from './test-distribution.js'
+
+handDownTestDistribution()
 
 /** Wait until `read` answers something; fails after five seconds. */
 async function eventually<T>(read: () => Promise<T | undefined>): Promise<T> {
@@ -76,6 +79,6 @@ test('no service declared, nothing runs', async () => {
   await services.stop()
 })
 
-test('the services OpenAgent brings are the ones the computer\'s packages declare', async () => {
-  assert.deepEqual((await builtInServices()).map(command => [command.package, command.name]), [['@openagt/dashboard-devices', 'devices']])
+test('the services the distribution brings are the ones the computer\'s packages declare', async () => {
+  assert.deepEqual((await distributionServices()).map(command => [command.package, command.name]), [['@openagt/dashboard-devices', 'devices']])
 })
