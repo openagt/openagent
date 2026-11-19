@@ -123,7 +123,7 @@ test('a plugin that keeps its own row is on as the row says, where it is asked, 
   assert.equal(await hooks.store.read({ kind: 'project', project: P2 }, 'settings.json'), undefined)
 })
 
-test("a question of every module's rows reads each scope's settings once, and only the rows of the modules that fill the hook asked", async () => {
+test("a question of every module's rows reads each scope's settings once, and only the rows of the modules that fill the hook asked; the modules on are every one's", async () => {
   const store = memoryStore()
   const reads: string[] = []
   const counting = defineModule({
@@ -147,6 +147,9 @@ test("a question of every module's rows reads each scope's settings once, and on
   )
   assert.deepEqual((await hooks.steps({ project: P1, options: {} })).map(one => one.name), ['tickets', 'queue', 'devices'])
   assert.deepEqual(reads.sort(), ['computer settings.json', 'project settings.json'], "discord's row is not read: it gives no step")
+  reads.length = 0
+  assert.deepEqual((await hooks.on(P1)).map(module => module.name), ['store-filesystem', 'tickets', 'queue', 'devices', 'discord'])
+  assert.deepEqual(reads.sort(), ['computer settings.json', 'person settings.json', 'project settings.json'])
 })
 
 test('a run goes without the plugins its options name: none of their steps, skills or items; a core module named there stays on', async () => {

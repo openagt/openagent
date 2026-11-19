@@ -1,6 +1,6 @@
 import { dirname, join } from 'node:path'
 import type { CleanupReport } from './dashboard/types.js'
-import { DISTRIBUTION_ENV, distributionItems, packageDirOf, type DistributionEntry, type DistributionPackage, type Hooks, type ModuleDefinition, type PluginInfo, type ProjectRef } from '@openagt/hooks'
+import { DISTRIBUTION_ENV, distributionItems, packageDirOf, type DistributionEntry, type DistributionPackage, type ModuleDefinition, type PluginInfo, type ProjectRef } from '@openagt/hooks'
 import { declaring, packageBins, projectId, readManifest, runPackageCommand, type ProjectPackage, type ProvidedCommand, type ProvidedCommandLookup } from '@openagt/agent-data'
 import { distributionHooks, projectRefAt } from './distribution-hooks.js'
 
@@ -63,10 +63,14 @@ async function readPackages(file: string): Promise<OwnPackage[]> {
   return packages
 }
 
-/** Whether a package is on: one with no module, or a core module's, always; a plugin's where its Enabled row is on, in `project` for one kept per project. */
-async function isOn(hooks: Hooks, pkg: OwnPackage, project?: ProjectRef): Promise<boolean> {
-  const module = hooks.ofPackage(pkg.name)
-  return !module?.plugin || (await hooks.enabled(module.name, project))
+/** The packages of `of` that are on: one with no module, or a core module's, always; a plugin's where its Enabled row is on, in `project` for one kept per project. */
+async function onPackages(of: OwnPackage['of'], project?: ProjectRef): Promise<OwnPackage[]> {
+  const hooks = await distributionHooks()
+  const on = new Set(await hooks.on(project))
+  return (await distributionPackages()).filter(pkg => {
+    const module = hooks.ofPackage(pkg.name)
+    return pkg.of === of && (module === undefined || on.has(module))
+  })
 }
 
 /**
@@ -75,11 +79,7 @@ async function isOn(hooks: Hooks, pkg: OwnPackage, project?: ProjectRef): Promis
  * None of the computer's: no project has those.
  */
 export async function packagesOf(root: string): Promise<OwnPackage[]> {
-  const hooks = await distributionHooks()
-  const project = await projectRefAt(projectId(root), root)
-  const packages: OwnPackage[] = []
-  for (const pkg of await distributionPackages()) if (pkg.of === 'every project' && (await isOn(hooks, pkg, project))) packages.push(pkg)
-  return packages
+  return onPackages('every project', await projectRefAt(projectId(root), root))
 }
 
 /**
@@ -92,10 +92,7 @@ export async function projectsPackages(): Promise<OwnPackage[]> {
 
 /** The packages that are this computer's ({@link DashboardPackage.for}), a plugin's where it is on. */
 export async function computerPackages(): Promise<OwnPackage[]> {
-  const hooks = await distributionHooks()
-  const packages: OwnPackage[] = []
-  for (const pkg of await distributionPackages()) if (pkg.of === 'the computer' && (await isOn(hooks, pkg))) packages.push(pkg)
-  return packages
+  return onPackages('the computer')
 }
 
 /**

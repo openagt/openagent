@@ -26,17 +26,16 @@ export interface PluginRow {
 
 /** The distribution's plugins kept where `kept` says, each with its row, in `project` for one kept per project, in the distribution's order. */
 async function pluginRows(kept: (scope: SettingScope) => boolean, project?: ProjectRef): Promise<PluginRow[]> {
-  const hooks = await distributionHooks()
-  const plugins = (await distributionPlugins()).filter(({ module }) => kept(module.plugin.scope))
-  return Promise.all(
-    plugins.map(async ({ module, description }) => ({
+  const on = new Set(await (await distributionHooks()).on(project))
+  return (await distributionPlugins())
+    .filter(({ module }) => kept(module.plugin.scope))
+    .map(({ module, description }) => ({
       name: module.name,
       description,
       scope: module.plugin.scope,
-      on: await hooks.enabled(module.name, project),
+      on: on.has(module),
       ...(module.plugin.row ? { settings: module.plugin.row.settings } : {}),
-    })),
-  )
+    }))
 }
 
 /** The plugins kept per person or per computer: the first group's Plugins. */

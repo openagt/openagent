@@ -65,6 +65,8 @@ export interface Hooks {
   ofPackage(name: string): ModuleDefinition | undefined
   /** Whether a module is on: always for a core module; for a plugin, its Enabled row, in `project` for one kept per project. */
   enabled(name: string, project?: ProjectRef): Promise<boolean>
+  /** The modules on, in the distribution's order: every core module, and each plugin whose Enabled row is on, in `project` for one kept per project. Each scope's rows are read once for all of them. */
+  on(project?: ProjectRef): Promise<ModuleDefinition[]>
   /** Switch a plugin's Enabled row, in `project` for one kept per project. One that keeps its own row is switched on its Settings entry, not here. */
   setEnabled(name: string, on: boolean, project?: ProjectRef): Promise<void>
   /** A run's steps, sorted by order; at the same order, in the distribution's order, then each module's own. */
@@ -182,6 +184,7 @@ export function createHooks(entries: readonly DistributionEntry[], opts: HooksOp
     module: name => byName.get(name),
     ofPackage: name => byPackage.get(name),
     enabled,
+    on: project => onModules(project),
     async setEnabled(name, on, project) {
       const module = byName.get(name)
       if (module?.plugin?.row) throw new Error(`${name} keeps its own row: it is switched on its Settings entry`)
