@@ -10,7 +10,6 @@ import { AgentUpdates } from './AgentUpdates.js'
 import { Agents } from './Agents.js'
 import { useRunsDoing } from '../lib/use-doing.js'
 import { useModuleCards, type OverviewCard } from './ModuleCards.js'
-import { SkillsCard } from './SkillsCard.js'
 import { CardGrid, EditOverview, TakeOffMark, UNDER, UnderCards, type Under } from './CustomizeOverview.js'
 import { ALL_PROJECTS, arrangeCards } from '../../src/client.js'
 import type { ProjectSummary } from '../../src/index.js'
@@ -47,7 +46,6 @@ const PACKAGES_PLACE = 3
 // for nobody. Both are in the history, where a component nothing renders belongs.
 export function DashboardPage({
   onSelectProject,
-  projectHref,
   onSelectAgent,
   onAgentStarted,
   waiting,
@@ -59,8 +57,6 @@ export function DashboardPage({
   listedPages,
 }: {
   onSelectProject: (id: string) => void
-  /** The address `onSelectProject` goes to: a link's `href`. */
-  projectHref: (id: string) => string
   /** Open one session (project + run): the Agents rows link straight to a session. */
   onSelectAgent: (projectId: string, agentId: string) => void
   /** Where a session the onboarding checklist starts lands (#1169): on that session. */
@@ -153,8 +149,6 @@ export function DashboardPage({
       ),
     },
     { id: 'usage', label: 'Usage', order: 9, width: '1/3', minWidth: '1/3', node: <Quota projects={projects} /> },
-    // How each project's skills stand: a newer version to take, skills not yet where agents start from.
-    { id: 'skills', label: 'Skills', order: 41, width: '1/3', minWidth: '1/4', node: <SkillsCard projects={shownProjects} onSelectProject={onSelectProject} projectHref={projectHref} /> },
     // The cards the installed packages declare (#1818): a package's own summary of its data, only
     // when one of the projects shown (every registered one, or the picked one alone) has the package.
     ...moduleCards,

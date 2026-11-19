@@ -14,14 +14,10 @@ already made, and lists it in its pull request; for anything else it proposes an
   it is handed. Picked over a package of its own for the command and that list
   (`@openagt/start`), a second name in front of the dashboard; and over the list staying in the
   runner.
-- A project's own skill takes a default's place by having its name: the project's
-  `.claude/skills/<name>` or `.agents/skills/<name>`, committed on the branch an agent
-  starts from. Picked over a skill saying which default it does in a line of its own, a
-  format nothing needs yet.
 - The defaults are what an agent needs in any project to work at all: ask, and github on a
-  GitHub project. Every other skill is picked on the project's Skills page: the tickets, the
-  queue, the logs and account rotation too. A new project shows only the
-  pages of the skills it picked. Picked over the skills with pages coming with every run,
+  GitHub project. Every other skill is the project's own (#2394): the tickets, the queue, the
+  logs and account rotation too. A new project shows only the
+  pages of the skills it has. Picked over the skills with pages coming with every run,
   which gave a new project Tickets, Queue and Logs pages it never asked for; and over every
   skill of the list, each one more description in every agent's context.
 - The dashboard carries only the skills its own pages, buttons and automations are built on:
@@ -179,8 +175,8 @@ already made, and lists it in its pull request; for anything else it proposes an
   select at the foot.
 - OpenAgent never pushes as the person's own login: the personal folder's sync and a project's
   Share switch each name one of OpenAgent's accounts at the repository's host, picked where they
-  are turned on (the one runs use first), and so do the Skills page's Send and the clean-up of
-  Claude Code web's branches (the Share switch's account, else the one runs use). With no
+  are turned on (the one runs use first), and so does the clean-up of Claude Code web's
+  branches (the Share switch's account, else the one runs use). With no
   account there, nothing is sent, and the page says so with the press that adds one. Picked over pushing with
   whatever login the computer has (Rom: "scary").
 - What is not backed up (the personal folder, or a shared project's data, at a git host with no
@@ -269,15 +265,14 @@ already made, and lists it in its pull request; for anything else it proposes an
   a server is when it was just connected, with no way to let a phone in; and over a
   starter project made on every server, one nobody asked for.
 - "Add project" stays small: it writes no skill. The launcher's row under the box then has
-  "Skills", after Auto, whose menu ends in that project's Skills page in Settings: a card with a
-  tick for each skill a project picks beyond the defaults. Picked over "Add project"
+  "Skills", after Auto, whose menu ends in that project's skills in Settings. Picked over "Add project"
   writing the skills itself, which put files into every project a person adds. The control was picked over a line of its own on the
   project's page ("This project has 4 of 25 skills", with an "Add skills" button), which
   stood there also when it had nothing to offer, and over an item in the project's ⋮ menu,
   where it was not seen.
 - The "Skills" menu under the box picks the skills one session gets, as the account beside it
   is picked: the skills every run gets ticked, each tickable off; every other skill OpenAgent
-  carries under "More skills", in the Skills page's groups, tickable on; the project's own
+  carries under "More skills", in groups, tickable on; the project's own
   skills all, none or each, as its preset has them until the session picks; nothing saved, so
   the next session starts from the skills every run gets and its preset's project skills. The
   picks reach the run in its environment with the preset and the account, its record keeps
@@ -287,21 +282,10 @@ already made, and lists it in its pull request; for anything else it proposes an
   exception. The skills every run does not get are the ones under "More skills" rather than
   one long list: twenty-five skills under the box read as the overwhelming list of the first
   skills picker.
-- OpenAgent has no command of its own to give a project skills: the Skills page in the
-  dashboard, or `npx skills add openagt/openagent` in a terminal, which writes the same
-  texts for any agent. Picked over `npx @openagt/init`, a second list with ticks to keep in
-  step with the dashboard's.
-- A skill the project picks is one tracked file, `.agents/skills/<name>/SKILL.md`, where
-  Codex reads it, and one tracked link at `.claude/skills/<name>`, where Claude Code reads
-  it, the shape `npx skills add` writes too. Nothing else: no `package.json`, no install,
-  so a Node project, a PHP project and an empty folder get exactly the same. Picked over
-  installing the skills' packages into the project.
-- The scheduler is one more skill in the list. Ticking it also writes its
-  two lines into the project's hooks file, which is this machine's and outside git, so it
-  starts with the dashboard; unticking it takes them out and stops it. A project that got the
-  text another way, `npx skills add` say, gets no lines: while the scheduler is off, the
-  Automations page says so and names the two commands that start it. Picked over a switch
-  on that page that writes the lines, one more control for a line that already says it.
+- A project's scheduler starts with the dashboard by its two lines in the project's hooks file,
+  which is this machine's and outside git. While they are not there, the Automations page says
+  the scheduler is off and names the two commands that start it. Picked over a switch on that
+  page that writes the lines, one more control for a line that already says it.
 - A project is also added by its repository's address, for a computer that does not have
   its folder, as a server: OpenAgent clones it into `~/projects/<its name>` and says where
   it went. Picked over asking for the folder at every add, one more thing to read.
@@ -328,31 +312,6 @@ already made, and lists it in its pull request; for anything else it proposes an
   own, and closes on the account once it is there, which is then the one picked where it was
   asked for; closing it gives the login up. Picked over the code shown in each place's own
   layout, and over a trip to the Permissions page from a place that had no account to pick.
-- The Skills page ticks nothing in a project that has no skills yet: the person picks what
-  the project needs. Picked over ticking every group but the ones that need a setup of
-  their own, a long list picked for them.
-- When a skill in a project has a newer version, the project's page names it ("The
-  logs skill has a newer version") with an "Update" button; the texts are written only on that press,
-  and sent on as a save is. Picked over a count of skills that "have a newer text", which
-  said neither which skill nor what a text is, over saying nothing until asked, and over
-  writing every text again unasked.
-- A save of the Skills page, and Update, take the change to where agents start from in the
-  same press: one commit of the skill files it wrote or deleted, those alone, then those
-  files pushed to the remote's default branch, or, where that push is refused, to a branch
-  of OpenAgent's own with a pull request opened for it, or that branch alone to merge by
-  hand where no git host package opens one. Nothing else of the person's is pushed. With
-  no remote the commit is all it takes. Picked over offering a commit and
-  leaving the push to the person, three steps with a git word at each before an agent had
-  the skill, and over committing and pushing unasked.
-- What a project's skills need from the person is a card under the agents that wait on
-  them, in the same column, shown only while there is something to do: a newer version,
-  skills on this computer only with a "Send" button, or skills in a pull
-  request or on OpenAgent's branch, waiting for a merge. Once agents have them the card is
-  gone, with no line saying so. While a skill is not yet on the branch agents start from,
-  the launcher does not take its command, so it never offers a command the agent does not
-  have. Picked over a line across the top of the page, which read as part of the page's
-  frame; and over a line for a project with no skill yet, which the default skills every
-  run gets made untrue.
 - Settings is a dialog over the page you are on: a list of entries on the left, the picked
   entry's settings on the right. The address carries it, so a reload or a link opens it
   again, and closing it leaves the page as it was. Picked over a page of its own, which took
@@ -374,11 +333,6 @@ already made, and lists it in its pull request; for anything else it proposes an
   of every project's packages saving one value to all of them, and over a tab per project
   inside each entry, which crowds with many projects and asks for the project again in
   every entry.
-- A project's skills are a page of the "Project" group, one card per skill, and it follows
-  that group's select. Opened from a project's "Skills" button it opens on that project. With
-  every project picked it asks for one project, because one press could otherwise write
-  files into every repository. Picked over a list with ticks in a dialog of its own, a
-  page of settings apart from all the others.
 - A module may bring an entry of Settings, with its name and icon, where a project has its
   package. It reads and writes through the package's own command. Picked over OpenAgent's
   own sections knowing a package's file and a hook line per setting, which made every

@@ -10,7 +10,6 @@ import { Panel, PanelRow } from './ui/panel.js'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu.js'
 import { useIsMobile } from '../lib/use-mobile.js'
 import { Checkbox } from './ui/checkbox.js'
-import { SkillTick } from './ProjectSkills.js'
 import { ConfirmDialog } from './ui/confirm-dialog.js'
 import { Dialog } from './ui/dialog.js'
 import { Input } from './ui/input.js'
@@ -19,6 +18,7 @@ import { Page } from './Page.js'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select.js'
 import { PanelShape, Slot } from './ui/slot.js'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip.js'
+import { cn } from '../lib/utils.js'
 
 // The Presets page (#2394): a preset is a name and a saved set of run options, made once and used
 // in any project or none. One row per preset, Default first, each edited in a dialog over the
@@ -481,8 +481,7 @@ function PresetEditor({ preset, view, onAccounts, onDone }: { preset?: Preset; v
         <AccountPicks label="Claude" accounts={view.claude} picked={draft.claude} busy={busy} onTick={(id, on) => tick('claude', id, on)} onAll={() => setDraft(d => ({ ...d, claude: new Set() }))} />
         <AccountPicks label="Codex" accounts={view.codex} picked={draft.codex} busy={busy} onTick={(id, on) => tick('codex', id, on)} onAll={() => setDraft(d => ({ ...d, codex: new Set() }))} />
         {/* A preset set to never pick up the project's own skills; a session can still pick them. */}
-        <SkillTick
-          brief
+        <WordedTick
           name="Project skills"
           description={
             Array.isArray(draft.project)
@@ -533,5 +532,31 @@ function AccountPicks({ label, accounts: all, picked, busy, onTick, onAll }: { l
       </div>
       <p className="text-xs text-muted-foreground">{picked.size === 0 ? `All of this computer's ${label} accounts, the next free one taking over at a limit.` : `Only these, where the computer the run goes to has them.`}</p>
     </fieldset>
+  )
+}
+
+/** A tick with its name, and its sentence under it in two lines, the whole of it on a press of those lines. No box around it. */
+function WordedTick({ name, description, checked, onChange, disabled }: { name: string; description: string; checked: boolean; onChange: (on: boolean) => void; disabled?: boolean | undefined }) {
+  const [whole, setWhole] = useState(false)
+  return (
+    <div className="min-w-0">
+      <label className="flex cursor-pointer items-start gap-3">
+        <Checkbox checked={checked} onCheckedChange={next => onChange(next === true)} disabled={disabled} className="mt-0.5" aria-label={name} />
+        <span className="min-w-0 text-sm font-medium">{name}</span>
+      </label>
+      {/* Under the name, on the edge its words start at: the box's 16 and the gap's 12. */}
+      <div className="min-w-0 pl-7">
+        <button
+          type="button"
+          aria-expanded={whole}
+          onClick={() => setWhole(on => !on)}
+          // 4 over and under its lines: its own box, since cut lines clip whatever reaches past them. Two lines
+          // before the cut, the rest a press away.
+          className={cn('focus-ring -my-1 block max-w-full rounded-sm py-1 text-left text-xs text-muted-foreground hover:text-foreground', !whole && 'line-clamp-2')}
+        >
+          {description}
+        </button>
+      </div>
+    </div>
   )
 }

@@ -4,8 +4,8 @@ import { git } from './fixture.js'
 import { needsChrome, smoke } from './smoke.js'
 
 // The project's pages, in a real browser (smoke.ts): a page a project's package brings, adding
-// a project from the picker, the list of files the message box opens, on a phone, and the
-// Overview's Human Queue, a package's card.
+// a project from the picker, the list of files the message box opens, on a phone, the
+// Overview's Human Queue, a package's card, and the project's skills, a package's entry of Settings.
 
 const { demo, flow, start, runIn } = smoke()
 
@@ -19,6 +19,18 @@ test("the Overview's Human Queue, its package's card, lists the run waiting on i
     assert.match((await row.textContent()) ?? '', /Which way\?/)
     await row.click()
     await page.waitForURL(url => url.pathname.endsWith(`/${waiting.id}`))
+  })
+})
+
+test("Settings › Skills, its package's entry, lists the project's own skills, what each says it does, and offers nothing to tick", needsChrome, async () => {
+  await flow('skills', async page => {
+    await page.goto(`${demo().url}/${demo().project.id}?settings=skills`)
+    const list = page.getByRole('dialog').getByRole('list', { name: `Skills of ${demo().project.name}` })
+    await list.waitFor()
+    // The skills the demo's project committed, each on the branch its runs start from.
+    for (const name of ['logs', 'queue', 'scheduler', 'tickets']) await list.getByRole('listitem').filter({ hasText: name }).first().waitFor()
+    assert.equal(await list.getByText(/^Not on .* yet$/).count(), 0)
+    assert.equal(await page.getByRole('dialog').getByRole('checkbox').count(), 0)
   })
 })
 

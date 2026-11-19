@@ -10,7 +10,6 @@ vi.mock('../rpc/reads.js', () => ({ onDocs }))
 // The sections are tested on their own; here they are stand-ins.
 vi.mock('./ProjectActions.js', () => ({ ProjectActions: ({ name }: { name?: string }) => (name === undefined ? null : <h1 data-testid="bar-name">{name}</h1>), BAR_NAME: '' }))
 vi.mock('./ProjectErrorBanner.js', () => ({ ProjectErrorBanner: () => null }))
-vi.mock('./ProjectSkills.js', () => ({ ProjectSkillsLine: () => <div>skills line</div> }))
 vi.mock('./StartAgentForm.js', () => ({ StartAgentForm: () => <div>start form</div> }))
 vi.mock('./WaitingList.js', () => ({ WaitingList: ({ items }: { items: unknown[] }) => <div>{items.length} rows</div>, holdsBack: (items: unknown[]) => items.length > 6 }))
 

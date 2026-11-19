@@ -20,6 +20,8 @@ const DISTRIBUTION: DashboardDistribution = [
   { package: '@openagt/skill-branches' },
   // github: the run's account and pull request; its skill is in every run.
   { package: '@openagt/skill-github', skill: 'every run' },
+  // skills: Settings › Skills, each project's own skills, listed; nothing installed.
+  { package: '@openagt/skills' },
   // agent-driver: this computer's host, the agent's turns and the run's record.
   { package: '@openagt/agent-runner' },
   // The Changes and Files panes.

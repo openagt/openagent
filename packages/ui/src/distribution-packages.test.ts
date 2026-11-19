@@ -67,10 +67,10 @@ test("a project with nothing installed gets its runs, its branches and a reposit
     assert.equal((await providedCommand(root, 'repository'))?.package, '@openagt/skill-github', 'the package that can create its repository')
     assert.deepEqual(
       (await packagesOf(root)).map(pkg => pkg.name),
-      ['@openagt/store-filesystem', '@openagt/store-git-repository', '@openagt/skill-branches', '@openagt/skill-github', '@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/skill-logs', '@openagt/skill-ask', '@openagt/agent-runner'],
+      ['@openagt/store-filesystem', '@openagt/store-git-repository', '@openagt/skill-branches', '@openagt/skill-github', '@openagt/skills', '@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/skill-logs', '@openagt/skill-ask', '@openagt/agent-runner'],
       "every project's, and the picked skill every run gets; none of the other picks, none of the computer's",
     )
-    assert.deepEqual((await readProjectModules(root)).map(module => module.package), ['@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/skill-logs'])
+    assert.deepEqual((await readProjectModules(root)).map(module => module.package), ['@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/skill-logs', '@openagt/skills'])
   } finally {
     await rm(root, { recursive: true, force: true })
   }
@@ -80,10 +80,10 @@ test("every project keeps its runs' records through the logs package, and shows 
   const root = await scratch('logs')
   const pages = async (): Promise<string[]> => (await readProjectPages(root)).map(module => module.package)
   try {
-    assert.deepEqual(await pages(), ['@openagt/dashboard-changes', '@openagt/dashboard-files'])
+    assert.deepEqual(await pages(), ['@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/skills'])
     assert.ok((await readProjectModules(root)).some(module => module.package === '@openagt/skill-logs'), 'its commands still run there')
     await skillText(root, '.agents/skills', 'logs')
-    assert.deepEqual(await pages(), ['@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/skill-logs'])
+    assert.deepEqual(await pages(), ['@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/skill-logs', '@openagt/skills'])
     assert.equal((await providedCommand(root, 'runs'))?.package, '@openagt/skill-logs')
   } finally {
     await rm(root, { recursive: true, force: true })
@@ -104,19 +104,19 @@ test("a project has a skill's package, its data and its page once it holds the s
     await skillText(root, '.agents/skills', 'tickets')
     assert.equal((await providedCommand(root, 'tickets'))?.package, '@openagt/skill-tickets')
     assert.deepEqual(await lookupProvided(root, 'queue'), {}, 'a skill the project does not hold stays out')
-    assert.deepEqual(await modules(), ['@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/skill-logs', '@openagt/skill-tickets'])
+    assert.deepEqual(await modules(), ['@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/skill-logs', '@openagt/skill-tickets', '@openagt/skills'])
 
     await skillText(root, '.claude/skills', 'queue')
     await skillText(root, '.claude/skills', 'scheduler')
     assert.equal((await providedCommand(root, 'queue'))?.package, '@openagt/skill-queue')
-    assert.deepEqual(await modules(), ['@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/skill-logs', '@openagt/skill-queue', '@openagt/skill-scheduler', '@openagt/skill-tickets'])
+    assert.deepEqual(await modules(), ['@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/skill-logs', '@openagt/skill-queue', '@openagt/skill-scheduler', '@openagt/skill-tickets', '@openagt/skills'])
 
     // A folder with no text in it, and a text under another name, are no skill of ours.
     await rm(join(root, '.agents/skills/tickets/SKILL.md'))
     await skillText(root, '.claude/skills', 'my-tickets')
     assert.deepEqual(await lookupProvided(root, 'tickets'), {})
     await rm(join(root, '.claude/skills/queue'), { recursive: true })
-    assert.deepEqual(await modules(), ['@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/skill-logs', '@openagt/skill-scheduler'])
+    assert.deepEqual(await modules(), ['@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/skill-logs', '@openagt/skill-scheduler', '@openagt/skills'])
   } finally {
     await rm(root, { recursive: true, force: true })
   }

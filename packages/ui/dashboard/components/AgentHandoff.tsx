@@ -219,7 +219,7 @@ function NextStep({
       </>
     )
   }
-  const pushed = handoff.gitHost ? { text: 'Pushed.' } : { text: 'Pushed. Pull requests need a remote on GitHub.', title: "Another git host needs a skill of its own, on the project's Skills page" }
+  const pushed = handoff.gitHost ? { text: 'Pushed.' } : { text: 'Pushed. Pull requests need a remote on GitHub.', title: 'Another git host needs a module of its own in OpenAgent' }
   const push = () => press('push', () => sendPush(projectId, agentId), 'Could not push the branch.', () => ({ pushed: true }), () => pushed)
   // Once a PR exists the bar links it and the needs-you queue (#632) has it: offering to open one
   // again is the single mistake this must not make. What is still worth offering is the Merge

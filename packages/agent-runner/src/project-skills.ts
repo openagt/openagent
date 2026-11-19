@@ -3,8 +3,8 @@ import type { ProjectSkillsPick } from './preset.js'
 
 /**
  * The project's own skills (Rom's design, the session's picks): the texts a project tracks under
- * `.agents/skills/<name>/`, and Claude Code's `.claude/skills/<name>` links to them, as the
- * dashboard's Skills page commits them. A session that leaves some out has them out of its
+ * `.agents/skills/<name>/`, and Claude Code's `.claude/skills/<name>` links to them, as the project
+ * commits them or `npx skills add` adds them. A session that leaves some out has them out of its
  * checkout alone (`skill-branches`'s `leaveOut`): the index keeps them, nothing is committed about
  * it, and the project's other checkouts have them.
  */

@@ -1,11 +1,11 @@
 import { delimiter } from 'node:path'
 import { SKILL_CATALOGUE_ENV, SKILLS_ENV } from '@openagt/agent-data'
 import { distributionPackages, type OwnPackage } from '../distribution-packages.js'
-import { SKILL_NAMES } from '../project-skills/catalogue.js'
+import { SKILL_NAMES } from '../skill-catalogue.js'
 
 /**
- * Put the skills every run gets in `env` under {@link SKILLS_ENV}, and beside them every skill of
- * the Skills page's catalogue, which an agent picks from, under {@link SKILL_CATALOGUE_ENV}: their
+ * Put the skills every run gets in `env` under {@link SKILLS_ENV}, and beside them every skill a
+ * session can take on top (`skill-catalogue.ts`) under {@link SKILL_CATALOGUE_ENV}: their
  * packages' directories, joined by the path delimiter, as the distribution handed down to this
  * process carries them. The distribution names the ones every run gets (`skill: 'every run'`):
  * what an agent needs in any project to ask the person a question and hand its work over on the

@@ -1,22 +1,8 @@
-import { originDefaultBranch } from '@openagt/agent-data'
+import { skillsOn, startBranch, type StartBranch } from '@openagt/skills'
 import { originGit } from '../dashboard-rpc/send-as.js'
 import { publishedBase } from '@openagt/agent-data/names'
 import type { StartFromPick } from '../registry.js'
-import { skillsOn } from '../project-skills/branch.js'
 import { currentBranch } from './git-status.js'
-
-/**
- * The branch agents start from in the project at `cwd`: origin's default branch as this clone has
- * it, else the branch the folder is on (a project with no remote starts an agent from its last
- * local commit). `ref` is what git is asked, `name` what a person reads. None where the folder is
- * on no branch, or is no repository.
- */
-export async function startBranch(cwd: string): Promise<{ ref: string; name: string } | undefined> {
-  const main = await originDefaultBranch(cwd).catch(() => undefined)
-  if (main !== undefined) return { ref: main, name: main.slice('origin/'.length) }
-  const local = await currentBranch(cwd).catch(() => undefined)
-  return local !== undefined && local !== 'HEAD' ? { ref: 'HEAD', name: local } : undefined
-}
 
 /** How long a read of origin's branches waits: past this, origin counts as not reached. */
 const ORIGIN_WAIT_MS = 10_000
@@ -39,8 +25,8 @@ export async function branchesOnOrigin(cwd: string): Promise<string[] | undefine
   return out.split('\n').flatMap(line => line.match(/\trefs\/heads\/(.+)$/)?.[1] ?? [])
 }
 
-/** What a pick of the launcher's menu starts from, as `startBranch` says it. */
-function pickedBranch(pick: StartFromPick, local: string | undefined): { ref: string; name: string } | undefined {
+/** What a pick of the launcher's menu starts from, as skills' `startBranch` says it. */
+function pickedBranch(pick: StartFromPick, local: string | undefined): StartBranch | undefined {
   if (pick.kind === 'published') return { ref: publishedBase(pick.branch), name: pick.branch }
   return local !== undefined && local !== 'HEAD' ? { ref: 'HEAD', name: local } : undefined
 }
@@ -67,7 +53,7 @@ const fetched = new Map<string, number>()
  * branch is fetched too (at most once a minute per project and branch), or a pull request merged a
  * moment ago would keep its skill waiting here.
  */
-export async function waitingSkills(cwd: string, names: readonly string[], pick?: StartFromPick): Promise<{ start?: { ref: string; name: string }; waiting: Map<string, Waiting> }> {
+export async function waitingSkills(cwd: string, names: readonly string[], pick?: StartFromPick): Promise<{ start?: StartBranch; waiting: Map<string, Waiting> }> {
   const start = pick ? pickedBranch(pick, await currentBranch(cwd).catch(() => undefined)) : await startBranch(cwd)
   if (!start || names.length === 0) return { ...(start ? { start } : {}), waiting: new Map() }
   let on = await skillsOn(cwd, start.ref)

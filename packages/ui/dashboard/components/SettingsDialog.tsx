@@ -1,6 +1,6 @@
 import { useCallback, useContext, useEffect, useId, useRef, useState, type ComponentType, type ReactNode } from 'react'
 import { Dialog as BaseDialog } from '@base-ui/react/dialog'
-import { ArrowLeft, Bell, Bot, ChevronRight, ChevronsUpDown, Database, FolderGit2, Globe, Keyboard, Layers, Palette, Puzzle, X, FolderSearch } from 'lucide-react'
+import { ArrowLeft, Bell, Bot, ChevronRight, ChevronsUpDown, Database, FolderGit2, Globe, Keyboard, Layers, Palette, X, FolderSearch } from 'lucide-react'
 import { DRIVERS, DRIVER_LABELS, isDriverName } from '../../src/client.js'
 import { driverOptions, useModels } from '../lib/models.js'
 import type { DriverOption } from './DriverModelMenu.js'
@@ -20,7 +20,6 @@ import { BridgeSettings } from './BridgeSettings.js'
 import { AGENT_DATA_ENTRY, AgentDataSettings } from './AgentDataSettings.js'
 import { SHORTCUTS_ENTRY, ShortcutList } from './ShortcutList.js'
 import { REPO_SOURCES_ENTRY, RepoSourcesSettings } from './RepoSourcesSettings.js'
-import { SKILLS_ENTRY, SkillsSettings } from './ProjectSkills.js'
 import { PickProject } from './PickProject.js'
 import { ProjectDot } from './ProjectPicker.js'
 import { PROJECT_AGENT_DATA_ENTRY, ProjectAgentDataSettings } from './ProjectAgentDataSettings.js'
@@ -47,10 +46,11 @@ import { SettingsFootContext, SettingsSection, SettingsSelectRow as SelectRow, T
 // (how it looks, what it tells you, which agent runs) and the entries of the packages that are
 // the computer's (Profile, Devices), in one order by number: the dashboard's own stand at 20 to
 // 80, so a package's entry goes before them, between two, or after them. Then "Project": the entries
-// of the packages a project has, each saved in that project's own folder, and the project's Skills.
-// That group shows the project picked in the sidebar, and its own select changes it without leaving
-// Settings; with "All projects" an entry is every project's that has its package, and a change saves
-// to each. Skills are one project's at a time: with "All projects" that page asks for one.
+// of the packages a project has (its Skills first), each saved in that project's own folder, and the
+// project's agent data, in one order the same way. That group shows the project picked in the
+// sidebar, and its own select changes it without leaving Settings; with "All projects" an entry is
+// every project's that has its package, and a change saves to each. The agent data is one project's
+// at a time: with "All projects" that page asks for one.
 //
 // On a phone the dialog is the whole screen: the list first, then an entry over it, with a way back.
 
@@ -78,7 +78,7 @@ export function SettingsDialog({
 }: {
   /** The entry shown, by id; `''` shows the first one, and on a phone the list. */
   entry: string
-  /** A page inside that entry to open, by what the entry knows it as; for Skills, the project. */
+  /** A page inside that entry to open, by what the entry knows it as; for a project's entry, the project, which the "Project" group then opens on. */
   openItem?: string | undefined
   /** Show another entry, or with `''` the list on a phone. */
   onEntry: (id: string) => void
@@ -102,8 +102,8 @@ export function SettingsDialog({
     title.tabIndex = -1
     return title
   }
-  // Skills opened from a project's page are that project's, whatever the sidebar has picked.
-  const [picked, setPicked] = useState((entry === SKILLS_ENTRY || entry === PROJECT_AGENT_DATA_ENTRY ? openItem : undefined) ?? scope ?? ALL_PROJECTS)
+  // A project's entry opened for one project (its Skills from the box's menu) is that project's, whatever the sidebar has picked.
+  const [picked, setPicked] = useState((openItem !== undefined && projects.some(p => p.id === openItem) ? openItem : undefined) ?? scope ?? ALL_PROJECTS)
   // A project removed while the dialog is open is no longer one to show.
   const project = projects.find(p => p.id === picked) ?? null
   const label = useProjectLabel()
@@ -135,23 +135,20 @@ export function SettingsDialog({
     }
   }
   // Sorted once more with the dashboard's own: a package's entries are in their order already, and at the same number the dashboard's stands first.
-  const yours = [...own, ...mounted.filter(section => section.computer).map(section => moduleEntry(section, []))].sort((a, b) => (a.order ?? DEFAULT_ORDER) - (b.order ?? DEFAULT_ORDER))
+  const byOrder = (a: Entry, b: Entry): number => (a.order ?? DEFAULT_ORDER) - (b.order ?? DEFAULT_ORDER)
+  const yours = [...own, ...mounted.filter(section => section.computer).map(section => moduleEntry(section, []))].sort(byOrder)
   const forProject = mounted.filter(section => !section.computer && (project ? section.projects.includes(project.id) : section.projects.length > 0))
   // A page of the dashboard's own for one project at a time: with every project picked, it asks for one.
-  const oneProject = (id: string, title: string, icon: Entry['icon'], Page: ComponentType<{ projectId: string }>, words: string): Entry => ({
+  const oneProject = (id: string, order: number, title: string, icon: Entry['icon'], Page: ComponentType<{ projectId: string }>, words: string): Entry => ({
     id,
+    order,
     title,
     icon,
     body: project ? <Page projectId={project.id} /> : <PickProject words={words} projects={projects} onPick={setPicked} />,
   })
   const ownForProject: Entry[] =
-    projects.length > 0
-      ? [
-          oneProject(SKILLS_ENTRY, 'Skills', Puzzle, SkillsSettings, 'Skills are written into a project’s own repository, one project at a time. Pick a project.'),
-          oneProject(PROJECT_AGENT_DATA_ENTRY, 'Project agent data', Database, ProjectAgentDataSettings, 'Each project keeps its agent data in one place, your folder or its own repository. Pick a project.'),
-        ]
-      : []
-  const projectEntries = [...ownForProject, ...forProject.map(section => moduleEntry(section, project ? [project] : projects))]
+    projects.length > 0 ? [oneProject(PROJECT_AGENT_DATA_ENTRY, 50, 'Project agent data', Database, ProjectAgentDataSettings, 'Each project keeps its agent data in one place, your folder or its own repository. Pick a project.')] : []
+  const projectEntries = [...ownForProject, ...forProject.map(section => moduleEntry(section, project ? [project] : projects))].sort(byOrder)
   const shown = [...yours, ...projectEntries].find(e => e.id === entry)
   const current = shown ?? yours[0]!
   // Opened with no entry, a computer shows the first: the address names it, as it names every other.
@@ -159,8 +156,9 @@ export function SettingsDialog({
     if (!phone && entry === '') onEntry(current.id)
   }, [phone, entry, current.id, onEntry])
   const inProject = projectEntries.includes(current)
-  // With every project picked, an entry says which projects a change goes to.
-  const savedTo = inProject && !project ? projectsHaving(forProject.find(s => s.id === current.id)?.projects ?? [], projects) : []
+  // With every project picked, an entry that changes something says which projects a change goes to.
+  const shownSection = inProject && !project ? forProject.find(s => s.id === current.id) : undefined
+  const savedTo = shownSection && shownSection.readOnly !== true ? projectsHaving(shownSection.projects, projects) : []
 
   const item = (e: Entry) => {
     const Icon = e.icon

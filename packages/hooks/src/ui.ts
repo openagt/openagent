@@ -210,6 +210,8 @@ export interface ViewPlaces {
        * Among the person's and this computer's, the dashboard's own stand at 20 to 80.
        */
       order?: number
+      /** The entry only shows what is (skills' list of a project's own skills): with every project picked, no line says which projects a change is saved to. */
+      readOnly?: true
     }
     props: UiSettingsProps
   }

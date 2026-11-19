@@ -85,7 +85,7 @@ test('the presets and the accounts this computer knows; a preset saved, edited, 
     assert.equal((await sendRemovePreset('../x')).ok, false)
   }))
 
-test("the skills a session picks from: every run's, each saying what it is, and the others the distribution carries, in the Skills page's groups", async () => {
+test("the skills a session picks from: every run's, each saying what it is, and the others the distribution carries, in the catalogue's groups", async () => {
   const choices = await onSkillChoices()
   assert.deepEqual(choices.everyRun.map(skill => skill.name), ['github', 'ask'])
   assert.ok(choices.everyRun.every(skill => skill.description.length > 0), 'each says what it is')

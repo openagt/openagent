@@ -1,12 +1,9 @@
 import { useContext } from 'react'
 import { Check, Puzzle, Settings2 } from 'lucide-react'
 import type { Preset } from '../rpc/presets.js'
-import { onSkillChoices, type SkillChoices } from '../rpc/skill-choices.js'
-import { onProjectSkills } from '../rpc/skills.js'
-import { skillsAgain } from '../lib/skills-saved.js'
+import { onProjectSkillNames, onSkillChoices, type SkillChoices } from '../rpc/skill-choices.js'
 import { useLoaded, usePolled } from '../lib/use-async.js'
 import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
-import { SKILLS_ENTRY } from './ProjectSkills.js'
 import { RowChevron, RowSaid, rowButtonClass, rowWideClass } from './ui/row-item.js'
 import { usePresetsList } from './PresetsPage.js'
 import { DEFAULT_PRESET } from '../../src/client.js'
@@ -29,12 +26,16 @@ import {
 
 // The "Skills" menu under the launcher's box (the session's picks): what the session gets, for
 // this session alone, as the account beside it is picked. The skills every run gets ticked, each
-// one tickable off; every other skill OpenAgent carries under "More skills", in the Skills page's
-// groups, tickable on; then the project's own skills, all, none or each, as its preset has them
-// until the session picks; then the project's Skills page. The picks go with the Start in the
-// run's environment and its record keeps them, so a resume applies them again. The pick is not
-// saved: the next session starts from the skills every run gets and its preset's project skills.
-// A session with no project has no project skills.
+// one tickable off; every other skill OpenAgent carries under "More skills", in its groups,
+// tickable on; then the project's own skills, all, none or each, as its preset has them until the
+// session picks; then the project's skills in Settings, what each one says it does. The picks go
+// with the Start in the run's environment and its record keeps them, so a resume applies them
+// again. The pick is not saved: the next session starts from the skills every run gets and its
+// preset's project skills. A session with no project has no project skills. The skills module's
+// own control under the box, once the box has places for them (#2394).
+
+/** Settings › Skills, the skills module's entry: each project's own skills, listed. */
+const SKILLS_SETTINGS = 'skills'
 
 /** The session's picks: skills on top of the ones every run gets, ones of those left out, which of the project's own stay (absent: every one). */
 export interface SkillPicks {
@@ -86,11 +87,11 @@ export function useSkillChoices(): SkillChoices | undefined {
 }
 
 /**
- * The project's own skills, as a run's checkout has them, kept in this browser: the Skills item
- * counts them, and counted from the last load it holds its place in the row from the first frame.
+ * The project's own skills, by name, as a run's checkout has them, kept in this browser: the Skills
+ * item counts them, and counted from the last load it holds its place in the row from the first frame.
  */
-function useProjectSkills(projectId: string | undefined) {
-  return useLoaded(projectId !== undefined ? () => onProjectSkills(projectId) : null, null, [projectId], projectId !== undefined ? { remember: `project-skills:${projectId}`, stored: true } : undefined, skillsAgain)
+function useProjectSkills(projectId: string | undefined): string[] | null {
+  return useLoaded(projectId !== undefined ? () => onProjectSkillNames(projectId) : null, null, [projectId], projectId !== undefined ? { remember: `project-skill-names:${projectId}`, stored: true } : undefined)
 }
 
 export function SkillsMenu({
@@ -99,7 +100,7 @@ export function SkillsMenu({
   onChange,
   busy,
 }: {
-  /** The project, for its own skills and its Skills page; none for a session with no project. */
+  /** The project, for its own skills and their list in Settings; none for a session with no project. */
   projectId: string | undefined
   picks: SkillPicks
   onChange: (picks: SkillPicks) => void
@@ -108,7 +109,7 @@ export function SkillsMenu({
   const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
   const choices = useSkillChoices()
   const project = useProjectSkills(projectId)
-  const held = project?.held ?? []
+  const held = project ?? []
   if (!choices) return null
   // Counted only once the project's skills are read: a count of the others alone would be drawn, then change. Till
   // then the item holds its place, a digit's room kept for the count, so nothing after it moves when it lands.
@@ -205,9 +206,9 @@ export function SkillsMenu({
               )}
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => services.openSettings(SKILLS_ENTRY, projectId)}>
+            <DropdownMenuItem onClick={() => services.openSettings(SKILLS_SETTINGS, projectId)}>
               <Settings2 className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
-              Manage project skills…
+              Project skills in Settings…
             </DropdownMenuItem>
           </>
         )}
@@ -228,7 +229,7 @@ export function SkillsOff({ projectId, preset, skillsOn, skillsOff, projectSkill
   const project = useProjectSkills(projectId)
   if (!choices || !view || (projectId !== undefined && project === null)) return null
   const got = projectSkills ?? view.presets.find(one => one.id === (preset ?? DEFAULT_PRESET))?.options.skills?.project
-  const count = skillCount(sessionSkills(choices.everyRun.map(skill => skill.name), { on: skillsOn ?? [], off: skillsOff ?? [] }), projectId !== undefined ? projectKept(project?.held ?? [], got) : [])
+  const count = skillCount(sessionSkills(choices.everyRun.map(skill => skill.name), { on: skillsOn ?? [], off: skillsOff ?? [] }), projectId !== undefined ? projectKept(project ?? [], got) : [])
   return (
     <RowSaid tip={`This session got ${skillPicksSaid({ skillsOn, skillsOff, projectSkills: projectId === undefined ? 'none' : got })}`}>
       <Puzzle className="size-4 shrink-0" aria-hidden />

@@ -1,6 +1,6 @@
 import { contextAddProject, contextHost, contextPrepareStart, contextProjectErrors, contextProjects, contextRemote, contextRemoveProject, contextStartedIn, resolveProjectPath } from './context.js'
 import { projectRefAt } from '../distribution-hooks.js'
-import { readProjectCommands, type ProjectCommand } from '../project-commands.js'
+import { readProjectSkills } from '@openagt/skills'
 import { DATA_BRANCH, addressOfRemote, errorMessage, isRepoOwner, originDefaultBranch, readRepoOwners, readSharing, repositoryAddress, repositorySpelling, shareProjectData, writeRepoOwners } from '@openagt/agent-data'
 import { readHosted, refreshHosted, type HostedRepo } from './hosted-repos.js'
 import { cloneAccountFor, originHost, remoteAccount } from './send-as.js'
@@ -260,6 +260,20 @@ export async function sendAddRepoFolder(): Promise<{ ok: true; added: boolean } 
   return { ok: true, added: true }
 }
 
+/**
+ * One of the project's commands (#1774) as the launcher offers it: a skill of the project's own
+ * written to be run by a person (skills' `command`), typed after the slash. OpenAgent ships no
+ * prompt text; what a project can be asked to do is what its own command skills say.
+ */
+export interface ProjectCommand {
+  /** What is typed after the slash: the skill's folder name. */
+  name: string
+  /** The `description` of the skill's front matter, when it has one. */
+  description?: string
+  /** The branch the skill has yet to reach, by name, when its text is in the folder but not on the branch agents start from: an agent started from that branch does not have the command. */
+  waiting?: string
+}
+
 /** What the launcher offers for a project: its commands, and how far its runs can go. */
 export interface ProjectLauncher {
   commands: ProjectCommand[]
@@ -287,7 +301,8 @@ export interface ProjectLauncher {
 export async function onCommands(projectId: string, from?: StartFromPick): Promise<ProjectLauncher | null> {
   const cwd = await resolveProjectPath(projectId)
   if (!cwd) return null
-  const [commands, gitHost, remote, address, main, local] = await Promise.all([readProjectCommands(cwd), projectGitHost(cwd).catch(() => undefined), hasRemote(cwd), repositoryAddress(cwd), originDefaultBranch(cwd), currentBranch(cwd)])
+  const [skills, gitHost, remote, address, main, local] = await Promise.all([readProjectSkills(cwd), projectGitHost(cwd).catch(() => undefined), hasRemote(cwd), repositoryAddress(cwd), originDefaultBranch(cwd), currentBranch(cwd)])
+  const commands = skills.filter(skill => skill.command).map(({ name, description }): ProjectCommand => ({ name, ...(description !== undefined ? { description } : {}) }))
   // Both read locally, never fetched. `HEAD` is a folder on no branch: there is no local branch to start from.
   const startFrom = remote && main !== undefined && local !== undefined && local !== 'HEAD' ? { main: main.slice('origin/'.length), local } : undefined
   // A skill written into the folder reaches agents once it is on the branch they start from: until then its command is said to be waiting.

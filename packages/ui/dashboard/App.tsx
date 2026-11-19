@@ -20,7 +20,6 @@ import { PaneLayout, PanesProvider } from './components/Panes.js'
 import { SubagentsPanel } from './components/SubagentsPanel.js'
 import { PagesBar, PhoneBar, PhoneBarCount } from './components/PhoneBar.js'
 import { cn } from './lib/utils.js'
-import { onSkillsSaved } from './lib/skills-saved.js'
 import { usePolled } from './lib/use-async.js'
 import { useIsMobile } from './lib/use-mobile.js'
 import { usePinnedPage } from './lib/use-pinned-page.js'
@@ -131,8 +130,6 @@ export function App() {
   // follow it. Slow, and reloadable so adding a project from the sidebar's "New" reflects at once
   // (`reloadProjects` bumps the key).
   const [projectsKey, reloadProjects] = useReducer((key: number) => key + 1, 0)
-  // A skill saved in Settings gives or takes a page too.
-  useEffect(() => onSkillsSaved(reloadProjects), [reloadProjects])
   // Kept for the next visit too: the Overview's cards are drawn for the projects before they are read again.
   const { value: projects, state: projectsState } = usePolled<ProjectSummary[]>(onProjects, EMPTY_PROJECTS, 30_000, [projectsKey], { remember: 'projects', stored: true })
   // Read again when a project is added from the sidebar or removed from its project home: which
@@ -529,7 +526,6 @@ export function App() {
       return (
         <DashboardPage
           onSelectProject={selectProject}
-          projectHref={id => hrefOf({ projectId: id, agentId: null })}
           onSelectAgent={selectAgentInProject}
           onAgentStarted={agentStarted}
           waiting={waiting}
@@ -570,8 +566,6 @@ export function App() {
           onOpenAgent={selectAgentInProject}
           errors={project?.errors}
           onProjectRemoved={leaveRemovedProject}
-          // A skill written or deleted gives or takes a page: read the projects and their modules again now.
-          onSkillsChanged={reloadProjects}
           projects={projects}
           onPickProject={newAgentInProject}
           onProjectAdded={reloadProjects}

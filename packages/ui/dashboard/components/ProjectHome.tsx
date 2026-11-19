@@ -6,11 +6,9 @@ import { ProjectActions } from './ProjectActions.js'
 import { ComposerShape } from './Composer.js'
 import { TopBar } from './Panes.js'
 import { ProjectErrorBanner } from './ProjectErrorBanner.js'
-import { ProjectSkillsLine } from './ProjectSkills.js'
 import { WaitingList } from './WaitingList.js'
 import { ScrollArea } from './ui/scroll-area.js'
 import type { StartPicks } from '../lib/started-from.js'
-import { SESSIONS_ID } from '../../src/project-address.js'
 import { useIsMobile } from '../lib/use-mobile.js'
 
 // The project home / launcher: the "New agent session" page. It is never consumed by an agent: starting
@@ -22,8 +20,6 @@ import { useIsMobile } from '../lib/use-mobile.js'
 // Queue's own rows, comes first, in the chat's column, and the box at the bottom, where an agent's
 // message box is; so on a phone. Starting a run carries the box to its place on the run's page (StartAgentForm). The
 // project's Docs are not here: they are the Docs pane (Panes), on this page as on an agent's.
-//
-// With no project (`SESSIONS_ID`), the page is the same without what a project has: its skills.
 export function ProjectHome({
   projectId,
   projectName,
@@ -37,7 +33,6 @@ export function ProjectHome({
   onOpenAgent,
   errors,
   onProjectRemoved,
-  onSkillsChanged,
   home,
   projects,
   onPickProject,
@@ -68,12 +63,9 @@ export function ProjectHome({
   errors?: ProjectError[] | undefined
   /** Told once the project is off the list, so the shell leaves its page. */
   onProjectRemoved?: (() => void) | undefined
-  /** Told once the project's skills were written, deleted or committed: its pages may have changed. */
-  onSkillsChanged?: (() => void) | undefined
   /** The saved machine the project is on, when only another computer of the person's has it (elsewhere.ts): it is removed there, not here. */
   home?: string | undefined
 }) {
-  const noProject = projectId === SESSIONS_ID
   // The list comes first, the box at the foot: while something waits, and on a phone.
   const isMobile = useIsMobile()
   const listFirst = waiting.length > 0 || isMobile
@@ -136,10 +128,6 @@ export function ProjectHome({
                   <WaitingList key={projectId} items={waiting} onOpenAgent={onOpenAgent} />
                 </section>
               )}
-              {/* What the project's skills need from the person, when they need something (#2023): a card
-                  under the agents that wait, in the same column; with nothing to say there is no card,
-                  and "Skills" under the box opens the project's Skills page in Settings. */}
-              {!noProject && <ProjectSkillsLine key={projectId} projectId={projectId} onChanged={onSkillsChanged} />}
             </div>
           </div>
         </ScrollArea>
