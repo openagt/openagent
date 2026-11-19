@@ -189,8 +189,8 @@ export async function startScheduler(repo: string, opts: { foreground?: boolean;
  * The scheduler's process: a tick now and every interval, until SIGINT or SIGTERM. The stop waits
  * for the tick in flight, which starts nothing more and records nothing once the stop is in, and
  * for no other: one that waited behind it does not run; and it
- * clears only this process's pid from the state, writing nothing when the state names another: a
- * dashboard's close hook stops this scheduler and its open hook starts the next one before this
+ * clears only this process's pid from the state, writing nothing when the state names another: an
+ * OpenAgent that stops stops this scheduler and the next OpenAgent starts another before this
  * tick is over, and that one's pid must stay.
  */
 async function loop(repo: string, everyMs: number, log: (line: string) => void): Promise<void> {

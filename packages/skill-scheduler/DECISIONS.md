@@ -232,21 +232,21 @@ already made, and lists it in its pull request; for anything else it proposes an
 - Every command prints one JSON document on stdout, one line for a person on stderr, and
   exits 0 for a result, 1 for a refusal or a failure, 2 for a command line that cannot be
   read: the skills' contract, so a person and a dashboard read it the same way.
-- `start` is the only clock: OpenAgent's daemon does not tick. A dashboard that wants
-  the scheduler on while it is open runs `start` when it opens and
-  `stop --unless-keep-alive` when it closes, from a hook file of the user's that names
-  the tool; OpenAgent's daemon calls no tool by name. Picked over the daemon calling the
-  tick, which would have made the daemon call the tool by name.
+- `start` is the only clock: OpenAgent's daemon does not tick. The plugin's own
+  `app.lifecycle` runs it (#2394, decision 13): `start` in each project scheduled-agents is on
+  in, and `stop --unless-keep-alive` as OpenAgent stops; OpenAgent's daemon calls no tool by
+  name. Picked over a hook file of the user's that named the tool, which `init` wrote
+  (`.openagent/hooks.yml`) and the dashboard ran as it opened and closed, and over the daemon
+  calling the tick, which would have made the daemon call the tool by name.
 - A stop waits for the tick in flight, and that tick starts nothing more: the readings are
   where a tick spends its seconds, and a person who said stop gets no new agent. The ending
-  scheduler clears only its own pid from the state, since a dashboard's close hook stops one
-  scheduler and its open hook starts the next before the first is over. Picked over killing
+  scheduler clears only its own pid from the state, since an OpenAgent that stops stops one
+  scheduler and the next OpenAgent starts another before the first is over. Picked over killing
   the tick mid-flight, which could leave a marker half written.
 - `stop --unless-keep-alive` is the one reader of keep-alive: it leaves a keep-alive
-  scheduler running and stops any other, so the line a dashboard runs when it closes
-  honours the user's keep-alive while a person's plain `stop` still stops. Picked over
-  `stop` reading keep-alive always (a person's stop must stop) and over a separate `close`
-  verb (one stop).
+  scheduler running and stops any other, so OpenAgent's stop, and a project's removal, honour
+  the user's keep-alive while a person's plain `stop` still stops. Picked over `stop` reading
+  keep-alive always (a person's stop must stop) and over a separate `close` verb (one stop).
 
 ## The dashboard part
 - The scheduler brings its own part of a dashboard: an Automations page (one row per

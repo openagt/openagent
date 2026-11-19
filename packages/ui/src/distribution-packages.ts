@@ -1,7 +1,7 @@
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
 import type { CleanupReport } from './dashboard/types.js'
 import { DISTRIBUTION_ENV, distributionItems, packageDirOf, type DistributionEntry, type DistributionPackage, type ModuleDefinition, type PluginInfo, type ProjectRef } from '@openagt/hooks'
-import { declaring, packageBins, projectId, readManifest, runPackageCommand, type ProjectPackage, type ProvidedCommand, type ProvidedCommandLookup } from '@openagt/agent-data'
+import { declaring, projectId, readManifest, runPackageCommand, type ProjectPackage, type ProvidedCommand, type ProvidedCommandLookup } from '@openagt/agent-data'
 import { distributionHooks, projectRefAt } from './distribution-hooks.js'
 
 /**
@@ -93,15 +93,6 @@ export async function projectsPackages(): Promise<OwnPackage[]> {
 /** The packages that are this computer's ({@link DashboardPackage.for}), a plugin's where it is on. */
 export async function computerPackages(): Promise<OwnPackage[]> {
   return onPackages('the computer')
-}
-
-/** The directories the commands of the distribution's packages sit in: what a hook line's PATH gains before the project's own installed tools. */
-export async function distributionBinDirs(): Promise<string[]> {
-  const dirs = new Set<string>()
-  for (const { name, dir, manifest } of await distributionPackages()) {
-    for (const bin of Object.values(packageBins(name, manifest.bin, dir))) dirs.add(dirname(bin))
-  }
-  return [...dirs]
 }
 
 /**

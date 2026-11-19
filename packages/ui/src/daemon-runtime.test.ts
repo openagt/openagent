@@ -11,8 +11,7 @@ import { forgetStartedNames, nameStarted, startedName, withStartedNames } from '
 import type { AgentMeta } from './store/index.js'
 import { ReadyNaming } from '@openagt/agent-runner'
 import { readyPrompt, type Driver } from '@openagt/agent-driver'
-import { PROJECT_HOOKS_FILE } from './project-hooks.js'
-import type { RunHost, RunOptions } from '@openagt/hooks'
+import type { Hooks, ProjectRef, RunHost, RunOptions } from '@openagt/hooks'
 import { fakeHost, type FakeHost } from '@openagt/hooks/testing'
 import { OPENAGENT_DIR } from './openagent-dir.js'
 import { addMachine, addProject, listMachines, listProjects, removeProject, tellMachine } from './registry.js'
@@ -33,6 +32,13 @@ async function project(): Promise<string> {
   const cwd = await realpath(await mkdtemp(join(tmpdir(), 'openagent-runtime-')))
   await mkdir(join(cwd, OPENAGENT_DIR), { recursive: true })
   return cwd
+}
+
+/** What the modules are told of the projects added and removed, as `added <id> <dir>` and `removed <id> <dir>`. */
+function toldModules(): { told: string[]; lifecycle: Pick<Hooks, 'projectAdded' | 'projectRemoved'> } {
+  const told: string[] = []
+  const said = (what: string) => async (project: ProjectRef): Promise<void> => void told.push(`${what} ${project.id} ${project.dir}`)
+  return { told, lifecycle: { projectAdded: said('added'), projectRemoved: said('removed') } }
 }
 
 /** What the host was asked last: the project's folder, the prompt, and the run's options. */
@@ -204,19 +210,20 @@ test("a Start from a branch of origin's hands the host origin's copy; one gone f
   }
 })
 
-test('adding a project makes it one, an empty folder included, and writes no hook lines: runs start through the host', async () => {
+test('adding a project makes it one, an empty folder included, and tells the modules once, as it is put on the list (app.lifecycle)', async () => {
   const folder = await realpath(await mkdtemp(join(tmpdir(), 'openagent-add-')))
   const cfg = await realpath(await mkdtemp(join(tmpdir(), 'openagent-add-cfg-')))
   // The add's git reads the process's own environment, and a new folder's first commit needs an author.
   const env = { XDG_CONFIG_HOME: cfg, GIT_AUTHOR_NAME: 'Test', GIT_AUTHOR_EMAIL: 'test@example.com', GIT_COMMITTER_NAME: 'Test', GIT_COMMITTER_EMAIL: 'test@example.com' }
   const before = Object.fromEntries(Object.keys(env).map(key => [key, process.env[key]]))
   Object.assign(process.env, env)
-  const runtime = createProjectRuntime({ cwd: folder, env, host: fakeHost() })
+  const { told, lifecycle } = toldModules()
+  const runtime = createProjectRuntime({ cwd: folder, env, host: fakeHost(), lifecycle })
   try {
     assert.deepEqual(await runtime.onAddProject(folder, false), { ok: true, alreadyActivated: false })
     // The person's answer on the agents' records is written with the add: kept on this machine.
     assert.equal(await readSharing(folder), false)
-    await assert.rejects(readFile(join(folder, PROJECT_HOOKS_FILE), 'utf8'), 'no hooks file')
+    assert.deepEqual(told, [`added ${projectId(folder)} ${folder}`], 'the modules on in it start their work there')
 
     // A yes is to the remote that is there: this folder has none, so the records stay kept.
     assert.deepEqual(await runtime.onAddProject(folder, true), { ok: true, alreadyActivated: true, noRemote: true })
@@ -225,6 +232,7 @@ test('adding a project makes it one, an empty folder included, and writes no hoo
     execFileSync('git', ['remote', 'add', 'origin', join(cfg, 'origin.git')], { cwd: folder })
     assert.deepEqual(await runtime.onAddProject(folder, true), { ok: true, alreadyActivated: true })
     assert.equal(await readSharing(folder), true)
+    assert.equal(told.length, 1, 'added again, it was on the list already: the modules are not told twice')
   } finally {
     await runtime.dispose()
     for (const [key, value] of Object.entries(before)) {
@@ -266,20 +274,21 @@ test('starting inside a folder not on the list adds it and leaves the repository
   }
 })
 
-test('removing a project runs its close hooks and takes it off the list, and deletes nothing in its folder; an id not on the list is refused', async () => {
+test('removing a project takes it off the list, tells every module, and deletes nothing in its folder; an id not on the list is refused', async () => {
   const folder = await realpath(await mkdtemp(join(tmpdir(), 'openagent-remove-')))
   const cfg = await realpath(await mkdtemp(join(tmpdir(), 'openagent-remove-cfg-')))
   const env = { XDG_CONFIG_HOME: cfg, GIT_AUTHOR_NAME: 'Test', GIT_AUTHOR_EMAIL: 'test@example.com', GIT_COMMITTER_NAME: 'Test', GIT_COMMITTER_EMAIL: 'test@example.com' }
   const before = Object.fromEntries(Object.keys(env).map(key => [key, process.env[key]]))
   Object.assign(process.env, env)
   // The daemon runs elsewhere: the project is not its own start folder.
-  const runtime = createProjectRuntime({ cwd: cfg, env, host: fakeHost() })
+  const { told, lifecycle } = toldModules()
+  const runtime = createProjectRuntime({ cwd: cfg, env, host: fakeHost(), lifecycle })
   try {
     assert.deepEqual(await runtime.onAddProject(folder, false), { ok: true, alreadyActivated: false })
     const [project] = await listProjects(env)
     assert.equal(project?.path, folder)
-    await writeFile(join(folder, PROJECT_HOOKS_FILE), 'close:\n  - echo closed > closed.txt\n')
     await writeFile(join(folder, 'mine.txt'), 'mine\n')
+    await writeFile(join(folder, OPENAGENT_DIR, 'kept.txt'), 'kept\n')
     const kept = execFileSync('git', ['log', '--format=%H'], { cwd: folder, encoding: 'utf8' })
 
     assert.deepEqual(await runtime.onRemoveProject('nope-123'), { ok: false, error: 'no project with that id is on the list' })
@@ -287,10 +296,10 @@ test('removing a project runs its close hooks and takes it off the list, and del
 
     assert.deepEqual(await runtime.onRemoveProject(project!.id), { ok: true })
     assert.deepEqual(await listProjects(env), [])
-    assert.equal(await readFile(join(folder, 'closed.txt'), 'utf8'), 'closed\n', 'the close line ran, in the project')
+    assert.deepEqual(told, [`added ${project!.id} ${folder}`, `removed ${project!.id} ${folder}`], 'each module stops what it started there')
     // Nothing of the folder is deleted: the person's file, OpenAgent's directory, the commits.
     assert.equal(await readFile(join(folder, 'mine.txt'), 'utf8'), 'mine\n')
-    assert.match(await readFile(join(folder, PROJECT_HOOKS_FILE), 'utf8'), /^close:/)
+    assert.equal(await readFile(join(folder, OPENAGENT_DIR, 'kept.txt'), 'utf8'), 'kept\n')
     assert.equal(execFileSync('git', ['log', '--format=%H'], { cwd: folder, encoding: 'utf8' }), kept)
 
     // Removed twice: the second time there is no such project.

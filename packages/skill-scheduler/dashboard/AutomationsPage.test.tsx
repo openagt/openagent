@@ -554,29 +554,28 @@ describe('the Automations page: its rows', () => {
     expect(late.className).toMatch(/text-warning/)
   })
 
-  test('a tick that decided nothing says why in the heading; a scheduler that is off says so once with the ways to turn it on, and one on with no process says what that means and how it starts', async () => {
-    const { host } = hostAnswering(projectId => ({ ok: true, output: { ...STATUS, ...(projectId === 'p1' ? { lastTick: { ...STATUS.lastTick, decisions: [], note: 'agent-data could not be pulled: origin is unreachable' } } : { on: false, lastTick: { ...STATUS.lastTick, decisions: [], note: 'off' } }) } }))
+  test('a tick that decided nothing says why in the heading; a scheduler that is off says so once with the ways to start it, and one on with no process says what that means and how it starts', async () => {
+    const { host, runCommand } = hostAnswering(projectId => ({ ok: true, output: { ...STATUS, ...(projectId === 'p1' ? { lastTick: { ...STATUS.lastTick, decisions: [], note: 'agent-data could not be pulled: origin is unreachable' } } : { on: false, lastTick: { ...STATUS.lastTick, decisions: [], note: 'off' } }) } }))
     show(host, [GEMSTACK, OTHER])
     const gemstack = await screen.findByRole('region', { name: 'gemstack' })
     expect(within(gemstack).getByText(/: agent-data could not be pulled: origin is unreachable/)).toBeTruthy()
     const other = screen.getByRole('region', { name: 'other' })
     expect(within(other).getByText('Scheduler off')).toBeTruthy()
     expect(within(other).queryByText(/: off/)).toBeNull()
-    // Said off once, on its line, with the one way to turn it on, Settings › Skills, whose tick starts it with the dashboard, on a row of its own under it.
+    // Said off once, on its line (a person stopped it: OpenAgent starts it as it starts), with the way to start it again, Start it, on a row of its own under it.
     expect(within(other).queryByText(/^The scheduler is off/)).toBeNull()
     const facts = within(other).getByText('Scheduler off').parentElement!.parentElement!
     expect(facts.textContent).toMatch(/^Scheduler off·[^·]+·Last looked /)
-    expect(facts.nextElementSibling!.textContent).toBe('Turn it on in SkillsIn a terminal')
-    fireEvent.click(within(other).getByRole('button', { name: 'Turn it on in Skills' }))
-    expect(host.openSettings).toHaveBeenCalledWith('skills')
-    expect(within(gemstack).queryByRole('button', { name: 'Turn it on in Skills' })).toBeNull()
-    // Beside it, the two commands, `start` (now) and `init`, behind a press of their own, each set as code with a button that copies it, named by the command.
-    expect(within(other).queryByText('npx @openagt/skill-scheduler@0.1 init')).toBeNull()
+    expect(facts.nextElementSibling!.textContent).toBe('Start itIn a terminal')
+    fireEvent.click(within(other).getByRole('button', { name: 'Start it' }))
+    await waitFor(() => expect(runCommand).toHaveBeenCalledWith('p2', ['start']))
+    expect(within(gemstack).queryByRole('button', { name: 'Start it' })).toBeNull()
+    // Beside it, the command that starts it, behind a press of their own, set as code with a button that copies it, named by the command.
+    expect(within(other).queryByText('npx @openagt/skill-scheduler@0.1 start')).toBeNull()
     fireEvent.click(within(other).getByRole('button', { name: 'In a terminal' }))
-    expect(within(other).getByText('npx @openagt/skill-scheduler@0.1 init').tagName).toBe('CODE')
     expect(within(other).getByText('npx @openagt/skill-scheduler@0.1 start').tagName).toBe('CODE')
     expect(within(other).getByRole('button', { name: 'Copy the start command' })).toBeTruthy()
-    expect(within(other).getByRole('button', { name: 'Copy the init command' })).toBeTruthy()
+    expect(within(other).queryByText(/skill-scheduler@0\.1 init/)).toBeNull()
     expect(within(gemstack).queryByRole('button', { name: 'In a terminal' })).toBeNull()
     expect(within(gemstack).queryByText(/so nothing here starts/)).toBeNull()
     cleanup()
@@ -585,6 +584,14 @@ describe('the Automations page: its rows', () => {
     expect(await screen.findByText(/^The scheduler is on but its process is not running, so nothing here starts by itself/)).toBeTruthy()
     expect(screen.getByText('npx @openagt/skill-scheduler@0.1 start').tagName).toBe('CODE')
     expect(screen.getAllByRole('button', { name: 'Copy the start command' })).toHaveLength(1)
+  })
+
+  test('a start that fails says why under the line, and the scheduler is still off', async () => {
+    const { host } = hostAnswering((_projectId, args) => (args[0] === 'start' ? { ok: false, error: 'the state file cannot be written' } : { ok: true, output: { ...STATUS, on: false, running: false } }))
+    show(host)
+    fireEvent.click(await screen.findByRole('button', { name: 'Start it' }))
+    expect((await screen.findByText('It did not start: the state file cannot be written')).className).toMatch(/text-warning/)
+    expect(screen.getByText('Scheduler off')).toBeTruthy()
   })
 
   test('a row switched on while the scheduler is off, or not running, says it does not start', async () => {

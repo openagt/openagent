@@ -63,7 +63,7 @@ test('usage errors exit 2 with what was wrong and where the usage is on stderr, 
   const repo = await testRepo()
   const elsewhere = await mkdtemp(join(tmpdir(), 'not-a-repo-'))
   try {
-    for (const argv of [[], ['nope'], ['model'], ['offset', 'many'], ['status', 'extra'], ['init', 'extra'], ['run', 'Read the docs'], ['check'], ['now'], ['now', 'work-queue', 'twice'], ['model', 'work-queue', 'haiku', 'extra'], ['agent'], ['agent', 'work-queue'], ['agent', 'work-queue', 'cursor'], ['agent', 'work-queue', 'codex', 'extra'], ['switch', 'work-queue'], ['switch', 'work-queue', 'maybe'], ['publish', 'work-queue'], ['publish', 'work-queue', 'push'], ['publish', 'work-queue', 'file']]) {
+    for (const argv of [[], ['nope'], ['model'], ['offset', 'many'], ['status', 'extra'], ['run', 'Read the docs'], ['check'], ['now'], ['now', 'work-queue', 'twice'], ['model', 'work-queue', 'haiku', 'extra'], ['agent'], ['agent', 'work-queue'], ['agent', 'work-queue', 'cursor'], ['agent', 'work-queue', 'codex', 'extra'], ['switch', 'work-queue'], ['switch', 'work-queue', 'maybe'], ['publish', 'work-queue'], ['publish', 'work-queue', 'push'], ['publish', 'work-queue', 'file']]) {
       const bad = await run(repo, ...argv)
       assert.equal(bad.code, 2, argv.join(' '))
       assert.equal(bad.out, undefined)

@@ -15,7 +15,6 @@ import { sayComputer, sayName, sayOwnUrl } from './dashboard/machine-call.js'
 import { bridgeSessionsFrom } from './dashboard/bridge-sessions.js'
 import { bridgeQuestions } from './dashboard/bridge-store.js'
 import { bridgeBrowserDir, bridgeBrowserOwner, startBridgeBrowser, type BridgeBrowser, type BridgeBrowserOptions } from './bridge-browser.js'
-import { runProjectHooks } from './project-hooks.js'
 import { readySessionsHome, startSessionsSweep } from './sessions-home.js'
 import { distributionHooks, localHostOf } from './distribution-hooks.js'
 import { devicesOn, otherComputers } from './other-computers.js'
@@ -118,11 +117,12 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
   // A run's name is asked of a naming session kept waiting for it (agent-runner's `ReadyNaming`), so
   // the page has it about a second after Start. A run starts on this computer's host, the
   // distribution's (#2394).
-  const hooks = opts.hooks ?? (await distributionHooks())
+  const hooks = opts.hooks ?? (await distributionHooks(env))
   const host = await localHostOf(hooks)
   // The person's other computers are reached where devices is on (`other-computers.ts`).
   otherComputers.on = () => devicesOn(hooks)
-  const runtime = createProjectRuntime({ cwd, env, naming: new ReadyNaming(), host })
+  // A project added or removed is told to the modules (`app.lifecycle`): a scheduler starts or stops with it.
+  const runtime = createProjectRuntime({ cwd, env, naming: new ReadyNaming(), host, lifecycle: hooks })
   // Known only once the dashboard listens; the bridge browser is told it (#1332).
   let daemonUrl: string | undefined
 
@@ -220,28 +220,22 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
   // above: the launch needs the address the dashboard only has now.
   if ((await readPreferences(env)).bridgeBrowser === true) void bridgeBrowser.start()
 
-  // Each project's open hooks (#1774): the lines its own `.openagent/hooks.yml` names, run in
-  // the project once the dashboard listens, so a slow line never delays the URL. The daemon names
-  // no tool; the file does. Bounded and logged, never a reason the daemon did not come up.
-  // The folder the caller named comes first, so its page opens before the other projects' lines
-  // have run. The list is read before it is added: adding runs the new project's own open lines.
-  const listed = await listProjects(env)
+  // The folder the caller named comes first, so its page opens before the modules start their
+  // work: adding it tells the modules on in it (`projectAdded`).
   if (opts.project !== undefined) {
     const started = await runtime.onStartedIn(opts.project)
     if (started.ok) opts.onProject?.({ id: started.id, path: started.path, added: started.added, address: started.address })
     else console.log(`[openagent] could not add ${opts.project}: ${started.error}`)
-  }
-  for (const record of listed) {
-    await runProjectHooks(record.path, 'open', { log: console.log })
   }
   // The sessions with no project: their home made, and a session whose process died swept, as a
   // project's scheduler sweeps its runs.
   const sessions = await readySessionsHome(sessionsHome(env))
   const stopSessionsSweep = startSessionsSweep(sessions)
 
-  // The modules' own work (`app.lifecycle`), devices' door among it: each module on starts it,
-  // told where OpenAgent answers and which computer this is, and a plugin kept per computer starts
-  // and stops with its switch from then on.
+  // The modules' own work (`app.lifecycle`), once the dashboard listens, so it never delays the
+  // URL: devices' door, the projects' schedulers. Each module on starts it, told where OpenAgent
+  // answers and which computer this is, and a plugin kept per computer starts and stops with its
+  // switch from then on.
   const lifecycle = new AbortController()
   await hooks.started({ signal: lifecycle.signal, url: dashboard.url, ...(computer !== undefined ? { computer } : {}) })
 
@@ -274,12 +268,6 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
     runningFixes.end()
     step('the background services')
     await services.quiesce()
-    // Each project's close hooks (#1774), the counterpart of the open hooks above. A run in flight
-    // is not the daemon's process: it goes on to its end, and the next dashboard shows it.
-    for (const record of await listProjects(env)) {
-      step(`the close hooks of ${record.path}`)
-      await runProjectHooks(record.path, 'close', { log: console.log })
-    }
     // Stopped here as well as by the dashboard: a broken install serves 503s without ever taking
     // ownership of the source we handed in, and that poller would go on reading by itself.
     quota.stop()

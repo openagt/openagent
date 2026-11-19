@@ -74,7 +74,7 @@ export async function installProject(cwd: string, deps: InstallDeps = {}): Promi
     }
 
     await fs.mkdir(join(cwd, OPENAGENT_DIR))
-    // Keep what lives under `.openagent/` (a run's live files, the hooks file) out of git
+    // Keep what lives under `.openagent/` (a run's live files, the scheduler's state) out of git
     // (#313). The early return above established the file is absent.
     await fs.write(gitignorePath(cwd), openagentGitignore())
     return insideRepo ? { ok: true } : { ok: true, initialized: true }

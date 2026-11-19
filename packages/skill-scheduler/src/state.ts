@@ -153,8 +153,8 @@ export async function writeState(repo: string, state: State, git: GitRunner = no
 
 /**
  * The state without the scheduler's process, when that process is `pid`; unchanged otherwise. A
- * scheduler ending must not clear a pid another scheduler wrote meanwhile: a dashboard's close
- * hook stops one and its open hook starts the next while the first still finishes its tick.
+ * scheduler ending must not clear a pid another scheduler wrote meanwhile: an OpenAgent that stops
+ * stops one and the next OpenAgent starts another while the first still finishes its tick.
  */
 export function withoutPid(state: State, pid: number): State {
   if (state.pid !== pid) return state

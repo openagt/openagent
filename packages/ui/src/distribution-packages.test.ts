@@ -3,10 +3,10 @@ import { test } from 'node:test'
 import { execFileSync } from 'node:child_process'
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { basename, join } from 'node:path'
+import { join } from 'node:path'
 import { projectId } from '@openagt/agent-data'
 import { DISTRIBUTION_ENV } from '@openagt/hooks'
-import { computerPackages, distributionBinDirs, distributionPackages, lookupProvided, packagesOf, providedCommand, runCleanups, type DashboardPackage } from './distribution-packages.js'
+import { computerPackages, distributionPackages, lookupProvided, packagesOf, providedCommand, runCleanups, type DashboardPackage } from './distribution-packages.js'
 import { distributionHooks, projectRefAt } from './distribution-hooks.js'
 import { readComputerModules, readProjectModules } from './project-modules.js'
 import { providedGitHost } from './store/git-host.js'
@@ -51,10 +51,8 @@ async function switchPlugin(root: string, name: string, on = true): Promise<void
   await (await distributionHooks()).setEnabled(name, on, await projectRefAt(projectId(root), root))
 }
 
-test("every package the distribution lists is read from its install, in its order, and their commands have a directory each", async () => {
+test("every package the distribution lists is read from its install, in its order", async () => {
   assert.deepEqual((await distributionPackages()).map(pkg => pkg.name), LISTED)
-  const dirs = await distributionBinDirs()
-  assert.ok(dirs.length > 0 && dirs.every(dir => basename(dir) === 'bin'), JSON.stringify(dirs))
   assert.deepEqual(await distributionPackages({}), [], 'no distribution handed down: no package')
 })
 
@@ -133,13 +131,11 @@ test("a plugin's package, its data and its page are a project's once the plugin 
   }
 })
 
-test("the scheduler is a project's once scheduled-agents is on there, and not by a hook line that runs it", async () => {
+test("the scheduler is a project's once scheduled-agents is on there", async () => {
   const root = await scratch('tool')
   const has = async (): Promise<boolean> => (await packagesOf(root)).some(pkg => pkg.name === '@openagt/skill-scheduler')
   try {
-    await mkdir(join(root, '.openagent'))
-    await writeFile(join(root, '.openagent', 'hooks.yml'), 'open:\n  - scheduler start\nclose:\n  - scheduler stop --unless-keep-alive\n')
-    assert.equal(await has(), false, 'its lines alone')
+    assert.equal(await has(), false, 'off until it is switched on')
     await switchPlugin(root, 'scheduled-agents')
     assert.equal(await has(), true)
     assert.ok((await readProjectModules(root)).some(module => module.package === '@openagt/skill-scheduler'), 'its page comes with it')

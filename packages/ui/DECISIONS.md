@@ -283,10 +283,10 @@ already made, and lists it in its pull request; for anything else it proposes an
   saved like the model's, which Rom's design ruled out: the preset is the lasting set, the
   session the exception. Picked over "More skills", every other skill OpenAgent carries,
   tickable on for one session: a plugin's Enabled row is the source of truth (decision 31).
-- A project's scheduler starts with the dashboard by its two lines in the project's hooks file,
-  which is this machine's and outside git. While they are not there, the Automations page says
-  the scheduler is off and names the two commands that start it. Picked over a switch on that
-  page that writes the lines, one more control for a line that already says it.
+- A project's scheduler starts and stops with OpenAgent wherever scheduled-agents is on, from
+  the plugin's own `app.lifecycle` (#2394, decision 13). Picked over its two lines in the
+  project's hooks file (#1774), which `scheduler init` wrote and the dashboard ran as it opened
+  and closed: `.openagent/hooks.yml` is gone, and the dashboard runs no project's lines.
 - A project is also added by its repository's address, for a computer that does not have
   its folder, as a server: OpenAgent clones it into `~/projects/<its name>` and says where
   it went. Picked over asking for the folder at every add, one more thing to read.
@@ -531,13 +531,6 @@ already made, and lists it in its pull request; for anything else it proposes an
   Picked over a worktree of each repo, which leaves branches and checkouts in a folder that
   is no project, and over a clone from the repo's address, which needs a login and the
   network for what is already on the computer.
-- A hook line (the `open` and `close` lines a project's hooks file still holds, the
-  scheduler's until it starts and stops with the app, #2394) finds its tools in the packages
-  OpenAgent brings first, then in the
-  project's installed packages. Nothing is downloaded to run a line. Picked over `npx`
-  in the lines, which downloads whatever package holds the name on npm when the project
-  has not installed it, and over the project's installed copy first, where a line ran
-  one copy of a tool and the tool's page went through another.
 - A Start hands the run the prompt, and the coding agent, the model and how far to publish
   when the person picked them; anything else is the run's own business. The publish pick is one menu
   beside Start: Off, Commit, Publish branch, Open PR, Merge on green. Off adds nothing to the

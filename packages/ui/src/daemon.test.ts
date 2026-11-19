@@ -2,7 +2,7 @@ import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { mkdtemp, writeFile, rm, mkdir, readFile, readdir, realpath } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { basename, join, resolve } from 'node:path'
+import { join, resolve } from 'node:path'
 import { createHooks, LOCAL_HOST, type AppContext } from '@openagt/hooks'
 import { fakeHost } from '@openagt/hooks/testing'
 import { runDaemon, type DaemonState, type RunDaemonOptions } from './daemon.js'
@@ -36,7 +36,7 @@ async function startDaemon(cwd: string, opts: RunDaemonOptions): Promise<{ done:
   return { done, state: await listening }
 }
 import { OPENAGENT_DIR } from './openagent-dir.js'
-import { listProjects, addProject } from './registry.js'
+import { listProjects } from './registry.js'
 import { gitignorePath, openagentGitignore, projectId } from '@openagt/agent-data'
 
 // The dashboard steers + starts over the daemon's in-process RPC mount (#405/#426), not the
@@ -120,7 +120,7 @@ test("the modules' own work starts once the dashboard listens, told its address 
   try {
     const { done, state } = await startDaemon(cwd, { port: 0, signal: ac.signal, env, hooks })
     url = state.url
-    // Started once the dashboard listens, like the open hooks: never a reason the address came late.
+    // Started once the dashboard listens: never a reason the address came late.
     for (let i = 0; i < 250 && started.length === 0; i++) await sleep(20)
     // Told where OpenAgent is and which computer this is: the word the home file keeps, made at this first start.
     const computer = JSON.parse(await readFile(join(env.XDG_CONFIG_HOME!, 'openagent.json'), 'utf8')).computer as string
@@ -146,47 +146,6 @@ test('runDaemon comes up in a folder that is no project, and leaves nothing in i
     await done
     assert.deepEqual(await readdir(cwd), ['cfg'], 'no .openagent of its own')
   } finally {
-    ac.abort()
-    await rm(cwd, { recursive: true, force: true })
-  }
-})
-
-test("a project's open hooks run once the dashboard listens, its close hooks at shutdown, each line in the project (#1774)", async () => {
-  const cwd = await realpath(await tmpWorkspace())
-  const env = await configEnv(cwd)
-  // On the list because a person added it: the daemon runs the hooks of listed projects only.
-  await addProject(cwd, new Date().toISOString(), env)
-  await writeFile(
-    join(cwd, OPENAGENT_DIR, 'hooks.yml'),
-    'open:\n  - echo open-1 >> hooks.log\n  - pwd -P >> hooks.log\n  - exit 3\n  - echo open-2 >> hooks.log\nclose:\n  - echo close >> hooks.log\n',
-  )
-  const logged: string[] = []
-  const original = console.log
-  console.log = (...args: unknown[]) => void logged.push(args.map(String).join(' '))
-  const ac = new AbortController()
-  try {
-    const { done, state } = await startDaemon(cwd, { port: 0, signal: ac.signal, env })
-    assert.match(state.url, /^http:\/\/127\.0\.0\.1:\d+$/)
-    // The hooks run after the URL is reported, so wait for the last open line to land.
-    let log = ''
-    for (let i = 0; i < 200 && !log.includes('open-2'); i++) {
-      await sleep(25)
-      log = await readFile(join(cwd, 'hooks.log'), 'utf8').catch(() => '')
-    }
-    assert.equal(log, `open-1\n${cwd}\nopen-2\n`, 'every open line ran, in order, in the project, the failing one included')
-    ac.abort()
-    await done
-    assert.equal(await readFile(join(cwd, 'hooks.log'), 'utf8'), `open-1\n${cwd}\nopen-2\nclose\n`)
-    const hookLines = logged.filter(l => l.includes(' hook ('))
-    assert.deepEqual(hookLines, [
-      `[openagent] open hook (${basename(cwd)}): echo open-1 >> hooks.log: exit 0`,
-      `[openagent] open hook (${basename(cwd)}): pwd -P >> hooks.log: exit 0`,
-      `[openagent] open hook (${basename(cwd)}): exit 3: exit 3`,
-      `[openagent] open hook (${basename(cwd)}): echo open-2 >> hooks.log: exit 0`,
-      `[openagent] close hook (${basename(cwd)}): echo close >> hooks.log: exit 0`,
-    ])
-  } finally {
-    console.log = original
     ac.abort()
     await rm(cwd, { recursive: true, force: true })
   }
@@ -224,23 +183,29 @@ test("a daemon whose modules have no host for this computer does not start: it w
   }
 })
 
-test('a stop frees the port before the close hooks run, and ends at its deadline however long a step takes (#2141)', async () => {
+test('a stop ends at its deadline however long a step takes, a module\'s own stop too, and what is left of it goes on behind (#2141)', async () => {
   const cwd = await realpath(await tmpWorkspace())
   const env = await configEnv(cwd)
-  await addProject(cwd, new Date().toISOString(), env)
-  await writeFile(join(cwd, OPENAGENT_DIR, 'hooks.yml'), 'close:\n  - sleep 6\n')
   const logged: string[] = []
   const original = console.log
   console.log = (...args: unknown[]) => void logged.push(args.map(String).join(' '))
+  // A module whose own work takes longer to stop than the stop may take.
+  const hooks = createHooks([{ module: { name: 'fake-runs', hooks: { 'run.host': [fakeHost({ id: LOCAL_HOST })], 'app.lifecycle': { stopping: () => sleep(3_000) } } } }])
   const ac = new AbortController()
   try {
-    const { done, state } = await startDaemon(cwd, { port: 0, signal: ac.signal, env, shutdownDeadlineMs: 2_000 })
+    const { done, state } = await startDaemon(cwd, { port: 0, signal: ac.signal, env, hooks, shutdownDeadlineMs: 1_000 })
     const stopping = Date.now()
     ac.abort()
     await done
-    assert.ok(Date.now() - stopping < 4_000, 'not held by the close hook')
-    await assert.rejects(fetch(state.url), 'the port is free again')
-    assert.ok(logged.some(line => line.includes(`stopped without waiting for the close hooks of ${cwd}`)), logged.join('\n'))
+    assert.ok(Date.now() - stopping < 2_500, "not held by the module's stop")
+    assert.ok(logged.some(line => line.includes("stopped without waiting for the modules' own work")), logged.join('\n'))
+    // The rest of the stop goes on once the module is done: the dashboard closes, the port is free again.
+    let free = false
+    for (let i = 0; i < 100 && !free; i++) {
+      free = await fetch(state.url).then(() => false, () => true)
+      if (!free) await sleep(100)
+    }
+    assert.ok(free, 'the port is free again')
   } finally {
     console.log = original
     ac.abort()
@@ -272,11 +237,14 @@ test('the folder the caller names is added once the dashboard listens, as Add pr
   Object.assign(process.env, env)
   await mkdir(join(folder, 'src'))
   const told: { id: string; path: string; added: boolean; address: string }[] = []
+  // The modules are told of the project added (`app.lifecycle`): a scheduler starts with it.
+  const added: string[] = []
+  const hooks = createHooks([{ module: { name: 'fake-runs', hooks: { 'run.host': [fakeHost({ id: LOCAL_HOST })], 'app.lifecycle': { projectAdded: project => void added.push(project.dir) } } } }])
   try {
     // Aborted as soon as it listens: the add comes before the daemon waits, so it has run once it is done.
     for (const project of [folder, join(folder, 'src')]) {
       const ac = new AbortController()
-      const { done } = await startDaemon(cfg, { port: 0, signal: ac.signal, env, project, onProject: started => told.push(started) })
+      const { done } = await startDaemon(cfg, { port: 0, signal: ac.signal, env, hooks, project, onProject: started => told.push(started) })
       ac.abort()
       await done
     }
@@ -284,7 +252,7 @@ test('the folder the caller names is added once the dashboard listens, as Add pr
     const address = id.slice(0, id.lastIndexOf('-')) // the folder's name, as the id writes it
     assert.deepEqual(told, [{ id, path: folder, added: true, address }, { id, path: folder, added: false, address }])
     assert.deepEqual((await listProjects(env)).map(project => project.id), [id])
-    await assert.rejects(readFile(join(folder, OPENAGENT_DIR, 'hooks.yml'), 'utf8'), 'added with no hook lines: its runs start on the host')
+    assert.deepEqual(added, [folder], 'told once: the second start finds it on the list')
   } finally {
     for (const [key, value] of Object.entries(before)) {
       if (value === undefined) delete process.env[key]

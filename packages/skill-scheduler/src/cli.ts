@@ -2,7 +2,6 @@ import { Refused, UsageError, inRepo, nodeGitRunner, parseCommandArgs, runComman
 import { projectRoot } from '@openagt/skill-branches'
 import { driverFor } from '@openagt/agent-runner'
 import { runNow, schedulerStatus, startScheduler, stopScheduler, tickProject } from './scheduler.js'
-import { initHooks } from './init.js'
 import { cleanup } from './cleanup.js'
 import { PUBLISH_PICKS, agentInForce, readState, updateState, withAgent, withoutCommand, withoutListed, withPacePicked, withPick, withSwitchedOn, type PublishPick, type State } from './state.js'
 import { parseInterval, parseTimeOfDay, takesTimeOfDay } from './pace.js'
@@ -23,9 +22,8 @@ const USAGE = `usage: scheduler <command>
 
 ${helpRows([
   ['tick', `pull agent-data, sweep, read the commands the project's skills schedule, start what is due, each a run of agent-runner`],
-  ['init', `this tool's lines in the dashboard's .openagent/hooks.yml, so it runs while the dashboard is open; a line already there is kept`],
-  ['start [--keep-alive]', 'the scheduler on, ticking every minute in its own process'],
-  ['stop [--unless-keep-alive]', 'the scheduler off; runs in flight go to the end; with the flag a keep-alive scheduler is left running'],
+  ['start [--keep-alive]', 'the scheduler on, ticking every minute in its own process; OpenAgent starts it in each project the plugin is on in, for as long as it runs itself'],
+  ['stop [--unless-keep-alive]', 'the scheduler off; runs in flight go to the end; with the flag a keep-alive scheduler is left running, as OpenAgent leaves it when it stops'],
   ['status', `the state file, whether the scheduler's process is alive, and the schedule as the project's files say it now`],
   ['model <id>', `the model a scheduled run on Claude Code starts on, where neither its command's skill nor you name another (this user)`],
   ['model <command> <id|skill>', `the model this machine's runs of a scheduled command start on, by the id its coding agent knows it by, the command quoted when it has a word after it; kept with the agent the command runs on here, and holding only while it runs on that agent; skill for the model its skill names again, else the scheduler's own on Claude Code and the agent's own default on Codex, taken for any name`],
@@ -63,15 +61,6 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
     const repo = await project(io.cwd, git)
     const record = await tickProject(repo, { git, log: io.stderr })
     return { ok: true, ...record }
-  },
-
-  async init(args, io, git) {
-    parseCommandArgs(args, {}, 0)
-    const repo = await project(io.cwd, git)
-    const outcome = await initHooks(repo)
-    if (outcome.ok) return outcome
-    const line = outcome.reason === 'no-dashboard' ? 'no .openagent/ here: add the project in the dashboard first' : `${outcome.file}: ${outcome.detail ?? 'unreadable'}`
-    throw new Refused(outcome, line)
   },
 
   async start(args, io, git) {

@@ -30,8 +30,7 @@ import { atOnce, atOnceWords, cannotRun, decided, heldBy, notAsked, startedNow, 
 
 const EMPTY: SchedulerRow[] = []
 
-/** The commands that start the scheduler, run in the project: with the dashboard from then on, or once, now. */
-const INIT = 'npx @openagt/skill-scheduler@0.1 init'
+/** The command that starts the scheduler, run in the project. OpenAgent starts it as it starts, wherever scheduled-agents is on. */
 const START = 'npx @openagt/skill-scheduler@0.1 start'
 
 /** The tick's note that says the project schedules nothing: the page says it in its own words under the heading. */
@@ -112,6 +111,12 @@ export function AutomationsPage({ projects }: UiPageProps) {
     queue.current = answered
     return answered
   }
+  /** A scheduler that is off started from its line, as a save goes: `start` writes the state the saves read. */
+  const startIn = async (project: UiProject): Promise<ModuleCommandResult> => {
+    const answer = await run(project, ['start'])
+    await reload().catch(() => {})
+    return answer
+  }
   /** A command asked without waiting for the saves: one that takes seconds and writes nothing a save reads. */
   const ask = (project: UiProject, args: string[]): Promise<ModuleCommandResult> => host.runCommand(project.id, args).catch(notAsked)
   /** One save or start of a row's own: the row is held until what it did has been read back, so it never shows the old value as if nothing had happened. */
@@ -186,7 +191,7 @@ export function AutomationsPage({ projects }: UiPageProps) {
       description="What starts by itself while nobody is at the keyboard."
       actions={single ? single.error === undefined && newButton(single.project, true) : projects.length === 1 && newButton(projects[0]!, true, false)}
       // One project's status under the page's line, its height held from the first paint.
-      bar={projects.length === 1 ? single ? <StatusLine row={single} agents={agents} /> : <StatusShape /> : undefined}
+      bar={projects.length === 1 ? single ? <StatusLine row={single} agents={agents} onStart={() => startIn(single.project)} /> : <StatusShape /> : undefined}
     >
       <Slot
         of={{ value: rows, state }}
@@ -213,7 +218,7 @@ export function AutomationsPage({ projects }: UiPageProps) {
                   </h2>
                   {single === undefined && row.error === undefined && newButton(row.project, false)}
                 </div>
-                {single === undefined && <StatusLine row={row} agents={agents} className="mb-6" />}
+                {single === undefined && <StatusLine row={row} agents={agents} onStart={() => startIn(row.project)} className="mb-6" />}
                 {creating === row.project.id && (
                   <AutomationForm
                     project={row.project}
@@ -441,19 +446,31 @@ const LINE_PRESS = 'focus-ring relative rounded-sm font-medium hover:underline a
 /**
  * A project's scheduler in one line: whether it runs, and the model rows on Claude Code start on where
  * nothing else names one; then, in the warning colour, a look that is late or that failed; while it is
- * off, the ways to turn it on: where it is ticked so it starts with the dashboard, and "In a terminal",
- * which shows under the line the two commands that start it, now (`start`) and with the dashboard from
- * now on (`init`). The page says it is off here alone. Under the page's line when the page shows one
- * project, else under the project's name.
+ * off (a person stopped it: OpenAgent starts it as it starts), the ways to start it again: Start it, and
+ * "In a terminal", which shows under the line the command that does it (`start`), and why a start
+ * failed. The page says it is off here alone. Under the page's line when the page shows one project,
+ * else under the project's name.
  */
-function StatusLine({ row, agents, className }: { row: SchedulerRow; agents: readonly AgentModels[]; className?: string }) {
+function StatusLine({ row, agents, onStart, className }: { row: SchedulerRow; agents: readonly AgentModels[]; onStart: () => Promise<ModuleCommandResult>; className?: string }) {
   const status = schedulerStatus(row)
   const note = row.lastTick?.note
   const [commands, setCommands] = useState(false)
+  const [starting, setStarting] = useState(false)
+  const [failed, setFailed] = useState<string>()
   const off = row.error === undefined && !row.on
-  // What turns it on: a row of its own under the facts, in the page's words' size, so the way out of "off" reads as one.
+  const start = (): void => {
+    setStarting(true)
+    setFailed(undefined)
+    void onStart().then(answer => {
+      setStarting(false)
+      if (!answer.ok) setFailed(answer.error)
+    })
+  }
+  // What starts it: a row of its own under the facts, in the page's words' size, so the way out of "off" reads as one.
   const presses = off && [
-    <TurnOn />,
+    <button type="button" disabled={starting} onClick={start} className={cn(LINE_PRESS, 'text-primary disabled:opacity-60')}>
+      Start it
+    </button>,
     <button type="button" aria-expanded={commands} onClick={() => setCommands(shown => !shown)} className={cn(LINE_PRESS, 'text-muted-foreground hover:text-foreground')}>
       In a terminal
     </button>,
@@ -482,12 +499,11 @@ function StatusLine({ row, agents, className }: { row: SchedulerRow; agents: rea
         ]}
       />
       {presses && <div className="mt-2 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm max-md:mt-3">{presses.map((press, at) => <span key={at}>{press}</span>)}</div>}
+      {off && failed !== undefined && <p className="mt-2 max-w-180 text-sm text-warning">{`It did not start: ${failed}`}</p>}
       {off && commands && (
         <div className="mt-3 max-w-180 space-y-2 text-sm text-muted-foreground">
-          <p>To start it now, run in the project:</p>
+          <p>To start it, run in the project:</p>
           <Command text={START} />
-          <p className="pt-2">To start it with the dashboard from now on:</p>
-          <Command text={INIT} />
         </div>
       )}
     </div>
@@ -522,16 +538,6 @@ function PhoneRowShapes() {
         </li>
       ))}
     </Panel>
-  )
-}
-
-/** Where a scheduler that is off is turned on: Settings › Skills, whose tick starts it with the dashboard. */
-function TurnOn() {
-  const host = useModuleHost()
-  return (
-    <button type="button" onClick={() => host.openSettings('skills')} className={cn(LINE_PRESS, 'text-primary')}>
-      Turn it on in Skills
-    </button>
   )
 }
 

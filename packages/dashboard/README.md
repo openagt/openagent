@@ -84,11 +84,10 @@ Before a Start, the launcher asks the host's check, for the picked coding agent:
 `problems` (a coding agent not installed or logged out) are said in red and its `warnings` in
 amber, each line naming its own fix.
 
-A project's `.openagent/hooks.yml` holds the shell lines that run as the dashboard opens and as
-it closes: the scheduler's, which `npx @openagt/skill-scheduler@0.1 init` in the project writes,
-until the scheduler starts and stops with the app as a module of its own. A line finds its tools in the packages the dashboard brings first, then in the
-project's installed ones; nothing is downloaded to run a line. The file's keys are `open` and
-`close`; any other key is refused and the whole file ignored.
+A project's scheduler runs for as long as OpenAgent does wherever scheduled-agents is on: it
+starts as OpenAgent starts, as the project is added and within a minute of the plugin being
+switched on there, and stops as OpenAgent stops and as the project is removed, unless it was set
+to keep running, and within a minute of the plugin being switched off.
 
 A package's own settings are no hook. The scheduler's are the scheduler package's own part of
 the dashboard: its Automations page holds a switch, a pace, a number of agents at once and a

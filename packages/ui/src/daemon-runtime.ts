@@ -2,7 +2,7 @@ import { isAbsolute, join, resolve, sep } from 'node:path'
 import { hostname } from 'node:os'
 import { stat } from 'node:fs/promises'
 import { isDriverName, type ReadyNaming } from '@openagt/agent-runner'
-import { isPresetId, MODULE_NAME, type RunHost, type RunOptions, type RunRequest } from '@openagt/hooks'
+import { isPresetId, MODULE_NAME, type Hooks, type RunHost, type RunOptions, type RunRequest } from '@openagt/hooks'
 import { sessionRepos } from '@openagt/skill-branches'
 import { nameStarted } from './started-names.js'
 import { findCheckout, fromDiaryLine, isPidAlive, isRunId, projectBranches, readLiveMetas, resolveAgentDiary, type AgentMeta, type AnyDiaryLine } from './store/index.js'
@@ -25,7 +25,6 @@ import { errorMessage, fileBranchRepo, installProject, projectKey, projectNameOf
 import { publishedBranch } from '@openagt/agent-data/names'
 import { branchesOnOrigin } from './dashboard/start-branch.js'
 import { removeProjectFiles } from './remove-files.js'
-import { runProjectHooks } from './project-hooks.js'
 import { projectRefAt } from './distribution-hooks.js'
 import { publishLevelOf, publishPickIn } from './publish-levels.js'
 import { isBranchName } from './branch-name.js'
@@ -112,6 +111,8 @@ export interface ProjectRuntimeOptions {
   naming?: ReadyNaming
   /** This computer's host, the distribution's (`distribution-hooks.ts`): where a run started here runs. */
   host: RunHost
+  /** Who is told of a project added or removed: the distribution's modules (`app.lifecycle`). */
+  lifecycle?: Pick<Hooks, 'projectAdded' | 'projectRemoved'>
 }
 
 /** The per-project surface the dashboard drives, plus its teardown. */
@@ -157,7 +158,7 @@ export interface ProjectRuntime {
  * The daemon's per-project runtime (#393). The home `cwd` is the default target: a request with
  * no project id (or the home id) resolves to it without a registry lookup.
  */
-export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = ownLogins, naming, host }: ProjectRuntimeOptions): ProjectRuntime {
+export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = ownLogins, naming, host, lifecycle }: ProjectRuntimeOptions): ProjectRuntime {
   const homeId = projectId(resolve(cwd))
 
   // A project id resolves to its repo path via the registry; the home id (or none)
@@ -388,10 +389,11 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
       const written = await writeSharing(abs, shared).then(() => undefined, (err: unknown) => (err instanceof Error ? err.message : String(err)))
       if (written !== undefined) return { ok: false, error: written }
     }
-    await addProject(abs, new Date().toISOString(), env).catch(() => {})
-    // The project's open hooks (#1774): a project added while the daemon runs is a project the
-    // boot never saw, so its open lines run now, the way they would have at boot.
-    await runProjectHooks(abs, 'open', { log: console.log })
+    const at = new Date().toISOString()
+    const listed = await addProject(abs, at, env).catch(() => undefined)
+    // Put on the list by this add: the modules on in it start their work there, its scheduler
+    // where scheduled-agents is on. One on the list already has had it started.
+    if (listed?.addedAt === at) await lifecycle?.projectAdded(await projectRefAt(listed.id, abs))
     return { ok: true, alreadyActivated: result.alreadyActivated === true, ...(share && !shared ? { noRemote: true as const } : {}) }
   }
 
@@ -463,12 +465,12 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
         agent => agent.status === 'running' && agent.pid !== undefined && agent.host === hostname() && isPidAlive(agent.pid),
       )
       if (working) return { ok: false, error: 'An agent is working in this project. Stop it, then remove the project.' }
-      // The project's close hooks, the ones a shutdown would have run for it: once it is off the
-      // list no shutdown names it, and what its open hooks started (a scheduler) would run on.
-      await runProjectHooks(record.path, 'close', { log: console.log })
     }
     await removeProject(id, env)
     providedDataChanged(record.path)
+    // Every module is told, so what it started there stops: off the list, nothing else would stop
+    // the project's scheduler.
+    await lifecycle?.projectRemoved(await projectRefAt(id, record.path))
     if (!files || !here) return { ok: true }
     // Off the list first, so no background job of this daemon starts on the folder again; then
     // what OpenAgent left in it. The records are the repository's: while another project on the

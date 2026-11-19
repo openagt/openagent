@@ -13,8 +13,8 @@ import { cannotRun, heldBy, notAsked, readSchedulers, schedulersKey, rowTitle, s
 //
 // One button, on the row under the pointer: "Run now", as the page's (`scheduler now`), for a
 // row the person wants once, now, without going to the page. A row is switched on its own page;
-// the scheduler is started and stopped by the project's own hooks when the dashboard opens and
-// closes, and by hand from the command line.
+// the scheduler is started and stopped by OpenAgent as it starts and stops (the plugin's
+// `app.lifecycle`), and by hand from the page or the command line.
 
 const EMPTY: SchedulerRow[] = []
 
