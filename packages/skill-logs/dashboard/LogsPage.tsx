@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { Button, Empty, Facts, FilterChips, MiddleCut, Page, PanelGroup, PanelGroups, PanelRow, PanelShape, PersonMark, RunMark, Skeleton, Slot, WordsShape, formatDateTime, formatDuration, needsWord, personSaid, runName, runLineTone, useCodingAgents, useGitHostPeople, useIsMobile, runsAgain, runWord, useModuleHost, usePolled, type CodingAgent, type ModuleAgent, type ModuleHostPerson, type UiPageProps, type UiProject, type ReadState } from '@openagt/ui/module'
+import { Button, Empty, Facts, FilterChips, MiddleCut, Page, PanelGroup, PanelGroups, PanelRow, PanelShape, PersonMark, RunMark, Skeleton, Slot, WordsShape, formatDateTime, formatDuration, needsWord, personSaid, rpcClient, runName, runLineTone, useCodingAgents, useGitHostPeople, useIsMobile, runsAgain, runWord, useModuleHost, usePolled, type CodingAgent, type ModuleAgent, type ModuleHostPerson, type UiPageProps, type UiProject, type ReadState } from '@openagt/ui/module'
 import type { RunCard } from '../src/run.js'
 
 /** How many runs each project lists: the command's own default page is 20; the page shows more. */
@@ -70,7 +70,7 @@ function cardOf(run: ModuleAgent): Omit<RunRow['card'], 'id' | 'startedAt'> {
   }
 }
 
-/** What one read of every project gave: the runs, and the projects whose command failed, with why. */
+/** What one read of every project gave: the runs, and the projects whose read failed, with why. */
 interface Read {
   rows: RunRow[]
   failed: { project: UiProject; error: string }[]
@@ -163,11 +163,11 @@ function dollars(cost: number): string {
 }
 
 /**
- * The Logs page: every project's recorded runs, newest first, from `logs --limit 50` in each
- * project, each as the dashboard says it stands right now ({@link withLiveRuns}). A chip shows one
- * status, kept in the query (`/logs?status=waiting`). A row opens the run's own page in the
- * dashboard. A project whose command fails is named with the command's own reason, and the other
- * projects still show.
+ * The Logs page: every project's recorded runs, newest first, the newest 50 of each project as
+ * the package's server part reads them (what `logs --limit 50` prints), each as the dashboard says
+ * it stands right now ({@link withLiveRuns}). A chip shows one status, kept in the query
+ * (`/logs?status=waiting`). A row opens the run's own page in the dashboard. A project whose read
+ * fails is named with its reason, and the other projects still show.
  */
 export function LogsPage({ projects }: UiPageProps) {
   const host = useModuleHost()
@@ -182,13 +182,20 @@ export function LogsPage({ projects }: UiPageProps) {
   )
   const { value: recorded, state: recordedState, failing } = usePolled<Read>(
     async () => {
-      const results = await Promise.all(projects.map(async project => ({ project, result: await host.runCommand(project.id, ['--limit', String(LIMIT)]) })))
+      const server = rpcClient<typeof import('../src/server.js')>(host)
+      const results = await Promise.all(
+        projects.map(project =>
+          server.runs(project.id, { limit: LIMIT }).then(
+            cards => ({ project, cards }),
+            (err: unknown) => ({ project, error: err instanceof Error ? err.message : String(err) }),
+          ),
+        ),
+      )
       const rows: RunRow[] = []
       const failed: Read['failed'] = []
-      for (const { project, result } of results) {
-        if (!result.ok) failed.push({ project, error: result.error })
-        else if (Array.isArray(result.output)) for (const card of result.output as RunRow['card'][]) rows.push({ project, card })
-        else failed.push({ project, error: 'the logs command did not print a list' })
+      for (const result of results) {
+        if ('error' in result) failed.push(result)
+        else for (const card of result.cards) rows.push({ project: result.project, card })
       }
       rows.sort((a, b) => b.card.startedAt.localeCompare(a.card.startedAt))
       return { rows, failed }

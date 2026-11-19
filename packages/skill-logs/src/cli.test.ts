@@ -4,8 +4,11 @@ import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { nodeGitRunner, personalFolder, sessionsHome, writeSharing, DATA_BRANCH, SESSIONS_DIR } from '@openagt/agent-data'
+import { rpcKind } from '@openagt/hooks/rpc'
+import { rpcHost } from '@openagt/hooks/testing'
 import { runCli, DEFAULT_LIMIT } from './cli.js'
 import { RUNS_DIR } from './names.js'
+import { people as peopleRead, runs as runsRead } from './server.js'
 
 const git = nodeGitRunner()
 const RETRIED_RM = { recursive: true, force: true, maxRetries: 10 } as const
@@ -302,6 +305,24 @@ test('people and skills read the runs of the last days off origin, or with --loc
       assert.equal((await run(a!, ['people', '--days', days])).code, 2, days)
       assert.equal((await run(a!, ['skills', '--days', days])).code, 2, days)
     }
+  } finally {
+    await cleanup()
+  }
+})
+
+test("the server part, what the package's pages read, answers what the command prints: the newest runs off origin, and who works here off this machine's copy", async () => {
+  const { agents, cleanup } = await rig(1)
+  const [a] = agents
+  try {
+    assert.equal(rpcKind(runsRead), 'read')
+    assert.equal(rpcKind(peopleRead), 'read')
+    const host = rpcHost({ root: a! })
+    assert.deepEqual(await runsRead(host, { limit: 2 }), (await run(a!, ['--limit', '2'])).json)
+    // This machine's copy, once a write made the checkout.
+    assert.equal((await run(a!, ['patch', R3, '--branch', 'agent-r3b'])).code, 0)
+    assert.deepEqual(await peopleRead(host, { days: 3650 }), (await run(a!, ['people', '--local', '--days', '3650'])).json)
+    for (const limit of [0, 1.5, '2']) await assert.rejects(runsRead(host, { limit } as { limit: number }), /limit is a whole number above 0/)
+    await assert.rejects(peopleRead(host, { days: -1 }), /days is a whole number above 0/)
   } finally {
     await cleanup()
   }

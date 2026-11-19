@@ -1,8 +1,8 @@
 // The logs' module for the dashboard: the package's `./dashboard` export. It adds one page, Logs,
 // that lists the recorded runs of every project that has this package, and one Overview card,
-// Members, of who starts runs there. Its data is the `logs`
-// command's own output, run in each project by the dashboard: the module reads exactly what an
-// agent reads with `npx @openagt/skill-logs@0.1`.
+// Members, of who starts runs there. It reads them through the package's server part
+// (`../src/server.ts`), in each project, as the `logs` command prints them: the module reads what
+// an agent reads with `npx @openagt/skill-logs@0.1`.
 import { ScrollText } from 'lucide-react'
 import { defineUiModule } from '@openagt/ui/module'
 import { LogsPage } from './LogsPage.js'

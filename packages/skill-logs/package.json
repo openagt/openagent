@@ -41,6 +41,7 @@
       "default": "./dist/names.js"
     },
     "./SKILL.md": "./SKILL.md",
+    "./server": "./dist/server.js",
     "./dashboard": "./dist/dashboard/dashboard.js"
   },
   "scripts": {

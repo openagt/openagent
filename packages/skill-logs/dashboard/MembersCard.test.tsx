@@ -4,18 +4,18 @@ import { ModuleHostContext, type ModuleAgent, type ModuleHost, type ModuleHostPe
 import { fakeHost, type FakeHost } from '@openagt/ui/module/testing'
 import { MembersCard } from './MembersCard.js'
 
-// The Overview's Members card, from `logs people` in each project and the git host's accounts
-// behind their emails. The tally itself is src/people.test.ts's.
+// The Overview's Members card, from the server part's `people` in each project and the git host's
+// accounts behind their emails. The tally itself is src/people.test.ts's.
 
 const NOW = new Date().toISOString()
 /** What a member did, as the card's line of facts says it: "3 runs · $1.50 · 2 commits", each fact joined by its one dot. */
 const did = (words: string) => (_: string, element: Element | null) => element?.tagName === 'P' && element.textContent === words.replaceAll(' · ', '·')
 const person = (email: string, over: Record<string, unknown> = {}) => ({ person: email, runs: 0, running: 0, waiting: 0, cost: 0, commits: 0, lastAt: NOW, ...over })
 
-/** A host whose `logs people` says `people`; the runs it lists are `runs`, and with none it cannot list them. */
+/** A host whose server part's `people` says `people`; the runs it lists are `runs`, and with none it cannot list them. */
 function hostWith(people: unknown[], accounts: ModuleHostPerson[], runs?: unknown[]): FakeHost {
   return fakeHost('@openagt/skill-logs', {
-    runCommand: async () => ({ ok: true as const, output: people }),
+    call: async () => ({ ok: true as const, output: people }),
     agents: async () => {
       if (!runs) throw new Error('no runs listed')
       return runs as ModuleAgent[]
@@ -122,4 +122,23 @@ test('a member with runs that wait on an answer says so beside the ones working'
   expect(within(member).getByText('working')).toBeTruthy()
   // In the sidebar's amber for a run that waits: its mark, the hexagon (RunMark).
   expect(within(member).getByText('2 need an answer').querySelector('svg')!.getAttribute('class')).toMatch(/text-warning/)
+})
+
+test("each project's people of the last 30 days are read through the server part; a project whose read fails counts no one, and the others still do", async () => {
+  const call = vi.fn(async (projectId: string) => (projectId === 'p2' ? { ok: false as const, error: 'not a repository' } : { ok: true as const, output: [person('s@a.dev', { name: 'Suleiman Shahbari', runs: 2 })] }))
+  render(
+    <ModuleHostContext.Provider value={fakeHost('@openagt/skill-logs', { call, agents: async () => [], gitHostPeople: async () => [] })}>
+      <MembersCard
+        projects={[
+          { id: 'p1', name: 'alpha', gitHost: true },
+          { id: 'p2', name: 'beta', gitHost: true },
+        ]}
+      />
+    </ModuleHostContext.Provider>,
+  )
+  expect(await screen.findByText('Suleiman Shahbari')).toBeTruthy()
+  expect(call.mock.calls).toEqual([
+    ['p1', 'people', { days: 30 }],
+    ['p2', 'people', { days: 30 }],
+  ])
 })

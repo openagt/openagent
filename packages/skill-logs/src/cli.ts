@@ -1,9 +1,8 @@
-import { GIT_FAILED, Refused, UsageError, inRepo, nodeBranchFileFs, nodeGitRunner, openProjectReader, parseCommandArgs, runCommandLine, runsRootOf, helpRows, helpText, type Command, type GitRunner } from '@openagt/agent-data'
-import { RUNS_DIR } from './names.js'
-import { agentLines, isRunId, publicCard, type ListedRun, type RunCard, type RunPatch } from './run.js'
-import { deleteRun, patchRun, runFiles, runsPath } from './store.js'
-import { findEntry, readCard, readRunDiary, runEntries, type RecordsReader } from './records.js'
-import { peopleOf, readCommitLines } from './people.js'
+import { GIT_FAILED, Refused, UsageError, inRepo, nodeGitRunner, parseCommandArgs, runCommandLine, runsRootOf, helpRows, helpText, type Command, type GitRunner } from '@openagt/agent-data'
+import { agentLines, isRunId, publicCard, type ListedRun, type RunPatch } from './run.js'
+import { deleteRun, patchRun, runFiles } from './store.js'
+import { findEntry, readCard, readRunDiary } from './records.js'
+import { newestRuns, peopleAt, records } from './reads.js'
 import { skillUseOf } from './skill-use.js'
 
 /**
@@ -11,11 +10,12 @@ import { skillUseOf } from './skill-use.js'
  * in a shell, in any clone of the repository. An agent only reads: its run is recorded by the
  * process that ran it, not by the agent.
  *
- * A dashboard that shows the runs reads and changes them through the same command, so it needs
- * no code of this package: `--local` reads this machine's copy, the directory the writer writes
- * to, with no fetch (fast enough to poll), `--full` prints the whole record (the writer's `caller`
- * key, every diary line), and `delete` / `patch` are its Delete and Open-PR buttons, written
- * through that directory like the writer's own records.
+ * OpenAgent reads and changes the runs through the same command, so it needs no code of this
+ * package: `--local` reads this machine's copy, the directory the writer writes to, with no fetch
+ * (fast enough to poll), `--full` prints the whole record (the writer's `caller` key, every diary
+ * line), and `delete` / `patch` are its Delete and Open-PR buttons, written through that directory
+ * like the writer's own records. The package's own pages read through its server part
+ * (`server.ts`), which reads as the command does (`reads.ts`).
  *
  * It answers as every OpenAgent command does (`runCommandLine`); a refusal here is a rule saying
  * no: there is no such run.
@@ -61,19 +61,9 @@ export function runCli(argv: string[], io: CliIo, git: GitRunner = nodeGitRunner
 const list: Command<[CliIo, GitRunner]> = async (args, io, git) => {
   const { values } = parseCommandArgs(args, { branch: { type: 'string' }, limit: { type: 'string' }, ...READ_FLAGS }, 0)
   const limit = values.limit === undefined ? DEFAULT_LIMIT : wholeAbove0('--limit', values.limit)
-  const keep = (card: RunCard): boolean => values.branch === undefined || card.branch === values.branch
   // Each card with the person it is kept under, whichever way it is printed.
   const shown = ({ person, ...card }: ListedRun) => ({ ...(values.full ? card : publicCard(card)), person })
-  const { reader, dir } = await records(io.cwd, values.local, git)
-  const cards: ListedRun[] = []
-  // Newest first, and no further than the cap: the cards past it are never read.
-  for (const run of await runEntries(reader, dir)) {
-    if (cards.length >= limit) break
-    const card = await readCard(reader, dir, run)
-    if (!card || !keep(card)) continue
-    cards.push({ ...card, person: run.person })
-  }
-  return cards.map(shown)
+  return (await newestRuns(await records(io.cwd, values.local, git), limit, values.branch)).map(shown)
 }
 
 /** The two flags either read takes: where it reads, and how much it prints. */
@@ -91,14 +81,7 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
   },
   async people(args, io, git) {
     const { values } = parseCommandArgs(args, DAYS_FLAGS, 0)
-    const since = sinceDays(values.days)
-    const [email, name] = await Promise.all(['user.email', 'user.name'].map(async key => (await git(['config', key], io.cwd).catch(() => '')).trim()))
-    const me = email ? { email, ...(name ? { name } : {}) } : undefined
-    // The main branch's commits, newest first: the default branch as origin names it, else what is checked out.
-    const main = (await git(['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'], io.cwd).catch(() => '')).trim() || 'HEAD'
-    const commits = readCommitLines(await git(['log', main, '-n', '5000', '--format=%ae%x09%an%x09%at'], io.cwd).catch(() => ''))
-    const { reader, dir } = await records(io.cwd, values.local, git)
-    return peopleOf(reader, dir, since, me, commits)
+    return peopleAt(io.cwd, sinceDays(values.days), values.local, git)
   },
   async show(args, io, git) {
     const { values, positionals } = parseCommandArgs(args, READ_FLAGS, 1)
@@ -152,19 +135,6 @@ function runIdArg(id: string): string {
 
 function noRun(id: string): Refused {
   return new Refused({ ok: false, reason: 'no-run', id }, `no run is named ${id}`)
-}
-
-/**
- * The records a read goes through, and where the runs are in them: origin's copy, fetched once,
- * or with `--local` this machine's, the writer's checkout read where it lies, with no fetch. From
- * wherever the command runs, in a project or among the sessions with no project (the sessions
- * home); outside both, a refusal.
- */
-async function records(cwd: string, local: boolean | undefined, git: GitRunner): Promise<{ reader: RecordsReader; dir: string }> {
-  const root = await inRepo(() => runsRootOf(cwd, git))
-  if (!local) return { reader: await openProjectReader(cwd, { git }), dir: RUNS_DIR }
-  const files = nodeBranchFileFs()
-  return { reader: { list: files.list, read: path => files.read(path).catch(() => undefined) }, dir: await runsPath(root, git) }
 }
 
 /** A flag's value that must be a whole number above 0: `--limit`, `--days`. */

@@ -1,14 +1,15 @@
-import { Facts, PageLink, Panel, PanelGroup, PanelNote, PartDescription, PersonMark, PanelShape, RunMark, Slot, Tooltip, TooltipContent, TooltipTrigger, formatAge, formatDateTime, personName, personSaid, runWord, useModuleHost, usePolled, type UiCardProps, type ModuleHostPerson } from '@openagt/ui/module'
+import { Facts, PageLink, Panel, PanelGroup, PanelNote, PartDescription, PersonMark, PanelShape, RunMark, Slot, Tooltip, TooltipContent, TooltipTrigger, formatAge, formatDateTime, personName, personSaid, rpcClient, runWord, useModuleHost, usePolled, type UiCardProps, type ModuleHostPerson } from '@openagt/ui/module'
 import { membersOf, peopleWithRuns, type Member, type PersonActivity } from '../src/people.js'
 
-// The Overview's Members card: who worked in the projects shown in the last 30 days, from `logs
-// people --local` in each, the same person counted once, across projects and across the emails of
-// one account at the git host: whoever started agents or committed to the main branch. Each by the name git knows them by, with their runs and what
-// they cost (as the dashboard lists the runs, so another computer's are as it says them), their
-// commits, whether a run of theirs is going now or waits on an answer, and when they last did either;
-// the person at this computer marked. Its title opens the Logs page, where each run is. Each with
-// their picture, where the project's git host knows the account behind their email (asked of the
-// shell, which keeps the answer a day); else two letters of their name.
+// The Overview's Members card: who worked in the projects shown in the last 30 days, as the
+// package's server part reads each (what `logs people --local` prints), the same person counted
+// once, across projects and across the emails of one account at the git host: whoever started
+// agents or committed to the main branch. Each by the name git knows them by, with their runs and
+// what they cost (as the dashboard lists the runs, so another computer's are as it says them),
+// their commits, whether a run of theirs is going now or waits on an answer, and when they last did
+// either; the person at this computer marked. Its title opens the Logs page, where each run is.
+// Each with their picture, where the project's git host knows the account behind their email
+// (asked of the shell, which keeps the answer a day); else two letters of their name.
 
 /** A member, with the git host's account behind their email when it knows one. */
 type Shown = Member & { account?: ModuleHostPerson }
@@ -42,12 +43,17 @@ export function MembersCard({ projects }: UiCardProps) {
   const key = projects.map(project => project.id).join(',')
   const { value: members, state } = usePolled<Shown[]>(
     async () => {
+      const server = rpcClient<typeof import('../src/server.js')>(host)
       const reads = await Promise.all(
         projects.map(async project => {
           const since = Date.now() - DAYS * 86_400_000
-          // The runs of those days only: a project keeps hundreds, and a phone downloads every one asked for.
-          const [result, runs] = await Promise.all([host.runCommand(project.id, ['people', '--local', '--days', String(DAYS)]), host.agents(project.id, { since: new Date(since).toISOString() }).catch(() => undefined)])
-          const recorded = result.ok && Array.isArray(result.output) ? (result.output as PersonActivity[]) : []
+          // A project whose records cannot be read counts no one, and the others still do. Of the runs
+          // the dashboard lists, those of these days only: a project keeps hundreds, and a phone
+          // downloads every one asked for.
+          const [recorded, runs] = await Promise.all([
+            server.people(project.id, { days: DAYS }).catch((): PersonActivity[] => []),
+            host.agents(project.id, { since: new Date(since).toISOString() }).catch(() => undefined),
+          ])
           // The runs as the dashboard lists them, each computer's by its own word: a record stops at what was shared last.
           const people = runs ? peopleWithRuns(recorded, runs, since) : recorded
           // Each project's git host is asked of its own people: another project may be on another host.

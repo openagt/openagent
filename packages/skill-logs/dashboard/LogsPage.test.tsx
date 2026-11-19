@@ -12,9 +12,9 @@ const at = (ms: number) => new Date(ms).toISOString()
 const now = Date.now()
 const noon = new Date(new Date().setHours(12, 0, 0, 0)).getTime()
 
-/** A host whose `logs` prints `cards`, and whose dashboard lists `runs` right now. */
+/** A host whose server part reads `cards`, and whose dashboard lists `runs` right now. */
 function hostWith(cards: unknown[], runs: unknown[] = []): FakeHost {
-  return fakeHost('@openagt/skill-logs', { runCommand: async () => ({ ok: true as const, output: cards }), agents: async () => runs as ModuleAgent[] })
+  return fakeHost('@openagt/skill-logs', { call: async () => ({ ok: true as const, output: cards }), agents: async () => runs as ModuleAgent[] })
 }
 
 afterEach(() => {
@@ -216,7 +216,7 @@ test('a second visit opens with the last list at once, while the runs are read a
   cleanup()
   forgetRemembered()
   // The next visit, after a reload: the reads do not answer yet.
-  render(page(fakeHost('@openagt/skill-logs', { runCommand: () => new Promise(() => {}), agents: () => new Promise(() => {}) })))
+  render(page(fakeHost('@openagt/skill-logs', { call: () => new Promise(() => {}), agents: () => new Promise(() => {}) })))
   expect(screen.getAllByText('Login page').length).toBeGreaterThan(0)
   expect(screen.queryByText('Loading…')).toBeNull()
   const row = screen.getAllByText('Login page')[0]!
@@ -226,7 +226,7 @@ test('a second visit opens with the last list at once, while the runs are read a
 
 test('the runs the dashboard lists show while the records are still read, with no "Loading…" over them', async () => {
   const host = fakeHost('@openagt/skill-logs', {
-    runCommand: () => new Promise(() => {}),
+    call: () => new Promise(() => {}),
     agents: async () => [{ id: 'r1', startedAt: at(now - 1000), status: 'running', title: 'Going' }] as ModuleAgent[],
   })
   render(
@@ -328,4 +328,28 @@ test("a run whose work never left this machine says what it needs in the sidebar
   forgetRemembered()
   render(page(true))
   expect((await row('Committed a login page')).textContent).toContain('Needs PR·1 commit')
+})
+
+test("each project's newest 50 runs are read through the server part; a project whose read fails is named with why, and the others still show", async () => {
+  const call = vi.fn(async (projectId: string) =>
+    projectId === 'p2' ? { ok: false as const, error: 'origin could not be fetched' } : { ok: true as const, output: [{ id: 'r1', startedAt: at(now - 1000), endedAt: at(now), status: 'done', title: 'Login page' }] },
+  )
+  render(
+    <ModuleHostContext.Provider value={fakeHost('@openagt/skill-logs', { call, agents: async () => [] })}>
+      <LogsPage
+        projects={[
+          { id: 'p1', name: 'alpha', gitHost: true },
+          { id: 'p2', name: 'beta', gitHost: true },
+        ]}
+        projectId={null}
+        path={[]}
+      />
+    </ModuleHostContext.Provider>,
+  )
+  expect((await screen.findByRole('alert')).textContent).toBe('Could not read the runs of beta: origin could not be fetched')
+  expect(screen.getAllByText('Login page').length).toBeGreaterThan(0)
+  expect(call.mock.calls).toEqual([
+    ['p1', 'runs', { limit: 50 }],
+    ['p2', 'runs', { limit: 50 }],
+  ])
 })

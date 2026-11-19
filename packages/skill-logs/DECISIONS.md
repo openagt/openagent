@@ -10,11 +10,12 @@ already made, and lists it in its pull request; for anything else it proposes an
 ## The logs
 - Three callers: the command an agent runs, which only reads; the program that ran an
   agent, which records the run through this package's functions when it is over; and a
-  dashboard, which reads, deletes and patches runs through the command (`--local`,
-  `--full`, `delete`, `patch`), found by the package's `openagent.runs` declaration. A
-  dashboard importing the package was the alternative and was not taken: the dashboard
-  names no skill. The executable is `logs`. The package ships `SKILL.md`, the agent's
-  instructions.
+  dashboard. The package's own module, its Logs page and Members card, reads the runs
+  through its server part (#2394, decision 8), as the command reads them. OpenAgent reads,
+  deletes and patches them through the command (`--local`, `--full`, `delete`, `patch`),
+  found by the package's `openagent.runs` declaration. A dashboard importing the package
+  was the alternative and was not taken: the dashboard names no skill. The executable is
+  `logs`. The package ships `SKILL.md`, the agent's instructions.
 - A run is two files on `agent-data`, the branch `@openagt/agent-data` names, never on a
   code branch: `agents/<who>/<id>.json`, the card, and `agents/<who>/<id>.jsonl`, the
   diary. Both are pushed. Keeping the diary on the machine that ran it was considered and

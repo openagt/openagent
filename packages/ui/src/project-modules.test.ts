@@ -130,8 +130,8 @@ console.log(JSON.stringify({ args, cwd: process.cwd() }))`),
   }
 })
 
-test("the Queue's, Tickets' and Automations' packages read through their server parts", async () => {
-  for (const name of ['@openagt/skill-queue', '@openagt/skill-tickets', '@openagt/skill-scheduler']) assert.match((await findBroughtModule(name))?.server ?? '', /server\.js$/, name)
+test("the Queue's, Tickets', Automations' and Logs' packages read through their server parts", async () => {
+  for (const name of ['@openagt/skill-queue', '@openagt/skill-tickets', '@openagt/skill-scheduler', '@openagt/skill-logs']) assert.match((await findBroughtModule(name))?.server ?? '', /server\.js$/, name)
   // The distribution's own copy is only of the packages a project can have.
   assert.equal(await findBroughtModule('@openagt/dashboard-devices'), undefined)
   assert.equal(await findBroughtModule('left-pad'), undefined)
