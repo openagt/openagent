@@ -12,10 +12,11 @@ import type { DashboardDistribution } from '@openagt/ui/cli'
  * every plugin starts off but the ones that say `on`.
  */
 const DISTRIBUTION: DashboardDistribution = [
-  // The store: every module's data in its folder on this computer, and the person's own folder
-  // synced with a repository of theirs.
+  // The store: every module's data in its folder on this computer, the person's own folder synced
+  // with a repository of theirs, and a shared project's on its repository's agent-data branch.
   { package: '@openagt/store-filesystem' },
   { package: '@openagt/store-git-repository' },
+  { package: '@openagt/store-git-branch' },
   // git-branches: the run's checkout, its branch read back, the checkout reclaimed.
   { package: '@openagt/skill-branches' },
   // github: the run's account and pull request; its skill is in every run of a project on GitHub.

@@ -123,6 +123,7 @@
     "@openagt/skill-update-tickets": "workspace:*",
     "@openagt/skill-work-queue": "workspace:*",
     "@openagt/store-filesystem": "workspace:*",
+    "@openagt/store-git-branch": "workspace:*",
     "@openagt/store-git-repository": "workspace:*",
     "@openagt/ui-card-waiting": "workspace:*",
     "@openagt/user-info": "workspace:*",

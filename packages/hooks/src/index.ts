@@ -64,6 +64,6 @@ export { SETTING_SCOPES, SETTINGS_FILE, defineSetting, settingsIn, enabledSettin
 export { PERSON_INFO, isPersonName, isPictureAddress, type PersonInfo, PRESETS, DEFAULT_PRESET, builtInDefault, isPresetId, isPresetName, presetIdOf, presetOf, presetsIn, type Preset } from './catalog.js'
 export type { GitAccess, AccountAccess } from './account.js'
 export type { AppContext, AppLifecycle, AttentionFix, AttentionMark, AttentionItem, AttentionArgs, WaitingRun, AppAttention, Attention, AttentionRead } from './app.js'
-export { HOOK_NAMES, MODULE_NAME, defineModule, type NodeHooks, type HookName, type PluginInfo, type ModuleDefinition } from './module.js'
+export { HOOK_NAMES, MODULE_NAME, defineModule, type NodeHooks, type HookName, type PluginInfo, type OwnRow, type ModuleDefinition } from './module.js'
 export { runPipeline, type OrderedStep, type StepError, type PipelineResult } from './pipeline.js'
 export { createHooks, loadModules, loadDistribution, loadHandedDown, distributionItems, packageDirOf, DISTRIBUTION_ENV, type DistributionEntry, type DistributionPackage, type DistributionItem, type HandlerError, type HooksOptions, type GivenSkill, type Hooks } from './loader.js'

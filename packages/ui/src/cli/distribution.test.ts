@@ -18,6 +18,7 @@ test("the dashboard runs the modules of the distribution handed down, and this c
   assert.deepEqual(hooks.modules.map(module => module.name), [
     'store-filesystem',
     'store-git-repository',
+    'store-git-branch',
     'git-branches',
     'github',
     'skills',

@@ -8,11 +8,12 @@ import { createHooks, DISTRIBUTION_ENV, LOCAL_HOST, distributionItems, loadHande
 
 const DISTRIBUTION = fileURLToPath(new URL('./distribution.js', import.meta.url))
 
-test("the distribution's modules load from its own install, the store's and the run pipeline's, and this computer's host is agent-driver's; ask is the one plugin it starts on", async () => {
+test("the distribution's modules load from its own install, the store's and the run pipeline's, and this computer's host is agent-driver's; ask is the one plugin it starts on, and the git stores are on as their repositories say", async () => {
   const modules = await loadHandedDown({ [DISTRIBUTION_ENV]: DISTRIBUTION })
   assert.deepEqual(modules?.map(entry => entry.module.name), [
     'store-filesystem',
     'store-git-repository',
+    'store-git-branch',
     'git-branches',
     'github',
     'skills',
@@ -31,8 +32,9 @@ test("the distribution's modules load from its own install, the store's and the 
     'update-tickets',
     'work-queue',
   ])
-  // #2394: ask starts on, every other plugin off.
+  // #2394: ask starts on, every other plugin off; a git store keeps its own row, how its repository stands.
   assert.deepEqual(modules!.filter(entry => entry.module.plugin && entry.on).map(entry => entry.module.name), ['ask'])
+  assert.deepEqual(modules!.filter(entry => entry.module.plugin?.row).map(entry => entry.module.name), ['store-git-repository', 'store-git-branch'])
   assert.deepEqual((await createHooks(modules!).hosts()).map(host => host.id), [LOCAL_HOST])
 })
 

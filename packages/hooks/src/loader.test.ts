@@ -39,6 +39,7 @@ test('a distribution that is wrong is refused, saying what is wrong', () => {
   refused([{ module: defineModule({ name: 'github', hooks: {} }), on: true }], /github is a core module, always on/)
   refused([{ module: { name: 'devices', plugin: { scope: 'machine' }, hooks: {} } as unknown as ModuleDefinition }], /devices keeps its Enabled row nowhere/)
   refused([{ module: defineModule({ name: 'github', hooks: { 'run.step': [{ order: Number.NaN, name: 'account', run: () => {} }] } }) }], /github's step "account" stands at no order/)
+  refused([{ module: defineModule({ name: 'store-git-branch', plugin: { scope: 'project', row: { read: async () => false, settings: 'project-agent-data' } }, hooks: {} }), on: true }], /store-git-branch keeps its own row: it starts as its row says/)
 })
 
 test("a run's steps go by order; at the same order, by the distribution's order, then by each module's own", async () => {
@@ -84,6 +85,68 @@ test('a plugin is off until its Enabled row is on, in the scope it keeps the row
   assert.equal(await hooks.enabled('nothing'), false)
   await assert.rejects(hooks.setEnabled('github', false), /github is a core module, always on/)
   await assert.rejects(hooks.setEnabled('nothing', true), /No module is named nothing/)
+})
+
+test('a plugin that keeps its own row is on as the row says, where it is asked, and is switched on its Settings entry, not here; a row that cannot be read is off, and told', async () => {
+  const errors: HandlerError[] = []
+  const shared = new Set(['p1'])
+  const asked: (string | undefined)[] = []
+  const hooks = hooksOf(
+    [
+      { module: defineModule({ name: 'store-git-branch', plugin: { scope: 'project', row: { read: async project => (asked.push(project?.id), project !== undefined && shared.has(project.id)), settings: 'project-agent-data' } }, hooks: {} }) },
+      {
+        module: defineModule({
+          name: 'store-git-repository',
+          plugin: {
+            scope: 'computer',
+            row: {
+              read: async () => {
+                throw new Error('the folder is gone')
+              },
+              settings: 'agent-data',
+            },
+          },
+          hooks: {},
+        }),
+      },
+    ],
+    errors,
+  )
+  assert.equal(await hooks.enabled('store-git-branch', P1), true)
+  assert.equal(await hooks.enabled('store-git-branch', P2), false)
+  assert.equal(await hooks.enabled('store-git-branch'), false, 'with no project, as the row says')
+  assert.deepEqual(asked, ['p1', 'p2', undefined])
+  await assert.rejects(hooks.setEnabled('store-git-branch', true, P2), /store-git-branch keeps its own row: it is switched on its Settings entry/)
+  assert.equal(await hooks.enabled('store-git-repository'), false)
+  assert.deepEqual(messages(errors), ['store-git-repository enabled: the folder is gone'])
+  // No setting was made for either: their rows are their own.
+  assert.equal(await hooks.store.read({ kind: 'project', project: P2 }, 'settings.json'), undefined)
+})
+
+test("a question of every module's rows reads each scope's settings once, and only the rows of the modules that fill the hook asked", async () => {
+  const store = memoryStore()
+  const reads: string[] = []
+  const counting = defineModule({
+    name: 'store-filesystem',
+    hooks: { 'store.backend': { order: store.order, wrap: (next, context) => {
+      const inner = store.wrap(next, context)
+      return { ...inner, read: (scope, path, opts) => (reads.push(`${scope.kind} ${path}`), inner.read(scope, path, opts)) }
+    } } },
+  })
+  const step = (name: string): RunStep => ({ order: RunOrder.RUN, name, run: () => {} })
+  const hooks = createHooks(
+    [
+      { module: counting },
+      { module: defineModule({ name: 'tickets', plugin: { scope: 'project' }, hooks: { 'run.step': [step('tickets')] } }), on: true },
+      { module: defineModule({ name: 'queue', plugin: { scope: 'project' }, hooks: { 'run.step': [step('queue')] } }), on: true },
+      { module: defineModule({ name: 'browser', plugin: { scope: 'project' }, hooks: { 'run.step': [step('browser')] } }) },
+      { module: defineModule({ name: 'devices', plugin: { scope: 'computer' }, hooks: { 'run.step': [step('devices')] } }), on: true },
+      { module: defineModule({ name: 'discord', plugin: { scope: 'person' }, hooks: { 'app.attention': async () => [] } }), on: true },
+    ],
+    { onError: () => {} },
+  )
+  assert.deepEqual((await hooks.steps({ project: P1, options: {} })).map(one => one.name), ['tickets', 'queue', 'devices'])
+  assert.deepEqual(reads.sort(), ['computer settings.json', 'project settings.json'], "discord's row is not read: it gives no step")
 })
 
 test('a run goes without the plugins its options name: none of their steps, skills or items; a core module named there stays on', async () => {

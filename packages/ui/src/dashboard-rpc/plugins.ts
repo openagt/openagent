@@ -7,7 +7,9 @@ import { resolveProjectPath } from './context.js'
 // Settings › Plugins (#2394): every plugin of the distribution with its Enabled row, the person's
 // switch. One kept per project is switched in the project's group, one project at a time; one
 // kept per person or per computer in the first group. The loader calls a plugin's hooks only where
-// it is on: its pages, its data, its skills and its steps come and go with the switch.
+// it is on: its pages, its data, its skills and its steps come and go with the switch. A plugin
+// that keeps its own row, a git store's, is switched on its own Settings entry, which asks what
+// switching takes: here it says how it stands, and leads there.
 
 /** A plugin, as Settings › Plugins lists it. */
 export interface PluginRow {
@@ -18,13 +20,23 @@ export interface PluginRow {
   /** Where its Enabled row is kept. */
   scope: SettingScope
   on: boolean
+  /** For a plugin that keeps its own row: the Settings entry it is switched on, the project's for one kept per project. */
+  settings?: string
 }
 
 /** The distribution's plugins kept where `kept` says, each with its row, in `project` for one kept per project, in the distribution's order. */
 async function pluginRows(kept: (scope: SettingScope) => boolean, project?: ProjectRef): Promise<PluginRow[]> {
   const hooks = await distributionHooks()
   const plugins = (await distributionPlugins()).filter(({ module }) => kept(module.plugin.scope))
-  return Promise.all(plugins.map(async ({ module, description }) => ({ name: module.name, description, scope: module.plugin.scope, on: await hooks.enabled(module.name, project) })))
+  return Promise.all(
+    plugins.map(async ({ module, description }) => ({
+      name: module.name,
+      description,
+      scope: module.plugin.scope,
+      on: await hooks.enabled(module.name, project),
+      ...(module.plugin.row ? { settings: module.plugin.row.settings } : {}),
+    })),
+  )
 }
 
 /** The plugins kept per person or per computer: the first group's Plugins. */

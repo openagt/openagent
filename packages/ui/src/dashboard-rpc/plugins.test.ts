@@ -13,7 +13,7 @@ import { provideTestContext } from './test-context.js'
 handDownTestDistribution()
 provideTestContext()
 
-test("Settings › Plugins lists the distribution's plugins with their rows, the ones kept per project in a project and the others in the first group, and switches each where it is kept", async () => {
+test("Settings › Plugins lists the distribution's plugins with their rows, the ones kept per project in a project and the others in the first group, and switches each where it is kept; a git store, which keeps its own row, on its own entry", async () => {
   const dir = await realpath(await mkdtemp(join(tmpdir(), 'openagent-plugins-')))
   const previous = process.env.XDG_CONFIG_HOME
   process.env.XDG_CONFIG_HOME = join(dir, 'cfg')
@@ -26,11 +26,16 @@ test("Settings › Plugins lists the distribution's plugins with their rows, the
     const rows = await onProjectPlugins(id)
     assert.deepEqual(
       rows?.map(row => `${row.name} ${row.on ? 'on' : 'off'}`),
-      ['ask on', 'logs off', 'tickets off', 'queue off', 'browser off', 'scheduled-agents off', 'discord off', 'plan off', 'plan-tickets off', 'github-auto-reply off', 'triage off', 'update-tickets off', 'work-queue off'],
-      'in the distribution\'s order, ask on as it starts',
+      ['store-git-branch off', 'ask on', 'logs off', 'tickets off', 'queue off', 'browser off', 'scheduled-agents off', 'discord off', 'plan off', 'plan-tickets off', 'github-auto-reply off', 'triage off', 'update-tickets off', 'work-queue off'],
+      'in the distribution\'s order, ask on as it starts, and the project\'s data not shared',
     )
     assert.ok(rows!.every(row => row.scope === 'project' && row.description.length > 0), 'each says what it is')
-    assert.deepEqual((await onComputerPlugins()).map(row => `${row.name} ${row.scope} ${row.on ? 'on' : 'off'}`), ['store-git-repository computer off'])
+    assert.deepEqual(rows!.flatMap(row => (row.settings ? [`${row.name} ${row.settings}`] : [])), ['store-git-branch project-agent-data'], 'a git store is switched on its own entry')
+    assert.deepEqual(
+      (await onComputerPlugins()).map(row => `${row.name} ${row.scope} ${row.on ? 'on' : 'off'} ${row.settings}`),
+      ['store-git-repository computer off agent-data'],
+      'the folder syncs with no repository yet',
+    )
 
     assert.deepEqual(await sendSwitchPlugin('tickets', true, id), { ok: true })
     assert.equal((await onProjectPlugins(id))?.find(row => row.name === 'tickets')?.on, true)
@@ -41,6 +46,8 @@ test("Settings › Plugins lists the distribution's plugins with their rows, the
     assert.deepEqual(await sendSwitchPlugin('tickets', true), { ok: false, error: 'tickets is switched in a project.' })
     assert.deepEqual(await sendSwitchPlugin('tickets', true, 'nowhere-1'), { ok: false, error: 'That project is not on this computer.' })
     assert.deepEqual(await sendSwitchPlugin('github', false, id), { ok: false, error: 'github is a core module, always on' })
+    assert.deepEqual(await sendSwitchPlugin('store-git-branch', true, id), { ok: false, error: 'store-git-branch keeps its own row: it is switched on its Settings entry' })
+    assert.deepEqual(await sendSwitchPlugin('store-git-repository', true), { ok: false, error: 'store-git-repository keeps its own row: it is switched on its Settings entry' })
     assert.deepEqual(await sendSwitchPlugin('nothing', true), { ok: false, error: 'No module is named nothing' })
     assert.equal(await onProjectPlugins('nowhere-1'), null)
   } finally {

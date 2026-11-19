@@ -1,5 +1,6 @@
 import type { AccountAccess } from './account.js'
 import type { AppAttention, AppLifecycle } from './app.js'
+import type { ProjectRef } from './project.js'
 import type { RunAgent, RunHost, RunSkills, RunStep } from './run.js'
 import type { SettingScope } from './settings.js'
 import type { StoreBackend } from './store.js'
@@ -31,6 +32,23 @@ export const HOOK_NAMES: readonly HookName[] = ['run.step', 'run.agent', 'run.ho
 /** What makes a module a plugin: an Enabled row, kept per person, per computer or per project. */
 export interface PluginInfo {
   scope: SettingScope
+  /** A row the plugin keeps itself; without it, the row is a setting, saved through the store. */
+  row?: OwnRow
+}
+
+/**
+ * A row a plugin keeps itself, as the thing it switches: a git store's is how the repository it
+ * syncs stands (the person's folder has a remote; the project's clone shares its data), which its
+ * link reads to know where the data goes. A setting beside it could say one thing and the
+ * repository another, and a project's settings are kept where the project's row says. It is read
+ * here, and switched on the plugin's Settings entry, which asks what switching takes (the
+ * repository to sync with, the account it is sent as).
+ */
+export interface OwnRow {
+  /** Whether the plugin is on: in `project` for one kept per project; none for a session with no project. */
+  read(project?: ProjectRef): Promise<boolean>
+  /** The Settings entry it is switched on (`?settings=<id>`), the project's for one kept per project. */
+  settings: string
 }
 
 /** A module's Node part: what its package's `./module` entry default-exports. */

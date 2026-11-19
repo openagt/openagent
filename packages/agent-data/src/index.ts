@@ -53,6 +53,7 @@ export {
   personalFolder,
   withPersonalFolder,
   readPersonalFolder,
+  personalFolderSyncs,
   syncPersonalFolder,
   sendPersonalFolderAs,
   stopSyncingPersonalFolder,

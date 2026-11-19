@@ -216,6 +216,9 @@ importers:
       '@openagt/store-filesystem':
         specifier: workspace:*
         version: link:../store-filesystem
+      '@openagt/store-git-branch':
+        specifier: workspace:*
+        version: link:../store-git-branch
       '@openagt/store-git-repository':
         specifier: workspace:*
         version: link:../store-git-repository
@@ -1234,6 +1237,9 @@ importers:
       '@openagt/store-filesystem':
         specifier: workspace:*
         version: link:../store-filesystem
+      '@openagt/store-git-branch':
+        specifier: workspace:*
+        version: link:../store-git-branch
       '@openagt/store-git-repository':
         specifier: workspace:*
         version: link:../store-git-repository

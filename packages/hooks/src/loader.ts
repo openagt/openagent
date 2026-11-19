@@ -4,12 +4,12 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { GitAccess } from './account.js'
 import type { AppContext, AttentionArgs, AttentionRead } from './app.js'
-import { HOOK_NAMES, MODULE_NAME, type ModuleDefinition } from './module.js'
+import { HOOK_NAMES, MODULE_NAME, type HookName, type ModuleDefinition, type OwnRow } from './module.js'
 import { runPipeline, type OrderedStep, type PipelineResult } from './pipeline.js'
 import type { ProjectRef } from './project.js'
 import type { RunAgent, RunContext, RunHost, RunOptions, RunSkill, SkillArgs } from './run.js'
 import { enabledSetting, SETTING_SCOPES, settingsIn, type Setting, type Settings } from './settings.js'
-import { chainStore, type Store, type StoreContext } from './store.js'
+import { chainStore, scopeKey, type Store, type StoreContext } from './store.js'
 
 /** A module, as a distribution lists it. */
 export interface DistributionEntry {
@@ -48,7 +48,8 @@ export interface GivenSkill extends RunSkill {
  * project; one kept per project is as the distribution starts it where no project is named, such
  * as a session with no project), and, for a run, not among the plugins the run goes without. A
  * core module is always on. The store's chain is the exception: every backend is in it, since
- * the Enabled rows are read through the store.
+ * the Enabled rows are read through the store; a git store keeps its own row, what its link reads
+ * to know where the data is ({@link OwnRow}).
  *
  * A handler that throws is told to `onError`, and the others go on: one module never takes the
  * app down. A run step that throws is no such handler: it fails the run (`run`).
@@ -64,7 +65,7 @@ export interface Hooks {
   ofPackage(name: string): ModuleDefinition | undefined
   /** Whether a module is on: always for a core module; for a plugin, its Enabled row, in `project` for one kept per project. */
   enabled(name: string, project?: ProjectRef): Promise<boolean>
-  /** Switch a plugin's Enabled row, in `project` for one kept per project. */
+  /** Switch a plugin's Enabled row, in `project` for one kept per project. One that keeps its own row is switched on its Settings entry, not here. */
   setEnabled(name: string, on: boolean, project?: ProjectRef): Promise<void>
   /** A run's steps, sorted by order; at the same order, in the distribution's order, then each module's own. */
   steps(run: { project?: ProjectRef; options: RunOptions }): Promise<OrderedStep[]>
@@ -99,7 +100,7 @@ export function createHooks(entries: readonly DistributionEntry[], opts: HooksOp
   const byName = new Map(modules.map(module => [module.name, module]))
   const byPackage = new Map(entries.flatMap(entry => (entry.package !== undefined ? [[entry.package, entry.module]] : [])))
   const switches = new Map<string, Setting<boolean>>()
-  for (const { module, on } of entries) if (module.plugin) switches.set(module.name, enabledSetting(module.name, module.plugin.scope, on ?? false))
+  for (const { module, on } of entries) if (module.plugin && !module.plugin.row) switches.set(module.name, enabledSetting(module.name, module.plugin.scope, on ?? false))
   const store = chainStore(
     modules.flatMap(module => (module.hooks['store.backend'] ? [module.hooks['store.backend']] : [])),
     { oneShot: opts.oneShot ?? false },
@@ -110,25 +111,29 @@ export function createHooks(entries: readonly DistributionEntry[], opts: HooksOp
     else console.error(`${module}: ${hook} failed`, error)
   }
 
-  const enabled = async (name: string, project?: ProjectRef): Promise<boolean> => {
+  /** Whether the module `name` is on, its row read through `rows`. */
+  const enabled = async (name: string, project?: ProjectRef, rows: Settings = settings): Promise<boolean> => {
     const module = byName.get(name)
-    if (!module) return false
-    const setting = switches.get(name)
-    if (!setting) return true
-    // Kept per project, where no project is named (a session with no project): no project keeps a row for it, so it is as the distribution starts it.
-    if (setting.scope === 'project' && project === undefined) return setting.default
+    if (!module?.plugin) return module !== undefined
     try {
-      return await settings.get(setting, project)
+      if (module.plugin.row) return await module.plugin.row.read(project)
+      const setting = switches.get(name)!
+      // Kept per project, where no project is named (a session with no project): no project keeps a row for it, so it is as the distribution starts it.
+      if (setting.scope === 'project' && project === undefined) return setting.default
+      return await rows.get(setting, project)
     } catch (error) {
       report(name, 'enabled', error)
       return false
     }
   }
-  const isOn = async (module: ModuleDefinition, project?: ProjectRef, options?: RunOptions): Promise<boolean> =>
-    !module.plugin || (!options?.plugins?.without?.includes(module.name) && (await enabled(module.name, project)))
-  const onModules = async (project?: ProjectRef, options?: RunOptions): Promise<ModuleDefinition[]> => {
-    const flags = await Promise.all(modules.map(module => isOn(module, project, options)))
-    return modules.filter((_, i) => flags[i])
+  const isOn = async (module: ModuleDefinition, rows: Settings, project?: ProjectRef, options?: RunOptions): Promise<boolean> =>
+    !module.plugin || (!options?.plugins?.without?.includes(module.name) && (await enabled(module.name, project, rows)))
+  /** The modules on, in the distribution's order: those that fill `hook`, when one is named. Each scope's rows are read once for all of them. */
+  const onModules = async (project?: ProjectRef, options?: RunOptions, hook?: HookName): Promise<ModuleDefinition[]> => {
+    const asked = hook ? modules.filter(module => module.hooks[hook] !== undefined) : modules
+    const rows = settingsIn(readingOnce(store))
+    const flags = await Promise.all(asked.map(module => isOn(module, rows, project, options)))
+    return asked.filter((_, i) => flags[i])
   }
   const firstOfEach = <T>(items: { module: string; item: T }[], idOf: (item: T) => string, hook: string): T[] => {
     const seen = new Map<string, string>()
@@ -163,7 +168,7 @@ export function createHooks(entries: readonly DistributionEntry[], opts: HooksOp
   })
 
   const steps = async (run: { project?: ProjectRef; options: RunOptions }): Promise<OrderedStep[]> => {
-    const all = (await onModules(run.project, run.options)).flatMap(module =>
+    const all = (await onModules(run.project, run.options, 'run.step')).flatMap(module =>
       (module.hooks['run.step'] ?? []).map(step => ({ order: step.order, name: step.name, module: module.name, run: (ctx: RunContext) => step.run(ctx) })),
     )
     // A stable sort: at the same order, the distribution's order and each module's own stay.
@@ -178,15 +183,17 @@ export function createHooks(entries: readonly DistributionEntry[], opts: HooksOp
     ofPackage: name => byPackage.get(name),
     enabled,
     async setEnabled(name, on, project) {
+      const module = byName.get(name)
+      if (module?.plugin?.row) throw new Error(`${name} keeps its own row: it is switched on its Settings entry`)
       const setting = switches.get(name)
-      if (!setting) throw new Error(byName.has(name) ? `${name} is a core module, always on` : `No module is named ${name}`)
+      if (!setting) throw new Error(module ? `${name} is a core module, always on` : `No module is named ${name}`)
       await settings.set(setting, on, project)
     },
     steps,
     run: async ctx => runPipeline(await steps({ ...(ctx.project ? { project: ctx.project } : {}), options: ctx.options }), ctx),
     async skills(args, opts = {}) {
       const given: { module: string; item: GivenSkill }[] = []
-      for (const module of opts.every ? modules : await onModules(args.project, args.options)) {
+      for (const module of opts.every ? modules : await onModules(args.project, args.options, 'run.skills')) {
         const hook = module.hooks['run.skills']
         if (!hook) continue
         try {
@@ -198,15 +205,15 @@ export function createHooks(entries: readonly DistributionEntry[], opts: HooksOp
       return firstOfEach(given, skill => `a skill named ${skill.name}`, 'run.skills')
     },
     async agents() {
-      const given = (await onModules()).flatMap(module => (module.hooks['run.agent'] ?? []).map(item => ({ module: module.name, item })))
+      const given = (await onModules(undefined, undefined, 'run.agent')).flatMap(module => (module.hooks['run.agent'] ?? []).map(item => ({ module: module.name, item })))
       return firstOfEach(given, agent => `a coding agent ${agent.id}`, 'run.agent')
     },
     async hosts(project) {
-      const given = (await onModules(project)).flatMap(module => (module.hooks['run.host'] ?? []).map(item => ({ module: module.name, item })))
+      const given = (await onModules(project, undefined, 'run.host')).flatMap(module => (module.hooks['run.host'] ?? []).map(item => ({ module: module.name, item })))
       return firstOfEach(given, host => `a host ${host.id}`, 'run.host')
     },
     async gitAccess(remote) {
-      for (const module of await onModules()) {
+      for (const module of await onModules(undefined, undefined, 'account.access')) {
         const access = module.hooks['account.access']
         if (!access?.git) continue
         try {
@@ -221,7 +228,7 @@ export function createHooks(entries: readonly DistributionEntry[], opts: HooksOp
     async attention(args) {
       // Every module at once: each reads what it says, a git host among them.
       const said = await Promise.all(
-        (await onModules(args.project, args.options)).map(async module => {
+        (await onModules(args.project, args.options, 'app.attention')).map(async module => {
           const hook = module.hooks['app.attention']
           if (!hook) return []
           try {
@@ -263,7 +270,7 @@ export function createHooks(entries: readonly DistributionEntry[], opts: HooksOp
       live = []
     },
     async projectAdded(project) {
-      for (const module of await onModules(project)) {
+      for (const module of await onModules(project, undefined, 'app.lifecycle')) {
         const lifecycle = module.hooks['app.lifecycle']
         if (!lifecycle?.projectAdded) continue
         try {
@@ -288,6 +295,21 @@ export function createHooks(entries: readonly DistributionEntry[], opts: HooksOp
   }
 }
 
+/** The store, each file read once while what asks of it goes on: many rows asked at once read each scope's settings once. A fresh read is the store's every time. */
+function readingOnce(store: Store): Store {
+  const reads = new Map<string, Promise<string | undefined>>()
+  return {
+    ...store,
+    read(scope, path, opts) {
+      if (opts?.fresh) return store.read(scope, path, opts)
+      const key = `${scopeKey(scope)}\0${path}`
+      let read = reads.get(key)
+      if (!read) reads.set(key, (read = store.read(scope, path, opts)))
+      return read
+    },
+  }
+}
+
 function check(entries: readonly DistributionEntry[]): void {
   const names = new Set<string>()
   for (const { module, on } of entries) {
@@ -298,6 +320,7 @@ function check(entries: readonly DistributionEntry[]): void {
     if (typeof module.hooks !== 'object' || module.hooks === null) throw new Error(`${name} fills no hooks: give it hooks: {}`)
     if (module.plugin !== undefined && !SETTING_SCOPES.includes(module.plugin.scope)) throw new Error(`${name} keeps its Enabled row nowhere: per person, per computer or per project`)
     if (on !== undefined && module.plugin === undefined) throw new Error(`${name} is a core module, always on: only a plugin starts on or off`)
+    if (on !== undefined && module.plugin?.row) throw new Error(`${name} keeps its own row: it starts as its row says`)
     for (const hook of Object.keys(module.hooks)) if (!(HOOK_NAMES as readonly string[]).includes(hook)) throw new Error(`${name} fills ${hook}, which is no hook`)
     for (const step of module.hooks['run.step'] ?? []) if (!Number.isFinite(step.order)) throw new Error(`${name}'s step "${step.name}" stands at no order`)
   }

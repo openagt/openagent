@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { forgetRemembered } from '../lib/use-async.js'
+import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
+import type { ReactNode } from 'react'
 
 const onComputerPlugins = vi.hoisted(() => vi.fn())
 const onProjectPlugins = vi.hoisted(() => vi.fn())
@@ -47,14 +49,32 @@ describe('Settings › Plugins', () => {
     render(<ProjectPluginsSettings projectId="p1" />)
     expect(await screen.findByText(/plugins are switched on the computer the project is on/)).toBeTruthy()
     cleanup()
-    onComputerPlugins.mockResolvedValue([{ ...row('store-git-repository', false), scope: 'computer' }])
+    onComputerPlugins.mockResolvedValue([{ ...row('discord', false), scope: 'person' }])
     sendSwitchPlugin.mockResolvedValue({ ok: true })
     render(<ComputerPluginsSettings />)
-    fireEvent.click(await screen.findByRole('switch', { name: 'store-git-repository' }))
-    await waitFor(() => expect(sendSwitchPlugin).toHaveBeenCalledWith('store-git-repository', true, undefined))
+    fireEvent.click(await screen.findByRole('switch', { name: 'discord' }))
+    await waitFor(() => expect(sendSwitchPlugin).toHaveBeenCalledWith('discord', true, undefined))
     cleanup()
     onComputerPlugins.mockResolvedValue([])
     render(<ComputerPluginsSettings />)
     expect(await screen.findByText('No plugin is kept per person or per computer.')).toBeTruthy()
+  })
+
+  test('a git store, which keeps its own row, says how it stands and leads to the entry it is switched on, in the project for one kept per project; it is no switch', async () => {
+    const openSettings = vi.fn()
+    const withServices = (ui: ReactNode) => render(<HostServicesContext.Provider value={{ ...INERT_HOST_SERVICES, openSettings }}>{ui}</HostServicesContext.Provider>)
+    onComputerPlugins.mockResolvedValue([{ ...row('store-git-repository', false), scope: 'computer', settings: 'agent-data' }])
+    withServices(<ComputerPluginsSettings />)
+    expect(await screen.findByText('The store-git-repository plugin. Off.')).toBeTruthy()
+    expect(screen.queryByRole('switch', { name: 'store-git-repository' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Switch on…' }))
+    expect(openSettings).toHaveBeenCalledWith('agent-data', undefined)
+    cleanup()
+    onProjectPlugins.mockResolvedValue([{ ...row('store-git-branch', true), settings: 'project-agent-data' }])
+    withServices(<ProjectPluginsSettings projectId="p1" />)
+    expect(await screen.findByText('The store-git-branch plugin. On.')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Change…' }))
+    expect(openSettings).toHaveBeenLastCalledWith('project-agent-data', 'p1')
+    expect(sendSwitchPlugin).not.toHaveBeenCalled()
   })
 })

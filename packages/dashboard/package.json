@@ -66,6 +66,7 @@
     "@openagt/skill-work-queue": "workspace:*",
     "@openagt/skills": "workspace:*",
     "@openagt/store-filesystem": "workspace:*",
+    "@openagt/store-git-branch": "workspace:*",
     "@openagt/store-git-repository": "workspace:*",
     "@openagt/ui": "workspace:*",
     "@openagt/ui-card-waiting": "workspace:*",
