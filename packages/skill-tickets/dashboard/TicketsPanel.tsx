@@ -16,10 +16,11 @@ import {
   formatRelative,
   useAction,
   useIsMobile,
+  rpcClient,
   useLoaded,
   useModuleHost,
 } from '@openagt/ui/module'
-import { NEW_TICKET, UPDATE_TICKETS_PROMPT, heldBack, readMeta, type TicketsMeta } from '../src/module.js'
+import { NEW_TICKET, UPDATE_TICKETS_PROMPT, heldBack, type TicketsMeta } from '../src/module.js'
 import { QueuedMark, TicketStartActions, useQueuedAsk } from './TicketStartActions.js'
 import type { WorkspaceTicket } from './lib/types.js'
 import { parsePriority } from './lib/ticket-priority.js'
@@ -277,10 +278,11 @@ export function TicketsPanel({
   return <TicketRows rows={rows} {...props} />
 }
 
-/** When `tickets/` last caught up with the issue tracker, from `tickets meta --local`; nothing is read for no project. */
+/** When `tickets/` last caught up with the issue tracker, from the server part's `meta`, nothing known when it cannot be read; nothing is read for no project. */
 export function useTicketsMeta(projectId: string | null): TicketsMeta {
   const host = useModuleHost()
-  return useLoaded<TicketsMeta>(projectId ? async () => readMeta(await host.runCommand(projectId, ['meta', '--local'])) : null, NO_META, [projectId])
+  const server = rpcClient<typeof import('../src/server.js')>(host)
+  return useLoaded<TicketsMeta>(projectId ? () => server.meta(projectId, {}).catch((): TicketsMeta => ({})) : null, NO_META, [projectId])
 }
 
 /**

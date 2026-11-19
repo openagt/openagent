@@ -23,9 +23,13 @@ export interface UiHost {
   readonly package: string
   /** Run one of the package's commands in the project, its answer read as JSON; `command` names which, when the package has several. */
   runCommand(projectId: string, args: string[], command?: string): Promise<UiCommandResult>
+  /** Run one of the package's commands in the project to change something, its answer read as JSON; what was read of the package's data is read again after it. */
+  act(projectId: string, args: string[], command?: string): Promise<UiCommandResult>
+  /** Call one function of the package's server part in the project (`@openagt/hooks/rpc`), its answer read as JSON. */
+  call(projectId: string, name: string, input: object): Promise<UiCommandResult>
 }
 
-/** What a command answered: its output read as JSON, or in words why there is none. */
+/** What a command or a call answered: its output read as JSON, or in words why there is none. */
 export type UiCommandResult = { ok: true; output: unknown } | { ok: false; error: string }
 
 /** How wide a card stands on the Overview: a share of its width. */

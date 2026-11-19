@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { DEFAULT_FAN_OUT_COUNT, DEFAULT_PRIORITY, PRIORITIES, QUEUE_COMMAND, addArgs, addTextArgs, doneArgs, paceWords, isEntryLine, isPlacedEntry, isWorkingOn, entryHeadline, priorityMeaning, addToQueue, alreadyQueued, entryLabel, fanOut, fanOutLabel, queueLine, readEntries, topEntries, workOnEntryPrompt, type CommandResult } from './module.js'
+import { DEFAULT_FAN_OUT_COUNT, DEFAULT_PRIORITY, PRIORITIES, QUEUE_COMMAND, addArgs, addTextArgs, doneArgs, paceWords, isWorkingOn, entryHeadline, priorityMeaning, addToQueue, alreadyQueued, entryLabel, fanOut, fanOutLabel, queueLine, topEntries, workOnEntryPrompt, type CommandResult } from './module.js'
 
 test('entryLabel shows a leading link\'s text, opens only an absolute http(s) target, and keeps anything else whole', () => {
   assert.deepEqual(entryLabel('[Login page](tickets/2026-08-01_login-page.md) — needs the cookie first'), { text: 'Login page' })
@@ -18,31 +18,23 @@ test('a link is queued as a markdown link in its priority\'s section; plain text
   assert.deepEqual(addArgs({ text: 'Tidy the loader' }), ['add', 'Tidy the loader'])
 })
 
-test('a read of the queue is read back: its entries of the right shape, or why there are none', () => {
-  assert.deepEqual(readEntries({ ok: true, output: ['a', 7, 'b'] }, isEntryLine), { entries: ['a', 'b'] })
-  assert.deepEqual(readEntries({ ok: true, output: [{ entry: 'a', priority: 5 }, { entry: 'b' }, { entry: 'c', priority: '5' }, 'd'] }, isPlacedEntry), { entries: [{ entry: 'a', priority: 5 }, { entry: 'b' }] })
-  assert.deepEqual(readEntries({ ok: true, output: { ok: false, reason: 'not-a-repo' } }, isEntryLine), { error: 'the queue command did not print a list' })
-  assert.deepEqual(readEntries({ ok: false, error: 'queue took too long' }, isEntryLine), { error: 'queue took too long' })
-})
-
-/** A command stub: the bare command lists `open`, and every `add` is recorded and answers `ok`. */
+/** A queue stub: its entries are `open`, and every `add` is recorded and answers `ok`. */
 function queueOf(open: string[], onAdd: (args: string[]) => CommandResult = () => ({ ok: true, output: { ok: true } })) {
   const seen: string[][] = []
   const run = async (args: string[]): Promise<CommandResult> => {
-    if (args.length === 0) return { ok: true, output: open }
     seen.push(args)
     return onAdd(args)
   }
-  return { run, seen }
+  return { queue: { entries: async () => open, run }, seen }
 }
 
 test('addToQueue reads the open entries once, runs one add per link not yet queued in order, and stops at the first failure or refusal with its reason', async () => {
-  const { run, seen } = queueOf([])
-  assert.deepEqual(await addToQueue(run, [{ text: 'a', href: 'tickets/a.md', priority: 5 }, { text: 'b' }]), { ok: true })
+  const { queue, seen } = queueOf([])
+  assert.deepEqual(await addToQueue(queue, [{ text: 'a', href: 'tickets/a.md', priority: 5 }, { text: 'b' }]), { ok: true })
   assert.deepEqual(seen, [['add', '[a](tickets/a.md)', '--priority', '5'], ['add', 'b']])
 
   const failing = queueOf([], args => (args[1] === 'b' ? { ok: false, error: 'queue took too long' } : { ok: true, output: { ok: true } }))
-  assert.deepEqual(await addToQueue(failing.run, [{ text: 'a' }, { text: 'b' }, { text: 'c' }]), { ok: false, error: 'queue took too long' })
+  assert.deepEqual(await addToQueue(failing.queue, [{ text: 'a' }, { text: 'b' }, { text: 'c' }]), { ok: false, error: 'queue took too long' })
   assert.deepEqual(
     failing.seen.map(args => args[1]),
     ['a', 'b'],
@@ -50,13 +42,15 @@ test('addToQueue reads the open entries once, runs one add per link not yet queu
   )
 
   const refusing = queueOf([], () => ({ ok: true, output: { ok: false, reason: 'not-a-repo' } }))
-  assert.deepEqual(await addToQueue(refusing.run, [{ text: 'a' }]), { ok: false, error: 'the queue refused: not-a-repo' })
-  assert.deepEqual(await addToQueue(queueOf([], () => ({ ok: true, output: { ok: false } })).run, [{ text: 'a' }]), { ok: false, error: 'the queue refused' })
+  assert.deepEqual(await addToQueue(refusing.queue, [{ text: 'a' }]), { ok: false, error: 'the queue refused: not-a-repo' })
+  assert.deepEqual(await addToQueue(queueOf([], () => ({ ok: true, output: { ok: false } })).queue, [{ text: 'a' }]), { ok: false, error: 'the queue refused' })
   // An empty batch reads nothing and is done; a read that cannot run stops the batch before any add.
   const untouched = queueOf([])
-  assert.deepEqual(await addToQueue(untouched.run, []), { ok: true })
+  assert.deepEqual(await addToQueue(untouched.queue, []), { ok: true })
   assert.deepEqual(untouched.seen, [])
-  assert.deepEqual(await addToQueue(async () => ({ ok: false, error: 'no remote' }), [{ text: 'a' }]), { ok: false, error: 'no remote' })
+  const unread = queueOf([])
+  assert.deepEqual(await addToQueue({ ...unread.queue, entries: async () => Promise.reject(new Error('no remote')) }, [{ text: 'a' }]), { ok: false, error: 'no remote' })
+  assert.deepEqual(unread.seen, [])
 })
 
 test('a link already on the queue is left as it is: by its target when it points somewhere, by its exact text otherwise', async () => {
@@ -69,9 +63,9 @@ test('a link already on the queue is left as it is: by its target when it points
   // A plain text is not matched by a link's text: the two are different lines on the queue.
   assert.equal(alreadyQueued(open, { text: 'Login page' }), false)
 
-  const { run, seen } = queueOf(open)
+  const { queue, seen } = queueOf(open)
   assert.deepEqual(
-    await addToQueue(run, [
+    await addToQueue(queue, [
       { text: 'Login page', href: 'tickets/2026-08-01_login-page.md', priority: 8 },
       { text: 'Other', href: 'tickets/2026-08-02_b.md', priority: 3 },
       { text: 'Create tickets/2026-08-02_b.plan.md' },

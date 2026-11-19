@@ -255,6 +255,21 @@ export async function readTicket(dir: string, file: string, fs: TicketsFs = node
   return { ...(await ticketRow(dir, file, content, new Set(names), fs)), content }
 }
 
+/** One ticket as `show` reads it: its whole text, its plan when it has one, and who holds it when it is claimed. */
+export interface ShownTicket {
+  ticket: TicketDetail
+  plan?: string
+  holder?: string
+}
+
+/** Ticket `file` with its plan and its holder, as `show` reads it; `null` where {@link readTicket} answers `null`. */
+export async function readShownTicket(dir: string, file: string, fs: TicketsFs = nodeTicketsFs()): Promise<ShownTicket | null> {
+  const ticket = await readTicket(dir, file, fs)
+  if (!ticket) return null
+  const plan = await fs.read(join(dir, ticketPlanName(file)))
+  return { ticket, ...(plan === undefined ? {} : { plan }), ...(ticket.lockedBy === undefined ? {} : { holder: ticket.lockedBy }) }
+}
+
 /** Whether `dir` holds any ticket at all — a listing, not a parse, for a caller asking often. */
 export async function hasTickets(dir: string, fs: TicketsFs = nodeTicketsFs()): Promise<boolean> {
   return (await fs.list(dir)).some(name => name.endsWith('.md') && !isSibling(name))

@@ -3,20 +3,21 @@ import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/re
 import { HostServicesContext, INERT_HOST_SERVICES, type HostServices } from '../../ui/dashboard/lib/host-services.js'
 import { mountedOf, type MountedModules } from '@openagt/ui/module/testing'
 import { forgetRemembered } from '@openagt/ui/module'
+import type { PlacedEntry } from '../src/queue.js'
 import type { Taker } from '../src/server.js'
 import { QueuePage } from './QueuePage.js'
 import { NO_MODULES, fakeHost, renderWithHost, type FakeHost } from './test-host.js'
 import { workOnEntryPrompt } from '../src/module.js'
 import { openMenu, phoneScreen } from '../../ui/dashboard/test-utils.js'
 
-// The page rendered from nothing but this package: a host answering `queue --local --full`, the
-// queue's own `done` and `add`, and its server part's `taker`, which reads the scheduler's switch
-// in the settings. What other packages tell it (what a path into the project's files is called)
+// The page rendered from nothing but this package: a host whose server part answers `entries` and
+// `taker`, which reads the scheduler's switch in the settings, and whose command takes the queue's
+// own `done` and `add`. What other packages tell it (what a path into the project's files is called)
 // comes through the dashboard's mounted modules, faked here by what such a package would declare.
 
 const alpha = { id: 'p1', name: 'alpha', gitHost: true }
 const PLAN = 'Create tickets/2026-08-01_login-page.plan.md'
-const FULL = [{ entry: 'Hand-written on top' }, { entry: 'Hot fix', priority: 8 }, { entry: 'Also urgent', priority: 8 }, { entry: 'Later', priority: 3 }]
+const FULL: PlacedEntry[] = [{ entry: 'Hand-written on top' }, { entry: 'Hot fix', priority: 8 }, { entry: 'Also urgent', priority: 8 }, { entry: 'Later', priority: 3 }]
 
 afterEach(() => {
   cleanup()
@@ -27,8 +28,8 @@ afterEach(() => {
 
 let host: FakeHost
 /** The page over a queue that answers `full`, and takes every `done` and `add`; who takes from it is `taker`, unknown without one. */
-function show(full: unknown[] = FULL, modules: MountedModules = NO_MODULES, { services, taker }: { services?: HostServices; taker?: Taker | 'pending' } = {}) {
-  host = fakeHost({ p1: { '--local --full': full } }, taker)
+function show(full: PlacedEntry[] = FULL, modules: MountedModules = NO_MODULES, { services, taker }: { services?: HostServices; taker?: Taker | 'pending' } = {}) {
+  host = fakeHost({ p1: full }, taker)
   host.act.mockImplementation(async () => ({ ok: true, output: { ok: true } }))
   const page = <QueuePage projects={[alpha]} projectId={null} path={[]} />
   return renderWithHost(services ? <HostServicesContext.Provider value={services}>{page}</HostServicesContext.Provider> : page, host, modules)
@@ -66,9 +67,9 @@ describe('QueuePage', () => {
   test("while the queue is first read, its rows' shapes stand where the entries will, and the entries take their place", async () => {
     // A browser that kept no list from an earlier visit.
     localStorage.clear()
-    host = fakeHost({ p1: { '--local --full': FULL } })
+    host = fakeHost({ p1: FULL })
     let answer = () => {}
-    host.runCommand.mockImplementationOnce(() => new Promise(resolve => (answer = () => resolve({ ok: true, output: FULL }))))
+    host.call.mockImplementation((_projectId, name) => (name === 'entries' ? new Promise(resolve => (answer = () => resolve({ ok: true, output: FULL }))) : Promise.resolve({ ok: false, error: 'not in this test' })))
     renderWithHost(<QueuePage projects={[alpha]} projectId={null} path={[]} />, host, NO_MODULES)
     expect(screen.getByText('Loading…')).toBeTruthy()
     expect(screen.queryByText('Nothing queued')).toBeNull()
@@ -146,7 +147,7 @@ describe('QueuePage', () => {
     })
 
     test('beside a free entry\'s "Start now", its menu sets a run up first or removes it; one an agent is on, only removes it', async () => {
-      host = fakeHost({ p1: { '--local --full': FULL } })
+      host = fakeHost({ p1: FULL })
       host.agents.mockImplementation(async () => [{ id: 'run-7', status: 'running', startedAt: '2026-10-01T10:00:00.000Z', ask: workOnEntryPrompt('Hand-written on top') }])
       renderWithHost(<QueuePage projects={[alpha]} projectId={null} path={[]} />, host)
       await screen.findByRole('button', { name: /^An agent is on it/ })
@@ -206,7 +207,7 @@ describe('QueuePage', () => {
     })
 
     test('an entry a working agent was asked says so, and opens that agent; one that only waits does not', async () => {
-      host = fakeHost({ p1: { '--local --full': FULL } })
+      host = fakeHost({ p1: FULL })
       host.agents.mockImplementation(async () => [
         { id: 'run-7', status: 'running', startedAt: '2026-10-01T10:00:00.000Z', ask: workOnEntryPrompt('Hot fix') },
         { id: 'run-6', status: 'done', startedAt: '2026-10-01T09:00:00.000Z', ask: workOnEntryPrompt('Later') },
@@ -220,7 +221,7 @@ describe('QueuePage', () => {
     })
 
     test('an agent waiting on the person\'s answer is on its entry too: the row offers no start, and the batch starts the entries nobody is on', async () => {
-      host = fakeHost({ p1: { '--local --full': FULL } })
+      host = fakeHost({ p1: FULL })
       host.agents.mockImplementation(async () => [{ id: 'run-7', status: 'waiting', startedAt: '2026-10-01T10:00:00.000Z', ask: workOnEntryPrompt('Hand-written on top') }])
       renderWithHost(<QueuePage projects={[alpha]} projectId={null} path={[]} />, host)
       await screen.findByRole('button', { name: /^(An agent is on it|Waiting on you) · / })
@@ -236,7 +237,7 @@ describe('QueuePage', () => {
     })
 
     test('an entry an agent is on gets no second one: its row offers no start, and the batch starts the entries nobody is on', async () => {
-      host = fakeHost({ p1: { '--local --full': FULL } })
+      host = fakeHost({ p1: FULL })
       host.agents.mockImplementation(async () => [{ id: 'run-7', status: 'running', startedAt: '2026-10-01T10:00:00.000Z', ask: workOnEntryPrompt('Hand-written on top') }])
       renderWithHost(<QueuePage projects={[alpha]} projectId={null} path={[]} />, host)
       await screen.findByRole('button', { name: /^(An agent is on it|Waiting on you) · / })
@@ -288,16 +289,17 @@ describe('QueuePage', () => {
       expect(within(dialog).getByRole('heading').nextElementSibling?.textContent).toMatch(/^Login page is deleted from the queue of /)
       expect(dialog.textContent).not.toContain('tickets/')
       expect(host.act).not.toHaveBeenCalled()
-      const reads = host.runCommand.mock.calls.length
+      const reads = () => host.call.mock.calls.filter(([, name]) => name === 'entries').length
+      const before = reads()
       fireEvent.click(within(dialog).getByRole('button', { name: 'Remove' }))
       await waitFor(() => expect(host.act).toHaveBeenCalledWith('p1', ['done', '--', ticket]))
-      await waitFor(() => expect(host.runCommand.mock.calls.length).toBeGreaterThan(reads))
+      await waitFor(() => expect(reads()).toBeGreaterThan(before))
     })
 
     test('after a removal the focus is on the entry now in its place, else on the one before it, else on the field that adds one', async () => {
       let entries = [{ entry: 'First' }, { entry: 'Second' }, { entry: 'Third' }]
       host = fakeHost()
-      host.runCommand.mockImplementation(async () => ({ ok: true, output: entries }))
+      host.call.mockImplementation(async (_projectId, name) => (name === 'entries' ? { ok: true, output: entries } : { ok: false, error: 'not in this test' }))
       host.act.mockImplementation(async (_projectId: string, args: string[]) => {
         entries = entries.filter(placed => placed.entry !== args[2])
         return { ok: true, output: { ok: true } }
@@ -479,7 +481,7 @@ describe('QueuePage', () => {
     const slow = fakeHost()
     // Answered only once the test has looked, so no read is left out for the next test.
     const reads: (() => void)[] = []
-    slow.runCommand.mockImplementation(() => new Promise(resolve => reads.push(() => resolve({ ok: false, error: 'read too late' }))))
+    slow.call.mockImplementation(() => new Promise(resolve => reads.push(() => resolve({ ok: false, error: 'read too late' }))))
     try {
       renderWithHost(<QueuePage projects={[alpha]} projectId={null} path={[]} />, slow, NO_MODULES)
       const entry = screen.getByText('Hot fix')
@@ -506,15 +508,15 @@ describe('QueuePage', () => {
     cleanup()
     forgetRemembered()
     show([{ entry: PLAN, priority: 5 }], { ...NO_MODULES, loaded: false })
-    await waitFor(() => expect(host.runCommand).toHaveBeenCalled())
+    await waitFor(() => expect(host.call).toHaveBeenCalledWith('p1', 'entries', {}))
     await new Promise(resolve => setTimeout(resolve, 20))
     expect(screen.getByRole('button', { name: 'Plan: Login page' })).toBeTruthy()
   })
 
-  test('a project whose command fails is named with the reason, and has no field to add to', async () => {
+  test('a project whose queue cannot be read is named with the reason, and has no field to add to', async () => {
     host = fakeHost({})
     renderWithHost(<QueuePage projects={[alpha]} projectId={null} path={[]} />, host)
-    expect((await screen.findByRole('alert')).textContent).toBe('Could not read the queue of alpha: no answer for p1: queue --local --full')
+    expect((await screen.findByRole('alert')).textContent).toBe('Could not read the queue of alpha: no answer for p1: entries')
     expect(screen.queryByRole('textbox', { name: 'A task to add to the queue' })).toBeNull()
   })
 })

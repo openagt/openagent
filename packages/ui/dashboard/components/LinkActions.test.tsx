@@ -87,11 +87,11 @@ describe('LinkActions', () => {
     await waitFor(() => expect(run).toHaveBeenCalledTimes(2))
     expect(run.mock.calls[0]![1]).toEqual({ projectId: 'p1', links: [LINK, { text: 'Second' }] })
     expect(run.mock.calls[1]![1]).toEqual({ projectId: 'p2', links: [{ text: 'Third', href: 'tickets/c.md', priority: 5 }] })
-    // The host runs only the module's own package's commands.
+    // The host runs only the module's own package's commands; its act is marked so, and the daemon
+    // converges the project's data and re-reads.
     runModuleCommand.mockResolvedValue({ ok: true, output: null })
-    await run.mock.calls[0]![0].runCommand('p1', ['add', 'x'])
-    // The last argument marks the command as an act, so the daemon converges the project's data and re-reads.
-    expect(runModuleCommand).toHaveBeenCalledWith('p1', '@x/queue', ['add', 'x'], undefined, true)
+    await run.mock.calls[0]![0].act('p1', ['add', 'x'])
+    expect(runModuleCommand).toHaveBeenCalledWith('p1', '@x/queue', ['add', 'x'], undefined, true, undefined)
     // Done: the button says so and rests, with the keyboard still on it, and a second press sends nothing.
     const rested = await screen.findByRole('button', { name: 'Queued' })
     expect(rested.getAttribute('aria-disabled')).toBe('true')

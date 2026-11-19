@@ -42,7 +42,7 @@ export interface ModuleHost {
   /**
    * The same, for a command that changes the project's data (a claim released, an entry added):
    * the dashboard then syncs the project's data with origin and forgets what it had read, so the
-   * change shows at once instead of at the next sync. A link action's host runs every command so.
+   * change shows at once instead of at the next sync.
    * `input` is what the command reads on standard input: a whole file it writes, a ticket say.
    */
   act(projectId: string, args: string[], command?: string, input?: string): Promise<ModuleCommandResult>
@@ -287,15 +287,11 @@ export type MachineRemoved = { ok: true } | { ok: false; error: string }
 /** What the dashboard knows about the module it is serving: every service but the commands and the reads, which it binds to the package. */
 export type ModuleHostBase = Omit<ModuleHost, 'runCommand' | 'act' | 'runComputerCommand' | 'runComputerCommandOn' | 'call' | 'callComputer'>
 
-/**
- * The host for one module: the dashboard's services, and its commands bound to the module's own
- * package. `acts` marks every command as an action on the project rather than a page's read: the
- * dashboard builds a link action's host with it, so what the action wrote is read back at once.
- */
-export function moduleHost(base: ModuleHostBase, opts: { acts?: boolean } = {}): ModuleHost {
+/** The host for one module: the dashboard's services, and its commands bound to the module's own package. */
+export function moduleHost(base: ModuleHostBase): ModuleHost {
   return {
     ...base,
-    runCommand: (projectId, args, command) => runModuleCommand(projectId, base.package, args, command, opts.acts ?? false),
+    runCommand: (projectId, args, command) => runModuleCommand(projectId, base.package, args, command, false),
     act: (projectId, args, command, input) => runModuleCommand(projectId, base.package, args, command, true, input),
     runComputerCommand: (args, command, input) => runComputerCommand(base.package, args, command, input),
     runComputerCommandOn: (machineId, args, command) => runComputerCommandOn(base.package, machineId, args, command),

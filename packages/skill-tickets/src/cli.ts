@@ -1,7 +1,7 @@
 import { join } from 'node:path'
 import { GIT_FAILED, Refused, commandReader, commandWrite, inRepo, nodeBranchFileFs, nodeGitRunner, parseCommandArgs, runCommandLine, helpRows, helpText, type BranchFileFs, type Command, type GitRunner } from '@openagt/agent-data'
 import { isTicketFile, META_FILE, nameInTickets, noTicketSaid, TICKETS_DIR, ticketLockName, ticketOfPlan, ticketPlanName, ticketStem } from './names.js'
-import { readTicket, readTickets, readTicketsMeta } from './tickets.js'
+import { readShownTicket, readTickets, readTicketsMeta } from './tickets.js'
 import { applyClaims, applyRelease, claimHistory, claimMessage, lockOn, releaseMessage } from './locks.js'
 import { holderOf } from './holder.js'
 
@@ -20,7 +20,9 @@ import { holderOf } from './holder.js'
  *
  * Two flags are the dashboard's, never an agent's: `--local` on the reads (this machine's copy, no
  * fetch — the dashboard polls, and the writer on that machine keeps it synced), and `--force` on `release` (lift whoever's claim: a person's answer to a dead agent).
- * OpenAgent finds this command through the package's `openagent.tickets` declaration.
+ * OpenAgent finds this command through the package's `openagent.tickets` declaration, and reads
+ * `list --local`; the package's own module changes the tickets through it, and reads them through
+ * its server part.
  */
 
 export const USAGE = `usage: tickets <command>
@@ -65,11 +67,9 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
   async show(args, io, git) {
     const { positionals, values } = parseCommandArgs(args, LOCAL, 1)
     const file = ticketArg(positionals[0]!)
-    const fs = await commandReader(io.cwd, values.local, git)
-    const ticket = await readTicket(TICKETS_DIR, file, fs)
-    if (!ticket) throw noTicket(file)
-    const plan = await fs.read(`${TICKETS_DIR}/${ticketPlanName(file)}`)
-    return { ok: true, ticket, ...(plan === undefined ? {} : { plan }), ...(ticket.lockedBy === undefined ? {} : { holder: ticket.lockedBy }) }
+    const shown = await readShownTicket(TICKETS_DIR, file, await commandReader(io.cwd, values.local, git))
+    if (!shown) throw noTicket(file)
+    return { ok: true, ...shown }
   },
 
   async put(args, io, git) {

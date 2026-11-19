@@ -8,15 +8,16 @@ implementer's judgment, not a decision. An AI writes a bullet only for a pick a 
 already made, and lists it in its pull request; for anything else it proposes and asks.
 
 ## The tickets
-- Two callers: the command an agent runs, and a dashboard, which reads the tickets through
-  the command (`--local`: this machine's copy, no fetch, because it polls and the writer
-  there keeps the checkout synced) and lifts a dead agent's claim through `release
-  --force` as its module's own pages, found by the package's `openagent.tickets`
-  declaration. A dashboard importing the package was the alternative and was not taken:
-  the dashboard names no skill. The library a long-lived program called to keep the
-  branch checked out and claim tickets for the agents it starts stays in the package;
-  nothing calls it now. The executable is `tickets`. The package ships `SKILL.md`, the
-  agent's instructions.
+- Two callers: the command an agent runs, and a dashboard. The package's own module reads
+  the tickets through its server part (#2394, decision 8), this machine's copy with no
+  fetch, because its pages poll and the writer there keeps the checkout synced; it changes
+  them through the command, as an agent does, lifting a dead agent's claim through
+  `release --force`. OpenAgent reads them through the command (`list --local`, the same
+  copy), found by the package's `openagent.tickets` declaration. A dashboard importing the
+  package was the alternative and was not taken: the dashboard names no skill. The library
+  a long-lived program called to keep the branch checked out and claim tickets for the
+  agents it starts stays in the package; nothing calls it now. The executable is
+  `tickets`. The package ships `SKILL.md`, the agent's instructions.
 - A ticket is a markdown file in `tickets/`. Its plan and its claim sit beside it:
   `<name>.plan.md` and `<name>.lock.md`, `<name>` the filename without `.md`.
 - Tickets live on `agent-data`, the branch `@openagt/agent-data` names, never on a code
@@ -114,7 +115,7 @@ already made, and lists it in its pull request; for anything else it proposes an
   goes through a throwaway worktree at origin's tip; one that loses a race is re-applied
   on the new tip by `@openagt/agent-data`. The program's writes go through its persistent checkout's
   cycle instead.
-- The Overview's Hot tickets card is this package's, reading `list --local` like the page, with
+- The Overview's Hot tickets card is this package's, reading the tickets like the page, with
   three lanes: claimed; unclaimed at priority 7 or up, neither in review nor waiting; and
   waiting, at any priority. Picked over the dashboard's own card fed by the tickets provider,
   which also had a lane for queued tickets: that lane was the dashboard knowing both this

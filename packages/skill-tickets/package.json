@@ -25,14 +25,7 @@
     "tickets": "bin/tickets"
   },
   "openagent": {
-    "tickets": "tickets",
-    "reads": {
-      "tickets": [
-        "list",
-        "show",
-        "meta"
-      ]
-    }
+    "tickets": "tickets"
   },
   "exports": {
     "./package.json": "./package.json",
@@ -49,7 +42,8 @@
       "default": "./dist/names.js"
     },
     "./SKILL.md": "./SKILL.md",
-    "./dashboard": "./dist/dashboard/dashboard.js"
+    "./dashboard": "./dist/dashboard/dashboard.js",
+    "./server": "./dist/server.js"
   },
   "scripts": {
     "build": "cp ../../skills/tickets/SKILL.md SKILL.md && mkdir -p commands/plan && cp ../../skills/plan/SKILL.md commands/plan/SKILL.md && mkdir -p commands/plan-tickets && cp ../../skills/plan-tickets/SKILL.md commands/plan-tickets/SKILL.md && mkdir -p commands/triage && cp ../../skills/triage/SKILL.md commands/triage/SKILL.md && mkdir -p commands/update-tickets && cp ../../skills/update-tickets/SKILL.md commands/update-tickets/SKILL.md && mkdir -p commands/suggest-tickets-to-work-on && cp ../../skills/suggest-tickets-to-work-on/SKILL.md commands/suggest-tickets-to-work-on/SKILL.md && tsc -p tsconfig.build.json && vite build -c dashboard/vite.config.ts",

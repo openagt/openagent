@@ -1,19 +1,23 @@
-import type { UiHost } from '@openagt/ui/module'
-import { readListed } from '../../src/module.js'
+import { rpcClient, type UiHost } from '@openagt/ui/module'
 import type { Ticket } from '../../src/tickets.js'
 
-/** Each project's `list --local` on its way, by project. */
+/** Each project's list on its way, by project. */
 const reading = new Map<string, Promise<{ tickets: Ticket[] } | { error: string }>>()
 
 /**
- * A project's tickets, as `list --local` prints them. Asked while the same list is on its way (the
+ * A project's tickets, as the server part's `list` reads them. Asked while the same list is on its way (the
  * hot tickets card and the queue card naming its links, as the page opens), the answer is that
  * read's: the project is read once. A list is never reused once answered.
  */
 export function listTickets(host: UiHost, projectId: string): Promise<{ tickets: Ticket[] } | { error: string }> {
   const out = reading.get(projectId)
   if (out) return out
-  const read = host.runCommand(projectId, ['list', '--local']).then(readListed)
+  const read = rpcClient<typeof import('../../src/server.js')>(host)
+    .list(projectId, {})
+    .then(
+      tickets => ({ tickets }),
+      (err: unknown) => ({ error: err instanceof Error ? err.message : String(err) }),
+    )
   reading.set(projectId, read)
   void read.finally(() => reading.get(projectId) === read && reading.delete(projectId))
   return read

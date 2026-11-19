@@ -1,11 +1,11 @@
 // The rules of the package's dashboard module (`../dashboard/`), kept apart from React so they
 // are unit-tested like the rest of the package: the sentences the pages start agents with, how a
 // page finds the agent behind a claim or a plan, how the module's URL reads, what a ticket is as
-// a link, which lane of the Overview card a ticket sits in, and how the command's answers are read back.
-import { TICKETS_DIR, isTicketFile, nameInTickets, noTicketSaid, queuePriorityForTicket, ticketOfPlan, ticketPlanName } from './names.js'
-import type { Ticket, TicketDetail, TicketsMeta } from './tickets.js'
+// a link, and which lane of the Overview card a ticket sits in.
+import { TICKETS_DIR, isTicketFile, nameInTickets, queuePriorityForTicket, ticketOfPlan, ticketPlanName } from './names.js'
+import type { ShownTicket, Ticket, TicketDetail, TicketsMeta } from './tickets.js'
 
-export type { Ticket, TicketDetail, TicketsMeta }
+export type { ShownTicket, Ticket, TicketDetail, TicketsMeta }
 
 /** The prompt behind "Update tickets": the project's `update-tickets` command, which brings the tickets in line with the issue tracker. One wording for every surface that offers it. */
 export const UPDATE_TICKETS_PROMPT = '/update-tickets'
@@ -227,55 +227,6 @@ export function ticketLink(ticket: LinkableTicket): TicketAsLink {
  */
 export function planLink(ticket: LinkableTicket): TicketAsLink {
   return { text: planTicketPrompt(ticket.file), priority: queuePriorityForTicket(ticket.priority) }
-}
-
-/** What running one command in a project answers: OpenAgent's `ModuleCommandResult`, by structure. */
-export type CommandResult = { ok: true; output: unknown } | { ok: false; error: string }
-
-/** The rows `list` printed, or why there are none: a command that could not run, or printed no list. */
-export function readListed(result: CommandResult): { tickets: Ticket[] } | { error: string } {
-  if (!result.ok) return { error: result.error }
-  if (!Array.isArray(result.output)) return { error: 'the tickets command did not print a list' }
-  return { tickets: result.output.filter(isTicket) }
-}
-
-function isTicket(value: unknown): value is Ticket {
-  if (!value || typeof value !== 'object') return false
-  const row = value as Record<string, unknown>
-  return typeof row.file === 'string' && typeof row.title === 'string' && typeof row.summary === 'string' && typeof row.date === 'string' && typeof row.planned === 'boolean'
-}
-
-/** One ticket as `show` printed it: the ticket with its whole text, its plan when it has one, its holder when claimed. */
-export interface ShownTicket {
-  ticket: TicketDetail
-  plan?: string
-  holder?: string
-}
-
-/**
- * What `show <file>` answered: the ticket, `null` for its refusal of a ticket it does not have
- * (deleted since the list read, or a stale link), or the error of a command that could not run or
- * printed no ticket.
- */
-export function readShown(result: CommandResult, file: string): { shown: ShownTicket | null } | { error: string } {
-  if (!result.ok) return result.error === noTicketSaid(file) ? { shown: null } : { error: result.error }
-  const answer = result.output as { ticket?: unknown; plan?: unknown; holder?: unknown } | null
-  if (!answer || typeof answer !== 'object') return { error: 'the tickets command did not print a ticket' }
-  if (!isTicket(answer.ticket) || typeof (answer.ticket as { content?: unknown }).content !== 'string') return { error: 'the tickets command did not print a ticket' }
-  return {
-    shown: {
-      ticket: answer.ticket as TicketDetail,
-      ...(typeof answer.plan === 'string' ? { plan: answer.plan } : {}),
-      ...(typeof answer.holder === 'string' ? { holder: answer.holder } : {}),
-    },
-  }
-}
-
-/** What `meta` answered: when the tickets last caught up with the tracker; nothing known on any failure. */
-export function readMeta(result: CommandResult): TicketsMeta {
-  if (!result.ok || !result.output || typeof result.output !== 'object') return {}
-  const stamp = (result.output as { lastImportedAt?: unknown }).lastImportedAt
-  return typeof stamp === 'string' ? { lastImportedAt: stamp } : {}
 }
 
 /** Why no agent is started on a ticket, nor a plan for it, and no page queues it: in review (a `PR:` line) or waiting (a `Waiting:` line). */

@@ -11,11 +11,11 @@ import { GROUP_BY_STAGE_FROM, ProjectTicketsPresses, TicketsPanel, type ListedTi
 
 // The panel reaches the dashboard through the host: a run started with `startRun` (which lands
 // on the run itself), a launcher opened with `configureRun`, and the last-update stamp read with
-// `tickets meta --local`.
+// the server part's `meta`.
 let meta: Record<string, unknown> = {}
 let host: FakeHost
 const render = (ui: ReactElement, mounted?: MountedModules) => {
-  host = fakeHost({ p1: { 'meta --local': meta } })
+  host = fakeHost({ p1: { meta } })
   return renderWithHost(ui, host, mounted)
 }
 /** The starts the host was asked for: `[projectId, prompt]` each. */
@@ -358,11 +358,11 @@ describe("a project's own presses", () => {
     expect(await screen.findByText(/already active/i)).toBeTruthy()
   })
 
-  test('beside the update, when tickets/ last caught up, read with `meta --local`, and that it never did (#1208)', async () => {
+  test('beside the update, when tickets/ last caught up, read with `meta`, and that it never did (#1208)', async () => {
     meta = { lastImportedAt: new Date(Date.now() - 3 * 60 * 60_000).toISOString() }
     render(<ProjectTicketsPresses projectId="p1" />)
     expect(await screen.findByText('Updated 3h ago')).toBeTruthy()
-    expect(host.runCommand).toHaveBeenCalledWith('p1', ['meta', '--local'])
+    expect(host.call).toHaveBeenCalledWith('p1', 'meta', {})
     cleanup()
     meta = {}
     render(<ProjectTicketsPresses projectId="p1" />)

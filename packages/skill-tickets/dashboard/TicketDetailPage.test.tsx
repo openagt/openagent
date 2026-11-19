@@ -8,9 +8,9 @@ import { fakeHost, renderWithHost, type FakeHost } from './test-host.js'
 import { TicketDetailPage } from './TicketDetailPage.js'
 import { planTicketPrompt, workOnTicketPrompt } from '../src/module.js'
 
-// The page reads one ticket with `tickets show <file> --local` through the host, and lifts a
-// claim with `tickets release <file> --force` as an act. `onTicket` is what the command answers:
-// the ticket, or `null` for the command's refusal (no such ticket).
+// The page reads one ticket with the server part's `show` through the host, and lifts a claim
+// with `tickets release <file> --force` as an act. `shown` is what `show` answers: the ticket, or
+// `null` for a ticket the project does not have.
 let shown: Record<string, unknown> | null = null
 let agents: ModuleAgent[] = []
 let released: { ok: true } | { ok: false; error: string } = { ok: true }
@@ -25,9 +25,9 @@ const queueAction = (projects: string[]): MountedAction<'link.menu'> => ({ place
 const modules = (projects: string[] = ['p1'], action = queueAction(projects)): MountedModules => mountedOf({ actions: { 'link.menu': [action] } })
 const render = (ui: ReactElement, mounted: MountedModules = modules()) => {
   const slug = (ui.props as { slug: string }).slug
-  host = fakeHost(shown ? { p1: { [`show ${slug} --local`]: { ok: true, ticket: shown } } } : {}, { p1: agents })
-  // The command refuses a ticket it does not have: the page is handed the line the refusal leaves, as the dashboard runs it.
-  if (!shown) host.runCommand.mockImplementation(async () => ({ ok: false, error: `no ticket tickets/${slug}` }))
+  host = fakeHost(shown ? { p1: { [`show ${slug}`]: { ticket: shown } } } : {}, { p1: agents })
+  // A ticket the project does not have reads as none.
+  if (!shown) host.call.mockImplementation(async () => ({ ok: true, output: null }))
   host.act.mockImplementation(async (_projectId, args) => {
     expect(args).toEqual(['release', slug, '--force'])
     return released.ok ? { ok: true, output: { ok: true, file: `tickets/${slug}` } } : released
@@ -75,7 +75,7 @@ describe('TicketDetailPage (#1144)', () => {
     cleanup()
     // Open again, the read still on its way.
     render(<TicketDetailPage projectId="p1" slug="2026-07-20_do-the-thing.md" />)
-    host.runCommand.mockImplementation(() => new Promise(() => {}))
+    host.call.mockImplementation(() => new Promise(() => {}))
     expect(screen.getByRole('heading', { name: 'Do the thing' })).toBeTruthy()
     expect(screen.queryByText('Loading…')).toBeNull()
   })
@@ -95,7 +95,7 @@ describe('TicketDetailPage (#1144)', () => {
     // The fact named, its value the priority's key.
     expect((await fact('Priority')).textContent).toBe('P8')
     expect(screen.getByRole('tab', { name: 'Plan' })).toBeTruthy()
-    expect(host.runCommand).toHaveBeenCalledWith('p1', ['show', '2026-07-20_do-the-thing.md', '--local'])
+    expect(host.call).toHaveBeenCalledWith('p1', 'show', { file: '2026-07-20_do-the-thing.md' })
   })
 
   test('says at its side where it stands, its issue, when it was opened and its file (#1144/#1265)', async () => {
@@ -238,7 +238,7 @@ describe('TicketDetailPage (#1144)', () => {
     await release()
     // An act, not a read: the dashboard syncs the branch and reads the lifted lock back at once.
     await waitFor(() => expect(host.act).toHaveBeenCalledWith('p1', ['release', '2026-07-20_do-the-thing.md', '--force']))
-    expect(host.runCommand).not.toHaveBeenCalledWith('p1', expect.arrayContaining(['release']))
+    expect(host.runCommand).not.toHaveBeenCalled()
     await waitFor(() => expect(screen.queryAllByText(/Claimed/)).toHaveLength(0))
     // Released, it is a ticket like any other: it may be queued.
     expect(screen.getByRole('button', { name: 'Plan now' })).toBeTruthy()

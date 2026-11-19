@@ -8,11 +8,12 @@ implementer's judgment, not a decision. An AI writes a bullet only for a pick a 
 already made, and lists it in its pull request; for anything else it proposes and asks.
 
 ## The queue
-- Two callers: the command an agent runs, and a dashboard, which reads the queue through
-  the command (`--local`, `--full`) and adds to it through the command as its module's
-  action, found by the package's `openagent.queue` declaration. A dashboard importing the
-  package was the alternative and was not taken: the dashboard names no skill. The
-  executable is `queue`. The package ships `SKILL.md`, the agent's instructions.
+- Two callers: the command an agent runs, and a dashboard. The package's own module reads
+  the queue through its server part (#2394, decision 8) and changes it through the command,
+  as an agent does; OpenAgent reads it through the command (`--local`), found by the
+  package's `openagent.queue` declaration. A dashboard importing the package was the
+  alternative and was not taken: the dashboard names no skill. The executable is `queue`.
+  The package ships `SKILL.md`, the agent's instructions.
 - The queue is one markdown file on the branch, `TODO_AGENTS.md`: sections `## Priority
   10` down to `## Priority 0`, any `## Priority N` with N of one or two digits counts, in
   any case; any `-`, `*` or `N.` list item with text is an entry, wherever it sits.
@@ -49,9 +50,8 @@ already made, and lists it in its pull request; for anything else it proposes an
   rejected first: the usage on stderr, nothing on stdout, exit 2. Anything a command
   throws refuses with `git-failed`. Outside a repository a command refuses `not-a-repo`;
   only git's own "not a git repository" reads as that.
-- A bare `queue` answers with a JSON array of strings; with `--full`, of objects, each
-  entry with the priority section it sits in, for the dashboard's page. Every other
-  result and every refusal is an object with `ok`.
+- A bare `queue` answers with a JSON array of strings. Every other result and every
+  refusal is an object with `ok`.
 - The command's write is one commit per command, pushed straight to origin when the
   project shares its records, else committed through the machine's checkout. The push
   goes through a throwaway worktree at origin's tip; one that loses a race is re-applied
@@ -65,7 +65,7 @@ already made, and lists it in its pull request; for anything else it proposes an
   caller deciding, since no page knows the queue: "add" means the set ends up queued,
   and a second entry would outlive the first's check-off as open work naming something
   done.
-- The Overview's AI Queue card is this package's, reading `queue --local` like the page and
+- The Overview's AI Queue card is this package's, reading the queue like the page and
   starting agents through the dashboard: one on an entry, landing on it, or one per top entry
   without landing. Picked over a card in the dashboard fed by the queue provider, which drew
   an empty queue for a project with no queue package. The card names no tickets: a queued

@@ -25,12 +25,7 @@
     "queue": "bin/queue"
   },
   "openagent": {
-    "queue": "queue",
-    "reads": {
-      "queue": [
-        ""
-      ]
-    }
+    "queue": "queue"
   },
   "exports": {
     "./package.json": "./package.json",

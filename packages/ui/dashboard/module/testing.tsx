@@ -6,7 +6,7 @@ import { SidebarProvider, useSidebar } from '../components/ui/sidebar.js'
 import { DaemonDown } from '../lib/use-daemon-health.js'
 import { ModulesContext, mountedOf, type MountedModules } from '../lib/use-modules.js'
 export { mountedOf } from '../lib/use-modules.js'
-import { ModuleHostContext, type ModuleCommandResult, type ModuleHost } from './index.js'
+import { ModuleHostContext, type ModuleCallResult, type ModuleCommandResult, type ModuleHost } from './index.js'
 
 // What a module's tests need of the dashboard, faked (`@openagt/ui/module/testing`, which
 // `moduleTests` in `./vite.ts` resolves): a host whose every service is a spy, and a render inside
@@ -75,6 +75,19 @@ export function answering(command: string, answers: Answers): (projectId: string
     const line = args.join(' ')
     const known = answers[projectId]?.[line]
     return known === undefined ? { ok: false, error: `no answer for ${projectId}: ${command} ${line}` } : { ok: true, output: known }
+  }
+}
+
+/**
+ * How a module's server part answers from `answers`, keyed by project, then by the function's name
+ * and the words of its input, joined with spaces: `show` with `{ file: 'x.md' }` by `show x.md`, a
+ * call with no words by its name alone. A call with no answer fails, naming itself.
+ */
+export function answeringCalls(answers: Answers): (projectId: string, name: string, input: object) => Promise<ModuleCallResult> {
+  return async (projectId, name, input) => {
+    const key = [name, ...Object.values(input).filter((value): value is string => typeof value === 'string')].join(' ')
+    const known = answers[projectId]?.[key]
+    return known === undefined ? { ok: false, error: `no answer for ${projectId}: ${key}` } : { ok: true, output: known }
   }
 }
 

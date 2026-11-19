@@ -1,7 +1,7 @@
 import { join } from 'node:path'
 import { GIT_FAILED, Refused, UsageError, commandReader, commandWrite, nodeBranchFileFs, nodeGitRunner, parseCommandArgs, runCommandLine, helpRows, helpText, type Command, type GitRunner } from '@openagt/agent-data'
 import { QUEUE_FILE } from './names.js'
-import { appendQueueEntry, insertQueueEntry, parseQueueEntries, parseQueueSections, removeQueueEntry } from './queue.js'
+import { appendQueueEntry, insertQueueEntry, parseQueueEntries, removeQueueEntry } from './queue.js'
 
 /**
  * The command line over the package: the same operations a daemon calls, for an agent (and a
@@ -15,12 +15,10 @@ import { appendQueueEntry, insertQueueEntry, parseQueueEntries, parseQueueSectio
  * branch; a rejected push is re-applied on the new tip and pushed again. The persistent checkout
  * a daemon keeps is never touched.
  *
- * A dashboard that shows the queue reads it through the same command, so it needs no code of this
- * package: `--local` reads this machine's copy (the directory a writer writes to) with no fetch,
- * fast enough to poll, and `--full`
- * prints each entry with the priority section it sits in, so the dashboard can show the sections.
- * The package declares the command as OpenAgent's queue provider (`"openagent": { "queue":
- * "queue" }`), which reads `queue --local`; the package's own module reads `queue --local --full`.
+ * The package's own module changes the queue through the same command, as an agent does, and
+ * reads it through its server part. `--local` reads this machine's copy (the directory a writer
+ * writes to) with no fetch, fast enough to poll: the package declares the command as OpenAgent's
+ * queue provider (`"openagent": { "queue": "queue" }`), which reads `queue --local`.
  */
 
 export const USAGE = `usage: queue [command]
@@ -31,7 +29,6 @@ ${helpRows([
   ['done <text>', 'take an entry off the queue'],
   'For a dashboard that shows the queue, not for an agent:',
   ['--local', `with the bare command: read this machine's copy, no fetch from origin`],
-  ['--full', 'with the bare command: each entry as {"entry", "priority"}, the priority of the section it sits in (absent outside any)'],
 ])}
 
 ${helpText('JSON on stdout. Exit code 1 for a refusal or a git failure (the reason on stderr), 2 for a usage error.')}`
@@ -48,14 +45,10 @@ export function runCli(argv: string[], io: CliIo, git: GitRunner = nodeGitRunner
   return runCommandLine(argv, io, { program: 'queue', usage: USAGE, commands: COMMANDS, bare: list, failure: GIT_FAILED }, io, git)
 }
 
-/**
- * The bare command: the open entries, in order of work. `--local` reads this machine's copy, no
- * fetch; `--full` prints each entry with the priority of the section it sits in.
- */
+/** The bare command: the open entries, in order of work. `--local` reads this machine's copy, no fetch. */
 const list: Command<[CliIo, GitRunner]> = async (args, io, git) => {
-  const { values } = parseCommandArgs(args, { local: { type: 'boolean' }, full: { type: 'boolean' } }, 0)
-  const md = (await queueText(io.cwd, values.local, git)) ?? ''
-  return values.full ? parseQueueSections(md) : parseQueueEntries(md)
+  const { values } = parseCommandArgs(args, { local: { type: 'boolean' } }, 0)
+  return parseQueueEntries((await queueText(io.cwd, values.local, git)) ?? '')
 }
 
 const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {

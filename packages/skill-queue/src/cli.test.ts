@@ -120,14 +120,10 @@ test('add creates the queue file when the branch has none', async () => {
   }
 })
 
-test('--full prints each entry with its section\'s priority; --local reads this machine\'s copy with no fetch, the persistent checkout first', async () => {
+test('--local reads this machine\'s copy with no fetch, the persistent checkout first', async () => {
   const { agents, seed, cleanup } = await rig(1, '## Priority 8\n\n- [Do A](tickets/2026-08-30_a.md)\n\n## Priority 5\n\n- Tidy the loader\n\n## Later\n\n- someday\n')
   const [a] = agents
   try {
-    const full = await run(a!, ['--full'])
-    assert.equal(full.code, 0)
-    assert.deepEqual(full.json, [{ entry: '[Do A](tickets/2026-08-30_a.md)', priority: 8 }, { entry: 'Tidy the loader', priority: 5 }, { entry: 'someday' }])
-
     // A writer's persistent checkout (`.branches/agent-data`), as a daemon keeps it, is what --local reads.
     await mkdir(join(seed, '.branches'), { recursive: true })
     await withFileBranch(seed, DATA_BRANCH, 'noop', async () => {})
@@ -138,10 +134,9 @@ test('--full prints each entry with its section\'s priority; --local reads this 
     assert.equal((await run(a!, ['add', 'fresh from another machine', '--priority', '9'])).code, 0)
     assert.deepEqual((await run(seed, ['--local'])).json, before)
     assert.deepEqual((await run(seed, [])).json, ['fresh from another machine', ...before])
-    assert.deepEqual((await run(seed, ['--local', '--full']))!.json![0], { entry: '[Do A](tickets/2026-08-30_a.md)', priority: 8 })
-    // The flags belong to the bare command only.
+    // The flag belongs to the bare command only.
     assert.equal((await run(a!, ['add', 'x', '--local'])).code, 2)
-    assert.equal((await run(a!, ['done', 'x', '--full'])).code, 2)
+    assert.equal((await run(a!, ['done', 'x', '--local'])).code, 2)
   } finally {
     await cleanup()
   }

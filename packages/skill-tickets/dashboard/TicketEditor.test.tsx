@@ -13,7 +13,7 @@ const type = (label: string, value: string) => fireEvent.change(screen.getByLabe
 
 describe('a ticket written by hand', () => {
   test('a new ticket is saved with put, named by today and its title, never over one already there, and opened', async () => {
-    const host = fakeHost({ p1: { 'list --local': [{ file: `${TODAY}_dark-mode.md`, title: 'Dark mode', summary: '', date: TODAY, planned: false }] } })
+    const host = fakeHost({ p1: { list: [{ file: `${TODAY}_dark-mode.md`, title: 'Dark mode', summary: '', date: TODAY, planned: false }] } })
     host.act.mockImplementation(async () => ({ ok: true, output: { ok: true } }))
     renderWithHost(<NewTicketPage projectId="p1" />, host)
     type('Title', 'Dark mode')
@@ -64,7 +64,7 @@ describe('a ticket written by hand', () => {
   test('after Save, and on the page of a ticket just created, the focus is on the ticket\'s title', async () => {
     const slug = '2026-07-20_do-the-thing.md'
     const ticket = { file: slug, title: 'Do the thing', summary: '', date: '2026-07-20', planned: false, content: '# Do the thing\n' }
-    const host = fakeHost({ p1: { [`show ${slug} --local`]: { ok: true, ticket }, 'list --local': [] } })
+    const host = fakeHost({ p1: { [`show ${slug}`]: { ticket }, list: [] } })
     host.act.mockImplementation(async () => ({ ok: true, output: { ok: true } }))
     renderWithHost(<TicketDetailPage projectId="p1" slug={slug} />, host)
     await openMenu(await screen.findByRole('button', { name: 'More' }))
@@ -78,21 +78,21 @@ describe('a ticket written by hand', () => {
     await waitFor(() => expect(host.adjustPage).toHaveBeenCalled())
     cleanup()
     const created = { ...ticket, file: `${TODAY}_dark-mode.md`, title: 'Dark mode', content: '# Dark mode\n' }
-    renderWithHost(<TicketDetailPage projectId="p1" slug={created.file} />, fakeHost({ p1: { [`show ${created.file} --local`]: { ok: true, ticket: created } } }))
+    renderWithHost(<TicketDetailPage projectId="p1" slug={created.file} />, fakeHost({ p1: { [`show ${created.file}`]: { ticket: created } } }))
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1, name: 'Dark mode' })))
   })
 
   test('after Save, the page shows the ticket as saved from the moment the form closes', async () => {
     const slug = '2026-07-20_rate-limit.md'
     const ticket = { file: slug, title: 'Rate limit', summary: '', date: '2026-07-20', planned: false, priority: '3', content: 'Priority: 3\n\n# Rate limit\n' }
-    const host = fakeHost({ p1: { [`show ${slug} --local`]: { ok: true, ticket } } })
+    const host = fakeHost({ p1: { [`show ${slug}`]: { ticket } } })
     // Saved, the ticket reads as saved, once the test lets that read land.
     let land = () => {}
     const landed = new Promise<void>(resolve => (land = resolve))
     host.act.mockImplementation(async () => {
-      host.runCommand.mockImplementation(async () => {
+      host.call.mockImplementation(async () => {
         await landed
-        return { ok: true, output: { ok: true, ticket: { ...ticket, priority: '5', content: 'Priority: 5\n\n# Rate limit\n' } } }
+        return { ok: true, output: { ticket: { ...ticket, priority: '5', content: 'Priority: 5\n\n# Rate limit\n' } } }
       })
       return { ok: true, output: { ok: true } }
     })
@@ -115,7 +115,7 @@ describe('a ticket written by hand', () => {
     const slug = '2026-07-20_checkout.md'
     const content = 'Priority: 9\nWaiting: the design review\nIssue: [#4](https://example.com/issues/4)\n\n# Checkout\n'
     const ticket = { file: slug, title: 'Checkout', summary: '', date: '2026-07-20', planned: false, priority: '9', waiting: 'the design review', issue: { label: '#4', url: 'https://example.com/issues/4' }, content }
-    const host = fakeHost({ p1: { [`show ${slug} --local`]: { ok: true, ticket } } })
+    const host = fakeHost({ p1: { [`show ${slug}`]: { ticket } } })
     host.act.mockImplementation(async () => ({ ok: true, output: { ok: true } }))
     renderWithHost(<TicketDetailPage projectId="p1" slug={slug} />, host)
     await openMenu(await screen.findByRole('button', { name: 'More' }))
@@ -127,7 +127,7 @@ describe('a ticket written by hand', () => {
   })
 
   test('Ctrl+Enter or ⌘+Enter in the text saves, as the press does; Enter alone is a new line', async () => {
-    const host = fakeHost({ p1: { 'list --local': [] } })
+    const host = fakeHost({ p1: { list: [] } })
     host.act.mockImplementation(async () => ({ ok: true, output: { ok: true } }))
     renderWithHost(<NewTicketPage projectId="p1" />, host)
     type('Title', 'Dark mode')
@@ -144,7 +144,7 @@ describe('a ticket written by hand', () => {
   })
 
   test('a refused save says why and stays on the form', async () => {
-    const host = fakeHost({ p1: { 'list --local': [] } })
+    const host = fakeHost({ p1: { list: [] } })
     host.act.mockImplementation(async () => ({ ok: true, output: { ok: false, reason: 'the push was refused' } }))
     renderWithHost(<NewTicketPage projectId="p1" />, host)
     type('Title', 'Dark mode')
@@ -157,7 +157,7 @@ describe('a ticket written by hand', () => {
     const slug = '2026-07-20_do-the-thing.md'
     const content = 'Priority: 8\nIssue: [#12](https://example.com/issues/12)\n\n# Do the thing\n\nThe thing is not done.\n'
     const ticket = { file: slug, title: 'Do the thing', summary: '', date: '2026-07-20', planned: false, priority: '8', issue: { label: '#12', url: 'https://example.com/issues/12' }, content }
-    const host = fakeHost({ p1: { [`show ${slug} --local`]: { ok: true, ticket } } })
+    const host = fakeHost({ p1: { [`show ${slug}`]: { ticket } } })
     host.act.mockImplementation(async () => ({ ok: true, output: { ok: true } }))
     renderWithHost(<TicketDetailPage projectId="p1" slug={slug} />, host)
     await openMenu(await screen.findByRole('button', { name: 'More' }))

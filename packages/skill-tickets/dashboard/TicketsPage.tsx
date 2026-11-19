@@ -21,7 +21,7 @@ import { ProjectTicketsPresses, TicketsPanel, type ListedTicket, type RowsProps 
 /** Stable initial for the cross-project tickets poll, so it does not churn on every render. */
 const EMPTY_GROUPS: ProjectTickets[] = []
 
-/** One project's tickets as read: its rows with their holders resolved, or why the command failed. */
+/** One project's tickets as read: its rows with their holders resolved, or why they could not be read. */
 interface ProjectRead extends ProjectTickets {
   error?: string
 }

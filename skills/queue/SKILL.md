@@ -7,7 +7,7 @@ description: Where the project's agent queue lives, how to read it and change it
 
 The agent queue (`TODO_AGENTS.md`) lives in the project's agent data, never on a code branch; your checkout does not contain it. It lists every task agents will work on next, in the order they will be taken.
 
-Read and change it with the `queue` command, always run by its full name: `npx @openagt/skill-queue@0.1`. Every change it makes is one commit, pushed straight to the remote when the project shares its records. The command's `--local` and `--full` flags are for the dashboard that shows the queue; never use them. A refusal exits 1 with a line on stderr; a wrong command line exits 2 with what was wrong and a pointer to `--help`.
+Read and change it with the `queue` command, always run by its full name: `npx @openagt/skill-queue@0.1`. Every change it makes is one commit, pushed straight to the remote when the project shares its records. The command's `--local` flag is for the dashboard that shows the queue; never use it. A refusal exits 1 with a line on stderr; a wrong command line exits 2 with what was wrong and a pointer to `--help`.
 
 ## Read
 

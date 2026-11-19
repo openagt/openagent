@@ -27,6 +27,7 @@ import {
   StateCell,
   inPlace,
   pathsIn,
+  rpcClient,
   useFileNames,
   useIsMobile,
   runsAgain,
@@ -41,13 +42,13 @@ import {
 } from '@openagt/ui/module'
 import { SCHEDULED_COMMANDS_PAGE } from '@openagt/hooks'
 import type { PlacedEntry } from '../src/queue.js'
-import { DEFAULT_PRIORITY, PRIORITIES, addTextArgs, paceWords, doneArgs, entryTarget, fanOutLabel, fanOutPress, isPlacedEntry, entryHeadline, isWorkingOn, priorityMeaning, readEntries, unclaimedEntries, workOnEntryPrompt } from '../src/module.js'
+import { DEFAULT_PRIORITY, PRIORITIES, addTextArgs, paceWords, doneArgs, entryTarget, fanOutLabel, fanOutPress, entryHeadline, isWorkingOn, priorityMeaning, unclaimedEntries, workOnEntryPrompt } from '../src/module.js'
 import { AgentOnEntry, entryView } from './entry.js'
 import { useQueueStarts, type QueueStarts } from './starts.js'
 import { BatchCount } from './batch-count.js'
 import { useTakers, type Takers } from './takers.js'
 
-/** One project's queue as read: its entries with their sections and the project's agents at work, or why the command failed. */
+/** One project's queue as read: its entries with their sections and the project's agents at work, or why it could not be read. */
 interface ProjectRead {
   project: UiProject
   entries?: PlacedEntry[]
@@ -82,15 +83,16 @@ function sections(entries: PlacedEntry[], working: ModuleAgent[]): { priority: n
 
 /**
  * The Queue page: every project's open entries, in the order agents will take them, under the
- * priority section each sits in, from `queue --local --full` in each project. A place to act: the
+ * priority section each sits in, from the server part's `entries` in each project. A place to act: the
  * page's head says whether anything takes from the queue by itself; an entry is started here, alone
  * or as a batch from the top, as on the Overview's card; an entry is removed, and a new one added,
  * through the same `queue done` and `queue add` an agent runs. An entry that names a file another
- * page opens reads as that page's name for it. A project whose command fails is named with the
- * command's own reason, and the other projects still show.
+ * page opens reads as that page's name for it. A project whose queue cannot be read is named with
+ * the reason, and the other projects still show.
  */
 export function QueuePage({ projects }: UiPageProps) {
   const host = useModuleHost()
+  const server = rpcClient<typeof import('../src/server.js')>(host)
   const key = projects.map(p => p.id).join(',')
   const {
     value: reads,
@@ -101,7 +103,13 @@ export function QueuePage({ projects }: UiPageProps) {
     () =>
       Promise.all(
         projects.map(async (project): Promise<ProjectRead> => {
-          const [read, agents] = await Promise.all([host.runCommand(project.id, ['--local', '--full']).then(result => readEntries(result, isPlacedEntry)), host.agents(project.id).catch(() => [])])
+          const [read, agents] = await Promise.all([
+            server.entries(project.id, {}).then(
+              entries => ({ entries }),
+              (err: unknown) => ({ error: err instanceof Error ? err.message : String(err) }),
+            ),
+            host.agents(project.id).catch(() => []),
+          ])
           const working = agents.filter(agent => agent.status === 'running' || agent.status === 'waiting')
           return 'error' in read ? { project, working, error: read.error } : { project, working, entries: read.entries }
         }),

@@ -8,9 +8,9 @@ import { fakeHost, renderWithHost, type Answers, type FakeHost } from './test-ho
 import { TicketsPage } from './TicketsPage.js'
 import { TicketDetailPage } from './TicketDetailPage.js'
 
-// The page reads every project's tickets with `tickets list --local` through the host, and its
-// sections read the last-import stamp with `tickets meta --local`. `onAllTickets` is what those
-// commands answer, per project; the page is rendered for exactly those projects.
+// The page reads every project's tickets with the server part's `list` through the host, and its
+// sections read the last-import stamp with its `meta`. `groups` is what those answer, per
+// project; the page is rendered for exactly those projects.
 type Group = { projectId: string; projectName: string; tickets: Record<string, unknown>[] }
 let groups: Group[] = []
 let host: FakeHost
@@ -24,7 +24,7 @@ const modules = (projects: string[] = ['p1', 'p2']): MountedModules =>
   mountedOf({ actions: { 'link.menu': [{ place: 'link.menu', id: 'add-to-queue', label: 'Add to queue', doneLabel: 'Queued', run: addToQueue, package: '@x/queue', projects }] } })
 const render = (mounted: MountedModules = modules()) => {
   const answers: Answers = {}
-  for (const g of groups) answers[g.projectId] = { 'list --local': g.tickets, 'meta --local': {} }
+  for (const g of groups) answers[g.projectId] = { list: g.tickets, meta: {} }
   host = fakeHost(answers)
   return renderWithHost(<TicketsPage projects={groups.map(g => ({ id: g.projectId, name: g.projectName, gitHost: true }))} />, host, mounted)
 }
@@ -126,7 +126,7 @@ describe('TicketsPage (#1144)', () => {
     fireEvent.click(await screen.findByText('Do the thing'))
     expect(host.openPage).toHaveBeenCalledWith('tickets', ['t.md'], 'p1')
     cleanup()
-    const page = fakeHost({ p1: { 'show t.md --local': { ok: true, ticket: { ...ticket(), content: '# Do the thing' } } } })
+    const page = fakeHost({ p1: { 'show t.md': { ticket: { ...ticket(), content: '# Do the thing' } } } })
     renderWithHost(<TicketDetailPage projectId="p1" slug="t.md" />, page, modules())
     fireEvent.click(await screen.findByRole('button', { name: /tickets/i }))
     expect(page.backToPage).toHaveBeenCalledWith('tickets')
@@ -141,7 +141,7 @@ describe('TicketsPage (#1144)', () => {
     const slow = fakeHost()
     // Answered only once the test has looked, so no read is left out for the next test.
     const reads: (() => void)[] = []
-    slow.runCommand.mockImplementation(() => new Promise(resolve => reads.push(() => resolve({ ok: false, error: 'read too late' }))))
+    slow.call.mockImplementation(() => new Promise(resolve => reads.push(() => resolve({ ok: false, error: 'read too late' }))))
     try {
       renderWithHost(<TicketsPage projects={[{ id: 'p1', name: 'Alpha', gitHost: true }]} />, slow, modules())
       const row = screen.getByText('Do the thing')
@@ -198,7 +198,7 @@ describe('TicketsPage (#1144)', () => {
 
   test("a claim naming one of the project's runs reads as its session name and opens the run (#1748)", async () => {
     const run = { id: '2026-08-30T10-00-00-000Z', name: 'login-page', status: 'running' as const, startedAt: '2026-08-30T10:00:00.000Z' }
-    host = fakeHost({ p1: { 'list --local': [ticket({ locked: true, lockedBy: run.id })], 'meta --local': {} } }, { p1: [run] })
+    host = fakeHost({ p1: { list: [ticket({ locked: true, lockedBy: run.id })], meta: {} } }, { p1: [run] })
     renderWithHost(<TicketsPage projects={[{ id: 'p1', name: 'Alpha', gitHost: true }]} />, host, modules())
     // Named as its run, and how that run stands.
     fireEvent.click(await screen.findByRole('button', { name: 'Claimed by login-page: working' }))

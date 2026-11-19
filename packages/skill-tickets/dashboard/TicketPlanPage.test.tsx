@@ -20,7 +20,7 @@ const PLAN = 'Effort: 2\n\n# [Plan] Do the thing\n\n## The plan\n\nDo it in two 
 
 /** The page over a `show` answer carrying `plan` (or not), and the project's runs. */
 const render = (plan: string | undefined, agents: ModuleAgent[] = []): FakeHost => {
-  const host = fakeHost({ p1: { [`show ${SLUG} --local`]: { ok: true, ticket: TICKET, ...(plan === undefined ? {} : { plan }) } } }, { p1: agents })
+  const host = fakeHost({ p1: { [`show ${SLUG}`]: { ticket: TICKET, ...(plan === undefined ? {} : { plan }) } } }, { p1: agents })
   renderWithHost(<TicketPlanPage projectId="p1" slug={SLUG} />, host)
   return host
 }
@@ -28,7 +28,7 @@ const render = (plan: string | undefined, agents: ModuleAgent[] = []): FakeHost 
 describe('TicketPlanPage (#685)', () => {
   test('reads the plan with the ticket, by its slug, and renders its markdown', async () => {
     const host = render(PLAN)
-    await waitFor(() => expect(host.runCommand).toHaveBeenCalledWith('p1', ['show', SLUG, '--local']))
+    await waitFor(() => expect(host.call).toHaveBeenCalledWith('p1', 'show', { file: SLUG }))
     expect(await screen.findByText('The plan')).toBeTruthy()
     expect(screen.getByText('Do it in two steps.')).toBeTruthy()
     // The breadcrumb names the ticket by its title, then the plan; the tab says which page this is.
@@ -50,7 +50,7 @@ describe('TicketPlanPage (#685)', () => {
   // The shell carries a return across pages opened beside each other (its App tests): from either
   // of a ticket's pages, the list the ticket was opened from is reached by Back, as it was left.
   test('the ticket\'s Plan tab opens beside the ticket, and its crumb "Tickets" goes back to the list', async () => {
-    const host = fakeHost({ p1: { [`show ${SLUG} --local`]: { ok: true, ticket: TICKET, plan: PLAN } } })
+    const host = fakeHost({ p1: { [`show ${SLUG}`]: { ticket: TICKET, plan: PLAN } } })
     renderWithHost(<TicketDetailPage projectId="p1" slug={SLUG} />, host)
     fireEvent.click(await screen.findByRole('tab', { name: 'Plan' }))
     expect(host.openPage).toHaveBeenCalledWith('tickets', [SLUG, 'plan'], 'p1', { beside: true })
@@ -67,7 +67,7 @@ describe('TicketPlanPage (#685)', () => {
     }, () => fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))],
     ['crumb to the ticket', async () => fireEvent.click(await screen.findByRole('button', { name: 'Do the thing' })), () => {}],
   ])('the Plan tab\'s %s opens the ticket beside it, whose "Tickets" goes back to the list', async (_, leave, onTicket) => {
-    const host = fakeHost({ p1: { [`show ${SLUG} --local`]: { ok: true, ticket: TICKET, plan: PLAN } } })
+    const host = fakeHost({ p1: { [`show ${SLUG}`]: { ticket: TICKET, plan: PLAN } } })
     renderWithHost(<TicketPlanPage projectId="p1" slug={SLUG} />, host)
     await leave()
     expect(host.openPage).toHaveBeenCalledWith('tickets', [SLUG], 'p1', { beside: true })
@@ -80,7 +80,7 @@ describe('TicketPlanPage (#685)', () => {
   })
 
   test('a ticket with no plan says so in one line, under the head whose press has an agent write it', async () => {
-    const host = fakeHost({ p1: { [`show ${SLUG} --local`]: { ok: true, ticket: { ...TICKET, planned: false } } } }, { p1: [] })
+    const host = fakeHost({ p1: { [`show ${SLUG}`]: { ticket: { ...TICKET, planned: false } } } }, { p1: [] })
     renderWithHost(<TicketPlanPage projectId="p1" slug={SLUG} />, host)
     expect(await screen.findByText('No plan yet.')).toBeTruthy()
     expect(screen.getAllByRole('button', { name: 'Plan now' })).toHaveLength(1)
@@ -89,7 +89,7 @@ describe('TicketPlanPage (#685)', () => {
   })
 
   test('a ticket an agent holds, with no plan, says so and offers no press to plan or work it', async () => {
-    const held = fakeHost({ p1: { [`show ${SLUG} --local`]: { ok: true, ticket: { ...TICKET, planned: false, locked: true } } } }, { p1: [] })
+    const held = fakeHost({ p1: { [`show ${SLUG}`]: { ticket: { ...TICKET, planned: false, locked: true } } } }, { p1: [] })
     renderWithHost(<TicketPlanPage projectId="p1" slug={SLUG} />, held)
     expect(await screen.findByText('No plan yet.')).toBeTruthy()
     expect(screen.queryByRole('button', { name: /plan now|start work/i })).toBeNull()
@@ -125,7 +125,7 @@ describe('TicketPlanPage (#685)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Start work' }))
     await waitFor(() => expect(host.startRun).toHaveBeenCalledWith('p1', workOnTicketPrompt(SLUG)))
     cleanup()
-    const held = fakeHost({ p1: { [`show ${SLUG} --local`]: { ok: true, ticket: { ...TICKET, locked: true }, plan: PLAN } } }, { p1: [] })
+    const held = fakeHost({ p1: { [`show ${SLUG}`]: { ticket: { ...TICKET, locked: true }, plan: PLAN } } }, { p1: [] })
     renderWithHost(<TicketPlanPage projectId="p1" slug={SLUG} />, held)
     expect(await screen.findByText('The plan')).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Start work' })).toBeNull()

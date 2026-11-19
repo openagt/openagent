@@ -3,7 +3,7 @@ import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
 import { QueueCard } from './QueueCard.js'
 import { HostServicesContext, INERT_HOST_SERVICES } from '../../ui/dashboard/lib/host-services.js'
 import { mountedOf, type MountedModules } from '@openagt/ui/module/testing'
-import { fakeHost, renderWithHost, type FakeHost } from './test-host.js'
+import { fakeHost, placed, renderWithHost, type FakeHost } from './test-host.js'
 import { workOnEntryPrompt } from '../src/module.js'
 import { configureFirst } from '../../ui/dashboard/test-utils.js'
 
@@ -17,8 +17,8 @@ const LOGIN = '[Login page](tickets/2026-08-01_login-page.md)'
 const UPSTREAM = '[Upstream bug](https://github.com/x/y/issues/1)'
 
 let host: FakeHost
-const render = (answers: Record<string, unknown[]> = {}) => {
-  host = fakeHost(Object.fromEntries(Object.entries(answers).map(([id, entries]) => [id, { '--local': entries }])))
+const render = (answers: Record<string, string[]> = {}) => {
+  host = fakeHost(Object.fromEntries(Object.entries(answers).map(([id, entries]) => [id, placed(...entries)])))
   return renderWithHost(<QueueCard projects={[alpha, beta]} />, host)
 }
 /** The starts the host was asked for: `[projectId, prompt, opts]` each. */
@@ -34,8 +34,8 @@ describe('QueueCard', () => {
     expect(screen.getByText('alpha')).toBeTruthy()
     expect(screen.getByText('All 2 waiting')).toBeTruthy()
     expect(screen.queryByText('beta')).toBeNull()
-    expect(host.runCommand).toHaveBeenCalledWith('p1', ['--local'])
-    expect(host.runCommand).toHaveBeenCalledWith('p2', ['--local'])
+    expect(host.call).toHaveBeenCalledWith('p1', 'entries', {})
+    expect(host.call).toHaveBeenCalledWith('p2', 'entries', {})
   })
 
   test('with no other module installed, a queued ticket reads as its title and points nowhere; an absolute URL opens', async () => {
@@ -48,12 +48,12 @@ describe('QueueCard', () => {
     expect(upstream.getAttribute('href')).toBe('https://github.com/x/y/issues/1')
   })
 
-  test('says "Nothing queued." when no project has an entry, and names a project whose command failed', async () => {
+  test('says "Nothing queued." when no project has an entry, and names a project whose queue could not be read', async () => {
     render({ p1: [], p2: [] })
     expect(await screen.findByText('Nothing queued.')).toBeTruthy()
     cleanup()
     render({ p1: [LOGIN] })
-    expect((await screen.findByRole('alert')).textContent).toBe('Could not read the queue of beta: no answer for p2: queue --local')
+    expect((await screen.findByRole('alert')).textContent).toBe('Could not read the queue of beta: no answer for p2: entries')
     expect(screen.getByText('Login page')).toBeTruthy()
   })
 
@@ -79,7 +79,7 @@ describe('QueueCard', () => {
   })
 
   test('the fan-out starts the entries nobody is on: an entry a working agent was asked gets no second agent', async () => {
-    host = fakeHost({ p1: { '--local': [LOGIN, 'Tidy the loader', 'Third'] }, p2: { '--local': [] } })
+    host = fakeHost({ p1: placed(LOGIN, 'Tidy the loader', 'Third'), p2: [] })
     host.agents.mockImplementation(async (projectId: string) => (projectId === 'p1' ? [{ id: 'run-7', status: 'running', startedAt: '2026-10-01T10:00:00.000Z', ask: workOnEntryPrompt(LOGIN) }] : []))
     renderWithHost(<QueueCard projects={[alpha, beta]} />, host)
     fireEvent.click(await screen.findByRole('button', { name: 'Start 2 agents' }))
@@ -92,7 +92,7 @@ describe('QueueCard', () => {
   })
 
   test('an agent waiting on the person\'s answer is on its entry too: the fan-out gives that entry no second agent', async () => {
-    host = fakeHost({ p1: { '--local': [LOGIN, 'Tidy the loader'] }, p2: { '--local': [] } })
+    host = fakeHost({ p1: placed(LOGIN, 'Tidy the loader'), p2: [] })
     host.agents.mockImplementation(async (projectId: string) => (projectId === 'p1' ? [{ id: 'run-7', status: 'waiting', startedAt: '2026-10-01T10:00:00.000Z', ask: workOnEntryPrompt(LOGIN) }] : []))
     renderWithHost(<QueueCard projects={[alpha, beta]} />, host)
     // The entry it waits on is at work: one is left up next.
@@ -102,7 +102,7 @@ describe('QueueCard', () => {
   })
 
   test('an entry a working agent was asked is at work, not up next: the card starts from the next free entry', async () => {
-    host = fakeHost({ p1: { '--local': [LOGIN, 'Tidy the loader'] }, p2: { '--local': [] } })
+    host = fakeHost({ p1: placed(LOGIN, 'Tidy the loader'), p2: [] })
     host.agents.mockImplementation(async (projectId: string) => (projectId === 'p1' ? [{ id: 'run-7', status: 'running', startedAt: '2026-10-01T10:00:00.000Z', ask: workOnEntryPrompt(LOGIN) }] : []))
     renderWithHost(<QueueCard projects={[alpha, beta]} />, host)
     const next = await screen.findByText('Tidy the loader')
@@ -158,7 +158,7 @@ describe('QueueCard', () => {
 
   test('with a page installed that names the file an entry points at, the entry reads as that name and opens that page', async () => {
     const openPage = vi.fn()
-    host = fakeHost({ p1: { '--local': ['Create tickets/2026-08-01_login-page.plan.md'] }, p2: { '--local': [] } })
+    host = fakeHost({ p1: placed('Create tickets/2026-08-01_login-page.plan.md'), p2: [] })
     const modules: MountedModules = mountedOf({ views: { 'app.page': [{ place: 'app.page', id: 'tickets', label: 'Tickets', View: () => null, package: 'a-tickets', projects: ['p1'], names: async () => ({ 'tickets/2026-08-01_login-page.plan.md': { title: 'Plan: Login page', href: 'tickets/2026-08-01_login-page.md' } }) }] } })
     renderWithHost(
       <HostServicesContext.Provider value={{ ...INERT_HOST_SERVICES, openPage }}>
@@ -174,7 +174,7 @@ describe('QueueCard', () => {
   })
 
   test('an entry whose file is there already (a plan already written) offers no start, and the fan-out leaves it out', async () => {
-    host = fakeHost({ p1: { '--local': ['Create tickets/2026-08-01_login-page.plan.md', 'Tidy the loader'] }, p2: { '--local': [] } })
+    host = fakeHost({ p1: placed('Create tickets/2026-08-01_login-page.plan.md', 'Tidy the loader'), p2: [] })
     const modules: MountedModules = mountedOf({ views: { 'app.page': [{ place: 'app.page', id: 'tickets', label: 'Tickets', View: () => null, package: 'a-tickets', projects: ['p1'], names: async () => ({ 'tickets/2026-08-01_login-page.plan.md': { title: 'Plan: Login page', href: 'tickets/2026-08-01_login-page.md', done: { ask: 'Create tickets/2026-08-01_login-page.plan.md', title: 'Plan: Login page · already written' } } }) }] } })
     renderWithHost(<QueueCard projects={[alpha, beta]} />, host, modules)
     await screen.findByRole('button', { name: 'Plan: Login page · already written' })
@@ -185,7 +185,7 @@ describe('QueueCard', () => {
 
   test('an entry that names a plan already written but asks something else of it is work: it offers a start, and the fan-out takes it', async () => {
     const review = 'Review tickets/2026-08-01_login-page.plan.md for accessibility issues'
-    host = fakeHost({ p1: { '--local': [review] }, p2: { '--local': [] } })
+    host = fakeHost({ p1: placed(review), p2: [] })
     const modules: MountedModules = mountedOf({ views: { 'app.page': [{ place: 'app.page', id: 'tickets', label: 'Tickets', View: () => null, package: 'a-tickets', projects: ['p1'], names: async () => ({ 'tickets/2026-08-01_login-page.plan.md': { title: 'Plan: Login page', href: 'tickets/2026-08-01_login-page.md', done: { ask: 'Create tickets/2026-08-01_login-page.plan.md', title: 'Plan: Login page · already written' } } }) }] } })
     renderWithHost(<QueueCard projects={[alpha, beta]} />, host, modules)
     // Named as the plan it asks about: "already written" would say it is done.

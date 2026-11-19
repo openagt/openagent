@@ -101,8 +101,7 @@ export function useLinkActions(
     let result: UiActionResult = { ok: true }
     try {
       const groups = typeof targets === 'function' ? await targets() : targets
-      // An action acts: its commands are marked so, and the dashboard reads back what they wrote at once.
-      const host = moduleHost({ ...(services ?? INERT_HOST_SERVICES), package: action.package }, { acts: true })
+      const host = moduleHost({ ...(services ?? INERT_HOST_SERVICES), package: action.package })
       // One project at a time, in the order given, only those that have the action's package;
       // the first failure ends the batch with its reason.
       for (const { projectId, links } of groups) {

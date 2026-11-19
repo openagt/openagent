@@ -157,14 +157,13 @@ test('a package says which of its commands only read; any other command, or a wo
   }
 })
 
-test("the Queue's, Tickets' and Automations' packages say their reads: everything that writes, starts a run or runs a line is a change", async () => {
+test("the Automations' package says its reads, everything that writes, starts a run or runs a line a change; the Queue's and the Tickets' read through their server parts, and every command of theirs is a change", async () => {
   const queue = (await findBroughtModule('@openagt/skill-queue'))!
   const tickets = (await findBroughtModule('@openagt/skill-tickets'))!
   const scheduler = (await findBroughtModule('@openagt/skill-scheduler'))!
-  assert.deepEqual([queue.reads, tickets.reads, scheduler.reads], [{ queue: [''] }, { tickets: ['list', 'show', 'meta'] }, { scheduler: ['status', 'show'] }])
+  assert.deepEqual([queue.reads, tickets.reads, scheduler.reads], [{}, {}, { scheduler: ['status', 'show'] }])
   const reads = (module: typeof queue, ...args: string[]): boolean => commandReads(module, args)
-  assert.deepEqual([reads(queue, '--local', '--full'), reads(queue, 'add', 'x'), reads(queue, 'done', 'x')], [true, false, false])
-  assert.deepEqual([reads(tickets, 'list', '--local'), reads(tickets, 'show', 'a.md', '--local'), reads(tickets, 'meta'), reads(tickets, 'release', 'a.md', '--force'), reads(tickets, 'put', 'a.md')], [true, true, true, false, false])
+  assert.deepEqual([reads(queue, '--local'), reads(queue, 'add', 'x'), reads(tickets, 'list', '--local'), reads(tickets, 'release', 'a.md', '--force')], [false, false, false, false])
   assert.deepEqual([reads(scheduler, 'status'), reads(scheduler, 'show', 'x'), reads(scheduler, 'now', 'x'), reads(scheduler, 'try', '--when=ls'), reads(scheduler, 'write-line', '--words=x'), reads(scheduler, 'switch', 'x', 'on')], [true, true, false, false, false, false])
   // The distribution's own copy is only of the packages a project can have.
   assert.equal(await findBroughtModule('@openagt/dashboard-devices'), undefined)

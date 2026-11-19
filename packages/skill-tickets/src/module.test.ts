@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { claimState, heldBack, holderAgent, hotLane, isHighPriority, namesOf, planAgentFor, planBody, planLink, planPath, planTicketPrompt, readListed, readMeta, readShown, routeOf, ticketLink, workAgentFor, workOnTicketPrompt } from './module.js'
+import { claimState, heldBack, holderAgent, hotLane, isHighPriority, namesOf, planAgentFor, planBody, planLink, planPath, planTicketPrompt, routeOf, ticketLink, workAgentFor, workOnTicketPrompt } from './module.js'
 
 const FILE = '2026-08-30_login-page.md'
 
@@ -43,24 +43,6 @@ test('a ticket as a link points at its file at its own priority; a plan ask poin
   assert.deepEqual(ticketLink({ file: FILE, title: 'Login page', priority: '8' }), { text: 'Login page', href: `tickets/${FILE}`, priority: 8 })
   assert.deepEqual(ticketLink({ file: FILE, title: 'Login page' }), { text: 'Login page', href: `tickets/${FILE}`, priority: 5 })
   assert.deepEqual(planLink({ file: FILE, title: 'Login page', priority: '0' }), { text: planTicketPrompt(FILE), priority: 0 })
-})
-
-test('the command\'s answers are read back: a list, one ticket or its refusal, the import stamp', () => {
-  const row = { file: FILE, title: 'Login page', summary: '', date: '2026-08-30T00:00:00.000Z', planned: false }
-  assert.deepEqual(readListed({ ok: true, output: [row, { file: 'x' }, 'no'] }), { tickets: [row] })
-  assert.deepEqual(readListed({ ok: true, output: { ok: false } }), { error: 'the tickets command did not print a list' })
-  assert.deepEqual(readListed({ ok: false, error: 'tickets took too long' }), { error: 'tickets took too long' })
-  const detail = { ...row, content: '# Login page\n' }
-  assert.deepEqual(readShown({ ok: true, output: { ok: true, ticket: detail, plan: 'Effort: 1\n', holder: 'a1' } }, FILE), { shown: { ticket: detail, plan: 'Effort: 1\n', holder: 'a1' } })
-  assert.deepEqual(readShown({ ok: true, output: { ok: true, ticket: detail } }, FILE), { shown: { ticket: detail } })
-  // A refusal reaches the page as the line the command left: the ticket's own "no ticket" is no ticket, any other line an error.
-  assert.deepEqual(readShown({ ok: false, error: `no ticket tickets/${FILE}` }, FILE), { shown: null })
-  assert.deepEqual(readShown({ ok: false, error: 'no ticket tickets/2026-01-01_other.md' }, FILE), { error: 'no ticket tickets/2026-01-01_other.md' })
-  assert.deepEqual(readShown({ ok: true, output: { ok: true, ticket: row } }, FILE), { error: 'the tickets command did not print a ticket' })
-  assert.deepEqual(readShown({ ok: false, error: 'boom' }, FILE), { error: 'boom' })
-  assert.deepEqual(readMeta({ ok: true, output: { lastImportedAt: '2026-09-01T00:00:00Z' } }), { lastImportedAt: '2026-09-01T00:00:00Z' })
-  assert.deepEqual(readMeta({ ok: true, output: {} }), {})
-  assert.deepEqual(readMeta({ ok: false, error: 'x' }), {})
 })
 
 test('heldBack: a PR: line is in review, a Waiting: line is waiting, in review first when both; anything else is free to work', () => {

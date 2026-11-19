@@ -9,8 +9,8 @@ import { useQueueReads, type ProjectRead } from './reads.js'
 // The Overview's AI Queue card: in each project with open entries, the first entries no agent is on,
 // the work agents pick up next, numbered by their place in the queue; at its heading a link to the
 // Queue page that says how many wait, where an entry is also removed and added. An entry an agent is on is at
-// work, and the At work part lists it. Its data is `queue --local` in each project, the very list an
-// agent reads. An entry that names a file another page opens reads as that page's name for it (a
+// work, and the At work part lists it. Its data is each project's queue, read through the server
+// part as the page reads it, the very list an agent reads. An entry that names a file another page opens reads as that page's name for it (a
 // ticket's title).
 //
 // Two ways to act, and they are different acts. The play button beside an entry STARTS it: one

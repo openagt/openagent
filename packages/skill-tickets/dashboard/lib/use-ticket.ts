@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { runsAgain, usePolled, useModuleHost, type ReadState } from '@openagt/ui/module'
-import { holderAgent, readShown, withHolder } from '../../src/module.js'
+import { rpcClient, runsAgain, usePolled, useModuleHost, type ReadState } from '@openagt/ui/module'
+import { holderAgent, withHolder } from '../../src/module.js'
 import { sessionsOf, type TicketSession } from '../TicketSessions.js'
 import { holdingRun } from './holding-run.js'
 import type { WorkspaceTicketDetail } from './types.js'
@@ -18,9 +18,16 @@ export type TicketRead =
 /** The ticket `slug`, read every 10 s and kept for the next visit; `released` hides its claim until a read no longer shows that holder's. */
 export function useTicket(projectId: string, slug: string): { read: TicketRead | null; state: ReadState; reload: () => Promise<void>; released: () => void } {
   const host = useModuleHost()
+  const server = rpcClient<typeof import('../../src/server.js')>(host)
   const { value: polled, state, reload } = usePolled<TicketRead | null>(
     async () => {
-      const [shown, agents] = await Promise.all([host.runCommand(projectId, ['show', slug, '--local']).then(result => readShown(result, slug)), host.agents(projectId).catch(() => [])])
+      const [shown, agents] = await Promise.all([
+        server.show(projectId, { file: slug }).then(
+          shown => ({ shown }),
+          (err: unknown) => ({ error: err instanceof Error ? err.message : String(err) }),
+        ),
+        host.agents(projectId).catch(() => []),
+      ])
       if ('error' in shown) return shown
       if (!shown.shown) return { ticket: null, plan: null, sessions: [] }
       const holder = holderAgent(agents, shown.shown.ticket.lockedBy)

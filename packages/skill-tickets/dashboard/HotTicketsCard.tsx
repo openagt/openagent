@@ -9,11 +9,12 @@ import { releaseClaim } from './lib/release.js'
 import { priorityTone } from './lib/ticket-priority.js'
 
 // The Overview's hot-tickets card: a cross-project glance at what agents hold, what is flagged
-// high priority, and what waits on a person, nothing else. Its data is `tickets list --local` in each project, the list an
-// agent reads, with each claim's holder matched to the project's runs the dashboard knows. A row
-// opens the ticket's own page; a claim opens the run holding it; beside every row sit the actions
-// the installed modules offer on a ticket as a link ("Add to queue" where the project has a queue
-// package), so the card names no queue and still leads to one.
+// high priority, and what waits on a person, nothing else. Its data is each project's tickets, read
+// through the server part as the page reads them (the list an agent reads), with each claim's
+// holder matched to the project's runs the dashboard knows. A row opens the ticket's own page; a
+// claim opens the run holding it; beside every row sit the actions the installed modules offer on
+// a ticket as a link ("Add to queue" where the project has a queue package), so the card names no
+// queue and still leads to one.
 
 /** The card's lanes: a claim, told apart by how its run stands ({@link claimState}), and the card's other two. */
 type CardLane = ClaimState | Exclude<HotLane, 'claimed'>
@@ -27,7 +28,7 @@ interface HotTicket {
   holder?: { id: string; status: string; machine?: string; seenAt?: string }
 }
 
-/** What one read of every project answered: the hot tickets, and the projects whose command failed. */
+/** What one read of every project answered: the hot tickets, and the projects whose tickets could not be read. */
 interface Read {
   hot: HotTicket[]
   errors: { project: UiProject; error: string }[]
