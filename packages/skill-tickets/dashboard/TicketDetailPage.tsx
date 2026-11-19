@@ -78,7 +78,7 @@ export function TicketDetailPage({
                 onReleased={released}
               />
               <div className="max-w-180">
-                <Markdown text={ticketBody(ticket.content)} page />
+                <Markdown text={ticketBody(ticket.content)} look="page" />
               </div>
             </>
           )

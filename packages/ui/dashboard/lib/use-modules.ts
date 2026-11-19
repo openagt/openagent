@@ -237,10 +237,13 @@ export type MountedRender<K extends RenderKind> = Mounted<{ kind: K; Render: Com
 
 /**
  * How content of `kind` looks in the project `projectId` (the sessions with no project at
- * {@link SESSIONS_ID}): the first module's that is on there and draws it, or none.
+ * {@link SESSIONS_ID}), or on a page of no project: the first module's that is on there and draws
+ * it, or none. A module of the computer's draws it everywhere.
  */
-export function renderFor<K extends RenderKind>({ renders }: MountedModules, kind: K, projectId: string): MountedRender<K> | undefined {
-  const render = renders.find(each => each.kind === kind && (each.projects.includes(projectId) || (projectId === SESSIONS_ID && each.sessions === true)))
+export function renderFor<K extends RenderKind>({ renders }: MountedModules, kind: K, projectId?: string): MountedRender<K> | undefined {
+  const render = renders.find(
+    each => each.kind === kind && (each.computer === true || (projectId !== undefined && (each.projects.includes(projectId) || (projectId === SESSIONS_ID && each.sessions === true)))),
+  )
   return render as MountedRender<K> | undefined
 }
 

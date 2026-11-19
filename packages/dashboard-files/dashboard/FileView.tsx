@@ -102,7 +102,7 @@ export function FileView({ page, projectId, agentId, path, wrap, source, files, 
           ) : rendered && !value.binary && value.text ? (
             <div className="max-w-prose px-5 py-4">
               <FileLinks.Provider value={opens}>
-                <Markdown text={value.text} document />
+                <Markdown text={value.text} look="document" />
               </FileLinks.Provider>
               {value.truncated && <Cut />}
             </div>

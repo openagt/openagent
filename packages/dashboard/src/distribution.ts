@@ -28,6 +28,8 @@ const DISTRIBUTION: DashboardDistribution = [
   // The Changes and Files panes.
   { package: '@openagt/dashboard-changes' },
   { package: '@openagt/dashboard-files' },
+  // How a text in markdown looks, wherever the dashboard shows one.
+  { package: '@openagt/ui-renderer-markdown', for: 'computer' },
   // The Overview's Human Queue: what waits on the person, in every project.
   { package: '@openagt/ui-card-waiting', for: 'computer' },
   // The person's name and picture, Settings › Profile.
@@ -42,6 +44,9 @@ const DISTRIBUTION: DashboardDistribution = [
   // notifications-browser, a plugin that starts on, kept per person: desktop notifications while
   // the dashboard is open in a browser that allows them.
   { package: '@openagt/notifications-browser', for: 'computer', on: true },
+  // ui-renderer-mermaid, a plugin that starts off, kept per person: a mermaid block drawn as its
+  // diagram, a heavy library loaded only where there is one.
+  { package: '@openagt/ui-renderer-mermaid', for: 'computer' },
   // The plugins kept per project: ask starts on, the others are a project's once a person switches them on.
   { package: '@openagt/skill-ask', on: true },
   { package: '@openagt/skill-logs' },

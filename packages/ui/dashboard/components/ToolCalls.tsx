@@ -333,7 +333,7 @@ function ThoughtLine({ text }: { text: string }) {
       </button>
       {open && (
         <div className="mt-1 italic">
-          <Markdown text={text} compact />
+          <Markdown text={text} look="compact" />
         </div>
       )}
     </div>

@@ -4,9 +4,9 @@ import { vi, type Mock } from 'vitest'
 import { PaneHeaderContext } from '../components/PaneHeader.js'
 import { SidebarProvider, useSidebar } from '../components/ui/sidebar.js'
 import { DaemonDown } from '../lib/use-daemon-health.js'
-import { ModulesContext, mountedOf, type MountedModules } from '../lib/use-modules.js'
+import { ModulesContext, mountedOf, type Mounted, type MountedModules } from '../lib/use-modules.js'
 export { mountedOf } from '../lib/use-modules.js'
-import { ModuleHostContext, type ModuleCallResult, type ModuleCommandResult, type ModuleHost } from './index.js'
+import { ModuleHostContext, type ModuleCallResult, type ModuleCommandResult, type ModuleHost, type UiModuleDefinition, type UiRender } from './index.js'
 
 // What a module's tests need of the dashboard, faked (`@openagt/ui/module/testing`, which
 // `moduleTests` in `./vite.ts` resolves): a host whose every service is a spy, and a render inside
@@ -94,6 +94,15 @@ export function answeringCalls(answers: Answers): (projectId: string, name: stri
 
 /** No other module is installed. */
 export const NO_MODULES: MountedModules = mountedOf()
+
+/**
+ * What the module `definition` of the package `pkg` draws (its `ui.render`), mounted as the
+ * dashboard mounts a module of the computer's: on every page. For a test of a part that shows what
+ * another module draws, as a text in markdown is: `mountedOf({ renders: computerRenders(markdown, '@openagt/ui-renderer-markdown') })`.
+ */
+export function computerRenders(definition: UiModuleDefinition, pkg: string): Mounted<UiRender>[] {
+  return (definition.hooks['ui.render'] ?? []).map(render => ({ ...render, package: pkg, projects: [], computer: true as const }))
+}
 
 /**
  * Render `ui` as the dashboard draws a module: inside `host`, beside the installed `modules` (none

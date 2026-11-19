@@ -45,7 +45,7 @@ export function TicketPlanPage({
                   // No `.plan.md` beside the ticket: never written, or removed since.
                   <TicketPageNote>No plan yet.</TicketPageNote>
                 ) : (
-                  <Markdown text={planBody(read.plan)} page />
+                  <Markdown text={planBody(read.plan)} look="page" />
                 )}
               </div>
             </>

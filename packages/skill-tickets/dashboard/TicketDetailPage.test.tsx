@@ -4,7 +4,7 @@ import { openMenu } from '../../ui/dashboard/test-utils.js'
 import type { ReactElement } from 'react'
 import { forgetRemembered, type ModuleAgent } from '@openagt/ui/module'
 import { mountedOf, type MountedAction, type MountedModules } from '@openagt/ui/module/testing'
-import { fakeHost, renderWithHost, type FakeHost } from './test-host.js'
+import { fakeHost, MARKDOWN, renderWithHost, type FakeHost } from './test-host.js'
 import { TicketDetailPage } from './TicketDetailPage.js'
 import { planTicketPrompt, workOnTicketPrompt } from '../src/module.js'
 
@@ -19,10 +19,11 @@ const onTicket = { mockResolvedValue: (value: Record<string, unknown> | null) =>
 const sendReleaseTicketLock = { mockResolvedValue: (value: { ok: true } | { ok: false; error: string }) => (released = value) }
 
 // The one link action an installed module offers here (#1774): a queue package's "Add to queue",
-// present in project p1. Its `run` is the spy the queueing tests read.
+// present in project p1. Its `run` is the spy the queueing tests read. The ticket's text is drawn by
+// the module that draws markdown, as in the dashboard.
 const addToQueue = vi.fn()
 const queueAction = (projects: string[]): MountedAction<'link.menu'> => ({ place: 'link.menu', id: 'add-to-queue', label: 'Add to queue', doneLabel: 'Queued', run: addToQueue, package: '@x/queue', projects })
-const modules = (projects: string[] = ['p1'], action = queueAction(projects)): MountedModules => mountedOf({ actions: { 'link.menu': [action] } })
+const modules = (projects: string[] = ['p1'], action = queueAction(projects)): MountedModules => mountedOf({ actions: { 'link.menu': [action] }, renders: MARKDOWN })
 const render = (ui: ReactElement, mounted: MountedModules = modules()) => {
   const slug = (ui.props as { slug: string }).slug
   host = fakeHost(shown ? { p1: { [`show ${slug}`]: { ticket: shown } } } : {}, { p1: agents })

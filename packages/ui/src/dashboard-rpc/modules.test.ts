@@ -91,12 +91,13 @@ test('the dashboard\'s modules are every registered project\'s, one per package,
 
     await withDistribution(dir, [...COMPUTER, '@openagt/store-filesystem', '@openagt/dashboard-changes', '@openagt/dashboard-files', 'logs', 'plain', 'queue'], async () => {
       await switchOn(b, 'queue')
-      // The computer's modules (Devices, the notifications, the accounts, the Human Queue, Profile) come first, and are no project's. Then the ones every project has, from the first, which the sessions with no project have too; then queue, which only the project it is on in has.
+      // The computer's modules (Devices, the notifications, the accounts, the Human Queue, how markdown looks, Profile) come first, and are no project's. Then the ones every project has, from the first, which the sessions with no project have too; then queue, which only the project it is on in has.
       assert.deepEqual(await listed(), [
         { package: '@openagt/dashboard-devices', url: '/_computer-modules/%40openagt%2Fdashboard-devices/dashboard.js', projects: [], computer: true },
         { package: '@openagt/notifications-browser', url: '/_computer-modules/%40openagt%2Fnotifications-browser/dashboard.js', projects: [], computer: true },
         { package: '@openagt/skill-account-rotation', url: '/_computer-modules/%40openagt%2Fskill-account-rotation/dashboard.js', projects: [], computer: true },
         { package: '@openagt/ui-card-waiting', url: '/_computer-modules/%40openagt%2Fui-card-waiting/dashboard.js', projects: [], computer: true },
+        { package: '@openagt/ui-renderer-markdown', url: '/_computer-modules/%40openagt%2Fui-renderer-markdown/dashboard.js', projects: [], computer: true },
         { package: '@openagt/user-info', url: '/_computer-modules/%40openagt%2Fuser-info/dashboard.js', projects: [], computer: true },
         { package: '@openagt/dashboard-changes', url: `/_modules/${projectId(a)}/%40openagt%2Fdashboard-changes/dashboard.js`, projects: [projectId(a), projectId(b)], sessions: true },
         { package: '@openagt/dashboard-files', url: `/_modules/${projectId(a)}/%40openagt%2Fdashboard-files/dashboard.js`, projects: [projectId(a), projectId(b)], sessions: true },
@@ -134,6 +135,7 @@ test("with no project added, the computer's modules are there and run their own 
         { package: '@openagt/notifications-browser', url: '/_computer-modules/%40openagt%2Fnotifications-browser/dashboard.js', projects: [], computer: true },
         { package: '@openagt/skill-account-rotation', url: '/_computer-modules/%40openagt%2Fskill-account-rotation/dashboard.js', projects: [], computer: true },
         { package: '@openagt/ui-card-waiting', url: '/_computer-modules/%40openagt%2Fui-card-waiting/dashboard.js', projects: [], computer: true },
+        { package: '@openagt/ui-renderer-markdown', url: '/_computer-modules/%40openagt%2Fui-renderer-markdown/dashboard.js', projects: [], computer: true },
         { package: '@openagt/user-info', url: '/_computer-modules/%40openagt%2Fuser-info/dashboard.js', projects: [], computer: true },
         { package: '@openagt/dashboard-files', url: '/_brought-modules/%40openagt%2Fdashboard-files/dashboard.js', projects: [], sessions: true },
         { package: 'queue', url: '/_brought-modules/queue/w.js', projects: [], sessions: true },

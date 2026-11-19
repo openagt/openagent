@@ -3,8 +3,8 @@ import type { ReactElement, ReactNode } from 'react'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { act, cleanup, fireEvent, render as rendered, screen, waitFor, within } from '@testing-library/react'
 import { continuationPrompt } from '@openagt/agent-driver/question'
-import { ModulesContext } from '../lib/use-modules.js'
-import { questionCard } from '../test-utils.js'
+import { ModulesContext, mountedOf } from '../lib/use-modules.js'
+import { MARKDOWN_RENDER, questionCard } from '../test-utils.js'
 
 /** What a reader gets of an element: its words less the ones fading out of it (CrossFade). */
 const shownText = (el: Element): string | null => {
@@ -161,10 +161,13 @@ describe('EventList conversation rows', () => {
     expect(screen.getByText('what is your name?')).toBeTruthy()
   })
 
-  test('a reply renders Markdown (bold, not raw asterisks)', () => {
-    render(<EventList events={[{ kind: 'driver', event: { type: 'text', text: 'I am **Claude**.' } }]} stick={false} />)
-    const strong = document.querySelector('strong')
-    expect(strong?.textContent).toBe('Claude')
+  test('a reply is markdown, drawn by the module that draws it in the chat\'s look', () => {
+    rendered(
+      <ModulesContext.Provider value={mountedOf({ renders: [MARKDOWN_RENDER] })}>
+        <EventList events={[{ kind: 'driver', event: { type: 'text', text: 'I am **Claude**.' } }]} stick={false} />
+      </ModulesContext.Provider>,
+    )
+    expect(document.querySelector('[data-markdown-look="chat"]')?.textContent).toBe('I am **Claude**.')
   })
 
   test('a long prompt is cut short and offers "Show more", which opens it and turns to "Show less"', () => {
@@ -420,9 +423,9 @@ describe('EventList question and answer', () => {
     render(<EventList events={[...header, { kind: 'driver', event: { type: 'start', prompt: 'run ls first' } }, { kind: 'driver', event: { type: 'text', text: 'Done.' } }] as OpenAgentEvent[]} projectId="p1" agentId="r1" stick={false} />)
     expect(screen.queryByRole('region', { name: 'Which color do you prefer?' })).toBeNull()
     const line = screen.getByRole('button', { name: /Asked “Colour”\s*Replied in chat/ })
-    expect(screen.queryByText('Which color do you prefer?', { selector: 'div' })).toBeNull()
+    expect(screen.queryByText('Which color do you prefer?', { selector: 'div:not([data-markdown])' })).toBeNull()
     fireEvent.click(line)
-    expect(screen.getByText('Which color do you prefer?', { selector: 'div' })).toBeTruthy()
+    expect(screen.getByText('Which color do you prefer?', { selector: 'div:not([data-markdown])' })).toBeTruthy()
   })
 
   test('with no header, the passed question is named by the question itself', () => {
@@ -1175,8 +1178,8 @@ describe('EventList hides the block a question is written in', () => {
 
   test('the message being written never shows the block, closed or not, and the words before it stay', () => {
     const { rerender } = render(<EventList events={[prompt]} writing={'Pick one.\n\n```await-choices\n{ "title": "Whi'} working stick={false} />)
-    // Its words come in one by one: the paragraph says them.
-    expect(screen.getByText((_, el) => el?.tagName === 'P' && el.textContent === 'Pick one.')).toBeTruthy()
+    // Its words come in one by one: the message says them.
+    expect(screen.getByText((_, el) => el?.hasAttribute('data-markdown') === true && el.textContent === 'Pick one.')).toBeTruthy()
     expect(screen.queryByText(/"title"/)).toBeNull()
     rerender(<EventList events={[prompt]} writing={'```await-choices\n{ "title": "Whi'} working stick={false} />)
     expect(screen.queryByText(/"title"/)).toBeNull()

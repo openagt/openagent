@@ -327,18 +327,37 @@ export interface UiQuestionProps {
   send?: ((pick: string | string[]) => Promise<unknown>) | undefined
 }
 
+/**
+ * How a text in markdown is set (an agent's reply, a ticket, a file read as a page), as the
+ * dashboard asks for it wherever it shows one.
+ */
+export interface UiMarkdownProps {
+  text: string
+  /**
+   * `chat`, the default: a reply in the chat, each line of it its own. `compact`: a notch smaller,
+   * at the density of a log. `document`: a file read as a page. `page`: a document inside a
+   * dashboard page (a ticket, its plan), in the page's own type. `inline`: one line's marks only
+   * (code, links), for a sentence in a box of its own.
+   */
+  look?: 'chat' | 'compact' | 'document' | 'page' | 'inline'
+  /** Each word comes in once, as the message is being written. */
+  fade?: boolean
+}
+
 /** The kinds of content drawn from props of their own rather than from a text, by kind: what each one's `Render` is given. */
 export interface RenderKinds {
   /** A question a run stopped on, asked in the chat under what the agent said. */
   question: UiQuestionProps
+  /** A text in markdown, wherever the dashboard shows one: drawn as written where no module draws it. */
+  markdown: UiMarkdownProps
 }
 
 export type RenderKind = keyof RenderKinds
 
 /** The kinds {@link RenderKinds} names: a fenced block of one of these languages is code, and none of them. */
-export const RENDER_KINDS: readonly RenderKind[] = ['question']
+export const RENDER_KINDS: readonly RenderKind[] = ['question', 'markdown']
 
-/** How a text of a kind looks: `markdown`, or a fenced block of one language (`mermaid`), its content the block's. */
+/** How a fenced block of one language looks (`mermaid`), its content the block's. */
 export interface UiTextRender {
   kind: string
   /**

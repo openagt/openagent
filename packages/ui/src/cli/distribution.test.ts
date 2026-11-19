@@ -26,6 +26,7 @@ test("the dashboard runs the modules of the distribution handed down, and this c
     'devices',
     'notifications-command',
     'notifications-browser',
+    'ui-renderer-mermaid',
     'ask',
     'logs',
     'tickets',

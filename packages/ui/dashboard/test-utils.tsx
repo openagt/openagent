@@ -1,7 +1,7 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { continuationPrompt } from '@openagt/agent-driver/question'
-import { mountedOf, type MountedModules } from './lib/use-modules.js'
-import type { UiQuestionProps } from './module/index.js'
+import { mountedOf, type Mounted, type MountedModules } from './lib/use-modules.js'
+import type { UiMarkdownProps, UiQuestionProps, UiRender } from './module/index.js'
 
 /**
  * Hover a tooltip trigger and hand back the tooltip it opens (#1149).
@@ -71,6 +71,19 @@ export function phoneScreen(): () => void {
     window.matchMedia = had
     for (const listener of [...listeners]) listener()
   }
+}
+
+/**
+ * A stand-in for the module that draws markdown (`ui-renderer-markdown`'s `ui.render`), the
+ * computer's, on every page: the text as it was given, in an element that says how it was asked to
+ * be set (`data-markdown-look`). How markdown looks is that module's, tested with it.
+ */
+export const MARKDOWN_RENDER: Mounted<UiRender> = {
+  kind: 'markdown',
+  Render: ({ text, look = 'chat' }: UiMarkdownProps) => <span data-markdown-look={look}>{text}</span>,
+  package: '@openagt/ui-renderer-markdown',
+  projects: [],
+  computer: true,
 }
 
 /**

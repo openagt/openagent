@@ -40,7 +40,7 @@ export function DocsPanel({ docs, loaded }: { docs: WorkspaceDoc[]; loaded: bool
       </div>
       <ScrollArea className="min-h-0 flex-auto">
         <div className="max-w-prose px-5 py-4">
-          <Markdown text={current.content} document />
+          <Markdown text={current.content} look="document" />
         </div>
       </ScrollArea>
     </div>

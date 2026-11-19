@@ -652,6 +652,9 @@ already made, and lists it in its pull request; for anything else it proposes an
   the message box with an "Asking" line in the chat, which put an empty line and a gap
   between the agent's words and its question. The card is the `ask` plugin's (`ui.render`,
   #2394).
+- What the agent says, and every other text in markdown, is drawn by the module that draws
+  markdown (`ui-renderer-markdown`, `ui.render`); with none, it is the text as written, its lines
+  kept (#2394, decision 41). Picked over the shell's own renderer.
 - Stop is a signal to the process the run's card names, whoever runs it. Picked over a
   message to the run: a stop that has to be read is not a stop.
 - Stop is Claude Code's: a square in the message box, Esc its key, and the turn ends where

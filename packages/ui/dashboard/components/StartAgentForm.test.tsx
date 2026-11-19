@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { forgetRemembered } from '../lib/use-async.js'
-import { openMenu } from '../test-utils.js'
+import { MARKDOWN_RENDER, openMenu } from '../test-utils.js'
+import { ModulesContext, mountedOf } from '../lib/use-modules.js'
 import { keepDraft, keptDraft, takePendingDraft } from '../lib/draft-handoff.js'
 
 // Everything the form reads goes through a lib module, so the mocks stop at the `rpc/` stubs: an
@@ -538,15 +539,18 @@ describe('StartAgentForm (#1774)', () => {
     onCommands.mockResolvedValue({ commands: [], gitHost: true })
     prefs.current = { driver: 'codex' }
     onStartCheck.mockResolvedValue({ problems: ['`codex` is not logged in. Run `codex login`, then start again.'], warnings: ['`gh` is not logged in.'] })
-    render(<StartAgentForm {...props} />)
+    render(
+      <ModulesContext.Provider value={mountedOf({ renders: [MARKDOWN_RENDER] })}>
+        <StartAgentForm {...props} />
+      </ModulesContext.Provider>,
+    )
     await waitFor(() => expect(screen.getAllByRole('alert')).toHaveLength(2))
     expect(onStartCheck).toHaveBeenCalledWith('p1', 'codex')
     const [problem, warning] = screen.getAllByRole('alert')
-    // What the line puts in backticks is code, as the chat draws it, not the backticks themselves.
-    expect(problem!.textContent).toBe('codex is not logged in. Run codex login, then start again.')
-    expect(within(problem!).getByText('codex login').tagName).toBe('CODE')
-    expect(warning!.textContent).toBe('gh is not logged in.')
-    expect(within(warning!).getByText('gh').tagName).toBe('CODE')
+    // Its sentences are lines of markdown, as the chat draws a line: what they put in backticks is code, not the backticks themselves.
+    const lines = (alert: HTMLElement) => [...alert.querySelectorAll('[data-markdown-look="inline"]')].map(line => line.textContent)
+    expect(lines(problem!)).toEqual(['`codex` is not logged in.', 'Run `codex login`, then start again.'])
+    expect(lines(warning!)).toEqual(['`gh` is not logged in.'])
     expect(problem!.querySelector('svg')!.getAttribute('class')).toContain('text-danger')
     expect(warning!.querySelector('svg')!.getAttribute('class')).toContain('text-warning')
     expect((screen.getByText('submit-typed') as HTMLButtonElement).disabled).toBe(false)

@@ -1,10 +1,13 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { forgetRemembered } from '@openagt/ui/module'
-import { fakeHost, renderWithHost } from '@openagt/ui/module/testing'
+import markdown from '@openagt/ui-renderer-markdown/dashboard'
+import { computerRenders, fakeHost, mountedOf, renderWithHost } from '@openagt/ui/module/testing'
 
 /** Render `ui` as the dashboard draws the module, in a host whose every service is a spy; the module's own reads are mocked, so the host's `read` never answers. */
-const render = (ui: Parameters<typeof renderWithHost>[0]) => renderWithHost(ui, fakeHost('@openagt/dashboard-files'))
+// A Markdown file is drawn by the module that draws markdown, as the dashboard has it.
+const WITH_MARKDOWN = mountedOf({ renders: computerRenders(markdown, '@openagt/ui-renderer-markdown') })
+const render = (ui: Parameters<typeof renderWithHost>[0]) => renderWithHost(ui, fakeHost('@openagt/dashboard-files'), WITH_MARKDOWN)
 
 const readProject = vi.fn(async () => [] as unknown)
 const readTree = vi.fn(async () => ({ source: 'checkout', files: [] }) as unknown)
