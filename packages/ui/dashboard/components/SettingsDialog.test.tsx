@@ -30,7 +30,6 @@ const onModels = vi.hoisted(() =>
 vi.mock('../rpc/models.js', () => ({ onModels }))
 // Its own suite reads the accounts; here the entry is its name.
 vi.mock('./RepoSourcesSettings.js', () => ({ REPO_SOURCES_ENTRY: 'repos', RepoSourcesSettings: () => <p>Where repos are found</p> }))
-vi.mock('./ProfileSettings.js', () => ({ PROFILE_ENTRY: 'profile', ProfileSettings: () => <p>Your name and picture</p> }))
 vi.mock('./AgentDataSettings.js', () => ({ AGENT_DATA_ENTRY: 'agent-data', AgentDataSettings: () => <p>Where the agent data is</p> }))
 vi.mock('./ProjectAgentDataSettings.js', () => ({ PROJECT_AGENT_DATA_ENTRY: 'project-agent-data', ProjectAgentDataSettings: () => <p>Where this project's agent data is</p> }))
 // A project's skills, as a page of the Project group; each project answers with its own one skill.
@@ -392,8 +391,10 @@ describe('the Settings list', () => {
   const Broken = () => {
     throw new Error('boom')
   }
+  const PROFILE: MountedView<'settings.section'> = { place: 'settings.section', id: 'profile', title: 'Profile', icon: Smartphone, order: 10, View: () => <p>Your name and picture</p>, package: '@openagt/user-info', projects: [], computer: true }
   const MODULES = mounted([
-    { place: 'settings.section', id: 'devices', title: 'Devices', icon: Smartphone, View: Given, package: '@openagt/dashboard-devices', projects: [], computer: true },
+    PROFILE,
+    { place: 'settings.section', id: 'devices', title: 'Devices', icon: Smartphone, order: 90, View: Given, package: '@openagt/dashboard-devices', projects: [], computer: true },
     { place: 'settings.section', id: 'tickets', title: 'Tickets', icon: Ticket, View: Given, package: '@openagt/skill-tickets', projects: ['p1', 'p2', 'gone'] },
     { place: 'settings.section', id: 'scheduler', title: 'Scheduler', icon: CalendarClock, View: Broken, package: '@openagt/skill-scheduler', projects: ['p2'] },
   ])
@@ -582,10 +583,20 @@ describe('the Settings list', () => {
     expect(screen.getByText('Nothing to set for your projects.')).toBeTruthy()
   })
 
-  test('opened with no entry, a computer shows Profile and its address says so; a phone shows the list, whose address is none', () => {
+  test("a package's entry of the computer's goes among the dashboard's own by its number: 50 when unsaid, after the dashboard's own at 50", () => {
+    const { order: _unsaid, ...unordered } = PROFILE
+    render(
+      <ModulesContext.Provider value={mounted([PROFILE, { ...PROFILE, id: 'lights', title: 'Lights', order: 55, package: 'lights' }, { ...unordered, id: 'plain', title: 'Plain', package: 'plain' }])}>
+        <SettingsDialog entry="profile" onEntry={() => {}} onClose={onClose} scope={null} projects={[]} />
+      </ModulesContext.Provider>,
+    )
+    expect(entries('You and this computer')).toEqual(['Profile', 'Appearance', 'Notifications', 'Coding agent', 'Your agent data', 'Plain', 'Lights', 'Repos', 'Claude web', 'Keyboard shortcuts'])
+  })
+
+  test('opened with no entry, a computer shows the first and its address says so; a phone shows the list, whose address is none', () => {
     const onEntry = vi.fn()
     const { unmount } = render(<SettingsDialog entry="" onEntry={onEntry} onClose={onClose} scope={null} projects={[]} />)
-    expect(onEntry).toHaveBeenCalledWith('profile')
+    expect(onEntry).toHaveBeenCalledWith('appearance')
     unmount()
     onEntry.mockClear()
     vi.stubGlobal('matchMedia', (query: string) => ({ matches: true, media: query, addEventListener: () => {}, removeEventListener: () => {} }))

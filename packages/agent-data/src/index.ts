@@ -47,7 +47,6 @@ export {
 export { SESSIONS_DIR, sessionsHome, sessionFolder, sessionsHomeOf, runsRootOf, listSessionFolders } from './sessions.js'
 export { AGENTS_DIR, DEFAULT_AGENT, DEFAULT_AGENT_SKILLS, agentIdOf, agentsDir, builtInDefault, isAgentId, isAgentName, listAgents, readAgent, removeAgent, writeAgent, type AgentAccounts, type AgentRecord } from './agents.js'
 export { REPO_OWNERS_FILE, isRepoOwner, readRepoOwners, writeRepoOwners } from './repo-owners.js'
-export { PERSON_FILE, isPersonRecordName, isPictureAddress, readPersonRecord, removePersonRecord, writePersonRecord, type PersonRecord } from './person.js'
 export { NoRemoteAccountError, accountGit, clearRemoteAccount, noAccountSentence, readRemoteAccount, remoteHostOf, writeRemoteAccount, type RemoteAccount } from './remote-account.js'
 export { addressOfRemote, spellingOfRemote } from './repository-address.js'
 export { originUrl, repositoryAddress, repositorySpelling, projectNameOf } from './origin.js'

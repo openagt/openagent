@@ -57,6 +57,7 @@ export {
   type StoreBackend,
 } from './store.js'
 export { SETTING_SCOPES, SETTINGS_FILE, defineSetting, settingsIn, enabledSetting, type Setting, type SettingScope, type Settings } from './settings.js'
+export { PERSON_INFO, isPersonName, isPictureAddress, type PersonInfo } from './catalog.js'
 export type { GitAccess, AccountAccess } from './account.js'
 export type { AppContext, AppLifecycle, AttentionFix, AttentionItem, AttentionArgs, AppAttention, Attention } from './app.js'
 export { HOOK_NAMES, MODULE_NAME, defineModule, type NodeHooks, type HookName, type PluginInfo, type ModuleDefinition } from './module.js'

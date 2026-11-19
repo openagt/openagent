@@ -28,7 +28,7 @@ export type MountedOption<P extends OptionPlace> = Mounted<Extract<UiOption, { p
 export type MountedSchedule = Mounted<NonNullable<UiModuleDefinition['schedule']>>
 
 /** The place of an entry that names none: a card, a part of the Overview's line, a Settings entry, an option. */
-const DEFAULT_ORDER = 50
+export const DEFAULT_ORDER = 50
 
 /**
  * What the installed modules bring, once loaded (#2394): each UI hook's entries, by place, in the

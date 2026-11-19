@@ -1,6 +1,6 @@
 import { withPersonalFolder, type PersonalFolderDeps } from '@openagt/agent-data'
 import { StoreOrder, type Scope, type Store, type StoreBackend } from '@openagt/hooks'
-import { foldersOf, type Folders } from '@openagt/store-filesystem'
+import { foldersOf, madeAtEachCall, type Folders } from '@openagt/store-filesystem'
 
 /**
  * The person's own folder as a git repository: every save to a scope kept there (the person's,
@@ -51,10 +51,11 @@ export function gitRepositoryStore(next: Store, folders: Folders, deps: Personal
   }
 }
 
-/** The git repository store as a link of the chain, wrapping the filesystem store. Its folders are the environment's when none are given. */
+/** The git repository store as a link of the chain, wrapping the filesystem store. With no folders given, they are the environment's at each call. */
 export function gitRepositoryBackend(opts: { folders?: Folders; deps?: PersonalFolderDeps } = {}): StoreBackend {
+  const { folders, deps } = opts
   return {
     order: StoreOrder.GIT_REPOSITORY,
-    wrap: next => gitRepositoryStore(next, opts.folders ?? foldersOf(), opts.deps),
+    wrap: next => (folders ? gitRepositoryStore(next, folders, deps) : madeAtEachCall(() => gitRepositoryStore(next, foldersOf(), deps))),
   }
 }

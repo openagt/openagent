@@ -6,8 +6,11 @@ import { join } from 'node:path'
 import { nodeGitRunner, writeRemoteAccount, type ProvidedCommand } from '@openagt/agent-data'
 import { loginsWiring } from './logins.js'
 import { provideTestContext } from './test-context.js'
+import { handDownTestDistribution } from '../test-distribution.js'
 import { onBackup } from './backup.js'
-import { sendSavePersonName, sendSyncPersonFromGitHub } from './person.js'
+import { callModule } from './module-calls.js'
+
+handDownTestDistribution()
 
 // What is not backed up, through the dashboard's calls: the personal folder under a temp
 // $XDG_CONFIG_HOME, synced with a repository at GitHub with no account of OpenAgent's named. No
@@ -25,7 +28,6 @@ async function withComputer(body: (folder: string) => Promise<void>): Promise<vo
     gitHost: async () => ({ package: '@openagt/skill-github', command: 'github', dir }) as unknown as ProvidedCommand,
     run: async (_root: string, _command: ProvidedCommand, args: readonly string[]) => {
       if (args[0] === 'accounts') return { ok: true, output: { ok: true, host: 'github.com', name: 'GitHub', requestWord: 'pull request', logo: '<svg/>', tool: 'gh', installed: true, install: 'brew install gh', accounts: [] } }
-      if (args[0] === 'profile' && args[1] === 'ada') return { ok: true, output: { ok: true, login: 'ada', name: 'Ada Lovelace', avatar: 'https://avatars.githubusercontent.com/u/1' } }
       return { ok: false, error: `no answer for ${args.join(' ')}` }
     },
   })
@@ -41,16 +43,18 @@ async function withComputer(body: (folder: string) => Promise<void>): Promise<vo
 
 const git = nodeGitRunner()
 
+/** Settings › Profile's save of the person's name, as the page makes it: a change saved with the person, in their folder. */
+const saveName = (name: string) => callModule(null, '@openagt/user-info', 'saveName', { name })
+
 test('a folder only on this computer, or backed up as an account of OpenAgent, is no gap; one at GitHub with none is, with what waits', async () => {
   await withComputer(async folder => {
-    assert.deepEqual(await sendSavePersonName('Ada'), { ok: true })
+    assert.deepEqual(await saveName('Ada'), { ok: true, output: null })
     assert.deepEqual(await onBackup(), { gaps: [] })
 
     await git(['remote', 'add', 'origin', 'https://github.com/ada/agent.git'], folder)
     // The bug the notice is for: a change made with no account named is made, not failed.
-    const synced = await sendSyncPersonFromGitHub('ada')
-    assert.deepEqual(synced, { ok: true, changed: true, login: 'ada' })
-    assert.match(readFileSync(join(folder, 'person.json'), 'utf8'), /Ada Lovelace/)
+    assert.deepEqual(await saveName('Ada Lovelace'), { ok: true, output: null })
+    assert.match(readFileSync(join(folder, 'person', 'settings.json'), 'utf8'), /Ada Lovelace/)
     const { gaps } = await onBackup()
     assert.equal(gaps.length, 1)
     assert.deepEqual({ ...gaps[0], waiting: undefined }, { kind: 'personal', address: 'github.com/ada/agent', url: 'https://github.com/ada/agent', host: 'github.com', waiting: undefined })

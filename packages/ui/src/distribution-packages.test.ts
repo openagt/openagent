@@ -67,7 +67,7 @@ test("a project with nothing installed gets its runs, its branches and a reposit
     assert.equal((await providedCommand(root, 'repository'))?.package, '@openagt/skill-github', 'the package that can create its repository')
     assert.deepEqual(
       (await packagesOf(root)).map(pkg => pkg.name),
-      ['@openagt/skill-branches', '@openagt/skill-github', '@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/skill-logs', '@openagt/skill-ask', '@openagt/agent-runner'],
+      ['@openagt/store-filesystem', '@openagt/store-git-repository', '@openagt/skill-branches', '@openagt/skill-github', '@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/skill-logs', '@openagt/skill-ask', '@openagt/agent-runner'],
       "every project's, and the picked skill every run gets; none of the other picks, none of the computer's",
     )
     assert.deepEqual((await readProjectModules(root)).map(module => module.package), ['@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/skill-logs'])
@@ -90,10 +90,10 @@ test("every project keeps its runs' records through the logs package, and shows 
   }
 })
 
-test("devices and account rotation are the computer's: their parts are there with no project, and no project has them", async () => {
-  assert.deepEqual((await computerPackages()).map(pkg => pkg.name), ['@openagt/dashboard-devices', '@openagt/skill-account-rotation'])
-  assert.deepEqual((await readComputerModules()).map(module => module.package), ['@openagt/dashboard-devices', '@openagt/skill-account-rotation'])
-  assert.deepEqual((await readComputerModules()).map(module => Object.keys(module.bins)), [['devices'], ['account-rotation']])
+test("the person's profile, devices and account rotation are the computer's: their parts are there with no project, and no project has them", async () => {
+  assert.deepEqual((await computerPackages()).map(pkg => pkg.name), ['@openagt/user-info', '@openagt/dashboard-devices', '@openagt/skill-account-rotation'])
+  assert.deepEqual((await readComputerModules()).map(module => module.package), ['@openagt/dashboard-devices', '@openagt/skill-account-rotation', '@openagt/user-info'])
+  assert.deepEqual((await readComputerModules()).map(module => Object.keys(module.bins)), [['devices'], ['account-rotation'], []])
 })
 
 test("a project has a skill's package, its data and its page once it holds the skill's text, in either folder, and no longer once the folder is deleted", async () => {

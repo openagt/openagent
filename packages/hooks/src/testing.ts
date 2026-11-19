@@ -3,7 +3,7 @@
 import { StoreOrder } from './order.js'
 import type { InboxLine } from '@openagt/agent-driver'
 import type { RunContext, RunEvent, RunHost, RunInput, RunRef, RunRequest, RunStatus, RunSummary } from './run.js'
-import { settingsIn } from './settings.js'
+import { settingsIn, type Settings } from './settings.js'
 import { chainStore, changesOf, checkPath, isUnder, messageOf, scopeKey, type Scope, type Store, type StoreBackend } from './store.js'
 
 /** A store kept in memory: the end of the chain, as the filesystem store is. */
@@ -12,6 +12,11 @@ export interface MemoryStore extends StoreBackend {
   files(scope: Scope): Record<string, string>
   /** Every save, in order: its scope, its message, the paths it changed. */
   readonly saves: readonly { scope: Scope; message: string; paths: string[] }[]
+}
+
+/** Settings kept in a memory store: for a function's host, or any test that reads and saves a setting. */
+export function memorySettings(): Settings {
+  return settingsIn(chainStore([memoryStore()]))
 }
 
 export function memoryStore(): MemoryStore {

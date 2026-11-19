@@ -10,11 +10,14 @@ import type { DashboardDistribution, DashboardPackage } from './distribution-pac
  * package's install (its devDependencies), with whose each is as the dashboard says it.
  */
 export const DASHBOARD_PACKAGES: DashboardDistribution = [
+  { package: '@openagt/store-filesystem' },
+  { package: '@openagt/store-git-repository' },
   { package: '@openagt/skill-branches' },
   { package: '@openagt/skill-github', skill: 'every run' },
   { package: '@openagt/dashboard-changes' },
   { package: '@openagt/dashboard-files' },
   { package: '@openagt/skill-logs', pages: 'picked' },
+  { package: '@openagt/user-info', for: 'computer' },
   { package: '@openagt/dashboard-devices', for: 'computer' },
   { package: '@openagt/skill-account-rotation', for: 'computer' },
   { package: '@openagt/skill-tickets', for: 'picked' },

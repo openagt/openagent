@@ -12,6 +12,10 @@ import type { DashboardDistribution } from '@openagt/ui/cli'
  * computer's (`computer`).
  */
 const DISTRIBUTION: DashboardDistribution = [
+  // The store: every module's data in its folder on this computer, and the person's own folder
+  // synced with a repository of theirs.
+  { package: '@openagt/store-filesystem' },
+  { package: '@openagt/store-git-repository' },
   // git-branches: the run's checkout, its branch read back, the checkout reclaimed.
   { package: '@openagt/skill-branches' },
   // github: the run's account and pull request; its skill is in every run.
@@ -23,6 +27,8 @@ const DISTRIBUTION: DashboardDistribution = [
   { package: '@openagt/dashboard-files' },
   // The runs' records, which every project's Log lists; its Logs page is a pick.
   { package: '@openagt/skill-logs', pages: 'picked' },
+  // The person's name and picture, Settings › Profile.
+  { package: '@openagt/user-info', for: 'computer' },
   // The door to this computer and its servers, and the accounts its runs use.
   { package: '@openagt/dashboard-devices', for: 'computer' },
   { package: '@openagt/skill-account-rotation', for: 'computer' },

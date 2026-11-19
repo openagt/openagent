@@ -199,7 +199,10 @@ export interface ViewPlaces {
       id: string
       title: string
       icon: UiIcon
-      /** Its place among every module's entries, lower first; 50 when unsaid, ties by package name. */
+      /**
+       * Its place among the entries of its group, lower first; 50 when unsaid, ties by package name.
+       * Among the person's and this computer's, the dashboard's own stand at 20 to 80.
+       */
       order?: number
     }
     props: UiSettingsProps

@@ -1,23 +1,16 @@
 import { useState } from 'react'
-import { sendRemovePersonPicture, sendSavePersonName, sendSyncPersonFromGitHub } from '../rpc/person.js'
-import { personChanged, usePerson } from '../lib/use-person.js'
-import { useAction } from '../lib/use-action.js'
-import { cn } from '../lib/utils.js'
-import { Button } from './ui/button.js'
-import { Input } from './ui/input.js'
-import { Avatar } from './PersonMenu.js'
-import { SettingsRow, SettingsSection } from './SettingsRows.js'
-
-/** The Settings entry's id. */
-export const PROFILE_ENTRY = 'profile'
+import { Avatar, Button, cn, Input, personChanged, SettingsRow, SettingsSection, useAction, useModuleHost, usePerson } from '@openagt/ui/module'
+import { copyFromGitHub, removePicture, saveName } from './calls.js'
 
 /**
  * Settings › Profile (Rom's design: the person's name and picture are OpenAgent's own, not a git
  * host's): the name the sidebar's foot shows and the servers they join are told, and their
- * picture. Kept in their own folder, so each computer of theirs shows the same. "Sync from
- * GitHub" copies a GitHub profile's name and picture once, read with no login.
+ * picture. Saved with the person, so each computer of theirs shows the same. "Sync from GitHub"
+ * copies a GitHub profile's name and picture once, read with no login. What it shows is the
+ * person as the shell reads them, the computer's name for them until they set their own.
  */
 export function ProfileSettings() {
+  const host = useModuleHost()
   const { person, reload } = usePerson()
   // What the person typed; until they type, what is saved.
   const [typedName, setName] = useState<string | undefined>()
@@ -41,18 +34,18 @@ export function ProfileSettings() {
     personChanged()
   }
   const save = () =>
-    void saving.run(() => sendSavePersonName(name), 'Could not save your name.').then(async outcome => {
+    void saving.run(() => saveName(host, name), 'Could not save your name.').then(async outcome => {
       await done(outcome)
       setSavedName(outcome.ok)
     })
   const sync = () => {
     setSynced(undefined)
-    void syncing.run(() => sendSyncPersonFromGitHub(github), 'Could not read that GitHub profile.').then(async outcome => {
+    void syncing.run(() => copyFromGitHub(host, github), 'Could not read that GitHub profile.').then(async outcome => {
       await done(outcome)
       if (outcome.ok) setSynced(outcome.value.changed ? `Name and picture copied from @${outcome.value.login}.` : `Already up to date with @${outcome.value.login}.`)
     })
   }
-  const remove = () => void removing.run(() => sendRemovePersonPicture(), 'Could not remove the picture.').then(done)
+  const remove = () => void removing.run(() => removePicture(host), 'Could not remove the picture.').then(done)
   const changedName = name.trim() !== '' && (name.trim() !== person.name || !person.own)
   const nothingToSave = saving.busy || !changedName
 

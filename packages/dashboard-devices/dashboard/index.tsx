@@ -15,7 +15,7 @@ export default defineUiModule({
   name: 'devices',
   hooks: {
     'ui.view': [
-      { place: 'settings.section', id: 'devices', title: 'Devices', icon: MonitorSmartphone, order: 10, View: ({ item }) => <DevicesSettings {...(item !== undefined ? { item } : {})} /> },
+      { place: 'settings.section', id: 'devices', title: 'Devices', icon: MonitorSmartphone, order: 90, View: ({ item }) => <DevicesSettings {...(item !== undefined ? { item } : {})} /> },
       { place: 'overview.card', id: 'devices', label: 'Devices', order: 11, width: '1/3', minWidth: '1/4', View: DevicesCard },
       { place: 'app.overlay', id: 'ask', View: AskPopup },
     ],

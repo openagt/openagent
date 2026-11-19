@@ -3,11 +3,12 @@ import { findAgent, findCheckout, isRunId, projectBranches, type BranchesFor } f
 import { leftNothing } from './agent-handoff.js'
 import { cachedPrsForBranch, type LinkedPr } from './pull-requests.js'
 import type { Cached } from './cache.js'
-import { rpcKind, type MergeLookup, type RpcFunction, type RpcHost, type RpcKind, type RunFound } from '@openagt/hooks/rpc'
+import type { Settings } from '@openagt/hooks'
+import { rpcKind, type MergeLookup, type RpcComputerHost, type RpcFunction, type RpcHost, type RpcKind, type RunFound } from '@openagt/hooks/rpc'
 
 // The daemon's side of a module's server part (`@openagt/hooks/rpc`): the host a function is given
-// (a project's folder and what is known of its runs) and the one way a function is called. What is
-// known is the core's; what a module makes of it is its own.
+// (the settings; for a project's module, the project's folder and what is known of its runs) and the
+// one way a function is called. What is known is the core's; what a module makes of it is its own.
 
 /** What {@link serverHost} reads through; each defaults to the production reader. */
 export interface ServerHostDeps {
@@ -18,9 +19,15 @@ export interface ServerHostDeps {
   prs?: (root: string, branch: string) => Promise<Cached<LinkedPr[]>>
 }
 
+/** The host a function of a module of the computer's is given, called in no project. */
+export function computerHost(settings: Settings): RpcComputerHost {
+  return { settings }
+}
+
 /** The host a function called in the project at `root` is given. */
-export function serverHost(root: string, deps: ServerHostDeps = {}): RpcHost {
+export function serverHost(root: string, settings: Settings, deps: ServerHostDeps = {}): RpcHost {
   return {
+    settings,
     root,
     async run(agentId: string): Promise<RunFound | undefined> {
       if (typeof agentId !== 'string' || !isRunId(agentId)) return undefined
@@ -54,14 +61,17 @@ export function serverHost(root: string, deps: ServerHostDeps = {}): RpcHost {
   }
 }
 
-/** The functions of each server part, by name, imported once per daemon, by its file: every export it wraps as a read or an act. */
-const imported = new Map<string, Promise<Map<string, RpcFunction> | undefined>>()
+/** One function of a server part, as the daemon calls it: with the host of the call it is, a project's or the computer's. */
+type ServerFunction = RpcFunction<object, unknown, RpcComputerHost>
 
-function load(file: string): Promise<Map<string, RpcFunction> | undefined> {
+/** The functions of each server part, by name, imported once per daemon, by its file: every export it wraps as a read or an act. */
+const imported = new Map<string, Promise<Map<string, ServerFunction> | undefined>>()
+
+function load(file: string): Promise<Map<string, ServerFunction> | undefined> {
   let loading = imported.get(file)
   if (!loading) {
     loading = import(pathToFileURL(file).href).then(
-      (module: Record<string, unknown>) => new Map(Object.entries(module).flatMap(([name, value]) => (rpcKind(value) ? [[name, value as RpcFunction]] : []))),
+      (module: Record<string, unknown>) => new Map(Object.entries(module).flatMap(([name, value]) => (rpcKind(value) ? [[name, value as ServerFunction]] : []))),
       () => undefined,
     )
     imported.set(file, loading)
@@ -88,7 +98,7 @@ export type ModuleCallResult = { ok: true; output: unknown } | { ok: false; erro
  * function that throws or runs past {@link CALL_TIMEOUT_MS} answers an error; nothing a function
  * does stops the daemon.
  */
-export async function callModuleFunction(file: string, name: string, host: RpcHost, input: unknown, timeoutMs = CALL_TIMEOUT_MS): Promise<ModuleCallResult> {
+export async function callModuleFunction(file: string, name: string, host: RpcComputerHost, input: unknown, timeoutMs = CALL_TIMEOUT_MS): Promise<ModuleCallResult> {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return { ok: false, error: 'a call takes an object' }
   if (JSON.stringify(input).length > MAX_CALL_INPUT) return { ok: false, error: 'the call input is too large' }
   const functions = await load(file)

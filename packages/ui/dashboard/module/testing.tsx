@@ -30,6 +30,7 @@ export function fakeHost(pkg: string, services: Partial<Omit<ModuleHost, 'packag
     runComputerCommand: nothing,
     runComputerCommandOn: nothing,
     call: nothing,
+    callComputer: nothing,
     openAgent: () => {},
     agentHref: (projectId, agentId) => `/${projectId}/${agentId}`,
     openPage: () => {},

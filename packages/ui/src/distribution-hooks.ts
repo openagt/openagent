@@ -1,5 +1,5 @@
 import { projectNameOf, repositoryAddress } from '@openagt/agent-data'
-import { createHooks, DISTRIBUTION_ENV, loadHandedDown, LOCAL_HOST, type Hooks, type ProjectRef, type RunHost, type RunRef } from '@openagt/hooks'
+import { createHooks, DISTRIBUTION_ENV, loadHandedDown, LOCAL_HOST, type Hooks, type ProjectRef, type RunHost, type RunRef, type Settings } from '@openagt/hooks'
 import { SESSIONS_ID } from './project-address.js'
 
 /**
@@ -11,6 +11,30 @@ export async function loadHooks(env: NodeJS.ProcessEnv = process.env): Promise<H
   const modules = await loadHandedDown(env)
   if (!modules) throw new Error(`the dashboard runs the modules of a distribution, and none was handed to it (${DISTRIBUTION_ENV}): start it with a distribution's openagent command, such as @openagt/dashboard's`)
   return createHooks(modules)
+}
+
+/** The hooks this process runs, by the distribution file they were loaded from. */
+let loaded: { file: string | undefined; hooks: Promise<Hooks> } | undefined
+
+/**
+ * The hooks of the distribution handed down to this process, loaded once for each distribution
+ * file: the daemon's, and its calls' (a setting read, a module's function).
+ */
+export function distributionHooks(env: NodeJS.ProcessEnv = process.env): Promise<Hooks> {
+  const file = env[DISTRIBUTION_ENV]
+  if (loaded && loaded.file === file) return loaded.hooks
+  const hooks = loadHooks(env)
+  // A distribution that did not load is tried again at the next call, not kept as its answer.
+  hooks.catch(() => {
+    if (loaded?.hooks === hooks) loaded = undefined
+  })
+  loaded = { file, hooks }
+  return hooks
+}
+
+/** The settings of the distribution handed down to this process: read and saved through its store. */
+export async function distributionSettings(env: NodeJS.ProcessEnv = process.env): Promise<Settings> {
+  return (await distributionHooks(env)).settings
 }
 
 /** This computer's host, agent-driver's: where a run started from here runs. A distribution without it starts no run. */

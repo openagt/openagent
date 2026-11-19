@@ -82,10 +82,11 @@ test('the dashboard\'s modules are every registered project\'s, one per package,
     await addProject(b, '2026-09-19T00:00:01.000Z')
 
     await withDistribution(dir, [...COMPUTER, '@openagt/dashboard-changes', '@openagt/dashboard-files', 'logs', 'plain', { package: 'queue', for: 'picked' }], async () => {
-      // The computer's modules (the Devices and Machines sections) come first, and are no project's. Then the ones every project has, from the first; then queue, which only the project that picked its skill has.
+      // The computer's modules (Devices, the accounts, Profile) come first, and are no project's. Then the ones every project has, from the first; then queue, which only the project that picked its skill has.
       assert.deepEqual(await listed(), [
         { package: '@openagt/dashboard-devices', url: '/_computer-modules/%40openagt%2Fdashboard-devices/dashboard.js', projects: [], computer: true },
         { package: '@openagt/skill-account-rotation', url: '/_computer-modules/%40openagt%2Fskill-account-rotation/dashboard.js', projects: [], computer: true },
+        { package: '@openagt/user-info', url: '/_computer-modules/%40openagt%2Fuser-info/dashboard.js', projects: [], computer: true },
         { package: '@openagt/dashboard-changes', url: `/_modules/${projectId(a)}/%40openagt%2Fdashboard-changes/dashboard.js`, projects: [projectId(a), projectId(b)] },
         { package: '@openagt/dashboard-files', url: `/_modules/${projectId(a)}/%40openagt%2Fdashboard-files/dashboard.js`, projects: [projectId(a), projectId(b)] },
         { package: 'logs', url: `/_modules/${projectId(a)}/logs/w.js`, projects: [projectId(a), projectId(b)] },
@@ -119,6 +120,7 @@ test('with no project added, the computer\'s modules are there and run their own
       assert.deepEqual(await listed(), [
         { package: '@openagt/dashboard-devices', url: '/_computer-modules/%40openagt%2Fdashboard-devices/dashboard.js', projects: [], computer: true },
         { package: '@openagt/skill-account-rotation', url: '/_computer-modules/%40openagt%2Fskill-account-rotation/dashboard.js', projects: [], computer: true },
+        { package: '@openagt/user-info', url: '/_computer-modules/%40openagt%2Fuser-info/dashboard.js', projects: [], computer: true },
       ])
       // The door's own command, answering what it keeps for this computer: nobody is in, and it is shut.
       assert.deepEqual(await runComputerCommand('@openagt/dashboard-devices', ['status']), { ok: true, output: { on: false, listening: false, devices: [], lines: [], persons: [] } })

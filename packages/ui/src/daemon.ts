@@ -17,7 +17,7 @@ import { bridgeQuestions } from './dashboard/bridge-store.js'
 import { bridgeBrowserDir, bridgeBrowserOwner, startBridgeBrowser, type BridgeBrowser, type BridgeBrowserOptions } from './bridge-browser.js'
 import { runProjectHooks } from './project-hooks.js'
 import { readySessionsHome, startSessionsSweep } from './sessions-home.js'
-import { loadHooks, localHostOf } from './distribution-hooks.js'
+import { distributionHooks, localHostOf } from './distribution-hooks.js'
 import type { Hooks } from '@openagt/hooks'
 import { sessionsHome } from '@openagt/agent-data'
 import { readSecureAddress, SECURE_PORT, type SecureAddress } from './secure-address.js'
@@ -121,7 +121,7 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
   // A run's name is asked of a naming session kept waiting for it (agent-runner's `ReadyNaming`), so
   // the page has it about a second after Start. A run starts on this computer's host, the
   // distribution's (#2394).
-  const host = await localHostOf(opts.hooks ?? (await loadHooks()))
+  const host = await localHostOf(opts.hooks ?? (await distributionHooks()))
   const runtime = createProjectRuntime({ cwd, env, naming: new ReadyNaming(), host })
   // Known only once the dashboard listens; the bridge browser is told it (#1332).
   let daemonUrl: string | undefined

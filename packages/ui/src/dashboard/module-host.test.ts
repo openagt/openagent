@@ -4,7 +4,10 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { BranchesFor, BranchesSource, Checkout } from '../store/branches.js'
+import { memorySettings } from '@openagt/hooks/testing'
 import { callModuleFunction, functionKind, serverHost, MAX_CALL_INPUT, type ServerHostDeps } from './module-host.js'
+
+const SETTINGS = memorySettings()
 
 const listing = (checkouts: Checkout[]): BranchesFor => async () => ({ list: async () => checkouts }) as unknown as BranchesSource
 
@@ -18,7 +21,7 @@ function deps(checkouts: Checkout[], records: Record<string, { status?: string; 
 }
 
 test('what is known of a run: its checkout, its record, and whether it ended here having changed nothing', async () => {
-  const host = serverHost('/p', deps([{ id: 'run-a', path: '/p/.branches/agent-a' } as Checkout], {
+  const host = serverHost('/p', SETTINGS, deps([{ id: 'run-a', path: '/p/.branches/agent-a' } as Checkout], {
     'run-a': { status: 'running', host: 'this-machine', branch: 'agent-a' },
     'run-b': { status: 'done', host: 'this-machine', branch: 'agent-b' },
     'run-c': { status: 'done', host: 'other-machine', branch: 'agent-c' },
@@ -33,7 +36,7 @@ test('what is known of a run: its checkout, its record, and whether it ended her
 })
 
 test('what is known of a run carries the commit its own work begins at and the commit it was landed at; a landed run did not change nothing', async () => {
-  const host = serverHost('/p', deps([], {
+  const host = serverHost('/p', SETTINGS, deps([], {
     'run-b': { status: 'running', host: 'this-machine', base: 'my-branch' },
     'run-s': { status: 'done', host: 'this-machine', branch: 'agent-s', baseCommit: 'b'.repeat(40) },
     'run-l': { status: 'done', host: 'this-machine', baseCommit: 'b'.repeat(40), landed: 'c'.repeat(40) },
@@ -48,13 +51,13 @@ test('a merge lookup says "still asking" only while the git host has not answere
   const answering = (value: { number: number; mergeCommit?: string; headRefOid?: string }[] | undefined, pending: boolean): ServerHostDeps => ({
     prs: async () => ({ value: value as never, pending }),
   })
-  assert.deepEqual(await serverHost('/p', answering(undefined, true)).mergeCommit('b', 1), { pending: true })
-  assert.deepEqual(await serverHost('/p', answering([{ number: 1, mergeCommit: 'abc' }], true)).mergeCommit('b', 1), { pending: false, commit: 'abc' })
-  assert.deepEqual(await serverHost('/p', answering([{ number: 2, mergeCommit: 'abc' }], false)).mergeCommit('b', 1), { pending: false })
+  assert.deepEqual(await serverHost('/p', SETTINGS, answering(undefined, true)).mergeCommit('b', 1), { pending: true })
+  assert.deepEqual(await serverHost('/p', SETTINGS, answering([{ number: 1, mergeCommit: 'abc' }], true)).mergeCommit('b', 1), { pending: false, commit: 'abc' })
+  assert.deepEqual(await serverHost('/p', SETTINGS, answering([{ number: 2, mergeCommit: 'abc' }], false)).mergeCommit('b', 1), { pending: false })
   // The last commit of the branch the request merged rides along when the git host says it.
-  assert.deepEqual(await serverHost('/p', answering([{ number: 1, mergeCommit: 'abc', headRefOid: 'def' }], false)).mergeCommit('b', 1), { pending: false, commit: 'abc', head: 'def' })
-  assert.deepEqual(await serverHost('/p', answering([{ number: 1, headRefOid: 'def' }], false)).mergeCommit('b', 1), { pending: false })
-  assert.deepEqual(await serverHost('/p', { prs: async () => Promise.reject(new Error('offline')) }).mergeCommit('b', 1), { pending: false })
+  assert.deepEqual(await serverHost('/p', SETTINGS, answering([{ number: 1, mergeCommit: 'abc', headRefOid: 'def' }], false)).mergeCommit('b', 1), { pending: false, commit: 'abc', head: 'def' })
+  assert.deepEqual(await serverHost('/p', SETTINGS, answering([{ number: 1, headRefOid: 'def' }], false)).mergeCommit('b', 1), { pending: false })
+  assert.deepEqual(await serverHost('/p', SETTINGS, { prs: async () => Promise.reject(new Error('offline')) }).mergeCommit('b', 1), { pending: false })
 })
 
 test('a function is called with the host and the input, and whatever goes wrong answers an error; whether it reads or acts is its own word', async () => {
@@ -72,7 +75,7 @@ export const claim = act(async (host, input) => ({ claimed: input.id }))
 export const plain = async () => 'not wrapped'
 export default { echo }`,
     )
-    const host = serverHost('/p', deps([], {}))
+    const host = serverHost('/p', SETTINGS, deps([], {}))
     assert.deepEqual(await callModuleFunction(file, 'echo', host, { agentId: 'run-a', path: 'x' }), { ok: true, output: { root: '/p', input: { agentId: 'run-a', path: 'x' } } })
     assert.deepEqual(await callModuleFunction(file, 'claim', host, { id: 't1' }), { ok: true, output: { claimed: 't1' } })
     assert.deepEqual(await callModuleFunction(file, 'nothing', host, {}), { ok: true, output: null })

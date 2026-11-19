@@ -1,39 +1,51 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import type { Person } from '../rpc/person.js'
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
+import type { ModuleCallResult } from '@openagt/ui/module'
+import { fakeHost, renderWithHost } from '@openagt/ui/module/testing'
 
-let person: Person
-const onPerson = vi.fn(async () => person)
-const sendSavePersonName = vi.fn(async (_name: string) => ({ ok: true }) as { ok: true } | { ok: false; error: string })
-const sendRemovePersonPicture = vi.fn(async () => ({ ok: true as const }))
-const sendSyncPersonFromGitHub = vi.fn(async (login: string) => ({ ok: true, changed: true, login }) as { ok: true; changed: boolean; login: string } | { ok: false; error: string })
-vi.mock('../rpc/person.js', () => ({ onPerson, sendSavePersonName, sendRemovePersonPicture, sendSyncPersonFromGitHub }))
+// The person as the shell reads them: `person` is what is saved, and the page shows it once it
+// reads them again. The module's own calls as a test answers them.
+type Person = { name: string; avatar?: string; github?: string; own?: true }
+const shell = vi.hoisted(() => ({ person: { name: '' } as Person, shown: { name: '' } as Person, personChanged: vi.fn() }))
+vi.mock('@openagt/ui/module', async original => ({
+  ...(await original<typeof import('@openagt/ui/module')>()),
+  usePerson: () => ({ person: shell.shown, reload: async () => void (shell.shown = shell.person) }),
+  personChanged: shell.personChanged,
+}))
 
 const { ProfileSettings } = await import('./ProfileSettings.js')
 
+let answers: Record<string, (input: Record<string, unknown>) => ModuleCallResult>
+const callComputer = vi.fn(async (name: string, input: object): Promise<ModuleCallResult> => (answers[name] ?? (() => ({ ok: true, output: null })))(input as Record<string, unknown>))
+const sent = (name: string) => callComputer.mock.calls.filter(([called]) => called === name).map(([, input]) => input)
+const render = () => renderWithHost(<ProfileSettings />, fakeHost('@openagt/user-info', { callComputer }))
+
 beforeEach(() => {
-  person = { name: 'Suleiman Shahbari' }
-  for (const fn of [onPerson, sendSavePersonName, sendRemovePersonPicture, sendSyncPersonFromGitHub]) fn.mockClear()
+  shell.person = shell.shown = { name: 'Suleiman Shahbari' }
+  answers = { copyFromGitHub: input => ({ ok: true, output: { changed: true, login: input['login'] } }) }
+  callComputer.mockClear()
+  shell.personChanged.mockClear()
 })
 afterEach(cleanup)
 
 describe('Settings › Profile', () => {
   test("with none set, the name is git's: saving it keeps it as the person's own", async () => {
-    render(<ProfileSettings />)
+    render()
     expect(await screen.findByText(/Your git name for now/)).toBeTruthy()
     expect((screen.getByLabelText('Name') as HTMLInputElement).value).toBe('Suleiman Shahbari')
     expect(screen.getByText('None: your initials.')).toBeTruthy()
-    person = { name: 'Suleiman S', own: true }
+    shell.person = { name: 'Suleiman S', own: true }
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Suleiman S' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-    await waitFor(() => expect(sendSavePersonName).toHaveBeenCalledWith('Suleiman S'))
+    await waitFor(() => expect(sent('saveName')).toEqual([{ name: 'Suleiman S' }]))
+    expect(shell.personChanged).toHaveBeenCalled()
     expect(await screen.findByText(/what the servers you join call you/)).toBeTruthy()
   })
 
   test('a name that was saved says so, until it is typed into again; Save, with nothing to save, keeps the focus and sends nothing', async () => {
-    render(<ProfileSettings />)
+    render()
     fireEvent.change(await screen.findByLabelText('Name'), { target: { value: 'Suleiman S' } })
-    person = { name: 'Suleiman S', own: true }
+    shell.person = { name: 'Suleiman S', own: true }
     const save = screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement
     save.focus()
     fireEvent.click(save)
@@ -41,32 +53,32 @@ describe('Settings › Profile', () => {
     await waitFor(() => expect(document.activeElement).toBe(save))
     expect([save.disabled, save.getAttribute('aria-disabled')]).toEqual([false, 'true'])
     fireEvent.click(save)
-    expect(sendSavePersonName).toHaveBeenCalledTimes(1)
+    expect(sent('saveName')).toHaveLength(1)
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Suleiman' } })
     expect(screen.queryByRole('status')).toBeNull()
   })
 
   test('Sync from GitHub copies a profile once; the picture it gave can be removed', async () => {
-    render(<ProfileSettings />)
+    render()
     fireEvent.change(await screen.findByLabelText('Sync from GitHub'), { target: { value: 'suleimansh' } })
-    person = { name: 'Suleiman Shahbari', avatar: 'https://avatars.githubusercontent.com/u/1', github: 'suleimansh', own: true }
+    shell.person = { name: 'Suleiman Shahbari', avatar: 'https://avatars.githubusercontent.com/u/1', github: 'suleimansh', own: true }
     fireEvent.click(screen.getByRole('button', { name: 'Sync' }))
-    await waitFor(() => expect(sendSyncPersonFromGitHub).toHaveBeenCalledWith('suleimansh'))
+    await waitFor(() => expect(sent('copyFromGitHub')).toEqual([{ login: 'suleimansh' }]))
     expect(await screen.findByText('From @suleimansh on GitHub.')).toBeTruthy()
     expect(screen.getByRole('status').textContent).toBe('Name and picture copied from @suleimansh.')
     // Again, with nothing new at GitHub: it still answers.
-    sendSyncPersonFromGitHub.mockResolvedValueOnce({ ok: true, changed: false, login: 'suleimansh' })
+    answers['copyFromGitHub'] = () => ({ ok: true, output: { changed: false, login: 'suleimansh' } })
     fireEvent.click(screen.getByRole('button', { name: 'Sync' }))
     expect(await screen.findByText('Already up to date with @suleimansh.')).toBeTruthy()
-    person = { name: 'Suleiman Shahbari', github: 'suleimansh', own: true }
+    shell.person = { name: 'Suleiman Shahbari', github: 'suleimansh', own: true }
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }))
-    await waitFor(() => expect(sendRemovePersonPicture).toHaveBeenCalled())
+    await waitFor(() => expect(sent('removePicture')).toEqual([{}]))
     expect(await screen.findByText('None: your initials.')).toBeTruthy()
   })
 
   test('a profile GitHub does not have: its reason is said', async () => {
-    sendSyncPersonFromGitHub.mockResolvedValueOnce({ ok: false, error: 'GitHub has no user nobody-here' })
-    render(<ProfileSettings />)
+    answers['copyFromGitHub'] = () => ({ ok: false, error: 'GitHub has no user nobody-here' })
+    render()
     fireEvent.change(await screen.findByLabelText('Sync from GitHub'), { target: { value: 'nobody-here' } })
     fireEvent.click(screen.getByRole('button', { name: 'Sync' }))
     expect(await screen.findByText('GitHub has no user nobody-here')).toBeTruthy()

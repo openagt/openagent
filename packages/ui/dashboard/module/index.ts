@@ -17,7 +17,7 @@ import type { AgentStatus } from '../../src/index.js'
 import type { ModuleAgent, ModuleAgentsWanted } from '../../src/dashboard/module-agents.js'
 import { callModule, runComputerCommand, runComputerCommandOn, runModuleCommand } from '../rpc/modules.js'
 import type { ModuleCallResult, ModuleCommandResult } from '../rpc/modules.js'
-import type { RpcClient } from '@openagt/hooks/rpc'
+import type { ComputerRpcClient, RpcClient } from '@openagt/hooks/rpc'
 import { DaemonDown } from '../lib/use-daemon-health.js'
 
 export type { ModuleCallResult, ModuleCommandResult, AgentStatus, Health, ModuleAgent, ModuleAgentsWanted }
@@ -68,6 +68,12 @@ export interface ModuleHost {
    * the server file.
    */
   call(projectId: string, name: string, input: object): Promise<ModuleCallResult>
+  /**
+   * The same in no project, for a package that is this computer's: what such a module keeps is the
+   * computer's or the person's, read and changed with no project added. {@link computerRpcClient}
+   * types it by the server file.
+   */
+  callComputer(name: string, input: object): Promise<ModuleCallResult>
   /** Open one agent's page in the dashboard: its live feed while it runs, its record after. */
   openAgent(projectId: string, agentId: string): void
   /** The address of one agent's page: a link's `href`, for a link that also opens in a new tab. */
@@ -279,7 +285,7 @@ export type ModuleMachinePerson = { ok: true; said: unknown } | { ok: false; err
 export type MachineRemoved = { ok: true } | { ok: false; error: string }
 
 /** What the dashboard knows about the module it is serving: every service but the commands and the reads, which it binds to the package. */
-export type ModuleHostBase = Omit<ModuleHost, 'runCommand' | 'act' | 'runComputerCommand' | 'runComputerCommandOn' | 'call'>
+export type ModuleHostBase = Omit<ModuleHost, 'runCommand' | 'act' | 'runComputerCommand' | 'runComputerCommandOn' | 'call' | 'callComputer'>
 
 /**
  * The host for one module: the dashboard's services, and its commands bound to the module's own
@@ -294,6 +300,7 @@ export function moduleHost(base: ModuleHostBase, opts: { acts?: boolean } = {}):
     runComputerCommand: (args, command, input) => runComputerCommand(base.package, args, command, input),
     runComputerCommandOn: (machineId, args, command) => runComputerCommandOn(base.package, machineId, args, command),
     call: (projectId, name, input) => callModule(base.package, name, projectId, input),
+    callComputer: (name, input) => callModule(base.package, name, null, input),
   }
 }
 
@@ -304,15 +311,27 @@ export function moduleHost(base: ModuleHostBase, opts: { acts?: boolean } = {}):
  * so a polled read keeps the last answer it had.
  */
 export function rpcClient<Server>(host: Pick<ModuleHost, 'call'>): RpcClient<Server> {
-  const functions = new Map<string, (projectId: string, input: object) => Promise<unknown>>()
-  return new Proxy({} as RpcClient<Server>, {
+  return clientOf<RpcClient<Server>, [projectId: string, input: object]>((name, projectId, input) => host.call(projectId, name, input))
+}
+
+/**
+ * The same for a package that is this computer's, whose functions are called in no project:
+ * `computerRpcClient<typeof import('../src/server.js')>(host)`, each function with its input alone.
+ */
+export function computerRpcClient<Server>(host: Pick<ModuleHost, 'callComputer'>): ComputerRpcClient<Server> {
+  return clientOf<ComputerRpcClient<Server>, [input: object]>((name, input) => host.callComputer(name, input))
+}
+
+function clientOf<Client extends object, Args extends unknown[]>(call: (name: string, ...args: Args) => Promise<ModuleCallResult>): Client {
+  const functions = new Map<string, (...args: Args) => Promise<unknown>>()
+  return new Proxy({} as Client, {
     get(_target, name) {
       // Never a promise: a client handed on through `await` is the client, not a call of `then`.
       if (typeof name !== 'string' || name === 'then') return undefined
       let fn = functions.get(name)
       if (!fn) {
-        fn = async (projectId, input) => {
-          const result = await host.call(projectId, name, input)
+        fn = async (...args) => {
+          const result = await call(name, ...args)
           if (!result.ok) throw new Error(result.error)
           return result.output
         }
@@ -401,6 +420,8 @@ export { needsWord } from '../components/HumanQueueList.js'
 export { useGitHostPeople, personSaid } from '../lib/use-git-host-people.js'
 export { machineKind, machineName, runName, type MachineKind } from '../../src/client.js'
 export { SettingsFoot, SettingsItem, SettingsItems, SettingsSection, SettingsRow, SettingsRowShapes, SettingsSelectRow, type SettingsOption } from '../components/SettingsRows.js'
+export { Avatar } from '../components/PersonMenu.js'
+export { usePerson, personChanged } from '../lib/use-person.js'
 export { useSettingsCrumb, type SettingsCrumb } from '../lib/settings-crumb.js'
 export { useSettingsHold } from '../lib/settings-hold.js'
 export { QrCode } from '../components/QrCode.js'

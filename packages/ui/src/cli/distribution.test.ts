@@ -15,7 +15,7 @@ test("the distribution handed down is the file of the command's own distribution
 
 test("the dashboard runs the modules of the distribution handed down, and this computer's host is its agent-driver's; with none, it runs none", async () => {
   const hooks = await loadHooks({ [DISTRIBUTION_ENV]: DEMO })
-  assert.deepEqual(hooks.modules.map(module => module.name), ['git-branches', 'github', 'agent-driver'])
+  assert.deepEqual(hooks.modules.map(module => module.name), ['store-filesystem', 'store-git-repository', 'git-branches', 'github', 'agent-driver'])
   assert.equal((await localHostOf(hooks)).id, LOCAL_HOST)
   await assert.rejects(loadHooks({}), /none was handed to it \(OPENAGENT_DISTRIBUTION\)/)
 })

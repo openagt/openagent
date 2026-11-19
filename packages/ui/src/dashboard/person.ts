@@ -1,14 +1,16 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { homedir, userInfo } from 'node:os'
-import { nodeGitRunner, readPersonRecord, type PersonRecord } from '@openagt/agent-data'
+import { nodeGitRunner } from '@openagt/agent-data'
+import { PERSON_INFO, type PersonInfo } from '@openagt/hooks'
+import { distributionSettings } from '../distribution-hooks.js'
 import { isPersonName } from '../registry.js'
 
 /**
  * The person at this dashboard, as the foot of its sidebar shows them: their name, and a picture
- * when they have one. Both are the person's own (`person.json` in the personal folder, the same on
- * every computer of theirs): what they typed in Settings, or copied once from a GitHub profile.
- * With none set, the name is git's own `user.name`, else this computer's user, and no picture;
- * no git host is ever asked.
+ * when they have one. Both are the person's own (the catalog's `user-info.person`, saved with the
+ * person, the same on every computer of theirs): what they typed in Settings › Profile, or copied
+ * once from a GitHub profile. With no name set, the name is git's own `user.name`, else this
+ * computer's user; with no picture, none. No git host is ever asked.
  */
 export interface Person {
   name: string
@@ -69,12 +71,21 @@ export function personAtPage(own: Person, name = caller.getStore()): Person {
   return name === undefined ? own : { name }
 }
 
-/** The person this computer's OpenAgent knows: their own record, else git's name or this computer's user; and git's email, which their runs are kept under. */
-export async function readPerson(deps: { record?: () => Promise<PersonRecord | undefined>; gitName?: () => Promise<string | undefined>; gitEmail?: () => Promise<string | undefined> } = {}): Promise<Person> {
-  const [record, email] = await Promise.all([(deps.record ?? (() => readPersonRecord()))().catch(() => undefined), (deps.gitEmail ?? readGitEmail)()])
-  const mail = email !== undefined ? { email } : {}
-  if (record) return { name: record.name, ...mail, ...(record.picture ? { avatar: record.picture } : {}), ...(record.github ? { github: record.github } : {}), own: true }
-  return { name: (await (deps.gitName ?? readGitName)()) ?? userInfo().username, ...mail }
+/** The person this computer's OpenAgent knows: their own name and picture, else git's name or this computer's user; and git's email, which their runs are kept under. */
+export async function readPerson(deps: { info?: () => Promise<PersonInfo>; gitName?: () => Promise<string | undefined>; gitEmail?: () => Promise<string | undefined> } = {}): Promise<Person> {
+  const [info, email] = await Promise.all([(deps.info ?? readPersonInfo)().catch((): PersonInfo => ({})), (deps.gitEmail ?? readGitEmail)()])
+  return {
+    name: info.name ?? (await (deps.gitName ?? readGitName)()) ?? userInfo().username,
+    ...(email !== undefined ? { email } : {}),
+    ...(info.picture ? { avatar: info.picture } : {}),
+    ...(info.github ? { github: info.github } : {}),
+    ...(info.name !== undefined ? { own: true as const } : {}),
+  }
+}
+
+/** The person's own name and picture, as the distribution's store keeps them. */
+async function readPersonInfo(): Promise<PersonInfo> {
+  return (await distributionSettings()).get(PERSON_INFO)
 }
 
 /** git's `user.name`, as it is set for this person (asked from their home, so no project's own setting answers). */

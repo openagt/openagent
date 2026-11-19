@@ -64,7 +64,10 @@
     "@openagt/skill-triage": "workspace:*",
     "@openagt/skill-update-tickets": "workspace:*",
     "@openagt/skill-work-queue": "workspace:*",
-    "@openagt/ui": "workspace:*"
+    "@openagt/store-filesystem": "workspace:*",
+    "@openagt/store-git-repository": "workspace:*",
+    "@openagt/ui": "workspace:*",
+    "@openagt/user-info": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

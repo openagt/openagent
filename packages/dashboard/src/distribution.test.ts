@@ -8,11 +8,11 @@ import { createHooks, DISTRIBUTION_ENV, LOCAL_HOST, distributionItems, loadHande
 
 const DISTRIBUTION = fileURLToPath(new URL('./distribution.js', import.meta.url))
 
-test("the distribution's modules load from its own install, the run pipeline's, and this computer's host is agent-driver's", async () => {
+test("the distribution's modules load from its own install, the store's and the run pipeline's, and this computer's host is agent-driver's", async () => {
   const modules = await loadHandedDown({ [DISTRIBUTION_ENV]: DISTRIBUTION })
   assert.deepEqual(
     modules?.map(entry => entry.module.name),
-    ['git-branches', 'github', 'agent-driver'],
+    ['store-filesystem', 'store-git-repository', 'git-branches', 'github', 'agent-driver'],
   )
   assert.deepEqual((await createHooks(modules!).hosts()).map(host => host.id), [LOCAL_HOST])
 })

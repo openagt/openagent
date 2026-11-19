@@ -1,11 +1,11 @@
 import { useCallback, useContext, useEffect, useId, useRef, useState, type ComponentType, type ReactNode } from 'react'
 import { Dialog as BaseDialog } from '@base-ui/react/dialog'
-import { ArrowLeft, Bell, Bot, ChevronRight, ChevronsUpDown, Database, FolderGit2, Globe, Keyboard, Layers, Palette, Puzzle, UserRound, X, FolderSearch } from 'lucide-react'
+import { ArrowLeft, Bell, Bot, ChevronRight, ChevronsUpDown, Database, FolderGit2, Globe, Keyboard, Layers, Palette, Puzzle, X, FolderSearch } from 'lucide-react'
 import { DRIVERS, DRIVER_LABELS, isDriverName } from '../../src/client.js'
 import { driverOptions, useModels } from '../lib/models.js'
 import type { DriverOption } from './DriverModelMenu.js'
 import type { ProjectSummary } from '../../src/index.js'
-import { useMountedModules, type MountedView } from '../lib/use-modules.js'
+import { DEFAULT_ORDER, useMountedModules, type MountedView } from '../lib/use-modules.js'
 import { SettingsCrumbContext, type SettingsCrumb } from '../lib/settings-crumb.js'
 import { SettingsHoldContext } from '../lib/settings-hold.js'
 import { PERMISSIONS_PAGE, holdEntry } from '../lib/use-route.js'
@@ -18,7 +18,6 @@ import { HUMAN_QUEUE_ABOUT, NEW_ACTIVITY_ABOUT, browserHint, kindHint } from '..
 import { AppearanceSettings } from './AppearanceSettings.js'
 import { BridgeSettings } from './BridgeSettings.js'
 import { AGENT_DATA_ENTRY, AgentDataSettings } from './AgentDataSettings.js'
-import { PROFILE_ENTRY, ProfileSettings } from './ProfileSettings.js'
 import { SHORTCUTS_ENTRY, ShortcutList } from './ShortcutList.js'
 import { REPO_SOURCES_ENTRY, RepoSourcesSettings } from './RepoSourcesSettings.js'
 import { SKILLS_ENTRY, SkillsSettings } from './ProjectSkills.js'
@@ -46,7 +45,8 @@ import { SettingsFootContext, SettingsSection, SettingsSelectRow as SelectRow, T
 //
 // The list has two groups, by whose the settings are. First, with no title: the dashboard's own
 // (how it looks, what it tells you, which agent runs) and the entries of the packages that are
-// the computer's (Devices, Machines), kept in the person's home folder. Then "Project": the entries
+// the computer's (Profile, Devices), in one order by number: the dashboard's own stand at 20 to
+// 80, so a package's entry goes before them, between two, or after them. Then "Project": the entries
 // of the packages a project has, each saved in that project's own folder, and the project's Skills.
 // That group shows the project picked in the sidebar, and its own select changes it without leaving
 // Settings; with "All projects" an entry is every project's that has its package, and a change saves
@@ -57,6 +57,8 @@ import { SettingsFootContext, SettingsSection, SettingsSelectRow as SelectRow, T
 /** One entry of the list: the dashboard's own, or one a package adds. */
 interface Entry {
   id: string
+  /** Its place among the person's and this computer's entries, lower first: a package's entry says its own, 50 when unsaid. */
+  order?: number
   title: string
   icon: ComponentType<{ className?: string; 'aria-hidden'?: boolean }>
   /** The entry's settings. */
@@ -122,6 +124,7 @@ export function SettingsDialog({
     const Body = section.View
     return {
       id: section.id,
+      ...(section.order !== undefined ? { order: section.order } : {}),
       title: section.title,
       icon: section.icon,
       body: (
@@ -131,7 +134,8 @@ export function SettingsDialog({
       ),
     }
   }
-  const yours = [...own, ...mounted.filter(section => section.computer).map(section => moduleEntry(section, []))]
+  // Sorted once more with the dashboard's own: a package's entries are in their order already, and at the same number the dashboard's stands first.
+  const yours = [...own, ...mounted.filter(section => section.computer).map(section => moduleEntry(section, []))].sort((a, b) => (a.order ?? DEFAULT_ORDER) - (b.order ?? DEFAULT_ORDER))
   const forProject = mounted.filter(section => !section.computer && (project ? section.projects.includes(project.id) : section.projects.length > 0))
   // A page of the dashboard's own for one project at a time: with every project picked, it asks for one.
   const oneProject = (id: string, title: string, icon: Entry['icon'], Page: ComponentType<{ projectId: string }>, words: string): Entry => ({
@@ -336,7 +340,7 @@ function ProjectSelect({ projects, value, onChange }: { projects: ProjectSummary
   )
 }
 
-/** The dashboard's own entries, the first of the list: who you are, how it looks, what it tells you, which agent runs, on which accounts, Claude web, the keys. */
+/** The dashboard's own entries: how it looks, what it tells you, which agent runs, your agent data, where repos come from, Claude web, the keys. */
 function useOwnEntries(): Entry[] {
   const preferences = usePreferences()
   const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
@@ -357,19 +361,15 @@ function useOwnEntries(): Entry[] {
 
   return [
     {
-      id: PROFILE_ENTRY,
-      title: 'Profile',
-      icon: UserRound,
-      body: <ProfileSettings />,
-    },
-    {
       id: 'appearance',
+      order: 20,
       title: 'Appearance',
       icon: Palette,
       body: <AppearanceSettings />,
     },
     {
       id: 'notifications',
+      order: 30,
       title: 'Notifications',
       icon: Bell,
       body: (
@@ -404,6 +404,7 @@ function useOwnEntries(): Entry[] {
     },
     {
       id: 'agent',
+      order: 40,
       title: 'Coding agent',
       icon: Bot,
       body: (
@@ -454,18 +455,21 @@ function useOwnEntries(): Entry[] {
     },
     {
       id: AGENT_DATA_ENTRY,
+      order: 50,
       title: 'Your agent data',
       icon: FolderGit2,
       body: <AgentDataSettings />,
     },
     {
       id: REPO_SOURCES_ENTRY,
+      order: 60,
       title: 'Repos',
       icon: FolderSearch,
       body: <RepoSourcesSettings />,
     },
     {
       id: 'claude-web',
+      order: 70,
       title: 'Claude web',
       icon: Globe,
       body: (
@@ -491,6 +495,7 @@ function useOwnEntries(): Entry[] {
     },
     {
       id: SHORTCUTS_ENTRY,
+      order: 80,
       title: 'Keyboard shortcuts',
       icon: Keyboard,
       body: <ShortcutList />,

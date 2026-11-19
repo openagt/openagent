@@ -1,7 +1,9 @@
 import { addressOf, nameAddress, numberAddress, ownAddresses, ownName, serverWhere, urlHost, type AddressDeps } from './address.js'
 import { doorFingerprint } from './certificate.js'
 import { execFile } from 'node:child_process'
-import { personalFolder, readPersonRecord, unknownWord, usageError, wrongArguments, helpRows } from '@openagt/agent-data'
+import { unknownWord, usageError, wrongArguments, helpRows } from '@openagt/agent-data'
+import { PERSON_INFO, chainStore, settingsIn } from '@openagt/hooks'
+import { filesystemBackend, foldersOf } from '@openagt/store-filesystem'
 import { codeLink, readKeyWord } from './door.js'
 import { ENTER_PATH } from './paths.js'
 import { askMe, enterForLine, leaveLine, readLineLink } from './line-out.js'
@@ -437,10 +439,15 @@ function runHelper(path: string, args: string[]): Promise<HelperAnswer> {
   })
 }
 
-/** The name of the person at this computer: the one they gave OpenAgent (`person.json` in their own folder), else git's, the one their commits carry. */
+/**
+ * The name of the person at this computer: the one they gave OpenAgent (the catalog's
+ * `user-info.person`, read where the store keeps it on this computer, in the environment the door
+ * is told), else git's, the one their commits carry.
+ */
 async function personName(env: NodeJS.ProcessEnv): Promise<string | undefined> {
-  const record = await readPersonRecord(personalFolder(env)).catch(() => undefined)
-  return (record ? nameOf(record.name) : undefined) ?? gitName()
+  const settings = settingsIn(chainStore([filesystemBackend({ folders: foldersOf(env) })]))
+  const info = await settings.get(PERSON_INFO).catch(() => undefined)
+  return (info?.name !== undefined ? nameOf(info.name) : undefined) ?? gitName()
 }
 
 function gitName(): Promise<string | undefined> {

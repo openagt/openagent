@@ -21,10 +21,25 @@ export function filesystemStore(folders: Folders): Store {
   }
 }
 
-/** The filesystem store as a link of the chain, the last one: it passes nothing on. Its folders are the environment's when none are given. */
+/**
+ * The filesystem store as a link of the chain, the last one: it passes nothing on. With no folders
+ * given, its folders are the environment's at each call, as every other reader of the personal
+ * folder finds it.
+ */
 export function filesystemBackend(opts: { folders?: Folders } = {}): StoreBackend {
+  const { folders } = opts
   return {
     order: StoreOrder.FILESYSTEM,
-    wrap: () => filesystemStore(opts.folders ?? foldersOf()),
+    wrap: () => (folders ? filesystemStore(folders) : madeAtEachCall(() => filesystemStore(foldersOf()))),
+  }
+}
+
+/** A store made anew for each call: one whose folders are the environment's as it is then. */
+export function madeAtEachCall(make: () => Store): Store {
+  return {
+    read: (scope, path, opts) => make().read(scope, path, opts),
+    list: (scope, dir, opts) => make().list(scope, dir, opts),
+    save: (scope, changes, message) => make().save(scope, changes, message),
+    watch: (scope, path, onChange) => make().watch(scope, path, onChange),
   }
 }
