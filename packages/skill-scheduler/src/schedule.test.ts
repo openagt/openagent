@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { parseInterval } from './pace.js'
 import { ableAgents, commandPrompt, homeAgent, promptCommand, readSchedule, skillFile, skillSchedule, skillText } from './schedule.js'
 import { FOUND_OPENING_OWN, ownAttached } from './check.js'
-import { AGENTS as AGENT_NAMES, AGENT_LABELS, AGENT_SKILLS_DIR, DEFAULT_AGENT, RUN_SKILLS_DIR, isAgent } from './names.js'
+import { AGENTS as AGENT_NAMES, AGENT_LABELS, AGENT_SKILLS_DIR, DEFAULT_AGENT, OWN_AUTOMATIONS_DIR, RUN_SKILLS_DIR, isAgent } from './names.js'
 
 const CLAUDE = '.claude/skills'
 const AGENTS = '.agents/skills'
@@ -184,6 +184,49 @@ test("the schedule is read from both folders a coding agent reads skills from, e
     assert.deepEqual((await readSchedule(repo)).commands.filter(c => c.name === 'plan-tickets' || c.name === 'archive').map(c => [c.name, c.dir, c.dirs]), [['archive', AGENTS, [AGENTS]], ['plan-tickets', CLAUDE, [CLAUDE, AGENTS]]])
   } finally {
     await rm(repo, { recursive: true, force: true })
+  }
+})
+
+test("the skills the plugins on in the project give its runs schedule commands too, which any coding agent can run and nothing here can edit; the project's own skill of a name is the project's, and what could not be read of the plugins' is said", async () => {
+  const repo = await mkdtemp(join(tmpdir(), 'scheduler-plugins-'))
+  const packages = await mkdtemp(join(tmpdir(), 'scheduler-plugin-packages-'))
+  const write = async (root: string, name: string, frontMatter: string): Promise<string> => {
+    await mkdir(join(root, name), { recursive: true })
+    await writeFile(join(root, name, 'SKILL.md'), skill(name, frontMatter))
+    return join(root, name)
+  }
+  try {
+    const skills = [
+      { name: 'work-queue', dir: await write(packages, 'work-queue', 'schedule:\n  when: npx queue\n'), plugin: 'work-queue' },
+      { name: 'update-tickets', dir: await write(join(packages, 'tickets'), 'update-tickets', 'schedule:\n  every: 15m\n'), plugin: 'update-tickets' },
+      // A plugin's skill that schedules nothing, and one whose folder holds no skill file: neither gives a command.
+      { name: 'tickets', dir: await write(packages, 'tickets', ''), plugin: 'tickets' },
+      { name: 'gone', dir: join(packages, 'gone'), plugin: 'gone' },
+    ]
+    const plugins = async (at: string) => {
+      assert.equal(at, repo, "asked of the project's folder")
+      return { skills, unreadable: [{ skill: "the triage plugin's skills", reason: 'no skills today' }] }
+    }
+    // The project's own copy of update-tickets is the project's.
+    await write(join(repo, CLAUDE), 'update-tickets', 'schedule:\n  every: 1h\n')
+    assert.deepEqual(await readSchedule(repo, plugins), {
+      commands: [
+        { name: 'update-tickets', every: parseInterval('1h')!, cap: 1, dir: CLAUDE, dirs: [CLAUDE] },
+        { name: 'work-queue', when: 'npx queue', cap: 1, dir: CLAUDE, dirs: [CLAUDE, AGENTS], plugin: 'work-queue' },
+      ],
+      unreadable: [{ skill: "the triage plugin's skills", reason: 'no skills today' }],
+    })
+    const queue = (await readSchedule(repo, plugins)).commands.find(c => c.name === 'work-queue')!
+    assert.deepEqual(ableAgents(queue), AGENT_NAMES, 'linked into the checkout of a run on either agent')
+    // An automation kept on this machine named like a plugin's skill: neither is listed, and the line says whose the name is.
+    await mkdir(join(repo, OWN_AUTOMATIONS_DIR), { recursive: true })
+    await writeFile(join(repo, OWN_AUTOMATIONS_DIR, 'work-queue.md'), skill('work-queue', 'schedule:\n  every: 1d\n'))
+    const clashed = await readSchedule(repo, plugins)
+    assert.deepEqual(clashed.commands.map(c => c.name), ['update-tickets'])
+    assert.match(clashed.unreadable.find(u => u.own)!.reason, /^the work-queue plugin's skill has this name too, so neither is listed/)
+  } finally {
+    await rm(repo, { recursive: true, force: true })
+    await rm(packages, { recursive: true, force: true })
   }
 })
 

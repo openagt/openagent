@@ -33,17 +33,19 @@ already made, and lists it in its pull request; for anything else it proposes an
   the branch. It never depends on OpenAgent; OpenAgent brings it, as one of its
   packages. Its dashboard part is the exception: it is drawn with the dashboard's module
   contract, and the tool itself runs without it.
-- The tool names no skill and no command. What runs comes from the project's skills: a
-  skill says in its own file that it can be scheduled, and a skill that is not in the
-  project has no scheduled command. Picked over the tool linking a command's skill into the
-  checkout from a package: a project tracks its skills, and the tool reads the project.
-- One scheduler per project, since the schedule comes from the project's skills and the
-  state sits in the project. Picked over one per machine reading a registry of projects:
+- The tool names no skill and no command. What runs comes from the skills of the project
+  and of the plugins on in it (#2394): a skill says in its own file that it can be
+  scheduled, and a skill neither has gives no scheduled command. A plugin's skill reaches a
+  run's checkout as every skill of the run's plugins does, linked by the run. Picked over the
+  project's skills alone, into which a plugin's skill had to be copied to be scheduled, and
+  over the tool linking a command's skill into the checkout from a package.
+- One scheduler per project, since the schedule comes from the project's skills and plugins
+  and the state sits in the project. Picked over one per machine reading a registry of projects:
   nothing machine-wide is left for it to hold.
 
 ## The schedule and the state
-- The schedule is the project's skills, and the automations a person keeps on their own
-  machine. A skill brings its scheduled command in the front
+- The schedule is the skills of the project and of the plugins on in it, and the
+  automations a person keeps on their own machine. A skill brings its scheduled command in the front
   matter of its `SKILL.md`, under `schedule`: its check, its pace, how many agents may run
   it at once, and one plain line saying what the check waits for. Picked over
   `agent-schedule.md`, a tracked file at the repository root that a person wrote, one line

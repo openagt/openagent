@@ -174,6 +174,7 @@ export async function savedAutomation(repo: string, name: string): Promise<Saved
     if (!unlisted) return none(`the schedule lists nothing named ${name}`)
     return none(whyUnlisted(unlisted))
   }
+  if (command.plugin !== undefined) return none(`${name} is a command of the ${command.plugin} plugin's skill, whose files are the plugin's own`)
   const kept = command.text !== undefined
   const file = kept ? `${OWN_AUTOMATIONS_DIR}/${name}.md` : skillFile(command)
   // The schedule says the file is the tool's to rewrite; what it holds is read from it now.

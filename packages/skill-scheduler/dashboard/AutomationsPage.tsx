@@ -11,9 +11,9 @@ import { atOnce, atOnceWords, cannotRun, decided, heldBy, notAsked, startedNow, 
 
 // The Automations page: what starts by itself while nobody is at the keyboard. One part per
 // project the page is given (every project that has this package, or the one picked in the
-// dashboard), under its name and its scheduler's status. A project's rows come in two groups: the
-// automations a person made with "New automation", and the commands the project's skills schedule,
-// as the project's files say them now.
+// dashboard), under its name and its scheduler's status. A project's rows come in three groups: the
+// automations a person made with "New automation", the commands the project's skills schedule, as
+// the project's files say them now, and those the skills of the plugins on in it schedule.
 //
 // A row is the same whichever group it is in, two lines after the mark of its last run: its name with
 // what it says it does, and its three controls: "Run now" starts one run of it at once (`scheduler
@@ -206,7 +206,8 @@ export function AutomationsPage({ projects }: UiPageProps) {
           rows.map(row => {
             const groups: [title: string, commands: SchedulerCommand[]][] = [
               ['Your automations', row.commands.filter(isOwn)],
-              ["From the project's skills", row.commands.filter(c => !isOwn(c))],
+              ["From the project's skills", row.commands.filter(c => !isOwn(c) && c.plugin === undefined)],
+              ['From its plugins', row.commands.filter(c => !isOwn(c) && c.plugin !== undefined)],
             ]
             return (
               // A project's part, named by the project: under its heading beside its own "New automation" when

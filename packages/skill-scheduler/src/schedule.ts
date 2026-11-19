@@ -5,11 +5,13 @@ import { HARNESS_SKILL_DIRS } from '@openagt/skill-branches'
 import { automationOf, isPlainFile, standsAlone } from './automation-file.js'
 import { AGENTS, AGENT_SKILLS_DIR, DEFAULT_AGENT, DEFAULT_CAP, MAX_AGENTS, OWN_AUTOMATIONS_DIR, OWN_TEXT_MAX, RUN_SKILLS_DIR, SKILL_FILE, isAgent, isAgents, type AgentName } from './names.js'
 import { parseInterval, type Interval } from './pace.js'
+import { pluginSkills, type PluginSkills } from './plugin-skills.js'
 
 /**
  * The schedule (#2022): the scheduled commands of a project, each brought by the skill it runs.
  * The tool knows no command by name; a skill says it can be scheduled with a `schedule` in the
- * front matter of its `SKILL.md`, and a skill that is not in the project has no command here.
+ * front matter of its `SKILL.md`: a skill of the project's, or one a plugin on in it gives its
+ * runs (#2394). A skill neither has gives no command here.
  *
  *     ---
  *     name: update-tickets
@@ -66,7 +68,8 @@ import { parseInterval, type Interval } from './pace.js'
  *
  * The schedule is read from every folder a coding agent reads skills from, so a project's skills
  * are all listed; a command whose skill is not in the folder of the agent that runs scheduled
- * commands is listed and never started, and the tick says so.
+ * commands is listed and never started, and the tick says so. A plugin's skill is linked into each
+ * run's checkout, so any coding agent can run its commands.
  */
 
 /** One command as its skill schedules it. */
@@ -83,7 +86,7 @@ export interface ScheduledCommand {
   checkEvery?: { ms: number; text: string }
   /** Runs in flight at once, across every machine, where no person set another number. */
   cap: number
-  /** The skills folder the skill was read from (`.claude/skills`). */
+  /** The skills folder the skill was read from (`.claude/skills`); for a plugin's skill, the one a run on Claude Code finds it linked in. */
   dir: string
   /** Every skills folder that holds the skill: a coding agent can run the command only when its own folder is among them. */
   dirs: string[]
@@ -93,6 +96,8 @@ export interface ScheduledCommand {
   model?: string
   /** What the skill does, in its own words: the `description` of its front matter, when it has one. */
   description?: string
+  /** The plugin that gives the skill, for a command of a plugin's skill: its files are the plugin's, linked into each run's checkout, and no checkout needs to hold them. */
+  plugin?: string
   /** Whether the row's check prints one item per run: a run it continues, on that run's own coding agent, model and publish level, or what a new run is for. */
   each?: true
   /**
@@ -226,8 +231,9 @@ function isMap(value: unknown): value is Record<string, unknown> {
  * The project's schedule: every skill's commands, the skills in name order, then the automations
  * a person keeps on this machine alone, in name order. Skills are read from each folder a coding
  * agent reads skills from, the folder of the agent that runs scheduled commands first; a skill in
- * two folders is read once, from the first folder that holds its `SKILL.md`. A project with no
- * skills folder and no automation of the person's schedules nothing.
+ * two folders is read once, from the first folder that holds its `SKILL.md`. Then the skills the
+ * plugins on in the project give its runs (`plugins`): one named as a skill of the project's own
+ * is the project's. A project with no skill and no automation of the person's schedules nothing.
  *
  * An automation kept on this machine is one file, written like a skill's: its front matter holds
  * one row of schedule, and its text is what a run is handed. One that cannot be listed is named
@@ -235,8 +241,8 @@ function isMap(value: unknown): value is Record<string, unknown> {
  * skill's commands: a run is counted by its command's name and this machine's picks are kept
  * under it, so the two cannot be told apart.
  */
-export async function readSchedule(repo: string): Promise<Schedule> {
-  const files = new Map<string, { md: string; dir: string; dirs: string[] }>()
+export async function readSchedule(repo: string, plugins: (repo: string) => Promise<PluginSkills> = pluginSkills): Promise<Schedule> {
+  const files = new Map<string, { md: string; dir: string; dirs: string[]; plugin?: string }>()
   for (const dir of [RUN_SKILLS_DIR, ...HARNESS_SKILL_DIRS.filter(d => d !== RUN_SKILLS_DIR)]) {
     const entries = await readdir(join(repo, dir)).catch(() => [])
     for (const skill of entries) {
@@ -249,15 +255,22 @@ export async function readSchedule(repo: string): Promise<Schedule> {
       else files.set(skill, { md, dir, dirs: [dir] })
     }
   }
+  const given = await plugins(repo)
+  for (const skill of given.skills) {
+    if (files.has(skill.name) || !SKILL.test(skill.name)) continue
+    const md = await readFile(join(skill.dir, SKILL_FILE), 'utf8').catch(() => undefined)
+    if (md !== undefined) files.set(skill.name, { md, dir: RUN_SKILLS_DIR, dirs: AGENTS.map(agent => AGENT_SKILLS_DIR[agent]), plugin: skill.plugin })
+  }
   const schedule: Schedule = { commands: [], unreadable: [] }
   for (const skill of [...files.keys()].sort()) {
-    const { md, dir, dirs } = files.get(skill)!
+    const { md, dir, dirs, plugin } = files.get(skill)!
     const read = skillSchedule(skill, md, dir)
     // A shared automation is a skill the tool wrote: its file reads as the tool writes one, alone in its folder where the tool saves them, a folder that is no link.
-    const editable = automationOf(skill, md) !== undefined && (await standsAlone(repo, skill))
-    schedule.commands.push(...read.commands.map(command => ({ ...command, dirs, ...(editable ? { editable: true as const } : {}) })))
+    const editable = plugin === undefined && automationOf(skill, md) !== undefined && (await standsAlone(repo, skill))
+    schedule.commands.push(...read.commands.map(command => ({ ...command, dirs, ...(plugin !== undefined ? { plugin } : {}), ...(editable ? { editable: true as const } : {}) })))
     schedule.unreadable.push(...read.unreadable)
   }
+  schedule.unreadable.push(...given.unreadable)
   const kept = (await readdir(join(repo, OWN_AUTOMATIONS_DIR)).catch((): string[] => [])).filter(file => file.endsWith('.md')).sort()
   for (const file of kept) {
     const name = file.slice(0, -3)
@@ -278,7 +291,8 @@ export async function readSchedule(repo: string): Promise<Schedule> {
       const before = schedule.commands.length
       schedule.commands = schedule.commands.filter(c => c.name.split(' ')[0] !== name)
       schedule.clashes = [...(schedule.clashes ?? []), name]
-      unlisted(`a skill of the project has this name too${schedule.commands.length < before ? ', so neither is listed' : ''}: rename or remove ${OWN_AUTOMATIONS_DIR}/${file}, then switch on what you want`)
+      const taken = files.get(name)!.plugin
+      unlisted(`${taken !== undefined ? `the ${taken} plugin's skill` : 'a skill of the project'} has this name too${schedule.commands.length < before ? ', so neither is listed' : ''}: rename or remove ${OWN_AUTOMATIONS_DIR}/${file}, then switch on what you want`)
       continue
     }
     const read = skillSchedule(name, md, OWN_AUTOMATIONS_DIR)

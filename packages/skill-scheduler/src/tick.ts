@@ -216,7 +216,8 @@ async function start(deps: TickDeps, command: ScheduledCommand, { now, found }: 
   if (running.length >= cap) return { outcome: capReached(running) }
   // A run's checkout starts from the project's published commit, not from the files here: a skill
   // that is not there is no command to the agent. Asked only now, when a run would start: it fetches.
-  if (command.text === undefined) {
+  // A plugin's skill is linked into the checkout by the run itself.
+  if (command.text === undefined && command.plugin === undefined) {
     const start = await deps.atStart(skillFile(command, AGENT_SKILLS_DIR[agent]))
     if (!start.there) return { outcome: `not on ${start.ref}${start.reached ? '' : ' as this clone last saw it'}: a run's checkout starts from ${start.ref}, and the command's skill is not there` }
   }

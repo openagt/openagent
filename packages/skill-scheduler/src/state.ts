@@ -48,6 +48,8 @@ export interface ListedCommand {
   onThisMachine?: true
   /** Whether the command is a person's own automation as the tool wrote it: `show`, `edit` and `remove` take it. */
   editable?: true
+  /** The plugin whose skill schedules the command, for one of a plugin's skills, not the project's. */
+  plugin?: string
   /** The coding agent the command is made for: the one its skill names, else Claude Code when it can run the command, else the one that can. */
   agent: AgentName
   /** The model its skill names, when it names one. */
@@ -60,7 +62,7 @@ export interface ListedCommand {
 
 /** A command as a dashboard lists it: what its skill says; not this machine's switch or picks, which the state carries, nor its runs, which the records do. */
 export function listed(command: ScheduledCommand): ListedCommand {
-  return { command: command.name, ...(command.each ? { each: true as const } : {}), ...(command.every ? { every: command.every.text } : {}), ...(command.when !== undefined ? { when: command.when } : {}), ...(command.waitsFor !== undefined ? { waitsFor: command.waitsFor } : {}), ...(command.checkEvery ? { checkEvery: command.checkEvery.text } : {}), ...(command.description !== undefined ? { description: command.description } : {}), ...(command.cap > 1 ? { agents: command.cap } : {}), ...(command.text !== undefined ? { onThisMachine: true as const } : {}), ...(command.editable ? { editable: true as const } : {}), agent: homeAgent(command), ...(command.model !== undefined ? { model: command.model, modelAgent: command.agent ?? DEFAULT_AGENT } : {}), able: ableAgents(command) }
+  return { command: command.name, ...(command.each ? { each: true as const } : {}), ...(command.every ? { every: command.every.text } : {}), ...(command.when !== undefined ? { when: command.when } : {}), ...(command.waitsFor !== undefined ? { waitsFor: command.waitsFor } : {}), ...(command.checkEvery ? { checkEvery: command.checkEvery.text } : {}), ...(command.description !== undefined ? { description: command.description } : {}), ...(command.cap > 1 ? { agents: command.cap } : {}), ...(command.text !== undefined ? { onThisMachine: true as const } : {}), ...(command.editable ? { editable: true as const } : {}), ...(command.plugin !== undefined ? { plugin: command.plugin } : {}), agent: homeAgent(command), ...(command.model !== undefined ? { model: command.model, modelAgent: command.agent ?? DEFAULT_AGENT } : {}), able: ableAgents(command) }
 }
 
 /** One tick as the state remembers it. */

@@ -160,6 +160,15 @@ describe('the Automations page: its rows', () => {
     }
   })
 
+  test("a command a plugin's skill schedules is in a group of its own, after the project's skills", async () => {
+    const withPlugin = { ...STATUS, schedule: [...STATUS.schedule, { command: 'update-tickets', every: '15m', agent: 'claude-code', able: ['claude-code', 'codex'], plugin: 'update-tickets' }] }
+    const { host } = hostAnswering(() => ({ ok: true, output: withPlugin }))
+    show(host)
+    const gemstack = await screen.findByRole('region', { name: 'gemstack' })
+    expect(within(gemstack).getAllByRole('region').map(g => document.getElementById(g.getAttribute('aria-labelledby')!)!.textContent)).toEqual(["From the project's skills", 'From its plugins'])
+    expect(within(within(gemstack).getByRole('region', { name: 'From its plugins' })).getAllByRole('listitem').map(li => li.getAttribute('aria-label'))).toEqual(['/update-tickets'])
+  })
+
   test('a project\'s rows come in two groups, the automations a person made and the commands of the project\'s skills; a row a person made says in its panel who gets it, and one kept on this machine is named without a slash; only a row that could follow its skill has a pick of the person\'s own', async () => {
     const since = '2026-10-03T08:00:00.000Z'
     const picked = { ...MINE, paces: { tidy: { every: '1d', at: '10:00', since }, 'post-merge-cleanup': { every: '2d', since } }, agents: { 'answer-comments': 2, 'work-queue': 3 } }

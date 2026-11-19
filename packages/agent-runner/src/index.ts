@@ -1,7 +1,7 @@
 export { RUNNER_DIR, RUNS_DIR, RUNNER_CONFIG, DASHBOARD_DIR } from './names.js'
 export { readConfig, readPersonal, configFile } from './config.js'
 export { markerCard, writeMarker, withdrawMarker, recordRun, runnerMark, isPublish, PUBLISH_LEVELS, type Publish, type RunnerMark } from './records.js'
-export { runCommand, resumeRun, runIdFrom, type RunOptions, type ResumeOptions, type RunOutcome } from './run.js'
+export { runCommand, resumeRun, runIdFrom, projectOf, type RunOptions, type ResumeOptions, type RunOutcome } from './run.js'
 export { sweep, type SweepDeps, type SweepResult } from './sweep.js'
 export { runProject, resumeProject, detachRun, detachResume, readyToRun, accountsOn, presetLoginFor, spawnRun, spawnResume, driverFor, isDriverName, DRIVER_NAMES, ACCOUNT_ENV, GIT_ACCOUNT_ENV, type AgentAccounts, type DriverName, type SpawnedRun, type SpawnedResume } from './runner.js'
 export { isPidAlive, lockHolder, runLockPath, runStderrPath } from './run-lock.js'

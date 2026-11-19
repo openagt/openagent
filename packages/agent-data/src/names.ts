@@ -37,7 +37,7 @@ export function publishedBranch(base: string): string | undefined {
 
 /**
  * The directory, under a project root, that holds OpenAgent's own files on this machine: a
- * run's live files, the scheduler's state. Hidden from git by an ignore file of its own, written when the
+ * run's live files. Hidden from git by an ignore file of its own, written when the
  * folder becomes a project (`install.ts`).
  */
 export const OPENAGENT_DIR = '.openagent'

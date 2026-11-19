@@ -55,6 +55,8 @@ export interface SchedulerCommand {
   onThisMachine?: true
   /** Whether the command is a person's own automation as the tool wrote it: the page can open it to be saved again, and remove it. */
   editable?: true
+  /** The plugin whose skill schedules the command, for one of a plugin's skills, not the project's. */
+  plugin?: string
   /** A shared automation whose file git never had: removing it takes it from nobody else. */
   untracked?: true
   /** A shared automation whose file is not where a run's checkout starts, as this machine last saw it: that start point. A run of it would start nothing. */
@@ -250,6 +252,7 @@ export function schedulerRow(project: UiProject, output: unknown): SchedulerRow 
       ...(row['each'] === true ? { each: true as const } : {}),
       ...(row['onThisMachine'] === true ? { onThisMachine: true as const } : {}),
       ...(row['editable'] === true ? { editable: true as const } : {}),
+      ...(typeof row['plugin'] === 'string' ? { plugin: row['plugin'] } : {}),
       ...(row['untracked'] === true ? { untracked: true as const } : {}),
       ...(typeof row['notOn'] === 'string' ? { notOn: row['notOn'] } : {}),
       ...(lastRunOf(row['lastRun']) ? { lastRun: lastRunOf(row['lastRun'])! } : {}),
