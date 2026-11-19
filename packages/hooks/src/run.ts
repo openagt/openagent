@@ -100,6 +100,8 @@ export interface PullRequest {
 
 /** github's facts: the run's pull request, and the ones it opened before it. */
 export interface GithubFacts {
+  /** The login of the GitHub account the run works as, kept on its record: a resume goes on as it. */
+  account?: string
   /** The pull request the run's branch has. */
   pr?: PullRequest
   /** The requests the run opened before that one, once it has had any. */
@@ -137,7 +139,11 @@ export interface RunContext {
   workspace?: string
   /** Sentences the prompt gets before the agent starts, added by the steps before `RunOrder.RUN`. */
   readonly context: string[]
-  /** Variables the agent's environment gets, added at `RunOrder.ACCOUNTS`. */
+  /**
+   * Variables the run works with, added at `RunOrder.ACCOUNTS`: the account it works as at its git
+   * host, say. Its agent's environment gets them, and so does the run's own git (its checkout's
+   * fetch, its record's push).
+   */
   readonly env: Record<string, string>
   /** What each module found out about the run (github's pull request, git-branches' branch): kept on its record. */
   readonly facts: RunFacts

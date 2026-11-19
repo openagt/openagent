@@ -84,8 +84,10 @@ export interface Leg {
   readonly earlier?: EarlierLeg
   /** Another tool marked the fresh run before it was spawned: the record keeps that tool's fields. */
   readonly marked?: true
-  /** The run's own marker being pushed, when it writes one: the record waits on it, so it lands after. */
-  readonly marking?: Promise<void>
+  /** The run's own marker being pushed, when it writes one, from once the run works as its accounts: the record waits on it, so it lands after. */
+  marking?: Promise<void>
+  /** Puts this process's environment back as it was before the run's (`RunContext.env`) went into it, once the leg ends. */
+  leaveEnvironment?: () => void
   /** The run's name, asked for as the run began; stopped when the run is. */
   readonly named?: AskedName
   /** Aborted by the second signal: the agent's process tree is ended at once. */

@@ -128,12 +128,18 @@ function requests(seen: Seen): { method: unknown; params: unknown }[] {
 }
 
 /** Runs one turn on a Codex driver with `opts` against a fake server, and answers what the server saw. */
-async function spawnedWith(opts: ConstructorParameters<typeof CodexDriver>[0], start: { cwd?: string; system?: string; model?: string; effort?: string; noTools?: boolean } = {}): Promise<Seen> {
+async function spawnedWith(opts: ConstructorParameters<typeof CodexDriver>[0], start: { cwd?: string; system?: string; model?: string; effort?: string; noTools?: boolean; env?: Record<string, string> } = {}): Promise<Seen> {
   let seen: Seen | undefined
   const session = await new CodexDriver({ spawn: fakeAppServer({}, s => (seen = s)), ...opts }).start({ cwd: '/ws', ...start })
   await session.prompt('go')
   return seen!
 }
+
+test("a session's agent gets the run's own variables on top of the driver's environment", async () => {
+  const seen = await spawnedWith({ env: { KEEP: 'yes', GH_TOKEN: 'the-person' } }, { env: { GH_TOKEN: 'the-run' } })
+  assert.equal(seen.env['GH_TOKEN'], 'the-run')
+  assert.equal(seen.env['KEEP'], 'yes')
+})
 
 test('a text attached to a prompt and a sentence added after it reach Codex as one message, the attached text between the two; the start event names each apart', async () => {
   const events: DriverEvent[] = []

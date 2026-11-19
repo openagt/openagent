@@ -50,10 +50,10 @@ test("a run's steps go by order; at the same order, by the distribution's order,
   ])
   assert.deepEqual(
     (await hooks.steps({ options: {} })).map(step => `${step.module}: ${step.name}`),
-    ['git-branches: worktree', 'github: account', 'agent-driver: turns', 'agent-driver: record', 'github: pull request', 'git-branches: reclaim'],
+    ['github: account', 'git-branches: worktree', 'agent-driver: turns', 'agent-driver: record', 'github: pull request', 'git-branches: reclaim'],
   )
   const result = await hooks.run(fakeRun({ store: hooks.store }))
-  assert.deepEqual(done, ['worktree', 'account', 'turns', 'record', 'pull request', 'reclaim'])
+  assert.deepEqual(done, ['account', 'worktree', 'turns', 'record', 'pull request', 'reclaim'])
   assert.deepEqual(result, { outcome: { status: 'done' }, errors: [] })
 })
 

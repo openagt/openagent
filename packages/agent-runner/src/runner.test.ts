@@ -11,9 +11,9 @@ import { accountsPath, addAccount } from '@openagt/skill-account-rotation'
 import { writeAgent } from '@openagt/agent-data'
 import { markerCard, writeMarker } from './records.js'
 import { runCommand } from './run.js'
-import { ACCOUNT_ENV, detachResume, detachRun, driverFor, gitHostRepo, readyToRun, resumeArgs, resumeProject, runArgs, workAs } from './runner.js'
+import { ACCOUNT_ENV, detachResume, detachRun, driverFor, readyToRun, resumeArgs, resumeProject, runArgs } from './runner.js'
 import { removeRepo, testRepo } from './test-repo.js'
-import { testModules } from './run-test-support.js'
+import { fakeGithub, testModules } from './run-test-support.js'
 import { TITLE_SYSTEM } from './title.js'
 
 // The detached start, with the spawn faked: the process asked for, the id answered. The marker is
@@ -140,13 +140,13 @@ test('a run goes on its agent\'s accounts, starting on the one whoever started i
 test('a resumed run continues on the tool its record names, and a Codex run with no model resumes with none', async () => {
   const repo = await testRepo()
   try {
-    const startedWith: Array<{ model?: string }> = []
+    const startedWith: Array<{ model?: string; token?: string }> = []
     const codex = (turn: string): Driver => ({
       id: 'codex',
       start: opts => {
         // The session that names the run is its own, on the small model (`title.ts`): not one of
         // the run's own, so it is not counted here.
-        if (opts.system !== TITLE_SYSTEM) startedWith.push({ ...(opts.model !== undefined ? { model: opts.model } : {}) })
+        if (opts.system !== TITLE_SYSTEM) startedWith.push({ ...(opts.model !== undefined ? { model: opts.model } : {}), ...(opts.env?.['GH_TOKEN'] !== undefined ? { token: opts.env['GH_TOKEN'] } : {}) })
         return new FakeDriver({ turns: [{ text: turn }], sessionId: 's-codex' }).start(opts)
       },
     })
@@ -157,17 +157,18 @@ test('a resumed run continues on the tool its record names, and a Codex run with
     try {
       await writeAgent({ id: 'reviewer', name: 'Reviewer', skills: ['ask'], accounts: { github: 'octo-one', claude: ['Dani', 'Nobody'] }, projectSkills: true })
       addAccount('Dani', 'x', accountsPath('claude'))
-      const first = await runCommand(repo, { prompt: 'Read the docs', driver: codex('Read.'), host: 'this-box', pid: 4242, now: () => NOW, modules: testModules(), gitAccount: 'octo-one', agent: 'reviewer', skillsOff: ['ask'], projectSkills: 'none' })
+      // The computer's own account at GitHub is another one by the time the run resumes.
+      const github = fakeGithub({ 'octo-computer': { GH_TOKEN: 'tok-computer' }, 'octo-one': { GH_TOKEN: 'tok-one' } })
+      const first = await runCommand(repo, { prompt: 'Read the docs', driver: codex('Read.'), host: 'this-box', pid: 4242, now: () => NOW, modules: testModules({ github }), gitAccount: 'octo-one', agent: 'reviewer', skillsOff: ['ask'], projectSkills: 'none' })
       assert.equal(first.status, 'done')
       assert.equal((await findRun(repo, first.id))?.caller?.['agent'], 'reviewer')
       assert.deepEqual((await findRun(repo, first.id))?.caller?.['skillsOff'], ['ask'], 'the session\'s picks of skills are on the record')
       assert.equal((await findRun(repo, first.id))?.caller?.['projectSkills'], 'none')
       const asked: string[] = []
-      const workedAs: (string | undefined)[] = []
-      const second = await resumeProject(repo, { id: first.id, text: 'And the tests?' }, { driverFor: (name, _id, setup, as) => { asked.push(`${name} ${JSON.stringify(setup)} ${JSON.stringify(as)}`); return codex('Read too.') }, workAs: async (_repo, login) => (workedAs.push(login), login), modules: testModules() })
+      const second = await resumeProject(repo, { id: first.id, text: 'And the tests?' }, { driverFor: (name, _id, setup, as) => { asked.push(`${name} ${JSON.stringify(setup)} ${JSON.stringify(as)}`); return codex('Read too.') }, modules: testModules({ github }) })
       assert.equal(second.status, 'done')
       assert.deepEqual(asked, ['codex {"memory":true,"connectors":true,"skills":true} {"claude":["Dani"]}'], 'no config on this machine: the run loads the person\'s setup, on the agent\'s accounts this computer has')
-      assert.deepEqual(workedAs, ['octo-one'], 'the resume goes on as the account the record names, not whatever the computer\'s pick is by then')
+      assert.deepEqual(github.workedAs, ['octo-one', 'octo-one'], 'the resume goes on as the account the record names, not whatever the computer\'s pick is by then')
       assert.equal((await findRun(repo, first.id))?.caller?.['gitAccount'], 'octo-one')
       assert.equal((await findRun(repo, first.id))?.caller?.['agent'], 'reviewer', 'the agent stays on the record')
       assert.deepEqual((await findRun(repo, first.id))?.caller?.['skillsOff'], ['ask'], 'and so do the picks')
@@ -177,7 +178,7 @@ test('a resumed run continues on the tool its record names, and a Codex run with
       else process.env.XDG_CONFIG_HOME = homeBefore
       await rm(home, { recursive: true, force: true })
     }
-    assert.deepEqual(startedWith, [{}, {}], 'no model named at the start nor at the resume: Codex runs on its own default')
+    assert.deepEqual(startedWith, [{ token: 'tok-one' }, { token: 'tok-one' }], 'no model named at the start nor at the resume: Codex runs on its own default')
   } finally {
     await removeRepo(repo)
   }
@@ -267,19 +268,7 @@ test('ready to run on Codex: skills in ~/.agents/skills are no warning while run
   }
 })
 
-test('a session with no project asks the git host of its repos, never only of its own folder, which is at none', async () => {
-  const atHost = new Set(['/projects/app', '/repos/site', '/repos/api'])
-  const atGitHost = async (repo: string) => atHost.has(repo)
-  // A project's run: the project itself.
-  assert.equal(await gitHostRepo('/projects/app', [{ name: 'site', from: '/repos/site' }], { atGitHost }), '/projects/app')
-  // A session's folder, at no git host: the first of its repos that is at one.
-  assert.equal(await gitHostRepo('/sessions/s1', [{ name: 'notes', from: '/repos/notes' }, { name: 'site', from: '/repos/site' }, { name: 'api', from: '/repos/api' }], { atGitHost }), '/repos/site')
-  // No repo at a git host, or none at all: the folder, as before.
-  assert.equal(await gitHostRepo('/sessions/s2', [{ name: 'notes', from: '/repos/notes' }], { atGitHost }), '/sessions/s2')
-  assert.equal(await gitHostRepo('/sessions/s3', undefined, { atGitHost }), '/sessions/s3')
-})
-
-test('ready to run, and the run: the computer\u2019s account at the git host, or the one picked for the session; no account, or one the git host cannot give, stops the run before it starts', async () => {
+test('ready to run: the computer\u2019s account at the git host, or the one picked for the session; no account, or one the git host cannot give, stops the run before it starts', async () => {
   const repo = await testRepo()
   try {
     const probe = async (_bin: string, args: readonly string[]) => ({ ok: true, output: args[0] === '--version' ? '2.1.0' : JSON.stringify({ loggedIn: true }) })
@@ -290,24 +279,17 @@ test('ready to run, and the run: the computer\u2019s account at the git host, or
     }
     assert.deepEqual(await readyToRun(repo, 'claude-code', { probe, isRoot: () => false, gitHostEnv }), { problems: [], warnings: [] })
     assert.deepEqual(asked, [undefined], 'no account named: the computer\u2019s is asked for')
-    // No account named: the computer's.
-    const env: NodeJS.ProcessEnv = {}
-    assert.equal(await workAs(repo, undefined, { gitHostEnv, env }), 'computer-login')
-    assert.equal(env['GH_TOKEN'], 'tok-computer')
     // OpenAgent has no account there: refused, in the git host's words, never the person's own login.
     const none = async () => ({ ok: false as const, error: "OpenAgent has no GitHub account: add one in OpenAgent's Permissions" })
     assert.deepEqual((await readyToRun(repo, 'claude-code', { probe, isRoot: () => false, gitHostEnv: none })).problems, ["OpenAgent has no GitHub account: add one in OpenAgent's Permissions"])
-    await assert.rejects(workAs(repo, undefined, { gitHostEnv: none, env: {} }), /no GitHub account/)
 
-    // The account picked for this session: asked for by its login, and the run goes as it.
+    // The account picked for this session: asked for by its login.
     assert.deepEqual(await readyToRun(repo, 'claude-code', { probe, isRoot: () => false, gitHostEnv, login: 'octo-agent' }), { problems: [], warnings: [] })
-    assert.equal(await workAs(repo, 'octo-agent', { gitHostEnv, env }), 'octo-agent')
-    assert.equal(env['GH_TOKEN'], 'tok-octo-agent')
+    assert.deepEqual(asked, [undefined, 'octo-agent'])
 
     // One this computer cannot use stops the run, naming it.
     const out = await readyToRun(repo, 'claude-code', { probe, isRoot: () => false, gitHostEnv, login: 'stranger' })
     assert.match(out.problems[0]!, /works as @stranger at the git host.*gh knows no account stranger/)
-    await assert.rejects(workAs(repo, 'stranger', { gitHostEnv, env: {} }), /works as @stranger/)
   } finally {
     await removeRepo(repo)
   }

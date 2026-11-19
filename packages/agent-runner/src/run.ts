@@ -4,7 +4,7 @@ import { createHooks, type DistributionEntry, type ProjectRef, type RunFacts, ty
 import type { SessionRepo } from '@openagt/skill-branches'
 import { findRun, readDiary, type RunCard, type RunStatus } from '@openagt/skill-logs'
 import { runProcess, withLeg, type Leg, type RunDeps } from './leg.js'
-import { earlierPrs, lasting, markerCard, runnerMark, writeMarker, type Publish, type RunnerMark } from './records.js'
+import { earlierPrs, lasting, markerCard, runnerMark, type Publish, type RunnerMark } from './records.js'
 import type { ProjectSkillsPick } from './agent.js'
 import { withRunLock } from './run-lock.js'
 import { askName, isBareCommand, type AskedName } from './title.js'
@@ -97,7 +97,10 @@ export interface RunOptions extends RunRequest, RunDeps {
   startedAt?: string
   /** Whether the run's marker is already on the branch: a scheduler's tick writes it before it spawns. A person's run marks itself. */
   marked?: boolean
-  /** The account the run works as at the git host, kept on its record; none when the git host cannot say. */
+  /**
+   * The account asked for at the git host: the session's pick, or its agent's; the account runs
+   * use when absent. The run's record keeps the one it works as, as its git host's module says.
+   */
   gitAccount?: string
   /** The agent the run is on, by its id (`OPENAGENT_AGENT`), kept on its mark; the default agent when absent. */
   agent?: string
@@ -135,19 +138,10 @@ export async function runCommand(repo: string, opts: RunOptions): Promise<RunOut
   const mark: RunnerMark = { host: here.host, pid: here.pid, ...lasting(opts) }
 
   return withRunLock(repo, id, here, async () => {
-    // A person's run marks itself; a scheduler's run was marked before it was spawned. The marker
-    // is pushed while the checkout is made and the agent starts: pushing takes seconds, and the
-    // person watching the run waits on the agent. It never writes `.git/config`, so the agent's own
-    // git is never locked out by it. The run's record waits on it, so it lands after.
+    // A person's run marks itself once it works as its accounts (agent-driver's step, `module.ts`);
+    // a scheduler's run was marked before it was spawned. The marker never writes `.git/config`, so
+    // the agent's own git is never locked out by it. The run's record waits on it, so it lands after.
     const card = markerCard({ id, startedAt, prompt: opts.prompt, driver: opts.driver.id, ...modelOf(opts.model), mark })
-    const marking = opts.marked
-      ? undefined
-      : writeMarker(repo, card, here.logs).then(
-          marked => {
-            if (!marked.ok && !marked.committed) here.log(`[agent-runner] the run's record could not be written: ${marked.error}`)
-          },
-          err => here.log(`[agent-runner] the run's record could not be written: ${errorMessage(err)}`),
-        )
 
     // The run's short name is asked for first of all, beside the checkout and the agent's start
     // rather than after them: the name is the first thing a person watching the run waits on, and
@@ -167,7 +161,6 @@ export async function runCommand(repo: string, opts: RunOptions): Promise<RunOut
         prompt: opts.prompt,
         ...(opts.attached !== undefined ? { attached: opts.attached } : {}),
         ...(opts.marked ? { marked: true } : {}),
-        ...(marking ? { marking } : {}),
         ...(named ? { named } : {}),
         mark,
         card,
@@ -186,8 +179,6 @@ export interface ResumeOptions extends RunDeps {
   answer?: string
   /** How far the run takes its work from here on: a level, or `null` for none; the level its record names when absent. */
   publish?: Publish | null
-  /** The account this leg works as at the git host, on the record from here on; the record's own when absent. */
-  gitAccount?: string
   /** Who resumes the run, kept on its mark with the time: a scheduler's row, which counts the run as its own from then on. */
   by?: string
   /** The model this leg starts on; the record's own when absent. */
@@ -243,7 +234,7 @@ export async function resumeRun(repo: string, opts: ResumeOptions): Promise<RunO
     // The level its record names, or the one this resume gives it from here on.
     const { publish: recorded, ...lasts } = lasting(previous)
     const publish = opts.publish === undefined ? recorded : (opts.publish ?? undefined)
-    const mark: RunnerMark = { host: here.host, pid: here.pid, ...lasts, ...(publish !== undefined ? { publish } : {}), ...(opts.gitAccount !== undefined ? { gitAccount: opts.gitAccount } : {}), ...(opts.by !== undefined ? { resumed: { by: opts.by, at: here.clock() } } : {}) }
+    const mark: RunnerMark = { host: here.host, pid: here.pid, ...lasts, ...(publish !== undefined ? { publish } : {}), ...(opts.by !== undefined ? { resumed: { by: opts.by, at: here.clock() } } : {}) }
     const model = opts.model ?? card.model
     const effort = opts.effort ?? card.effort
 
@@ -319,11 +310,11 @@ interface LegStart {
 async function runLeg(given: Omit<Leg, 'killed'>, start: LegStart): Promise<RunOutcome> {
   const stop = new AbortController()
   const kill = new AbortController()
+  const leg: Leg = { ...given, killed: kill.signal }
   const onSignal = (): void => (stop.signal.aborted ? kill : stop).abort()
   process.on('SIGINT', onSignal)
   process.on('SIGTERM', onSignal)
   try {
-    const leg: Leg = { ...given, killed: kill.signal }
     const hooks = createHooks([...start.modules, ...BUILT_IN_MODULES])
     const project = await projectOf(leg.repo, leg.here.git)
     const ctx = withLeg(
@@ -360,5 +351,7 @@ async function runLeg(given: Omit<Leg, 'killed'>, start: LegStart): Promise<RunO
   } finally {
     process.off('SIGINT', onSignal)
     process.off('SIGTERM', onSignal)
+    // The run's environment was this process's for the leg alone.
+    leg.leaveEnvironment?.()
   }
 }

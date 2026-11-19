@@ -1,26 +1,29 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { logDiaryFile, takeInbox } from '@openagt/agent-driver'
+import { errorMessage } from '@openagt/agent-data'
 import { findRun, type AnyDiaryLine, type RunCard } from '@openagt/skill-logs'
 import { defineModule, RunOrder, type RunContext, type RunOutcome } from '@openagt/hooks'
 import { localHost } from './host.js'
 import { legOf, type EarlierLeg, type Leg } from './leg.js'
 import { hideLiveDir, inboxPath, liveDir, readLiveCard, readLiveDiary } from './live-card.js'
-import { forReaders, recordBranchGone, recordRun } from './records.js'
+import { forReaders, markerCard, recordBranchGone, recordRun, writeMarker } from './records.js'
 import { detailOf, effortOf, modelOf, sessionTurns } from './session.js'
 
 /**
  * agent-driver, the module (#2394), as far as the run engine of this package is it: this computer
  * as the host runs are started on (`host.ts`); and a run's steps, which work on the leg of the run
- * this process runs (`leg.ts`): the agent's turns, opening the run's live record first; the record
- * saved from what the session kept, with where the work ended up, as the run's facts say; and the
- * record said again without the branch the reclaim deleted.
+ * this process runs (`leg.ts`): this process working in the run's environment once the run's
+ * accounts are set, and the run's marker pushed; the agent's turns, opening the run's live record
+ * first; the record saved from what the session kept, with where the work ended up, as the run's
+ * facts say; and the record said again without the branch the reclaim deleted.
  */
 const agentDriver = defineModule({
   name: 'agent-driver',
   hooks: {
     'run.host': [localHost()],
     'run.step': [
+      { order: RunOrder.ACCOUNTS + 10, name: "work in the run's environment", run: workInEnvironment },
       { order: RunOrder.RUN, name: 'run the agent', run: runAgent },
       { order: RunOrder.RECORD, name: 'save the record', run: saveRecord },
       { order: RunOrder.CLEANUP + 10, name: 'record the branch gone', run: recordGone },
@@ -29,6 +32,42 @@ const agentDriver = defineModule({
 })
 
 export default agentDriver
+
+/**
+ * This process works in the run's environment from here on, as its agent does: what the steps at
+ * `RunOrder.ACCOUNTS` put there (the account the run works as at its git host) is this process's
+ * until the leg ends, so everything of the run that reaches a remote, its marker and its record,
+ * its checkout's fetch, goes as that account. The run's mark names the account. A person's run
+ * marks itself, and its marker is pushed now, while its checkout is made and its agent starts:
+ * pushing takes seconds, and the person watching the run waits on the agent.
+ */
+function workInEnvironment(ctx: RunContext): void {
+  const leg = legOf(ctx)
+  leg.leaveEnvironment = intoProcess(ctx.env)
+  const account = ctx.facts.github?.account
+  if (account !== undefined) leg.mark = { ...leg.mark, gitAccount: account }
+  if (leg.earlier !== undefined || leg.marked) return
+  const { here } = leg
+  leg.card = markerCard({ id: leg.id, startedAt: leg.card.startedAt, prompt: leg.prompt, driver: leg.driver.id, ...modelOf(leg.model), mark: leg.mark })
+  leg.marking = writeMarker(leg.repo, leg.card, here.logs).then(
+    marked => {
+      if (!marked.ok && !marked.committed) here.log(`[agent-runner] the run's record could not be written: ${marked.error}`)
+    },
+    err => here.log(`[agent-runner] the run's record could not be written: ${errorMessage(err)}`),
+  )
+}
+
+/** Put `env` in this process's environment; answers what puts back what was there. */
+function intoProcess(env: Readonly<Record<string, string>>): () => void {
+  const before = Object.entries(env).map(([key]) => [key, process.env[key]] as const)
+  Object.assign(process.env, env)
+  return () => {
+    for (const [key, value] of before) {
+      if (value === undefined) delete process.env[key]
+      else process.env[key] = value
+    }
+  }
+}
 
 /** How the run ended, as a finishing step reads it: the pipeline says it before the first one. */
 function endOf(ctx: RunContext): RunOutcome {
@@ -57,7 +96,7 @@ async function runAgent(ctx: RunContext): Promise<void> {
   }
   // A checkout with an untracked directory in it is a dirty tree, which the branches rule never reclaims.
   await hideLiveDir(workspace).catch(() => {})
-  ctx.outcome = await sessionTurns(leg, workspace, dir, ctx.signal)
+  ctx.outcome = await sessionTurns(leg, workspace, dir, ctx.signal, ctx.env)
 }
 
 /**

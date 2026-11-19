@@ -127,6 +127,11 @@ export interface DriverStartOptions {
    * instructions — ~11,300 tokens down to ~8,800.
    */
   noTools?: boolean
+  /**
+   * Variables this session's agent gets on top of the driver's own environment: the run's
+   * (`RunContext.env` in `@openagt/hooks`), such as the account it works as at its git host.
+   */
+  env?: Readonly<Record<string, string>>
   /** Abort the whole session; disposing kills the underlying process. */
   signal?: AbortSignal
   /**

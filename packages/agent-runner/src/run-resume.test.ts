@@ -11,7 +11,7 @@ import { resumeRun, runCommand } from './run.js'
 import { AFRESH_NOTICE, earlierWorkLine, PUBLISH_LINES, STOPPED_DETAIL } from './session.js'
 import { recordRun, runnerMark } from './records.js'
 import { handDownBasicSkills, readUntimedDiary, removeRepo, testRepo } from './test-repo.js'
-import { NOW, fakeGitHost, wrap, QUESTION, committingDriver, ticking, testModules, type GitHost } from './run-test-support.js'
+import { NOW, fakeGitHost, fakeGithub, wrap, QUESTION, committingDriver, ticking, testModules, type GitHost } from './run-test-support.js'
 
 // A run as OpenAgent starts it: with the basic skills handed down.
 handDownBasicSkills()
@@ -462,17 +462,23 @@ test('a message that says how far to take the work changes the run\'s level from
   }
 })
 
-test('the account a run works as at the git host is on its record, and a resume on another account says that one from then on', async () => {
+test('the account a run works as at the git host is on its record, and a resume goes on as it; a run recorded with none works as the one runs use, named from then on', async () => {
   const repo = await testRepo()
   try {
-    const first = await runCommand(repo, { prompt: 'Fix the typo', gitAccount: 'octo-one', driver: new FakeDriver({ turns: [{ text: 'Done.' }], sessionId: 's-1' }), now: ticking(), modules: testModules() })
+    const github = fakeGithub({ 'octo-computer': {}, 'octo-one': {} })
+    const first = await runCommand(repo, { prompt: 'Fix the typo', gitAccount: 'octo-one', driver: new FakeDriver({ turns: [{ text: 'Done.' }], sessionId: 's-1' }), now: ticking(), modules: testModules({ github }) })
     const card = await findRun(repo, first.id)
     assert.equal(runnerMark(card!)?.gitAccount, 'octo-one')
     assert.equal(card!.caller?.['gitAccount'], 'octo-one', 'what the dashboard reads')
-    await resumeRun(repo, { id: first.id, text: 'Go on.', gitAccount: 'octo-two', driver: new FakeDriver({ turns: [{ text: 'Done.' }] }), now: ticking(), modules: testModules() })
-    assert.equal((await findRun(repo, first.id))!.caller?.['gitAccount'], 'octo-two')
-    await resumeRun(repo, { id: first.id, text: 'And on.', driver: new FakeDriver({ turns: [{ text: 'Done.' }] }), now: ticking(), modules: testModules() })
-    assert.equal((await findRun(repo, first.id))!.caller?.['gitAccount'], 'octo-two', 'a git host that cannot say leaves the last one it could')
+    await resumeRun(repo, { id: first.id, text: 'Go on.', driver: new FakeDriver({ turns: [{ text: 'Done.' }] }), now: ticking(), modules: testModules({ github }) })
+    assert.equal((await findRun(repo, first.id))!.caller?.['gitAccount'], 'octo-one')
+    assert.deepEqual(github.workedAs, ['octo-one', 'octo-one'])
+
+    // A run that worked as no account at GitHub, in a repository that was on none then.
+    const unnamed = await runCommand(repo, { prompt: 'Fix the other typo', driver: new FakeDriver({ turns: [{ text: 'Done.' }], sessionId: 's-2' }), now: ticking(), modules: testModules() })
+    assert.equal((await findRun(repo, unnamed.id))!.caller?.['gitAccount'], undefined)
+    await resumeRun(repo, { id: unnamed.id, text: 'Go on.', driver: new FakeDriver({ turns: [{ text: 'Done.' }] }), now: ticking(), modules: testModules({ github }) })
+    assert.equal((await findRun(repo, unnamed.id))!.caller?.['gitAccount'], 'octo-computer')
   } finally {
     await removeRepo(repo)
   }

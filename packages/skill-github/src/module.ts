@@ -1,29 +1,89 @@
+import { errorMessage } from '@openagt/agent-data'
 import { defineModule, RunOrder, type ModuleDefinition, type PullRequest, type RunContext } from '@openagt/hooks'
+import { readFacts, runEnv } from './accounts.js'
+import { nodeGhRunner } from './gh.js'
 import { homeUrlFor } from './home.js'
 import { listRequests } from './requests.js'
+import { accountNamed, tokenOf } from './working-account.js'
 
 /**
- * github, the module (#2394): the pull request a run's branch has, read back once the branch is,
- * into the run's facts (`RunFacts.github`), which the run's record keeps.
+ * github, the module (#2394): the account a run works as on GitHub, first of its steps, and the
+ * pull request its branch has, read back once the branch is, into the run's facts
+ * (`RunFacts.github`), which the run's record keeps.
  */
+
+/** One of OpenAgent's GitHub accounts, as a run works as it: its login, and what the run's environment gets for it. */
+export interface WorkingAs {
+  login: string
+  env: Record<string, string>
+}
 
 /** What the module works with; the real one when absent. */
 export interface GithubDeps {
   /** The newest pull request whose head is `branch` in the project at `dir`, open or closed; none when there is none, or GitHub cannot say. */
   requestOfBranch?: (dir: string, branch: string) => Promise<PullRequest | undefined>
+  /** Whether the repository at `dir` is on GitHub. */
+  onGithub?: (dir: string) => Promise<boolean>
+  /** OpenAgent's account `user`, else the one runs use, as a run in the repository at `dir` works as it; throws when OpenAgent has no such account. */
+  workAs?: (dir: string, user: string | undefined) => Promise<WorkingAs>
 }
 
 export function githubModule(deps: GithubDeps = {}): ModuleDefinition {
   const requestOfBranch = deps.requestOfBranch ?? branchRequest
+  const onGithub = deps.onGithub ?? (async (dir: string) => (await homeUrlFor(dir).catch(() => undefined)) !== undefined)
+  const workAs = deps.workAs ?? openagentAccount
   return defineModule({
     name: 'github',
     hooks: {
-      'run.step': [{ order: RunOrder.RECORD - 10, name: 'read the pull request back', run: ctx => readRequest(ctx, requestOfBranch) }],
+      'run.step': [
+        { order: RunOrder.ACCOUNTS, name: "work as the run's account", run: ctx => workAsAccount(ctx, onGithub, workAs) },
+        { order: RunOrder.RECORD - 10, name: 'read the pull request back', run: ctx => readRequest(ctx, requestOfBranch) },
+      ],
     },
   })
 }
 
 export default githubModule()
+
+/** OpenAgent's account `user`, else the one runs use, with the token GitHub said is its own. */
+async function openagentAccount(dir: string, user: string | undefined): Promise<WorkingAs> {
+  const gh = nodeGhRunner()
+  const { login, dir: home } = await accountNamed(user, dir, gh, process.env)
+  return { login, env: runEnv(await tokenOf(login, home, dir, gh), home, readFacts(home), process.env) }
+}
+
+/**
+ * The run works as one of OpenAgent's GitHub accounts, never the person's own login: the one
+ * picked for it (`options.github.account`), else the account runs use. What its environment gets
+ * for it is the run's from here on, its agent's and its own git's, and its login goes on its
+ * record. The repository that decides is the project's, or, for a session with no project, the
+ * first of its repos that is on GitHub: the session's folder is on no host, its repos are. A run
+ * on no GitHub repository works as no account of this module's; one picked an account it cannot
+ * work as there is refused, rather than run as someone else.
+ */
+async function workAsAccount(ctx: RunContext, onGithub: (dir: string) => Promise<boolean>, workAs: (dir: string, user: string | undefined) => Promise<WorkingAs>): Promise<void> {
+  const picked = ctx.options.github?.account
+  const candidates = ctx.project ? [ctx.project.dir] : (ctx.options['git-branches']?.repos ?? []).map(repo => repo.from)
+  let dir: string | undefined
+  for (const candidate of candidates) {
+    if (await onGithub(candidate)) {
+      dir = candidate
+      break
+    }
+  }
+  if (dir === undefined) {
+    if (picked !== undefined) throw new Error(`This session works as @${picked} on GitHub, and it works in no repository on GitHub.`)
+    return
+  }
+  let working: WorkingAs
+  try {
+    working = await workAs(dir, picked)
+  } catch (err) {
+    throw new Error(picked !== undefined ? `This session works as @${picked} on GitHub, and it cannot be used here: ${errorMessage(err)}` : errorMessage(err))
+  }
+  Object.assign(ctx.env, working.env)
+  ctx.facts.github = { ...ctx.facts.github, account: working.login }
+}
 
 /** The newest pull request of a branch on GitHub; none for a project that is not on GitHub. */
 async function branchRequest(dir: string, branch: string): Promise<PullRequest | undefined> {
@@ -49,5 +109,9 @@ async function readRequest(ctx: RunContext, requestOfBranch: NonNullable<GithubD
   if (pr && named && pr.url !== named.url) earlier = [...earlier, { number: named.number, url: named.url }]
   if (pr) named = pr
   earlier = earlier.filter((one, at) => one.url !== named?.url && earlier.findIndex(other => other.url === one.url) === at)
-  ctx.facts.github = { ...(named ? { pr: named } : {}), ...(before.earlierPrs !== undefined || earlier.length > 0 ? { earlierPrs: earlier } : {}) }
+  ctx.facts.github = {
+    ...(before.account !== undefined ? { account: before.account } : {}),
+    ...(named ? { pr: named } : {}),
+    ...(before.earlierPrs !== undefined || earlier.length > 0 ? { earlierPrs: earlier } : {}),
+  }
 }

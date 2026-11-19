@@ -5,7 +5,7 @@ import { FakeDriver, promptSent, type Driver, type DriverSession, type DriverSta
 import type { GitRunner } from '@openagt/agent-data'
 import type { DistributionEntry, PullRequest } from '@openagt/hooks'
 import { gitBranchesModule } from '@openagt/skill-branches/module'
-import { githubModule } from '@openagt/skill-github/module'
+import { githubModule, type GithubDeps } from '@openagt/skill-github/module'
 import agentDriver from './module.js'
 import { git } from './test-repo.js'
 
@@ -103,15 +103,40 @@ export function publishingDriver(gitHost: ReturnType<typeof fakeGitHost>, seen: 
   }
 }
 
+/** GitHub as a test's run works as an account on it: what github's module asks of it there. */
+export type GithubAccounts = Pick<GithubDeps, 'onGithub' | 'workAs'>
+
+/** GitHub with no repository a test's run is in: the run works as no account there. */
+export const noGithub: GithubAccounts = { onGithub: async () => false }
+
+/**
+ * GitHub with every repository on it, and OpenAgent's accounts there, by login, each with the
+ * environment a run works as it with; the first is the one runs use. Each account worked as is kept.
+ */
+export function fakeGithub(accounts: Record<string, Record<string, string>>): GithubAccounts & { workedAs: string[] } {
+  const workedAs: string[] = []
+  return {
+    workedAs,
+    onGithub: async () => true,
+    workAs: async (_dir, user) => {
+      const login = user ?? Object.keys(accounts)[0]
+      const env = login !== undefined ? accounts[login] : undefined
+      if (login === undefined || env === undefined) throw new Error(`OpenAgent has no GitHub account ${user ?? ''}`.trim())
+      workedAs.push(login)
+      return { login, env }
+    },
+  }
+}
+
 /**
  * The modules a test's run goes through, as OpenAgent's distribution lists them for a run:
  * git-branches and github, each with what the test stands in for, and agent-driver.
  */
-export function testModules(deps: { gitHost?: GitHost; git?: GitRunner } = {}): DistributionEntry[] {
+export function testModules(deps: { gitHost?: GitHost; git?: GitRunner; github?: GithubAccounts } = {}): DistributionEntry[] {
   const gitHost = deps.gitHost ?? noGitHost
   return [
     { module: gitBranchesModule(deps.git ? { git: deps.git } : {}) },
-    { module: githubModule({ requestOfBranch: (dir, branch) => gitHost.requestOfBranch(dir, branch) }) },
+    { module: githubModule({ ...(deps.github ?? noGithub), requestOfBranch: (dir, branch) => gitHost.requestOfBranch(dir, branch) }) },
     { module: agentDriver },
   ]
 }

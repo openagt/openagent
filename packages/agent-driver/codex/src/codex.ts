@@ -71,7 +71,8 @@ export class CodexDriver implements Driver {
   constructor(private readonly opts: CodexDriverOptions = {}) {}
 
   async start(opts: DriverStartOptions): Promise<DriverSession> {
-    const env = this.opts.env ?? process.env
+    // The run's own variables go over the driver's environment, for this session alone.
+    const env = opts.env !== undefined ? { ...(this.opts.env ?? process.env), ...opts.env } : (this.opts.env ?? process.env)
     const personal = this.opts.personal
     const args: string[] = []
     if (personal?.memory === false) args.push('-c', 'features.memories=false')

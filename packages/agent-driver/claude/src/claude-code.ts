@@ -76,7 +76,9 @@ export class ClaudeCodeDriver implements Driver {
   constructor(private readonly opts: ClaudeCodeDriverOptions = {}) {}
 
   start(opts: DriverStartOptions): Promise<DriverSession> {
-    return Promise.resolve(new ClaudeCodeSession(withPersonal(this.opts), opts))
+    // The run's own variables go over the driver's environment, for this session alone.
+    const options = opts.env !== undefined ? { ...this.opts, env: { ...(this.opts.env ?? process.env), ...opts.env } } : this.opts
+    return Promise.resolve(new ClaudeCodeSession(withPersonal(options), opts))
   }
 
   /** Where the account's subscription quota stands (#521). Account-wide, so no session. */

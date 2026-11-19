@@ -83,7 +83,7 @@ function queued(line: PromptLine): Queued {
  * it, its live record kept in `dir`: how the run ended. A signal to stop asks the agent to end its
  * turn where it is; `leg.killed` ends its process tree at once.
  */
-export async function sessionTurns(leg: Leg, workspace: string, dir: string, stopped: AbortSignal): Promise<RunOutcome> {
+export async function sessionTurns(leg: Leg, workspace: string, dir: string, stopped: AbortSignal, env: Readonly<Record<string, string>>): Promise<RunOutcome> {
   const { id: _id, status: _status, endedAt: _endedAt, ...startCard } = leg.card
   const continued = leg.earlier !== undefined
   const resumeSessionId = leg.earlier?.sessionId
@@ -94,6 +94,7 @@ export async function sessionTurns(leg: Leg, workspace: string, dir: string, sto
   try {
     driverSession = await leg.driver.start({
       cwd: workspace,
+      env,
       ...modelOf(leg.model),
       ...effortOf(leg.effort),
       signal: leg.killed,

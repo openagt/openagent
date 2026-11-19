@@ -739,13 +739,20 @@ test('a session that keeps a log names its diary in the agent environment; one w
 })
 
 /** Runs one turn on a Claude Code driver with `opts`, and answers the arguments and the environment Claude Code was spawned with. */
-async function spawnedWith(opts: ConstructorParameters<typeof ClaudeCodeDriver>[0]): Promise<{ args: string[]; env: NodeJS.ProcessEnv }> {
+async function spawnedWith(opts: ConstructorParameters<typeof ClaudeCodeDriver>[0], env?: Record<string, string>): Promise<{ args: string[]; env: NodeJS.ProcessEnv }> {
   let seen: { args: string[]; env: NodeJS.ProcessEnv } | undefined
   const spawn: SpawnLike = (cmd, args, spawnOpts) => ((seen = { args: [...args], env: spawnOpts.env ?? {} }), fakeSpawn([JSON.stringify({ type: 'result', result: 'ok' })])(cmd, args, spawnOpts))
-  const session = await new ClaudeCodeDriver({ ...opts, spawn }).start({ cwd: '/ws' })
+  const session = await new ClaudeCodeDriver({ ...opts, spawn }).start({ cwd: '/ws', ...(env !== undefined ? { env } : {}) })
   await session.prompt('go')
   return seen!
 }
+
+test("a session's agent gets the run's own variables on top of the driver's environment, and the person's setup still applies", async () => {
+  const seen = await spawnedWith({ env: { KEEP: 'yes', GH_TOKEN: 'the-person' }, personal: { memory: false, connectors: true, skills: true } }, { GH_TOKEN: 'the-run' })
+  assert.equal(seen.env['GH_TOKEN'], 'the-run')
+  assert.equal(seen.env['KEEP'], 'yes')
+  assert.equal(seen.env['CLAUDE_CODE_DISABLE_AUTO_MEMORY'], '1')
+})
 
 test('ClaudeCodeDriver turns each part of the person\'s setup that is off into Claude Code\'s own switch, and only those', async () => {
   const none = await spawnedWith({ env: {} })

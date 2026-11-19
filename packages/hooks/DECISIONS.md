@@ -18,6 +18,11 @@ already made, and lists it in its pull request; for anything else it proposes an
 - The run is one pipeline of steps, `run.step`: below 0 they prepare the run, at 0 are the
   agent's turns, above 0 they finish it. Picked over separate "before run", "context" and
   "after run" hooks.
+- The accounts a run works as come first, at `RunOrder.ACCOUNTS`, in the run's environment
+  (`RunContext.env`): its agent's, and the run's own git, from its project's clone and its
+  checkout's fetch on (#2394). Picked over the accounts after the checkout, where the run's
+  first fetch went as the person's own login, and over each step of the run asking a module
+  for git access of its own.
 - A hook's name starts with its area: `run.`, `store.`, `account.`, `app.`, `ui.`.
 - A hook is code the loader calls, or an answer that must be fresh (what needs the person). A
   fact a module owns and other modules read is a setting, declared in the catalog here and

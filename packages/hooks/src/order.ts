@@ -5,14 +5,17 @@
  * place run in the distribution's order.
  */
 export const RunOrder = {
+  /**
+   * github, agent-driver: the accounts the run works as, first of all: everything of the run that
+   * reaches a remote goes as them, from the project's clone and its checkout's fetch on.
+   */
+  ACCOUNTS: -600,
   /** projects: the project's repo is on this machine. */
   CLONE: -500,
   /** git-branches: the run's own worktree. */
   WORKSPACE: -400,
   /** skills: the run's skills linked into its worktree. */
   SKILLS: -300,
-  /** github, agent-driver: the accounts the run works as. */
-  ACCOUNTS: -200,
   /** What the prompt gets before the agent starts. */
   CONTEXT: -100,
   /** agent-driver: the agent's turns. */

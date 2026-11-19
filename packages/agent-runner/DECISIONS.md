@@ -183,9 +183,13 @@ already made, and lists it in its pull request; for anything else it proposes an
   own, or the dashboard resolving the skills per run: a scheduler's runs name no agent and are
   on the default one, so its edits reach them with nothing restarted.
 - The account a run works as at the git host is the session's: the one whoever started the run
-  picked for it, in the run's environment, else its agent's, else the computer's. The record
-  keeps its login, and a resumed run goes on as it, never as whatever the computer's pick is by
-  then. An account this computer cannot use stops the run before it starts, naming it. An
+  picked for it, in the run's environment, else its agent's, else the computer's. The git host's
+  module works as it at the run's first step (`RunOrder.ACCOUNTS`, #2394): the account's
+  environment is the run's (`ctx.env`), handed to the agent and this process's own until the leg
+  ends, so the run's marker, its checkout's fetch and its record go as that account too. The
+  record keeps the login it worked as, and a resumed run goes on as it, never as whatever the
+  computer's pick is by then. An account this computer cannot use stops the run before it
+  starts, naming it (the host's check); one that goes by then fails the run at that step. An
   agent's account applies only where the project has a git host: in a session with no project,
   or a project on another host, the run goes as no account rather than refused. On
   Claude and Codex an agent's accounts apply where this computer has them, and none of them here

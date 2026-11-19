@@ -13,7 +13,6 @@ import { gitHostCommand, gitHostEnv } from './git-host.js'
 import { namedAtStart, resumeRun, runCommand, runIdFrom, type RunOutcome, type RunRequest } from './run.js'
 import { askName } from './title.js'
 import { publishChange, runnerMark, type NO_PUBLISH, type Publish } from './records.js'
-import type { SessionRepo } from '@openagt/skill-branches'
 import { acquireRunLock, handOverRunLock, isPidAlive, releaseRunLock, runStderrPath } from './run-lock.js'
 import { accountRotation, accountsPath, hasAddedAccount, readAccounts } from '@openagt/skill-account-rotation'
 import { AGENT_ID_ENV, type AgentRecord } from '@openagt/agent-data'
@@ -57,33 +56,6 @@ export async function readyToRun(repo: string, driver: DriverName, deps: { probe
 /** Why a run cannot go as `login` at the git host, on this computer. */
 function cannotWorkAs(login: string, error: string): string {
   return `This session works as @${login} at the git host, and it cannot be used here: ${error}`
-}
-
-/**
- * The account this run works as at the git host: `login`, the one picked for this session, or
- * else the computer's. Its environment is set on this process, which is the run's own (the CLI's
- * `run`), so the agent and every git push of the run go as that account, and nothing of the
- * person's own settings changes. The login, when the git host can say; an account this computer
- * cannot use is a refusal naming it, never a run as someone else.
- */
-export async function workAs(repo: string, login: string | undefined, deps: { gitHostEnv?: typeof gitHostEnv; env?: NodeJS.ProcessEnv } = {}): Promise<string | undefined> {
-  const given = await (deps.gitHostEnv ?? gitHostEnv)(repo, login)
-  if (!given.ok) throw new Error(login !== undefined ? cannotWorkAs(login, given.error) : given.error)
-  Object.assign(deps.env ?? process.env, given.env)
-  return given.login
-}
-
-/**
- * The folder a run asks the git host about: `repo` when it is at one, else the first of the
- * session's repos that is. A session with no project works in a folder of its own, with its repos
- * copied in it: that folder is at no git host, its repos are, and a run asked only of the folder
- * would push them with the person's own login.
- */
-export async function gitHostRepo(repo: string, repos: SessionRepo[] | undefined, deps: { atGitHost?: (repo: string) => Promise<boolean> } = {}): Promise<string> {
-  const atHost = deps.atGitHost ?? (async (at: string) => (await gitHostCommand(at)) !== undefined)
-  if (await atHost(repo)) return repo
-  for (const { from } of repos ?? []) if (await atHost(from)) return from
-  return repo
 }
 
 /** The command line of a spawned run: the model, the coding agent, the publish level, the attached text, the base, the pull request's base, the branch and what it is for named only when the run has them, so the run's own defaults apply otherwise. */
@@ -244,7 +216,7 @@ export interface ProjectRun extends RunRequest {
  * id here and marks itself. The model is the
  * one given; none given, the coding agent starts on its own default.
  */
-export async function runProject(repo: string, opts: ProjectRun, deps: { workAs?: typeof workAs; modules?: readonly DistributionEntry[] } = {}): Promise<RunOutcome> {
+export async function runProject(repo: string, opts: ProjectRun, deps: { modules?: readonly DistributionEntry[] } = {}): Promise<RunOutcome> {
   const modules = deps.modules ?? (await distributionModules())
   // What the run is asked, its start, its agent and its log go on to it as they are; the rest is read here.
   const { id: given, mark, driver = 'claude-code', gitAccount, skills: picks = {}, ...rest } = opts
@@ -256,10 +228,10 @@ export async function runProject(repo: string, opts: ProjectRun, deps: { workAs?
   const accounts = accountsOn(on)
   // A run given its id was marked by whoever spawned it, unless it was told to mark itself.
   const marked = given !== undefined && mark !== true
-  // The name is asked for before the git host's account is read, which takes a second or more
-  // (`gitHostEnv` runs the git host's command) and is nothing the small model naming the run needs.
+  // The name is asked for first of all: the run's account at the git host is read by its first
+  // step, which takes a second or more, and is nothing the small model naming the run needs.
   const naming = namedAtStart({ ...rest, marked }) ? askName(driverFor(driver, undefined, setup, accounts), rest.prompt) : undefined
-  const as = await (deps.workAs ?? workAs)(await gitHostRepo(repo, rest.repos), gitAccount ?? (await agentLoginFor(repo, on)))
+  const asked = gitAccount ?? (await agentLoginFor(repo, on))
   return runCommand(repo, {
     ...rest,
     ...(naming !== undefined ? { naming } : {}),
@@ -268,7 +240,7 @@ export async function runProject(repo: string, opts: ProjectRun, deps: { workAs?
     marked,
     driver: driverFor(driver, id, setup, accounts),
     skills: (where, agent) => basicSkills(where, agent, on, picks),
-    ...(as !== undefined ? { gitAccount: as } : {}),
+    ...(asked !== undefined ? { gitAccount: asked } : {}),
     ...(picks.on !== undefined ? { skillsOn: picks.on } : {}),
     ...(picks.off !== undefined ? { skillsOff: picks.off } : {}),
     ...(picks.project !== undefined ? { projectSkills: picks.project } : {}),
@@ -279,12 +251,12 @@ export async function runProject(repo: string, opts: ProjectRun, deps: { workAs?
  * Continue an ended run of the real project, in this process: the user's text, or the answer to
  * the question it ended on. The coding agent is the one the run's record names: the session
  * to resume is its own, and so is the account at the git host it worked as, when the record
- * names one; the computer's for a run recorded before that was kept.
+ * names one; the account runs use for a run recorded with none.
  */
 export async function resumeProject(
   repo: string,
   opts: SpawnedResume & { log?: (line: string) => void },
-  deps: { driverFor?: typeof driverFor; workAs?: typeof workAs; modules?: readonly DistributionEntry[] } = {},
+  deps: { driverFor?: typeof driverFor; modules?: readonly DistributionEntry[] } = {},
 ): Promise<RunOutcome> {
   const modules = deps.modules ?? (await distributionModules())
   const card = await findRun(repo, opts.id)
@@ -297,7 +269,6 @@ export async function resumeProject(
   const on = await runAgent(previous?.agent, log)
   const picks: SkillPicks = { ...(previous?.skillsOn !== undefined ? { on: previous.skillsOn } : {}), ...(previous?.skillsOff !== undefined ? { off: previous.skillsOff } : {}), ...(previous?.projectSkills !== undefined ? { project: previous.projectSkills } : {}) }
   const accounts = accountsOn(on)
-  const as = await (deps.workAs ?? workAs)(await gitHostRepo(repo, previous?.repos), previous?.gitAccount)
   return resumeRun(repo, {
     id: opts.id,
     modules,
@@ -309,7 +280,6 @@ export async function resumeProject(
     ...(opts.publish !== undefined ? { publish: publishChange(opts.publish) ?? null } : {}),
     driver: (deps.driverFor ?? driverFor)(recorded, opts.id, setup, accounts),
     skills: (where, agent) => basicSkills(where, agent, on, picks),
-    ...(as !== undefined ? { gitAccount: as } : {}),
     ...(opts.log ? { log: opts.log } : {}),
   })
 }
