@@ -30,6 +30,9 @@ export const INERT_HOST_SERVICES: HostServices = {
   async agents() {
     return []
   },
+  async activity() {
+    return { items: [], whole: [] }
+  },
   async machines() {
     return { version: 'unknown', machines: [] }
   },

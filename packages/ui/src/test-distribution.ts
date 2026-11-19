@@ -24,6 +24,7 @@ export const DASHBOARD_PACKAGES: DashboardDistribution = [
   { package: '@openagt/dashboard-devices', for: 'computer' },
   { package: '@openagt/skill-account-rotation', for: 'computer' },
   { package: '@openagt/notifications-command', for: 'computer' },
+  { package: '@openagt/notifications-browser', for: 'computer', on: true },
   { package: '@openagt/skill-ask', on: true },
   { package: '@openagt/skill-logs' },
   { package: '@openagt/skill-tickets' },

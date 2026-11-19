@@ -476,8 +476,8 @@ export function AgentHistory({
             </SidebarContent>
           )}
         </Slot>
-        {/* The person at this dashboard, as one row that opens their menu: the theme, the
-            notifications and Settings (PersonMenu). */}
+        {/* The person at this dashboard, as one row that opens their menu: the theme and Settings
+            (PersonMenu). */}
         {/* At the bottom, the Log there or not yet. */}
         <SidebarFooter className="mt-auto">
           <PersonMenu onSettings={leave(onSettings)} />

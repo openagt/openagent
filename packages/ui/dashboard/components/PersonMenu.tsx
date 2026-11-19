@@ -6,7 +6,6 @@ import type { Person } from '../rpc/person.js'
 import { usePerson } from '../lib/use-person.js'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu.js'
 import { ThemeSubmenu } from './ThemeSubmenu.js'
-import { NotificationsSubmenu } from './NotificationsSubmenu.js'
 import { useMissing } from './Logins.js'
 import { useBackup } from '../lib/use-backup.js'
 import { AGENT_DATA_ENTRY } from './AgentDataSettings.js'
@@ -14,7 +13,7 @@ import { personLetters } from './PersonMark.js'
 import { cn } from '../lib/utils.js'
 
 // The foot of the sidebar: the person at this dashboard, their picture and first name, as one row
-// that opens their menu (his pick, over a row of three icons): the theme, the notifications, and
+// that opens their menu (his pick, over a row of three icons): the theme and
 // Settings, under their whole name. The accounts a run takes are picked where the run is started,
 // beside the message box, for the computer it goes to: the agent's in the agent picker, the git
 // host's after the branch; not here a second time. A dot on the picture says something runs need is missing, or that the agents' data is not backed up; the menu says what fixes it. The gear at the row's end says what the row opens. The name and
@@ -91,7 +90,6 @@ export function PersonMenu({ onSettings }: { onSettings: (entry?: string) => voi
           </>
         )}
         <ThemeSubmenu />
-        <NotificationsSubmenu />
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => onSettings()}>
           <Settings className="size-4 shrink-0 text-muted-foreground" aria-hidden />

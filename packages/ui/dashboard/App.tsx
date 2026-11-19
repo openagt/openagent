@@ -1,8 +1,8 @@
 import { PermissionsPage } from './components/Accounts.js'
 import { PresetsPage } from './components/PresetsPage.js'
 import { useEffect, useMemo, useReducer, useState, type CSSProperties } from 'react'
-import type { Activity, ProjectionRead, ProjectSummary, Waiting } from '../src/index.js'
-import { onProjectFiles, onWaiting, onActivity, onStartedName } from './rpc/reads.js'
+import type { ProjectionRead, ProjectSummary, Waiting } from '../src/index.js'
+import { onProjectFiles, onWaiting, onStartedName } from './rpc/reads.js'
 import { sendStart } from './rpc/control.js'
 import { onProjects } from './rpc/projects.js'
 import { AgentHistory } from './components/AgentHistory.js'
@@ -39,9 +39,8 @@ import { PRESETS_PAGE, PERMISSIONS_PAGE, back, leaving, useRoute } from './lib/u
 import { formatRoute, keepPageQuery, parseRoute, type Route } from './lib/route.js'
 import { projectAddresses, SESSIONS_ID } from '../src/project-address.js'
 import { startedAtFromAgentId } from '../src/agent-id.js'
-import { useActivityNotifications, useWaitingNotifications } from './lib/use-notifications.js'
 import { WaitingContext } from './lib/use-waiting.js'
-import { usePreferences, notificationsEnabled, newActivityEnabled, humanInterventionEnabled, OpenProjectContext } from './lib/preferences.js'
+import { usePreferences, OpenProjectContext } from './lib/preferences.js'
 import { useDocumentTitle } from './lib/document-title.js'
 import { projectLabels, ProjectLabelsContext } from './lib/project-labels.js'
 import { useActiveAgents } from './lib/use-working.js'
@@ -63,9 +62,6 @@ const EMPTY_PROJECTS: ProjectSummary[] = []
 
 /** Stable initial for the poll of what waits on the person, so it does not churn on every render. */
 const EMPTY_WAITING: ProjectionRead<Waiting> = { items: [], whole: [] }
-
-/** Stable initial for the activity poll (#627), so it does not churn on every render. */
-const EMPTY_ACTIVITY: ProjectionRead<Activity> = { items: [], whole: [] }
 
 
 /** A module's page as the sidebar, the bar of pages and the jump list draw it: by its address word. */
@@ -248,9 +244,9 @@ export function App() {
   // launcher's "Waiting on you" share one poll. Read again the moment a run changes, as the sidebar
   // is, and every five seconds for what no run tells (a pull request on the git host, read no more
   // often for it, its listing being cached).
-  // The read as a whole goes to the notifier, which tells of every project's items whichever one
-  // is picked, and also needs to know which projects the poll actually reached before it calls
-  // anything "new" (#1625).
+  // The read as a whole goes to every part as `all` (a module's notifier among them), which tells of
+  // every project's items whichever one is picked, and also needs to know which projects the poll
+  // actually reached before it calls anything "new" (#1625).
   const { value: waitingRead, state: waitingState } = usePolled<ProjectionRead<Waiting>>(
     onWaiting,
     EMPTY_WAITING,
@@ -265,7 +261,7 @@ export function App() {
   // What waits on the person as the pages show it: the picked project's items, or every project's.
   const waiting = useMemo(() => (scope ? waitingRead.items.filter(item => item.projectId === scope) : waitingRead.items), [waitingRead, scope])
   // What every part that shows it reads, a module's card among them: one object while the read stands.
-  const waitingShown = useMemo(() => ({ items: waiting, state: waitingState }), [waiting, waitingState])
+  const waitingShown = useMemo(() => ({ items: waiting, state: waitingState, all: waitingRead }), [waiting, waitingState, waitingRead])
   // A URL naming a project that is not registered (renamed, removed, mistyped). Only this load's
   // read, and a non-empty one, is the answer: the list this browser kept from its last load may lack
   // a project added since. Until that read, a project the kept list has is drawn from the first
@@ -276,21 +272,8 @@ export function App() {
   const unknownProject = projectAddress && projectsRead && projects.length > 0 && !listedProject
   const projectPending = projectAddress && !projectsRead && !listedProject
 
-  // Fire a browser notification when a new item lands on the "needs you" queue (#627). Rides the
-  // one poll above of what waits on the person (the poll stays unconditional — it also feeds the sidebar badge
-  // and Overview card); only the notification is gated, on both the category (`notifyHumanIntervention`,
-  // default on) and the browser method (`notifyBrowser`).
+  // The person's picks: whether runs are named, and what a run starts with.
   const preferences = usePreferences()
-  // Only a fresh read: one stored by an earlier visit taken as what was already there would announce
-  // everything that came while the page was closed.
-  useWaitingNotifications(waitingState === 'fresh' ? waitingRead : EMPTY_WAITING, humanInterventionEnabled(preferences) && notificationsEnabled(preferences), (inProject, id) => selectAgentInProject(inProject, id))
-
-  // The "New activity" category (#627): the default-off feed of agents starting/finishing. Its only
-  // client consumer is the browser notification below, so it is polled exactly when that will fire —
-  // both the category (`notifyNewActivity`) and the browser method (`notifyBrowser`) on.
-  const browserActivity = newActivityEnabled(preferences) && notificationsEnabled(preferences)
-  const { value: activity } = usePolled<ProjectionRead<Activity>>(browserActivity ? onActivity : null, EMPTY_ACTIVITY, 15000, [browserActivity], undefined, runsAgain(undefined))
-  useActivityNotifications(activity, browserActivity, (inProject, id) => selectAgentInProject(inProject, id))
 
   // The shared sidebar's recents when all projects show (#shared-shell): the rail pools every
   // project's sessions here.

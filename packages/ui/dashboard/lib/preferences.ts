@@ -1,12 +1,11 @@
 import { createContext, useContext, useEffect, useSyncExternalStore } from 'react'
 import type { CustomPreset, Preferences } from '../../src/index.js'
-import { browserNotifyEnabled, notifyCategoryEnabled } from '../../src/client.js'
 import { onPreferences, patchPreferences, onProjectPresets, saveProjectPresets } from '../rpc/preferences.js'
 
 // The dashboard's Global options (#410), owned by the daemon and persisted in the same
 // `openagent.json` as the project list — no more localStorage. Loaded once over its RPC
-// and cached in this module so every component (the Start form's toggles, the notifications
-// menu, Settings) reads one shared value and stays in lockstep: an update writes through to the
+// and cached in this module so every component (the Start form's toggles,
+// Settings) reads one shared value and stays in lockstep: an update writes through to the
 // cache, notifies subscribers, and persists daemon-side. Prerender has no daemon, so the
 // server snapshot is the empty default and the real values load on the client.
 //
@@ -206,23 +205,4 @@ export function themePreference(preferences: Preferences): ThemePreference {
 /** Whether the dark palette applies, given the theme choice and the OS's dark preference. */
 export function resolvedDark(theme: ThemePreference, systemDark: boolean): boolean {
   return theme === 'dark' || (theme === 'system' && systemDark)
-}
-
-// The notification defaults are OpenAgent's (#627), not the dashboard's: the polarities are
-// not uniform, so they have one home. These stay as named readers because the call sites read
-// better for it — and each one says which axis it is asking about (B5).
-
-/** Browser delivery; the browser permission is still the real gate. */
-export function notificationsEnabled(preferences: Preferences): boolean {
-  return browserNotifyEnabled(preferences)
-}
-
-/** The "New activity" category: pings on a session starting or finishing. Composes with browser delivery above. */
-export function newActivityEnabled(preferences: Preferences): boolean {
-  return notifyCategoryEnabled(preferences, 'newActivity')
-}
-
-/** The "needs you" category: a session awaiting your answer, or a PR to review. */
-export function humanInterventionEnabled(preferences: Preferences): boolean {
-  return notifyCategoryEnabled(preferences, 'humanIntervention')
 }

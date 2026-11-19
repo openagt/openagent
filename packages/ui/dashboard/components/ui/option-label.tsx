@@ -1,5 +1,5 @@
 // A menu item's label with a short one-line description under it (#654). Shared by the
-// options, notifications, and Commands menus so they read identically. Lives in ui/ so a menu
+// options and Commands menus so they read identically. Lives in ui/ so a menu
 // can use it without dragging in another menu's module (and its preference wiring).
 export function OptionLabel({ label, description }: { label: string; description?: string | undefined }) {
   return (

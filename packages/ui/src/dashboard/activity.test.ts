@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { buildActivity, activityKey } from './activity.js'
+import { buildActivity } from './activity.js'
 import type { ProjectSummary } from './projects.js'
 import type { AgentMeta } from '../store/index.js'
 
@@ -71,11 +71,5 @@ test('buildActivity calls a project read when it has no runs at all (#1623)', as
   const { items, whole } = await buildActivity([project('fresh', '/fresh')], { readAgents })
   assert.deepEqual(items, [])
   assert.deepEqual(whole, ['fresh'])
-})
-
-test('activityKey separates a run start from its finish', () => {
-  const base = { projectId: 'a', projectName: 'a', agentId: 'r1' } as const
-  assert.equal(activityKey({ ...base, kind: 'started' }), 'started:a:r1')
-  assert.equal(activityKey({ ...base, kind: 'finished' }), 'finished:a:r1')
 })
 

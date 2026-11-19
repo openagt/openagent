@@ -15,8 +15,8 @@ already made, and lists it in its pull request; for anything else it proposes an
   (`@openagt/start`), a second name in front of the dashboard; and over the list of the skills
   every run gets staying in the runner.
 - A new project has what an agent needs in any project to work at all: the core modules, with
-  github's skill on a GitHub project, and ask, the one plugin the distribution starts on (#2394,
-  decisions 18 and 31). Every other plugin starts off, in every project, until the person
+  github's skill on a GitHub project, and ask, the one plugin kept per project the distribution
+  starts on (#2394, decisions 18 and 31). Every other plugin starts off, in every project, until the person
   switches it on: the tickets, the queue, the logs, the browser, the scheduler. A new project
   shows only the pages of the plugins on in it. Picked over the skills with pages coming with
   every run, which gave a new project Tickets, Queue and Logs pages it never asked for; and over
@@ -114,10 +114,11 @@ already made, and lists it in its pull request; for anything else it proposes an
   else the branch as the agent named it; OpenAgent derives no session name from a branch.
   Picked over stripping the package's prefix here, which was OpenAgent knowing how the
   package names a branch.
-- Notifications are the browser's only: they alert in the open tab. Posting to a
-  channel is a skill's, fired when a run needs the person by the notifications-command
-  plugin's step, which runs with the run. Picked over the dashboard's Discord watchers,
-  which posted only while the dashboard was running.
+- The dashboard sends no notification of its own: each way of telling the person is a plugin
+  (#2394), the browser's in the open tab (notifications-browser), and a command's, fired when a
+  run needs the person by the notifications-command plugin's step, which runs with the run, to
+  post to a channel with a skill. Picked over the dashboard's notifier and its Settings entry,
+  and over its Discord watchers, which posted only while the dashboard was running.
 - The themes keep Claude Code's levels in Everforest's colors. Dark is Everforest's hue a
   step darker than its dimmest background, as dark as Claude Code's: the page near-black,
   the sidebar and panes a step above it, fills and lines close to them. Light is near-white
@@ -172,7 +173,7 @@ already made, and lists it in its pull request; for anything else it proposes an
 - The bar above a session's box goes once its pull request is merged or closed. Picked over the
   bar staying with the request as a label: the labels under the box already say it.
 - The foot of the sidebar is the person: their picture and first name, as one row that opens
-  one menu with their whole name, the theme, the notifications and Settings. The project select stays at the
+  one menu with their whole name, the theme and Settings. The project select stays at the
   top, beside the pages it changes. Picked over a row of three icons, and over the project
   select at the foot.
 - OpenAgent never pushes as the person's own login: the personal folder's sync and a project's
@@ -493,8 +494,8 @@ already made, and lists it in its pull request; for anything else it proposes an
   goes there. Picked over the server following at once, which could leave its runs with no login.
 - Only a person's own computers' logins are used. A person with no computer of their own logs
   in on the server's own page, in the same cards, the browser step on their own device.
-- The person's settings follow the same way: how OpenAgent looks, what it tells them, what a run
-  starts with, the onboarding hidden. One changed on the server's own page stays until the same
+- The person's settings follow the same way: how OpenAgent looks, what a run starts with, the
+  onboarding hidden. One changed on the server's own page stays until the same
   one changes on the computer. A computer's own settings (its editor, its browser bridge) stay
   its own. Picked over each OpenAgent keeping its own settings, where a phone showed what the
   laptop had hidden.

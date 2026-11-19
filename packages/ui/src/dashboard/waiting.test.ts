@@ -5,6 +5,9 @@ import { memoryStore } from '@openagt/hooks/testing'
 import ask from '@openagt/skill-ask/module'
 import { buildWaiting, waitingKey, type Waiting, type WaitingDeps } from './waiting.js'
 import { forgetStartedNames, nameStarted } from '../started-names.js'
+import { pendingChoices } from '../open-choices.js'
+import { eventsOf } from '../store/run-record.js'
+import type { AnyDiaryLine } from '../store/runs.js'
 import type { OpenPr } from './pull-requests.js'
 import type { BranchAhead, BranchesFor } from '../store/branches.js'
 import type { ProjectSummary } from './projects.js'
@@ -209,6 +212,21 @@ test("an item's key is its project, its module, and its own id there, else what 
   // an identity without the run in the question's id — and the dedupe would announce only one of them.
   const parked = item({ module: 'ask', scope: 'run' })
   assert.notEqual(waitingKey({ ...parked, run: 'r1', id: 'r1:question' }), waitingKey({ ...parked, run: 'r2', id: 'r2:question' }))
+})
+
+test("a run's second question is a new key: each question is the one asked at its own line", () => {
+  // As ask says it: the run, and the question it asks now.
+  const keys = (lines: AnyDiaryLine[]): string[] =>
+    pendingChoices(eventsOf(lines)).map(choice => waitingKey({ projectId: 'p', module: 'ask', scope: 'run', run: 'r1', id: `r1:${choice.id}` }))
+  const first = { kind: 'question', title: 'Which way?', options: [{ id: 'a', label: 'Left' }], at: '2026-11-15T10:00:00.000Z' }
+  const second = { kind: 'question', title: 'Which colour?', options: [{ id: 'b', label: 'Blue' }], at: '2026-11-15T10:05:00.000Z' }
+  const answered = [first, { kind: 'said', text: 'Going left.', at: '2026-11-15T10:01:00.000Z' }]
+  const asked = keys([first])
+  assert.equal(asked.length, 1)
+  assert.deepEqual(keys(answered), [])
+  const again = keys([...answered, second])
+  assert.equal(again.length, 1)
+  assert.notEqual(again[0], asked[0])
 })
 
 // #860: a finished agent whose branch still holds unpushed, unmerged commits.

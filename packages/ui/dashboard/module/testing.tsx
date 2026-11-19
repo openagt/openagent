@@ -42,6 +42,7 @@ export function fakeHost(pkg: string, services: Partial<Omit<ModuleHost, 'packag
     startRun: nothing,
     configureRun: () => {},
     agents: async () => [],
+    activity: async () => ({ items: [], whole: [] }),
     machines: async () => ({ version: '0.0.0', machines: [] }),
     addMachine: nothing,
     removeMachine: nothing,

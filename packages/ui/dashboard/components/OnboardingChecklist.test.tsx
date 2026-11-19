@@ -16,9 +16,7 @@ const updatePreferences = vi.hoisted(() => vi.fn())
 vi.mock('../lib/preferences.js', () => ({
   usePreferences: () => ({}),
   updatePreferences,
-  notificationsEnabled: () => false,
 }))
-vi.mock('../lib/notification-permission.js', () => ({ useNotificationPermission: () => 'default' }))
 const logins = vi.hoisted(() => ({ onGitHosts: vi.fn(), onAgentState: vi.fn(), sendAgentFix: vi.fn(), sendGitHostInstall: vi.fn(), sendGitHostLogin: vi.fn(), sendStopGitHostLogin: vi.fn(), sendUseGitHostAccount: vi.fn() }))
 vi.mock('../rpc/logins.js', () => logins)
 // One stable object, so a test can steer the start and its error without a re-mock.
@@ -101,10 +99,10 @@ describe('the first steps on the Overview', () => {
     logins.onGitHosts.mockResolvedValue(github([]))
     steps()
     // A part's heading like every other, the count beside it as every part's count stands.
-    const heading = await screen.findByRole('heading', { level: 2, name: /^Good (morning|afternoon|evening), Ada 0 of 3$/ })
+    const heading = await screen.findByRole('heading', { level: 2, name: /^Good (morning|afternoon|evening), Ada 0 of 2$/ })
     expect(heading.className).toContain('text-sm')
-    expect(within(heading).getByText('0 of 3').className).toContain('font-normal')
-    expect(await screen.findByRole('list', { name: '0 of 3 done' })).toBeTruthy()
+    expect(within(heading).getByText('0 of 2').className).toContain('font-normal')
+    expect(await screen.findByRole('list', { name: '0 of 2 done' })).toBeTruthy()
   })
 
   test.each(['dashboard', 'agent', 'hosts'])('says "Loading…" and no step until the projects, the coding agent and the git hosts are read, and tells the page only then: %s answers last', async last => {
@@ -163,11 +161,11 @@ describe('the first steps on the Overview', () => {
     cleanup()
     const none = await frame([{ id: 'logs', label: 'Logs', projects: ['p1'] }])
     expect(none).not.toContain('a place')
-    expect(none.at(-1)).toBe('Turn on notifications')
+    expect(none.at(-1)).toBe('Add your first project')
     const queue = await frame([{ id: 'queue', label: 'Queue', projects: ['p1'] }, { id: 'logs', label: 'Logs', projects: ['p1'] }])
-    expect(queue).toEqual([...none.slice(0, -1), 'a place', 'Turn on notifications'])
+    expect(queue).toEqual([...none, 'a place'])
     const both = await frame([{ id: 'queue', label: 'Queue', projects: ['p1'] }, { id: 'tickets', label: 'Tickets', projects: ['p1'] }])
-    expect(both).toEqual([...none.slice(0, -1), 'a place', 'a place', 'Turn on notifications'])
+    expect(both).toEqual([...none, 'a place', 'a place'])
   })
 
   test('what adding a project does is behind an ⓘ beside the open step, not in its way', async () => {
@@ -237,7 +235,6 @@ describe('the first steps on the Overview', () => {
     steps({ projects: [SHOP] })
     await waitFor(() => expect(row('Populate the tickets')).toBeTruthy())
     expect(within(row('Populate the tickets')).getByText('Optional')).toBeTruthy()
-    expect(within(row('Turn on notifications')).getByText('Optional')).toBeTruthy()
     expect(within(row('Populate the queue of AI tasks')).queryByText('Optional')).toBeNull()
   })
 
@@ -262,7 +259,7 @@ describe('the first steps on the Overview', () => {
   test('the queue step is there only while some project has a queue at all, the tickets step only while some project provides tickets (#1774)', async () => {
     onDashboard.mockResolvedValue({ ...WITH_PROJECT, projects: [{ projectId: 'p1', hasTickets: false, providesTickets: false }] } as DashboardData)
     steps({ projects: [SHOP] })
-    await waitFor(() => expect(row('Turn on notifications')).toBeTruthy())
+    await waitFor(() => expect(row('Add your first project')).toBeTruthy())
     expect(screen.queryByRole('listitem', { name: 'Populate the queue of AI tasks' })).toBeNull()
     expect(screen.queryByRole('listitem', { name: 'Populate the tickets' })).toBeNull()
   })

@@ -13,14 +13,14 @@
 // sharing every chunk with the dashboard itself. Nothing here names a skill.
 import type { Health } from '../../src/health.js'
 import { createContext, useContext } from 'react'
-import type { AgentStatus, Waiting as WaitingItem } from '../../src/index.js'
+import type { Activity as ActivityItem, AgentStatus, ProjectionRead, Waiting as WaitingItem } from '../../src/index.js'
 import type { ModuleAgent, ModuleAgentsWanted } from '../../src/dashboard/module-agents.js'
 import { callModule, runComputerCommand, runComputerCommandOn, runModuleCommand } from '../rpc/modules.js'
 import type { ModuleCallResult, ModuleCommandResult } from '../rpc/modules.js'
 import type { ComputerRpcClient, RpcClient } from '@openagt/hooks/rpc'
 import { DaemonDown } from '../lib/use-daemon-health.js'
 
-export type { ModuleCallResult, ModuleCommandResult, AgentStatus, Health, ModuleAgent, ModuleAgentsWanted, WaitingItem }
+export type { ModuleCallResult, ModuleCommandResult, ActivityItem, AgentStatus, Health, ModuleAgent, ModuleAgentsWanted, ProjectionRead, WaitingItem }
 export type * from '@openagt/hooks/ui'
 export { defineUiModule } from '@openagt/hooks/ui'
 
@@ -124,6 +124,11 @@ export interface ModuleHost {
    * the last 30 days): a project keeps hundreds, and a phone downloads every one asked for.
    */
   agents(projectId: string, wanted?: ModuleAgentsWanted): Promise<ModuleAgent[]>
+  /**
+   * The runs that started or ended lately, in every project of this computer's and of the ones it
+   * reaches, with the projects the read reached whole: what a part that tells of activity compares.
+   */
+  activity(): Promise<ProjectionRead<ActivityItem>>
   /**
    * The other computers a run can be sent to, as saved on this one, each with the OpenAgent it
    * runs, beside this computer's own: how a page tells that a machine fell behind this computer.
@@ -414,12 +419,12 @@ export { ButtonGroup, ButtonGroupSeparator } from '../components/ui/button-group
 export { LinkActions, useLinkActions, type LinkActionOffer, type ProjectLinks, type LinkTargets } from '../components/LinkActions.js'
 export { MachineMark } from '../components/MachineMark.js'
 export { PersonMark, personName } from '../components/PersonMark.js'
-export { needsWord, type RunNeed } from '../../src/client.js'
+export { needsWord, waitingKey, type RunNeed } from '../../src/client.js'
 export { WaitingList, holdsBack } from '../components/WaitingList.js'
 export { useWaiting, type WaitingRead } from '../lib/use-waiting.js'
 export { useGitHostPeople, personSaid } from '../lib/use-git-host-people.js'
 export { machineKind, machineName, runName, type MachineKind } from '../../src/client.js'
-export { SettingsFoot, SettingsItem, SettingsItems, SettingsSection, SettingsRow, SettingsRowShapes, SettingsSelectRow, type SettingsOption } from '../components/SettingsRows.js'
+export { SettingsFoot, SettingsItem, SettingsItems, SettingsSection, SettingsRow, SettingsRowShapes, SettingsSelectRow, ToggleRow, type SettingsOption } from '../components/SettingsRows.js'
 export { Avatar } from '../components/PersonMenu.js'
 export { usePerson, personChanged } from '../lib/use-person.js'
 export { useSettingsCrumb, type SettingsCrumb } from '../lib/settings-crumb.js'

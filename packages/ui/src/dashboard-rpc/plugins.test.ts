@@ -33,8 +33,8 @@ test("Settings › Plugins lists the distribution's plugins with their rows, the
     assert.deepEqual(rows!.flatMap(row => (row.settings ? [`${row.name} ${row.settings}`] : [])), ['store-git-branch project-agent-data'], 'a git store is switched on its own entry')
     assert.deepEqual(
       (await onComputerPlugins()).map(row => `${row.name} ${row.scope} ${row.on ? 'on' : 'off'} ${row.settings}`),
-      ['store-git-repository computer off agent-data', 'devices computer on undefined', 'notifications-command computer off undefined'],
-      'the folder syncs with no repository yet, the tests have devices on, and notifications-command starts off',
+      ['store-git-repository computer off agent-data', 'devices computer on undefined', 'notifications-command computer off undefined', 'notifications-browser person on undefined'],
+      'the folder syncs with no repository yet, the tests have devices on, notifications-command starts off and notifications-browser on',
     )
 
     assert.deepEqual(await sendSwitchPlugin('tickets', true, id), { ok: true })

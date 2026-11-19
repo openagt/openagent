@@ -19,7 +19,8 @@ whose each is and which plugins start on, and the `openagent` command, which ser
 ([`@openagt/ui`](../ui/README.md)) with them. A project installs none of them.
 
 The core modules are always on. A plugin has an Enabled row each, switched in **Settings ›
-Plugins**: `ask` starts on, every other plugin starts off (devices, which is the door to this
+Plugins**: `ask` and desktop notifications while the dashboard is open (**Settings ›
+Notifications**) start on, every other plugin starts off (devices, which is the door to this
 computer and your other computers, the command this computer runs when a run needs you, typed in
 **Settings › Notification command**, the tickets, the queue, the logs, the browser, the
 scheduler, Discord and the commands that move a ticket to work). The two git stores
@@ -116,8 +117,7 @@ So a working agent and a finished one render identically, and an agent on anothe
 needs only its lines carried home.
 
 - **One daemon per machine.** Running the CLI in any registered repo finds it. It serves
-  the dashboard, runs each project's hooks, and runs the background work — the notifications
-  and the cloud sweeps.
+  the dashboard, runs each project's hooks, and runs the background work — the cloud sweeps.
 - **An agent is one task being worked**, in its own checkout on its own branch. You can watch
   it, answer its questions, and say more to it — or not be there at all.
 - **What you can ask for is your project's own commands**: its skills, read from

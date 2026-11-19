@@ -234,11 +234,11 @@ test('readRegistry reads only the object form; a shape it no longer writes is an
 test('readRegistry reads the object form with preferences and drops unknown/non-boolean fields', async () => {
   const raw = JSON.stringify({
     projects: [APP_A],
-    preferences: { bridge: true, notifyNewActivity: 'yes', bogus: 1, notifyBrowser: true, bridgeBrowser: true },
+    preferences: { bridge: true, nameRuns: 'yes', bogus: 1, showThinking: true, bridgeBrowser: true },
   })
   assert.deepEqual(await readRegistry(ENV, memFs({ [FILE]: raw })), {
     projects: [APP_A],
-    preferences: { bridge: true, notifyBrowser: true, bridgeBrowser: true }, // notifyNewActivity (non-boolean) + bogus dropped
+    preferences: { bridge: true, showThinking: true, bridgeBrowser: true }, // nameRuns (non-boolean) + bogus dropped
   })
 })
 
@@ -250,9 +250,6 @@ test('every boolean preference survives a save; the sanitizer cannot silently dr
     [K in keyof Preferences]-?: NonNullable<Preferences[K]> extends boolean ? K : never
   }[keyof Preferences]
   const allOn: Record<BooleanKey, boolean> = {
-    notifyBrowser: true,
-    notifyNewActivity: true,
-    notifyHumanIntervention: true,
     bridge: true,
     bridgeBrowser: true,
     onboardingDismissed: true,
@@ -325,9 +322,9 @@ test('patchPreferences merges only the keys it is given (#1148)', async () => {
   // someone else's change wrote the old value back over it. A patch touches only what it names.
   const fs = memFs({ [FILE]: JSON.stringify({ projects: [], preferences: { theme: 'dark', driver: 'codex' } }) })
 
-  const stored = await patchPreferences({ notifyBrowser: true }, ENV, fs)
+  const stored = await patchPreferences({ showThinking: true }, ENV, fs)
 
-  assert.deepEqual(stored, { theme: 'dark', driver: 'codex', notifyBrowser: true })
+  assert.deepEqual(stored, { theme: 'dark', driver: 'codex', showThinking: true })
   assert.deepEqual(await readPreferences(ENV, fs), stored)
 })
 
@@ -372,19 +369,6 @@ test('writePreferences persists sanitized prefs and preserves the project list',
   })
   // The project list still reads back unchanged.
   assert.deepEqual(await listProjects(ENV, fs), [APP_A, APP_B])
-})
-
-test('writePreferences round-trips the notifyNewActivity toggle (#627)', async () => {
-  const fs = memFs({ [FILE]: JSON.stringify({ projects: [APP_A], preferences: {} }) })
-  await writePreferences({ notifyNewActivity: true }, ENV, fs)
-  assert.deepEqual(await readPreferences(ENV, fs), { notifyNewActivity: true })
-})
-
-test('writePreferences round-trips the notifyHumanIntervention toggle (#627)', async () => {
-  const fs = memFs({ [FILE]: JSON.stringify({ projects: [APP_A], preferences: {} }) })
-  // Default is on, so the persisted value that matters is the explicit opt-out.
-  await writePreferences({ notifyHumanIntervention: false }, ENV, fs)
-  assert.deepEqual(await readPreferences(ENV, fs), { notifyHumanIntervention: false })
 })
 
 test('writePreferences keeps the model string but drops a blank one (#628)', async () => {
@@ -497,11 +481,11 @@ test('registryPreferencesStore tells its listener which keys were written (#1161
   const fs = memFs()
   const written: Preferences[] = []
   const store = registryPreferencesStore(ENV, patch => written.push(patch), fs)
-  await store.save({ notifyNewActivity: true })
+  await store.save({ showThinking: true })
   await store.patch?.({ bridge: true })
-  assert.deepEqual(written, [{ notifyNewActivity: true }, { bridge: true }])
+  assert.deepEqual(written, [{ showThinking: true }, { bridge: true }])
   // The patch still merged, so the listener's narrower view is not the stored one.
-  assert.deepEqual(await store.read(), { notifyNewActivity: true, bridge: true })
+  assert.deepEqual(await store.read(), { showThinking: true, bridge: true })
 })
 
 test('a preferences listener that throws does not fail the write (#1161)', async () => {
@@ -514,8 +498,8 @@ test('a preferences listener that throws does not fail the write (#1161)', async
     },
     fs,
   )
-  await store.save({ notifyNewActivity: true })
-  assert.deepEqual(await store.read(), { notifyNewActivity: true })
+  await store.save({ showThinking: true })
+  assert.deepEqual(await store.read(), { showThinking: true })
 })
 
 test('the registry file is never written in place, only renamed over (#991)', async () => {

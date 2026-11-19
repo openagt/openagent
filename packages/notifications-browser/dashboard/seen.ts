@@ -1,6 +1,6 @@
 // The baseline half of the browser's notifications (#627): what a feed already held versus what
-// is new. One engine, two feeds: the "needs you" queue and the "New activity" feed. They differ
-// only in how an item is identified, so that is a parameter rather than a second copy.
+// is new. One engine, two feeds: what waits on the person and the runs that start or end. They
+// differ only in how an item is identified, so that is a parameter rather than a second copy.
 
 /**
  * Tracks which items have been announced, so only new ones notify. Identity is the caller's
@@ -29,12 +29,10 @@ export class SeenTracker<T> {
    * never announced, and a project that could not be read stays quiet until it can be.
    *
    * Items keep being folded in either way: a partial read can only under-report, never invent, so
-   * anything it did see is still something the user should not later hear about as new.
+   * anything it did see is still something the person should not later hear about as new.
    */
-  observe(items: T[], whole: Iterable<string>): T[] {
-    const fresh = items.filter(
-      item => this.warmedUp.has(this.scopeOf(item)) && !this.seen.has(this.keyOf(item)),
-    )
+  observe(items: readonly T[], whole: Iterable<string>): T[] {
+    const fresh = items.filter(item => this.warmedUp.has(this.scopeOf(item)) && !this.seen.has(this.keyOf(item)))
     for (const item of items) this.seen.add(this.keyOf(item))
     for (const project of whole) this.warmedUp.add(project)
     return fresh

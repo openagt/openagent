@@ -15,9 +15,8 @@ vi.mock('../lib/host-services.js', async importOriginal => {
   const actual = await importOriginal<typeof import('../lib/host-services.js')>()
   return { ...actual, INERT_HOST_SERVICES: { ...actual.INERT_HOST_SERVICES, openPage } }
 })
-// The menu's theme and notifications rows have their own suites; here they are the rows' names.
+// The menu's theme row has its own suite; here it is the row's name.
 vi.mock('./ThemeSubmenu.js', () => ({ ThemeSubmenu: () => <div role="menuitem">Theme</div> }))
-vi.mock('./NotificationsSubmenu.js', () => ({ NotificationsSubmenu: () => <div role="menuitem">Notifications</div> }))
 
 const { PersonMenu, firstName } = await import('./PersonMenu.js')
 
@@ -39,7 +38,7 @@ afterEach(() => {
 })
 
 describe('PersonMenu', () => {
-  test('the person\'s row: their picture and first name, opening their whole name, the theme, the notifications, and Settings', async () => {
+  test('the person\'s row: their picture and first name, opening their whole name, the theme and Settings', async () => {
     onPerson.mockResolvedValue({ name: 'Ada Lovelace', github: 'ada', avatar: 'https://avatars.githubusercontent.com/u/1' })
     const onSettings = vi.fn()
     const { container } = render(<PersonMenu onSettings={onSettings} />)
@@ -49,7 +48,7 @@ describe('PersonMenu', () => {
     fireEvent.click(row)
     expect(screen.getByText('Ada Lovelace')).toBeTruthy()
     expect(screen.getByText('@ada')).toBeTruthy()
-    expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toEqual(['Theme', 'Notifications', 'Settings'])
+    expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toEqual(['Theme', 'Settings'])
     fireEvent.click(screen.getByRole('menuitem', { name: 'Settings' }))
     expect(onSettings).toHaveBeenCalledTimes(1)
   })
@@ -62,7 +61,7 @@ describe('PersonMenu', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Ada Lovelace: settings' }))
     await waitFor(() => expect(logins.onGitHosts).toHaveBeenCalled())
     await new Promise(resolve => setTimeout(resolve, 20))
-    expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toEqual(['Theme', 'Notifications', 'Settings'])
+    expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toEqual(['Theme', 'Settings'])
   })
 
   test('drawn again, as a phone draws its sidebar at each opening, the row shows the person at once, while they are asked again', async () => {

@@ -40,25 +40,25 @@ describe('preferences', () => {
     const { usePreferences, updatePreferences } = await import('./preferences.js')
 
     const { result } = renderHook(() => usePreferences())
-    // The load is in flight; the user turns browser notifications off before it resolves.
-    act(() => updatePreferences({ notifyBrowser: false }))
-    expect(result.current.notifyBrowser).toBe(false)
+    // The load is in flight; the person turns run naming off before it resolves.
+    act(() => updatePreferences({ nameRuns: false }))
+    expect(result.current.nameRuns).toBe(false)
 
     // The load now resolves with the server's pre-toggle value; the toggle must win.
     await act(async () => {
-      resolveLoad({ notifyBrowser: true })
+      resolveLoad({ nameRuns: true })
       await Promise.resolve()
     })
-    expect(result.current.notifyBrowser).toBe(false)
+    expect(result.current.nameRuns).toBe(false)
   })
 
   test('the initial load populates the cache when no optimistic write raced it', async () => {
-    onPreferences.mockResolvedValue({ notifyBrowser: false, notifyNewActivity: true })
+    onPreferences.mockResolvedValue({ nameRuns: false, showThinking: true })
     const { usePreferences } = await import('./preferences.js')
 
     const { result } = renderHook(() => usePreferences())
     await flush()
-    expect(result.current).toEqual({ notifyBrowser: false, notifyNewActivity: true })
+    expect(result.current).toEqual({ nameRuns: false, showThinking: true })
   })
 
   test('a screen can tell the preferences not read yet from the preferences read', async () => {
@@ -78,30 +78,30 @@ describe('preferences', () => {
   // A stale tab reverting settings it never touched (#1148).
 
   test('a write sends only the keys it changed, so it cannot replay the rest', async () => {
-    onPreferences.mockResolvedValue({ theme: 'dark', notifyBrowser: false })
+    onPreferences.mockResolvedValue({ theme: 'dark', showThinking: false })
     const { usePreferences, updatePreferences } = await import('./preferences.js')
 
     renderHook(() => usePreferences())
     await flush()
-    act(() => updatePreferences({ notifyBrowser: true }))
+    act(() => updatePreferences({ showThinking: true }))
 
-    // Not `{ theme: 'dark', notifyBrowser: true }`: sending the whole cached object is how a tab
+    // Not `{ theme: 'dark', showThinking: true }`: sending the whole cached object is how a tab
     // opened before someone else changed the theme wrote the old theme back over it.
-    expect(patchPreferences).toHaveBeenCalledWith({ notifyBrowser: true })
+    expect(patchPreferences).toHaveBeenCalledWith({ showThinking: true })
   })
 
   test("a write adopts the daemon's answer, so a stale tab converges", async () => {
     onPreferences.mockResolvedValue({ theme: 'dark' })
     // Another tab set the theme to light in the meantime; the merged result carries it back.
-    patchPreferences.mockResolvedValue({ ok: true, preferences: { theme: 'light', notifyBrowser: true } })
+    patchPreferences.mockResolvedValue({ ok: true, preferences: { theme: 'light', showThinking: true } })
     const { usePreferences, updatePreferences } = await import('./preferences.js')
 
     const { result } = renderHook(() => usePreferences())
     await flush()
-    act(() => updatePreferences({ notifyBrowser: true }))
+    act(() => updatePreferences({ showThinking: true }))
     await flush()
 
-    expect(result.current).toEqual({ theme: 'light', notifyBrowser: true })
+    expect(result.current).toEqual({ theme: 'light', showThinking: true })
   })
 
   test('a reply that lands after a newer write does not undo it', async () => {

@@ -1,22 +1,21 @@
 import { useEffect, useRef } from 'react'
-import type { Activity, Waiting } from '../../src/index.js'
-import { SeenTracker, activityKey, waitingKey, type ProjectionRead } from '../../src/client.js'
+import { waitingKey, type ActivityItem, type ProjectionRead, type WaitingItem } from '@openagt/ui/module'
+import { SeenTracker } from './seen.js'
 
-// Browser notifications for the two feeds the shell already polls (#627): the "needs you"
-// queue and the "new activity" feed. One engine — identity and baseline are imported from
-// OpenAgent, beside the item types they read, so they cannot drift from them. What differs per
-// feed is wording and where a click goes, which is what a spec is.
+// Browser notifications for the two feeds (#627): what waits on the person, which the shell reads
+// for every part that shows it, and the runs that start or end. One engine: what differs per feed
+// is wording and where a click goes, which is what a spec is.
 //
-// Two guards keep it quiet: it never fires unless enabled AND the browser permission is granted,
-// and a project's backlog is absorbed as a baseline the first time that project is read whole —
-// you only hear about what happens while you are watching, never what was already there.
+// Two guards keep it quiet: it never fires unless its kind is on AND the browser allows it, and a
+// project's backlog is absorbed as a baseline the first time that project is read whole: the person
+// only hears of what happens while they are watching, never of what was already there.
 //
 // The baseline used to be a count: the first two observations, whatever they held (#1625). A page
-// opened while the daemon could not reach the git host spent both of them on empty lists, and the first
-// fetch that did reach the git host announced every already-open pull request as new.
+// opened while the daemon could not reach the git host spent both of them on empty lists, and the
+// first fetch that did reach the git host announced every already-open pull request as new.
 
 /** The per-feed half: identity plus wording and click target. */
-interface NotificationSpec<T> {
+export interface NotificationSpec<T> {
   keyOf: (item: T) => string
   title: (first: T, count: number) => string
   /** How one item reads in the notification body. */
@@ -46,17 +45,11 @@ function fire<T>(items: T[], spec: NotificationSpec<T>, openAgent: OpenAgent): v
 }
 
 /**
- * Fire a browser notification when a new item appears in a watched feed. `enabled` folds the
- * gates the caller owns (the category toggle AND the browser method); the browser permission is
- * the remaining gate (checked in {@link fire}). No-op on the server (no `window`), and harmless
- * when notifications are unsupported.
+ * Fire a browser notification when a new item appears in a watched feed. `enabled` is the kind's
+ * switch; the browser's permission is the remaining gate (checked in {@link fire}). Harmless where
+ * notifications are unsupported.
  */
-function useNewItemNotifications<T extends { projectId: string }>(
-  read: ProjectionRead<T>,
-  enabled: boolean,
-  spec: NotificationSpec<T>,
-  openAgent: OpenAgent,
-): void {
+export function useNewItemNotifications<T extends { projectId: string }>(read: ProjectionRead<T>, enabled: boolean, spec: NotificationSpec<T>, openAgent: OpenAgent): void {
   // A click comes long after the render that fired: it opens the run as the page navigates by then.
   const open = useRef(openAgent)
   open.current = openAgent
@@ -65,19 +58,20 @@ function useNewItemNotifications<T extends { projectId: string }>(
   const lastRead = useRef<ProjectionRead<T> | undefined>(undefined)
 
   useEffect(() => {
-    // A toggle flip re-runs this effect with the SAME feed, and re-observing it would be busywork:
-    // every item is already in the baseline. Only a genuine fetch is worth folding in.
+    // A switch flipped re-runs this effect with the SAME feed, and observing it again would be
+    // busywork: every item is already in the baseline. Only a genuine fetch is worth folding in.
     if (read === lastRead.current) return
     lastRead.current = read
-    // Observed whether or not notifications are on, which is what keeps flipping the toggle from
-    // replaying the backlog: what happened while it was off is still "already there".
+    // Observed whether or not the kind is on, which is what keeps switching it on from replaying the
+    // backlog: what happened while it was off is still "already there".
     const fresh = tracker.current!.observe(read.items, read.whole)
     if (enabled && fresh.length > 0) fire(fresh, spec, (projectId, agentId) => open.current(projectId, agentId))
-    // The spec is a module const (stable identity), so the feed and the toggle are the deps.
+    // The spec is a module const (stable identity), so the feed and the switch are the deps.
   }, [read, enabled]) // eslint-disable-line react-hooks/exhaustive-deps
 }
 
-const WAITING: NotificationSpec<Waiting> = {
+/** What waits on the person: a question to answer, a pull request to review, work left. */
+export const WAITING: NotificationSpec<WaitingItem> = {
   keyOf: waitingKey,
   title: (first, count) => (count === 1 ? `Human Queue · ${first.projectName}` : `${count} items in your Human Queue`),
   // Each by what it is about, as the list's rows: the run's name, what it needs, and what that adds (the question, the request's number, the work left).
@@ -86,20 +80,18 @@ const WAITING: NotificationSpec<Waiting> = {
   opens: first => (first.run !== undefined ? { projectId: first.projectId, agentId: first.run } : first.fix !== undefined && 'href' in first.fix ? { url: first.fix.href } : undefined),
 }
 
-const ACTIVITY: NotificationSpec<Activity> = {
+/**
+ * The stable identity of an activity item: its kind, project and run. The kind is part of the key
+ * so a run's `started` and `finished` are two announcements, each made once.
+ */
+export function activityKey(item: ActivityItem): string {
+  return `${item.kind}:${item.projectId}:${item.agentId}`
+}
+
+/** A run that started or ended. */
+export const ACTIVITY: NotificationSpec<ActivityItem> = {
   keyOf: activityKey,
-  title: (first, count) =>
-    count === 1 ? `${first.kind === 'started' ? 'Agent started' : 'Agent finished'} · ${first.projectName}` : `${count} agent updates`,
+  title: (first, count) => (count === 1 ? `${first.kind === 'started' ? 'Agent started' : 'Agent finished'} · ${first.projectName}` : `${count} agent updates`),
   label: item => `${item.kind === 'started' ? 'Started' : 'Finished'}: ${item.title ?? 'a session'}`,
   opens: first => ({ projectId: first.projectId, agentId: first.agentId }),
-}
-
-/** Notify when something new waits on the person (#627). */
-export function useWaitingNotifications(waiting: ProjectionRead<Waiting>, enabled: boolean, openAgent: OpenAgent): void {
-  useNewItemNotifications(waiting, enabled, WAITING, openAgent)
-}
-
-/** Notify when an agent starts or finishes (#627). */
-export function useActivityNotifications(activity: ProjectionRead<Activity>, enabled: boolean, openAgent: OpenAgent): void {
-  useNewItemNotifications(activity, enabled, ACTIVITY, openAgent)
 }

@@ -147,23 +147,6 @@ export function startFromPick(value: unknown): StartFromPick | undefined {
  * own default below.
  */
 export interface Preferences {
-  /** Fire a browser notification when a new item lands on the "needs you" queue (#627). Absent = on. */
-  notifyBrowser?: boolean
-  /**
-   * Also notify on plain agent activity — an agent started, an agent finished (#627). The default-off
-   * counterpart to the always-on "needs you" notifications: it keeps you loosely informed of the
-   * pipeline moving even when nothing needs you. A *category* toggle: it composes with the method
-   * toggle {@link notifyBrowser}.
-   */
-  notifyNewActivity?: boolean
-  /**
-   * The "needs you" category (#627): notify when an agent is awaiting your answer or a PR is ready
-   * to review. A *category* toggle, like {@link notifyNewActivity}, composing with the method
-   * toggle {@link notifyBrowser}. **Absent = on**: unlike the other
-   * flat opt-in booleans, human-intervention pings are the baseline OpenAgent leans on, so an
-   * unset preference keeps them firing; a user turns them off explicitly.
-   */
-  notifyHumanIntervention?: boolean
   /** The model to run on (#628), e.g. `opus` / `sonnet`, handed to the run. Absent = the coding agent's own default. */
   model?: string
   /**
@@ -376,9 +359,6 @@ type BooleanPreferenceKey = {
  * preference on every save, the write-then-vanish failure shape for a settings file.
  */
 const BOOLEAN_PREFERENCES: Record<BooleanPreferenceKey, true> = {
-  notifyBrowser: true,
-  notifyNewActivity: true,
-  notifyHumanIntervention: true,
   bridge: true,
   bridgeBrowser: true,
   onboardingDismissed: true,

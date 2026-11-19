@@ -9,8 +9,7 @@ import { Button, buttonVariants } from './ui/button.js'
 import { inPlace } from '../lib/in-place.js'
 import { Facts, Panel, PanelGroup, StepNumber } from './ui/panel.js'
 import { Skeleton } from './ui/skeleton.js'
-import { usePreferences, updatePreferences, notificationsEnabled } from '../lib/preferences.js'
-import { setBrowserNotifications, useNotificationPermission } from '../lib/notification-permission.js'
+import { usePreferences, updatePreferences } from '../lib/preferences.js'
 import { startPicks, useStartAgent } from '../lib/use-start-agent.js'
 import { AddProjectEffects } from './AddProjectEffects.js'
 import { ProjectPicker } from './ProjectPicker.js'
@@ -26,8 +25,8 @@ import type { ListedPage } from '../lib/use-modules.js'
 // in rather than a static list to read past.
 //
 // Every "done" is derived from a real fact — a login, a registered project, a non-empty queue, a
-// ticket on disk, a granted browser permission — so a step cannot be ticked by clicking it, and a
-// step done outside the dashboard shows up ticked anyway. Numbered, not boxes: a box invites a
+// ticket on disk — so a step cannot be ticked by clicking it, and a step done outside the dashboard
+// shows up ticked anyway. Numbered, not boxes: a box invites a
 // click that can tick nothing.
 //
 // One step is open at a time (his pick): the next one to do, its words and its button at the row's
@@ -96,7 +95,6 @@ export function OnboardingChecklist({
   // Kept for the next visit: the steps open where they stood, not as titles that then grow.
   const { value: data, reload, state } = usePolled<DashboardData | null>(onDashboard, null, 10_000, [], { remember: 'onboarding:dashboard', stored: true })
   const preferences = usePreferences()
-  const permission = useNotificationPermission()
   const { start, busy: starting, error: startError } = useStartAgent()
   const { person } = usePerson()
   const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
@@ -113,9 +111,6 @@ export function OnboardingChecklist({
   // Before the projects are read, the app's own list says whether there is one.
   const projectCount = data?.totals.projects ?? projects.length
   const hasTickets = data?.projects.some(p => p.hasTickets) ?? false
-  const browserGranted = permission === 'granted' && notificationsEnabled(preferences)
-
-  const enableBrowserNotifications = () => setBrowserNotifications(true)
 
   const populateTickets = async () => {
     if (!targetProjectId) return
@@ -220,23 +215,6 @@ export function OnboardingChecklist({
           },
         ]
       : []),
-    {
-      key: 'browser-notification',
-      label: 'Turn on notifications',
-      description: 'Desktop pings while the dashboard is open, so a session waiting on you does not sit unnoticed.',
-      done: browserGranted,
-      optional: true,
-      action:
-        permission === 'denied' ? (
-          <span className="text-xs text-muted-foreground">Blocked in your browser settings</span>
-        ) : permission === 'unsupported' ? (
-          <span className="text-xs text-muted-foreground">Not supported by this browser</span>
-        ) : (
-          <Button variant="outline" onClick={enableBrowserNotifications}>
-            Turn on
-          </Button>
-        ),
-    },
   ]
 
   // No step before its reads have said where it stands: an unread project count is not "no project".
@@ -249,15 +227,15 @@ export function OnboardingChecklist({
   const name = person ? `, ${firstName(person.name)}` : ''
 
   const doneCount = steps.filter(step => step.done).length
-  // While the projects are not read: the queue's and the tickets' steps hold their places before the last step exactly
-  // where the sidebar's pages say a project has the Queue or the Tickets, as the same packages bring the page and the
-  // step. Until those pages are known (a browser's first visit) the frame is not drawn.
+  // While the projects are not read: the queue's and the tickets' steps hold their places at the end exactly where the
+  // sidebar's pages say a project has the Queue or the Tickets, as the same packages bring the page and the step. Until
+  // those pages are known (a browser's first visit) the frame is not drawn.
   const listed = (segment: string) => listedPages?.some(page => page.id === segment && page.projects.length > 0) === true
   const coming = [...(listed('queue') ? [{ key: 'todos', done: false }] : []), ...(listed('tickets') ? [{ key: 'tickets', done: false }] : [])]
-  const frame: { key: string; label?: string; description?: ReactNode; done: boolean }[] = steps.flatMap(step => [
-    ...(data === null && step.key === 'browser-notification' ? coming : []),
-    { key: step.key, label: step.label, description: step.description, done: step.done },
-  ])
+  const frame: { key: string; label?: string; description?: ReactNode; done: boolean }[] = [
+    ...steps.map(step => ({ key: step.key, label: step.label, description: step.description, done: step.done })),
+    ...(data === null ? coming : []),
+  ]
   return (
     <PanelGroup
       bare

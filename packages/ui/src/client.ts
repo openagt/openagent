@@ -24,17 +24,13 @@ export {
 } from './agent-view.js'
 // Which questions a run still waits on: one rule for the run page and the daemon's own reads.
 export { pendingChoices } from './open-choices.js'
-// The identity of a notification feed's item (#627). Pure, so the dashboard shares it with the
-// item types rather than keeping a copy that drifts silently.
-export { waitingKey, activityKey } from './dashboard/keys.js'
+// The identity of what waits on the person (#627). Pure, so the dashboard and its plugins share it
+// with the item type rather than keeping a copy that drifts silently.
+export { waitingKey } from './dashboard/keys.js'
 // What a run needs of the person, in the two words every list says it in.
 export { needsWord, type RunNeed } from './dashboard/waiting-words.js'
-// The baseline half of the same engine (#1625): what counts as "already there" when a feed is first
-// seen. The dashboard used to decide that by counting observations, which made a page loaded with no
-// git host reach take an empty backlog for a real one. Pure, and its only import is a type.
-export { SeenTracker } from './dashboard/keyed-watcher.js'
 export type { ProjectionRead } from './dashboard/projects.js'
-export { NOTIFICATION_DEFAULTS, MAX_SPEND_OFFSET, notifies, browserNotifyEnabled, notifyCategoryEnabled, type NotifyCategory } from './preference-defaults.js'
+export { MAX_SPEND_OFFSET } from './preference-defaults.js'
 // How a pasted machine link is read, so the dialog and the daemon read a paste the same way.
 export { parseMachineLink } from './machine-link.js'
 // Which saved machine is a person's own computer that keeps a line open here, so the daemon and the pages say it by one rule.

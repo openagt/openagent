@@ -23,11 +23,10 @@ vi.mock('../rpc/reads.js', () => ({ onAgent }))
 const onGitHostPeople = vi.hoisted(() => vi.fn(async (_projectId: string, _emails: string[]) => [] as { email: string; login: string; avatar?: string }[]))
 vi.mock('../rpc/people.js', () => ({ onGitHostPeople }))
 
-// The rail also carries the person's menu at its foot (#772 follow-up). Its theme and notifications
-// rows pull the preferences into jsdom, which this suite deliberately avoids. It is about the agents
-// list, not the menu (each has its own suite), so stub them out, and the person is a name.
+// The rail also carries the person's menu at its foot (#772 follow-up). Its theme row pulls the
+// preferences into jsdom, which this suite deliberately avoids. It is about the agents list, not
+// the menu (each has its own suite), so stub it out, and the person is a name.
 vi.mock('./ThemeSubmenu.js', () => ({ ThemeSubmenu: () => null }))
-vi.mock('./NotificationsSubmenu.js', () => ({ NotificationsSubmenu: () => null }))
 const onPerson = vi.hoisted(() => vi.fn(async () => ({ name: 'Ada Lovelace' }) as { name: string; email?: string; avatar?: string }))
 vi.mock('../rpc/person.js', () => ({ onPerson }))
 

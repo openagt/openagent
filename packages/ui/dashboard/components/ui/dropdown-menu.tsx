@@ -51,7 +51,7 @@ export const DropdownMenuGroup = Menu.Group
 export const DropdownMenuSub = Menu.SubmenuRoot
 
 // Keep a trigger lit while its menu is open (#1046), matching the hover state Base UI marks it with.
-// One place so every menu button (Commands, agent/model, gear, notifications) behaves the same.
+// One place so every menu button (Commands, agent/model, gear) behaves the same.
 export const MENU_TRIGGER_OPEN_CLASS =
   'data-[popup-open]:bg-[var(--color-accent)] data-[popup-open]:text-[var(--color-accent-foreground)]'
 

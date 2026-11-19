@@ -48,6 +48,7 @@
     "@openagt/dashboard-devices": "workspace:*",
     "@openagt/dashboard-files": "workspace:*",
     "@openagt/hooks": "workspace:*",
+    "@openagt/notifications-browser": "workspace:*",
     "@openagt/notifications-command": "workspace:*",
     "@openagt/skill-account-rotation": "workspace:*",
     "@openagt/skill-ask": "workspace:*",

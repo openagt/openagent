@@ -1,17 +1,12 @@
 import { readAllAgents, type AgentMeta, type AgentStatus } from '../store/index.js'
 import type { ProjectSummary, ProjectionRead } from './projects.js'
 
-// The identity + diff live in the leaf `keys.ts` so the dashboard can share them (they are pure);
-// re-exported here so this stays the import site for anything that already reads them from the
-// module that defines `Activity`.
-export { activityKey } from './keys.js'
-
 // The "New activity" feed (#627): the cross-project stream of run lifecycle transitions that
-// do NOT need the human — an agent started, an agent finished. It is the default-off notification
-// category, the counterpart to what waits on the person (which is the always-on "needs you"
-// half). Same shape and same "only genuinely new" diff as waiting.ts, so the browser
-// hook folds it into a baseline on first look and then notifies once per transition — you hear
-// an agent kick off and an agent land, nothing when the page opens.
+// do NOT need the human — an agent started, an agent finished. A page reads it through its host
+// (`ModuleHost.activity`): the notifications-browser plugin's opt-in kind, the counterpart to what
+// waits on the person. Same shape and same "only genuinely new" diff as waiting.ts, so the plugin
+// folds it into a baseline on first look and then notifies once per transition — you hear an
+// agent kick off and an agent land, nothing when the page opens.
 
 /** How many recent agents per project to consider. Bounds the finished-set — older agents rolled off
  * long ago and were already baselined, so they never fire. A running agent is always newest (live
@@ -65,8 +60,8 @@ function activityFor(project: ProjectSummary, agent: AgentMeta): Activity {
  * comes back named as one that was *not* read whole (#1623), since "nothing happened there" and
  * "I could not look" are the same empty list to everyone but the notification watcher.
  *
- * The `started` and `finished` items for one agent carry distinct keys ({@link activityKey}), so a
- * run that is still going notifies once (started) and again when it lands (finished). An agent that
+ * The `started` and `finished` items for one agent are told apart by their kind, so a run that is
+ * still going notifies once (started) and again when it lands (finished). An agent that
  * both starts and finishes between two polls is only ever seen terminal, so it notifies once
  * (finished) — one quick agent, one line.
  */

@@ -1,6 +1,7 @@
 import { onComputersThrough, onMachineAgentAccounts, onMachinePerson, onMachineVersions, sendLetMachineIn, sendMachineCode, sendMachineRemoveAgentAccount, sendRemoveMachineDevice } from '../rpc/machines.js'
 import { onGitHostPeople } from '../rpc/people.js'
 import { onPersonalFolder } from '../rpc/personal-folder.js'
+import { onActivity } from '../rpc/reads.js'
 import { sendSyncPersonalFolderOn, sendUseLoginsOn } from '../rpc/server-logins.js'
 import type { HostServices } from './host-services.js'
 import { addComputerThrough, addMachine, removeMachine, renameComputer, renameMachine } from './machines.js'
@@ -9,9 +10,9 @@ import { sendToScreen, watchScreen } from './screen.js'
 import { ownComputerName } from './this-machine.js'
 
 // The shell's services for modules (#1774) that are questions for the daemon: a project's runs and
-// people, the saved machines, a run's live screen. They need nothing of the page on screen, so they
-// are the same for the page's life; the shell adds to them the ones that do, which navigate or start
-// a run.
+// people, the runs that started or ended lately, the saved machines, a run's live screen. They need
+// nothing of the page on screen, so they are the same for the page's life; the shell adds to them
+// the ones that do, which navigate or start a run.
 
 /** The services only the shell can give: they go somewhere on the page, or land on a run. */
 type ShellServices = 'openAgent' | 'agentHref' | 'openPage' | 'pageHref' | 'adjustPage' | 'backToPage' | 'openSettings' | 'startRun' | 'configureRun'
@@ -20,6 +21,7 @@ export const DAEMON_SERVICES: Omit<HostServices, ShellServices> = {
   gitHostPeople: onGitHostPeople,
   // Asked at once by two cards, or soon again, the same runs are read once.
   agents: (projectId, wanted) => readModuleAgents(projectId, wanted),
+  activity: onActivity,
   // This computer by the name the page says it everywhere else: one computer, one name.
   machines: async () => {
     const versions = await onMachineVersions()

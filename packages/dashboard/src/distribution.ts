@@ -39,7 +39,10 @@ const DISTRIBUTION: DashboardDistribution = [
   // notifications-command, a plugin that starts off: the person's command, run when a run on this
   // computer needs them.
   { package: '@openagt/notifications-command', for: 'computer' },
-  // The plugins: ask starts on, the others are a project's once a person switches them on.
+  // notifications-browser, a plugin that starts on, kept per person: desktop notifications while
+  // the dashboard is open in a browser that allows them.
+  { package: '@openagt/notifications-browser', for: 'computer', on: true },
+  // The plugins kept per project: ask starts on, the others are a project's once a person switches them on.
   { package: '@openagt/skill-ask', on: true },
   { package: '@openagt/skill-logs' },
   { package: '@openagt/skill-tickets' },

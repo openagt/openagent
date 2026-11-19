@@ -1,6 +1,6 @@
 import { useCallback, useContext, useEffect, useId, useRef, useState, type ComponentType, type ReactNode } from 'react'
 import { Dialog as BaseDialog } from '@base-ui/react/dialog'
-import { ArrowLeft, Bell, Blocks, Bot, ChevronRight, ChevronsUpDown, Database, FolderGit2, Globe, Keyboard, Layers, Palette, X, FolderSearch } from 'lucide-react'
+import { ArrowLeft, Blocks, Bot, ChevronRight, ChevronsUpDown, Database, FolderGit2, Globe, Keyboard, Layers, Palette, X, FolderSearch } from 'lucide-react'
 import { DRIVERS, DRIVER_LABELS, isDriverName } from '../../src/client.js'
 import { driverOptions, useModels } from '../lib/models.js'
 import type { DriverOption } from './DriverModelMenu.js'
@@ -13,8 +13,6 @@ import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.j
 import { inPlace } from '../lib/in-place.js'
 import { useIsMobile } from '../lib/use-mobile.js'
 import { usePreferences, updatePreferences } from '../lib/preferences.js'
-import { setBrowserNotifications, useNotificationPermission } from '../lib/notification-permission.js'
-import { HUMAN_QUEUE_ABOUT, NEW_ACTIVITY_ABOUT, browserHint, kindHint } from '../lib/notification-words.js'
 import { AppearanceSettings } from './AppearanceSettings.js'
 import { BridgeSettings } from './BridgeSettings.js'
 import { AGENT_DATA_ENTRY, AgentDataSettings } from './AgentDataSettings.js'
@@ -31,7 +29,7 @@ import { buttonVariants } from './ui/button.js'
 import { BACKDROP_CLASS, DIALOG_PRESSES_CLASS } from './ui/dialog.js'
 import { RadioGroup, RadioGroupItem } from './ui/radio-group.js'
 import { ScrollArea } from './ui/scroll-area.js'
-import { InSection, Section } from './ui/section.js'
+import { InSection } from './ui/section.js'
 import { Select, SelectContent, SelectItem, SelectTriggerBare, SelectValue } from './ui/select.js'
 import { MENU_TRIGGER_OPEN_CLASS } from './ui/dropdown-menu.js'
 import { navRowClass } from './ui/nav-row.js'
@@ -345,7 +343,7 @@ function ProjectSelect({ projects, value, onChange }: { projects: ProjectSummary
   )
 }
 
-/** The dashboard's own entries: how it looks, what it tells you, which agent runs, your agent data, where repos come from, Claude web, the keys. */
+/** The dashboard's own entries: how it looks, which agent runs, your agent data, where repos come from, Claude web, the keys. */
 function useOwnEntries(): Entry[] {
   const preferences = usePreferences()
   const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
@@ -356,13 +354,6 @@ function useOwnEntries(): Entry[] {
   const driverAnswer = isDriverName(driver) ? models?.[driver] : undefined
   const missingDriver = isDriverName(driver) && driverAnswer !== undefined && 'missing' in driverAnswer && driverAnswer.missing ? DRIVER_LABELS[driver] : undefined
   const model = preferences.model ?? ''
-  // A notification toggle is a preference; whether it can deliver is the browser's permission
-  // (#948). Both are shown, the same way the bell does, so the row cannot promise delivery that
-  // will not happen.
-  const permission = useNotificationPermission()
-  const browserBlocked = permission === 'denied'
-  // While the browser delivers nothing, the kinds wait on it: their rows are greyed, and still switch.
-  const delivered = permission === 'unsupported' || ((preferences.notifyBrowser ?? true) && permission === 'granted')
 
   return [
     {
@@ -371,41 +362,6 @@ function useOwnEntries(): Entry[] {
       title: 'Appearance',
       icon: Palette,
       body: <AppearanceSettings />,
-    },
-    {
-      id: 'notifications',
-      order: 30,
-      title: 'Notifications',
-      icon: Bell,
-      body: (
-        <div className="flex flex-col gap-8">
-          <HeadedSection heading="Deliver to">
-            <ToggleRow
-              label="Browser"
-              description={browserHint(permission)}
-              checked={(preferences.notifyBrowser ?? true) && permission !== 'default' && !browserBlocked}
-              disabled={browserBlocked}
-              onChange={setBrowserNotifications}
-            />
-          </HeadedSection>
-          <HeadedSection heading="Notify me about">
-            <ToggleRow
-              label="Human Queue"
-              description={kindHint(HUMAN_QUEUE_ABOUT, permission, preferences.notifyBrowser ?? true)}
-              checked={preferences.notifyHumanIntervention ?? true}
-              dimmed={!delivered}
-              onChange={next => updatePreferences({ notifyHumanIntervention: next })}
-            />
-            <ToggleRow
-              label="New activity"
-              description={kindHint(NEW_ACTIVITY_ABOUT, permission, preferences.notifyBrowser ?? true)}
-              dimmed={!delivered}
-              checked={preferences.notifyNewActivity ?? false}
-              onChange={next => updatePreferences({ notifyNewActivity: next })}
-            />
-          </HeadedSection>
-        </div>
-      ),
     },
     {
       id: 'agent',
@@ -555,15 +511,6 @@ function BridgeBrowserChoice({ daemonBrowser, onChange }: { daemonBrowser: boole
         )}
       </RadioGroup>
     </div>
-  )
-}
-
-/** A group of rows under a heading of its own. */
-function HeadedSection({ heading, children }: { heading: string; children: ReactNode }) {
-  return (
-    <Section title={heading}>
-      <SettingsSection>{children}</SettingsSection>
-    </Section>
   )
 }
 

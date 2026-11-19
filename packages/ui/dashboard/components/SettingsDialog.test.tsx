@@ -211,7 +211,7 @@ describe('Settings on and off rows', () => {
   const row = (label: string) => screen.getByRole('switch', { name: label })
 
   test('each is a switch that shows what is saved, and switching it saves that one setting at once', async () => {
-    prefsRead.mockResolvedValueOnce({ showThinking: true, notifyNewActivity: false })
+    prefsRead.mockResolvedValueOnce({ showThinking: true })
     refreshPreferences()
     open('agent')
     await waitFor(() => expect(checked(row('Show what the coding agent thought'))).toBe(true))
@@ -227,85 +227,19 @@ describe('Settings on and off rows', () => {
     expect(checked(row('Name each run'))).toBe(false)
     fireEvent.click(row('Show what the coding agent thought'))
     expect(checked(row('Show what the coding agent thought'))).toBe(false)
-    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }))
-    expect(switches()).toEqual([
-      ['Browser', true],
-      ['Human Queue', true],
-      ['New activity', false],
-    ])
     fireEvent.click(screen.getByRole('button', { name: 'Claude web' }))
     expect(switches()).toEqual([['Claude web bridge', false]])
-    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }))
-    fireEvent.click(row('New activity'))
-    expect(checked(row('New activity'))).toBe(true)
-    fireEvent.click(row('Human Queue'))
-    fireEvent.click(row('Browser'))
-    expect(saves()).toEqual([{ nameRuns: false }, { showThinking: false }, { notifyNewActivity: true }, { notifyHumanIntervention: false }, { notifyBrowser: false }])
-    expect([checked(row('Human Queue')), checked(row('Browser'))]).toEqual([false, false])
+    expect(saves()).toEqual([{ nameRuns: false }, { showThinking: false }])
   })
 
   test("a click on a switch's name switches it, as a click on the switch does", async () => {
-    prefsRead.mockResolvedValueOnce({ notifyNewActivity: false })
+    prefsRead.mockResolvedValueOnce({ nameRuns: false })
     refreshPreferences()
-    open('notifications')
-    await waitFor(() => expect(checked(row('New activity'))).toBe(false))
-    fireEvent.click(screen.getByText('New activity'))
-    expect(checked(row('New activity'))).toBe(true)
-    expect(saves()).toEqual([{ notifyNewActivity: true }])
-  })
-
-  test('notifications the browser was not asked for yet: the Browser row reads off, and switching it on asks the browser', async () => {
-    const requestPermission = vi.fn(async () => 'default')
-    vi.stubGlobal('Notification', { permission: 'default', requestPermission })
-    prefsRead.mockResolvedValueOnce({ notifyBrowser: true })
-    refreshPreferences()
-    open('notifications')
-    const browser = row('Browser')
-    await waitFor(() => expect(checked(browser)).toBe(false))
-    fireEvent.click(browser)
-    expect(saves()).toEqual([{ notifyBrowser: true }])
-    expect(requestPermission).toHaveBeenCalled()
-  })
-
-  test('the browser refuses when asked: the Browser row says it is blocked as soon as the browser answers', async () => {
-    // The person answers the browser's question after the switch has saved and drawn.
-    let refuse = () => {}
-    const stub = { permission: 'default', requestPermission: vi.fn(() => new Promise<string>(resolve => (refuse = () => resolve((stub.permission = 'denied'))))) }
-    vi.stubGlobal('Notification', stub)
-    prefsRead.mockResolvedValueOnce({ notifyBrowser: false })
-    refreshPreferences()
-    open('notifications')
-    const browser = row('Browser')
-    fireEvent.click(browser)
-    await waitFor(() => expect(within(browser.parentElement!.parentElement!).getByText(/Switched on, the browser asks/)).toBeTruthy())
-    expect(saves()).toEqual([{ notifyBrowser: true }])
-    refuse()
-    await waitFor(() => expect(browser.getAttribute('aria-disabled')).toBe('true'), { timeout: 1000 })
-  })
-
-  test('Notifications groups its switches under the headings of the person menu', () => {
-    open('notifications')
-    expect(screen.getByRole('region', { name: 'Deliver to' }).textContent).toContain('Browser')
-    const kinds = screen.getByRole('region', { name: 'Notify me about' }).textContent
-    expect(kinds).toContain('Human Queue')
-    expect(kinds).toContain('New activity')
-  })
-
-  test('notifications the browser blocked: the Browser row says so, reads off, and cannot be switched', async () => {
-    vi.stubGlobal('Notification', { permission: 'denied' })
-    prefsRead.mockResolvedValueOnce({ notifyBrowser: true })
-    refreshPreferences()
-    open('notifications')
-    const browser = row('Browser')
-    await waitFor(() => expect(browser.getAttribute('aria-disabled')).toBe('true'))
-    // Why is said in the row itself, in place of what the setting does.
-    expect(within(browser.parentElement!.parentElement!).getByText('Blocked in your browser settings')).toBeTruthy()
-    expect(checked(browser)).toBe(false)
-    fireEvent.click(browser)
-    expect(saves()).toEqual([])
-    expect(checked(browser)).toBe(false)
-    // The rows beside it still switch.
-    expect(row('Human Queue').getAttribute('aria-disabled')).toBeNull()
+    open('agent')
+    await waitFor(() => expect(checked(row('Name each run'))).toBe(false))
+    fireEvent.click(screen.getByText('Name each run'))
+    expect(checked(row('Name each run'))).toBe(true)
+    expect(saves()).toEqual([{ nameRuns: true }])
   })
 })
 
@@ -417,7 +351,7 @@ describe('the Settings list', () => {
 
   test("two groups: yours and this computer's, the computer's packages among them; then the picked project's packages", () => {
     show('', 'p1')
-    expect(entries('You and this computer')).toEqual(['Profile', 'Appearance', 'Notifications', 'Coding agent', 'Plugins', 'Your agent data', 'Repos', 'Claude web', 'Keyboard shortcuts', 'Devices'])
+    expect(entries('You and this computer')).toEqual(['Profile', 'Appearance', 'Coding agent', 'Plugins', 'Your agent data', 'Repos', 'Claude web', 'Keyboard shortcuts', 'Devices'])
     // gemstack has tickets and no scheduler; every project has its skills, whose entry says it goes first, and its plugins.
     expect(entries('Project')).toEqual(['Skills', 'Plugins', 'Project agent data', 'Tickets', 'List'])
     expect(showing(select('Project'))).toBe('gemstack')
@@ -600,7 +534,7 @@ describe('the Settings list', () => {
         <SettingsDialog entry="profile" onEntry={() => {}} onClose={onClose} scope={null} projects={[]} />
       </ModulesContext.Provider>,
     )
-    expect(entries('You and this computer')).toEqual(['Profile', 'Appearance', 'Notifications', 'Coding agent', 'Plugins', 'Your agent data', 'Plain', 'Lights', 'Repos', 'Claude web', 'Keyboard shortcuts'])
+    expect(entries('You and this computer')).toEqual(['Profile', 'Appearance', 'Coding agent', 'Plugins', 'Your agent data', 'Plain', 'Lights', 'Repos', 'Claude web', 'Keyboard shortcuts'])
   })
 
   test('opened with no entry, a computer shows the first and its address says so; a phone shows the list, whose address is none', () => {
