@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
+import type { ReactNode } from 'react'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { forgetRemembered } from '../lib/use-async.js'
 
@@ -184,22 +185,36 @@ describe('Agent accounts', () => {
     expect(runAccounts(alone).map(account => account.name)).toEqual(['Claude login on VPS'])
   })
 
-  test("Settings draws the skill's own card, the Overview's; a skill that did not load says so", async () => {
+  test("the Permissions page draws the modules' parts, each with the line under an account; with none, the rest of the page", async () => {
     views(TWO)
-    const nothing = mountedOf()
-    const card = { place: 'overview.card' as const, id: 'accounts', label: 'Accounts', package: '@openagt/skill-account-rotation', projects: [], computer: true as const, View: () => <p>The skill's card</p> }
+    const part = {
+      place: 'permissions.section' as const,
+      id: 'accounts',
+      label: 'Accounts',
+      package: 'an-accounts-module',
+      projects: [],
+      computer: true as const,
+      View: ({ accountWhere }: { accountWhere?: (account: { agent: 'claude' | 'codex'; own: boolean; name: string }) => ReactNode }) => (
+        <div>
+          <p>The module's part</p>
+          <p>{accountWhere ? 'with the line under an account' : 'without'}</p>
+        </div>
+      ),
+    }
     const { unmount } = render(
-      <ModulesContext.Provider value={mountedOf({ views: { 'overview.card': [card] } })}>
+      <ModulesContext.Provider value={mountedOf({ views: { 'permissions.section': [part] } })}>
         <AccountsList />
       </ModulesContext.Provider>,
     )
-    expect(await screen.findByText("The skill's card")).toBeTruthy()
+    expect(await screen.findByText("The module's part")).toBeTruthy()
+    expect(screen.getByText('with the line under an account')).toBeTruthy()
     unmount()
     render(
-      <ModulesContext.Provider value={nothing}>
+      <ModulesContext.Provider value={mountedOf()}>
         <AccountsList />
       </ModulesContext.Provider>,
     )
-    expect(await screen.findByText('The accounts card did not load.')).toBeTruthy()
+    expect(await screen.findByText('Git host accounts')).toBeTruthy()
+    expect(screen.queryByText("The module's part")).toBeNull()
   })
 })

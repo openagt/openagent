@@ -51,7 +51,7 @@ export interface MountedModules {
   loaded: boolean
 }
 
-const VIEW_PLACES: readonly ViewPlace[] = ['app.page', 'app.overlay', 'overview.card', 'overview.line', 'chat.pane', 'chat.summary', 'settings.section', 'usage.line']
+const VIEW_PLACES: readonly ViewPlace[] = ['app.page', 'app.overlay', 'overview.card', 'overview.line', 'chat.pane', 'chat.summary', 'settings.section', 'permissions.section', 'usage.line']
 const ACTION_PLACES: readonly ActionPlace[] = ['link.menu']
 const OPTION_PLACES: readonly OptionPlace[] = ['composer.auto', 'composer.where']
 
@@ -228,7 +228,7 @@ function mount(loadedModules: { module: DashboardModule; definition: UiModuleDef
     if (definition.schedule) mounted.schedule ??= { ...definition.schedule, ...of }
   }
   // Numbers, not a list the shell keeps: a third package sits between two others without the shell knowing it exists.
-  for (const place of ['overview.card', 'overview.line', 'settings.section'] as const) views[place].sort(byMountOrder)
+  for (const place of ['overview.card', 'overview.line', 'settings.section', 'permissions.section'] as const) views[place].sort(byMountOrder)
   for (const place of OPTION_PLACES) options[place].sort(byMountOrder)
   return mounted
 }

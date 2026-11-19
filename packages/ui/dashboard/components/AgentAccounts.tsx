@@ -9,8 +9,8 @@ import { DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSep
 import { Facts } from './ui/panel.js'
 
 // The accounts runs use, per coding agent, as the run's own places read them. Adding and removing
-// them is the skill's (`@openagt/skill-account-rotation`, its card on the Overview and in Settings ›
-// Accounts). Here: the agent's part of the agent picker under the message box (which one is first,
+// them is the skill's (`@openagt/skill-account-rotation`, its card on the Overview and its part of
+// the Permissions page). Here: the agent's part of the agent picker under the message box (which one is first,
 // on the computer the run goes to) and the Overview's usage card (how full each added Claude one is).
 
 /** How often a page that shows the accounts asks again. */

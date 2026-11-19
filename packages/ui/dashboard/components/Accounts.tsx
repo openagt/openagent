@@ -17,12 +17,10 @@ import { AccountWhere, ServerAsks, ServersProvider } from './ServerLogins.js'
 // reach what its accounts can, and nothing else is a permission. Each account is said once, with
 // where it works under it (this computer and the person's servers, `ServerLogins.tsx`), and only
 // what a server asks of the person stands above them (his pick over a card that listed every
-// account again under each server). The coding agents' accounts are the skill's own card, the same
-// as on the Overview, the dashboard filling the line under each row through the card's
-// `accountWhere`; the git hosts' are the dashboard's (`GitHosts.tsx`), in the same rows. On a
-// server, the page says whose computer's logins it uses.
-
-const ACCOUNT_ROTATION = '@openagt/skill-account-rotation'
+// account again under each server). The modules' parts of the page (`permissions.section`) come
+// next, the coding agents' accounts among them, the dashboard filling the line under each account
+// row through their `accountWhere`; the git hosts' are the dashboard's (`GitHosts.tsx`), in the
+// same rows. On a server, the page says whose computer's logins it uses.
 
 /** The Permissions page. */
 export function PermissionsPage() {
@@ -53,26 +51,31 @@ export function AccountsList() {
         <AgentSetup state={claude.state} reload={claude.reload} title="Claude Code" primary />
         <AgentSetup state={codex.state} reload={codex.reload} title="Codex" primary={false} />
         <ServerAsks />
-        <RotationCard />
+        <ModuleSections />
         <GitHostsCard />
       </div>
     </ServersProvider>
   )
 }
 
-/** The skill's card, as the Overview draws it. While the modules load, it waits in the room of its emptiest answer: its heading and one sentence. */
-function RotationCard() {
+/**
+ * The modules' parts of the page (`permissions.section`), in their order. While the modules load,
+ * they wait in the room of one part's emptiest answer: its heading and one sentence.
+ */
+function ModuleSections() {
   const { views, loaded } = useMountedModules()
-  const card = views['overview.card'].find(each => each.package === ACCOUNT_ROTATION && each.id === 'accounts')
+  const sections = views['permissions.section']
   return (
-    <Slot of={{ value: card, state: card || loaded ? 'fresh' : 'unknown' }} shape={<CardShape />}>
-      {card =>
-        card ? (
-          <ModuleSlot package={card.package} label="accounts card">
-            <card.View projects={[]} accountWhere={account => <AccountWhere account={{ kind: account.agent, own: account.own, name: account.name }} />} />
-          </ModuleSlot>
-        ) : (
-          <p className="text-sm text-danger">The accounts card did not load.</p>
+    <Slot of={{ value: sections, state: sections.length > 0 || loaded ? 'fresh' : 'unknown' }} shape={<CardShape />}>
+      {sections =>
+        sections.length > 0 && (
+          <div className="space-y-8">
+            {sections.map(section => (
+              <ModuleSlot key={`${section.package} ${section.id}`} package={section.package} label={section.label}>
+                <section.View accountWhere={account => <AccountWhere account={{ kind: account.agent, own: account.own, name: account.name }} />} />
+              </ModuleSlot>
+            ))}
+          </div>
         )
       }
     </Slot>

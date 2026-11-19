@@ -105,6 +105,12 @@ export interface UiRunProps {
   working: boolean
 }
 
+/** What a part of the Permissions page is given. */
+export interface UiPermissionsProps {
+  /** The shell's line under one account's row, for a part that lists a coding agent's accounts: where the account works, on the person's devices. */
+  accountWhere?: (account: UiAccount) => ReactNode
+}
+
 /** What a Settings entry is given: the projects whose settings it shows and saves. */
 export interface UiSettingsProps {
   /** The projects the entry is for: the one picked in Settings, or every project that has the module with "All projects"; none for a module of the computer's. */
@@ -197,6 +203,18 @@ export interface ViewPlaces {
       order?: number
     }
     props: UiSettingsProps
+  }
+  /** A part of the Permissions page, which lists every account OpenAgent's work goes as: the accounts the module adds, and what they reach. */
+  'permissions.section': {
+    entry: {
+      /** Which part this is among the module's own, for the shell's key. */
+      id: string
+      /** Its name, in the line a part that failed says. */
+      label: string
+      /** Its place among every module's parts, lower first; 50 when unsaid, ties by package name. */
+      order?: number
+    }
+    props: UiPermissionsProps
   }
   /** The line on the usage bar where the module's unattended work stops; the first module's that has one. */
   'usage.line': { entry: { id: string }; props: UiUsageLineProps }
