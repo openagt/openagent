@@ -8,23 +8,34 @@ const HOUR = 3_600_000
 
 type Agents = { claude: unknown[]; codex: unknown[] }
 
+/**
+ * The card on a host whose server part and command answer by their words, a read by its name: the
+ * card reads through the one, in no project, and changes the accounts through the other. What it
+ * ran through the command is answered.
+ */
+function hostFor(answer: (args: string[], input?: string) => Promise<ModuleCommandResult>) {
+  const runComputerCommand = vi.fn(async (args: string[], _command?: string, input?: string) => answer(args, input))
+  const callComputer = vi.fn(async (name: string, _input: object) => answer([name]))
+  return { host: fakeHost('@openagt/skill-account-rotation', { runComputerCommand, callComputer }), runComputerCommand, callComputer }
+}
+
 function renderCard(list: (args: string[]) => ModuleCommandResult, usage: Agents | Promise<Agents> = { claude: [], codex: [] }) {
-  const runComputerCommand = vi.fn(async (args: string[]): Promise<ModuleCommandResult> => (args[0] === 'usage' ? { ok: true, output: await usage } : list(args)))
-  renderWithHost(<AccountsCard />, fakeHost('@openagt/skill-account-rotation', { runComputerCommand }))
+  const { host, runComputerCommand } = hostFor(async args => (args[0] === 'usage' ? { ok: true, output: await usage } : list(args)))
+  renderWithHost(<AccountsCard />, host)
   return runComputerCommand
 }
 
 /** A card with one account each on a computer where `adding` answers what the test says, recording what was asked. */
 function renderAdding(addingNow: () => Record<string, unknown>, more: (args: string[], input: string | undefined) => ModuleCommandResult = () => ({ ok: true, output: {} }), list: Agents = { claude: [{ name: 'This computer', who: 'Ada', own: true }], codex: [] }) {
   const calls: { args: string[]; input: string | undefined }[] = []
-  const runComputerCommand = vi.fn(async (args: string[], _command?: string, input?: string): Promise<ModuleCommandResult> => {
+  const { host } = hostFor(async (args, input) => {
     calls.push({ args, input })
     if (args[0] === 'list') return { ok: true, output: list }
     if (args[0] === 'usage') return { ok: true, output: { claude: [], codex: [] } }
     if (args[0] === 'adding') return { ok: true, output: addingNow() }
     return more(args, input)
   })
-  renderWithHost(<AccountsCard />, fakeHost('@openagt/skill-account-rotation', { runComputerCommand }))
+  renderWithHost(<AccountsCard />, host)
   return calls
 }
 
@@ -52,8 +63,8 @@ describe('AccountsCard', () => {
   })
 
   test('the page it is on may say where each account works: its line under the row, asked with the account', async () => {
-    const runComputerCommand = vi.fn(async (args: string[]): Promise<ModuleCommandResult> => (args[0] === 'usage' ? { ok: true, output: { claude: [], codex: [] } } : listed([{ name: 'This computer', who: 'Ada', own: true }, { name: 'Work', own: false }], [{ name: 'This computer', who: 'Ada C', own: true }])()))
-    renderWithHost(<AccountsCard accountWhere={account => <span>{`where ${account.agent} ${account.own ? 'own' : account.name}`}</span>} />, fakeHost('@openagt/skill-account-rotation', { runComputerCommand }))
+    const { host } = hostFor(async args => (args[0] === 'usage' ? { ok: true, output: { claude: [], codex: [] } } : listed([{ name: 'This computer', who: 'Ada', own: true }, { name: 'Work', own: false }], [{ name: 'This computer', who: 'Ada C', own: true }])()))
+    renderWithHost(<AccountsCard accountWhere={account => <span>{`where ${account.agent} ${account.own ? 'own' : account.name}`}</span>} />, host)
     expect(await screen.findByText('where claude own')).toBeTruthy()
     expect(screen.getByText('where claude Work')).toBeTruthy()
     expect(screen.getByText('where codex own')).toBeTruthy()
@@ -100,9 +111,9 @@ describe('AccountsCard', () => {
   })
 
   test('an answer an earlier version of the card kept in the browser still draws', async () => {
-    const first = renderCard(listed([{ name: 'This computer', who: 'Ada', own: true }]))
+    renderCard(listed([{ name: 'This computer', who: 'Ada', own: true }]))
     expect(await screen.findByText('Ada')).toBeTruthy()
-    await waitFor(() => expect(first).toHaveBeenCalledWith(['list']))
+    await waitFor(() => expect(Object.keys(localStorage).some(key => key.includes('account-rotation:list'))).toBe(true))
     const kept = Object.entries(localStorage).find(([key]) => key.includes('account-rotation:list'))
     expect(kept).toBeTruthy()
     // The shape 0.1.0's card kept: a change of it crashes the card on the next visit, before any read.
@@ -315,7 +326,7 @@ describe('AccountsCard', () => {
     let reads = 0
     let adds = 0
     let answer: ((done: ModuleCommandResult) => void) | undefined
-    const runComputerCommand = vi.fn(async (args: string[]): Promise<ModuleCommandResult> => {
+    const { host } = hostFor(async (args): Promise<ModuleCommandResult> => {
       if (args[0] === 'list') return { ok: true, output: { claude: [{ name: 'This computer', who: 'Ada', own: true }], codex: [] } }
       if (args[0] === 'usage') return { ok: true, output: { claude: [], codex: [] } }
       // Each read a new answer, as one over the wire is.
@@ -331,7 +342,7 @@ describe('AccountsCard', () => {
       // The second try's command is slow to answer.
       return new Promise(resolve => (answer = resolve))
     })
-    renderWithHost(<AccountsCard />, fakeHost('@openagt/skill-account-rotation', { runComputerCommand }))
+    renderWithHost(<AccountsCard />, host)
     const dialog = await add('Claude Code')
     fireEvent.change(within(dialog).getByRole('textbox', { name: 'Whose account' }), { target: { value: 'Dani' } })
     fireEvent.click(within(dialog).getByRole('button', { name: 'Log in to Claude' }))

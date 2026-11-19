@@ -20,14 +20,16 @@ already made, and lists it in its pull request; for anything else it proposes an
   switch accounts without it, the runner using this package itself. The skill only lets an
   agent add or remove an account when the person asks. Picked over every run getting it, one
   more description in every agent's context for something a person seldom asks.
-- An Accounts card built only on the command, the first skill whose card shows what its command
-  says. Picked over moving the whole Settings page first; that it overlaps the Usage card is
+- An Accounts card built only on the package: it reads the accounts through the package's
+  server part (#2394, decision 8), which answers what the command's `list`, `usage` and
+  `adding` answer, and changes them through the command, so it shows what the command says.
+  Picked over moving the whole Settings page first; that it overlaps the Usage card is
   accepted, and Customize hides either.
 - The person's own login can be logged out from the card and Settings, their terminal with it.
   Picked over never offering it: an account on the list cannot be added a second time, so there
   has to be a way to take any row off.
-- The card says the same numbers as the Permissions page, and the skill reads them itself, with the
-  `usage` command. Picked over the card showing only what the last run saved, which on one account
+- The card says the same numbers as the Permissions page, and the package reads them itself, what
+  the `usage` command answers. Picked over the card showing only what the last run saved, which on one account
   is nothing, and over OpenAgent handing the card its own reading, which a skill's own page does
   not have.
 - The card is "Coding agent accounts", and what it does at an account's limit is said behind an ⓘ

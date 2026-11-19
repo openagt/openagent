@@ -28,7 +28,7 @@ test('RELAY_RPC_NAMES is the run-scoped read/steer/handoff surface and a project
   // Deleting a session, removing a worktree, and how a project keeps its records are NOT relayable:
   // destroying history/checkouts is not something a relaying daemon may reach. A start is, as the
   // guarded start a run sent here gets (the test below). A module's command and a module's function
-  // are, as acts unless this computer's own copy of the module says they only read (isRelayReadCall).
+  // are, as acts, a function a read where this computer's own copy of the module wraps it as one (isRelayReadCall).
   for (const off of ['sendDeleteAgent', 'sendRemoveWorktree', 'sendShareRecords', 'sendCreateRepository', 'sendRemoveProject', 'sendPreview']) {
     assert.ok(!RELAY_RPC_NAMES.includes(off), `${off} must not be relayable`)
   }
@@ -138,7 +138,7 @@ test('dispatchMachineRpc rejects a name that is no machine-wide call, a run-scop
   for (const off of ['sendStart', 'onGitStatus', 'constructor', 'nope']) await assert.rejects(dispatchMachineRpc(off, []), /unknown machine rpc/, off)
 })
 
-test("a relayed module command or function is a read when this computer's own copy of the module says so, in the project the call names", async () => {
+test("a relayed module function is a read when this computer's own copy of the module wraps it as one, in the project the call names; a module's command never is", async () => {
   const dir = await realpath(await mkdtemp(join(tmpdir(), 'openagent-relay-reads-')))
   const previous = process.env.XDG_CONFIG_HOME
   process.env.XDG_CONFIG_HOME = join(dir, 'cfg')
@@ -148,23 +148,21 @@ test("a relayed module command or function is a read when this computer's own co
     const tool = join(dir, 'node_modules', 'tool')
     await mkdir(tool, { recursive: true })
     await mkdir(shop)
-    await writeFile(join(tool, 'package.json'), JSON.stringify({ name: 'tool', exports: { './dashboard': './w.js', './server': './s.mjs' }, bin: { tool: 'bin/tool' }, openagent: { reads: { tool: ['list'] } } }))
+    await writeFile(join(tool, 'package.json'), JSON.stringify({ name: 'tool', exports: { './dashboard': './w.js', './server': './s.mjs' }, bin: { tool: 'bin/tool' } }))
     await writeFile(join(tool, 'w.js'), 'export default {}')
     await writeFile(join(tool, 's.mjs'), `import { act, read } from ${JSON.stringify(import.meta.resolve('@openagt/hooks/rpc'))}\nexport const list = read(async () => [])\nexport const add = act(async () => ({ ok: true }))\n`)
     await addProject(shop, '2026-10-27T00:00:00.000Z')
     const here = projectId(shop)
     await withDistribution(dir, ['tool'], async () => {
       // The caller's own project id comes first and is no matter: the call is read in the project here.
-      assert.equal(await isRelayReadCall(here, 'runModuleCommand', ['callers-id', 'tool', ['list']]), true)
-      assert.equal(await isRelayReadCall(here, 'runModuleCommand', ['callers-id', 'tool', ['add', 'x'], undefined, false]), false)
-      assert.equal(await isRelayReadCall(here, 'runModuleCommand', ['callers-id', 'nope', ['list']]), false)
-      assert.equal(await isRelayReadCall('nowhere-1', 'runModuleCommand', ['callers-id', 'tool', ['list']]), false)
-      assert.equal(await isRelayReadCall(here, 'runModuleCommand', ['callers-id', 'tool', 'list']), false)
       // A function is what it is wrapped as; one this copy does not have is no read.
       assert.equal(await isRelayReadCall(here, 'callModule', ['callers-id', 'tool', 'list', {}]), true)
+      assert.equal(await isRelayReadCall('nowhere-1', 'callModule', ['callers-id', 'tool', 'list', {}]), false)
       assert.equal(await isRelayReadCall(here, 'callModule', ['callers-id', 'tool', 'add', {}]), false)
       assert.equal(await isRelayReadCall(here, 'callModule', ['callers-id', 'tool', 'missing', {}]), false)
       assert.equal(await isRelayReadCall(here, 'callModule', ['callers-id', 'nope', 'list', {}]), false)
+      // A module's command, whatever its words.
+      assert.equal(await isRelayReadCall(here, 'runModuleCommand', ['callers-id', 'tool', ['list']]), false)
       // A read by its name, and any other act.
       assert.equal(await isRelayReadCall(here, 'onGitStatus', []), true)
       assert.equal(await isRelayReadCall(here, 'sendStop', ['callers-id', 'tool', ['list']]), false)

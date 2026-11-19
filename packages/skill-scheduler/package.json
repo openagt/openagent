@@ -18,13 +18,7 @@
     "SKILL.md"
   ],
   "openagent": {
-    "cleanup": "scheduler",
-    "reads": {
-      "scheduler": [
-        "status",
-        "show"
-      ]
-    }
+    "cleanup": "scheduler"
   },
   "bin": {
     "scheduler": "bin/scheduler"
@@ -39,6 +33,7 @@
       "types": "./dist/plugin.d.ts",
       "default": "./dist/plugin.js"
     },
+    "./server": "./dist/server.js",
     "./dashboard": "./dist/dashboard/dashboard.js"
   },
   "scripts": {

@@ -30,8 +30,8 @@ describe('Settings → Scheduler', () => {
   })
 
   test('while the scheduler is read, the section says so', async () => {
-    const { host, runCommand } = scheduler()
-    runCommand.mockImplementation(() => new Promise<ModuleCommandResult>(() => {}))
+    const { host, call } = scheduler()
+    call.mockImplementation(() => new Promise<ModuleCommandResult>(() => {}))
     // A project of its own: a read is shared by everything that asks it under the same projects, and this one never answers.
     show(host, [{ id: 'p3', name: 'slow', gitHost: false }])
     expect(screen.getByText('Loading…')).toBeTruthy()

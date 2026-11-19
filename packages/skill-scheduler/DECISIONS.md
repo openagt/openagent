@@ -255,14 +255,15 @@ already made, and lists it in its pull request; for anything else it proposes an
 
 ## The dashboard part
 - The scheduler brings its own part of a dashboard: an Automations page (one row per
-  scheduled command, with its switch, its pace, its number of agents and its publish pick),
-  a Settings entry (the spend cushion, each project's own) and an Overview card (on or off, the last tick).
-  All read `status` and write through `offset`, `switch`, `pace`, `agents`, `agent`, `model`, `publish`,
-  `add`, `edit` and `remove`; an automation is read through `show`, a check is tried
-  through `try`, and a row is started at once through `now`.
-  Picked over a hook line per setting that a dashboard runs, and over the dashboard reading
-  the state file by name. The rows are on a page of their own, picked over rows inside
-  Settings: Settings keeps only what reaches every project.
+  scheduled command, with its switch, its pace, its number of agents and its publish
+  pick), a Settings entry (the spend cushion, each project's own) and an Overview card (on
+  or off, the last tick). All read `status` through the package's server part (#2394,
+  decision 8) and write through the command's `offset`, `switch`, `pace`, `agents`,
+  `agent`, `model`, `publish`, `add`, `edit` and `remove`; an automation is read through
+  the server part's `show`, a check is tried through `try`, and a row is started at once
+  through `now`. Picked over a hook line per setting that a dashboard runs, and over the
+  dashboard reading the state file by name. The rows are on a page of their own, picked
+  over rows inside Settings: Settings keeps only what reaches every project.
 - The rows of the Automations page are the schedule as the project's files say it at that
   moment, which `status` reads: a row saved, changed or removed shows at once, also where
   no scheduler is running. Picked over listing what the scheduler last read, where a new

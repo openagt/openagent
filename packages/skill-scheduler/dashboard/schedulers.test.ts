@@ -144,11 +144,12 @@ describe('a scheduler row, from what status printed', () => {
   })
 })
 
-describe('reading and saving through the command', () => {
-  test('status runs in every project; a project whose command fails is a row that says why', async () => {
-    const { host, runCommand } = hostAnswering(projectId => (projectId === 'p1' ? { ok: true, output: STATUS } : { ok: false, error: 'not inside a git repository' }))
+describe('reading through the server part, saving through the command', () => {
+  test("status is read in every project; a project whose scheduler cannot be read is a row that says why", async () => {
+    const { host, call, runCommand } = hostAnswering(projectId => (projectId === 'p1' ? { ok: true, output: STATUS } : { ok: false, error: 'not inside a git repository' }))
     const rows = await readSchedulers(host, [GEMSTACK, OTHER])
-    expect(runCommand.mock.calls).toEqual([['p1', ['status']], ['p2', ['status']]])
+    expect(call.mock.calls).toEqual([['p1', 'status', {}], ['p2', 'status', {}]])
+    expect(runCommand).not.toHaveBeenCalled()
     expect(rows[0]!.commands).toHaveLength(2)
     expect(rows[1]).toEqual({ project: OTHER, error: 'not inside a git repository', on: false, keepAlive: false, running: false, commands: [], unreadable: [] })
     expect(schedulerStatus(rows[1]!).label).toBe('not readable')

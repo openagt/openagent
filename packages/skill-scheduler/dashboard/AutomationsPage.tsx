@@ -7,7 +7,7 @@ import { CodeWords, Command } from './CodeWords.js'
 import { EditPanel } from './EditPanel.js'
 import { openedAutomation, type OpenedAutomation } from './automation-form.js'
 import { AGENT_LABELS, DEFAULT_AGENT, TICK_MS } from '../src/names.js'
-import { atOnce, atOnceWords, cannotRun, decided, heldBy, notAsked, startedNow, type Answered, isOwn, modelLabel, pace, publishes, saysAtOnce, readSchedulers, schedulersKey, rowTitle, schedulerStatus, schedulerStopped, unlistedWords, type AgentModels, type SchedulerCommand, type SchedulerRow } from './schedulers.js'
+import { atOnce, atOnceWords, cannotRun, decided, heldBy, notAsked, startedNow, type Answered, isOwn, modelLabel, pace, publishes, saysAtOnce, readSchedulers, schedulersKey, rowTitle, schedulerStatus, schedulerStopped, server, unlistedWords, type AgentModels, type SchedulerCommand, type SchedulerRow } from './schedulers.js'
 
 // The Automations page: what starts by itself while nobody is at the keyboard. One part per
 // project the page is given (every project that has this package, or the one picked in the
@@ -138,8 +138,8 @@ export function AutomationsPage({ projects }: UiPageProps) {
   }
 
   /**
-   * Open a row's panel. A row a person made is read first, as its file says it now (`show`, which
-   * refuses a file changed by hand): its words are then the panel's to change, and when it cannot
+   * Open a row's panel. A row a person made is read first, as its file says it now (the server
+   * part's `show`, which refuses a file changed by hand): its words are then the panel's to change, and when it cannot
    * be read the panel says why and leaves them alone. Nothing opens over a change not saved yet.
    */
   const open = async (id: string, project: UiProject, scheduled: SchedulerCommand): Promise<void> => {
@@ -150,7 +150,9 @@ export function AutomationsPage({ projects }: UiPageProps) {
       return setPanel({ id })
     }
     hold(id)
-    const answer = await ask(project, ['show', scheduled.command])
+    const answer = await server(host)
+      .show(project.id, { name: scheduled.command })
+      .then((shown): ModuleCommandResult => ({ ok: true, output: shown }), notAsked)
     letGo(id)
     // Nothing opens over a change made, meanwhile, in what is open.
     if (asked.current !== mine || dirtyNow.current) return

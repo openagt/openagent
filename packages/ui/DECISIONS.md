@@ -106,7 +106,7 @@ already made, and lists it in its pull request; for anything else it proposes an
   package. Picked over OpenAgent's own cards fed by the providers, which showed an empty
   queue to a project with no queue package. The onboarding steps stay OpenAgent's.
 - The Overview's queue card is the queue package's and its hot-tickets card the tickets
-  package's, each reading through its own command; OpenAgent draws neither, reads no
+  package's, each reading through its own server part; OpenAgent draws neither, reads no
   hot tickets and rules no lane. The lane for queued tickets was OpenAgent knowing both
   packages and is gone: a ticket's way onto the queue is the action the queue package
   offers on links, drawn beside the row where a project has that package.
@@ -335,9 +335,9 @@ already made, and lists it in its pull request; for anything else it proposes an
   inside each entry, which crowds with many projects and asks for the project again in
   every entry.
 - A module may bring an entry of Settings, with its name and icon, where a project has its
-  package. It reads and writes through the package's own command. Picked over OpenAgent's
-  own sections knowing a package's file and a hook line per setting, which made every
-  package's settings a change to OpenAgent.
+  package. It reads and writes through the package's own server part and command. Picked
+  over OpenAgent's own sections knowing a package's file and a hook line per setting,
+  which made every package's settings a change to OpenAgent.
 - The onboarding checklist is the Overview's alone. Picked over keeping a copy in Settings,
   where it is no setting.
 - The onboarding is numbered steps, one open at a time: the next to do, its words and its
@@ -354,15 +354,16 @@ already made, and lists it in its pull request; for anything else it proposes an
   of them. Picked over a grid of fixed spans with gaps, and over moving cards up out of the
   order the person set.
 - The scheduler is a package's: its Automations page, its Settings entry and its Overview
-  card are the scheduler package's own module, read and written through its command.
-  OpenAgent reads no scheduler file and has no hook line for a scheduler setting. Picked
-  over OpenAgent's own Automation section and scheduler card, which read the scheduler's
-  state file by name and needed a hook line per setting.
+  card are the scheduler package's own module, read through its server part and written
+  through its command. OpenAgent reads no scheduler file and has no hook line for a
+  scheduler setting. Picked over OpenAgent's own Automation section and scheduler card,
+  which read the scheduler's state file by name and needed a hook line per setting.
 - A module may put a stop line on the usage bar: where its unattended work stops, as an
-  offset from the quota boundary. The bar draws it and its handle, and the module reads and
-  saves the offset through its own command. With no such module the bar shows the account
-  only. Picked over OpenAgent reading the scheduler's state file and writing through an
-  `offset` hook line, and over dropping the handle, which lost dragging on the bar.
+  offset from the quota boundary. The bar draws it and its handle, and the module reads
+  the offset through its own server part and saves it through its command. With no such
+  module the bar shows the account only. Picked over OpenAgent reading the scheduler's
+  state file and writing through an `offset` hook line, and over dropping the handle,
+  which lost dragging on the bar.
 - A module may bring a server part (`./server`), functions the daemon calls in its own process
   at `/_rpc/<module>/<name>`, given the project's folder and the facts about a run, never a
   verdict about them. Picked over reading only through the package's command, a new process

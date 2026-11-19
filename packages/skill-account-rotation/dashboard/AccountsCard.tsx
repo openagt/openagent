@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import { Check, ChevronDown, Copy, Info, MoreHorizontal, Plus } from 'lucide-react'
-import { Button, useAskOn, ClaudeLogo, CodexLogo, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, GaugeFace, Input, Panel, PanelGroup, Skeleton, Slot, Tooltip, TooltipContent, TooltipTrigger, cn, useModuleHost, useOpenAgentDown, usePolled, WordsShape, type UiPermissionsProps, type ModuleHost } from '@openagt/ui/module'
+import { Button, useAskOn, ClaudeLogo, CodexLogo, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, GaugeFace, Input, Panel, PanelGroup, Skeleton, Slot, Tooltip, TooltipContent, TooltipTrigger, cn, computerRpcClient, useModuleHost, useOpenAgentDown, usePolled, WordsShape, type UiPermissionsProps, type ModuleHost } from '@openagt/ui/module'
 
 // The accounts each coding agent's runs try, in order: how full each one is, whether it is at a
 // limit, adding one: the command's own sign-in, which goes on by itself while the card follows it,
@@ -86,12 +86,20 @@ interface AddingNow {
   noBrowser?: true
 }
 
-/** What a command answered: its output for each agent, and what it says beside them, or why there is none. A browser keeps this between visits, so a new version reads what an old one kept. */
+/** What a read answered: its output for each agent, and what it says beside them, or why there is none. A browser keeps this between visits, so a new version reads what an old one kept. */
 type Read<T, Beside = object> = { ok: true; accounts: Record<AgentId, T[]> & Beside } | { ok: false; error: string }
 
-async function read<T, Beside = object>(host: ModuleHost, word: string): Promise<Read<T, Beside>> {
-  const answer = await host.runComputerCommand([word])
-  return answer.ok ? { ok: true, accounts: answer.output as Record<AgentId, T[]> & Beside } : answer
+/** The package's server part, which the card reads through: the accounts are this computer's, so it is called in no project. */
+const server = (host: ModuleHost) => computerRpcClient<typeof import('../src/server.js')>(host)
+
+/** One of the server part's reads, `list` or `usage`, as the card keeps it. */
+async function read<T, Beside = object>(host: ModuleHost, word: 'list' | 'usage'): Promise<Read<T, Beside>> {
+  return server(host)
+    [word]({})
+    .then(
+      (output): Read<T, Beside> => ({ ok: true, accounts: output as unknown as Record<AgentId, T[]> & Beside }),
+      (err: unknown): Read<T, Beside> => ({ ok: false, error: err instanceof Error ? err.message : String(err) }),
+    )
 }
 
 /** What `list` says beside the accounts: the agents whose program this computer does not have, whose account cannot be added yet. */
@@ -474,10 +482,7 @@ export function AccountsCard({ accountWhere }: UiPermissionsProps) {
   // Followed closely from a press until the sign-in has ended, which the person may take minutes over.
   const [following, setFollowing] = useState(false)
   const { value: adding, reload: reloadAdding, refresh: refreshAdding } = usePolled<Partial<Record<AgentId, AddingNow>> | undefined>(
-    async () => {
-      const answer = await host.runComputerCommand(['adding'])
-      return answer.ok ? (answer.output as Partial<Record<AgentId, AddingNow>>) : undefined
-    },
+    () => server(host).adding({}).then((output): Partial<Record<AgentId, AddingNow>> | undefined => output, () => undefined),
     undefined,
     following ? ADDING_EVERY_MS : LIST_EVERY_MS,
     [],

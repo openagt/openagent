@@ -1,7 +1,7 @@
 import { onProjectFiles, onGitStatus, onAgentWorktree, onAgentMainBranch, onAgentHandoff, onAgent, onStartedName, onOwnRuns, onOwnWaiting, onDocs, onAgentsDoing, onRetainedWorktrees, onGitHostHome, onRepositoryOffer } from './reads.js'
 import { runModuleCommand } from './modules.js'
 import { callModule } from './module-calls.js'
-import { commandReads, findProjectModule } from '../project-modules.js'
+import { findProjectModule } from '../project-modules.js'
 import { functionKind } from '../dashboard/module-host.js'
 import { resolveProjectPath } from './context.js'
 import { sendStop, sendMessage, withdrawMessage, sendNow, sendOpenPullRequest, sendPush, sendMerge, sendMergeBranch, sendStart } from './control.js'
@@ -31,9 +31,9 @@ import { onPersonalFolder, sendSyncPersonalFolder } from './personal-folder.js'
 type RelayFn = (...args: unknown[]) => Promise<unknown>
 // Each entry is a read or an act, and this is the one place that says which: a computer that only
 // lets its server watch answers the reads and refuses the acts (relay-endpoints.ts). An entry goes
-// in one of the two lists, so nothing is relayed that was not classed. A module's command and a
-// module's function are acts, but for the ones this computer's own copy of the module says only
-// read (isRelayReadCall).
+// in one of the two lists, so nothing is relayed that was not classed. A module's command is an act;
+// a module's function is one too, but for the ones this computer's own copy of the module wraps as
+// a read (isRelayReadCall).
 //
 // Besides a run's own calls, a project's: what the person's other computer lists of a project only
 // this computer has (elsewhere.ts) is read here, and a run of it is started here, by the same
@@ -67,20 +67,19 @@ export function isRelayRead(fn: string): boolean {
 }
 
 /**
- * Whether one relayed call only reads, here: a read by its name, a module's command that its
- * package says only reads, or a module's function wrapped as a read, as this computer's own copy
- * of the module says it. The caller's word for it counts for nothing: a server holding this
- * computer's key could call any command a read.
+ * Whether one relayed call only reads, here: a read by its name, or a module's function wrapped
+ * as a read, as this computer's own copy of the module says it (`@openagt/hooks/rpc`). A module's
+ * command never is: what it does is the command's to say, and its pages read through functions.
+ * The caller's word for it counts for nothing: a server holding this computer's key could call
+ * anything a read.
  */
 export async function isRelayReadCall(projectId: string, fn: string, args: readonly unknown[]): Promise<boolean> {
   if (isRelayRead(fn)) return true
-  if (fn !== 'runModuleCommand' && fn !== 'callModule') return false
-  const [, pkg, second, command] = args
+  if (fn !== 'callModule') return false
+  const [, pkg, name] = args
   const root = typeof pkg === 'string' ? await resolveProjectPath(projectId) : undefined
   const module = root ? await findProjectModule(root, pkg as string).catch(() => undefined) : undefined
-  if (!module) return false
-  if (fn === 'callModule') return typeof second === 'string' && module.server !== undefined && (await functionKind(module.server, second)) === 'read'
-  return Array.isArray(second) && commandReads(module, second as unknown[], typeof command === 'string' ? command : undefined)
+  return typeof name === 'string' && module?.server !== undefined && (await functionKind(module.server, name)) === 'read'
 }
 
 /**

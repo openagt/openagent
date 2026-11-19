@@ -1,13 +1,13 @@
-import { MAX_SPEND_OFFSET, type ModuleCommandResult, type UiHost, type UiProject } from '@openagt/ui/module'
+import { MAX_SPEND_OFFSET, rpcClient, type ModuleCommandResult, type UiHost, type UiProject } from '@openagt/ui/module'
 import type { PublishPick, TickDecision } from '../src/state.js'
 import { QUOTA_UNREAD } from '../src/quota-boundary.js'
 import { AGENTS, AGENT_LABELS, AGENT_SKILLS_DIR, DEFAULT_AGENT, DEFAULT_PUBLISH, isAgent, isAgents, isTime, type AgentName } from '../src/names.js'
 import { MAX_COUNT, dueFrom, paceInForce, parseInterval, parseTimeOfDay, takesTimeOfDay, type PacePick, type PaceUnit } from '../src/pace.js'
 
-// What the module shows of each project's scheduler: the answer of `scheduler status`, the
-// state file as it stands, whether the scheduler's process is alive, and the schedule as the
-// project's files say it at that moment. Forgiving: a field that is
-// not what the command promises reads as absent, and a project whose command fails is a row that
+// What the module shows of each project's scheduler: the server part's `status`, as the command's
+// `status` says it: the state as it stands, whether the scheduler's process is alive, and the
+// schedule as the project's files say it at that moment. Forgiving: a field that is not what
+// `status` promises reads as absent, and a project whose scheduler cannot be read is a row that
 // says why.
 
 /** The publish picks a person can make for a scheduled command, in the menu's order, with their labels. No level is the first: the run is told none, and does what its skill says. */
@@ -204,7 +204,7 @@ const UNREADABLE = 'unreadable schedule: '
 /** What a tick says of an automation kept on this machine that it does not list, before the reason. */
 const UNLISTED = 'unlisted automation: '
 
-/** A project's row from what `status` printed: each scheduled command as the project's files say it now, with this machine's switch and picks and the last tick's decision folded in, and the skills whose schedule cannot be read. */
+/** A project's row from what `status` answered: each scheduled command as the project's files say it now, with this machine's switch and picks and the last tick's decision folded in, and the skills whose schedule cannot be read. */
 export function schedulerRow(project: UiProject, output: unknown): SchedulerRow {
   const state = record(output)
   const tick = record(state['lastTick'])
@@ -281,13 +281,20 @@ export function schedulersKey(projectIds: string): string {
   return `skill-scheduler:rows:${projectIds}`
 }
 
-/** Every project's scheduler, one row per project in the order given: `scheduler status` run in each. */
+/** The module's server part, called from the page: typed by its file. */
+export const server = (host: Pick<UiHost, 'call'>) => rpcClient<typeof import('../src/server.js')>(host)
+
+/** Every project's scheduler, one row per project in the order given: the server part's `status` read in each. */
 export function readSchedulers(host: UiHost, projects: readonly UiProject[]): Promise<SchedulerRow[]> {
   return Promise.all(
-    projects.map(async project => {
-      const answer = await host.runCommand(project.id, ['status'])
-      return answer.ok ? schedulerRow(project, answer.output) : { project, error: answer.error, on: false, keepAlive: false, running: false, commands: [], unreadable: [] }
-    }),
+    projects.map(project =>
+      server(host)
+        .status(project.id, {})
+        .then(
+          (status): SchedulerRow => schedulerRow(project, status),
+          (err: unknown): SchedulerRow => ({ project, error: notAsked(err).error, on: false, keepAlive: false, running: false, commands: [], unreadable: [] }),
+        ),
+    ),
   )
 }
 

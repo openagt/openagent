@@ -29,9 +29,13 @@ function handedDown(): Promise<Settings | undefined> {
 /** Why a switch or a pace cannot be saved here. */
 export const NO_SETTINGS = "this machine's switches and paces are OpenAgent's settings, which a command reaches only where OpenAgent started it: from its dashboard, or an agent it started"
 
-/** The switches and paces this computer keeps for the project at `repo`: none outside OpenAgent. */
-export async function readPicks(repo: string): Promise<Picks> {
-  const settings = await picksSettings.of()
+/**
+ * The switches and paces this computer keeps for the project at `repo`: none outside OpenAgent.
+ * Read from `settings` where given (the dashboard's own, to its server part), else from the
+ * distribution handed down to this process.
+ */
+export async function readPicks(repo: string, given?: Settings): Promise<Picks> {
+  const settings = given ?? (await picksSettings.of())
   if (!settings) return {}
   return picksOf((await settings.get(SCHEDULED_COMMANDS))[projectId(repo)] ?? {})
 }

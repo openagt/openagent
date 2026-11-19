@@ -43,9 +43,9 @@ describe("the scheduler's stop line on the usage bar", () => {
   })
 
   test('with no project that keeps an offset, the bar has no handle', async () => {
-    const { host, runCommand } = hostAnswering(() => ({ ok: true, output: { ...STATUS, spendOffset: undefined } }))
+    const { host, call } = hostAnswering(() => ({ ok: true, output: { ...STATUS, spendOffset: undefined } }))
     show(host)
-    await waitFor(() => expect(runCommand).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(call).toHaveBeenCalledTimes(2))
     expect(screen.getByText('no handle')).toBeTruthy()
   })
 

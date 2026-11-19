@@ -7,7 +7,7 @@ import { PUBLISH_PICKS, agentInForce, readState, updateState, withAgent, without
 import { parseInterval, parseTimeOfDay, takesTimeOfDay } from './pace.js'
 import { AGENTS, AGENT_LABELS, AGENT_SKILLS_DIR, DEFAULT_AGENT, MAX_AGENTS, WRITE_LINE_TIMEOUT_MS, isAgent, isAgents } from './names.js'
 import { ableAgents, homeAgent, readSchedule, whyUnlisted, type ScheduledCommand } from './schedule.js'
-import { addAutomation, editAutomation, removeAutomation, savedAutomation, type AddRefusal, type ChangedSince, type NotAnAutomation } from './automation.js'
+import { addAutomation, editAutomation, removeAutomation, shownAutomation, whyRefused } from './automation.js'
 import { tryCheck } from './check.js'
 import type { NewAutomation } from './automation-file.js'
 import { lineContext, writeLine } from './write-line.js'
@@ -186,14 +186,14 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
       await forget(repo, s => withoutCommand(s, outcome.command), git)
       return outcome
     }
-    throw new Refused(outcome, refusal(outcome))
+    throw new Refused(outcome, whyRefused(outcome))
   },
 
   async show(args, io, git) {
     const { positionals } = parseCommandArgs(args, {}, 1)
-    const found = await savedAutomation(await project(io.cwd, git), positionals[0]!)
-    if ('reason' in found) throw new Refused(found, refusal(found))
-    return { ok: true, ...found.automation, file: found.file, version: found.version, ...(found.onThisMachine ? { onThisMachine: true } : {}) }
+    const shown = await shownAutomation(await project(io.cwd, git), positionals[0]!)
+    if ('reason' in shown) throw new Refused(shown, whyRefused(shown))
+    return { ok: true, ...shown }
   },
 
   async edit(args, io, git) {
@@ -203,14 +203,14 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
     const part = (typed: string | undefined): string | null | undefined => (typed === undefined ? undefined : typed.trim() === '' ? null : typed)
     const outcome = await editAutomation(await project(io.cwd, git), positionals[0]!, { prompt: values.prompt, every: part(values.every), when: part(values.when), waitsFor: part(values['waits-for']) }, git, values.was !== undefined ? { was: values.was } : {})
     if (outcome.ok) return outcome
-    throw new Refused(outcome, refusal(outcome))
+    throw new Refused(outcome, whyRefused(outcome))
   },
 
   async remove(args, io, git) {
     const { positionals } = parseCommandArgs(args, {}, 1)
     const repo = await project(io.cwd, git)
     const outcome = await removeAutomation(repo, positionals[0]!, git)
-    if (!outcome.ok) throw new Refused(outcome, refusal(outcome))
+    if (!outcome.ok) throw new Refused(outcome, whyRefused(outcome))
     // What this machine held for the command goes with it, and the last tick's record stops naming it, so a dashboard stops listing it at once.
     await forget(repo, s => withoutListed(withoutCommand(s, outcome.command), outcome.command), git)
     return outcome
@@ -268,14 +268,6 @@ async function forget(repo: string, without: (state: State) => State, git: GitRu
 /** An automation as the command line was given it: its name, its prompt, and the schedule flags that were typed. */
 function typed(name: string, prompt: string, values: { every?: string | undefined; when?: string | undefined; 'waits-for'?: string | undefined }): NewAutomation {
   return { name, prompt, ...(values.every !== undefined ? { every: values.every } : {}), ...(values.when !== undefined ? { when: values.when } : {}), ...(values['waits-for'] !== undefined ? { waitsFor: values['waits-for'] } : {}) }
-}
-
-/** Why an automation was not saved, shown or removed, as one line for a person. */
-function refusal(outcome: AddRefusal | NotAnAutomation | ChangedSince): string {
-  if (outcome.reason === 'taken') return `that name is taken: ${outcome.folder}`
-  if (outcome.reason === 'no-prompt') return 'the prompt is empty'
-  if (outcome.reason === 'bad-schedule') return `it cannot run as written: ${outcome.detail}`
-  return outcome.detail
 }
 
 /** The scheduled command of that name; refused where no skill of the project schedules it, with why when its skill's schedule cannot be read. */

@@ -42,11 +42,11 @@ const MINE = {
   ],
 }
 
-/** What `scheduler show answer-comments` prints for the shared one. */
-const SHOWN = { ok: true, name: 'answer-comments', prompt: 'Answer each new comment below.', every: '15m', when: 'gh api comments', waitsFor: 'when someone commented', file: '.claude/skills/answer-comments/SKILL.md' }
+/** What `show` answers for the shared one. */
+const SHOWN = { name: 'answer-comments', prompt: 'Answer each new comment below.', every: '15m', when: 'gh api comments', waitsFor: 'when someone commented', file: '.claude/skills/answer-comments/SKILL.md' }
 
-/** What `scheduler show tidy` prints for the one kept on this machine. */
-const KEPT = { ok: true, name: 'tidy', prompt: 'Tidy up.', every: '1d', file: '.scheduler/automations/tidy.md', onThisMachine: true }
+/** What `show` answers for the one kept on this machine. */
+const KEPT = { name: 'tidy', prompt: 'Tidy up.', every: '1d', file: '.scheduler/automations/tidy.md', onThisMachine: true }
 
 /** A host whose `status` answers {@link MINE}, whose `show` answers the automation asked for, and whose saves are answered by `saved`. */
 function mine(saved: (projectId: string, args: string[]) => ModuleCommandResult = () => ({ ok: true, output: { ok: true } }), status: () => unknown = () => MINE) {
@@ -55,8 +55,8 @@ function mine(saved: (projectId: string, args: string[]) => ModuleCommandResult 
 
 type Ran = ReturnType<typeof hostAnswering>['runCommand']
 
-/** What the page ran apart from its reads, the rows and an automation's file: its saves, in the order they were asked. */
-const saves = (runCommand: Ran): string[][] => runCommand.mock.calls.filter(([, args]) => args[0] !== 'status' && args[0] !== 'show').map(([, args]) => args)
+/** What the page ran through the command, its reads being the server part's: its saves, in the order they were asked. */
+const saves = (runCommand: Ran): string[][] => runCommand.mock.calls.map(([, args]) => args)
 
 const row = (name: string): HTMLElement => screen.getByRole('listitem', { name })
 const editing = (name: string): HTMLElement => screen.getByRole('group', { name: `Editing ${name}` })
@@ -339,8 +339,8 @@ describe('the Automations page: its rows', () => {
 
   test("a row's switch moves at the press and is held while it saves; one the command refused goes back, with why", async () => {
     let answer: (result: ModuleCommandResult) => void = () => {}
-    const runCommand = vi.fn(async (_projectId: string, args: string[]): Promise<ModuleCommandResult> => (args[0] === 'status' ? { ok: true, output: STATUS } : new Promise(resolve => (answer = resolve))))
-    show(fakeHost('@openagt/skill-scheduler', { runCommand, act: runCommand }))
+    const runCommand = vi.fn((_projectId: string, _args: string[]): Promise<ModuleCommandResult> => new Promise(resolve => (answer = resolve)))
+    show(fakeHost('@openagt/skill-scheduler', { runCommand, act: runCommand, call: async () => ({ ok: true, output: STATUS }) }))
     await screen.findByRole('region', { name: 'gemstack' })
     const toggle = screen.getByRole('switch', { name: 'Run /work-queue by itself' })
     fireEvent.click(toggle)
@@ -356,12 +356,12 @@ describe('the Automations page: its rows', () => {
       { ok: true, output: { ok: true, command: 'work-queue', run: '2026-10-09T18-50-37-688Z' } },
       { ok: true, output: { ok: true } },
     ]
-    const { host, runCommand } = scheduler((_, args) => (args[0] === 'now' ? answers.shift()! : { ok: true, output: { ok: true } }))
+    const { host, runCommand, call } = scheduler((_, args) => (args[0] === 'now' ? answers.shift()! : { ok: true, output: { ok: true } }))
     show(host)
     await screen.findByRole('region', { name: 'gemstack' })
     // Switched off here: a person asked, so it starts all the same.
     const queue = row('/work-queue')
-    const statusReads = runCommand.mock.calls.filter(([, args]) => args[0] === 'status').length
+    const statusReads = call.mock.calls.filter(([, name]) => name === 'status').length
     fireEvent.click(within(queue).getByRole('button', { name: 'Run /work-queue now' }))
     // Until it answers, its button says so, as the Overview card's does.
     expect(within(queue).getByRole('button', { name: 'Run /work-queue now' }).textContent).toBe('Starting…')
@@ -371,7 +371,7 @@ describe('the Automations page: its rows', () => {
     expect(started.textContent).toBe('Started a run. Open it')
     expect(started.className).toMatch(/text-success/)
     // The rows were read again before it said so: the row then says when it last ran.
-    expect(runCommand.mock.calls.filter(([, args]) => args[0] === 'status').length).toBeGreaterThan(statusReads)
+    expect(call.mock.calls.filter(([, name]) => name === 'status').length).toBeGreaterThan(statusReads)
     fireEvent.click(within(started).getByRole('button', { name: 'Open it' }))
     expect(host.openAgent).toHaveBeenCalledWith('p1', '2026-10-09T18-50-37-688Z')
     // Said on its own row alone.
@@ -419,7 +419,7 @@ describe('the Automations page: its rows', () => {
     const save = within(form).getByRole('button', { name: 'Save' })
     expect(disabled(save)).toBe(true)
     fireEvent.click(save)
-    expect(runCommand.mock.calls.every(([, args]) => args[0] === 'status')).toBe(true)
+    expect(runCommand).not.toHaveBeenCalled()
   })
 
   test('a "Run now" that starts nothing says why on its row: nothing to do, or one already running, is a plain note; anything else is said as a failure, in the page\'s words for the scheduler\'s decision; the next one takes the line away', async () => {
@@ -530,7 +530,7 @@ describe('the Automations page: its rows', () => {
   test('a row is held, its three controls with it, until its save has answered and the rows were read again; the same command in another project is not; and saves go one at a time', async () => {
     const answers: ((result: ModuleCommandResult) => void)[] = []
     const { host, runCommand } = scheduler()
-    runCommand.mockImplementation(async (_projectId: string, args: string[]) => (args[0] === 'status' ? { ok: true, output: STATUS } : new Promise<ModuleCommandResult>(resolve => answers.push(resolve))))
+    runCommand.mockImplementation(() => new Promise<ModuleCommandResult>(resolve => answers.push(resolve)))
     show(host, [GEMSTACK, OTHER])
     const gemstack = await screen.findByRole('region', { name: 'gemstack' })
     const held = within(gemstack).getByRole('listitem', { name: '/work-queue' })
@@ -707,7 +707,7 @@ describe('the Automations page: its rows', () => {
 
 describe("the Edit panel of a skill's row", () => {
   test('Edit opens the panel in the row, with its parts in order: what it does is shown greyed, since its words are the skill\'s; nothing is to save until something changes; Save runs `publish` and closes it, Cancel saves nothing', async () => {
-    const { host, runCommand } = scheduler()
+    const { host, runCommand, call } = scheduler()
     show(host)
     await screen.findByRole('region', { name: 'gemstack' })
     expect(screen.queryByRole('combobox', { name: 'What its runs publish' })).toBeNull()
@@ -715,7 +715,7 @@ describe("the Edit panel of a skill's row", () => {
     const editor = await edit('/post-merge-cleanup')
     expect(within(editor).getAllByRole('region').map(r => r.getAttribute('aria-label'))).toEqual(['What it does', 'When it runs', 'How many at once', 'What it runs on', 'What its runs publish'])
     // A skill's row is read from what the scheduler listed: no file is opened.
-    expect(runCommand.mock.calls.some(([, args]) => args[0] === 'show')).toBe(false)
+    expect(call.mock.calls.some(([, name]) => name === 'show')).toBe(false)
     const does = part(editor, 'What it does')
     expect(within(does).getByText('Write up merged pull requests.')).toBeTruthy()
     expect(within(does).getByText("Its words are its skill's, /post-merge-cleanup: they are changed in the skill's file, by whoever writes the skill.")).toBeTruthy()
@@ -1169,8 +1169,8 @@ describe("the Edit panel of a skill's row", () => {
 
   test('while a panel saves it takes no more picks, no second Save and no Cancel, and Escape does not close it; it closes once what it saved has been read back', async () => {
     let answer!: (result: ModuleCommandResult) => void
-    const { host, runCommand } = scheduler()
-    runCommand.mockImplementation(async (_projectId: string, args: string[]) => (args[0] === 'status' ? { ok: true, output: STATUS } : new Promise<ModuleCommandResult>(resolve => (answer = resolve))))
+    const { host, runCommand, call } = scheduler()
+    runCommand.mockImplementation(() => new Promise<ModuleCommandResult>(resolve => (answer = resolve)))
     show(host)
     await screen.findByRole('region', { name: 'gemstack' })
     const editor = await edit('/post-merge-cleanup')
@@ -1188,10 +1188,10 @@ describe("the Edit panel of a skill's row", () => {
     expect(disabled(within(editor).getByLabelText('How long'))).toBe(true)
     fireEvent.keyDown(editor, { key: 'Escape' })
     expect(editing('/post-merge-cleanup')).toBeTruthy()
-    const statusReads = runCommand.mock.calls.filter(([, args]) => args[0] === 'status').length
+    const statusReads = call.mock.calls.filter(([, name]) => name === 'status').length
     answer({ ok: true, output: { ok: true } })
     await gone('/post-merge-cleanup')
-    expect(runCommand.mock.calls.filter(([, args]) => args[0] === 'status').length).toBeGreaterThan(statusReads)
+    expect(call.mock.calls.filter(([, name]) => name === 'status').length).toBeGreaterThan(statusReads)
     expect(saves(runCommand)).toEqual([['publish', 'post-merge-cleanup', 'pr']])
   })
 
@@ -1250,12 +1250,12 @@ describe("the Edit panel of a skill's row", () => {
 
 describe('the Edit panel of a row a person made', () => {
   test('Edit reads the automation with `show` and opens the same panel with its words to change: what the agent is told and its shell line, one pace control with no skill to follow, a lone number of agents, the publish menu, and Remove; one Save runs `edit`, `agents` and `publish` in that order and then says what is left to commit', async () => {
-    const { host, runCommand } = mine(() => ({ ok: true, output: { ok: true, command: 'answer-comments', file: SHOWN.file, startsFrom: 'origin/main' } }))
+    const { host, runCommand, call } = mine(() => ({ ok: true, output: { ok: true, command: 'answer-comments', file: SHOWN.file, startsFrom: 'origin/main' } }))
     show(host)
     await screen.findByRole('region', { name: 'gemstack' })
     const own = row('/answer-comments')
     const panel = await edit('/answer-comments')
-    expect(runCommand).toHaveBeenCalledWith('p1', ['show', 'answer-comments'])
+    expect(call).toHaveBeenCalledWith('p1', 'show', { name: 'answer-comments' })
     // The same parts, in the same order, as a skill's row.
     expect(within(panel).getAllByRole('region').map(r => r.getAttribute('aria-label'))).toEqual(['What it does', 'When it runs', 'How many at once', 'What it runs on', 'What its runs publish'])
     const does = part(panel, 'What it does')
@@ -1292,7 +1292,7 @@ describe('the Edit panel of a row a person made', () => {
     expect(within(many).getByText('agents at once')).toBeTruthy()
     await pick(publish(panel), 'Open PR')
     expect(within(panel).getByText('Every 30 minutes at most, when someone commented. Up to 2 at once. Claude Code, Opus 5.5. May open a pull request.')).toBeTruthy()
-    const statusReads = runCommand.mock.calls.filter(([, args]) => args[0] === 'status').length
+    const statusReads = call.mock.calls.filter(([, name]) => name === 'status').length
     fireEvent.click(within(panel).getByRole('button', { name: 'Save' }))
     const saved = await within(own).findByText(/It is a change to a file of yours, in this project, and nothing was committed for you\./)
     // Its interval went into its file with its words: no pick of this machine's stands in for it.
@@ -1306,7 +1306,7 @@ describe('the Edit panel of a row a person made', () => {
     expect(saved.textContent).toContain('An agent is told the new words only once the change is on origin/main: commit it and bring it there.')
     // The row shows the change at once, so the note says nothing of when.
     expect(note.textContent).not.toMatch(/once the scheduler/)
-    expect(runCommand.mock.calls.filter(([, args]) => args[0] === 'status').length).toBeGreaterThan(statusReads)
+    expect(call.mock.calls.filter(([, name]) => name === 'status').length).toBeGreaterThan(statusReads)
     // Saved: nothing is held any more, though the note is still up.
     await waitFor(() => expect(disabled(screen.getByRole('button', { name: 'Edit tidy' }))).toBe(false))
     fireEvent.click(within(note).getByRole('button', { name: 'Done' }))
@@ -1320,11 +1320,11 @@ describe('the Edit panel of a row a person made', () => {
       { ok: false, error: 'it cannot run as written: neither every nor when says when' },
       { ok: true, output: { ok: true, command: 'tidy', file: KEPT.file, startsFrom: 'origin/main', onThisMachine: true } },
     ]
-    const { host, runCommand } = mine(() => answers.shift()!)
+    const { host, runCommand, call } = mine(() => answers.shift()!)
     show(host)
     await screen.findByRole('region', { name: 'gemstack' })
     let panel = await edit('tidy')
-    expect(runCommand).toHaveBeenCalledWith('p1', ['show', 'tidy'])
+    expect(call).toHaveBeenCalledWith('p1', 'show', { name: 'tidy' })
     // It follows no skill: with no level its runs do as its prompt says.
     expect((await choices(publish(panel)))[0]).toBe('As the prompt says')
     expect(within(panel).getByText('Kept on this machine alone, outside git: .scheduler/automations/tidy.md.')).toBeTruthy()
@@ -1551,13 +1551,13 @@ describe('the Edit panel of a row a person made', () => {
 
   test('an automation kept on this machine whose file the tool no longer reads as its own opens without asking for it: its picks follow "As it was saved", count this machine\'s runs alone, and it has no Remove', async () => {
     const status = { ...STATUS, schedule: [...STATUS.schedule, { command: 'watch-competitor', every: '1h', description: 'Look for new threads.', onThisMachine: true }] }
-    const { host, runCommand } = hostAnswering((_, args) => (args[0] === 'status' ? { ok: true, output: status } : { ok: true, output: { ok: true } }))
+    const { host, runCommand, call } = hostAnswering((_, args) => (args[0] === 'status' ? { ok: true, output: status } : { ok: true, output: { ok: true } }))
     show(host)
     await screen.findByRole('region', { name: 'gemstack' })
     // Still a row of the person's own: in their group, named without a slash.
     expect(within(screen.getByRole('region', { name: 'Your automations' })).getByRole('listitem', { name: 'watch-competitor' })).toBeTruthy()
     const box = await edit('watch-competitor')
-    expect(runCommand.mock.calls.some(([, args]) => args[0] === 'show')).toBe(false)
+    expect(call.mock.calls.some(([, name]) => name === 'show')).toBe(false)
     expect(within(box).getAllByText('As it was saved').length).toBe(2)
     expect(radioNames(box)).toEqual(['As it was saved', 'A wait you set', 'As it was saved', 'A number you set'])
     expect(within(box).getByText('Counted from its last start, on this machine.')).toBeTruthy()
@@ -1590,8 +1590,8 @@ describe('the Edit panel of a row a person made', () => {
 
   test("an automation that answers `show` late, after a form or another row's panel was opened, opens nothing over it", async () => {
     const late: ((shown: ModuleCommandResult) => void)[] = []
-    const { host, runCommand } = scheduler()
-    runCommand.mockImplementation(async (_projectId: string, args: string[]) => (args[0] === 'status' ? { ok: true, output: MINE } : args[0] === 'show' ? new Promise<ModuleCommandResult>(resolve => late.push(resolve)) : { ok: true, output: { ok: true } }))
+    const { host, runCommand, call } = scheduler()
+    call.mockImplementation((_projectId: string, name: string) => (name === 'status' ? Promise.resolve({ ok: true, output: MINE }) : new Promise<ModuleCommandResult>(resolve => late.push(resolve))))
     show(host)
     await screen.findByRole('region', { name: 'gemstack' })
     fireEvent.click(within(row('/answer-comments')).getByRole('button', { name: 'Edit /answer-comments' }))
@@ -1958,8 +1958,8 @@ describe('one panel or form at a time', () => {
   test('an automation that answers `show` after a change was made in the panel that is open does not take its place: the change is kept', async () => {
     let answer: (result: ModuleCommandResult) => void = () => {}
     const { host } = hostAnswering((_, args) => (args[0] === 'status' ? { ok: true, output: MINE } : { ok: true, output: { ok: true } }))
-    const plain = host.runCommand
-    host.runCommand = ((projectId: string, args: string[]) => (args[0] === 'show' ? new Promise<ModuleCommandResult>(resolve => (answer = resolve)) : plain(projectId, args))) as typeof host.runCommand
+    const plain = host.call
+    host.call = ((projectId: string, name: string, input: object) => (name === 'show' ? new Promise<ModuleCommandResult>(resolve => (answer = resolve)) : plain(projectId, name, input))) as typeof host.call
     show(host)
     await screen.findByRole('region', { name: 'gemstack' })
     const panel = await edit('/work-queue')
@@ -2126,7 +2126,7 @@ describe('the "New automation" form', () => {
   test('a written line that comes back after the person typed in the line\'s box is dropped', async () => {
     const { host, runCommand } = scheduler()
     let answer!: (result: ModuleCommandResult) => void
-    runCommand.mockImplementation(async (_projectId: string, args: string[]) => (args[0] === 'write-line' ? new Promise<ModuleCommandResult>(resolve => (answer = resolve)) : { ok: true, output: args[0] === 'status' ? STATUS : { ok: true } }))
+    runCommand.mockImplementation(async (_projectId: string, args: string[]) => (args[0] === 'write-line' ? new Promise<ModuleCommandResult>(resolve => (answer = resolve)) : { ok: true, output: { ok: true } }))
     show(host)
     fireEvent.click(await screen.findByRole('button', { name: 'New automation in gemstack' }))
     const form = screen.getByRole('group', { name: 'New automation' })
@@ -2148,7 +2148,7 @@ describe('the "New automation" form', () => {
   test('an answer that comes back after the line was changed is not shown under the other line', async () => {
     const { host, runCommand } = scheduler()
     let answer!: (result: ModuleCommandResult) => void
-    runCommand.mockImplementation(async (_projectId: string, args: string[]) => (args[0] === 'try' ? new Promise<ModuleCommandResult>(resolve => (answer = resolve)) : { ok: true, output: args[0] === 'status' ? STATUS : { ok: true } }))
+    runCommand.mockImplementation(async (_projectId: string, args: string[]) => (args[0] === 'try' ? new Promise<ModuleCommandResult>(resolve => (answer = resolve)) : { ok: true, output: { ok: true } }))
     show(host)
     fireEvent.click(await screen.findByRole('button', { name: 'New automation in gemstack' }))
     const form = screen.getByRole('group', { name: 'New automation' })
@@ -2170,7 +2170,7 @@ describe('the "New automation" form', () => {
   test("a second try asked while the first is still running: the first one's late answer changes nothing, and the button stays held until the second answers", async () => {
     const answers: ((result: ModuleCommandResult) => void)[] = []
     const { host, runCommand } = scheduler()
-    runCommand.mockImplementation(async (_projectId: string, args: string[]) => (args[0] === 'try' ? new Promise<ModuleCommandResult>(resolve => answers.push(resolve)) : { ok: true, output: args[0] === 'status' ? STATUS : { ok: true } }))
+    runCommand.mockImplementation(async (_projectId: string, args: string[]) => (args[0] === 'try' ? new Promise<ModuleCommandResult>(resolve => answers.push(resolve)) : { ok: true, output: { ok: true } }))
     show(host)
     fireEvent.click(await screen.findByRole('button', { name: 'New automation in gemstack' }))
     const form = screen.getByRole('group', { name: 'New automation' })
@@ -2197,7 +2197,7 @@ describe('the "New automation" form', () => {
       { ok: false, error: 'that name is taken: .claude/skills/answer-comments' },
       { ok: true, output: { ok: true, command: 'answer-replies', file: '.claude/skills/answer-replies/SKILL.md', startsFrom: 'origin/main' } },
     ]
-    const { host, runCommand } = scheduler((_, args) => (args[0] === 'add' ? added.shift()! : { ok: true, output: { ok: true } }))
+    const { host, runCommand, call } = scheduler((_, args) => (args[0] === 'add' ? added.shift()! : { ok: true, output: { ok: true } }))
     show(host)
     fireEvent.click(await screen.findByRole('button', { name: 'New automation in gemstack' }))
     const form = screen.getByRole('group', { name: 'New automation' })
@@ -2214,7 +2214,7 @@ describe('the "New automation" form', () => {
     // Typing again takes the refusal away.
     fireEvent.change(within(form).getByRole('textbox', { name: 'Name' }), { target: { value: 'answer-replies' } })
     expect(within(form).queryByRole('alert')).toBeNull()
-    const statusReads = runCommand.mock.calls.filter(([, args]) => args[0] === 'status').length
+    const statusReads = call.mock.calls.filter(([, name]) => name === 'status').length
     fireEvent.click(within(form).getByRole('button', { name: 'Save' }))
     const saved = await screen.findByText(/It is a file of yours, in this project, and nothing was committed for you\./)
     const panel = screen.getByRole('group', { name: 'New automation' })
@@ -2223,7 +2223,7 @@ describe('the "New automation" form', () => {
     expect(panel.textContent).toContain('Its row is in the list now, switched off.')
     expect(within(panel).queryByRole('alert')).toBeNull()
     // The rows are read again at once.
-    await waitFor(() => expect(runCommand.mock.calls.filter(([, args]) => args[0] === 'status').length).toBeGreaterThan(statusReads))
+    await waitFor(() => expect(call.mock.calls.filter(([, name]) => name === 'status').length).toBeGreaterThan(statusReads))
     // Saved: nothing is held any more, though the note is still up.
     await waitFor(() => expect(disabled(screen.getByRole('button', { name: 'Edit /work-queue' }))).toBe(false))
     fireEvent.click(within(panel).getByRole('button', { name: 'Done' }))
@@ -2233,8 +2233,9 @@ describe('the "New automation" form', () => {
 
   test('while a save runs the form takes no more typing and no second Save, and Escape does not close it; in a project whose scheduler is not running the saved panel says the same as in any other: the row is in the list', async () => {
     let answer!: (result: ModuleCommandResult) => void
-    const { host, runCommand } = scheduler()
-    runCommand.mockImplementation(async (_projectId: string, args: string[]) => (args[0] === 'add' ? new Promise<ModuleCommandResult>(resolve => (answer = resolve)) : { ok: true, output: args[0] === 'status' ? { ...STATUS, running: false } : { ok: true } }))
+    const { host, runCommand, call } = scheduler()
+    call.mockImplementation(async () => ({ ok: true, output: { ...STATUS, running: false } }))
+    runCommand.mockImplementation(async (_projectId: string, args: string[]) => (args[0] === 'add' ? new Promise<ModuleCommandResult>(resolve => (answer = resolve)) : { ok: true, output: { ok: true } }))
     show(host)
     fireEvent.click(await screen.findByRole('button', { name: 'New automation in gemstack' }))
     const form = screen.getByRole('group', { name: 'New automation' })

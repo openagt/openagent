@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { commandReads, findBroughtModule, findProjectModule, moduleFile, readProjectModules, runModuleCommand } from './project-modules.js'
+import { findBroughtModule, findProjectModule, moduleFile, readProjectModules, runModuleCommand } from './project-modules.js'
 import { handDownTestDistribution, withDistribution } from './test-distribution.js'
 
 handDownTestDistribution()
@@ -130,41 +130,8 @@ console.log(JSON.stringify({ args, cwd: process.cwd() }))`),
   }
 })
 
-test('a package says which of its commands only read; any other command, or a word after flags, changes something', async () => {
-  const root = await tempDir('openagent-modules-reads-')
-  try {
-    await pkg(
-      join(root, 'node_modules', 'tool'),
-      {
-        name: 'tool',
-        exports: { './dashboard': './w.js' },
-        bin: { tool: 'bin/tool', other: 'bin/other' },
-        // A command it does not have, a list that is no list, a flag for a word: dropped.
-        openagent: { tool: 'tool', reads: { tool: ['list', '', '--local', 7], nope: ['list'], other: 'status' } },
-      },
-      { 'w.js': 'export default {}' },
-    )
-    let module!: NonNullable<Awaited<ReturnType<typeof findProjectModule>>>
-    await withDistribution(root, ['tool'], async () => void (module = (await findProjectModule(root, 'tool'))!))
-    assert.deepEqual(module.reads, { tool: ['list', ''] })
-    for (const args of [['list'], ['list', '--local'], [], ['--local', '--full']]) assert.equal(commandReads(module, args, 'tool'), true, JSON.stringify(args))
-    for (const args of [['add', 'x'], ['--local', 'add', 'x'], ['list', 7]]) assert.equal(commandReads(module, args, 'tool'), false, JSON.stringify(args))
-    // A command of the package that names no reads, and a package of several commands asked with none named.
-    assert.equal(commandReads(module, ['status'], 'other'), false)
-    assert.equal(commandReads(module, ['list']), false)
-  } finally {
-    await rm(root, { recursive: true, force: true })
-  }
-})
-
-test("the Automations' package says its reads, everything that writes, starts a run or runs a line a change; the Queue's and the Tickets' read through their server parts, and every command of theirs is a change", async () => {
-  const queue = (await findBroughtModule('@openagt/skill-queue'))!
-  const tickets = (await findBroughtModule('@openagt/skill-tickets'))!
-  const scheduler = (await findBroughtModule('@openagt/skill-scheduler'))!
-  assert.deepEqual([queue.reads, tickets.reads, scheduler.reads], [{}, {}, { scheduler: ['status', 'show'] }])
-  const reads = (module: typeof queue, ...args: string[]): boolean => commandReads(module, args)
-  assert.deepEqual([reads(queue, '--local'), reads(queue, 'add', 'x'), reads(tickets, 'list', '--local'), reads(tickets, 'release', 'a.md', '--force')], [false, false, false, false])
-  assert.deepEqual([reads(scheduler, 'status'), reads(scheduler, 'show', 'x'), reads(scheduler, 'now', 'x'), reads(scheduler, 'try', '--when=ls'), reads(scheduler, 'write-line', '--words=x'), reads(scheduler, 'switch', 'x', 'on')], [true, true, false, false, false, false])
+test("the Queue's, Tickets' and Automations' packages read through their server parts", async () => {
+  for (const name of ['@openagt/skill-queue', '@openagt/skill-tickets', '@openagt/skill-scheduler']) assert.match((await findBroughtModule(name))?.server ?? '', /server\.js$/, name)
   // The distribution's own copy is only of the packages a project can have.
   assert.equal(await findBroughtModule('@openagt/dashboard-devices'), undefined)
   assert.equal(await findBroughtModule('left-pad'), undefined)

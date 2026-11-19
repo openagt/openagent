@@ -2,13 +2,17 @@ import { vi } from 'vitest'
 import type { ModuleCommandResult } from '@openagt/ui/module'
 import { fakeHost } from '@openagt/ui/module/testing'
 
-// What the module's tests share: a fake dashboard host, and what the command prints.
+// What the module's tests share: a fake dashboard host, and what the command and the server part answer.
 
-/** A host whose command answers what `answer` says per project and arguments. */
+/** The words a call is answered by: its name, then its input's words, as the command is asked (`show` with `{ name: 'x' }` is `show x`). */
+export const callWords = (name: string, input: object): string[] => [name, ...Object.values(input).filter((value): value is string => typeof value === 'string')]
+
+/** A host whose command and server part answer what `answer` says per project and words: a call by {@link callWords}. */
 export function hostAnswering(answer: (projectId: string, args: string[]) => ModuleCommandResult) {
   const runCommand = vi.fn(async (projectId: string, args: string[]) => answer(projectId, args))
-  const host = fakeHost('@openagt/skill-scheduler', { runCommand, act: runCommand })
-  return { host, runCommand }
+  const call = vi.fn(async (projectId: string, name: string, input: object) => answer(projectId, callWords(name, input)))
+  const host = fakeHost('@openagt/skill-scheduler', { runCommand, act: runCommand, call })
+  return { host, runCommand, call }
 }
 
 /** What `status` lists of a row beside what its file says, for a skill that is in Claude Code's folder alone: the coding agent it is made for, and the ones that can run it. */
@@ -17,9 +21,8 @@ export const ON_CLAUDE = { agent: 'claude-code', able: ['claude-code'] }
 /** The same for an automation kept on this machine, which is no skill: made for Claude Code, and any agent can run it. */
 export const ANY_AGENT = { agent: 'claude-code', able: ['claude-code', 'codex'] }
 
-/** What `scheduler status` prints for a scheduler that ticked once in a project whose skills schedule two commands: one switched on here, one with a publish pick made here. */
+/** What `status` answers for a scheduler that ticked once in a project whose skills schedule two commands: one switched on here, one with a publish pick made here. */
 export const STATUS = {
-  ok: true,
   on: true,
   keepAlive: false,
   model: 'opus',

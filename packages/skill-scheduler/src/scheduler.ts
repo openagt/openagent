@@ -9,6 +9,7 @@ import { accountFolder, personalCodexHome, readCodexUsage } from '@openagt/agent
 import { gitHostEnv, isPidAlive, lockHolder, readyToRun, runIdFrom, spawnResume, spawnRun, sweep, withdrawMarker, writeMarker } from '@openagt/agent-runner'
 import { findRun } from '@openagt/skill-logs'
 import { nodeGitRunner, originUrl, pullProjectData, remoteHostOf, type GitRunner } from '@openagt/agent-data'
+import type { Settings } from '@openagt/hooks'
 import { CHECK_TIMEOUT_MS, GLANCE_MS, NOW_CHECK_TIMEOUT_MS, QUOTA_KEPT_MS, SCHEDULER_LOG, TICK_MS } from './names.js'
 import { inFlight, lastRuns, lastStart, type LastRun } from './records.js'
 import { readSchedule, type Schedule, type ScheduledCommand, type Unlisted } from './schedule.js'
@@ -282,10 +283,11 @@ export type Status = State & { running: boolean; schedule: StatusCommand[]; unre
  * `status`: the state, whether its process is alive, and the schedule read now, each command with
  * its last run off the run records. Read from the files and the records, not off the last tick,
  * so a command saved, changed, removed or started a moment ago is listed as it stands, also where
- * no scheduler is running. Records that cannot be read list no last run and stop nothing.
+ * no scheduler is running. Records that cannot be read list no last run and stop nothing. This
+ * machine's switches and paces are read from `settings` where given ({@link readState}).
  */
-export async function schedulerStatus(repo: string, git: GitRunner): Promise<Status> {
-  const [state, schedule] = await Promise.all([readState(repo), readSchedule(repo)])
+export async function schedulerStatus(repo: string, git: GitRunner, settings?: Settings): Promise<Status> {
+  const [state, schedule] = await Promise.all([readState(repo, settings), readSchedule(repo)])
   const last = await lastRuns(repo, schedule, hostname()).catch((): Record<string, LastRun> => ({}))
   const shared = (command: ScheduledCommand): boolean => command.editable === true && command.text === undefined
   // Where a run's checkout starts is asked once, and only where a shared automation is listed.

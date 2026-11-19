@@ -20,18 +20,10 @@
   "bin": {
     "account-rotation": "bin/account-rotation"
   },
-  "openagent": {
-    "reads": {
-      "account-rotation": [
-        "list",
-        "usage",
-        "adding"
-      ]
-    }
-  },
   "exports": {
     "./package.json": "./package.json",
     "./dashboard": "./dist/dashboard/dashboard.js",
+    "./server": "./dist/server.js",
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
@@ -49,7 +41,8 @@
     "@openagt/agent-data": "workspace:*",
     "@openagt/agent-driver": "workspace:*",
     "@openagt/agent-driver-claude": "workspace:*",
-    "@openagt/agent-driver-codex": "workspace:*"
+    "@openagt/agent-driver-codex": "workspace:*",
+    "@openagt/hooks": "workspace:*"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.0.0",

@@ -481,6 +481,9 @@ importers:
       '@openagt/agent-driver-codex':
         specifier: workspace:*
         version: link:../agent-driver/codex
+      '@openagt/hooks':
+        specifier: workspace:*
+        version: link:../hooks
     devDependencies:
       '@tailwindcss/vite':
         specifier: ^4.0.0

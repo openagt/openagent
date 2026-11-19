@@ -1,6 +1,7 @@
-// The skill's UI: the package's `./dashboard` export. One card, built only on the `account-rotation`
-// command, so it shows on the dashboard's Overview and its Permissions page what an agent sees
-// through the same command.
+// The skill's UI: the package's `./dashboard` export. One card, on the dashboard's Overview and its
+// Permissions page. It reads the accounts through the package's server part, which answers what
+// the `account-rotation` command's reads answer, so it shows what an agent sees through the
+// command, and changes them through the command.
 import { defineUiModule } from '@openagt/ui/module'
 import { AccountsCard } from './AccountsCard.js'
 

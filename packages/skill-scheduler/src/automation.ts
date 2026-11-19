@@ -184,6 +184,24 @@ export async function savedAutomation(repo: string, name: string): Promise<Saved
   return none(kept ? `${file} is a link, or was changed by hand since it was saved: edit or remove the file itself` : `${dirname(file)} is a skill of the project, or an automation changed by hand since it was saved: edit or remove its files yourself`)
 }
 
+/** An automation as `show` says it: what its file says, the file, its version, and whether it is kept on this machine alone. */
+export type ShownAutomation = NewAutomation & { file: string; version: string; onThisMachine?: true }
+
+/** The automation of that name as `show` says it, or why the tool leaves what has the name alone ({@link savedAutomation}). */
+export async function shownAutomation(repo: string, name: string): Promise<ShownAutomation | NotAnAutomation> {
+  const found = await savedAutomation(repo, name)
+  if ('reason' in found) return found
+  return { ...found.automation, file: found.file, version: found.version, ...(found.onThisMachine ? { onThisMachine: true as const } : {}) }
+}
+
+/** Why an automation was not saved, shown or removed, as one line for a person. */
+export function whyRefused(outcome: AddRefusal | NotAnAutomation | ChangedSince): string {
+  if (outcome.reason === 'taken') return `that name is taken: ${outcome.folder}`
+  if (outcome.reason === 'no-prompt') return 'the prompt is empty'
+  if (outcome.reason === 'bad-schedule') return `it cannot run as written: ${outcome.detail}`
+  return outcome.detail
+}
+
 /** What `edit` changes of an automation: a part given takes the place of the file's, `null` takes a part out, and a part left out stays as the file says it. */
 export interface AutomationChange {
   prompt?: string | undefined

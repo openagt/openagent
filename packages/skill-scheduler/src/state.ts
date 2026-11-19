@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { excludeFromGit, nodeGitRunner, type GitRunner } from '@openagt/agent-data'
+import type { Settings } from '@openagt/hooks'
 import { PUBLISH_LEVELS, type Publish } from '@openagt/agent-runner'
 import { DEFAULT_AGENT, DEFAULT_MODEL, DEFAULT_PUBLISH, DEFAULT_SPEND_OFFSET, STATE_DIR, STATE_FILE, isAgent, isAgents, isTime, type AgentName } from './names.js'
 import { ableAgents, homeAgent, type ScheduledCommand } from './schedule.js'
@@ -134,9 +135,12 @@ export function statePath(repo: string): string {
   return join(stateDir(repo), STATE_FILE)
 }
 
-/** The state as written, defaults filled in, with this machine's switches and paces; the default state when there is none or it does not parse. */
-export async function readState(repo: string): Promise<State> {
-  const [file, picks] = await Promise.all([readStateFile(repo), readPicks(repo)])
+/**
+ * The state as written, defaults filled in, with this machine's switches and paces, read from
+ * `settings` where given ({@link readPicks}); the default state when there is none or it does not parse.
+ */
+export async function readState(repo: string, settings?: Settings): Promise<State> {
+  const [file, picks] = await Promise.all([readStateFile(repo), readPicks(repo, settings)])
   return { ...file, ...picks }
 }
 

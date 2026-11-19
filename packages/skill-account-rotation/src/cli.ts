@@ -1,7 +1,7 @@
-import { hostname } from 'node:os'
-import { handedOverBy, OWN_NAME, readAccounts, shownAccounts, useFirst, type AccountsAgent, type ShownAccount } from './accounts.js'
+import { readAccounts, shownAccounts, useFirst, type AccountsAgent } from './accounts.js'
 import { addingNow, beginAdding, bringCode, cancelAdding, runAdding } from './adding.js'
-import { comesBackFrom, logOut, ownLoginThere, ownName, removeAdded } from './login.js'
+import { comesBackFrom, logOut, removeAdded } from './login.js'
+import { addingBoth, listed, listing } from './reads.js'
 import { loginWiring, type LoginWiring } from './wiring.js'
 import { readUsage } from './usage.js'
 import { unknownWord, usageError, wrongArguments, helpRows } from '@openagt/agent-data'
@@ -49,26 +49,6 @@ const isAgent = (value: string | undefined): value is AccountsAgent => value ===
 /** Every command, `add`'s own sign-in process included. */
 const COMMANDS = new Set(['list', 'usage', 'add', 'adding', 'add-code', 'add-cancel', 'remove', 'logout', 'use-first', 'add-worker'])
 
-/**
- * An agent's accounts as `list` says them. The person's own says the computer it is a login on, who
- * it is while it goes by no name they gave it, as `who`, and `signedOut` when the agent has no login
- * of theirs: runs skip it then. Commands still take its `name`. On a server, one a computer of the
- * person's handed over says which, as `from`, and `comesBack` when removing it here would only bring it back.
- */
-async function listed(agent: AccountsAgent, wiring: LoginWiring): Promise<(ShownAccount & { who?: string; signedOut?: true; computer?: string; from?: string; comesBack?: true })[]> {
-  const accounts = shownAccounts(readAccounts(wiring.path(agent)))
-  const there = ownLoginThere(agent, wiring)
-  const unnamed = (a: ShownAccount): boolean => a.name === OWN_NAME
-  const who = accounts.some(a => a.own && unnamed(a)) ? await ownName(agent, wiring) : undefined
-  const computer = hostname().replace(/\.local$/i, '')
-  const handedOver = handedOverBy(agent, wiring.env)
-  return accounts.map(a => {
-    if (a.own) return { ...a, computer, ...(unnamed(a) && who !== undefined ? { who } : {}), ...(there ? {} : { signedOut: true as const }) }
-    const handed = handedOver.get(a.name)
-    return handed ? { ...a, from: handed.from, ...(handed.comesBack ? { comesBack: true as const } : {}) } : a
-  })
-}
-
 export async function runCli(argv: readonly string[], io: CliIo): Promise<number> {
   const env = io.env ?? process.env
   const wiring = io.wiring ?? loginWiring(env)
@@ -89,13 +69,9 @@ export async function runCli(argv: readonly string[], io: CliIo): Promise<number
     io.stdout(USAGE)
     return 0
   }
-  if (command === 'list' && argv.length === 1) {
-    const agents = ['claude', 'codex'] as const
-    const [claude, codex, installed] = await Promise.all([listed('claude', wiring), listed('codex', wiring), Promise.all(agents.map(each => wiring.installed(each)))])
-    return answer({ claude, codex, notInstalled: agents.filter((_, at) => !installed[at]) })
-  }
+  if (command === 'list' && argv.length === 1) return answer(await listing(wiring))
   if (command === 'usage' && argv.length === 1) return answer(await readUsage(wiring))
-  if (command === 'adding' && argv.length === 1) return answer({ claude: addingNow('claude', wiring), codex: addingNow('codex', wiring) })
+  if (command === 'adding' && argv.length === 1) return answer(addingBoth(wiring))
   if (!isAgent(agent)) return misread()
   if (command === 'add-code' && argv.length === 2) {
     const brought = bringCode(agent, await (io.stdin ?? readStdin)(), wiring)
