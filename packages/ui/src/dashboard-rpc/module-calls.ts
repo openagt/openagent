@@ -1,10 +1,11 @@
-import { resolveProjectPath } from './context.js'
+import { contextHost, resolveProjectPath } from './context.js'
 import { findComputerModule, findProjectModule } from '../project-modules.js'
 import { providedDataChanged } from '../store/provided.js'
 import { callModuleFunction, computerHost, functionKind, serverHost, type ModuleCallResult } from '../dashboard/module-host.js'
-import { distributionSettings } from '../distribution-hooks.js'
+import { distributionSettings, runRefAt } from '../distribution-hooks.js'
 import { relayOr } from './relay-agent.js'
 import { pullProjectData } from '@openagt/agent-data'
+import type { RunFound, RunRef } from '@openagt/hooks'
 
 // A module's functions (`@openagt/hooks/rpc`), which the page calls at `/_rpc/<module>/<name>`
 // (rpc-serve.ts) and no other way: this file is none of the RPCs the page calls by name.
@@ -32,13 +33,26 @@ export async function callModule(projectId: string | null, pkg: string, name: st
     if (!root) return { ok: false, error: 'unknown project' }
     if (!module) return { ok: false, error: `${pkg} is no module of this project` }
     if (!module.server) return { ok: false, error: `${pkg} has no server part` }
-    const result = await callModuleFunction(module.server, name, serverHost(root, await distributionSettings()), input)
+    const result = await callModuleFunction(module.server, name, serverHost(root, await distributionSettings(), { find: runsFound(projectId, root) }), input)
     if (kind === 'act') {
       await pullProjectData(root, { log: () => {} }).catch(() => {})
       providedDataChanged(root, pkg)
     }
     return result
   }, { ok: false, error: 'the machine this run works on did not answer' }, kind === 'read')
+}
+
+/**
+ * Where a run of the project at `root` has its work, as this computer's host says it: each run as a
+ * host is asked about it, made once for the call, which may ask about one run more than once.
+ */
+function runsFound(projectId: string, root: string): (agentId: string) => Promise<RunFound | undefined> {
+  const refs = new Map<string, Promise<RunRef>>()
+  return async agentId => {
+    let ref = refs.get(agentId)
+    if (!ref) refs.set(agentId, (ref = runRefAt(projectId, root, agentId)))
+    return contextHost().find(await ref)
+  }
 }
 
 /**

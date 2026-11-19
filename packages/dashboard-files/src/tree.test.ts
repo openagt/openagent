@@ -27,8 +27,8 @@ type Pr = { number: number; mergeCommit?: string } & Record<string, unknown>
 
 /**
  * The host for a run with no checkout, the given record, and the given pull requests on its
- * branch. "Changed nothing" is the core's rule, as the core's host answers it: it ended `done` or
- * `failed` on this machine, with no pull request, and was not landed.
+ * branch. "Changed nothing" is the run's host's to say, as this computer's says it: it ended `done`
+ * or `failed` on this machine, with no pull request, and was not landed.
  */
 function deps(agent: { status?: string; host?: string; branch?: string; pr?: { number: number }; base?: string; landed?: string }, prs: { value?: Pr[]; pending?: boolean } = {}): RpcHost {
   return {

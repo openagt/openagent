@@ -1,21 +1,20 @@
 import { pathToFileURL } from 'node:url'
-import { findAgent, findCheckout, isRunId, projectBranches, type BranchesFor } from '../store/index.js'
-import { leftNothing } from './agent-handoff.js'
+import { isRunId } from '../store/index.js'
 import { cachedPrsForBranch, type LinkedPr } from './pull-requests.js'
 import type { Cached } from './cache.js'
-import type { Settings } from '@openagt/hooks'
-import { rpcKind, type MergeLookup, type RpcComputerHost, type RpcFunction, type RpcHost, type RpcKind, type RunFound } from '@openagt/hooks/rpc'
+import type { RunFound, Settings } from '@openagt/hooks'
+import { rpcKind, type MergeLookup, type RpcComputerHost, type RpcFunction, type RpcHost, type RpcKind } from '@openagt/hooks/rpc'
 
 // The daemon's side of a module's server part (`@openagt/hooks/rpc`): the host a function is given
-// (the settings; for a project's module, the project's folder and what is known of its runs) and the
-// one way a function is called. What is known is the core's; what a module makes of it is its own.
+// (the settings; for a project's module, the project's folder and where its runs have their work)
+// and the one way a function is called. Where a run's work is, is its host's to say; what a module
+// makes of it is its own.
 
-/** What {@link serverHost} reads through; each defaults to the production reader. */
+/** What {@link serverHost} reads through. */
 export interface ServerHostDeps {
-  branches?: BranchesFor
-  agent?: (root: string, agentId: string) => Promise<{ id: string; status?: string; host?: string; branch?: string; pr?: { number: number }; base?: string; baseCommit?: string; landed?: string } | undefined>
-  /** This machine's name, against a run's `host`. */
-  host?: string
+  /** Where a run of the project has its work, as the run's host says it (`RunHost.find`). */
+  find: (agentId: string) => Promise<RunFound | undefined>
+  /** The project's pull requests from a branch, as the git host last said; the production reader when absent. */
   prs?: (root: string, branch: string) => Promise<Cached<LinkedPr[]>>
 }
 
@@ -24,33 +23,14 @@ export function computerHost(settings: Settings): RpcComputerHost {
   return { settings }
 }
 
-/** The host a function called in the project at `root` is given. */
-export function serverHost(root: string, settings: Settings, deps: ServerHostDeps = {}): RpcHost {
+/** The host a function called in the project at `root` is given. A string that is no run's id is never asked about. */
+export function serverHost(root: string, settings: Settings, deps: ServerHostDeps): RpcHost {
   return {
     settings,
     root,
     async run(agentId: string): Promise<RunFound | undefined> {
       if (typeof agentId !== 'string' || !isRunId(agentId)) return undefined
-      const checkout = await findCheckout(root, agentId, deps.branches ?? projectBranches)
-      const agent = await (deps.agent ?? findAgent)(root, agentId).catch(() => undefined)
-      if (!checkout && !agent) return undefined
-      return {
-        ...(checkout ? { checkout: checkout.path } : {}),
-        ...(agent
-          ? {
-              record: {
-                ...(agent.status !== undefined ? { status: agent.status } : {}),
-                ...(agent.host !== undefined ? { host: agent.host } : {}),
-                ...(agent.branch !== undefined ? { branch: agent.branch } : {}),
-                ...(agent.pr ? { pr: { number: agent.pr.number } } : {}),
-                ...(agent.base !== undefined ? { base: agent.base } : {}),
-                ...(agent.baseCommit !== undefined ? { baseCommit: agent.baseCommit } : {}),
-                ...(agent.landed !== undefined ? { landed: agent.landed } : {}),
-              },
-            }
-          : {}),
-        changedNothing: agent ? leftNothing(agent, deps.host) : false,
-      }
+      return deps.find(agentId)
     },
     async mergeCommit(branch: string, number: number): Promise<MergeLookup> {
       const read = await (deps.prs ?? cachedPrsForBranch)(root, branch).catch((): Cached<LinkedPr[]> => ({ value: undefined, pending: false }))

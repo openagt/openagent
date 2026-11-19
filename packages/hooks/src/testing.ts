@@ -2,7 +2,7 @@
 // memory, a host whose runs a test drives, and a run's context for a step.
 import { StoreOrder } from './order.js'
 import type { InboxLine } from '@openagt/agent-driver'
-import type { RunContext, RunEvent, RunHost, RunInput, RunRef, RunRequest, RunStatus, RunSummary } from './run.js'
+import type { RunContext, RunEvent, RunFound, RunHost, RunInput, RunRef, RunRequest, RunStatus, RunSummary } from './run.js'
 import { settingsIn, type Settings } from './settings.js'
 import { chainStore, changesOf, checkPath, isUnder, messageOf, scopeKey, type Scope, type Store, type StoreBackend } from './store.js'
 
@@ -92,6 +92,8 @@ export interface FakeHost extends RunHost {
   emit(id: string, event: RunEvent): void
   /** A run ends: its streams end after the events they have not read yet. */
   end(id: string, status: Exclude<RunStatus, 'working'>): void
+  /** Where a run's work is, as `find` answers it from then on: a run the host started is found with nothing known of its work until then. */
+  place(id: string, found: RunFound): void
 }
 
 export function fakeHost(opts: { id?: string; label?: string } = {}): FakeHost {
@@ -100,6 +102,7 @@ export function fakeHost(opts: { id?: string; label?: string } = {}): FakeHost {
   const resumed: { id: string; input: RunInput }[] = []
   const steered: { id: string; line: InboxLine }[] = []
   const stopped: { id: string; force: boolean }[] = []
+  const places = new Map<string, RunFound>()
   let next = 1
   const runOf = (id: string) => {
     const run = runs.get(id)
@@ -151,6 +154,9 @@ export function fakeHost(opts: { id?: string; label?: string } = {}): FakeHost {
         .map(run => run.summary)
         .filter(summary => summary.project === project?.id)
     },
+    async find({ id }) {
+      return places.get(id) ?? (runs.has(id) ? { changedNothing: false } : undefined)
+    },
     async *events({ id }, signal) {
       const run = runOf(id)
       let read = 0
@@ -169,6 +175,9 @@ export function fakeHost(opts: { id?: string; label?: string } = {}): FakeHost {
       wake(run)
     },
     end,
+    place(id, found) {
+      places.set(id, found)
+    },
   }
 }
 

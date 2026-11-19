@@ -235,6 +235,33 @@ export interface RunSummary {
   prompt: string
 }
 
+/**
+ * Where one run's work is, as its host knows it: facts, never a verdict about what the run's files
+ * are. The panes read the work there themselves (the checkout, else the branch, the commit its pull
+ * request merged as, or the one it landed at).
+ */
+export interface RunFound {
+  /** The run's own checkout while it has one, on this computer: an absolute path. */
+  checkout?: string
+  /** The run's record, when its host keeps one for it. */
+  record?: {
+    status?: string
+    /** The machine the run ran on. */
+    host?: string
+    /** The branch the run left its work on, by its last recorded name. */
+    branch?: string
+    pr?: { number: number }
+    /** The branch the run was told to start from, by its name; absent on a run that started from origin's default branch. */
+    base?: string
+    /** The commit the run's own work begins at, for a run that made its own branch: what its changes are measured from when the default branch cannot tell them. */
+    baseCommit?: string
+    /** The last commit of the run's work, once its main agent landed it: its branch is gone, and its work is read here. */
+    landed?: string
+  }
+  /** The run ended on this machine without a pull request and was not landed, so a branch it no longer has held nothing. */
+  changedNothing: boolean
+}
+
 /** This computer's host, agent-driver's, by its id: where a run runs when no other host is picked. */
 export const LOCAL_HOST = 'here'
 
@@ -264,10 +291,8 @@ export interface RunHost {
   stop(run: RunRef, opts?: { force?: boolean }): Promise<void>
   /** The runs it has in a project, or with no project, newest first. */
   list(project?: ProjectRef): Promise<RunSummary[]>
-  /** A run's events from its start, then each one as it comes, until the run ends or `signal` aborts. The panes read a run through its host from #2394's step 5. */
+  /** Where a run's work is, for the panes that show it (`RpcHost.run`); none for a run this host does not have. */
+  find(run: RunRef): Promise<RunFound | undefined>
+  /** A run's events from its start, then each one as it comes, until the run ends or `signal` aborts. Not asked yet: the dashboard tails the diary of a run of this computer's itself. */
   events?(run: RunRef, signal: AbortSignal): AsyncIterable<RunEvent>
-  /** A file of the run's checkout, by its path there; none when there is no such file. */
-  file?(run: RunRef, path: string): Promise<string | undefined>
-  /** What the run changed, as a unified diff from where its branch started; none for a run with no checkout. */
-  diff?(run: RunRef): Promise<string | undefined>
 }

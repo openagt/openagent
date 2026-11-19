@@ -1,12 +1,12 @@
 import { randomUUID } from 'node:crypto'
-import { readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { hostname, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { appendInbox, logCardFile, promptLines, takeInbox, type InboxLine, type PromptLine } from '@openagt/agent-driver'
 import { PRESET_ENV, PROJECT_SKILLS_ENV, SKILLS_OFF_ENV, SKILLS_ON_ENV, isSkillName, sessionFolder, sessionsHome, sessionsHomeOf } from '@openagt/agent-data'
-import { LOCAL_HOST, isPresetId, type ProjectRef, type RunHost, type RunInput, type RunOptions, type RunReadiness, type RunRef, type RunRequest, type RunStatus, type RunSummary } from '@openagt/hooks'
-import { worktreePath } from '@openagt/skill-branches'
-import { findRun, listRuns, parseRunCard, type RunCard } from '@openagt/skill-logs'
+import { LOCAL_HOST, isPresetId, type ProjectRef, type RunFound, type RunHost, type RunInput, type RunOptions, type RunReadiness, type RunRef, type RunRequest, type RunStatus, type RunSummary } from '@openagt/hooks'
+import { currentBranch, worktreePath } from '@openagt/skill-branches'
+import { findRun, isRunId, listRuns, parseRunCard, type RunCard } from '@openagt/skill-logs'
 import { handedDownSettings, runPreset } from './preset.js'
 import { inboxPath, liveDir } from './live-card.js'
 import { isPublish, NO_PUBLISH } from './records.js'
@@ -145,6 +145,53 @@ export function localHost(deps: LocalHostDeps = {}): RunHost {
       const cards = await listRuns(placeOf(project))
       return cards.map(card => summaryOf(card, project)).sort((a, b) => b.startedAt.localeCompare(a.startedAt))
     },
+
+    async find(run) {
+      if (!isRunId(run.id)) return undefined
+      const dir = placeOf(run.project)
+      const path = await ownFolder(dir, run.id)
+      const [live, record, branch] = await Promise.all([
+        path !== undefined ? liveCard(path, run.id) : undefined,
+        findRun(dir, run.id).catch(() => undefined),
+        path !== undefined ? currentBranch(path) : undefined,
+      ])
+      if (path === undefined && !record) return undefined
+      const pr = live?.pr ?? record?.pr
+      const caller = { ...record?.caller, ...live?.caller }
+      return foundOf({ ...record, ...live, ...(pr ? { pr } : {}), caller }, path !== undefined ? { path, branch } : undefined, here)
+    },
+  }
+}
+
+/**
+ * Where a run's work is, by its card as it stands (its live card's facts over its record's, fact by
+ * fact, so the pull request a dashboard wrote on the record is kept): its checkout while it has one,
+ * at the branch it has out then, since an agent renames its branch as it works and its card learns
+ * the name at the end. A run that ended here with no pull request and nothing landed changed nothing
+ * (#1850): its tool deletes a branch with its checkout only when the branch holds nothing.
+ */
+function foundOf(card: Partial<RunCard>, checkout: { path: string; branch: string | undefined } | undefined, here: string): RunFound {
+  const caller = card.caller ?? {}
+  const text = (key: string): string | undefined => (typeof caller[key] === 'string' ? (caller[key] as string) : undefined)
+  const host = text('host')
+  const base = text('base')
+  const baseCommit = text('baseCommit')
+  const landed = text('landed')
+  const branch = checkout?.branch ?? card.branch
+  const record = card.status === undefined ? undefined : {
+    status: card.status,
+    ...(host !== undefined ? { host } : {}),
+    ...(branch !== undefined ? { branch } : {}),
+    ...(card.pr ? { pr: { number: card.pr.number } } : {}),
+    ...(base !== undefined ? { base } : {}),
+    ...(baseCommit !== undefined ? { baseCommit } : {}),
+    ...(landed !== undefined ? { landed } : {}),
+  }
+  const ended = card.status === 'done' || card.status === 'failed' || card.status === 'stopped'
+  return {
+    ...(checkout ? { checkout: checkout.path } : {}),
+    ...(record ? { record } : {}),
+    changedNothing: !card.pr && landed === undefined && ended && host === here,
   }
 }
 
@@ -157,6 +204,18 @@ function placeOf(project: ProjectRef | undefined): string {
 async function checkoutOf(dir: string, id: string): Promise<string> {
   const home = await sessionsHomeOf(dir)
   return home !== undefined ? sessionFolder(home, id) : worktreePath(dir, id)
+}
+
+/**
+ * The folder a run works in, while it is there: a session's folder, or a checkout of the project
+ * with a `.git` of its own; without one, git in that folder would read the project's own checkout,
+ * and its branch would pass for the run's.
+ */
+async function ownFolder(dir: string, id: string): Promise<string | undefined> {
+  const home = await sessionsHomeOf(dir)
+  const path = home !== undefined ? sessionFolder(home, id) : worktreePath(dir, id)
+  const there = await stat(home !== undefined ? path : join(path, '.git')).then(() => true, () => false)
+  return there ? path : undefined
 }
 
 /** A run's live card, in its checkout while it works there; none when it has none, whatever tool wrote it. */

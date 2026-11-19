@@ -34,6 +34,7 @@ export {
   type RunReadiness,
   type RunSummary,
   type RunHost,
+  type RunFound,
   LOCAL_HOST,
 } from './run.js'
 export {

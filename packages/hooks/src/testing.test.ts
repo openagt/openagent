@@ -57,3 +57,12 @@ test('runs are listed newest first, one project at a time; a line reaches a work
   assert.deepEqual(await reading, [], 'a stream ends when its signal aborts')
   await assert.rejects(host.steer({ id: 'run-9' }, { kind: 'now' }), /No run run-9 here/)
 })
+
+test('a run the host started is found, with what a test placed of its work once it is placed; a run it never started is not', async () => {
+  const host = fakeHost()
+  const { id } = await host.start({ project: P1, prompt: 'fix the login', options: {} })
+  assert.deepEqual(await host.find({ id, project: P1 }), { changedNothing: false })
+  host.place(id, { checkout: '/work/shop/.branches/agent-1', record: { status: 'running', branch: 'agent-fix-login' }, changedNothing: false })
+  assert.deepEqual(await host.find({ id, project: P1 }), { checkout: '/work/shop/.branches/agent-1', record: { status: 'running', branch: 'agent-fix-login' }, changedNothing: false })
+  assert.equal(await host.find({ id: 'run-9', project: P1 }), undefined)
+})

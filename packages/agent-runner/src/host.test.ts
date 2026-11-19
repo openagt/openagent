@@ -1,22 +1,25 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { spawn } from 'node:child_process'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { logCardFile, type InboxLine } from '@openagt/agent-driver'
-import { PRESET_ENV, PROJECT_SKILLS_ENV, SKILLS_OFF_ENV, SKILLS_ON_ENV } from '@openagt/agent-data'
+import { PRESET_ENV, PROJECT_SKILLS_ENV, SKILLS_OFF_ENV, SKILLS_ON_ENV, sessionFolder, sessionsHome } from '@openagt/agent-data'
 import { LOCAL_HOST, type ProjectRef, type RunHost, type RunReadiness } from '@openagt/hooks'
 import { worktreePath } from '@openagt/skill-branches'
+import { patchRun } from '@openagt/skill-logs'
 import { localHost, type LocalHostDeps } from './host.js'
 import { inboxPath, liveDir } from './live-card.js'
 import { markerCard, writeMarker } from './records.js'
 import { GIT_ACCOUNT_ENV, runArgs, type SpawnedResume, type SpawnedRun } from './runner.js'
 import { NAME_FILE_ENV } from './title.js'
-import { removeRepo, testRepo } from './test-repo.js'
+import { git, removeRepo, testRepo } from './test-repo.js'
 import { NOW } from './run-test-support.js'
 
 // This computer's host, with the runs' processes stood in for: what each is spawned with, what a
-// person says to a run reaching it or resuming it, a Stop's signal, and the runs it lists.
+// person says to a run reaching it or resuming it, a Stop's signal, the runs it lists, and where a
+// run's work is.
 
 const NOTHING_WRONG: RunReadiness = { problems: [], warnings: [] }
 const HERE = 'this-box'
@@ -214,5 +217,66 @@ test("the runs it lists are the project's records, newest first", async () => {
     ])
   } finally {
     await removeRepo(repo)
+  }
+})
+
+test("where a run's work is: its checkout while it has one, at the branch it has out, with its live card's facts over its record's; else its record alone", async () => {
+  const repo = await testRepo()
+  try {
+    const project = projectAt(repo)
+    const { host: here } = host()
+    const start = (await git(['rev-parse', 'HEAD'], repo)).trim()
+
+    // Working, in its checkout: the agent renamed its branch, which its card learns at the end; a dashboard wrote its pull request on the record.
+    const working = '2026-09-16T14-01-00-000Z'
+    const checkout = worktreePath(repo, working)
+    await git(['worktree', 'add', '-q', '-b', 'agent-login-fix', checkout, 'main'], repo)
+    await writeMarker(repo, { ...markerCard({ id: working, startedAt: NOW.toISOString(), prompt: 'fix it', driver: 'claude-code', mark: { host: HERE, base: 'develop', baseCommit: start } }), status: 'waiting', branch: 'agent-old-name' })
+    await patchRun(repo, working, { pr: { number: 7, url: 'https://github.com/o/r/pull/7' } })
+    await liveCard(repo, working, 'running', { pid: 4242, host: HERE, base: 'develop', baseCommit: start })
+    assert.deepEqual(await here.find({ id: working, project }), {
+      checkout,
+      record: { status: 'running', host: HERE, branch: 'agent-login-fix', pr: { number: 7 }, base: 'develop', baseCommit: start },
+      changedNothing: false,
+    })
+
+    // Ended here, its checkout gone, with no pull request and nothing landed: it changed nothing. Landed, or another computer's, it did not say so.
+    const ended = '2026-09-16T14-05-00-000Z'
+    await writeMarker(repo, { ...markerCard({ id: ended, startedAt: NOW.toISOString(), prompt: 'tidy', driver: 'claude-code', mark: { host: HERE } }), status: 'done', endedAt: NOW.toISOString(), branch: 'agent-tidy' })
+    assert.deepEqual(await here.find({ id: ended, project }), { record: { status: 'done', host: HERE, branch: 'agent-tidy' }, changedNothing: true })
+    await patchRun(repo, ended, { landed: { commit: start, from: start } })
+    assert.deepEqual(await here.find({ id: ended, project }), { record: { status: 'done', host: HERE, baseCommit: start, landed: start }, changedNothing: false })
+    const elsewhere = '2026-09-16T14-06-00-000Z'
+    await writeMarker(repo, { ...markerCard({ id: elsewhere, startedAt: NOW.toISOString(), prompt: 'tidy', driver: 'claude-code', mark: { host: 'laptop' } }), status: 'done', endedAt: NOW.toISOString() })
+    assert.deepEqual(await here.find({ id: elsewhere, project }), { record: { status: 'done', host: 'laptop' }, changedNothing: false })
+
+    // A checkout with no card yet: a run just started, found with nothing known of it. A folder that is no checkout of its own is no run's, and neither is a name that is no run's.
+    const starting = '2026-09-16T14-07-00-000Z'
+    await git(['worktree', 'add', '-q', '-b', 'agent-starting', worktreePath(repo, starting), 'main'], repo)
+    assert.deepEqual(await here.find({ id: starting, project }), { checkout: worktreePath(repo, starting), changedNothing: false })
+    const stray = '2026-09-16T14-08-00-000Z'
+    await mkdir(worktreePath(repo, stray), { recursive: true })
+    assert.equal(await here.find({ id: stray, project }), undefined)
+    assert.equal(await here.find({ id: '../escape', project }), undefined)
+  } finally {
+    await removeRepo(repo)
+  }
+})
+
+test("a session with no project works in a folder of its own, with no git of its own: that folder is where its work is", async () => {
+  const config = await realpath(await mkdtemp(join(tmpdir(), 'agent-runner-sessions-')))
+  const before = process.env['XDG_CONFIG_HOME']
+  process.env['XDG_CONFIG_HOME'] = config
+  try {
+    const { host: here } = host()
+    const id = '2026-09-16T14-01-00-000Z'
+    assert.equal(await here.find({ id }), undefined, 'no folder yet, and no record')
+    const folder = sessionFolder(sessionsHome(), id)
+    await mkdir(folder, { recursive: true })
+    assert.deepEqual(await here.find({ id }), { checkout: folder, changedNothing: false })
+  } finally {
+    if (before === undefined) delete process.env['XDG_CONFIG_HOME']
+    else process.env['XDG_CONFIG_HOME'] = before
+    await rm(config, { recursive: true, force: true })
   }
 })

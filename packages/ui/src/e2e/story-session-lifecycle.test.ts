@@ -6,6 +6,7 @@ import { makeWorld, waitFor, release, git } from './harness.js'
 import { onAgent, onAgents, onAgentHandoff, onAgentWorktree, onRetainedWorktrees, onActivity, onRecentAgents } from '../dashboard-rpc/reads.js'
 import { onCommands } from '../dashboard-rpc/projects.js'
 import { sendStart } from '../dashboard-rpc/control.js'
+import { callModule } from '../dashboard-rpc/module-calls.js'
 
 // The run lifecycle stories (README.md): what a user sees between clicking Start and reading the
 // recorded run's row — through the same RPCs the dashboard calls, this computer's run host, and a
@@ -103,6 +104,48 @@ test('two runs at once, each in its own checkout (#736)', async () => {
       await release(project, agentId)
       assert.equal((await world.waitAgent(project, agentId, 'done')).status, 'done')
     }
+  } finally {
+    await world.close()
+  }
+})
+
+test("the Changes and Files panes find a run's work through this computer's host: in its checkout while it works, on its branch once the checkout is reclaimed", async () => {
+  const world = await makeWorld()
+  const rpc = world.rpc
+  try {
+    const project = await world.addProject()
+    /** What a pane's function answers about the run, as the page calls it. */
+    const pane = async (pkg: '@openagt/dashboard-changes' | '@openagt/dashboard-files', name: 'run' | 'tree', agentId: string): Promise<Record<string, unknown>> => {
+      const said = await rpc(callModule)(project.id, pkg, name, { agentId })
+      assert.ok(said.ok, `${pkg} ${name}: ${said.ok ? '' : said.error}`)
+      return said.output as Record<string, unknown>
+    }
+    const agentId = await world.startAgent(project, 'hold: commit the work')
+    await world.waitAgent(project, agentId, 'running')
+    const checkout = (await rpc(onAgentWorktree)(project.id, agentId))?.checkout?.path
+    assert.ok(checkout, 'the run works in a checkout of its own')
+
+    // Working: a file it wrote and has not committed is read where it is, in its checkout.
+    await writeFile(join(checkout, 'draft.txt'), 'a draft\n')
+    const working = await pane('@openagt/dashboard-changes', 'run', agentId)
+    assert.equal(working['source'], 'checkout')
+    assert.deepEqual(Object.keys(working['changes'] as object), ['draft.txt'])
+    assert.equal(working['to'], `agent-${agentId}`, 'between the branch it started from and its own')
+    const tree = await pane('@openagt/dashboard-files', 'tree', agentId)
+    assert.equal(tree['source'], 'checkout')
+    assert.ok((tree['files'] as string[]).includes('draft.txt'))
+
+    // Done: it committed its work and its checkout was reclaimed, so its work is read on its branch.
+    await rm(join(checkout, 'draft.txt'))
+    await release(project, agentId)
+    await world.waitAgent(project, agentId, 'done')
+    await world.waitRetired(project, agentId)
+    const ended = await pane('@openagt/dashboard-changes', 'run', agentId)
+    assert.equal(ended['source'], 'branch')
+    assert.deepEqual(Object.keys(ended['changes'] as object), ['work.txt'])
+    const files = await pane('@openagt/dashboard-files', 'tree', agentId)
+    assert.equal(files['source'], 'branch')
+    assert.ok((files['files'] as string[]).includes('work.txt'))
   } finally {
     await world.close()
   }
