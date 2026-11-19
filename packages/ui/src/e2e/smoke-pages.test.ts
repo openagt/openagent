@@ -4,9 +4,23 @@ import { git } from './fixture.js'
 import { needsChrome, smoke } from './smoke.js'
 
 // The project's pages, in a real browser (smoke.ts): a page a project's package brings, adding
-// a project from the picker, and the list of files the message box opens, on a phone.
+// a project from the picker, the list of files the message box opens, on a phone, and the
+// Overview's Human Queue, a package's card.
 
-const { demo, flow, start } = smoke()
+const { demo, flow, start, runIn } = smoke()
+
+test("the Overview's Human Queue, its package's card, lists the run waiting on its question, and the row opens that run", needsChrome, async () => {
+  await flow('human-queue', async page => {
+    await start(page, 'ask which colour the login page should be')
+    const waiting = await runIn('ask which colour the login page should be', ['waiting'])
+    await page.getByRole('link', { name: /^Overview/ }).click()
+    const row = page.getByRole('region', { name: 'Human Queue' }).getByRole('link', { name: /^Needs answer/ })
+    await row.waitFor()
+    assert.match((await row.textContent()) ?? '', /Which way\?/)
+    await row.click()
+    await page.waitForURL(url => url.pathname.endsWith(`/${waiting.id}`))
+  })
+})
 
 test("the Tickets page lists the project's tickets", needsChrome, async () => {
   await flow('tickets', async page => {

@@ -168,6 +168,12 @@ export interface ViewPlaces {
       minWidth?: UiCardWidth
       /** Its place among every module's cards, lower first; 50 when unsaid, ties by package name. */
       order?: number
+      /**
+       * It is the card of what needs the person: the first steps a new install still has to take
+       * stand right under it, wherever the layout puts it, and no card after it is drawn until
+       * what waits on the person was first read. The first module's card that says so.
+       */
+      needsYou?: true
     }
     props: UiCardProps
   }

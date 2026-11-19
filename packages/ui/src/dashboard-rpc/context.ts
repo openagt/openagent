@@ -8,7 +8,7 @@ import type { ProjectErrorsReader } from '../project-errors.js'
 import type { BridgeBrowserOwner } from '../bridge-browser.js'
 import type { OpenAgentEvent } from '../events.js'
 import type { OwnProject } from '../dashboard/elsewhere.js'
-import type { MachinesQueue } from '../dashboard/machine-interventions.js'
+import type { MachinesQueue } from '../dashboard/machine-waiting.js'
 import type { AddProjectResult, RemoveProjectResult, StartAgentOptions, StartAgentResult, StartedInResult } from '../dashboard/types.js'
 import type { BringProject, RelayProject, RemoteTarget } from '../dashboard/remote-run.js'
 import type { MachineRuns } from '../dashboard/machine-runs.js'
@@ -85,7 +85,7 @@ export interface RemoteAgents {
   elsewhereHome(projectId: string): Promise<{ machine: string; project: OwnProject } | undefined>
   /** Make a page's call about another computer's project on that computer, and answer what it answered. */
   forward(projectId: string, fn: string, args: unknown[]): Promise<unknown>
-  /** What the person's other computers say of their Human Queues, each named as its project is here (machine-interventions.ts). */
+  /** What the person's other computers say waits on the person there, each item named as its project is here (machine-waiting.ts). */
   machinesQueue(): Promise<MachinesQueue>
   /** Where this computer's copy of the project at `address` stands; with `bring`, cloned and added when there is none, on its own. */
   bringHere(address: string, bring?: BringProject): Promise<RelayProject>

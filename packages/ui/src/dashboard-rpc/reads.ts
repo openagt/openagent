@@ -11,8 +11,8 @@ import { repositoryOffer, type RepositoryOffer } from '../store/repository.js'
 import { readDocs, type WorkspaceDoc } from '../dashboard/docs.js'
 import { collectQueue, type ProjectQueue } from '../dashboard/queue.js'
 import { buildOverview, buildRecentAgents, type FoundAgent, type Overview, type RecentAgent } from '../dashboard/overview.js'
-import { buildInterventions, type Intervention } from '../dashboard/interventions.js'
-import { withMachinesQueue, type MachinesQueue } from '../dashboard/machine-interventions.js'
+import { buildWaiting, type Waiting } from '../dashboard/waiting.js'
+import { withMachinesQueue, type MachinesQueue } from '../dashboard/machine-waiting.js'
 import type { ProjectionRead, ProjectSummary } from '../dashboard/projects.js'
 import { buildActivity, type Activity } from '../dashboard/activity.js'
 import { buildDashboard, type DashboardData } from '../dashboard/dashboard.js'
@@ -300,19 +300,20 @@ async function pooledRuns(limit?: number): Promise<RecentAgent[]> {
 
 
 /**
- * The cross-project interventions queue (#632, Queue #624): open PRs that need review, newest first,
- * plus which projects were read whole (#1625).
+ * What waits on the person, across the projects (#632, #2394): every module's `waiting` items of
+ * `app.attention`, and the ones the shell still finds itself, newest first, plus which projects
+ * were read whole (#1625).
  *
  * The panels render `items` and ignore the rest. The browser's notifier is the caller that cannot:
  * it keeps a baseline of what was already waiting when the page opened, and a queue that came back
  * empty because the git host was unreachable is not a baseline — taking it for one announces the whole
  * backlog the moment the git host answers.
  */
-export async function onInterventions(): Promise<ProjectionRead<Intervention>> {
+export async function onWaiting(): Promise<ProjectionRead<Waiting>> {
   // What needs the person on their other computers too: a run's question there, the PRs of a project only they have.
   const remote = contextRemote()
   const [own, machines, elsewhere] = await Promise.all([
-    withProjects(projects => buildInterventions(projects).then(read => ({ read, projects }))),
+    withProjects(projects => buildWaiting(projects).then(read => ({ read, projects }))),
     remote.machinesQueue().catch((): MachinesQueue => ({ said: [], unread: [] })),
     remote.elsewhere().catch((): ProjectSummary[] => []),
   ])
@@ -320,17 +321,17 @@ export async function onInterventions(): Promise<ProjectionRead<Intervention>> {
 }
 
 /**
- * This computer's own Human Queue, for another computer of the person's that shows it beside its
- * own (machine-interventions.ts): the items of this computer's projects only, never of the
+ * What waits on the person on this computer, for another computer of the person's that shows it beside its
+ * own (machine-waiting.ts): the items of this computer's projects only, never of the
  * projects it lists of other computers, so no computer asks back the one that asked it.
  */
-export async function onOwnInterventions(): Promise<ProjectionRead<Intervention>> {
-  return withProjects(buildInterventions)
+export async function onOwnWaiting(): Promise<ProjectionRead<Waiting>> {
+  return withProjects(projects => buildWaiting(projects))
 }
 
 /**
  * The cross-project "New activity" feed (#627): recent run started/finished transitions, newest
- * first, with the projects that were read whole beside them (#1625) — see {@link onInterventions}.
+ * first, with the projects that were read whole beside them (#1625) — see {@link onWaiting}.
  */
 export async function onActivity(): Promise<ProjectionRead<Activity>> {
   // Another computer's runs start and end by its own word, as the lists show them, and so do the

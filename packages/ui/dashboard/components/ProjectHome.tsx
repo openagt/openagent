@@ -1,13 +1,13 @@
 import { useLayoutEffect, useRef } from 'react'
 import { cn } from '../lib/utils.js'
-import type { Intervention, ProjectError, ProjectSummary } from '../../src/index.js'
+import type { ProjectError, ProjectSummary, Waiting } from '../../src/index.js'
 import { StartAgentForm } from './StartAgentForm.js'
 import { ProjectActions } from './ProjectActions.js'
 import { ComposerShape } from './Composer.js'
 import { TopBar } from './Panes.js'
 import { ProjectErrorBanner } from './ProjectErrorBanner.js'
 import { ProjectSkillsLine } from './ProjectSkills.js'
-import { HumanQueueList } from './HumanQueueList.js'
+import { WaitingList } from './WaitingList.js'
 import { ScrollArea } from './ui/scroll-area.js'
 import type { StartPicks } from '../lib/started-from.js'
 import { SESSIONS_ID } from '../../src/project-address.js'
@@ -53,7 +53,7 @@ export function ProjectHome({
   /** The project's name, for the launcher's chip; absent until the projects are read. */
   projectName?: string | null | undefined
   /** The Human Queue, already only the project picked in the sidebar's (#1513) when one is picked. */
-  waiting: Intervention[]
+  waiting: readonly Waiting[]
   /** Carries the started agent's id through to the shell; dropping it is what #1169 was. */
   onAgentStarted?: ((intent: string, agentId: string, runsOn?: string, startedIn?: string, picks?: StartPicks) => void) | undefined
   files: string[]
@@ -133,7 +133,7 @@ export function ProjectHome({
               {waiting.length > 0 && (
                 <section aria-label="Waiting on you">
                   <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Waiting on you · {waiting.length}</h2>
-                  <HumanQueueList key={projectId} items={waiting} onOpenAgent={onOpenAgent} />
+                  <WaitingList key={projectId} items={waiting} onOpenAgent={onOpenAgent} />
                 </section>
               )}
               {/* What the project's skills need from the person, when they need something (#2023): a card

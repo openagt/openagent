@@ -434,15 +434,15 @@ test("the other machine's Human Queue is named here by the projects as they are 
   let asked = 0
   const said = (otherId: string, shopId: string) => ({
     items: [
-      { projectId: shopId, projectName: 'work-shop', kind: 'awaiting', title: 'Asks on B', question: 'Which one?', awaitId: 'q1', agentId: B_RUN, createdAt: '2026-10-27T10:00:00.000Z' },
-      { projectId: otherId, projectName: 'other', kind: 'pr', title: 'Opened by hand', number: 7, url: 'https://github.com/acme/other/pull/7' },
-      { projectId: 'gone-1', projectName: 'gone', kind: 'pr', title: 'Of a project B no longer says', url: 'https://github.com/acme/gone/pull/1' },
-      { projectId: shopId, kind: 'awaiting', title: 'No project name, no item' },
+      { kind: 'waiting', projectId: shopId, projectName: 'work-shop', module: 'ask', scope: 'run', run: B_RUN, id: `${B_RUN}:q1`, words: 'Needs answer', title: 'Asks on B', detail: 'Which one?', since: '2026-10-27T10:00:00.000Z' },
+      { kind: 'waiting', projectId: otherId, projectName: 'other', module: 'github', scope: 'project', id: 'https://github.com/acme/other/pull/7', words: 'Needs merge', title: 'Opened by hand', detail: '#7', fix: { label: 'Open PR #7', href: 'https://github.com/acme/other/pull/7' } },
+      { kind: 'waiting', projectId: 'gone-1', projectName: 'gone', module: 'github', scope: 'project', words: 'Needs merge', title: 'Of a project B no longer says' },
+      { kind: 'waiting', projectId: shopId, module: 'ask', scope: 'run', words: 'No project name, no item' },
     ],
     whole: [otherId, shopId, 'gone-1'],
   })
   let ids: [string, string] = ['', '']
-  const m = await twoMachines({ machineCalls: fn => (fn === 'onOwnInterventions' ? (asked++, Promise.resolve(said(...ids))) : undefined) })
+  const m = await twoMachines({ machineCalls: fn => (fn === 'onOwnWaiting' ? (asked++, Promise.resolve(said(...ids))) : undefined) })
   try {
     ids = [projectId(otherOf(m.shopB)), projectId(m.shopB)]
     // B's projects are known first: it says them when the list is read.
@@ -454,8 +454,8 @@ test("the other machine's Human Queue is named here by the projects as they are 
       said: [
         {
           items: [
-            { projectId: projectId(m.shopA), projectName: 'work-shop', kind: 'awaiting', title: 'Asks on B', question: 'Which one?', awaitId: 'q1', agentId: B_RUN, createdAt: '2026-10-27T10:00:00.000Z', computer: { name: 'Studio', kind: 'computer', id: m.machineB } },
-            { projectId: other, projectName: 'other', kind: 'pr', title: 'Opened by hand', number: 7, url: 'https://github.com/acme/other/pull/7' },
+            { kind: 'waiting', projectId: projectId(m.shopA), projectName: 'work-shop', module: 'ask', scope: 'run', run: B_RUN, id: `${B_RUN}:q1`, words: 'Needs answer', title: 'Asks on B', detail: 'Which one?', since: '2026-10-27T10:00:00.000Z', computer: { name: 'Studio', kind: 'computer', id: m.machineB } },
+            { kind: 'waiting', projectId: other, projectName: 'other', module: 'github', scope: 'project', id: 'https://github.com/acme/other/pull/7', words: 'Needs merge', title: 'Opened by hand', detail: '#7', fix: { label: 'Open PR #7', href: 'https://github.com/acme/other/pull/7' } },
           ],
           whole: [other, projectId(m.shopA)],
         },

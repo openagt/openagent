@@ -26,7 +26,9 @@ export {
 export { pendingChoices } from './open-choices.js'
 // The identity of a notification feed's item (#627). Pure, so the dashboard shares it with the
 // item types rather than keeping a copy that drifts silently.
-export { interventionKey, activityKey } from './dashboard/keys.js'
+export { waitingKey, activityKey } from './dashboard/keys.js'
+// What a run needs of the person, in the two words every list says it in.
+export { needsWord, type RunNeed } from './dashboard/waiting-words.js'
 // The baseline half of the same engine (#1625): what counts as "already there" when a feed is first
 // seen. The dashboard used to decide that by counting observations, which made a page loaded with no
 // git host reach take an empty backlog for a real one. Pure, and its only import is a type.

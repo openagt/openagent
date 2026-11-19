@@ -32,15 +32,36 @@ export interface AppLifecycle {
 /** What fixes an item: one of the module's own `ui.action`s, by its id, or a page to open. */
 export type AttentionFix = { label: string; action: string } | { label: string; href: string }
 
-/** Something that needs the person: something to set up, or something waiting on them. */
+/** How a list marks an item at a glance: a question to answer, a pull request to merge, a branch never published, files never committed. */
+export type AttentionMark = 'question' | 'pull-request' | 'branch' | 'changes'
+
+/**
+ * Something that needs the person: something to set up, or something waiting on them. A list
+ * shows it as a row: what is needed, what it is about, then the rest; a row of an item about a
+ * run opens the run, else what fixes it.
+ */
 export interface AttentionItem {
   kind: 'setup' | 'waiting'
   /** What it is about: this computer, the project asked about, or one of its runs. */
   scope: 'computer' | 'project' | 'run'
   /** The run it is about, for an item about a run. */
   run?: string
-  /** What the person reads: "Claude Code is logged out". */
+  /**
+   * Which of the module's items about the project this is: the same thing said again keeps its
+   * id, so it is new only once (a notification of it is not said twice), and a list keys its row
+   * on it. Its scope and run when unsaid.
+   */
+  id?: string
+  /** What the person reads first, in a few words: "Needs answer", "Claude Code is logged out". */
   words: string
+  /** What it is about, as every list names it: the run's name, a pull request's title. */
+  title?: string
+  /** What it adds after that: the question the run asks, "2 files", "#12". */
+  detail?: string
+  /** Since when it waits, ISO: a list shows the newest first. */
+  since?: string
+  /** A plain dot when unsaid. */
+  mark?: AttentionMark
   fix?: AttentionFix
 }
 
@@ -56,4 +77,14 @@ export type AppAttention = (args: AttentionArgs) => AttentionItem[] | Promise<At
 /** An item, with the module that said it: the one whose `ui.action` its fix names. */
 export interface Attention extends AttentionItem {
   module: string
+}
+
+/**
+ * What every module on said needs the person, in the distribution's order, and whether each one
+ * answered: one that threw gave nothing, so its items are not known to be gone, and a reader that
+ * tells new items from old ones takes none of them as gone.
+ */
+export interface AttentionRead {
+  items: Attention[]
+  whole: boolean
 }

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
-import type { ActiveAgent, Intervention } from '../../src/index.js'
+import type { ActiveAgent, Waiting } from '../../src/index.js'
 import type { ListedPage } from '../lib/use-modules.js'
 
 // The Overview's own layout: its cards on a grid, ordered, sized and hidden by the person's layout
@@ -32,7 +32,16 @@ vi.mock('./ModuleCards.js', async () => {
       <div>a package's card</div>
     </Section>
   )
-  return { useModuleCards: () => ({ cards: modules.gone ? [] : [{ id: '@x/tickets/hot', label: 'Hot tickets', width: '1/2', minWidth: '1/3', present: true, node }], line: modules.line, loaded: modules.loaded }) }
+  // The card of what needs the person, a package's as ui-card-waiting's is, in the part the line's count scrolls to.
+  const queue = (
+    <div id="needs-you">
+      <Section title="Human Queue">
+        <div>what waits on you</div>
+      </Section>
+    </div>
+  )
+  const waiting = { id: 'human-queue', label: 'Human Queue', order: 5, width: '2/3', minWidth: '1/2', needsYou: true, node: queue }
+  return { useModuleCards: () => ({ cards: [waiting, ...(modules.gone ? [] : [{ id: '@x/tickets/hot', label: 'Hot tickets', order: 50, width: '1/2', minWidth: '1/3', present: true, node }])], line: modules.line, loaded: modules.loaded }) }
 })
 // The screen's size, as the page reads it: a desktop's unless a test says a phone's.
 const screenSize = vi.hoisted(() => ({ phone: false }))
@@ -49,8 +58,8 @@ const projects = [{ id: 'p1', name: 'alpha' }, { id: 'p2', name: 'beta' }] as ne
 let working: ActiveAgent[] = []
 /** The modules' pages as the sidebar lists them: none known until a test says. */
 let listed: readonly ListedPage[] | null = null
-const overview = (scope: string | null = null, kept = { interventions: false, active: false }, read = true) => (
-  <DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} projectHref={id => `/${id}`} onSelectAgent={() => {}} onAgentStarted={() => {}} interventions={[]} interventionsState={!read ? 'unknown' : kept.interventions ? 'kept' : 'fresh'} active={{ active: working, state: !read ? 'unknown' : kept.active ? 'kept' : 'fresh' }} projects={projects} scope={scope} listedPages={listed} />
+const overview = (scope: string | null = null, kept = { waiting: false, active: false }, read = true) => (
+  <DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} projectHref={id => `/${id}`} onSelectAgent={() => {}} onAgentStarted={() => {}} waiting={[]} waitingState={!read ? 'unknown' : kept.waiting ? 'kept' : 'fresh'} active={{ active: working, state: !read ? 'unknown' : kept.active ? 'kept' : 'fresh' }} projects={projects} scope={scope} listedPages={listed} />
 )
 const show = (...args: Parameters<typeof overview>) => render(overview(...args))
 /** The cards drawn, in order, each with its grid classes. */
@@ -357,19 +366,20 @@ describe('the Overview', () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     try {
       working = [active('r1', 'p1')]
-      show(null, { interventions: true, active: false })
+      show(null, { waiting: false, active: true })
       await screen.findByText('working on r1')
       const faded = () => [...document.querySelectorAll<HTMLElement>('[data-stale]')].map(el => el.dataset['card'])
       // A read that answers within the second never fades its card: no flicker on every load.
       expect(faded()).toEqual([])
       act(() => vi.advanceTimersByTime(FADE_AFTER_MS))
-      expect(faded()).toEqual(['human-queue'])
-      expect(document.querySelector('[data-card="human-queue"]')!.className).toContain('opacity-60')
+      expect(faded()).toEqual(['working'])
+      expect(document.querySelector('[data-card="working"]')!.className).toContain('opacity-60')
       cleanup()
-      show(null, { interventions: false, active: true })
+      // What waits on the person only an earlier visit read: its card, a package's, fades itself.
+      show(null, { waiting: true, active: false })
       await screen.findByText('working on r1')
       act(() => vi.advanceTimersByTime(FADE_AFTER_MS))
-      expect(faded()).toEqual(['working'])
+      expect(faded()).toEqual([])
       cleanup()
       show()
       await screen.findByText('working on r1')
@@ -383,7 +393,7 @@ describe('the Overview', () => {
   test('on a first visit nothing is drawn under the Human Queue or the first steps until they have answered, so nothing is pushed when they do', async () => {
     prefs.value = {}
     firstSteps.read = false
-    const { rerender } = show(null, { interventions: false, active: false }, false)
+    const { rerender } = show(null, { waiting: false, active: false }, false)
     await screen.findByText('Human Queue')
     expect(drawn().map(card => card.id)).toEqual(['human-queue'])
     expect(screen.queryByText('onboarding')).toBeNull()
@@ -410,7 +420,7 @@ describe('the Overview', () => {
   })
 
   test('the line under the title says no count before its reads, and a nothing in words after', async () => {
-    show(null, { interventions: false, active: false }, false)
+    show(null, { waiting: false, active: false }, false)
     await screen.findByText('Human Queue')
     expect(screen.queryByRole('button', { name: /needs? you/ })).toBeNull()
     expect(screen.queryByText(/^(no agent|\d+) working$/)).toBeNull()
@@ -456,45 +466,16 @@ describe('the Overview', () => {
     expect(firstVisit.textContent).toBe('·nothing needs you·no agent working·nothing queued·your presets')
   })
 
-  test('the Human Queue says it is loading before its read, not that nothing waits', async () => {
-    show(null, { interventions: false, active: false }, false)
-    const card = (await screen.findByText('Human Queue')).closest('[data-card]')!
-    expect(card.textContent).toContain('Loading…')
-    expect(card.textContent).not.toContain('AI doesn’t need you.')
-  })
-
-  test("the line's first part: how many things wait, and how many of each kind on its hover; it takes the page to the Human Queue", async () => {
+  test("the line's first part: how many things wait, and how many of each mark on its hover; it takes the page to the card of what needs the person", async () => {
     working = []
-    const item = (kind: Intervention['kind'], n: number): Intervention => ({ projectId: 'p1', projectName: 'alpha', kind, title: `t${n}`, agentId: `r${n}` })
+    const item = (mark: Waiting['mark'], n: number): Waiting => ({ projectId: 'p1', projectName: 'alpha', kind: 'waiting', module: 'm', scope: 'run', run: `r${n}`, words: 'Needs it', title: `t${n}`, ...(mark ? { mark } : {}) })
     const scrolled = vi.fn()
     Element.prototype.scrollIntoView = scrolled
-    render(<DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} projectHref={id => `/${id}`} onSelectAgent={() => {}} onAgentStarted={() => {}} interventions={[item('awaiting', 1), item('awaiting', 2), item('pr', 3)]} interventionsState="fresh" active={{ active: [], state: 'fresh' }} projects={projects} scope={null} listedPages={null} />)
-    const part = await screen.findByRole('button', { name: '3 need you' })
-    expect(part.getAttribute('title')).toBe('2 questions, 1 pull request')
+    render(<DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} projectHref={id => `/${id}`} onSelectAgent={() => {}} onAgentStarted={() => {}} waiting={[item('question', 1), item('question', 2), item('pull-request', 3), item(undefined, 4)]} waitingState="fresh" active={{ active: [], state: 'fresh' }} projects={projects} scope={null} listedPages={null} />)
+    const part = await screen.findByRole('button', { name: '4 need you' })
+    expect(part.getAttribute('title')).toBe('2 questions, 1 pull request, 1 more')
     fireEvent.click(part)
     expect(scrolled).toHaveBeenCalled()
     expect(scrolled.mock.contexts[0]).toBe(document.getElementById('needs-you'))
-  })
-
-  test('the Human Queue: work left uncommitted asks for a commit and opens its run; a request a run opened opens that run, one opened elsewhere links the git host', async () => {
-    working = []
-    const onSelectAgent = vi.fn()
-    const item = (over: Partial<Intervention>): Intervention => ({ projectId: 'p1', projectName: 'test-project', kind: 'pr', title: 't', ...over })
-    const interventions = [
-      item({ kind: 'uncommitted', title: 'Create test.md', agentId: 'r1', branch: 'agent-r1', files: 1 }),
-      item({ number: 6, title: 'Add DESCRIPTION.md', url: 'https://x/pull/6', agentId: 'r6' }),
-      item({ number: 8, title: 'Condense README', url: 'https://x/pull/8' }),
-    ]
-    render(<DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} projectHref={id => `/${id}`} onSelectAgent={onSelectAgent} onAgentStarted={() => {}} interventions={interventions} interventionsState="fresh" active={{ active: [], state: 'fresh' }} projects={[]} scope={null} listedPages={null} />)
-    // One list, in the order the queue gives them: a row says what it needs first in its line, so no kind has a heading.
-    const part = within(screen.getByRole('region', { name: 'Human Queue' }))
-    expect(part.queryAllByRole('region')).toEqual([])
-    expect(part.getAllByRole('listitem').map(row => row.textContent)).toEqual(['Needs commitCreate test.md1 file', 'Needs mergeAdd DESCRIPTION.md#6', 'Needs mergeCondense README#8'])
-    // The row is the press: it opens where what it needs is done.
-    fireEvent.click(screen.getByText('Create test.md'))
-    fireEvent.click(screen.getByText('Add DESCRIPTION.md'))
-    expect(onSelectAgent.mock.calls).toEqual([['p1', 'r1'], ['p1', 'r6']])
-    expect(screen.getByText('Condense README').closest('a')?.getAttribute('href')).toBe('https://x/pull/8')
-    expect(screen.getByText('Add DESCRIPTION.md').closest('a')?.getAttribute('href')).toBe('/p1/r6')
   })
 })

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ComponentType, type ReactNod
 import { Dialog as BaseDialog } from '@base-ui/react/dialog'
 import { Autocomplete } from '@base-ui/react/autocomplete'
 import { Blocks, Folder, LayoutDashboard, Search, X } from 'lucide-react'
-import type { AgentMeta, FoundAgent, Intervention, ProjectSummary } from '../../src/index.js'
+import type { AgentMeta, FoundAgent, ProjectSummary, Waiting } from '../../src/index.js'
 import { onAllAgents } from '../rpc/reads.js'
 import type { Route } from '../lib/route.js'
 import { foundParts, jumpGroups, type JumpRow } from '../lib/jump.js'
@@ -11,7 +11,6 @@ import { inPlace } from '../lib/in-place.js'
 import { pressed, shortcut, shortcutKeys, useShortcut } from '../lib/shortcut.js'
 import { useProjectLabel } from '../lib/project-labels.js'
 import { cn } from '../lib/utils.js'
-import { needsWord } from './HumanQueueList.js'
 import { RunMark } from './RunMark.js'
 import { KeyCaps } from './ShortcutList.js'
 import { BACKDROP_CLASS } from './ui/dialog.js'
@@ -86,8 +85,8 @@ const runKey = (projectId: string, agentId: string): string => `${projectId}/${a
 const RECENT_SHOWN = 5
 
 export function JumpPalette({ waiting, runs, pages, projects, scope, here, hrefOf, go }: {
-  /** The Human Queue, in its order. */
-  waiting: readonly Intervention[]
+  /** What waits on the person, in its order. */
+  waiting: readonly Waiting[]
   /** The runs this page has read: the picked project's and every project's newest, newest first. */
   runs: readonly { projectId: string; projectName: string; agent: AgentMeta }[]
   /** The pages of the dashboard and its modules that the sidebar lists, with the icon it gives each. */
@@ -149,15 +148,16 @@ export function JumpPalette({ waiting, runs, pages, projects, scope, here, hrefO
     const pageRuns = runs.map(run => runPlace(run.projectId, run.projectName, run.agent))
     const known = new Map(pageRuns.map(place => [place.key, place]))
     const waitingRows = waiting.flatMap((item): Place[] => {
-      if (item.agentId === undefined) return []
-      const pr = item.number !== undefined ? `#${item.number}` : undefined
+      if (item.run === undefined) return []
+      const key = runKey(item.projectId, item.run)
       return [{
-        key: runKey(item.projectId, item.agentId),
+        key,
         mark: <RunMark status="waiting" />,
-        name: item.title,
-        also: [item.branch, pr].filter((text): text is string => text !== undefined),
-        meta: [scope === null ? label(item.projectId, item.projectName) : undefined, needsWord(item.kind, item.gitHost)],
-        to: { projectId: item.projectId, agentId: item.agentId },
+        name: item.title ?? item.words,
+        // Found by what the run's own row is found by (its branch, its request), and by what waits.
+        also: [...(known.get(key)?.also ?? []), ...(item.detail !== undefined ? [item.detail] : [])],
+        meta: [scope === null ? label(item.projectId, item.projectName) : undefined, item.words],
+        to: { projectId: item.projectId, agentId: item.run },
       }]
     })
     const opened = readOpened().flatMap(key => known.get(key) ?? [])

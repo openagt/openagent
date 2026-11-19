@@ -33,7 +33,7 @@ export interface LinkedPr {
   armed?: true
 }
 
-/** An open PR on the interventions queue (#632). */
+/** An open PR, as what waits on the person lists it (#632). */
 export interface OpenPr {
   number: number
   title: string
@@ -80,7 +80,7 @@ export function linkedPrOf(request: GitHostRequest): LinkedPr {
   }
 }
 
-/** A provider's open request as the interventions queue keeps it. */
+/** A provider's open request as the waiting list keeps it. */
 export function openPrOf(request: GitHostRequest): OpenPr {
   return {
     number: request.number,

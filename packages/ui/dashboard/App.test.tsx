@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { createElement, useContext, useRef, useState } from 'react'
 import { openMenu, phoneScreen } from './test-utils.js'
-import { defineUiModule, useModuleHost, useOpenAgentDown, type UiCardProps, type UiPageProps, type UiView } from './module/index.js'
+import { WaitingList, defineUiModule, useModuleHost, useOpenAgentDown, useWaiting, type UiCardProps, type UiPageProps, type UiView } from './module/index.js'
 import { forgetRemembered } from './lib/use-async.js'
 import { holdEntry } from './lib/use-route.js'
 import { HostServicesContext } from './lib/host-services.js'
@@ -80,11 +80,17 @@ function moduleModule(key: string, ...views: UiView[]): string {
   return `data:text/javascript,export default globalThis[${JSON.stringify(key)}]`
 }
 
+/** A module's card of what needs the person, as ui-card-waiting's: the shell's one read of it, in the shell's rows. */
+function WaitingCard() {
+  const { items } = useWaiting()
+  return createElement(WaitingList, { items, onOpenAgent: useModuleHost().openAgent })
+}
+
 function answerShell(modules: unknown[]): void {
   answers.clear()
   answers.set('onProjects', () => [PROJECT])
   answers.set('onModules', () => modules)
-  answers.set('onInterventions', () => ({ items: [], whole: [] }))
+  answers.set('onWaiting', () => ({ items: [], whole: [] }))
   answers.set('onRecentAgents', () => [])
   answers.set('onAgents', () => [])
   answers.set('onOverview', () => ({ active: [] }))
@@ -121,7 +127,7 @@ describe('the queue of what needs you', () => {
       answerShell([])
       window.history.replaceState(null, '', '/app/overview')
       render(<App />)
-      const reads = () => calls.filter(call => call.name === 'onInterventions').length
+      const reads = () => calls.filter(call => call.name === 'onWaiting').length
       await waitFor(() => expect(reads()).toBeGreaterThan(0))
       await waitFor(() => expect(streams.length).toBe(1))
       const before = reads()
@@ -523,11 +529,11 @@ describe('module cards on the Overview (#1818)', () => {
     try {
       answerOverview([])
       // The last visit saw nothing waiting; since then a run asked a question.
-      localStorage.setItem('openagent:read:interventions', JSON.stringify({ items: [], whole: [PROJECT.id] }))
-      answers.set('onInterventions', () => ({ items: [{ projectId: PROJECT.id, projectName: 'app', kind: 'awaiting', title: 'Pick a name', agentId: 'r1' }], whole: [PROJECT.id] }))
+      localStorage.setItem('openagent:read:waiting', JSON.stringify({ items: [], whole: [PROJECT.id] }))
+      answers.set('onWaiting', () => ({ items: [{ kind: 'waiting', projectId: PROJECT.id, projectName: 'app', module: 'ask', scope: 'run', run: 'r1', words: 'Needs answer', title: 'Pick a name' }], whole: [PROJECT.id] }))
       window.history.replaceState(null, '', '/')
       render(<App />)
-      expect(await within(screen.getByRole('main')).findByText('Pick a name')).toBeTruthy()
+      expect(await within(screen.getByRole('main')).findByText('1 needs you')).toBeTruthy()
       await new Promise(resolve => setTimeout(resolve, 50))
       expect(announced).toEqual([])
     } finally {
@@ -768,16 +774,22 @@ describe('the project select (#1513)', () => {
     function QueueCard({ projects }: UiCardProps) {
       return createElement('p', null, `card for ${projects.map(p => p.name).join(', ')}`)
     }
-    answerShell([{ package: '@acme/logs', url: moduleModule('__scopeModule', { place: 'app.page', id: 'logs', label: 'Logs', View: LogsPage }, { place: 'overview.card', id: 'queue', label: 'queue', View: QueueCard }), projects: [PROJECT.id, OTHER.id] }])
+    answerShell([
+      {
+        package: '@acme/logs',
+        url: moduleModule('__scopeModule', { place: 'app.page', id: 'logs', label: 'Logs', View: LogsPage }, { place: 'overview.card', id: 'queue', label: 'queue', View: QueueCard }, { place: 'overview.card', id: 'waiting', label: 'Waiting', needsYou: true, View: WaitingCard }),
+        projects: [PROJECT.id, OTHER.id],
+      },
+    ])
     answers.set('onProjects', () => [PROJECT, OTHER])
     answers.set('onQuota', () => null)
     answers.set('onDocs', () => [])
     answers.set('onProjectFiles', () => [])
     answers.set('onAgentChanges', () => [])
-    answers.set('onInterventions', () => ({
+    answers.set('onWaiting', () => ({
       items: [
-        { kind: 'awaiting', projectId: PROJECT.id, projectName: 'app', agentId: 'a1', title: 'app asks' },
-        { kind: 'awaiting', projectId: OTHER.id, projectName: 'site', agentId: 's1', title: 'site asks' },
+        { kind: 'waiting', projectId: PROJECT.id, projectName: 'app', module: 'ask', scope: 'run', run: 'a1', words: 'Needs answer', title: 'app asks' },
+        { kind: 'waiting', projectId: OTHER.id, projectName: 'site', module: 'ask', scope: 'run', run: 's1', words: 'Needs answer', title: 'site asks' },
       ],
       whole: [],
     }))
@@ -1263,7 +1275,7 @@ describe('the shell on a phone', () => {
     const wide = phoneScreen()
     try {
       answerShell([{ package: '@acme/logs', url: moduleModule('__phoneBarLogs', { place: 'app.page', id: 'logs', label: 'Logs', View: () => null }), projects: [PROJECT.id] }])
-      answers.set('onInterventions', () => ({ items: [{ projectId: PROJECT.id, projectName: 'app', kind: 'awaiting', title: 'Pick a name', agentId: 'r1' }], whole: [PROJECT.id] }))
+      answers.set('onWaiting', () => ({ items: [{ kind: 'waiting', projectId: PROJECT.id, projectName: 'app', module: 'ask', scope: 'run', run: 'r1', words: 'Needs answer', title: 'Pick a name' }], whole: [PROJECT.id] }))
       render(<App />)
       const pages = await screen.findByRole('navigation', { name: 'Pages' })
       await waitFor(() => expect(within(pages).getByRole('link', { name: 'Overview, 1 waiting on you' })).toBeTruthy())
@@ -1300,7 +1312,7 @@ describe('the shell on a phone', () => {
     const wide = phoneScreen()
     const id = '2026-11-14T23-05-03-506Z'
     try {
-      answerShell([])
+      answerShell([{ package: '@acme/waiting', url: moduleModule('__phoneWaiting', { place: 'overview.card', id: 'waiting', label: 'Waiting', needsYou: true, View: WaitingCard }), projects: [PROJECT.id] }])
       answers.set('onQuota', () => null)
       answers.set('onDashboard', () => null)
       answers.set('onAgentChanges', () => [])
@@ -1308,7 +1320,7 @@ describe('the shell on a phone', () => {
       answers.set('onProjectFiles', () => [])
       answers.set('onRetainedWorktrees', () => [])
       answers.set('onAgents', () => [{ id, status: 'done', startedAt: '2026-11-14T23:05:03.506Z', updatedAt: '2026-11-14T23:06:00.000Z', intent: 'pick a name' }])
-      answers.set('onInterventions', () => ({ items: [{ projectId: PROJECT.id, projectName: 'app', kind: 'awaiting', title: 'Pick a name', agentId: id }], whole: [PROJECT.id] }))
+      answers.set('onWaiting', () => ({ items: [{ kind: 'waiting', projectId: PROJECT.id, projectName: 'app', module: 'ask', scope: 'run', run: id, words: 'Needs answer', title: 'Pick a name' }], whole: [PROJECT.id] }))
 
       // Opened cold, from a link: nothing of this app's is behind it, so Back goes to the Overview.
       window.history.replaceState(null, '', `/${PROJECT.name}/${id}`)

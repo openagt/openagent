@@ -5,8 +5,8 @@ import { Plus, Bot, ArrowDownUp, Check, Cloud, Laptop, LayoutDashboard, Blocks, 
 import { MACHINE_ICONS } from './MachineMark.js'
 import { PersonMark } from './PersonMark.js'
 import type { ComponentType } from 'react'
-import type { AgentMeta, AgentStatus, Intervention, RecentAgent, ProjectSummary } from '../../src/index.js'
-import { interventionKey } from '../../src/client.js'
+import type { AgentMeta, AgentStatus, RecentAgent, ProjectSummary, Waiting } from '../../src/index.js'
+import { needsWord, waitingKey } from '../../src/client.js'
 import { StateCell } from './ui/state.js'
 import type { ModuleHostPerson } from '../module/index.js'
 import { DRIVER_LABELS, driverFromImpl, cloudRunState, type CloudRunState, type MachineKind } from '../../src/client.js'
@@ -42,7 +42,6 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from './ui/sidebar.js'
-import { needsWord } from './HumanQueueList.js'
 import { ScrollArea } from './ui/scroll-area.js'
 import { Skeleton } from './ui/skeleton.js'
 import { Slot } from './ui/slot.js'
@@ -148,7 +147,7 @@ export function AgentHistory({
   /** Open a module's page by its segment. */
   onPage?: (segment: string) => void
   /** What waits on the person (the Human Queue, #632), the picked project's or every project's: the "Waiting on you" part, named as the launcher names it. */
-  waiting?: readonly Intervention[]
+  waiting?: readonly Waiting[]
   /** The address a row or a nav item goes to, as the shell writes it: each is a link, which also opens in a new tab. */
   hrefOf?: (route: Route) => string
   /** Cross-project recents, for when all projects show: every project's sessions pooled. */
@@ -275,7 +274,7 @@ export function AgentHistory({
   const telling: Telling = { person: differ(row => row.agent.person?.toLowerCase()), driver: differ(row => driverFromImpl(row.agent.driver)), project: differ(row => row.project) }
 
   // A run listed in "Waiting on you" is not listed again in the Log.
-  const waitingListed = new Set(waiting.slice(0, WAITING_SHOWN).flatMap(item => (item.agentId ? [`${item.projectId}:${item.agentId}`] : [])))
+  const waitingListed = new Set(waiting.slice(0, WAITING_SHOWN).flatMap(item => (item.run !== undefined ? [`${item.projectId}:${item.run}`] : [])))
   const logged = rows.filter(row => !waitingListed.has(`${row.projectId}:${row.agent.id}`))
 
   const hasRecents = rows.length > 0 || showOptimistic
@@ -416,9 +415,9 @@ export function AgentHistory({
                 {waiting.length > 0 && (
                   <WaitingOnYou
                     waiting={waiting}
-                    hrefOf={item => (item.agentId ? hrefOf({ projectId: item.projectId, agentId: item.agentId }) : item.url)}
-                    isOpen={item => item.agentId !== undefined && item.agentId === selectedAgentId && item.projectId === (crossProject ? projectId : listOf)}
-                    onOpen={item => (item.agentId ? leave(onSelectRecent ?? (() => {}))(item.projectId, item.agentId) : undefined)}
+                    hrefOf={item => (item.run !== undefined ? hrefOf({ projectId: item.projectId, agentId: item.run }) : item.fix !== undefined && 'href' in item.fix ? item.fix.href : undefined)}
+                    isOpen={item => item.run !== undefined && item.run === selectedAgentId && item.projectId === (crossProject ? projectId : listOf)}
+                    onOpen={item => (item.run !== undefined ? leave(onSelectRecent ?? (() => {}))(item.projectId, item.run) : undefined)}
                     moreHref={homeHref}
                     onMore={leave(onDashboard)}
                   />
@@ -574,13 +573,13 @@ function WaitingOnYou({
   moreHref,
   onMore,
 }: {
-  waiting: readonly Intervention[]
-  /** Where a row goes: its run's page, or a pull request no run here opened. */
-  hrefOf: (item: Intervention) => string | undefined
+  waiting: readonly Waiting[]
+  /** Where a row goes: its run's page, or the page that fixes it, a pull request no run here opened. */
+  hrefOf: (item: Waiting) => string | undefined
   /** Whether a row's run is the page shown: its row is the picked one, as the Log's would be. */
-  isOpen: (item: Intervention) => boolean
+  isOpen: (item: Waiting) => boolean
   /** Open a row's run in place. */
-  onOpen: (item: Intervention) => void
+  onOpen: (item: Waiting) => void
   moreHref: string
   onMore: () => void
 }) {
@@ -595,13 +594,14 @@ function WaitingOnYou({
         <SidebarMenu className="gap-0.5">
           {shown.map(item => {
             const href = hrefOf(item)
-            const need = needsWord(item.kind, item.gitHost)
-            const external = item.agentId === undefined
+            const need = item.words
+            const external = item.run === undefined
+            const name = item.title ?? item.projectName
             return (
-              <SidebarMenuItem key={interventionKey(item)}>
+              <SidebarMenuItem key={waitingKey(item)}>
                 <a
                   href={href}
-                  aria-label={`${item.title} · ${need}`}
+                  aria-label={`${name} · ${need}`}
                   aria-current={isOpen(item) ? 'page' : undefined}
                   {...(external ? { target: '_blank', rel: 'noreferrer' } : { onClick: inPlace(() => onOpen(item)) })}
                   className={cn(rowClass, 'py-1.5 md:min-h-8 max-md:min-h-11', isOpen(item) ? 'bg-foreground/8' : 'hover:bg-foreground/4 active:bg-foreground/8')}
@@ -613,9 +613,9 @@ function WaitingOnYou({
                       <span className="flex h-5 w-4 shrink-0 items-center justify-center">
                         <StateCell state="waiting" />
                       </span>
-                      <span className="line-clamp-2 min-w-0 flex-1 break-words">{item.title}</span>
+                      <span className="line-clamp-2 min-w-0 flex-1 break-words">{name}</span>
                       <span aria-hidden className={cn(AGE, 'leading-5')}>
-                        {formatSince(item.createdAt)}
+                        {formatSince(item.since)}
                       </span>
                     </span>
                     {/* Under the name, 16 for the mark and 12 after it: the words start where the name does. */}

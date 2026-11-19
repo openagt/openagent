@@ -1,4 +1,4 @@
-import { onProjectFiles, onGitStatus, onAgentWorktree, onAgentMainBranch, onAgentHandoff, onAgent, onStartedName, onOwnRuns, onOwnInterventions, onDocs, onAgentsDoing, onRetainedWorktrees, onGitHostHome, onRepositoryOffer } from './reads.js'
+import { onProjectFiles, onGitStatus, onAgentWorktree, onAgentMainBranch, onAgentHandoff, onAgent, onStartedName, onOwnRuns, onOwnWaiting, onDocs, onAgentsDoing, onRetainedWorktrees, onGitHostHome, onRepositoryOffer } from './reads.js'
 import { runModuleCommand } from './modules.js'
 import { callModule } from './module-calls.js'
 import { commandReads, findProjectModule } from '../project-modules.js'
@@ -101,7 +101,7 @@ export async function dispatchRelayRpc(projectId: string, fn: string, args: unkn
 // Which of a computer's accounts its runs take, a coding agent's and a git host's, is asked and picked
 // from the page of the computer that sends it a run: the run goes with the one picked there. One is
 // removed from there too, as its own page removes it.
-const MACHINE_READS = { onCopiedLogins, onOwnProjects, onOwnInterventions, onOwnComputers, onCloneCheck, onModels, onAgentAccounts, onGitHosts, onPersonalFolder }
+const MACHINE_READS = { onCopiedLogins, onOwnProjects, onOwnWaiting, onOwnComputers, onCloneCheck, onModels, onAgentAccounts, onGitHosts, onPersonalFolder }
 const MACHINE_ACTS = { sendCopiedLogin, sendForgetCopiedLogin, sendKeepCopiedLogin, sendCopiedUsage, patchPreferences, sendAddComputer, sendForgetComputers, sendRenameComputer, sendUseAgentAccountFirst, sendRemoveAgentAccount, sendUseGitHostAccount, sendSyncPersonalFolder }
 const MACHINE_FNS = Object.assign(Object.create(null) as Record<string, RelayFn>, MACHINE_READS, MACHINE_ACTS) as unknown as Record<string, RelayFn>
 

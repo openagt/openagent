@@ -25,6 +25,8 @@ const DISTRIBUTION: DashboardDistribution = [
   // The Changes and Files panes.
   { package: '@openagt/dashboard-changes' },
   { package: '@openagt/dashboard-files' },
+  // The Overview's Human Queue: what waits on the person, in every project.
+  { package: '@openagt/ui-card-waiting', for: 'computer' },
   // The runs' records, which every project's Log lists; its Logs page is a pick.
   { package: '@openagt/skill-logs', pages: 'picked' },
   // The person's name and picture, Settings › Profile.

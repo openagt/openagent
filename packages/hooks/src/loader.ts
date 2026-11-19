@@ -3,7 +3,7 @@ import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { GitAccess } from './account.js'
-import type { AppContext, Attention, AttentionArgs } from './app.js'
+import type { AppContext, AttentionArgs, AttentionRead } from './app.js'
 import { HOOK_NAMES, MODULE_NAME, type ModuleDefinition } from './module.js'
 import { runPipeline, type OrderedStep, type PipelineResult } from './pipeline.js'
 import type { ProjectRef } from './project.js'
@@ -73,8 +73,8 @@ export interface Hooks {
   hosts(project?: ProjectRef): Promise<RunHost[]>
   /** How git reaches `remote` as an account: the first module with an account for it says. */
   gitAccess(remote: string): Promise<GitAccess | undefined>
-  /** What needs the person, every module's items in the distribution's order. */
-  attention(args: AttentionArgs): Promise<Attention[]>
+  /** What needs the person, every module's items in the distribution's order, and whether every module answered. */
+  attention(args: AttentionArgs): Promise<AttentionRead>
   /** The app started: each module on starts its own work, with `signal` aborting when the app stops. */
   started(signal: AbortSignal): Promise<void>
   /** The app is stopping: the modules started, the last first. */
@@ -207,17 +207,20 @@ export function createHooks(entries: readonly DistributionEntry[], opts: HooksOp
       return undefined
     },
     async attention(args) {
-      const items: Attention[] = []
-      for (const module of await onModules(args.project, args.options)) {
-        const hook = module.hooks['app.attention']
-        if (!hook) continue
-        try {
-          for (const item of await hook(args)) items.push({ ...item, module: module.name })
-        } catch (error) {
-          report(module.name, 'app.attention', error)
-        }
-      }
-      return items
+      // Every module at once: each reads what it says, a git host among them.
+      const said = await Promise.all(
+        (await onModules(args.project, args.options)).map(async module => {
+          const hook = module.hooks['app.attention']
+          if (!hook) return []
+          try {
+            return (await hook(args)).map(item => ({ ...item, module: module.name }))
+          } catch (error) {
+            report(module.name, 'app.attention', error)
+            return undefined
+          }
+        }),
+      )
+      return { items: said.flatMap(items => items ?? []), whole: said.every(items => items !== undefined) }
     },
     async started(signal) {
       appSignal = signal

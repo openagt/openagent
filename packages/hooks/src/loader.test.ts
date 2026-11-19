@@ -109,8 +109,8 @@ test('a run goes without the plugins its options name: none of their steps, skil
   assert.deepEqual((await hooks.steps(without)).map(step => step.name), ['account'])
   assert.deepEqual((await hooks.skills(every)).map(skill => `${skill.module}: ${skill.name}`), ['github: github', 'browser: browser'])
   assert.deepEqual((await hooks.skills(without)).map(skill => skill.name), ['github'])
-  assert.deepEqual(await hooks.attention(every), [{ kind: 'setup', scope: 'project', words: 'Chrome is missing', module: 'browser' }])
-  assert.deepEqual(await hooks.attention(without), [])
+  assert.deepEqual(await hooks.attention(every), { items: [{ kind: 'setup', scope: 'project', words: 'Chrome is missing', module: 'browser' }], whole: true })
+  assert.deepEqual(await hooks.attention(without), { items: [], whole: true })
   assert.deepEqual((await hooks.steps({ project: P2, options: {} })).map(step => step.name), ['account'], 'the browser is off in p2')
 })
 
@@ -149,7 +149,8 @@ test('a second skill, coding agent or host of one name is left out and told; a h
   assert.deepEqual((await hooks.skills({ project: P1 })).map(skill => `${skill.module}: ${skill.name} at ${String(skill.dir)}`), ['agent-driver-claude-code: shared at /a', 'copycat: own at /c'])
   assert.deepEqual((await hooks.agents()).map(agent => agent.id), ['claude-code'])
   assert.deepEqual((await hooks.hosts()).map(host => host.id), ['here', 'there'])
-  assert.deepEqual(await hooks.attention({}), [{ kind: 'waiting', scope: 'run', run: 'r1', words: 'Needs an answer', fix: { label: 'Answer', action: 'answer' }, module: 'devices' }])
+  // The module that threw gave nothing, and says the read is not whole: its items are not known to be gone.
+  assert.deepEqual(await hooks.attention({}), { items: [{ kind: 'waiting', scope: 'run', run: 'r1', words: 'Needs an answer', fix: { label: 'Answer', action: 'answer' }, module: 'devices' }], whole: false })
   assert.deepEqual(messages(errors), [
     'broken run.skills: no skills today',
     'copycat run.skills: agent-driver-claude-code gives a skill named shared already',

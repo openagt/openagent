@@ -3,8 +3,8 @@ import { findAgent, isRunId, type AgentMeta } from './store/index.js'
 import type { EventsSource, RemoteAgents, SavedMachine } from './dashboard-rpc/context.js'
 import { RelayedAgents, machineCall, relayRpc, remoteFacts, targetOf, type RemoteTarget } from './dashboard/remote-run.js'
 import { OwnProjectsAsked, elsewhereHomes, elsewhereId, elsewhereSummary, homeOf as elsewhereHomeOf, isElsewhereId, lineNameOf, type ElsewhereHome, type OwnProject } from './dashboard/elsewhere.js'
-import { AnswersKept, interventionsOf, namedHere, type MachinesQueue } from './dashboard/machine-interventions.js'
-import type { Intervention } from './dashboard/interventions.js'
+import { AnswersKept, waitingOf, namedHere, type MachinesQueue } from './dashboard/machine-waiting.js'
+import type { Waiting } from './dashboard/waiting.js'
 import type { ProjectSummary, ProjectionRead } from './dashboard/projects.js'
 import { MachineRunsKept, RUNS_WAIT_MS, type MachineRuns } from './dashboard/machine-runs.js'
 import { asRecorded, onMachine } from './dashboard/run-rows.js'
@@ -37,7 +37,7 @@ const RUNS_FOLLOWED_MS = 30_000
 
 /** How long one of the person's computers gets to say its projects: a list does not wait on it past the first time (elsewhere.ts). */
 const PROJECTS_ASKED_MS = 8_000
-/** How long one of the person's computers gets to say its Human Queue: its PRs are asked of the git host (machine-interventions.ts). */
+/** How long one of the person's computers gets to say what waits on the person there: its PRs are asked of the git host (machine-waiting.ts). */
 const QUEUE_ASKED_MS = 15_000
 
 /** Inputs to {@link createRemoteAgents}. */
@@ -185,13 +185,13 @@ export function createRemoteAgents({ env, resolveProject, addressOf, bringHere }
     const addresses = await Promise.all((await listProjects(env)).map(record => addressOf(record.path)))
     return elsewhereHomes(own, new Set(addresses.filter(address => address !== undefined))).map(elsewhereSummary)
   }
-  // The Human Queues of the person's other computers (machine-interventions.ts): each says its own
+  // What waits on the person on their other computers (machine-waiting.ts): each says its own
   // projects' items, named here by the project as it is listed here, one of a run there marked with
   // its computer. None for a person the owner invited, as their projects are none.
-  const queuesAsked = new AnswersKept<MachineRecord, ProjectionRead<Intervention>>(async machine => {
-    const said = await machineCall(machine, 'onOwnInterventions', [], QUEUE_ASKED_MS)
+  const queuesAsked = new AnswersKept<MachineRecord, ProjectionRead<Waiting>>(async machine => {
+    const said = await machineCall(machine, 'onOwnWaiting', [], QUEUE_ASKED_MS)
     if (!said.ok) throw new Error(said.error)
-    return interventionsOf(said.ret)
+    return waitingOf(said.ret)
   })
   const machinesQueue = async (): Promise<MachinesQueue> => {
     if (callerAtPage() !== undefined) return { said: [], unread: [] }
@@ -254,9 +254,9 @@ export function createRemoteAgents({ env, resolveProject, addressOf, bringHere }
     const projectCwd = await resolveProject(project)
     const agent = projectCwd ? await runOf(projectCwd, agentId) : undefined
     if (!projectCwd) return undefined
-    // No record of it here: a run a saved machine's Human Queue names is that machine's, else nothing is known, and it is asked again.
+    // No record of it here: a run a saved machine says waits on the person is that machine's, else nothing is known, and it is asked again.
     if (!agent) {
-      const queued = (await machinesQueue()).said.flatMap(said => said.items).find(item => item.projectId === project && item.agentId === agentId)?.computer?.id
+      const queued = (await machinesQueue()).said.flatMap(said => said.items).find(item => item.projectId === project && item.run === agentId)?.computer?.id
       const machine = queued === undefined ? undefined : (await ownMachines()).find(saved => saved.id === queued)
       const address = machine ? await addressOf(projectCwd) : undefined
       return machine && address !== undefined ? keep({ target: targetOf(machine, address), label: machine.label }, HOME_KEPT_MS) : undefined

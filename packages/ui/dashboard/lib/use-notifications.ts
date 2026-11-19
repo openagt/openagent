@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
-import type { Activity, Intervention } from '../../src/index.js'
-import { SeenTracker, activityKey, interventionKey, type ProjectionRead } from '../../src/client.js'
+import type { Activity, Waiting } from '../../src/index.js'
+import { SeenTracker, activityKey, waitingKey, type ProjectionRead } from '../../src/client.js'
 
 // Browser notifications for the two feeds the shell already polls (#627): the "needs you"
 // queue and the "new activity" feed. One engine — identity and baseline are imported from
@@ -77,22 +77,13 @@ function useNewItemNotifications<T extends { projectId: string }>(
   }, [read, enabled]) // eslint-disable-line react-hooks/exhaustive-deps
 }
 
-const INTERVENTIONS: NotificationSpec<Intervention> = {
-  keyOf: interventionKey,
+const WAITING: NotificationSpec<Waiting> = {
+  keyOf: waitingKey,
   title: (first, count) => (count === 1 ? `Human Queue · ${first.projectName}` : `${count} items in your Human Queue`),
-  // Each by its run's name, as the queue's rows: a PR with its number, a paused agent with its question (#636), a finished agent with what sits uncommitted or unpushed (#860).
-  label: item => {
-    if (item.kind === 'awaiting') return item.question ? `${item.title} — ${item.question}` : item.title
-    if (item.kind === 'uncommitted') return `${item.title} — ${item.files === 1 ? '1 file' : `${item.files ?? 0} files`} not committed`
-    if (item.kind === 'unpushed') {
-      return item.commits === undefined || item.commits === 0
-        ? `${item.title} — work not pushed`
-        : `${item.title} — ${item.commits === 1 ? '1 commit' : `${item.commits} commits`} not pushed`
-    }
-    return `#${item.number} ${item.title}`
-  },
-  // A PR opens on the git host; a paused agent and work left on this machine open their run here.
-  opens: first => (first.kind === 'pr' && first.url ? { url: first.url } : first.agentId ? { projectId: first.projectId, agentId: first.agentId } : undefined),
+  // Each by what it is about, as the list's rows: the run's name, what it needs, and what that adds (the question, the request's number, the work left).
+  label: item => `${item.title ?? item.projectName} — ${item.detail !== undefined ? `${item.words}: ${item.detail}` : item.words}`,
+  // An item about a run opens the run here; one about no run, the page that fixes it (a request opened by hand, on the git host).
+  opens: first => (first.run !== undefined ? { projectId: first.projectId, agentId: first.run } : first.fix !== undefined && 'href' in first.fix ? { url: first.fix.href } : undefined),
 }
 
 const ACTIVITY: NotificationSpec<Activity> = {
@@ -103,9 +94,9 @@ const ACTIVITY: NotificationSpec<Activity> = {
   opens: first => ({ projectId: first.projectId, agentId: first.agentId }),
 }
 
-/** Notify when a new "needs you" item appears (#627). */
-export function useInterventionNotifications(interventions: ProjectionRead<Intervention>, enabled: boolean, openAgent: OpenAgent): void {
-  useNewItemNotifications(interventions, enabled, INTERVENTIONS, openAgent)
+/** Notify when something new waits on the person (#627). */
+export function useWaitingNotifications(waiting: ProjectionRead<Waiting>, enabled: boolean, openAgent: OpenAgent): void {
+  useNewItemNotifications(waiting, enabled, WAITING, openAgent)
 }
 
 /** Notify when an agent starts or finishes (#627). */

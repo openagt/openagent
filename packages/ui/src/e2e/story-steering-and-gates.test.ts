@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { makeWorld, waitFor, release } from './harness.js'
-import { onInterventions, onAgents, onAgent, onRetainedWorktrees, onAgentWorktree } from '../dashboard-rpc/reads.js'
+import { onWaiting, onAgents, onAgent, onRetainedWorktrees, onAgentWorktree } from '../dashboard-rpc/reads.js'
 import { sendChoice, sendMessage, sendStop, sendDeleteAgent, sendRemoveWorktree } from '../dashboard-rpc/control.js'
 
 // The steering stories (README.md): everything the user does TO a run — answer its question, say
@@ -27,12 +27,12 @@ test('answer a waiting run’s question from the Human Queue; the answer resumes
     await world.waitAgent(project, agentId, 'waiting')
     assert.equal((await rpc(onAgentWorktree)(project.id, agentId))?.checkout !== undefined, true, 'a waiting run keeps its checkout')
     const waiting = await waitFor(
-      async () => (await rpc(onInterventions)()).items.find(item => item.kind === 'awaiting' && item.agentId === agentId),
+      async () => (await rpc(onWaiting)()).items.find(item => item.words === 'Needs answer' && item.run === agentId),
       'the Human Queue to list the waiting run',
     )
     assert.equal(waiting.projectId, project.id)
-    assert.equal(waiting.question, 'Which way?')
-    assert.equal(waiting.awaitId, gate.id)
+    assert.equal(waiting.detail, 'Which way?')
+    assert.equal(waiting.id, `${agentId}:${gate.id}`)
 
     // A pick that is not one of the question's options is refused, and nothing is resumed.
     assert.deepEqual(await rpc(sendChoice)(project.id, gate.id, 'no-such-option', agentId), { ok: false, error: 'every pick must be one of the question\'s options' })
@@ -48,7 +48,7 @@ test('answer a waiting run’s question from the Human Queue; the answer resumes
     assert.ok(replay.some(e => e.kind === 'driver' && e.event.type === 'text' && e.event.text.includes('The user chose: Right')), 'the resumed turn carried the answer')
 
     // Answered means gone from the Human Queue, and the question no longer open to a second answer.
-    assert.equal((await rpc(onInterventions)()).items.some(item => item.kind === 'awaiting' && item.agentId === agentId), false)
+    assert.equal((await rpc(onWaiting)()).items.some(item => item.words === 'Needs answer' && item.run === agentId), false)
     assert.deepEqual(await rpc(sendChoice)(project.id, gate.id, right.id, agentId), { ok: false, error: 'that question is no longer open' })
   } finally {
     await world.close()

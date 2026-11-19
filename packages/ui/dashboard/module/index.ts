@@ -13,14 +13,14 @@
 // sharing every chunk with the dashboard itself. Nothing here names a skill.
 import type { Health } from '../../src/health.js'
 import { createContext, useContext } from 'react'
-import type { AgentStatus } from '../../src/index.js'
+import type { AgentStatus, Waiting as WaitingItem } from '../../src/index.js'
 import type { ModuleAgent, ModuleAgentsWanted } from '../../src/dashboard/module-agents.js'
 import { callModule, runComputerCommand, runComputerCommandOn, runModuleCommand } from '../rpc/modules.js'
 import type { ModuleCallResult, ModuleCommandResult } from '../rpc/modules.js'
 import type { ComputerRpcClient, RpcClient } from '@openagt/hooks/rpc'
 import { DaemonDown } from '../lib/use-daemon-health.js'
 
-export type { ModuleCallResult, ModuleCommandResult, AgentStatus, Health, ModuleAgent, ModuleAgentsWanted }
+export type { ModuleCallResult, ModuleCommandResult, AgentStatus, Health, ModuleAgent, ModuleAgentsWanted, WaitingItem }
 export type * from '@openagt/hooks/ui'
 export { defineUiModule } from '@openagt/hooks/ui'
 
@@ -416,7 +416,9 @@ export { ButtonGroup, ButtonGroupSeparator } from '../components/ui/button-group
 export { LinkActions, useLinkActions, type LinkActionOffer, type ProjectLinks, type LinkTargets } from '../components/LinkActions.js'
 export { MachineMark } from '../components/MachineMark.js'
 export { PersonMark, personName } from '../components/PersonMark.js'
-export { needsWord } from '../components/HumanQueueList.js'
+export { needsWord, type RunNeed } from '../../src/client.js'
+export { WaitingList, holdsBack } from '../components/WaitingList.js'
+export { useWaiting, type WaitingRead } from '../lib/use-waiting.js'
 export { useGitHostPeople, personSaid } from '../lib/use-git-host-people.js'
 export { machineKind, machineName, runName, type MachineKind } from '../../src/client.js'
 export { SettingsFoot, SettingsItem, SettingsItems, SettingsSection, SettingsRow, SettingsRowShapes, SettingsSelectRow, type SettingsOption } from '../components/SettingsRows.js'

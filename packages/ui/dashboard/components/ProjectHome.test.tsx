@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { act, cleanup, render, screen } from '@testing-library/react'
-import type { Intervention } from '../../src/index.js'
+import type { Waiting } from '../../src/index.js'
 
 // The project has a document, and the page must still show none: the documents are the side
 // panel's "Docs" tab. The read is stubbed to prove the page does not even ask for them.
@@ -12,12 +12,12 @@ vi.mock('./ProjectActions.js', () => ({ ProjectActions: ({ name }: { name?: stri
 vi.mock('./ProjectErrorBanner.js', () => ({ ProjectErrorBanner: () => null }))
 vi.mock('./ProjectSkills.js', () => ({ ProjectSkillsLine: () => <div>skills line</div> }))
 vi.mock('./StartAgentForm.js', () => ({ StartAgentForm: () => <div>start form</div> }))
-vi.mock('./HumanQueueList.js', () => ({ HumanQueueList: ({ items }: { items: unknown[] }) => <div>{items.length} rows</div>, holdsBack: (items: unknown[]) => items.length > 6 }))
+vi.mock('./WaitingList.js', () => ({ WaitingList: ({ items }: { items: unknown[] }) => <div>{items.length} rows</div>, holdsBack: (items: unknown[]) => items.length > 6 }))
 
 const { ProjectHome } = await import('./ProjectHome.js')
 const { phoneScreen } = await import('../test-utils.js')
 
-const WAITS: Intervention = { projectId: 'p1', projectName: 'p1', kind: 'awaiting', title: 'Auth store', question: 'Cache it?', agentId: 'r1', awaitId: 'q1' }
+const WAITS: Waiting = { projectId: 'p1', projectName: 'p1', kind: 'waiting', module: 'ask', scope: 'run', run: 'r1', id: 'r1:q1', words: 'Needs answer', title: 'Auth store', detail: 'Cache it?', mark: 'question' }
 
 beforeEach(() => {
   onDocs.mockReset().mockResolvedValue([{ name: 'PLAN.md', content: '# the plan' }])

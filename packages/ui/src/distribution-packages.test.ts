@@ -90,10 +90,10 @@ test("every project keeps its runs' records through the logs package, and shows 
   }
 })
 
-test("the person's profile, devices and account rotation are the computer's: their parts are there with no project, and no project has them", async () => {
-  assert.deepEqual((await computerPackages()).map(pkg => pkg.name), ['@openagt/user-info', '@openagt/dashboard-devices', '@openagt/skill-account-rotation'])
-  assert.deepEqual((await readComputerModules()).map(module => module.package), ['@openagt/dashboard-devices', '@openagt/skill-account-rotation', '@openagt/user-info'])
-  assert.deepEqual((await readComputerModules()).map(module => Object.keys(module.bins)), [['devices'], ['account-rotation'], []])
+test("the Human Queue, the person's profile, devices and account rotation are the computer's: their parts are there with no project, and no project has them", async () => {
+  assert.deepEqual((await computerPackages()).map(pkg => pkg.name), ['@openagt/ui-card-waiting', '@openagt/user-info', '@openagt/dashboard-devices', '@openagt/skill-account-rotation'])
+  assert.deepEqual((await readComputerModules()).map(module => module.package), ['@openagt/dashboard-devices', '@openagt/skill-account-rotation', '@openagt/ui-card-waiting', '@openagt/user-info'])
+  assert.deepEqual((await readComputerModules()).map(module => Object.keys(module.bins)), [['devices'], ['account-rotation'], [], []])
 })
 
 test("a project has a skill's package, its data and its page once it holds the skill's text, in either folder, and no longer once the folder is deleted", async () => {

@@ -65,8 +65,8 @@ export function HandoffSummary({ handoff }: { handoff: AgentHandoff | null }) {
  * deliberate click, and the button's own word — Publish branch, Open PR — says it has not
  * happened yet. They sit in the
  * bar rather than behind the disclosure, because the point of the handoff is to be offered without
- * being looked for. Once a PR exists neither shows — the bar links the PR, and the interventions
- * queue (#632) has picked it up by then. What shows is what the PR still needs: the commit of work
+ * being looked for. Once a PR exists neither shows — the bar links the PR, and the Human Queue
+ * (#632) has picked it up by then. What shows is what the PR still needs: the commit of work
  * left uncommitted, the push of commits it does not have, and its merge. Work committed after the
  * PR merged or closed is offered the next one.
  */

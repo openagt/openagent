@@ -1,22 +1,30 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import type { Intervention } from '../../src/index.js'
-import { HumanQueueList, holdsBack, needsWord } from './HumanQueueList.js'
+import type { Waiting } from '../../src/index.js'
+import { needsWord, type RunNeed } from '../../src/client.js'
+import { WaitingList, holdsBack } from './WaitingList.js'
 
 afterEach(cleanup)
 
-const item = (over: Partial<Intervention>): Intervention => ({ projectId: 'p1', projectName: 'test-project', kind: 'pr', title: 't', ...over })
+// What waits on the person, as the modules say it (`app.attention`'s `waiting` items), in the project p1.
+const item = (over: Partial<Waiting>): Waiting => ({ kind: 'waiting', module: 'github', scope: 'project', words: 'Needs merge', projectId: 'p1', projectName: 'test-project', title: 't', ...over })
+const asks = (run: string, title: string, question: string, over: Partial<Waiting> = {}) => item({ module: 'ask', scope: 'run', run, id: `${run}:q`, words: 'Needs answer', title, detail: question, mark: 'question', ...over })
+const uncommitted = (run: string, title = 't', files?: number) => item({ module: 'git-branches', scope: 'run', run, id: `uncommitted:${run}`, words: 'Needs commit', title, ...(files ? { detail: files === 1 ? '1 file' : `${files} files` } : {}), mark: 'changes' })
+const unpushed = (run: string, title: string, commits: number, gitHost: boolean) =>
+  item({ module: 'git-branches', scope: 'run', run, id: `unpushed:${run}`, words: needsWord('unpushed', gitHost), title, detail: commits === 1 ? '1 commit' : `${commits} commits`, mark: 'branch' })
+const request = (number: number, title: string, url: string, run?: string) =>
+  item({ module: 'github', ...(run ? { scope: 'run' as const, run } : {}), id: url, words: 'Needs merge', title, detail: `#${number}`, mark: 'pull-request', fix: { label: `Open PR #${number}`, href: url } })
 
-describe('the Human Queue\'s rows', () => {
+describe('the rows of what waits on the person', () => {
   test('each row says what it needs, the run\'s name, then what it is about', () => {
     render(
-      <HumanQueueList
+      <WaitingList
         items={[
-          item({ kind: 'awaiting', title: 'Interactive question', question: 'What kind of work?', agentId: 'r1', awaitId: 'q' }),
-          item({ kind: 'uncommitted', title: 'Create test.md file', files: 1, agentId: 'r2' }),
-          item({ kind: 'unpushed', title: 'AI essay', commits: 2, gitHost: true, agentId: 'r3' }),
-          item({ kind: 'unpushed', title: 'Local only', commits: 1, gitHost: false, agentId: 'r4' }),
-          item({ kind: 'pr', title: 'Add README sentence', number: 2, url: 'u2', agentId: 'r5' }),
+          asks('r1', 'Interactive question', 'What kind of work?'),
+          uncommitted('r2', 'Create test.md file', 1),
+          unpushed('r3', 'AI essay', 2, true),
+          unpushed('r4', 'Local only', 1, false),
+          request(2, 'Add README sentence', 'u2', 'r5'),
         ]}
         onOpenAgent={() => {}}
       />,
@@ -30,7 +38,7 @@ describe('the Human Queue\'s rows', () => {
       'Needs pushLocal only1 commit',
       'Needs mergeAdd README sentence#2',
     ])
-    // Each kind has its own mark: a question, a file, a branch, a pull request.
+    // Each mark is its own: a question, a file, a branch, a pull request.
     expect(screen.getAllByRole('listitem').map(row => row.querySelector('svg')!.getAttribute('class'))).toEqual([
       expect.stringContaining('lucide-circle-help'),
       expect.stringContaining('lucide-file-pen'),
@@ -42,7 +50,7 @@ describe('the Human Queue\'s rows', () => {
 
   test('a row is one line that ends with how long ago and an arrow to where it goes', () => {
     const since = new Date(Date.now() - 2 * 86_400_000).toISOString()
-    render(<HumanQueueList items={[item({ kind: 'awaiting', title: 'Asks', question: 'q?', agentId: 'r1', awaitId: 'q', createdAt: since })]} onOpenAgent={() => {}} />)
+    render(<WaitingList items={[asks('r1', 'Asks', 'q?', { since })]} onOpenAgent={() => {}} />)
     const row = screen.getByRole('listitem')
     expect(row.textContent).toBe('Needs answerAsksq?2d ago')
     expect(row.querySelector('.lucide-arrow-right')).toBeTruthy()
@@ -52,24 +60,24 @@ describe('the Human Queue\'s rows', () => {
   })
 
   test('nothing waits: nothing, unless the place says so in a sentence', () => {
-    const { container, rerender } = render(<HumanQueueList items={[]} onOpenAgent={() => {}} />)
+    const { container, rerender } = render(<WaitingList items={[]} onOpenAgent={() => {}} />)
     expect(container.innerHTML).toBe('')
-    rerender(<HumanQueueList items={[]} onOpenAgent={() => {}} empty="Nothing waits." />)
+    rerender(<WaitingList items={[]} onOpenAgent={() => {}} empty="Nothing waits." />)
     expect(container.textContent).toBe('Nothing waits.')
   })
 
   test('the project is named only when the rows are of several projects', () => {
-    const { rerender } = render(<HumanQueueList items={[item({ kind: 'uncommitted', agentId: 'r1' }), item({ kind: 'uncommitted', agentId: 'r2' })]} onOpenAgent={() => {}} />)
+    const { rerender } = render(<WaitingList items={[uncommitted('r1'), uncommitted('r2')]} onOpenAgent={() => {}} />)
     expect(screen.queryByText('test-project')).toBeNull()
-    rerender(<HumanQueueList items={[item({ kind: 'uncommitted', agentId: 'r1' }), item({ kind: 'uncommitted', agentId: 'r2', projectId: 'p2', projectName: 'shop' })]} onOpenAgent={() => {}} />)
+    rerender(<WaitingList items={[uncommitted('r1'), { ...uncommitted('r2'), projectId: 'p2', projectName: 'shop' }]} onOpenAgent={() => {}} />)
     expect(screen.getByText('test-project')).toBeTruthy()
     expect(screen.getByText('shop')).toBeTruthy()
   })
 
   test('a run on another of the person\'s computers says which; one of this computer\'s says nothing more', () => {
     render(
-      <HumanQueueList
-        items={[item({ kind: 'awaiting', title: 'Asks there', question: 'q?', agentId: 'r1', awaitId: 'q', computer: { name: 'Suleimans-MacBook-Pro', kind: 'computer' } }), item({ kind: 'uncommitted', title: 'Left here', agentId: 'r2' })]}
+      <WaitingList
+        items={[asks('r1', 'Asks there', 'q?', { computer: { name: 'Suleimans-MacBook-Pro', kind: 'computer' } }), uncommitted('r2', 'Left here')]}
         onOpenAgent={() => {}}
       />,
     )
@@ -82,14 +90,23 @@ describe('the Human Queue\'s rows', () => {
     expect(here!.querySelector('.lucide-laptop')).toBeNull()
   })
 
-  test('the words are one rule, for every list that shows these rows', () => {
-    expect(['awaiting', 'uncommitted', 'unpushed', 'pr'].map(kind => needsWord(kind as Intervention['kind']))).toEqual(['Needs answer', 'Needs commit', 'Needs PR', 'Needs merge'])
+  test('the words are one rule, for every list that shows what a run needs', () => {
+    expect((['awaiting', 'uncommitted', 'unpushed', 'pr'] as RunNeed[]).map(need => needsWord(need))).toEqual(['Needs answer', 'Needs commit', 'Needs PR', 'Needs merge'])
     expect(needsWord('unpushed', false)).toBe('Needs push')
   })
 
+  test("an item that names no mark has a plain dot; one about no run and with no page to open says what waits, and is no press", () => {
+    render(<WaitingList items={[item({ module: 'tickets', id: 't1', words: 'Needs triage', title: 'Three new tickets' })]} onOpenAgent={() => {}} />)
+    const row = screen.getByRole('listitem')
+    expect(row.textContent).toBe('Needs triageThree new tickets')
+    expect(row.querySelector('.lucide-circle-dot')).toBeTruthy()
+    expect(screen.queryByRole('link')).toBeNull()
+    expect(screen.queryByRole('button')).toBeNull()
+  })
+
   test('the first five show, and a line offers the rest, and then fewer again', () => {
-    const items = Array.from({ length: 8 }, (_, i) => item({ kind: 'uncommitted', title: `run ${i}`, agentId: `r${i}` }))
-    render(<HumanQueueList items={items} onOpenAgent={() => {}} />)
+    const items = Array.from({ length: 8 }, (_, i) => uncommitted(`r${i}`, `run ${i}`))
+    render(<WaitingList items={items} onOpenAgent={() => {}} />)
     expect(holdsBack(items)).toBe(true)
     // Five rows, and the line under them offers the rest.
     expect(screen.getAllByRole('listitem')).toHaveLength(5)
@@ -100,26 +117,26 @@ describe('the Human Queue\'s rows', () => {
   })
 
   test('six: the sixth shows too, since a line offering one more is as tall as the row it hides', () => {
-    const items = Array.from({ length: 6 }, (_, i) => item({ kind: 'uncommitted', title: `run ${i}`, agentId: `r${i}` }))
-    render(<HumanQueueList items={items} onOpenAgent={() => {}} />)
+    const items = Array.from({ length: 6 }, (_, i) => uncommitted(`r${i}`, `run ${i}`))
+    render(<WaitingList items={items} onOpenAgent={() => {}} />)
     expect(holdsBack(items)).toBe(false)
     expect(screen.getAllByRole('listitem')).toHaveLength(6)
     expect(screen.queryByRole('button', { name: /more|fewer/ })).toBeNull()
   })
 
   test('five or fewer: no line offers more', () => {
-    render(<HumanQueueList items={[item({ kind: 'uncommitted', agentId: 'r1' })]} onOpenAgent={() => {}} />)
+    render(<WaitingList items={[uncommitted('r1')]} onOpenAgent={() => {}} />)
     expect(screen.queryByRole('button', { name: /more|fewer/ })).toBeNull()
   })
 
   test('a row opens the session it is about; a request opened elsewhere opens on the git host', () => {
     const onOpenAgent = vi.fn()
     render(
-      <HumanQueueList
+      <WaitingList
         items={[
-          item({ kind: 'awaiting', title: 'Asks', question: 'q?', agentId: 'r1', awaitId: 'q' }),
-          item({ number: 6, title: 'Opened by a run', url: 'https://x/pull/6', agentId: 'r6' }),
-          item({ number: 8, title: 'Opened by hand', url: 'https://x/pull/8' }),
+          asks('r1', 'Asks', 'q?'),
+          request(6, 'Opened by a run', 'https://x/pull/6', 'r6'),
+          request(8, 'Opened by hand', 'https://x/pull/8'),
         ]}
         onOpenAgent={onOpenAgent}
       />,
@@ -132,7 +149,7 @@ describe('the Human Queue\'s rows', () => {
 
   test('a row is a link to its session: a Ctrl+click or a middle click is the browser\'s, for a new tab', () => {
     const onOpenAgent = vi.fn()
-    render(<HumanQueueList items={[item({ kind: 'awaiting', title: 'Asks', question: 'q?', agentId: 'r1', awaitId: 'q' })]} onOpenAgent={onOpenAgent} />)
+    render(<WaitingList items={[asks('r1', 'Asks', 'q?')]} onOpenAgent={onOpenAgent} />)
     const row = screen.getByText('Asks').closest('a')!
     expect(row.getAttribute('href')).toBe('/p1/r1')
     expect(fireEvent.click(row, { ctrlKey: true })).toBe(true)

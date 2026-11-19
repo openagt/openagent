@@ -67,6 +67,7 @@
     "@openagt/store-filesystem": "workspace:*",
     "@openagt/store-git-repository": "workspace:*",
     "@openagt/ui": "workspace:*",
+    "@openagt/ui-card-waiting": "workspace:*",
     "@openagt/user-info": "workspace:*"
   },
   "devDependencies": {

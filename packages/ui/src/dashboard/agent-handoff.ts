@@ -450,7 +450,7 @@ export async function mergeAgentBranch(cwd: string, agent: Pick<AgentMeta, 'id' 
  * `claude/*` branch was pushed from a VM this machine never sees, so there is nothing to push
  * here — the provider publishes the branch as the remote has it. Draft because a PR
  * OpenAgent opens by itself must not put a review request in anyone's inbox, and the
- * interventions queue keeps listing a session's draft.
+ * waiting list keeps listing a session's draft.
  */
 export async function openRemoteBranchPullRequest(
   cwd: string,

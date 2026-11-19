@@ -8,8 +8,8 @@ export { activityKey } from './keys.js'
 
 // The "New activity" feed (#627): the cross-project stream of run lifecycle transitions that
 // do NOT need the human — an agent started, an agent finished. It is the default-off notification
-// category, the counterpart to the interventions queue (which is the always-on "needs you"
-// half). Same shape and same "only genuinely new" diff as interventions.ts, so the browser
+// category, the counterpart to what waits on the person (which is the always-on "needs you"
+// half). Same shape and same "only genuinely new" diff as waiting.ts, so the browser
 // hook folds it into a baseline on first look and then notifies once per transition — you hear
 // an agent kick off and an agent land, nothing when the page opens.
 

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import type { AgentMeta, FoundAgent, Intervention } from '../../src/index.js'
+import type { AgentMeta, FoundAgent, Waiting } from '../../src/index.js'
 import type { Route } from '../lib/route.js'
 
 // The transport, stubbed at its one seam: the jump's one read answers when the test says.
@@ -18,7 +18,7 @@ const found = (projectId: string, id: string, title: string): FoundAgent => ({ p
 const SHOP = { id: 'shop', path: '/shop', name: 'shop', activated: true, gitHost: true }
 const BLOG = { id: 'blog', path: '/blog', name: 'blog', activated: true, gitHost: true }
 
-const WAITING: Intervention = { projectId: 'shop', projectName: 'shop', kind: 'awaiting', title: 'Pick a colour', agentId: 'r-ask' }
+const WAITING: Waiting = { projectId: 'shop', projectName: 'shop', kind: 'waiting', module: 'ask', scope: 'run', run: 'r-ask', words: 'Needs answer', title: 'Pick a colour', mark: 'question' }
 
 let go: ReturnType<typeof vi.fn<(to: Route) => void>>
 

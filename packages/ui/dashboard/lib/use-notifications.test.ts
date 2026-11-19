@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { renderHook } from '@testing-library/react'
-import type { Activity, Intervention, ProjectionRead } from '../../src/index.js'
-import { useActivityNotifications, useInterventionNotifications } from './use-notifications.js'
+import type { Activity, ProjectionRead, Waiting } from '../../src/index.js'
+import { useActivityNotifications, useWaitingNotifications } from './use-notifications.js'
 
 const ctor = vi.fn()
 /** Each notification made, to click. */
@@ -32,13 +32,13 @@ const read = <T,>(items: T[], whole: string[] = ['p']): ProjectionRead<T> => ({ 
 /** A poll that could not read anything: an empty list that means "we could not look" (#1625). */
 const unread = <T,>(): ProjectionRead<T> => ({ items: [], whole: [] })
 
-describe('useInterventionNotifications (#627)', () => {
-  const item = (n: number, url: string): Intervention => ({ projectId: 'p', projectName: 'p', kind: 'pr', number: n, title: `pr ${n}`, url })
-  const awaiting = (awaitId: string, title: string): Intervention => ({ projectId: 'p', projectName: 'p', kind: 'awaiting', title, url: '', awaitId })
+describe('useWaitingNotifications (#627)', () => {
+  const item = (n: number, url: string, projectId = 'p'): Waiting => ({ projectId, projectName: projectId, kind: 'waiting', module: 'github', scope: 'project', id: url, words: 'Needs merge', title: `pr ${n}`, detail: `#${n}`, mark: 'pull-request', fix: { label: `Open PR #${n}`, href: url } })
+  const awaiting = (questionId: string, question: string, run = 'r1'): Waiting => ({ projectId: 'p', projectName: 'p', kind: 'waiting', module: 'ask', scope: 'run', run, id: `${run}:${questionId}`, words: 'Needs answer', title: 'Auth', detail: question, mark: 'question' })
 
   const render = (enabled: boolean) =>
-    renderHook(({ items }) => useInterventionNotifications(items, enabled, openAgent), {
-      initialProps: { items: unread<Intervention>() },
+    renderHook(({ items }) => useWaitingNotifications(items, enabled, openAgent), {
+      initialProps: { items: unread<Waiting>() },
     })
 
   test('stays quiet for PRs already open at load, then fires for one that appears later', () => {
@@ -52,7 +52,7 @@ describe('useInterventionNotifications (#627)', () => {
 
   test('fires for a paused run that appears later, showing its question (#636)', () => {
     const { rerender } = render(true)
-    rerender({ items: read([] as Intervention[]) }) // baseline: read whole, nothing waiting
+    rerender({ items: read([] as Waiting[]) }) // baseline: read whole, nothing waiting
     rerender({ items: read([awaiting('g1', 'Cache the auth store?')]) })
     expect(ctor).toHaveBeenCalledTimes(1)
     expect(ctor.mock.calls[0]![1]?.body).toContain('Cache the auth store?')
@@ -61,23 +61,23 @@ describe('useInterventionNotifications (#627)', () => {
   test('a question is told with its own tag, the same in every open tab, so the system shows it once', () => {
     const tab = () => {
       const { rerender } = render(true)
-      rerender({ items: read([] as Intervention[]) })
+      rerender({ items: read([] as Waiting[]) })
       rerender({ items: read([awaiting('g1', 'Cache the auth store?')]) })
     }
     tab()
     tab()
     expect(ctor).toHaveBeenCalledTimes(2)
-    expect(ctor.mock.calls.map(call => call[1]?.tag)).toEqual(['awaiting:p::g1', 'awaiting:p::g1'])
+    expect(ctor.mock.calls.map(call => call[1]?.tag)).toEqual(['p:ask:r1:g1', 'p:ask:r1:g1'])
   })
 
   test('a click on a question opens the run that asks it, in this tab; one on a pull request opens it on the git host', () => {
     const opened = vi.spyOn(window, 'open').mockImplementation(() => null)
     const { rerender } = render(true)
-    rerender({ items: read([] as Intervention[]) })
-    rerender({ items: read([{ ...awaiting('g1', 'Cache the auth store?'), agentId: 'r1' }]) })
+    rerender({ items: read([] as Waiting[]) })
+    rerender({ items: read([awaiting('g1', 'Cache the auth store?')]) })
     made[0]!.onclick!()
     expect(openAgent.mock.calls).toEqual([['p', 'r1']])
-    rerender({ items: read([{ ...awaiting('g1', 'Cache the auth store?'), agentId: 'r1' }, item(2, 'https://github.com/o/r/pull/2')]) })
+    rerender({ items: read([awaiting('g1', 'Cache the auth store?'), item(2, 'https://github.com/o/r/pull/2')]) })
     made[1]!.onclick!()
     expect(opened).toHaveBeenCalledWith('https://github.com/o/r/pull/2', '_blank', 'noopener')
     expect(openAgent).toHaveBeenCalledTimes(1)
@@ -94,8 +94,8 @@ describe('useInterventionNotifications (#627)', () => {
     // What a dashboard opened with no GitHub reach actually sees: the fetch succeeds, empty,
     // because every read underneath forgave its own failure.
     const { rerender } = render(true)
-    rerender({ items: unread<Intervention>() })
-    rerender({ items: unread<Intervention>() })
+    rerender({ items: unread<Waiting>() })
+    rerender({ items: unread<Waiting>() })
     // GitHub answers at last. Both PRs were open before this tab existed; neither is news.
     rerender({ items: read([item(1, 'u1'), item(2, 'u2')]) })
     expect(ctor).not.toHaveBeenCalled()
@@ -105,7 +105,7 @@ describe('useInterventionNotifications (#627)', () => {
   })
 
   test('a project that cannot be read does not hold back a project that can (#1625)', () => {
-    const other = (n: number): Intervention => ({ projectId: 'q', projectName: 'q', kind: 'pr', number: n, title: `pr ${n}`, url: `u${n}` })
+    const other = (n: number): Waiting => item(n, `u${n}`, 'q')
     const { rerender } = render(true)
     // `p` answers from the start; `q` — a repo with no remote, say — never does.
     rerender({ items: read([item(1, 'u1')]) })
@@ -117,8 +117,8 @@ describe('useInterventionNotifications (#627)', () => {
   })
 
   test('turning notifications on does not replay what arrived while they were off', () => {
-    const { rerender } = renderHook(({ items, enabled }) => useInterventionNotifications(items, enabled, openAgent), {
-      initialProps: { items: unread<Intervention>(), enabled: false },
+    const { rerender } = renderHook(({ items, enabled }) => useWaitingNotifications(items, enabled, openAgent), {
+      initialProps: { items: unread<Waiting>(), enabled: false },
     })
     rerender({ items: read([item(1, 'u1')]), enabled: false })
     rerender({ items: read([item(1, 'u1'), item(2, 'u2')]), enabled: false })

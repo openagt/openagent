@@ -1,6 +1,7 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { buildInterventions, interventionKey } from './interventions.js'
+import { createHooks, defineModule, type AttentionItem, type Hooks } from '@openagt/hooks'
+import { buildWaiting, waitingKey, type Waiting, type WaitingDeps } from './waiting.js'
 import { forgetStartedNames, nameStarted } from '../started-names.js'
 import type { OpenPr } from './pull-requests.js'
 import type { BranchAhead, BranchesFor } from '../store/branches.js'
@@ -10,6 +11,12 @@ import type { OpenAgentEvent } from '../events.js'
 import type { BridgeQuestion } from './bridge-question.js'
 
 const project = (id: string, path: string): ProjectSummary => ({ id, path, name: id, activated: true, gitHost: false })
+
+/** A distribution with no module that says anything waits: only the shell's own sources. */
+const noModules = async (): Promise<Hooks> => createHooks([])
+
+/** What waits on the person in `projects`, with the modules of `deps.hooks`, none unless said. */
+const build = (projects: ProjectSummary[], deps: WaitingDeps = {}) => buildWaiting(projects, { hooks: noModules, ...deps })
 
 /** No paused run anywhere — keeps the PR-only tests hermetic (no disk read). */
 const noAgents = async (): Promise<LiveAgent[]> => []
@@ -25,7 +32,7 @@ const runningAgentMeta = (over: Partial<AgentMeta> = {}): AgentMeta => ({
   ...over,
 })
 
-test('buildInterventions rolls up open non-draft PRs across projects, newest first', async () => {
+test('build rolls up open non-draft PRs across projects, newest first', async () => {
   const prsByPath: Record<string, OpenPr[]> = {
     '/a': [
       { number: 7, title: 'add cart', url: 'u7', isDraft: false, createdAt: '2026-07-10T00:00:00Z' },
@@ -35,58 +42,59 @@ test('buildInterventions rolls up open non-draft PRs across projects, newest fir
     '/c': [], // no open PRs -> contributes nothing
   }
   const prs = async (cwd: string): Promise<OpenPr[]> => prsByPath[cwd] ?? []
-  const { items } = await buildInterventions([project('a', '/a'), project('b', '/b'), project('c', '/c')], { prs, liveAgents: noAgents })
+  const { items } = await build([project('a', '/a'), project('b', '/b'), project('c', '/c')], { prs, liveAgents: noAgents })
 
   // Newest PR first; the draft is gone.
   assert.deepEqual(
-    items.map(i => ({ project: i.projectId, number: i.number, title: i.title })),
+    items.map(i => ({ project: i.projectId, detail: i.detail, title: i.title })),
     [
-      { project: 'b', number: 3, title: 'fix login' },
-      { project: 'a', number: 7, title: 'add cart' },
+      { project: 'b', detail: '#3', title: 'fix login' },
+      { project: 'a', detail: '#7', title: 'add cart' },
     ],
   )
-  assert.ok(items.every(i => i.kind === 'pr'))
+  // Each is github's, about its project (no run here opened it): it needs merging, and its page on the git host fixes it.
+  assert.deepEqual(items[0], { kind: 'waiting', module: 'github', scope: 'project', id: 'u3', words: 'Needs merge', title: 'fix login', detail: '#3', mark: 'pull-request', since: '2026-07-15T00:00:00Z', fix: { label: 'Open PR #3', href: 'u3' }, projectId: 'b', projectName: 'b' })
 })
 
-test('buildInterventions skips a project whose PR lookup throws, and does not call it read (#1623)', async () => {
+test('build skips a project whose PR lookup throws, and does not call it read (#1623)', async () => {
   const prs = async (cwd: string): Promise<OpenPr[]> => {
     if (cwd === '/boom') throw new Error('gh exploded')
     return [{ number: 1, title: 'ok', url: 'u1', isDraft: false }]
   }
-  const { items, whole } = await buildInterventions([project('boom', '/boom'), project('ok', '/ok')], { prs, liveAgents: noAgents })
+  const { items, whole } = await build([project('boom', '/boom'), project('ok', '/ok')], { prs, liveAgents: noAgents })
   assert.deepEqual(items.map(i => i.projectId), ['ok'])
   // Both projects contributed nothing visible about /boom; only `whole` says which silence was real.
   assert.deepEqual(whole, ['ok'])
 })
 
-test('buildInterventions calls a project read when it answers with nothing (#1623)', async () => {
+test('build calls a project read when it answers with nothing (#1623)', async () => {
   const prs = async (): Promise<OpenPr[]> => []
-  const { items, whole } = await buildInterventions([project('quiet', '/quiet')], { prs, liveAgents: noAgents })
+  const { items, whole } = await build([project('quiet', '/quiet')], { prs, liveAgents: noAgents })
   assert.deepEqual(items, [])
   assert.deepEqual(whole, ['quiet'])
 })
 
-test('buildInterventions does not call a project read when its live-agent read throws (#1623)', async () => {
+test('build does not call a project read when its live-agent read throws (#1623)', async () => {
   const liveAgents = async (): Promise<LiveAgent[]> => {
     throw new Error('store unreadable')
   }
   const prs = async (): Promise<OpenPr[]> => [{ number: 7, title: 'open', url: 'u7', isDraft: false }]
-  const { items, whole } = await buildInterventions([project('a', '/a')], { prs, liveAgents })
+  const { items, whole } = await build([project('a', '/a')], { prs, liveAgents })
   // The PRs it did read are still shown — forgiving as ever — but the project is not a baseline.
-  assert.deepEqual(items.map(i => i.number), [7])
+  assert.deepEqual(items.map(i => i.detail), ['#7'])
   assert.deepEqual(whole, [])
 })
 
-test('buildInterventions returns [] when nothing is open anywhere', async () => {
+test('build returns [] when nothing is open anywhere', async () => {
   const prs = async (): Promise<OpenPr[]> => []
-  assert.deepEqual((await buildInterventions([project('a', '/a')], { prs, liveAgents: noAgents })).items, [])
+  assert.deepEqual((await build([project('a', '/a')], { prs, liveAgents: noAgents })).items, [])
 })
 
-test('buildInterventions dedupes a PR shared by two registered projects (same repo), keeping one', async () => {
+test('build dedupes a PR shared by two registered projects (same repo), keeping one', async () => {
   const shared: OpenPr = { number: 285, title: 'release', url: 'https://gh/pr/285', isDraft: false, createdAt: '2026-07-05T00:00:00Z' }
   const prs = async (): Promise<OpenPr[]> => [shared] // both projects resolve to the same repo
-  const { items } = await buildInterventions([project('root', '/repo'), project('sub', '/repo/packages/x')], { prs, liveAgents: noAgents })
-  assert.deepEqual(items.map(i => i.number), [285])
+  const { items } = await build([project('root', '/repo'), project('sub', '/repo/packages/x')], { prs, liveAgents: noAgents })
+  assert.deepEqual(items.map(i => i.detail), ['#285'])
 })
 
 const noPrs = async (): Promise<OpenPr[]> => []
@@ -97,17 +105,27 @@ const waitingOn = (id: string, title: string): OpenAgentEvent[] => [
   { kind: 'end', ok: false, waiting: true },
 ]
 
-test('buildInterventions adds an awaiting item for a run waiting on the question it ended on (#636/#1774)', async () => {
+test('build adds an awaiting item for a run waiting on the question it ended on (#636/#1774)', async () => {
   const liveAgents = async (cwd: string): Promise<LiveAgent[]> => (cwd === '/a' ? [live(runningAgentMeta({ status: 'waiting', title: 'Auth store caching' }))] : [])
   const read: string[] = []
   const events = async (cwd: string, agentId: string) => (read.push(`${cwd} ${agentId}`), waitingOn('gate-1', 'Cache the auth store?'))
-  const { items } = await buildInterventions([project('a', '/a'), project('b', '/b')], { prs: noPrs, liveAgents, events })
+  const { items } = await build([project('a', '/a'), project('b', '/b')], { prs: noPrs, liveAgents, events })
 
   assert.equal(items.length, 1)
-  assert.deepEqual(
-    { kind: items[0]!.kind, project: items[0]!.projectId, title: items[0]!.title, question: items[0]!.question, awaitId: items[0]!.awaitId, agentId: items[0]!.agentId },
-    { kind: 'awaiting', project: 'a', title: 'Auth store caching', question: 'Cache the auth store?', awaitId: 'gate-1', agentId: 'r1' },
-  )
+  assert.deepEqual(items[0], {
+    kind: 'waiting',
+    module: 'ask',
+    scope: 'run',
+    run: 'r1',
+    id: 'r1:gate-1',
+    words: 'Needs answer',
+    title: 'Auth store caching',
+    detail: 'Cache the auth store?',
+    mark: 'question',
+    since: '2026-07-16T00:00:00Z',
+    projectId: 'a',
+    projectName: 'a',
+  })
   assert.deepEqual(read, ['/a r1'], "only the waiting run's diary is read")
 })
 
@@ -116,46 +134,41 @@ test('a run just started goes by the name asked for it, as the sidebar names it,
   await new Promise(resolve => setImmediate(resolve))
   try {
     const liveAgents = async (): Promise<LiveAgent[]> => [live(runningAgentMeta({ status: 'waiting', intent: 'please look at how the auth store caches its reads and decide' }))]
-    const { items } = await buildInterventions([project('a', '/a')], { prs: noPrs, liveAgents, events: async () => waitingOn('gate-1', 'q?') })
+    const { items } = await build([project('a', '/a')], { prs: noPrs, liveAgents, events: async () => waitingOn('gate-1', 'q?') })
     assert.equal(items[0]?.title, 'Auth store caching')
   } finally {
     forgetStartedNames()
   }
 })
 
-test('buildInterventions adds no awaiting item for a run that is not waiting, or whose diary shows no open question', async () => {
+test('build adds no awaiting item for a run that is not waiting, or whose diary shows no open question', async () => {
   const events = async () => waitingOn('gate-1', 'stale')
   const running = async (): Promise<LiveAgent[]> => [live(runningAgentMeta())]
-  assert.deepEqual((await buildInterventions([project('a', '/a')], { prs: noPrs, liveAgents: running, events })).items, [])
+  assert.deepEqual((await build([project('a', '/a')], { prs: noPrs, liveAgents: running, events })).items, [])
   const waiting = async (): Promise<LiveAgent[]> => [live(runningAgentMeta({ status: 'waiting' }))]
   const answered = async (): Promise<OpenAgentEvent[]> => [...waitingOn('gate-1', 'q?'), { kind: 'driver', event: { type: 'start', prompt: 'Yes' } }]
-  assert.deepEqual((await buildInterventions([project('a', '/a')], { prs: noPrs, liveAgents: waiting, events: answered })).items, [])
+  assert.deepEqual((await build([project('a', '/a')], { prs: noPrs, liveAgents: waiting, events: answered })).items, [])
   const unreadable = async () => undefined
-  assert.deepEqual((await buildInterventions([project('a', '/a')], { prs: noPrs, liveAgents: waiting, events: unreadable })).items, [])
+  assert.deepEqual((await build([project('a', '/a')], { prs: noPrs, liveAgents: waiting, events: unreadable })).items, [])
 })
 
-test('buildInterventions surfaces PRs and awaiting runs together, newest first', async () => {
+test('build surfaces PRs and awaiting runs together, newest first', async () => {
   const prs = async (cwd: string): Promise<OpenPr[]> =>
     cwd === '/a' ? [{ number: 5, title: 'pr', url: 'u5', isDraft: false, createdAt: '2026-07-10T00:00:00Z' }] : []
   const liveAgents = async (cwd: string): Promise<LiveAgent[]> =>
     cwd === '/b' ? [live(runningAgentMeta({ status: 'waiting', updatedAt: '2026-07-16T00:00:00Z' }))] : []
-  const { items } = await buildInterventions([project('a', '/a'), project('b', '/b')], { prs, liveAgents, events: async () => waitingOn('g', 'q?') })
-  assert.deepEqual(items.map(i => i.kind), ['awaiting', 'pr']) // awaiting is newer
+  const { items } = await build([project('a', '/a'), project('b', '/b')], { prs, liveAgents, events: async () => waitingOn('g', 'q?') })
+  assert.deepEqual(items.map(i => i.words), ['Needs answer', 'Needs merge']) // the question is newer
 })
 
-test('interventionKey is the url for a PR and project+agent+gate for an awaiting run', () => {
-  assert.equal(
-    interventionKey({ projectId: 'a', projectName: 'a', kind: 'pr', title: 't', url: 'https://gh/pr/1', number: 1 }),
-    'https://gh/pr/1',
-  )
-  assert.equal(
-    interventionKey({ projectId: 'a', projectName: 'a', kind: 'awaiting', title: 't', url: '', awaitId: 'g1', agentId: 'r1' }),
-    'awaiting:a:r1:g1',
-  )
+test("an item's key is its project, its module, and its own id there, else what it is about", () => {
+  const item = (over: Partial<Waiting>): Waiting => ({ kind: 'waiting', module: 'github', scope: 'project', words: 'Needs merge', projectId: 'a', projectName: 'a', ...over })
+  assert.equal(waitingKey(item({ id: 'https://gh/pr/1' })), 'a:github:https://gh/pr/1')
+  assert.equal(waitingKey(item({ module: 'tickets', scope: 'run', run: 'r1' })), 'a:tickets:run:r1')
   // Every agent's first gate is `await-choices`, so two agents parked in one project would share
-  // an identity without the run in the key — and the dedupe would announce only one of them.
-  const parked = { projectId: 'a', projectName: 'a', kind: 'awaiting', title: 't', url: '', awaitId: 'await-choices' } as const
-  assert.notEqual(interventionKey({ ...parked, agentId: 'r1' }), interventionKey({ ...parked, agentId: 'r2' }))
+  // an identity without the run in the question's id — and the dedupe would announce only one of them.
+  const parked = item({ module: 'ask', scope: 'run' })
+  assert.notEqual(waitingKey({ ...parked, run: 'r1', id: 'r1:await-choices' }), waitingKey({ ...parked, run: 'r2', id: 'r2:await-choices' }))
 })
 
 // #860: a finished agent whose branch still holds unpushed, unmerged commits.
@@ -213,17 +226,27 @@ const onlyUnpushed = (agents: AgentMeta[], branches: BranchesFor) => ({
 })
 
 test('a finished run with unpushed commits lands on the queue (#860)', async () => {
-  const { items } = await buildInterventions(
+  const { items } = await build(
     [project('a', '/a')],
     onlyUnpushed([doneMeta()], counting(branch => waiting({ branch, ahead: 2 }))),
   )
 
   assert.equal(items.length, 1)
-  assert.equal(items[0]?.kind, 'unpushed')
-  assert.equal(items[0]?.title, 'add the cart', 'what was asked, not the branch name')
-  assert.equal(items[0]?.branch, 'agent-add-cart')
-  assert.equal(items[0]?.commits, 2)
-  assert.equal(items[0]?.agentId, 'r1')
+  assert.deepEqual(items[0], {
+    kind: 'waiting',
+    module: 'git-branches',
+    scope: 'run',
+    run: 'r1',
+    id: 'unpushed:r1',
+    // The project has no git host: its next step is a push.
+    words: 'Needs push',
+    detail: '2 commits',
+    mark: 'branch',
+    title: 'add the cart',
+    since: '2026-07-16T01:00:00Z',
+    projectId: 'a',
+    projectName: 'a',
+  })
 })
 
 test('nothing is waiting when the work already went somewhere (#860)', async () => {
@@ -239,7 +262,7 @@ test('nothing is waiting when the work already went somewhere (#860)', async () 
     ['the provider did not answer for the branch', undefined as unknown as Partial<BranchAhead>],
   ]
   for (const [why, over] of cases) {
-    const { items } = await buildInterventions(
+    const { items } = await build(
       [project('a', '/a')],
       onlyUnpushed([doneMeta()], counting(branch => (over ? waiting({ branch, ...over }) : undefined))),
     )
@@ -249,7 +272,7 @@ test('nothing is waiting when the work already went somewhere (#860)', async () 
 
 test('a still-running run is not unpushed work (#860)', async () => {
   // It is still writing; the overview already shows it.
-  const { items } = await buildInterventions(
+  const { items } = await build(
     [project('a', '/a')],
     onlyUnpushed([doneMeta({ status: 'running' })], counting(branch => waiting({ branch }))),
   )
@@ -260,9 +283,9 @@ test('a finished run continued, working again in its checkout, is not unpushed w
   // Its record still says how its first leg ended; its checkout's card says it works again, as the list of runs shows it.
   const recorded = doneMeta()
   const read = (status: AgentMeta['status']) =>
-    buildInterventions([project('a', '/a')], { ...onlyUnpushed([recorded], counting(branch => waiting({ branch }))), liveAgents: async () => [{ ...recorded, status, cwd: '/a/.branches/agent-add-cart' }] })
+    build([project('a', '/a')], { ...onlyUnpushed([recorded], counting(branch => waiting({ branch }))), liveAgents: async () => [{ ...recorded, status, cwd: '/a/.branches/agent-add-cart' }] })
   assert.deepEqual((await read('running')).items, [])
-  assert.deepEqual((await read('done')).items.map(i => [i.kind, i.agentId]), [['unpushed', 'r1']], 'and listed once, ended again')
+  assert.deepEqual((await read('done')).items.map(i => [i.id, i.run]), [['unpushed:r1', 'r1']], 'and listed once, ended again')
 })
 
 test('an unreadable branch state is skipped rather than throwing, and the project does not count as read whole (#860)', async () => {
@@ -276,13 +299,13 @@ test('an unreadable branch state is skipped rather than throwing, and the projec
     merge: async () => ({ ok: false, error: 'no' }),
     remove: async () => ({ ok: false, error: 'no' }),
   })
-  const { items, whole } = await buildInterventions([project('a', '/a')], onlyUnpushed([doneMeta()], failing))
+  const { items, whole } = await build([project('a', '/a')], onlyUnpushed([doneMeta()], failing))
   assert.deepEqual(items, [])
   assert.deepEqual(whole, [])
 })
 
 test('a project with no branches provider has nothing unpushed (#1774)', async () => {
-  const { items, whole } = await buildInterventions([project('a', '/a')], onlyUnpushed([doneMeta()], async () => undefined))
+  const { items, whole } = await build([project('a', '/a')], onlyUnpushed([doneMeta()], async () => undefined))
   assert.deepEqual(items, [])
   assert.deepEqual(whole, ['a'])
 })
@@ -293,7 +316,7 @@ test('every finished run is asked, the oldest too, in one read (#860)', async ()
     doneMeta({ id: `r${i}`, startedAt: `2026-07-${String(i + 1).padStart(2, '0')}T00:00:00Z`, branch: `agent-b${i}` }),
   )
   const asked: string[][] = []
-  const { items } = await buildInterventions([project('a', '/a')], onlyUnpushed(agents, counting(branch => waiting({ branch }), asked)))
+  const { items } = await build([project('a', '/a')], onlyUnpushed(agents, counting(branch => waiting({ branch }), asked)))
 
   assert.equal(asked.length, 1, 'one read')
   assert.equal(asked[0]!.length, 12)
@@ -310,23 +333,23 @@ test('a run started from another branch is counted from the commit its own work 
     doneMeta({ id: 'r2', branch: 'agent-plain-1', baseCommit: 'beef', startedAt: '2026-07-16T01:00:00Z' }),
     doneMeta({ id: 'r3', branch: 'agent-plain-2', startedAt: '2026-07-16T00:00:00Z' }),
   ]
-  const { items } = await buildInterventions(
+  const { items } = await build(
     [project('a', '/a')],
     onlyUnpushed(agents, counting((branch, from) => waiting({ branch, ahead: from === 'c0ffee' || branch !== 'agent-based' ? 1 : 2 }), asked, askedFrom)),
   )
   assert.deepEqual(new Map(asked.map((branches, i) => [askedFrom[i], branches])), new Map([['c0ffee', ['agent-based']], [undefined, ['agent-plain-1', 'agent-plain-2']]]), 'the based run asked on its own, the others in one read')
-  assert.deepEqual(items.map(i => [i.agentId, i.commits]).sort(), [['r1', 1], ['r2', 1], ['r3', 1]])
+  assert.deepEqual(items.map(i => [i.run, i.detail]).sort(), [['r1', '1 commit'], ['r2', '1 commit'], ['r3', '1 commit']])
 })
 
 test('a finished run that left files uncommitted is "not committed", even with commits or a pull request; one waiting on its question is not', async () => {
   const left = (over: Partial<AgentMeta> = {}) =>
-    buildInterventions([project('a', '/a')], onlyUnpushed([doneMeta(over)], counting(branch => waiting({ branch, ahead: 3, uncommitted: 2 }))))
+    build([project('a', '/a')], onlyUnpushed([doneMeta(over)], counting(branch => waiting({ branch, ahead: 3, uncommitted: 2 }))))
   const { items } = await left()
-  assert.deepEqual(items.map(i => [i.kind, i.files, i.commits, i.agentId]), [['uncommitted', 2, undefined, 'r1']], 'committing is the next step, so it is the one item')
+  assert.deepEqual(items.map(i => [i.id, i.words, i.detail, i.mark, i.run]), [['uncommitted:r1', 'Needs commit', '2 files', 'changes', 'r1']], 'committing is the next step, so it is the one item')
   const withPr = await left({ pr: { number: 7, url: 'u7' } })
-  assert.deepEqual(withPr.items.map(i => i.kind), ['uncommitted'])
+  assert.deepEqual(withPr.items.map(i => i.words), ['Needs commit'])
   const parked = await left({ status: 'waiting' })
-  assert.deepEqual(parked.items.map(i => i.kind), ['unpushed'], 'its question is its next step; its commits still wait')
+  assert.deepEqual(parked.items.map(i => i.words), ['Needs push'], 'its question is its next step; its commits still wait')
 })
 
 test('an open request a run opened opens that run: by the request its record names, else by its branch; one opened anywhere else names no run', async () => {
@@ -336,8 +359,8 @@ test('an open request a run opened opens that run: by the request its record nam
     { number: 8, title: 'elsewhere', url: 'u8', isDraft: false, headRefName: 'claude/elegant-maxwell' },
   ]
   const agents = [doneMeta({ id: 'r6', branch: 'agent-six', pr: { number: 6, url: 'u6' } }), doneMeta({ id: 'r7', branch: 'agent-seven' })]
-  const { items } = await buildInterventions([project('a', '/a')], { prs, liveAgents: noAgents, agents: async () => agents, branches: async () => undefined })
-  assert.deepEqual(items.map(i => [i.number, i.agentId]), [[6, 'r6'], [7, 'r7'], [8, undefined]])
+  const { items } = await build([project('a', '/a')], { prs, liveAgents: noAgents, agents: async () => agents, branches: async () => undefined })
+  assert.deepEqual(items.map(i => [i.detail, i.scope, i.run]), [['#6', 'run', 'r6'], ['#7', 'run', 'r7'], ['#8', 'project', undefined]])
 })
 
 test('the projects are read at once, not one after the other', async () => {
@@ -350,7 +373,7 @@ test('the projects are read at once, not one after the other', async () => {
     await gate
     return []
   }
-  const read = buildInterventions([project('a', '/a'), project('b', '/b')], { prs, liveAgents: noAgents, agents: async () => [] })
+  const read = build([project('a', '/a'), project('b', '/b')], { prs, liveAgents: noAgents, agents: async () => [] })
   await Promise.race([read, new Promise((_, reject) => setTimeout(() => reject(new Error('the second project waited for the first')), 1000))])
   assert.equal(started, 2)
 })
@@ -358,26 +381,23 @@ test('the projects are read at once, not one after the other', async () => {
 test('a checkout\'s uncommitted files are the newest run\'s on its branch: a run continued on an earlier one\'s branch does not charge the earlier one', async () => {
   const earlier = doneMeta({ id: 'r1', startedAt: '2026-07-16T00:00:00Z' })
   const later = (status: AgentMeta['status']) => doneMeta({ id: 'r2', status, startedAt: '2026-07-16T02:00:00Z' })
-  const read = (agents: AgentMeta[]) => buildInterventions([project('a', '/a')], onlyUnpushed(agents, counting(branch => waiting({ branch, ahead: 0, uncommitted: 2 }))))
+  const read = (agents: AgentMeta[]) => build([project('a', '/a')], onlyUnpushed(agents, counting(branch => waiting({ branch, ahead: 0, uncommitted: 2 }))))
   assert.deepEqual((await read([earlier, later('running')])).items, [], 'the later run is still working in it')
-  assert.deepEqual((await read([earlier, later('done')])).items.map(i => [i.kind, i.agentId]), [['uncommitted', 'r2']])
+  assert.deepEqual((await read([earlier, later('done')])).items.map(i => [i.id, i.run]), [['uncommitted:r2', 'r2']])
 })
 
 test('a provider that does not answer for every branch asked is a read that failed, never "nothing waits"', async () => {
-  const { items, whole } = await buildInterventions([project('a', '/a')], onlyUnpushed([doneMeta()], counting(() => undefined)))
+  const { items, whole } = await build([project('a', '/a')], onlyUnpushed([doneMeta()], counting(() => undefined)))
   assert.deepEqual(items, [])
   assert.deepEqual(whole, [], 'so the notifier does not take it for a baseline')
 })
 
-test('unpushed items key on the run, so each notifies once (#860)', () => {
-  const base = { projectId: 'p', projectName: 'p', kind: 'unpushed' as const, title: 't', url: '' }
-  assert.equal(interventionKey({ ...base, agentId: 'r1' }), 'unpushed:p:r1')
-  assert.notEqual(interventionKey({ ...base, agentId: 'r1' }), interventionKey({ ...base, agentId: 'r2' }))
-  // And never collides with the other kinds, whose url is the same shared dashboard URL.
-  assert.notEqual(
-    interventionKey({ ...base, agentId: 'r1' }),
-    interventionKey({ ...base, kind: 'awaiting', awaitId: 'r1' }),
-  )
+test('work left on the machine keys on the run and on what it needs, so each notifies once, and anew once committed (#860)', async () => {
+  const read = (uncommitted: number) => build([project('p', '/p')], onlyUnpushed([doneMeta()], counting(branch => waiting({ branch, uncommitted }))))
+  const [left] = (await read(2)).items
+  const [committed] = (await read(0)).items
+  assert.equal(waitingKey(left!), 'p:git-branches:uncommitted:r1')
+  assert.equal(waitingKey(committed!), 'p:git-branches:unpushed:r1')
 })
 
 test("a session's own draft PR still reaches the queue; a hand-made draft does not (#1102)", async () => {
@@ -389,11 +409,11 @@ test("a session's own draft PR still reaches the queue; a hand-made draft does n
   ]
   // A draft is a run's when its head is the branch a run's record, or a run's checkout, names (#1774).
   const recorded: AgentMeta = { id: 'x', status: 'done', startedAt: '2026-07-16T00:00:00Z', updatedAt: '2026-07-16T01:00:00Z', branch: 'agent-x' }
-  const { items } = await buildInterventions([project('a', '/a')], { prs, liveAgents: noAgents, agents: async () => [recorded] })
-  assert.deepEqual(items.map(i => i.number), [9])
-  const { items: live } = await buildInterventions([project('a', '/a')], { prs, liveAgents: async () => [{ ...recorded, status: 'running', cwd: '/a/.branches/agent-x' }], agents: async () => [] })
-  assert.deepEqual(live.map(i => i.number), [9], 'a running agent\'s draft counts too')
-  const { items: nobody } = await buildInterventions([project('a', '/a')], { prs, liveAgents: noAgents, agents: async () => [] })
+  const { items } = await build([project('a', '/a')], { prs, liveAgents: noAgents, agents: async () => [recorded] })
+  assert.deepEqual(items.map(i => i.detail), ['#9'])
+  const { items: live } = await build([project('a', '/a')], { prs, liveAgents: async () => [{ ...recorded, status: 'running', cwd: '/a/.branches/agent-x' }], agents: async () => [] })
+  assert.deepEqual(live.map(i => i.detail), ['#9'], 'a running agent\'s draft counts too')
+  const { items: nobody } = await build([project('a', '/a')], { prs, liveAgents: noAgents, agents: async () => [] })
   assert.deepEqual(nobody, [], 'a draft on a branch no run names is hand-made')
 })
 
@@ -401,17 +421,17 @@ test('a draft with no branch recorded is still treated as hand-made (#1102)', as
   // `headRefName` is new: an older gh, or a lookup that did not ask for it, must not turn every
   // draft in the repo into a "needs you".
   const prs = async (): Promise<OpenPr[]> => [{ number: 11, title: 'wip', url: 'u11', isDraft: true }]
-  const { items } = await buildInterventions([project('a', '/a')], { prs, liveAgents: noAgents, agents: async () => [] })
+  const { items } = await build([project('a', '/a')], { prs, liveAgents: noAgents, agents: async () => [] })
   assert.deepEqual(items, [])
 })
 
 test('unpushed work is titled by the run\'s own name, else what was asked, else the branch', async () => {
-  const both = await buildInterventions([project('p', '/p')], onlyUnpushed([doneMeta({ title: 'Cart page' })], counting(branch => waiting({ branch }))))
+  const both = await build([project('p', '/p')], onlyUnpushed([doneMeta({ title: 'Cart page' })], counting(branch => waiting({ branch }))))
   assert.deepEqual(both.items.map(i => i.title), ['Cart page'], 'the name the sidebar shows, not the prompt')
   const { intent: _intent, ...unasked } = doneMeta({ branch: 'agent-fix-login' })
-  const named = await buildInterventions([project('p', '/p')], onlyUnpushed([{ ...unasked, title: 'Fix the login' }], counting(branch => waiting({ branch }))))
-  assert.deepEqual(named.items.map(i => [i.kind, i.title, i.branch]), [['unpushed', 'Fix the login', 'agent-fix-login']])
-  const plain = await buildInterventions([project('p', '/p')], onlyUnpushed([unasked], counting(branch => waiting({ branch }))))
+  const named = await build([project('p', '/p')], onlyUnpushed([{ ...unasked, title: 'Fix the login' }], counting(branch => waiting({ branch }))))
+  assert.deepEqual(named.items.map(i => [i.words, i.title]), [['Needs push', 'Fix the login']])
+  const plain = await build([project('p', '/p')], onlyUnpushed([unasked], counting(branch => waiting({ branch }))))
   assert.deepEqual(plain.items.map(i => i.title), ['agent-fix-login'], 'no name: the branch as it is')
 })
 
@@ -421,25 +441,25 @@ test('every row goes by the name the sidebar shows: a request a run opened by th
     { number: 8, title: 'Bump deps', url: 'u8', isDraft: false },
   ]
   const agents = [doneMeta({ id: 'r6', title: 'Cart page', pr: { number: 6, url: 'u6' } })]
-  const { items } = await buildInterventions([project('a', '/a')], { prs, liveAgents: noAgents, agents: async () => agents, branches: async () => undefined })
-  assert.deepEqual(items.map(i => [i.number, i.title]), [[6, 'Cart page'], [8, 'Bump deps']])
+  const { items } = await build([project('a', '/a')], { prs, liveAgents: noAgents, agents: async () => agents, branches: async () => undefined })
+  assert.deepEqual(items.map(i => [i.detail, i.title]), [['#6', 'Cart page'], ['#8', 'Bump deps']])
 })
 
 test('unpushed work says whether the project can open a pull request, so the row asks for one or for a push', async () => {
-  const withHost = await buildInterventions([{ ...project('p', '/p'), gitHost: true }], onlyUnpushed([doneMeta()], counting(branch => waiting({ branch }))))
-  assert.deepEqual(withHost.items.map(i => [i.kind, i.gitHost]), [['unpushed', true]])
-  const without = await buildInterventions([project('p', '/p')], onlyUnpushed([doneMeta()], counting(branch => waiting({ branch }))))
-  assert.deepEqual(without.items.map(i => [i.kind, i.gitHost]), [['unpushed', false]])
+  const withHost = await build([{ ...project('p', '/p'), gitHost: true }], onlyUnpushed([doneMeta()], counting(branch => waiting({ branch }))))
+  assert.deepEqual(withHost.items.map(i => i.words), ['Needs PR'])
+  const without = await build([project('p', '/p')], onlyUnpushed([doneMeta()], counting(branch => waiting({ branch }))))
+  assert.deepEqual(without.items.map(i => i.words), ['Needs push'])
 })
 
 test('a pushed branch with no pull request still needs one where the project opens pull requests', async () => {
   const pushed = counting(branch => waiting({ branch, ahead: 2, pushed: true }))
   const host = { ...project('p', '/p'), gitHost: true }
   const read = (over: { gitHost?: boolean; prs?: () => Promise<OpenPr[]>; meta?: Partial<AgentMeta> }) =>
-    buildInterventions([over.gitHost === false ? project('p', '/p') : host], { ...onlyUnpushed([doneMeta(over.meta)], pushed), ...(over.prs ? { prs: over.prs } : {}) })
-  assert.deepEqual((await read({})).items.map(i => [i.kind, i.commits, i.gitHost]), [['unpushed', 2, true]], 'Open PR pushed it, then the request failed')
+    build([over.gitHost === false ? project('p', '/p') : host], { ...onlyUnpushed([doneMeta(over.meta)], pushed), ...(over.prs ? { prs: over.prs } : {}) })
+  assert.deepEqual((await read({})).items.map(i => [i.words, i.detail]), [['Needs PR', '2 commits']], 'Open PR pushed it, then the request failed')
   const open = async (): Promise<OpenPr[]> => [{ number: 4, title: 'Add the cart', url: 'u4', isDraft: false, headRefName: 'agent-add-cart' }]
-  assert.deepEqual((await read({ prs: open })).items.map(i => i.kind), ['pr'], 'its open request is what waits')
+  assert.deepEqual((await read({ prs: open })).items.map(i => i.words), ['Needs merge'], 'its open request is what waits')
   assert.deepEqual((await read({ meta: { publish: 'branch' } })).items, [], 'started to go no further than its branch')
   assert.deepEqual((await read({ gitHost: false })).items, [], 'no git host: the push was the last step')
   const unreadable = await read({ prs: () => Promise.reject(new Error('gh: not logged in')) })
@@ -458,7 +478,7 @@ const onlyBridged = (agents: AgentMeta[], bridged: BridgeQuestion[]) => ({
 })
 
 test('a web session\'s question arrives from the bridge and is listed under its run, waiting since the bridge saw it (#1554)', async () => {
-  const { items } = await buildInterventions(
+  const { items } = await build(
     [project('p1', '/one')],
     onlyBridged(
       [
@@ -470,18 +490,66 @@ test('a web session\'s question arrives from the bridge and is listed under its 
     ),
   )
   assert.deepEqual(items, [
-    { projectId: 'p1', projectName: 'p1', kind: 'awaiting', title: 'CI checks', question: 'Which checks should run?', awaitId: 'bridge:session_01Web', agentId: 'run-web', createdAt: '2026-08-23T09:30:00.000Z' },
+    {
+      kind: 'waiting',
+      module: 'host-claude-web',
+      scope: 'run',
+      run: 'run-web',
+      id: 'run-web:bridge:session_01Web',
+      words: 'Needs answer',
+      title: 'CI checks',
+      detail: 'Which checks should run?',
+      mark: 'question',
+      since: '2026-08-23T09:30:00.000Z',
+      projectId: 'p1',
+      projectName: 'p1',
+    },
   ])
 })
 
 test('two checkouts of one repository list a bridged question once, not twice (#1554)', async () => {
   // They share the records, so the same web run is in both projects' lists.
   const run: AgentMeta = { status: 'done', id: 'run-web', startedAt: '', updatedAt: '', target: 'web', sessionId: 'session_01Web' }
-  const { items } = await buildInterventions([project('p1', '/one'), project('p2', '/two')], onlyBridged([run], [{ sessionId: 'session_01Web', title: 'Where?', options: [{ label: 'Here' }], receivedAt: '' }]))
+  const { items } = await build([project('p1', '/one'), project('p2', '/two')], onlyBridged([run], [{ sessionId: 'session_01Web', title: 'Where?', options: [{ label: 'Here' }], receivedAt: '' }]))
   assert.deepEqual(items.map(i => i.projectId), ['p1'])
 })
 
 test('a bridged question whose run is unknown here is not listed (#1554)', async () => {
-  const { items } = await buildInterventions([project('p1', '/one')], onlyBridged([], [{ sessionId: 'session_01Gone', title: 'Still there?', options: [{ label: 'Yes' }], receivedAt: '' }]))
+  const { items } = await build([project('p1', '/one')], onlyBridged([], [{ sessionId: 'session_01Gone', title: 'Still there?', options: [{ label: 'Yes' }], receivedAt: '' }]))
   assert.deepEqual(items, [])
+})
+
+// What the modules say waits on the person (`app.attention`), beside what the shell finds itself (#2394).
+
+/** A distribution of one module whose `app.attention` answers `say` for a project. */
+const saying = (say: (project: string | undefined) => AttentionItem[] | Promise<AttentionItem[]>): (() => Promise<Hooks>) => {
+  const hooks = createHooks([{ module: defineModule({ name: 'tickets', hooks: { 'app.attention': ({ project }) => say(project?.id) } }) }], { onError: () => {} })
+  return async () => hooks
+}
+
+test("a module's waiting items join the shell's, each in its project; what is to set up is not waiting", async () => {
+  const hooks = saying(project => [
+    { kind: 'waiting', scope: 'project', id: 'triage', words: 'Needs triage', title: `New tickets in ${project}`, since: '2026-07-20T00:00:00Z' },
+    { kind: 'setup', scope: 'computer', words: 'Chrome is missing' },
+  ])
+  const prs = async (): Promise<OpenPr[]> => [{ number: 5, title: 'pr', url: 'u5', isDraft: false, createdAt: '2026-07-10T00:00:00Z' }]
+  const { items, whole } = await build([project('a', '/a')], { prs, liveAgents: noAgents, hooks })
+  assert.deepEqual(
+    items.map(i => [i.module, i.words, i.title, i.projectId]),
+    [
+      ['tickets', 'Needs triage', 'New tickets in a', 'a'],
+      ['github', 'Needs merge', 'pr', 'a'],
+    ],
+  )
+  assert.deepEqual(whole, ['a'])
+})
+
+test('a module that cannot say what waits leaves its project not read whole, and the rest is still listed', async () => {
+  const hooks = saying(() => {
+    throw new Error('no tickets today')
+  })
+  const prs = async (): Promise<OpenPr[]> => [{ number: 5, title: 'pr', url: 'u5', isDraft: false }]
+  const { items, whole } = await build([project('a', '/a')], { prs, liveAgents: noAgents, hooks })
+  assert.deepEqual(items.map(i => i.detail), ['#5'])
+  assert.deepEqual(whole, [], 'so the notifier does not take its silence for a baseline')
 })

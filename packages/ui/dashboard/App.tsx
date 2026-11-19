@@ -1,8 +1,8 @@
 import { PermissionsPage } from './components/Accounts.js'
 import { PresetsPage } from './components/PresetsPage.js'
 import { useEffect, useMemo, useReducer, useState, type CSSProperties } from 'react'
-import type { Intervention, Activity, ProjectionRead, ProjectSummary } from '../src/index.js'
-import { onProjectFiles, onInterventions, onActivity, onStartedName } from './rpc/reads.js'
+import type { Activity, ProjectionRead, ProjectSummary, Waiting } from '../src/index.js'
+import { onProjectFiles, onWaiting, onActivity, onStartedName } from './rpc/reads.js'
 import { sendStart } from './rpc/control.js'
 import { onProjects } from './rpc/projects.js'
 import { AgentHistory } from './components/AgentHistory.js'
@@ -40,7 +40,8 @@ import { PRESETS_PAGE, PERMISSIONS_PAGE, back, leaving, useRoute } from './lib/u
 import { formatRoute, keepPageQuery, parseRoute, type Route } from './lib/route.js'
 import { projectAddresses, SESSIONS_ID } from '../src/project-address.js'
 import { startedAtFromAgentId } from '../src/agent-id.js'
-import { useActivityNotifications, useInterventionNotifications } from './lib/use-notifications.js'
+import { useActivityNotifications, useWaitingNotifications } from './lib/use-notifications.js'
+import { WaitingContext } from './lib/use-waiting.js'
 import { usePreferences, notificationsEnabled, newActivityEnabled, humanInterventionEnabled, OpenProjectContext } from './lib/preferences.js'
 import { useDocumentTitle } from './lib/document-title.js'
 import { projectLabels, ProjectLabelsContext } from './lib/project-labels.js'
@@ -61,8 +62,8 @@ const EMPTY_FILES: string[] = []
 /** Stable initial for the projects load, so it does not churn on every render. */
 const EMPTY_PROJECTS: ProjectSummary[] = []
 
-/** Stable initial for the interventions poll, so it does not churn on every render. */
-const EMPTY_INTERVENTIONS: ProjectionRead<Intervention> = { items: [], whole: [] }
+/** Stable initial for the poll of what waits on the person, so it does not churn on every render. */
+const EMPTY_WAITING: ProjectionRead<Waiting> = { items: [], whole: [] }
 
 /** Stable initial for the activity poll (#627), so it does not churn on every render. */
 const EMPTY_ACTIVITY: ProjectionRead<Activity> = { items: [], whole: [] }
@@ -253,19 +254,21 @@ export function App() {
   // The read as a whole goes to the notifier, which tells of every project's items whichever one
   // is picked, and also needs to know which projects the poll actually reached before it calls
   // anything "new" (#1625).
-  const { value: interventionsRead, state: interventionsState } = usePolled<ProjectionRead<Intervention>>(
-    onInterventions,
-    EMPTY_INTERVENTIONS,
+  const { value: waitingRead, state: waitingState } = usePolled<ProjectionRead<Waiting>>(
+    onWaiting,
+    EMPTY_WAITING,
     5000,
     [],
-    { remember: 'interventions', stored: true },
+    { remember: 'waiting', stored: true },
     runsAgain(undefined),
   )
 
   const project = projectId ? projects.find(p => p.id === projectId) : undefined
   const projectName = project ? (labels.get(project.id) ?? project.name) : null
-  // The Human Queue as the pages show it: the picked project's items, or every project's.
-  const interventions = scope ? interventionsRead.items.filter(item => item.projectId === scope) : interventionsRead.items
+  // What waits on the person as the pages show it: the picked project's items, or every project's.
+  const waiting = useMemo(() => (scope ? waitingRead.items.filter(item => item.projectId === scope) : waitingRead.items), [waitingRead, scope])
+  // What every part that shows it reads, a module's card among them: one object while the read stands.
+  const waitingShown = useMemo(() => ({ items: waiting, state: waitingState }), [waiting, waitingState])
   // A URL naming a project that is not registered (renamed, removed, mistyped). Only this load's
   // read, and a non-empty one, is the answer: the list this browser kept from its last load may lack
   // a project added since. Until that read, a project the kept list has is drawn from the first
@@ -277,13 +280,13 @@ export function App() {
   const projectPending = projectAddress && !projectsRead && !listedProject
 
   // Fire a browser notification when a new item lands on the "needs you" queue (#627). Rides the
-  // one interventions poll above (the poll stays unconditional — it also feeds the sidebar badge
+  // one poll above of what waits on the person (the poll stays unconditional — it also feeds the sidebar badge
   // and Overview card); only the notification is gated, on both the category (`notifyHumanIntervention`,
   // default on) and the browser method (`notifyBrowser`).
   const preferences = usePreferences()
   // Only a fresh read: one stored by an earlier visit taken as what was already there would announce
   // everything that came while the page was closed.
-  useInterventionNotifications(interventionsState === 'fresh' ? interventionsRead : EMPTY_INTERVENTIONS, humanInterventionEnabled(preferences) && notificationsEnabled(preferences), (inProject, id) => selectAgentInProject(inProject, id))
+  useWaitingNotifications(waitingState === 'fresh' ? waitingRead : EMPTY_WAITING, humanInterventionEnabled(preferences) && notificationsEnabled(preferences), (inProject, id) => selectAgentInProject(inProject, id))
 
   // The "New activity" category (#627): the default-off feed of agents starting/finishing. Its only
   // client consumer is the browser notification below, so it is polled exactly when that will fire —
@@ -529,8 +532,8 @@ export function App() {
           projectHref={id => hrefOf({ projectId: id, agentId: null })}
           onSelectAgent={selectAgentInProject}
           onAgentStarted={agentStarted}
-          interventions={interventions}
-          interventionsState={interventionsState}
+          waiting={waiting}
+          waitingState={waitingState}
           active={activeAgents}
           projects={projects}
           scope={scope}
@@ -557,7 +560,7 @@ export function App() {
           projectId={projectId}
           projectName={projectName}
           home={project?.machine}
-          waiting={interventions}
+          waiting={waiting}
           onAgentStarted={onAgentStarted}
           files={files}
           context={context}
@@ -660,7 +663,7 @@ export function App() {
               : agentId === null
                 ? 'New agent session'
                 : (sessionLabel ?? startedTitle)
-  useDocumentTitle(interventions.length, projectName ?? (scope ? (labels.get(scope) ?? null) : null), pageName)
+  useDocumentTitle(waiting.length, projectName ?? (scope ? (labels.get(scope) ?? null) : null), pageName)
   // The phone bar's place for the page's count, once the bar is drawn.
   const [phoneCount, setPhoneCount] = useState<HTMLElement | null>(null)
   // Every other page is pinned: only its own columns scroll.
@@ -672,6 +675,7 @@ export function App() {
     // the column that used to be a plain div. The installed modules (#1774) are provided around it
     // all, so the link actions they offer reach any page that shows a link.
     <ModulesContext.Provider value={modules}>
+    <WaitingContext.Provider value={waitingShown}>
     <HostServicesContext.Provider value={hostServices}>
     <OpenProjectContext.Provider value={projectId}>
     <ProjectLabelsContext.Provider value={labels}>
@@ -749,7 +753,7 @@ export function App() {
           pages={sidebarPages}
           activePage={pageSegment}
           onPage={showPage}
-          waiting={interventions}
+          waiting={waiting}
           hrefOf={hrefOf}
         />
         {/* A project's page and an agent's have panes beside them (Panes). A module's page takes
@@ -789,7 +793,7 @@ export function App() {
           newHref={hrefOf({ projectId: scope ?? SESSIONS_ID, agentId: null })}
           newActive={!notFound && projectId !== null && agentId === null}
           onNew={() => newAgentInProject(scope ?? SESSIONS_ID)}
-          waiting={interventions.length}
+          waiting={waiting.length}
         />
       )}
       {/* What a module of this computer's draws over every page: a popup it raises itself. */}
@@ -799,7 +803,7 @@ export function App() {
         </ModuleSlot>
       ))}
       <JumpPalette
-        waiting={interventions}
+        waiting={waiting}
         runs={pageRuns}
         pages={[...shownPages.map(barPage), ...[...OWN_PAGES].map(([segment, page]) => ({ segment, ...page }))]}
         projects={projects}
@@ -816,6 +820,7 @@ export function App() {
     </ProjectLabelsContext.Provider>
     </OpenProjectContext.Provider>
     </HostServicesContext.Provider>
+    </WaitingContext.Provider>
     </ModulesContext.Provider>
   )
 }

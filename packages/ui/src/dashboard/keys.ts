@@ -1,10 +1,10 @@
 import type { Activity } from './activity.js'
-import type { Intervention } from './interventions.js'
+import type { Waiting } from './waiting.js'
 
 /**
  * The stable identity of a watched item, which the browser notifications dedupe on.
  *
- * A leaf module on purpose: `activity.ts` and `interventions.ts` build their items by reading the
+ * A leaf module on purpose: `activity.ts` and `waiting.ts` build their items by reading the
  * store, so they import `node:*` and cannot be reached from the browser bundle. These functions
  * are pure and depend on nothing but the item, so they live here and are re-exported from
  * `client.ts` — which is what lets the dashboard share them instead of keeping a copy that could
@@ -15,19 +15,12 @@ import type { Intervention } from './interventions.js'
  */
 
 /**
- * The stable identity of an intervention. A PR is its url (survives title edits and re-sorts);
- * the others have no url and are keyed on the project plus the thing waiting — the agent and
- * the gate it is parked on, or the agent whose work is uncommitted or unpushed.
- *
- * The agent is part of the awaiting key because a gate id is only unique within its own agent:
- * a question's id is the time of its diary line, which another agent's question can share. Two
- * agents running in one project (#736) and both parked would otherwise share one identity, and
- * the dedupe would announce only one of them.
+ * The stable identity of what waits on the person: its project, the module that says it, and the
+ * item's own id among that module's (a pull request's address, a run's question), else what it is
+ * about: the project, or the run. A thing said again under the same id is the same row, and is new once.
  */
-export function interventionKey(item: Intervention): string {
-  if (item.kind === 'awaiting') return `awaiting:${item.projectId}:${item.agentId ?? ''}:${item.awaitId ?? ''}`
-  if (item.kind === 'uncommitted' || item.kind === 'unpushed') return `${item.kind}:${item.projectId}:${item.agentId ?? ''}`
-  return item.url ?? ''
+export function waitingKey(item: Pick<Waiting, 'projectId' | 'module' | 'scope' | 'run' | 'id'>): string {
+  return `${item.projectId}:${item.module}:${item.id ?? `${item.scope}:${item.run ?? ''}`}`
 }
 
 /**

@@ -944,7 +944,7 @@ test("a run a saved machine's Human Queue names, which no record here has, is th
       if (req.url === '/_relay/ping') return void res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ version: '9.9.9', host: 'server-box' }))
       const { fn } = JSON.parse(body) as { fn: string }
       if (fn === 'onOwnProjects') return answer([{ id: 'shop-there', name: 'shop', path: '/srv/shop', address: 'github.com/acme/shop', share: false, gitHost: true, activated: true }])
-      if (fn === 'onOwnInterventions') return answer({ items: [{ projectId: 'shop-there', projectName: 'shop', kind: 'awaiting', title: 'Pick a colour', question: 'Which colour?', agentId: ASKING }], whole: ['shop-there'] })
+      if (fn === 'onOwnWaiting') return answer({ items: [{ kind: 'waiting', projectId: 'shop-there', projectName: 'shop', module: 'ask', scope: 'run', run: ASKING, words: 'Needs answer', title: 'Pick a colour', detail: 'Which colour?' }], whole: ['shop-there'] })
       if (fn === 'onOwnRuns') return answer({ at: 'b.1', runs: [], ids: [] })
       answer(null)
     })
@@ -960,7 +960,7 @@ test("a run a saved machine's Human Queue names, which no record here has, is th
       await new Promise(resolve => setTimeout(resolve, 50))
     }
     const queue = await runtime.remoteAgents.machinesQueue()
-    assert.deepEqual(queue.said[0]!.items.map(item => [item.projectId, item.agentId, item.computer]), [[shop, ASKING, { name: 'Server', kind: 'computer', id: url }]])
+    assert.deepEqual(queue.said[0]!.items.map(item => [item.projectId, item.run, item.computer]), [[shop, ASKING, { name: 'Server', kind: 'computer', id: url }]])
     assert.deepEqual(await runtime.remoteAgents.home(shop, ASKING), { url, key: 'id.key', project: 'github.com/acme/shop' })
     // A run nobody names is still nobody's.
     assert.equal(await runtime.remoteAgents.home(shop, '2026-07-13T00-22-59-999Z'), undefined)

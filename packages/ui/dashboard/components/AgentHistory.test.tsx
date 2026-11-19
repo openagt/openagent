@@ -62,7 +62,7 @@ const renderRail = (ui: ReactElement) => render(<SidebarProvider>{ui}</SidebarPr
 
 describe('AgentHistory (#785)', () => {
   test('what waits on the person is its own part over the Log: a run\'s name and how long it has waited, what it needs under them, five, then a row that opens the Overview; the Overview row has no count', () => {
-    const asks = (n: number) => ({ projectId: 'p1', projectName: 'p1', kind: 'awaiting' as const, title: `Run ${n}`, agentId: `r${n}`, awaitId: `q${n}`, createdAt: new Date(Date.now() - 3 * 60_000).toISOString() })
+    const asks = (n: number) => ({ projectId: 'p1', projectName: 'p1', kind: 'waiting' as const, module: 'ask', scope: 'run' as const, run: `r${n}`, id: `r${n}:q${n}`, words: 'Needs answer', title: `Run ${n}`, mark: 'question' as const, since: new Date(Date.now() - 3 * 60_000).toISOString() })
     const onSelectRecent = vi.fn()
     const onDashboard = vi.fn()
     renderRail(
@@ -83,7 +83,7 @@ describe('AgentHistory (#785)', () => {
   })
 
   test('a run waiting on the person is listed once, under "Waiting on you", picked there while it is the page shown; the Log lists the others', () => {
-    const asked = { projectId: 'p1', projectName: 'p1', kind: 'awaiting' as const, title: 'Pick a colour', agentId: 'run-2', awaitId: 'q1', createdAt: new Date().toISOString() }
+    const asked = { projectId: 'p1', projectName: 'p1', kind: 'waiting' as const, module: 'ask', scope: 'run' as const, run: 'run-2', id: 'run-2:q1', words: 'Needs answer', title: 'Pick a colour', mark: 'question' as const, since: new Date().toISOString() }
     renderRail(
       <AgentHistory projectId="p1" scope="p1" agents={[agent({ intent: 'Make the cart', status: 'done' }), agent({ id: 'run-2', intent: 'Pick a colour', status: 'waiting' })]} selectedAgentId="run-2" onSelect={() => {}} waiting={[asked]} hrefOf={route => `/${route.projectId}/${route.agentId}`} />,
     )

@@ -1,13 +1,9 @@
-import type { ActiveAgent, Intervention } from '../../src/index.js'
+import type { ActiveAgent, Waiting } from '../../src/index.js'
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { flushSync } from 'react-dom'
 import { SlidersHorizontal } from 'lucide-react'
 import { Quota } from './Quota.js'
-import { SentenceShape, Slot } from './ui/slot.js'
-import { PartDescription } from './PartDescription.js'
 import { Button } from './ui/button.js'
-import { HumanQueueList, holdsBack } from './HumanQueueList.js'
-import { PanelGroup } from './ui/panel.js'
 import { updatePreferences, usePreferences, usePreferencesLoaded } from '../lib/preferences.js'
 import { OnboardingChecklist } from './OnboardingChecklist.js'
 import { AgentUpdates } from './AgentUpdates.js'
@@ -33,11 +29,13 @@ import { useIsMobile } from '../lib/use-mobile.js'
  */
 const PACKAGES_PLACE = 3
 
-// The Overview landing page (#1139): a focused at-a-glance board — what needs a human (Human Queue)
-// first, the first steps under it, then usage and the agents working now, then the cards the installed packages
-// declare, in two columns (#1818: the queue package's AI Queue, the tickets package's hot tickets,
-// the scheduler package's Automations). A card with nothing to show says so in a sentence ("No agent is at work."). OpenAgent's own cards are projections of the same .openagent files
-// over the shell's own polls (the agents at work, the Human Queue), so they stay live; selecting a row jumps into its project or
+// The Overview landing page (#1139): a focused at-a-glance board — what needs a human (the Human
+// Queue, `ui-card-waiting`'s card) first, the first steps under it, then usage and the agents
+// working now, then the other cards the installed packages declare, in two columns (#1818: the
+// queue package's AI Queue, the tickets package's hot tickets, the scheduler package's
+// Automations). A card with nothing to show says so in a sentence ("No agent is at work.").
+// OpenAgent's own cards are projections of the same .openagent files over the shell's own polls
+// (the agents at work, what waits on the person), so they stay live; selecting a row jumps into its project or
 // straight into a session. With one project picked in the sidebar's project select (#1513), every
 // part but the usage bar shows that project's only, and the cards of packages it does not have are
 // not drawn.
@@ -52,8 +50,8 @@ export function DashboardPage({
   projectHref,
   onSelectAgent,
   onAgentStarted,
-  interventions,
-  interventionsState,
+  waiting,
+  waitingState,
   active,
   projects,
   scope,
@@ -67,10 +65,10 @@ export function DashboardPage({
   onSelectAgent: (projectId: string, agentId: string) => void
   /** Where a session the onboarding checklist starts lands (#1169): on that session. */
   onAgentStarted: (projectId: string, intent: string, agentId: string) => void
-  /** The Human Queue's items, already only the picked project's when one is picked. */
-  interventions: Intervention[]
-  /** What is known of the Human Queue's items: until they are read, by this visit or an earlier one, its part has no count; while they are only an earlier visit's, its card is faded. */
-  interventionsState: ReadState
+  /** What waits on the person, already only the picked project's when one is picked. */
+  waiting: readonly Waiting[]
+  /** What is known of what waits on the person: until it is read, by this visit or an earlier one, its part of the line has no count, and no card is drawn after the card of it. */
+  waitingState: ReadState
   /** Every agent going right now, across the projects, and what is known of it. */
   active: { active: ActiveAgent[]; state: ReadState }
   /** Every registered project. The usage bar is given all of them: usage is the account's, not a project's. */
@@ -95,8 +93,13 @@ export function DashboardPage({
   // Until the pages are known (a browser's first visit) nor any package's part is in, whether the queue's part comes is
   // not known: the parts after its place wait, so a part coming in before them pushes nothing.
   const placeKnown = modulesLoaded || moduleLine.length > 0 || listedPages !== null
-  // What the number counts, kind by kind: "1 question, 1 to publish".
-  const waiting = KINDS.map(kind => ({ kind, count: interventions.filter(item => item.kind === kind.value).length })).filter(({ count }) => count > 0)
+  // What the number counts, mark by mark: "1 question, 1 to publish".
+  const counts = waitingCounts(waiting)
+  // The card of what needs the person, a module's: the first steps stand under it, and the cards after
+  // it wait for what it shows, and for its code while its room is held.
+  const needsYouCard = moduleCards.find(card => card.needsYou)
+  const needsYou = needsYouCard?.id
+  const needsYouWaits = needsYouCard !== undefined && (waitingState === 'unknown' || needsYouCard.holding === true)
   // How things stand, in one line under the title, each part a link to where it is: what needs the
   // person, who is at work, the queue's own part (its package's, by its order) and the person's agents.
   const line: { id: string; order: number; node: ReactNode }[] = [
@@ -105,12 +108,12 @@ export function DashboardPage({
       order: 1,
       node: (
         <LinePart
-          reading={interventionsState === 'unknown'}
+          reading={waitingState === 'unknown'}
           shape="2 need you"
-          note={waiting.length === 0 ? 'Nothing waits on you' : waiting.map(({ kind, count }) => kind.counted(count)).join(', ')}
-          onClick={() => scrollToPart(NEEDS_YOU_ID)}
+          note={counts.length === 0 ? 'Nothing waits on you' : counts.join(', ')}
+          {...(needsYou !== undefined ? { onClick: () => scrollToPart(NEEDS_YOU_ID) } : {})}
         >
-          {interventions.length === 0 ? 'nothing needs you' : interventions.length === 1 ? '1 needs you' : `${interventions.length} need you`}
+          {waiting.length === 0 ? 'nothing needs you' : waiting.length === 1 ? '1 needs you' : `${waiting.length} need you`}
         </LinePart>
       ),
     },
@@ -131,19 +134,6 @@ export function DashboardPage({
     ...(placeKnown ? [{ id: 'your-presets', order: 4, node: <YourPresetsPart /> }] : []),
   ].sort((one, other) => one.order - other.order)
   const cards: OverviewCard[] = [
-    {
-      id: 'human-queue',
-      stale: interventionsState === 'kept',
-      label: 'Human Queue',
-      order: 5,
-      width: '2/3',
-      minWidth: '1/2',
-      node: (
-        <div id={NEEDS_YOU_ID} className="flex scroll-mt-6 flex-col *:flex-1">
-          <HumanQueue items={interventions} state={interventionsState} onSelectProject={onSelectProject} onSelectAgent={onSelectAgent} />
-        </div>
-      ),
-    },
     // Under what needs the person, a column two thirds wide down the page's left and one a third wide
     // beside it, the packages' cards taking their turns in both: each third comes after the card it
     // stands beside (the hot tickets beside what is at work, the account's usage, the one figure that
@@ -208,7 +198,7 @@ export function DashboardPage({
   const [firstStepsRead, setFirstStepsRead] = useState(false)
   const firstStepsHaveRead = useCallback(() => setFirstStepsRead(true), [])
   const firstSteps: Under = {
-    card: 'human-queue',
+    card: needsYou,
     node: (
       <>
         {!onboardingDismissed && <OnboardingChecklist projects={projects} onAgentStarted={onAgentStarted} onSelectProject={onSelectProject} onProjectAdded={onProjectAdded} onRead={firstStepsHaveRead} listedPages={listedPages} />}
@@ -286,7 +276,7 @@ export function DashboardPage({
           />
         ) : arranged.some(({ hidden }) => !hidden) ? (
           // On a first visit the parts come in from the top: none is drawn under the Human Queue or the first steps until they have answered, as either grows from its waiting room by more than a line.
-          <CardGrid cards={arranged.filter(({ hidden }) => !hidden)} under={firstSteps} until={interventionsState === 'unknown' ? 'human-queue' : !onboardingDismissed && !firstStepsRead ? UNDER : undefined} />
+          <CardGrid cards={arranged.filter(({ hidden }) => !hidden)} under={firstSteps} until={needsYouWaits ? needsYou : !onboardingDismissed && !firstStepsRead ? UNDER : undefined} />
         ) : (
           <>
             <UnderCards under={firstSteps} />
@@ -303,39 +293,19 @@ export function DashboardPage({
   )
 }
 
-// What needs the person (#632/#1139), the Human Queue: the cross-project things only a person can
-// clear. Four kinds: open PRs to review (proposals and finished work both surface as PRs) — merge to
-// confirm, close to reject — which open the session that made them, or the PR itself when no run here
-// did; runs paused mid-flight on a question (#636), which jump into that project's live view to
-// answer; and work a finished session left uncommitted or unpushed. #627 notifications fire off the
-// same set. One list, newest first as the queue gives them: a row says what is needed first in its
-// line, so the kinds need no heading of their own.
-function HumanQueue({
-  items,
-  state,
-  onSelectProject,
-  onSelectAgent,
-}: {
-  items: Intervention[]
-  /** What is known of the items: until they are read, by this visit or an earlier one, the part waits in a sentence's room, not saying that nothing waits. */
-  state: ReadState
-  onSelectProject: (id: string) => void
-  onSelectAgent: (projectId: string, agentId: string) => void
-}) {
-  return (
-    <PanelGroup bare title={<span className="text-warning">Human Queue</span>} count={holdsBack(items) ? items.length : undefined}>
-      <PartDescription>Agents awaiting your approval, review, or input</PartDescription>
-      <Slot of={{ state, value: items }} shape={<SentenceShape />}>
-        {() => <HumanQueueList items={items} onOpenAgent={onSelectAgent} onOpenProject={onSelectProject} empty="AI doesn't need you." />}
-      </Slot>
-    </PanelGroup>
-  )
-}
-
-/** The kinds of what needs the person, in the order of how much they hold a run up (a question stops one), as the line under the title counts them. */
-const KINDS: { value: Intervention['kind']; counted: (count: number) => string }[] = [
-  { value: 'awaiting', counted: count => (count === 1 ? '1 question' : `${count} questions`) },
-  { value: 'pr', counted: count => (count === 1 ? '1 pull request' : `${count} pull requests`) },
-  { value: 'unpushed', counted: count => `${count} to publish` },
-  { value: 'uncommitted', counted: count => `${count} to commit` },
+/** The marks of what waits on the person, in the order of how much they hold a run up (a question stops one), as the line under the title counts them. */
+const COUNTED: { mark: Waiting['mark']; counted: (count: number) => string }[] = [
+  { mark: 'question', counted: count => (count === 1 ? '1 question' : `${count} questions`) },
+  { mark: 'pull-request', counted: count => (count === 1 ? '1 pull request' : `${count} pull requests`) },
+  { mark: 'branch', counted: count => `${count} to publish` },
+  { mark: 'changes', counted: count => `${count} to commit` },
+  { mark: undefined, counted: count => `${count} more` },
 ]
+
+/** What the line's number counts, mark by mark: "1 question", "1 to publish"; nothing for a mark none has. */
+function waitingCounts(waiting: readonly Waiting[]): string[] {
+  return COUNTED.flatMap(({ mark, counted }) => {
+    const count = waiting.filter(item => item.mark === mark).length
+    return count > 0 ? [counted(count)] : []
+  })
+}

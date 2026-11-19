@@ -16,6 +16,7 @@ export const DASHBOARD_PACKAGES: DashboardDistribution = [
   { package: '@openagt/skill-github', skill: 'every run' },
   { package: '@openagt/dashboard-changes' },
   { package: '@openagt/dashboard-files' },
+  { package: '@openagt/ui-card-waiting', for: 'computer' },
   { package: '@openagt/skill-logs', pages: 'picked' },
   { package: '@openagt/user-info', for: 'computer' },
   { package: '@openagt/dashboard-devices', for: 'computer' },
