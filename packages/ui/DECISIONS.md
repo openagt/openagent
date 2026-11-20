@@ -48,14 +48,15 @@ already made, and lists it in its pull request; for anything else it proposes an
   runs no agent of its own. Picked over the dashboard owning the agent it shows, which is
   what made every capability a person wanted — another coding agent, a schedule, a run on
   another machine — a feature of OpenAgent.
-- It ships no prompt text. What a project can be asked to do is what the project's own
-  skills say. Picked over the built-in presets: a prompt that lives here cannot be read,
-  changed or run by the agent working the repository.
+- It ships no prompt text. What a run can be asked to do is what its skills say: the
+  project's own, and the commands of the plugins on for it (`run.skills`, #2394). Picked over
+  built-in prompts: a prompt that lives here cannot be read, changed or run by the agent
+  working the repository.
 - The tickets are a package's: OpenAgent reads them through the command the package
   declares (`openagent.tickets`, `list --local`), and only for what it composes across
-  skills, the onboarding step, a queued link's title. Showing,
-  planning, claiming and releasing a ticket is the package's own module, through its
-  command. Picked over the dashboard's own ticket pages fed by the provider, which would
+  skills, the onboarding step, a queued link's title. Showing a ticket is the package's own
+  module, through its server part (#2394, decision 8); planning, claiming and releasing one,
+  through its command. Picked over the dashboard's own ticket pages fed by the provider, which would
   have kept a reserved route and a hand-written sidebar row.
 - The checkouts are a package's: OpenAgent finds a run's checkout, and pushes and
   reclaims its branch, through the command the package declares (`openagent.branches`:
@@ -157,8 +158,8 @@ already made, and lists it in its pull request; for anything else it proposes an
   person who liked the work had no way to have it published but a new run.
 - A session's box has the launcher's two rows, item for item in the same places and the same
   look, each item a session cannot change off: above the box where it runs, the project and the
-  branch; under the box the agent, then Context, Auto and Skills, and at the right the git host
-  account, then the model. The branch is the one it started from, with the one it works on in
+  branch; under the box the preset, then Skills and Context, and at the right the git host
+  account and Auto, then the model. The branch is the one it started from, with the one it works on in
   its hover: the same meaning as on the launcher, and it does not flip as the agent renames its
   own. Where the record cannot vouch for that branch the row leaves it out. The account is the
   one the run worked as, which its record keeps; a run recorded before that says the host's
@@ -178,9 +179,7 @@ already made, and lists it in its pull request; for anything else it proposes an
   select at the foot.
 - OpenAgent never pushes as the person's own login: the personal folder's sync and a project's
   Share switch each name one of OpenAgent's accounts at the repository's host, picked where they
-  are turned on (the one runs use first), and so does the clean-up of Claude Code web's
-  branches (the Share switch's account, else the one runs use). With no
-  account there, nothing is sent, and the page says so with the press that adds one. Picked over pushing with
+  are turned on (the one runs use first). With no account there, nothing is sent, and the page says so with the press that adds one. Picked over pushing with
   whatever login the computer has (Rom: "scary").
 - What is not backed up (the personal folder, or a shared project's data, at a git host with no
   account named) is said once: an item in the person's menu, and a notice at the top of
@@ -197,12 +196,11 @@ already made, and lists it in its pull request; for anything else it proposes an
   keeping Files a folder inside OpenAgent, which gave it a boundary but taught the module
   contract nothing, and named module over widget; and over a project's own dependencies
   bringing modules too.
-- A skill works alone through its commands; its UI is a dashboard module, with no page of its
-  own. Picked over a separate `skill-ui` package with a standalone page, and over a contract
-  package beside the dashboard.
-- A module that is no skill is named `dashboard-<name>`. A package with agent instructions
-  keeps its `skill-<name>` name when it also brings a module: it works with no dashboard, and
-  its `./dashboard` export says it is both. Picked over `dashboard-<name>` for every package
+- A skill works alone through its commands; its UI is its module's UI part, drawn by the
+  shell at the places the UI hooks name (#2394), with no standalone page. Picked over a
+  separate `skill-ui` package with a standalone page.
+- A package with agent instructions keeps its `skill-<name>` name when it also brings a
+  module: it works with no dashboard, and its `./module` export says it is both. Picked over `dashboard-<name>` for every package
   with a module, which tells someone using the skill alone that they need the dashboard.
 - What a module shows beside the chat is a pane, as on Claude Code on the web. Each pane
   has an icon at the end of the page's top bar, which opens and closes it. The open panes
@@ -237,8 +235,8 @@ already made, and lists it in its pull request; for anything else it proposes an
 - A file's icon is Material Icon Theme's. Picked over vscode-icons, Catppuccin's outlines, and
   a small two-tone set of our own.
 - The packages every project wants are the distribution's, installed with it, and used for
-  every project through the same contract as any package (a module by its `./dashboard`
-  export, a provider of a kind of data by its `openagent` key). They are Changes, Files, the
+  every project through the same contract as any package (a module by its `./module`
+  export, its UI part by `./dashboard`, a provider of a kind of data by its `openagent` key). They are Changes, Files, the
   runner, the packages that read a project's runs and checkouts, and the GitHub package, so
   an empty folder starts an agent, shows it, and can be put on GitHub. A git host is a
   project's only when the project's remote is on that host: no project chose it, so it does
@@ -259,7 +257,8 @@ already made, and lists it in its pull request; for anything else it proposes an
   without asking.
 - The distribution names the packages OpenAgent brings, and says of each whose it is: every
   project's or the computer's, and a plugin's is wherever its Enabled row has it on (#2394).
-  Nothing else in OpenAgent names a package, and a project's own dependencies are not read.
+  No other list in OpenAgent says which packages it brings, and a project's own dependencies
+  are not read.
   Picked over three lists in the dashboard's code, and over a project's own copy winning,
   which gave one package two ways into a project.
 - The door to this computer and the servers it installed OpenAgent on are the
@@ -296,8 +295,8 @@ already made, and lists it in its pull request; for anything else it proposes an
   runs use at the repository's host, the person's credential helpers dropped; with none
   there, only a public repository is read. An SSH address is refused unless the account's
   settings take it over the web: SSH would use the person's own key. The dashboard's other
-  talks with a project's origin (the branches the launcher offers, Claude Code web's
-  branches) go as the Share switch's account, else the one runs use. Picked over the logins
+  talks with a project's origin (the branches the launcher offers) go as the Share switch's
+  account, else the one runs use. Picked over the logins
   the computer has, which are the person's own.
 - Adding a project asks one thing: whether the person trusts the repository, with why it
   matters. The agents' records stay on this machine; the project's Agent data page shares
@@ -433,8 +432,8 @@ already made, and lists it in its pull request; for anything else it proposes an
   makes it one.
 
 ## What runs log in with
-- Settings has one page for it, Accounts: the coding agents' cards, then the git hosts', each
-  a card per tool drawn from its package's answers. Picked over two pages, Agent accounts and
+- One page has it, Permissions: the coding agents' cards, then the git hosts', each a card
+  per tool drawn from its package's answers. Picked over two pages, Agent accounts and
   Git hosts, which a server's logins would have split in two: a git host's card says the package's name for the host, its
   word for a pull request, the accounts its tool knows and the one runs use, so OpenAgent
   names no git host. One card per host the projects' remotes are on, a self-hosted one its
@@ -535,8 +534,8 @@ already made, and lists it in its pull request; for anything else it proposes an
   Picked over a worktree of each repo, which leaves branches and checkouts in a folder that
   is no project, and over a clone from the repo's address, which needs a login and the
   network for what is already on the computer.
-- A Start hands the run the prompt, and the coding agent, the model and how far to publish
-  when the person picked them; anything else is the run's own business. The publish pick is one menu
+- A Start hands the run the prompt and the run options picked for it, each module's slice
+  (#2394, decision 12). The publish pick is one menu
   beside Start: Off, Commit, Publish branch, Open PR, Merge on green. Off adds nothing to the
   person's message: whether the agent then commits is its own, by the branches skill in its
   checkout, where Commit asks for it. Picked over the name "Nothing", which promised that
@@ -545,8 +544,6 @@ already made, and lists it in its pull request; for anything else it proposes an
   is offered Off, Commit and Publish branch only. A project with no remote can publish
   nothing, so it is offered Off and Commit, and a saved pick it is not offered counts
   as Commit.
-  Picked over handing over every option the launcher once had, which is how the options
-  became the thing to maintain.
 - Until a person picks in that menu, a run commits its work and pushes nothing. Picked over
   Publish branch until then, which put on the remote a branch nobody asked to publish.
 - A Start also hands the run the branch to start from, picked in the launcher's branch menu. The menu
@@ -637,8 +634,8 @@ already made, and lists it in its pull request; for anything else it proposes an
   reached it at. Picked over "This machine", which the phone's holder reads as the phone.
 
 ## Saying something to a run
-- What a person says reaches a run through its host: a line in the run's inbox file while
-  the run works, a resume once it has ended (#2394). Picked over a channel of ours that every
+- What a person says reaches a run through its host (#2394): on this computer, a line in the
+  run's inbox file while the run works, a resume once it has ended. Picked over a channel of ours that every
   tool would have to learn.
 - A run that ends while the line is on its way has its line taken back out of the inbox
   and resumed instead. Picked over leaving it for a run that will never read it.
@@ -656,8 +653,8 @@ already made, and lists it in its pull request; for anything else it proposes an
 - What the agent says, and every other text in markdown, is drawn by the module that draws
   markdown (`ui-renderer-markdown`, `ui.render`); with none, it is the text as written, its lines
   kept (#2394, decision 41). Picked over the shell's own renderer.
-- Stop is a signal to the process the run's card names, whoever runs it. Picked over a
-  message to the run: a stop that has to be read is not a stop.
+- Stop goes to the run's host (#2394): on this computer, a signal to the process the run's
+  card names. Picked over a message to the run: a stop that has to be read is not a stop.
 - Stop is Claude Code's: a square in the message box, Esc its key, and the turn ends where
   the agent was, with no line after it; a message continues the run. Picked over a stop that
   ended the run for good, a "Stopped" line and a Resume button.
@@ -678,12 +675,6 @@ already made, and lists it in its pull request; for anything else it proposes an
 - A run that finished `done` on this machine and left no checkout, branch or pull request
   changed nothing, and its Files pane shows the project's files. Picked over saying its
   changes are gone, which read as lost work. No other run is judged so.
-
-## Sweeping origin's scratch refs
-- A branch on origin is a run's, and may be swept once landed, unclaimed by a pull request,
-  old and idle, when a run's record names it, aged by that record. Picked over a naming
-  pattern, `agent-<timestamp>`, which was OpenAgent knowing how the package names a
-  branch and missed a branch the agent renamed.
 
 ## Removing a project
 - "Remove project" takes the project off the dashboard's list and leaves the folder as it

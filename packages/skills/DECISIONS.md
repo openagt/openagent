@@ -15,9 +15,9 @@ already made, and lists it in its pull request; for anything else it proposes an
   as commands and lets a run leave some out. It never installs or updates them. Picked over
   OpenAgent writing its skills' texts into each project that picked them, which put files in
   the person's repository and a commit to keep up to date.
-- A project's own skill takes a default's place by having its name: the project's
+- A project's own skill takes a module's skill's place by having its name: the project's
   `.claude/skills/<name>` or `.agents/skills/<name>`, committed on the branch an agent
-  starts from. Picked over a skill saying which default it does in a line of its own, a
+  starts from. Picked over a skill saying which one it replaces in a line of its own, a
   format nothing needs yet.
 - OpenAgent has no command of its own to give a project skills, and no catalogue of them: a
   module's skills come with its package, and a project's own are its files. Picked over

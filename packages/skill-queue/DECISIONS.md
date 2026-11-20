@@ -73,8 +73,8 @@ already made, and lists it in its pull request; for anything else it proposes an
 
 ## The commands
 - The commands about the queue ship inside it (#2394, decision 25): `work-queue`, a skill of
-  its own that the plugin gives a project's runs where it is on, its text in
-  `skills/work-queue/` like the capability skills'. Picked over one package per command,
+  its own that the plugin gives a project's runs where it is on, its text in the package's
+  `commands/work-queue/`. Picked over one package per command,
   `@openagt/skill-<command>`, each installed and switched on by itself, which let a project
   have a command without the data it is about.
 - Two kinds of skill: capability skills (`branches`, `tickets`, `queue`, `logs`, `github`),

@@ -8,9 +8,9 @@ implementer's judgment, not a decision. An AI writes a bullet only for a pick a 
 already made, and lists it in its pull request; for anything else it proposes and asks.
 
 ## The tool
-- A skill package of its own, named `skill-account-rotation`. `skill-accounts` is kept for
-  logged-in user accounts of other kinds. Picked over rotation living in the driver core,
-  where nobody could use, read or replace it apart from the drivers.
+- The coding agents' accounts and their rotation are `agent-driver`'s (#2394, decisions 15
+  and 20), kept in this package until the packages are merged. Picked over a package of
+  their own beside the driver.
 - A driver holds no rotation: it is handed one (`AccountRotation` in `agent-driver`) by
   whoever starts it, and a driver handed none runs on whatever login its agent has. The
   package depends on the drivers for their logins, never the other way. Picked over the
@@ -34,8 +34,8 @@ already made, and lists it in its pull request; for anything else it proposes an
   not have.
 - The card is "Coding agent accounts", and what it does at an account's limit is said behind an ⓘ
   beside its title, only while an agent has two accounts or more: with one each, nothing
-  rotates. Rotation is the runner's for every run, ticked as a skill or not: the skill only
-  teaches an agent to change the accounts when asked.
+  rotates. Rotation is the runner's for every run: the skill only teaches an agent to change
+  the accounts when asked.
 - Under each account's row the card draws the line the page it is on gives it
   (`accountWhere`), the account named by its agent, whether it is the own login, and its name:
   the Permissions page says there where the account works, on the person's servers. Picked over

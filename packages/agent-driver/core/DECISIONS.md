@@ -79,9 +79,9 @@ already made, and lists it in its pull request; for anything else it proposes an
   plain tool row it was: a row with no name on it, and on Codex one that never resolved.
 
 ## Accounts
-- Which of a person's accounts takes a turn is `@openagt/skill-account-rotation`'s, handed to
-  a driver when it starts; what an added account's login is and how a turn runs on it is the
-  driver's. Picked over keeping the rotation in this package.
+- Which of a person's accounts takes a turn is the `agent-driver` module's rotation (#2394,
+  decision 15), today in `@openagt/skill-account-rotation`, handed to a driver when it starts;
+  what an added account's login is and how a turn runs on it is the driver's.
 - An agent's package declares how its CLI is installed and logged in, each one command a
   press runs with no terminal and no admin (Claude Code: its own `install.sh` into
   `~/.local/bin`, and `claude auth login` in this computer's browser; Codex: its own

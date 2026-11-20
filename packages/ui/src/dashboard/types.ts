@@ -50,8 +50,8 @@ export interface CleanupReport {
 export type RemoveProjectResult = { ok: true; cleanup?: CleanupReport } | { ok: false; error: string }
 
 /**
- * What a Start carries besides its prompt (#1774): the person's picks, handed to the project's
- * `start` hook line as `DRIVER`, `MODEL`, `PUBLISH` and `BASE`. Absent leaves each to the tool the line names.
+ * What a Start carries besides its prompt: the person's picks, handed to the run's host as the run
+ * options, each module's slice (#2394, decision 12). Absent leaves each to the run's own default.
  */
 export interface StartAgentOptions {
   /** The model to run on. */

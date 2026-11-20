@@ -1,6 +1,6 @@
 import { defineModule } from '@openagt/hooks'
 
-/** The commands about the tickets that ship with them (#2394, decision 25), each a skill of its own in `commands/<name>/`, its text copied there from the repository's `skills/` folder by the build. */
+/** The commands about the tickets that ship with them (#2394, decision 25), each a skill of its own in `commands/<name>/`. */
 const COMMANDS = ['plan', 'plan-tickets', 'triage', 'update-tickets', 'suggest-tickets-to-work-on'] as const
 
 /**

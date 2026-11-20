@@ -8,8 +8,8 @@ implementer's judgment, not a decision. An AI writes a bullet only for a pick a 
 already made, and lists it in its pull request; for anything else it proposes and asks.
 
 ## The package
-- A **library, not a skill**: no `SKILL.md`, no command. Skills import it; they never
-  import each other.
+- A **library, not a skill**: no `SKILL.md`, no command. Modules import it; one imports
+  another only where it needs that one (#2394).
 - Named for the `agent-data` branch, but no function hardcodes it: every one that touches
   a branch takes it as an argument.
 - `.branches/` holds a project's persistent checkouts, one per branch at

@@ -1,8 +1,8 @@
 // `@openagt/ui/module`: what the dashboard offers a module (#1774).
 //
 // A module is a package that adds to the dashboard; its browser part is the file it exports as
-// `./dashboard`. The dashboard finds it in a
-// project's dependencies, imports it at runtime, and reads its default export, a
+// `./dashboard`. The dashboard finds it among the distribution's packages (#2394), imports it at
+// runtime, and reads its default export, a
 // `UiModuleDefinition`: the UI hooks it fills, each at a place of the shell's, as `@openagt/hooks/ui`
 // declares them and this file offers them, beside the shell's host and its design kit (#2394). The
 // browser part imports `react` and this file as bare names and bundles neither: the dashboard's

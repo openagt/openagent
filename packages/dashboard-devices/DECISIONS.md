@@ -185,7 +185,7 @@ already made, and lists it in its pull request; for anything else it proposes an
 ## The server's agent data
 - A server set up from this computer is offered the person's agent data too, when this computer's
   syncs with a repository: the server syncs with the same one, sent as the GitHub login copied
-  there, so the same logs, tickets and agents are on both. Picked over a server that starts with
+  there, so the same logs, tickets and presets are on both. Picked over a server that starts with
   agent data of its own, set to sync on its own page by hand.
 
 ## The server's logins

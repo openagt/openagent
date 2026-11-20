@@ -9,18 +9,19 @@ already made, and lists it in its pull request; for anything else it proposes an
 
 ## The tool
 - A tool, a package with a command line, like `agent-driver`; not a skill. It runs one
-  agent from start to end and nothing else: when an agent starts is the scheduler's call,
-  a person's, or another run's agent's.
-- Standalone, beside `agent-driver`, not inside it. `agent-driver` depends on nothing; the
-  runner needs git for its checkouts and its records, and inside the driver every user of
-  the driver would get git and the skills with it. Either way was open; this one for now.
+  agent from start to end and nothing else: when an agent starts is the scheduler's call or
+  a person's.
+- The run engine is the `agent-driver` module (#2394, decision 15): the engine, the run's
+  record, this computer's host, and the coding-agent accounts with their rotation, each
+  coding agent's adapter a package of its own. It lives in this package until the packages
+  are merged. Picked over a runner beside the driver, which kept git out of the driver.
 - The runner depends on `@openagt/agent-driver` for the session contract, on each coding
   agent's adapter (`@openagt/agent-driver-claude`, `@openagt/agent-driver-codex`) for
   its driver and its readiness check, on the logs package for the records, and on
   `agent-data` for the branch. A run's checkout and its pull request are steps of the
   modules of the distribution that starts the run, handed down to the run's process
-  (`@openagt/hooks`, #2394). It never depends on OpenAgent; OpenAgent brings it, as one
-  of its packages.
+  (`@openagt/hooks`, #2394). It runs only as a package of the OpenAgent that starts it: a
+  run with no distribution handed down is refused (#2394, decision 4).
 - The runner reads no schedule: a run is the prompt it is given. It names no skill: a run's
   skills are its modules' (`run.skills`, #2394), the modules of the distribution that started
   OpenAgent (`@openagt/dashboard`): every core module's, a git host's only where the project is
@@ -123,11 +124,10 @@ already made, and lists it in its pull request; for anything else it proposes an
 - A run starts from the branch it is told, `run --base <ref>`, written on its record. With
   none, origin's default branch, as before. Picked over a run that always starts from the
   default branch: a person can start a run from their own local branch, or from another of
-  the branches on origin, which the `start` line passes on too (`BASE`). The second is told
-  by the full name of origin's copy, and fetched first; a fetch that fails fails the run.
-  Picked over the short `origin/x`, which a local branch of that name would take over, and
-  over a second option, which a `start` line written before it existed would drop for a
-  silent start from somewhere else. The branch's name is on the record beside the host as
+  the branches on origin (`git-branches`' run option `base`, #2394). The second is told by
+  the full name of origin's copy, and fetched first; a fetch that fails fails the run.
+  Picked over the short `origin/x`, which a local branch of that name would take over. The
+  branch's name is on the record beside the host as
   well, plain (`x`, whichever it was), so a reader that does not know the runner's mark can
   say where the run started.
 - A run that makes its own branch records the commit the branch was made at: where its
@@ -165,9 +165,8 @@ already made, and lists it in its pull request; for anything else it proposes an
 - A run is on a preset (#2394): a name and a saved set of run options, kept with the person
   through the store (the catalog's `presets.saved`), named in the run's environment by whoever
   started it, Default when nobody did. Its options are the run's where the session picked
-  none: its accounts, and which of the project's own skills stay in its checkout. The basic
-  skills are every run's, the defaults the package that started OpenAgent hands down. The
-  record keeps the preset, and each leg of the run, a resume too, is on it as it stands then.
+  none: its accounts, the plugins it goes without, and which of the project's own skills stay
+  in its checkout. Its other skills are its modules' (above). The record keeps the preset, and each leg of the run, a resume too, is on it as it stands then.
   Picked over the dashboard resolving a preset's options per run: a scheduler's runs name no
   preset and are on Default, so its edits reach them with nothing restarted.
 - The account a run works as at the git host is the session's: the one whoever started the run
