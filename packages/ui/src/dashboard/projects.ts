@@ -3,7 +3,7 @@ import { listProjects, type ProjectRecord } from '../registry.js'
 import { nodeFs } from '../node-fs.js'
 import { isActivated } from '../project.js'
 import { readAllAgents, type AgentMeta } from '../store/index.js'
-import type { ProjectError, StaysLocal } from '../project-errors.js'
+import type { ProjectError, StaysLocal } from '../project-state.js'
 import { projectGitHost, type GitHostFor } from '../store/git-host.js'
 import { projectNameOf, sessionsHome } from '@openagt/agent-data'
 import { SESSIONS_ID } from '../project-address.js'
@@ -37,15 +37,15 @@ export interface ProjectSummary {
   /** ISO timestamp of the project's newest activity: its most recent session. */
   lastActivityAt?: string
   /**
-   * What the daemon's background jobs currently find wrong with the project (#1500), oldest
-   * first — absent when nothing is. Not part of the summary itself: the dashboard's project
-   * list attaches it from the daemon's error state.
+   * What the person has to fix in the project (#1500), as the modules on in it say — absent when
+   * nothing is. Not part of the summary itself: the dashboard's project list attaches it
+   * (`project-state.ts`).
    */
   errors?: ProjectError[]
   /**
-   * Why the project's data stays on this machine, as the daemon's last data sync found it: its
-   * repository has no remote, or the person keeps the agents' records here. Nothing is wrong.
-   * Absent for a project that shares them; attached like `errors`.
+   * Why the project's data stays on this machine: its repository has no remote, or the person
+   * keeps the agents' records here. Nothing is wrong. Absent for a project that shares them;
+   * attached like `errors`.
    */
   local?: StaysLocal
 }

@@ -6,8 +6,7 @@ import { createProjectRuntime } from './daemon-runtime.js'
 import { defaultQuotaSource } from './dashboard/quota.js'
 import { defaultModelsSource } from './dashboard/models.js'
 import { agentUpdates } from './dashboard/agent-updates.js'
-import { startBackgroundServices } from './daemon-services.js'
-import { projectErrorStore } from './project-errors.js'
+import { projectStateReader } from './project-state.js'
 import { resolveDashboardBundle } from './dashboard/bundle.js'
 import { resolveWebsite } from './dashboard/website.js'
 import { ensureComputerId, registryPreferencesStore, thisComputerName } from './registry.js'
@@ -121,8 +120,6 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
   const clientBundleDir = await resolveDashboardBundle()
   // The long-lived meter the usage panel draws (#685), owned here so it stops with the daemon.
   const quota = defaultQuotaSource()
-  // The per-project error state (#1500): the background services write it, the dashboard reads it.
-  const projectErrors = projectErrorStore()
   // Which models each coding agent offers: asked on the menu's first read, then kept.
   const models = defaultModelsSource()
   const websiteDir = await resolveWebsite()
@@ -150,7 +147,8 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
       quota,
       models,
       agentUpdates: agentUpdates({ models }),
-      projectErrors: projectErrors.read,
+      // What a project's page and row say of it beside its runs: the modules on in it say what needs setting up.
+      projectState: projectStateReader({ hooks: async () => hooks }),
     },
     // The `/_relay/*` endpoints let another daemon run + read + steer a session here. A person's own
     // OpenAgent on a computer several people use keeps their logins there: another OpenAgent of
@@ -200,13 +198,6 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
   const lifecycle = new AbortController()
   await hooks.started({ signal: lifecycle.signal, url: dashboard.url, ...(computer !== undefined ? { computer } : {}) })
 
-  // Everything that runs in the background beside serving the dashboard: the data sync.
-  const services = startBackgroundServices({
-    env,
-    projectErrors,
-    log: console.log,
-  })
-
   // A computer keeps the servers that use its logins up to them (`logins-sync.ts`); a server makes none for another.
   const stopLoginsSync = env.OPENAGENT_SERVER === '1' ? () => {} : startLoginsSync(env)
   // Every computer of the person's keeps the same computers as the others (`computers-sync.ts`), a server too.
@@ -226,8 +217,6 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
     step('the dashboard')
     await dashboard.close()
     runningFixes.end()
-    step('the background services')
-    await services.quiesce()
     // Stopped here as well as by the dashboard: a broken install serves 503s without ever taking
     // ownership of the source we handed in, and that poller would go on reading by itself.
     quota.stop()

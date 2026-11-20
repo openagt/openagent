@@ -32,7 +32,12 @@ export interface AppStart {
 
 /** The app's life, for a module that does work of its own: its timers, its own process. */
 export interface AppLifecycle {
-  /** The app started, or the plugin was switched on since (one kept per person or per computer): start the module's own background work. */
+  /**
+   * The app started, or the plugin was switched on since (one kept per person or per computer):
+   * start the module's own background work. A plugin kept per project, or one that keeps its own
+   * row, starts with the app wherever it is on, and its work asks where it is on now
+   * ({@link AppContext.projects}, its row).
+   */
   started?(app: AppContext): void | Promise<void>
   /** The app is stopping, or the plugin was switched off: called for the modules that were started, the last started first. */
   stopping?(): void | Promise<void>

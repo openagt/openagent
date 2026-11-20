@@ -289,8 +289,10 @@ export function createHooks(entries: readonly DistributionEntry[], opts: HooksOp
     async started(start) {
       app = start
       for (const module of modules) {
-        // A plugin kept per project starts wherever it is: its projects() says where it is on.
-        if (module.plugin && module.plugin.scope !== 'project' && !(await enabled(module.name))) continue
+        // A plugin kept per project starts wherever it is: its projects() says where it is on. So
+        // does one that keeps its own row: the row turns on and off on its Settings entry, never
+        // through a switch here, so its work asks the row.
+        if (module.plugin && module.plugin.scope !== 'project' && !module.plugin.row && !(await enabled(module.name))) continue
         await startOne(module, start)
       }
     },

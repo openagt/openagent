@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import { addProject, listProjects } from '../registry.js'
 import type { RunHost } from '@openagt/hooks'
 import { fakeHost } from '@openagt/hooks/testing'
-import { projectErrorStore } from '../project-errors.js'
+import type { ProjectState } from '../project-state.js'
 import { provideTestContext } from './test-context.js'
 import { onCloneCheck, onCommands, onOwnProjects, onProjects, onRunHosts, onStartBranches, onStartCheck, sendAddProject, sendRemoveProject, sendShareRecords } from './projects.js'
 import { SESSIONS_ID } from '../project-address.js'
@@ -33,29 +33,28 @@ async function registered(): Promise<{ dir: string; restore: () => Promise<void>
   }
 }
 
-test('onProjects carries each project’s recorded errors, and nothing when there are none (#1500)', async () => {
+test('onProjects carries what each project’s state says: its errors, and nothing when there are none; why its data stays here, if it does (#1500)', async () => {
   const { dir, restore } = await registered()
   try {
-    const errors = projectErrorStore(() => new Date('2026-08-20T10:00:00.000Z'))
-    provideTestContext({ projectErrors: errors.read })
+    let state: ProjectState = { errors: [] }
+    const asked: string[] = []
+    provideTestContext({ projectState: async project => (asked.push(project.path), state) })
 
     const clean = await onProjects()
     assert.equal(clean.length, 1)
     assert.equal('errors' in clean[0]!, false, 'a healthy project has no errors field at all')
+    assert.deepEqual(asked, [dir], "each project's state is asked by its folder")
 
-    errors.set(dir, 'data-sync', 'the data branch could not be pushed: permission denied')
-    const [stranded] = await onProjects()
-    assert.deepEqual(stranded?.errors, [
-      { code: 'data-sync', message: 'the data branch could not be pushed: permission denied', since: '2026-08-20T10:00:00.000Z' },
-    ])
+    const stranded = { id: 'store-git-branch:data-sync', title: 'Not syncing with the remote', message: 'the data branch could not be pushed: permission denied', since: '2026-08-20T10:00:00.000Z' }
+    state = { errors: [stranded] }
+    const [listed] = await onProjects()
+    assert.deepEqual(listed?.errors, [stranded])
+    assert.equal('local' in listed!, false, 'a project whose data reaches its remote carries no note')
 
-    assert.equal('local' in stranded!, false, 'a project whose data reaches its remote carries no note')
-    errors.setReach(dir, 'no-remote')
+    state = { errors: [], local: 'no-remote' }
     assert.equal((await onProjects())[0]?.local, 'no-remote')
-    errors.setReach(dir, 'kept')
+    state = { errors: [], local: 'kept' }
     assert.equal((await onProjects())[0]?.local, 'kept')
-    errors.setReach(dir, 'origin')
-    assert.equal('local' in (await onProjects())[0]!, false)
   } finally {
     await restore()
   }

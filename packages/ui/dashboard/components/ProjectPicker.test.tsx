@@ -93,7 +93,7 @@ describe('ProjectPicker', () => {
   })
 
   test("a project's row says what is wrong with it, that it is not activated, how its records are kept, or which other computer of the person's has it", async () => {
-    const stranded: ProjectSummary = { ...ALPHA, errors: [{ code: 'data-sync', message: 'the data branch could not be pushed: Permission denied (publickey)', since: '2026-08-20T10:00:00.000Z' }] }
+    const stranded: ProjectSummary = { ...ALPHA, errors: [{ id: 'store-git-branch:data-sync', title: 'Not syncing with the remote', message: 'the data branch could not be pushed: Permission denied (publickey)', since: '2026-08-20T10:00:00.000Z' }] }
     const idle: ProjectSummary = { id: 'beta-2', path: '/home/me/beta', name: 'beta', activated: false, gitHost: true }
     const local: ProjectSummary = { id: 'gamma-3', path: '/home/me/gamma', name: 'gamma', activated: true, gitHost: true, local: 'no-remote' }
     const kept: ProjectSummary = { id: 'delta-4', path: '/home/me/delta', name: 'delta', activated: true, gitHost: true, local: 'kept' }

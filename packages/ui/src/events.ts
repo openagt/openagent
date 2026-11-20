@@ -117,8 +117,8 @@ export type OpenAgentEvent = { at?: string } & (
    * is the first line, the detail is the rest.
    *
    * An event, not a status: it says what happened at this point in the run and stays in the log
-   * as history — nothing clears it, because nothing can un-happen it. The project-level errors a
-   * background job finds between runs are the other half (project-errors.ts): those are
+   * as history — nothing clears it, because nothing can un-happen it. What the modules find needs
+   * setting up in a project between runs is the other half (project-state.ts): those are
    * conditions that are true *now*, and clear themselves when the condition is gone.
    */
   | { kind: 'error'; headline: string; detail?: string }

@@ -744,7 +744,7 @@ describe('the project select (#1513)', () => {
     name: 'alpha',
     activated: true,
     gitHost: false,
-    errors: [{ code: 'data-sync', message: 'the data branch could not be pushed: Permission denied (publickey)', since: '2026-08-20T10:00:00.000Z' }],
+    errors: [{ id: 'store-git-branch:data-sync', title: 'Not syncing with the remote', message: 'the data branch could not be pushed: Permission denied (publickey)', since: '2026-08-20T10:00:00.000Z' }],
   }
   const idle: ProjectSummary = { id: 'p2', path: '/repos/p2', name: 'beta', activated: false, gitHost: false }
 

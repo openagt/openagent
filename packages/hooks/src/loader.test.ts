@@ -280,7 +280,7 @@ test('git reaches a remote as the first module with an account for it says; one 
   assert.deepEqual(messages(errors), ['broken account.access: the keychain is locked', 'broken account.access: the keychain is locked'])
 })
 
-test("the app's life: modules start where they are on and stop the last first; a project added reaches the modules on in it, a removed one every module", async () => {
+test("the app's life: modules start where they are on, one that keeps its own row wherever it is, and stop the last first; a project added reaches the modules on in it, a removed one every module", async () => {
   const seen: string[] = []
   const errors: HandlerError[] = []
   const lifecycle = (name: string): AppLifecycle => ({
@@ -309,6 +309,8 @@ test("the app's life: modules start where they are on and stop the last first; a
         }),
         on: true,
       },
+      // Off as its row says, and started all the same: its row may turn on while the app runs.
+      { module: defineModule({ name: 'store-git-repository', plugin: { scope: 'computer', row: { read: async () => false, settings: 'agent-data' } }, hooks: { 'app.lifecycle': lifecycle('folder sync') } }) },
     ],
     errors,
   )
@@ -320,12 +322,15 @@ test("the app's life: modules start where they are on and stop the last first; a
   assert.deepEqual(seen, [
     'projects started in p1,p2',
     'auto-reply started in p2',
+    'folder sync started in p1,p2',
     'projects added p3',
     'scheduler added p3',
     'projects removed p1',
     'auto-reply removed p1',
     'devices removed p1',
     'scheduler removed p1',
+    'folder sync removed p1',
+    'folder sync stopping',
     'scheduler stopping',
     'auto-reply stopping',
     'projects stopping',

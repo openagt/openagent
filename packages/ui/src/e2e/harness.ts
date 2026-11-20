@@ -149,7 +149,7 @@ export async function makeWorld(): Promise<StoryWorld> {
     // No story reads the menu, and none may start a coding agent's CLI to ask.
     models: { read: async () => ({ 'claude-code': { models: [] as [] }, codex: { models: [] as [] } }), forget: () => {} },
     agentUpdates: { read: async () => [], update: async () => ({ ok: false as const, error: 'not wired in this test' }), openAgent: async () => undefined },
-    projectErrors: () => ({ errors: [] }),
+    projectState: async () => ({ errors: [] }),
   }
 
   const repos: string[] = []

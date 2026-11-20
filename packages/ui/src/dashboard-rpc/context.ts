@@ -4,7 +4,7 @@ import type { PreferencesStore } from '../registry.js'
 import type { QuotaSource } from '../dashboard/quota.js'
 import type { ModelsSource } from '../dashboard/models.js'
 import type { AgentUpdates } from '../dashboard/agent-updates.js'
-import type { ProjectErrorsReader } from '../project-errors.js'
+import type { ProjectStateReader } from '../project-state.js'
 import type { OpenAgentEvent } from '../events.js'
 import type { OwnProject } from '../dashboard/elsewhere.js'
 import type { MachinesQueue } from '../dashboard/machine-waiting.js'
@@ -126,8 +126,8 @@ export interface DashboardContext {
   models: ModelsSource
   /** Whether a newer version of a coding agent on this computer is out, and its update. */
   agentUpdates: AgentUpdates
-  /** What a project currently suffers from (#1500): the daemon's error state, read per project. */
-  projectErrors: ProjectErrorsReader
+  /** What a project's page and row say of it beside its runs (#1500): what needs fixing there, and why its data stays here. */
+  projectState: ProjectStateReader
 }
 
 /**
@@ -245,9 +245,9 @@ export function contextModels(): ModelsSource {
   return fromContext('models')
 }
 
-/** What a project currently suffers from (#1500), as the daemon's background jobs last recorded it. */
-export function contextProjectErrors(): ProjectErrorsReader {
-  return fromContext('projectErrors')
+/** What a project's page and row say of it beside its runs (#1500). */
+export function contextProjectState(): ProjectStateReader {
+  return fromContext('projectState')
 }
 
 

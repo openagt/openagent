@@ -10,7 +10,6 @@ import { useMachines } from '../lib/machines.js'
 import { useProjectLabel } from '../lib/project-labels.js'
 import { cn } from '../lib/utils.js'
 import { MACHINE_ICONS } from './MachineMark.js'
-import { projectErrorTitle } from './ProjectErrorBanner.js'
 import { rowButtonClass, RowChevron } from './ui/row-item.js'
 import { buttonVariants } from './ui/button.js'
 import { ScrollArea } from './ui/scroll-area.js'
@@ -135,10 +134,10 @@ function ProjectLine({ project, label }: { project: ProjectSummary; label: strin
       <span className="min-w-0 flex-1 leading-5">
         <ProjectName name={project.name} label={label} />
         {project.machine !== undefined && <ElsewhereLine machineId={project.machine} />}
-        {/* What the daemon finds wrong with it, in words: the project's own page carries the detail. */}
+        {/* What the person has to fix there, in words: the project's own page carries the detail. */}
         {project.errors?.map(e => (
-          <span key={e.code} data-line2 title={e.message} className="block truncate text-xs leading-4 text-danger">
-            {projectErrorTitle(e.code)}
+          <span key={e.id} data-line2 title={e.message} className="block truncate text-xs leading-4 text-danger">
+            {e.title}
           </span>
         ))}
         {!project.errors?.length && !project.activated && <span data-line2 className="block text-xs leading-4 text-muted-foreground">Not activated</span>}

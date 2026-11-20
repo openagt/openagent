@@ -1,6 +1,7 @@
 import { readSharing } from '@openagt/agent-data'
 import { defineModule } from '@openagt/hooks'
 import { gitBranchBackend } from './backend.js'
+import { dataSync } from './sync.js'
 
 /** The Settings entry a project's data is shared on: the project's Agent data. */
 export const SHARE_ENTRY = 'project-agent-data'
@@ -11,10 +12,14 @@ export const SHARE_ENTRY = 'project-agent-data'
  * answer (`agent-data.share`), which its link reads to know where the project's data is, switched
  * on the project's Agent data entry, which moves the data and asks first: everyone who can read
  * the repository reads it there. Its link of the store's chain is there in every project, as
- * every store's is, and passes on the scopes of the projects not shared.
+ * every store's is, and passes on the scopes of the projects not shared. Its own timer keeps the
+ * shared projects' data in step with their remotes, and a project whose data does not converge is
+ * said to need the person (`sync.ts`).
  */
+const sync = dataSync()
+
 export default defineModule({
   name: 'store-git-branch',
   plugin: { scope: 'project', row: { read: async project => project !== undefined && (await readSharing(project.dir)), settings: SHARE_ENTRY } },
-  hooks: { 'store.backend': gitBranchBackend() },
+  hooks: { 'store.backend': gitBranchBackend(), 'app.lifecycle': sync.lifecycle, 'app.attention': sync.attention },
 })

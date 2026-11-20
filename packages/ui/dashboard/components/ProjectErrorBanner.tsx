@@ -1,22 +1,12 @@
 import { TriangleAlert } from 'lucide-react'
-import type { ProjectError, ProjectErrorCode } from '../../src/index.js'
+import type { ProjectError } from '../../src/index.js'
 import { formatAge } from '../lib/format-date.js'
 import { Facts } from './ui/panel.js'
 
-// What the daemon currently finds wrong with the project (#1500), at the top of its page. The
-// daemon records the state and clears it when the condition is gone (#1599: an agent-data branch that
-// cannot reach origin), so this renders exactly what the project list carries — no state of its
+// What the person has to fix in the project (#1500), at the top of its page: what the modules on
+// in it say needs setting up, each said until its condition is gone (#1599: an agent-data branch
+// that cannot reach origin). This renders exactly what the project list carries — no state of its
 // own, and nothing to dismiss: the way to make it go away is to fix the thing it names.
-
-/** The one-line headline per kind of error; the detail underneath is the emitter's own message. */
-export function projectErrorTitle(code: ProjectErrorCode): string {
-  switch (code) {
-    case 'data-sync':
-      return 'Not syncing with the remote'
-    case 'provider':
-      return 'Unsettled: which package provides the data'
-  }
-}
 
 export function ProjectErrorBanner({ errors }: { errors: ProjectError[] | undefined }) {
   if (!errors || errors.length === 0) return null
@@ -24,14 +14,14 @@ export function ProjectErrorBanner({ errors }: { errors: ProjectError[] | undefi
     // The banners' strip: a tinted fill with no edge, the mark in the danger's colour, the words in the text's.
     <div className="flex flex-col gap-2 bg-danger/10 px-4 py-3">
       {errors.map(error => (
-        <div key={error.code} role="alert" className="flex items-start gap-2 text-sm">
+        <div key={error.id} role="alert" className="flex items-start gap-2 text-sm">
           <TriangleAlert className="mt-0.5 size-4 shrink-0 text-danger" aria-hidden />
           <div className="min-w-0">
             <p className="font-medium">
               {/* Since when, so a week-old failure does not read like a blip that will pass. */}
-              <Facts facts={[projectErrorTitle(error.code), { fact: `since ${formatAge(error.since)}`, className: 'font-normal text-muted-foreground' }]} />
+              <Facts facts={[error.title, ...(error.since !== undefined ? [{ fact: `since ${formatAge(error.since)}`, className: 'font-normal text-muted-foreground' }] : [])]} />
             </p>
-            <p className="break-words text-muted-foreground">{error.message}</p>
+            {error.message !== undefined && <p className="whitespace-pre-line break-words text-muted-foreground">{error.message}</p>}
           </div>
         </div>
       ))}
