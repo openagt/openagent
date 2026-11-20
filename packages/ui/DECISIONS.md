@@ -24,11 +24,11 @@ already made, and lists it in its pull request; for anything else it proposes an
 - The dashboard carries only the skills its own pages, buttons and automations are built on:
   the tickets with the commands about them (plan, plan-tickets, triage, update-tickets and
   the ticket suggestions, #2394 decision 25), the queue with work-queue, the logs, account
-  rotation, reply, the scheduler, the browser and Discord. The prompts for code reviews and
-  research and the post-merge clean-up are not carried: their texts stay in the repository's
-  `skills` folder, where `npx skills add` takes them from, and one comes back by its name in
-  the list and its package. Picked over carrying every skill written so far: a list too long
-  to pick from, most of it nothing in the product uses.
+  rotation, reply, the scheduler, the browser and Discord, each in its package. The prompts
+  for code reviews and research, the post-merge clean-up and the other standalone skills are
+  gone, and with them the repository's `skills` folder and its `npx skills add` catalogue
+  (#2394, decision 26). Picked over carrying every skill written so far: a list too long to
+  pick from, most of it nothing in the product uses.
 - Typed inside a Git repository, the command adds that repository to the projects, by
   its top folder, as "Add project" does, with the agents' records kept on this computer.
   The server adds no folder by itself: the command names the one it was typed in.

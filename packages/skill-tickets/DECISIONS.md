@@ -130,8 +130,8 @@ already made, and lists it in its pull request; for anything else it proposes an
 ## The commands
 - The commands about the tickets ship inside them (#2394, decision 25): `plan`,
   `plan-tickets`, `triage`, `update-tickets` and `suggest-tickets-to-work-on`, each a skill
-  of its own that the plugin gives a project's runs where it is on, its text in
-  `skills/<command>/` like the capability skills'. Picked over one package per command,
+  of its own that the plugin gives a project's runs where it is on, its text in the
+  package's `commands/<command>/`. Picked over one package per command,
   `@openagt/skill-<command>`, each installed and switched on by itself, which let a project
   have a command without the data it is about.
 - Two kinds of skill: capability skills (`branches`, `tickets`, `queue`, `logs`, `github`),

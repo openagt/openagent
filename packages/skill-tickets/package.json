@@ -46,11 +46,11 @@
     "./server": "./dist/server.js"
   },
   "scripts": {
-    "build": "cp ../../skills/tickets/SKILL.md SKILL.md && mkdir -p commands/plan && cp ../../skills/plan/SKILL.md commands/plan/SKILL.md && mkdir -p commands/plan-tickets && cp ../../skills/plan-tickets/SKILL.md commands/plan-tickets/SKILL.md && mkdir -p commands/triage && cp ../../skills/triage/SKILL.md commands/triage/SKILL.md && mkdir -p commands/update-tickets && cp ../../skills/update-tickets/SKILL.md commands/update-tickets/SKILL.md && mkdir -p commands/suggest-tickets-to-work-on && cp ../../skills/suggest-tickets-to-work-on/SKILL.md commands/suggest-tickets-to-work-on/SKILL.md && tsc -p tsconfig.build.json && vite build -c dashboard/vite.config.ts",
-    "prepack": "node -e \"if(!process.env.npm_config_user_agent?.startsWith('pnpm/')){console.error('Pack and publish with pnpm: it replaces workspace:* with the real version, npm does not');process.exit(1)}\" && cp ../../skills/tickets/SKILL.md SKILL.md && mkdir -p commands/plan && cp ../../skills/plan/SKILL.md commands/plan/SKILL.md && mkdir -p commands/plan-tickets && cp ../../skills/plan-tickets/SKILL.md commands/plan-tickets/SKILL.md && mkdir -p commands/triage && cp ../../skills/triage/SKILL.md commands/triage/SKILL.md && mkdir -p commands/update-tickets && cp ../../skills/update-tickets/SKILL.md commands/update-tickets/SKILL.md && mkdir -p commands/suggest-tickets-to-work-on && cp ../../skills/suggest-tickets-to-work-on/SKILL.md commands/suggest-tickets-to-work-on/SKILL.md",
+    "build": "tsc -p tsconfig.build.json && vite build -c dashboard/vite.config.ts",
+    "prepack": "node -e \"if(!process.env.npm_config_user_agent?.startsWith('pnpm/')){console.error('Pack and publish with pnpm: it replaces workspace:* with the real version, npm does not');process.exit(1)}\"",
     "typecheck": "tsc --noEmit && tsc --noEmit -p dashboard/tsconfig.json",
     "test": "tsc -p tsconfig.test.json && node ../../scripts/test-node.mjs && cd dashboard && vitest run",
-    "clean": "rm -rf dist dist-test SKILL.md commands"
+    "clean": "rm -rf dist dist-test"
   },
   "dependencies": {
     "@openagt/agent-data": "workspace:*",

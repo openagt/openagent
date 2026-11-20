@@ -19,9 +19,11 @@ already made, and lists it in its pull request; for anything else it proposes an
   `.claude/skills/<name>` or `.agents/skills/<name>`, committed on the branch an agent
   starts from. Picked over a skill saying which default it does in a line of its own, a
   format nothing needs yet.
-- OpenAgent has no command of its own to give a project skills: `npx skills add
-  openagt/openagent` in a terminal writes the texts for any agent. Picked over
-  `npx @openagt/init`, a second list with ticks to keep in step with the dashboard's.
+- OpenAgent has no command of its own to give a project skills, and no catalogue of them: a
+  module's skills come with its package, and a project's own are its files. Picked over
+  `npx @openagt/init`, a second list with ticks to keep in step with the dashboard's; and
+  over the repository's `skills` folder for `npx skills add openagt/openagent`, which every
+  skill being in its package left empty (#2394, decision 26).
 
 - The project skills a run does not get are left out of its checkout by git's sparse checkout,
   right after the worktree is made and before the skills are linked, so the index keeps them,
