@@ -1,9 +1,9 @@
 import { readFileSync } from 'node:fs'
-import type { AgentAccount, DriverQuota, DriverRateWindow } from '@openagt/agent-driver'
 import { readAccounts, type AccountsAgent } from './accounts.js'
 import { configFile, writePrivate } from './files.js'
 import { ownLoginThere } from './login.js'
 import type { LoginWiring } from './wiring.js'
+import type { AgentAccount, DriverQuota, DriverRateWindow } from '@openagt/hooks'
 
 // How full each account is, now where it can be known. The person's own Claude login says so
 // through Claude Code's `/usage`, every Codex login through Codex; an added Claude login only in

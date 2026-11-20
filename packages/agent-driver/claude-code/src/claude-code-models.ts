@@ -2,7 +2,8 @@ import { spawn as nodeSpawn } from 'node:child_process'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { DriverModel, SpawnLike } from '@openagt/agent-driver'
+import type { SpawnLike } from '@openagt/agent-driver'
+import type { DriverModel } from '@openagt/hooks'
 
 /** How long {@link readClaudeModels} waits for the CLI's answer. */
 export const MODELS_TIMEOUT_MS = 30_000

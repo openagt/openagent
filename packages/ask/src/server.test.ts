@@ -1,7 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import type { InboxLine } from '@openagt/agent-driver'
-import type { RunQuestion } from '@openagt/hooks'
+import type { RunQuestion, InboxLine } from '@openagt/hooks'
 import { rpcHost } from '@openagt/hooks/testing'
 import { answer } from './server.js'
 

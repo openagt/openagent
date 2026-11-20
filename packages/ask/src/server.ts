@@ -1,6 +1,6 @@
 import { continuationPrompt, skipPrompt } from '@openagt/agent-driver/question'
-import type { InboxLine } from '@openagt/agent-driver'
 import { act, type RpcHost } from '@openagt/hooks/rpc'
+import type { InboxLine } from '@openagt/hooks'
 
 // ask's server part (`@openagt/hooks/rpc`): the answer the question's card sends, in the project of
 // the run that asks. The answer is said to the run through its host, which hands it to the run

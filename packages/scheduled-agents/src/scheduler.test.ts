@@ -1,10 +1,10 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import type { DriverQuota } from '@openagt/agent-driver'
 import { QUOTA_KEPT_MS } from './names.js'
 import { keepQuota, startScheduler } from './scheduler.js'
 import { readState } from './state.js'
 import { removeRepo, testRepo } from './test-repo.js'
+import type { DriverQuota } from '@openagt/hooks'
 
 // Claude's quota, read once and used again for a while: a read spawns the CLI and takes seconds.
 

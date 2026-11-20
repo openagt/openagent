@@ -1,9 +1,9 @@
 import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { AgentAccount } from '@openagt/agent-driver'
 import { addAccount, forgetHandedOver, handedOverBy, nameRefused, OWN_NAME, readAccounts, removeAccount, type AccountsAgent } from './accounts.js'
 import type { LoginWiring } from './wiring.js'
+import type { AgentAccount } from '@openagt/hooks'
 
 // Adding an account and taking one off: a name first, then the person signs in to the account being
 // added. How is the agent's own: Claude Code makes a login that lasts a year; Codex keeps the

@@ -1,4 +1,4 @@
-import type { DriverEvent } from '@openagt/agent-driver'
+import type { DriverEvent } from '@openagt/hooks'
 
 /** One selectable option in an interactive {@link ChoiceRequest} (#304). */
 export interface ChoiceOption {

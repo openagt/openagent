@@ -1,7 +1,7 @@
-import type { Driver, ReadyPrompt } from '@openagt/agent-driver'
 import { readPersonal } from './config.js'
 import { driverFor, type DriverName } from './runner.js'
 import { isBareCommand, startNaming, TITLE_MODELS, titleOf, titlePrompt, type NamingSession } from './title.js'
+import type { Driver, ReadyPrompt } from '@openagt/hooks'
 
 // A run's name, ready the moment the run is started: what keeps a session's row from waiting
 // seconds for it, as Claude Code on the web has its name in about a second and a half.

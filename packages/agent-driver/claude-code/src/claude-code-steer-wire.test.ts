@@ -7,7 +7,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import { ClaudeCodeDriver } from './claude-code.js'
-import { appendInbox, type DriverEvent } from '@openagt/agent-driver'
+import { appendInbox } from '@openagt/agent-driver'
+import type { DriverEvent } from '@openagt/hooks'
 
 // How Claude Code takes a message mid-turn (a stream-json user line it queues and repeats under
 // `--replay-user-messages` once it read it) and the person's Stop (the `interrupt` request) is no

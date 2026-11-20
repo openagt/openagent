@@ -1,7 +1,6 @@
-import type { DriverQuota, DriverQuotaWindow, DriverRateWindow } from '@openagt/agent-driver'
-import { type AgentAccount } from '@openagt/agent-driver'
 import { QUOTA_WEEK_MS, quotaBoundaryStatus, quotaHeadroom } from './quota-boundary.js'
 import { freesIn, isLimited } from '@openagt/skill-account-rotation'
+import type { DriverQuota, DriverQuotaWindow, DriverRateWindow, AgentAccount } from '@openagt/hooks'
 
 // Unattended work on several accounts of one agent: it starts when any account is under its line,
 // and on that one. How an account's windows are read is the agent's: Claude's own login live,

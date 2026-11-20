@@ -1,5 +1,5 @@
-import type { DriverEvent } from '@openagt/agent-driver'
 import type { OpenAgentEvent } from '../../src/index.js'
+import type { DriverEvent } from '@openagt/hooks'
 
 /**
  * The chat's own words for the rows that are neither a message, a step, nor a card: how a run

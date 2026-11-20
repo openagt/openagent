@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
-import type { AgentAccount, DriverRateWindow } from '@openagt/agent-driver'
 import { configFile, writePrivate } from './files.js'
+import type { AgentAccount, DriverRateWindow } from '@openagt/hooks'
 
 // The accounts an agent's runs may use, when a person has more than one: their own login, which the
 // agent keeps where it always does, and the ones added beside it. What an added account's login is,

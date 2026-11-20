@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import type { DriverQuota } from '@openagt/agent-driver'
 import { accountWindows, accountWithRoom, readClaudeAccount, readCodexAccount } from './accounts.js'
+import type { DriverQuota } from '@openagt/hooks'
 
 const NOW = Date.parse('2026-09-16T14:01:00.000Z')
 const HOUR = 60 * 60_000

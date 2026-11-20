@@ -13,6 +13,10 @@ already made, and lists it in its pull request; for anything else it proposes an
   package per seam.
 - `hooks` declares all of them: a hook a module needs is added here. Picked over modules
   adding hooks of their own through declaration merging.
+- The coding agent's contract is `hooks`' too (`run.agent`, #2394): the driver an adapter
+  implements, its sessions and turns, the question, the inbox's lines, the session's log and
+  the accounts a turn is on. agent-driver keeps what an adapter builds its driver with.
+  Picked over `hooks` taking the contract from agent-driver.
 - A hook's handlers go by a number, `order`, the way universal-middleware orders middleware
   around its handler. Picked over a fixed list of lifecycle stages.
 - The run is one pipeline of steps, `run.step`: below 0 they prepare the run, at 0 are the

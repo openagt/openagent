@@ -1,6 +1,7 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { FakeDriver, type Driver, type DriverStartOptions } from '@openagt/agent-driver'
+import { FakeDriver } from '@openagt/agent-driver'
+import type { Driver, DriverStartOptions } from '@openagt/hooks'
 import { readdir } from 'node:fs/promises'
 import { MAX_TITLE, isBareCommand, nameRun, titleOf, titlePrompt, TITLE_MODELS, TITLE_SYSTEM } from './title.js'
 

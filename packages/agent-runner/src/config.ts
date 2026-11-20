@@ -1,8 +1,8 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { PERSONAL_PARTS, type PersonalSetup } from '@openagt/agent-driver'
 import { parseDocument } from 'yaml'
 import { RUNNER_CONFIG, RUNNER_DIR } from './names.js'
+import { PERSONAL_PARTS, type PersonalSetup } from '@openagt/hooks'
 
 /**
  * This machine's settings for the tool: `.agent-runner/config.yml` in the project, hidden from git

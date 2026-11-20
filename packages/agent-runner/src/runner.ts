@@ -2,7 +2,8 @@ import { spawn } from 'node:child_process'
 import { closeSync, mkdirSync, openSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { findRun, probeCli, type CliProbe, type Driver, type DriverReadiness, type PersonalSetup } from '@openagt/agent-driver'
+import { findRun, probeCli, type CliProbe } from '@openagt/agent-driver'
+import { createHooks, DISTRIBUTION_ENV, loadHandedDown, type DistributionEntry, type Preset, type Driver, type DriverReadiness, type PersonalSetup } from '@openagt/hooks'
 import { ClaudeCodeDriver, claudeCodeReady } from '@openagt/agent-driver-claude-code'
 import { CodexDriver, codexReady } from '@openagt/agent-driver-codex'
 import { readPersonal } from './config.js'
@@ -14,7 +15,6 @@ import { publishChange, runnerMark, type NO_PUBLISH, type Publish } from './reco
 import { acquireRunLock, handOverRunLock, isPidAlive, releaseRunLock, runStderrPath } from './run-lock.js'
 import { accountRotation, accountsPath, hasAddedAccount, readAccounts } from '@openagt/skill-account-rotation'
 import { AGENT_ID_ENV } from '@openagt/agent-data'
-import { createHooks, DISTRIBUTION_ENV, loadHandedDown, type DistributionEntry, type Preset } from '@openagt/hooks'
 
 /**
  * The tool's process side: a run in this process, the same run detached in its own process and

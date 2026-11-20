@@ -2,7 +2,7 @@
 // memory, a host whose runs a test drives, a run's context for a step, and the host a server
 // part's function is handed.
 import { StoreOrder } from './order.js'
-import type { InboxLine } from '@openagt/agent-driver'
+import type { InboxLine } from './agent.js'
 import type { RpcHost } from './rpc.js'
 import type { RunContext, RunEvent, RunFound, RunHost, RunInput, RunRef, RunRequest, RunStatus, RunSummary } from './run.js'
 import { settingsIn, type Settings } from './settings.js'

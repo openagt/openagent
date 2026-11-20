@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import { StreamJsonParser } from '@openagt/agent-driver-claude-code'
 import { readZip } from './actions-zip.js'
-import { combineFraming, makeEmit, promptSent, startEvent, finishTurn, attachLog, type SessionLog, type DriverEvent, type DriverPromptOptions, type DriverSession, type DriverStartOptions, type DriverTurn } from '@openagt/agent-driver'
+import { combineFraming, makeEmit, promptSent, startEvent, finishTurn, attachLog } from '@openagt/agent-driver'
+import type { SessionLog, DriverEvent, DriverPromptOptions, DriverSession, DriverStartOptions, DriverTurn } from '@openagt/hooks'
 
 /**
  * A run's turns on **GitHub Actions** instead of on this machine (#610, #2394): each prompt is one

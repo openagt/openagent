@@ -3,11 +3,11 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
-import type { DriverQuota } from '@openagt/agent-driver'
 import { accountsPath, addAccount, noteWindows } from './accounts.js'
 import { runCli } from './cli.js'
 import { loginWiring, type LoginWiring } from './wiring.js'
 import { claudeUsagePath, keepClaudeReading, READING_KEPT_MS } from './usage.js'
+import type { DriverQuota } from '@openagt/hooks'
 
 const NOW = 1_800_000_000_000
 const HOUR = 3_600_000

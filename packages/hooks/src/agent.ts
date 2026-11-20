@@ -1,6 +1,8 @@
-import type { Question } from './question.js'
-import type { SessionLog, SessionLogOptions } from './session-log.js'
-import type { InboxLine, PromptLine } from './inbox.js'
+/**
+ * The coding agent's contract (#2394): what a module fills `run.agent` with, and what the run
+ * engine, a host and a page read of a run's agent. The adapters (`agent-driver-claude-code`,
+ * `agent-driver-codex`) implement it; agent-driver holds what they build it with.
+ */
 
 /**
  * The **driver** seam: the one abstraction a coding-agent CLI is wrapped behind.
@@ -152,7 +154,7 @@ export interface DriverStartOptions {
   resumeSessionId?: string
   /**
    * Keep the session's log, two files in a run record's shape at this directory, written as the
-   * agent works (`session-log.ts`). The session exposes it as {@link DriverSession.log} for the
+   * agent works (agent-driver's `attachLog`). The session exposes it as {@link DriverSession.log} for the
    * caller to patch and to end.
    */
   log?: SessionLogOptions
@@ -553,3 +555,213 @@ export type DriverEvent =
   | { type: 'notice'; message: string }
   /** The turn ended on a question the agent will not decide alone: its `await-choices` block, parsed (`question.ts`). */
   | { type: 'question'; question: Question }
+
+// A question the agent stopped to ask: how a turn ends when the agent will not decide alone, which
+// every driver reports the same way (`DriverTurn.question`, a `question` event).
+
+/** One option of a question: what the user picks between. */
+export interface QuestionOption {
+  /** Stable id an answer is posted back against; synthesized from position when the agent names none. */
+  id: string
+  /** The option as shown to the user. */
+  label: string
+  /** An optional one-liner under the label. */
+  detail?: string
+  /** Starts checked. Only meaningful on a {@link Question.multi} question. */
+  default?: boolean
+  /** Picking this ends the session rather than resuming the agent with it: the user takes over. */
+  stop?: boolean
+}
+
+/** A question the agent stopped to ask. */
+export interface Question {
+  /** The question shown above the options. */
+  title: string
+  /** A word or two naming the question ("Background"): what it is called once it is passed by. */
+  header?: string
+  /** The options to pick between: at least one, or it is no question. */
+  options: QuestionOption[]
+  /** The option to default to when nobody is there to answer, when the agent named one. */
+  recommended?: string
+  /** Any number of options may be picked rather than exactly one. */
+  multi?: boolean
+  /** A markdown file the question is about (a plan under approval). */
+  file?: string
+}
+
+// The inbox: what reaches a running agent from outside, one line per message or answer.
+
+/** One line of the inbox. */
+export type InboxLine =
+  /**
+   * The user's own words to the agent. `publish` is how far the run takes its work from this
+   * message on, in the words of the tool that runs it, which reads it (`agent-runner`'s levels, or
+   * `nothing`): a driver sends the words alone. `id` names the message for the lines that act on
+   * it and for the `steered` event that says it landed. `later` keeps it for after the turn, as
+   * Claude Code's ⌘Enter does, rather than handing it to the agent while it works.
+   */
+  | { kind: 'message'; text: string; publish?: string; id?: string; later?: true }
+  /** The user's answer to the question the agent stopped on: the question's title and the chosen label or labels. */
+  | { kind: 'answer'; question: string; answer: string }
+  /** Take back the message `id`, which has not reached the agent yet: the person edits it instead. */
+  | { kind: 'cancel'; id: string }
+  /** Hand the waiting messages to the agent now: what it is running goes on in the background, as Claude Code's Send now does. */
+  | { kind: 'now' }
+
+/** A line that is a prompt of its own once the turn is over: a message or an answer. */
+export type PromptLine = Extract<InboxLine, { kind: 'message' | 'answer' }>
+
+// The session's log: two files in the shape of a run record, written as the agent works.
+
+/** How the run ended: finished, stopped, failed, or waiting on an answer to the question its last turn asked. */
+export type LogEndStatus = 'done' | 'stopped' | 'failed' | 'waiting'
+
+/** What the card holds; every field but `id` is optional and the caller's to give or patch. */
+export interface LogCard {
+  id: string
+  startedAt?: string
+  intent?: string
+  /** The run's short name, two to five words, as a list shows it; absent until something names it. */
+  title?: string
+  driver?: string
+  model?: string
+  /** How hard the model thinks, by its agent's names: the one picked, or the one in force when the driver can tell. */
+  effort?: string
+  branch?: string
+  pr?: { number: number; url: string }
+  /** How much of the model's context the conversation filled at the last turn ({@link DriverUsage.contextTokens}). */
+  contextTokens?: number
+  caller?: Record<string, unknown>
+}
+
+/** Where the log goes, and the card it starts with. */
+export interface SessionLogOptions {
+  dir: string
+  card: LogCard
+  /**
+   * The files are there already, from an earlier session of the same run: the diary is kept and
+   * appended to, and the card is rewritten `running`. Without it the diary starts empty.
+   */
+  continue?: boolean
+}
+
+/** A card as written. */
+export interface WrittenCard extends LogCard {
+  startedAt: string
+  status: 'running' | LogEndStatus
+  endedAt?: string
+  cost?: number
+}
+
+/**
+ * A session's log, as its caller uses it ({@link DriverSession.log}): the card it keeps, patched as
+ * the run goes and ended once it is over. agent-driver keeps it in two files at the directory
+ * {@link SessionLogOptions.dir} names, in the shape of a run record.
+ */
+export interface SessionLog {
+  readonly card: WrittenCard
+  /** The card's path. */
+  readonly cardPath: string
+  /** The diary's path: one JSON line per thing that happened. */
+  readonly diaryPath: string
+  /** The live file's path: the message the agent is writing, while it writes it. */
+  readonly livePath: string
+  /** Write one event to the diary, as the session does with each it sees. */
+  record(event: DriverEvent): Promise<void>
+  /** Change fields of the card. */
+  patch(fields: Partial<Omit<LogCard, 'id'>>): Promise<void>
+  /** Name the run: its title on the card, and a line in the diary. */
+  title(text: string): Promise<void>
+  /** End the log: the card's status and end time, and an `ended` line. */
+  end(status: LogEndStatus, detail?: string): Promise<void>
+  /** Open an ended log again, for more turns of the same session. */
+  reopen(): Promise<void>
+  /** Resolves once every write so far has landed. */
+  settled(): Promise<void>
+}
+
+// Whether a coding agent can start a session here, asked before a run spends a checkout on it.
+
+/** What stands in the way of a session: problems stop it, warnings are said and do not. Each line names its own fix. */
+export interface DriverReadiness {
+  problems: string[]
+  warnings: string[]
+  /** What a press does about the problem, when the adapter has a command for it: install the CLI, or log it in. */
+  fix?: DriverFix
+  /** The CLI's own login is out, and an added account is what runs use: its own login is no account to show. */
+  ownLoggedOut?: true
+}
+
+/** The command a press runs about a problem: one the adapter declared, never one from a page. */
+export interface DriverFix {
+  kind: 'install' | 'log-in'
+  /** A shell command line, shown under the button as it is run. */
+  command: string
+  /** The line of `problems` this answers: a page that says it in its own words, beside its press, leaves that line out. */
+  problem: string
+}
+
+// What a driver sees of a person's several accounts: one account, the rotation it is handed, and
+// what it answers a turn on an account with. Which account takes a turn is the rotation's; what an
+// added account's login is, and how a turn runs on it, is the driver's.
+
+/** One account as the list keeps it. */
+export interface AgentAccount {
+  /** Its name, as the person gave it; unique. The person's own login has none until they give one. */
+  name: string
+  /** An added account's login, as its agent keeps it. None for the person's own: the agent has that one. */
+  login?: string
+  /** Who the login is at its agent's service, when the computer that made it knew: an agent told it lists what that account may use. */
+  accountId?: string
+  /** When it was added, ISO 8601. */
+  added?: string
+  /** When a limit it hit frees, epoch milliseconds: until then no run picks it. */
+  limitedUntil?: number
+  /** Its windows as the last turn on it said them. */
+  windows?: DriverRateWindow[]
+  /** When those were said, epoch milliseconds. */
+  windowsAt?: number
+}
+
+/** What a turn's own output said of the account it ran on, read once the turn is over. */
+export interface AccountReading {
+  /** Whether the account's limit is what stopped the turn. */
+  limited: boolean
+  /** When that limit frees, epoch ms, when the agent said. */
+  resetsAt?: number
+  /** The account's windows as the turn said them. */
+  windows?: DriverRateWindow[]
+  /** The conversation, so far as the turn got: what the next account continues. */
+  sessionId?: string
+}
+
+/** What one turn on one account came to, as its agent read it. */
+export interface AccountTurn extends AccountReading {
+  /** The turn, when it ended with one. */
+  turn?: DriverTurn
+  /** What it threw, when it did. */
+  failure?: unknown
+}
+
+/** What a driver gives a rotation to run one turn with. */
+export interface RotatedTurn {
+  /** The account the session is on, kept across its turns until a limit moves it on. */
+  current: { account?: string }
+  text: string
+  opts: DriverPromptOptions
+  emit: (event: DriverEvent) => void
+  /** Whether the session or the turn was stopped: a stop is never a limit to switch over. */
+  stopped: () => boolean
+  /** The conversation the next account continues. */
+  continueFrom: (sessionId: string) => void
+  /** One turn on `account`: the person's own login, as the agent keeps it, when the account has none. */
+  run: (account: AgentAccount, said: string, sent: DriverPromptOptions) => Promise<AccountTurn>
+}
+
+/** The accounts a driver's sessions run on. */
+export interface AccountRotation {
+  /** The account a run takes first in this environment, when any is free. */
+  first(env: NodeJS.ProcessEnv): AgentAccount | undefined
+  /** A turn on the accounts of this environment, handing over at a limit. */
+  turn(env: NodeJS.ProcessEnv, on: RotatedTurn): Promise<DriverTurn>
+}

@@ -1,7 +1,7 @@
-import type { DriverEvent } from '@openagt/agent-driver'
 import type { AnyDiaryLine, RunCard } from './runs.js'
 import type { ChoiceOption, OpenAgentEvent } from '../events.js'
 import type { AgentMeta } from './agent-store.js'
+import type { DriverEvent } from '@openagt/hooks'
 
 /**
  * A run's card and diary (`runs.ts`), read as OpenAgent's own shapes (#1769): the card as the

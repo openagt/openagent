@@ -1,11 +1,11 @@
 import { hostname } from 'node:os'
-import type { InboxLine } from '@openagt/agent-driver'
 import { errorMessage } from '@openagt/agent-data'
 import { runHostOf } from '../dashboard-rpc/context.js'
 import { isArrived } from '../dashboard-rpc/relay-agent.js'
 import { runRefAt } from '../distribution-hooks.js'
 import { withAgentLock } from '../agent-locks.js'
 import { findAgent } from '../store/index.js'
+import type { InboxLine } from '@openagt/hooks'
 
 /**
  * What a person says to a run (#1774): their own words, their answer to the question the run

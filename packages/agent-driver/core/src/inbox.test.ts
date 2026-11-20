@@ -5,8 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { FakeDriver } from './fake.js'
 import { appendInbox, takeInbox } from './inbox.js'
-import type { Question } from './question.js'
-import type { DriverEvent } from './types.js'
+import type { Question, DriverEvent } from '@openagt/hooks'
 
 // The transport and the log, through the fake driver: what reaches a running agent, what the
 // driver reports when a turn ends on a question, and the two files the session keeps.

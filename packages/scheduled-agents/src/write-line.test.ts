@@ -3,7 +3,8 @@ import { test } from 'node:test'
 import { access, chmod, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { FakeDriver, type Driver, type DriverSession, type DriverStartOptions } from '@openagt/agent-driver'
+import { FakeDriver } from '@openagt/agent-driver'
+import type { Driver, DriverSession, DriverStartOptions } from '@openagt/hooks'
 import { WRITE_LINE_SYSTEM, lineContext, lineOf, writeLine, writeLinePrompt, writtenOf } from './write-line.js'
 
 // A shell line written from plain words: what the agent is asked, what is taken from its answer,

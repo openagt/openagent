@@ -5,7 +5,7 @@
 // {@link ComputerRpcClient}), so renaming a function on one side is a type error on the other.
 // Whether a function only reads is its own word: a computer that lets its server only watch calls
 // the reads alone.
-import type { InboxLine } from '@openagt/agent-driver'
+import type { InboxLine } from './agent.js'
 import type { ProjectRef } from './project.js'
 import type { RunFound, RunQuestion } from './run.js'
 import type { Settings } from './settings.js'

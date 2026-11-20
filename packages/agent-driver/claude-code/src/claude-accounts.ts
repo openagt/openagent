@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import type { AgentAccount } from '@openagt/agent-driver'
+import type { AgentAccount } from '@openagt/hooks'
 
 // The Claude accounts runs may use (`@openagt/skill-account-rotation` keeps the list): the person's
 // own login, which Claude Code keeps (the Mac's Keychain, a server's login file), and the ones added

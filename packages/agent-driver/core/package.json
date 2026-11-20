@@ -32,7 +32,8 @@
     "clean": "rm -rf dist dist-test"
   },
   "dependencies": {
-    "@openagt/agent-data": "workspace:*"
+    "@openagt/agent-data": "workspace:*",
+    "@openagt/hooks": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

@@ -1,4 +1,4 @@
-import type { DriverTurn, ReadyPrompt } from './types.js'
+import type { DriverTurn, ReadyPrompt } from '@openagt/hooks'
 
 /**
  * A {@link ReadyPrompt} around a turn that is started at once: `start` spawns the process and is

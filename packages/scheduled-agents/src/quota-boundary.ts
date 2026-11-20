@@ -1,3 +1,4 @@
+import type { DriverQuotaWindow } from '@openagt/hooks'
 /**
  * The spend boundary: how much of the account's week unattended work may have spent by now.
  *
@@ -10,7 +11,6 @@
  * @openagt/agent-driver-claude-code, which reads the windows, and not on OpenAgent, which only draws the boundary.
  */
 
-import type { DriverQuotaWindow } from '@openagt/agent-driver'
 
 /** The quota week, in ms. */
 export const QUOTA_WEEK_MS = 7 * 24 * 60 * 60 * 1000

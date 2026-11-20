@@ -2,8 +2,7 @@ import { pathToFileURL } from 'node:url'
 import { isRunId } from '../store/index.js'
 import { cachedPrsForBranch, type LinkedPr } from './pull-requests.js'
 import type { Cached } from './cache.js'
-import type { InboxLine } from '@openagt/agent-driver'
-import type { ProjectRef, RunFound, RunQuestion, Settings } from '@openagt/hooks'
+import type { ProjectRef, RunFound, RunQuestion, Settings, InboxLine } from '@openagt/hooks'
 import { rpcKind, type MergeLookup, type RpcComputerHost, type RpcFunction, type RpcHost, type RpcKind } from '@openagt/hooks/rpc'
 
 // The daemon's side of a module's server part (`@openagt/hooks/rpc`): the host a function is given

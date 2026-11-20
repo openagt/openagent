@@ -9,7 +9,8 @@ import { PassThrough, Readable } from 'node:stream'
 import { CodexDriver, codexReady, parseCodexModels } from './codex.js'
 import { CodexAppServerParser, codexQuestion, parseCodexUsage } from './codex-app-server.js'
 import { defaultCodexHome } from './codex-home.js'
-import { AgentExitError, ConversationGoneError, type SpawnLike, type SpawnedProcess, type Driver, type DriverEvent } from '@openagt/agent-driver'
+import { AgentExitError, ConversationGoneError, type SpawnLike, type SpawnedProcess } from '@openagt/agent-driver'
+import type { Driver, DriverEvent } from '@openagt/hooks'
 
 type Message = { method: string; params: Record<string, unknown> }
 const note = (method: string, params: Record<string, unknown>): Message => ({ method, params })

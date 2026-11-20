@@ -1,8 +1,8 @@
 import { computerName } from '../computer-name.js'
-import type { AgentAccount, DriverQuotaWindow, DriverRateWindow } from '@openagt/agent-driver'
 import { comesBackFrom, handedOverBy, isLimited, loginWiring, OWN_NAME, ownLoginThere, ownName, readAccounts, removeAdded, useFirst, type AccountsAgent, type LoginWiring } from '@openagt/skill-account-rotation'
 import { contextQuota } from './context.js'
 import { readCopied, type CopiedLogin } from '../dashboard/copied-logins.js'
+import type { AgentAccount, DriverQuotaWindow, DriverRateWindow } from '@openagt/hooks'
 
 // The accounts runs use, per coding agent (`@openagt/skill-account-rotation`): the person's own
 // login, which the agent keeps, and the ones added beside it. A page sees each one's name, how full

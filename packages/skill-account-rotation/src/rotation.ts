@@ -1,7 +1,7 @@
-import type { AccountRotation, AccountTurn, AgentAccount, DriverTurn, RotatedTurn } from '@openagt/agent-driver'
 import { accountsPath, freesIn, isLimited, markLimited, noteWindows, pickAccount, readAccounts, usableAccounts, withLogin, type AccountsAgent } from './accounts.js'
 import { ownLoginThere } from './login.js'
 import { loginWiring } from './wiring.js'
+import type { AccountRotation, AccountTurn, AgentAccount, DriverTurn, RotatedTurn } from '@openagt/hooks'
 
 // The rotation a driver is handed (`AccountRotation` in `agent-driver`): a turn runs on the first
 // free account of the list, and one its account's limit stops goes on, the same conversation, with

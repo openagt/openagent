@@ -1,9 +1,9 @@
 // What the run tests share: a fixed clock, fake git hosts and the fake agents a run is started with.
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { FakeDriver, promptSent, type Driver, type DriverSession, type DriverStartOptions, type FakeDriverSession } from '@openagt/agent-driver'
+import { FakeDriver, promptSent, type FakeDriverSession } from '@openagt/agent-driver'
 import type { GitRunner } from '@openagt/agent-data'
-import { loadModules, type DistributionEntry, type ModuleDefinition, type PullRequest, type StoreBackend } from '@openagt/hooks'
+import { loadModules, type DistributionEntry, type ModuleDefinition, type PullRequest, type StoreBackend, type Driver, type DriverSession, type DriverStartOptions } from '@openagt/hooks'
 import { memoryStore } from '@openagt/hooks/testing'
 import { gitBranchesModule } from '@openagt/git-branches/module'
 import { githubModule, type GithubDeps } from '@openagt/github/module'

@@ -4,6 +4,43 @@
 // Its UI part's hooks, the places of the shell they fill, are `@openagt/hooks/ui` (`./ui.ts`), and
 // its server part's functions, which the UI part calls, `@openagt/hooks/rpc` (`./rpc.ts`).
 export { RunOrder, StoreOrder } from './order.js'
+export {
+  PERSONAL_PARTS,
+  isTransientQuotaReason,
+  type AccountReading,
+  type AccountRotation,
+  type AccountTurn,
+  type AgentAccount,
+  type Driver,
+  type DriverEvent,
+  type DriverFix,
+  type DriverImplId,
+  type DriverModel,
+  type DriverPromptOptions,
+  type DriverQuota,
+  type DriverQuotaUnavailableReason,
+  type DriverQuotaWindow,
+  type DriverRateLimit,
+  type DriverRateWindow,
+  type DriverReadiness,
+  type DriverSession,
+  type DriverStartOptions,
+  type DriverTurn,
+  type DriverUsage,
+  type FileChange,
+  type InboxLine,
+  type LogCard,
+  type LogEndStatus,
+  type PersonalSetup,
+  type PromptLine,
+  type Question,
+  type QuestionOption,
+  type ReadyPrompt,
+  type RotatedTurn,
+  type SessionLog,
+  type SessionLogOptions,
+  type WrittenCard,
+} from './agent.js'
 export type { ProjectRef } from './project.js'
 export {
   PUBLISH_LEVELS,

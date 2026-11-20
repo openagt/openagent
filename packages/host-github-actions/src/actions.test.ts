@@ -1,8 +1,8 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { ActionsSession, replayTranscript, type ActionsOptions } from './actions.js'
-import type { DriverEvent, DriverStartOptions } from '@openagt/agent-driver'
 import { EXECUTION, fakeGitHub, type Call, type FakeOptions } from './test-support.js'
+import type { DriverEvent, DriverStartOptions } from '@openagt/hooks'
 
 /** A session against the fake, its turns started with `start`, the client's options over the fake's with `more`. */
 function makeSession(opts: FakeOptions = {}, start: Partial<DriverStartOptions> = {}, more: Partial<ActionsOptions> = {}): { session: ActionsSession; calls: Call[] } {

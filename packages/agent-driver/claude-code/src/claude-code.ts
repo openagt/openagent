@@ -7,7 +7,8 @@ import { readClaudeQuota } from './claude-code-quota.js'
 import { readClaudeModels } from './claude-code-models.js'
 import { StreamJsonParser } from './claude-code-stream.js'
 import { accountEnv, CLAUDE_TOKEN_ENV } from './claude-accounts.js'
-import { type AccountRotation, accountTurn, type AgentCliParser, type CliIo, type ReadyPrompt, readyPrompt, combineFraming, combineSignals, makeEmit, promptSent, readWorkspaceFile, runCliSession, continuingTurn, checkCliReady, type CliSpec, type DriverReadiness, type DriverReadyOptions, type PersonalSetup, finishTurn, agentEnv, attachLog, type SpawnLike, type SessionLog, type Driver, type DriverEvent, type DriverModel, type DriverPromptOptions, type DriverQuota, type DriverSession, type DriverStartOptions, type DriverTurn, steeredWords } from '@openagt/agent-driver'
+import { accountTurn, type AgentCliParser, type CliIo, readyPrompt, combineFraming, combineSignals, makeEmit, promptSent, readWorkspaceFile, runCliSession, continuingTurn, checkCliReady, type CliSpec, type DriverReadyOptions, finishTurn, agentEnv, attachLog, type SpawnLike, steeredWords } from '@openagt/agent-driver'
+import type { AccountRotation, ReadyPrompt, DriverReadiness, PersonalSetup, SessionLog, Driver, DriverEvent, DriverModel, DriverPromptOptions, DriverQuota, DriverSession, DriverStartOptions, DriverTurn } from '@openagt/hooks'
 
 /** Claude Code permission modes we pass through to the CLI. */
 export type PermissionMode = 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan'

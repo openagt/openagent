@@ -4,7 +4,8 @@ import { PassThrough, Readable, Writable } from 'node:stream'
 import { existsSync, readFileSync } from 'node:fs'
 import { ClaudeCodeDriver, settingsEffort, claudeCodeReady } from './claude-code.js'
 import { StreamJsonParser } from './claude-code-stream.js'
-import { ConversationGoneError, runCliSession, type SpawnLike, type SpawnedProcess, type DriverEvent } from '@openagt/agent-driver'
+import { ConversationGoneError, runCliSession, type SpawnLike, type SpawnedProcess } from '@openagt/agent-driver'
+import type { DriverEvent } from '@openagt/hooks'
 
 test('StreamJsonParser surfaces assistant text + tool names, keeps the result', () => {
   const p = new StreamJsonParser()

@@ -1,5 +1,5 @@
-import type { DriverEvent, DriverRateLimit } from '@openagt/agent-driver'
 import { pickedIds, type ChoiceOption, type OpenAgentEvent } from './events.js'
+import type { DriverEvent, DriverRateLimit } from '@openagt/hooks'
 
 // The terminal surface for the agent's event stream: render one {@link OpenAgentEvent} as one
 // human-readable line. This is the CLI's counterpart to the dashboard's read-model

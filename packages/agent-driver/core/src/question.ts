@@ -8,35 +8,7 @@
  * reader of a run's prompts reads back ({@link answeredQuestion}).
  */
 
-/** One option of a question: what the user picks between. */
-export interface QuestionOption {
-  /** Stable id an answer is posted back against; synthesized from position when the agent names none. */
-  id: string
-  /** The option as shown to the user. */
-  label: string
-  /** An optional one-liner under the label. */
-  detail?: string
-  /** Starts checked. Only meaningful on a {@link Question.multi} question. */
-  default?: boolean
-  /** Picking this ends the session rather than resuming the agent with it: the user takes over. */
-  stop?: boolean
-}
-
-/** A question the agent stopped to ask. */
-export interface Question {
-  /** The question shown above the options. */
-  title: string
-  /** A word or two naming the question ("Background"): what it is called once it is passed by. */
-  header?: string
-  /** The options to pick between: at least one, or it is no question. */
-  options: QuestionOption[]
-  /** The option to default to when nobody is there to answer, when the agent named one. */
-  recommended?: string
-  /** Any number of options may be picked rather than exactly one. */
-  multi?: boolean
-  /** A markdown file the question is about (a plan under approval). */
-  file?: string
-}
+import type { Question, QuestionOption } from '@openagt/hooks'
 
 const str = (v: unknown): string => (typeof v === 'string' ? v.trim() : '')
 

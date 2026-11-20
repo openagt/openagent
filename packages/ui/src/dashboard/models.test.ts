@@ -3,9 +3,9 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
-import type { AccountRotation, DriverModel } from '@openagt/agent-driver'
 import { cachedModelsSource, firstAccount, modelDrivers } from './models.js'
 import { accountsPath, addAccount, useFirst } from '@openagt/skill-account-rotation'
+import type { AccountRotation, DriverModel } from '@openagt/hooks'
 
 /** A driver that answers each ask with the next of `answers`, counting the asks. */
 function driver(...answers: Array<DriverModel[] | Error>) {

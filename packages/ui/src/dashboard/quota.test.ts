@@ -2,7 +2,7 @@ import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { pollerQuotaSource } from './quota.js'
 import { QuotaPoller } from '../quota-poller.js'
-import type { DriverQuota } from '@openagt/agent-driver'
+import type { DriverQuota } from '@openagt/hooks'
 
 /** 2026-07-20T12:00:00Z. The week below resets in 5 days, so this is day 3 of 7. */
 const T0 = Date.UTC(2026, 6, 20, 12, 0, 0)

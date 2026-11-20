@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import { ClaudeCodeDriver } from './claude-code.js'
-import type { DriverEvent } from '@openagt/agent-driver'
+import type { DriverEvent } from '@openagt/hooks'
 
 // How Claude Code asks its questions over stdin (`--permission-prompt-tool stdio`, the
 // `control_request` it writes, the interrupt it is answered with) is no documented interface: it

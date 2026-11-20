@@ -1,9 +1,9 @@
 import { access, constants, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
-import type { Driver } from '@openagt/agent-driver'
 import { originUrl, type GitRunner } from '@openagt/agent-data'
 import { LAST_RUN_ENV, OWN_TEXT_MAX, WRITE_LINE_TIMEOUT_MS } from './names.js'
+import type { Driver } from '@openagt/hooks'
 
 // The shell line of an automation, written from what a person says it waits for ("when someone
 // comments on an issue"): a line printing the new thing is a `gh api … --jq …` only someone who

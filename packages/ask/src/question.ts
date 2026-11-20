@@ -1,4 +1,4 @@
-import type { Question, QuestionOption } from '@openagt/agent-driver'
+import type { Question, QuestionOption } from '@openagt/hooks'
 
 /**
  * The question block: how an agent with no question tool of its own asks the person to decide,

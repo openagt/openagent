@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process'
+import type { DriverFix, DriverReadiness } from '@openagt/hooks'
 
 /**
  * Whether a coding agent's CLI can start a session at all, asked before a run spends a checkout
@@ -9,25 +10,6 @@ import { execFile } from 'node:child_process'
  * say" and passes: a wrong "you are logged out" blocks a setup that works, which is worse than
  * the dead session this exists to prevent.
  */
-
-/** What stands in the way of a session: problems stop it, warnings are said and do not. Each line names its own fix. */
-export interface DriverReadiness {
-  problems: string[]
-  warnings: string[]
-  /** What a press does about the problem, when the adapter has a command for it: install the CLI, or log it in. */
-  fix?: DriverFix
-  /** The CLI's own login is out, and an added account is what runs use: its own login is no account to show. */
-  ownLoggedOut?: true
-}
-
-/** The command a press runs about a problem: one the adapter declared, never one from a page. */
-export interface DriverFix {
-  kind: 'install' | 'log-in'
-  /** A shell command line, shown under the button as it is run. */
-  command: string
-  /** The line of `problems` this answers: a page that says it in its own words, beside its press, leaves that line out. */
-  problem: string
-}
 
 /**
  * Run `<bin> <args>`: whether it succeeded, and everything it said. stdout and stderr merged,

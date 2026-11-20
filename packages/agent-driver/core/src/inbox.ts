@@ -1,8 +1,8 @@
 import { appendFile, mkdir, readFile, rename, rm } from 'node:fs/promises'
 import { dirname } from 'node:path'
-import type { DriverPromptOptions, DriverSession, DriverTurn } from './types.js'
-import { continuationPrompt, type Question } from './question.js'
+import { continuationPrompt } from './question.js'
 import { promptSent } from './session-support.js'
+import type { DriverPromptOptions, DriverSession, DriverTurn, InboxLine, PromptLine, Question } from '@openagt/hooks'
 
 /**
  * The inbox: what reaches a running agent from outside, a file at a path the caller gives, one
@@ -18,25 +18,6 @@ import { promptSent } from './session-support.js'
  * meanwhile lands in a fresh file for the next take and none is lost or read twice.
  */
 
-/** One line of the inbox. */
-export type InboxLine =
-  /**
-   * The user's own words to the agent. `publish` is how far the run takes its work from this
-   * message on, in the words of the tool that runs it, which reads it (`agent-runner`'s levels, or
-   * `nothing`): a driver sends the words alone. `id` names the message for the lines that act on
-   * it and for the `steered` event that says it landed. `later` keeps it for after the turn, as
-   * Claude Code's ⌘Enter does, rather than handing it to the agent while it works.
-   */
-  | { kind: 'message'; text: string; publish?: string; id?: string; later?: true }
-  /** The user's answer to the question the agent stopped on: the question's title and the chosen label or labels. */
-  | { kind: 'answer'; question: string; answer: string }
-  /** Take back the message `id`, which has not reached the agent yet: the person edits it instead. */
-  | { kind: 'cancel'; id: string }
-  /** Hand the waiting messages to the agent now: what it is running goes on in the background, as Claude Code's Send now does. */
-  | { kind: 'now' }
-
-/** A line that is a prompt of its own once the turn is over: a message or an answer. */
-export type PromptLine = Extract<InboxLine, { kind: 'message' | 'answer' }>
 
 /** Append one line to an inbox, creating the file and its directory as needed. */
 export async function appendInbox(path: string, line: InboxLine): Promise<void> {

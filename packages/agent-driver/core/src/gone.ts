@@ -1,4 +1,4 @@
-import type { DriverEvent, DriverTurn } from './types.js'
+import type { DriverEvent, DriverTurn } from '@openagt/hooks'
 
 /**
  * A turn asked to continue a conversation its coding agent no longer has: deleted after the agent

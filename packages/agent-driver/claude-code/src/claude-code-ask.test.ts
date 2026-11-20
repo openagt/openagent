@@ -3,7 +3,8 @@ import { test } from 'node:test'
 import { Readable, Writable } from 'node:stream'
 import { ClaudeCodeDriver } from './claude-code.js'
 import { StreamJsonParser, askedQuestion } from './claude-code-stream.js'
-import type { CliIo, DriverEvent, SpawnLike, SpawnedProcess } from '@openagt/agent-driver'
+import type { CliIo, SpawnLike, SpawnedProcess } from '@openagt/agent-driver'
+import type { DriverEvent } from '@openagt/hooks'
 
 // The lines Claude Code 2.1.318 writes when its agent calls AskUserQuestion under
 // `--permission-prompt-tool stdio`, as read off a real run (trimmed to the fields read).

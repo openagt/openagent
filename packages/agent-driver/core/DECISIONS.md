@@ -96,9 +96,9 @@ already made, and lists it in its pull request; for anything else it proposes an
   that checkout's serialized cycle, the same as the other skills'.
 
 ## The adapters
-- Each driver is its own package, `@openagt/agent-driver-<name>`, on the contract `@openagt/agent-driver`
-  keeps: the types, the shared process core, the inbox, the question, the log and the
-  fake. A driver is a coding agent on this machine (`claude`, `codex`), and they live side
+- Each driver is its own package, `@openagt/agent-driver-<name>`, on the contract `hooks`
+  declares (`run.agent`, #2394), built with what `@openagt/agent-driver` keeps: the shared
+  process core, the inbox, the question, the log and the fake. A driver is a coding agent on this machine (`claude`, `codex`), and they live side
   by side under `packages/agent-driver/`. A place elsewhere that runs a run is a host of
   it (`run.host`), a plugin of its own: a GitHub Actions runner (`host-github-actions`), or
   one vendor's own cloud (`host-claude-web`; a `codex-web` would share nothing with it)

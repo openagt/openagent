@@ -1,5 +1,6 @@
 import { codexWindows } from './codex-accounts.js'
-import { type AccountReading, type AgentCliParser, type CliIo, type Question, toolQuestion, callArgument, cutOutput, hunkLines, lineCount, oneLine, patchSize, type DriverEvent, type DriverRateWindow, type DriverTurn, type DriverUsage, type FileChange } from '@openagt/agent-driver'
+import { type AgentCliParser, type CliIo, toolQuestion, callArgument, cutOutput, hunkLines, lineCount, oneLine, patchSize } from '@openagt/agent-driver'
+import type { AccountReading, Question, DriverEvent, DriverRateWindow, DriverTurn, DriverUsage, FileChange } from '@openagt/hooks'
 
 // One turn of Codex's app server (`codex app-server`, JSON-RPC over stdio), talked to and read: the
 // requests that open the conversation and start the turn, and what Codex sends back, turned into

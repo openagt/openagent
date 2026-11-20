@@ -1,4 +1,4 @@
-import { isTransientQuotaReason, type DriverQuota, type DriverQuotaUnavailableReason } from '@openagt/agent-driver'
+import { isTransientQuotaReason, type DriverQuota, type DriverQuotaUnavailableReason } from '@openagt/hooks'
 
 /**
  * How often to read the quota when everything is healthy. A read spawns the

@@ -2,8 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { Driver, DriverSession } from '@openagt/agent-driver'
-import type { RunRequest } from '@openagt/hooks'
+import type { RunRequest, Driver, DriverSession } from '@openagt/hooks'
 
 // A run's short name, the way Claude Code on the web names a session: "README.md condensing" for
 // "make readme.md shorter". The person's own words are the whole prompt — too long for a list and

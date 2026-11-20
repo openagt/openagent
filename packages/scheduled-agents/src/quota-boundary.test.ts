@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { boundaryFromResetsAt, parseResetsAt, quotaBoundaryStatus, QUOTA_WEEK_MS } from './quota-boundary.js'
-import type { DriverQuotaWindow } from '@openagt/agent-driver'
+import type { DriverQuotaWindow } from '@openagt/hooks'
 
 const DAY = 24 * 60 * 60 * 1000
 

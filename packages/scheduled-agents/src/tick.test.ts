@@ -1,6 +1,7 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import type { DriverQuota, RunCard } from '@openagt/agent-driver'
+import type { RunCard } from '@openagt/agent-driver'
+import type { DriverQuota } from '@openagt/hooks'
 import type { RunnerMark } from '@openagt/agent-runner'
 import { DEFAULT_STATE, type State } from './state.js'
 import { parseInterval, type Interval } from './pace.js'
