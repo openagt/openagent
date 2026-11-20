@@ -10,7 +10,7 @@ import { OnComputer } from './MachineMark.js'
 import { MiddleCut } from './MiddleCut.js'
 import { runName } from '../../src/client.js'
 import { awaitingName } from '../lib/agent-label.js'
-import { runWord } from '../lib/run-words.js'
+import { useRunHosts } from '../lib/run-hosts.js'
 import { RunMark } from './RunMark.js'
 import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
 
@@ -83,12 +83,12 @@ function RunRow({ agent, naming, doing, projectNamed, href, onOpen }: {
   /** Open the session — project and run both, never just the launcher (#1189). */
   onOpen: () => void
 }) {
-  // A web run's cloud side (#1668): no local process backs the row, so it says where it is, and when it waits on the person.
-  const status = agent.cloud === 'waiting' ? 'waiting' : 'running'
+  // A run on a host beside this computer's (#1668, #2394): no process here backs the row, so it says where it runs.
+  const hosts = useRunHosts(agent.host !== undefined ? agent.projectId : null)
   return (
     // The run's mark is the hexagon, 14 in the row's 16 place (rulings-5: at least 12 of ink).
     <PanelRow
-      state={<RunMark status={status} />}
+      state={<RunMark status="running" />}
       title={
         naming ? (
           <>
@@ -100,7 +100,7 @@ function RunRow({ agent, naming, doing, projectNamed, href, onOpen }: {
         )
       }
       meta={[
-        agent.cloud === 'waiting' ? runWord('waiting') : agent.cloud === 'in-cloud' ? 'in cloud' : undefined,
+        agent.host !== undefined && (hosts.find(one => one.id === agent.host)?.label ?? 'Another host'),
         projectNamed && agent.projectName,
         agent.computer && <OnComputer computer={agent.computer} />,
         // The part that gives way, with its last step: cut in its middle, as the Logs cut it, so the words before it stay whole.

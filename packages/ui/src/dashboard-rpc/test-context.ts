@@ -65,7 +65,6 @@ export function testDashboardContext(over: Partial<DashboardContext> = {}): Dash
     models: { read: async () => ({ 'claude-code': { models: [] }, codex: { models: [] } }), forget: () => {} },
     agentUpdates: { read: async () => [], update: async () => ({ ok: false, error: 'not wired in this test' }), openAgent: async () => undefined },
     projectErrors: () => ({ errors: [] }),
-    bridgeBrowser: { status: async () => ({ state: 'off' }), start: async () => {}, stop: async () => {}, act: async () => {} },
     ...over,
   }
 }

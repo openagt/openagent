@@ -1,19 +1,16 @@
 import { basename } from 'node:path'
 import { listProjects } from './registry.js'
-import { startDaemonTick, DAEMON_TICK_MS } from './daemon-tick.js'
+import { startDaemonTick } from './daemon-tick.js'
 import { branchReach, pullProjectData } from '@openagt/agent-data'
 import type { ProjectErrors } from './project-errors.js'
-import { startCloudScratchSweep } from './cloud-scratch-refs.js'
-import { originAccountOf, originGit } from './dashboard-rpc/send-as.js'
-import { adoptCloudWork, startCloudWorkAdoption } from './cloud-work.js'
 import type { ProjectSummary } from './dashboard/projects.js'
 import { providerProblems } from './store/provided.js'
 import { projectGitHost } from './store/git-host.js'
 
 /**
- * Everything the daemon runs in the background beside serving the dashboard: the data sync (#1599),
- * the cloud-scratch sweep (#1547) and the cloud work adoption (#1601). None of them starts a run
- * (#1774).
+ * Everything the daemon runs in the background beside serving the dashboard: the data sync (#1599)
+ * and the providers' check (#1820). Neither starts a run (#1774). What follows a run on the web is
+ * host-claude-web's own pass (#2394).
  *
  * All of it used to sit inline in `runDaemon`, which meant its body was a lifecycle narrative with
  * ~200 lines of service wiring in the middle of it; the daemon body is left with the sequence it
@@ -23,15 +20,6 @@ import { projectGitHost } from './store/git-host.js'
  * with no single place to look when a sweep was not running; now each declares how many ticks it
  * wants between turns and `daemon-tick.ts` fires them.
  */
-
-/** Ticks between cloud work adoption passes: a ten-minute job. */
-const TEN_MINUTES_EVERY = Math.round((10 * 60 * 1000) / DAEMON_TICK_MS)
-
-/**
- * Ticks between cloud-scratch sweeps (#1547): hourly. The refs it deletes have to sit for a day
- * first, so a finer cadence would only spend `ls-remote` round-trips asking the same question.
- */
-const CLOUD_SCRATCH_EVERY = Math.round((60 * 60 * 1000) / DAEMON_TICK_MS)
 
 /** What the daemon needs back. */
 export interface BackgroundServices {
@@ -95,20 +83,6 @@ export function startBackgroundServices(deps: BackgroundServiceDeps): Background
   const { env, log } = deps
   const projects = () => listSummaries(env)
 
-  // Delete the scratch refs a web hand-off leaves on origin (#1547): the pre-hand-off `cloud-*`
-  // ref and the run branch, one dead pair per web run. Daemon-side rather than in the driver,
-  // because session creation only signals "created", not "clone finished" — a driver deleting its
-  // own ref races the provisioning and can strand the session. The sweep waits out that race
-  // (~a day) and only deletes refs whose work is provably on the default branch.
-  const cloudScratch = startCloudScratchSweep({ projects, log, pushAccount: originAccountOf })
-
-  // Adopt the branch a cloud session actually worked on (#1601): match each settled web run to
-  // the `claude/*` head descending from its hand-off anchor, record the branch and PR on the
-  // run's archive, and open the armed draft PR the session never did. Daemon-side by necessity:
-  // the branch does not exist yet when the wrapper ends — the cloud VM is still provisioning.
-  // Origin is read as one of OpenAgent's accounts, never the person's own login.
-  const cloudWork = startCloudWorkAdoption({ projects, log, adopt: async cwd => adoptCloudWork(cwd, { git: await originGit(cwd) }) })
-
   // One clock for every background job (E4). Each says how many ticks it wants between turns
   // instead of owning an interval, so there is one place to look when the answer to "why is
   // nothing happening" is that a sweep is not running — and the ratios are exact rather than six
@@ -117,7 +91,7 @@ export function startBackgroundServices(deps: BackgroundServiceDeps): Background
     log,
     jobs: [
       // The eager data pull (#1582): converge every project's data checkout on what other
-      // machines and cloud sessions pushed, and carry out anything a failed cycle left local.
+      // computers pushed, and carry out anything a failed cycle left local.
       // Its start-up turn is also what creates the checkout on a fresh clone. A project that
       // cannot converge is recorded as such for the dashboard (#1599).
       {
@@ -133,21 +107,12 @@ export function startBackgroundServices(deps: BackgroundServiceDeps): Background
           }
         },
       },
-      // Hourly. Its start-up turn is what starts a `cloud-*` ref's one-day clock (#1547): the
-      // sweep ages those refs from when it first saw them, so the sooner it looks, the sooner
-      // a leftover can go.
-      { name: 'cloud scratch sweep', every: CLOUD_SCRATCH_EVERY, run: () => cloudScratch.tick() },
-      // Ten minutes: the cloud session it waits on lives minutes-to-hours itself, and the pass
-      // costs an `ls-remote` per project only while a settled web run is actually waiting.
-      { name: 'cloud work adoption', every: TEN_MINUTES_EVERY, run: () => cloudWork.tick() },
     ],
   })
 
   return {
     quiesce: async () => {
       await clock.stop()
-      cloudScratch.stop()
-      cloudWork.stop()
     },
   }
 }

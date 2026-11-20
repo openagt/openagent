@@ -3,7 +3,6 @@ import { stat } from 'node:fs/promises'
 import { originDefaultBranch } from '@openagt/agent-data'
 import { moduleAgents, type ModuleAgent, type ModuleAgentsWanted } from '../dashboard/module-agents.js'
 import { join } from 'node:path'
-import { bridgeExtensionSource, type BridgeBrowserStatus } from '../bridge-browser.js'
 import { findAgent, findCheckout, readLiveMetas, readDoing, loadAgentEvents, type AgentDoing, startedAtFromAgentId, type AgentMeta, isRunId, projectBranches } from '../store/index.js'
 import { listProjectWorktrees } from '../worktrees.js'
 import { projectGitHost, type GitHostHome } from '../store/git-host.js'
@@ -20,13 +19,9 @@ import { readGitStatus, type GitStatus } from '../dashboard/git-status.js'
 import { readRunHandoff, resolveAgentPr, type AgentHandoff } from '../dashboard/agent-handoff.js'
 import type { AgentWorktree } from '../dashboard/types.js'
 import { crawlRepoFiles } from '../project.js'
-import { contextBridgeBrowser, contextProjects, contextRemote, resolveProjectPath, resolveAgentPath } from './context.js'
+import { contextProjects, contextRemote, resolveProjectPath, resolveAgentPath } from './context.js'
 import { relayOr } from './relay-agent.js'
 import type { OpenAgentEvent } from '../events.js'
-import { bridgeQuestions } from '../dashboard/bridge-store.js'
-import { isCloudSessionId, type BridgeEvent, type BridgeHello, type BridgeQuestion } from '../dashboard/bridge-endpoints.js'
-import type { BridgeAnswer, BridgeContact, BridgeVersion } from '../dashboard/bridge-store.js'
-import { readBridgeToken, readPreferences } from '../registry.js'
 import { hostname } from 'node:os'
 import { RUNS_WAIT_MS, RunChanges, withMachineRuns, type MachineRuns, type OwnRuns } from '../dashboard/machine-runs.js'
 import { ownRunsWatch } from '../dashboard/runs-watch.js'
@@ -439,81 +434,4 @@ export async function onAgentHandoff(projectId: string, agentId: string): Promis
     const agent = await findAgent(cwd, agentId).catch(() => undefined)
     return (agent && (await readRunHandoff(cwd, agent).catch(() => undefined))) ?? null
   }, null)
-}
-
-/**
- * The question a Claude web session is parked on, as reported by the browser bridge (#1237).
- *
- * Keyed by cloud session id rather than agent id because that is what the bridge can see: it reads
- * a claude.ai page, which knows its session and nothing about our runs. The agent view already
- * derives that id from the agent's own `cloud <url>` event, so the join happens on the client
- * without the daemon having to index runs by session.
- *
- * Returns null for anything unrecognised, so an agent with no bridge, no question, or a target that
- * is not `web` renders exactly as it did before.
- */
-export async function onBridgeQuestion(sessionId: string): Promise<BridgeQuestion | null> {
-  if (!isCloudSessionId(sessionId)) return null
-  return bridgeQuestions().get(sessionId) ?? null
-}
-
-/**
- * Whether anything has reached the browser bridge, and how it went (#1237).
- *
- * A misconfigured extension and an uninstalled one both leave no question behind, so "nothing is
- * showing" cannot be diagnosed from the questions alone. A refused request at least proves
- * something is trying, and its status says which half is wrong.
- */
-export async function onBridgeStatus(): Promise<{
-  lastContact: BridgeContact | null
-  questions: number
-  page: BridgeHello | null
-  version: BridgeVersion | null
-}> {
-  const store = bridgeQuestions()
-  return {
-    lastContact: store.lastContact() ?? null,
-    questions: store.list().length,
-    page: store.hello() ?? null,
-    version: store.version() ?? null,
-  }
-}
-
-/**
- * The bridge token, for the setup step where a user pastes it into the extension (#1237).
- *
- * Only while the bridge is on, so a daemon with the feature off never hands the secret to a
- * page. Revealing it here is not a new exposure: anyone who can load this dashboard can already
- * start runs on this machine. What it replaces is the alternative, which was telling people to
- * open `~/.openagent.json` and copy a field out of it.
- */
-export async function onBridgeToken(): Promise<string | null> {
-  const preferences = await readPreferences()
-  if (preferences.bridge !== true) return null
-  return (await readBridgeToken()) ?? null
-}
-
-/** The folder a person loads the bridge extension from into their own Chrome: the checkout's, or the copy this package carries; null with neither. */
-export async function onBridgeExtensionFolder(): Promise<string | null> {
-  return bridgeExtensionSource()?.dir ?? null
-}
-
-/**
- * Where the answer picked for that session's question stands (#1237): queued for the
- * extension, delivered, or failed with the extension's reason. Null when nothing was picked.
- */
-export async function onBridgeAnswer(sessionId: string): Promise<BridgeAnswer | null> {
-  if (!isCloudSessionId(sessionId)) return null
-  return bridgeQuestions().answer(sessionId) ?? null
-}
-
-/** What a Claude web session has said so far, as scraped by the browser bridge (#1237). */
-export async function onBridgeEvents(sessionId: string): Promise<BridgeEvent[]> {
-  if (!isCloudSessionId(sessionId)) return []
-  return bridgeQuestions().events(sessionId)
-}
-
-/** Where the daemon's own bridge browser stands (#1332): off, starting (and on which step), running, or stopped and why. */
-export async function onBridgeBrowser(): Promise<BridgeBrowserStatus> {
-  return contextBridgeBrowser().status()
 }

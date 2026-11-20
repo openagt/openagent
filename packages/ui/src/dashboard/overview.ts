@@ -1,8 +1,6 @@
 import { readAllAgents, readLiveMetas, type LiveAgent, type AgentMeta, type AgentStatus } from '../store/index.js'
 import type { ProjectSummary } from './projects.js'
 import { collectQueue, type ProjectQueue } from './queue.js'
-import { cloudRunState } from '../cloud-run-state.js'
-import { bridgeQuestions } from './bridge-store.js'
 import { hostname } from 'node:os'
 import type { MachineKind } from '../reached-by-line.js'
 import { SESSIONS_ID } from '../project-address.js'
@@ -34,11 +32,11 @@ export interface ActiveAgent {
   /** ISO timestamp of the agent's last event. */
   updatedAt?: string
   /**
-   * A web run at work on its cloud side (#1668): in its session, or parked on a question the
-   * bridge reported. Its local half is over, so it is not a live agent — it is listed because the
-   * cloud side is the agent, and "no agents working" over a waiting cloud session was a lie.
+   * The host beside this computer's it runs on, by its id (`run.host`, #2394: GitHub Actions'
+   * `actions`, Claude Code on the web's `web`). No checkout here backs it, so it is listed because
+   * its record says it is at work: "no agents working" over a cloud session at work was a lie (#1668).
    */
-  cloud?: 'in-cloud' | 'waiting'
+  host?: string
   /**
    * The computer it runs on, only when that is not this one: the saved machine's name and kind for
    * a run of one of the person's other computers, else the computer its record names (#1648).
@@ -118,11 +116,8 @@ export async function buildRecentAgents(projects: ProjectSummary[], deps: Recent
 export interface OverviewDeps {
   liveAgents?: (cwd: string) => Promise<LiveAgent[]>
   queue?: (projects: ProjectSummary[]) => Promise<ProjectQueue[]>
-  /** Every run of a project, archived included (default {@link readAllAgents}): where the web runs are. */
+  /** Every run of a project, archived included (default {@link readAllAgents}): where the runs on other hosts are. */
   agents?: (cwd: string) => Promise<AgentMeta[]>
-  /** Whether the bridge holds a question for that cloud session (default: the daemon's bridge store). */
-  waiting?: (sessionId: string) => boolean
-  now?: () => number
   /**
    * The runs the person's other computers say they run of a project, each marked with the saved
    * machine it is (`remoteLabel`): of a project this computer has too, and of one only they have.
@@ -144,15 +139,13 @@ export async function buildOverview(projects: ProjectSummary[], deps: OverviewDe
   const liveAgents = deps.liveAgents ?? readLiveMetas
   const queue = deps.queue ?? (p => collectQueue(p))
   const agents = deps.agents ?? readAllAgents
-  const waiting = deps.waiting ?? (sessionId => bridgeQuestions().waiting(sessionId))
   const machineRuns = deps.machineRuns ?? (async () => [])
-  const now = (deps.now ?? Date.now)()
   const thisHost = deps.host ?? hostname()
 
   const active: ActiveAgent[] = []
-  // One entry per web run across projects: two checkouts of one repository share their archive,
-  // so the same run is in both projects' lists; the first project to list it keeps it.
-  const cloudSeen = new Set<string>()
+  // One entry per run on another host across projects: two checkouts of one repository share their
+  // records, so the same run is in both projects' lists; the first project to list it keeps it.
+  const elsewhere = new Set<string>()
   const entry = (project: ProjectSummary, meta: AgentMeta, cwd: string): ActiveAgent => ({
     projectId: project.id,
     projectName: project.name,
@@ -182,14 +175,13 @@ export async function buildOverview(projects: ProjectSummary[], deps: OverviewDe
       if (meta.status !== 'running') continue
       active.push(entry(project, meta, meta.cwd))
     }
-    // The web runs whose cloud side is still at work (#1668): their local half is over and their
-    // checkout may be gone, so they are read from the archive and keyed to the project's own path.
+    // The runs on a host beside this computer's still at work (`run.host`): no checkout here backs
+    // them, so they are read from their records and keyed to the project's own path.
     for (const meta of await agents(project.path).catch((): AgentMeta[] => [])) {
-      if (meta.target !== 'web' || cloudSeen.has(meta.id)) continue
-      const state = cloudRunState({ ...meta, cloudWaiting: meta.sessionId !== undefined && waiting(meta.sessionId) }, now)
-      if (state !== 'in-cloud' && state !== 'waiting') continue
-      cloudSeen.add(meta.id)
-      active.push({ ...entry(project, meta, project.path), cloud: state })
+      const host = meta.target
+      if (host === undefined || host === 'local' || host === 'remote' || meta.status !== 'running' || elsewhere.has(meta.id)) continue
+      elsewhere.add(meta.id)
+      active.push({ ...entry(project, meta, project.path), host })
     }
   }
   const listed = new Set(active.map(agent => agent.agentId))

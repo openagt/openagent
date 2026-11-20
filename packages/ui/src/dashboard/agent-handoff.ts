@@ -446,22 +446,6 @@ export async function mergeAgentBranch(cwd: string, agent: Pick<AgentMeta, 'id' 
 }
 
 /**
- * Open a draft PR for a branch that exists only on the remote (#1601): a cloud session's own
- * `claude/*` branch was pushed from a VM this machine never sees, so there is nothing to push
- * here — the provider publishes the branch as the remote has it. Draft because a PR
- * OpenAgent opens by itself must not put a review request in anyone's inbox, and the
- * waiting list keeps listing a session's draft.
- */
-export async function openRemoteBranchPullRequest(
-  cwd: string,
-  agent: HandoffAgent,
-  branch: string,
-  deps: { branches?: BranchesFor; gitHost?: GitHostFor } = {},
-): Promise<HandoffResult> {
-  return publishBranch(cwd, branch, { title: agentPrTitle(agent), body: agentPrBody(agent), draft: true }, deps.branches ?? projectBranches, deps.gitHost ?? projectGitHost)
-}
-
-/**
  * Whether the session kept committing after its PR merged or closed (#1512): the PR carries a
  * head, the branch has a tip, and they disagree. False for an open PR (pushed commits still land
  * on it), for a headless read (an older cache or injected lookup — never risk a duplicate PR on
@@ -547,8 +531,8 @@ function agentPrTitle(agent: Pick<HandoffAgent, 'id' | 'branch'>, name?: string)
 }
 
 /**
- * The PR body where none of the branch's commits can be read, a branch only on the remote: what
- * was asked for, and which session did it.
+ * The PR body where none of the branch's commits can be read: what was asked for, and which
+ * session did it.
  */
 function agentPrBody(agent: HandoffAgent): string {
   const lines: string[] = []

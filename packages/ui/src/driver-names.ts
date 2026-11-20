@@ -24,11 +24,11 @@ export const DRIVER_LABELS: Record<DriverName, string> = {
 }
 
 /**
- * The pick behind the driver a run's record names (#831). Every surface Claude ran on is still
- * Claude (#1263): older records name its cloud session and its Actions runner. `undefined` for a
- * driver no pick claims (a fake one, or a record from a newer version).
+ * The pick behind the driver a run's record names (#831). Every surface Claude runs on is still
+ * Claude (#1263): a run on GitHub Actions names its runner. `undefined` for a driver no pick
+ * claims (a fake one, or a record from a newer version).
  */
 export function driverFromImpl(impl: string | undefined): DriverName | undefined {
-  if (impl === 'claude-web' || impl === 'github-actions') return 'claude-code'
+  if (impl === 'github-actions') return 'claude-code'
   return isDriverName(impl) ? impl : undefined
 }

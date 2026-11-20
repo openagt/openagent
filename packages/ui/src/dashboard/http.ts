@@ -1,12 +1,8 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 
 /**
- * The plumbing every one of the daemon's non-RPC HTTP surfaces shares: the browser bridge
- * (`/_bridge`), the web-start queue (`/_web-start`) and the machine relay (`/_relay`).
- *
- * All three answer plain-text statuses, JSON payloads, and read capped JSON request bodies, and
- * each carried its own copy — two body readers that differed only in which message they rejected
- * with, and three identical status responders.
+ * The plumbing of the daemon's one HTTP surface past its RPC, the machine relay (`/_relay`):
+ * plain-text statuses, JSON payloads, and capped JSON request bodies.
  */
 
 /** Answer with a plain-text status line. */
@@ -23,8 +19,8 @@ export function sendJson(res: ServerResponse, payload: unknown, status = 200): v
 
 /**
  * Read a JSON body, refusing anything past the cap rather than buffering it. Rejects with
- * `body too large` on overflow and `body must be JSON` on anything unparseable — the messages the
- * bridge and web-start routes answer 400 with, so a caller learns which of the two it hit.
+ * `body too large` on overflow and `body must be JSON` on anything unparseable, so a caller
+ * learns which of the two it hit.
  */
 export function readJsonBody(req: IncomingMessage, maxBytes: number): Promise<unknown> {
   return new Promise((resolve, reject) => {
@@ -48,25 +44,6 @@ export function readJsonBody(req: IncomingMessage, maxBytes: number): Promise<un
     })
     req.on('error', () => reject(new Error('read failed')))
   })
-}
-
-/**
- * The preamble every POST route runs: refuse a non-POST, then read the body. Answers the request
- * itself on either failure and resolves `undefined`, so a caller's whole check is
- * `const body = await readPost(...); if (body === undefined) return`. JSON has no `undefined`, so
- * the sentinel cannot collide with a body that parsed.
- */
-export async function readPost(req: IncomingMessage, res: ServerResponse, maxBytes: number): Promise<unknown> {
-  if (req.method !== 'POST') {
-    end(res, 405, 'method not allowed', { allow: 'POST' })
-    return undefined
-  }
-  try {
-    return await readJsonBody(req, maxBytes)
-  } catch (err) {
-    end(res, 400, (err as Error).message)
-    return undefined
-  }
 }
 
 /** Refuse anything but a GET, answering 405 itself. `false` means the request is already answered. */

@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdtemp, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { onBridgeExtensionFolder, onProjectFiles, onAgentMainBranch, onAgentWorktree } from './reads.js'
+import { onProjectFiles, onAgentMainBranch, onAgentWorktree } from './reads.js'
 import { provideTestContext } from './test-context.js'
 import { projectId } from '@openagt/agent-data'
 import { addProject } from '../registry.js'
@@ -58,8 +58,4 @@ test('onAgentMainBranch names origin\'s default branch as the clone has it, by t
   } finally {
     await rm(dir, { recursive: true, force: true })
   }
-})
-
-test('the folder the bridge extension is loaded from by hand is the checkout\u2019s, beside this package', async () => {
-  assert.equal(await onBridgeExtensionFolder(), join(import.meta.dirname, '..', '..', '..', 'chrome-extension') + '/')
 })

@@ -61,10 +61,10 @@ export function useSelectedHost(): string | null {
 
 /**
  * The host beside this computer's a run runs on, by its id, as its record's `target` says it: none
- * for this computer's (`local`, or none said), a saved machine's (`remote`), or a cloud session's (`web`).
+ * for this computer's (`local`, or none said), or a saved machine's (`remote`).
  */
 export function hostOf(target: string | undefined): string | undefined {
-  return target === undefined || target === 'local' || target === 'remote' || target === 'web' ? undefined : target
+  return target === undefined || target === 'local' || target === 'remote' ? undefined : target
 }
 
 /** The host a run of a project goes to: the one picked, where the project has it. */

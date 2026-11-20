@@ -1,19 +1,8 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { asRecorded, markCloudWaiting, markMachine, markOtherHost, markSaving, withFollowed, withPrStates, withUnpublished } from './run-rows.js'
-import { bridgeQuestions, resetBridgeQuestions } from './bridge-store.js'
+import { asRecorded, markMachine, markOtherHost, markSaving, withFollowed, withPrStates, withUnpublished } from './run-rows.js'
 import type { AgentMeta } from '../store/index.js'
 import type { BranchAhead, BranchesFor, BranchesSource } from '../store/branches.js'
-
-test('a web run whose session the bridge holds a question for is handed to the dashboard as waiting (#1668)', async () => {
-  resetBridgeQuestions()
-  bridgeQuestions().record({ sessionId: 'session_01Park', title: 'Where?', options: [{ label: 'Here' }], receivedAt: '' })
-  const web = (sessionId: string): AgentMeta => ({ status: 'done', id: 'r', startedAt: '', updatedAt: '', target: 'web', sessionId }) as AgentMeta
-  assert.equal(markCloudWaiting(web('session_01Park')).cloudWaiting, true)
-  assert.equal(markCloudWaiting(web('session_01Other')).cloudWaiting, undefined)
-  assert.equal(markCloudWaiting({ ...web('session_01Park'), target: 'local' }).cloudWaiting, undefined)
-  resetBridgeQuestions()
-})
 
 test('a run another machine\'s daemon started is handed to the dashboard as from another host (#1648)', () => {
   const run = (host?: string): AgentMeta => ({ status: 'done', id: 'r', startedAt: '', updatedAt: '', ...(host ? { host } : {}) }) as AgentMeta
@@ -68,7 +57,7 @@ test('a run that ended clean while its process is still alive on this host is ha
 })
 
 test('a record cannot say of its run what only this daemon says: that it runs on a saved machine, that it is another computer\'s, that it is being saved', () => {
-  const written = { status: 'done', id: 'r', startedAt: '', updatedAt: '', host: 'their-laptop', target: 'remote', remoteLabel: 'My server', remoteKind: 'computer', otherHost: false, saving: true, cloudWaiting: true } as AgentMeta
+  const written = { status: 'done', id: 'r', startedAt: '', updatedAt: '', host: 'their-laptop', target: 'remote', remoteLabel: 'My server', remoteKind: 'computer', otherHost: false, saving: true } as AgentMeta
   assert.deepEqual(asRecorded(written), { status: 'done', id: 'r', startedAt: '', updatedAt: '', host: 'their-laptop' })
   // So it reads as what it is: a run of a computer that is no saved machine.
   const row = markOtherHost(markMachine(asRecorded(written), () => undefined, 'suleiman-mbp'), 'suleiman-mbp')

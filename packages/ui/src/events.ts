@@ -142,14 +142,6 @@ export type OpenAgentEvent = { at?: string } & (
    */
   | { kind: 'branch'; branch: string }
   /**
-   * The hand-off anchor a cloud run pushed for its session to clone at (#1601): an empty commit
-   * unique to this run, so the branch the session actually works on — a `claude/*` name of the
-   * cloud's own choosing, never the designated run branch — is recognizable later by plain
-   * ancestry. Folded to `AgentMeta.cloudAnchor`, which the daemon's adoption pass matches
-   * against origin's `claude/*` heads once the session has pushed its work.
-   */
-  | { kind: 'cloud-anchor'; sha: string }
-  /**
    * The work has settled and the agent is parked on the user (#785): it stays open as a
    * conversation (#714), so its process is still alive and it still takes messages, but
    * the agent is not doing anything until you say something.

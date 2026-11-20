@@ -15,7 +15,9 @@ const sendAddProject = vi.hoisted(() => vi.fn())
 const sendPickProjectDirectory = vi.hoisted(() => vi.fn())
 // The project picker at the top reads the repos on this computer: none here.
 const onRepos = vi.hoisted(() => vi.fn(() => Promise.resolve({ repos: [], canAddFolder: false })))
-vi.mock('../rpc/projects.js', () => ({ onProjects, sendAddProject, sendPickProjectDirectory, onRepos, sendAddRepoFolder: vi.fn(), onCloneTarget: vi.fn(), sendAddProjectFromAddress: vi.fn() }))
+// The hosts beside this computer each project's modules bring (`run.host`): Claude Code on the web in p1.
+const onRunHosts = vi.fn(async (projectId: string) => (projectId === 'p1' ? [{ id: 'web', label: 'Claude Code on the web' }] : []))
+vi.mock('../rpc/projects.js', () => ({ onProjects, sendAddProject, sendPickProjectDirectory, onRepos, onRunHosts, sendAddRepoFolder: vi.fn(), onCloneTarget: vi.fn(), sendAddProjectFromAddress: vi.fn() }))
 // An ended agent's log, read as the pointer reaches its row.
 const onAgent = vi.hoisted(() => vi.fn((_projectId: string, _agentId: string) => Promise.resolve([])))
 vi.mock('../rpc/reads.js', () => ({ onAgent }))
@@ -684,86 +686,33 @@ describe('AgentHistory New button (#new-button)', () => {
 
 })
 
-describe('cloud sessions on the rail (#1263/#1264)', () => {
-  test('a finished web run reads as in cloud, not done: the session is still working over there', () => {
+describe('runs on another host on the rail (#1263, #2394)', () => {
+  test("a run on a host beside this computer's carries the host's mark, named as its project's module names it, and still names its agent", async () => {
     renderRail(
       <AgentHistory
         projectId="p1" scope="p1"
-        agents={[agent({ status: 'done', target: 'web', driver: 'claude-web', startedAt: new Date().toISOString() })]}
+        agents={[agent({ status: 'running', target: 'web', driver: 'claude-code' }), agent({ id: 'r2', status: 'done', driver: 'codex' })]}
         selectedAgentId={null}
         onSelect={() => {}}
       />,
     )
-    expect(screen.getByLabelText('in cloud')).toBeTruthy()
-    expect(screen.queryByLabelText('done')).toBeNull()
-  })
-
-  test('a web run stopped early is just stopped: nothing is working anywhere', () => {
-    renderRail(
-      <AgentHistory
-        projectId="p1" scope="p1"
-        agents={[agent({ status: 'stopped', target: 'web', driver: 'claude-web' })]}
-        selectedAgentId={null}
-        onSelect={() => {}}
-      />,
-    )
-    expect(screen.getByLabelText('stopped')).toBeTruthy()
-    expect(screen.queryByLabelText('in cloud')).toBeNull()
-  })
-
-  test('a web run parked on a question the bridge reported reads as needing an answer (#1668)', () => {
-    renderRail(
-      <AgentHistory
-        projectId="p1" scope="p1"
-        agents={[agent({ status: 'done', target: 'web', driver: 'claude-web', startedAt: new Date().toISOString(), cloudWaiting: true })]}
-        selectedAgentId={null}
-        onSelect={() => {}}
-      />,
-    )
-    expect(screen.getByLabelText('needs answer')).toBeTruthy()
-    expect(screen.queryByLabelText('in cloud')).toBeNull()
-  })
-
-  test('adopted cloud work reads done (its PR badge says the rest) or merged; an old run with nothing adopted is done (#1668)', () => {
-    const fresh = new Date().toISOString()
-    const old = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString()
-    renderRail(
-      <AgentHistory
-        projectId="p1" scope="p1"
-        agents={[
-          agent({ id: 'pr', status: 'done', target: 'web', driver: 'claude-web', startedAt: fresh, pr: { number: 1, url: 'u' } }),
-          agent({ id: 'merged', status: 'done', target: 'web', driver: 'claude-web', startedAt: old, pr: { number: 2, url: 'u' }, mergeOutcome: 'merged' }),
-          agent({ id: 'stale', status: 'done', target: 'web', driver: 'claude-web', startedAt: old }),
-        ]}
-        selectedAgentId={null}
-        onSelect={() => {}}
-      />,
-    )
-    expect(screen.getByLabelText('merged')).toBeTruthy()
-    expect(screen.getAllByLabelText('done')).toHaveLength(2)
-    expect(screen.queryByLabelText('in cloud')).toBeNull()
-  })
-
-  test('a web run shows the cloud glyph and still names its agent (#1263)', () => {
-    renderRail(
-      <AgentHistory
-        projectId="p1" scope="p1"
-        agents={[agent({ status: 'done', target: 'web', driver: 'claude-web' }), agent({ id: 'r2', status: 'done', driver: 'codex' })]}
-        selectedAgentId={null}
-        onSelect={() => {}}
-      />,
-    )
-    expect(screen.getByLabelText('Runs as a Claude Code cloud session')).toBeTruthy()
-    // claude-web is still Claude: where it runs is the target, not the agent.
+    expect(await screen.findByLabelText('Runs on Claude Code on the web')).toBeTruthy()
+    // Where it runs is the host, not the agent: it is Claude Code.
     expect(screen.getByLabelText('Claude Code')).toBeTruthy()
+    // At work over there for as long as its record says so.
+    expect(screen.getByLabelText('working')).toBeTruthy()
   })
 
-  test('a local finished run keeps its plain done badge and gets no cloud glyph', () => {
-    renderRail(
-      <AgentHistory projectId="p1" scope="p1" agents={[agent({ status: 'done', driver: 'claude-code' })]} selectedAgentId={null} onSelect={() => {}} />,
-    )
+  test("a host its project's modules no longer bring is still another host", async () => {
+    renderRail(<AgentHistory projectId="p2" scope="p2" agents={[agent({ status: 'done', target: 'web', driver: 'claude-code' })]} selectedAgentId={null} onSelect={() => {}} />)
+    expect(await screen.findByLabelText('Runs on another host')).toBeTruthy()
     expect(screen.getByLabelText('done')).toBeTruthy()
-    expect(screen.queryByLabelText('Runs as a Claude Code cloud session')).toBeNull()
+  })
+
+  test('a run on this computer gets no host mark', () => {
+    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent({ status: 'done', driver: 'claude-code' })]} selectedAgentId={null} onSelect={() => {}} />)
+    expect(screen.getByLabelText('done')).toBeTruthy()
+    expect(screen.queryByLabelText(/^Runs on /)).toBeNull()
   })
 })
 

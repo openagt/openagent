@@ -4,7 +4,6 @@ import { isPidAlive, readAllAgents, type AgentMeta, type BranchesFor } from '../
 import { cachedOpenPrs, cachedPrStates, type ListedPr } from './pull-requests.js'
 import { projectGitHost } from '../store/git-host.js'
 import { unpublishedRuns, type Unpublished } from './unpublished.js'
-import { bridgeQuestions } from './bridge-store.js'
 import type { SavedMachine } from '../dashboard-rpc/context.js'
 import { isHostName } from '../registry.js'
 import { machineKind, machineName } from '../reached-by-line.js'
@@ -108,17 +107,6 @@ export function withFollowed(followed: AgentMeta[], local: AgentMeta[], sent: (a
 }
 
 /**
- * A web run whose cloud session is waiting on a human — the bridge holds its parked question, or
- * claude.ai's session list shows it awaiting input (#1332) — is marked waiting (#1668), so its row
- * says so instead of "in cloud": the archive on disk cannot know, only the daemon's bridge store
- * does. Every other run passes through untouched.
- */
-export function markCloudWaiting(agent: AgentMeta): AgentMeta {
-  if (agent.target !== 'web' || !agent.sessionId || !bridgeQuestions().waiting(agent.sessionId)) return agent
-  return { ...agent, cloudWaiting: true }
-}
-
-/**
  * A run another machine's daemon started is marked as from another host (#1648): the data branch
  * is shared precisely so other machines' runs show up here, and a row that looked exactly like
  * one of this daemon's own sent the user reading the archive by hand to learn whose it was. A run
@@ -164,7 +152,7 @@ export function markSaving(agent: AgentMeta, thisHost: string = hostname(), aliv
 
 /** Every annotation a run gets on its way to the dashboard, once it is as recorded ({@link asRecorded}): what the daemon knows and the disk cannot. */
 export function forDashboard(agent: AgentMeta, machineOf: (host: string) => SavedMachine | undefined): AgentMeta {
-  return markSaving(markOtherHost(markMachine(markCloudWaiting(agent), machineOf)))
+  return markSaving(markOtherHost(markMachine(agent, machineOf)))
 }
 
 /**
@@ -175,7 +163,7 @@ export function forDashboard(agent: AgentMeta, machineOf: (host: string) => Save
  * no name is none.
  */
 export function asRecorded(agent: AgentMeta): AgentMeta {
-  const { remoteLabel: _label, remoteKind: _kind, otherHost: _other, saving: _saving, cloudWaiting: _waiting, seenAt: _seen, ...said } = agent
+  const { remoteLabel: _label, remoteKind: _kind, otherHost: _other, saving: _saving, seenAt: _seen, ...said } = agent
   if (said.target === 'remote') delete said.target
   if (said.host !== undefined && !isHostName(said.host)) delete said.host
   return said

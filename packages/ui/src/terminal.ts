@@ -25,8 +25,6 @@ export function formatOpenAgentEvent(event: OpenAgentEvent): string {
       return `◆ done for now — waiting for your next message`
     case 'branch':
       return `  branch: ${event.branch}`
-    case 'cloud-anchor':
-      return `  hand-off anchor: ${event.sha.slice(0, 7)}`
     case 'pull-request':
       return `  pull request: #${event.number}`
     case 'usage':

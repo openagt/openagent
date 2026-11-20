@@ -23,7 +23,6 @@ describe('the chat says a row in its own words', () => {
       thing: '#2105',
       href: 'https://github.com/openagt/openagent/pull/2105',
     })
-    expect(rowWords({ kind: 'cloud-anchor', sha: '806eb7cb9af2dfcc9d1284990ca179f5ea8d80e1' })).toEqual({ said: 'Handed off at', thing: '806eb7c' })
   })
 
   test('what was said: a log line, a notice and an error keep their own text', () => {
@@ -57,7 +56,6 @@ describe('the chat says a row in its own words', () => {
       { kind: 'settled' },
       { kind: 'branch', branch: 'b' },
       { kind: 'pull-request', number: 1, url: 'https://x/1' },
-      { kind: 'cloud-anchor', sha: 'abcdef1234' },
       { kind: 'log', message: 'said' },
       { kind: 'intent', text: 'make it shorter' },
     ]

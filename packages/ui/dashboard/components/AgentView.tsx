@@ -23,7 +23,6 @@ import { IssueLinks } from '../lib/markdown-links.js'
 import { OpenFile } from './ToolCalls.js'
 import { ChatNote, ChatPane } from './ChatPane.js'
 import { LostStreamNotice } from './LostStreamNotice.js'
-import { CloudMirrorRow, CloudAgentNotice } from './CloudAgentNotice.js'
 import { ModuleSlot } from './ModulePageView.js'
 import { useMountedModules } from '../lib/use-modules.js'
 import { Committing, HandoffActions, HandoffSummary, isCommitAsk } from './AgentHandoff.js'
@@ -95,7 +94,7 @@ export function AgentView({
   naming?: boolean | undefined
   /** The session's project, said in the row above the message box. */
   projectName?: string | null | undefined
-  /** Where the agent executes: `remote` is relayed to a machine (#1067); `web` is handed to a Claude Code cloud session (#610); any other is a host beside this computer's, by its id (`run.host`). */
+  /** Where the agent executes: `remote` is relayed to a machine (#1067); any other is a host beside this computer's, by its id (`run.host`: GitHub Actions' `actions`, Claude Code on the web's `web`). */
   target?: string | undefined
   /** The machine this agent executes on (#1067), when it is relayed to another one, by the name it
    *  was given: the row above the message box says it. */
@@ -166,7 +165,7 @@ export function AgentView({
   // that computer: it did not run here.
   const host = hostOf(target)
   const hosts = useRunHosts(host !== undefined ? projectId : null)
-  const runsOn = remoteLabel ?? (target === 'web' ? 'Cloud' : target === 'remote' ? 'Another machine' : host !== undefined ? (hosts.find(one => one.id === host)?.label ?? 'Another host') : card?.otherHost && card.host ? card.host : thisMachineName())
+  const runsOn = remoteLabel ?? (target === 'remote' ? 'Another machine' : host !== undefined ? (hosts.find(one => one.id === host)?.label ?? 'Another host') : card?.otherHost && card.host ? card.host : thisMachineName())
   // The branch it started from, for that row: its card's, or, where the card says it was origin's
   // default branch, the name that has on the computer the run is on. Read once: it never changes.
   const fromMain = startedFromMain(card)
@@ -352,9 +351,6 @@ export function AgentView({
               <Notice projectId={projectId} agentId={agentId} working={working} {...(host !== undefined ? { host } : {})} />
             </ModuleSlot>
           ))}
-          {/* A run handed to Claude Code on the web (#610): the work is happening in a cloud session
-              this machine cannot stream, so point at where it is rather than show an empty feed. */}
-          <CloudAgentNotice target={target} events={shown} projectId={projectId} agentId={agentId} />
           {lost && <LostStreamNotice />}
         </>
       }
@@ -460,9 +456,6 @@ export function AgentView({
           // A message just sent to an ended agent: the chat follows its end from the send on, not
           // only once the agent's own line arrives, by which time the chat had grown past the view.
           {...(going ? {} : { stick: false })}
-          // A web agent's log dead-ends at the hand-off (#1265): the mirror box rides the tail of
-          // the scroller, where "and then…" belongs. Self-nulling for every other target.
-          tail={<CloudMirrorRow target={target} events={shown} />}
           setup={setup}
           onOpenSubagent={onOpenSubagent}
           onOpenChange={onOpenChange}

@@ -41,7 +41,6 @@ const EVENT_KINDS: Record<OpenAgentEvent['kind'], true> = {
   error: true,
   'pull-request': true,
   branch: true,
-  'cloud-anchor': true,
   settled: true,
   usage: true,
   choice: true,

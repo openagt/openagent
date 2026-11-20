@@ -44,8 +44,6 @@ export function rowWords(e: OpenAgentEvent): RowWords | undefined {
       return { said: 'Branch', thing: e.branch }
     case 'pull-request':
       return { said: 'Pull request', thing: `#${e.number}`, href: e.url }
-    case 'cloud-anchor':
-      return { said: 'Handed off at', thing: e.sha.slice(0, 7) }
     case 'log':
       return { said: e.message }
     case 'intent':

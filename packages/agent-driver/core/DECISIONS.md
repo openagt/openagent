@@ -57,12 +57,11 @@ already made, and lists it in its pull request; for anything else it proposes an
   fake. A driver is a coding agent on this machine (`claude`, `codex`), and they live side
   by side under `packages/agent-driver/`. A place elsewhere that runs a run is a host of
   it (`run.host`), a plugin of its own: a GitHub Actions runner (`host-github-actions`), or
-  one vendor's own cloud (later `host-claude-web`; a `codex-web` would share nothing with
-  it) (#2394). A caller installs only what it drives. Picked over one package holding every
+  one vendor's own cloud (`host-claude-web`; a `codex-web` would share nothing with it)
+  (#2394). A caller installs only what it drives. Picked over one package holding every
   driver, over one package per agent holding every place, over one `web` package for both
   vendors' clouds, and over a place being a driver beside the coding agents
-  (`agent-driver-github-actions`). Claude Code in a cloud session stays in the product
-  until it has a seam apart from the browser bridge.
+  (`agent-driver-github-actions`).
 - Every adapter takes the same three parts of the person's own setup, `memory`,
   `connectors` and `skills`, and turns each off with its own coding agent's switches. A
   part it cannot keep out is a warning in its readiness check, never a silent "off".

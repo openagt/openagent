@@ -1,3 +1,4 @@
+import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { ProjectRef } from './project.js'
 import type { RunOptions, RunQuestion } from './run.js'
 import type { Settings } from './settings.js'
@@ -40,6 +41,22 @@ export interface AppLifecycle {
   /** A project was removed: called for every module, each cleaning up its own data. */
   projectRemoved?(project: ProjectRef, app: AppContext): void | Promise<void>
 }
+
+/**
+ * An address the app answers on its computer for a caller that is no page of its own: a browser
+ * extension, a module's own process. Every path at `path` and below it is the route's. Nothing
+ * checks who calls before it: the page's own check (the same origin) cannot hold for a caller
+ * from elsewhere, so the route checks its caller itself, as a token it gave out.
+ */
+export interface AppRoute {
+  /** Where it answers: `/_` and a name (`/_bridge`), and every path below that. */
+  path: string
+  /** Answer a request at the path or below it. */
+  handle(req: IncomingMessage, res: ServerResponse): void | Promise<void>
+}
+
+/** What a route's path may be: `/_`, then a name of lower-case words joined by dashes. */
+export const ROUTE_PATH = /^\/_[a-z][a-z0-9]*(-[a-z0-9]+)*$/
 
 /** What fixes an item: one of the module's own `ui.action`s, by its id, or a page to open. */
 export type AttentionFix = { label: string; action: string } | { label: string; href: string }

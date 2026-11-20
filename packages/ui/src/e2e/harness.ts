@@ -150,7 +150,6 @@ export async function makeWorld(): Promise<StoryWorld> {
     models: { read: async () => ({ 'claude-code': { models: [] as [] }, codex: { models: [] as [] } }), forget: () => {} },
     agentUpdates: { read: async () => [], update: async () => ({ ok: false as const, error: 'not wired in this test' }), openAgent: async () => undefined },
     projectErrors: () => ({ errors: [] }),
-    bridgeBrowser: { status: async () => ({ state: 'off' as const }), start: async () => {}, stop: async () => {}, act: async () => {} },
   }
 
   const repos: string[] = []

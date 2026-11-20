@@ -440,6 +440,8 @@ export { formatRelative, formatDateTime, formatDuration, formatAge } from '../li
 export { useNarrow } from '../lib/use-narrow.js'
 export { useIsMobile, isMobileScreen } from '../lib/use-mobile.js'
 export { Waiting } from '../components/Waiting.js'
+// A question as the chat draws it: the card of the module that asks, where it is on, else in words.
+export { AskedQuestion } from '../components/AskedQuestion.js'
 export { useHighlighted, useHighlightedIn, languageOfFence, Pieces, ColouredLines, type Piece } from '../lib/highlight.js'
 export { useAction } from '../lib/use-action.js'
 export { useFileNames, pathsIn, type FileNames, type NamedFile } from '../lib/use-file-names.js'

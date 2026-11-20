@@ -1,12 +1,9 @@
 import { agentLockKey, sayToRun, startedElsewhere, type SteerResult } from '../dashboard/run-inbox.js'
 export type { SteerResult }
-import { bridgeQuestions } from '../dashboard/bridge-store.js'
-import { isCloudSessionId } from '../dashboard/bridge-endpoints.js'
 import { openInApp, type OpenTarget, type OpenResult } from '../dashboard/open-in-app.js'
-import { contextBridgeBrowser, contextPreferences, contextStartAgent, resolveProjectPath, resolveAgentPath, runHostOf } from './context.js'
+import { contextPreferences, contextStartAgent, resolveProjectPath, resolveAgentPath, runHostOf } from './context.js'
 import { runRefAt } from '../distribution-hooks.js'
 import { errorMessage } from '@openagt/agent-data'
-import type { BridgeBrowserAction } from '../bridge-browser.js'
 import { relayOr } from './relay-agent.js'
 import { findAgent, isRunId, projectRuns, type AgentMeta } from '../store/index.js'
 import { withAgentLock } from '../agent-locks.js'
@@ -46,29 +43,6 @@ export async function sendStop(projectId: string, agentId?: string): Promise<Ste
       return { ok: false, error: errorMessage(err) }
     }
   }, { ok: false, error: 'could not reach the machine' })
-}
-
-/**
- * Queue the user's pick for the question a Claude web session is parked on (#1237).
- *
- * Not a line for a run, as an answer to a run's question is (ask's): a cloud agent has no run here to hand it to, so
- * the pick goes to the bridge store, where the browser extension collects it, types
- * it into the session's composer and submits. Only labels of the currently parked question are
- * accepted — one, or a multi-select's subset — and the daemon composes the text typed from them,
- * so this can never put arbitrary text in front of another product's agent. Local only, no
- * relay: the bridge lives on the daemon the extension talks to.
- */
-export async function sendBridgeAnswer(sessionId: string, labels: string[]): Promise<{ ok: boolean; error?: string }> {
-  if (!isCloudSessionId(sessionId)) return { ok: false, error: 'unknown session' }
-  if (!Array.isArray(labels) || !labels.every(label => typeof label === 'string' && label.trim())) return { ok: false, error: 'answer labels are required' }
-  const queued = bridgeQuestions().queueAnswer(sessionId, labels)
-  return typeof queued === 'string' ? { ok: false, error: queued } : { ok: true }
-}
-
-/** Withdraw a queued bridge answer (#1237). A no-op once the extension has delivered it. */
-export async function sendBridgeAnswerCancel(sessionId: string): Promise<void> {
-  if (!isCloudSessionId(sessionId)) return
-  bridgeQuestions().cancelAnswer(sessionId)
 }
 
 /**
@@ -284,14 +258,4 @@ export async function sendMerge(projectId: string, agentId: string): Promise<Han
     if (target.agent.status === 'running') return { ok: false, error: 'that session is still going' }
     return mergeAgentPr(target.cwd, target.agent)
   }, { ok: false, error: 'could not reach the machine' })
-}
-
-/**
- * Ask the daemon's bridge browser to show its window (for the one-time sign-in), hide it again,
- * or restart (#1332). Anything else is refused; a browser that is not running ignores show/hide.
- */
-export async function sendBridgeBrowser(action: BridgeBrowserAction): Promise<{ ok: boolean; error?: string }> {
-  if (action !== 'show' && action !== 'hide' && action !== 'restart') return { ok: false, error: 'unknown action' }
-  await contextBridgeBrowser().act(action)
-  return { ok: true }
 }

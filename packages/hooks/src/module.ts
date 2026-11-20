@@ -1,5 +1,5 @@
 import type { AccountAccess } from './account.js'
-import type { AppAttention, AppLifecycle } from './app.js'
+import type { AppAttention, AppLifecycle, AppRoute } from './app.js'
 import type { ProjectRef } from './project.js'
 import type { RunAgent, RunHost, RunSkills, RunStep } from './run.js'
 import type { SettingScope } from './settings.js'
@@ -23,11 +23,13 @@ export interface NodeHooks {
   'app.lifecycle'?: AppLifecycle
   /** What it says needs the person. */
   'app.attention'?: AppAttention
+  /** The addresses it answers for callers that are no page of the app's. */
+  'app.route'?: readonly AppRoute[]
 }
 
 export type HookName = keyof NodeHooks
 
-export const HOOK_NAMES: readonly HookName[] = ['run.step', 'run.agent', 'run.host', 'run.skills', 'store.backend', 'account.access', 'app.lifecycle', 'app.attention']
+export const HOOK_NAMES: readonly HookName[] = ['run.step', 'run.agent', 'run.host', 'run.skills', 'store.backend', 'account.access', 'app.lifecycle', 'app.attention', 'app.route']
 
 /** What makes a module a plugin: an Enabled row, kept per person, per computer or per project. */
 export interface PluginInfo {

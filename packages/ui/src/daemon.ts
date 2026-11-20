@@ -10,20 +10,15 @@ import { startBackgroundServices } from './daemon-services.js'
 import { projectErrorStore } from './project-errors.js'
 import { resolveDashboardBundle } from './dashboard/bundle.js'
 import { resolveWebsite } from './dashboard/website.js'
-import { ensureBridgeToken, ensureComputerId, listProjects, readPreferences, registryPreferencesStore, thisComputerName } from './registry.js'
+import { ensureComputerId, registryPreferencesStore, thisComputerName } from './registry.js'
 import { sayComputer, sayName, sayOwnUrl } from './dashboard/machine-call.js'
-import { bridgeSessionsFrom } from './dashboard/bridge-sessions.js'
-import { bridgeQuestions } from './dashboard/bridge-store.js'
-import { bridgeBrowserDir, bridgeBrowserOwner, startBridgeBrowser, type BridgeBrowser, type BridgeBrowserOptions } from './bridge-browser.js'
 import { readySessionsHome, startSessionsSweep } from './sessions-home.js'
 import { distributionHooks, localHostOf } from './distribution-hooks.js'
 import { devicesOn, otherComputers } from './other-computers.js'
 import type { Hooks, ProjectRef, RunHost } from '@openagt/hooks'
 import { sessionsHome } from '@openagt/agent-data'
 import { readSecureAddress, SECURE_PORT, type SecureAddress } from './secure-address.js'
-import { readAllAgents } from './store/index.js'
 import type { StartedProject } from './dashboard/types.js'
-import type { BridgeSession } from './dashboard/bridge-endpoints.js'
 import { personLogins } from './dashboard/copy-logins.js'
 import { startLoginsSync } from './dashboard/logins-sync.js'
 import { startComputersSync } from './dashboard/computers-sync.js'
@@ -78,8 +73,6 @@ export interface RunDaemonOptions {
   project?: string
   /** Called once {@link project} is on the list: its id, which always opens its page, the address the page shows, and whether it was added now. */
   onProject?: (project: StartedProject) => void
-  /** How the bridge browser is launched (#1332); default the real Chrome for Testing. For tests. */
-  bridgeBrowser?: (opts: BridgeBrowserOptions) => Promise<BridgeBrowser>
   /** How long the teardown after Ctrl+C may take; default {@link SHUTDOWN_DEADLINE_MS}. For tests. */
   shutdownDeadlineMs?: number
   /** The modules the dashboard runs, loaded; its distribution's when unsaid (`distribution-hooks.ts`). For tests. */
@@ -103,10 +96,6 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
   // What the person's terminal runs is found by the checks and by every run started from here: the
   // service's own PATH is the one its install's terminal had.
   await refreshLoginShellPath()
-  // The browser bridge (#1237). Opt-in, because it opens the daemon's one route reachable from
-  // another origin, behind a key of its own. The key may not exist yet, hence ensure, not read.
-  const bridgeOn = (await readPreferences(env)).bridge === true
-  const bridgeToken = bridgeOn ? await ensureBridgeToken(env) : undefined
   // Which computer this is, said to every machine it gets into and to the modules: a machine
   // lists this computer once by it. A home file that cannot be written says nothing.
   const computer = await ensureComputerId(env).catch(() => undefined)
@@ -125,9 +114,6 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
   otherComputers.on = () => devicesOn(hooks)
   // A project added or removed is told to the modules (`app.lifecycle`): a scheduler starts or stops with it.
   const runtime = createProjectRuntime({ cwd, env, naming: new ReadyNaming(), host, otherHosts, lifecycle: hooks })
-  // Known only once the dashboard listens; the bridge browser is told it (#1332).
-  let daemonUrl: string | undefined
-
   // The daemon serves the built dashboard bundle (#405/#426): the SPA reads each run's files over
   // `GET /_rpc/events`, so there is no in-process event stream to feed here. The runtime's RPCs reach the browser through the
   // dashboard context the mount is wired with. A missing bundle (a broken install) surfaces as a
@@ -137,23 +123,6 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
   const quota = defaultQuotaSource()
   // The per-project error state (#1500): the background services write it, the dashboard reads it.
   const projectErrors = projectErrorStore()
-  // The bridge browser (#1332): the daemon's own Chrome for Testing with the extension installed,
-  // so a web run no longer needs the user's Chrome open. Created here, launched only once the
-  // dashboard listens (the extension is told the daemon's address) and the preference says so.
-  // It needs the bridge: without the token there is nothing to hand the extension.
-  const bridgeBrowser = bridgeBrowserOwner(async (report, signal) => {
-    if (!bridgeToken || !daemonUrl) {
-      // The token is minted at boot, from the bridge preference as it stood then (above). A bridge
-      // switched on since is a restart away; a bridge that is off wants switching on first.
-      const bridgeOnNow = (await readPreferences(env)).bridge === true
-      throw new Error(
-        bridgeOnNow
-          ? 'the browser bridge was switched on after the dashboard started — restart the dashboard, and the browser launches on its own'
-          : 'turn the browser bridge on, then restart the dashboard',
-      )
-    }
-    return (opts.bridgeBrowser ?? (o => startBridgeBrowser(o)))({ daemonUrl, token: bridgeToken, dir: bridgeBrowserDir(env), report, signal })
-  }, console.log)
   // Which models each coding agent offers: asked on the menu's first read, then kept.
   const models = defaultModelsSource()
   const websiteDir = await resolveWebsite()
@@ -177,24 +146,19 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
       remote: runtime.remoteAgents,
       host,
       otherHosts,
-      // The bridge browser follows its switch (#1332): on launches it, off closes it, without a restart.
-      preferences: registryPreferencesStore(env, written => {
-        if (written.bridgeBrowser === true) void bridgeBrowser.start()
-        if (written.bridgeBrowser === false) void bridgeBrowser.stop()
-      }),
+      preferences: registryPreferencesStore(env),
       quota,
       models,
       agentUpdates: agentUpdates({ models }),
       projectErrors: projectErrors.read,
-      bridgeBrowser,
     },
     // The `/_relay/*` endpoints let another daemon run + read + steer a session here. A person's own
     // OpenAgent on a computer several people use keeps their logins there: another OpenAgent of
     // theirs hands them over through the relay.
     relay: { project: runtime.projectAt, tailEvents: runtime.tailRelayEvents, rpc: dispatchRelayRpc, reads: isRelayReadCall, machine: dispatchMachineRpc, bring: runtime.bringProject, ...(env.OPENAGENT_PERSON ? { logins: personLogins(runComputerCommand) } : {}) },
     screen: runtime.screenOf,
-    // The browser bridge (#1237): absent unless the preference is on, which 404s every route.
-    ...(bridgeToken ? { bridgeToken, bridgeSessions: () => listBridgeSessions(env) } : {}),
+    // What the modules on answer on the dashboard's address (`app.route`): host-claude-web's bridge.
+    routes: () => hooks.routes(),
     ...(clientBundleDir ? { clientBundleDir } : {}),
     ...(secure ? { secure: { ...secure, port: SECURE_PORT } } : {}),
     ...(websiteDir ? { websiteDir } : {}),
@@ -206,7 +170,6 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
     throw err
   })
 
-  daemonUrl = dashboard.url
   sayOwnUrl(dashboard.url)
   try {
     const actualPort = Number(new URL(dashboard.url).port) || port
@@ -217,11 +180,6 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
     await dashboard.close()
     throw err
   }
-
-  // The bridge browser comes up in the background (#1332): its first launch downloads Chrome,
-  // and the dashboard must not wait on that. Read here rather than with the bridge preference
-  // above: the launch needs the address the dashboard only has now.
-  if ((await readPreferences(env)).bridgeBrowser === true) void bridgeBrowser.start()
 
   // The folder the caller named comes first, so its page opens before the modules start their
   // work: adding it tells the modules on in it (`projectAdded`).
@@ -242,8 +200,7 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
   const lifecycle = new AbortController()
   await hooks.started({ signal: lifecycle.signal, url: dashboard.url, ...(computer !== undefined ? { computer } : {}) })
 
-  // Everything that runs in the background beside serving the dashboard: the data sync and the
-  // cloud sweeps.
+  // Everything that runs in the background beside serving the dashboard: the data sync.
   const services = startBackgroundServices({
     env,
     projectErrors,
@@ -274,10 +231,6 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
     // Stopped here as well as by the dashboard: a broken install serves 503s without ever taking
     // ownership of the source we handed in, and that poller would go on reading by itself.
     quota.stop()
-    // The daemon's browser goes with the daemon (#1332): left running it would keep serving a
-    // daemon that is gone, and the next daemon would find its profile held.
-    step('the bridge browser')
-    await bridgeBrowser.stop()
     step('the relayed runs')
     await runtime.dispose()
   })
@@ -326,16 +279,4 @@ function waitForShutdown(signal?: AbortSignal): Promise<void> {
     process.once('SIGTERM', done)
     signal?.addEventListener('abort', done, { once: true })
   })
-}
-
-/**
- * The cloud sessions the browser bridge's Driver tab should be serving (#1237, #1332).
- *
- * Across every registered project, because a cloud agent is not tied to the daemon's home
- * checkout, and best-effort per project so one unreadable repo cannot empty the list.
- */
-async function listBridgeSessions(env: NodeJS.ProcessEnv): Promise<BridgeSession[]> {
-  const projects = await listProjects(env)
-  const agents = (await Promise.all(projects.map(p => readAllAgents(p.path).catch(() => [])))).flat()
-  return bridgeSessionsFrom(agents, new Date(), bridgeQuestions().pendingAnswerSessions())
 }

@@ -1,7 +1,7 @@
 import type { Attention, Hooks, WaitingRun } from '@openagt/hooks'
 import { checkoutsFirst, listAgents, loadAgentEvents, readLiveMetas, type LiveAgent, type AgentMeta } from '../store/index.js'
 import { pendingChoices } from '../open-choices.js'
-import type { ChoiceRequest, OpenAgentEvent } from '../events.js'
+import type { OpenAgentEvent } from '../events.js'
 import type { ProjectSummary, ProjectionRead } from './projects.js'
 import { projectBranches, type BranchesFor } from '../store/branches.js'
 import { unpublishedRuns, type Unpublished } from './unpublished.js'
@@ -10,8 +10,6 @@ import { waitingKey } from './keys.js'
 import { needsWord } from './waiting-words.js'
 import { runName } from '../run-name.js'
 import { withStartedNames } from '../started-names.js'
-import { bridgeChoiceRequest, type BridgeQuestion } from './bridge-question.js'
-import { bridgeQuestions } from './bridge-store.js'
 import { distributionHooks, projectRefAt } from '../distribution-hooks.js'
 import type { MachineKind } from '../reached-by-line.js'
 
@@ -22,7 +20,7 @@ export { waitingKey } from './keys.js'
 // `app.attention`, every module's (a run waiting on the question it ended on is ask's), asked with
 // the project's runs that wait, and the ones the shell still finds itself until their modules say
 // them (#2394's step 6): the open pull requests (github's), a finished run's work never published
-// (git-branches'), a Claude Code web session's question (host-claude-web's). Each is said in the
+// (git-branches'). Each is said in the
 // hook's shape, by the module it is whose, so no reader tells the two apart. #627 notifications
 // ride this whole set.
 
@@ -50,23 +48,15 @@ export interface WaitingDeps {
   agents?: (cwd: string) => Promise<AgentMeta[]>
   /** The project's checkouts and branches (default the project's provider, {@link projectBranches}): where a branch's state is read (#860). */
   branches?: BranchesFor
-  /** The questions Claude Code web sessions are parked on, as the browser bridge holds them, minus those with an answer on its way (default: the daemon's bridge store, #1554). */
-  bridged?: () => BridgeQuestion[]
   /** The modules whose `app.attention` is asked (default the distribution's). */
   hooks?: () => Promise<Hooks>
-}
-
-/** The bridge store's questions still waiting for a pick. */
-function unansweredBridgeQuestions(): BridgeQuestion[] {
-  const store = bridgeQuestions()
-  return store.list().filter(question => !store.pendingAnswer(question.sessionId))
 }
 
 /**
  * What waits on the person in every registered project, newest first. Forgiving: a project with
  * no remote (or an unreadable one) simply contributes nothing. Hand-opened draft PRs are excluded:
  * they are not yet asking for review. A draft on an agent's branch is not (#1102): an agent
- * publishes a draft when a person should look first, and cloud work adoption opens its PRs as drafts.
+ * publishes a draft when a person should look first.
  *
  * Which projects were read whole comes back alongside the items (#1623): forgiveness here is what
  * lets one unreachable project keep the list useful, and it is also what would let that project's
@@ -76,27 +66,22 @@ function unansweredBridgeQuestions(): BridgeQuestion[] {
 export async function buildWaiting(projects: ProjectSummary[], deps: WaitingDeps = {}): Promise<ProjectionRead<Waiting>> {
   // Every project at once, and each one's sources at once: a project's open requests are a git host
   // read, and asking them one project after the other kept the list waiting seconds.
-  const bridged = (deps.bridged ?? unansweredBridgeQuestions)()
   const hooks = await (deps.hooks ?? distributionHooks)()
-  const read = await Promise.all(projects.map(project => projectWaiting(project, deps, bridged, hooks)))
+  const read = await Promise.all(projects.map(project => projectWaiting(project, deps, hooks)))
   const items = read.flatMap(project => project.items)
   const whole = read.flatMap(project => (project.whole ? [project.id] : []))
   items.sort((a, b) => (b.since ?? '').localeCompare(a.since ?? ''))
   // The same repo can be registered under two projects (e.g. a monorepo root + a subdir), so a
-  // PR would otherwise appear once per entry. Collapse by identity, keeping the first (newest-sorted).
-  // A web session's question is one too: both entries share the repository's records, so each finds
-  // the run that asked it.
+  // PR would otherwise appear once per entry, and so would what waits on a run: both entries share
+  // the repository's records, so each finds the run. Collapse by identity, keeping the first (newest-sorted).
   const seen = new Set<string>()
-  const identity = (item: Waiting) => (item.module === BRIDGED || item.module === 'github' ? `${item.module}:${item.id ?? ''}` : waitingKey(item))
+  const identity = (item: Waiting) => (item.module === 'github' ? `github:${item.id ?? ''}` : item.scope === 'run' ? `${item.module}:run:${item.run ?? ''}:${item.id ?? ''}` : waitingKey(item))
   const unique = items.filter(item => (seen.has(identity(item)) ? false : (seen.add(identity(item)), true)))
   return { items: unique, whole }
 }
 
-/** The module a web session's question is: the host of Claude Code's web sessions, which the browser bridge is until it has a module of its own. */
-const BRIDGED = 'host-claude-web'
-
 /** One project's items, and whether every one of its sources answered. */
-async function projectWaiting(project: ProjectSummary, deps: WaitingDeps, bridged: BridgeQuestion[], hooks: Hooks): Promise<{ id: string; items: Waiting[]; whole: boolean }> {
+async function projectWaiting(project: ProjectSummary, deps: WaitingDeps, hooks: Hooks): Promise<{ id: string; items: Waiting[]; whole: boolean }> {
   const prs = deps.prs ?? cachedOpenPrs
   const liveAgents = deps.liveAgents ?? readLiveMetas
   const events = deps.events ?? loadAgentEvents
@@ -129,8 +114,8 @@ async function projectWaiting(project: ProjectSummary, deps: WaitingDeps, bridge
     // the row goes, the conversation rather than the git host.
     const run = runs.find(agent => agent.pr?.url === pr.url) ?? (pr.headRefName !== undefined ? runs.find(agent => agent.branch === pr.headRefName) : undefined)
     // A draft opened by hand is not asking for review, so it stays off the list. A draft on a
-    // run's branch is the opposite (#1102): the agent, or cloud work adoption, opened it as a
-    // draft so it does not ping reviewers, and if the list then dropped it too, nothing
+    // run's branch is the opposite (#1102): the agent opened it as a draft so it does not ping
+    // reviewers, and if the list then dropped it too, nothing
     // would tell anyone the work exists — which is the whole of #860 again.
     if (pr.isDraft && !run) continue
     items.push({
@@ -149,12 +134,6 @@ async function projectWaiting(project: ProjectSummary, deps: WaitingDeps, bridge
     })
   }
   if (live === undefined) unread()
-  // A Claude Code web session's question lives in the bridge store, not its log (#1554): joined on
-  // the cloud session its run's record names. Waiting since the bridge saw it, not since the hand-off.
-  for (const question of bridged) {
-    const run = runs.find(agent => agent.target === 'web' && agent.sessionId === question.sessionId)
-    if (run) items.push(askedBy(project, run, bridgeChoiceRequest(question), question.receivedAt, BRIDGED))
-  }
   // A finished run whose work never left the machine is a "needs you" too (#860). Until then the
   // list only knew about a PR that is *already on the git host* and an agent parked on a gate, so an agent
   // that committed real code and stopped produced neither, and nothing told anyone: the overview
@@ -199,25 +178,6 @@ async function waitingRuns(project: ProjectSummary, live: Promise<LiveAgent[] | 
       return { id: meta.id, ...(name !== undefined ? { name } : {}), ...(endedAt ? { endedAt } : {}), questions: questions.map(question => ({ ...question, options: [...question.options] })) }
     }),
   )
-}
-
-/** A Claude Code web session's question, named as every list names its run, the question beside it. */
-function askedBy(project: ProjectSummary, run: AgentMeta, choice: ChoiceRequest, since: string | undefined, module: string): Waiting {
-  return {
-    kind: 'waiting',
-    module,
-    scope: 'run',
-    run: run.id,
-    // A question's id is the time of its diary line, which another run's question can share.
-    id: `${run.id}:${choice.id}`,
-    words: needsWord('awaiting'),
-    title: runName(run) ?? run.id,
-    detail: choice.title,
-    mark: 'question',
-    ...(since ? { since } : {}),
-    projectId: project.id,
-    projectName: project.name,
-  }
 }
 
 /**

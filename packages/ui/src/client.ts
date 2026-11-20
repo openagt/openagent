@@ -37,10 +37,6 @@ export { parseMachineLink } from './machine-link.js'
 export { machineKind, machineName, reachedByLine, reachedThrough, type MachineKind } from './reached-by-line.js'
 // Which names are this computer's own, so a page knows whether it was opened on the computer it is served from.
 export { isLoopbackHost } from './loopback-host.js'
-// A bridged question as the gate panel renders it (#1554): pure, so the client projects it itself.
-export { bridgeChoiceRequest } from './dashboard/bridge-question.js'
 // How long a run just started counts as starting, so the page and a Stop wait for it alike.
 export { STARTING_AT_MOST_MS } from './starting.js'
-// What a web run's cloud side is doing, from its record (#1668): pure, so every surface derives the same word.
-export { cloudRunState, cloudRunActive, CLOUD_SESSION_WINDOW_MS, type CloudRunState } from './cloud-run-state.js'
 export { ALL_PROJECTS, CARD_WIDTHS, arrangeCards, widthsFor, type CardPlace, type CardWidth, type LayoutCard, type OverviewLayouts } from './overview-layout.js'

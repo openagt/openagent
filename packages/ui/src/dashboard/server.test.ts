@@ -14,9 +14,7 @@ import { openagentVersion } from '../version.js'
 import { computerName } from '../computer-name.js'
 import type { StartAgentOptions, StartAgentResult } from './types.js'
 import type { IncomingMessage } from 'node:http'
-import { EXPECTED_EXTENSION_VERSION, EXTENSION_VERSION_HEADER } from './bridge-endpoints.js'
-import { resetBridgeStarts } from './bridge-starts.js'
-import { resetBridgeQuestions } from './bridge-store.js'
+import type { AppRoute } from '@openagt/hooks'
 
 /** Start a dashboard the way the daemon does (D3), with only the parts a test cares about overridden. */
 function dashboard(over: Partial<DashboardOptions> = {}): Promise<Dashboard> {
@@ -526,34 +524,29 @@ test('isExpectedHost: only a loopback Host passes (DNS rebinding)', () => {
   assert.equal(isExpectedHost(req({})), false) // HTTP/1.1 requires Host; every browser sends it
 })
 
-// The session start-queue end to end (#1328/#1697): what a web run posts on the run-facing route is
-// what the extension is handed on the bridge route, the model included.
-test('a web run\'s model reaches the extension through the start-queue (#1697)', async () => {
-  resetBridgeStarts()
-  resetBridgeQuestions()
-  const bridgeToken = 'x'.repeat(43)
+// The modules' routes (`app.route`, #2394): what a program of another origin calls a module on,
+// a browser extension's calls host-claude-web's bridge.
+test("a module's route answers its path and every path below it, after the dashboard's own, while the module is on (#2394)", async () => {
   const bundle = await fakeBundle()
-  const dash = await dashboard({ clientBundleDir: bundle, bridgeToken })
-  const asExtension = { authorization: `Bearer ${bridgeToken}`, [EXTENSION_VERSION_HEADER]: EXPECTED_EXTENSION_VERSION }
+  const answering = (name: string): AppRoute['handle'] => (req, res) => void res.writeHead(200, { 'content-type': 'text/plain' }).end(`${name} ${req.url}`)
+  let routes: AppRoute[] = [
+    { path: '/_bridge', handle: answering('bridge') },
+    { path: '/_rpc', handle: answering('copycat') },
+  ]
+  const dash = await dashboard({ clientBundleDir: bundle, routes: async () => routes })
   try {
-    // The extension must have spoken recently for the run's request to be taken at all.
-    assert.equal((await fetch(`${dash.url}/_bridge/ping`, { headers: asExtension })).status, 200)
-    const queued = await fetch(`${dash.url}/_web-start`, {
-      method: 'POST',
-      headers: { authorization: `Bearer ${bridgeToken}`, 'content-type': 'application/json' },
-      body: JSON.stringify({ repo: 'openagt/openagent', branch: 'cloud-1-abcd1234', prompt: 'Add the thing', model: 'sonnet' }),
-    })
-    assert.equal(queued.status, 202)
-    const { id } = (await queued.json()) as { id: string }
-    const claimed = await fetch(`${dash.url}/_bridge/start`, { headers: asExtension })
-    assert.deepEqual(await claimed.json(), {
-      start: { id, repo: 'openagt/openagent', branch: 'cloud-1-abcd1234', prompt: 'Add the thing', model: 'sonnet' },
-    })
+    assert.equal((await fetchText(`${dash.url}/_bridge`)).body, 'bridge /_bridge')
+    assert.equal((await fetchText(`${dash.url}/_bridge/ping?at=1`)).body, 'bridge /_bridge/ping?at=1')
+    // A path that merely begins with its name is another path: the dashboard's page, as any.
+    assert.match((await fetchText(`${dash.url}/_bridges`)).body, /<div id="root">/)
+    // The dashboard's own paths are its own, whatever a module says.
+    assert.notEqual((await fetchText(`${dash.url}/_rpc/version`)).body, 'copycat /_rpc/version')
+    // Asked on each call: a module switched off answers no more, with no restart.
+    routes = []
+    assert.match((await fetchText(`${dash.url}/_bridge/ping`)).body, /<div id="root">/)
   } finally {
     await dash.close()
     await rm(bundle, { recursive: true, force: true })
-    resetBridgeStarts()
-    resetBridgeQuestions()
   }
 })
 

@@ -112,14 +112,6 @@ export interface AgentMeta {
    */
   branch?: string
   /**
-   * The hand-off anchor a cloud run pushed for its session to clone at (#1601): an empty commit
-   * unique to this run, folded from the `cloud-anchor` event. The session works on a `claude/*`
-   * branch of the cloud's own naming, and this is the ancestor by which the daemon's adoption
-   * pass recognizes which of origin's `claude/*` heads is this run's. Absent on non-web runs
-   * and on web runs whose pre-hand-off push failed.
-   */
-  cloudAnchor?: string
-  /**
    * The pull request this session's work is on (E6), recorded when one is opened rather than
    * re-derived from branch names and timestamps by every surface that wants it.
    */
@@ -155,14 +147,8 @@ export interface AgentMeta {
    */
   pendingChoice?: { id: string; title: string }
   /**
-   * The browser bridge holds a question this run's cloud session is parked on (#1668). Not stored:
-   * the daemon annotates a web run's record on the way to the dashboard, the way a relayed run's
-   * label is, because the bridge store is in memory and the archive on disk knows nothing of it.
-   */
-  cloudWaiting?: boolean
-  /**
    * The run was started by another machine's daemon (#1648): its {@link host} is not this one.
-   * Not stored either — annotated on the way to the dashboard like {@link cloudWaiting}, since
+   * Not stored: annotated on the way to the dashboard, the way a relayed run's label is, since
    * the shared data branch shows every machine's runs here and only this daemon knows which host
    * it is.
    */
@@ -202,9 +188,9 @@ export interface AgentMeta {
    */
   browserStreamPort?: number
   /**
-   * Where this run executes (#1050/#610): `web` for a Claude Code cloud session, `remote` when
-   * relayed to a saved machine (#1067), a host's id for a run on a host beside this computer's
-   * (`run.host`, a GitHub Actions runner's `actions`), absent or `local` for a run on this computer.
+   * Where this run executes (#1050): `remote` when relayed to a saved machine (#1067), a host's id
+   * for a run on a host beside this computer's (`run.host`: a GitHub Actions runner's `actions`, a
+   * Claude Code cloud session's `web`), absent or `local` for a run on this computer.
    * Kept on the run's record by the host that runs it, so the run's page names where it is and
    * draws that host's notice after a reload.
    */

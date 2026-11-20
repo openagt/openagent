@@ -40,6 +40,8 @@ test('a distribution that is wrong is refused, saying what is wrong', () => {
   refused([{ module: { name: 'devices', plugin: { scope: 'machine' }, hooks: {} } as unknown as ModuleDefinition }], /devices keeps its Enabled row nowhere/)
   refused([{ module: defineModule({ name: 'github', hooks: { 'run.step': [{ order: Number.NaN, name: 'account', run: () => {} }] } }) }], /github's step "account" stands at no order/)
   refused([{ module: defineModule({ name: 'store-git-branch', plugin: { scope: 'project', row: { read: async () => false, settings: 'project-agent-data' } }, hooks: {} }), on: true }], /store-git-branch keeps its own row: it starts as its row says/)
+  refused([{ module: defineModule({ name: 'host-claude-web', hooks: { 'app.route': [{ path: '/bridge', handle: () => {} }] } }) }], /host-claude-web's route "\/bridge" is no route's path/)
+  refused([{ module: defineModule({ name: 'host-claude-web', hooks: { 'app.route': [{ path: '/_bridge/start', handle: () => {} }] } }) }], /host-claude-web's route "\/_bridge\/start" is no route's path/)
 })
 
 test("a run's steps go by order; at the same order, by the distribution's order, then by each module's own", async () => {
@@ -230,6 +232,25 @@ test('a second skill, coding agent or host of one name is left out and told; a h
     'devices run.host: broken gives a host here already',
     'broken app.attention: no idea',
   ])
+})
+
+test("the routes are the modules' on, a plugin's only while it is: a second route at a path is left out and told", async () => {
+  const errors: HandlerError[] = []
+  const bridge = { path: '/_bridge', handle: () => {} }
+  const copied = { path: '/_bridge', handle: () => {} }
+  const copy = { path: '/_copy', handle: () => {} }
+  const hooks = hooksOf(
+    [
+      { module: defineModule({ name: 'host-claude-web', plugin: { scope: 'computer' }, hooks: { 'app.route': [bridge] } }) },
+      { module: defineModule({ name: 'copycat', hooks: { 'app.route': [copied, copy] } }) },
+    ],
+    errors,
+  )
+  assert.deepEqual(await hooks.routes(), [copied, copy])
+  assert.deepEqual(messages(errors), [])
+  await hooks.setEnabled('host-claude-web', true)
+  assert.deepEqual(await hooks.routes(), [bridge, copy])
+  assert.deepEqual(messages(errors), ['copycat app.route: host-claude-web gives a route at /_bridge already'])
 })
 
 test('git reaches a remote as the first module with an account for it says; one that throws is told and gone past', async () => {

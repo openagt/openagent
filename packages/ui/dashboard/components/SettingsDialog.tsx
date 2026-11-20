@@ -1,6 +1,6 @@
-import { useCallback, useContext, useEffect, useId, useRef, useState, type ComponentType, type ReactNode } from 'react'
+import { useCallback, useContext, useEffect, useRef, useState, type ComponentType, type ReactNode } from 'react'
 import { Dialog as BaseDialog } from '@base-ui/react/dialog'
-import { ArrowLeft, Blocks, Bot, ChevronRight, ChevronsUpDown, Database, FolderGit2, Globe, Keyboard, Layers, Palette, X, FolderSearch } from 'lucide-react'
+import { ArrowLeft, Blocks, Bot, ChevronRight, ChevronsUpDown, Database, FolderGit2, Keyboard, Layers, Palette, X, FolderSearch } from 'lucide-react'
 import { DRIVERS, DRIVER_LABELS, isDriverName } from '../../src/client.js'
 import { driverOptions, useModels } from '../lib/models.js'
 import type { DriverOption } from './DriverModelMenu.js'
@@ -14,7 +14,6 @@ import { inPlace } from '../lib/in-place.js'
 import { useIsMobile } from '../lib/use-mobile.js'
 import { usePreferences, updatePreferences } from '../lib/preferences.js'
 import { AppearanceSettings } from './AppearanceSettings.js'
-import { BridgeSettings } from './BridgeSettings.js'
 import { AGENT_DATA_ENTRY, AgentDataSettings } from './AgentDataSettings.js'
 import { SHORTCUTS_ENTRY, ShortcutList } from './ShortcutList.js'
 import { REPO_SOURCES_ENTRY, RepoSourcesSettings } from './RepoSourcesSettings.js'
@@ -22,12 +21,10 @@ import { PickProject } from './PickProject.js'
 import { ProjectDot } from './ProjectPicker.js'
 import { PROJECT_AGENT_DATA_ENTRY, ProjectAgentDataSettings } from './ProjectAgentDataSettings.js'
 import { COMPUTER_PLUGINS_ENTRY, ComputerPluginsSettings, PLUGINS_ENTRY, ProjectPluginsSettings } from './PluginsSettings.js'
-import { BridgeBrowserSettings } from './BridgeBrowserSettings.js'
 import { ModuleSlot, projectsHaving } from './ModulePageView.js'
 import { ConfirmDialog } from './ui/confirm-dialog.js'
 import { buttonVariants } from './ui/button.js'
 import { BACKDROP_CLASS, DIALOG_PRESSES_CLASS } from './ui/dialog.js'
-import { RadioGroup, RadioGroupItem } from './ui/radio-group.js'
 import { ScrollArea } from './ui/scroll-area.js'
 import { InSection } from './ui/section.js'
 import { Select, SelectContent, SelectItem, SelectTriggerBare, SelectValue } from './ui/select.js'
@@ -343,7 +340,7 @@ function ProjectSelect({ projects, value, onChange }: { projects: ProjectSummary
   )
 }
 
-/** The dashboard's own entries: how it looks, which agent runs, your agent data, where repos come from, Claude web, the keys. */
+/** The dashboard's own entries: how it looks, which agent runs, the plugins, your agent data, where repos come from, the keys. */
 function useOwnEntries(): Entry[] {
   const preferences = usePreferences()
   const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
@@ -436,32 +433,6 @@ function useOwnEntries(): Entry[] {
       body: <RepoSourcesSettings />,
     },
     {
-      id: 'claude-web',
-      order: 70,
-      title: 'Claude web',
-      icon: Globe,
-      body: (
-        // The switch's two sentences say what it does and what it needs; an introduction above them told the same.
-        <SettingsSection>
-          <ToggleRow
-            label="Claude web bridge"
-            description="Carry claude.ai questions into this dashboard and type your answers back. A browser signed in to claude.ai does the work, through the bridge extension."
-            checked={preferences.bridge ?? false}
-            onChange={next => updatePreferences({ bridge: next })}
-          />
-          {(preferences.bridge ?? false) && (
-            // One feature, one real choice (#1332): which browser drives claude.ai. Two toggles
-            // named "Browser bridge" and "Bridge browser" read as anagrams; a choice under the
-            // switch reads as what it is. The preference stays the boolean `bridgeBrowser`.
-            <BridgeBrowserChoice
-              daemonBrowser={preferences.bridgeBrowser ?? false}
-              onChange={next => updatePreferences({ bridgeBrowser: next })}
-            />
-          )}
-        </SettingsSection>
-      ),
-    },
-    {
       id: SHORTCUTS_ENTRY,
       order: 80,
       title: 'Keyboard shortcuts',
@@ -469,49 +440,6 @@ function useOwnEntries(): Entry[] {
       body: <ShortcutList />,
     },
   ]
-}
-
-/**
- * Which browser does the bridge's work (#1332): one the daemon runs, with which web runs work with
- * the user's own Chrome closed, or the user's own Chrome with the extension set up
- * by hand. Each option carries what it needs right under it: the daemon's browser its status and
- * window controls, the user's Chrome the token to paste. Both can technically serve at once
- * (answers are claimed on read), but a person decides one, so it is presented as one.
- */
-function BridgeBrowserChoice({ daemonBrowser, onChange }: { daemonBrowser: boolean; onChange: (daemonBrowser: boolean) => void }) {
-  const question = useId()
-  const option = (value: boolean, label: string, description: string, body: ReactNode) => (
-    <label className="flex cursor-pointer gap-3">
-      <RadioGroupItem value={value ? 'daemon' : 'own'} aria-label={label} className="mt-0.5" />
-      <span className="min-w-0 flex-1">
-        <span className="block text-sm font-medium">{label}</span>
-        <span className="block text-xs text-muted-foreground">{description}</span>
-        {daemonBrowser === value && body}
-      </span>
-    </label>
-  )
-  return (
-    // One group with one name: the radio group is named by the question above it.
-    <div>
-      <p id={question} className="mb-3 text-sm font-medium">
-        Which browser does the work?
-      </p>
-      <RadioGroup aria-labelledby={question} value={daemonBrowser ? 'daemon' : 'own'} onValueChange={next => onChange(next === 'daemon')} className="gap-4">
-        {option(
-          true,
-          'A browser the dashboard runs',
-          'Chrome for Testing, downloaded once, signed in once, kept minimized. Web runs work with your own Chrome closed.',
-          <BridgeBrowserSettings />,
-        )}
-        {option(
-          false,
-          'Your own Chrome',
-          'Install the extension from the folder below, open its options and paste the token. Web runs need your Chrome open.',
-          <BridgeSettings />,
-        )}
-      </RadioGroup>
-    </div>
-  )
 }
 
 /**

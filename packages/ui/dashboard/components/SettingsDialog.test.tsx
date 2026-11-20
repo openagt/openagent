@@ -35,8 +35,6 @@ vi.mock('./AgentDataSettings.js', () => ({ AGENT_DATA_ENTRY: 'agent-data', Agent
 vi.mock('./ProjectAgentDataSettings.js', () => ({ PROJECT_AGENT_DATA_ENTRY: 'project-agent-data', ProjectAgentDataSettings: () => <p>Where this project's agent data is</p> }))
 vi.mock('../rpc/reads.js', async importOriginal => ({
   ...(await importOriginal<typeof import('../rpc/reads.js')>()),
-  onBridgeToken: vi.fn(async () => null),
-  onBridgeBrowser: vi.fn(async () => ({ state: 'off' as const })),
   onPreferences: vi.fn(async () => ({})),
   onDetectedEditors: vi.fn(async () => []),
   onDashboard: vi.fn(async () => null),
@@ -227,8 +225,6 @@ describe('Settings on and off rows', () => {
     expect(checked(row('Name each run'))).toBe(false)
     fireEvent.click(row('Show what the coding agent thought'))
     expect(checked(row('Show what the coding agent thought'))).toBe(false)
-    fireEvent.click(screen.getByRole('button', { name: 'Claude web' }))
-    expect(switches()).toEqual([['Claude web bridge', false]])
     expect(saves()).toEqual([{ nameRuns: false }, { showThinking: false }])
   })
 
@@ -240,57 +236,6 @@ describe('Settings on and off rows', () => {
     fireEvent.click(screen.getByText('Name each run'))
     expect(checked(row('Name each run'))).toBe(true)
     expect(saves()).toEqual([{ nameRuns: true }])
-  })
-})
-
-describe('Settings › Claude web (#1332)', () => {
-  test('with the bridge on, which browser does the work is one choice, and each option carries its own setup', async () => {
-    // "Browser bridge" and "Bridge browser" as two toggles read as anagrams of each other; the
-    // real decision is which browser drives claude.ai, so it is presented as exactly that.
-    prefsRead.mockResolvedValueOnce({ bridge: true, bridgeBrowser: true })
-    refreshPreferences()
-    open('claude-web')
-    const daemon = await screen.findByRole('radio', { name: /A browser the dashboard runs/ })
-    const own = screen.getByRole('radio', { name: 'Your own Chrome' })
-    // One choice: the two are the radios of one group, named by the question.
-    const group = screen.getByRole('radiogroup', { name: 'Which browser does the work?' })
-    expect(within(group).getAllByRole('radio')).toEqual([daemon, own])
-    expect(checked(daemon)).toBe(true)
-    expect(checked(own)).toBe(false)
-    // The daemon's browser carries its status; the token to paste belongs to the other option only.
-    await waitFor(() => expect(screen.getByText(/The bridge browser is off/)).toBeTruthy())
-    expect(screen.queryByText(/paste this token/)).toBeNull()
-  })
-
-  test('picking the other browser saves it, by the radio or by its words', async () => {
-    prefsRead.mockResolvedValueOnce({ bridge: true, bridgeBrowser: true })
-    refreshPreferences()
-    open('claude-web')
-    fireEvent.click(await screen.findByRole('radio', { name: 'Your own Chrome' }))
-    expect(saves()).toEqual([{ bridgeBrowser: false }])
-    expect(checked(screen.getByRole('radio', { name: 'Your own Chrome' }))).toBe(true)
-    expect(checked(screen.getByRole('radio', { name: /A browser the dashboard runs/ }))).toBe(false)
-    // The status of the daemon's browser goes with its option.
-    expect(screen.queryByText(/The bridge browser is off/)).toBeNull()
-    // The words are the radio's label: a click on them picks it too.
-    fireEvent.click(screen.getByText('A browser the dashboard runs'))
-    expect(saves()).toEqual([{ bridgeBrowser: false }, { bridgeBrowser: true }])
-    expect(checked(screen.getByRole('radio', { name: /A browser the dashboard runs/ }))).toBe(true)
-  })
-
-  test('with the bridge off there is no browser to choose, and switching the bridge on asks which', async () => {
-    prefsRead.mockResolvedValueOnce({ bridge: false })
-    refreshPreferences()
-    open('claude-web')
-    const bridge = await screen.findByRole('switch', { name: 'Claude web bridge' })
-    await waitFor(() => expect(checked(bridge)).toBe(false))
-    expect(screen.queryByText(/Which browser does the work/)).toBeNull()
-    expect(screen.queryByRole('radio')).toBeNull()
-    fireEvent.click(bridge)
-    expect(saves()).toEqual([{ bridge: true }])
-    expect(checked(bridge)).toBe(true)
-    // Nothing saved says the daemon's browser, so the person's own Chrome is the pick.
-    expect(checked(screen.getByRole('radio', { name: 'Your own Chrome' }))).toBe(true)
   })
 })
 
@@ -351,7 +296,7 @@ describe('the Settings list', () => {
 
   test("two groups: yours and this computer's, the computer's packages among them; then the picked project's packages", () => {
     show('', 'p1')
-    expect(entries('You and this computer')).toEqual(['Profile', 'Appearance', 'Coding agent', 'Plugins', 'Your agent data', 'Repos', 'Claude web', 'Keyboard shortcuts', 'Devices'])
+    expect(entries('You and this computer')).toEqual(['Profile', 'Appearance', 'Coding agent', 'Plugins', 'Your agent data', 'Repos', 'Keyboard shortcuts', 'Devices'])
     // gemstack has tickets and no scheduler; every project has its skills, whose entry says it goes first, and its plugins.
     expect(entries('Project')).toEqual(['Skills', 'Plugins', 'Project agent data', 'Tickets', 'List'])
     expect(showing(select('Project'))).toBe('gemstack')
@@ -534,7 +479,7 @@ describe('the Settings list', () => {
         <SettingsDialog entry="profile" onEntry={() => {}} onClose={onClose} scope={null} projects={[]} />
       </ModulesContext.Provider>,
     )
-    expect(entries('You and this computer')).toEqual(['Profile', 'Appearance', 'Coding agent', 'Plugins', 'Your agent data', 'Plain', 'Lights', 'Repos', 'Claude web', 'Keyboard shortcuts'])
+    expect(entries('You and this computer')).toEqual(['Profile', 'Appearance', 'Coding agent', 'Plugins', 'Your agent data', 'Plain', 'Lights', 'Repos', 'Keyboard shortcuts'])
   })
 
   test('opened with no entry, a computer shows the first and its address says so; a phone shows the list, whose address is none', () => {

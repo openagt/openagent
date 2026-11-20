@@ -44,7 +44,13 @@ vi.mock('../lib/preferences.js', () => ({
 // The hosts beside this computer project p1's modules bring, as the daemon would answer them.
 vi.mock('../lib/run-hosts.js', async importOriginal => ({
   ...(await importOriginal<typeof import('../lib/run-hosts.js')>()),
-  useRunHosts: (projectId: string | null) => (projectId === 'p1' ? [{ id: 'actions', label: 'GitHub Actions' }] : []),
+  useRunHosts: (projectId: string | null) =>
+    projectId === 'p1'
+      ? [
+          { id: 'actions', label: 'GitHub Actions' },
+          { id: 'web', label: 'Claude Code on the web' },
+        ]
+      : [],
 }))
 
 // The frame around the feed is not under test: the bar and composer reach for git and session
@@ -953,7 +959,7 @@ describe('a message sent while the agent works', () => {
 })
 
 describe('where the agent runs, for the row above the message box', () => {
-  test("this machine by itself; another machine by the name it was given; the cloud by its own; a host by the name the project's module gives it", () => {
+  test("this machine by itself; another machine by the name it was given; a host by the name the project's module gives it", () => {
     const runsOn = () => screen.getByTestId('row-runs-on').textContent
     const { rerender } = render(view({ live: true }))
     expect(runsOn()).toBe('This machine')
@@ -964,7 +970,7 @@ describe('where the agent runs, for the row above the message box', () => {
     rerender(view({ live: true, target: 'remote' }))
     expect(runsOn()).toBe('Another machine')
     rerender(view({ live: true, target: 'web' }))
-    expect(runsOn()).toBe('Cloud')
+    expect(runsOn()).toBe('Claude Code on the web')
     rerender(view({ live: true, target: 'actions' }))
     expect(runsOn()).toBe('GitHub Actions')
     // A host whose module is no longer on in the project.

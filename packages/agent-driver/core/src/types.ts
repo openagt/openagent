@@ -23,10 +23,10 @@ import type { InboxLine, PromptLine } from './inbox.js'
 
 /**
  * The stable id of one concrete implementation, as recorded on a session's meta. A driver has one
- * per place it can run — `claude-code` locally, `claude-web` in a cloud session, `github-actions`
- * on a runner — which is why this is wider than the user's driver choice.
+ * per place it can run — `claude-code` locally, `github-actions` on a runner — which is why this is
+ * wider than the user's driver choice.
  */
-export type DriverImplId = 'claude-code' | 'claude-web' | 'github-actions' | 'codex' | 'fake'
+export type DriverImplId = 'claude-code' | 'github-actions' | 'codex' | 'fake'
 
 /** A wrapped coding-agent CLI. Boots {@link DriverSession}s bound to a workspace. */
 export interface Driver {

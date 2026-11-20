@@ -16,11 +16,9 @@ import {
   addProject,
   addRepoFolder,
   listRepoFolders,
-  ensureBridgeToken,
   ensureComputerId,
   listMachines,
   listProjects,
-  readBridgeToken,
   readPreferences,
   removeMachine,
   removeProject,
@@ -157,7 +155,6 @@ test('a read of the registry never fails, whatever the disk does or the file hol
   assert.deepEqual(await readRegistry(ENV, unreadable), { projects: [], preferences: {} })
   assert.deepEqual(await readPreferences(ENV, unreadable), {})
   assert.deepEqual(await listMachines(ENV, unreadable), [])
-  assert.equal(await readBridgeToken(ENV, unreadable), undefined)
   assert.equal(await thisComputerName(ENV, unreadable), computerName())
   // Every field of the wrong shape, as a hand edit could leave it.
   const junk = { projects: [1, null, {}], preferences: { model: 3, startFrom: [1], overviewLayouts: 'x' }, machines: [null, 5, { label: 1 }], forgotten: 'x', repoFolders: [3], computer: {}, name: [] }
@@ -234,11 +231,11 @@ test('readRegistry reads only the object form; a shape it no longer writes is an
 test('readRegistry reads the object form with preferences and drops unknown/non-boolean fields', async () => {
   const raw = JSON.stringify({
     projects: [APP_A],
-    preferences: { bridge: true, nameRuns: 'yes', bogus: 1, showThinking: true, bridgeBrowser: true },
+    preferences: { onboardingDismissed: true, nameRuns: 'yes', bogus: 1, showThinking: true },
   })
   assert.deepEqual(await readRegistry(ENV, memFs({ [FILE]: raw })), {
     projects: [APP_A],
-    preferences: { bridge: true, showThinking: true, bridgeBrowser: true }, // nameRuns (non-boolean) + bogus dropped
+    preferences: { onboardingDismissed: true, showThinking: true }, // nameRuns (non-boolean) + bogus dropped
   })
 })
 
@@ -250,8 +247,6 @@ test('every boolean preference survives a save; the sanitizer cannot silently dr
     [K in keyof Preferences]-?: NonNullable<Preferences[K]> extends boolean ? K : never
   }[keyof Preferences]
   const allOn: Record<BooleanKey, boolean> = {
-    bridge: true,
-    bridgeBrowser: true,
     onboardingDismissed: true,
     nameRuns: true,
     showThinking: true,
@@ -346,7 +341,7 @@ test('patchPreferences sanitizes the merged result, not just the patch (#1148)',
 
 test('the preferences store exposes the patch the dashboard writes through (#1148)', async () => {
   const fs = memFs({ [FILE]: JSON.stringify({ projects: [APP_A], preferences: { theme: 'dark' } }) })
-  const store = registryPreferencesStore(ENV, undefined, fs)
+  const store = registryPreferencesStore(ENV, fs)
 
   assert.deepEqual(await store.patch!({ driver: 'codex' }), { theme: 'dark', driver: 'codex' })
 })
@@ -358,10 +353,10 @@ test('readPreferences on a missing file, or one with no preferences block, is {}
 
 test('writePreferences persists sanitized prefs and preserves the project list', async () => {
   const fs = memFs({ [FILE]: JSON.stringify({ projects: [APP_A, APP_B], preferences: {} }) })
-  await writePreferences({ bridge: false, bridgeBrowser: true, bogus: 3 } as never, ENV, fs)
+  await writePreferences({ nameRuns: false, showThinking: true, bogus: 3 } as never, ENV, fs)
   assert.deepEqual(JSON.parse(fs.files.get(FILE)!), {
     projects: [APP_A, APP_B],
-    preferences: { bridge: false, bridgeBrowser: true },
+    preferences: { nameRuns: false, showThinking: true },
   })
   // The project list still reads back unchanged.
   assert.deepEqual(await listProjects(ENV, fs), [APP_A, APP_B])
@@ -427,53 +422,25 @@ test('writePreferences keeps a known look, stores the default look as nothing, a
 })
 
 test('addProject preserves existing preferences', async () => {
-  const fs = memFs({ [FILE]: JSON.stringify({ projects: [APP_A], preferences: { bridge: false } }) })
+  const fs = memFs({ [FILE]: JSON.stringify({ projects: [APP_A], preferences: { nameRuns: false } }) })
   await addProject('/repos/app-b', APP_B.addedAt, ENV, fs)
   assert.deepEqual(JSON.parse(fs.files.get(FILE)!), {
     projects: [APP_A, APP_B],
-    preferences: { bridge: false },
+    preferences: { nameRuns: false },
   })
 })
 
 test('registryPreferencesStore round-trips through the same file', async () => {
   const fs = memFs()
-  const store = registryPreferencesStore(ENV, undefined, fs)
+  const store = registryPreferencesStore(ENV, fs)
   assert.deepEqual(await store.read(), {})
-  await store.save({ bridge: true })
-  assert.deepEqual(await store.read(), { bridge: true })
-})
-
-test('registryPreferencesStore tells its listener which keys were written (#1161)', async () => {
-  // The daemon launches or closes the bridge browser only on the write that switched it, so it
-  // needs the caller's own keys — the merged result would say "on" every time anything else was
-  // saved while it was on.
-  const fs = memFs()
-  const written: Preferences[] = []
-  const store = registryPreferencesStore(ENV, patch => written.push(patch), fs)
-  await store.save({ showThinking: true })
-  await store.patch?.({ bridge: true })
-  assert.deepEqual(written, [{ showThinking: true }, { bridge: true }])
-  // The patch still merged, so the listener's narrower view is not the stored one.
-  assert.deepEqual(await store.read(), { showThinking: true, bridge: true })
-})
-
-test('a preferences listener that throws does not fail the write (#1161)', async () => {
-  // The write already landed; a listener must not be able to report otherwise.
-  const fs = memFs()
-  const store = registryPreferencesStore(
-    ENV,
-    () => {
-      throw new Error('the daemon is mid-shutdown')
-    },
-    fs,
-  )
   await store.save({ showThinking: true })
   assert.deepEqual(await store.read(), { showThinking: true })
 })
 
 test('the registry file is never written in place, only renamed over (#991)', async () => {
   const fs = memFs({ [FILE]: JSON.stringify({ projects: [APP_A], preferences: {} }) })
-  await writePreferences({ bridge: true }, ENV, fs)
+  await writePreferences({ showThinking: true }, ENV, fs)
   assert.deepEqual(
     fs.written.filter(path => path === FILE),
     [],
@@ -482,20 +449,20 @@ test('the registry file is never written in place, only renamed over (#991)', as
   assert.ok(fs.written.every(path => path.startsWith(`${FILE}.`) && path.endsWith('.tmp')))
   assert.deepEqual(await readRegistry(ENV, fs), {
     projects: [APP_A],
-    preferences: { bridge: true },
+    preferences: { showThinking: true },
   })
   assert.equal([...fs.files.keys()].length, 1, 'the temp file is renamed away, not left beside the real one')
 })
 
 test('a write that dies partway leaves the previous registry intact (#991)', async () => {
-  const stored = JSON.stringify({ projects: [APP_A, APP_B], preferences: { bridge: false } })
+  const stored = JSON.stringify({ projects: [APP_A, APP_B], preferences: { nameRuns: false } })
   // The disk fills between the truncate and the flush. Whatever it truncated must not be the live file.
   const fs = memFs({ [FILE]: stored }, { failWritesTo: `${FILE}.${process.pid}.tmp` })
-  await assert.rejects(() => writePreferences({ bridge: true }, ENV, fs), /ENOSPC/)
+  await assert.rejects(() => writePreferences({ showThinking: true }, ENV, fs), /ENOSPC/)
   assert.equal(fs.files.get(FILE), stored, 'the live file is untouched by a failed write')
   assert.deepEqual(await readRegistry(ENV, fs), {
     projects: [APP_A, APP_B],
-    preferences: { bridge: false },
+    preferences: { nameRuns: false },
   })
 })
 
@@ -507,10 +474,10 @@ test('concurrent addProject calls both survive rather than the later one droppin
 
 test('a concurrent addProject and writePreferences do not drop each other (#991)', async () => {
   const fs = memFs({ [FILE]: JSON.stringify({ projects: [], preferences: {} }) }, { slow: true })
-  await Promise.all([addProject('/repos/app-a', APP_A.addedAt, ENV, fs), writePreferences({ bridge: true }, ENV, fs)])
+  await Promise.all([addProject('/repos/app-a', APP_A.addedAt, ENV, fs), writePreferences({ showThinking: true }, ENV, fs)])
   assert.deepEqual(await readRegistry(ENV, fs), {
     projects: [APP_A],
-    preferences: { bridge: true },
+    preferences: { showThinking: true },
   })
 })
 
@@ -524,28 +491,15 @@ test('a rejected mutation does not wedge the queue for the next caller (#991)', 
 })
 
 
-test('ensureBridgeToken generates a base64url token, persists it, and reuses it (#1237)', async () => {
-  const fs = memFs()
-  const first = await ensureBridgeToken(ENV, fs)
-  assert.match(first, /^[A-Za-z0-9_-]+$/) // base64url
-  assert.ok(first.length >= 43) // 32 random bytes as base64url
-  // Persisted as a top-level field, never under preferences (never shipped to the browser bundle).
-  const stored = JSON.parse(fs.files.get(FILE)!)
-  assert.equal(stored.bridgeToken, first)
-  assert.equal(stored.preferences.bridgeToken, undefined)
-  // A second call reuses the persisted one rather than rotating it.
-  assert.equal(await ensureBridgeToken(ENV, fs), first)
-})
-
 test('which computer this is is a word made once and kept, beside the projects and the machines; what is no such word in the file is not read as one', async () => {
-  const fs = memFs({ [FILE]: JSON.stringify({ projects: [], preferences: { theme: 'dark' }, bridgeToken: 'kept' }) })
+  const fs = memFs({ [FILE]: JSON.stringify({ projects: [], preferences: { theme: 'dark' }, name: 'kept' }) })
   const first = await ensureComputerId(ENV, fs)
   assert.match(first, /^[a-f0-9]{32}$/)
   const stored = JSON.parse(fs.files.get(FILE)!)
   // Top-level, never among the preferences a browser is handed; what the file held stays.
   assert.equal(stored.computer, first)
   assert.equal(stored.preferences.computer, undefined)
-  assert.equal(stored.bridgeToken, 'kept')
+  assert.equal(stored.name, 'kept')
   assert.equal(await ensureComputerId(ENV, fs), first)
   // Asked for twice at once on a new home: one word, not two.
   const fresh = memFs()
@@ -557,38 +511,13 @@ test('which computer this is is a word made once and kept, beside the projects a
   }
 })
 
-test('readBridgeToken returns undefined until one is generated, then the persisted token (#1237)', async () => {
-  const fs = memFs()
-  assert.equal(await readBridgeToken(ENV, fs), undefined)
-  const token = await ensureBridgeToken(ENV, fs)
-  assert.equal(await readBridgeToken(ENV, fs), token)
-})
-
-test('a non-string / empty bridgeToken in a hand-edited file is dropped (#1237)', async () => {
-  for (const bad of [42, '', null, {}]) {
-    const fs = memFs({ [FILE]: JSON.stringify({ projects: [], preferences: {}, bridgeToken: bad }) })
-    assert.equal(await readBridgeToken(ENV, fs), undefined)
-  }
-})
-
-test('the bridge token survives the other registry mutators (#1237)', async () => {
-  const fs = memFs()
-  const token = await ensureBridgeToken(ENV, fs)
-  await addProject('/repos/app-a', APP_A.addedAt, ENV, fs)
-  await writePreferences({ bridge: true }, ENV, fs)
-  await patchPreferences({ theme: 'dark' }, ENV, fs)
-  assert.equal(await readBridgeToken(ENV, fs), token)
-})
-
-test('two concurrent first starts settle on one bridge token, not two (#1237)', async () => {
-  const fs = memFs({ [FILE]: JSON.stringify({ projects: [], preferences: {} }) }, { slow: true })
-  const [a, b] = await Promise.all([ensureBridgeToken(ENV, fs), ensureBridgeToken(ENV, fs)])
-  assert.equal(a, b)
-})
+const STUDIO = 'http://192.168.1.5:4201'
+const DOOR = `${STUDIO}/_devices/enter`
+const OFFICE = 'http://10.0.0.2:4201'
 
 test('the registry file is written owner-only, and the mode is set before the rename (#1095)', async () => {
   const fs = memFs()
-  await ensureBridgeToken(ENV, fs)
+  await addMachine({ url: STUDIO, key: 'aaa', door: DOOR }, ENV, fs)
 
   assert.equal(fs.modes.get(FILE), REGISTRY_FILE_MODE)
   // The temp file carried the mode across the rename, so the real path was never world-readable.
@@ -603,14 +532,10 @@ test('a filesystem that cannot narrow a mode still writes the registry (#1095)',
       throw new Error('EPERM: the volume keeps no permission bits')
     },
   }
-  const token = await ensureBridgeToken(ENV, noModes)
+  await addMachine({ url: STUDIO, key: 'aaa', door: DOOR }, ENV, noModes)
 
-  assert.equal(await readBridgeToken(ENV, noModes), token)
+  assert.deepEqual((await listMachines(ENV, noModes)).map(machine => machine.key), ['aaa'])
 })
-
-const STUDIO = 'http://192.168.1.5:4201'
-const DOOR = `${STUDIO}/_devices/enter`
-const OFFICE = 'http://10.0.0.2:4201'
 
 test('addMachine saves a machine with its key, newest first, named by its host when no name is given', async () => {
   const fs = memFs()
@@ -710,7 +635,6 @@ test('the saved machines survive the other registry mutators, and an emptied lis
   const fs = memFs()
   await addProject('/repos/alpha', '2026-10-11T00:00:00.000Z', ENV, fs)
   await writePreferences({ model: 'opus' }, ENV, fs)
-  const token = await ensureBridgeToken(ENV, fs)
   await addMachine({ url: STUDIO, key: 'aaa', door: DOOR }, ENV, fs)
   await addProject('/repos/beta', '2026-10-11T00:00:00.000Z', ENV, fs)
   await patchPreferences({ theme: 'dark' }, ENV, fs)
@@ -718,7 +642,6 @@ test('the saved machines survive the other registry mutators, and an emptied lis
   assert.equal(registry.machines?.length, 1)
   assert.equal(registry.projects.length, 2)
   assert.deepEqual(registry.preferences, { model: 'opus', theme: 'dark' })
-  assert.equal(registry.bridgeToken, token)
   await removeMachine(STUDIO, ENV, fs)
   assert.equal(fs.files.get(FILE)!.includes('machines'), false) // an empty list is not written
 })

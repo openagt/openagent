@@ -1,4 +1,5 @@
 import { createServer, type Server, type IncomingMessage, type ServerResponse } from 'node:http'
+import type { AppRoute } from '@openagt/hooks'
 import { createServer as createSecureServer } from 'node:https'
 import type { AddressInfo } from 'node:net'
 import { serveClientBundle } from './static.js'
@@ -10,10 +11,6 @@ import { BROUGHT_MODULES_PREFIX, COMPUTER_MODULES_PREFIX, MODULES_PREFIX, PAGE_S
 import { handleRelayRequest, RELAY_PREFIX, type RelayHandlers } from './relay-endpoints.js'
 import { noteOwnersName, OWNERS_NAME_HEADER } from './machine-call.js'
 import { handleScreenRequest, kept, SCREEN_PREFIX, type ScreenHandlers } from './screen.js'
-import { BRIDGE_PREFIX, EXPECTED_EXTENSION_VERSION, handleBridgeRequest, type BridgeHandlers, type BridgeSession } from './bridge-endpoints.js'
-import { bridgeQuestions } from './bridge-store.js'
-import { bridgeStarts } from './bridge-starts.js'
-import { WEB_START_PREFIX, handleWebStartRequest, type WebStartHandlers } from './web-start-endpoints.js'
 import { SECURE_PORT, type SecureAddress } from '../secure-address.js'
 
 /** Options for {@link startDashboard}. */
@@ -48,19 +45,13 @@ export interface DashboardOptions {
    */
   screen?: (projectId: string, agentId: string) => Promise<string | undefined>
   /**
-   * The browser bridge (#1237): the token a Claude web extension presents to report the question
-   * its cloud session is parked on. Absent leaves every `/_bridge/*` route 404, which is default.
-   *
-   * What keeps other origins out of `/_rpc` is the same-origin check. The bridge is the one
-   * route meant to be reached from another origin, so that check does not protect it and it
-   * authenticates on its own.
+   * The routes the modules on this computer answer (`app.route`, #2394): a path `/_<name>` and every
+   * path below it, after the dashboard's own, which no module's shadows. Asked for on each call, so
+   * a plugin switched on or off answers, or stops, at once. A route checks its caller itself: it is
+   * how a program of another origin reaches a module (a browser extension's calls), so the
+   * same-origin check that keeps other origins out of `/_rpc` is no guard of it.
    */
-  bridgeToken?: string
-  /**
-   * The cloud sessions the browser bridge should have a tab open for (#1237). Only the daemon
-   * wires one, since it is the process that can see every project's runs.
-   */
-  bridgeSessions?: () => Promise<BridgeSession[]>
+  routes?: () => Promise<readonly AppRoute[]>
   /**
    * The secure address (#1919): also answer over HTTPS on `port`, with the certificate made on
    * this computer for `name`. Absent serves plain HTTP only.
@@ -116,47 +107,6 @@ export async function startDashboard(opts: DashboardOptions): Promise<Dashboard>
   const relayHandlers: RelayHandlers | undefined = opts.relay ? { ...opts.relay, start: context.startAgent, ...(localScreen ? { screen: localScreen } : {}) } : undefined
   const screenHandlers: ScreenHandlers | undefined = localScreen ? { local: localScreen, remote: (projectId, agentId) => context.remote.target(agentId, projectId) } : undefined
 
-  // The browser bridge (#1237). Off unless a token was supplied, and it carries that token itself.
-  const bridgeHandlers: BridgeHandlers | undefined = opts.bridgeToken
-    ? {
-        token: opts.bridgeToken,
-        // The version gate (#1519): a stale extension is refused loudly rather than half-working.
-        expectedExtensionVersion: EXPECTED_EXTENSION_VERSION,
-        extensionVersion: (got, blocked) => bridgeQuestions().recordVersion(got, EXPECTED_EXTENSION_VERSION, blocked),
-        record: question => bridgeQuestions().record(question),
-        contact: (route, status) => bridgeQuestions().recordContact(route, status),
-        recordEvent: event => bridgeQuestions().recordEvent(event),
-        hello: hello => bridgeQuestions().recordHello(hello),
-        statuses: statuses => {
-          for (const status of statuses) bridgeQuestions().recordStatus(status)
-        },
-        // Claimed on read (#1332), like a start: two Drivers asking must not both type it.
-        answer: sessionId => {
-          const pending = bridgeQuestions().claimAnswer(sessionId)
-          return pending ? { id: pending.id, text: pending.text } : undefined
-        },
-        answered: (sessionId, id, ok, note) => bridgeQuestions().resolveAnswer(sessionId, id, ok, note),
-        // The session start-queue (#1328). The claim happens inside claimNext, not in the route:
-        // two polling tabs handed the same request would create two cloud sessions.
-        start: () => {
-          const next = bridgeStarts().claimNext()
-          return next ? { id: next.id, repo: next.repo, branch: next.branch, prompt: next.prompt, ...(next.model ? { model: next.model } : {}) } : undefined
-        },
-        started: (id, ok, sessionId, note) => bridgeStarts().resolve(id, ok, sessionId, note),
-        ...(opts.bridgeSessions ? { sessions: opts.bridgeSessions } : {}),
-      }
-    : undefined
-
-  // The run-facing side of the same queue (#1328): a spawned web run asks here, on the same token.
-  const webStartHandlers: WebStartHandlers | undefined = opts.bridgeToken
-    ? {
-        token: opts.bridgeToken,
-        extensionAlive: () => bridgeQuestions().extensionAlive(),
-        request: input => bridgeStarts().request(input),
-        get: id => bridgeStarts().get(id),
-      }
-    : undefined
-
   const handle = (req: IncomingMessage, res: ServerResponse): void => {
     const pathname = requestPathname(req)
     if (pathname === undefined) {
@@ -166,15 +116,6 @@ export async function startDashboard(opts: DashboardOptions): Promise<Dashboard>
     // A person's own OpenAgent on a computer several people use goes by the name its owner gave the
     // computer: the door says it with each call it passes on.
     noteOwnersName(req.headers[OWNERS_NAME_HEADER])
-    // The browser bridge (#1237) presents its own bearer token.
-    if (pathname === BRIDGE_PREFIX || pathname.startsWith(`${BRIDGE_PREFIX}/`)) {
-      void handleBridgeRequest(req, res, pathname, bridgeHandlers)
-      return
-    }
-    if (pathname === WEB_START_PREFIX || pathname.startsWith(`${WEB_START_PREFIX}/`)) {
-      void handleWebStartRequest(req, res, pathname, webStartHandlers)
-      return
-    }
     // The machine relay (#1067): another daemon posts a start here and streams the run's events back.
     // Exactly like the RPC mount below, the relay carries its own CSRF + DNS-rebinding guard, or a
     // page the user merely visited could POST /_relay/start to start a run (a machine's call
@@ -224,11 +165,31 @@ export async function startDashboard(opts: DashboardOptions): Promise<Dashboard>
       return
     }
     const websiteDir = opts.websiteDir
+    if (websiteDir && isSecureAddressRequest(req) && (pathname === VIEW_PREFIX || pathname.startsWith(`${VIEW_PREFIX}/`))) {
+      handleViewRequest(req, res, pathname)
+      return
+    }
+    // A module's route (`app.route`): a path of the dashboard's own was answered above.
+    const routes = opts.routes
+    if (routes && pathname.startsWith('/_')) {
+      void routes()
+        .then(async known => {
+          const route = known.find(one => pathname === one.path || pathname.startsWith(`${one.path}/`))
+          if (route) await route.handle(req, res)
+          else servePage(req, res, pathname)
+        })
+        .catch(() => {
+          if (!res.headersSent) res.writeHead(500, { 'content-type': 'text/plain' }).end('the route failed')
+          else res.destroy()
+        })
+      return
+    }
+    servePage(req, res, pathname)
+  }
+  /** What is no route of the dashboard's nor of a module's: the website's copy, or the dashboard's page. */
+  const servePage = (req: IncomingMessage, res: ServerResponse, pathname: string): void => {
+    const websiteDir = opts.websiteDir
     if (websiteDir && isSecureAddressRequest(req)) {
-      if (pathname === VIEW_PREFIX || pathname.startsWith(`${VIEW_PREFIX}/`)) {
-        handleViewRequest(req, res, pathname)
-        return
-      }
       keepView(req, res)
       void serveWebsite(req, res, websiteDir, pathname)
         .then(served => (served ? undefined : serveClientBundle(req, res, clientBundleDir)))

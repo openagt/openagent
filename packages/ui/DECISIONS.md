@@ -496,7 +496,7 @@ already made, and lists it in its pull request; for anything else it proposes an
   in on the server's own page, in the same cards, the browser step on their own device.
 - The person's settings follow the same way: how OpenAgent looks, what a run starts with, the
   onboarding hidden. One changed on the server's own page stays until the same
-  one changes on the computer. A computer's own settings (its editor, its browser bridge) stay
+  one changes on the computer. A computer's own settings (its editor, its plugins' own) stay
   its own. Picked over each OpenAgent keeping its own settings, where a phone showed what the
   laptop had hidden.
 
@@ -504,12 +504,12 @@ already made, and lists it in its pull request; for anything else it proposes an
 - A Start goes to a run host, a `run.host` of the modules OpenAgent is distributed with
   (#2394): this computer's, `agent-runner`'s, which spawns the run's process with the prompt
   and the person's picks and answers the new run's id, or one a plugin on in the project
-  brings (`host-github-actions`). What is said to a run, a Stop and the launcher's check go
-  to the run's host. Adding a project writes nothing into it for its runs. Picked over the
-  project's own `start`, `resume` and `check` lines in its hooks file (#1774), written into
-  every project as it was added, where each pick of the launcher's was a variable a line had
-  to pass on, and a line written before the pick ignored it: what starts a run is the
-  distribution's, and a module changes it.
+  brings (`host-github-actions`, `host-claude-web`). What is said to a run, a Stop and the
+  launcher's check go to the run's host. Adding a project writes nothing into it for its
+  runs. Picked over the project's own `start`, `resume` and `check` lines in its hooks file
+  (#1774), written into every project as it was added, where each pick of the launcher's was
+  a variable a line had to pass on, and a line written before the pick ignored it: what
+  starts a run is the distribution's, and a module changes it.
 - A session need not be in a project: with none, it runs in a folder of its own,
   `~/.openagent-sessions/<id>/`, started on this computer's host with no project. It runs on
   this computer, with no branch and nothing to publish. Its address is `/session/<id>`, and `/session` is the "New

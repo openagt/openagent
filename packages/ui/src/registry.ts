@@ -196,20 +196,6 @@ export interface Preferences {
   /** The font a Markdown file is read in, in the Files pane. Absent = Source Serif 4. */
   documentFont?: DocumentFont
   /**
-   * The browser bridge (#1237): let an extension running in the user's own Claude session report
-   * the question a Claude web agent is parked on, so it shows in the dashboard rather than only on
-   * claude.ai. **Absent = off.** It opens the daemon's one route reachable from another origin,
-   * so it is opt-in rather than a baseline, and turning it on is what mints the bridge token.
-   */
-  bridge?: boolean
-  /**
-   * The bridge browser (#1332): let the daemon run its own Chrome for Testing with the bridge
-   * extension installed, signed in once and kept minimized, so web runs stop depending on the
-   * user's own Chrome being open. **Absent = off**: it downloads a browser and keeps a signed-in
-   * claude.ai session on disk, neither of which should happen unasked. Needs {@link bridge}.
-   */
-  bridgeBrowser?: boolean
-  /**
    * Whether the Overview's Onboarding checklist has been dismissed (#958). Absent = show it,
    * so a fresh install is walked through setup; its ✕ sets it, and a switch in Settings ›
    * Appearance clears it.
@@ -224,13 +210,7 @@ export interface Registry {
   projects: ProjectRecord[]
   preferences: Preferences
   /**
-   * The browser bridge's key (#1237): generated when the bridge is first switched on and reused
-   * after. A top-level field, deliberately not a {@link Preferences} one, so it is never shipped
-   * to the browser bundle. Absent on a machine that never had the bridge on.
-   */
-  bridgeToken?: string
-  /**
-   * The saved machines. Top-level like {@link bridgeToken}, and for the same reason: each one
+   * The saved machines. A top-level field, deliberately not a {@link Preferences} one: each one
    * carries a key, so the list is never part of what the browser is handed.
    */
   machines?: MachineRecord[]
@@ -271,7 +251,7 @@ export interface PreferencesStore {
 /** The registry file name: a single file under `$XDG_CONFIG_HOME` (dotted under `$HOME`). */
 export const REGISTRY_FILE = 'openagent.json'
 
-/** Owner read/write only: the file holds the bridge's key and the saved machines' keys. */
+/** Owner read/write only: the file holds the saved machines' keys. */
 export const REGISTRY_FILE_MODE = 0o600
 
 /**
@@ -294,9 +274,9 @@ export interface RegistryFs {
   /** Replace `to` with `from`, atomically: how {@link writeRegistry} avoids a truncate-then-write (#991). */
   rename(from: string, to: string): Promise<void>
   /**
-   * Narrow a file's permissions. Best-effort at the call site: this file holds the bridge's key and
-   * the saved machines' keys, so it is written owner-only — but a filesystem that cannot express
-   * that (Windows, a FAT volume) must not fail the write.
+   * Narrow a file's permissions. Best-effort at the call site: this file holds the saved machines'
+   * keys, so it is written owner-only — but a filesystem that cannot express that (Windows, a FAT
+   * volume) must not fail the write.
    */
   chmod(path: string, mode: number): Promise<void>
 }
@@ -341,8 +321,6 @@ type BooleanPreferenceKey = {
  * preference on every save, the write-then-vanish failure shape for a settings file.
  */
 const BOOLEAN_PREFERENCES: Record<BooleanPreferenceKey, true> = {
-  bridge: true,
-  bridgeBrowser: true,
   onboardingDismissed: true,
   nameRuns: true,
   showThinking: true,
@@ -503,8 +481,6 @@ export async function readRegistry(
   return {
     projects,
     preferences: sanitizePreferences(obj.preferences),
-    // Kept only as a non-empty string, so a hand-edited registry can't smuggle a junk key.
-    ...(typeof obj.bridgeToken === 'string' && obj.bridgeToken ? { bridgeToken: obj.bridgeToken } : {}),
     ...(machines.length ? { machines } : {}),
     ...(isComputerId(obj.computer) ? { computer: obj.computer } : {}),
     ...(computerNameOf(obj.name) !== undefined ? { name: computerNameOf(obj.name)! } : {}),
@@ -522,18 +498,17 @@ export async function readRegistry(
  * preference vanished silently. A failed write now only ever damages the temp file. The temp is
  * left behind on failure rather than swept up: one stray file is the cheaper half of that trade.
  *
- * Written owner-only (#1095): the file carries the bridge's key and the saved machines' keys, so a default-umask 0644 in a
+ * Written owner-only (#1095): the file carries the saved machines' keys, so a default-umask 0644 in a
  * shared home would hand it to every other account on the machine.
  * The mode is set on the temp file, before the rename — narrowing after it would leave a window
  * where the real path is readable. Best-effort: a filesystem with no permission bits still writes.
  */
 async function writeRegistry(registry: Registry, env: NodeJS.ProcessEnv, fs: RegistryFs): Promise<void> {
   const file = registryPath(env)
-  const { projects, preferences, bridgeToken, machines, computer, name, forgotten, repoFolders } = registry
+  const { projects, preferences, machines, computer, name, forgotten, repoFolders } = registry
   const contents = {
     projects,
     preferences,
-    ...(bridgeToken ? { bridgeToken } : {}),
     ...(machines?.length ? { machines } : {}),
     ...(computer ? { computer } : {}),
     ...(name ? { name } : {}),
@@ -700,24 +675,6 @@ export async function patchPreferences(
 }
 
 /**
- * The browser bridge's key (#1237): read the persisted one, or generate + persist it now. Called
- * only with the bridge switched on, so a machine that never had it on never grows one. Serialized
- * with the other mutators so two concurrent starts can't each write a different key.
- */
-export async function ensureBridgeToken(
-  env: NodeJS.ProcessEnv = process.env,
-  fs: RegistryFs = nodeRegistryFs(),
-): Promise<string> {
-  return serialize(async () => {
-    const registry = await readRegistry(env, fs)
-    if (registry.bridgeToken) return registry.bridgeToken
-    const bridgeToken = randomBytes(32).toString('base64url')
-    await writeRegistry({ ...registry, bridgeToken }, env, fs)
-    return bridgeToken
-  })
-}
-
-/**
  * Which computer this is: read the word the home file keeps, or make one and keep it now.
  * Serialized with the other mutators, so two starts at once do not each make another.
  */
@@ -754,14 +711,6 @@ export async function renameThisComputer(picked: string, env: NodeJS.ProcessEnv 
     await writeRegistry({ ...(await readRegistry(env, fs)), name }, env, fs)
     return name
   })
-}
-
-/** The persisted bridge key, or `undefined` when none exists. A pure read: it never generates one. */
-export async function readBridgeToken(
-  env: NodeJS.ProcessEnv = process.env,
-  fs: RegistryFs = nodeRegistryFs(),
-): Promise<string | undefined> {
-  return (await readRegistry(env, fs)).bridgeToken
 }
 
 /** The saved machines, newest first. Forgiving like every read of this file: none on a bad file. */
@@ -966,30 +915,11 @@ function hostOf(url: string): string {
 }
 
 /** A {@link PreferencesStore} bound to the real registry file, wired by the daemon so the
- * dashboard's preferences RPCs read/write the user's home file.
- *
- * `onChange` is handed **the keys the caller wrote**, not the merged result, so a listener can
- * tell "this write switched the setting on" from "it was already on and something else changed"
- * (#1161). It runs after the write has landed, and its failure is swallowed: the save succeeded,
- * and a listener must not be able to report otherwise: a setting saved in the browser has to
- * reach the daemon's own services without a restart.
- */
-export function registryPreferencesStore(
-  env: NodeJS.ProcessEnv = process.env,
-  onChange?: (written: Preferences) => void,
-  fs: RegistryFs = nodeRegistryFs(),
-): PreferencesStore {
-  const changed = <T>(written: Preferences, result: T): T => {
-    try {
-      onChange?.(written)
-    } catch {
-      // The write landed; a listener that throws is not the writer's problem.
-    }
-    return result
-  }
+ * dashboard's preferences RPCs read/write the user's home file. */
+export function registryPreferencesStore(env: NodeJS.ProcessEnv = process.env, fs: RegistryFs = nodeRegistryFs()): PreferencesStore {
   return {
     read: () => readPreferences(env, fs),
-    save: async preferences => changed(preferences, await writePreferences(preferences, env, fs)),
-    patch: async patch => changed(patch, await patchPreferences(patch, env, fs)),
+    save: preferences => writePreferences(preferences, env, fs),
+    patch: patch => patchPreferences(patch, env, fs),
   }
 }

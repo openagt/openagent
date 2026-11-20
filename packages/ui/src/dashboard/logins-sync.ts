@@ -261,7 +261,7 @@ async function syncServer(machine: MachineRecord, local: LocalLogin[], usage: Aw
 
 /**
  * The settings that are the person's wherever they open OpenAgent: how it looks, what a run starts
- * with. Never this computer's own: its editor, its browser bridge, where its projects' runs start
+ * with. Never this computer's own: its editor, where its projects' runs start
  * from.
  */
 const FOLLOWING = ['theme', 'driver', 'model', 'effort', 'publish', 'nameRuns', 'showThinking', 'recentsSort', 'onboardingDismissed', 'overviewLayouts'] as const satisfies readonly (keyof Preferences)[]

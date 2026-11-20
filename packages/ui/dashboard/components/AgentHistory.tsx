@@ -1,15 +1,17 @@
 import { PRESETS_PAGE, PERMISSIONS_PAGE } from '../lib/use-route.js'
 import { RevealedTitle } from './RevealedTitle.js'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Plus, Bot, ArrowDownUp, Check, Cloud, Laptop, LayoutDashboard, Blocks, FilePen, GitBranch, KeyRound } from 'lucide-react'
+import { Plus, Bot, ArrowDownUp, Check, Laptop, LayoutDashboard, Blocks, FilePen, GitBranch, KeyRound } from 'lucide-react'
 import { MACHINE_ICONS } from './MachineMark.js'
+import { HOST_ICON } from './RunOnMenu.js'
+import { hostOf, useRunHosts } from '../lib/run-hosts.js'
 import { PersonMark } from './PersonMark.js'
 import type { ComponentType } from 'react'
 import type { AgentMeta, AgentStatus, RecentAgent, ProjectSummary, Waiting } from '../../src/index.js'
 import { needsWord, waitingKey } from '../../src/client.js'
 import { StateCell } from './ui/state.js'
 import type { ModuleHostPerson } from '../module/index.js'
-import { DRIVER_LABELS, driverFromImpl, cloudRunState, type CloudRunState, type MachineKind } from '../../src/client.js'
+import { DRIVER_LABELS, driverFromImpl, type MachineKind } from '../../src/client.js'
 import { buttonVariants } from './ui/button.js'
 import { inPlace } from '../lib/in-place.js'
 import { formatRoute, type Route } from '../lib/route.js'
@@ -308,9 +310,8 @@ export function AgentHistory({
       age={formatSince(row.agent.startedAt)}
       active={row.active}
       remote={row.agent.target === 'remote'}
-      cloud={row.agent.target === 'web'}
+      {...(hostOf(row.agent.target) !== undefined ? { host: { id: hostOf(row.agent.target)!, projectId: row.projectId } } : {})}
       {...(row.agent.otherHost && row.agent.host ? { startedOn: row.agent.host } : {})}
-      cloudState={cloudRunState(row.agent, Date.now())}
       {...(row.agent.remoteLabel ? { remoteLabel: row.agent.remoteLabel } : {})}
       {...(row.agent.remoteKind ? { remoteKind: row.agent.remoteKind } : {})}
       seenAt={row.agent.seenAt}
@@ -710,8 +711,7 @@ function AgentHistoryRow({
   standIn = false,
   saving = false,
   remote = false,
-  cloud = false,
-  cloudState,
+  host,
   remoteLabel,
   remoteKind = 'server',
   seenAt,
@@ -753,10 +753,8 @@ function AgentHistoryRow({
   saving?: boolean
   /** Runs on a saved machine (#1067): the row gets a machine glyph next to the agent logo. */
   remote?: boolean
-  /** A Claude Code cloud session (#1263): the row gets a cloud glyph beside the agent logo. */
-  cloud?: boolean
-  /** What that session is doing (#1668), once the local half is over; undefined = the status is the word. */
-  cloudState?: CloudRunState | undefined
+  /** Runs on a host beside this computer's (`run.host`, #1263, #2394), by its id, a host of its project's: the row gets the host's glyph beside the agent logo. */
+  host?: { id: string; projectId: string | null } | undefined
   /** The machine's label, for the glyph's tooltip. */
   remoteLabel?: string | undefined
   /** What that machine is: the glyph is its kind's icon, as every list of machines draws it. */
@@ -782,21 +780,13 @@ function AgentHistoryRow({
   /** Their picture when the git host has none to give: the person's own, for their own runs. */
   picture?: string | undefined
 }) {
-  // A run that ended on its question waits on you (#785), and so does a web run whose cloud
-  // session the bridge reports as parked (#1668).
-  const parked = status === 'waiting' || cloudState === 'waiting'
+  // A run that ended on its question waits on you (#785).
+  const parked = status === 'waiting'
   const picked = driverFromImpl(driver)
   const MachineIcon = MACHINE_ICONS[remoteKind]
-  // A web agent's local process ends at the hand-off by design, so its `done` is about this
-  // machine, not the session (#1264): the cloud side keeps working and opens its own PR. Saying
-  // "done" under ten working cloud agents is the lie the demo would put on camera — and "in cloud"
-  // over a run whose PR merged two days ago is the opposite lie (#1668), so the word comes from
-  // what is known of the session: waiting, in cloud, merged, or finally done.
-  const inCloud = cloudState === 'in-cloud'
-  const cloudWord = cloudState === 'merged' ? 'merged' : undefined
-  // "In cloud" outranks "saving…": a web agent's local half is over either way, and the cloud
-  // side owns its own push/PR, so the cloud word is the truer one for that row.
-  const savingNow = saving && !cloud
+  // The host it runs on, by the name its project's module gives it.
+  const hostLabel = useRunHosts(host ? host.projectId : null).find(one => one.id === host?.id)?.label
+  const onHost = host ? `Runs on ${hostLabel ?? 'another host'}` : undefined
   const titleText = naming ? '' : intent || 'New agent session'
   // A name that comes to a row that waited for it comes in as a new session's does.
   const waitedForName = useRef(false)
@@ -804,13 +794,13 @@ function AgentHistoryRow({
   const titleClass = 'rail-title min-w-0 flex-1 truncate text-sm font-normal'
   // What the row says in a word, the one the status badge used to print: it names the circle, and
   // opens the sentence the row's hover says.
-  const word = parked ? runWord('waiting') : inCloud ? 'in cloud' : cloudWord ? runWord(cloudWord) : savingNow ? runWord('saving') : runWord(status)
+  const word = parked ? runWord('waiting') : saving ? runWord('saving') : runWord(status)
   // A run whose computer does not answer: which computer, and when it was last seen.
   const offline = status === 'unknown' ? `${remoteLabel ?? 'Its computer'} offline${seenAt ? ` · last seen ${formatRelative(seenAt)}` : ''}` : undefined
   // The mark: the state's hexagon, from the table every place reads (`run-words.ts`). Only a working
   // run's ring turns: a run parked on you has been still for as long as you have not answered it (#785).
-  const working = status === 'running' || inCloud || savingNow
-  const marked = savingNow ? 'saving' : parked ? 'waiting' : working ? 'running' : (cloudWord ?? status)
+  const working = status === 'running' || saving
+  const marked = saving ? 'saving' : parked ? 'waiting' : working ? 'running' : status
   const prMark = pr?.state ? PR_MARKS[pr.state] : undefined
   const prSaid = pr ? `PR #${pr.number}${prMark ? ` ${prMark.word}` : ''}` : undefined
   // Work that never left the machine, in the Human Queue's words and icon, gray (his pick): files left
@@ -823,7 +813,7 @@ function AgentHistoryRow({
   const personWords = person ? personSaid(person, account) : undefined
   // Everything the two-line row used to print, in one sentence, for a reader that cannot see the
   // marks: the word, where the run is and when it started, which coding agent ran it, and the
-  // machine or cloud it ran on.
+  // machine or host it ran on.
   const said = [
     word,
     ...(project ? [project] : []),
@@ -832,7 +822,7 @@ function AgentHistoryRow({
     ...(picked ? [DRIVER_LABELS[picked]] : []),
     ...(startedOn ? [`started on ${startedOn}`] : []),
     ...(offline ? [offline] : remote ? [remoteLabel ? `runs on ${remoteLabel}` : 'runs on another machine'] : []),
-    ...(cloud ? ['a Claude Code cloud session'] : []),
+    ...(host ? [`runs on ${hostLabel ?? 'another host'}`] : []),
     ...(prSaid ? [prSaid] : []),
     ...(left ? [left.said] : []),
   ].join(' · ')
@@ -860,7 +850,7 @@ function AgentHistoryRow({
         </TooltipContent>
       </Tooltip>
       {/* What is unusual about where the run is, kept on the row as one small glyph: another
-          machine, a person's own computer, a cloud session. Rare, so the row stays a circle and a
+          machine, a person's own computer, a host. Rare, so the row stays a circle and a
           name nearly always. */}
       {startedOn && (
         <RowMark said={`Started on ${startedOn}`}>
@@ -872,9 +862,9 @@ function AgentHistoryRow({
           <MachineIcon className="size-3.5 text-muted-foreground" />
         </RowMark>
       )}
-      {cloud && (
-        <RowMark said="Runs as a Claude Code cloud session">
-          <Cloud className="size-3.5 text-muted-foreground" />
+      {onHost && (
+        <RowMark said={onHost}>
+          <HOST_ICON className="size-3.5 text-muted-foreground" />
         </RowMark>
       )}
       {/* Where the sessions of several projects are listed together, the project is what tells one

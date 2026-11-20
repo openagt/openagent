@@ -13,7 +13,6 @@ import type { BranchAhead, BranchesFor } from '../store/branches.js'
 import type { ProjectSummary } from './projects.js'
 import type { LiveAgent, AgentMeta } from '../store/index.js'
 import type { OpenAgentEvent } from '../events.js'
-import type { BridgeQuestion } from './bridge-question.js'
 
 const project = (id: string, path: string): ProjectSummary => ({ id, path, name: id, activated: true, gitHost: false })
 
@@ -524,59 +523,6 @@ test('a pushed branch with no pull request still needs one where the project ope
   assert.deepEqual([unreadable.items, unreadable.whole], [[], []], 'the requests could not be read: nothing is said of the branch')
 })
 
-// A Claude Code web session's question (#1554): the browser bridge holds it, not the run's diary.
-
-/** Only the bridged source: the given records, no requests, no checkouts, no branches. */
-const onlyBridged = (agents: AgentMeta[], bridged: BridgeQuestion[]) => ({
-  prs: async () => [],
-  liveAgents: noAgents,
-  agents: async () => agents,
-  branches: async () => undefined,
-  bridged: () => bridged,
-})
-
-test('a web session\'s question arrives from the bridge and is listed under its run, waiting since the bridge saw it (#1554)', async () => {
-  const { items } = await build(
-    [project('p1', '/one')],
-    onlyBridged(
-      [
-        // The records, not the checkouts: a web run is done at its hand-off and its checkout may be gone.
-        { status: 'done', id: 'run-web', startedAt: '2026-08-23T09:00:00.000Z', updatedAt: '2026-08-23T09:01:00.000Z', target: 'web', sessionId: 'session_01Web', title: 'CI checks' },
-        { status: 'done', id: 'run-other', startedAt: '2026-08-23T08:00:00.000Z', updatedAt: '2026-08-23T08:01:00.000Z', target: 'web', sessionId: 'session_01Other' },
-      ],
-      [{ sessionId: 'session_01Web', title: 'Which checks should run?', options: [{ label: 'Lint' }], receivedAt: '2026-08-23T09:30:00.000Z' }],
-    ),
-  )
-  assert.deepEqual(items, [
-    {
-      kind: 'waiting',
-      module: 'host-claude-web',
-      scope: 'run',
-      run: 'run-web',
-      id: 'run-web:bridge:session_01Web',
-      words: 'Needs answer',
-      title: 'CI checks',
-      detail: 'Which checks should run?',
-      mark: 'question',
-      since: '2026-08-23T09:30:00.000Z',
-      projectId: 'p1',
-      projectName: 'p1',
-    },
-  ])
-})
-
-test('two checkouts of one repository list a bridged question once, not twice (#1554)', async () => {
-  // They share the records, so the same web run is in both projects' lists.
-  const run: AgentMeta = { status: 'done', id: 'run-web', startedAt: '', updatedAt: '', target: 'web', sessionId: 'session_01Web' }
-  const { items } = await build([project('p1', '/one'), project('p2', '/two')], onlyBridged([run], [{ sessionId: 'session_01Web', title: 'Where?', options: [{ label: 'Here' }], receivedAt: '' }]))
-  assert.deepEqual(items.map(i => i.projectId), ['p1'])
-})
-
-test('a bridged question whose run is unknown here is not listed (#1554)', async () => {
-  const { items } = await build([project('p1', '/one')], onlyBridged([], [{ sessionId: 'session_01Gone', title: 'Still there?', options: [{ label: 'Yes' }], receivedAt: '' }]))
-  assert.deepEqual(items, [])
-})
-
 // What the modules say waits on the person (`app.attention`), beside what the shell finds itself (#2394).
 
 /** A distribution of one module whose `app.attention` answers `say` for a project. */
@@ -610,4 +556,21 @@ test('a module that cannot say what waits leaves its project not read whole, and
   const { items, whole } = await build([project('a', '/a')], { prs, liveAgents: noAgents, hooks })
   assert.deepEqual(items.map(i => i.detail), ['#5'])
   assert.deepEqual(whole, [], 'so the notifier does not take its silence for a baseline')
+})
+
+test('two checkouts of one repository list what waits on a run once, and what waits on each project in each (#1554, #2394)', async () => {
+  // They share the records, so a module that reads them finds the same run in both.
+  const hooks = saying(project => [
+    { kind: 'waiting', scope: 'run', run: 'run-web', id: 'run-web:Where?', words: 'Needs answer', title: 'CI checks', since: '2026-11-19T10:00:00Z' },
+    { kind: 'waiting', scope: 'project', id: 'triage', words: 'Needs triage', title: `New tickets in ${project}`, since: '2026-11-19T09:00:00Z' },
+  ])
+  const { items } = await build([project('p1', '/one'), project('p2', '/two')], { prs: async () => [], liveAgents: noAgents, hooks })
+  assert.deepEqual(
+    items.map(i => [i.title, i.projectId]),
+    [
+      ['CI checks', 'p1'],
+      ['New tickets in p1', 'p1'],
+      ['New tickets in p2', 'p2'],
+    ],
+  )
 })

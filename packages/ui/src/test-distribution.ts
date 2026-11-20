@@ -28,6 +28,7 @@ export const DASHBOARD_PACKAGES: DashboardDistribution = [
   { package: '@openagt/notifications-command', for: 'computer' },
   { package: '@openagt/notifications-browser', for: 'computer', on: true },
   { package: '@openagt/ui-renderer-mermaid', for: 'computer' },
+  { package: '@openagt/host-claude-web', for: 'computer' },
   { package: '@openagt/skill-ask', on: true },
   { package: '@openagt/skill-logs' },
   { package: '@openagt/skill-tickets' },

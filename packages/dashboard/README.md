@@ -22,14 +22,15 @@ The core modules are always on. A plugin has an Enabled row each, switched in **
 Plugins**: `ask` and desktop notifications while the dashboard is open (**Settings ›
 Notifications**) start on, every other plugin starts off (devices, which is the door to this
 computer and your other computers, the command this computer runs when a run needs you, typed in
-**Settings › Notification command**, the tickets, the queue, the logs, the browser, the
-scheduler, Discord, the commands that move a ticket to work, and GitHub Actions, which "Run on"
-then offers beside this computer in a project whose repository has the workflow it brings). The
-two git stores are on as their repositories stand: your folder's sync with a repository of yours,
-set in **Settings › Your agent data**, and a project's data on its own repository, set in the
-project's **Project agent data**. A run gets the skills of the core modules (github's on a GitHub
-project) and of the plugins on in its project, linked into its checkout; nothing is written into
-the project.
+**Settings › Notification command**, the tickets, the queue, the logs, the browser, the scheduler,
+Discord, the commands that move a ticket to work, a mermaid block drawn as its diagram, GitHub
+Actions, which "Run on" then offers beside this computer in a project whose repository has the
+workflow it brings, and Claude Code on the web, which "Run on" then offers in a project on GitHub,
+through the browser extension it brings, set up in **Settings › Claude web**). The two git stores
+are on as their repositories stand: your folder's sync with a repository of yours, set in **Settings
+› Your agent data**, and a project's data on its own repository, set in the project's **Project
+agent data**. A run gets the skills of the core modules (github's on a GitHub project) and of the
+plugins on in its project, linked into its checkout; nothing is written into the project.
 
 ## The command is three options and no verbs
 

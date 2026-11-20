@@ -3,7 +3,7 @@ import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { GitAccess } from './account.js'
-import type { AppContext, AppStart, AttentionArgs, AttentionRead } from './app.js'
+import { ROUTE_PATH, type AppContext, type AppRoute, type AppStart, type AttentionArgs, type AttentionRead } from './app.js'
 import { HOOK_NAMES, MODULE_NAME, type HookName, type ModuleDefinition, type OwnRow } from './module.js'
 import { runPipeline, type OrderedStep, type PipelineResult } from './pipeline.js'
 import type { ProjectRef } from './project.js'
@@ -85,6 +85,8 @@ export interface Hooks {
   hosts(project?: ProjectRef): Promise<RunHost[]>
   /** How git reaches `remote` as an account: the first module with an account for it says. */
   gitAccess(remote: string): Promise<GitAccess | undefined>
+  /** The addresses the modules on answer for callers that are no page of the app's; a second route at a path is left out. */
+  routes(): Promise<AppRoute[]>
   /** What needs the person, every module's items in the distribution's order, and whether every module answered. */
   attention(args: AttentionArgs): Promise<AttentionRead>
   /**
@@ -251,6 +253,10 @@ export function createHooks(entries: readonly DistributionEntry[], opts: HooksOp
       const given = (await onModules(project, undefined, 'run.host')).flatMap(module => (module.hooks['run.host'] ?? []).map(item => ({ module: module.name, item })))
       return firstOfEach(given, host => `a host ${host.id}`, 'run.host')
     },
+    async routes() {
+      const given = (await onModules(undefined, undefined, 'app.route')).flatMap(module => (module.hooks['app.route'] ?? []).map(item => ({ module: module.name, item })))
+      return firstOfEach(given, route => `a route at ${route.path}`, 'app.route')
+    },
     async gitAccess(remote) {
       for (const module of await onModules(undefined, undefined, 'account.access')) {
         const access = module.hooks['account.access']
@@ -345,6 +351,7 @@ function check(entries: readonly DistributionEntry[]): void {
     if (on !== undefined && module.plugin?.row) throw new Error(`${name} keeps its own row: it starts as its row says`)
     for (const hook of Object.keys(module.hooks)) if (!(HOOK_NAMES as readonly string[]).includes(hook)) throw new Error(`${name} fills ${hook}, which is no hook`)
     for (const step of module.hooks['run.step'] ?? []) if (!Number.isFinite(step.order)) throw new Error(`${name}'s step "${step.name}" stands at no order`)
+    for (const route of module.hooks['app.route'] ?? []) if (!ROUTE_PATH.test(route.path)) throw new Error(`${name}'s route ${JSON.stringify(route.path)} is no route's path: /_ and a name`)
   }
 }
 

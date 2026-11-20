@@ -117,30 +117,28 @@ test('buildRecentAgents tolerates a project whose runs cannot be read', async ()
   assert.deepEqual(recent.map(r => r.agent.id), ['x'])
 })
 
-test('buildOverview lists a web run whose cloud side is still at work, and says where it is (#1668)', async () => {
-  const now = Date.parse('2026-08-23T20:00:00Z')
-  const at = (hoursAgo: number) => new Date(now - hoursAgo * 60 * 60 * 1000).toISOString()
-  const web = (id: string, over: Partial<AgentMeta>): AgentMeta =>
-    ({ version: 1, status: 'done', id, startedAt: at(1), updatedAt: at(1), target: 'web', intent: id, ...over }) as AgentMeta
+test('buildOverview lists a run at work on a host beside this computer\'s, and says which (#1668, #2394)', async () => {
+  const run = (id: string, over: Partial<AgentMeta>): AgentMeta =>
+    ({ version: 1, status: 'running', id, startedAt: '2026-11-19T10:00:00Z', updatedAt: '2026-11-19T10:00:00Z', intent: id, ...over }) as AgentMeta
   // Two projects sharing one archive (a clone of the repository) list each run once.
   const overview = await buildOverview([project('a', '/a'), project('b', '/b')], {
     liveAgents: async () => [],
     agents: async () => [
-      web('working', { sessionId: 'session_01Work' }),
-      web('parked', { sessionId: 'session_01Park' }),
-      web('opened', { sessionId: 'session_01Pr', pr: { number: 3, url: 'u' } }),
-      web('stale', { startedAt: at(13), updatedAt: at(13) }),
-      web('stopped', { status: 'stopped' }),
+      run('on-the-web', { target: 'web' }),
+      run('on-actions', { target: 'actions' }),
+      run('ended', { target: 'web', status: 'done' }),
+      // This computer's and a saved machine's are listed by what runs them: a checkout, the machine.
+      run('here', {}),
+      run('local', { target: 'local' }),
+      run('relayed', { target: 'remote' }),
     ],
-    waiting: sessionId => sessionId === 'session_01Park',
-    now: () => now,
     queue: async () => [],
   })
   assert.deepEqual(
-    overview.active.map(r => ({ id: r.agentId, cloud: r.cloud, cwd: r.cwd })),
+    overview.active.map(r => ({ id: r.agentId, host: r.host, cwd: r.cwd })),
     [
-      { id: 'working', cloud: 'in-cloud', cwd: '/a' },
-      { id: 'parked', cloud: 'waiting', cwd: '/a' },
+      { id: 'on-the-web', host: 'web', cwd: '/a' },
+      { id: 'on-actions', host: 'actions', cwd: '/a' },
     ],
   )
 })

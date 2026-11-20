@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import { hostname } from 'node:os'
 import assert from 'node:assert/strict'
-import { answeredBefore, readAgentHandoff, readRunHandoff, leftNothing, resolveAgentPr, mergeAgentPr, openAgentPullRequest, openRemoteBranchPullRequest, pushAgentBranch, mergeAgentBranch, type HandoffAgent } from './agent-handoff.js'
+import { answeredBefore, readAgentHandoff, readRunHandoff, leftNothing, resolveAgentPr, mergeAgentPr, openAgentPullRequest, pushAgentBranch, mergeAgentBranch } from './agent-handoff.js'
 import { pickAgentPr, type LinkedPr } from './pull-requests.js'
 import type { BranchState, BranchesFor, BranchesSource } from '../store/branches.js'
 import type { GitHostFor, GitHostSource } from '../store/git-host.js'
@@ -313,17 +313,9 @@ test('the Open PR button refuses a session with no branch, a gone branch, an emp
 test("a provider's refusal is the button's answer, never a throw: a dirty checkout stops before the git host is asked, a refused open is the git host's line", async () => {
   const dirty = fakeBranches({ 'openagent/work': state() }, { push: { ok: false, error: 'openagent/work has uncommitted work; commit or delete it, then push' } })
   assert.deepEqual(await openAgentPullRequest('/repo', agent(), { branches: dirty.branches, gitHost: dirty.gitHost }), { ok: false, error: 'openagent/work has uncommitted work; commit or delete it, then push' })
-  assert.deepEqual(await openRemoteBranchPullRequest('/repo', agent(), 'claude/x', { branches: dirty.branches, gitHost: dirty.gitHost }), { ok: false, error: 'openagent/work has uncommitted work; commit or delete it, then push' })
   assert.deepEqual(dirty.calls.filter(call => call[0] === 'open'), [], 'nothing asked of the git host')
   const refused = fakeBranches({ 'openagent/work': state() }, { open: { ok: false, error: 'gh: not logged in' } })
   assert.deepEqual(await openAgentPullRequest('/repo', agent(), { branches: refused.branches, gitHost: refused.gitHost }), { ok: false, error: 'gh: not logged in' })
-})
-
-test('a remote-only branch gets its draft PR through the two providers, and the body says what was asked (#1601)', async () => {
-  const { branches, gitHost, calls } = fakeBranches({})
-  const result = await openRemoteBranchPullRequest('/repo', { id: 'r1', branch: 'agent-x', intent: 'fix it' }, 'claude/x', { branches, gitHost })
-  assert.deepEqual(result, { ok: true, url: 'https://github.com/o/r/pull/9', number: 9 })
-  assert.deepEqual(calls, [['push', 'claude/x'], ['open', 'claude/x', { title: 'agent-x', body: 'fix it\n\nOpened from OpenAgent session `r1`.', draft: true }]])
 })
 
 test('the Push button pushes a finished session\'s branch through the branches provider: the last step where the project has no git host (#1820)', async () => {
@@ -409,20 +401,6 @@ test('a different PR on the branch is not this run’s answer (E6)', async () =>
   const other = { number: 40, url: 'u40', state: 'OPEN', title: 'someone else' }
   const result = await resolveAgentPr('/repo', { id: 'r1', branch: 'agent-x', pr: { number: 41, url: 'u41' } }, async () => ({ value: other, pending: false }))
   assert.deepEqual(result.value, { number: 41, url: 'u41', state: 'UNKNOWN', title: '' })
-})
-
-async function titleOf(handoffAgent: HandoffAgent): Promise<string | undefined> {
-  const { branches, gitHost, calls } = fakeBranches({})
-  await openRemoteBranchPullRequest('/repo', handoffAgent, 'claude/x', { branches, gitHost })
-  return (calls.find(call => call[0] === 'open')?.[2] as { title: string } | undefined)?.title
-}
-
-test('a session with no branch gets its id as the title, not the prompt it was given (#1618)', async () => {
-  // The prompt used to be the middle rung, cut to 72 characters. The squash merge made that a
-  // permanent commit subject: an instruction, truncated mid-sentence, standing in for a
-  // description of the change. The session id says less and misleads nobody.
-  const intent = 'Open TODO_AGENTS.md and work on the FIRST open entry only. When the work is done, close the ticket it links to.'
-  assert.equal(await titleOf({ id: 'r1', intent }), 'Session r1')
 })
 
 test("the Merge action lands the session's open PR through the git host (#1391)", async () => {

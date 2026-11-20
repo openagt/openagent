@@ -49,6 +49,9 @@ const DISTRIBUTION: DashboardDistribution = [
   // ui-renderer-mermaid, a plugin that starts off, kept per person: a mermaid block drawn as its
   // diagram, a heavy library loaded only where there is one.
   { package: '@openagt/ui-renderer-mermaid', for: 'computer' },
+  // host-claude-web, a plugin that starts off: "Run on" offers Claude Code on the web beside this
+  // computer, in a project on GitHub, through the browser extension it brings.
+  { package: '@openagt/host-claude-web', for: 'computer' },
   // The plugins kept per project: ask starts on, the others are a project's once a person switches them on.
   { package: '@openagt/skill-ask', on: true },
   { package: '@openagt/skill-logs' },
