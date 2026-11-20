@@ -20,7 +20,7 @@ async function withComputer(body: (dir: string, asked: string[][]) => Promise<vo
   process.env.XDG_CONFIG_HOME = join(dir, 'cfg')
   mkdirSync(process.env.XDG_CONFIG_HOME, { recursive: true })
   const before = { ...loginsWiring }
-  provideTestContext({ quota: { read: async () => ({ windows: [] }), stop: () => {} } })
+  provideTestContext()
   const asked: string[][] = []
   Object.assign(loginsWiring, {
     home: () => dir,

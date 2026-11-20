@@ -1,6 +1,6 @@
 import { QuotaPoller } from '../quota-poller.js'
 import { weekBoundary, type QuotaBoundary } from '../quota-boundary.js'
-import { ClaudeCodeDriver, keepClaudeReading } from '@openagt/agent-driver-claude-code'
+import { ClaudeCodeDriver } from '@openagt/agent-driver-claude-code'
 import type { DriverQuotaUnavailableReason, DriverQuotaWindow } from '@openagt/hooks'
 
 /**
@@ -72,14 +72,9 @@ export function pollerQuotaSource(poller: QuotaPoller, now: () => number = () =>
  */
 export function defaultQuotaSource(): QuotaSource {
   const driver = new ClaudeCodeDriver()
-  // Kept for the account-rotation command too: Claude refuses this read when asked too often, whoever asks.
-  const poller = new QuotaPoller({
-    read: async () => {
-      const quota = await driver.readQuota()
-      keepClaudeReading(quota)
-      return quota
-    },
-  })
+  // Each reading is kept for everyone on this computer by the read itself (`readClaudeQuota`): the
+  // accounts card and command answer from it, and a read another process makes at the same moment is this one's too.
+  const poller = new QuotaPoller({ read: () => driver.readQuota() })
   poller.start()
   return pollerQuotaSource(poller)
 }

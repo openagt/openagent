@@ -62,7 +62,7 @@ async function withProjects(body: (dirs: { github: string; gitlab: string; local
     codexUsage: async () => [],
     computer: () => 'Studio',
   })
-  provideTestContext({ quota: { read: async () => ({ windows: [] }), stop: () => {} } })
+  provideTestContext()
   Object.assign(loginsWiring, {
     gitHost: async () => GITHUB,
     run: async (root: string, _command: ProvidedCommand, args: readonly string[]) => {

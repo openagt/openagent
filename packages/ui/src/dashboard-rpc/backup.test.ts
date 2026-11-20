@@ -22,7 +22,7 @@ async function withComputer(body: (folder: string) => Promise<void>): Promise<vo
   process.env.XDG_CONFIG_HOME = join(dir, 'cfg')
   mkdirSync(process.env.XDG_CONFIG_HOME, { recursive: true })
   const before = { ...loginsWiring }
-  provideTestContext({ quota: { read: async () => ({ windows: [] }), stop: () => {} } })
+  provideTestContext()
   Object.assign(loginsWiring, {
     home: () => dir,
     gitHost: async () => ({ package: '@openagt/github', command: 'github', dir }) as unknown as ProvidedCommand,

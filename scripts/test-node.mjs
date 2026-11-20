@@ -9,13 +9,19 @@
 //   that ran a project's tests passed its own skills on, so a test's empty project held tickets and
 //   a queue, and seven tests failed in every agent's checkout alone. Kept: `OPENAGENT_NETWORK_TESTS`,
 //   which a person sets to run the tests that reach the network.
+// - No coding agent's own CLI: `claude` and `codex` are stand-ins first on PATH that refuse, as on
+//   CI where neither is installed. A test that forgot its own stand-in (a `spawn`, a fake driver, a
+//   quota source) would start the person's real agent, with its MCP servers and its login: one run
+//   of the ui tests started `claude -p /usage` 177 times, 60 at once, on a computer people share. A
+//   test that means the real one says so in the agent's environment, `OPENAGENT_TEST_REAL_AGENT=1`:
+//   the wire test of Claude Code's questions, which runs only with `OPENAGENT_NETWORK_TESTS`.
 // - Outside a terminal, where an agent or CI reads it: a dot per test and every failure in full.
 //   Then, last, one line that names the package and its counts, so a failure in a whole-workspace
 //   run says where it is.
 import { spawn } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { accessSync, constants, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { delimiter, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const KEPT = new Set(['OPENAGENT_NETWORK_TESTS'])
@@ -27,6 +33,25 @@ const summaryFile = join(scratch, 'summary.json')
 mkdirSync(configHome)
 const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !handedToAgents(name)))
 env.XDG_CONFIG_HOME = configHome
+const agents = join(scratch, 'agents')
+mkdirSync(agents)
+for (const name of ['claude', 'codex']) {
+  const real = onPath(name, env.PATH)
+  const through = real ? `[ "$OPENAGENT_TEST_REAL_AGENT" = 1 ] && exec '${real}' "$@"\n` : ''
+  writeFileSync(join(agents, name), `#!/bin/sh\n${through}echo "${name} is not run in a test: give the test a stand-in for it" >&2\nexit 127\n`, { mode: 0o755 })
+}
+env.PATH = [agents, env.PATH].filter(Boolean).join(delimiter)
+
+/** The first `name` on `path` that runs; none when it is not there. */
+function onPath(name, path = '') {
+  for (const dir of path.split(delimiter).filter(Boolean)) {
+    try {
+      accessSync(join(dir, name), constants.X_OK)
+      return join(dir, name)
+    } catch {}
+  }
+  return undefined
+}
 
 const args = process.argv.slice(2)
 // Files named on the command line are the run; without any, every compiled test of the package.

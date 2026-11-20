@@ -1,7 +1,11 @@
 import { strict as assert } from 'node:assert'
+import { existsSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
+import { stat } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { test } from 'node:test'
 import { Readable, Writable } from 'node:stream'
-import { parseQuotaReadout, readClaudeQuota } from './claude-code-quota.js'
+import { keepClaudeReading, keptClaudeReading, parseQuotaReadout, readClaudeQuota } from './claude-code-quota.js'
 import type { SpawnLike, SpawnedProcess } from '@openagt/agent-driver'
 import { isTransientQuotaReason } from '@openagt/hooks'
 
@@ -190,3 +194,167 @@ test('readClaudeQuota gives up on a hung agent (#521)', async () => {
   }
   assert.deepEqual(await readClaudeQuota({ spawn, timeoutMs: 5 }), { available: false, reason: 'timeout' })
 })
+
+/** A `claude` whose `/usage` answers `stdout` once {@link end} is called, and how often it was started. */
+function heldSpawn(stdout: string): { spawn: SpawnLike; started: () => number; end: () => void } {
+  let started = 0
+  const held: Readable[] = []
+  const spawn: SpawnLike = () => {
+    started += 1
+    const out = new Readable({ read: () => undefined })
+    held.push(out)
+    const proc: SpawnedProcess = {
+      stdout: out,
+      stderr: Readable.from([]),
+      stdin: new Writable({ write: (_c, _e, cb) => cb() }),
+      on(event, listener) {
+        if (event === 'close') out.on('end', () => (listener as (c: number | null) => void)(0))
+        return proc
+      },
+      kill: () => undefined,
+    }
+    return proc
+  }
+  const end = (): void => {
+    for (const out of held.splice(0)) {
+      out.push(stdout)
+      out.push(null)
+    }
+  }
+  return { spawn, started: () => started, end }
+}
+
+/** `spawn`, counting how often it was started. */
+function counting(spawn: SpawnLike): { spawn: SpawnLike; started: () => number } {
+  let started = 0
+  return {
+    spawn: (...args) => {
+      started += 1
+      return spawn(...args)
+    },
+    started: () => started,
+  }
+}
+
+const READOUT = JSON.stringify({ result: REAL_READOUT })
+const REFUSED = JSON.stringify({ type: 'result', is_error: true, result: 'usage fetch failed' })
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+
+async function inDir(body: (dir: string) => Promise<void>): Promise<void> {
+  const dir = mkdtempSync(join(tmpdir(), 'claude-usage-'))
+  try {
+    await body(dir)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+}
+
+test('whoever asks while a read of the same login goes on is answered by it: one `claude` for everyone at that moment', async () => {
+  const claude = heldSpawn(READOUT)
+  const env = { HOME: '/home/ada' }
+  const asks = [readClaudeQuota({ spawn: claude.spawn, env }), readClaudeQuota({ spawn: claude.spawn, env }), readClaudeQuota({ spawn: claude.spawn, env, cwd: '/a/project' })]
+  claude.end()
+  const [first, ...rest] = await Promise.all(asks)
+  assert.equal(claude.started(), 1)
+  assert.ok(first?.available)
+  for (const quota of rest) assert.deepEqual(quota, first)
+  // That read is over: the next ask is a read of its own.
+  const next = readClaudeQuota({ spawn: claude.spawn, env })
+  claude.end()
+  await next
+  assert.equal(claude.started(), 2)
+})
+
+test('a read of another login is a read of its own', async () => {
+  const claude = heldSpawn(READOUT)
+  const asks = [readClaudeQuota({ spawn: claude.spawn, env: { HOME: '/home/ada' } }), readClaudeQuota({ spawn: claude.spawn, env: { HOME: '/home/ada', CLAUDE_CODE_OAUTH_TOKEN: 'sk-ant-oat01-other' } })]
+  claude.end()
+  await Promise.all(asks)
+  assert.equal(claude.started(), 2)
+})
+
+test('an ask that stops waiting is answered `timeout`, and the read goes on for whoever else asked', async () => {
+  const claude = heldSpawn(READOUT)
+  const stop = new AbortController()
+  const leaving = readClaudeQuota({ spawn: claude.spawn, signal: stop.signal })
+  const staying = readClaudeQuota({ spawn: claude.spawn })
+  stop.abort()
+  assert.deepEqual(await leaving, { available: false, reason: 'timeout' })
+  claude.end()
+  assert.ok((await staying).available)
+  assert.equal(claude.started(), 1)
+})
+
+test("across this computer's processes one reads at a time: who finds another's read going on waits, and is answered what it kept", () =>
+  inDir(async dir => {
+    const keptIn = join(dir, 'usage.json')
+    const claude = counting(fakeSpawn(READOUT))
+    // Another process of this computer is reading: its lock, its process alive (this one).
+    writeFileSync(`${keptIn}.lock`, `${process.pid}\n`)
+    const waiting = readClaudeQuota({ spawn: claude.spawn, keptIn })
+    await sleep(400)
+    const theirs = parseQuotaReadout(REAL_READOUT.replace('2% used', '7% used'))
+    keepClaudeReading(theirs, keptIn)
+    rmSync(`${keptIn}.lock`)
+    assert.deepEqual(await waiting, theirs)
+    assert.equal(claude.started(), 0)
+  }))
+
+test('a good reading is kept for everyone, readable by this user only, and answers whoever asks in the same moment', () =>
+  inDir(async dir => {
+    const keptIn = join(dir, 'usage.json')
+    const claude = counting(fakeSpawn(READOUT))
+    assert.ok((await readClaudeQuota({ spawn: claude.spawn, keptIn })).available)
+    assert.equal((await stat(keptIn)).mode & 0o777, 0o600)
+    assert.equal(existsSync(`${keptIn}.lock`), false, 'the lock goes with the read')
+    assert.ok((await readClaudeQuota({ spawn: claude.spawn, keptIn })).available)
+    assert.equal(claude.started(), 1, 'the reading of a moment ago answered')
+    assert.ok(keptClaudeReading(keptIn, Date.now(), 60_000)?.available)
+  }))
+
+test('a failed read answers only whoever waited for it: who asks after it reads again, and the good reading before it stays kept', () =>
+  inDir(async dir => {
+    const keptIn = join(dir, 'usage.json')
+    // A good reading of a minute ago: past the moment, still kept.
+    keepClaudeReading(parseQuotaReadout(REAL_READOUT), keptIn, Date.now() - 60_000)
+    const claude = counting(fakeSpawn(REFUSED))
+    assert.deepEqual(await readClaudeQuota({ spawn: claude.spawn, keptIn }), { available: false, reason: 'fetch-failed' })
+    assert.deepEqual(await readClaudeQuota({ spawn: claude.spawn, keptIn }), { available: false, reason: 'fetch-failed' })
+    assert.equal(claude.started(), 2)
+    assert.ok(keptClaudeReading(keptIn, Date.now(), 5 * 60_000)?.available, 'the good reading of a minute ago')
+
+    writeFileSync(`${keptIn}.lock`, `${process.pid}\n`)
+    const waiting = readClaudeQuota({ spawn: claude.spawn, keptIn })
+    await sleep(400)
+    keepClaudeReading({ available: false, reason: 'timeout' }, keptIn)
+    rmSync(`${keptIn}.lock`)
+    assert.deepEqual(await waiting, { available: false, reason: 'timeout' }, 'the failure of the read it waited for')
+    assert.equal(claude.started(), 2)
+  }))
+
+test("a lock left by a read whose process is gone, or held past a read's time, is taken over", () =>
+  inDir(async dir => {
+    const claude = counting(fakeSpawn(READOUT))
+    const gone = join(dir, 'gone.json')
+    // No process has this pid: past the most Linux ever gives out (2^22).
+    writeFileSync(`${gone}.lock`, `${2 ** 22 + 1}\n`)
+    assert.ok((await readClaudeQuota({ spawn: claude.spawn, keptIn: gone })).available)
+    const hung = join(dir, 'hung.json')
+    writeFileSync(`${hung}.lock`, `${process.pid}\n`)
+    const longAgo = new Date(Date.now() - 60 * 60_000)
+    utimesSync(`${hung}.lock`, longAgo, longAgo)
+    assert.ok((await readClaudeQuota({ spawn: claude.spawn, keptIn: hung })).available)
+    assert.equal(claude.started(), 2)
+    assert.equal(existsSync(`${gone}.lock`) || existsSync(`${hung}.lock`), false)
+  }))
+
+test("the real CLI's reads are shared through the person's own file", () =>
+  inDir(async dir => {
+    const bin = join(dir, 'claude')
+    writeFileSync(bin, `#!/bin/sh\necho started >> "${dir}/started"\nprintf '%s' '${READOUT.replaceAll("'", "'\\''")}'\n`, { mode: 0o755 })
+    const env = { PATH: process.env['PATH'], XDG_CONFIG_HOME: join(dir, 'config') }
+    assert.ok((await readClaudeQuota({ bin, env })).available)
+    assert.ok(keptClaudeReading(join(dir, 'config', 'openagent-claude-usage.json'), Date.now(), 60_000)?.available)
+    assert.ok((await readClaudeQuota({ bin, env })).available)
+    assert.equal((await stat(join(dir, 'started'))).size, 'started\n'.length, 'started once')
+  }))

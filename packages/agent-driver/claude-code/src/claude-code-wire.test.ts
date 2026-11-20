@@ -13,10 +13,15 @@ import type { DriverEvent } from '@openagt/hooks'
 // `control_request` it writes, the interrupt it is answered with) is no documented interface: it
 // was read off @anthropic-ai/claude-agent-sdk 0.3.318. This runs the `claude` on this machine
 // against a stand-in for Anthropic's API that makes the model call AskUserQuestion, so a CLI
-// that changes any of it fails here, and costs nothing. Skipped where no `claude` is installed.
+// that changes any of it fails here, and costs nothing. It starts the real `claude`, which no
+// other test does (the test runner puts a stand-in first on PATH): only where a person asks for
+// the tests that reach past this repository, `OPENAGENT_NETWORK_TESTS=1`, and `claude` is installed.
 
-const installed = spawnSync('claude', ['--version'], { encoding: 'utf8' })
-const skip = installed.status === 0 ? false : 'no `claude` on PATH: the wire test of AskUserQuestion did not run'
+/** What the real `claude` is started with: the test runner's stand-in hands it on. */
+const REAL = { OPENAGENT_TEST_REAL_AGENT: '1' }
+const asked = process.env['OPENAGENT_NETWORK_TESTS'] === '1'
+const installed = asked && spawnSync('claude', ['--version'], { encoding: 'utf8', env: { ...process.env, ...REAL } }).status === 0
+const skip = !asked ? 'starts the real `claude`: OPENAGENT_NETWORK_TESTS=1' : installed ? false : 'no `claude` on PATH: the wire test of AskUserQuestion did not run'
 
 const input = { questions: [{ question: 'Which colour?', header: 'Colour', options: [{ label: 'Blue (Recommended)', description: 'Light blue' }, { label: 'Green', description: 'Light green' }], multiSelect: false }] }
 
@@ -82,6 +87,7 @@ test('the installed claude asks AskUserQuestion over stdin as the driver reads i
   const stop = new AbortController()
   try {
     const env = {
+      ...REAL,
       PATH: process.env['PATH'],
       HOME: home,
       CLAUDE_CONFIG_DIR: join(home, '.claude'),

@@ -6,3 +6,4 @@
   - One package: `pnpm --filter <package> test`. One node test file, in its package: `pnpm exec tsc -p tsconfig.test.json && node ../../scripts/test-node.mjs dist-test/<path>.test.js`, plus `--test-name-pattern=<re>` for one test. One UI test file: `cd <package>/dashboard && npx vitest run <path>`
   - To see a flow work in the real dashboard, offline, with a scripted agent: `pnpm demo` (`packages/ui/src/e2e/README.md`)
   - The tests that reach the network run with `OPENAGENT_NETWORK_TESTS=1`
+  - No test starts a real coding agent: the node tests find refusing stand-ins for `claude` and `codex` first on PATH (`scripts/test-node.mjs`), so a test gives its own (a `spawn`, a fake driver, a quota source); only the wire test of Claude Code's questions runs the real one, with `OPENAGENT_NETWORK_TESTS=1`

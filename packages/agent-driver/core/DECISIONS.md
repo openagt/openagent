@@ -306,6 +306,13 @@ already made, and lists it in its pull request; for anything else it proposes an
   usage"; "Codex: … a Codex home per account, sign-in"): its own login and who it is, how a new
   one signs in, its logout, how full an account is now, and what it keeps of an added account
   beside the list.
+- Claude's `/usage` is read once for everyone who asks at the same moment: in a process, whoever
+  asks while a read of the same login goes on is answered by it; across a computer's processes, one
+  reads at a time, holding a lock beside the reading kept for everyone, and whoever waited for it
+  is answered what it read (a good reading, whoever asks within half a minute of it too; a failure,
+  only whoever waited for it). Each read starts the whole CLI with its MCP servers, and Claude Code
+  refuses `/usage` asked too often: 17 reads at once took a computer people share to a load of
+  171. Picked over each caller reading its own.
 - An agent's package declares how its CLI is installed and logged in, each one command a
   press runs with no terminal and no admin (Claude Code: its own `install.sh` into
   `~/.local/bin`, and `claude auth login` in this computer's browser; Codex: its own

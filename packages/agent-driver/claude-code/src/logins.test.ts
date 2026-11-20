@@ -5,11 +5,13 @@ import { join } from 'node:path'
 import { test } from 'node:test'
 import type { DriverQuota } from '@openagt/hooks'
 import type { MintOptions } from './claude-login.js'
-import { claudeLogins, claudeUsagePath, keepClaudeReading, READING_KEPT_MS } from './logins.js'
+import { claudeUsagePath, keepClaudeReading } from './claude-code-quota.js'
+import { claudeLogins, READING_KEPT_MS } from './logins.js'
 
 // Claude Code's accounts (`RunAgent.accounts`): its own login and who it is, a new one signed in
-// with `claude setup-token`, how full the own one is through `/usage`, kept for everyone a while,
-// and its logout. Never the real `claude`: it would log this computer's person out.
+// with `claude setup-token`, how full the own one is through `/usage`, the reading kept on this
+// computer serving a while, and its logout. Never the real `claude`: it would log this computer's
+// person out.
 
 const NOW = 1_800_000_000_000
 const OWN = { name: 'This computer' }
@@ -89,34 +91,24 @@ test("the person's own login is read with /usage: a session and a week, a single
     ])
   }))
 
-test('a good reading serves everyone for a while, so Claude Code is not asked again; then it is', () =>
+test('the reading kept on this computer (by whoever read it: the poller, a card, a scheduler) serves a while, so Claude Code is not asked; then it is', () =>
   inDir(async env => {
+    keepClaudeReading(READING, claudeUsagePath(env), NOW - 60_000)
     let now = NOW
     const { logins, reads } = counted(undefined, () => now)
     const own = { ...env, CLAUDE_CODE_OAUTH_TOKEN: 'given' }
-    await logins.usage(OWN, own)
+    assert.equal((await logins.usage(OWN, own))?.length, 2)
+    assert.equal(reads(), 0)
+    now = NOW - 60_000 + READING_KEPT_MS
     await logins.usage(OWN, own)
     assert.equal(reads(), 1)
-    assert.equal((await stat(claudeUsagePath(env))).mode & 0o777, 0o600)
-    now = NOW + READING_KEPT_MS
-    await logins.usage(OWN, own)
-    assert.equal(reads(), 2)
   }))
 
-test("OpenAgent's poller keeping its reading means Claude Code is not asked at all", () =>
-  inDir(async env => {
-    keepClaudeReading(READING, claudeUsagePath(env), NOW - 60_000)
-    const { logins, reads } = counted()
-    assert.equal((await logins.usage(OWN, { ...env, CLAUDE_CODE_OAUTH_TOKEN: 'given' }))?.length, 2)
-    assert.equal(reads(), 0)
-  }))
-
-test('a failed reading is none and is not kept, nor one that throws; a kept file that does not read is none', () =>
+test('a failed reading is none, and so is one that throws, or a kept file that does not read', () =>
   inDir(async env => {
     const own = { ...env, CLAUDE_CODE_OAUTH_TOKEN: 'given' }
     const failed = counted(() => Promise.resolve({ available: false, reason: 'no-subscription' }))
     assert.equal(await failed.logins.usage(OWN, own), undefined)
-    await assert.rejects(readFile(claudeUsagePath(env)))
     await failed.logins.usage(OWN, own)
     assert.equal(failed.reads(), 2)
     assert.equal(await counted(() => Promise.reject(new Error('claude is not installed'))).logins.usage(OWN, own), undefined)

@@ -2,9 +2,11 @@ import { execFile } from 'node:child_process'
 import { readFileSync, rmSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { configFile, probeCli, writePrivate } from '@openagt/agent-driver'
+import { probeCli } from '@openagt/agent-driver'
 import type { AgentLogins, DriverQuota, UsageWindow } from '@openagt/hooks'
+import { CLAUDE_ENV_LOGINS } from './claude-accounts.js'
 import { ClaudeCodeDriver } from './claude-code.js'
+import { claudeUsagePath, keptClaudeReading } from './claude-code-quota.js'
 import { isSignInCode, mintClaude, type Mint } from './claude-login.js'
 
 // Claude Code's accounts (`RunAgent.accounts`, the list `claude`): the person's own login, which
@@ -14,30 +16,16 @@ import { isSignInCode, mintClaude, type Mint } from './claude-login.js'
 //
 // How full the person's own login is, Claude Code says through `/usage`, and it refuses `/usage`
 // when asked too often, for minutes, whoever asks: every tab of a card and OpenAgent's own poller
-// count against one login. So a good reading is kept in one file for all of them, for longer than
-// OpenAgent's poller waits between its own reads. A failed reading is not kept: it may say more of
-// the process that took it (a sandbox with no credentials) than of the login. An added login says
-// how full it is only in its runs.
+// count against one login. So the reading the reader keeps for everyone on this computer
+// (`readClaudeQuota`) serves the cards for longer than OpenAgent's poller waits between its own
+// reads. A failed reading serves nobody: it may say more of the process that took it (a sandbox
+// with no credentials) than of the login. An added login says how full it is only in its runs.
 
 /** How long a reading of `/usage` serves everyone on this computer: a little over the five minutes OpenAgent's poller waits. */
 export const READING_KEPT_MS = 6 * 60_000
 
-/** The logins Claude Code takes from its environment before its own. */
-const ENV_LOGINS = ['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN'] as const
-
 /** How long Claude Code's logout gets: a page's call ends at 30 seconds. */
 const LOG_OUT_MS = 25_000
-
-/** A reading kept in the file. */
-interface KeptReading {
-  at: number
-  windows: UsageWindow[]
-}
-
-/** Where the reading is kept: `$XDG_CONFIG_HOME/openagent-claude-usage.json`, else dotted under the home. */
-export function claudeUsagePath(env: NodeJS.ProcessEnv = process.env): string {
-  return configFile('openagent-claude-usage.json', env)
-}
 
 /** A `/usage` reading in the names a turn's own windows go by; none for one that said nothing. */
 function readingWindows(quota: DriverQuota): UsageWindow[] | undefined {
@@ -48,32 +36,6 @@ function readingWindows(quota: DriverQuota): UsageWindow[] | undefined {
     return name ? [{ window: name, percentUsed: window.percentUsed, ...(window.resetsAt !== undefined ? { resetsAt: window.resetsAt } : {}) }] : []
   })
   return windows.length > 0 ? windows : undefined
-}
-
-/**
- * Keep a good reading of `/usage` for everyone on this computer: written whole, then moved over the
- * old one. A failed one changes nothing, and neither does a file that cannot be written: the
- * reading is still good, and the next one who asks only asks again.
- */
-export function keepClaudeReading(quota: DriverQuota, path: string = claudeUsagePath(), now: number = Date.now()): void {
-  const windows = readingWindows(quota)
-  if (!windows) return
-  try {
-    writePrivate(path, `${JSON.stringify({ at: now, windows } satisfies KeptReading)}\n`)
-  } catch {
-    // Read again next time.
-  }
-}
-
-/** The kept reading while it serves; none when there is none, it is too old, or it says a time to come. */
-function keptReading(path: string, now: number): UsageWindow[] | undefined {
-  try {
-    const kept = JSON.parse(readFileSync(path, 'utf8')) as Partial<KeptReading>
-    if (typeof kept.at !== 'number' || !Array.isArray(kept.windows)) return undefined
-    return now >= kept.at && now - kept.at < READING_KEPT_MS ? kept.windows : undefined
-  } catch {
-    return undefined
-  }
 }
 
 /** The person's own name as Claude Code knows it: its account's display name, else its email. */
@@ -97,7 +59,7 @@ export interface ClaudeLoginsDeps {
   mint?: Mint
   /** Claude Code's `/usage`, of the person's own login. */
   quota?: () => Promise<DriverQuota>
-  /** The clock a reading is kept by. */
+  /** The clock a kept reading is told old by. */
   now?: () => number
 }
 
@@ -106,11 +68,11 @@ export function claudeLogins(deps: ClaudeLoginsDeps = {}): AgentLogins {
   const mint = deps.mint ?? mintClaude
   const quota = deps.quota ?? (() => new ClaudeCodeDriver().readQuota())
   const now = deps.now ?? Date.now
-  const ownLoginThere = (env: NodeJS.ProcessEnv): boolean => ENV_LOGINS.some(name => env[name]) || ownNameIn(env) !== undefined
+  const ownLoginThere = (env: NodeJS.ProcessEnv): boolean => CLAUDE_ENV_LOGINS.some(name => env[name]) || ownNameIn(env) !== undefined
   return {
     list: 'claude',
     service: 'Claude',
-    envLogins: ENV_LOGINS,
+    envLogins: CLAUDE_ENV_LOGINS,
     installed: async () => (await probeCli('claude', ['--version'])).ok,
     ownLoginThere,
     ownName: env => Promise.resolve(ownNameIn(env)),
@@ -125,15 +87,11 @@ export function claudeLogins(deps: ClaudeLoginsDeps = {}): AgentLogins {
     forget: () => Promise.resolve(),
     async usage(account, env) {
       if (account.login !== undefined) return undefined
-      const at = now()
-      const path = claudeUsagePath(env)
-      const kept = keptReading(path, at)
-      if (kept) return kept
+      const kept = keptClaudeReading(claudeUsagePath(env), now(), READING_KEPT_MS)
+      if (kept) return readingWindows(kept)
       if (!ownLoginThere(env)) return undefined
       const read = await quota().catch(() => undefined)
-      if (!read) return undefined
-      keepClaudeReading(read, path, at)
-      return readingWindows(read)
+      return read ? readingWindows(read) : undefined
     },
   }
 }

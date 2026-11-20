@@ -59,7 +59,7 @@ async function onServer(body: (server: Server) => Promise<void>, server = true):
       return { ok: true, output: { ok: true } }
     },
   })
-  provideTestContext({ quota: { read: async () => ({ windows: [] }), stop: () => {} } })
+  provideTestContext()
   try {
     await body({ dir, path, git })
   } finally {

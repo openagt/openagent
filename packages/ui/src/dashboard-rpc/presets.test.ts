@@ -35,7 +35,7 @@ async function withComputer(body: (dir: string) => Promise<void>): Promise<void>
     codexUsage: async () => [],
     computer: () => 'Studio',
   })
-  provideTestContext({ quota: { read: async () => ({ windows: [] }), stop: () => {} } })
+  provideTestContext()
   Object.assign(loginsWiring, {
     home: () => dir,
     gitHost: async () => ({ package: '@openagt/github', command: 'github', dir } as unknown as ProvidedCommand),

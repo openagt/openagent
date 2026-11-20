@@ -12,6 +12,9 @@ import type { AgentAccount } from '@openagt/hooks'
 /** The name Claude Code reads a login under that was made for a computer nobody sits at. */
 export const CLAUDE_TOKEN_ENV = 'CLAUDE_CODE_OAUTH_TOKEN'
 
+/** The logins Claude Code takes from its environment before its own. */
+export const CLAUDE_ENV_LOGINS = [CLAUDE_TOKEN_ENV, 'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN'] as const
+
 /**
  * The name Claude Code reads who such a login is under. The login cannot say it itself, and
  * without it Claude Code offers only its four plain models, not the ones the account may use.
