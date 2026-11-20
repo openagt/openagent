@@ -51,6 +51,7 @@
     "@openagt/host-github-actions": "workspace:*",
     "@openagt/notifications-browser": "workspace:*",
     "@openagt/notifications-command": "workspace:*",
+    "@openagt/saved-prompts": "workspace:*",
     "@openagt/skill-account-rotation": "workspace:*",
     "@openagt/skill-ask": "workspace:*",
     "@openagt/skill-branches": "workspace:*",

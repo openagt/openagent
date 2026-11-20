@@ -2,10 +2,11 @@ import { resolveProjectPath, runHostOf } from './context.js'
 import { findComputerModule, findProjectModule } from '../project-modules.js'
 import { providedDataChanged } from '../store/provided.js'
 import { callModuleFunction, computerHost, functionKind, serverHost, type ModuleCallResult } from '../dashboard/module-host.js'
-import { distributionSettings, runRefAt } from '../distribution-hooks.js'
+import { distributionSettings, projectRefAt, runRefAt } from '../distribution-hooks.js'
+import { SESSIONS_ID } from '../project-address.js'
 import { relayOr } from './relay-agent.js'
 import { pullProjectData } from '@openagt/agent-data'
-import type { RunFound, RunQuestion, RunRef } from '@openagt/hooks'
+import type { ProjectRef, RunFound, RunQuestion, RunRef } from '@openagt/hooks'
 import { loadAgentEvents } from '../store/index.js'
 import { pendingChoices } from '../open-choices.js'
 import { sayForModule } from '../dashboard/run-inbox.js'
@@ -37,6 +38,7 @@ export async function callModule(projectId: string | null, pkg: string, name: st
     if (!module) return { ok: false, error: `${pkg} is no module of this project` }
     if (!module.server) return { ok: false, error: `${pkg} has no server part` }
     const host = serverHost(root, await distributionSettings(), {
+      project: projectOnce(projectId, root),
       find: runsFound(projectId, root),
       questions: agentId => runQuestions(root, agentId),
       say: (agentId, line) => sayForModule(projectId, root, agentId, line),
@@ -48,6 +50,12 @@ export async function callModule(projectId: string | null, pkg: string, name: st
     }
     return result
   }, { ok: false, error: 'the machine this run works on did not answer' }, kind === 'read')
+}
+
+/** The project `projectId` at `root`, as a hook is given it, read once for the call and only when asked: a session with no project is none. */
+function projectOnce(projectId: string, root: string): () => Promise<ProjectRef | undefined> {
+  let project: Promise<ProjectRef | undefined> | undefined
+  return () => (project ??= projectId === SESSIONS_ID ? Promise.resolve(undefined) : projectRefAt(projectId, root))
 }
 
 /**

@@ -3,16 +3,18 @@ import { isRunId } from '../store/index.js'
 import { cachedPrsForBranch, type LinkedPr } from './pull-requests.js'
 import type { Cached } from './cache.js'
 import type { InboxLine } from '@openagt/agent-driver'
-import type { RunFound, RunQuestion, Settings } from '@openagt/hooks'
+import type { ProjectRef, RunFound, RunQuestion, Settings } from '@openagt/hooks'
 import { rpcKind, type MergeLookup, type RpcComputerHost, type RpcFunction, type RpcHost, type RpcKind } from '@openagt/hooks/rpc'
 
 // The daemon's side of a module's server part (`@openagt/hooks/rpc`): the host a function is given
-// (the settings; for a project's module, the project's folder, where its runs have their work, the
-// questions they wait on, and a line said to one) and the one way a function is called. Where a run's work is, is its host's to say; what a module
-// makes of it is its own.
+// (the settings; for a project's module, the project's folder and the project, where its runs have
+// their work, the questions they wait on, and a line said to one) and the one way a function is
+// called. Where a run's work is, is its host's to say; what a module makes of it is its own.
 
 /** What {@link serverHost} reads and says through. */
 export interface ServerHostDeps {
+  /** The project the call is in, as a hook is given it; none for a session with no project. */
+  project: () => Promise<ProjectRef | undefined>
   /** Where a run of the project has its work, as the run's host says it (`RunHost.find`). */
   find: (agentId: string) => Promise<RunFound | undefined>
   /** The questions a run of the project still waits on, as its events say. */
@@ -33,6 +35,7 @@ export function serverHost(root: string, settings: Settings, deps: ServerHostDep
   return {
     settings,
     root,
+    project: deps.project,
     async run(agentId: string): Promise<RunFound | undefined> {
       if (typeof agentId !== 'string' || !isRunId(agentId)) return undefined
       return deps.find(agentId)

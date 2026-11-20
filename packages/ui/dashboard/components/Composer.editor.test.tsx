@@ -9,8 +9,6 @@ vi.mock('../lib/preferences.js', () => ({
   usePreferences: () => ({}),
   usePreferencesLoaded: () => true,
   updatePreferences: vi.fn(),
-  useProjectPresets: () => [],
-  saveProjectPresetList: vi.fn(),
   useActiveProjectId: () => 'p1',
 }))
 vi.mock('../lib/editors.js', () => ({ useDetectedEditors: () => [] }))

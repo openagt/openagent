@@ -160,7 +160,7 @@ test('a read of the registry never fails, whatever the disk does or the file hol
   assert.equal(await readBridgeToken(ENV, unreadable), undefined)
   assert.equal(await thisComputerName(ENV, unreadable), computerName())
   // Every field of the wrong shape, as a hand edit could leave it.
-  const junk = { projects: [1, null, {}], preferences: { model: 3, startFrom: [1], overviewLayouts: 'x', customPresets: {} }, machines: [null, 5, { label: 1 }], forgotten: 'x', repoFolders: [3], computer: {}, name: [] }
+  const junk = { projects: [1, null, {}], preferences: { model: 3, startFrom: [1], overviewLayouts: 'x' }, machines: [null, 5, { label: 1 }], forgotten: 'x', repoFolders: [3], computer: {}, name: [] }
   assert.deepEqual(await readRegistry(ENV, memFs({ [FILE]: JSON.stringify(junk) })), { projects: [], preferences: {} })
 })
 
@@ -329,16 +329,12 @@ test('patchPreferences merges only the keys it is given (#1148)', async () => {
 })
 
 test('a patched key still clears the way it always has (#1148)', async () => {
-  // No sentinel for "remove": the sanitizer already drops blanks and empty lists, which is how
-  // the dashboard clears the editor and the last custom preset.
-  const seed = { projects: [], preferences: { editor: 'code', theme: 'dark', customPresets: [{ id: 'a', label: 'A', prompt: 'p' }] } }
+  // No sentinel for "remove": the sanitizer already drops blanks, which is how the dashboard
+  // clears the editor.
+  const seed = { projects: [], preferences: { editor: 'code', theme: 'dark' } }
   const fs = memFs({ [FILE]: JSON.stringify(seed) })
 
-  assert.deepEqual(await patchPreferences({ editor: '' }, ENV, fs), {
-    theme: 'dark',
-    customPresets: [{ id: 'a', label: 'A', prompt: 'p' }],
-  })
-  assert.deepEqual(await patchPreferences({ customPresets: [] }, ENV, fs), { theme: 'dark' })
+  assert.deepEqual(await patchPreferences({ editor: '' }, ENV, fs), { theme: 'dark' })
 })
 
 test('patchPreferences sanitizes the merged result, not just the patch (#1148)', async () => {
@@ -428,33 +424,6 @@ test('writePreferences keeps a known look, stores the default look as nothing, a
   assert.deepEqual(await readPreferences(ENV, fs), {})
   await writePreferences({ palette: 'neutral', accent: 'aqua' }, ENV, fs)
   assert.deepEqual(await readPreferences(ENV, fs), { palette: 'neutral' })
-})
-
-test('writePreferences keeps well-formed custom presets and drops malformed ones (#626)', async () => {
-  const fs = memFs({ [FILE]: JSON.stringify({ projects: [APP_A], preferences: {} }) })
-  await writePreferences(
-    {
-      customPresets: [
-        { id: 'a', label: '  Deep review  ', prompt: '  Audit this PR.  ' }, // trimmed
-        { id: 'b', label: '', prompt: 'no label' }, // dropped (empty label)
-        { id: 'c', label: 'no prompt', prompt: '  ' }, // dropped (empty prompt)
-        { id: 'a', label: 'dup id', prompt: 'x' }, // dropped (duplicate id)
-        { label: 'no id', prompt: 'x' }, // dropped (missing id)
-        'nonsense', // dropped (not an object)
-      ],
-    } as never,
-    ENV,
-    fs,
-  )
-  assert.deepEqual(await readPreferences(ENV, fs), {
-    customPresets: [{ id: 'a', label: 'Deep review', prompt: 'Audit this PR.' }],
-  })
-})
-
-test('writePreferences omits customPresets entirely when none survive (#626)', async () => {
-  const fs = memFs({ [FILE]: JSON.stringify({ projects: [APP_A], preferences: {} }) })
-  await writePreferences({ customPresets: [{ id: '', label: 'x', prompt: 'y' }] } as never, ENV, fs)
-  assert.deepEqual(await readPreferences(ENV, fs), {}) // empty list -> field left off
 })
 
 test('addProject preserves existing preferences', async () => {

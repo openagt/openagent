@@ -3,13 +3,9 @@ import { act, renderHook } from '@testing-library/react'
 
 const onPreferences = vi.hoisted(() => vi.fn())
 const patchPreferences = vi.hoisted(() => vi.fn())
-const onProjectPresets = vi.hoisted(() => vi.fn())
-const saveProjectPresets = vi.hoisted(() => vi.fn())
 vi.mock('../rpc/preferences.js', () => ({
   onPreferences,
   patchPreferences,
-  onProjectPresets,
-  saveProjectPresets,
 }))
 
 const flush = () => act(async () => {
@@ -29,8 +25,6 @@ describe('preferences', () => {
     // The daemon merges the patch and hands back what it stored (#1148); with nothing else
     // stored, that is the patch itself.
     patchPreferences.mockReset().mockImplementation(async (patch: unknown) => ({ ok: true, preferences: patch }))
-    onProjectPresets.mockReset().mockResolvedValue([])
-    saveProjectPresets.mockReset().mockResolvedValue({ ok: true })
     openProject(null)
   })
 

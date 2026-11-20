@@ -4,22 +4,16 @@ import { ArrowUp, Loader2 } from 'lucide-react'
 import type { ProjectSummary } from '../../src/index.js'
 import { machineName, type DriverName } from '../../src/client.js'
 import { SESSIONS_ID } from '../../src/project-address.js'
-import {
-  usePreferences,
-  usePreferencesLoaded,
-  updatePreferences,
-  useProjectPresets,
-  saveProjectPresetList,
-  useActiveProjectId,
-} from '../lib/preferences.js'
+import { usePreferences, usePreferencesLoaded, updatePreferences, useActiveProjectId } from '../lib/preferences.js'
 import { useLoaded } from '../lib/use-async.js'
 import { Button } from './ui/button.js'
 import { cn } from '../lib/utils.js'
 import { ClaudeLogo, CodexLogo } from './driver-logos.js'
 import { onProjects } from '../rpc/projects.js'
 import { PromptEditor, type PromptDraft, type PromptEditorHandle } from './PromptEditor.js'
-import { PresetCreatePanel } from './PresetCreatePanel.js'
 import { CommandsMenu } from './CommandsMenu.js'
+import { ModuleSlot } from './ModulePageView.js'
+import { usePrompts } from '../lib/use-prompts.js'
 import { IN_BOX } from '../lib/in-box.js'
 import { DriverModelMenu, type DriverOption } from './DriverModelMenu.js'
 import { RunOnMenu } from './RunOnMenu.js'
@@ -136,7 +130,7 @@ export const Composer = forwardRef<ComposerHandle, {
   onPromptChange?: ((prompt: string) => void) | undefined
   /** A command or a saved prompt was loaded (so the launcher can flag it in its note);
    *  `replaced` says a typed draft was overwritten (undo brings it back). */
-  onPreset?: ((label: string, replaced: boolean) => void) | undefined
+  onLoaded?: ((label: string, replaced: boolean) => void) | undefined
   busy: boolean
   submitLabel: string
   submitBusyLabel: string
@@ -162,13 +156,14 @@ export const Composer = forwardRef<ComposerHandle, {
   /** The box takes the caret when it opens. */
   autoFocus?: boolean | undefined
 }>(function Composer(
-  { files, addContext, removeContext, startsAt, controls, controlsEnd, sessionModel, sessionContext, onSubmit, onPromptChange, onPreset, busy, submitLabel, submitBusyLabel, placeholder, inAgent = false, sessionRow, idleControl, home, notes, draftKey, autoFocus = false },
+  { files, addContext, removeContext, startsAt, controls, controlsEnd, sessionModel, sessionContext, onSubmit, onPromptChange, onLoaded, busy, submitLabel, submitBusyLabel, placeholder, inAgent = false, sessionRow, idleControl, home, notes, draftKey, autoFocus = false },
   ref,
 ) {
   const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
   const modules = useMountedModules()
   const [prompt, setPrompt] = useState('')
-  const [addingPreset, setAddingPreset] = useState(false)
+  // The panel that saves what the box holds as a prompt is open.
+  const [savingPrompt, setSavingPrompt] = useState(false)
   const editorRef = useRef<PromptEditorHandle>(null)
   // The box's edge, which the tooltips of its last line's items open past.
   const surface = useRef<HTMLDivElement>(null)
@@ -183,9 +178,12 @@ export const Composer = forwardRef<ComposerHandle, {
   const preferences = usePreferences()
   const model = preferences.model ?? '' // #628: empty = the coding agent's own default model
   const driver = preferences.driver ?? 'claude-code' // which coding agent does the work (#650)
-  const customPresets = preferences.customPresets ?? [] // #626: the user's own saved prompts
-  const projectPresets = useProjectPresets() // #1025: saved prompts committed in the open project's repo
   const activeProjectId = useActiveProjectId() // the project whose commands the `/` list offers
+  // The saved prompts the modules offer the box (#2394). A project only another computer of the
+  // person's has is not here to read, so its box offers what a session with no project's does.
+  const promptsIn = home !== undefined ? SESSIONS_ID : activeProjectId
+  const prompts = usePrompts(promptsIn)
+  const savePrompt = prompts.saver ? () => setSavingPrompt(true) : undefined
   const launcher = useProjectLauncher(activeProjectId)
   const commands = launcher?.commands ?? []
   // A session with no project runs on any machine, in that machine's own folder for them.
@@ -290,7 +288,7 @@ export const Composer = forwardRef<ComposerHandle, {
     if (!carried) return
     const over = carriedDraft?.text !== carried ? carriedDraft?.text : undefined
     setCarriedDraft({ text: carried, handedOver: true, ...(over !== undefined ? { over } : {}) })
-    if (over !== undefined) onPreset?.('The prompt', true)
+    if (over !== undefined) onLoaded?.('The prompt', true)
   }, [inAgent])
   const phone = useIsMobile()
 
@@ -312,7 +310,7 @@ export const Composer = forwardRef<ComposerHandle, {
   // suggestion plugin, then the same bookkeeping as the `/` menu.
   const loadFromMenu = (text: string, label: string) => {
     const replaced = editorRef.current?.loadTemplate(text) ?? false
-    onPreset?.(label, replaced)
+    onLoaded?.(label, replaced)
   }
 
   const onPromptEdit = (value: string) => {
@@ -326,16 +324,15 @@ export const Composer = forwardRef<ComposerHandle, {
       ref={editorRef}
       onChange={onPromptEdit}
       onSubmit={later => submit(undefined, later)}
-      {...(onPreset ? { onPreset } : {})}
+      {...(onLoaded ? { onLoaded } : {})}
       {...(addContext ? { onMentionProject: addContext, onMentionFile: addContext } : {})}
       {...(removeContext ? { onMentionRemoved: removeContext } : {})}
       projects={projects}
       files={files}
       commands={readyCommands(commands)}
-      customPresets={customPresets}
-      projectPresets={projectPresets}
-      // The `/` menu's "Save prompt…" opens the create panel under the box.
-      onNewPreset={() => setAddingPreset(true)}
+      prompts={prompts.list}
+      // The `/` menu's "Save prompt…" opens the panel that saves what the box holds.
+      {...(savePrompt ? { onSavePrompt: savePrompt } : {})}
       // A session's box takes what is typed next while a message goes: the message has left it.
       disabled={busy && !inAgent}
       {...(placeholder ? { placeholder } : {})}
@@ -363,13 +360,11 @@ export const Composer = forwardRef<ComposerHandle, {
   const commandsEl = (
     <CommandsMenu
       commands={commands}
-      customPresets={customPresets}
-      projectPresets={projectPresets}
+      prompts={prompts.list}
       busy={busy}
       onLoad={loadFromMenu}
-      onNew={() => setAddingPreset(true)}
-      onDelete={id => updatePreferences({ customPresets: customPresets.filter(p => p.id !== id) })}
-      onDeleteProject={id => saveProjectPresetList(activeProjectId, projectPresets.filter(p => p.id !== id))}
+      onNew={savePrompt}
+      onDelete={prompt => void prompts.remove(prompt)}
     />
   )
   // Where the next run starts (#1052/#1067): this machine, a host the project's modules bring, or a
@@ -550,22 +545,18 @@ export const Composer = forwardRef<ComposerHandle, {
         {notesSlot ? createPortal(notesEl, notesSlot) : <div className="absolute inset-x-0 bottom-full">{notesEl}</div>}
       </div>
 
-      {addingPreset && (
-        <PresetCreatePanel
-          currentPrompt={prompt}
-          busy={busy}
-          canSaveToProject={activeProjectId !== null}
-          onCancel={() => {
-            setAddingPreset(false)
-            editorRef.current?.focus()
-          }}
-          onSave={(preset, scope) => {
-            if (scope === 'project') saveProjectPresetList(activeProjectId, [...projectPresets, preset])
-            else updatePreferences({ customPresets: [...customPresets, preset] })
-            setAddingPreset(false)
-            editorRef.current?.focus()
-          }}
-        />
+      {savingPrompt && prompts.saver && promptsIn !== null && (
+        <ModuleSlot package={prompts.saver.package} label="Save prompt dialog">
+          <prompts.saver.View
+            projectId={promptsIn}
+            text={prompt}
+            onDone={saved => {
+              setSavingPrompt(false)
+              if (saved) prompts.reload()
+              editorRef.current?.focus()
+            }}
+          />
+        </ModuleSlot>
       )}
     </>
   )

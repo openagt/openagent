@@ -470,9 +470,9 @@ test('removing a project with its files keeps what is not OpenAgent\'s to delete
   try {
     await usedProject(runtime, folder)
     // A file of the dashboard's directory that the person committed.
-    await writeFile(join(folder, '.openagent', 'custom-presets.json'), '[]\n')
-    git('add', '-f', '.openagent/custom-presets.json')
-    git('commit', '-q', '-m', 'presets')
+    await writeFile(join(folder, '.openagent', 'notes.md'), 'notes\n')
+    git('add', '-f', '.openagent/notes.md')
+    git('commit', '-q', '-m', 'notes')
     // Work an agent left uncommitted, and the person's own settings for the runner.
     await writeFile(join(folder, '.branches', 'agent-idle', 'draft.txt'), 'draft\n')
     await writeFile(join(folder, '.agent-runner', 'config.yml'), 'personal:\n  memory: off\n')
@@ -490,7 +490,7 @@ test('removing a project with its files keeps what is not OpenAgent\'s to delete
       { path: `.branches/${DATA_BRANCH}`, reason: 'not made by branches' },
       { path: '.agent-runner/config.yml', reason: 'your settings for agent-runner' },
       { path: `branch ${DATA_BRANCH}`, reason: `another project on the list uses it: ${second}` },
-      { path: '.openagent/custom-presets.json', reason: 'git tracks it' },
+      { path: '.openagent/notes.md', reason: 'git tracks it' },
     ])
     assert.deepEqual(cleanup?.removed, ['.branches/agent-worked', '.agent-runner/runs', '.openagent/.gitignore'])
     assert.equal(await readFile(join(folder, '.branches', 'agent-idle', 'draft.txt'), 'utf8'), 'draft\n')

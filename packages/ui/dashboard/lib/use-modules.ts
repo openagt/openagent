@@ -51,7 +51,7 @@ export interface MountedModules {
   loaded: boolean
 }
 
-const VIEW_PLACES: readonly ViewPlace[] = ['app.page', 'app.overlay', 'overview.card', 'overview.line', 'chat.pane', 'chat.summary', 'chat.notice', 'settings.section', 'permissions.section', 'usage.line']
+const VIEW_PLACES: readonly ViewPlace[] = ['app.page', 'app.overlay', 'overview.card', 'overview.line', 'chat.pane', 'chat.summary', 'chat.notice', 'composer.prompts', 'settings.section', 'permissions.section', 'usage.line']
 const ACTION_PLACES: readonly ActionPlace[] = ['link.menu']
 const OPTION_PLACES: readonly OptionPlace[] = ['composer.auto', 'composer.where']
 

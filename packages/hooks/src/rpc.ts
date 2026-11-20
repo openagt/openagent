@@ -6,6 +6,7 @@
 // Whether a function only reads is its own word: a computer that lets its server only watch calls
 // the reads alone.
 import type { InboxLine } from '@openagt/agent-driver'
+import type { ProjectRef } from './project.js'
 import type { RunFound, RunQuestion } from './run.js'
 import type { Settings } from './settings.js'
 
@@ -21,6 +22,11 @@ export interface RpcComputerHost {
 export interface RpcHost extends RpcComputerHost {
   /** The project's folder: an absolute path. */
   root: string
+  /**
+   * The project the call is in, as a hook is given it: what a setting kept per project is read
+   * and saved for. None for a session with no project, whose folder is no project's.
+   */
+  project(): Promise<ProjectRef | undefined>
   /** Where one run of the project has its work, as the run's host says (`RunHost.find`); undefined when the id names no run. */
   run(agentId: string): Promise<RunFound | undefined>
   /** The commit pull request `number` of `branch` merged as, as the project's git host says. */

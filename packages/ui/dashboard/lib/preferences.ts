@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useSyncExternalStore } from 'react'
-import type { CustomPreset, Preferences } from '../../src/index.js'
-import { onPreferences, patchPreferences, onProjectPresets, saveProjectPresets } from '../rpc/preferences.js'
+import type { Preferences } from '../../src/index.js'
+import { onPreferences, patchPreferences } from '../rpc/preferences.js'
 
 // The dashboard's Global options (#410), owned by the daemon and persisted in the same
 // `openagent.json` as the project list — no more localStorage. Loaded once over its RPC
@@ -18,10 +18,6 @@ import { onPreferences, patchPreferences, onProjectPresets, saveProjectPresets }
 const EMPTY: Preferences = {}
 let cache: Preferences | null = null
 let loading: Promise<void> | null = null
-/** Each project's shared custom presets, committed in its `.openagent/custom-presets.json` (#1025). */
-const projectPresets = new Map<string, CustomPreset[]>()
-const projectPresetLoads = new Set<string>()
-const EMPTY_PRESETS: CustomPreset[] = []
 /**
  * Write bookkeeping per tier (#1148), so nothing the daemon answers can replace the value the
  * user just chose: `writes` orders one write's reply against a newer write's, and `pending`
@@ -42,7 +38,7 @@ function subscribe(listener: () => void): () => void {
 
 /**
  * The project whose own page is open (an agent's or its "New agent session" page), by id, set by the shell
- * from the route; null on every other page. Its committed presets are the ones offered.
+ * from the route; null on every other page.
  */
 export const OpenProjectContext = createContext<string | null>(null)
 
@@ -71,52 +67,6 @@ if (typeof window !== 'undefined') {
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') refreshPreferences()
   })
-}
-
-/** Load a project's shared custom presets (#1025) once, from its committed `.openagent/`. */
-function ensureProjectPresetsLoaded(projectId: string | null): void {
-  if (!projectId || projectPresets.has(projectId) || projectPresetLoads.has(projectId)) return
-  projectPresetLoads.add(projectId)
-  void onProjectPresets(projectId)
-    .then(presets => {
-      // `??=` reasoning as elsewhere: a save during the load already wrote this entry.
-      if (!projectPresets.has(projectId)) projectPresets.set(projectId, presets)
-    })
-    .catch(() => {
-      if (!projectPresets.has(projectId)) projectPresets.set(projectId, [])
-    })
-    .finally(() => {
-      projectPresetLoads.delete(projectId)
-      notify()
-    })
-}
-
-/**
- * The open project's shared custom presets (#1025): the ones committed into its `.openagent/`,
- * so everyone who clones the repo sees them. Empty with no project open, since there is no repo to
- * read them from.
- */
-export function useProjectPresets(): CustomPreset[] {
-  const projectId = useContext(OpenProjectContext)
-  const value = useSyncExternalStore(
-    subscribe,
-    () => (projectId ? (projectPresets.get(projectId) ?? EMPTY_PRESETS) : EMPTY_PRESETS),
-    () => EMPTY_PRESETS,
-  )
-  useEffect(() => ensureProjectPresetsLoaded(projectId), [projectId])
-  return value
-}
-
-/**
- * Replace the shared presets of `projectId`, the open project, write-through then persist into its `.openagent/`
- * (#1025). Best-effort like {@link updatePreferences}: a failed save is not worth surfacing over a
- * preset edit. A no-op when no project is open — there is no repo to commit them to.
- */
-export function saveProjectPresetList(projectId: string | null, next: CustomPreset[]): void {
-  if (!projectId) return
-  projectPresets.set(projectId, next)
-  void saveProjectPresets(projectId, next).catch(() => {})
-  notify()
 }
 
 /**
@@ -166,7 +116,7 @@ export function refreshPreferences(): void {
     .catch(() => {})
 }
 
-/** The open project's id, or null on a view with none — for deciding a preset can be shared (#1025). */
+/** The open project's id, or null on a view with none: the project whose commands the box offers. */
 export function useActiveProjectId(): string | null {
   return useContext(OpenProjectContext)
 }

@@ -3,7 +3,8 @@ import { test } from 'node:test'
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { projectId } from '@openagt/agent-data'
+import { projectId, sessionsHome } from '@openagt/agent-data'
+import { SESSIONS_ID } from '../project-address.js'
 import { addProject } from '../registry.js'
 import { projectQueue } from '../store/queue.js'
 import { onModules, runComputerCommand, runModuleCommand } from './modules.js'
@@ -193,7 +194,7 @@ test('a module\'s action may write what OpenAgent reads through a provider: the 
   }
 })
 
-test("a module calls its own server part's functions, in its own project; nothing else is called", async () => {
+test("a module calls its own server part's functions, in its own project, which the function is given, or in a session with no project, which gives none; nothing else is called", async () => {
   const dir = await realpath(await mkdtemp(join(tmpdir(), 'openagent-modules-read-')))
   const previous = process.env.XDG_CONFIG_HOME
   process.env.XDG_CONFIG_HOME = join(dir, 'cfg')
@@ -202,7 +203,7 @@ test("a module calls its own server part's functions, in its own project; nothin
     await install(dir, {
       reader: {
         manifest: { exports: { './dashboard': './w.js', './server': './s.mjs' } },
-        files: { 'w.js': 'export default {}', 's.mjs': `import { read } from ${JSON.stringify(import.meta.resolve('@openagt/hooks/rpc'))}\nexport const where = read(async (host, input) => ({ root: host.root, input }))\n` },
+        files: { 'w.js': 'export default {}', 's.mjs': `import { read } from ${JSON.stringify(import.meta.resolve('@openagt/hooks/rpc'))}\nexport const where = read(async (host, input) => ({ root: host.root, project: await host.project(), input }))\n` },
       },
       logs: module('logs'),
     })
@@ -211,7 +212,8 @@ test("a module calls its own server part's functions, in its own project; nothin
     await addProject(a, '2026-09-19T00:00:00.000Z')
 
     await withDistribution(dir, ['reader', 'logs', '@openagt/dashboard-files'], async () => {
-      assert.deepEqual(await callModule(projectId(a), 'reader', 'where', { path: 'x' }), { ok: true, output: { root: a, input: { path: 'x' } } })
+      assert.deepEqual(await callModule(projectId(a), 'reader', 'where', { path: 'x' }), { ok: true, output: { root: a, project: { id: projectId(a), name: 'a', dir: a }, input: { path: 'x' } } })
+      assert.deepEqual(await callModule(SESSIONS_ID, 'reader', 'where', {}), { ok: true, output: { root: sessionsHome(), project: undefined, input: {} } })
       assert.deepEqual(await callModule(projectId(a), 'logs', 'where', {}), { ok: false, error: 'logs has no server part' })
       assert.deepEqual(await callModule(projectId(a), 'nothing', 'where', {}), { ok: false, error: 'nothing is no module of this project' })
       assert.deepEqual(await callModule('nowhere-1', 'reader', 'where', {}), { ok: false, error: 'unknown project' })

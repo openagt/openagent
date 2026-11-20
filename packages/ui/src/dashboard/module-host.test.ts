@@ -10,12 +10,18 @@ const SETTINGS = memorySettings()
 
 /** A project whose runs' host knows nothing of any run: what a call about none is given. */
 const NO_RUNS: ServerHostDeps = {
+  project: async () => ({ id: 'p', name: 'p', dir: '/p' }),
   find: async () => undefined,
   questions: async () => [],
   say: async () => {
     throw new Error('unknown session')
   },
 }
+
+test('a function is given the project it is called in, as its caller reads it, and none in a session with no project', async () => {
+  assert.deepEqual(await serverHost('/p', SETTINGS, NO_RUNS).project(), { id: 'p', name: 'p', dir: '/p' })
+  assert.equal(await serverHost('/sessions', SETTINGS, { ...NO_RUNS, project: async () => undefined }).project(), undefined)
+})
 
 test("where a run has its work is its host's to say, asked by the run's id; a string that is no run's id is never asked about", async () => {
   const asked: string[] = []

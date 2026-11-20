@@ -237,7 +237,7 @@ describe('StartAgentForm (#1774)', () => {
   test('a loaded prompt is said above the box, over the page, so the box does not move', async () => {
     onCommands.mockResolvedValue({ commands: [], gitHost: true })
     render(<StartAgentForm {...props} />)
-    act(() => (composerProps.current.onPreset as (label: string, replaced: boolean) => void)('footer', false))
+    act(() => (composerProps.current.onLoaded as (label: string, replaced: boolean) => void)('footer', false))
     expect(screen.getByRole('status').textContent).toBe('footer loaded — review or edit, then Start')
     expect(screen.getByRole('status').parentElement!.dataset.testid).toBe('notes')
   })

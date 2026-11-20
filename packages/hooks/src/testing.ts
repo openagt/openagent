@@ -203,13 +203,14 @@ export function fakeRun(given: Partial<Omit<RunContext, 'store' | 'settings'>> &
 
 /**
  * The host a function of a project's module is handed, for the module's server tests: the project
- * at `/work/project`, settings in memory, and no run, merge or question known, and every line said
- * refused, unless `given` says how it answers.
+ * `project` at `/work/project`, settings in memory, and no run, merge or question known, and every
+ * line said refused, unless `given` says how it answers.
  */
 export function rpcHost(given: Partial<RpcHost> = {}): RpcHost {
   return {
     settings: memorySettings(),
     root: '/work/project',
+    project: async () => ({ id: 'project', name: 'project', dir: '/work/project' }),
     run: async () => undefined,
     mergeCommit: async () => ({ pending: false }),
     questions: async () => [],

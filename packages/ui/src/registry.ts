@@ -106,22 +106,6 @@ export function isPersonName(value: unknown): value is string {
 /** The cap on saved machines and on a name's length, so a hand-edited file cannot bloat. */
 const MACHINE_LIMITS = { count: 50, label: 60 } as const
 
-/**
- * A user-defined preset (#626): a named prompt the user saved to re-run their own high-signal
- * prompts, listed as a saved prompt in the launcher's Commands menu beside the project's commands.
- * Just data — the label is the menu item, the prompt is loaded verbatim into the editor. `id` is
- * stable so edits/deletes address one.
- */
-export interface CustomPreset {
-  id: string
-  label: string
-  prompt: string
-}
-
-/** The cap on saved custom presets, and the per-field lengths — enough for real prompts, bounded
- * so a hand-edited or hostile registry can't bloat the home file. */
-const CUSTOM_PRESET_LIMITS = { count: 30, label: 80, prompt: 20_000 } as const
-
 /** The cap on the projects `startFrom` lists, for the same reason. */
 const START_FROM_LIMIT = 200
 
@@ -225,8 +209,6 @@ export interface Preferences {
    * claude.ai session on disk, neither of which should happen unasked. Needs {@link bridge}.
    */
   bridgeBrowser?: boolean
-  /** User-defined presets (#626): the user's own saved prompts, shown in the Commands menu beside the project's commands. */
-  customPresets?: CustomPreset[]
   /**
    * Whether the Overview's Onboarding checklist has been dismissed (#958). Absent = show it,
    * so a fresh install is walked through setup; its ✕ sets it, and a switch in Settings ›
@@ -419,8 +401,6 @@ function sanitizePreferences(value: unknown): Preferences {
   if (isFont(input['font']) && input['font'] !== 'ibm-plex-sans') preferences.font = input['font']
   if (isCodeFont(input['codeFont']) && input['codeFont'] !== 'jetbrains-mono') preferences.codeFont = input['codeFont']
   if (isDocumentFont(input['documentFont']) && input['documentFont'] !== 'source-serif-4') preferences.documentFont = input['documentFont']
-  const customPresets = sanitizeCustomPresets(input['customPresets'])
-  if (customPresets.length) preferences.customPresets = customPresets
   // `recentsSort` is constrained to the known set; the default, `created`, is stored as nothing.
   if (input['recentsSort'] === 'updated' || input['recentsSort'] === 'name') preferences.recentsSort = input['recentsSort']
   const overviewLayouts = sanitizeOverviewLayouts(input['overviewLayouts'])
@@ -441,30 +421,6 @@ function sanitizeStartFrom(value: unknown): Record<string, StartFromPick> {
     return id !== '' && pick ? [[id, pick] as const] : []
   })
   return Object.fromEntries(picks.slice(0, START_FROM_LIMIT))
-}
-
-/**
- * Keep only well-formed custom presets (#626): each needs a non-empty id, label, and prompt;
- * label/prompt are trimmed and length-capped, the list capped at {@link CUSTOM_PRESET_LIMITS.count},
- * and duplicate ids dropped. A malformed entry is skipped, not thrown — a bad registry never breaks the read.
- */
-export function sanitizeCustomPresets(value: unknown): CustomPreset[] {
-  if (!Array.isArray(value)) return []
-  const out: CustomPreset[] = []
-  const seen = new Set<string>()
-  for (const raw of value) {
-    if (out.length >= CUSTOM_PRESET_LIMITS.count) break
-    if (typeof raw !== 'object' || raw === null) continue
-    const { id, label, prompt } = raw as Record<string, unknown>
-    if (typeof id !== 'string' || typeof label !== 'string' || typeof prompt !== 'string') continue
-    const trimmedId = id.trim()
-    const trimmedLabel = label.trim().slice(0, CUSTOM_PRESET_LIMITS.label)
-    const trimmedPrompt = prompt.trim().slice(0, CUSTOM_PRESET_LIMITS.prompt)
-    if (!trimmedId || !trimmedLabel || !trimmedPrompt || seen.has(trimmedId)) continue
-    seen.add(trimmedId)
-    out.push({ id: trimmedId, label: trimmedLabel, prompt: trimmedPrompt })
-  }
-  return out
 }
 
 /** Whether a value reads as a computer's own name: the letters a host name has, at a host name's length. A page shows it. */

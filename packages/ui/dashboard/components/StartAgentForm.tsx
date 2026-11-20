@@ -363,7 +363,7 @@ export function StartAgentForm({
           // Editing after a failed start: the red error described the old attempt, drop it (#948).
           if (error) reset()
         }}
-        onPreset={loaded}
+        onLoaded={loaded}
         busy={busy}
         submitLabel="Start agent"
         submitBusyLabel="Starting…"

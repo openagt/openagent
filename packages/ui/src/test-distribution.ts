@@ -19,6 +19,7 @@ export const DASHBOARD_PACKAGES: DashboardDistribution = [
   { package: '@openagt/skills' },
   { package: '@openagt/dashboard-changes' },
   { package: '@openagt/dashboard-files' },
+  { package: '@openagt/saved-prompts' },
   { package: '@openagt/ui-renderer-markdown', for: 'computer' },
   { package: '@openagt/ui-card-waiting', for: 'computer' },
   { package: '@openagt/user-info', for: 'computer' },

@@ -15,6 +15,4 @@ export type { EditorInfo } from '../../src/dashboard/open-in-app.js'
 export const onPreferences = rpc<typeof impl.onPreferences>('onPreferences')
 export const savePreferences = rpc<typeof impl.savePreferences>('savePreferences')
 export const patchPreferences = rpc<typeof impl.patchPreferences>('patchPreferences')
-export const onProjectPresets = rpc<typeof impl.onProjectPresets>('onProjectPresets')
-export const saveProjectPresets = rpc<typeof impl.saveProjectPresets>('saveProjectPresets')
 export const onEditors = rpc<typeof impl.onEditors>('onEditors')

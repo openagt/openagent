@@ -8,6 +8,8 @@ import { hoverTooltip, openMenu } from '../test-utils.js'
 import { Laptop } from 'lucide-react'
 import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
 import { ModulesContext, mountedOf, type MountedView } from '../lib/use-modules.js'
+import { forgetRemembered } from '../lib/use-async.js'
+import type { UiPrompt, UiPromptSaveProps } from '../module/index.js'
 
 // Preferences are the shared daemon store; stub them so the composer reads a fixed value.
 const updatePreferences = vi.hoisted(() => vi.fn())
@@ -16,9 +18,6 @@ vi.mock('../lib/preferences.js', () => ({
   usePreferences: () => prefs,
   usePreferencesLoaded: () => true,
   updatePreferences,
-  // #1025: the project's saved prompts; none here.
-  useProjectPresets: () => [],
-  saveProjectPresetList: vi.fn(),
   useActiveProjectId: () => 'p1',
 }))
 // The editor picker (#727) detects installed editors over an RPC; stub it to none in the test.
@@ -243,16 +242,87 @@ describe('Composer (#721)', () => {
   })
 
   test('a command picked from the menu loads as its slash line, and what is sent is that line plus the argument typed after it', async () => {
-    const onPreset = vi.fn()
-    const { onSubmit } = renderComposer({ onPreset })
+    const onLoaded = vi.fn()
+    const { onSubmit } = renderComposer({ onLoaded })
     await waitFor(() => expect(onCommands).toHaveBeenCalledWith('p1'))
     fireEvent.click(screen.getByRole('button', { name: 'Commands' }))
     fireEvent.click(await screen.findByText('/work-queue'))
     expect(editorText()).toBe('/work-queue ')
-    expect(onPreset).toHaveBeenCalledWith('/work-queue', false)
+    expect(onLoaded).toHaveBeenCalledWith('/work-queue', false)
     fireEvent.change(screen.getByLabelText('prompt'), { target: { value: '/work-queue now' } })
     fireEvent.click(screen.getByRole('button', { name: 'Send' }))
     expect(onSubmit).toHaveBeenCalledWith('/work-queue now', { later: false })
+  })
+
+  /** A module offering saved prompts, as `offered` holds them: deleting one takes it out; its panel saves at a press. */
+  function promptsModule(offered: UiPrompt[], of: Partial<MountedView<'composer.prompts'>> = {}) {
+    const list = vi.fn(async () => offered)
+    const remove = vi.fn(async (_host: unknown, _projectId: string, id: string) => {
+      offered = offered.filter(prompt => prompt.id !== id)
+      return { ok: true as const }
+    })
+    const panels: UiPromptSaveProps[] = []
+    const SavePanel = (props: UiPromptSaveProps) => {
+      panels.push(props)
+      return (
+        <button type="button" onClick={() => props.onDone(true)}>
+          module-save
+        </button>
+      )
+    }
+    const entry: MountedView<'composer.prompts'> = { place: 'composer.prompts', id: 'saved-prompts', list, remove, View: SavePanel, package: '@openagt/saved-prompts', projects: ['p1'], ...of }
+    return { entry, list, remove, panels }
+  }
+
+  test("the saved prompts the project's module offers are in the Commands menu under whose they are: one loads, one is deleted through the module, and Save prompt opens the module's panel with what the box holds (#2394)", async () => {
+    forgetRemembered()
+    const { entry, list, remove, panels } = promptsModule([
+      { id: 'person:a', label: 'Deep review', text: 'Audit this PR.', group: 'Your saved prompts' },
+      { id: 'project:b', label: 'Release notes', text: 'Write the notes.', group: 'Project saved prompts' },
+    ])
+    const onLoaded = vi.fn()
+    render(
+      <ModulesContext.Provider value={mountedOf({ views: { 'composer.prompts': [entry] } })}>
+        <Composer files={[]} onSubmit={vi.fn()} onLoaded={onLoaded} busy={false} submitLabel="Send" submitBusyLabel="Sending…" />
+      </ModulesContext.Provider>,
+    )
+    await waitFor(() => expect(list).toHaveBeenCalledWith(expect.objectContaining({ package: '@openagt/saved-prompts' }), 'p1'))
+    await openMenu(screen.getByRole('button', { name: 'Commands' }))
+    expect(await screen.findByText('Project saved prompts')).toBeTruthy()
+    fireEvent.click(screen.getByText('Deep review'))
+    expect(editorText()).toBe('Audit this PR.')
+    expect(onLoaded).toHaveBeenCalledWith('Deep review', false)
+
+    await openMenu(screen.getByRole('button', { name: 'Commands' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete saved prompt Release notes' }))
+    await waitFor(() => expect(remove).toHaveBeenCalledWith(expect.objectContaining({ package: '@openagt/saved-prompts' }), 'p1', 'project:b'))
+    await waitFor(() => expect(screen.queryByText('Release notes')).toBeNull())
+
+    await openMenu(screen.getByRole('button', { name: 'Commands' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: /Save prompt/ }))
+    expect(panels.at(-1)).toMatchObject({ projectId: 'p1', text: 'Audit this PR.' })
+    const reads = list.mock.calls.length
+    fireEvent.click(screen.getByRole('button', { name: 'module-save' }))
+    await waitFor(() => expect(list.mock.calls.length).toBeGreaterThan(reads))
+    expect(screen.queryByRole('button', { name: 'module-save' })).toBeNull()
+  })
+
+  test("with no module offering saved prompts, the Commands menu has none and no way to save one; a project only another computer has offers the person's, as a session with no project (#2394)", async () => {
+    forgetRemembered()
+    render(<Composer files={[]} onSubmit={vi.fn()} busy={false} submitLabel="Send" submitBusyLabel="Sending…" />)
+    await openMenu(screen.getByRole('button', { name: 'Commands' }))
+    expect(await screen.findByText('/work-queue')).toBeTruthy()
+    expect(screen.queryByRole('menuitem', { name: /Save prompt/ })).toBeNull()
+    cleanup()
+
+    const { entry, list } = promptsModule([{ id: 'person:a', label: 'Deep review', text: 'Audit this PR.', group: 'Your saved prompts' }], { sessions: true })
+    render(
+      <ModulesContext.Provider value={mountedOf({ views: { 'composer.prompts': [entry] } })}>
+        <Composer files={[]} onSubmit={vi.fn()} busy={false} submitLabel="Send" submitBusyLabel="Sending…" home="studio" />
+      </ModulesContext.Provider>,
+    )
+    await waitFor(() => expect(list).toHaveBeenCalledWith(expect.anything(), 'session'))
+    expect(list).not.toHaveBeenCalledWith(expect.anything(), 'p1')
   })
 
   // #1139: a draft carried across a navigation lands in sessionStorage; the launcher seeds it into
@@ -293,20 +363,20 @@ describe('Composer (#721)', () => {
   })
 
   test('a draft handed over to a box that kept one is loaded over it, said as a load over a draft, and the kept one is under it for an undo', () => {
-    const onPreset = vi.fn()
+    const onLoaded = vi.fn()
     localStorage.setItem('oa.draft:launcher:p1', 'my own long draft')
     sessionStorage.setItem('oa.pending-draft', 'carried from a ticket')
-    renderComposer({ draftKey: 'launcher:p1', onPreset })
+    renderComposer({ draftKey: 'launcher:p1', onLoaded })
     expect(editorText()).toBe('carried from a ticket')
     expect(screen.getByLabelText('prompt').getAttribute('data-replaced')).toBe('my own long draft')
-    expect(onPreset).toHaveBeenCalledWith('The prompt', true)
+    expect(onLoaded).toHaveBeenCalledWith('The prompt', true)
     cleanup()
-    onPreset.mockReset()
+    onLoaded.mockReset()
     // The same words handed over again replace nothing.
     sessionStorage.setItem('oa.pending-draft', 'carried from a ticket')
-    renderComposer({ draftKey: 'launcher:p1', onPreset })
+    renderComposer({ draftKey: 'launcher:p1', onLoaded })
     expect(screen.getByLabelText('prompt').getAttribute('data-replaced')).toBeNull()
-    expect(onPreset).not.toHaveBeenCalled()
+    expect(onLoaded).not.toHaveBeenCalled()
   })
 
   test('on a phone a kept draft comes back without the caret, and one a press handed over takes it; elsewhere a kept draft takes it', () => {

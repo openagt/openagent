@@ -24,7 +24,7 @@ test('a file too long for the list gives up its folders before its name, and its
 })
 
 test('a row that is no file is cut at its label’s end, with its hint whole', () => {
-  list([{ id: 'new-preset', label: 'Save prompt…', hint: 'save the current prompt', group: 'Saved prompts' }])
+  list([{ id: 'save-prompt', label: 'Save prompt…', hint: 'save the current prompt', group: 'Saved prompts' }])
   const row = screen.getByRole('option')
   const [label, hint] = [...row.querySelectorAll('span')]
   expect(label!.textContent).toBe('Save prompt…')

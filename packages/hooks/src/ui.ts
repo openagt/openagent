@@ -115,6 +115,28 @@ export interface UiRunNoticeProps extends UiRunProps {
   host?: string
 }
 
+/** A prompt a person saved, as the message box offers it: its menus list it, and a pick loads its text into the box. */
+export interface UiPrompt {
+  /** Which prompt this is among the module's own: what deleting it names. */
+  id: string
+  /** Its name, as the menus list it. */
+  label: string
+  /** What it loads into the box, word for word. */
+  text: string
+  /** Whose it is, as the menus group it: "Your saved prompts". */
+  group: string
+}
+
+/** What the panel that saves a prompt is given: the box's project, what the box holds, and how it says it is done. */
+export interface UiPromptSaveProps {
+  /** The project the box is in: where a prompt saved as the project's is kept. */
+  projectId: string
+  /** What the box holds as the panel opens: what is saved, unless the person changes it. */
+  text: string
+  /** The panel is done, `saved` when it saved a prompt: the box reads its prompts again. */
+  onDone(saved: boolean): void
+}
+
 /** What a part of the Permissions page is given. */
 export interface UiPermissionsProps {
   /** The shell's line under one account's row, for a part that lists a coding agent's accounts: where the account works, on the person's devices. */
@@ -210,6 +232,22 @@ export interface ViewPlaces {
   'chat.summary': { entry: { id: string }; props: UiRunProps }
   /** A strip above a run's chat, with a word on the run: a host's, on a run it runs, say where the run is and when its news comes. */
   'chat.notice': { entry: { id: string }; props: UiRunNoticeProps }
+  /**
+   * Prompts a person saved, which the message box offers in its `/` menu and its Commands menu,
+   * each loading its text into the box. The view is the panel that saves what the box holds as
+   * one: the first module's, which the menus' "Save prompt…" opens.
+   */
+  'composer.prompts': {
+    entry: {
+      /** Which entry this is among the module's own, for the shell's key. */
+      id: string
+      /** The prompts the box offers in the project `projectId`, in the order the menus list them. */
+      list(host: UiHost, projectId: string): Promise<UiPrompt[]>
+      /** Delete one of them, by its id. */
+      remove(host: UiHost, projectId: string, id: string): Promise<UiActionResult>
+    }
+    props: UiPromptSaveProps
+  }
   /** An entry in Settings: the module's own settings. */
   'settings.section': {
     entry: {

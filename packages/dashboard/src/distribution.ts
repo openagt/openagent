@@ -28,6 +28,8 @@ const DISTRIBUTION: DashboardDistribution = [
   // The Changes and Files panes.
   { package: '@openagt/dashboard-changes' },
   { package: '@openagt/dashboard-files' },
+  // The prompts a person saved, theirs or a project's, which the message box loads.
+  { package: '@openagt/saved-prompts' },
   // How a text in markdown looks, wherever the dashboard shows one.
   { package: '@openagt/ui-renderer-markdown', for: 'computer' },
   // The Overview's Human Queue: what waits on the person, in every project.

@@ -1,5 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react'
-import type { ProjectSummary, CustomPreset } from '../../src/index.js'
+import type { ProjectSummary } from '../../src/index.js'
 import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import { Markdown } from 'tiptap-markdown'
@@ -11,6 +11,7 @@ import type { SuggestionItem } from './prompt-editor/SuggestionList.js'
 // The same entry the Commands button renders: the `/` menu is the other face of that one list,
 // so it reads the shape rather than restating it structurally.
 import type { CommandEntry } from './CommandsMenu.js'
+import type { OfferedPrompt } from '../lib/use-prompts.js'
 import { pressed } from '../lib/shortcut.js'
 
 // The rich prompt editor (#470): a Tiptap surface that replaces the plain textarea. `/` opens
@@ -42,7 +43,7 @@ interface PromptEditorProps {
   onSubmit: (later?: boolean) => void
   /** A command or a saved prompt picked from the `/` menu. `replaced` says whether a typed draft
    *  was overwritten — undo brings it back, and the form's note says so. */
-  onPreset?: (label: string, replaced: boolean) => void
+  onLoaded?: (label: string, replaced: boolean) => void
   /** A project referenced via `@`, so the form can add its path to the Context. */
   onMentionProject?: (path: string) => void
   /** A file referenced via `#`, so the form can add its repo-relative path to the Context. */
@@ -55,13 +56,11 @@ interface PromptEditorProps {
   files?: string[]
   /** The project's commands: each loads as `/<name> `, for the person to add an argument or send. */
   commands: CommandEntry[]
-  /** The user's saved prompts (#626), loaded verbatim from the `/` menu (#722). */
-  customPresets?: CustomPreset[]
-  /** The open project's shared saved prompts (#1025), committed in its repo; loaded verbatim like the user's. */
-  projectPresets?: CustomPreset[]
-  /** Open the create panel from the `/` menu's "Save prompt…" (#722). Omit where there is no panel,
-   *  which also drops the item. */
-  onNewPreset?: () => void
+  /** The saved prompts the box offers (#626, #1025, #2394), each loaded verbatim from the `/` menu (#722). */
+  prompts?: readonly OfferedPrompt[]
+  /** Open the panel that saves what the box holds, from the `/` menu's "Save prompt…" (#722). Omit
+   *  where there is no panel, which also drops the item. */
+  onSavePrompt?: () => void
   disabled?: boolean
   placeholder?: string
   /** What a screen reader calls the box: the launcher's takes a prompt, a session's a message. */
@@ -106,8 +105,16 @@ function applyTemplate(editor: Editor, text: string, focus = true): void {
   if (/\s$/.test(text)) editor.commands.insertContent({ type: 'text', text: ' ' })
 }
 
+/** The `/` menu's item that opens the panel saving what the box holds. */
+const SAVE_PROMPT = 'save-prompt'
+
+/** A saved prompt's item in the `/` menu: the module that offers it, and its id there. */
+function promptItemId(prompt: OfferedPrompt): string {
+  return `prompt:${prompt.package}:${prompt.id}`
+}
+
 export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(function PromptEditor(
-  { onChange, onSubmit, onPreset, onMentionProject, onMentionFile, onMentionRemoved, projects, files = [], commands, customPresets = [], projectPresets = [], onNewPreset, disabled = false, placeholder = 'Describe what to do…', label = 'Prompt', initialText, initialFocus = true, replacedText, autoFocus = false },
+  { onChange, onSubmit, onLoaded, onMentionProject, onMentionFile, onMentionRemoved, projects, files = [], commands, prompts = [], onSavePrompt, disabled = false, placeholder = 'Describe what to do…', label = 'Prompt', initialText, initialFocus = true, replacedText, autoFocus = false },
   ref,
 ) {
   const [isEmpty, setIsEmpty] = useState(true)
@@ -125,10 +132,9 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
   const projectsRef = useRef(projects)
   const filesRef = useRef(files)
   const commandsRef = useRef(commands)
-  const customPresetsRef = useRef(customPresets)
-  const projectPresetsRef = useRef(projectPresets)
-  const onNewPresetRef = useRef(onNewPreset)
-  const onPresetRef = useRef(onPreset)
+  const promptsRef = useRef(prompts)
+  const onSavePromptRef = useRef(onSavePrompt)
+  const onLoadedRef = useRef(onLoaded)
   const onMentionProjectRef = useRef(onMentionProject)
   const onMentionFileRef = useRef(onMentionFile)
   const onMentionRemovedRef = useRef(onMentionRemoved)
@@ -138,10 +144,9 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
     projectsRef.current = projects
     filesRef.current = files
     commandsRef.current = commands
-    customPresetsRef.current = customPresets
-    projectPresetsRef.current = projectPresets
-    onNewPresetRef.current = onNewPreset
-    onPresetRef.current = onPreset
+    promptsRef.current = prompts
+    onSavePromptRef.current = onSavePrompt
+    onLoadedRef.current = onLoaded
     onMentionProjectRef.current = onMentionProject
     onMentionFileRef.current = onMentionFile
     onMentionRemovedRef.current = onMentionRemoved
@@ -190,13 +195,13 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
   }
 
   // What a `/` menu item loads, and what the form's note calls it: a command as `/<name> `, for the
-  // person to add an argument or send; a saved prompt, the user's own (#626) or the project's
+  // person to add an argument or send; a saved prompt, the person's own (#626) or the project's
   // (#1025), verbatim.
   const loadedBy = (id: string): { label: string; text: string } | undefined => {
     const command = commandsRef.current.find(c => `command:${c.name}` === id)
     if (command) return { label: `/${command.name}`, text: `/${command.name} ` }
-    const preset = customPresetsRef.current.find(p => `custom-preset:${p.id}` === id) ?? projectPresetsRef.current.find(p => `project-preset:${p.id}` === id)
-    return preset && { label: preset.label, text: preset.prompt }
+    const prompt = promptsRef.current.find(p => promptItemId(p) === id)
+    return prompt && { label: prompt.label, text: prompt.text }
   }
 
   const editor = useEditor({
@@ -221,27 +226,22 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
           const commandItems: SuggestionItem[] = commandsRef.current
             .filter(c => c.name.includes(q))
             .map(c => ({ id: `command:${c.name}`, label: `/${c.name}`, group: 'Commands', ...(c.description ? { title: c.description } : {}) }))
-          // The user's saved prompts (#626) load verbatim.
-          const customItems: SuggestionItem[] = customPresetsRef.current
+          // The saved prompts (#626, #1025) load verbatim, each hinted with whose it is.
+          const promptItems: SuggestionItem[] = promptsRef.current
             .filter(p => p.label.toLowerCase().includes(q))
-            .map(p => ({ id: `custom-preset:${p.id}`, label: p.label, hint: 'saved prompt', group: 'Saved prompts' }))
-          // The open project's shared saved prompts (#1025): same verbatim load, tagged so the hint tells
-          // them apart from your own.
-          const projectItems: SuggestionItem[] = projectPresetsRef.current
-            .filter(p => p.label.toLowerCase().includes(q))
-            .map(p => ({ id: `project-preset:${p.id}`, label: p.label, hint: 'project saved prompt', group: 'Saved prompts' }))
-          // "Save prompt…" to capture the current prompt (#722), only where the create panel exists.
-          const newPresetItem: SuggestionItem[] =
-            onNewPresetRef.current && 'save prompt'.includes(q)
-              ? [{ id: 'new-preset', label: 'Save prompt…', hint: 'save the current prompt', group: 'Saved prompts' }]
+            .map(p => ({ id: promptItemId(p), label: p.label, hint: p.group, group: 'Saved prompts' }))
+          // "Save prompt…" to capture the current prompt (#722), only where the panel that saves it exists.
+          const saveItem: SuggestionItem[] =
+            onSavePromptRef.current && 'save prompt'.includes(q)
+              ? [{ id: SAVE_PROMPT, label: 'Save prompt…', hint: 'save the current prompt', group: 'Saved prompts' }]
               : []
-          return [...commandItems, ...customItems, ...projectItems, ...newPresetItem]
+          return [...commandItems, ...promptItems, ...saveItem]
         },
         onSelect: (item, { editor: ed, range }) => {
-          if (item.id === 'new-preset') {
-            // Drop the `/query` trigger so the create panel captures the real prompt, not the slash.
+          if (item.id === SAVE_PROMPT) {
+            // Drop the `/query` trigger so the panel captures the real prompt, not the slash.
             ed.chain().focus().deleteRange(range).run()
-            onNewPresetRef.current?.()
+            onSavePromptRef.current?.()
             return
           }
           const loaded = loadedBy(item.id)
@@ -249,7 +249,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
           // Drop the `/query` trigger first so it does not count as a replaced draft.
           ed.chain().focus().deleteRange(range).run()
           const replaced = loadTemplateInto(ed, loaded.text)
-          onPresetRef.current?.(loaded.label, replaced)
+          onLoadedRef.current?.(loaded.label, replaced)
         },
       }),
       // `@` — references: the registered projects, by name.
