@@ -34,6 +34,9 @@ test('the port rule touches the address alone, not all of 127.0.0.1', () => {
   assert.equal(portRule(), `rdr pass on lo0 inet proto tcp from any to ${LOOPBACK_ADDRESS} port 443 -> 127.0.0.1 port ${SECURE_PORT}\n`)
 })
 
-test('the administrator scripts are whole shell scripts', () => {
-  for (const script of [adminInstallScript(), adminUninstallScript()]) execFileSync('/bin/sh', ['-n', '-c', script])
+test('the administrator scripts are whole shell scripts, the openagent command among what they put and take off', () => {
+  const install = adminInstallScript({ node: '/usr/local/bin/node', dashboard: "/Users/o'neil/Library/Application Support/OpenAgent/node_modules/@openagt/dashboard/dist/bin.js" })
+  for (const script of [install, adminUninstallScript()]) execFileSync('/bin/sh', ['-n', '-c', script])
+  assert.match(install, /^mv -f '\/usr\/local\/bin\/openagent.openagent' '\/usr\/local\/bin\/openagent'$/m)
+  assert.match(adminUninstallScript(), /then rm -f '\/usr\/local\/bin\/openagent'; fi/)
 })

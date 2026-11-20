@@ -21,7 +21,8 @@ const defaultIO: CliIO = {
   err: line => process.stderr.write(line + '\n'),
 }
 
-const HELP = `OpenAgent — autonomous AI programming, with a coding agent (Claude Code or Codex).
+/** The command's help; with `--uninstall` where the distribution takes OpenAgent off the computer. */
+const helpOf = (uninstall: boolean): string => `OpenAgent — autonomous AI programming, with a coding agent (Claude Code or Codex).
 
 ${helpRows([
   'Usage:',
@@ -30,6 +31,7 @@ ${helpRows([
   ['--port <n>', 'Dashboard port (default: 4200).'],
   ['-h, --help', 'Show this help.'],
   ['-v, --version', 'Print the version.'],
+  ...(uninstall ? [['--uninstall', 'Take OpenAgent off this computer: everything `npx @openagt/install` put on it.'] as [string, string]] : []),
 ])}
 
 ${helpText("The dashboard listens on this computer only. A phone, or another computer's OpenAgent, gets in from Settings › Devices.")}
@@ -94,6 +96,11 @@ export interface CliOptions {
    * The package above it is the one OpenAgent is installed as, whose version it says.
    */
   distribution: string
+  /**
+   * What `openagent --uninstall` runs, handed the words typed with it: the distribution's install,
+   * taking OpenAgent off this computer (#2394, decision 39). Absent, the command has no `--uninstall`.
+   */
+  uninstall?: (argv: string[]) => Promise<number>
   io?: CliIO
 }
 
@@ -106,13 +113,15 @@ export async function runCli(argv: string[], opts: CliOptions): Promise<number> 
   // Set in this process's own environment before anything: everything the dashboard starts
   // inherits it, and it says which package OpenAgent is, and so its version.
   handDownDistribution(process.env, opts.distribution)
+  const at = argv.indexOf('--uninstall')
+  if (at !== -1 && opts.uninstall) return opts.uninstall(argv.filter((_, i) => i !== at))
   const args = parseArgs(argv)
   if (args.error) {
     io.err(usageError('openagent', args.error))
     return 2
   }
   if (args.help) {
-    io.out(HELP)
+    io.out(helpOf(opts.uninstall !== undefined))
     return 0
   }
   if (args.version) {

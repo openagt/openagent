@@ -21,7 +21,7 @@ Install OpenAgent, on macOS or Linux:
 npx @openagt/install
 ```
 
-From then on, https://openagent.build opens your dashboard, on this computer. It starts when you log in. `npx @openagt/uninstall` takes it off again.
+From then on, https://openagent.build opens your dashboard, on this computer. It starts when you log in, and `openagent` runs the same copy in a terminal. `openagent --uninstall` takes it off again.
 
 Or try it once, with nothing installed, in your project's folder:
 

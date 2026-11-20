@@ -8,10 +8,10 @@ checkout of the repo, does its work, and hands the result off as a pull request.
 checkout is never touched.
 
 ```bash
-npm i -g @openagt/dashboard
+npx @openagt/install   # starts at login, at https://openagent.build, and puts `openagent` on the PATH
 
 cd ~/code/my-repo
-openagent          # serves the dashboard at http://127.0.0.1:4200
+openagent              # adds the repository to the dashboard's projects, and opens its page
 ```
 
 This package is OpenAgent as it ships: the packages it runs, listed in `src/distribution.ts` with
@@ -32,7 +32,7 @@ are on as their repositories stand: your folder's sync with a repository of your
 agent data**. A run gets the skills of the core modules (github's on a GitHub project) and of the
 plugins on in its project, linked into its checkout; nothing is written into the project.
 
-## The command is three options and no verbs
+## The command is four options and no verbs
 
 ```
 openagent              Serve the dashboard in the foreground. Ctrl+C closes it; the
@@ -41,6 +41,8 @@ openagent              Serve the dashboard in the foreground. Ctrl+C closes it; 
   --port <n>           Dashboard port (default: 4200).
   -h, --help           Show this help.
   -v, --version        Print the version.
+  --uninstall          Take OpenAgent off this computer: everything `npx @openagt/install`
+                       put on it, this command too.
 ```
 
 Everything else is the dashboard. It is the product's user interface, and where an agent's

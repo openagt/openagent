@@ -54,6 +54,12 @@ test('every package the distribution lists is one of its own dependencies, insta
   }
 })
 
+test("openagent --uninstall is the install's: its help says what it takes off, and touches nothing", async () => {
+  const { stdout } = await promisify(execFile)(process.execPath, [fileURLToPath(new URL('./bin.js', import.meta.url)), '--uninstall', '--help'])
+  assert.match(stdout, /^Usage: openagent --uninstall$/m)
+  assert.match(stdout, /the `openagent`\s+command too/)
+})
+
 test("openagent is the dashboard's command serving this distribution: the version it says is this package's", async () => {
   const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8')) as { version: string }
   const { stdout } = await promisify(execFile)(process.execPath, [fileURLToPath(new URL('./bin.js', import.meta.url)), '--version'])

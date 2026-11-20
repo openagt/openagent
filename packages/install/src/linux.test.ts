@@ -36,14 +36,17 @@ test('the port rule touches the address alone, in a table of its own, and loads 
   assert.match(unit, /^WantedBy=multi-user.target nftables.service$/m)
 })
 
-test('the administrator scripts are whole shell scripts, with the system store where the computer has one', () => {
+test('the administrator scripts are whole shell scripts, with the system store where the computer has one, and the openagent command', () => {
   const store = SYSTEM_STORE
-  for (const script of [adminInstallScript("/home/o'neil/cert.pem", store), adminInstallScript('/c.pem', undefined), adminUninstallScript(store), adminUninstallScript(undefined)]) {
+  const launcher = { node: '/home/a/.nvm/node', dashboard: '/home/a/.local/share/openagent/node_modules/@openagt/dashboard/dist/bin.js' }
+  for (const script of [adminInstallScript("/home/o'neil/cert.pem", store, launcher), adminInstallScript('/c.pem', undefined, launcher), adminUninstallScript(store), adminUninstallScript(undefined)]) {
     execFileSync('/bin/sh', ['-n', '-c', script])
   }
-  assert.match(adminInstallScript("/home/o'neil/cert.pem", store), /^install -m 644 '\/home\/o'\\''neil\/cert.pem' '\/usr\/local\/share\/ca-certificates\/openagent.build.crt'\nupdate-ca-certificates >\/dev\/null 2>&1$/m)
-  assert.doesNotMatch(adminInstallScript('/c.pem', undefined), /ca-certificates|update-ca/)
+  assert.match(adminInstallScript("/home/o'neil/cert.pem", store, launcher), /^install -m 644 '\/home\/o'\\''neil\/cert.pem' '\/usr\/local\/share\/ca-certificates\/openagent.build.crt'\nupdate-ca-certificates >\/dev\/null 2>&1$/m)
+  assert.doesNotMatch(adminInstallScript('/c.pem', undefined, launcher), /ca-certificates|update-ca/)
   assert.match(adminUninstallScript(store), /rm -f '\/usr\/local\/share\/ca-certificates\/openagent.build.crt'; update-ca-certificates/)
+  assert.match(adminInstallScript('/c.pem', undefined, launcher), /^mv -f '\/usr\/local\/bin\/openagent.openagent' '\/usr\/local\/bin\/openagent'$/m)
+  assert.match(adminUninstallScript(undefined), /then rm -f '\/usr\/local\/bin\/openagent'; fi/)
 })
 
 test('apt-get reads the list of packages when it knows none yet; the others install at once', () => {

@@ -63,6 +63,22 @@ test("runCli --version prints the version of the distribution's package (#312)",
   }
 })
 
+test("--uninstall hands the words typed with it to the distribution's install, and the help names it only where there is one", async () => {
+  const handed: string[][] = []
+  const uninstall = async (argv: string[]): Promise<number> => (handed.push(argv), 7)
+  const { io, out } = capture()
+  assert.equal(await runCli(['--uninstall'], { distribution: DISTRIBUTION, io, uninstall }), 7)
+  assert.equal(await runCli(['--port', '1', '--uninstall', '--help'], { distribution: DISTRIBUTION, io, uninstall }), 7)
+  assert.deepEqual(handed, [[], ['--port', '1', '--help']])
+  assert.equal(await runCli(['--help'], { distribution: DISTRIBUTION, io, uninstall }), 0)
+  assert.match(out.join('\n'), /--uninstall +Take OpenAgent off this computer/)
+  const without = capture()
+  assert.equal(await cli(['--help'], without.io), 0)
+  assert.doesNotMatch(without.out.join('\n'), /--uninstall/)
+  assert.equal(await cli(['--uninstall'], without.io), 2, 'a distribution with no install has no --uninstall')
+  assert.match(without.err.join('\n'), /unknown option/)
+})
+
 test('parseArgs flags unknown options and bad values', () => {
   assert.match(parseArgs(['--nope']).error!, /unknown option/)
   assert.match(parseArgs(['--port', '-1']).error!, /--port/)

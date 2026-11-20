@@ -4,6 +4,7 @@ import { homedir, release } from 'node:os'
 import { dirname, join } from 'node:path'
 import { SECURE_PORT } from '@openagt/ui/secure-address'
 import { ADDRESS, LOOPBACK_ADDRESS, addHostsLine, hasHostsLine, quoted, removeHostsLine } from './address.js'
+import { addLauncherLines, hasLauncher, removeLauncherLine, type Launcher } from './launcher.js'
 import type { Platform } from './platform.js'
 import { asAdmin, installed, run, succeeds } from './run.js'
 
@@ -136,8 +137,8 @@ WantedBy=multi-user.target nftables.service
 `
 }
 
-/** The install's script as the administrator: the hosts line, the port rule's service, started now, and the certificate in the system's store. */
-export function adminInstallScript(certFile: string, store: SystemStore | undefined): string {
+/** The install's script as the administrator: the hosts line, the port rule's service, started now, the `openagent` command, and the certificate in the system's store. */
+export function adminInstallScript(certFile: string, store: SystemStore | undefined, launcher: Launcher): string {
   return `set -e
 ${addHostsLine('/etc/hosts')}
 printf '%s' ${quoted(portUnit())} > ${PORT_UNIT_FILE}
@@ -145,6 +146,7 @@ chmod 644 ${PORT_UNIT_FILE}
 systemctl daemon-reload
 systemctl enable ${PORT_UNIT} 2>/dev/null
 systemctl restart ${PORT_UNIT}
+${addLauncherLines(launcher)}
 ${store ? `install -m 644 ${quoted(certFile)} ${quoted(store.file)}\n${store.refresh} >/dev/null 2>&1\n` : ''}`
 }
 
@@ -154,6 +156,7 @@ export function adminUninstallScript(store: SystemStore | undefined): string {
 systemctl disable --now ${PORT_UNIT} 2>/dev/null || true
 rm -f ${PORT_UNIT_FILE}
 systemctl daemon-reload
+${removeLauncherLine()}
 ${store ? `if [ -e ${quoted(store.file)} ]; then rm -f ${quoted(store.file)}; ${store.refresh} >/dev/null 2>&1; fi\n` : ''}`
 }
 
@@ -249,11 +252,11 @@ export const linux: Platform = {
     await mkdir(place.app, { recursive: true })
     await writeFile(place.packages, JSON.stringify({ manager, packages: [...new Set([...before.packages, ...packages])] }) + '\n')
   },
-  adminInstall(certFile) {
+  adminInstall(certFile, launcher) {
     const store = systemStore()
     return {
-      says: `Your password as the administrator, to point ${ADDRESS} at this computer (/etc/hosts) and its port 443 at the dashboard (an nftables rule, loaded at each start)${store ? ', and to have the system trust its certificate, for curl and other tools' : ''}.`,
-      script: adminInstallScript(certFile, store),
+      says: `Your password as the administrator, to point ${ADDRESS} at this computer (/etc/hosts) and its port 443 at the dashboard (an nftables rule, loaded at each start)${store ? ', to put the `openagent` command in /usr/local/bin, and to have the system trust its certificate, for curl and other tools' : ', and to put the `openagent` command in /usr/local/bin'}.`,
+      script: adminInstallScript(certFile, store, launcher),
     }
   },
   async trust(certFile, io, env) {
@@ -290,11 +293,11 @@ export const linux: Platform = {
     }
   },
   dashboardInstalled: env => existsSync(places(env).unit),
-  adminInstalled: async () => (await hasHostsLine('/etc/hosts')) || existsSync(PORT_UNIT_FILE) || existsSync(SYSTEM_STORE.file),
+  adminInstalled: async () => (await hasHostsLine('/etc/hosts')) || existsSync(PORT_UNIT_FILE) || existsSync(SYSTEM_STORE.file) || (await hasLauncher()),
   adminUninstall() {
     const store = systemStore()
     return {
-      says: `Your password as the administrator, once, to take off the hosts line for ${ADDRESS} and its port rule${store ? ', and the system’s trust in its certificate' : ''}.`,
+      says: `Your password as the administrator, once, to take off the hosts line for ${ADDRESS}, its port rule and the \`openagent\` command${store ? ', and the system’s trust in its certificate' : ''}.`,
       script: adminUninstallScript(store),
     }
   },

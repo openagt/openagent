@@ -5,6 +5,7 @@ import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { SECURE_PORT } from '@openagt/ui/secure-address'
 import { ADDRESS, LOOPBACK_ADDRESS, addHostsLine, hasHostsLine, quoted, removeHostsLine } from './address.js'
+import { addLauncherLines, hasLauncher, removeLauncherLine, type Launcher } from './launcher.js'
 import type { Platform } from './platform.js'
 import { run, succeeds } from './run.js'
 
@@ -90,8 +91,8 @@ export function portPlist(): string {
 /** Forget what the Mac remembers of names, so the hosts line counts at once. */
 const FORGET_NAMES = 'dscacheutil -flushcache; killall -HUP mDNSResponder 2>/dev/null || true'
 
-/** The install's one script as the administrator: the hosts line, and the port rule with its launch daemon, started now. */
-export function adminInstallScript(): string {
+/** The install's one script as the administrator: the hosts line, the port rule with its launch daemon, started now, and the `openagent` command. */
+export function adminInstallScript(launcher: Launcher): string {
   return `set -e
 ${addHostsLine('/etc/hosts')}
 printf '%s' ${quoted(portRule())} > ${PORT_RULE_FILE}
@@ -100,6 +101,7 @@ chown root:wheel ${PORT_RULE_FILE} ${PORT_PLIST}
 chmod 644 ${PORT_RULE_FILE} ${PORT_PLIST}
 launchctl bootout system/${PORT_LABEL} 2>/dev/null || true
 launchctl bootstrap system ${PORT_PLIST}
+${addLauncherLines(launcher)}
 ${FORGET_NAMES}
 `
 }
@@ -111,6 +113,7 @@ launchctl bootout system/${PORT_LABEL} 2>/dev/null || true
 /sbin/pfctl -a ${PORT_ANCHOR} -F all 2>/dev/null || true
 /sbin/ifconfig lo0 -alias ${LOOPBACK_ADDRESS} 2>/dev/null || true
 rm -f ${PORT_RULE_FILE} ${PORT_PLIST}
+${removeLauncherLine()}
 ${FORGET_NAMES}
 `
 }
@@ -137,9 +140,9 @@ export const mac: Platform = {
   stopDashboard: bootoutDashboard,
   appDir: env => places(env).app,
   prepare: async () => {},
-  adminInstall: () => ({
-    says: `Your password as the administrator, once, to point ${ADDRESS} at this Mac (/etc/hosts) and its port 443 at the dashboard (a packet filter rule).`,
-    script: adminInstallScript(),
+  adminInstall: (_certFile, launcher) => ({
+    says: `Your password as the administrator, once, to point ${ADDRESS} at this Mac (/etc/hosts) and its port 443 at the dashboard (a packet filter rule), and to put the \`openagent\` command in /usr/local/bin.`,
+    script: adminInstallScript(launcher),
   }),
   async trust(certFile, io, env) {
     // Trusted already, by an install before: macOS asks nothing.
@@ -170,9 +173,9 @@ export const mac: Platform = {
     await run('security', ['delete-certificate', '-Z', sha1, places(env).keychain]).catch(() => {})
   },
   dashboardInstalled: env => existsSync(places(env).agent),
-  adminInstalled: async () => (await hasHostsLine('/etc/hosts')) || existsSync(PORT_PLIST),
+  adminInstalled: async () => (await hasHostsLine('/etc/hosts')) || existsSync(PORT_PLIST) || (await hasLauncher()),
   adminUninstall: () => ({
-    says: `Your password as the administrator, once, to take off the hosts line for ${ADDRESS} and its port rule.`,
+    says: `Your password as the administrator, once, to take off the hosts line for ${ADDRESS}, its port rule and the \`openagent\` command.`,
     script: adminUninstallScript(),
   }),
   folders: env => [places(env).app, places(env).logs],
