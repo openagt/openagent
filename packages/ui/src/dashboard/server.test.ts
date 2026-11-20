@@ -160,11 +160,11 @@ test('the files of the computer\'s modules are served with no project added, and
   const bundle = await fakeBundle()
   const dash = await dashboard({ clientBundleDir: bundle })
   try {
-    const module = await fetch(dash.url + '/_computer-modules/%40openagt%2Fdashboard-devices/dashboard.js')
+    const module = await fetch(dash.url + '/_computer-modules/%40openagt%2Fdevices/dashboard.js')
     assert.equal(module.status, 200)
     assert.match(module.headers.get('content-type') ?? '', /javascript/)
     assert.match(await module.text(), /export/)
-    assert.equal((await fetch(dash.url + '/_computer-modules/%40openagt%2Fdashboard-files/dashboard.js')).status, 404)
+    assert.equal((await fetch(dash.url + '/_computer-modules/%40openagt%2Fui-pane-files/dashboard.js')).status, 404)
   } finally {
     await dash.close()
     await rm(bundle, { recursive: true, force: true })

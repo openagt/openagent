@@ -113,16 +113,16 @@ test("a module's function is called at /_rpc/<module>/<name> with the project an
       },
     },
   })
-  const files = `${encodeURIComponent('@openagt/dashboard-files')}/tree`
+  const files = `${encodeURIComponent('@openagt/ui-pane-files')}/tree`
   const there = elsewhereId('shop-1abc', 'http://127.0.0.1:4210')
   try {
     // A project this computer does not know: the call's own refusal, travelling back.
     assert.deepEqual(JSON.parse((await call(server.url, files, ['nowhere-1', { agentId: 'run-1' }])).body), { ret: { ok: false, error: 'unknown project' } })
     // Another computer's project: passed on as the relay names the call, with the module and the function the path says.
     assert.deepEqual(JSON.parse((await call(server.url, files, [there, { agentId: 'run-1' }])).body), { ret: { ok: true, output: 'by the laptop' } })
-    assert.deepEqual(forwarded, [[there, 'callModule', [there, '@openagt/dashboard-files', 'tree', { agentId: 'run-1' }]]])
+    assert.deepEqual(forwarded, [[there, 'callModule', [there, '@openagt/ui-pane-files', 'tree', { agentId: 'run-1' }]]])
     // The page's own RPCs are reached by their name alone: the call of a module's function is none of them, and a path with a bad escape names no module.
-    assert.equal((await call(server.url, 'callModule', ['p1', '@openagt/dashboard-files', 'tree', {}])).status, 404)
+    assert.equal((await call(server.url, 'callModule', ['p1', '@openagt/ui-pane-files', 'tree', {}])).status, 404)
     assert.equal((await call(server.url, '%zz/tree', ['p1', {}])).status, 404)
   } finally {
     await server.close()

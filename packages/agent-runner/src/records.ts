@@ -3,7 +3,7 @@ import { isPresetId, MODULE_NAME } from '@openagt/hooks'
 import type { ProjectSkillsPick } from './preset.js'
 import { publishedBranch } from '@openagt/agent-data/names'
 import { deleteRun, writeRun, type AnyDiaryLine, type RecordDeps, type RunCard } from '@openagt/agent-driver'
-import type { SessionRepo } from '@openagt/skill-branches'
+import type { SessionRepo } from '@openagt/git-branches'
 
 /**
  * A run in flight is a run record (#1774): the `logs` skill's card on the project's `agent-data`

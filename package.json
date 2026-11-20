@@ -28,15 +28,15 @@
     "website:test": "pnpm -C packages/openagent.build test"
   },
   "devDependencies": {
-    "@openagt/skill-branches": "workspace:*",
-    "@openagt/skill-github": "workspace:*",
-    "@openagt/skill-tickets": "workspace:*",
-    "@openagt/skill-queue": "workspace:*",
-    "@openagt/skill-logs": "workspace:*",
-    "@openagt/skill-browser": "workspace:*",
-    "@openagt/skill-discord": "workspace:*",
+    "@openagt/git-branches": "workspace:*",
+    "@openagt/github": "workspace:*",
+    "@openagt/tickets": "workspace:*",
+    "@openagt/queue": "workspace:*",
+    "@openagt/logs": "workspace:*",
+    "@openagt/browser": "workspace:*",
+    "@openagt/discord": "workspace:*",
     "@openagt/agent-runner": "workspace:*",
-    "@openagt/skill-scheduler": "workspace:*",
+    "@openagt/scheduled-agents": "workspace:*",
     "typescript": "^7.0.2"
   }
 }

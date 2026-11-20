@@ -39,7 +39,7 @@ test('answer a waiting run’s question from the Human Queue; the answer resumes
     // The answer is ask's, as its card sends it: a pick that is not one of the question's options
     // is refused, and nothing is resumed.
     const answer = async (picked: string) => {
-      const called = await rpc(callModule)(project.id, '@openagt/skill-ask', 'answer', { agentId, question: gate.id, picked })
+      const called = await rpc(callModule)(project.id, '@openagt/ask', 'answer', { agentId, question: gate.id, picked })
       return called.ok ? called.output : called
     }
     assert.deepEqual(await answer('no-such-option'), { ok: false, error: 'every pick must be one of the question\'s options' })

@@ -20,7 +20,7 @@ const realFix = loginsWiring.fix
 // The Permissions page, the agent's own fix, and a project's own accounts: drawn from what the
 // git host's package and the agent's package answer, never naming either.
 
-const GITHUB: ProvidedCommand = { name: 'github', bin: '/pkg/github', package: '@openagt/skill-github' } as ProvidedCommand
+const GITHUB: ProvidedCommand = { name: 'github', bin: '/pkg/github', package: '@openagt/github' } as ProvidedCommand
 
 const card = (accounts: { login: string; terminal?: boolean; runs?: boolean }[]) => ({
   ok: true,

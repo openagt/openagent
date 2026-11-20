@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import type { GhRunner } from '@openagt/skill-github'
+import type { GhRunner } from '@openagt/github'
 import { readDiary } from '@openagt/agent-driver'
 import { UNMADE, anchorRefOf } from './hand-off.js'
 import { passProject, type PassDeps } from './passes.js'

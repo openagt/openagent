@@ -41,7 +41,7 @@
   "dependencies": {
     "@openagt/agent-data": "workspace:*",
     "@openagt/hooks": "workspace:*",
-    "@openagt/skill-branches": "workspace:*",
+    "@openagt/git-branches": "workspace:*",
     "yaml": "^2.5.0"
   },
   "devDependencies": {

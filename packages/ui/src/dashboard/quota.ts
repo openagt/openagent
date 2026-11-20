@@ -1,6 +1,6 @@
 import { QuotaPoller } from '../quota-poller.js'
 import { weekBoundary, type QuotaBoundary } from '../quota-boundary.js'
-import { ClaudeCodeDriver } from '@openagt/agent-driver-claude'
+import { ClaudeCodeDriver } from '@openagt/agent-driver-claude-code'
 import { keepClaudeReading } from '@openagt/skill-account-rotation'
 import type { DriverQuotaUnavailableReason, DriverQuotaWindow } from '@openagt/agent-driver'
 

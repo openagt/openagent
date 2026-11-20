@@ -30,7 +30,7 @@ function StopLine({ projects, Bar }: UiUsageLineProps) {
     </>
   )
 }
-const STOP_LINE: MountedView<'usage.line'> = { place: 'usage.line', id: 'stop-line', View: StopLine, package: '@openagt/skill-scheduler', projects: ['p1'] }
+const STOP_LINE: MountedView<'usage.line'> = { place: 'usage.line', id: 'stop-line', View: StopLine, package: '@openagt/scheduled-agents', projects: ['p1'] }
 const NOTHING = mountedOf()
 const WITH_LINE = mountedOf({ views: { 'usage.line': [STOP_LINE] } })
 const PROJECTS: ProjectSummary[] = [

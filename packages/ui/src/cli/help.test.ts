@@ -12,17 +12,17 @@ const require = createRequire(import.meta.url)
 /** The programs OpenAgent ships, each as it is typed with `--help`: the package's own bin, and what follows its name. */
 const PROGRAMS: [pkg: string, args: string[]][] = [
   ['@openagt/agent-runner', []],
-  ['@openagt/dashboard-devices', []],
-  ['@openagt/dashboard-devices', ['server']],
+  ['@openagt/devices', []],
+  ['@openagt/devices', ['server']],
   ['@openagt/skill-account-rotation', []],
-  ['@openagt/skill-branches', []],
-  ['@openagt/skill-browser', []],
-  ['@openagt/skill-discord', []],
-  ['@openagt/skill-github', []],
-  ['@openagt/skill-logs', []],
-  ['@openagt/skill-queue', []],
-  ['@openagt/skill-scheduler', []],
-  ['@openagt/skill-tickets', []],
+  ['@openagt/git-branches', []],
+  ['@openagt/browser', []],
+  ['@openagt/discord', []],
+  ['@openagt/github', []],
+  ['@openagt/logs', []],
+  ['@openagt/queue', []],
+  ['@openagt/scheduled-agents', []],
+  ['@openagt/tickets', []],
 ]
 
 function binOf(pkg: string): string {

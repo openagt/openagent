@@ -279,9 +279,9 @@ describe('the Settings list', () => {
   const PROFILE: MountedView<'settings.section'> = { place: 'settings.section', id: 'profile', title: 'Profile', icon: Smartphone, order: 10, View: () => <p>Your name and picture</p>, package: '@openagt/user-info', projects: [], computer: true }
   const MODULES = mounted([
     PROFILE,
-    { place: 'settings.section', id: 'devices', title: 'Devices', icon: Smartphone, order: 90, View: Given, package: '@openagt/dashboard-devices', projects: [], computer: true },
-    { place: 'settings.section', id: 'tickets', title: 'Tickets', icon: Ticket, View: Given, package: '@openagt/skill-tickets', projects: ['p1', 'p2', 'gone'] },
-    { place: 'settings.section', id: 'scheduler', title: 'Scheduler', icon: CalendarClock, View: Broken, package: '@openagt/skill-scheduler', projects: ['p2'] },
+    { place: 'settings.section', id: 'devices', title: 'Devices', icon: Smartphone, order: 90, View: Given, package: '@openagt/devices', projects: [], computer: true },
+    { place: 'settings.section', id: 'tickets', title: 'Tickets', icon: Ticket, View: Given, package: '@openagt/tickets', projects: ['p1', 'p2', 'gone'] },
+    { place: 'settings.section', id: 'scheduler', title: 'Scheduler', icon: CalendarClock, View: Broken, package: '@openagt/scheduled-agents', projects: ['p2'] },
     { place: 'settings.section', id: 'skills', title: 'Skills', icon: Puzzle, order: 10, View: Ticks, package: '@openagt/skills', projects: ['p1', 'p2', 'p3'] },
     { place: 'settings.section', id: 'list', title: 'List', icon: Puzzle, order: 60, readOnly: true, View: Given, package: '@openagt/list', projects: ['p1', 'p2'] },
   ])

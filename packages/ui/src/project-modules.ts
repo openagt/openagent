@@ -91,7 +91,7 @@ const MAX_ARG_LENGTH = 4096
 /**
  * Run one of a module package's own commands in the project, with the given arguments, and read
  * its standard output as JSON. This is how a module reads its data: the same command an agent runs
- * (`npx @openagt/skill-logs@0.1`), so the module and the agent see the same thing and OpenAgent knows neither.
+ * (`npx @openagt/logs@0.1`), so the module and the agent see the same thing and OpenAgent knows neither.
  *
  * `command` picks one of the package's commands; a package with exactly one needs none. The
  * command runs with Node (a package's commands are Node scripts), in `root` (the project's, or

@@ -5,7 +5,7 @@ import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { DriverEvent, SpawnLike, SpawnedProcess } from '@openagt/agent-driver'
-import { CLAUDE_ACCOUNT_ENV, CLAUDE_TOKEN_ENV, ClaudeCodeDriver } from '@openagt/agent-driver-claude'
+import { CLAUDE_ACCOUNT_ENV, CLAUDE_TOKEN_ENV, ClaudeCodeDriver } from '@openagt/agent-driver-claude-code'
 import { accountsPath, addAccount, markLimited, nameOwnAccount, OWN_NAME, readAccounts, usableAccounts, useFirst, removeAccount } from './accounts.js'
 import { accountRotation, goOn, UsageLimitError } from './rotation.js'
 

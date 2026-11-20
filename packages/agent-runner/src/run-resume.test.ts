@@ -6,7 +6,7 @@ import { appendInbox, FakeDriver, findRun, promptSent, readDiary, type Driver, t
 import { chainStore, enabledSetting, settingsIn } from '@openagt/hooks'
 import { memoryStore } from '@openagt/hooks/testing'
 import { NOTIFY_COMMAND, notificationsCommand } from '@openagt/notifications-command/module'
-import { worktreePath } from '@openagt/skill-branches'
+import { worktreePath } from '@openagt/git-branches'
 import { inboxPath } from './live-card.js'
 import { acquireRunLock, releaseRunLock } from './run-lock.js'
 import { resumeRun, runCommand } from './run.js'
@@ -321,7 +321,7 @@ test('a resumed run whose conversation its coding agent no longer has goes on in
     assert.equal(second.id, first.id, 'the same run')
     assert.equal(second.status, 'done')
     const pointer = earlierWorkLine(first.id, { url: 'https://example.com/x/y/pull/12' })
-    assert.equal(pointer, "Your earlier conversation in this run is gone, so this one starts without it. Before anything else, read what you did before: this run's record, `npx @openagt/skill-logs@0.1 show 2026-09-16T14-01-00-000Z`, and the whole thread of its pull request, https://example.com/x/y/pull/12.")
+    assert.equal(pointer, "Your earlier conversation in this run is gone, so this one starts without it. Before anything else, read what you did before: this run's record, `npx @openagt/logs@0.1 show 2026-09-16T14-01-00-000Z`, and the whole thread of its pull request, https://example.com/x/y/pull/12.")
     assert.deepEqual(sent, [promptSent('/reply a comment came', { attached: pointer })], 'one prompt reached the agent: the words, then where its earlier work is')
 
     const after = await readUntimedDiary(repo, first.id)

@@ -25,12 +25,12 @@ describe('Settings › Notification command', () => {
   test('with none saved, nothing runs: a command typed and saved is the one this computer runs', async () => {
     render()
     expect(await screen.findByText('None yet: nothing runs.')).toBeTruthy()
-    fireEvent.change(screen.getByLabelText('Command'), { target: { value: ' npx @openagt/skill-discord@0.1 send "$MESSAGE" ' } })
+    fireEvent.change(screen.getByLabelText('Command'), { target: { value: ' npx @openagt/discord@0.1 send "$MESSAGE" ' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-    await waitFor(() => expect(sent('saveCommand')).toEqual([{ command: ' npx @openagt/skill-discord@0.1 send "$MESSAGE" ' }]))
+    await waitFor(() => expect(sent('saveCommand')).toEqual([{ command: ' npx @openagt/discord@0.1 send "$MESSAGE" ' }]))
     expect((await screen.findByRole('status')).textContent).toBe('Saved.')
     expect(screen.getByText('Run when a run on this computer needs you.')).toBeTruthy()
-    expect((screen.getByLabelText('Command') as HTMLInputElement).value).toBe('npx @openagt/skill-discord@0.1 send "$MESSAGE"')
+    expect((screen.getByLabelText('Command') as HTMLInputElement).value).toBe('npx @openagt/discord@0.1 send "$MESSAGE"')
   })
 
   test('the command saved is shown; Save, with nothing changed, sends nothing; emptied and saved, nothing runs', async () => {

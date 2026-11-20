@@ -32,7 +32,7 @@
   },
   "dependencies": {
     "@openagt/hooks": "workspace:*",
-    "@openagt/skill-github": "workspace:*"
+    "@openagt/github": "workspace:*"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.0.0",

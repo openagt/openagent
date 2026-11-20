@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { StreamJsonParser } from '@openagt/agent-driver-claude'
+import { StreamJsonParser } from '@openagt/agent-driver-claude-code'
 import { readZip } from './actions-zip.js'
 import { combineFraming, makeEmit, promptSent, startEvent, finishTurn, attachLog, type SessionLog, type DriverEvent, type DriverPromptOptions, type DriverSession, type DriverStartOptions, type DriverTurn } from '@openagt/agent-driver'
 

@@ -22,9 +22,9 @@ const Icon = () => <svg aria-hidden />
 // The installed modules' panes, as the Files module and the browser skill bring them: each shows what it was given.
 const shown = vi.fn()
 type MountedPanel = MountedView<'chat.pane'>
-const FILES: MountedPanel = { place: 'chat.pane', id: 'files', label: 'Files', icon: Icon, files: true, View: (props: UiPaneProps) => (shown(props), <div>the files</div>), package: '@openagt/dashboard-files', projects: ['p1'] }
-const CHANGES: MountedPanel = { place: 'chat.pane', id: 'changes', label: 'Changes', icon: Icon, changes: true, View: (props: UiPaneProps) => <div>changes: {props.reveal?.path ?? 'none asked'}</div>, package: '@openagt/dashboard-changes', projects: ['p1'] }
-const BROWSER: MountedPanel = { place: 'chat.pane', id: 'browser', label: 'Browser', icon: Icon, screen: true, View: () => <div>the browser</div>, package: '@openagt/skill-browser', projects: ['p1'] }
+const FILES: MountedPanel = { place: 'chat.pane', id: 'files', label: 'Files', icon: Icon, files: true, View: (props: UiPaneProps) => (shown(props), <div>the files</div>), package: '@openagt/ui-pane-files', projects: ['p1'] }
+const CHANGES: MountedPanel = { place: 'chat.pane', id: 'changes', label: 'Changes', icon: Icon, changes: true, View: (props: UiPaneProps) => <div>changes: {props.reveal?.path ?? 'none asked'}</div>, package: '@openagt/ui-pane-changes', projects: ['p1'] }
+const BROWSER: MountedPanel = { place: 'chat.pane', id: 'browser', label: 'Browser', icon: Icon, screen: true, View: () => <div>the browser</div>, package: '@openagt/browser', projects: ['p1'] }
 const mounted = (panes: MountedPanel[]): MountedModules => mountedOf({ views: { 'chat.pane': panes } })
 
 const base = { projectId: 'p1', agentId: 'r1', enabled: true, files: [] as string[], context: new Set<string>(), toggleContext: () => {} }
@@ -157,7 +157,7 @@ describe('opening and closing a pane', () => {
     expect(icon('Files').getAttribute('aria-pressed')).toBe('true')
     expect(icon('Files').className.split(' ')).toContain('bg-accent')
     expect(icon('Changes').getAttribute('aria-pressed')).toBe('false')
-    expect(keptOpen('p1/r1')).toEqual(['@openagt/dashboard-files/files'])
+    expect(keptOpen('p1/r1')).toEqual(['@openagt/ui-pane-files/files'])
     fireEvent.click(icon('Files'))
     expect(cards()).toEqual([])
     expect(icon('Files').getAttribute('aria-pressed')).toBe('false')
@@ -210,7 +210,7 @@ describe('opening and closing a pane', () => {
     rerender(<Page agentId={null} />)
     expect(cards()).toEqual([])
     fireEvent.click(icon('Changes'))
-    expect(keptOpen('new')).toEqual(['@openagt/dashboard-changes/changes'])
+    expect(keptOpen('new')).toEqual(['@openagt/ui-pane-changes/changes'])
     rerender(<Page />)
     expect(cards()).toEqual(['Files'])
   })
@@ -330,12 +330,12 @@ describe('how the room is shared', () => {
     expect(row!.contains(column!)).toBe(true)
     expect(screen.getAllByRole('separator')).toHaveLength(2)
     // In the column: a pane, a line, a pane.
-    expect([...column!.children].map(child => (child.getAttribute('role') === 'separator' ? 'line' : holds(child)))).toEqual(['@openagt/dashboard-files/files', 'line', '@openagt/dashboard-changes/changes'])
+    expect([...column!.children].map(child => (child.getAttribute('role') === 'separator' ? 'line' : holds(child)))).toEqual(['@openagt/ui-pane-files/files', 'line', '@openagt/ui-pane-changes/changes'])
     // Each line says what it shares.
     expect(screen.getAllByRole('separator').map(line => line.getAttribute('aria-label'))).toEqual(['The width of the chat and the panes', 'The height of Files and Changes'])
     // An even share until a person sets one.
-    expect(share('@openagt/dashboard-files/files')).toBe('50%')
-    expect(share('@openagt/dashboard-changes/changes')).toBe('50%')
+    expect(share('@openagt/ui-pane-files/files')).toBe('50%')
+    expect(share('@openagt/ui-pane-changes/changes')).toBe('50%')
   })
 
   test('a share a person dragged is kept for that agent; an agent never sized starts with the last share set on any', () => {
@@ -401,16 +401,16 @@ describe('how the room is shared', () => {
     const { container } = render(<Page />)
     fireEvent.click(icon('Files'))
     fireEvent.click(icon('Changes'))
-    laidOut(groups(container)[1]!, { '@openagt/dashboard-files/files': 70, '@openagt/dashboard-changes/changes': 30 })
-    expect(share('@openagt/dashboard-files/files')).toBe('70%')
-    expect(share('@openagt/dashboard-changes/changes')).toBe('30%')
-    expect(owner('@openagt/dashboard-files/files')).toBe('p1/r1')
+    laidOut(groups(container)[1]!, { '@openagt/ui-pane-files/files': 70, '@openagt/ui-pane-changes/changes': 30 })
+    expect(share('@openagt/ui-pane-files/files')).toBe('70%')
+    expect(share('@openagt/ui-pane-changes/changes')).toBe('30%')
+    expect(owner('@openagt/ui-pane-files/files')).toBe('p1/r1')
     // A third pane: three other panes share the height, evenly until a person sets it.
     fireEvent.click(icon('Browser'))
-    for (const id of ['@openagt/dashboard-files/files', '@openagt/dashboard-changes/changes', '@openagt/skill-browser/browser']) expect(Number.parseFloat(share(id)!)).toBeCloseTo(100 / 3)
+    for (const id of ['@openagt/ui-pane-files/files', '@openagt/ui-pane-changes/changes', '@openagt/browser/browser']) expect(Number.parseFloat(share(id)!)).toBeCloseTo(100 / 3)
     // The two again: as they were left.
     fireEvent.click(icon('Browser'))
-    expect(share('@openagt/dashboard-files/files')).toBe('70%')
+    expect(share('@openagt/ui-pane-files/files')).toBe('70%')
   })
 })
 

@@ -7,7 +7,7 @@ import { pathToFileURL } from 'node:url'
 import { nodeGitRunner } from '@openagt/agent-data'
 import type { ProjectRef } from '@openagt/hooks'
 import { fakeRun } from '@openagt/hooks/testing'
-import { createCheckout, HARNESS_SKILL_DIRS } from '@openagt/skill-branches'
+import { createCheckout, HARNESS_SKILL_DIRS } from '@openagt/git-branches'
 import { skillsModule } from './module.js'
 
 const git = nodeGitRunner()

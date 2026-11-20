@@ -20,7 +20,7 @@ if (!existsSync(new URL('dist/dashboard-bundle', dashboard)) || !existsSync(demo
 // The browser the dashboard's own smoke stories drive, from the dashboard's dependencies.
 const require = createRequire(new URL('package.json', dashboard))
 const { chromium } = require('playwright-core')
-const { resolveChromePath } = await import(pathToFileURL(require.resolve('@openagt/skill-browser')).href)
+const { resolveChromePath } = await import(pathToFileURL(require.resolve('@openagt/browser')).href)
 const { startDemo } = await import(demoBuild.href)
 
 const out = new URL('public/pictures/', import.meta.url)

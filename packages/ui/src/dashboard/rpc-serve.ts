@@ -87,7 +87,7 @@ export const RPC_PREFIX = '/_rpc'
 
 /**
  * The module and the function a call's path names past {@link RPC_PREFIX}, `<module>/<name>`, the
- * module by its package's name, encoded as one segment (`%40openagt%2Fdashboard-files/tree`);
+ * module by its package's name, encoded as one segment (`%40openagt%2Fui-pane-files/tree`);
  * undefined for any other path, one of the dashboard's own RPCs (`<name>`) among them.
  */
 export function moduleCallOf(path: string): { pkg: string; name: string } | undefined {

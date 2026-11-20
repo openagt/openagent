@@ -121,7 +121,7 @@ test('a computer reached through a server says nothing of persons, and is not as
       const through = `${server.url}/_devices/via/abc123def456`
       await addMachine({ url: through, key: KEY, door: `${through}/_devices/enter` })
       assert.deepEqual(await onMachinePerson(through), { ok: false, error: 'A computer reached through a server says nothing of persons.', unknown: true })
-      assert.deepEqual(await runComputerCommandOn('@openagt/dashboard-devices', through, ['own']), { ok: false, error: 'That machine is no longer saved.' })
+      assert.deepEqual(await runComputerCommandOn('@openagt/devices', through, ['own']), { ok: false, error: 'That machine is no longer saved.' })
       assert.equal(server.asked.length, 0)
     } finally {
       await server.close()
@@ -134,9 +134,9 @@ test('a computer package\'s command is run on a saved machine as its page runs i
     const server = await door()
     try {
       await addMachine({ url: server.url, key: KEY, door: `${server.url}/_devices/enter` })
-      assert.deepEqual(await runComputerCommandOn('@openagt/dashboard-devices', server.url, ['own', 'login', 'github'], null, 'gho_secret'), {
+      assert.deepEqual(await runComputerCommandOn('@openagt/devices', server.url, ['own', 'login', 'github'], null, 'gho_secret'), {
         ok: true,
-        output: { pkg: '@openagt/dashboard-devices', args: ['own', 'login', 'github'], command: null, input: 'gho_secret' },
+        output: { pkg: '@openagt/devices', args: ['own', 'login', 'github'], command: null, input: 'gho_secret' },
       })
       const call = server.asked.at(-1)!
       assert.equal(call.url, '/_rpc/runComputerCommand')
@@ -144,9 +144,9 @@ test('a computer package\'s command is run on a saved machine as its page runs i
       // In the body only, never in the address.
       assert.equal(call.url.includes('gho_secret'), false)
       // Only a package that is this computer's, and only words.
-      assert.deepEqual(await runComputerCommandOn('@openagt/dashboard-files', server.url, ['x']), { ok: false, error: "@openagt/dashboard-files is not this computer's" })
-      assert.deepEqual(await runComputerCommandOn('@openagt/dashboard-devices', server.url, [1] as unknown as string[]), { ok: false, error: 'arguments must be a list of words' })
-      assert.deepEqual(await runComputerCommandOn('@openagt/dashboard-devices', 'http://10.9.9.9:4201', ['own']), { ok: false, error: 'That machine is no longer saved.' })
+      assert.deepEqual(await runComputerCommandOn('@openagt/ui-pane-files', server.url, ['x']), { ok: false, error: "@openagt/ui-pane-files is not this computer's" })
+      assert.deepEqual(await runComputerCommandOn('@openagt/devices', server.url, [1] as unknown as string[]), { ok: false, error: 'arguments must be a list of words' })
+      assert.deepEqual(await runComputerCommandOn('@openagt/devices', 'http://10.9.9.9:4201', ['own']), { ok: false, error: 'That machine is no longer saved.' })
     } finally {
       await server.close()
     }

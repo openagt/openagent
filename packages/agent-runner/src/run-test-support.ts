@@ -5,8 +5,8 @@ import { FakeDriver, promptSent, type Driver, type DriverSession, type DriverSta
 import type { GitRunner } from '@openagt/agent-data'
 import { loadModules, type DistributionEntry, type ModuleDefinition, type PullRequest, type StoreBackend } from '@openagt/hooks'
 import { memoryStore } from '@openagt/hooks/testing'
-import { gitBranchesModule } from '@openagt/skill-branches/module'
-import { githubModule, type GithubDeps } from '@openagt/skill-github/module'
+import { gitBranchesModule } from '@openagt/git-branches/module'
+import { githubModule, type GithubDeps } from '@openagt/github/module'
 import { skillsModule } from '@openagt/skills/module'
 import agentDriver from './module.js'
 import { git } from './test-repo.js'
@@ -131,7 +131,7 @@ export function fakeGithub(accounts: Record<string, Record<string, string>>): Gi
 }
 
 /** The plugins whose skills every test's run gets, on as OpenAgent's distribution starts them, loaded by their packages as it loads them. */
-const PLUGINS = await loadModules([{ package: '@openagt/skill-logs', on: true }, { package: '@openagt/skill-ask', on: true }], specifier => import(specifier))
+const PLUGINS = await loadModules([{ package: '@openagt/logs', on: true }, { package: '@openagt/ask', on: true }], specifier => import(specifier))
 
 /**
  * The modules a test's run goes through, as OpenAgent's distribution lists them for a run: a store

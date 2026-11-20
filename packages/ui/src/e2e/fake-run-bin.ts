@@ -22,10 +22,10 @@ import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { hostname } from 'node:os'
 import { join } from 'node:path'
 import { continuationPrompt, FakeDriver, findRun, logDiaryFile, parseRunCard, readDiary, startEvent, writeRun, type AnyDiaryLine, type DriverEvent, type LogEndStatus, type RunCard, type SessionLog } from '@openagt/agent-driver'
-import { parseQuestion, QUESTION_TAG } from '@openagt/skill-ask/question'
+import { parseQuestion, QUESTION_TAG } from '@openagt/ask/question'
 import { nodeGitRunner } from '@openagt/agent-data'
 import { NAME_FILE_ENV, givenName, isPublish, type Publish } from '@openagt/agent-runner'
-import { agentBranchName, attachCheckout, createCheckout, reclaimWorktree, worktreeBranch, worktreePath } from '@openagt/skill-branches'
+import { agentBranchName, attachCheckout, createCheckout, reclaimWorktree, worktreeBranch, worktreePath } from '@openagt/git-branches'
 import { OPENAGENT_DIR } from '../openagent-dir.js'
 
 const QUESTION = { title: 'Which way?', options: [{ label: 'Left', detail: 'the short way' }, { label: 'Right' }], recommended: 'Left' }

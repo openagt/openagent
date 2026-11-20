@@ -108,6 +108,6 @@ export function questionCard(projects: string[] = ['p1'], more: { sessions?: tru
       </section>
     )
   }
-  const of = { package: '@openagt/skill-ask', projects, ...more }
+  const of = { package: '@openagt/ask', projects, ...more }
   return { given, modules: mountedOf({ renders: [{ kind: 'question', Render, ...of }, { kind: 'await-choices', ...of }] }) }
 }

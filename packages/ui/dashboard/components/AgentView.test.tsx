@@ -548,7 +548,7 @@ describe('a changed file\'s row in the chat', () => {
     { kind: 'end', ok: true },
   ] as OpenAgentEvent[]
   const withPanels = (ui: ReactNode, panes: MountedView<'chat.pane'>[]) => <ModulesContext.Provider value={mountedOf({ views: { 'chat.pane': panes } })}>{ui}</ModulesContext.Provider>
-  const panel = (over: object) => ({ place: 'chat.pane' as const, id: 'changes', label: 'Changes', icon: () => null, View: () => null, package: '@openagt/dashboard-changes', projects: ['p1'], ...over })
+  const panel = (over: object) => ({ place: 'chat.pane' as const, id: 'changes', label: 'Changes', icon: () => null, View: () => null, package: '@openagt/ui-pane-changes', projects: ['p1'], ...over })
 
   test('with a pane that lists changes, a click asks this agent\'s page for the file by its path in the checkout', async () => {
     const { useRevealedChange, forgetRevealedChanges } = await import('../lib/reveal-change.js')
@@ -575,7 +575,7 @@ describe('a changed file\'s row in the chat', () => {
 describe('what the modules add to a run’s page (#817)', () => {
   const Summary = ({ agentId, working }: UiRunProps) => <span>summary {agentId} {String(working)}</span>
   const withSlots = (ui: ReactNode, projects = ['p1']) => {
-    const modules = mountedOf({ views: { 'chat.summary': [{ place: 'chat.summary', id: 'changes', View: Summary, package: '@openagt/dashboard-changes', projects }] } })
+    const modules = mountedOf({ views: { 'chat.summary': [{ place: 'chat.summary', id: 'changes', View: Summary, package: '@openagt/ui-pane-changes', projects }] } })
     return <ModulesContext.Provider value={modules}>{ui}</ModulesContext.Provider>
   }
 

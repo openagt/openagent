@@ -13,7 +13,7 @@ export const otherComputers = {
 }
 
 /** The package of the door and of the person's other computers: devices. */
-export const DEVICES_PACKAGE = '@openagt/dashboard-devices'
+export const DEVICES_PACKAGE = '@openagt/devices'
 
 /** Whether devices is on among the modules: never in a distribution without it. */
 export async function devicesOn(hooks: Hooks): Promise<boolean> {

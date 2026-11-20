@@ -27,7 +27,7 @@ describe('the host a module is given', () => {
       const services = useSteadyServices({ ...INERT_HOST_SERVICES, openPage: segment => opened.push(`${segment} at render ${renders}`) })
       return (
         <HostServicesContext.Provider value={services}>
-          <ModuleSlot package="@openagt/dashboard-devices" label="test">
+          <ModuleSlot package="@openagt/devices" label="test">
             <Module />
           </ModuleSlot>
         </HostServicesContext.Provider>

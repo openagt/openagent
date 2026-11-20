@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process'
 import { readFileSync, rmSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { isSignInCode } from '@openagt/agent-driver-claude'
+import { isSignInCode } from '@openagt/agent-driver-claude-code'
 import type { AccountsAgent } from './accounts.js'
 import { configFile, writePrivate } from './files.js'
 import { nameTaken, signIn, type SignInSaid } from './login.js'

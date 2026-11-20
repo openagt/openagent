@@ -24,7 +24,7 @@ async function withComputer(body: (dir: string, asked: string[][]) => Promise<vo
   const asked: string[][] = []
   Object.assign(loginsWiring, {
     home: () => dir,
-    gitHost: async () => ({ package: '@openagt/skill-github', command: 'github', dir }) as unknown as ProvidedCommand,
+    gitHost: async () => ({ package: '@openagt/github', command: 'github', dir }) as unknown as ProvidedCommand,
     run: async (_root: string, _command: ProvidedCommand, args: readonly string[]) => {
       asked.push([...args])
       if (args[0] === 'accounts') return { ok: true, output: { ok: true, host: 'github.com', name: 'GitHub', requestWord: 'pull request', logo: '<svg/>', tool: 'gh', installed: true, install: 'brew install gh', accounts: logins.map((login, i) => ({ login, runs: i === 0, ok: true })) } }

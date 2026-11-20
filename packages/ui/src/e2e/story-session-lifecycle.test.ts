@@ -115,7 +115,7 @@ test("the Changes and Files panes find a run's work through this computer's host
   try {
     const project = await world.addProject()
     /** What a pane's function answers about the run, as the page calls it. */
-    const pane = async (pkg: '@openagt/dashboard-changes' | '@openagt/dashboard-files', name: 'run' | 'tree', agentId: string): Promise<Record<string, unknown>> => {
+    const pane = async (pkg: '@openagt/ui-pane-changes' | '@openagt/ui-pane-files', name: 'run' | 'tree', agentId: string): Promise<Record<string, unknown>> => {
       const said = await rpc(callModule)(project.id, pkg, name, { agentId })
       assert.ok(said.ok, `${pkg} ${name}: ${said.ok ? '' : said.error}`)
       return said.output as Record<string, unknown>
@@ -127,11 +127,11 @@ test("the Changes and Files panes find a run's work through this computer's host
 
     // Working: a file it wrote and has not committed is read where it is, in its checkout.
     await writeFile(join(checkout, 'draft.txt'), 'a draft\n')
-    const working = await pane('@openagt/dashboard-changes', 'run', agentId)
+    const working = await pane('@openagt/ui-pane-changes', 'run', agentId)
     assert.equal(working['source'], 'checkout')
     assert.deepEqual(Object.keys(working['changes'] as object), ['draft.txt'])
     assert.equal(working['to'], `agent-${agentId}`, 'between the branch it started from and its own')
-    const tree = await pane('@openagt/dashboard-files', 'tree', agentId)
+    const tree = await pane('@openagt/ui-pane-files', 'tree', agentId)
     assert.equal(tree['source'], 'checkout')
     assert.ok((tree['files'] as string[]).includes('draft.txt'))
 
@@ -140,10 +140,10 @@ test("the Changes and Files panes find a run's work through this computer's host
     await release(project, agentId)
     await world.waitAgent(project, agentId, 'done')
     await world.waitRetired(project, agentId)
-    const ended = await pane('@openagt/dashboard-changes', 'run', agentId)
+    const ended = await pane('@openagt/ui-pane-changes', 'run', agentId)
     assert.equal(ended['source'], 'branch')
     assert.deepEqual(Object.keys(ended['changes'] as object), ['work.txt'])
-    const files = await pane('@openagt/dashboard-files', 'tree', agentId)
+    const files = await pane('@openagt/ui-pane-files', 'tree', agentId)
     assert.equal(files['source'], 'branch')
     assert.ok((files['files'] as string[]).includes('work.txt'))
   } finally {

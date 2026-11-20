@@ -28,7 +28,7 @@ async function withComputer(body: (dir: string) => Promise<void>): Promise<void>
   provideTestContext({ quota: { read: async () => ({ windows: [] }), stop: () => {} } })
   Object.assign(loginsWiring, {
     home: () => dir,
-    gitHost: async () => ({ package: '@openagt/skill-github', command: 'github', dir } as unknown as ProvidedCommand),
+    gitHost: async () => ({ package: '@openagt/github', command: 'github', dir } as unknown as ProvidedCommand),
     run: async (_root: string, _command: ProvidedCommand, args: readonly string[]) =>
       args[0] === 'accounts'
         ? { ok: true, output: { ok: true, host: 'github.com', name: 'GitHub', requestWord: 'pull request', logo: '<svg/>', tool: 'gh', installed: true, install: 'brew install gh', accounts: [{ login: 'octo', terminal: false, runs: true, ok: true }, { login: 'octo-agent', terminal: false, runs: false, ok: true }, { login: 'stale', terminal: false, runs: false, ok: false }] } }

@@ -50,5 +50,5 @@ test("Settings › Profile saves through user-info's own function, called in no 
     assert.deepEqual(await said(), { name: 'Ada King', own: true })
     assert.deepEqual(await callModule(null, '@openagt/user-info', 'saveName', { name: 'a\nb' }), { ok: false, error: 'A name is one line of at most 60 characters.' })
     // A package a project has is called in that project, never in none.
-    assert.deepEqual(await callModule(null, '@openagt/dashboard-files', 'project', {}), { ok: false, error: "@openagt/dashboard-files is not this computer's" })
+    assert.deepEqual(await callModule(null, '@openagt/ui-pane-files', 'project', {}), { ok: false, error: "@openagt/ui-pane-files is not this computer's" })
   }))

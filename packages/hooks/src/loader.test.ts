@@ -395,7 +395,7 @@ test("a distribution is loaded from its packages' ./module entries, through the 
   )
   assert.equal(await hooks.enabled('tickets', P1), true)
   assert.equal(hooks.ofPackage('@openagt/tickets')?.name, 'tickets', 'a package is known by the module it is')
-  assert.equal(hooks.ofPackage('@openagt/dashboard-files'), undefined)
+  assert.equal(hooks.ofPackage('@openagt/ui-pane-files'), undefined)
   await assert.rejects(loadDistribution([{ package: '@openagt/nothing' }], load), /Cannot find @openagt\/nothing\/module/)
   await assert.rejects(loadDistribution([{ package: '@openagt/bare' }], async () => ({ default: 42 })), /@openagt\/bare\/module default-exports no module/)
 })

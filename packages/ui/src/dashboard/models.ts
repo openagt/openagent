@@ -1,4 +1,4 @@
-import { ClaudeCodeDriver } from '@openagt/agent-driver-claude'
+import { ClaudeCodeDriver } from '@openagt/agent-driver-claude-code'
 import { CodexDriver } from '@openagt/agent-driver-codex'
 import { type Driver, type DriverModel } from '@openagt/agent-driver'
 import { DRIVERS, type DriverName } from '../driver-names.js'

@@ -137,7 +137,7 @@ test('a person\'s OpenAgent takes logins as the devices package does, GitHub fir
   const status = (logins: Record<string, unknown>) => ({ ok: true as const, output: { person: 'sul', logins } })
   let after: Record<string, unknown> = { github: { there: false, working: false }, claude: { there: false, working: false } }
   const run: RunComputerCommand = async (pkg, args, _command, input) => {
-    assert.equal(pkg, '@openagt/dashboard-devices')
+    assert.equal(pkg, '@openagt/devices')
     ran.push({ args, input })
     if (args[2] === 'login' && args[3] === 'github') after = { ...after, github: { there: true, working: false, from: 'vps-1', mark: markOf(GITHUB) } }
     if (args[2] === 'login' && args[3] === 'claude') after = { ...after, claude: { there: true, working: false, from: 'vps-1', mark: markOf(CLAUDE) } }

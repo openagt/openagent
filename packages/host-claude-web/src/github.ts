@@ -1,5 +1,5 @@
 import { accountGit, nodeGitRunner, type GitRunner } from '@openagt/agent-data'
-import { HOST, accountNamed, asAccount, gitConfig, homeUrlFor, nodeGhRunner, type GhRunner } from '@openagt/skill-github'
+import { HOST, accountNamed, asAccount, gitConfig, homeUrlFor, nodeGhRunner, type GhRunner } from '@openagt/github'
 
 // The project's repository on GitHub, and the account this host reaches it as: a cloud session is
 // made on a repository claude.ai's picker lists, and what this host pushes there, and reads back,

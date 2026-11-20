@@ -24,8 +24,8 @@ test('what a computer says of its projects is taken only where it reads as proje
 })
 
 test('what a computer says of a project\'s pages is taken as package names, a few dozen at most', () => {
-  const said = ownProjectsOf([{ ...shop, modules: ['@openagt/skill-queue', 7, '', 'x'.repeat(600), ...Array.from({ length: 60 }, (_, i) => `p${i}`)] }])
-  assert.deepEqual(said[0]!.modules!.slice(0, 2), ['@openagt/skill-queue', 'p0'])
+  const said = ownProjectsOf([{ ...shop, modules: ['@openagt/queue', 7, '', 'x'.repeat(600), ...Array.from({ length: 60 }, (_, i) => `p${i}`)] }])
+  assert.deepEqual(said[0]!.modules!.slice(0, 2), ['@openagt/queue', 'p0'])
   assert.equal(said[0]!.modules!.length, 47)
   assert.equal(ownProjectsOf([{ ...shop, modules: 'all' }])[0]!.modules, undefined)
 })
@@ -84,8 +84,8 @@ test("another computer's project is listed as the page lists projects, marked wi
 })
 
 test("another computer's project is listed with the pages its computer said it has", () => {
-  const machine: OwnMachine = { id: 'http://127.0.0.1:4210', projects: [{ ...shop, modules: ['@openagt/skill-queue'] }] }
-  assert.deepEqual(elsewhereSummary({ machine, project: machine.projects![0]! }).modules, ['@openagt/skill-queue'])
+  const machine: OwnMachine = { id: 'http://127.0.0.1:4210', projects: [{ ...shop, modules: ['@openagt/queue'] }] }
+  assert.deepEqual(elsewhereSummary({ machine, project: machine.projects![0]! }).modules, ['@openagt/queue'])
 })
 
 test('a computer is asked for its projects once in a while, and what it said is kept only when it changed', async () => {

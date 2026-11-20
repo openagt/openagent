@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { PERSON_INFO } from '@openagt/hooks'
 import { act, rpcKind, type RpcComputerHost } from '@openagt/hooks/rpc'
 import { memorySettings } from '@openagt/hooks/testing'
-import type { ProfileOutcome } from '@openagt/skill-github'
+import type { ProfileOutcome } from '@openagt/github'
 import { copyFromGitHub, copyingFrom, removePicture, saveName } from './server.js'
 
 // Settings › Profile's functions, against a store kept in memory, GitHub's profile as a test says it.

@@ -15,8 +15,8 @@ import { onDashboard, onQueue } from '../dashboard-rpc/reads.js'
 
 const TICKET_FILE = '2026-08-01_login-page.md'
 /** The fixture's provider packages: the modules' commands are these packages' own. */
-const QUEUE_PACKAGE = '@openagt/skill-queue'
-const TICKETS_PACKAGE = '@openagt/skill-tickets'
+const QUEUE_PACKAGE = '@openagt/queue'
+const TICKETS_PACKAGE = '@openagt/tickets'
 const TICKET = [
   'priority: 8',
   '',

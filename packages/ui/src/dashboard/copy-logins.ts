@@ -1,7 +1,7 @@
-import { runsAccountDir } from '@openagt/skill-github'
+import { runsAccountDir } from '@openagt/github'
 import { execFile } from 'node:child_process'
 import { hostname } from 'node:os'
-import { CLAUDE_ACCOUNT_ENV, CLAUDE_TOKEN_ENV } from '@openagt/agent-driver-claude'
+import { CLAUDE_ACCOUNT_ENV, CLAUDE_TOKEN_ENV } from '@openagt/agent-driver-claude-code'
 import type { ModuleCommandResult } from '../project-modules.js'
 import type { RelayHandlers } from './relay-endpoints.js'
 import { giveRemoteLogins, pingRemote, remoteLogins, type MachineAccess } from './remote-run.js'
@@ -25,7 +25,7 @@ import { accountsPath, readAccounts } from '@openagt/skill-account-rotation'
  */
 
 /** The package that keeps a person's own logins on a computer several people use. */
-const DEVICES = '@openagt/dashboard-devices'
+const DEVICES = '@openagt/devices'
 
 /** How a command of this computer's packages is run: `runComputerCommand`. */
 export type RunComputerCommand = (pkg: string, args: string[], command?: string | null, input?: string | null) => Promise<ModuleCommandResult>

@@ -24,10 +24,10 @@ jobs:
             run: pnpm -C packages/ui test:node
           # --no-bail: a red package does not stop the next one either.
           - name: agent packages tests
-            run: pnpm -r --workspace-concurrency=1 --no-bail --filter @openagt/agent-runner --filter @openagt/skill-scheduler run test
+            run: pnpm -r --workspace-concurrency=1 --no-bail --filter @openagt/agent-runner --filter @openagt/scheduled-agents run test
           # Every other package, named by what it is not: a new package's tests run here.
           - name: other packages tests
-            run: pnpm -r --workspace-concurrency=1 --no-bail --filter '!@openagt/ui' --filter '!@openagt/agent-runner' --filter '!@openagt/skill-scheduler' run test
+            run: pnpm -r --workspace-concurrency=1 --no-bail --filter '!@openagt/ui' --filter '!@openagt/agent-runner' --filter '!@openagt/scheduled-agents' run test
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

@@ -144,7 +144,7 @@ describe('Composer (#721)', () => {
   })
 
   test('where devices is off, no Settings entry adds a machine: with none saved there is no "Run on"; with devices, "Add a machine…" leads to its entry', async () => {
-    const devices: MountedView<'settings.section'> = { place: 'settings.section', id: 'devices', title: 'Devices', icon: Laptop, order: 90, View: () => null, package: '@openagt/dashboard-devices', projects: [], computer: true }
+    const devices: MountedView<'settings.section'> = { place: 'settings.section', id: 'devices', title: 'Devices', icon: Laptop, order: 90, View: () => null, package: '@openagt/devices', projects: [], computer: true }
     const openSettings = vi.fn()
     const composer = (sections: MountedView<'settings.section'>[]) => (
       <HostServicesContext.Provider value={{ ...INERT_HOST_SERVICES, openSettings }}>

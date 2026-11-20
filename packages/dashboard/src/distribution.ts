@@ -18,16 +18,16 @@ const DISTRIBUTION: DashboardDistribution = [
   { package: '@openagt/store-git-repository' },
   { package: '@openagt/store-git-branch' },
   // git-branches: the run's checkout, its branch read back, the checkout reclaimed.
-  { package: '@openagt/skill-branches' },
+  { package: '@openagt/git-branches' },
   // github: the run's account and pull request; its skill is in every run of a project on GitHub.
-  { package: '@openagt/skill-github' },
+  { package: '@openagt/github' },
   // skills: a run's skills linked where it works, and Settings › Skills, each project's own skills, listed.
   { package: '@openagt/skills' },
   // agent-driver: this computer's host, the agent's turns and the run's record.
   { package: '@openagt/agent-runner' },
   // The Changes and Files panes.
-  { package: '@openagt/dashboard-changes' },
-  { package: '@openagt/dashboard-files' },
+  { package: '@openagt/ui-pane-changes' },
+  { package: '@openagt/ui-pane-files' },
   // The prompts a person saved, theirs or a project's, which the message box loads.
   { package: '@openagt/saved-prompts' },
   // How a text in markdown looks, wherever the dashboard shows one.
@@ -38,7 +38,7 @@ const DISTRIBUTION: DashboardDistribution = [
   { package: '@openagt/user-info', for: 'computer' },
   // devices, a plugin that starts off: the door to this computer, and its other computers and
   // servers. Then the accounts its runs use.
-  { package: '@openagt/dashboard-devices', for: 'computer' },
+  { package: '@openagt/devices', for: 'computer' },
   { package: '@openagt/skill-account-rotation', for: 'computer' },
   // notifications-command, a plugin that starts off: the person's command, run when a run on this
   // computer needs them.
@@ -53,14 +53,14 @@ const DISTRIBUTION: DashboardDistribution = [
   // computer, in a project on GitHub, through the browser extension it brings.
   { package: '@openagt/host-claude-web', for: 'computer' },
   // The plugins kept per project: ask starts on, the others are a project's once a person switches them on.
-  { package: '@openagt/skill-ask', on: true },
-  { package: '@openagt/skill-logs' },
-  { package: '@openagt/skill-tickets' },
-  { package: '@openagt/skill-queue' },
-  { package: '@openagt/skill-browser' },
-  { package: '@openagt/skill-scheduler' },
-  { package: '@openagt/skill-discord' },
-  { package: '@openagt/skill-reply' },
+  { package: '@openagt/ask', on: true },
+  { package: '@openagt/logs' },
+  { package: '@openagt/tickets' },
+  { package: '@openagt/queue' },
+  { package: '@openagt/browser' },
+  { package: '@openagt/scheduled-agents' },
+  { package: '@openagt/discord' },
+  { package: '@openagt/github-auto-reply' },
   // host-github-actions: "Run on" offers GitHub Actions beside this computer, in a project on
   // GitHub whose repository has the workflow it brings.
   { package: '@openagt/host-github-actions' },

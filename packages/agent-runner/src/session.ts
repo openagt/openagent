@@ -263,7 +263,7 @@ export const AFRESH_NOTICE = "The coding agent no longer has this run's earlier 
 
 /** What the agent of a run going on in a fresh conversation is handed after its prompt: where its earlier work is. */
 export function earlierWorkLine(id: string, pr: { url: string } | undefined): string {
-  return `Your earlier conversation in this run is gone, so this one starts without it. Before anything else, read what you did before: this run's record, \`npx @openagt/skill-logs@0.1 show ${id}\`${pr ? `, and the whole thread of its pull request, ${pr.url}` : ''}.`
+  return `Your earlier conversation in this run is gone, so this one starts without it. Before anything else, read what you did before: this run's record, \`npx @openagt/logs@0.1 show ${id}\`${pr ? `, and the whole thread of its pull request, ${pr.url}` : ''}.`
 }
 
 /**

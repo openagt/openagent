@@ -388,7 +388,7 @@ test("a project only the other machine has is listed here, marked with that mach
     const listed = await elsewhereOnceSaid(m)
     const otherB = otherOf(m.shopB)
     const id = elsewhereId(projectId(otherB), m.machineB)
-    assert.deepEqual(listed, [{ id, path: otherB, name: 'other', activated: false, gitHost: true, machine: m.machineB, modules: ['@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/saved-prompts', '@openagt/skill-ask', '@openagt/skills'] }])
+    assert.deepEqual(listed, [{ id, path: otherB, name: 'other', activated: false, gitHost: true, machine: m.machineB, modules: ['@openagt/ask', '@openagt/saved-prompts', '@openagt/skills', '@openagt/ui-pane-changes', '@openagt/ui-pane-files'] }])
 
     // On B, the run starts in B's own project, and the branch picked is B's to read: it goes with it.
     const result = await m.a.onStart('fix the other', { machine: m.machineB, base: 'a-branch-of-b', model: 'opus' }, id)

@@ -7,7 +7,7 @@
 import { strict as assert } from 'node:assert'
 import { mkdir } from 'node:fs/promises'
 import { after, before } from 'node:test'
-import { resolveChromePath } from '@openagt/skill-browser'
+import { resolveChromePath } from '@openagt/browser'
 import { chromium, type Browser, type Page } from 'playwright-core'
 import type { AgentMeta } from '../store/index.js'
 import { startDemo, type Demo } from './demo.js'

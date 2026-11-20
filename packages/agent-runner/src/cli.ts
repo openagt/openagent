@@ -1,6 +1,6 @@
 import { PLUGINS_WITHOUT_ENV, PRESET_ENV, Refused, UsageError, errorMessage, inRepo, nodeGitRunner, parseCommandArgs, runCommandLine, runPackageCommand, sessionsHomeOf, PROJECT_SKILLS_ENV, helpRows, helpText, type Command, type GitRunner } from '@openagt/agent-data'
 import { createHooks, loadHandedDown } from '@openagt/hooks'
-import { liftSkillRules, projectRoot, sessionRepos, skillLink } from '@openagt/skill-branches'
+import { liftSkillRules, projectRoot, sessionRepos, skillLink } from '@openagt/git-branches'
 import { DRIVER_NAMES, GIT_ACCOUNT_ENV, detachResume, detachRun, isDriverName, presetLoginFor, readyToRun, resumeProject, runProject, type DriverName, type SpawnedResume } from './runner.js'
 import { projectOf, type RunOutcome, type RunRequest } from './run.js'
 import { anyPick, handedDownSettings, presetNamed, runPreset, sessionPicksNamed } from './preset.js'

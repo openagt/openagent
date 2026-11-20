@@ -19,9 +19,9 @@ test('reading the command only reads; saving it changes it', () => {
 test("the command is this computer's, empty until one is saved; an empty one takes it away", async () => {
   const host = computer()
   assert.equal(await command(host, {}), '')
-  await saveCommand(host, { command: '  npx @openagt/skill-discord@0.1 send "$MESSAGE"  ' })
-  assert.equal(await command(host, {}), 'npx @openagt/skill-discord@0.1 send "$MESSAGE"')
-  assert.equal(await host.settings.get(NOTIFY_COMMAND), 'npx @openagt/skill-discord@0.1 send "$MESSAGE"')
+  await saveCommand(host, { command: '  npx @openagt/discord@0.1 send "$MESSAGE"  ' })
+  assert.equal(await command(host, {}), 'npx @openagt/discord@0.1 send "$MESSAGE"')
+  assert.equal(await host.settings.get(NOTIFY_COMMAND), 'npx @openagt/discord@0.1 send "$MESSAGE"')
   await saveCommand(host, { command: '' })
   assert.equal(await command(host, {}), '')
 })

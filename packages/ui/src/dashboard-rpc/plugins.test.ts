@@ -39,7 +39,7 @@ test("Settings › Plugins lists the distribution's plugins with their rows, the
 
     assert.deepEqual(await sendSwitchPlugin('tickets', true, id), { ok: true })
     assert.equal((await onProjectPlugins(id))?.find(row => row.name === 'tickets')?.on, true)
-    assert.ok((await packagesOf(shop)).some(pkg => pkg.name === '@openagt/skill-tickets'), 'its package is the project\'s')
+    assert.ok((await packagesOf(shop)).some(pkg => pkg.name === '@openagt/tickets'), 'its package is the project\'s')
     assert.deepEqual(await sendSwitchPlugin('ask', false, id), { ok: true })
     assert.equal((await onProjectPlugins(id))?.find(row => row.name === 'ask')?.on, false)
     assert.deepEqual(await sendSwitchPlugin('devices', false), { ok: true })

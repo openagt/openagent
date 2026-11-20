@@ -1,0 +1,59 @@
+{
+  "name": "@openagt/github",
+  "version": "0.1.14",
+  "description": "GitHub as a skill for coding agents: the project's pull requests and issues through gh, and the one command OpenAgent and the scheduler run for the git host: requests, open, merge, home, and replies, what came on the pull requests this machine's agents opened since each ended.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/openagt/openagent.git",
+    "directory": "packages/github"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "bin/github",
+    "SKILL.md",
+    "assets"
+  ],
+  "bin": {
+    "github": "bin/github"
+  },
+  "openagent": {
+    "git-host": "github",
+    "repository": "github"
+  },
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./SKILL.md": "./SKILL.md",
+    "./module": {
+      "types": "./dist/module.d.ts",
+      "default": "./dist/module.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "prepack": "node -e \"if(!process.env.npm_config_user_agent?.startsWith('pnpm/')){console.error('Pack and publish with pnpm: it replaces workspace:* with the real version, npm does not');process.exit(1)}\"",
+    "typecheck": "tsc --noEmit",
+    "test": "tsc -p tsconfig.test.json && node ../../scripts/test-node.mjs",
+    "clean": "rm -rf dist dist-test"
+  },
+  "dependencies": {
+    "@openagt/agent-data": "workspace:*",
+    "@openagt/hooks": "workspace:*",
+    "@openagt/agent-driver": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^7.0.2"
+  }
+}

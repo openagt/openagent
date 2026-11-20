@@ -6,7 +6,7 @@ import { mkdir, mkdtemp, realpath, rm, stat, writeFile } from 'node:fs/promises'
 import { deleteProjectAgent, removeProjectWorktree } from './worktrees.js'
 import { nodeGitRunner } from '@openagt/agent-data'
 import { runFiles, writeRun } from '@openagt/agent-driver'
-import { addWorktree, agentBranchName } from '@openagt/skill-branches'
+import { addWorktree, agentBranchName } from '@openagt/git-branches'
 import { handDownTestDistribution } from './test-distribution.js'
 
 handDownTestDistribution()

@@ -19,7 +19,7 @@ import type { OpenAgentEvent } from './events.js'
 import { nodeGitRunner, sessionsHome, projectId } from '@openagt/agent-data'
 import { publishedBase } from '@openagt/agent-data/names'
 import { SESSIONS_ID } from './project-address.js'
-import { addWorktree, agentBranchName, worktreePath } from '@openagt/skill-branches'
+import { addWorktree, agentBranchName, worktreePath } from '@openagt/git-branches'
 import { DATA_BRANCH, SHARE_SETTING, excludeFromGit, readSharing, withFileBranch, writeSharing } from '@openagt/agent-data'
 import { handDownTestDistribution } from './test-distribution.js'
 

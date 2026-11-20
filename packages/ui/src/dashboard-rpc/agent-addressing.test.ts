@@ -12,7 +12,7 @@ import { asArrived } from './relay-agent.js'
 import { dispatchRelayRpc } from './relay-dispatch.js'
 import { addProject } from '../registry.js'
 import { DATA_BRANCH, fileBranchPath, nodeGitRunner, projectId as idFor } from '@openagt/agent-data'
-import { worktreePath, addWorktree, agentBranchName } from '@openagt/skill-branches'
+import { worktreePath, addWorktree, agentBranchName } from '@openagt/git-branches'
 import { OPENAGENT_DIR } from '../openagent-dir.js'
 import { INBOX_FILE } from '@openagt/agent-runner'
 import { writeRun } from '@openagt/agent-driver'
@@ -35,7 +35,7 @@ const QUESTION = { kind: 'question', title: 'Which way?', options: [{ id: 'a', l
  * in the words ask's server part or the call said it.
  */
 async function answer(run: { projectId: string; agentId: string }, question: string, picked: string | string[]): Promise<{ ok: true } | { ok: false; error: string }> {
-  const called = await callModule(run.projectId, '@openagt/skill-ask', 'answer', { agentId: run.agentId, question, picked })
+  const called = await callModule(run.projectId, '@openagt/ask', 'answer', { agentId: run.agentId, question, picked })
   if (!called.ok) return called
   const answered = called.output as { ok: true } | { ok: false; error: string }
   return answered.ok ? { ok: true } : answered
@@ -478,7 +478,7 @@ test('sendOpenPullRequest opens the pull request as a draft when asked to, and a
     await writeFile(join(host, 'provider.cjs'), GIT_HOST_PROVIDER)
     const opens = async (): Promise<string[]> => (await readFile(join(host, 'calls.log'), 'utf8').catch(() => '')).split('\n').filter(line => line.startsWith('open '))
 
-    await withDistribution(ctx.dir, [...testPackagesBut('@openagt/skill-github'), 'host'], async () => {
+    await withDistribution(ctx.dir, [...testPackagesBut('@openagt/github'), 'host'], async () => {
       assert.deepEqual(await sendOpenPullRequest(ctx.projectId, ctx.agentId, { draft: true }), { ok: true, url: 'https://x/pull/9', number: 9 })
       assert.equal((await opens()).length, 1)
       assert.match((await opens())[0]!, / --draft$/)

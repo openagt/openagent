@@ -10,7 +10,7 @@ import { DISTRIBUTION_ENV, distributionItems, packageDirOf } from '@openagt/hook
  * host or a package.
  *
  * What this tool asks of it: the account a run works as there. The pull request a run's branch
- * has is the github module's to read back (`@openagt/skill-github/module`).
+ * has is the github module's to read back (`@openagt/github/module`).
  */
 
 const NO_GIT_HOST = 'this project has no git host package'

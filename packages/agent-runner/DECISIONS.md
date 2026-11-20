@@ -16,7 +16,7 @@ already made, and lists it in its pull request; for anything else it proposes an
   coding agent's adapter a package of its own. It lives in this package until the packages
   are merged. Picked over a runner beside the driver, which kept git out of the driver.
 - The runner depends on `@openagt/agent-driver` for the session contract and the
-  records, on each coding agent's adapter (`@openagt/agent-driver-claude`,
+  records, on each coding agent's adapter (`@openagt/agent-driver-claude-code`,
   `@openagt/agent-driver-codex`) for its driver and its readiness check, and on
   `agent-data` for the branch. A run's checkout and its pull request are steps of the
   modules of the distribution that starts the run, handed down to the run's process

@@ -65,7 +65,7 @@ test("a preset's GitHub account applies where the project has a git host; in a s
   const repo = await testRepo()
   const home = await mkdtemp(join(tmpdir(), 'oa-sessions-'))
   // The git host is the distribution's github, as OpenAgent hands its distribution down to a run.
-  const handBack = await handDownDistribution(home, { '@openagt/skill-github': dirname(createRequire(import.meta.url).resolve('@openagt/skill-github/package.json')) })
+  const handBack = await handDownDistribution(home, { '@openagt/github': dirname(createRequire(import.meta.url).resolve('@openagt/github/package.json')) })
   try {
     await git(['remote', 'set-url', 'origin', 'git@github.com:someone/project.git'], repo)
     assert.equal(await presetLoginFor(repo, { options: { github: { account: 'octo-agent' } } }), 'octo-agent')

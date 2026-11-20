@@ -1,6 +1,6 @@
 import { PERSON_INFO, isPersonName, isPictureAddress, type PersonInfo } from '@openagt/hooks'
 import { act, type RpcComputerHost } from '@openagt/hooks/rpc'
-import { publicProfile, type ProfileOutcome } from '@openagt/skill-github'
+import { publicProfile, type ProfileOutcome } from '@openagt/github'
 
 // user-info's server part: the functions Settings › Profile calls (`@openagt/hooks/rpc`), in no
 // project, since the person's name and picture are theirs on every computer. Each saves the

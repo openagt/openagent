@@ -59,16 +59,16 @@ test("every package the distribution lists is read from its install, in its orde
 test("a project with nothing installed gets its runs, its branches and a repository to create from the distribution's packages, and nothing of a plugin that is off", async () => {
   const root = await scratch('packages')
   try {
-    assert.equal((await providedCommand(root, 'runs'))?.package, '@openagt/skill-logs', "the runs' records, whatever logs says")
-    assert.equal((await providedCommand(root, 'branches'))?.package, '@openagt/skill-branches')
+    assert.equal((await providedCommand(root, 'runs'))?.package, '@openagt/logs', "the runs' records, whatever logs says")
+    assert.equal((await providedCommand(root, 'branches'))?.package, '@openagt/git-branches')
     assert.deepEqual(await lookupProvided(root, 'tickets'), {})
-    assert.equal((await providedCommand(root, 'repository'))?.package, '@openagt/skill-github', 'the package that can create its repository')
+    assert.equal((await providedCommand(root, 'repository'))?.package, '@openagt/github', 'the package that can create its repository')
     assert.deepEqual(
       (await packagesOf(root)).map(pkg => pkg.name),
-      ['@openagt/store-filesystem', '@openagt/skill-branches', '@openagt/skill-github', '@openagt/skills', '@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/saved-prompts', '@openagt/skill-ask', '@openagt/agent-runner'],
+      ['@openagt/store-filesystem', '@openagt/git-branches', '@openagt/github', '@openagt/skills', '@openagt/ui-pane-changes', '@openagt/ui-pane-files', '@openagt/saved-prompts', '@openagt/ask', '@openagt/agent-runner'],
       "every project's core packages, and the plugin that starts on; none of the others, none of the computer's",
     )
-    assert.deepEqual((await readProjectModules(root)).map(module => module.package), ['@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/saved-prompts', '@openagt/skill-ask', '@openagt/skills'])
+    assert.deepEqual((await readProjectModules(root)).map(module => module.package), ['@openagt/ask', '@openagt/saved-prompts', '@openagt/skills', '@openagt/ui-pane-changes', '@openagt/ui-pane-files'])
   } finally {
     await rm(root, { recursive: true, force: true })
   }
@@ -78,18 +78,18 @@ test("every project keeps its runs' records through the logs package, and shows 
   const root = await scratch('logs')
   const modules = async (): Promise<string[]> => (await readProjectModules(root)).map(module => module.package)
   try {
-    assert.deepEqual(await modules(), ['@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/saved-prompts', '@openagt/skill-ask', '@openagt/skills'])
+    assert.deepEqual(await modules(), ['@openagt/ask', '@openagt/saved-prompts', '@openagt/skills', '@openagt/ui-pane-changes', '@openagt/ui-pane-files'])
     await switchPlugin(root, 'logs')
-    assert.deepEqual(await modules(), ['@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/saved-prompts', '@openagt/skill-ask', '@openagt/skill-logs', '@openagt/skills'])
-    assert.equal((await providedCommand(root, 'runs'))?.package, '@openagt/skill-logs')
+    assert.deepEqual(await modules(), ['@openagt/ask', '@openagt/logs', '@openagt/saved-prompts', '@openagt/skills', '@openagt/ui-pane-changes', '@openagt/ui-pane-files'])
+    assert.equal((await providedCommand(root, 'runs'))?.package, '@openagt/logs')
   } finally {
     await rm(root, { recursive: true, force: true })
   }
 })
 
 test("how markdown looks, the Human Queue, the person's profile, devices, account rotation and the notifications are the computer's: their parts are there with no project, and no project has them; the plugins' only while they are on", async () => {
-  assert.deepEqual((await computerPackages()).map(pkg => pkg.name), ['@openagt/ui-renderer-markdown', '@openagt/ui-card-waiting', '@openagt/user-info', '@openagt/dashboard-devices', '@openagt/skill-account-rotation', '@openagt/notifications-browser'])
-  assert.deepEqual((await readComputerModules()).map(module => module.package), ['@openagt/dashboard-devices', '@openagt/notifications-browser', '@openagt/skill-account-rotation', '@openagt/ui-card-waiting', '@openagt/ui-renderer-markdown', '@openagt/user-info'])
+  assert.deepEqual((await computerPackages()).map(pkg => pkg.name), ['@openagt/ui-renderer-markdown', '@openagt/ui-card-waiting', '@openagt/user-info', '@openagt/devices', '@openagt/skill-account-rotation', '@openagt/notifications-browser'])
+  assert.deepEqual((await readComputerModules()).map(module => module.package), ['@openagt/devices', '@openagt/notifications-browser', '@openagt/skill-account-rotation', '@openagt/ui-card-waiting', '@openagt/ui-renderer-markdown', '@openagt/user-info'])
   assert.deepEqual((await readComputerModules()).map(module => Object.keys(module.bins)), [['devices'], [], ['account-rotation'], [], [], []])
   const hooks = await distributionHooks()
   await hooks.setEnabled('devices', false)
@@ -112,23 +112,23 @@ test("a plugin's package, its data and its page are a project's once the plugin 
   try {
     assert.deepEqual(await lookupProvided(root, 'tickets'), {})
     await switchPlugin(root, 'tickets')
-    assert.equal((await providedCommand(root, 'tickets'))?.package, '@openagt/skill-tickets')
+    assert.equal((await providedCommand(root, 'tickets'))?.package, '@openagt/tickets')
     assert.deepEqual(await lookupProvided(other, 'tickets'), {}, "another project's row is its own")
     assert.deepEqual(await lookupProvided(root, 'queue'), {}, 'a plugin that is off stays out')
-    assert.deepEqual(await modules(), ['@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/saved-prompts', '@openagt/skill-ask', '@openagt/skill-tickets', '@openagt/skills'])
+    assert.deepEqual(await modules(), ['@openagt/ask', '@openagt/saved-prompts', '@openagt/skills', '@openagt/tickets', '@openagt/ui-pane-changes', '@openagt/ui-pane-files'])
 
     await switchPlugin(root, 'queue')
     await switchPlugin(root, 'scheduled-agents')
-    assert.equal((await providedCommand(root, 'queue'))?.package, '@openagt/skill-queue')
-    assert.deepEqual(await modules(), ['@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/saved-prompts', '@openagt/skill-ask', '@openagt/skill-queue', '@openagt/skill-scheduler', '@openagt/skill-tickets', '@openagt/skills'])
+    assert.equal((await providedCommand(root, 'queue'))?.package, '@openagt/queue')
+    assert.deepEqual(await modules(), ['@openagt/ask', '@openagt/queue', '@openagt/saved-prompts', '@openagt/scheduled-agents', '@openagt/skills', '@openagt/tickets', '@openagt/ui-pane-changes', '@openagt/ui-pane-files'])
 
     await switchPlugin(root, 'tickets', false)
     await switchPlugin(root, 'queue', false)
     assert.deepEqual(await lookupProvided(root, 'tickets'), {})
-    assert.deepEqual(await modules(), ['@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/saved-prompts', '@openagt/skill-ask', '@openagt/skill-scheduler', '@openagt/skills'])
+    assert.deepEqual(await modules(), ['@openagt/ask', '@openagt/saved-prompts', '@openagt/scheduled-agents', '@openagt/skills', '@openagt/ui-pane-changes', '@openagt/ui-pane-files'])
     await switchPlugin(root, 'ask', false)
-    assert.ok(!(await packagesOf(root)).some(pkg => pkg.name === '@openagt/skill-ask'), 'one that starts on goes off the same way')
-    assert.deepEqual(await modules(), ['@openagt/dashboard-changes', '@openagt/dashboard-files', '@openagt/saved-prompts', '@openagt/skill-scheduler', '@openagt/skills'])
+    assert.ok(!(await packagesOf(root)).some(pkg => pkg.name === '@openagt/ask'), 'one that starts on goes off the same way')
+    assert.deepEqual(await modules(), ['@openagt/saved-prompts', '@openagt/scheduled-agents', '@openagt/skills', '@openagt/ui-pane-changes', '@openagt/ui-pane-files'])
   } finally {
     await rm(root, { recursive: true, force: true })
     await rm(other, { recursive: true, force: true })
@@ -137,12 +137,12 @@ test("a plugin's package, its data and its page are a project's once the plugin 
 
 test("the scheduler is a project's once scheduled-agents is on there", async () => {
   const root = await scratch('tool')
-  const has = async (): Promise<boolean> => (await packagesOf(root)).some(pkg => pkg.name === '@openagt/skill-scheduler')
+  const has = async (): Promise<boolean> => (await packagesOf(root)).some(pkg => pkg.name === '@openagt/scheduled-agents')
   try {
     assert.equal(await has(), false, 'off until it is switched on')
     await switchPlugin(root, 'scheduled-agents')
     assert.equal(await has(), true)
-    assert.ok((await readProjectModules(root)).some(module => module.package === '@openagt/skill-scheduler'), 'its page comes with it')
+    assert.ok((await readProjectModules(root)).some(module => module.package === '@openagt/scheduled-agents'), 'its page comes with it')
   } finally {
     await rm(root, { recursive: true, force: true })
   }
@@ -151,9 +151,9 @@ test("the scheduler is a project's once scheduled-agents is on there", async () 
 test("a project's own dependencies bring nothing: neither a copy of the distribution's package, nor a package of their own for a kind", async () => {
   const root = await scratch('own')
   try {
-    const listed = join(root, 'node_modules', '@openagt', 'skill-tickets')
+    const listed = join(root, 'node_modules', '@openagt', 'tickets')
     await mkdir(join(listed, 'bin'), { recursive: true })
-    await writeFile(join(listed, 'package.json'), JSON.stringify({ name: '@openagt/skill-tickets', version: '9.9.9', bin: { tickets: 'bin/tickets' }, openagent: { tickets: 'tickets' }, exports: { './dashboard': './d.js' } }))
+    await writeFile(join(listed, 'package.json'), JSON.stringify({ name: '@openagt/tickets', version: '9.9.9', bin: { tickets: 'bin/tickets' }, openagent: { tickets: 'tickets' }, exports: { './dashboard': './d.js' } }))
     await writeFile(join(listed, 'bin', 'tickets'), '')
     await writeFile(join(listed, 'd.js'), 'export default {}')
     const own = join(root, 'node_modules', 'my-logs')
@@ -161,16 +161,16 @@ test("a project's own dependencies bring nothing: neither a copy of the distribu
     await writeFile(join(own, 'package.json'), JSON.stringify({ name: 'my-logs', bin: { mine: 'bin/mine' }, openagent: { runs: 'mine' }, exports: { './dashboard': './d.js' } }))
     await writeFile(join(own, 'bin', 'mine'), '')
     await writeFile(join(own, 'd.js'), 'export default {}')
-    await writeFile(join(root, 'package.json'), JSON.stringify({ dependencies: { 'my-logs': '1.0.0' }, devDependencies: { '@openagt/skill-tickets': '9.9.9' }, openagent: { runs: 'my-logs' } }))
+    await writeFile(join(root, 'package.json'), JSON.stringify({ dependencies: { 'my-logs': '1.0.0' }, devDependencies: { '@openagt/tickets': '9.9.9' }, openagent: { runs: 'my-logs' } }))
     assert.deepEqual(await lookupProvided(root, 'tickets'), {}, "listed and installed, with its plugin off: not the project's")
-    assert.equal((await providedCommand(root, 'runs'))?.package, '@openagt/skill-logs', 'nor what its package.json names')
-    assert.ok(!(await readProjectModules(root)).some(module => module.package === 'my-logs' || module.package === '@openagt/skill-tickets'))
+    assert.equal((await providedCommand(root, 'runs'))?.package, '@openagt/logs', 'nor what its package.json names')
+    assert.ok(!(await readProjectModules(root)).some(module => module.package === 'my-logs' || module.package === '@openagt/tickets'))
 
     await switchPlugin(root, 'tickets')
     const command = await providedCommand(root, 'tickets')
-    assert.equal(command?.package, '@openagt/skill-tickets')
+    assert.equal(command?.package, '@openagt/tickets')
     assert.ok(!command!.bin.startsWith(root), "the distribution's copy runs, not the one in the project")
-    const module = (await readProjectModules(root)).find(module => module.package === '@openagt/skill-tickets')
+    const module = (await readProjectModules(root)).find(module => module.package === '@openagt/tickets')
     assert.ok(module && module.version !== '9.9.9' && !module.dir.startsWith(root), "its page is the distribution's copy too")
   } finally {
     await rm(root, { recursive: true, force: true })

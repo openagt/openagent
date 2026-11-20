@@ -8,7 +8,7 @@ export type ProjectSkillsPick = NonNullable<SkillsOptions['project']>
  * The project's own skills a run leaves out (Rom's design, the session's picks): the texts a
  * project tracks under `.agents/skills/<name>/`, and Claude Code's `.claude/skills/<name>` links to
  * them, as the project commits them or `npx skills add` adds them. A session that leaves some out
- * has them out of its checkout alone (`skill-branches`'s `leaveOut`): the index keeps them, nothing
+ * has them out of its checkout alone (`git-branches`' `leaveOut`): the index keeps them, nothing
  * is committed about it, and the project's other checkouts have them.
  */
 
@@ -35,7 +35,7 @@ export async function leftOutSkillPaths(checkout: string, pick: ProjectSkillsPic
   return (await projectSkillNames(checkout, git)).filter(name => !kept.has(name)).flatMap(name => SKILLS_DIRS.map(dir => `${dir}/${name}`))
 }
 
-/** What a run's checkout leaves out, for `skill-branches` to ask of it: {@link leftOutSkillPaths} for the session's pick. */
+/** What a run's checkout leaves out, for `git-branches` to ask of it: {@link leftOutSkillPaths} for the session's pick. */
 export function leavingOut(pick: ProjectSkillsPick | undefined, git: GitRunner = nodeGitRunner()): (checkout: string) => Promise<string[]> {
   return checkout => leftOutSkillPaths(checkout, pick, git)
 }

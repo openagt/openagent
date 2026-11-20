@@ -1,7 +1,7 @@
 import { hostname } from 'node:os'
 import type { GitRunner } from '@openagt/agent-data'
 import type { ProjectRef } from '@openagt/hooks'
-import { listRequests, type GhRunner } from '@openagt/skill-github'
+import { listRequests, type GhRunner } from '@openagt/github'
 import type { AnyDiaryLine, RecordDeps, RunCard } from '@openagt/agent-driver'
 import { endUnmade, handingOff } from './hand-off.js'
 import { githubAccount } from './github.js'

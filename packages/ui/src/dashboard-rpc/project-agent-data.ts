@@ -16,7 +16,7 @@ import { personalFolderShown, type PersonalFolderShown } from '../personal-folde
 export interface KeptData {
   kind: 'runs' | 'tickets' | 'queue'
   count: number
-  /** The providing package's name as a person knows the skill (`logs` for `@openagt/skill-logs`). */
+  /** The providing package's name as a person knows the skill (`logs` for `@openagt/logs`). */
   skill: string
 }
 
@@ -34,9 +34,9 @@ export interface ProjectAgentData {
   accounts?: SendAsHost
 }
 
-/** The skill's name of a package: `@openagt/skill-logs` reads `logs`. */
+/** The skill's name of a package: `@openagt/logs` reads `logs`. */
 function skillName(pkg: string): string {
-  return pkg.replace(/^@[^/]+\//, '').replace(/^skill-/, '')
+  return pkg.replace(/^@[^/]+\//, '')
 }
 
 /** Where the project's agent data is and what is kept; `null` for a project with no folder on this computer. */

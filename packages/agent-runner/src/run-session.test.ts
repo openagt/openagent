@@ -10,7 +10,7 @@ import { markerCard, writeMarker } from './records.js'
 import { sweep } from './sweep.js'
 import { runCli } from './cli.js'
 import { runArgs } from './runner.js'
-import { SESSION_FOLDER_STAYS, sessionRepos } from '@openagt/skill-branches'
+import { SESSION_FOLDER_STAYS, sessionRepos } from '@openagt/git-branches'
 import { NOW, testModules } from './run-test-support.js'
 import { git, removeRepo, testRepo } from './test-repo.js'
 

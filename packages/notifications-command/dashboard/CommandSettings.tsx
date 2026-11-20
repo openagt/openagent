@@ -17,7 +17,7 @@ const ABOUT = (
 /**
  * Settings › Notification command: the shell line this computer runs when a run needs the person,
  * typed and saved here, one line, empty for none. What it does is the person's: it may post to a
- * channel (`npx @openagt/skill-discord@0.1 send "$MESSAGE"`), or anything else.
+ * channel (`npx @openagt/discord@0.1 send "$MESSAGE"`), or anything else.
  */
 export function CommandSettings() {
   const host = useModuleHost()
@@ -81,7 +81,7 @@ export function CommandSettings() {
               <Input
                 id="notifications-command"
                 value={command}
-                placeholder={'npx @openagt/skill-discord@0.1 send "$MESSAGE"'}
+                placeholder={'npx @openagt/discord@0.1 send "$MESSAGE"'}
                 spellCheck={false}
                 disabled={saving.busy}
                 onChange={event => {

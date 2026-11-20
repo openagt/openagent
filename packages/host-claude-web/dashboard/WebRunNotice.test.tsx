@@ -45,7 +45,7 @@ function questionCard(projects: string[]): { given: UiQuestionProps[]; modules: 
       </section>
     )
   }
-  return { given, modules: mountedOf({ renders: [{ kind: 'question', Render, package: '@openagt/skill-ask', projects }] }) }
+  return { given, modules: mountedOf({ renders: [{ kind: 'question', Render, package: '@openagt/ask', projects }] }) }
 }
 
 /**

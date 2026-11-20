@@ -8,8 +8,8 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { withFileBranch, DATA_BRANCH } from '@openagt/agent-data'
-import { TICKETS_DIR } from '@openagt/skill-tickets'
-import { QUEUE_FILE } from '@openagt/skill-queue'
+import { TICKETS_DIR } from '@openagt/tickets'
+import { QUEUE_FILE } from '@openagt/queue'
 
 /**
  * The plugins a fixture project has on, switched on as a person does in Settings › Plugins once the

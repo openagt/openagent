@@ -3,7 +3,7 @@ import { hostname, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { findRun, logCardFile, logDiaryFile, parseDiary, parseRunCard, readDiary, type AnyDiaryLine, type DriverEvent, type LogCard, type RecordDeps, type RunCard, type SessionLog } from '@openagt/agent-driver'
 import { acquireRunLock, isPidAlive, markerCard, recordRun, releaseRunLock, writeMarker } from '@openagt/agent-runner'
-import { accountToken, homeUrlFor, nodeGhRunner } from '@openagt/skill-github'
+import { accountToken, homeUrlFor, nodeGhRunner } from '@openagt/github'
 import { ActionsSession, type ActionsOptions } from './actions.js'
 
 /**

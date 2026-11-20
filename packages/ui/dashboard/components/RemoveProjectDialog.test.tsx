@@ -51,7 +51,7 @@ test('Done puts the keyboard on the project picker, where the next project is pi
 })
 
 test('its scheduler stops is said only for a project that has the scheduler', () => {
-  const scheduler = mountedOf({ views: { 'app.page': [{ place: 'app.page', id: 'automations', label: 'Automations', View: () => null, package: '@openagt/skill-scheduler', projects: ['p1'] }] } })
+  const scheduler = mountedOf({ views: { 'app.page': [{ place: 'app.page', id: 'automations', label: 'Automations', View: () => null, package: '@openagt/scheduled-agents', projects: ['p1'] }] } })
   const { unmount } = render(
     <ModulesContext.Provider value={scheduler}>
       <RemoveProjectDialog projectId="p1" open onOpenChange={vi.fn()} onRemoved={vi.fn()} />

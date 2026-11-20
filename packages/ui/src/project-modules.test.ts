@@ -60,9 +60,9 @@ test("a distribution's modules are the packages it lists that export ./dashboard
 test("a module may bring a server part; every project has the distribution's modules, and one of their names among its own dependencies is not read", async () => {
   const root = await tempDir('openagent-modules-server-')
   try {
-    await pkg(root, { dependencies: { '@openagt/dashboard-files': '1' } })
-    await pkg(join(root, 'node_modules', '@openagt/dashboard-files'), { name: '@openagt/dashboard-files', version: '9.9.9', exports: { './dashboard': './d.js' } }, { 'd.js': 'export default {}' })
-    const files = (await readProjectModules(root)).filter(module => module.package === '@openagt/dashboard-files')
+    await pkg(root, { dependencies: { '@openagt/ui-pane-files': '1' } })
+    await pkg(join(root, 'node_modules', '@openagt/ui-pane-files'), { name: '@openagt/ui-pane-files', version: '9.9.9', exports: { './dashboard': './d.js' } }, { 'd.js': 'export default {}' })
+    const files = (await readProjectModules(root)).filter(module => module.package === '@openagt/ui-pane-files')
     assert.equal(files.length, 1)
     assert.notEqual(files[0]!.version, '9.9.9', 'the distribution’s copy, not the one the project lists')
     assert.ok(files[0]!.server, 'with its server part, which the project’s copy has none of')
@@ -131,8 +131,8 @@ console.log(JSON.stringify({ args, cwd: process.cwd() }))`),
 })
 
 test("the Queue's, Tickets', Automations' and Logs' packages read through their server parts", async () => {
-  for (const name of ['@openagt/skill-queue', '@openagt/skill-tickets', '@openagt/skill-scheduler', '@openagt/skill-logs']) assert.match((await findBroughtModule(name))?.server ?? '', /server\.js$/, name)
+  for (const name of ['@openagt/queue', '@openagt/tickets', '@openagt/scheduled-agents', '@openagt/logs']) assert.match((await findBroughtModule(name))?.server ?? '', /server\.js$/, name)
   // The distribution's own copy is only of the packages a project can have.
-  assert.equal(await findBroughtModule('@openagt/dashboard-devices'), undefined)
+  assert.equal(await findBroughtModule('@openagt/devices'), undefined)
   assert.equal(await findBroughtModule('left-pad'), undefined)
 })
