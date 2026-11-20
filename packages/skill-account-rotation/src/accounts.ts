@@ -1,14 +1,14 @@
 import { readFileSync } from 'node:fs'
-import { configFile, writePrivate } from './files.js'
+import { configFile, writePrivate } from '@openagt/agent-driver'
 import type { AgentAccount, DriverRateWindow } from '@openagt/hooks'
 
 // The accounts an agent's runs may use, when a person has more than one: their own login, which the
 // agent keeps where it always does, and the ones added beside it. What an added account's login is,
-// and how a turn runs on it, is the agent's own (a login in the turn's environment, a home folder of
-// its own): the list, its order, and the next free one taking over at a limit are the same for all.
-// The person's terminal never changes account.
+// and how a turn runs on it, is the agent's own (`RunAgent.accounts`, and its driver): the list,
+// its order, and the next free one taking over at a limit are the same for all. The person's
+// terminal never changes account.
 //
-// One file per agent and user, beside OpenAgent's own registry, readable by that user only: it may
+// One file per list and user, beside OpenAgent's own registry, readable by that user only: it may
 // hold logins. The runner, the scheduler, the dashboard and a server's install read it, and only
 // through here. A driver knows none of this: it is handed the rotation (`rotation.ts`).
 
@@ -23,18 +23,9 @@ interface AccountsFile {
 /** The name the person's own login goes by until they give it one. */
 export const OWN_NAME = 'This computer'
 
-/** The agents with accounts, by the name of their list. */
-export const ACCOUNTS_AGENTS = ['claude', 'codex'] as const
-export type AccountsAgent = (typeof ACCOUNTS_AGENTS)[number]
-
-/** Whether `list` names an agent's list of accounts here: what a coding agent's turns take (`RunAgent.accounts`). */
-export function isAccountsAgent(list: string | undefined): list is AccountsAgent {
-  return (ACCOUNTS_AGENTS as readonly (string | undefined)[]).includes(list)
-}
-
-/** Where an agent's file is: `$XDG_CONFIG_HOME/openagent-<agent>-accounts.json`, else dotted under the home. */
-export function accountsPath(agent: AccountsAgent, env: NodeJS.ProcessEnv = process.env): string {
-  return configFile(`openagent-${agent}-accounts.json`, env)
+/** Where a list's file is: `$XDG_CONFIG_HOME/openagent-<list>-accounts.json`, else dotted under the home. */
+export function accountsPath(list: string, env: NodeJS.ProcessEnv = process.env): string {
+  return configFile(`openagent-${list}-accounts.json`, env)
 }
 
 /** Where a server keeps what it knows of the logins the person's computers handed it, never a login: OpenAgent writes it, beside the accounts. */
@@ -58,18 +49,18 @@ function readHandedOver(env: NodeJS.ProcessEnv): unknown[] {
   }
 }
 
-/** An agent's accounts a computer handed over, by the account's name. None but on a server that uses a computer's logins. */
-export function handedOverBy(agent: AccountsAgent, env: NodeJS.ProcessEnv = process.env): Map<string, HandedOver> {
+/** A list's accounts a computer handed over, by the account's name. None but on a server that uses a computer's logins. */
+export function handedOverBy(list: string, env: NodeJS.ProcessEnv = process.env): Map<string, HandedOver> {
   const entries = (readHandedOver(env) as { kind?: unknown; name?: unknown; from?: unknown; source?: unknown }[]).flatMap(login =>
-    login?.kind === agent && typeof login.name === 'string' && typeof login.from === 'string' ? [[login.name, { from: login.from, comesBack: agent === 'claude' && login.source !== 'own' }] as const] : [],
+    login?.kind === list && typeof login.name === 'string' && typeof login.from === 'string' ? [[login.name, { from: login.from, comesBack: list === 'claude' && login.source !== 'own' }] as const] : [],
   )
   return new Map(entries)
 }
 
 /** The account is no longer here: the computer that handed it over offers it again. */
-export function forgetHandedOver(agent: AccountsAgent, name: string, env: NodeJS.ProcessEnv = process.env): void {
+export function forgetHandedOver(list: string, name: string, env: NodeJS.ProcessEnv = process.env): void {
   const logins = readHandedOver(env) as { kind?: unknown; name?: unknown }[]
-  const left = logins.filter(login => login?.kind !== agent || login.name !== name)
+  const left = logins.filter(login => login?.kind !== list || login.name !== name)
   if (left.length === logins.length) return
   writePrivate(copiedPath(env), `${JSON.stringify({ logins: left }, null, 2)}\n`)
 }
@@ -202,7 +193,7 @@ export function shownAccounts(accounts: AgentAccount[]): ShownAccount[] {
   return accounts.map(({ login, ...rest }) => ({ ...rest, own: login === undefined }))
 }
 
-/** Whether the person added an account of `agent` beside the login its CLI keeps. */
-export function hasAddedAccount(agent: AccountsAgent, env: NodeJS.ProcessEnv = process.env): boolean {
-  return readAccounts(accountsPath(agent, env)).some(account => account.login !== undefined)
+/** Whether the person added an account to `list` beside the login its agent keeps. */
+export function hasAddedAccount(list: string, env: NodeJS.ProcessEnv = process.env): boolean {
+  return readAccounts(accountsPath(list, env)).some(account => account.login !== undefined)
 }

@@ -36,6 +36,9 @@ export {
 export { runIdsOf, runEntries, findEntry, readCard, readRunDiary, type RecordsReader, type RunEntry } from './records.js'
 export { listRuns, findRun, runFiles, readDiary, writeRun, patchRun, deleteRun, runsPath, recordFunnel, resolveRecordDeps, type RecordDeps, type RecordFiles, type RecordFunnel } from './record-store.js'
 export { accountTurn } from './accounts.js'
+export { configFile, writePrivate } from './private-files.js'
+// The coding agents of the distribution (`run.agent`, #2394): the one a run is on, and the accounts each has.
+export { codingAgent, codingAgents, agentNames, UnknownAgent } from './agents.js'
 export {
   runCliSession,
   AgentExitError,

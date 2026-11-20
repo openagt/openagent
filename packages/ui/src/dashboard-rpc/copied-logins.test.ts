@@ -8,6 +8,8 @@ import { copiedWiring, onCopiedLogins, sendCopiedLogin, sendCopiedUsage, sendFor
 import { readCopied } from '../dashboard/copied-logins.js'
 import { provideTestContext } from './test-context.js'
 import { addAccount, copiedPath, OWN_NAME, readAccounts } from '@openagt/skill-account-rotation'
+import { claudeLogins } from '@openagt/agent-driver-claude-code'
+import { codexLogins } from '@openagt/agent-driver-codex'
 
 // A server takes the logins of the person's own computers: each goes where its tool reads it, and
 // the server keeps what the computer said of it, never the login. Taking one off ends nothing.
@@ -37,7 +39,17 @@ async function onServer(body: (server: Server) => Promise<void>, server = true):
   const xdg = process.env['XDG_CONFIG_HOME']
   process.env['XDG_CONFIG_HOME'] = dir
   const path = (agent: 'claude' | 'codex'): string => join(dir, `${agent}-accounts.json`)
-  Object.assign(accountsWiring, { path, now: () => NOW, computer: () => 'droplet', claudeJson: () => join(dir, 'none.json'), codexUsage: async () => [], codexDir: () => join(dir, 'codex-accounts'), codexFolder: (account: { login?: string }) => join(dir, 'codex-accounts', account.login ?? 'none') })
+  // No Claude Code on the server knows who the person is, and no Codex login is there.
+  Object.assign(accountsWiring, {
+    path,
+    env: { ...process.env, CLAUDE_CONFIG_DIR: join(dir, 'no-claude'), CODEX_HOME: join(dir, 'no-codex') },
+    logins: async () => [claudeLogins(), codexLogins({ who: async () => ({}) })],
+    now: () => NOW,
+    computer: () => 'droplet',
+    codexUsage: async () => [],
+    codexDir: () => join(dir, 'codex-accounts'),
+    codexFolder: (account: { login?: string }) => join(dir, 'codex-accounts', account.login ?? 'none'),
+  })
   Object.assign(copiedWiring, {
     server: () => server,
     codexDir: () => join(dir, 'codex-accounts'),

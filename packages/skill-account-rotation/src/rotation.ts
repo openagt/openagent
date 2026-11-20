@@ -1,7 +1,5 @@
-import { accountsPath, freesIn, isLimited, markLimited, noteWindows, pickAccount, readAccounts, usableAccounts, withLogin, type AccountsAgent } from './accounts.js'
-import { ownLoginThere } from './login.js'
-import { loginWiring } from './wiring.js'
-import type { AccountRotation, AccountTurn, AgentAccount, DriverTurn, RotatedTurn } from '@openagt/hooks'
+import { accountsPath, freesIn, isLimited, markLimited, noteWindows, pickAccount, readAccounts, usableAccounts, withLogin } from './accounts.js'
+import type { AccountRotation, AccountTurn, AgentAccount, AgentLogins, DriverTurn, RotatedTurn } from '@openagt/hooks'
 
 // The rotation a driver is handed (`AccountRotation` in `agent-driver`): a turn runs on the first
 // free account of the list, and one its account's limit stops goes on, the same conversation, with
@@ -10,7 +8,7 @@ import type { AccountRotation, AccountTurn, AgentAccount, DriverTurn, RotatedTur
 
 /** Which accounts file a session runs on, and the account it starts on when that one is free. */
 export interface AccountsOption {
-  /** The file. Default the agent's own {@link accountsPath} in the session's environment. */
+  /** The file. Default the list's own {@link accountsPath} in the session's environment. */
   path?: string
   /** The account to start on, by name: a scheduler's pick. Else the first free one. */
   prefer?: string
@@ -18,7 +16,7 @@ export interface AccountsOption {
   only?: readonly string[]
   /** The clock, for tests. */
   now?: () => number
-  /** Whether the agent has a login of the person's own here. Default what it keeps in the session's environment. */
+  /** Whether the agent has a login of the person's own here. Default what it keeps in the session's environment ({@link AgentLogins.ownLoginThere}). */
   ownLoginThere?: (env: NodeJS.ProcessEnv) => boolean
 }
 
@@ -91,15 +89,12 @@ export async function turnOnAccounts(on: TurnOnAccounts): Promise<DriverTurn> {
   }
 }
 
-/** The agents' names as a person reads them. */
-const AGENT_NAMES: Record<AccountsAgent, string> = { claude: 'Claude', codex: 'Codex' }
-
-/** The accounts of `agent`, as a driver is handed them: what its sessions run on. */
-export function accountRotation(agent: AccountsAgent, option: AccountsOption = {}): AccountRotation {
-  const path = (env: NodeJS.ProcessEnv): string => option.path ?? accountsPath(agent, env)
-  const ownThere = (env: NodeJS.ProcessEnv): boolean => (option.ownLoginThere ?? (given => ownLoginThere(agent, loginWiring(given))))(env)
+/** The accounts of an agent's list, as its driver is handed them: what its sessions run on. */
+export function accountRotation(logins: Pick<AgentLogins, 'list' | 'service' | 'ownLoginThere'>, option: AccountsOption = {}): AccountRotation {
+  const path = (env: NodeJS.ProcessEnv): string => option.path ?? accountsPath(logins.list, env)
+  const ownThere = (env: NodeJS.ProcessEnv): boolean => (option.ownLoginThere ?? logins.ownLoginThere)(env)
   return {
     first: env => pickAccount(withLogin(readAccounts(path(env)), ownThere(env)), (option.now ?? Date.now)(), option.prefer),
-    turn: (env, on) => turnOnAccounts({ ...on, option, path: path(env), agent: AGENT_NAMES[agent], ownThere: ownThere(env) }),
+    turn: (env, on) => turnOnAccounts({ ...on, option, path: path(env), agent: logins.service, ownThere: ownThere(env) }),
   }
 }

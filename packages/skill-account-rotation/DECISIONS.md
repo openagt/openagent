@@ -12,10 +12,12 @@ already made, and lists it in its pull request; for anything else it proposes an
   and 20), kept in this package until the packages are merged. Picked over a package of
   their own beside the driver.
 - A driver holds no rotation: it is handed one (`AccountRotation` in `agent-driver`) by
-  whoever starts it, and a driver handed none runs on whatever login its agent has. The
-  package depends on the drivers for their logins, never the other way. Picked over the
-  drivers calling this package, a circle of packages, and over the switching staying in
-  the drivers, with only the list moved out.
+  whoever starts it, and a driver handed none runs on whatever login its agent has. What only
+  an agent knows of its logins, its adapter gives with the agent (`RunAgent.accounts`,
+  #2394), and the package depends on no driver. Picked over the drivers calling this package,
+  a circle of packages; over the package depending on the drivers for their logins, which kept
+  it out of `agent-driver`, the package the drivers build on; and over the switching staying
+  in the drivers, with only the list moved out.
 - No run gets the skill (#2394): the accounts and their rotation are agent-driver's, and runs
   switch accounts without it, the runner using this package itself. The skill only lets an
   agent add or remove an account when the person asks. Picked over every run getting it, one

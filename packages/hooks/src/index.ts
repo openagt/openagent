@@ -11,6 +11,7 @@ export {
   type AccountRotation,
   type AccountTurn,
   type AgentAccount,
+  type AgentLogins,
   type Driver,
   type DriverEvent,
   type DriverFix,
@@ -42,6 +43,9 @@ export {
   type RunAgentReadyOptions,
   type SessionLog,
   type SessionLogOptions,
+  type SignedIn,
+  type SignInSaid,
+  type UsageWindow,
   type WrittenCard,
 } from './agent.js'
 export type { ProjectRef } from './project.js'

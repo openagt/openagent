@@ -1,5 +1,5 @@
 import { readPersonal } from './config.js'
-import { codingAgent } from './agents.js'
+import { codingAgent } from '@openagt/agent-driver'
 import { driverFor } from './runner.js'
 import { isBareCommand, startNaming, titleOf, titlePrompt, type NamingSession } from './title.js'
 import type { Driver, ReadyPrompt } from '@openagt/hooks'

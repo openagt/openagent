@@ -11,7 +11,7 @@ const notRoot = () => false
 
 test("a run's driver bypasses Claude Code's permission prompts, in the run's environment, with this machine's setup parts and the accounts its turns take", () => {
   const agent = claudeCodeAgent()
-  assert.deepEqual([agent.id, agent.label, agent.accounts, agent.ownQuestionTool], ['claude-code', 'Claude Code', 'claude', true])
+  assert.deepEqual([agent.id, agent.label, agent.accounts?.list, agent.ownQuestionTool], ['claude-code', 'Claude Code', 'claude', true])
   const accounts: AccountRotation = { first: () => undefined, turn: async () => ({ text: '' }) }
   const driver = agent.driver({ env: { AGENT_ID: 'run-1' }, personal, accounts })
   assert.ok(driver instanceof ClaudeCodeDriver)

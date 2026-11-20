@@ -1,10 +1,11 @@
-import { readAccounts, shownAccounts, useFirst, type AccountsAgent } from './accounts.js'
+import { readAccounts, shownAccounts, useFirst } from './accounts.js'
 import { addingNow, beginAdding, bringCode, cancelAdding, runAdding } from './adding.js'
 import { comesBackFrom, logOut, removeAdded } from './login.js'
-import { addingBoth, listed, listing } from './reads.js'
+import { addingAll, listed, listing } from './reads.js'
 import { loginWiring, type LoginWiring } from './wiring.js'
 import { readUsage } from './usage.js'
 import { unknownWord, usageError, wrongArguments, helpRows } from '@openagt/agent-data'
+import { UnknownAgent } from '@openagt/agent-driver'
 
 /**
  * The command line: a result is one JSON document on stdout; a refusal is one line for a person on
@@ -15,10 +16,10 @@ import { unknownWord, usageError, wrongArguments, helpRows } from '@openagt/agen
 export const USAGE = `usage: account-rotation <command>
 
 ${helpRows([
-  ['list', 'the accounts of each agent in the order runs try them, never a login, and the agents not installed'],
+  ['list', `the accounts of each coding agent's list in the order runs try them, never a login, and the lists whose agent is not installed`],
   ['usage', 'how full each account is, read now where it can be'],
   ['add <claude|codex> <name>', 'start adding a new account under <name>: the person signs in, and this answers at once'],
-  ['adding', 'how adding stands for each agent: where to sign in, and why the last one did not go through'],
+  ['adding', 'how adding stands for each list: where to sign in, and why the last one did not go through'],
   ['add-code <claude|codex>', 'hand the sign-in the code its page showed, on standard input'],
   ['add-cancel <claude|codex>', 'stop adding'],
   ['remove <claude|codex> <name>', 'take an added account off the list'],
@@ -44,8 +45,6 @@ async function readStdin(): Promise<string> {
   return said
 }
 
-const isAgent = (value: string | undefined): value is AccountsAgent => value === 'claude' || value === 'codex'
-
 /** Every command, `add`'s own sign-in process included. */
 const COMMANDS = new Set(['list', 'usage', 'add', 'adding', 'add-code', 'add-cancel', 'remove', 'logout', 'use-first', 'add-worker'])
 
@@ -69,44 +68,49 @@ export async function runCli(argv: readonly string[], io: CliIo): Promise<number
     io.stdout(USAGE)
     return 0
   }
+  // The lists are the coding agents' of the OpenAgent that started this command: with none handed down, there is none.
+  if (COMMANDS.has(command ?? '') && (await wiring.logins()).length === 0) return refuse(new UnknownAgent(undefined, []).message)
   if (command === 'list' && argv.length === 1) return answer(await listing(wiring))
   if (command === 'usage' && argv.length === 1) return answer(await readUsage(wiring))
-  if (command === 'adding' && argv.length === 1) return answer(addingBoth(wiring))
-  if (!isAgent(agent)) return misread()
+  if (command === 'adding' && argv.length === 1) return answer(await addingAll(wiring))
+  // The list a command names, among the coding agents' lists: one of no agent here is a command that cannot be read.
+  const logins = agent === undefined || !COMMANDS.has(command ?? '') ? undefined : (await wiring.logins()).find(one => one.list === agent)
+  if (!logins) return misread()
+  const list = logins.list
   if (command === 'add-code' && argv.length === 2) {
-    const brought = bringCode(agent, await (io.stdin ?? readStdin)(), wiring)
-    return brought.ok ? answer(addingNow(agent, wiring)) : refuse(brought.error)
+    const brought = bringCode(logins, await (io.stdin ?? readStdin)(), wiring)
+    return brought.ok ? answer(addingNow(list, wiring)) : refuse(brought.error)
   }
   if (command === 'add-cancel' && argv.length === 2) {
-    cancelAdding(agent, wiring)
-    return answer(addingNow(agent, wiring))
+    cancelAdding(list, wiring)
+    return answer(addingNow(list, wiring))
   }
   if (command === 'logout' && argv.length === 2) {
-    const failed = await logOut(agent, wiring)
-    return failed === undefined ? answer(await listed(agent, wiring)) : refuse(failed)
+    const failed = await logOut(logins, wiring)
+    return failed === undefined ? answer(await listed(logins, wiring)) : refuse(failed)
   }
   if (name === undefined || argv.length !== 3) return misread()
   if (command === 'add') {
-    const begun = await beginAdding(agent, name, wiring)
-    return begun.ok ? answer(addingNow(agent, wiring)) : refuse(begun.error)
+    const begun = await beginAdding(logins, name, wiring)
+    return begun.ok ? answer(addingNow(list, wiring)) : refuse(begun.error)
   }
   // The sign-in's own process, which `add` starts: it ends when the person has signed in, or stopped.
   if (command === 'add-worker') {
     const stop = new AbortController()
     process.once('SIGTERM', () => stop.abort())
-    await runAdding(agent, name, wiring, stop.signal)
+    await runAdding(logins, name, wiring, stop.signal)
     return 0
   }
   if (command === 'use-first') {
-    if (!readAccounts(wiring.path(agent)).some(a => a.name === name)) return refuse(`There is no ${agent} account named ${name}.`)
-    return answer(shownAccounts(useFirst(name, wiring.path(agent))))
+    if (!readAccounts(wiring.path(list)).some(a => a.name === name)) return refuse(`There is no ${list} account named ${name}.`)
+    return answer(shownAccounts(useFirst(name, wiring.path(list))))
   }
   if (command === 'remove') {
-    const from = comesBackFrom(agent, name, wiring)
+    const from = comesBackFrom(list, name, wiring)
     if (from !== undefined) return refuse(`${name}'s account comes from ${from}: remove it there.`)
-    const gone = await removeAdded(agent, name, wiring)
-    if (!gone) return refuse(`There is no added ${agent} account named ${name}.`)
-    return answer(shownAccounts(readAccounts(wiring.path(agent))))
+    const gone = await removeAdded(logins, name, wiring)
+    if (!gone) return refuse(`There is no added ${list} account named ${name}.`)
+    return answer(shownAccounts(readAccounts(wiring.path(list))))
   }
   return misread()
 }

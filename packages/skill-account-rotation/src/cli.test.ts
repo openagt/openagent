@@ -3,10 +3,15 @@ import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { hostname, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
+import type { AgentAccount, AgentLogins, SignInSaid } from '@openagt/hooks'
 import { runAdding, type AddingNow } from './adding.js'
 import { accountsPath, addAccount, copiedPath, markLimited, nameOwnAccount, readAccounts } from './accounts.js'
 import { runCli, USAGE } from './cli.js'
+import { testLogins } from './test-logins.js'
 import { loginWiring, type LoginWiring } from './wiring.js'
+
+// The command, on coding agents of a test's own (`test-logins.ts`): what each agent does with its
+// logins is its adapter's, tested there.
 
 interface Run {
   code: number
@@ -24,31 +29,37 @@ async function inDir(body: (env: NodeJS.ProcessEnv, dir: string) => Promise<void
   }
 }
 
+/** The agents of a test: a `claude` and a `codex` list, each as `more` says. */
+const agents = (claude: Partial<AgentLogins> = {}, codex: Partial<AgentLogins> = {}): Pick<LoginWiring, 'logins'> => ({
+  logins: () => Promise.resolve([testLogins('claude', claude), testLogins('codex', codex)]),
+})
+
 /** Run a command, with a sign-in `add` starts running here in place of a process of its own, and ended before this answers. */
 async function run(argv: string[], env: NodeJS.ProcessEnv, more: Partial<LoginWiring> = {}, stdin?: string): Promise<Run> {
   const out: string[] = []
   const err: string[] = []
   const signIns: Promise<void>[] = []
-  const wiring: LoginWiring = { ...loginWiring(env), isRunning: () => true, ...more }
-  wiring.startAdding = (agent, name) => void signIns.push(runAdding(agent, name, wiring))
+  const wiring: LoginWiring = { ...loginWiring(env), ...agents(), isRunning: () => true, ...more }
+  wiring.startAdding = (list, name) => void signIns.push(wiring.logins().then(all => runAdding(all.find(one => one.list === list)!, name, wiring)))
   const code = await runCli(argv, { stdout: line => out.push(line), stderr: line => err.push(line), env, wiring, ...(stdin !== undefined ? { stdin: () => Promise.resolve(stdin) } : {}) })
   await Promise.all(signIns)
   return { code, out, err }
 }
 
-const adding = async (env: NodeJS.ProcessEnv, agent: 'claude' | 'codex' = 'claude'): Promise<AddingNow> => (JSON.parse((await run(['adding'], env)).out[0]!) as Record<string, AddingNow>)[agent]!
+const adding = async (env: NodeJS.ProcessEnv, list: 'claude' | 'codex' = 'claude'): Promise<AddingNow> => (JSON.parse((await run(['adding'], env)).out[0]!) as Record<string, AddingNow>)[list]!
 
-const names = (answer: Run, agent?: 'claude' | 'codex'): string[] => {
+const names = (answer: Run, list?: 'claude' | 'codex'): string[] => {
   const said = JSON.parse(answer.out[0]!) as { name: string }[] | Record<string, { name: string }[]>
-  return (agent ? (said as Record<string, { name: string }[]>)[agent]! : (said as { name: string }[])).map(a => a.name)
+  return (list ? (said as Record<string, { name: string }[]>)[list]! : (said as { name: string }[])).map(a => a.name)
 }
 
-test('list answers each agent\'s accounts in the order runs try them, how full and whether limited, and never a login', () =>
+test("list answers each list's accounts in the order runs try them, how full and whether limited, and never a login", () =>
   inDir(async env => {
     addAccount('Dani', 'sk-ant-oat01-secret', accountsPath('claude', env))
     markLimited('Dani', Date.now() + 60_000, Date.now(), accountsPath('claude', env))
     const listed = await run(['list'], env)
     assert.equal(listed.code, 0)
+    assert.deepEqual(Object.keys(JSON.parse(listed.out[0]!) as object), ['claude', 'codex', 'notInstalled'])
     assert.deepEqual(names(listed, 'claude'), ['This computer', 'Dani'])
     assert.deepEqual(names(listed, 'codex'), ['This computer'])
     assert.ok(!listed.out[0]!.includes('sk-ant-oat01-secret'))
@@ -60,8 +71,7 @@ test('list answers each agent\'s accounts in the order runs try them, how full a
 
 test('add signs in by itself, keeps the login under the name, and nothing says the login', () =>
   inDir(async env => {
-    const mint: LoginWiring['mint'] = () => Promise.resolve({ ok: true, login: 'sk-ant-oat01-new' })
-    const added = await run(['add', 'claude', ' Dani '], env, { mint })
+    const added = await run(['add', 'claude', ' Dani '], env, agents({ signIn: () => Promise.resolve({ ok: true, login: 'sk-ant-oat01-new' }) }))
     assert.equal(added.code, 0)
     assert.deepEqual(names(await run(['list'], env), 'claude'), ['This computer', 'Dani'])
     assert.equal(readAccounts(accountsPath('claude', env)).find(a => a.name === 'Dani')?.login, 'sk-ant-oat01-new')
@@ -70,78 +80,82 @@ test('add signs in by itself, keeps the login under the name, and nothing says t
     assert.deepEqual(await adding(env), {})
   }))
 
+test('the agent signs in with the accounts on the list, to tell one of them apart; one the list cannot take after all is forgotten by the agent', () =>
+  inDir(async env => {
+    addAccount('Dani', 'codex-dani', accountsPath('codex', env))
+    let known: string[] = []
+    const forgotten: AgentAccount[] = []
+    const codex: Partial<AgentLogins> = {
+      signIn: accounts => {
+        known = accounts.map(a => a.name)
+        // Another sign-in took the name while this one went.
+        addAccount('Rom', 'codex-other', accountsPath('codex', env))
+        return Promise.resolve({ ok: true, login: 'codex-rom' })
+      },
+      forget: account => (forgotten.push(account), Promise.resolve()),
+    }
+    await run(['add', 'codex', 'Rom'], env, agents({}, codex))
+    assert.deepEqual(known, ['This computer', 'Dani'])
+    assert.match((await adding(env, 'codex')).failed ?? '', /There is an account named Rom already/)
+    assert.deepEqual(forgotten, [{ name: 'Rom', login: 'codex-rom' }])
+  }))
+
 test('add refuses a name that is taken before any browser opens, and adding says why a sign-in did not go through until the next add', () =>
   inDir(async env => {
-    let minted = 0
-    const mint: LoginWiring['mint'] = () => {
-      minted++
-      return Promise.resolve({ ok: false, error: 'Nobody signed in in time.' })
-    }
+    let signedIn = 0
+    const failing = agents({
+      signIn: () => {
+        signedIn++
+        return Promise.resolve({ ok: false, error: 'Nobody signed in in time.' })
+      },
+    })
     addAccount('Dani', 'x', accountsPath('claude', env))
-    const taken = await run(['add', 'claude', 'dani'], env, { mint })
+    const taken = await run(['add', 'claude', 'dani'], env, failing)
     assert.equal(taken.code, 1)
     assert.match(taken.err.join('\n'), /already/)
-    assert.equal(minted, 0)
-    assert.equal((await run(['add', 'claude', 'Rom'], env, { mint })).code, 0)
+    assert.equal(signedIn, 0)
+    assert.equal((await run(['add', 'claude', 'Rom'], env, failing)).code, 0)
     assert.deepEqual(await adding(env), { failed: 'Nobody signed in in time.' })
     assert.deepEqual(readAccounts(accountsPath('claude', env)).map(a => a.name), ['This computer', 'Dani'])
-    await run(['add', 'claude', 'Rom'], env, { mint: () => Promise.resolve({ ok: true, login: 'y' }) })
+    await run(['add', 'claude', 'Rom'], env, agents({ signIn: () => Promise.resolve({ ok: true, login: 'y' }) }))
     assert.deepEqual(await adding(env), {})
   }))
 
-test('add refuses the name the person\'s own login goes by, before they named it', () =>
-  inDir(async (env, dir) => {
-    const claudeJson = join(dir, '.claude.json')
-    await writeFile(claudeJson, JSON.stringify({ oauthAccount: { displayName: 'Suleiman' } }))
-    const taken = await run(['add', 'claude', 'suleiman'], env, { claudeJson: () => claudeJson })
+test("add refuses the name the person's own login goes by, before they named it", () =>
+  inDir(async env => {
+    const taken = await run(['add', 'claude', 'suleiman'], env, agents({ ownName: () => Promise.resolve('Suleiman') }))
     assert.equal(taken.code, 1)
     assert.match(taken.err.join('\n'), /already/)
   }))
 
-test('adding a Codex account says the page to copy into a private window, and an account on the list already is refused, leaving no folder', () =>
+test("adding on this computer's browser says the page to copy into a private window while it goes, and why the agent did not take the account", () =>
   inDir(async env => {
-    const wiring = loginWiring(env)
-    const folder = join(wiring.codexDir(), 'codex-new')
+    let said: SignInSaid | undefined
     let during: AddingNow | undefined
-    const loginCodex: LoginWiring['loginCodex'] = async opts => {
-      opts.onUrl?.('https://auth.example/sign-in')
-      during = (await adding(env, 'codex'))
-      await mkdir(folder, { recursive: true })
-      return { ok: true, login: 'codex-new', who: { key: 'same/ws' } }
+    const codex: Partial<AgentLogins> = {
+      signIn: async (_accounts, given) => {
+        said = given
+        given.onUrl?.('https://auth.example/sign-in')
+        during = await adding(env, 'codex')
+        return { ok: false, error: 'That account is on the list already.' }
+      },
     }
-    assert.equal((await run(['add', 'codex', 'Dani'], env, { loginCodex, codexWho: () => Promise.resolve({ key: 'other/ws' }) })).code, 0)
+    await run(['add', 'codex', 'Dani'], env, agents({}, codex))
+    assert.deepEqual(Object.keys(said!).sort(), ['onUrl'], "a browser here: no page to bring a code back from, no code to type")
     assert.deepEqual(during, { adding: { name: 'Dani', url: 'https://auth.example/sign-in' } })
-    await run(['add', 'codex', 'Rom'], env, { loginCodex, codexWho: () => Promise.resolve({ key: 'same/ws' }) })
-    assert.match((await adding(env, 'codex')).failed ?? '', /on the list already/)
-    await assert.rejects(stat(folder))
-    assert.deepEqual(readAccounts(accountsPath('codex', env)).map(a => a.name), ['This computer', 'Dani'])
+    assert.deepEqual(await adding(env, 'codex'), { failed: 'That account is on the list already.' })
   }))
 
-test('on a server, the account on the list already is told apart in words a code sign-in can follow: it has no link to copy', () =>
+test('list names the lists whose agent is not installed, and only those', () =>
   inDir(async env => {
-    const server = { ...env, OPENAGENT_SERVER: '1' }
-    const wiring = loginWiring(server)
-    const loginCodex: LoginWiring['loginCodex'] = async opts => {
-      opts.onCode?.('ABCD-1234', 'https://auth.example/device')
-      await mkdir(join(wiring.codexDir(), 'codex-new'), { recursive: true })
-      return { ok: true, login: 'codex-new', who: { key: 'same/ws' } }
-    }
-    await run(['add', 'codex', 'Rom'], server, { loginCodex, codexWho: () => Promise.resolve({ key: 'same/ws' }) })
-    const failed = (await adding(server, 'codex')).failed ?? ''
-    assert.match(failed, /on the list already/)
-    assert.match(failed, /open the page in a private window/)
-    assert.doesNotMatch(failed, /copy the link/)
-  }))
-
-test('list names the agents whose program is not installed, and only those', () =>
-  inDir(async env => {
-    const said = (installed: string[]) => run(['list'], env, { installed: agent => Promise.resolve(installed.includes(agent)) }).then(answer => (JSON.parse(answer.out[0]!) as { notInstalled: string[] }).notInstalled)
+    const said = (installed: string[]) =>
+      run(['list'], env, agents({ installed: () => Promise.resolve(installed.includes('claude')) }, { installed: () => Promise.resolve(installed.includes('codex')) })).then(answer => (JSON.parse(answer.out[0]!) as { notInstalled: string[] }).notInstalled)
     assert.deepEqual(await said(['claude']), ['codex'])
     assert.deepEqual(await said([]), ['claude', 'codex'])
     assert.deepEqual(await said(['claude', 'codex']), [])
   }))
 
-test('list says which computer handed an account over, only the agent it is of, and only on a row it has', () =>
+test('list says which computer handed an account over, only the list it is of, and only on a row it has', () =>
   inDir(async env => {
     addAccount('Dani', 'login-dani', accountsPath('claude', env))
     addAccount('Rom', 'login-rom', accountsPath('claude', env))
@@ -165,40 +179,39 @@ test('adding says a computer has no browser on a server, and on Linux with no di
     assert.deepEqual(await adding({ ...noScreen, WAYLAND_DISPLAY: 'wayland-0' }), {})
   }))
 
-test('remove takes an added account off, a Codex one with its folder; the person\'s own and a name not there are refused', () =>
+test("remove takes an added account off, and the agent forgets what it kept of it; the person's own and a name not there are refused", () =>
   inDir(async env => {
-    const wiring = loginWiring(env)
     addAccount('Dani', 'codex-dani', accountsPath('codex', env))
-    const folder = join(wiring.codexDir(), 'codex-dani')
-    await mkdir(folder, { recursive: true })
-    await writeFile(join(folder, 'auth.json'), '{}')
-    const own = await run(['remove', 'codex', 'This computer'], env)
+    const forgotten: AgentAccount[] = []
+    const codex = agents({}, { forget: account => (forgotten.push(account), Promise.resolve()) })
+    const own = await run(['remove', 'codex', 'This computer'], env, codex)
     assert.equal(own.code, 1)
-    const nobody = await run(['remove', 'codex', 'Nobody'], env)
+    const nobody = await run(['remove', 'codex', 'Nobody'], env, codex)
     assert.equal(nobody.code, 1)
     assert.match(nobody.err.join('\n'), /no added codex account named Nobody/)
     assert.deepEqual(readAccounts(accountsPath('codex', env)).map(a => a.name), ['This computer', 'Dani'])
-    const removed = await run(['remove', 'codex', 'Dani'], env)
+    assert.equal(forgotten.length, 0)
+    const removed = await run(['remove', 'codex', 'Dani'], env, codex)
     assert.equal(removed.code, 0)
     assert.deepEqual(names(removed), ['This computer'])
-    await assert.rejects(stat(folder))
+    assert.deepEqual(forgotten.map(a => [a.name, a.login]), [['Dani', 'codex-dani']])
   }))
 
 test('list says who the own login is while it goes by no given name, and use-first still takes its name', () =>
   inDir(async env => {
-    await mkdir(env['HOME']!, { recursive: true })
-    await writeFile(join(env['HOME']!, '.claude.json'), JSON.stringify({ oauthAccount: { displayName: 'Ada' } }))
     addAccount('Dani', 'sk-ant-oat01-secret', accountsPath('claude', env))
-    const said = JSON.parse((await run(['list'], env)).out[0]!) as Record<string, { name: string; who?: string }[]>
+    const who = agents({ ownName: () => Promise.resolve('Ada') }, { ownLoginThere: () => false })
+    const said = JSON.parse((await run(['list'], env, who)).out[0]!) as Record<string, { name: string; who?: string; signedOut?: true }[]>
     assert.deepEqual(said['claude']!.map(a => [a.name, a.who]), [['This computer', 'Ada'], ['Dani', undefined]])
+    assert.equal(said['claude']![0]!.signedOut, undefined)
     assert.equal(said['codex']![0]!.who, undefined)
-    assert.equal((said['codex']![0] as { signedOut?: true }).signedOut, true)
-    assert.equal((await run(['use-first', 'claude', 'This computer'], env)).code, 0)
+    assert.equal(said['codex']![0]!.signedOut, true)
+    assert.equal((await run(['use-first', 'claude', 'This computer'], env, who)).code, 0)
     nameOwnAccount('Me', accountsPath('claude', env))
-    const named = JSON.parse((await run(['list'], env)).out[0]!) as Record<string, { name: string; who?: string }[]>
+    const named = JSON.parse((await run(['list'], env, who)).out[0]!) as Record<string, { name: string; who?: string; computer?: string }[]>
     assert.equal(named['claude']![0]!.name, 'Me')
     assert.equal(named['claude']![0]!.who, undefined)
-    assert.equal((named['claude']![0] as { computer?: string }).computer, hostname().replace(/\.local$/i, ''))
+    assert.equal(named['claude']![0]!.computer, hostname().replace(/\.local$/i, ''))
   }))
 
 test('use-first moves the account to the front; a name not there is refused, and the list stays', () =>
@@ -244,61 +257,55 @@ test('on a server an account made here is removed; one a computer handed over is
     assert.equal((await run(['use-first', 'claude', 'Added there'], server)).code, 0)
   }))
 
-test('logout runs the agent\'s own logout, of the person\'s own login: the row says it is out, and what was read of it goes', () =>
-  inDir(async (env, dir) => {
-    const bin = join(dir, 'bin')
-    await mkdir(bin, { recursive: true })
-    const calls = join(dir, 'calls')
-    const home = join(dir, 'codex-home')
-    await mkdir(home, { recursive: true })
-    await writeFile(join(home, 'auth.json'), '{}')
-    // Stand-ins: never the real commands, which would log this computer's person out.
-    for (const name of ['claude', 'codex']) await writeFile(join(bin, name), `#!/bin/sh\necho "${name} $* home=$CODEX_HOME" >> "${calls}"\n[ "${name}" = codex ] && rm -f "$CODEX_HOME/auth.json"\nexit 0\n`, { mode: 0o755 })
-    const full = { ...env, PATH: `${bin}:${process.env['PATH']}`, CODEX_HOME: home }
-    assert.equal(JSON.parse((await run(['list'], full)).out[0]!).codex[0].signedOut, undefined)
-    const out = await run(['logout', 'codex'], full)
+test("logout runs the agent's own logout, of the person's own login, in the user's environment, and answers its list with the row out", () =>
+  inDir(async env => {
+    let there = true
+    const loggedOut: NodeJS.ProcessEnv[] = []
+    const codex = agents({}, { ownLoginThere: () => there, logOut: given => (loggedOut.push(given), (there = false), Promise.resolve()) })
+    assert.equal((JSON.parse((await run(['list'], env, codex)).out[0]!) as Record<string, { signedOut?: true }[]>)['codex']![0]!.signedOut, undefined)
+    const out = await run(['logout', 'codex'], env, codex)
     assert.equal(out.code, 0)
     assert.equal((JSON.parse(out.out[0]!) as { signedOut?: true }[])[0]!.signedOut, true)
-    const reading = loginWiring(full).claudeUsagePath()
-    await mkdir(join(reading, '..'), { recursive: true })
-    await writeFile(reading, '{}')
-    assert.equal((await run(['logout', 'claude'], full)).code, 0)
-    await assert.rejects(stat(reading))
-    assert.deepEqual((await readFile(calls, 'utf8')).trim().split('\n'), [`codex logout home=${home}`, `claude auth logout home=${home}`])
+    assert.deepEqual(loggedOut, [env])
   }))
 
-test('logout says why not: a login from the environment is not the agent\'s to end, and a logout that fails is said', () =>
+test("logout says why not: a login from the environment is not the agent's to end, and a logout that fails is said", () =>
   inDir(async env => {
-    const given = await run(['logout', 'claude'], { ...env, CLAUDE_CODE_OAUTH_TOKEN: 'x' }, { logOutAgent: () => assert.fail('no logout for a login from the environment') })
+    const given = await run(['logout', 'claude'], { ...env, CLAUDE_CODE_OAUTH_TOKEN: 'x' }, agents({ envLogins: ['CLAUDE_CODE_OAUTH_TOKEN'], logOut: () => assert.fail('no logout for a login from the environment') }))
     assert.equal(given.code, 1)
     assert.match(given.err.join('\n'), /CLAUDE_CODE_OAUTH_TOKEN in the environment/)
-    const broke = await run(['logout', 'codex'], env, { logOutAgent: () => Promise.reject(new Error('no codex here')) })
+    const broke = await run(['logout', 'codex'], env, agents({}, { logOut: () => Promise.reject(new Error('no codex here')) }))
     assert.equal(broke.code, 1)
     assert.match(broke.err.join('\n'), /did not go through: no codex here/)
   }))
 
-test('on a server adding a Claude account says the page to open, and the code brought back on standard input goes to Claude Code', () =>
+test('on a server adding says the page to open, and the code brought back on standard input goes to the agent', () =>
   inDir(async env => {
     const server = { ...env, OPENAGENT_SERVER: '1' }
     const pasted: string[] = []
+    let said: SignInSaid | undefined
     let during: AddingNow | undefined
     let refusedCode: Run | undefined
     let goodCode: Run | undefined
-    const mint: LoginWiring['mint'] = ({ onLink } = {}) =>
-      new Promise(resolve => {
-        onLink!('https://claude.example/sign-in', code => {
-          pasted.push(code)
-          resolve({ ok: true, login: 'sk-ant-oat01-new' })
-          return true
-        })
-        void (async () => {
-          during = await adding(server)
-          refusedCode = await run(['add-code', 'claude'], server, {}, 'not a code!')
-          goodCode = await run(['add-code', 'claude'], server, {}, ' the-code-here\n')
-        })()
-      })
+    const claude = agents({
+      signIn: (_accounts, given) =>
+        new Promise(resolve => {
+          said = given
+          given.onLink!('https://claude.example/sign-in', code => {
+            pasted.push(code)
+            resolve({ ok: true, login: 'sk-ant-oat01-new' })
+            return true
+          })
+          void (async () => {
+            during = await adding(server)
+            refusedCode = await run(['add-code', 'claude'], server, {}, 'not a code!')
+            goodCode = await run(['add-code', 'claude'], server, {}, ' the-code-here\n')
+          })()
+        }),
+    })
     assert.equal((await run(['add-code', 'claude'], server, {}, 'the-code-here')).code, 1)
-    assert.equal((await run(['add', 'claude', 'Dani'], server, { mint })).code, 0)
+    assert.equal((await run(['add', 'claude', 'Dani'], server, claude)).code, 0)
+    assert.deepEqual(Object.keys(said!).sort(), ['onCode', 'onLink', 'onRefused'], 'no browser here: a page whose code comes back, or a code to type at one')
     assert.deepEqual(during, { noBrowser: true, adding: { name: 'Dani', url: 'https://claude.example/sign-in', paste: true } })
     assert.match(refusedCode!.err.join('\n'), /not the code the page shows/)
     assert.equal(goodCode!.code, 0)
@@ -308,30 +315,32 @@ test('on a server adding a Claude account says the page to open, and the code br
     await assert.rejects(stat(`${loginWiring(server).addingPath('claude')}.code`))
   }))
 
-test('on a server a code is said to be with Claude while it checks it, and to be refused when it does not take it, ready for another', () =>
+test('on a server a code is said to be with the agent while it checks it, and to be refused when it does not take it, ready for another', () =>
   inDir(async env => {
     const server = { ...env, OPENAGENT_SERVER: '1' }
     const said: (AddingNow | undefined)[] = []
     const wait = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms))
-    const mint: LoginWiring['mint'] = ({ onLink, onRefused } = {}) =>
-      new Promise(resolve => {
-        let codes = 0
-        onLink!('https://claude.example/sign-in', () => {
-          codes += 1
-          if (codes === 1) setTimeout(() => void wait(400).then(() => onRefused!()), 0)
-          else resolve({ ok: true, login: 'sk-ant-oat01-new' })
-          return true
-        })
-        void (async () => {
-          await run(['add-code', 'claude'], server, {}, 'first-code-here')
-          await wait(300)
-          said.push(await adding(server))
-          await wait(500)
-          said.push(await adding(server))
-          await run(['add-code', 'claude'], server, {}, 'second-code-here')
-        })()
-      })
-    await run(['add', 'claude', 'Dani'], server, { mint })
+    const claude = agents({
+      signIn: (_accounts, { onLink, onRefused }) =>
+        new Promise(resolve => {
+          let codes = 0
+          onLink!('https://claude.example/sign-in', () => {
+            codes += 1
+            if (codes === 1) setTimeout(() => void wait(400).then(() => onRefused!()), 0)
+            else resolve({ ok: true, login: 'sk-ant-oat01-new' })
+            return true
+          })
+          void (async () => {
+            await run(['add-code', 'claude'], server, {}, 'first-code-here')
+            await wait(300)
+            said.push(await adding(server))
+            await wait(500)
+            said.push(await adding(server))
+            await run(['add-code', 'claude'], server, {}, 'second-code-here')
+          })()
+        }),
+    })
+    await run(['add', 'claude', 'Dani'], server, claude)
     assert.deepEqual(said, [
       { noBrowser: true, adding: { name: 'Dani', url: 'https://claude.example/sign-in', paste: true, checking: true } },
       { noBrowser: true, adding: { name: 'Dani', url: 'https://claude.example/sign-in', paste: true, refused: true } },
@@ -339,32 +348,36 @@ test('on a server a code is said to be with Claude while it checks it, and to be
     assert.deepEqual(names(await run(['list'], server), 'claude'), ['This computer', 'Dani'])
   }))
 
-test('on a server adding a Codex account says the code to type and where', () =>
+test('on a server adding says the code to type and where', () =>
   inDir(async env => {
     const server = { ...env, OPENAGENT_SERVER: '1' }
     let during: AddingNow | undefined
-    const loginCodex: LoginWiring['loginCodex'] = async opts => {
-      opts.onCode?.('ABCD-1234', 'https://auth.example/device')
-      during = await adding(server, 'codex')
-      return { ok: false, error: 'stopped' }
-    }
-    await run(['add', 'codex', 'Dani'], server, { loginCodex })
+    const codex = agents(
+      {},
+      {
+        signIn: async (_accounts, { onCode }) => {
+          onCode?.('ABCD-1234', 'https://auth.example/device')
+          during = await adding(server, 'codex')
+          return { ok: false, error: 'stopped' }
+        },
+      },
+    )
+    await run(['add', 'codex', 'Dani'], server, codex)
     assert.deepEqual(during, { noBrowser: true, adding: { name: 'Dani', url: 'https://auth.example/device', code: 'ABCD-1234' } })
   }))
 
-test('one sign-in at a time for an agent, and a sign-in whose process is gone is no longer under way', () =>
+test('one sign-in at a time for a list, and a sign-in whose process is gone is no longer under way', () =>
   inDir(async env => {
     let release!: () => void
-    const mint: LoginWiring['mint'] = () => new Promise(resolve => (release = () => resolve({ ok: true, login: 'y' })))
-    const wiring: LoginWiring = { ...loginWiring(env), isRunning: () => true, mint, startAdding: (agent, name) => void runAdding(agent, name, wiring) }
-    const say = (argv: string[], use: LoginWiring = wiring): Promise<Run> => run(argv, env, use)
+    const claude = testLogins('claude', { signIn: () => new Promise(resolve => (release = () => resolve({ ok: true, login: 'y' }))) })
+    const wiring: LoginWiring = { ...loginWiring(env), logins: () => Promise.resolve([claude]), isRunning: () => true, startAdding: (_list, name) => void runAdding(claude, name, wiring) }
     const first: string[] = []
     assert.equal(await runCli(['add', 'claude', 'Dani'], { stdout: line => first.push(line), stderr: () => {}, env, wiring }), 0)
     assert.deepEqual(JSON.parse(first[0]!), { adding: { name: 'Dani' } })
     const second: string[] = []
     assert.equal(await runCli(['add', 'claude', 'Rom'], { stdout: () => {}, stderr: line => second.push(line), env, wiring }), 1)
     assert.match(second.join('\n'), /Dani's account is being added/)
-    assert.deepEqual((JSON.parse((await say(['adding'], { ...wiring, isRunning: () => false })).out[0]!) as Record<string, AddingNow>)['claude'], {})
+    assert.deepEqual((JSON.parse((await run(['adding'], env, { ...wiring, isRunning: () => false })).out[0]!) as Record<string, AddingNow>)['claude'], {})
     release()
   }))
 
@@ -372,13 +385,13 @@ test('add-cancel stops the sign-in under way and forgets it, keeping nothing', (
   inDir(async env => {
     const stop = new AbortController()
     let stopped: number | undefined
-    const mint: LoginWiring['mint'] = ({ signal } = {}) => new Promise(resolve => signal!.addEventListener('abort', () => resolve({ ok: false, error: 'The login was stopped.' })))
+    const claude = testLogins('claude', { signIn: (_accounts, { signal }) => new Promise(resolve => signal!.addEventListener('abort', () => resolve({ ok: false, error: 'The login was stopped.' }))) })
     let signIn: Promise<void> | undefined
     const wiring: LoginWiring = {
       ...loginWiring(env),
+      logins: () => Promise.resolve([claude]),
       isRunning: () => true,
-      mint,
-      startAdding: (agent, name) => void (signIn = runAdding(agent, name, wiring, stop.signal)),
+      startAdding: (_list, name) => void (signIn = runAdding(claude, name, wiring, stop.signal)),
       stopAdding: pid => {
         stopped = pid
         stop.abort()
@@ -398,7 +411,7 @@ test('--help is the usage on stdout, exit 0', () =>
     for (const help of ['--help', '-h']) assert.deepEqual(await run([help], env), { code: 0, out: [USAGE], err: [] })
   }))
 
-test('a command that cannot be read says what was wrong and where the usage is, and exits 2; no command at all, the usage', () =>
+test('a command that cannot be read says what was wrong and where the usage is, and exits 2; no command at all, the usage; a list of no agent here is not read', () =>
   inDir(async env => {
     for (const argv of [[], ['nope'], ['list', 'claude'], ['add'], ['add', 'claude'], ['add', 'gemini', 'Rom'], ['add', 'claude', 'Rom', 'extra'], ['adding', 'claude'], ['add-code'], ['add-cancel', 'gemini']]) {
       const wrong = await run(argv, env)
@@ -407,5 +420,16 @@ test('a command that cannot be read says what was wrong and where the usage is, 
     }
     assert.deepEqual((await run(['nope'], env)).err, ['unknown command: nope\nRun `account-rotation --help` for usage.'])
     assert.deepEqual((await run(['add', 'gemini', 'Rom'], env)).err, ['wrong arguments for add: gemini Rom\nRun `account-rotation --help` for usage.'])
+    assert.deepEqual((await run(['add', 'codex', 'Rom'], env, { logins: () => Promise.resolve([testLogins('claude')]) })).code, 2, 'a distribution with no Codex has no codex list')
     assert.deepEqual(await readFile(accountsPath('claude', env), 'utf8').catch(() => 'no file'), 'no file')
+  }))
+
+test('a command with no coding agent handed down to it says so: there is no list to read or change', () =>
+  inDir(async env => {
+    for (const argv of [['list'], ['add', 'claude', 'Rom']]) {
+      const none = await run(argv, env, { logins: () => Promise.resolve([]) })
+      assert.equal(none.code, 1, argv.join(' '))
+      assert.match(none.err.join('\n'), /No coding agent was handed down to this process/)
+    }
+    assert.equal((await run(['--help'], env, { logins: () => Promise.resolve([]) })).code, 0)
   }))

@@ -11,6 +11,8 @@ import { accountsWiring } from './accounts.js'
 import { loginsWiring, onAgentState, onGitHosts, runningFixes, sendAgentFix, sendStopAgentFix, sendForgetGitHostAccount, sendGitHostLogin, sendUseGitHostAccount } from './logins.js'
 import { provideTestContext } from './test-context.js'
 import { accountsPath, addAccount } from '@openagt/skill-account-rotation'
+import { claudeLogins } from '@openagt/agent-driver-claude-code'
+import { codexLogins } from '@openagt/agent-driver-codex'
 
 /** The real readiness question, before a test swaps it. */
 const realReady = loginsWiring.ready
@@ -51,7 +53,15 @@ async function withProjects(body: (dirs: { github: string; gitlab: string; local
   const asked: { root: string; args: string[] }[] = []
   const before = { ...loginsWiring }
   const accountsBefore = { ...accountsWiring }
-  Object.assign(accountsWiring, { path: (agent: string) => join(dir, `${agent}-accounts.json`), claudeJson: () => join(dir, 'none.json'), codexOwnHome: () => join(dir, 'codex'), codexWho: async () => ({}), codexUsage: async () => [], computer: () => 'Studio' })
+  // No Claude Code here knows who the person is, and no Codex login is here.
+  Object.assign(accountsWiring, {
+    path: (agent: string) => join(dir, `${agent}-accounts.json`),
+    env: { ...process.env, CLAUDE_CONFIG_DIR: join(dir, 'no-claude'), CODEX_HOME: join(dir, 'codex') },
+    logins: async () => [claudeLogins(), codexLogins({ who: async () => ({}) })],
+    codexOwnHome: () => join(dir, 'codex'),
+    codexUsage: async () => [],
+    computer: () => 'Studio',
+  })
   provideTestContext({ quota: { read: async () => ({ windows: [] }), stop: () => {} } })
   Object.assign(loginsWiring, {
     gitHost: async () => GITHUB,

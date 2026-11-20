@@ -2,8 +2,10 @@ import { chmodSync, mkdirSync, renameSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 
-// Where the package keeps its files, and how it writes one. Each file is the user's own, beside
-// OpenAgent's other files, and may hold a login or a page to sign in at: readable by that user only.
+// Where the coding agents' accounts keep their files, and how one is written: the list of each
+// agent's accounts, a sign-in under way, a reading of how full an account is. Each file is the
+// user's own, beside OpenAgent's other files, and may hold a login or a page to sign in at:
+// readable by that user only.
 
 /** The file `name` of the user `env` is: `$XDG_CONFIG_HOME/<name>` when that is set, else `~/.<name>`. */
 export function configFile(name: string, env: NodeJS.ProcessEnv): string {

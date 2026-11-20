@@ -48,7 +48,8 @@ export async function handDownAgents(dir: string): Promise<() => void> {
   await writeFile(
     file,
     [
-      "const agent = (id, accounts) => ({ id, label: id, accounts, ready: async () => ({ problems: [], warnings: [] }), driver: () => { throw new Error('these tests run no agent') } })",
+      "const logins = list => ({ list, service: list, envLogins: [], installed: async () => true, ownLoginThere: () => true, ownName: async () => undefined, logOut: async () => {}, signIn: async () => ({ ok: false, error: 'these tests sign nobody in' }), isSignInCode: () => false, forget: async () => {}, usage: async () => undefined })",
+      "const agent = (id, list) => ({ id, label: id, accounts: logins(list), ready: async () => ({ problems: [], warnings: [] }), driver: () => { throw new Error('these tests run no agent') } })",
       "export default [{ module: { name: 'test-agents', hooks: { 'run.agent': [agent('claude-code', 'claude'), agent('codex', 'codex')] } } }]",
       '',
     ].join('\n'),

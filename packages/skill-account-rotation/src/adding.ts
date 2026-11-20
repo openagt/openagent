@@ -1,10 +1,9 @@
 import { spawn } from 'node:child_process'
 import { readFileSync, rmSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { isSignInCode } from '@openagt/agent-driver-claude-code'
-import type { AccountsAgent } from './accounts.js'
-import { configFile, writePrivate } from './files.js'
-import { nameTaken, signIn, type SignInSaid } from './login.js'
+import { configFile, writePrivate } from '@openagt/agent-driver'
+import type { AgentLogins, SignInSaid } from '@openagt/hooks'
+import { nameTaken, signIn } from './login.js'
 import type { LoginWiring } from './wiring.js'
 
 // Adding an account takes as long as the person takes to sign in, and on a computer with no browser
@@ -21,13 +20,13 @@ interface AddingFile {
   pid?: number
   /** The page to sign in at. */
   url?: string
-  /** Codex's code, to type at that page. */
+  /** A code to type at that page. */
   code?: string
-  /** Claude's page gives a code to bring back. */
+  /** The page gives a code to bring back. */
   paste?: true
-  /** The code brought back is with Claude. */
+  /** The code brought back is with the agent, which checks it. */
   checking?: true
-  /** Claude did not take the code brought back: it waits for another. */
+  /** The agent did not take the code brought back: it waits for another. */
   refused?: true
   /** Why it did not go through. */
   failed?: string
@@ -44,7 +43,7 @@ export interface Adding {
   refused?: true
 }
 
-/** How adding stands for one agent: under way, why the last one did not go through, or neither. */
+/** How adding stands for one list: under way, why the last one did not go through, or neither. */
 export interface AddingNow {
   adding?: Adding
   failed?: string
@@ -61,15 +60,15 @@ const CODE_EVERY_MS = 200
 
 const NOT_WAITING = 'No login waits for a code: start it again.'
 
-/** Where an agent's sign-in says how it goes: `$XDG_CONFIG_HOME/openagent-<agent>-adding.json`, else dotted under the home. */
-export function addingPath(agent: AccountsAgent, env: NodeJS.ProcessEnv = process.env): string {
-  return configFile(`openagent-${agent}-adding.json`, env)
+/** Where a list's sign-in says how it goes: `$XDG_CONFIG_HOME/openagent-<list>-adding.json`, else dotted under the home. */
+export function addingPath(list: string, env: NodeJS.ProcessEnv = process.env): string {
+  return configFile(`openagent-${list}-adding.json`, env)
 }
 
 /** Start the sign-in's own process: this package's command, on its own, holding on to nothing of the one that started it. */
-export function startAddingProcess(agent: AccountsAgent, name: string): void {
+export function startAddingProcess(list: string, name: string): void {
   const bin = fileURLToPath(new URL('../bin/account-rotation', import.meta.url))
-  spawn(process.execPath, [bin, 'add-worker', agent, name], { detached: true, stdio: 'ignore' }).unref()
+  spawn(process.execPath, [bin, 'add-worker', list, name], { detached: true, stdio: 'ignore' }).unref()
 }
 
 function readFile(path: string): AddingFile | undefined {
@@ -89,10 +88,10 @@ function underWay(file: AddingFile, wiring: LoginWiring): boolean {
   return file.pid !== undefined ? wiring.isRunning(file.pid) : wiring.now() - file.at < STARTING_MS
 }
 
-/** How adding stands for an agent. */
-export function addingNow(agent: AccountsAgent, wiring: LoginWiring): AddingNow {
+/** How adding stands for a list. */
+export function addingNow(list: string, wiring: LoginWiring): AddingNow {
   const where: AddingNow = wiring.headless() ? { noBrowser: true } : {}
-  const file = readFile(wiring.addingPath(agent))
+  const file = readFile(wiring.addingPath(list))
   if (!file) return where
   if (file.failed !== undefined) return wiring.now() - file.at < FAILED_SAID_MS ? { ...where, failed: file.failed } : where
   if (!underWay(file, wiring)) return where
@@ -100,35 +99,35 @@ export function addingNow(agent: AccountsAgent, wiring: LoginWiring): AddingNow 
 }
 
 /** Start adding an account under `name`, and answer as soon as it is started. Refused while one is being added, and for a name that cannot be used. */
-export async function beginAdding(agent: AccountsAgent, name: string, wiring: LoginWiring): Promise<{ ok: true } | { ok: false; error: string }> {
-  const busy = addingNow(agent, wiring).adding
+export async function beginAdding(logins: AgentLogins, name: string, wiring: LoginWiring): Promise<{ ok: true } | { ok: false; error: string }> {
+  const busy = addingNow(logins.list, wiring).adding
   if (busy) return { ok: false, error: `${busy.name}'s account is being added: sign in on the page it gave, or wait for it to end.` }
-  const refused = await nameTaken(agent, name, wiring)
+  const refused = await nameTaken(logins, name, wiring)
   if (refused) return { ok: false, error: refused }
   const said = name.trim()
-  writeFile(wiring.addingPath(agent), { name: said, at: wiring.now() })
+  writeFile(wiring.addingPath(logins.list), { name: said, at: wiring.now() })
   try {
-    wiring.startAdding(agent, said)
+    wiring.startAdding(logins.list, said)
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err)
-    writeFile(wiring.addingPath(agent), { name: said, failed: error, at: wiring.now() })
+    writeFile(wiring.addingPath(logins.list), { name: said, failed: error, at: wiring.now() })
     return { ok: false, error }
   }
   return { ok: true }
 }
 
 /** Hand the sign-in the code its page showed the person. */
-export function bringCode(agent: AccountsAgent, code: unknown, wiring: LoginWiring): { ok: true } | { ok: false; error: string } {
-  if (!addingNow(agent, wiring).adding?.paste) return { ok: false, error: NOT_WAITING }
+export function bringCode(logins: AgentLogins, code: unknown, wiring: LoginWiring): { ok: true } | { ok: false; error: string } {
+  if (!addingNow(logins.list, wiring).adding?.paste) return { ok: false, error: NOT_WAITING }
   const word = typeof code === 'string' ? code.trim() : ''
-  if (!isSignInCode(word)) return { ok: false, error: 'That is not the code the page shows: copy it whole, and paste it here.' }
-  writePrivate(`${wiring.addingPath(agent)}.code`, word)
+  if (!logins.isSignInCode(word)) return { ok: false, error: 'That is not the code the page shows: copy it whole, and paste it here.' }
+  writePrivate(`${wiring.addingPath(logins.list)}.code`, word)
   return { ok: true }
 }
 
 /** Stop the sign-in under way, and forget why the last one did not go through. */
-export function cancelAdding(agent: AccountsAgent, wiring: LoginWiring): void {
-  const path = wiring.addingPath(agent)
+export function cancelAdding(list: string, wiring: LoginWiring): void {
+  const path = wiring.addingPath(list)
   const file = readFile(path)
   if (file?.pid !== undefined && underWay(file, wiring)) wiring.stopAdding(file.pid)
   rmSync(path, { force: true })
@@ -139,8 +138,8 @@ export function cancelAdding(agent: AccountsAgent, wiring: LoginWiring): void {
  * The sign-in itself, in the process {@link beginAdding} started: says how it goes in the file, and
  * takes the code from beside it. Ends with the file gone when the account is kept, or saying why not.
  */
-export async function runAdding(agent: AccountsAgent, name: string, wiring: LoginWiring, signal?: AbortSignal): Promise<void> {
-  const path = wiring.addingPath(agent)
+export async function runAdding(logins: AgentLogins, name: string, wiring: LoginWiring, signal?: AbortSignal): Promise<void> {
+  const path = wiring.addingPath(logins.list)
   const pid = wiring.ownPid()
   const say = (more: Partial<AddingFile>): void => writeFile(path, { name, pid, at: wiring.now(), ...more })
   say({})
@@ -156,21 +155,20 @@ export async function runAdding(agent: AccountsAgent, name: string, wiring: Logi
     rmSync(`${path}.code`, { force: true })
     if (paste?.(code) && link !== undefined) say({ url: link, paste: true, checking: true })
   }, CODE_EVERY_MS)
+  // Each agent's sign-in says where through the ones it has a use for: on this computer's browser a
+  // page to copy, else a page whose code is brought back, or a code to type at a page.
   const onScreen: SignInSaid = !wiring.headless()
-    ? agent === 'codex'
-      ? { onUrl: url => say({ url }) }
-      : {}
-    : agent === 'codex'
-      ? { onCode: (code, url) => say({ url, code }) }
-      : {
-          onLink: (url, handIn) => {
-            paste = handIn
-            link = url
-            say({ url, paste: true })
-          },
-          onRefused: () => say({ ...(link !== undefined ? { url: link } : {}), paste: true, refused: true }),
-        }
-  const failed = await signIn(agent, name, wiring, { ...onScreen, ...(signal ? { signal } : {}) }).catch((err: unknown) => (err instanceof Error ? err.message : String(err)))
+    ? { onUrl: url => say({ url }) }
+    : {
+        onLink: (url, handIn) => {
+          paste = handIn
+          link = url
+          say({ url, paste: true })
+        },
+        onRefused: () => say({ ...(link !== undefined ? { url: link } : {}), paste: true, refused: true }),
+        onCode: (code, url) => say({ url, code }),
+      }
+  const failed = await signIn(logins, name, wiring, { ...onScreen, ...(signal ? { signal } : {}) }).catch((err: unknown) => (err instanceof Error ? err.message : String(err)))
   clearInterval(looking)
   rmSync(`${path}.code`, { force: true })
   if (failed !== undefined && !signal?.aborted) writeFile(path, { name, failed, at: wiring.now() })

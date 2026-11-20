@@ -1,5 +1,5 @@
-import { ClaudeCodeDriver } from '@openagt/agent-driver-claude-code'
-import { CodexDriver } from '@openagt/agent-driver-codex'
+import { ClaudeCodeDriver, claudeLogins } from '@openagt/agent-driver-claude-code'
+import { CodexDriver, codexLogins } from '@openagt/agent-driver-codex'
 import { DRIVERS, type DriverName } from '../driver-names.js'
 import { accountRotation, accountsPath, pickAccount, readAccounts } from '@openagt/skill-account-rotation'
 import type { Driver, DriverModel } from '@openagt/hooks'
@@ -59,7 +59,7 @@ export function firstAccount(name: DriverName, env: NodeJS.ProcessEnv = process.
 
 /** The coding agents on this machine, each on the account its runs take first. */
 export function modelDrivers(): Record<DriverName, Driver> {
-  return { 'claude-code': new ClaudeCodeDriver({ accounts: accountRotation('claude') }), codex: new CodexDriver({ accounts: accountRotation('codex') }) }
+  return { 'claude-code': new ClaudeCodeDriver({ accounts: accountRotation(claudeLogins()) }), codex: new CodexDriver({ accounts: accountRotation(codexLogins()) }) }
 }
 
 /** The daemon's own source. */

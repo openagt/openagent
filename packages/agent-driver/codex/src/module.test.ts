@@ -14,7 +14,7 @@ const notRoot = () => false
 
 test("a run's driver has Codex's full access, in the run's environment, with this machine's setup parts and the accounts its turns take", () => {
   const agent = codexAgent()
-  assert.deepEqual([agent.id, agent.label, agent.accounts, agent.ownQuestionTool], ['codex', 'Codex', 'codex', undefined])
+  assert.deepEqual([agent.id, agent.label, agent.accounts?.list, agent.ownQuestionTool], ['codex', 'Codex', 'codex', undefined])
   const accounts: AccountRotation = { first: () => undefined, turn: async () => ({ text: '' }) }
   const driver = agent.driver({ env: { AGENT_ID: 'run-1' }, personal, accounts })
   assert.ok(driver instanceof CodexDriver)

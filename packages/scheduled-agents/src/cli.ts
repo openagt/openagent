@@ -1,6 +1,7 @@
 import { Refused, UsageError, inRepo, nodeGitRunner, parseCommandArgs, runCommandLine, helpRows, helpText, type Command, type GitRunner } from '@openagt/agent-data'
 import { projectRoot } from '@openagt/git-branches'
-import { codingAgent, driverFor } from '@openagt/agent-runner'
+import { codingAgent } from '@openagt/agent-driver'
+import { driverFor } from '@openagt/agent-runner'
 import { runNow, schedulerStatus, startScheduler, stopScheduler, tickProject } from './scheduler.js'
 import { cleanup } from './cleanup.js'
 import { PUBLISH_PICKS, agentInForce, readState, updateState, withAgent, withoutCommand, withoutListed, withPacePicked, withPick, withSwitchedOn, type PublishPick, type State } from './state.js'

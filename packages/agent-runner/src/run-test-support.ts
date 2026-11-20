@@ -3,7 +3,7 @@ import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { FakeDriver, promptSent, type FakeDriverSession } from '@openagt/agent-driver'
 import type { GitRunner } from '@openagt/agent-data'
-import { loadModules, type DistributionEntry, type DriverReadiness, type ModuleDefinition, type PullRequest, type RunAgent, type RunAgentOptions, type RunAgentReadyOptions, type StoreBackend, type Driver, type DriverSession, type DriverStartOptions } from '@openagt/hooks'
+import { loadModules, type AgentLogins, type DistributionEntry, type DriverReadiness, type ModuleDefinition, type PullRequest, type RunAgent, type RunAgentOptions, type RunAgentReadyOptions, type StoreBackend, type Driver, type DriverSession, type DriverStartOptions } from '@openagt/hooks'
 import { memoryStore } from '@openagt/hooks/testing'
 import { gitBranchesModule } from '@openagt/git-branches/module'
 import { githubModule, type GithubDeps } from '@openagt/github/module'
@@ -133,8 +133,16 @@ export function fakeGithub(accounts: Record<string, Record<string, string>>): Gi
 /** The plugins whose skills every test's run gets, on as OpenAgent's distribution starts them, loaded by their packages as it loads them. */
 const PLUGINS = await loadModules([{ package: '@openagt/logs', on: true }, { package: '@openagt/ask', on: true }], specifier => import(specifier))
 
+/** A list of accounts as a test's coding agent has one (`RunAgent.accounts`): its own login there, and nothing else of it asked. */
+export function testLogins(list: string): AgentLogins {
+  const none = (): never => {
+    throw new Error("these tests ask nothing of an agent's logins")
+  }
+  return { list, service: list, envLogins: [], installed: async () => true, ownLoginThere: () => true, ownName: async () => undefined, logOut: none, signIn: none, isSignInCode: () => false, forget: none, usage: async () => undefined }
+}
+
 /**
- * A coding agent of the tests' own, as a module fills `run.agent` with one: `ready` its readiness,
+ * A coding agent of the tests' own, as a module fills `run.agent` with one: `accounts` its list's name, `ready` its readiness,
  * `driver` the driver of each run (a {@link FakeDriver} saying `Done.` when absent), and what it
  * was built and asked with kept for a test to read.
  */
@@ -147,7 +155,7 @@ export function testAgent(
   return {
     id,
     label: id,
-    ...(opts.accounts !== undefined ? { accounts: opts.accounts } : {}),
+    ...(opts.accounts !== undefined ? { accounts: testLogins(opts.accounts) } : {}),
     built,
     asked,
     ready: async readyOpts => {

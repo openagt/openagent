@@ -4,7 +4,6 @@ export { markerCard, writeMarker, withdrawMarker, recordRun, runnerMark, isPubli
 export { runCommand, resumeRun, runIdFrom, projectOf, type RunOptions, type ResumeOptions, type RunOutcome } from './run.js'
 export { sweep, type SweepDeps, type SweepResult } from './sweep.js'
 export { runProject, resumeProject, detachRun, detachResume, readyToRun, accountsOn, presetLoginFor, spawnRun, spawnResume, driverFor, ACCOUNT_ENV, GIT_ACCOUNT_ENV, type SpawnedRun, type SpawnedResume } from './runner.js'
-export { codingAgent, codingAgents, agentNames, UnknownAgent } from './agents.js'
 export { acquireRunLock, isPidAlive, lockHolder, releaseRunLock, runLockPath, runStderrPath } from './run-lock.js'
 export { gitHostEnv } from './git-host.js'
 export { readLiveCard, readLiveDiary, endLiveCard, liveDir, inboxPath, INBOX_FILE } from './live-card.js'

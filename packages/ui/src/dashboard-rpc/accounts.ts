@@ -1,8 +1,9 @@
 import { computerName } from '../computer-name.js'
-import { comesBackFrom, handedOverBy, isLimited, loginWiring, OWN_NAME, ownLoginThere, ownName, readAccounts, removeAdded, useFirst, type AccountsAgent, type LoginWiring } from '@openagt/skill-account-rotation'
+import { accountFolder, codexAccountsDir, personalCodexHome, readCodexUsage } from '@openagt/agent-driver-codex'
+import { comesBackFrom, handedOverBy, isLimited, loginWiring, OWN_NAME, readAccounts, removeAdded, useFirst, type LoginWiring } from '@openagt/skill-account-rotation'
 import { contextQuota } from './context.js'
 import { readCopied, type CopiedLogin } from '../dashboard/copied-logins.js'
-import type { AgentAccount, DriverQuotaWindow, DriverRateWindow } from '@openagt/hooks'
+import type { AgentAccount, AgentLogins, DriverQuotaWindow, DriverRateWindow } from '@openagt/hooks'
 
 // The accounts runs use, per coding agent (`@openagt/skill-account-rotation`): the person's own
 // login, which the agent keeps, and the ones added beside it. A page sees each one's name, how full
@@ -10,7 +11,8 @@ import type { AgentAccount, DriverQuotaWindow, DriverRateWindow } from '@openagt
 // through its command. On a server, an account may also be a login of the person's own computer
 // (`copied-logins.ts`): its row says which computer, and how full the computer last read it.
 
-export type { AccountsAgent }
+/** The coding agents whose accounts a page shows, by their list: Claude Code's and Codex's. */
+export type AccountsAgent = 'claude' | 'codex'
 
 /** One of an account's usage windows, by how long it lasts. */
 export interface AccountWindow {
@@ -56,13 +58,30 @@ export interface AccountsView {
   now: number
 }
 
-/** What the RPCs reach for, swapped in tests: the logins, how full a Codex account is. */
+/** What the RPCs reach for, swapped in tests: the lists and what each agent knows of its own logins, where a Codex login is and how full it is. */
 export const accountsWiring: LoginWiring & {
   /** This computer's own name. */
   computer: () => string
+  /** Where an added Codex account's login is kept, a folder each. */
+  codexDir: () => string
+  /** The person's own Codex home, where their login is. */
+  codexOwnHome: () => string
+  /** An added Codex account's folder. */
+  codexFolder: (account: AgentAccount) => string
+  /** How full the Codex login in a home is, now. */
+  codexUsage: (home: string) => Promise<DriverRateWindow[]>
 } = {
   ...loginWiring(),
   computer: computerName,
+  codexDir: () => codexAccountsDir(),
+  codexOwnHome: () => personalCodexHome(),
+  codexFolder: account => accountFolder(account),
+  codexUsage: home => readCodexUsage({ home }),
+}
+
+/** What the agent of `agent`'s list knows of its own logins (`RunAgent.accounts`), as the distribution gives it. */
+async function loginsOf(agent: AccountsAgent): Promise<AgentLogins | undefined> {
+  return (await accountsWiring.logins()).find(logins => logins.list === agent)
 }
 
 /** How long a Codex reading is kept: the page asks every few seconds, and each reading starts a Codex. */
@@ -105,9 +124,9 @@ const AGENT_NAMES: Record<AccountsAgent, string> = { claude: 'Claude', codex: 'C
  * added one from its last run, a login of the person's computer from the last reading it sent when
  * that is newer; every Codex one live.
  */
-async function row(agent: AccountsAgent, account: AgentAccount, liveOwn: DriverQuotaWindow[], copies: CopiedLogin[], now: number): Promise<AccountRow> {
+async function row(agent: AccountsAgent, logins: AgentLogins | undefined, account: AgentAccount, liveOwn: DriverQuotaWindow[], copies: CopiedLogin[], now: number): Promise<AccountRow> {
   const own = account.login === undefined
-  const name = own && account.name === OWN_NAME ? ((await ownName(agent, accountsWiring)) ?? `${AGENT_NAMES[agent]} login on ${accountsWiring.computer()}`) : account.name
+  const name = own && account.name === OWN_NAME ? ((await logins?.ownName(accountsWiring.env)) ?? `${AGENT_NAMES[agent]} login on ${accountsWiring.computer()}`) : account.name
   const copy = own ? undefined : copies.find(login => login.name === account.name)
   const said = (): Pick<AccountRow, 'windows' | 'asOf'> => {
     if (copy?.usage && (account.windowsAt === undefined || copy.usage.at > account.windowsAt)) return { windows: copy.usage.windows, asOf: copy.usage.at }
@@ -125,7 +144,7 @@ async function row(agent: AccountsAgent, account: AgentAccount, liveOwn: DriverQ
     ...(copy ? { from: copy.from } : {}),
     ...(!own && handedOverBy(agent, accountsWiring.env).get(account.name)?.comesBack ? { comesBack: true as const } : {}),
     own,
-    ...(own && !ownLoginThere(agent, accountsWiring) ? { loggedOut: true as const } : {}),
+    ...(own && !(logins?.ownLoginThere(accountsWiring.env) ?? false) ? { loggedOut: true as const } : {}),
     ...(account.added !== undefined ? { added: account.added } : {}),
     ...reading,
     ...(isLimited(account, now) ? { limitedUntil: account.limitedUntil! } : {}),
@@ -144,7 +163,8 @@ export async function onAgentAccounts(agent: AccountsAgent): Promise<AccountsVie
       : []
   const copied = readCopied()
   const copies = copied.filter(login => login.kind === agent)
-  const rows = await Promise.all(readAccounts(accountsWiring.path(agent)).map(account => row(agent, account, liveOwn, copies, now)))
+  const logins = await loginsOf(agent)
+  const rows = await Promise.all(readAccounts(accountsWiring.path(agent)).map(account => row(agent, logins, account, liveOwn, copies, now)))
   // The first free one is the one a run takes; with one account there is no order to say.
   if (rows.length > 1) {
     const free = rows.filter(r => r.limitedUntil === undefined && (!r.loggedOut || rows.every(other => other.own)))
@@ -168,7 +188,9 @@ export async function sendRemoveAgentAccount(agent: AccountsAgent, name: string)
   try {
     const from = comesBackFrom(agent, name, accountsWiring)
     if (from !== undefined) return { ok: false, error: `${name}'s account comes from ${from}: remove it there.` }
-    await removeAdded(agent, name, accountsWiring)
+    const logins = await loginsOf(agent)
+    if (!logins) return { ok: false, error: `No coding agent here keeps ${AGENT_NAMES[agent]} accounts.` }
+    await removeAdded(logins, name, accountsWiring)
     return { ok: true }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }

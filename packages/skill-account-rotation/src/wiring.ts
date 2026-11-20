@@ -1,79 +1,52 @@
-import { execFile } from 'node:child_process'
-import { homedir } from 'node:os'
-import { join } from 'node:path'
-import { probeCli } from '@openagt/agent-driver'
-import type { AgentAccount, DriverQuota, DriverRateWindow } from '@openagt/hooks'
-import { ClaudeCodeDriver, mintClaude, type Mint } from '@openagt/agent-driver-claude-code'
-import { accountFolder, codexAccountsDir, codexWho, loginCodex, personalCodexHome, readCodexUsage, type CodexLogin, type CodexLoginOptions, type CodexWho } from '@openagt/agent-driver-codex'
-import { accountsPath, type AccountsAgent } from './accounts.js'
+import { codingAgents } from '@openagt/agent-driver'
+import type { AgentLogins } from '@openagt/hooks'
+import { accountsPath } from './accounts.js'
 import { addingPath, startAddingProcess } from './adding.js'
-import { claudeUsagePath } from './usage.js'
 
 // Everything adding, removing and reading the accounts reach for beyond the list itself, in one
-// place: the agents' own logins and sign-ins, where each keeps who the person is, the files beside
-// the accounts, and the processes a sign-in runs in. The modules that use it take it as a value,
-// so a test hands them its own; only this one knows the real ones.
+// place: the coding agents' own part of their accounts (`RunAgent.accounts`, the distribution's),
+// the files beside the accounts, and the processes a sign-in runs in. The modules that use it take
+// it as a value, so a test hands them its own; only this one knows the real ones.
 
-/** What adding and removing reach for, swapped in tests: the logins, and where each agent keeps who the person is. */
+/** What adding, removing and reading the accounts reach for, swapped in tests. */
 export interface LoginWiring {
-  mint: Mint
-  claudeJson: () => string
-  path: (agent: AccountsAgent) => string
+  /** The coding agents' accounts, one for each list: those of the distribution handed down to this process. */
+  logins: () => Promise<readonly AgentLogins[]>
+  /** Where a list's accounts are. */
+  path: (list: string) => string
   now: () => number
-  loginCodex: (opts: CodexLoginOptions) => Promise<CodexLogin>
-  codexDir: () => string
-  codexOwnHome: () => string
-  codexFolder: (account: AgentAccount) => string
-  codexWho: (home: string) => Promise<CodexWho>
-  /** The environment an agent's own login may be given in. */
+  /** The environment the agents' own logins are read in. */
   env: NodeJS.ProcessEnv
-  /** Where the person's own Claude login's reading is kept. */
-  claudeUsagePath: () => string
-  /** Claude Code's `/usage`, of the person's own login. */
-  claudeQuota: () => Promise<DriverQuota>
-  /** How full the Codex login in a home is, now. */
-  codexUsage: (home: string) => Promise<DriverRateWindow[]>
   /** No browser on this computer: a server's, or a Linux computer with no display. The person signs in on another device. */
   headless: () => boolean
-  /** Where an agent's sign-in says how it goes. */
-  addingPath: (agent: AccountsAgent) => string
-  /** Start an agent's sign-in, on its own: what the sign-in itself runs is `signIn` (`login.ts`). */
-  startAdding: (agent: AccountsAgent, name: string) => void
+  /** Where a list's sign-in says how it goes. */
+  addingPath: (list: string) => string
+  /** Start a list's sign-in, on its own: what the sign-in itself runs is `signIn` (`login.ts`). */
+  startAdding: (list: string, name: string) => void
   /** This process, as a sign-in says it runs in it. */
   ownPid: () => number
   /** Whether a sign-in's process is still there. */
   isRunning: (pid: number) => boolean
   /** Stop a sign-in's process. */
   stopAdding: (pid: number) => void
-  /** Run the agent's own logout, of the person's own login. */
-  logOutAgent: (agent: AccountsAgent) => Promise<void>
-  /** Whether the agent's program answers on this computer, as a run's readiness check asks it. */
-  installed: (agent: AccountsAgent) => Promise<boolean>
 }
 
-/** The agents' own logouts: the agent's program, then what it is told. */
-const LOG_OUT: Record<AccountsAgent, readonly [string, ...string[]]> = { claude: ['claude', 'auth', 'logout'], codex: ['codex', 'logout'] }
-/** How long an agent's logout gets: a page's call ends at 30 seconds. */
-const LOG_OUT_MS = 25_000
+/** The coding agents' accounts, one for each list, the first agent's where two name one. */
+export async function agentLogins(env: NodeJS.ProcessEnv = process.env): Promise<AgentLogins[]> {
+  const logins: AgentLogins[] = []
+  for (const agent of await codingAgents(undefined, env)) if (agent.accounts && !logins.some(one => one.list === agent.accounts!.list)) logins.push(agent.accounts)
+  return logins
+}
 
 /** The logins of the user `env` is. */
 export function loginWiring(env: NodeJS.ProcessEnv = process.env): LoginWiring {
   return {
-    mint: mintClaude,
-    claudeJson: () => join(env['CLAUDE_CONFIG_DIR'] ?? env['HOME'] ?? homedir(), '.claude.json'),
-    path: agent => accountsPath(agent, env),
+    logins: () => agentLogins(env),
+    path: list => accountsPath(list, env),
     now: Date.now,
-    loginCodex,
-    codexDir: () => codexAccountsDir(env),
-    codexOwnHome: () => personalCodexHome(env),
-    codexFolder: account => accountFolder(account, env),
-    codexWho,
     env,
-    claudeUsagePath: () => claudeUsagePath(env),
-    claudeQuota: () => new ClaudeCodeDriver().readQuota(),
-    codexUsage: home => readCodexUsage({ home }),
     headless: () => env['OPENAGENT_SERVER'] === '1' || (process.platform === 'linux' && !env['DISPLAY'] && !env['WAYLAND_DISPLAY']),
-    addingPath: agent => addingPath(agent, env),
+    addingPath: list => addingPath(list, env),
     startAdding: startAddingProcess,
     ownPid: () => process.pid,
     isRunning: pid => {
@@ -91,11 +64,5 @@ export function loginWiring(env: NodeJS.ProcessEnv = process.env): LoginWiring {
         // Gone already.
       }
     },
-    logOutAgent: agent =>
-      new Promise((resolve, reject) => {
-        const [bin, ...args] = LOG_OUT[agent]
-        execFile(bin, args, { env, timeout: LOG_OUT_MS }, err => (err ? reject(err) : resolve()))
-      }),
-    installed: async agent => (await probeCli(LOG_OUT[agent][0], ['--version'])).ok,
   }
 }

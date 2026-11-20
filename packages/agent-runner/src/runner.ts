@@ -2,9 +2,8 @@ import { spawn } from 'node:child_process'
 import { closeSync, mkdirSync, openSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { findRun } from '@openagt/agent-driver'
+import { codingAgent, findRun } from '@openagt/agent-driver'
 import { createHooks, DISTRIBUTION_ENV, loadHandedDown, type DistributionEntry, type Driver, type DriverReadiness, type PersonalSetup, type Preset, type RunAgent } from '@openagt/hooks'
-import { codingAgent } from './agents.js'
 import { readPersonal } from './config.js'
 import { runPreset, type SessionPicks } from './preset.js'
 import { gitHostCommand, gitHostEnv } from './git-host.js'
@@ -12,7 +11,7 @@ import { namedAtStart, resumeRun, runCommand, runIdFrom, type RunOutcome, type R
 import { askName } from './title.js'
 import { publishChange, runnerMark, type NO_PUBLISH, type Publish } from './records.js'
 import { acquireRunLock, handOverRunLock, isPidAlive, releaseRunLock, runStderrPath } from './run-lock.js'
-import { accountRotation, accountsPath, hasAddedAccount, isAccountsAgent, readAccounts } from '@openagt/skill-account-rotation'
+import { accountRotation, accountsPath, hasAddedAccount, readAccounts } from '@openagt/skill-account-rotation'
 import { AGENT_ID_ENV } from '@openagt/agent-data'
 
 /**
@@ -36,7 +35,7 @@ const BIN = fileURLToPath(new URL('../bin/agent-runner', import.meta.url))
 export async function readyToRun(repo: string, driver: string | undefined, deps: { agent?: RunAgent; gitHostEnv?: typeof gitHostEnv; login?: string } = {}): Promise<DriverReadiness> {
   const agent = deps.agent ?? (await codingAgent(driver))
   // An added account is a login runs use: a server with only the person's own computers' logins runs on them.
-  const ready = await agent.ready({ personal: await readPersonal(repo, () => {}), addedAccount: isAccountsAgent(agent.accounts) && hasAddedAccount(agent.accounts) })
+  const ready = await agent.ready({ personal: await readPersonal(repo, () => {}), addedAccount: agent.accounts !== undefined && hasAddedAccount(agent.accounts.list) })
   const given = await (deps.gitHostEnv ?? gitHostEnv)(repo, deps.login)
   if (!given.ok) ready.problems.push(deps.login !== undefined ? cannotWorkAs(deps.login, given.error) : given.error)
   return ready
@@ -312,8 +311,8 @@ export async function presetLoginFor(repo: string, preset: Pick<Preset, 'options
  * none named, or an agent with no list: every account of the computer's.
  */
 export function accountsOn(preset: Pick<Preset, 'options'>, agent: Pick<RunAgent, 'accounts'>, env: NodeJS.ProcessEnv = process.env): string[] | undefined {
-  const list = agent.accounts
-  if (!isAccountsAgent(list)) return undefined
+  const list = agent.accounts?.list
+  if (list === undefined) return undefined
   const picks: Record<string, unknown> = { ...preset.options['agent-driver'] }
   const named = picks[list]
   if (!Array.isArray(named)) return undefined
@@ -336,6 +335,6 @@ export function driverFor(agent: RunAgent, id: string | undefined, personal: Per
   const env: NodeJS.ProcessEnv = { ...process.env, ...(id !== undefined ? { [AGENT_ID_ENV]: id } : {}) }
   // On the computer's accounts of the agent's list, or the few the run's preset names, the next free one taking over at a limit; the one to start on, when whoever started the run said.
   const prefer = env[ACCOUNT_ENV]?.trim()
-  const accounts = isAccountsAgent(agent.accounts) ? accountRotation(agent.accounts, { ...(prefer ? { prefer } : {}), ...(only ? { only } : {}) }) : undefined
+  const accounts = agent.accounts ? accountRotation(agent.accounts, { ...(prefer ? { prefer } : {}), ...(only ? { only } : {}) }) : undefined
   return agent.driver({ env, personal, ...(accounts ? { accounts } : {}) })
 }

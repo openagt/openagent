@@ -80,11 +80,11 @@ export interface RunAgent {
   /** It asks the person with a tool of its own ({@link Driver.ownQuestionTool}): its runs get no skill that teaches asking. */
   readonly ownQuestionTool?: boolean
   /**
-   * The list of accounts its turns take, by its name (`claude`, `codex`): the accounts a person
-   * added for it in OpenAgent, and a preset's picks among them (`RunOptions['agent-driver']`).
+   * Its accounts on this computer: the list its turns take, the accounts a person added for it in
+   * OpenAgent beside its own login, and a preset's picks among them (`RunOptions['agent-driver']`).
    * None: it runs on whatever login it has.
    */
-  readonly accounts?: string
+  readonly accounts?: AgentLogins
   /** What would stop a run on it here, asked before a run spends a checkout: its CLI missing or logged out. */
   ready(opts: RunAgentReadyOptions): Promise<DriverReadiness>
   /** The driver one run's sessions start on, unrestricted: nobody is there to approve what its agent does in the run's checkout. */
@@ -808,4 +808,62 @@ export interface AccountRotation {
   first(env: NodeJS.ProcessEnv): AgentAccount | undefined
   /** A turn on the accounts of this environment, handing over at a limit. */
   turn(env: NodeJS.ProcessEnv, on: RotatedTurn): Promise<DriverTurn>
+}
+
+// What only a coding agent knows of its accounts, given with it (`RunAgent.accounts`, #2394): its
+// own login, how a new one is signed in, its logout, how full an account is now, and what it keeps
+// of an added account beside the list. The list, its order and the next free account taking over
+// at a limit are agent-driver's, the same for every agent.
+
+/** One window of an account as a reading says it: its name, how full, and when it resets where that is known. */
+export interface UsageWindow {
+  /** `five_hour`, `seven_day`, `thirty_day`. */
+  window: string
+  /** How much of the window is gone, 0-100. */
+  percentUsed: number
+  /** When it resets, epoch milliseconds, when the reading said. */
+  resetsAt?: number
+}
+
+/** How the person is told where to sign in to an account being added: each agent's sign-in calls the ones it has a use for. Unsaid, this computer's browser opens and that is all. */
+export interface SignInSaid {
+  /** A page that gives a code to bring back, on a computer with no browser: the code goes back through `paste`, which says whether the sign-in took it to check. */
+  onLink?: (url: string, paste: (code: string) => boolean) => void
+  /** The code brought back was not taken: the sign-in waits for another. */
+  onRefused?: () => void
+  /** The page, as this computer's browser opens on it: what a person copies into a private window. */
+  onUrl?: (url: string) => void
+  /** A code the person types at `url`, on a computer with no browser. */
+  onCode?: (code: string, url: string) => void
+  /** Stop it: nothing is kept. */
+  signal?: AbortSignal
+}
+
+/** What a sign-in came to: the login an added account keeps, or why there is none. */
+export type SignedIn = { ok: true; login: string } | { ok: false; error: string }
+
+/** A coding agent's accounts on this computer, as only the agent knows them. */
+export interface AgentLogins {
+  /** The list, by the name its file and a preset's pick go by: `claude`, `codex`. */
+  readonly list: string
+  /** The service an account is at, as a person reads it in a sentence: `Claude`, `Codex`. */
+  readonly service: string
+  /** The logins the agent takes from its environment before its own: one given there is not logged out here. */
+  readonly envLogins: readonly string[]
+  /** Whether the agent's program is on this computer: an account of it cannot be added before. */
+  installed(): Promise<boolean>
+  /** Whether the agent has a login of the person's own in `env`, from what it keeps: quick enough to ask before each turn, as asking the agent is not. */
+  ownLoginThere(env: NodeJS.ProcessEnv): boolean
+  /** Who the person's own login is, as the agent knows them; none when it has no login of theirs, or keeps no name. */
+  ownName(env: NodeJS.ProcessEnv): Promise<string | undefined>
+  /** Log the person's own login out, with the agent's own logout: their terminal is logged out with it. */
+  logOut(env: NodeJS.ProcessEnv): Promise<void>
+  /** Sign a new account in, the person told where as `said` lets: its login, or why not. One of `accounts` already is refused, where the agent can tell who an account is. */
+  signIn(accounts: readonly AgentAccount[], said: SignInSaid, env: NodeJS.ProcessEnv): Promise<SignedIn>
+  /** Whether `code` is the kind of code its sign-in page gives to bring back ({@link SignInSaid.onLink}). */
+  isSignInCode(code: string): boolean
+  /** Take what the agent keeps of an added account beside the list (a home folder of its own) off this computer, with the account. */
+  forget(account: AgentAccount, env: NodeJS.ProcessEnv): Promise<void>
+  /** How full the account is now, where the agent can read it now; none where it cannot: what its last turn said stands. */
+  usage(account: AgentAccount, env: NodeJS.ProcessEnv): Promise<UsageWindow[] | undefined>
 }

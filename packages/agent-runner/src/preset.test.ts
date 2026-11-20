@@ -10,6 +10,7 @@ import { memorySettings } from '@openagt/hooks/testing'
 import { accountsPath, addAccount } from '@openagt/skill-account-rotation'
 import { anyPick, presetNamed, runPreset, sessionPicksNamed } from './preset.js'
 import { accountsOn, presetLoginFor } from './runner.js'
+import { testLogins } from './run-test-support.js'
 import { git, handDownDistribution, removeRepo, testRepo } from './test-repo.js'
 
 test('the preset a run is on is read off the environment by its id; Default is none; a word that is no id is refused', () => {
@@ -53,8 +54,8 @@ test('a preset\'s Claude and Codex accounts apply where this computer has them: 
     addAccount('Dani', 'x', accountsPath('claude', env))
     addAccount('Rom', 'y', accountsPath('claude', env))
     addAccount('Rom', 'z', accountsPath('codex', env))
-    const claude = { accounts: 'claude' }
-    const codex = { accounts: 'codex' }
+    const claude = { accounts: testLogins('claude') }
+    const codex = { accounts: testLogins('codex') }
     assert.equal(accountsOn({ options: {} }, claude, env), undefined)
     const both = { options: { 'agent-driver': { claude: ['Rom', 'Dani', 'Nobody'], codex: ['Dani'] } } }
     assert.deepEqual(accountsOn(both, claude, env), ['Rom', 'Dani'])

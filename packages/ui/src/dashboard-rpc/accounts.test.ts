@@ -7,6 +7,8 @@ import { accountsWiring, onAgentAccounts, sendRemoveAgentAccount, sendUseAgentAc
 import { provideTestContext } from './test-context.js'
 import type { QuotaView } from '../dashboard/quota.js'
 import { addAccount, markLimited, noteWindows, OWN_NAME, readAccounts } from '@openagt/skill-account-rotation'
+import { claudeLogins } from '@openagt/agent-driver-claude-code'
+import { codexLogins } from '@openagt/agent-driver-codex'
 
 const HOUR = 60 * 60_000
 const NOW = Date.parse('2026-10-22T12:00:00Z')
@@ -18,7 +20,15 @@ async function withAccounts(body: (path: string) => Promise<void>, claude: objec
   const path = join(dir, 'accounts.json')
   writeFileSync(join(dir, '.claude.json'), JSON.stringify(claude))
   const before = { ...accountsWiring }
-  Object.assign(accountsWiring, { path: () => path, claudeJson: () => join(dir, '.claude.json'), now: () => NOW, codexWho: async () => ({}), codexUsage: async () => [], computer: () => 'Studio' })
+  // Claude Code keeps who the person is in the test's folder; no Codex login is there.
+  Object.assign(accountsWiring, {
+    path: () => path,
+    env: { ...process.env, CLAUDE_CONFIG_DIR: dir, CODEX_HOME: join(dir, 'no-codex') },
+    logins: async () => [claudeLogins(), codexLogins({ who: async () => ({}) })],
+    now: () => NOW,
+    codexUsage: async () => [],
+    computer: () => 'Studio',
+  })
   provideTestContext({ quota: { read: async () => live, stop: () => {} } })
   try {
     await body(path)
@@ -85,11 +95,13 @@ function codexWiring(dir: string, who: Record<string, { name?: string; key?: str
   mkdirSync(folders, { recursive: true })
   mkdirSync(own, { recursive: true })
   writeFileSync(join(own, 'auth.json'), '{}')
+  const whoIn = async (home: string) => who[home === own ? 'own' : home.slice(folders.length + 1)] ?? {}
   Object.assign(accountsWiring, {
+    env: { ...accountsWiring.env, CODEX_HOME: own },
+    logins: async () => [claudeLogins(), codexLogins({ who: whoIn })],
     codexDir: () => folders,
     codexOwnHome: () => own,
     codexFolder: (account: { login?: string }) => join(folders, account.login!),
-    codexWho: async (home: string) => who[home === own ? 'own' : home.slice(folders.length + 1)] ?? {},
     codexUsage: async (home: string) => {
       reads.push(home)
       const said = usage[home === own ? 'own' : home.slice(folders.length + 1)]
