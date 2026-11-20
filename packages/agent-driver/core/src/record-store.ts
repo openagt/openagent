@@ -1,7 +1,7 @@
 import { dirname, join } from 'node:path'
 import { nodeBranchFileFs, nodeGitRunner, projectDataDir, withProjectData, type BranchFileFs, type CommitMessage, type FileBranchWrite, type GitRunner } from '@openagt/agent-data'
-import { RUNS_DIR } from './names.js'
 import {
+  RUNS_DIR,
   type ListedRun,
   formatDiary,
   formatRunCard,
@@ -14,42 +14,42 @@ import {
   type AnyDiaryLine,
   type RunCard,
   type RunPatch,
-} from './run.js'
+} from './record.js'
 import { findEntry, readCard, runEntries, type RecordsReader } from './records.js'
 
 // Where the runs live: `agents/<who>/<id>.json` and `<id>.jsonl` in the project's data directory
 // (its directory in the personal folder, or the checkout of its `agent-data` branch when the
 // project is shared). This module is a long-lived process's side: it reads that directory,
-// walking it as `records` does, and writes through the caller's funnel. The command an agent runs
-// reads through `cli` instead.
+// walking it as `records.ts` does, and writes through the caller's funnel. The `logs` command
+// reads with `records.ts` alone, through whichever copy of the records it is asked for.
 
 /** The plain-file seams an operation on the branch's files needs. */
-export type LogsFiles = BranchFileFs
+export type RecordFiles = BranchFileFs
 
 /**
  * A caller's write funnel: apply `op` to a checkout of the branch, commit, push. The default is
  * the persistent checkout's serialized cycle; a test's fake stands in.
  */
-export type LogsFunnel = (root: string, message: CommitMessage, op: (dir: string) => Promise<void>) => Promise<FileBranchWrite>
+export type RecordFunnel = (root: string, message: CommitMessage, op: (dir: string) => Promise<void>) => Promise<FileBranchWrite>
 
 /** Injectable seams so every operation is unit-testable off disk and git; production takes the defaults. */
-export interface LogsDeps extends Partial<LogsFiles> {
-  funnel?: LogsFunnel
+export interface RecordDeps extends Partial<RecordFiles> {
+  funnel?: RecordFunnel
   git?: GitRunner
 }
 
 /** The default funnel: the project's data write. */
-export const logsFunnel: LogsFunnel = (root, message, op) => withProjectData(root, message, op)
+export const recordFunnel: RecordFunnel = (root, message, op) => withProjectData(root, message, op)
 
 /** Fill in whatever a caller left out, so an operation reads the same way in tests and out. */
-export function resolveLogsDeps(deps: LogsDeps): LogsFiles & { funnel: LogsFunnel; git: GitRunner } {
+export function resolveRecordDeps(deps: RecordDeps): RecordFiles & { funnel: RecordFunnel; git: GitRunner } {
   const fs = nodeBranchFileFs()
   return {
     read: deps.read ?? fs.read,
     write: deps.write ?? fs.write,
     remove: deps.remove ?? fs.remove,
     list: deps.list ?? fs.list,
-    funnel: deps.funnel ?? logsFunnel,
+    funnel: deps.funnel ?? recordFunnel,
     git: deps.git ?? nodeGitRunner(),
   }
 }
@@ -65,12 +65,12 @@ export async function runsPath(root: string, git: GitRunner = nodeGitRunner()): 
 }
 
 /** The checkout's files as a reader of the records: a file that cannot be read reads as absent. */
-function asRecords(r: LogsFiles): RecordsReader {
+function asRecords(r: RecordFiles): RecordsReader {
   return { list: dir => r.list(dir), read: path => r.read(path).catch(() => undefined) }
 }
 
 /** The card and diary paths of one run inside a checkout, searched across every person's directory; `undefined` when it is nowhere. */
-async function locate(checkout: string, id: string, r: LogsFiles): Promise<{ card: string; diary: string } | undefined> {
+async function locate(checkout: string, id: string, r: RecordFiles): Promise<{ card: string; diary: string } | undefined> {
   if (!isRunId(id)) return undefined
   const dir = runsDir(checkout)
   const run = await findEntry(asRecords(r), dir, id)
@@ -82,8 +82,8 @@ async function locate(checkout: string, id: string, r: LogsFiles): Promise<{ car
  * kept under: each person's directory is read, a card that does not parse is skipped. `since`
  * (epoch ms) keeps only the runs started at or after it. Never throws: a missing directory is no runs.
  */
-export async function listRuns(root: string, opts: { since?: number } = {}, deps: LogsDeps = {}): Promise<ListedRun[]> {
-  const r = resolveLogsDeps(deps)
+export async function listRuns(root: string, opts: { since?: number } = {}, deps: RecordDeps = {}): Promise<ListedRun[]> {
+  const r = resolveRecordDeps(deps)
   const dir = await runsPath(root, r.git)
   const records = asRecords(r)
   const cards: ListedRun[] = []
@@ -97,21 +97,21 @@ export async function listRuns(root: string, opts: { since?: number } = {}, deps
 }
 
 /** Where one run's two files sit on the persistent checkout, or `undefined` when the run is not there. */
-export async function runFiles(root: string, id: string, deps: LogsDeps = {}): Promise<{ card: string; diary: string } | undefined> {
-  const r = resolveLogsDeps(deps)
+export async function runFiles(root: string, id: string, deps: RecordDeps = {}): Promise<{ card: string; diary: string } | undefined> {
+  const r = resolveRecordDeps(deps)
   return locate(await projectDataDir(root, { git: r.git }), id, r)
 }
 
 /** One run's card, or `undefined` when there is no such run or its card does not parse. */
-export async function findRun(root: string, id: string, deps: LogsDeps = {}): Promise<RunCard | undefined> {
-  const r = resolveLogsDeps(deps)
+export async function findRun(root: string, id: string, deps: RecordDeps = {}): Promise<RunCard | undefined> {
+  const r = resolveRecordDeps(deps)
   const files = await runFiles(root, id, deps)
   return files ? parseRunCard(await r.read(files.card).catch(() => '')) : undefined
 }
 
 /** One run's diary, every line: `[]` for a run with no diary file, `undefined` for no such run. */
-export async function readDiary(root: string, id: string, deps: LogsDeps = {}): Promise<AnyDiaryLine[] | undefined> {
-  const r = resolveLogsDeps(deps)
+export async function readDiary(root: string, id: string, deps: RecordDeps = {}): Promise<AnyDiaryLine[] | undefined> {
+  const r = resolveRecordDeps(deps)
   const files = await runFiles(root, id, deps)
   if (!files) return undefined
   return parseDiary(await r.read(files.diary).catch(() => ''))
@@ -123,8 +123,8 @@ export async function readDiary(root: string, id: string, deps: LogsDeps = {}): 
  * (its ending, written by a later process) stays in one place. Never throws; the funnel's outcome
  * says whether the commit landed and whether it was pushed.
  */
-export async function writeRun(root: string, card: RunCard, diary: readonly AnyDiaryLine[], deps: LogsDeps = {}): Promise<FileBranchWrite> {
-  const r = resolveLogsDeps(deps)
+export async function writeRun(root: string, card: RunCard, diary: readonly AnyDiaryLine[], deps: RecordDeps = {}): Promise<FileBranchWrite> {
+  const r = resolveRecordDeps(deps)
   if (!isRunId(card.id)) return { ok: false, committed: false, error: `not a run id: ${card.id}` }
   const email = await r.git(['config', 'user.email'], root).catch(() => '')
   const person = personDir(email)
@@ -144,8 +144,8 @@ export async function writeRun(root: string, card: RunCard, diary: readonly AnyD
  * commit. True when the card now carries it, committed; a push that could not go out rides the
  * next cycle. False when there is no such run.
  */
-export async function patchRun(root: string, id: string, patch: RunPatch, deps: LogsDeps = {}): Promise<boolean> {
-  const r = resolveLogsDeps(deps)
+export async function patchRun(root: string, id: string, patch: RunPatch, deps: RecordDeps = {}): Promise<boolean> {
+  const r = resolveRecordDeps(deps)
   let patched = false
   const result = await r.funnel(root, `logs: patch run ${id}`, async checkout => {
     patched = false
@@ -165,8 +165,8 @@ export async function patchRun(root: string, id: string, patch: RunPatch, deps: 
  * Delete a run as one commit: its card, its diary, and any other file named after its id that
  * another package keeps beside them (`<id>.<anything>`). A run that is not there is a landed no-op.
  */
-export async function deleteRun(root: string, id: string, deps: LogsDeps = {}): Promise<FileBranchWrite> {
-  const r = resolveLogsDeps(deps)
+export async function deleteRun(root: string, id: string, deps: RecordDeps = {}): Promise<FileBranchWrite> {
+  const r = resolveRecordDeps(deps)
   return r.funnel(root, `logs: delete run ${id}`, async checkout => {
     const files = await locate(checkout, id, r)
     if (!files) return

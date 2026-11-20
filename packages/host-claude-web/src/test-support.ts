@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { DATA_BRANCH, nodeGitRunner, writeSharing, type GitRunner } from '@openagt/agent-data'
-import { writeRun, type AnyDiaryLine, type RunCard } from '@openagt/skill-logs'
+import { writeRun, type AnyDiaryLine, type RunCard } from '@openagt/agent-driver'
 import { WEB_HOST } from './web-runs.js'
 
 // What the tests work with: a project whose runs' records are kept where a real one keeps them,

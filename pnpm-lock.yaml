@@ -75,6 +75,10 @@ importers:
         version: 7.0.2
 
   packages/agent-driver/core:
+    dependencies:
+      '@openagt/agent-data':
+        specifier: workspace:*
+        version: link:../../agent-data
     devDependencies:
       '@types/node':
         specifier: ^20.0.0
@@ -106,9 +110,6 @@ importers:
       '@openagt/skill-branches':
         specifier: workspace:*
         version: link:../skill-branches
-      '@openagt/skill-logs':
-        specifier: workspace:*
-        version: link:../skill-logs
       yaml:
         specifier: ^2.5.0
         version: 2.9.0
@@ -122,6 +123,9 @@ importers:
       '@openagt/skill-github':
         specifier: workspace:*
         version: link:../skill-github
+      '@openagt/skill-logs':
+        specifier: workspace:*
+        version: link:../skill-logs
       '@openagt/skills':
         specifier: workspace:*
         version: link:../skills
@@ -439,9 +443,6 @@ importers:
       '@openagt/skill-github':
         specifier: workspace:*
         version: link:../skill-github
-      '@openagt/skill-logs':
-        specifier: workspace:*
-        version: link:../skill-logs
       '@puppeteer/browsers':
         specifier: 3.2.1
         version: 3.2.1
@@ -506,9 +507,6 @@ importers:
       '@openagt/skill-github':
         specifier: workspace:*
         version: link:../skill-github
-      '@openagt/skill-logs':
-        specifier: workspace:*
-        version: link:../skill-logs
     devDependencies:
       '@openagt/agent-data':
         specifier: workspace:*
@@ -961,12 +959,12 @@ importers:
       '@openagt/agent-data':
         specifier: workspace:*
         version: link:../agent-data
+      '@openagt/agent-driver':
+        specifier: workspace:*
+        version: link:../agent-driver/core
       '@openagt/hooks':
         specifier: workspace:*
         version: link:../hooks
-      '@openagt/skill-logs':
-        specifier: workspace:*
-        version: link:../skill-logs
     devDependencies:
       '@types/node':
         specifier: ^20.0.0
@@ -980,6 +978,9 @@ importers:
       '@openagt/agent-data':
         specifier: workspace:*
         version: link:../agent-data
+      '@openagt/agent-driver':
+        specifier: workspace:*
+        version: link:../agent-driver/core
       '@openagt/hooks':
         specifier: workspace:*
         version: link:../hooks
@@ -1107,9 +1108,6 @@ importers:
       '@openagt/skill-branches':
         specifier: workspace:*
         version: link:../skill-branches
-      '@openagt/skill-logs':
-        specifier: workspace:*
-        version: link:../skill-logs
       yaml:
         specifier: ^2.5.0
         version: 2.9.0

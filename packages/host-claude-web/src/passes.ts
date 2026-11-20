@@ -2,7 +2,7 @@ import { hostname } from 'node:os'
 import type { GitRunner } from '@openagt/agent-data'
 import type { ProjectRef } from '@openagt/hooks'
 import { listRequests, type GhRunner } from '@openagt/skill-github'
-import type { AnyDiaryLine, LogsDeps, RunCard } from '@openagt/skill-logs'
+import type { AnyDiaryLine, RecordDeps, RunCard } from '@openagt/agent-driver'
 import { endUnmade, handingOff } from './hand-off.js'
 import { githubAccount } from './github.js'
 import { SESSION_WINDOW_MS, projectWebRuns, updateWebRun, type WebRun } from './web-runs.js'
@@ -44,7 +44,7 @@ export interface PassDeps {
   account?: (dir: string, account: string | undefined) => Promise<{ git: GitRunner; gh: GhRunner }>
   /** The newest pull request of `branch` created since `since`; none when it has none. Throws when GitHub cannot say. */
   prOf?: (dir: string, branch: string, since: string, gh: GhRunner) => Promise<{ number: number; url: string } | undefined>
-  logs?: LogsDeps
+  logs?: RecordDeps
   /** This computer's name, as the runs it handed off say it. */
   host?: string
   now?: () => Date

@@ -1,4 +1,4 @@
-import { newestFirst, parseDiary, parseRunCard, runCardFile, runDiaryFile, runIdOfFile, type AnyDiaryLine, type RunCard } from './run.js'
+import { newestFirst, parseDiary, parseRunCard, runCardFile, runDiaryFile, runIdOfFile, type AnyDiaryLine, type RunCard } from './record.js'
 
 // Walking the runs, through whichever copy of the records is read: this machine's checkout of the
 // project's data, or origin's copy read off git. A run is two files in the folder of the person it

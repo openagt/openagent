@@ -7,7 +7,7 @@ import { nodeGitRunner, personalFolder, sessionsHome, writeSharing, DATA_BRANCH,
 import { rpcKind } from '@openagt/hooks/rpc'
 import { rpcHost } from '@openagt/hooks/testing'
 import { runCli, DEFAULT_LIMIT } from './cli.js'
-import { RUNS_DIR } from './names.js'
+import { RUNS_DIR } from '@openagt/agent-driver'
 import { people as peopleRead, runs as runsRead } from './server.js'
 
 const git = nodeGitRunner()

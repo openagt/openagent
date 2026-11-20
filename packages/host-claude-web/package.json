@@ -43,7 +43,6 @@
     "@openagt/agent-runner": "workspace:*",
     "@openagt/hooks": "workspace:*",
     "@openagt/skill-github": "workspace:*",
-    "@openagt/skill-logs": "workspace:*",
     "@puppeteer/browsers": "3.2.1"
   },
   "devDependencies": {

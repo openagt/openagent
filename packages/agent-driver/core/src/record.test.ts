@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { ANONYMOUS_DIR, agentLines, formatDiary, formatRunCard, isRunId, newestFirst, parseDiary, parseRunCard, personDir, publicCard, runIdOfFile } from './run.js'
+import { ANONYMOUS_DIR, agentLines, formatDiary, formatRunCard, isRunId, newestFirst, parseDiary, parseRunCard, personDir, publicCard, runIdOfFile } from './record.js'
 
 test('a run id is letters, digits, dashes and underscores; a card file is named after one', () => {
   assert.equal(isRunId('2026-09-08T18-14-30-111Z'), true)

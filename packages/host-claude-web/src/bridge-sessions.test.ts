@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import type { RunCard } from '@openagt/skill-logs'
+import type { RunCard } from '@openagt/agent-driver'
 import { bridgeSessionsFrom } from './bridge-sessions.js'
 import { webRunOf, type WebRun } from './web-runs.js'
 

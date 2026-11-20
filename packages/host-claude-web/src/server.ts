@@ -1,5 +1,5 @@
 import { act, read, type RpcComputerHost, type RpcHost } from '@openagt/hooks/rpc'
-import { isRunId } from '@openagt/skill-logs'
+import { isRunId } from '@openagt/agent-driver'
 import { bridgeBrowser } from './bridge.js'
 import { bridgeExtensionSource, type BridgeBrowserAction, type BridgeBrowserStatus } from './bridge-browser.js'
 import type { BridgeEvent, BridgeHello, BridgeQuestion } from './bridge-endpoints.js'

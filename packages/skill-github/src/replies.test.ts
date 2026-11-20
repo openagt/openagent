@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { RunCard } from '@openagt/skill-logs'
+import type { RunCard } from '@openagt/agent-driver'
 import type { GhRunner } from './gh.js'
 import { WHOLE_READ_EVERY_MS, answersFor, listReplies, parseThreads, repliesArgs, seenArgs } from './replies.js'
 

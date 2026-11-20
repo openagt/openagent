@@ -2,7 +2,7 @@ import { nodeGitRunner } from '@openagt/agent-data'
 import { read, type RpcHost } from '@openagt/hooks/rpc'
 import type { PersonActivity } from './people.js'
 import { newestRuns, peopleAt, records } from './reads.js'
-import { publicCard, type RunCard } from './run.js'
+import { publicCard, type RunCard } from '@openagt/agent-driver'
 
 // The logs' server part (`@openagt/hooks/rpc`): what their page and their Overview card read, as
 // the command prints it (`reads.ts`). What a caller sends is checked here, whatever its type says:

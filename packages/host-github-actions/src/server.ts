@@ -1,5 +1,5 @@
 import { read, type RpcHost } from '@openagt/hooks/rpc'
-import { findRun, isRunId } from '@openagt/skill-logs'
+import { findRun, isRunId } from '@openagt/agent-driver'
 import { ACTIONS_HOST } from './turn.js'
 
 // host-github-actions' server part (`@openagt/hooks/rpc`): what the strip above a run's chat reads.

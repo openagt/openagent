@@ -28,6 +28,33 @@ export { FakeDriver, FakeDriverSession, type FakeTurn, type FakeDriverOptions } 
 export { makeEmit, promptSent, startEvent, type PromptExtras, combineFraming, combineSignals, readWorkspaceFile, oneLine, cutOutput, callArgument, lineCount, patchSize, hunkLines, OUTPUT_MAX } from './session-support.js'
 export { ConversationGoneError, continuingTurn } from './gone.js'
 export { readyPrompt } from './ready-prompt.js'
+// The run's record (#2394, decision 15): its card and its diary, how they read and are written.
+export {
+  RUNS_DIR,
+  ANONYMOUS_DIR,
+  isRunId,
+  runCardFile,
+  runDiaryFile,
+  runIdOfFile,
+  startOfId,
+  personDir,
+  parseRunCard,
+  formatRunCard,
+  parseDiary,
+  formatDiary,
+  isDiaryLine,
+  agentLines,
+  newestFirst,
+  publicCard,
+  type RunCard,
+  type ListedRun,
+  type RunPatch,
+  type RunStatus,
+  type DiaryLine,
+  type AnyDiaryLine,
+} from './record.js'
+export { runIdsOf, runEntries, findEntry, readCard, readRunDiary, type RecordsReader, type RunEntry } from './records.js'
+export { listRuns, findRun, runFiles, readDiary, writeRun, patchRun, deleteRun, runsPath, recordFunnel, resolveRecordDeps, type RecordDeps, type RecordFiles, type RecordFunnel } from './record-store.js'
 export { accountTurn, type AgentAccount, type AccountReading, type AccountTurn, type AccountRotation, type RotatedTurn } from './accounts.js'
 export {
   runCliSession,

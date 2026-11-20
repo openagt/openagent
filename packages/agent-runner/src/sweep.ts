@@ -1,7 +1,7 @@
 import { readFile, stat } from 'node:fs/promises'
 import { listSessionFolders, nodeGitRunner, sessionFolder, sessionsHomeOf, type GitRunner } from '@openagt/agent-data'
 import { agentBranchName, reclaimWorktree, SESSION_FOLDER_STAYS, worktreeDirEntries, worktreePath } from '@openagt/skill-branches'
-import { listRuns, type LogsDeps, type RunCard } from '@openagt/skill-logs'
+import { listRuns, type RecordDeps, type RunCard } from '@openagt/agent-driver'
 import { endLiveCard, readLiveCard, readLiveDiary } from './live-card.js'
 import { lockHolder, runStderrPath } from './run-lock.js'
 import { recordBranchGone, recordRun, runnerMark, startOf } from './records.js'
@@ -31,7 +31,7 @@ export interface SweepDeps {
   isAlive: (pid: number) => boolean
   now?: () => Date
   git?: GitRunner
-  logs?: LogsDeps
+  logs?: RecordDeps
   log?: (line: string) => void
 }
 

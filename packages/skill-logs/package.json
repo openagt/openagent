@@ -1,7 +1,7 @@
 {
   "name": "@openagt/skill-logs",
   "version": "0.1.15",
-  "description": "The agent logs for coding agents: the record of every run made on a project, its card and its diary, kept on a branch of the project's repository and read with the logs command.",
+  "description": "The agent logs for coding agents: looking back at the runs made on a project, their cards and their diaries as agent-driver records them, read with the logs command.",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -36,10 +36,6 @@
       "types": "./dist/plugin.d.ts",
       "default": "./dist/plugin.js"
     },
-    "./names": {
-      "types": "./dist/names.d.ts",
-      "default": "./dist/names.js"
-    },
     "./SKILL.md": "./SKILL.md",
     "./server": "./dist/server.js",
     "./dashboard": "./dist/dashboard/dashboard.js"
@@ -53,6 +49,7 @@
   },
   "dependencies": {
     "@openagt/agent-data": "workspace:*",
+    "@openagt/agent-driver": "workspace:*",
     "@openagt/hooks": "workspace:*"
   },
   "devDependencies": {

@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { readDiary, type RunCard } from '@openagt/skill-logs'
+import { readDiary, type RunCard } from '@openagt/agent-driver'
 import { recorded, removeRepo, testRepo } from './test-support.js'
 import { findWebRun, isCloudSessionId, projectWebRuns, sessionUrl, updateWebRun, webRunOf } from './web-runs.js'
 

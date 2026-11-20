@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import type { GhRunner } from '@openagt/skill-github'
-import { readDiary } from '@openagt/skill-logs'
+import { readDiary } from '@openagt/agent-driver'
 import { UNMADE, anchorRefOf } from './hand-off.js'
 import { passProject, type PassDeps } from './passes.js'
 import { git, originHas, pushedStart, pushedWork, recorded, removeRepo, startOf, testRepo } from './test-support.js'

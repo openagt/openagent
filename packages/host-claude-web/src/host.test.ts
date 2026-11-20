@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import type { ProjectRef, RunHost, RunOptions } from '@openagt/hooks'
-import { readDiary } from '@openagt/skill-logs'
+import { readDiary } from '@openagt/agent-driver'
 import { bridgeStarts, resetBridgeStarts } from './bridge-starts.js'
 import { NOT_ON_GITHUB } from './github.js'
 import { NO_EXTENSION, UNMADE } from './hand-off.js'

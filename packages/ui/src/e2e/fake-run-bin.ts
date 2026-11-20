@@ -21,12 +21,11 @@
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { hostname } from 'node:os'
 import { join } from 'node:path'
-import { FakeDriver, continuationPrompt, logDiaryFile, startEvent, type DriverEvent, type LogEndStatus, type SessionLog } from '@openagt/agent-driver'
+import { continuationPrompt, FakeDriver, findRun, logDiaryFile, parseRunCard, readDiary, startEvent, writeRun, type AnyDiaryLine, type DriverEvent, type LogEndStatus, type RunCard, type SessionLog } from '@openagt/agent-driver'
 import { parseQuestion, QUESTION_TAG } from '@openagt/skill-ask/question'
 import { nodeGitRunner } from '@openagt/agent-data'
 import { NAME_FILE_ENV, givenName, isPublish, type Publish } from '@openagt/agent-runner'
 import { agentBranchName, attachCheckout, createCheckout, reclaimWorktree, worktreeBranch, worktreePath } from '@openagt/skill-branches'
-import { findRun, parseRunCard, readDiary, writeRun, type AnyDiaryLine, type RunCard } from '@openagt/skill-logs'
 import { OPENAGENT_DIR } from '../openagent-dir.js'
 
 const QUESTION = { title: 'Which way?', options: [{ label: 'Left', detail: 'the short way' }, { label: 'Right' }], recommended: 'Left' }

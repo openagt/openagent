@@ -45,7 +45,6 @@
     "@openagt/agent-driver-codex": "workspace:*",
     "@openagt/agent-data": "workspace:*",
     "@openagt/skill-branches": "workspace:*",
-    "@openagt/skill-logs": "workspace:*",
     "@openagt/agent-driver": "workspace:*",
     "@openagt/hooks": "workspace:*",
     "yaml": "^2.5.0",
@@ -57,7 +56,8 @@
     "@openagt/skill-github": "workspace:*",
     "@openagt/skill-ask": "workspace:*",
     "@openagt/skills": "workspace:*",
-    "@openagt/notifications-command": "workspace:*"
+    "@openagt/notifications-command": "workspace:*",
+    "@openagt/skill-logs": "workspace:*"
   },
   "publishConfig": {
     "access": "public"

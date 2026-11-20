@@ -4,8 +4,8 @@ import { mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { nodeGitRunner, fileBranchPath, withFileBranch, writeSharing, DATA_BRANCH } from '@openagt/agent-data'
-import { deleteRun, findRun, listRuns, patchRun, readDiary, runFiles, writeRun } from './store.js'
-import { RUNS_DIR } from './names.js'
+import { deleteRun, findRun, listRuns, patchRun, readDiary, runFiles, writeRun } from './record-store.js'
+import { RUNS_DIR } from './record.js'
 
 const git = nodeGitRunner()
 const RETRIED_RM = { recursive: true, force: true, maxRetries: 10 } as const

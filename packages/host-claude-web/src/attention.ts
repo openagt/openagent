@@ -1,5 +1,5 @@
 import type { AppAttention, AttentionItem } from '@openagt/hooks'
-import type { LogsDeps, RunCard } from '@openagt/skill-logs'
+import type { RecordDeps, RunCard } from '@openagt/agent-driver'
 import { bridgeQuestions } from './bridge-store.js'
 import { projectWebRuns } from './web-runs.js'
 
@@ -12,7 +12,7 @@ export const NEEDS_ANSWER = 'Needs answer'
  * awaits input, which a question asked in words leaves as its only trace. A pick on its way to the
  * session waits on nobody. The row opens the run, where the question's card answers it.
  */
-export function webAttention(deps: { logs?: LogsDeps; now?: () => Date } = {}): AppAttention {
+export function webAttention(deps: { logs?: RecordDeps; now?: () => Date } = {}): AppAttention {
   return async ({ project }) => {
     if (!project) return []
     const store = bridgeQuestions()

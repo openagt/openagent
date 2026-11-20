@@ -1,9 +1,6 @@
 import { inRepo, nodeBranchFileFs, openProjectReader, runsRootOf, type GitRunner } from '@openagt/agent-data'
-import { RUNS_DIR } from './names.js'
+import { RUNS_DIR, readCard, runEntries, runsPath, type ListedRun, type RecordsReader } from '@openagt/agent-driver'
 import { peopleOf, readCommitLines, type PersonActivity } from './people.js'
-import { readCard, runEntries, type RecordsReader } from './records.js'
-import type { ListedRun } from './run.js'
-import { runsPath } from './store.js'
 
 // The reads the command prints and the package's own pages show, from wherever they are read: a
 // project, or the sessions with no project (the sessions home).

@@ -48,8 +48,7 @@
     "@openagt/agent-driver-claude": "workspace:*",
     "@openagt/agent-runner": "workspace:*",
     "@openagt/hooks": "workspace:*",
-    "@openagt/skill-github": "workspace:*",
-    "@openagt/skill-logs": "workspace:*"
+    "@openagt/skill-github": "workspace:*"
   },
   "devDependencies": {
     "@openagt/agent-data": "workspace:*",

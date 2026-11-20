@@ -1,7 +1,7 @@
 import { hostname } from 'node:os'
 import { runIdFrom } from '@openagt/agent-runner'
 import type { ProjectRef, RunRequest } from '@openagt/hooks'
-import { writeRun, type AnyDiaryLine, type LogsDeps, type RunCard } from '@openagt/skill-logs'
+import { writeRun, type AnyDiaryLine, type RecordDeps, type RunCard } from '@openagt/agent-driver'
 import type { GitRunner } from '@openagt/agent-data'
 import { bridgeQuestions } from './bridge-store.js'
 import { bridgeStarts, type BridgeStarts } from './bridge-starts.js'
@@ -35,7 +35,7 @@ export interface HandOffDeps {
   repo?: (dir: string) => Promise<string>
   /** One of OpenAgent's GitHub accounts, as git with origin works as it. */
   account?: (dir: string, account: string | undefined) => Promise<{ login: string; git: GitRunner }>
-  logs?: LogsDeps
+  logs?: RecordDeps
   /** This computer's name, as the run's record says it. */
   host?: string
   now?: () => Date
@@ -164,7 +164,7 @@ export const UNMADE = 'OpenAgent stopped before its cloud session was made.'
  * End a run whose hand-off is under way nowhere, its session never made: it ended with an earlier
  * run of OpenAgent on this computer. `stopped` when a person stopped it, else `failed`.
  */
-export async function endUnmade(dir: string, id: string, status: 'stopped' | 'failed', logs: LogsDeps = {}, now: () => Date = () => new Date()): Promise<void> {
+export async function endUnmade(dir: string, id: string, status: 'stopped' | 'failed', logs: RecordDeps = {}, now: () => Date = () => new Date()): Promise<void> {
   const at = now().toISOString()
   await updateWebRun(dir, id, card => ({ ...card, status, endedAt: at }), [{ kind: 'ended', status, detail: UNMADE, at }], logs)
 }

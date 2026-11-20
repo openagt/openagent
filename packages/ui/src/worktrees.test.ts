@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { mkdir, mkdtemp, realpath, rm, stat, writeFile } from 'node:fs/promises'
 import { deleteProjectAgent, removeProjectWorktree } from './worktrees.js'
 import { nodeGitRunner } from '@openagt/agent-data'
-import { runFiles, writeRun } from '@openagt/skill-logs'
+import { runFiles, writeRun } from '@openagt/agent-driver'
 import { addWorktree, agentBranchName } from '@openagt/skill-branches'
 import { handDownTestDistribution } from './test-distribution.js'
 
@@ -155,8 +155,8 @@ test('a project none of whose own packages provides its checkouts is asked throu
 // keeps it. Against real git, because "did the branch survive" is the whole distinction.
 
 /**
- * Record a run the way a run's tool does, with the logs package, which every project has as its
- * runs provider. The two files that put its row in the rail.
+ * Record a run the way a run's tool does, with agent-driver's record, which every project's
+ * runs provider reads. The two files that put its row in the rail.
  */
 async function recordRun(repo: string, id: string): Promise<{ card: string; diary: string }> {
   const written = await writeRun(repo, { id, startedAt: '2026-01-01T00:00:00.000Z', status: 'stopped' }, [{ kind: 'ended', status: 'stopped' }])

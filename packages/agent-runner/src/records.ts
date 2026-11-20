@@ -2,7 +2,7 @@ import { isSkillName, type FileBranchWrite } from '@openagt/agent-data'
 import { isPresetId, MODULE_NAME } from '@openagt/hooks'
 import type { ProjectSkillsPick } from './preset.js'
 import { publishedBranch } from '@openagt/agent-data/names'
-import { deleteRun, writeRun, type AnyDiaryLine, type LogsDeps, type RunCard } from '@openagt/skill-logs'
+import { deleteRun, writeRun, type AnyDiaryLine, type RecordDeps, type RunCard } from '@openagt/agent-driver'
 import type { SessionRepo } from '@openagt/skill-branches'
 
 /**
@@ -169,17 +169,17 @@ export function startOf(card: RunCard): { from?: string } {
 }
 
 /** Put the run's card on the branch before its agent exists. The outcome says whether it reached origin. */
-export function writeMarker(repo: string, card: RunCard, deps: LogsDeps = {}): Promise<FileBranchWrite> {
+export function writeMarker(repo: string, card: RunCard, deps: RecordDeps = {}): Promise<FileBranchWrite> {
   return writeRun(repo, card, [], deps)
 }
 
 /** Take a marker back: a scheduler lost a cap to another machine's marker, so this run never starts. */
-export function withdrawMarker(repo: string, id: string, deps: LogsDeps = {}): Promise<FileBranchWrite> {
+export function withdrawMarker(repo: string, id: string, deps: RecordDeps = {}): Promise<FileBranchWrite> {
   return deleteRun(repo, id, deps)
 }
 
 /** Record how a run went: its card and its diary, over the marker. */
-export function recordRun(repo: string, card: RunCard, diary: readonly AnyDiaryLine[], deps: LogsDeps = {}): Promise<FileBranchWrite> {
+export function recordRun(repo: string, card: RunCard, diary: readonly AnyDiaryLine[], deps: RecordDeps = {}): Promise<FileBranchWrite> {
   return writeRun(repo, card, diary, deps)
 }
 
@@ -189,7 +189,7 @@ export function recordRun(repo: string, card: RunCard, diary: readonly AnyDiaryL
  * after the reclaim rather than reclaiming first, so the record never says `running` with no
  * checkout behind it. Nothing is written when the branch stayed.
  */
-export async function recordBranchGone(repo: string, card: RunCard, diary: readonly AnyDiaryLine[], deleted: readonly string[] | undefined, deps: LogsDeps = {}): Promise<FileBranchWrite | undefined> {
+export async function recordBranchGone(repo: string, card: RunCard, diary: readonly AnyDiaryLine[], deleted: readonly string[] | undefined, deps: RecordDeps = {}): Promise<FileBranchWrite | undefined> {
   if (card.branch === undefined || !deleted?.includes(card.branch)) return undefined
   const branchless: RunCard = { ...card }
   delete branchless.branch

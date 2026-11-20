@@ -1,7 +1,6 @@
 import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { logCardFile, logDiaryFile } from '@openagt/agent-driver'
-import { parseDiary, parseRunCard, type AnyDiaryLine, type RunCard, type RunStatus } from '@openagt/skill-logs'
+import { logCardFile, logDiaryFile, parseDiary, parseRunCard, type AnyDiaryLine, type RunCard, type RunStatus } from '@openagt/agent-driver'
 import { DASHBOARD_DIR } from './names.js'
 import { runnerMark } from './records.js'
 

@@ -48,7 +48,6 @@
     "@openagt/agent-driver-codex": "workspace:*",
     "@openagt/agent-data": "workspace:*",
     "@openagt/skill-branches": "workspace:*",
-    "@openagt/skill-logs": "workspace:*",
     "@openagt/agent-driver": "workspace:*",
     "@openagt/agent-runner": "workspace:*",
     "yaml": "^2.5.0",

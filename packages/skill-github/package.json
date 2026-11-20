@@ -50,7 +50,7 @@
   "dependencies": {
     "@openagt/agent-data": "workspace:*",
     "@openagt/hooks": "workspace:*",
-    "@openagt/skill-logs": "workspace:*"
+    "@openagt/agent-driver": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

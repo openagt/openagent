@@ -2,7 +2,7 @@ import { strict as assert } from 'node:assert'
 import { stat } from 'node:fs/promises'
 import { test } from 'node:test'
 import { runLockPath } from '@openagt/agent-runner'
-import { findRun, readDiary } from '@openagt/skill-logs'
+import { findRun, readDiary } from '@openagt/agent-driver'
 import { ACTIONS_HOST, runTurn, type GitHubAccess, type TurnDeps } from './turn.js'
 import { fakeGitHub, removeRepo, testRepo, type FakeOptions } from './test-support.js'
 

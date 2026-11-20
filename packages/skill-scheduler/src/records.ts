@@ -1,5 +1,5 @@
 import { runnerMark } from '@openagt/agent-runner'
-import { listRuns, type LogsDeps, type RunCard } from '@openagt/skill-logs'
+import { listRuns, type RecordDeps, type RunCard } from '@openagt/agent-driver'
 import { isTime } from './names.js'
 import { promptCommand, type Schedule } from './schedule.js'
 
@@ -49,7 +49,7 @@ function startFor(card: RunCard, command: string, schedule: Schedule, host: stri
  * scheduled run's start is when its command was asked about, before its check ran: the tick gives
  * the run that moment as its start. A record whose start is not a time is not counted.
  */
-export async function lastStart(repo: string, command: string, schedule: Schedule, host: string, deps: LogsDeps = {}): Promise<string | undefined> {
+export async function lastStart(repo: string, command: string, schedule: Schedule, host: string, deps: RecordDeps = {}): Promise<string | undefined> {
   const cards = await listRuns(repo, {}, deps)
   let latest: string | undefined
   for (const card of cards) {
@@ -77,7 +77,7 @@ export interface LastRun {
  * `running`. Counted like the starts: every machine's runs for a skill's command, this machine's
  * for an automation kept here.
  */
-export async function lastRuns(repo: string, schedule: Schedule, host: string, deps: LogsDeps = {}): Promise<Record<string, LastRun>> {
+export async function lastRuns(repo: string, schedule: Schedule, host: string, deps: RecordDeps = {}): Promise<Record<string, LastRun>> {
   const latest = new Map<string, LastRun>()
   for (const card of await listRuns(repo, {}, deps)) {
     for (const command of new Set([commandOf(card, schedule, host), resumedBy(card, host)?.by])) {
@@ -91,7 +91,7 @@ export async function lastRuns(repo: string, schedule: Schedule, host: string, d
 }
 
 /** The runs of one command still in flight: on any machine for a skill's command, on this one for an automation kept here and for a row that resumed them. */
-export async function inFlight(repo: string, command: string, schedule: Schedule, host: string, deps: LogsDeps = {}): Promise<RunCard[]> {
+export async function inFlight(repo: string, command: string, schedule: Schedule, host: string, deps: RecordDeps = {}): Promise<RunCard[]> {
   const cards = await listRuns(repo, {}, deps)
   return cards.filter(card => card.status === 'running' && (commandOf(card, schedule, host) === command || resumedBy(card, host)?.by === command))
 }

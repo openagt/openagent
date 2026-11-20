@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path'
 import { strict as assert } from 'node:assert'
 import { DATA_BRANCH, nodeGitRunner, writeSharing } from '@openagt/agent-data'
 import { DISTRIBUTION_ENV } from '@openagt/hooks'
-import { readDiary, type AnyDiaryLine } from '@openagt/skill-logs'
+import { readDiary, type AnyDiaryLine } from '@openagt/agent-driver'
 
 /**
  * A project for the tests: one commit on `main`, a bare `origin`, the `agent-data` branch born

@@ -1,8 +1,7 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { membersOf, peopleOf, peopleWithRuns, readCommitLines } from './people.js'
-import type { RecordsReader } from './records.js'
-import { startOfId } from './run.js'
+import { startOfId, type RecordsReader } from '@openagt/agent-driver'
 
 const DAY = 86_400_000
 const NOW = Date.parse('2026-10-25T12:00:00.000Z')

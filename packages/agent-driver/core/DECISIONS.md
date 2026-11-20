@@ -51,6 +51,50 @@ already made, and lists it in its pull request; for anything else it proposes an
   Code's settings may set one, and with none set it says nothing). Picked over the card
   naming only a picked effort.
 
+## The run's record
+- The run's record is agent-driver's: its card and its diary, and how they are read,
+  written, patched and deleted (#2394, decision 15). The `logs` plugin reads it, for its
+  command, its page and its card. Picked over the record in the logs plugin's package,
+  which every core module that keeps or reads runs then imported.
+- A run is two files on `agent-data`, the branch `@openagt/agent-data` names, never on a
+  code branch: `agents/<who>/<id>.json`, the card, and `agents/<who>/<id>.jsonl`, the
+  diary. Both are pushed. Keeping the diary on the machine that ran it was considered and
+  dropped: a run's page on another machine, a continued run on another machine and a
+  wiped laptop all read the diary from the branch, and a few megabytes a year is the
+  price.
+- The sessions with no project keep their runs together, in the personal folder's
+  `sessions/` directory, in the shape a project's data has: one place for all of them, read
+  from the sessions home and from any session's folder in it. Picked over a record kept in
+  each session's own folder, which is not synced.
+- `<who>` is the git email the writer's repository commits as, lowercased, unsafe
+  characters replaced, `anonymous` when unusable. The folder groups the runs by person and
+  protects nothing: ids never collide, and the same email authors the commits. A flat
+  `agents/<id>.json` with the person inside the card was the alternative and was not
+  taken: the grouping stays visible in a file listing.
+- The card is small and the record's: `id`, `startedAt`, `endedAt`, `status`, `intent`,
+  `driver`, `model`, `branch`, `pr`, `cost`. Everything else a writer records sits under
+  one key of its own, `caller`, which the record stores and never reads. Owning the
+  writer's whole record, renamed field by field, was rejected: a program's private
+  fields would become a package's public API. Under semver these fields are the branch's
+  public API: a change to them is a major.
+- A fifth status, `waiting`: the run ended on a question the agent asked and waits for the
+  answer to resume it. A status rather than a field on the card, because every reader
+  filters on the status and a waiting run is neither running nor done.
+- The diary is JSON lines. The record knows four kinds — `said`, `result`, `ended`,
+  `cost` — and skips every other line a writer adds. A writer maps its own events onto
+  the four; the record never learns them. A line may carry more fields than its kind
+  needs; they pass through.
+
+## Flow: what the writer records
+- A run is recorded once, when it is over, as one commit carrying both files. Late
+  facts are patched onto the card afterwards, one commit per patch: the branch the work is
+  on, the pull request, and that the work landed, which drops the branch and keeps its last
+  commit and the commit the work began at under the writer's key. A run is deleted as one commit, both
+  files. A run a dead writer left marked running is recorded again by the next writer that
+  notices, ended, where it already sits. Nothing else on a card changes after it lands.
+- The writer's persistent checkout is `.branches/agent-data`, and its writes go through
+  that checkout's serialized cycle, the same as the other skills'.
+
 ## The adapters
 - Each driver is its own package, `@openagt/agent-driver-<name>`, on the contract `@openagt/agent-driver`
   keeps: the types, the shared process core, the inbox, the question, the log and the

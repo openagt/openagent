@@ -1,7 +1,7 @@
 {
   "name": "@openagt/agent-driver",
   "version": "0.0.17",
-  "description": "The contract for driving a coding-agent CLI as a black box: start a session in a directory, prompt it for one full turn, stream what it does, resume it later; the pieces every adapter shares, and a scripted fake for tests. Each driver ships as @openagt/agent-driver-<name>.",
+  "description": "The contract for driving a coding-agent CLI as a black box: start a session in a directory, prompt it for one full turn, stream what it does, resume it later; the pieces every adapter shares, a scripted fake for tests, and the run's record, its card and its diary kept in the project's data. Each driver ships as @openagt/agent-driver-<name>.",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -30,6 +30,9 @@
     "typecheck": "tsc --noEmit",
     "test": "tsc -p tsconfig.test.json && node ../../../scripts/test-node.mjs",
     "clean": "rm -rf dist dist-test"
+  },
+  "dependencies": {
+    "@openagt/agent-data": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

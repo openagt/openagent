@@ -1,5 +1,5 @@
 import type { ProjectRef, RunFound, RunHost, RunReadiness, RunSummary } from '@openagt/hooks'
-import type { LogsDeps } from '@openagt/skill-logs'
+import type { RecordDeps } from '@openagt/agent-driver'
 import { bridgeQuestions } from './bridge-store.js'
 import { hostname } from 'node:os'
 import { NO_EXTENSION, endUnmade, giveUp, startWebRun, type HandOffDeps } from './hand-off.js'
@@ -16,7 +16,7 @@ import { WEB_HOST, findWebRun, projectWebRuns, type WebRun } from './web-runs.js
 
 /** What the host works with; the real one when absent. */
 export interface WebHostDeps extends HandOffDeps {
-  logs?: LogsDeps
+  logs?: RecordDeps
 }
 
 /** Said to a message or a Stop for a run whose session is made. */

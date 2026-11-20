@@ -1,7 +1,7 @@
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { hostname } from 'node:os'
 import { dirname, join } from 'node:path'
-import { listRuns, type RunCard } from '@openagt/skill-logs'
+import { listRuns, type RunCard } from '@openagt/agent-driver'
 import { errorMessage, type GitRunner } from '@openagt/agent-data'
 import { nodeGhRunner, type GhRunner } from './gh.js'
 import { COMMENT_MARK } from './comment.js'

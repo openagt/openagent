@@ -1,10 +1,9 @@
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { hostname, tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { logCardFile, logDiaryFile, type DriverEvent, type LogCard, type SessionLog } from '@openagt/agent-driver'
+import { findRun, logCardFile, logDiaryFile, parseDiary, parseRunCard, readDiary, type AnyDiaryLine, type DriverEvent, type LogCard, type RecordDeps, type RunCard, type SessionLog } from '@openagt/agent-driver'
 import { acquireRunLock, isPidAlive, markerCard, recordRun, releaseRunLock, writeMarker } from '@openagt/agent-runner'
 import { accountToken, homeUrlFor, nodeGhRunner } from '@openagt/skill-github'
-import { findRun, parseDiary, parseRunCard, readDiary, type AnyDiaryLine, type LogsDeps, type RunCard } from '@openagt/skill-logs'
 import { ActionsSession, type ActionsOptions } from './actions.js'
 
 /**
@@ -48,7 +47,7 @@ export interface TurnDeps {
   host?: string
   pid?: number
   now?: () => Date
-  logs?: LogsDeps
+  logs?: RecordDeps
   /** Fires on the person's Stop: the Actions run is cancelled, and the run ends stopped. */
   stop?: AbortSignal
   /** The run's name, as whoever started it asked for it: on the record from the first write after it comes. */
@@ -136,7 +135,7 @@ export async function runTurn(dir: string, request: TurnRequest, deps: TurnDeps 
 }
 
 /** The run's card and diary as the turn opens: a first turn's marker, or an ended run's record opened again. */
-async function opening(dir: string, request: TurnRequest, at: { host: string; pid: number; now: () => Date; logs: LogsDeps }): Promise<{ card: RunCard; diary: AnyDiaryLine[] }> {
+async function opening(dir: string, request: TurnRequest, at: { host: string; pid: number; now: () => Date; logs: RecordDeps }): Promise<{ card: RunCard; diary: AnyDiaryLine[] }> {
   if (request.resume !== true) {
     const marker = markerCard({ id: request.id, startedAt: at.now().toISOString(), prompt: request.prompt, driver: 'claude-code', ...(request.model !== undefined ? { model: request.model } : {}), mark: { host: at.host, pid: at.pid } })
     const card = withCaller(marker, { target: ACTIONS_HOST, pid: at.pid, ...(request.account !== undefined ? { gitAccount: request.account } : {}) })
@@ -181,7 +180,7 @@ function logCardOf(card: RunCard): LogCard {
 }
 
 /** Record the run as the turn ended, once the address written while it ran is in: the last write is the run's end. */
-async function record(dir: string, card: RunCard, diary: readonly AnyDiaryLine[], noted: Promise<unknown>, logs: LogsDeps): Promise<RunCard> {
+async function record(dir: string, card: RunCard, diary: readonly AnyDiaryLine[], noted: Promise<unknown>, logs: RecordDeps): Promise<RunCard> {
   await noted
   await recordRun(dir, card, diary, logs)
   return card

@@ -1,7 +1,6 @@
 import { hostname } from 'node:os'
-import type { Driver, SessionLog } from '@openagt/agent-driver'
+import type { AnyDiaryLine, Driver, RecordDeps, RunCard, SessionLog } from '@openagt/agent-driver'
 import { nodeGitRunner, type GitRunner } from '@openagt/agent-data'
-import type { AnyDiaryLine, LogsDeps, RunCard } from '@openagt/skill-logs'
 import type { DistributionEntry, RunContext } from '@openagt/hooks'
 import { isPidAlive } from './run-lock.js'
 import type { RunnerMark } from './records.js'
@@ -23,7 +22,7 @@ export interface RunDeps {
   now?: () => Date
   /** The git this process reads the run's project with. */
   git?: GitRunner
-  logs?: LogsDeps
+  logs?: RecordDeps
   log?: (line: string) => void
 }
 
@@ -34,7 +33,7 @@ export interface RunProcess {
   isAlive: (pid: number) => boolean
   git: GitRunner
   clock: () => string
-  logs: LogsDeps
+  logs: RecordDeps
   log: (line: string) => void
 }
 

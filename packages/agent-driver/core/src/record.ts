@@ -1,6 +1,13 @@
-// A run: one agent's work on the project, from its start to its end, recorded as two files on the
-// branch — the card, `<id>.json`, and the diary, `<id>.jsonl`. This module is the pure half: what
-// the two files hold, and how they are read back. Nothing here touches git or a disk.
+// A run: one agent's work on the project, from its start to its end, recorded as two files in the
+// project's data — the card, `<id>.json`, and the diary, `<id>.jsonl`. This module is the pure half:
+// what the two files hold, and how they are read back. Nothing here touches git or a disk.
+
+/**
+ * Where the runs live: `agents/<who>/<id>.json` and `<id>.jsonl` in the project's data directory
+ * (`@openagt/agent-data` knows where that is: in the person's own folder, or the project's
+ * `agent-data` branch when shared).
+ */
+export const RUNS_DIR = 'agents'
 
 /** How a run stands: still going, or how it ended. */
 export type RunStatus = 'running' | 'done' | 'stopped' | 'failed' | 'waiting'

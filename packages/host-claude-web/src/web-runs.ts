@@ -1,5 +1,5 @@
 import type { ProjectRef } from '@openagt/hooks'
-import { findRun, listRuns, readDiary, writeRun, type AnyDiaryLine, type LogsDeps, type RunCard } from '@openagt/skill-logs'
+import { findRun, listRuns, readDiary, writeRun, type AnyDiaryLine, type RecordDeps, type RunCard } from '@openagt/agent-driver'
 
 // A run of this host's, as its record keeps it (#2394): the card says how it stands, and its
 // `caller` what only this host knows of it: the cloud session the hand-off made, and the commit and
@@ -55,13 +55,13 @@ export function webRunOf(card: RunCard): WebRun | undefined {
 }
 
 /** The project's runs of this host's, newest first; none for a project whose records cannot be read. */
-export async function projectWebRuns(project: Pick<ProjectRef, 'dir'>, opts: { since?: number } = {}, logs: LogsDeps = {}): Promise<WebRun[]> {
+export async function projectWebRuns(project: Pick<ProjectRef, 'dir'>, opts: { since?: number } = {}, logs: RecordDeps = {}): Promise<WebRun[]> {
   const cards = await listRuns(project.dir, opts, logs).catch((): RunCard[] => [])
   return cards.flatMap(card => webRunOf(card) ?? []).sort((a, b) => b.card.startedAt.localeCompare(a.card.startedAt))
 }
 
 /** The run `id` of the project at `dir`, when it is one of this host's. */
-export async function findWebRun(dir: string, id: string, logs: LogsDeps = {}): Promise<WebRun | undefined> {
+export async function findWebRun(dir: string, id: string, logs: RecordDeps = {}): Promise<WebRun | undefined> {
   const card = await findRun(dir, id, logs).catch(() => undefined)
   return card ? webRunOf(card) : undefined
 }
@@ -71,7 +71,7 @@ export async function findWebRun(dir: string, id: string, logs: LogsDeps = {}): 
  * which reaches wherever the project keeps its records. Nothing is written for a run the project
  * has no record of. Answers the card written.
  */
-export async function updateWebRun(dir: string, id: string, change: (card: RunCard) => RunCard, more: readonly AnyDiaryLine[] = [], logs: LogsDeps = {}): Promise<RunCard | undefined> {
+export async function updateWebRun(dir: string, id: string, change: (card: RunCard) => RunCard, more: readonly AnyDiaryLine[] = [], logs: RecordDeps = {}): Promise<RunCard | undefined> {
   const card = await findRun(dir, id, logs).catch(() => undefined)
   if (!card) return undefined
   const diary = (await readDiary(dir, id, logs).catch(() => undefined)) ?? []
