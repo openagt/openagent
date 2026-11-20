@@ -1,7 +1,8 @@
 import { isAbsolute, join, resolve, sep } from 'node:path'
 import { hostname } from 'node:os'
 import { stat } from 'node:fs/promises'
-import { isDriverName, type ReadyNaming } from '@openagt/agent-runner'
+import type { ReadyNaming } from '@openagt/agent-runner'
+import { isDriverName } from './driver-names.js'
 import { isPresetId, MODULE_NAME, type Hooks, type ProjectRef, type RunHost, type RunOptions, type RunRequest } from '@openagt/hooks'
 import { sessionRepos } from '@openagt/git-branches'
 import { nameStarted } from './started-names.js'
@@ -279,7 +280,7 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
   // starts is named exactly as one a person starts is.
   const nameAsStarted = async (projectCwd: string, prompt: string, driver: string): Promise<StartName> => {
     const nameRun = (await readPreferences(env)).nameRuns !== false
-    if (naming === undefined || !nameRun || !isDriverName(driver) || !naming.names(prompt, driver)) return { title: nameRun ? {} : { title: false }, started: () => {}, failed: () => {} }
+    if (naming === undefined || !nameRun || !isDriverName(driver) || !naming.names(prompt)) return { title: nameRun ? {} : { title: false }, started: () => {}, failed: () => {} }
     const stop = new AbortController()
     const name = naming.name(projectCwd, prompt, driver, stop.signal)
     return {

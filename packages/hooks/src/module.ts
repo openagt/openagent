@@ -1,7 +1,8 @@
 import type { AccountAccess } from './account.js'
 import type { AppAttention, AppLifecycle, AppRoute } from './app.js'
 import type { ProjectRef } from './project.js'
-import type { RunAgent, RunHost, RunSkills, RunStep } from './run.js'
+import type { RunAgent } from './agent.js'
+import type { RunHost, RunSkills, RunStep } from './run.js'
 import type { SettingScope } from './settings.js'
 import type { StoreBackend } from './store.js'
 

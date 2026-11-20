@@ -9,7 +9,7 @@ import { handedDownSettings, runPreset } from './preset.js'
 import { inboxPath, liveDir } from './live-card.js'
 import { isPublish, NO_PUBLISH } from './records.js'
 import { isPidAlive } from './run-lock.js'
-import { presetLoginFor, detachResume, detachRun, DRIVER_NAMES, GIT_ACCOUNT_ENV, isDriverName, readyToRun, spawnResume, spawnRun, type DriverName } from './runner.js'
+import { presetLoginFor, detachResume, detachRun, GIT_ACCOUNT_ENV, readyToRun, spawnResume, spawnRun } from './runner.js'
 import type { RunRequest as AskedRun } from './run.js'
 import { nameHandOver } from './title.js'
 
@@ -25,8 +25,8 @@ import { nameHandOver } from './title.js'
 export interface LocalHostDeps {
   spawnRun?: typeof spawnRun
   spawnResume?: typeof spawnResume
-  /** Whether a run on `driver` can start here, working as `login` at the git host when one is named. */
-  ready?: (dir: string, driver: DriverName, login?: string) => Promise<RunReadiness>
+  /** Whether a run on the coding agent `driver` (the distribution's first when none is named) can start here, working as `login` at the git host when one is named. */
+  ready?: (dir: string, driver: string | undefined, login?: string) => Promise<RunReadiness>
   /** The account at the git host a run on `preset` works as when it names none: its preset's. */
   loginFor?: (dir: string, preset: string | undefined) => Promise<string | undefined>
   isAlive?: (pid: number) => boolean
@@ -86,19 +86,19 @@ export function localHost(deps: LocalHostDeps = {}): RunHost {
     label: 'This computer',
 
     async check({ project, options }) {
-      return ready(placeOf(project), driverOf(options))
+      return ready(placeOf(project), options['agent-driver']?.driver)
     },
 
     async start({ project, prompt, options, title }) {
       refuse(project, options)
       const dir = placeOf(project)
-      const driver = driverOf(options)
+      const driver = options['agent-driver']?.driver
       // A run is refused before it spends a checkout when its coding agent cannot start, or the account it works as cannot be used here.
       const login = options.github?.account ?? (await loginFor(dir, options.presets?.preset))
       const readiness = await ready(dir, driver, login)
       if (readiness.problems.length > 0) throw new Error(readiness.problems.join(' '))
       const name = nameHandOver(title)
-      const { id } = await detachRun(dir, { prompt, driver, ...asked(options), env: { ...picks(options), ...name.env } }, deps.spawnRun ? { spawn: deps.spawnRun } : {})
+      const { id } = await detachRun(dir, { prompt, ...(driver !== undefined ? { driver } : {}), ...asked(options), env: { ...picks(options), ...name.env } }, deps.spawnRun ? { spawn: deps.spawnRun } : {})
       name.started()
       return { id }
     },
@@ -229,13 +229,6 @@ function processOf(card: RunCard | undefined): { pid?: number; host?: string } {
   const pid = card?.caller?.['pid']
   const host = card?.caller?.['host']
   return { ...(typeof pid === 'number' ? { pid } : {}), ...(typeof host === 'string' ? { host } : {}) }
-}
-
-/** The coding agent a run is on: the one picked, else Claude Code. */
-function driverOf(options: RunOptions): DriverName {
-  const driver = options['agent-driver']?.driver ?? 'claude-code'
-  if (!isDriverName(driver)) throw new Error(`No coding agent is named ${driver}: the coding agents are ${DRIVER_NAMES.join(' and ')}.`)
-  return driver
 }
 
 /**

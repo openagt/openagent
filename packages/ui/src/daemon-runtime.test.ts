@@ -1014,6 +1014,7 @@ test("a run a saved machine's Human Queue names, which no record here has, is th
 function readyNaming(title: string): ReadyNaming {
   const driver: Driver = {
     id: 'claude-code',
+    namingModel: 'haiku',
     start: async opts => ({
       id: 'naming',
       cwd: opts.cwd,

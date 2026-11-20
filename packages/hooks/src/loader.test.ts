@@ -8,7 +8,8 @@ import { createHooks, DISTRIBUTION_ENV, loadDistribution, loadHandedDown, type D
 import { defineModule, type ModuleDefinition } from './module.js'
 import { RunOrder } from './order.js'
 import type { ProjectRef } from './project.js'
-import type { RunAgent, RunStep } from './run.js'
+import type { RunAgent } from './agent.js'
+import type { RunStep } from './run.js'
 import { fakeHost, fakeRun, memoryStore } from './testing.js'
 
 // The loader: a distribution checked, its modules' hooks called in order, a plugin's only where it
@@ -26,8 +27,8 @@ function hooksOf(entries: DistributionEntry[], errors: HandlerError[] = []) {
 
 const marker = (name: string, order: number, done: string[]): RunStep => ({ order, name, run: () => void done.push(name) })
 
-/** A coding agent that is only its id: enough for the loader, which never starts one. */
-const driver = (id: string): RunAgent => ({ id }) as unknown as RunAgent
+/** A coding agent that never runs: enough for the loader, which only lists it. */
+const agent = (id: string): RunAgent => ({ id, label: id, ready: async () => ({ problems: [], warnings: [] }), driver: () => { throw new Error('no runs here') } })
 
 const messages = (errors: HandlerError[]): string[] => errors.map(error => `${error.module} ${error.hook}: ${(error.error as Error).message}`)
 
@@ -192,8 +193,8 @@ test('a second skill, coding agent or host of one name is left out and told; a h
   const errors: HandlerError[] = []
   const hooks = hooksOf(
     [
-      { module: defineModule({ name: 'agent-driver-claude-code', hooks: { 'run.agent': [driver('claude-code')], 'run.skills': () => [{ name: 'shared', dir: '/a' }] } }) },
-      { module: defineModule({ name: 'copycat', hooks: { 'run.agent': [driver('claude-code')], 'run.skills': () => [{ name: 'shared', dir: '/b' }, { name: 'own', dir: '/c' }] } }) },
+      { module: defineModule({ name: 'agent-driver-claude-code', hooks: { 'run.agent': [agent('claude-code')], 'run.skills': () => [{ name: 'shared', dir: '/a' }] } }) },
+      { module: defineModule({ name: 'copycat', hooks: { 'run.agent': [agent('claude-code')], 'run.skills': () => [{ name: 'shared', dir: '/b' }, { name: 'own', dir: '/c' }] } }) },
       {
         module: defineModule({
           name: 'broken',

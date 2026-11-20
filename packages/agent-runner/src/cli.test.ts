@@ -4,7 +4,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { runCli, withTextsApart } from './cli.js'
-import { removeRepo, testRepo } from './test-repo.js'
+import { handDownAgents, removeRepo, testRepo } from './test-repo.js'
 
 // The contract on top of the functions: JSON on stdout, a line for a person on stderr, and an
 // exit code that says refusal or failure. The commands that spawn or talk to Claude are covered
@@ -33,13 +33,21 @@ test('usage errors exit 2 with what was wrong on stderr and nothing on stdout; o
       assert.equal(bad.out, undefined)
       assert.match(bad.err, argv.length ? /\nRun `agent-runner --help` for usage\.$/ : /^usage: agent-runner/)
     }
-    // A driver this tool cannot start, and a driver named for a run that already has one.
-    const unknown = await run(repo, 'run', 'Read the docs', '--driver', 'pi')
-    assert.equal(unknown.code, 2)
-    assert.match(unknown.err, /unknown driver "pi"; the drivers are claude-code and codex/)
-    const unknownCheck = await run(repo, 'check', '--driver', 'pi')
-    assert.equal(unknownCheck.code, 2)
-    assert.match(unknownCheck.err, /unknown driver "pi"/)
+    // A driver the distribution has no coding agent for, and a driver named for a run that already has one.
+    const noAgents = await run(repo, 'run', 'Read the docs', '--driver', 'codex')
+    assert.equal(noAgents.code, 2)
+    assert.match(noAgents.err, /No coding agent was handed down to this process/)
+    const handBack = await handDownAgents(elsewhere)
+    try {
+      const unknown = await run(repo, 'run', 'Read the docs', '--driver', 'pi')
+      assert.equal(unknown.code, 2)
+      assert.match(unknown.err, /unknown driver "pi"; the drivers are claude-code and codex/)
+      const unknownCheck = await run(repo, 'check', '--driver', 'pi')
+      assert.equal(unknownCheck.code, 2)
+      assert.match(unknownCheck.err, /unknown driver "pi"/)
+    } finally {
+      handBack()
+    }
     const renamed = await run(repo, 'run', '--resume', '2026-09-17T20-00-00-000Z', 'go on', '--driver', 'codex')
     assert.equal(renamed.code, 2)
     assert.match(renamed.err, /--resume takes no --driver/)

@@ -53,9 +53,14 @@ test('a preset\'s Claude and Codex accounts apply where this computer has them: 
     addAccount('Dani', 'x', accountsPath('claude', env))
     addAccount('Rom', 'y', accountsPath('claude', env))
     addAccount('Rom', 'z', accountsPath('codex', env))
-    assert.deepEqual(accountsOn({ options: {} }, env), {})
-    assert.deepEqual(accountsOn({ options: { 'agent-driver': { claude: ['Rom', 'Dani', 'Nobody'], codex: ['Dani'] } } }, env), { claude: ['Rom', 'Dani'] }, 'a Codex account not here: all of the computer\'s Codex accounts')
-    assert.deepEqual(accountsOn({ options: { 'agent-driver': { codex: ['Rom'] } } }, env), { codex: ['Rom'] })
+    const claude = { accounts: 'claude' }
+    const codex = { accounts: 'codex' }
+    assert.equal(accountsOn({ options: {} }, claude, env), undefined)
+    const both = { options: { 'agent-driver': { claude: ['Rom', 'Dani', 'Nobody'], codex: ['Dani'] } } }
+    assert.deepEqual(accountsOn(both, claude, env), ['Rom', 'Dani'])
+    assert.equal(accountsOn(both, codex, env), undefined, "a Codex account not here: all of the computer's Codex accounts")
+    assert.deepEqual(accountsOn({ options: { 'agent-driver': { codex: ['Rom'] } } }, codex, env), ['Rom'])
+    assert.equal(accountsOn(both, {}, env), undefined, 'an agent with no list of accounts takes none')
   } finally {
     await rm(dir, { recursive: true, force: true })
   }

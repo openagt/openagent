@@ -1,6 +1,7 @@
 import { readPersonal } from './config.js'
-import { driverFor, type DriverName } from './runner.js'
-import { isBareCommand, startNaming, TITLE_MODELS, titleOf, titlePrompt, type NamingSession } from './title.js'
+import { codingAgent } from './agents.js'
+import { driverFor } from './runner.js'
+import { isBareCommand, startNaming, titleOf, titlePrompt, type NamingSession } from './title.js'
 import type { Driver, ReadyPrompt } from '@openagt/hooks'
 
 // A run's name, ready the moment the run is started: what keeps a session's row from waiting
@@ -42,10 +43,10 @@ export interface NamingSetup {
   driver: Driver
 }
 
-/** The setup a run of `driver` in `repo` names with: the project's setup parts. */
-export async function namingSetup(repo: string, driver: DriverName): Promise<NamingSetup> {
+/** The setup a run on the coding agent `driver` in `repo` names with: the project's setup parts. */
+export async function namingSetup(repo: string, driver: string): Promise<NamingSetup> {
   const personal = await readPersonal(repo, () => {})
-  return { key: JSON.stringify([driver, personal]), driver: driverFor(driver, undefined, personal) }
+  return { key: JSON.stringify([driver, personal]), driver: driverFor(await codingAgent(driver), undefined, personal) }
 }
 
 interface Waiting {
@@ -56,7 +57,7 @@ interface Waiting {
 }
 
 export interface ReadyNamingDeps {
-  setup?: (repo: string, driver: DriverName) => Promise<NamingSetup>
+  setup?: (repo: string, driver: string) => Promise<NamingSetup>
   now?: () => number
   maxWaitMs?: number
   maxWaiting?: number
@@ -75,13 +76,13 @@ export class ReadyNaming {
     this.timer.unref()
   }
 
-  /** Whether a run of `driver` started with `prompt` is named here: not a bare command (named from its report), and on an agent with a small model to name with. */
-  names(prompt: string, driver: DriverName): boolean {
-    return !this.closed && !isBareCommand(prompt) && TITLE_MODELS[driver] !== undefined
+  /** Whether a run started with `prompt` is named here: not a bare command, which is named from its report. */
+  names(prompt: string): boolean {
+    return !this.closed && !isBareCommand(prompt)
   }
 
   /** Have a naming session waiting for runs of `driver` in `repo`, unless one waits already. Never throws. */
-  async prepare(repo: string, driver: DriverName): Promise<void> {
+  async prepare(repo: string, driver: string): Promise<void> {
     const setup = await this.setupOf(repo, driver)
     if (setup) await this.keep(setup)
   }
@@ -89,12 +90,12 @@ export class ReadyNaming {
   /**
    * The name of a run of `driver` started in `repo` with `prompt`: asked of the session waiting for
    * it, or of one started now when none waits, and the next one started once it answered.
-   * `undefined` when this run is not named here — an agent with no small model, a bare command
-   * (named from its report) — or when no name came: the run's words stay its name, or it asks on
-   * its own. Never throws.
+   * `undefined` when this run is not named here (a bare command, named from its report), when its
+   * agent has no small model to name with, or when no name came: the run's words stay its name.
+   * Never throws.
    */
-  async name(repo: string, prompt: string, driver: DriverName, signal?: AbortSignal): Promise<string | undefined> {
-    if (!this.names(prompt, driver)) return undefined
+  async name(repo: string, prompt: string, driver: string, signal?: AbortSignal): Promise<string | undefined> {
+    if (!this.names(prompt)) return undefined
     const setup = await this.setupOf(repo, driver)
     if (!setup) return undefined
     const taken = this.take(setup.key) ?? (await this.start(setup))
@@ -124,7 +125,7 @@ export class ReadyNaming {
     await Promise.all(all.map(one => this.end(one)))
   }
 
-  private async setupOf(repo: string, driver: DriverName): Promise<NamingSetup | undefined> {
+  private async setupOf(repo: string, driver: string): Promise<NamingSetup | undefined> {
     return (this.deps.setup ?? namingSetup)(repo, driver).catch(() => undefined)
   }
 

@@ -25,6 +25,10 @@ const DISTRIBUTION: DashboardDistribution = [
   { package: '@openagt/skills' },
   // agent-driver: this computer's host, the agent's turns and the run's record.
   { package: '@openagt/agent-runner' },
+  // The coding agents a run can be on, the first the one a run names none: Claude Code and Codex,
+  // the CLIs on this computer.
+  { package: '@openagt/agent-driver-claude-code', for: 'computer' },
+  { package: '@openagt/agent-driver-codex', for: 'computer' },
   // The Changes and Files panes.
   { package: '@openagt/ui-pane-changes' },
   { package: '@openagt/ui-pane-files' },

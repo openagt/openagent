@@ -18,6 +18,8 @@ export {
   freesIn,
   shownAccounts,
   OWN_NAME,
+  ACCOUNTS_AGENTS,
+  isAccountsAgent,
   type AccountsAgent,
   type ShownAccount,
 } from './accounts.js'

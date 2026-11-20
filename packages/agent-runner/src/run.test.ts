@@ -116,6 +116,7 @@ test('a run is named by the agent\'s small model: the name on its record, and a 
     // naming session is the one asked to name something.
     const driver: Driver = {
       id: 'claude-code',
+      namingModel: 'haiku',
       start: opts => new FakeDriver({ respond: prompt => (prompt.includes('Name this coding session') ? 'README.md condensing' : 'Done.') }).start(opts),
     }
     const run = await runCommand(repo, { prompt: 'make readme.md shorter', driver, now: () => NOW, modules: testModules() })
@@ -153,6 +154,7 @@ test('a fresh run is named while its checkout is made, not after its agent has s
     const naming = new Promise<void>(resolve => (askedToName = resolve))
     const driver: Driver = {
       id: 'claude-code',
+      namingModel: 'haiku',
       start: async opts =>
         wrap((await new FakeDriver({ respond: prompt => (prompt.includes('Name this coding session') ? 'Readme condensing' : 'Done.') }).start(opts)) as FakeDriverSession, async text => {
           if (text.includes('Name this coding session')) askedToName()
@@ -187,6 +189,7 @@ test('a run handed the name its starter asked for keeps that one, and asks none 
     const asked: string[] = []
     const driver: Driver = {
       id: 'claude-code',
+      namingModel: 'haiku',
       start: opts =>
         new FakeDriver({
           respond: prompt => {
@@ -225,6 +228,7 @@ test('a run asked only a slash command keeps it while it works, and is named fro
     const asked: string[] = []
     const driver: Driver = {
       id: 'claude-code',
+      namingModel: 'haiku',
       start: opts =>
         new FakeDriver({
           respond: prompt => {
@@ -247,7 +251,7 @@ test('a run asked only a slash command keeps it while it works, and is named fro
     assert.equal(kinds.at(-1), 'ended')
 
     // A run that ends on a question has not reported its work: it is not named from the question.
-    const asking: Driver = { id: 'claude-code', start: opts => new FakeDriver({ respond: prompt => (prompt.includes('Name this coding session') ? 'Ship it question' : QUESTION) }).start(opts) }
+    const asking: Driver = { id: 'claude-code', namingModel: 'haiku', start: opts => new FakeDriver({ respond: prompt => (prompt.includes('Name this coding session') ? 'Ship it question' : QUESTION) }).start(opts) }
     const waiting = await runCommand(repo, { prompt: '/work-queue', driver: asking, now: () => new Date(NOW.getTime() + 60_000), modules: testModules() })
     assert.equal(waiting.status, 'waiting')
     assert.equal((await findRun(repo, waiting.id))?.title, undefined)
@@ -264,6 +268,7 @@ test('a run\'s card says its name is being asked while it is, not once the ask e
     const seen: unknown[] = []
     const driver: Driver = {
       id: 'claude-code',
+      namingModel: 'haiku',
       start: async opts => {
         const fake = (await new FakeDriver({ respond: () => 'Done.' }).start(opts)) as FakeDriverSession
         // What the card says once the writes made so far have landed.
@@ -298,6 +303,7 @@ test('a run told how hard to think starts its agent that way and keeps it on its
     const starts: (string | undefined)[] = []
     const driver: Driver = {
       id: 'claude-code',
+      namingModel: 'haiku',
       start: opts => {
         starts.push(opts.effort)
         return new FakeDriver({ respond: () => 'Done.' }).start(opts)

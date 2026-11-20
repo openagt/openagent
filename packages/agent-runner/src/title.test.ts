@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { FakeDriver } from '@openagt/agent-driver'
 import type { Driver, DriverStartOptions } from '@openagt/hooks'
 import { readdir } from 'node:fs/promises'
-import { MAX_TITLE, isBareCommand, nameRun, titleOf, titlePrompt, TITLE_MODELS, TITLE_SYSTEM } from './title.js'
+import { MAX_TITLE, isBareCommand, nameRun, titleOf, titlePrompt, TITLE_SYSTEM } from './title.js'
 
 // A run's short name: what the small model is asked, what is taken from its answer, and that the
 // asking is a session of its own that never touches the run's record.
@@ -14,6 +14,7 @@ function naming(said: string): Driver & { starts: DriverStartOptions[] } {
   const starts: DriverStartOptions[] = []
   return {
     id: 'claude-code',
+    namingModel: 'haiku',
     starts,
     start: opts => {
       starts.push(opts)
@@ -74,7 +75,7 @@ test('the agent is asked in a session of its own, on its small model', async () 
   const driver = naming('README.md condensing')
   assert.equal(await nameRun(driver, { prompt: 'make readme.md shorter' }), 'README.md condensing')
   assert.equal(driver.starts.length, 1)
-  assert.equal(driver.starts[0]?.model, TITLE_MODELS['claude-code'])
+  assert.equal(driver.starts[0]?.model, 'haiku', "the agent's own small model")
   assert.equal(driver.starts[0]?.system, TITLE_SYSTEM)
   // An empty folder of its own, never the run's checkout: there is nothing there to look at, and
   // nothing of it makes the run's tree dirty.
@@ -86,6 +87,6 @@ test('the agent is asked in a session of its own, on its small model', async () 
 
 test('an agent with no small model named for it, and one that fails, name nothing', async () => {
   assert.equal(await nameRun(new FakeDriver({ respond: () => 'Anything' }), { prompt: 'do it' }), undefined)
-  const broken: Driver = { id: 'claude-code', start: () => Promise.reject(new Error('not logged in')) }
+  const broken: Driver = { id: 'claude-code', namingModel: 'haiku', start: () => Promise.reject(new Error('not logged in')) }
   assert.equal(await nameRun(broken, { prompt: 'do it' }), undefined)
 })

@@ -1,6 +1,6 @@
 import { Refused, UsageError, inRepo, nodeGitRunner, parseCommandArgs, runCommandLine, helpRows, helpText, type Command, type GitRunner } from '@openagt/agent-data'
 import { projectRoot } from '@openagt/git-branches'
-import { driverFor } from '@openagt/agent-runner'
+import { codingAgent, driverFor } from '@openagt/agent-runner'
 import { runNow, schedulerStatus, startScheduler, stopScheduler, tickProject } from './scheduler.js'
 import { cleanup } from './cleanup.js'
 import { PUBLISH_PICKS, agentInForce, readState, updateState, withAgent, withoutCommand, withoutListed, withPacePicked, withPick, withSwitchedOn, type PublishPick, type State } from './state.js'
@@ -240,7 +240,7 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
     if (!isAgent(agent)) throw new UsageError(`--agent is one of ${AGENTS.join(', ')}`)
     const repo = await project(io.cwd, git)
     // None of the person's own setup: the session answers in words, and what it would load is only cost.
-    const driver = driverFor(agent, 'write-line', { memory: false, connectors: false, skills: false })
+    const driver = driverFor(await codingAgent(agent), 'write-line', { memory: false, connectors: false, skills: false })
     const written = await writeLine(driver, words, await lineContext(repo, git))
     if ('failed' in written) throw new Refused({ ok: false, reason: 'not-written', detail: written.failed }, `the line was not written: ${written.failed}`)
     return { ok: true, ...written }

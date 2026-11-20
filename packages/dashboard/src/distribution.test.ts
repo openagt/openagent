@@ -18,6 +18,8 @@ test("the distribution's modules load from its own install, the store's and the 
     'github',
     'skills',
     'agent-driver',
+    'agent-driver-claude-code',
+    'agent-driver-codex',
     'devices',
     'notifications-command',
     'notifications-browser',

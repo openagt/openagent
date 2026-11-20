@@ -69,6 +69,8 @@ export class CodexDriver implements Driver {
   // No `ownQuestionTool`, though the agent has request_user_input: without the `ask` skill most
   // models ask in plain words instead (6 of 20 used the tool, measured on codex-cli 0.166.0 across
   // its 8 models), and with it they use the tool (15 of 20) or the skill's block (3).
+  /** Its smallest, quickest model: a run's short name is asked of it. */
+  readonly namingModel = 'gpt-5.6-luna'
   constructor(private readonly opts: CodexDriverOptions = {}) {}
 
   async start(opts: DriverStartOptions): Promise<DriverSession> {

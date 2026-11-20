@@ -15,13 +15,15 @@ already made, and lists it in its pull request; for anything else it proposes an
   record, this computer's host, and the coding-agent accounts with their rotation, each
   coding agent's adapter a package of its own. It lives in this package until the packages
   are merged. Picked over a runner beside the driver, which kept git out of the driver.
-- The runner depends on `@openagt/agent-driver` for the session contract and the
-  records, on each coding agent's adapter (`@openagt/agent-driver-claude-code`,
-  `@openagt/agent-driver-codex`) for its driver and its readiness check, and on
-  `agent-data` for the branch. A run's checkout and its pull request are steps of the
-  modules of the distribution that starts the run, handed down to the run's process
-  (`@openagt/hooks`, #2394). It runs only as a package of the OpenAgent that starts it:
-  a run with no distribution handed down is refused (#2394, decision 4).
+- The runner depends on `@openagt/hooks` for the session contract, on `@openagt/agent-driver`
+  for the records, and on `agent-data` for the branch. A run's coding agent, its checkout and its
+  pull request are the modules' of the distribution that starts the run, handed down to the run's
+  process (#2394): each coding agent's adapter (`@openagt/agent-driver-claude-code`,
+  `@openagt/agent-driver-codex`) fills `run.agent` with its driver and its readiness check, and
+  the checkout and the pull request are steps. Picked over the runner depending on each adapter,
+  where which coding agents a run could be on was the runner's to say. It runs only as a package
+  of the OpenAgent that starts it: a run with no distribution handed down is refused (#2394,
+  decision 4).
 - The runner reads no schedule: a run is the prompt it is given. It names no skill: a run's
   skills are its modules' (`run.skills`, #2394), the modules of the distribution that started
   OpenAgent (`@openagt/dashboard`): every core module's, a git host's only where the project is

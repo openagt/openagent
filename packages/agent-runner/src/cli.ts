@@ -1,7 +1,8 @@
 import { PLUGINS_WITHOUT_ENV, PRESET_ENV, Refused, UsageError, errorMessage, inRepo, nodeGitRunner, parseCommandArgs, runCommandLine, sessionsHomeOf, PROJECT_SKILLS_ENV, helpRows, helpText, type Command, type GitRunner } from '@openagt/agent-data'
 import { createHooks, loadHandedDown } from '@openagt/hooks'
 import { liftSkillRules, projectRoot, sessionRepos, skillLink } from '@openagt/git-branches'
-import { DRIVER_NAMES, GIT_ACCOUNT_ENV, detachResume, detachRun, isDriverName, presetLoginFor, readyToRun, resumeProject, runProject, type DriverName, type SpawnedResume } from './runner.js'
+import { GIT_ACCOUNT_ENV, detachResume, detachRun, presetLoginFor, readyToRun, resumeProject, runProject, type SpawnedResume } from './runner.js'
+import { UnknownAgent, agentNames, codingAgents } from './agents.js'
 import { projectOf, type RunOutcome, type RunRequest } from './run.js'
 import { anyPick, handedDownSettings, presetNamed, runPreset, sessionPicksNamed } from './preset.js'
 import { cleanup } from './cleanup.js'
@@ -16,12 +17,12 @@ import { isPublish, NO_PUBLISH, PUBLISH_LEVELS } from './records.js'
 export const USAGE = `usage: agent-runner <command>
 
 ${helpRows([
-  ['run <prompt> [--model <id>] [--effort <level>] [--driver <claude-code|codex>] [<option>…]', `one run of <prompt> in its own checkout, now, recorded; on Claude Code unless --driver says Codex, on the coding agent's own default model unless --model names one`],
+  ['run <prompt> [--model <id>] [--effort <level>] [--driver <agent>] [<option>…]', `one run of <prompt> in its own checkout, now, recorded; on the coding agent --driver names among those of OpenAgent's distribution (claude-code, codex), else its first, on the coding agent's own default model unless --model names one`],
   ['run --detach <prompt>', `the same run in its own process, answered at once with its id`],
   ['run --resume <id> [<text>] [--answer <label>] [--publish <commit|branch|pr|merge|nothing>]', `continue an ended run: the same record, its session resumed; the text as the next prompt, or the answer to the question it ended on; with --publish, the run takes its work that far from here on, or, with nothing, only as far as its prompts ask; at its record's level without it`],
   ['run --detach --resume <id> …', `the same continuing in its own process, answered at once`],
   ['run --resume <id> … --by <who>', `kept on the run's record with the time, until its next resume: a scheduler's row that resumed it, which counts the run as its own`],
-  ['check [--driver <claude-code|codex>]', `whether a run can start here: the coding agent's CLI installed and logged in, and its warnings; what this computer's host answers before a Start`],
+  ['check [--driver <agent>]', `whether a run can start here: the coding agent's CLI installed and logged in, and its warnings; what this computer's host answers before a Start`],
   ['cleanup', `remove what this tool left in the project: the runs' locks and stderr files, then .agent-runner/ and the rule hiding it from git once it is empty; config.yml is yours and stays; refused while a run's process is alive; the command a dashboard asks for when a project is removed with its files`],
   'Options of run:',
   ['--publish <commit|branch|pr|merge>', 'with --publish, the agent is told, in one sentence after the prompt, how far to take its work when it finishes: commit it, and from there push its branch, open its pull request, or set the request to merge once its checks pass; without it the prompt goes as written, and nothing is committed or published unless the prompt asks'],
@@ -80,12 +81,19 @@ const RUN_FLAGS = {
   repos: { type: 'string' },
 } as const
 
+/** `--driver`, refused as a usage error when it names no coding agent of the distribution handed down to this process. */
+async function knownAgent(driver: string | undefined): Promise<void> {
+  if (driver === undefined) return
+  const agents = await codingAgents()
+  if (agents.length === 0) throw new UsageError(new UnknownAgent(driver, agents).message)
+  if (!agents.some(agent => agent.id === driver)) throw new UsageError(`unknown driver "${driver}"; the drivers are ${agentNames(agents)}`)
+}
+
 const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
   async run(args, io, git) {
     const { positionals, values } = parseWithTexts(args, RUN_FLAGS, 0, 1)
     const repo = await project(io.cwd, git)
     const driver = values.driver
-    if (driver !== undefined && !isDriverName(driver)) throw new UsageError(`unknown driver "${driver}"; the drivers are ${DRIVER_NAMES.join(' and ')}`)
     const publish = isPublish(values.publish) ? values.publish : undefined
     // A resume may also take the run's level away: from there on its prompts go as written.
     const noLevel = values.resume !== undefined && values.publish === NO_PUBLISH
@@ -102,6 +110,7 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
       if (values.repos !== undefined) throw new UsageError('--resume takes no --repos: a session continues with the repos its record names')
       if (positionals[0] === undefined && values.answer === undefined) throw new UsageError('a text or --answer is needed to resume a run')
     }
+    await knownAgent(driver)
     if (values.by !== undefined && (values.resume === undefined || !values.by.trim())) throw new UsageError('--by names who resumes a run, with --resume')
     if (values.branch !== undefined && values.base !== undefined) throw new UsageError('--branch takes no --base: the run works on a branch that exists')
     if (values.branch !== undefined && !values.branch.trim()) throw new UsageError('--branch needs a branch name')
@@ -138,7 +147,7 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
     if (values.resume === undefined && values.id === undefined) {
       // The session's account, or its preset's: an account this computer cannot use stops the run here, naming it.
       const login = gitAccount ?? (await presetLoginFor(repo, await runPreset(preset, await handedDownSettings(), io.stderr)))
-      const ready = await readyToRun(repo, driver ?? 'claude-code', login !== undefined ? { login } : {})
+      const ready = await readyToRun(repo, driver, login !== undefined ? { login } : {})
       if (ready.problems.length > 0) throw new Refused({ ok: false, reason: 'not-ready', ...ready }, ready.problems.join(' '))
     }
 
@@ -157,7 +166,7 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
     }
     if (positionals[0] === undefined) throw new UsageError('expected 1 argument(s), got 0')
     // What the run is asked, the same whether it goes on in this process or in one of its own.
-    const asked: RunRequest & { driver?: DriverName } = {
+    const asked: RunRequest & { driver?: string } = {
       prompt: positionals[0],
       ...(values.model !== undefined ? { model: values.model } : {}),
       ...(values.effort !== undefined ? { effort: values.effort } : {}),
@@ -190,10 +199,9 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
 
   async check(args, io, git) {
     const { values } = parseWithTexts(args, { driver: { type: 'string' } }, 0)
-    const driver = values.driver ?? 'claude-code'
-    if (!isDriverName(driver)) throw new UsageError(`unknown driver "${driver}"; the drivers are ${DRIVER_NAMES.join(' and ')}`)
+    await knownAgent(values.driver)
     const repo = await project(io.cwd, git)
-    return { ok: true, ...(await readyToRun(repo, driver)) }
+    return { ok: true, ...(await readyToRun(repo, values.driver)) }
   },
 
   async cleanup(args, io, git) {

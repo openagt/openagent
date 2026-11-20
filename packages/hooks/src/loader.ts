@@ -7,7 +7,8 @@ import { ROUTE_PATH, type AppContext, type AppRoute, type AppStart, type Attenti
 import { HOOK_NAMES, MODULE_NAME, type HookName, type ModuleDefinition, type OwnRow } from './module.js'
 import { runPipeline, type OrderedStep, type PipelineResult } from './pipeline.js'
 import type { ProjectRef } from './project.js'
-import type { RunAgent, RunContext, RunHost, RunOptions, RunSkill, SkillArgs } from './run.js'
+import type { RunAgent } from './agent.js'
+import type { RunContext, RunHost, RunOptions, RunSkill, SkillArgs } from './run.js'
 import { enabledSetting, SETTING_SCOPES, settingsIn, type Setting, type Settings } from './settings.js'
 import { chainStore, scopeKey, type Store, type StoreContext } from './store.js'
 

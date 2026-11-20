@@ -3,7 +3,7 @@ import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { FakeDriver, promptSent, type FakeDriverSession } from '@openagt/agent-driver'
 import type { GitRunner } from '@openagt/agent-data'
-import { loadModules, type DistributionEntry, type ModuleDefinition, type PullRequest, type StoreBackend, type Driver, type DriverSession, type DriverStartOptions } from '@openagt/hooks'
+import { loadModules, type DistributionEntry, type DriverReadiness, type ModuleDefinition, type PullRequest, type RunAgent, type RunAgentOptions, type RunAgentReadyOptions, type StoreBackend, type Driver, type DriverSession, type DriverStartOptions } from '@openagt/hooks'
 import { memoryStore } from '@openagt/hooks/testing'
 import { gitBranchesModule } from '@openagt/git-branches/module'
 import { githubModule, type GithubDeps } from '@openagt/github/module'
@@ -134,6 +134,37 @@ export function fakeGithub(accounts: Record<string, Record<string, string>>): Gi
 const PLUGINS = await loadModules([{ package: '@openagt/logs', on: true }, { package: '@openagt/ask', on: true }], specifier => import(specifier))
 
 /**
+ * A coding agent of the tests' own, as a module fills `run.agent` with one: `ready` its readiness,
+ * `driver` the driver of each run (a {@link FakeDriver} saying `Done.` when absent), and what it
+ * was built and asked with kept for a test to read.
+ */
+export function testAgent(
+  id: string,
+  opts: { accounts?: string; ready?: (asked: RunAgentReadyOptions) => DriverReadiness; driver?: (built: RunAgentOptions) => Driver } = {},
+): RunAgent & { built: RunAgentOptions[]; asked: RunAgentReadyOptions[] } {
+  const built: RunAgentOptions[] = []
+  const asked: RunAgentReadyOptions[] = []
+  return {
+    id,
+    label: id,
+    ...(opts.accounts !== undefined ? { accounts: opts.accounts } : {}),
+    built,
+    asked,
+    ready: async readyOpts => {
+      asked.push(readyOpts)
+      return opts.ready?.(readyOpts) ?? { problems: [], warnings: [] }
+    },
+    driver: driverOpts => {
+      built.push(driverOpts)
+      return opts.driver?.(driverOpts) ?? new FakeDriver({ turns: [{ text: 'Done.' }] })
+    },
+  }
+}
+
+/** The tests' coding agents, as a distribution's module brings them: Claude Code's id first, the one a run names none on, then Codex's. */
+export const TEST_AGENTS: ModuleDefinition = { name: 'test-agents', hooks: { 'run.agent': [testAgent('claude-code', { accounts: 'claude' }), testAgent('codex', { accounts: 'codex' })] } }
+
+/**
  * The modules a test's run goes through, as OpenAgent's distribution lists them for a run: a store
  * kept in memory (the person's settings: the plugins' Enabled rows, the presets), git-branches and
  * github, each with what the test stands in for, the skills module, agent-driver, the plugins
@@ -147,6 +178,7 @@ export function testModules(deps: { gitHost?: GitHost; git?: GitRunner; github?:
     { module: githubModule({ ...(deps.github ?? noGithub), requestOfBranch: (dir, branch) => gitHost.requestOfBranch(dir, branch) }) },
     { module: skillsModule() },
     { module: agentDriver },
+    { module: TEST_AGENTS },
     ...PLUGINS,
     ...(deps.also ?? []).map(module => ({ module })),
   ]

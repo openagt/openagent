@@ -4,16 +4,14 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { FakeDriver, findRun } from '@openagt/agent-driver'
-import { ClaudeCodeDriver } from '@openagt/agent-driver-claude-code'
-import { CodexDriver } from '@openagt/agent-driver-codex'
 import { accountsPath, addAccount } from '@openagt/skill-account-rotation'
 import { PRESETS, RunOrder, chainStore, settingsIn, type DistributionEntry, type RunContext, type AccountRotation, type Driver, type DriverTurn } from '@openagt/hooks'
 import { memoryStore } from '@openagt/hooks/testing'
 import { markerCard, writeMarker } from './records.js'
 import { runCommand } from './run.js'
 import { ACCOUNT_ENV, detachResume, detachRun, driverFor, readyToRun, resumeArgs, resumeProject, runArgs } from './runner.js'
-import { removeRepo, testRepo } from './test-repo.js'
-import { fakeGithub, testModules } from './run-test-support.js'
+import { handDownAgents, removeRepo, testRepo } from './test-repo.js'
+import { fakeGithub, testAgent, testModules } from './run-test-support.js'
 import { TITLE_SYSTEM } from './title.js'
 
 // The detached start, with the spawn faked: the process asked for, the id answered. The marker is
@@ -26,15 +24,16 @@ test('run --detach spawns the run with its id, to write its own marker, and answ
   try {
     const spawned: unknown[] = []
     const started = await detachRun(repo, { prompt: '/work-queue now', now: () => NOW }, { spawn: async (_repo, run) => { spawned.push(run) } })
-    assert.deepEqual(started, { id: '2026-09-17T20-00-00-000Z', driver: 'claude-code' }, 'no model given: the coding agent starts on its own default')
-    assert.deepEqual(spawned, [{ id: started.id, prompt: '/work-queue now', mark: true, driver: 'claude-code' }])
+    assert.deepEqual(started, { id: '2026-09-17T20-00-00-000Z' })
+    assert.deepEqual(spawned, [{ id: started.id, prompt: '/work-queue now', mark: true }], 'no coding agent and no model named: the run is on the first of its distribution, on its own default model')
     assert.equal(await findRun(repo, started.id), undefined, 'nothing written before the id is answered')
-    const named = await detachRun(repo, { prompt: 'Read the docs', model: 'opus', now: () => new Date(NOW.getTime() + 1000) }, { spawn: async () => {} })
-    assert.equal(named.model, 'opus')
+    const modelled: unknown[] = []
+    await detachRun(repo, { prompt: 'Read the docs', model: 'opus', now: () => new Date(NOW.getTime() + 1000) }, { spawn: async (_repo, run) => { modelled.push(run) } })
+    assert.deepEqual(modelled, [{ id: '2026-09-17T20-00-01-000Z', prompt: 'Read the docs', model: 'opus', mark: true }])
     // Started from another branch: it reaches the spawned run.
     const based: unknown[] = []
     const onBranch = await detachRun(repo, { prompt: 'Do task one', base: 'agent-plan', now: () => new Date(NOW.getTime() + 2000) }, { spawn: async (_repo, run) => { based.push(run) } })
-    assert.deepEqual(based, [{ id: onBranch.id, prompt: 'Do task one', mark: true, driver: 'claude-code', base: 'agent-plan' }])
+    assert.deepEqual(based, [{ id: onBranch.id, prompt: 'Do task one', mark: true, base: 'agent-plan' }])
   } finally {
     await removeRepo(repo)
   }
@@ -66,34 +65,36 @@ test('run --detach on Codex: the spawned run names Codex, no model unless one is
   try {
     const spawned: unknown[] = []
     const started = await detachRun(repo, { prompt: '/work-queue', driver: 'codex', now: () => NOW }, { spawn: async (_repo, run) => { spawned.push(run) } })
-    assert.deepEqual(started, { id: '2026-09-17T20-00-00-000Z', driver: 'codex' })
+    assert.deepEqual(started, { id: '2026-09-17T20-00-00-000Z' })
     assert.deepEqual(spawned, [{ id: started.id, prompt: '/work-queue', mark: true, driver: 'codex' }])
-    const named = await detachRun(repo, { prompt: '/work-queue', driver: 'codex', model: 'gpt-5', now: () => new Date(NOW.getTime() + 1000) }, { spawn: async () => {} })
-    assert.equal(named.model, 'gpt-5', 'a model given by hand is passed on')
+    const modelled: unknown[] = []
+    await detachRun(repo, { prompt: '/work-queue', driver: 'codex', model: 'gpt-5', now: () => new Date(NOW.getTime() + 1000) }, { spawn: async (_repo, run) => { modelled.push(run) } })
+    assert.deepEqual(modelled, [{ id: '2026-09-17T20-00-01-000Z', prompt: '/work-queue', driver: 'codex', model: 'gpt-5', mark: true }], 'a model given by hand is passed on')
     const levelled: unknown[] = []
     const withLevel = await detachRun(repo, { prompt: 'Fix the typo', publish: 'merge', now: () => new Date(NOW.getTime() + 3000) }, { spawn: async (_repo, run) => { levelled.push(run) } })
-    assert.deepEqual(levelled, [{ id: withLevel.id, prompt: 'Fix the typo', mark: true, driver: 'claude-code', publish: 'merge' }], 'the publish level a person picked reaches the run')
+    assert.deepEqual(levelled, [{ id: withLevel.id, prompt: 'Fix the typo', mark: true, publish: 'merge' }], 'the publish level a person picked reaches the run')
     const handed: unknown[] = []
     const withText = await detachRun(repo, { prompt: '/answer-comments', attached: 'Found:\n[1]', now: () => new Date(NOW.getTime() + 4000) }, { spawn: async (_repo, run) => { handed.push(run) } })
-    assert.deepEqual(handed, [{ id: withText.id, prompt: '/answer-comments', mark: true, driver: 'claude-code', attached: 'Found:\n[1]' }], 'a text attached to the prompt reaches the run')
+    assert.deepEqual(handed, [{ id: withText.id, prompt: '/answer-comments', mark: true, attached: 'Found:\n[1]' }], 'a text attached to the prompt reaches the run')
   } finally {
     await removeRepo(repo)
   }
 })
 
-test('a run\'s coding agent is unrestricted, has the run\'s id, and gets this machine\'s setup parts as they are', () => {
+test("a run's driver is its coding agent's own, built with the run's id in its environment and this machine's setup parts as they are", () => {
   const personal = { memory: true, connectors: false, skills: false }
-  const optsOf = (driver: Driver) => (driver as unknown as { opts: { sandbox?: string; permissionMode?: string; env?: NodeJS.ProcessEnv; personal?: unknown } }).opts
-  const codex = driverFor('codex', 'run-1', personal)
-  assert.ok(codex instanceof CodexDriver)
-  assert.equal(optsOf(codex).sandbox, 'danger-full-access')
-  assert.equal(optsOf(codex).env?.['AGENT_ID'], 'run-1')
-  assert.deepEqual(optsOf(codex).personal, personal)
-  const claude = driverFor('claude-code', 'run-1', personal)
-  assert.ok(claude instanceof ClaudeCodeDriver)
-  assert.equal(optsOf(claude).permissionMode, 'bypassPermissions')
-  assert.equal(optsOf(claude).env?.['AGENT_ID'], 'run-1')
-  assert.deepEqual(optsOf(claude).personal, personal)
+  const codex = testAgent('codex', { accounts: 'codex' })
+  driverFor(codex, 'run-1', personal)
+  assert.equal(codex.built[0]?.env['AGENT_ID'], 'run-1')
+  assert.deepEqual(codex.built[0]?.personal, personal)
+  assert.ok(codex.built[0]?.accounts, 'its turns go on its list of accounts')
+  // A session that only names a run is for no run's agent.
+  driverFor(codex, undefined, personal)
+  assert.equal(codex.built[1]?.env['AGENT_ID'], undefined)
+  // An agent with no list of accounts runs on its own login.
+  const own = testAgent('own')
+  driverFor(own, 'run-1', personal)
+  assert.equal(own.built[0]?.accounts, undefined)
 })
 
 test('a run goes on its accounts, starting on the one whoever started it named, on Claude and on Codex alike', async () => {
@@ -104,10 +105,12 @@ test('a run goes on its accounts, starting on the one whoever started it named, 
     addAccount('Dani', 'x', accountsPath(agent, env))
     addAccount('Rom', 'y', accountsPath(agent, env))
   }
-  /** The account a turn of the driver's sessions is run on, in this test's lists. */
-  const takes = async (driver: Driver): Promise<string> => {
+  /** The account a turn of the driver the agent was built last is run on, in this test's lists. */
+  const takes = async (agent: ReturnType<typeof testAgent>): Promise<string> => {
     let on = ''
-    await (driver as unknown as { opts: { accounts: AccountRotation } }).opts.accounts.turn(env, {
+    const rotation: AccountRotation | undefined = agent.built.at(-1)?.accounts
+    assert.ok(rotation)
+    await rotation.turn(env, {
       current: {},
       text: 'go',
       opts: {},
@@ -122,14 +125,20 @@ test('a run goes on its accounts, starting on the one whoever started it named, 
     return on
   }
   const personal = { memory: true, connectors: true, skills: true }
+  const codex = testAgent('codex', { accounts: 'codex' })
+  const claude = testAgent('claude-code', { accounts: 'claude' })
+  const on = async (agent: ReturnType<typeof testAgent>): Promise<string> => {
+    driverFor(agent, 'run-1', personal)
+    return takes(agent)
+  }
   const before = process.env[ACCOUNT_ENV]
   try {
     delete process.env[ACCOUNT_ENV]
-    assert.equal(await takes(driverFor('codex', 'run-1', personal)), 'This computer')
-    assert.equal(await takes(driverFor('claude-code', 'run-1', personal)), 'This computer')
+    assert.equal(await on(codex), 'This computer')
+    assert.equal(await on(claude), 'This computer')
     process.env[ACCOUNT_ENV] = ' Dani '
-    assert.equal(await takes(driverFor('codex', 'run-1', personal)), 'Dani')
-    assert.equal(await takes(driverFor('claude-code', 'run-1', personal)), 'Dani')
+    assert.equal(await on(codex), 'Dani')
+    assert.equal(await on(claude), 'Dani')
   } finally {
     if (before === undefined) delete process.env[ACCOUNT_ENV]
     else process.env[ACCOUNT_ENV] = before
@@ -143,6 +152,7 @@ test('a resumed run continues on the tool its record names, and a Codex run with
     const startedWith: Array<{ model?: string; token?: string }> = []
     const codex = (turn: string): Driver => ({
       id: 'codex',
+      namingModel: 'gpt-5.6-luna',
       start: opts => {
         // The session that names the run is its own, on the small model (`title.ts`): not one of
         // the run's own, so it is not counted here.
@@ -167,9 +177,9 @@ test('a resumed run continues on the tool its record names, and a Codex run with
       assert.deepEqual((await findRun(repo, first.id))?.caller?.['pluginsWithout'], ['ask'], "the session's picks are on the record")
       assert.equal((await findRun(repo, first.id))?.caller?.['projectSkills'], 'none')
       const asked: string[] = []
-      const second = await resumeProject(repo, { id: first.id, text: 'And the tests?' }, { driverFor: (name, _id, setup, as) => { asked.push(`${name} ${JSON.stringify(setup)} ${JSON.stringify(as)}`); return codex('Read too.') }, modules })
+      const second = await resumeProject(repo, { id: first.id, text: 'And the tests?' }, { driverFor: (agent, _id, setup, only) => { asked.push(`${agent.id} ${JSON.stringify(setup)} ${JSON.stringify(only)}`); return codex('Read too.') }, modules })
       assert.equal(second.status, 'done')
-      assert.deepEqual(asked, ['codex {"memory":true,"connectors":true,"skills":true} {"claude":["Dani"]}'], 'no config on this machine: the run loads the person\'s setup, on the preset\'s accounts this computer has')
+      assert.deepEqual(asked, ['codex {"memory":true,"connectors":true,"skills":true} undefined'], "no config on this machine: the run loads the person's setup, on every Codex account this computer has: the preset names only Claude accounts")
       assert.deepEqual(github.workedAs, ['octo-one', 'octo-one'], 'the resume goes on as the account the record names, not whatever the computer\'s pick is by then')
       assert.equal((await findRun(repo, first.id))?.caller?.['gitAccount'], 'octo-one')
       assert.equal((await findRun(repo, first.id))?.caller?.['preset'], 'reviewer', 'the preset stays on the record')
@@ -194,7 +204,7 @@ test("a run goes without the plugins its preset leaves out, where the session pi
     const seen: { without: readonly string[] | undefined; skills: string[] }[] = []
     const looking = { name: 'looking', hooks: { 'run.step': [{ order: RunOrder.CONTEXT, name: 'look', run: (ctx: RunContext) => void seen.push({ without: ctx.options.plugins?.without, skills: ctx.skills.map(skill => skill.name) }) }] } }
     const modules = testModules({ store, also: [looking] })
-    const codex = (): Driver => ({ id: 'codex', start: opts => new FakeDriver({ turns: [{ text: 'Read.' }], sessionId: 's-codex' }).start(opts) })
+    const codex = (): Driver => ({ id: 'codex', namingModel: 'gpt-5.6-luna', start: opts => new FakeDriver({ turns: [{ text: 'Read.' }], sessionId: 's-codex' }).start(opts) })
     // Started as `runProject` starts it, on the preset's options as the store keeps them.
     const run = (at: number, picks: { pluginsWithout?: string[] }) =>
       runCommand(repo, { prompt: 'Read the docs', driver: codex(), host: 'this-box', pid: 4242, now: () => new Date(NOW.getTime() + at), modules, preset: 'quiet', presetOptions: { plugins: { without: ['logs'] } }, ...picks })
@@ -233,73 +243,40 @@ test('a spawned run is told its tool, and its model only when it has one', () =>
   assert.deepEqual(runArgs({ id: 'r1', prompt: '/reply', branch: 'dark-mode', for: 'https://github.com/o/r/pull/6' }), ['run', '/reply', '--id', 'r1', '--branch', 'dark-mode', '--for', 'https://github.com/o/r/pull/6'])
 })
 
-test('ready to run: the coding agent\'s problems stop a run; nothing else is probed, the git host only for a project that names its own account there', async () => {
-  const notRoot = () => false
-  const probed: string[] = []
-  const answers = (loggedIn: boolean) => async (bin: string, args: readonly string[]) => {
-    probed.push(bin)
-    return { ok: true, output: args[0] === '--version' ? '2.1.0' : JSON.stringify({ loggedIn }) }
-  }
+test("ready to run: what the run's coding agent says, asked with this machine's setup parts and whether an account was added to its own list", async () => {
   const repo = await testRepo()
+  const config = process.env['XDG_CONFIG_HOME']
+  process.env['XDG_CONFIG_HOME'] = join(repo, 'config')
+  const gitHostEnv = async () => ({ ok: true as const, env: {} })
   try {
-    assert.deepEqual(await readyToRun(repo, 'claude-code', { probe: answers(true), isRoot: notRoot }), { problems: [], warnings: [] })
-    assert.deepEqual(await readyToRun(repo, 'codex', { probe: answers(true), isRoot: notRoot, agentsSkills: join(repo, 'no-such-dir') }), { problems: [], warnings: [] })
-    assert.ok(probed.every(bin => bin === 'claude' || bin === 'codex'), `only the coding agent's CLI is asked, not ${probed.join(', ')}`)
-
-    // Whether the person added an account is read off their files: here, none of the real ones.
-    const config = process.env['XDG_CONFIG_HOME']
-    process.env['XDG_CONFIG_HOME'] = join(repo, 'config')
-    try {
-      const out = await readyToRun(repo, 'claude-code', { probe: answers(false), isRoot: notRoot })
-      assert.match(out.problems[0]!, /claude auth login/)
-      addAccount('Dani', 'sk-ant-oat01-dani', accountsPath('claude'))
-      assert.deepEqual(await readyToRun(repo, 'claude-code', { probe: answers(false), isRoot: notRoot }), { problems: [], warnings: [], ownLoggedOut: true })
-    } finally {
-      if (config === undefined) delete process.env['XDG_CONFIG_HOME']
-      else process.env['XDG_CONFIG_HOME'] = config
-    }
-  } finally {
-    await removeRepo(repo)
-  }
-})
-
-test('ready to run with the CLI logged out: an account added beside it is a login runs use, on each agent\'s own list', async () => {
-  const repo = await testRepo()
-  const dir = await mkdtemp(join(tmpdir(), 'runner-added-'))
-  const before = process.env['XDG_CONFIG_HOME']
-  const probe = async (_bin: string, args: readonly string[]) => ({ ok: true, output: args[0] === '--version' ? '1.0.0' : JSON.stringify({ loggedIn: false }) })
-  const codexProbe = async (_bin: string, args: readonly string[]) => ({ ok: args[0] === '--version', output: args[0] === '--version' ? '1.0.0' : 'Not logged in' })
-  const deps = { isRoot: () => false, agentsSkills: join(repo, 'no-such-dir') }
-  try {
-    process.env['XDG_CONFIG_HOME'] = dir
-    assert.equal((await readyToRun(repo, 'claude-code', { ...deps, probe })).problems.length, 1)
-    assert.equal((await readyToRun(repo, 'codex', { ...deps, probe: codexProbe })).problems.length, 1)
-    addAccount('Dani', 'x', accountsPath('claude'))
-    assert.deepEqual((await readyToRun(repo, 'claude-code', { ...deps, probe })).problems, [])
-    assert.equal((await readyToRun(repo, 'codex', { ...deps, probe: codexProbe })).problems.length, 1)
-    addAccount('Dani', 'codex-dani', accountsPath('codex'))
-    assert.deepEqual((await readyToRun(repo, 'codex', { ...deps, probe: codexProbe })).problems, [])
-  } finally {
-    if (before === undefined) delete process.env['XDG_CONFIG_HOME']
-    else process.env['XDG_CONFIG_HOME'] = before
-    await rm(dir, { recursive: true, force: true })
-    await removeRepo(repo)
-  }
-})
-
-test('ready to run on Codex: skills in ~/.agents/skills are no warning while runs load the person\'s skills, and a warning once this machine turns them off', async () => {
-  const repo = await testRepo()
-  try {
-    const agentsSkills = join(repo, 'agents-skills')
-    await mkdir(join(agentsSkills, 'my-skill'), { recursive: true })
-    const deps = { probe: async (_bin: string, args: readonly string[]) => ({ ok: true, output: args[0] === '--version' ? '0.144.4' : 'Logged in' }), isRoot: () => false, agentsSkills }
-    assert.deepEqual(await readyToRun(repo, 'codex', deps), { problems: [], warnings: [] })
+    const loggedOut = { problems: ['`claude` is logged out: run `claude auth login`'], warnings: [] }
+    const claude = testAgent('claude-code', { accounts: 'claude', ready: asked => (asked.addedAccount ? { problems: [], warnings: [], ownLoggedOut: true } : loggedOut) })
+    const codex = testAgent('codex', { accounts: 'codex' })
+    assert.deepEqual(await readyToRun(repo, 'claude-code', { agent: claude, gitHostEnv }), loggedOut)
+    addAccount('Dani', 'sk-ant-oat01-dani', accountsPath('claude'))
+    assert.deepEqual(await readyToRun(repo, 'claude-code', { agent: claude, gitHostEnv }), { problems: [], warnings: [], ownLoggedOut: true })
+    await readyToRun(repo, 'codex', { agent: codex, gitHostEnv })
+    assert.deepEqual(claude.asked.map(asked => asked.addedAccount), [false, true])
+    assert.deepEqual(codex.asked.map(asked => asked.addedAccount), [false], "each agent's own list: a Claude account is none of Codex's")
+    assert.deepEqual(claude.asked[0]?.personal, { memory: true, connectors: true, skills: true }, "no config on this machine: the person's own setup")
     await mkdir(join(repo, '.agent-runner'), { recursive: true })
     await writeFile(join(repo, '.agent-runner', 'config.yml'), 'personal:\n  skills: off\n')
-    const out = await readyToRun(repo, 'codex', deps)
-    assert.deepEqual(out.problems, [])
-    assert.match(out.warnings[0]!, /no switch/)
+    await readyToRun(repo, 'codex', { agent: codex, gitHostEnv })
+    assert.equal(codex.asked[1]?.personal.skills, false, "this machine's config turns a part off")
   } finally {
+    if (config === undefined) delete process.env['XDG_CONFIG_HOME']
+    else process.env['XDG_CONFIG_HOME'] = config
+    await removeRepo(repo)
+  }
+})
+
+test('ready to run on a coding agent the distribution does not have is refused, naming the ones it has', async () => {
+  const repo = await testRepo()
+  const handBack = await handDownAgents(repo)
+  try {
+    await assert.rejects(readyToRun(repo, 'cursor'), /No coding agent is named cursor: the coding agents are claude-code and codex\./)
+  } finally {
+    handBack()
     await removeRepo(repo)
   }
 })
@@ -307,24 +284,24 @@ test('ready to run on Codex: skills in ~/.agents/skills are no warning while run
 test('ready to run: the computer\u2019s account at the git host, or the one picked for the session; no account, or one the git host cannot give, stops the run before it starts', async () => {
   const repo = await testRepo()
   try {
-    const probe = async (_bin: string, args: readonly string[]) => ({ ok: true, output: args[0] === '--version' ? '2.1.0' : JSON.stringify({ loggedIn: true }) })
+    const agent = testAgent('claude-code', { accounts: 'claude' })
     const asked: (string | undefined)[] = []
     const gitHostEnv = async (_repo: string, user?: string) => {
       asked.push(user)
       return user === 'stranger' ? { ok: false as const, error: 'gh knows no account stranger' } : { ok: true as const, env: { GH_TOKEN: `tok-${user ?? 'computer'}` }, login: user ?? 'computer-login' }
     }
-    assert.deepEqual(await readyToRun(repo, 'claude-code', { probe, isRoot: () => false, gitHostEnv }), { problems: [], warnings: [] })
+    assert.deepEqual(await readyToRun(repo, 'claude-code', { agent, gitHostEnv }), { problems: [], warnings: [] })
     assert.deepEqual(asked, [undefined], 'no account named: the computer\u2019s is asked for')
     // OpenAgent has no account there: refused, in the git host's words, never the person's own login.
     const none = async () => ({ ok: false as const, error: "OpenAgent has no GitHub account: add one in OpenAgent's Permissions" })
-    assert.deepEqual((await readyToRun(repo, 'claude-code', { probe, isRoot: () => false, gitHostEnv: none })).problems, ["OpenAgent has no GitHub account: add one in OpenAgent's Permissions"])
+    assert.deepEqual((await readyToRun(repo, 'claude-code', { agent, gitHostEnv: none })).problems, ["OpenAgent has no GitHub account: add one in OpenAgent's Permissions"])
 
     // The account picked for this session: asked for by its login.
-    assert.deepEqual(await readyToRun(repo, 'claude-code', { probe, isRoot: () => false, gitHostEnv, login: 'octo-agent' }), { problems: [], warnings: [] })
+    assert.deepEqual(await readyToRun(repo, 'claude-code', { agent, gitHostEnv, login: 'octo-agent' }), { problems: [], warnings: [] })
     assert.deepEqual(asked, [undefined, 'octo-agent'])
 
     // One this computer cannot use stops the run, naming it.
-    const out = await readyToRun(repo, 'claude-code', { probe, isRoot: () => false, gitHostEnv, login: 'stranger' })
+    const out = await readyToRun(repo, 'claude-code', { agent, gitHostEnv, login: 'stranger' })
     assert.match(out.problems[0]!, /works as @stranger at the git host.*gh knows no account stranger/)
   } finally {
     await removeRepo(repo)

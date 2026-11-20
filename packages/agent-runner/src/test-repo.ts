@@ -38,6 +38,29 @@ export async function handDownDistribution(dir: string, packages: Record<string,
   }
 }
 
+/**
+ * Hand down to this process a distribution whose one module brings coding agents of Claude Code's
+ * id and Codex's, ready and never run: what a command that names a coding agent reads them from.
+ * Answers what hands back the distribution handed down before.
+ */
+export async function handDownAgents(dir: string): Promise<() => void> {
+  const file = join(dir, `distribution-${++handedDown}.mjs`)
+  await writeFile(
+    file,
+    [
+      "const agent = (id, accounts) => ({ id, label: id, accounts, ready: async () => ({ problems: [], warnings: [] }), driver: () => { throw new Error('these tests run no agent') } })",
+      "export default [{ module: { name: 'test-agents', hooks: { 'run.agent': [agent('claude-code', 'claude'), agent('codex', 'codex')] } } }]",
+      '',
+    ].join('\n'),
+  )
+  const before = process.env[DISTRIBUTION_ENV]
+  process.env[DISTRIBUTION_ENV] = file
+  return () => {
+    if (before === undefined) delete process.env[DISTRIBUTION_ENV]
+    else process.env[DISTRIBUTION_ENV] = before
+  }
+}
+
 export const RETRIED_RM = { recursive: true, force: true, maxRetries: 10 } as const
 
 export async function testRepo(): Promise<string> {

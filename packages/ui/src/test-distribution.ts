@@ -17,6 +17,8 @@ export const DASHBOARD_PACKAGES: DashboardDistribution = [
   { package: '@openagt/git-branches' },
   { package: '@openagt/github' },
   { package: '@openagt/skills' },
+  { package: '@openagt/agent-driver-claude-code', for: 'computer' },
+  { package: '@openagt/agent-driver-codex', for: 'computer' },
   { package: '@openagt/ui-pane-changes' },
   { package: '@openagt/ui-pane-files' },
   { package: '@openagt/saved-prompts' },

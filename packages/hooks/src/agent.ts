@@ -44,6 +44,8 @@ export interface Driver {
    * teaches another way to ask: it would ask that way instead.
    */
   readonly ownQuestionTool?: boolean
+  /** A small, quick model of the agent's, which a run's short name is asked of; none, and its runs are not named. */
+  readonly namingModel?: string
   /** Boot a session bound to a workspace directory. */
   start(opts: DriverStartOptions): Promise<DriverSession>
   /**
@@ -63,6 +65,48 @@ export interface Driver {
    * Optional: an agent that cannot list its models omits the method.
    */
   listModels?(opts?: { signal?: AbortSignal }): Promise<DriverModel[]>
+}
+
+/**
+ * A coding agent, as a module fills `run.agent` with it (#2394): what a run on it is built with,
+ * and whether one can start here. The run engine names no agent: it takes the one a run's options
+ * or record name from the modules of its distribution.
+ */
+export interface RunAgent {
+  /** What a run's options and record name it by: `claude-code`, `codex`. */
+  readonly id: string
+  /** Its name for a person: `Claude Code`. */
+  readonly label: string
+  /** It asks the person with a tool of its own ({@link Driver.ownQuestionTool}): its runs get no skill that teaches asking. */
+  readonly ownQuestionTool?: boolean
+  /**
+   * The list of accounts its turns take, by its name (`claude`, `codex`): the accounts a person
+   * added for it in OpenAgent, and a preset's picks among them (`RunOptions['agent-driver']`).
+   * None: it runs on whatever login it has.
+   */
+  readonly accounts?: string
+  /** What would stop a run on it here, asked before a run spends a checkout: its CLI missing or logged out. */
+  ready(opts: RunAgentReadyOptions): Promise<DriverReadiness>
+  /** The driver one run's sessions start on, unrestricted: nobody is there to approve what its agent does in the run's checkout. */
+  driver(opts: RunAgentOptions): Driver
+}
+
+/** What a coding agent's readiness is asked with. */
+export interface RunAgentReadyOptions {
+  /** The parts of the person's own setup its runs keep here: one it cannot keep out is a warning. */
+  personal: PersonalSetup
+  /** An account was added to its list: runs use it where the agent's own login is out. */
+  addedAccount: boolean
+}
+
+/** What one run's driver is built with. */
+export interface RunAgentOptions {
+  /** The environment the agent runs in: the run's process's, with the run's id. */
+  env: NodeJS.ProcessEnv
+  /** The parts of the person's own setup the run keeps. */
+  personal: PersonalSetup
+  /** The accounts of its list its turns take, the next free one going on at a limit; none when it runs on its own login. */
+  accounts?: AccountRotation
 }
 
 /** One model a coding agent offers. */

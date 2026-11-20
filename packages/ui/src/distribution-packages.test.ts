@@ -87,8 +87,8 @@ test("every project keeps its runs' records through the logs package, and shows 
   }
 })
 
-test("how markdown looks, the Human Queue, the person's profile, devices, account rotation and the notifications are the computer's: their parts are there with no project, and no project has them; the plugins' only while they are on", async () => {
-  assert.deepEqual((await computerPackages()).map(pkg => pkg.name), ['@openagt/ui-renderer-markdown', '@openagt/ui-card-waiting', '@openagt/user-info', '@openagt/devices', '@openagt/skill-account-rotation', '@openagt/notifications-browser'])
+test("the coding agents, how markdown looks, the Human Queue, the person's profile, devices, account rotation and the notifications are the computer's: their parts are there with no project, and no project has them; the plugins' only while they are on", async () => {
+  assert.deepEqual((await computerPackages()).map(pkg => pkg.name), ['@openagt/agent-driver-claude-code', '@openagt/agent-driver-codex', '@openagt/ui-renderer-markdown', '@openagt/ui-card-waiting', '@openagt/user-info', '@openagt/devices', '@openagt/skill-account-rotation', '@openagt/notifications-browser'])
   assert.deepEqual((await readComputerModules()).map(module => module.package), ['@openagt/devices', '@openagt/notifications-browser', '@openagt/skill-account-rotation', '@openagt/ui-card-waiting', '@openagt/ui-renderer-markdown', '@openagt/user-info'])
   assert.deepEqual((await readComputerModules()).map(module => Object.keys(module.bins)), [['devices'], [], ['account-rotation'], [], [], []])
   const hooks = await distributionHooks()
@@ -96,7 +96,7 @@ test("how markdown looks, the Human Queue, the person's profile, devices, accoun
   await hooks.setEnabled('notifications-browser', false)
   await hooks.setEnabled('notifications-command', true)
   try {
-    assert.deepEqual((await computerPackages()).map(pkg => pkg.name), ['@openagt/ui-renderer-markdown', '@openagt/ui-card-waiting', '@openagt/user-info', '@openagt/skill-account-rotation', '@openagt/notifications-command'])
+    assert.deepEqual((await computerPackages()).map(pkg => pkg.name), ['@openagt/agent-driver-claude-code', '@openagt/agent-driver-codex', '@openagt/ui-renderer-markdown', '@openagt/ui-card-waiting', '@openagt/user-info', '@openagt/skill-account-rotation', '@openagt/notifications-command'])
     assert.deepEqual((await readComputerModules()).map(module => module.package), ['@openagt/notifications-command', '@openagt/skill-account-rotation', '@openagt/ui-card-waiting', '@openagt/ui-renderer-markdown', '@openagt/user-info'])
   } finally {
     await hooks.setEnabled('devices', true)

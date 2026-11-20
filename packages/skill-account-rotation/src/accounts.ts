@@ -23,8 +23,14 @@ interface AccountsFile {
 /** The name the person's own login goes by until they give it one. */
 export const OWN_NAME = 'This computer'
 
-/** The agents with accounts. */
-export type AccountsAgent = 'claude' | 'codex'
+/** The agents with accounts, by the name of their list. */
+export const ACCOUNTS_AGENTS = ['claude', 'codex'] as const
+export type AccountsAgent = (typeof ACCOUNTS_AGENTS)[number]
+
+/** Whether `list` names an agent's list of accounts here: what a coding agent's turns take (`RunAgent.accounts`). */
+export function isAccountsAgent(list: string | undefined): list is AccountsAgent {
+  return (ACCOUNTS_AGENTS as readonly (string | undefined)[]).includes(list)
+}
 
 /** Where an agent's file is: `$XDG_CONFIG_HOME/openagent-<agent>-accounts.json`, else dotted under the home. */
 export function accountsPath(agent: AccountsAgent, env: NodeJS.ProcessEnv = process.env): string {

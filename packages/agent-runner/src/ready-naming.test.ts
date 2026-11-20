@@ -18,6 +18,7 @@ function namingAgent(said: (prompt: string) => string = () => 'Fix flaky login t
   let cancelled = 0
   const driver: Driver = {
     id: 'claude-code',
+    namingModel: 'haiku',
     async start(opts) {
       starts.push(opts)
       const session: DriverSession = {
@@ -84,11 +85,18 @@ test('with none waiting, a run is still named, by a session started then', async
 test('a bare command and an agent with no small model are not named here', async () => {
   const agent = namingAgent()
   const pool = new ReadyNaming({ setup: setupOf(agent.driver) })
-  assert.equal(pool.names('/work-queue', 'claude-code'), false, 'a bare command is named from its report')
-  assert.equal(pool.names('fix the login test', 'claude-code'), true)
+  assert.equal(pool.names('/work-queue'), false, 'a bare command is named from its report')
+  assert.equal(pool.names('fix the login test'), true)
   assert.equal(await pool.name('/repo', '/triage quick', 'claude-code'), undefined)
   assert.equal(agent.starts.length, 0)
   await pool.close()
+  // An agent with no small model starts no naming session: the run's words stay its name.
+  const plain = namingAgent()
+  const { namingModel: _none, ...withNone } = plain.driver
+  const none = new ReadyNaming({ setup: setupOf(withNone) })
+  assert.equal(await none.name('/repo', 'fix the login test', 'codex'), undefined)
+  assert.equal(plain.starts.length, 0)
+  await none.close()
 })
 
 test('a session that waited too long is not asked: it is replaced', async () => {

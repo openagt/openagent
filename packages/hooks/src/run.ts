@@ -1,4 +1,4 @@
-import type { Driver, DriverEvent, DriverReadiness, InboxLine, Question } from './agent.js'
+import type { DriverEvent, DriverReadiness, InboxLine, Question, RunAgent } from './agent.js'
 import type { ProjectRef } from './project.js'
 import type { Settings } from './settings.js'
 import type { Store } from './store.js'
@@ -215,9 +215,6 @@ export interface SkillArgs {
 
 /** A module's skills for a run: none where they do not apply (github's on a project that is not on GitHub). */
 export type RunSkills = (args: SkillArgs) => RunSkill[] | Promise<RunSkill[]>
-
-/** A coding agent, what `run.agent` holds: the driver contract (`agent.ts`). */
-export type RunAgent = Driver
 
 /** What a run's stream carries. */
 export type RunEvent = DriverEvent

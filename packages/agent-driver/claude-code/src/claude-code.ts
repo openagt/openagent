@@ -74,6 +74,8 @@ export class ClaudeCodeDriver implements Driver {
   readonly id = 'claude-code'
   /** Its agent asks with AskUserQuestion, which the CLI asks over stdin (`--permission-prompt-tool stdio`). */
   readonly ownQuestionTool = true
+  /** Its smallest, quickest model: a run's short name is asked of it. */
+  readonly namingModel = 'haiku'
   constructor(private readonly opts: ClaudeCodeDriverOptions = {}) {}
 
   start(opts: DriverStartOptions): Promise<DriverSession> {

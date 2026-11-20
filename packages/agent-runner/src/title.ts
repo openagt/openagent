@@ -54,12 +54,6 @@ export const TITLE_SYSTEM = [
 /** The most words a name may have: beyond this the model wrote a sentence, and a run keeps the person's own words. */
 export const MAX_TITLE_WORDS = 8
 
-/** The small, fast model each coding agent names a run with. An agent not named here names nothing. */
-export const TITLE_MODELS: Record<string, string> = {
-  'claude-code': 'haiku',
-  codex: 'gpt-5.6-luna',
-}
-
 /** The longest a name may be: a list row shows about this much, and the model is asked for far less. */
 export const MAX_TITLE = 60
 
@@ -125,10 +119,10 @@ export interface NamingSession {
  * Start a naming session: the coding agent on its small model, with no tools, in an empty folder of
  * its own (the top of this file says why). Never inside the run's checkout either: an untracked
  * folder there is a dirty tree, and the branches rule never reclaims one. `undefined` for an agent
- * with no small model named here; a session that cannot start rejects, its folder already gone.
+ * with no small model ({@link Driver.namingModel}); a session that cannot start rejects, its folder already gone.
  */
 export async function startNaming(driver: Driver, signal?: AbortSignal): Promise<NamingSession | undefined> {
-  const model = TITLE_MODELS[driver.id]
+  const model = driver.namingModel
   if (model === undefined) return undefined
   const dir = await mkdtemp(join(tmpdir(), 'openagent-naming-'))
   const removeDir = () => rm(dir, { recursive: true, force: true }).catch(() => {})
