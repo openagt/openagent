@@ -36,8 +36,9 @@ already made, and lists it in its pull request; for anything else it proposes an
   refusal is the answer.
 - An agent whose account cannot write to the project works from its fork: `origin` reads
   the project and pushes to the fork (`git remote set-url --push origin <fork>`), and
-  `open` and `replies` take that fork's pull requests as the agent's own. Picked over a
-  second remote for the fork, which every push and branch read would have had to learn.
+  `open`, and github-auto-reply's check, take that fork's pull requests as the agent's own.
+  Picked over a second remote for the fork, which every push and branch read would have had
+  to learn.
 
 ## Flow: merge
 - `merge <number>` lands a request for a person or the scheduler: a draft is marked ready,
@@ -52,44 +53,12 @@ already made, and lists it in its pull request; for anything else it proposes an
   merged since a time), in one shape; a read `gh` cannot answer is a refusal, never an
   empty list, so "none" and "could not tell" never look alike to a caller.
 
-## Flow: replies
-- `replies` is the check of the scheduler's row with each: what came on the open issues and
-  pull requests this machine's agents worked on, since each agent ended, one item per run,
-  and the open ones no run was on where a maintainer called the agent. Picked over a
-  watcher of its own that wakes the agent: the scheduler asks, as every row does.
-- Issues and pull requests, not discussions yet: picked over discussions too, a second read
-  of another shape, which can come later.
-- New is after the run last ended; no time is kept. Picked over a time kept since the last
-  look, where something that came while the run worked was lost, and a red check the agent
-  chose to leave woke it again and again.
-- Only maintainers' comments and reviews that call the agent with `/agent`, a word of its
-  own, count, on the agent's own pull request too; red checks and a conflict with the base
-  branch count with no word: nobody writes one. Picked over every maintainer's words waking
-  the agent, where people talking on the pull request woke it too. Only this machine's runs: only it holds the conversation.
-- `/agent` on an issue or a pull request no run was on starts a run for it, whose record
-  names it, and the next `/agent` there continues that run. Picked over answering only on
-  the agent's own pull requests. A call made before the row was switched on starts nothing:
-  picked over answering every call still open.
-- On a person's pull request the agent was called on, the agent works on its branch and
-  pushes there, and only a call wakes it again: its red checks and conflicts are the
-  person's. One from a fork, which it cannot push to, it answers. Picked over a pull
-  request of the agent's own on top of the person's, and over answering only.
-- A pull request is a run's when its branch is the run's branch, as the run's record keeps
-  it, so a run started with no dashboard and no git host behind it is answered too. Picked
-  over the pull request the record names, which only a run with a git host learns, and
-  over the runner handing every run the basic skills itself.
-- About one GitHub call a minute, not one per pull request.
-- A look first asks whether any issue or comment of the repository changed, by its last answer
-  (ETag): "not modified" costs no call of the hour's, and then nothing is read, so the row
-  can look every few seconds. Reviews, checks and conflicts have no such question: the
-  whole read is made at least once a minute. Picked over the whole read at every look.
+## Flow: comment
 - A comment `comment` writes opens with the coding agent's logo, the model and the effort,
   as the agent's run record names them (`<logo> sonnet-5-5 · high effort`), else the 🤖
   line. Picked over the 🤖 line on every comment, and over the agent's name beside its logo.
-- It ends with a hidden mark, and `replies` never counts one that carries it: it is posted
-  with a person's account, and an agent's own words must never wake it.
-- Each comment and review a look hands a run gets 👀 from the look itself, so who wrote sees
-  within seconds that an agent saw it. Picked over the agent putting it once it started.
+- It ends with a hidden mark, and github-auto-reply's check never counts one that carries it:
+  it is posted with a person's account, and an agent's own words must never wake it.
 
 ## The command
 - Every command prints one JSON document on stdout: the result or the refusal. A refusal

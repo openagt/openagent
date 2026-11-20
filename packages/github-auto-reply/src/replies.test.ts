@@ -1,11 +1,11 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { RunCard } from '@openagt/agent-driver'
-import type { GhRunner } from './gh.js'
-import { WHOLE_READ_EVERY_MS, answersFor, listReplies, parseThreads, repliesArgs, seenArgs } from './replies.js'
+import type { GhRunner } from '@openagt/github'
+import { WHOLE_READ_EVERY_MS, answersFor, forgetLooks, listReplies, parseThreads, repliesArgs, seenArgs } from './replies.js'
 
 // What came on the project's open issues and pull requests for this machine's agents: which run a
 // thread is, what of GitHub's answer counts, the threads a new run is started for, and the one read.
@@ -312,6 +312,25 @@ test('when nothing changed, a look reads nothing more, but for the whole read on
     calls.length = 0
     await look()
     assert.equal(calls.at(-1)?.[1], 'graphql', 'a change is read at once')
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test("a removed project's looks are forgotten: the cache in its clone's .git, and the folder once nothing else is in it", async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'replies-forget-'))
+  try {
+    const kept = join(dir, '.git', 'openagent')
+    await mkdir(kept, { recursive: true })
+    await writeFile(join(kept, 'replies.json'), '{}')
+    await forgetLooks(dir)
+    assert.equal(await stat(kept).then(() => true, () => false), false, 'the folder went with the cache')
+    await mkdir(kept, { recursive: true })
+    await writeFile(join(kept, 'replies.json'), '{}')
+    await writeFile(join(kept, 'other.json'), '{}')
+    await forgetLooks(dir)
+    assert.deepEqual(await readdir(kept), ['other.json'], "what is not the check's stays")
+    await forgetLooks(join(dir, 'no-clone'))
   } finally {
     await rm(dir, { recursive: true, force: true })
   }

@@ -9,7 +9,6 @@ import { MAX_PEOPLE, peopleByEmail } from './people.js'
 import { createRepository, offerRepository, type CreateOffer, type CreateOutcome } from './create.js'
 import { publicProfile, type ProfileFetch } from './profile.js'
 import { listRepos } from './repos.js'
-import { listReplies } from './replies.js'
 import { DIARY_ENV, byline, writeComment } from './comment.js'
 import { readFileSync } from 'node:fs'
 import { HOST, accountDir, accountsRoot, asAccount, forgetAccount, ghState, gitConfig, installedAccounts, isGithubLogin, loginUnderWay, picksPath, stopLogin, readFacts, runEnv, runsAccount, settleAdded, startLogin, takeToken, useForRuns, type LoggingIn } from './accounts.js'
@@ -34,9 +33,8 @@ export const USAGE = `usage: github <command>
 
 ${helpRows([
   ['requests [--branch <b>] [--state open|merged|all] [--since <iso>]', `the project's pull requests, newest first: number, url, state, title, draft, branch, head, createdAt, mergedAt, mergeCommit`],
-  ['replies [--since <iso>]', `what came on the open issues and pull requests this machine's agents worked on, since each agent ended: maintainers' words that call the agent with /agent, and on an agent's own pull request checks that turned red and a conflict once the base branch moved; [{ run, text }], one per run, read from the project's run records; with --since, also [{ for, text, branch? }] for each open issue or pull request no run was on, where a maintainer called the agent since then: the check of a scheduler's row with each`],
-  ['comment <number> --body <text>', `post a comment on issue or pull request <number>: its id and url. It opens with the coding agent's logo, the model and the effort, as the agent's run record says (found through AGENT_DIARY, which its runner sets), else the line 🤖 automated; a hidden mark after the text, so replies never counts it`],
-  ['open [--branch <b>] --title <t> [--body <text>] [--base <b>] [--draft] [--merge]', `open the pull request of branch <b> (default: the current branch; it must be on the remote already), its body opened with the line a comment opens with; an open one is answered as it is; --base names the branch it goes into (default: the repository's default branch); --merge lands it on green. An account that cannot write to the project pushes to its fork: git remote set-url --push origin <fork>; open and replies then take that fork's pull requests as this machine's`],
+  ['comment <number> --body <text>', `post a comment on issue or pull request <number>: its id and url. It opens with the coding agent's logo, the model and the effort, as the agent's run record says (found through AGENT_DIARY, which its runner sets), else the line 🤖 automated; a hidden mark after the text, so github-auto-reply never takes it for a person's`],
+  ['open [--branch <b>] --title <t> [--body <text>] [--base <b>] [--draft] [--merge]', `open the pull request of branch <b> (default: the current branch; it must be on the remote already), its body opened with the line a comment opens with; an open one is answered as it is; --base names the branch it goes into (default: the repository's default branch); --merge lands it on green. An account that cannot write to the project pushes to its fork: git remote set-url --push origin <fork>; open, and github-auto-reply, then take that fork's pull requests as this machine's`],
   ['merge <number>', 'land pull request <number>: a draft is marked ready, then the merge is armed as --merge arms it'],
   ['watch <number>', `wait for pull request <number>'s checks and merge it once they pass; what --merge starts where the repository has no auto-merge`],
   ['home', `the project's page on GitHub, from its origin remote`],
@@ -161,12 +159,6 @@ const COMMANDS: Record<string, Command<[Context]>> = {
     const state = values.state ?? 'all'
     if (state !== 'open' && state !== 'merged' && state !== 'all') throw new UsageError(`--state is open, merged or all, not ${state}`)
     return gitHostAnswer('the pull requests could not be read', () => listRequests(cwd, { ...(values.branch ? { branch: values.branch } : {}), state, ...(values.since ? { since: values.since } : {}) }, gh))
-  }),
-
-  replies: asOpenAgent(async (args, { cwd, gh }) => {
-    const { values } = parseCommandArgs(args, { since: { type: 'string' } }, 0)
-    if (values.since !== undefined && Number.isNaN(Date.parse(values.since))) throw new UsageError(`--since is a time, like 2026-10-09T10:00:00Z, not "${values.since}"`)
-    return gitHostAnswer('the pull requests could not be read', () => listReplies(cwd, { gh, ...(values.since !== undefined ? { since: values.since } : {}) }))
   }),
 
   comment: asOpenAgent(async (args, { cwd, gh, env }) => {

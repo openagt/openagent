@@ -67,9 +67,6 @@ already made, and lists it in its pull request; for anything else it proposes an
   from the branch's commits, over the agent leaving a title and body in a file, and over
   the command a project's own git host package declares: the distribution decides the git
   host.
-- `git-host <command>` runs a command of the project's git host package and prints what it
-  printed, so a skill's check reads pull requests with no git host named. Picked over a
-  skill naming the GitHub skill's command.
 - How far a run takes its work is one sentence after its prompt: commit it, and from there
   push the branch, open its pull request, or set it to merge once its checks pass
   (`run --publish <commit|branch|pr|merge>`). Every level starts with the commit. With no

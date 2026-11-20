@@ -1,4 +1,4 @@
-import { PLUGINS_WITHOUT_ENV, PRESET_ENV, Refused, UsageError, errorMessage, inRepo, nodeGitRunner, parseCommandArgs, runCommandLine, runPackageCommand, sessionsHomeOf, PROJECT_SKILLS_ENV, helpRows, helpText, type Command, type GitRunner } from '@openagt/agent-data'
+import { PLUGINS_WITHOUT_ENV, PRESET_ENV, Refused, UsageError, errorMessage, inRepo, nodeGitRunner, parseCommandArgs, runCommandLine, sessionsHomeOf, PROJECT_SKILLS_ENV, helpRows, helpText, type Command, type GitRunner } from '@openagt/agent-data'
 import { createHooks, loadHandedDown } from '@openagt/hooks'
 import { liftSkillRules, projectRoot, sessionRepos, skillLink } from '@openagt/git-branches'
 import { DRIVER_NAMES, GIT_ACCOUNT_ENV, detachResume, detachRun, isDriverName, presetLoginFor, readyToRun, resumeProject, runProject, type DriverName, type SpawnedResume } from './runner.js'
@@ -6,7 +6,6 @@ import { projectOf, type RunOutcome, type RunRequest } from './run.js'
 import { anyPick, handedDownSettings, presetNamed, runPreset, sessionPicksNamed } from './preset.js'
 import { cleanup } from './cleanup.js'
 import { isPublish, NO_PUBLISH, PUBLISH_LEVELS } from './records.js'
-import { gitHostCommand } from './git-host.js'
 
 /**
  * The command line: JSON on stdout, one line for a person on stderr, and the exit code says how
@@ -23,7 +22,6 @@ ${helpRows([
   ['run --detach --resume <id> …', `the same continuing in its own process, answered at once`],
   ['run --resume <id> … --by <who>', `kept on the run's record with the time, until its next resume: a scheduler's row that resumed it, which counts the run as its own`],
   ['check [--driver <claude-code|codex>]', `whether a run can start here: the coding agent's CLI installed and logged in, and its warnings; what this computer's host answers before a Start`],
-  ['git-host <command> [<arg>…]', `run a command of the project's git host, whichever package is it, and print what it printed: a skill's check reads pull requests with no host named (git-host replies); refused where the project has no git host`],
   ['cleanup', `remove what this tool left in the project: the runs' locks and stderr files, then .agent-runner/ and the rule hiding it from git once it is empty; config.yml is yours and stays; refused while a run's process is alive; the command a dashboard asks for when a project is removed with its files`],
   'Options of run:',
   ['--publish <commit|branch|pr|merge>', 'with --publish, the agent is told, in one sentence after the prompt, how far to take its work when it finishes: commit it, and from there push its branch, open its pull request, or set the request to merge once its checks pass; without it the prompt goes as written, and nothing is committed or published unless the prompt asks'],
@@ -196,17 +194,6 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
     if (!isDriverName(driver)) throw new UsageError(`unknown driver "${driver}"; the drivers are ${DRIVER_NAMES.join(' and ')}`)
     const repo = await project(io.cwd, git)
     return { ok: true, ...(await readyToRun(repo, driver)) }
-  },
-
-  async 'git-host'(args, io, git) {
-    // What follows is the git host's own command line, read by it, not here.
-    if (args.length === 0) throw new UsageError('git-host needs the command to run')
-    const repo = await project(io.cwd, git)
-    const command = await gitHostCommand(repo)
-    if (!command) throw new Refused({ ok: false, reason: 'no-git-host' }, 'this project has no git host package')
-    const result = await runPackageCommand(repo, command, args)
-    if (!result.ok) throw new Refused({ ok: false, reason: 'git-host', detail: result.error }, result.error)
-    return result.output
   },
 
   async cleanup(args, io, git) {

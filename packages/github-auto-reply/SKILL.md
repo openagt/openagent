@@ -4,7 +4,7 @@ description: "Answer where a maintainer calls you with /agent, on an issue or a 
 disable-model-invocation: true
 schedule:
   each: true
-  when: npx @openagt/agent-runner@0.0 git-host replies --since "$SWITCHED_ON"
+  when: npx @openagt/github-auto-reply@0.1 replies --since "$SWITCHED_ON"
   check-every: 15s
   waits-for: when a maintainer wrote /agent on an issue or a pull request, or a pull request an agent of this machine opened has a red check or a conflict
 ---

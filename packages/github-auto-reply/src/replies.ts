@@ -1,11 +1,9 @@
-import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rm, rmdir, stat, writeFile } from 'node:fs/promises'
 import { hostname } from 'node:os'
 import { dirname, join } from 'node:path'
 import { listRuns, type RunCard } from '@openagt/agent-driver'
 import { errorMessage, type GitRunner } from '@openagt/agent-data'
-import { nodeGhRunner, type GhRunner } from './gh.js'
-import { COMMENT_MARK } from './comment.js'
-import { pushFork } from './home.js'
+import { COMMENT_MARK, nodeGhRunner, pushFork, type GhRunner } from '@openagt/github'
 
 /**
  * What came on the project's open issues and pull requests for this machine's agents (#2042): the
@@ -306,6 +304,14 @@ async function writeLooked(path: string | undefined, looked: Looked): Promise<vo
   if (path === undefined) return
   await mkdir(dirname(path), { recursive: true })
   await writeFile(path, JSON.stringify(looked))
+}
+
+/** Forget what the looks at a project's repository last had: its cache, and its folder once nothing else is in it. */
+export async function forgetLooks(repo: string): Promise<void> {
+  const path = await lookedPath(repo)
+  if (path === undefined) return
+  await rm(path, { force: true })
+  await rmdir(dirname(path)).catch(() => {})
 }
 
 /** The gh command line of 👀 on each thread, comment and review of `ids`, by GitHub's ids, in one call. */

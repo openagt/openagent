@@ -1,10 +1,10 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { runCli, withTextsApart } from './cli.js'
-import { handDownDistribution, removeRepo, testRepo } from './test-repo.js'
+import { removeRepo, testRepo } from './test-repo.js'
 
 // The contract on top of the functions: JSON on stdout, a line for a person on stderr, and an
 // exit code that says refusal or failure. The commands that spawn or talk to Claude are covered
@@ -170,35 +170,5 @@ test('a text may open with a dash: only one of the command\'s own flags is a fla
     }
   } finally {
     await rm(elsewhere, { recursive: true, force: true })
-  }
-})
-
-test("git-host runs a command of the git host among the distribution's packages, where it answers for the project, and prints what it printed; a project with none, and a command that fails, are refused", async () => {
-  const repo = await testRepo()
-  const dir = await mkdtemp(join(tmpdir(), 'git-host-fake-'))
-  const host = join(dir, 'git-host-fake')
-  let handBack = await handDownDistribution(dir, {})
-  try {
-    const none = await run(repo, 'git-host', 'replies')
-    assert.deepEqual({ code: none.code, out: none.out }, { code: 1, out: { ok: false, reason: 'no-git-host' } })
-    assert.equal((await run(repo, 'git-host')).code, 2, 'no command to run')
-
-    // A package of the distribution that is a git host, which knows the project's page there.
-    await mkdir(host)
-    await writeFile(join(host, 'package.json'), JSON.stringify({ name: 'git-host-fake', bin: { 'git-host-fake': 'cli.cjs' }, openagent: { 'git-host': 'git-host-fake' } }))
-    await writeFile(
-      join(host, 'cli.cjs'),
-      "const args = process.argv.slice(2)\nif (args[0] === 'home') process.stdout.write(JSON.stringify({ url: 'https://host.example/project', name: 'Host' }))\nelse if (args[0] === 'replies') process.stdout.write(JSON.stringify([{ run: 'r1', text: args.slice(1).join(' ') }]))\nelse { process.stderr.write('gh: not logged in\\n'); process.exit(1) }\n",
-    )
-    handBack()
-    handBack = await handDownDistribution(dir, { 'git-host-fake': host })
-    const replies = await run(repo, 'git-host', 'replies', '--since', 'then')
-    assert.deepEqual({ code: replies.code, out: replies.out }, { code: 0, out: [{ run: 'r1', text: '--since then' }] }, 'its own flags are its own')
-    const failed = await run(repo, 'git-host', 'requests')
-    assert.deepEqual({ code: failed.code, out: failed.out, err: failed.err }, { code: 1, out: { ok: false, reason: 'git-host', detail: 'gh: not logged in' }, err: 'gh: not logged in' })
-  } finally {
-    handBack()
-    await rm(dir, { recursive: true, force: true })
-    await removeRepo(repo)
   }
 })

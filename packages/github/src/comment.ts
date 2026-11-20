@@ -15,7 +15,7 @@ import type { GhRunner } from './gh.js'
 
 /**
  * The line every comment this command writes ends with, hidden from readers: what an agent
- * writes here is posted with a person's account, and `replies` must never count it as theirs.
+ * writes here is posted with a person's account, and github-auto-reply must never count it as theirs.
  */
 export const COMMENT_MARK = '<!-- openagent -->'
 

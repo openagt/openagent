@@ -444,9 +444,6 @@ importers:
       '@openagt/agent-data':
         specifier: workspace:*
         version: link:../agent-data
-      '@openagt/agent-driver':
-        specifier: workspace:*
-        version: link:../agent-driver/core
       '@openagt/hooks':
         specifier: workspace:*
         version: link:../hooks
@@ -458,7 +455,27 @@ importers:
         specifier: ^7.0.2
         version: 7.0.2
 
-  packages/github-auto-reply: {}
+  packages/github-auto-reply:
+    dependencies:
+      '@openagt/agent-data':
+        specifier: workspace:*
+        version: link:../agent-data
+      '@openagt/agent-driver':
+        specifier: workspace:*
+        version: link:../agent-driver/core
+      '@openagt/github':
+        specifier: workspace:*
+        version: link:../github
+      '@openagt/hooks':
+        specifier: workspace:*
+        version: link:../hooks
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.43
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
 
   packages/hooks:
     dependencies:
