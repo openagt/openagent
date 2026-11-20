@@ -1,6 +1,6 @@
 import { rm } from 'node:fs/promises'
 import { callPackageCommand, listSessionFolders, runPackageCommand, sessionFolder, sessionsHomeOf, type ProvidedCommand } from '@openagt/agent-data'
-import { gitHostEnv } from '@openagt/agent-runner'
+import { gitHostEnv } from '@openagt/agent-driver'
 import { providedCommand } from '../distribution-packages.js'
 import { isRunId } from './runs.js'
 

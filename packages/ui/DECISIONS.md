@@ -501,7 +501,7 @@ already made, and lists it in its pull request; for anything else it proposes an
 
 ## Starting a run
 - A Start goes to a run host, a `run.host` of the modules OpenAgent is distributed with
-  (#2394): this computer's, `agent-runner`'s, which spawns the run's process with the prompt
+  (#2394): this computer's, `agent-driver`'s, which spawns the run's process with the prompt
   and the person's picks and answers the new run's id, or one a plugin on in the project
   brings (`host-github-actions`, `host-claude-web`). What is said to a run, a Stop and the
   launcher's check go to the run's host. Adding a project writes nothing into it for its

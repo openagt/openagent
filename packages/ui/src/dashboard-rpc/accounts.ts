@@ -1,13 +1,13 @@
 import { computerName } from '../computer-name.js'
 import { accountFolder, codexAccountsDir, personalCodexHome, readCodexUsage } from '@openagt/agent-driver-codex'
-import { comesBackFrom, handedOverBy, isLimited, loginWiring, OWN_NAME, readAccounts, removeAdded, useFirst, type LoginWiring } from '@openagt/skill-account-rotation'
+import { comesBackFrom, handedOverBy, isLimited, loginWiring, OWN_NAME, readAccounts, removeAdded, useFirst, type LoginWiring } from '@openagt/agent-driver'
 import { contextQuota } from './context.js'
 import { readCopied, type CopiedLogin } from '../dashboard/copied-logins.js'
 import type { AgentAccount, AgentLogins, DriverQuotaWindow, DriverRateWindow } from '@openagt/hooks'
 
-// The accounts runs use, per coding agent (`@openagt/skill-account-rotation`): the person's own
-// login, which the agent keeps, and the ones added beside it. A page sees each one's name, how full
-// it is and whether a limit keeps it out, never a login. Adding and logging out are the skill's own,
+// The accounts runs use, per coding agent (`@openagt/agent-driver`'s): the person's own login,
+// which the agent keeps, and the ones added beside it. A page sees each one's name, how full it is
+// and whether a limit keeps it out, never a login. Adding and logging out are agent-driver's own,
 // through its command. On a server, an account may also be a login of the person's own computer
 // (`copied-logins.ts`): its row says which computer, and how full the computer last read it.
 

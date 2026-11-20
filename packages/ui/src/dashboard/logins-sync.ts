@@ -12,7 +12,7 @@ import { markOf } from './machine-logins.js'
 import { isKind, isWord, type CopiedKind, type CopiedLogin, type GivenLogin, type UsageWindow } from './copied-logins.js'
 import { onAgentAccounts } from '../dashboard-rpc/accounts.js'
 import { gitHostPackages, onGitHosts } from '../dashboard-rpc/logins.js'
-import { accountsPath, OWN_NAME, readAccounts } from '@openagt/skill-account-rotation'
+import { accountsPath, OWN_NAME, readAccounts } from '@openagt/agent-driver'
 import { PRESETS } from '@openagt/hooks'
 import { distributionSettings } from '../distribution-hooks.js'
 

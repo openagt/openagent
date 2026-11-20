@@ -4,16 +4,15 @@ import { Readable, Writable } from 'node:stream'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { SpawnLike, SpawnedProcess } from '@openagt/agent-driver'
+import { type SpawnLike, type SpawnedProcess, accountRotation, addAccount, goOn, markLimited, nameOwnAccount, OWN_NAME, readAccounts, usableAccounts, useFirst, removeAccount, UsageLimitError } from '@openagt/agent-driver'
 import type { DriverEvent } from '@openagt/hooks'
-import { accountRotation, addAccount, goOn, markLimited, nameOwnAccount, OWN_NAME, readAccounts, usableAccounts, useFirst, removeAccount, UsageLimitError } from '@openagt/skill-account-rotation'
 import { CLAUDE_ACCOUNT_ENV, CLAUDE_TOKEN_ENV } from './claude-accounts.js'
 import { ClaudeCodeDriver } from './claude-code.js'
 import { claudeLogins } from './logins.js'
 
 // Claude Code's turns on the person's accounts: an added one's login in the turn's environment, and
 // the next free account going on with the same conversation at a limit (the rotation is
-// `@openagt/skill-account-rotation`'s, the same for every agent).
+// `@openagt/agent-driver`'s, the same for every agent).
 
 const HOUR = 60 * 60_000
 const NOW = Date.parse('2026-10-22T12:00:00Z')

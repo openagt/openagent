@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url'
 import { nodeGitRunner, type GitRunner } from '@openagt/agent-data'
-import { projectOf } from '@openagt/agent-runner'
+import { projectOf } from '@openagt/agent-driver'
 import { createHooks, loadHandedDown } from '@openagt/hooks'
 import type { Unlisted } from './schedule.js'
 

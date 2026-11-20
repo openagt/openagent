@@ -1,4 +1,4 @@
-import { ReadyNaming } from '@openagt/agent-runner'
+import { ReadyNaming } from '@openagt/agent-driver'
 import { withLocalBin } from './local-bin.js'
 import { refreshLoginShellPath } from './shell-path.js'
 import { startDashboard, type Dashboard } from './dashboard/server.js'
@@ -102,7 +102,7 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
   sayName(await thisComputerName(env))
   // Everything the dashboard drives per project (a run's start, project install, the machine
   // relay) lives in the runtime, so this body stays about the daemon's own lifecycle.
-  // A run's name is asked of a naming session kept waiting for it (agent-runner's `ReadyNaming`), so
+  // A run's name is asked of a naming session kept waiting for it (agent-driver's `ReadyNaming`), so
   // the page has it about a second after Start. A run starts on this computer's host, the
   // distribution's (#2394).
   const hooks = opts.hooks ?? (await distributionHooks(env))

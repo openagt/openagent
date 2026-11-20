@@ -6,7 +6,7 @@ import type { ModuleCommandResult } from '../project-modules.js'
 import type { RelayHandlers } from './relay-endpoints.js'
 import { giveRemoteLogins, pingRemote, remoteLogins, type MachineAccess } from './remote-run.js'
 import { isClaudeAccountId, isServerName, loginsOfOwn, loginsToCopy, type MachineLogins } from './machine-logins.js'
-import { accountsPath, readAccounts } from '@openagt/skill-account-rotation'
+import { accountsPath, readAccounts } from '@openagt/agent-driver'
 
 /**
  * Both ends of copying a person's logins to another person's computer (machine-logins.ts).

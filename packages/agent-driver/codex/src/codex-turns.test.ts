@@ -5,16 +5,15 @@ import { join } from 'node:path'
 import { createInterface } from 'node:readline'
 import { test } from 'node:test'
 import { PassThrough, Readable } from 'node:stream'
-import type { SpawnLike, SpawnedProcess } from '@openagt/agent-driver'
+import { type SpawnLike, type SpawnedProcess, accountRotation, accountsPath, addAccount, goOn, nameOwnAccount, OWN_NAME, readAccounts, useFirst, UsageLimitError } from '@openagt/agent-driver'
 import type { DriverEvent } from '@openagt/hooks'
-import { accountRotation, accountsPath, addAccount, goOn, nameOwnAccount, OWN_NAME, readAccounts, useFirst, UsageLimitError } from '@openagt/skill-account-rotation'
 import { codexAccountsDir } from './codex-accounts.js'
 import { CodexDriver } from './codex.js'
 import { codexLogins } from './logins.js'
 
 // Codex's turns on the person's accounts: an added one from a home of its own that links to the
 // person's conversations, and the next free account going on with the same conversation at a limit
-// (the rotation is `@openagt/skill-account-rotation`'s, the same for every agent).
+// (the rotation is `@openagt/agent-driver`'s, the same for every agent).
 
 const HOUR = 60 * 60_000
 const NOW = Date.parse('2026-10-22T12:00:00Z')

@@ -35,7 +35,7 @@ export {
 } from './record.js'
 export { runIdsOf, runEntries, findEntry, readCard, readRunDiary, type RecordsReader, type RunEntry } from './records.js'
 export { listRuns, findRun, runFiles, readDiary, writeRun, patchRun, deleteRun, runsPath, recordFunnel, resolveRecordDeps, type RecordDeps, type RecordFiles, type RecordFunnel } from './record-store.js'
-export { accountTurn } from './accounts.js'
+export { accountTurn } from './accounts/turn.js'
 export { configFile, writePrivate } from './private-files.js'
 // The coding agents of the distribution (`run.agent`, #2394): the one a run is on, and the accounts each has.
 export { codingAgent, codingAgents, agentNames, UnknownAgent } from './agents.js'
@@ -48,3 +48,42 @@ export {
   type SpawnLike,
   type SpawnedProcess,
 } from './cli-session.js'
+
+// The run engine (#2394): a run from start to end over the distribution's `run.step`s, this
+// computer as its host, and what the scheduler, the hosts beside this computer and the dashboard
+// share of it: the run's mark and record, its lock, its name.
+export { markerCard, writeMarker, withdrawMarker, recordRun, runnerMark, isPublish, PUBLISH_LEVELS, type Publish, type RunnerMark } from './engine/records.js'
+export { runIdFrom, projectOf } from './engine/run.js'
+export { sweep, type SweepDeps, type SweepResult } from './engine/sweep.js'
+export { readyToRun, spawnRun, spawnResume, driverFor, type SpawnedRun, type SpawnedResume } from './engine/runner.js'
+export { acquireRunLock, isPidAlive, lockHolder, releaseRunLock, runLockPath, runStderrPath } from './engine/run-lock.js'
+export { gitHostEnv } from './engine/git-host.js'
+export { INBOX_FILE } from './engine/live-card.js'
+export { localHost, type LocalHostDeps } from './engine/host.js'
+export { ReadyNaming, type ReadyNamingDeps } from './engine/ready-naming.js'
+export { NAME_FILE_ENV, givenName, nameHandOver } from './engine/title.js'
+// The coding agents' accounts and their rotation (#2394): the lists, the order runs take them in,
+// the limits, and the next free one taking over a turn at a usage limit.
+export {
+  accountsPath,
+  copiedPath,
+  handedOverBy,
+  type HandedOver,
+  hasAddedAccount,
+  readAccounts,
+  changeAccounts,
+  addAccount,
+  removeAccount,
+  nameOwnAccount,
+  useFirst,
+  isLimited,
+  usableAccounts,
+  pickAccount,
+  markLimited,
+  noteWindows,
+  freesIn,
+  OWN_NAME,
+} from './accounts/accounts.js'
+export { accountRotation, goOn, UsageLimitError, type AccountsOption } from './accounts/rotation.js'
+export { comesBackFrom, removeAdded } from './accounts/login.js'
+export { loginWiring, type LoginWiring } from './accounts/wiring.js'

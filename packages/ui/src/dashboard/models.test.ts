@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import { cachedModelsSource, firstAccount, modelDrivers } from './models.js'
-import { accountsPath, addAccount, useFirst } from '@openagt/skill-account-rotation'
+import { accountsPath, addAccount, useFirst } from '@openagt/agent-driver'
 import type { AccountRotation, DriverModel } from '@openagt/hooks'
 
 /** A driver that answers each ask with the next of `answers`, counting the asks. */

@@ -3,8 +3,7 @@ import { closeSync, mkdirSync, openSync } from 'node:fs'
 import { hostname } from 'node:os'
 import { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { findRun, isRunId, listRuns, promptLines, type RunCard } from '@openagt/agent-driver'
-import { nameHandOver, runIdFrom, runnerMark, runStderrPath } from '@openagt/agent-runner'
+import { findRun, isRunId, listRuns, promptLines, type RunCard, nameHandOver, runIdFrom, runnerMark, runStderrPath } from '@openagt/agent-driver'
 import type { ProjectRef, RunFound, RunHost, RunInput, RunOptions, RunReadiness, RunRef, RunSummary, InboxLine, PromptLine } from '@openagt/hooks'
 import { GitHubError, githubRequest, type FetchLike } from './actions.js'
 import { ACTIONS_HOST, WORKFLOW, githubAccess, type GitHubAccess, type TurnRequest } from './turn.js'
@@ -183,7 +182,7 @@ const BIN = fileURLToPath(new URL('../bin/host-github-actions', import.meta.url)
 
 /**
  * A turn's process, detached: `host-github-actions turn <dir>`, handed the turn on its stdin, its
- * stderr kept where a run's is (`agent-runner`'s), so one that dies before it records says why.
+ * stderr kept where a run's is (agent-driver's), so one that dies before it records says why.
  */
 async function spawnTurnProcess(dir: string, turn: TurnRequest, env: Record<string, string>): Promise<void> {
   const stderrPath = runStderrPath(dir, turn.id)

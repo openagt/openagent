@@ -40,7 +40,6 @@
   "dependencies": {
     "@openagt/agent-data": "workspace:*",
     "@openagt/agent-driver": "workspace:*",
-    "@openagt/agent-runner": "workspace:*",
     "@openagt/hooks": "workspace:*",
     "@openagt/github": "workspace:*",
     "@puppeteer/browsers": "3.2.1"

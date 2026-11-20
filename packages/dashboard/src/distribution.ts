@@ -23,8 +23,10 @@ const DISTRIBUTION: DashboardDistribution = [
   { package: '@openagt/github' },
   // skills: a run's skills linked where it works, and Settings › Skills, each project's own skills, listed.
   { package: '@openagt/skills' },
-  // agent-driver: this computer's host, the agent's turns and the run's record.
-  { package: '@openagt/agent-runner' },
+  // agent-driver: this computer's host, the agent's turns and the run's record, and the coding
+  // agents' accounts with their rotation. This computer's: the accounts are its person's, and its
+  // card and command are in no project.
+  { package: '@openagt/agent-driver', for: 'computer' },
   // The coding agents a run can be on, the first the one a run names none: Claude Code and Codex,
   // the CLIs on this computer.
   { package: '@openagt/agent-driver-claude-code', for: 'computer' },
@@ -41,9 +43,8 @@ const DISTRIBUTION: DashboardDistribution = [
   // The person's name and picture, Settings › Profile.
   { package: '@openagt/user-info', for: 'computer' },
   // devices, a plugin that starts off: the door to this computer, and its other computers and
-  // servers. Then the accounts its runs use.
+  // servers.
   { package: '@openagt/devices', for: 'computer' },
-  { package: '@openagt/skill-account-rotation', for: 'computer' },
   // notifications-command, a plugin that starts off: the person's command, run when a run on this
   // computer needs them.
   { package: '@openagt/notifications-command', for: 'computer' },

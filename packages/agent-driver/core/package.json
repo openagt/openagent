@@ -1,7 +1,7 @@
 {
   "name": "@openagt/agent-driver",
-  "version": "0.0.17",
-  "description": "The contract for driving a coding-agent CLI as a black box: start a session in a directory, prompt it for one full turn, stream what it does, resume it later; the pieces every adapter shares, a scripted fake for tests, and the run's record, its card and its diary kept in the project's data. Each driver ships as @openagt/agent-driver-<name>.",
+  "version": "0.1.0",
+  "description": "OpenAgent's runs: a coding agent run from start to end in its own checkout over the distribution's steps, steered, stopped and resumed; this computer as their host; the run's record, its card and its diary; and the coding agents' accounts, the next free one taking over at a usage limit, with the skill that tells an agent how to add and list them. The coding agents themselves come from @openagt/agent-driver-<name>.",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -13,8 +13,18 @@
     "node": ">=22.12.0"
   },
   "files": [
-    "dist"
+    "dist",
+    "bin/agent-runner",
+    "bin/account-rotation",
+    "SKILL.md"
   ],
+  "bin": {
+    "agent-runner": "bin/agent-runner",
+    "account-rotation": "bin/account-rotation"
+  },
+  "openagent": {
+    "cleanup": "agent-runner"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -23,21 +33,51 @@
     "./question": {
       "types": "./dist/question.d.ts",
       "default": "./dist/question.js"
-    }
+    },
+    "./record": {
+      "types": "./dist/run-record.d.ts",
+      "default": "./dist/run-record.js"
+    },
+    "./module": {
+      "types": "./dist/engine/module.d.ts",
+      "default": "./dist/engine/module.js"
+    },
+    "./server": "./dist/accounts/server.js",
+    "./dashboard": "./dist/dashboard/dashboard.js",
+    "./SKILL.md": "./SKILL.md",
+    "./package.json": "./package.json"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
-    "typecheck": "tsc --noEmit",
-    "test": "tsc -p tsconfig.test.json && node ../../../scripts/test-node.mjs",
+    "build": "tsc -p tsconfig.build.json && vite build -c dashboard/vite.config.ts",
+    "prepack": "node -e \"if(!process.env.npm_config_user_agent?.startsWith('pnpm/')){console.error('Pack and publish with pnpm: it replaces workspace:* with the real version, npm does not');process.exit(1)}\"",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p dashboard/tsconfig.json",
+    "test": "tsc -p tsconfig.test.json && node ../../../scripts/test-node.mjs && cd dashboard && vitest run",
     "clean": "rm -rf dist dist-test"
   },
   "dependencies": {
     "@openagt/agent-data": "workspace:*",
-    "@openagt/hooks": "workspace:*"
+    "@openagt/git-branches": "workspace:*",
+    "@openagt/hooks": "workspace:*",
+    "yaml": "^2.5.0"
   },
   "devDependencies": {
+    "@openagt/github": "workspace:*",
+    "@openagt/notifications-command": "workspace:*",
+    "@openagt/skills": "workspace:*",
+    "@tailwindcss/vite": "^4.0.0",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/react": "^16.3.2",
     "@types/node": "^20.0.0",
-    "typescript": "^7.0.2"
+    "@types/react": "^19.2.0",
+    "@vitejs/plugin-react": "^6.0.3",
+    "jsdom": "^29.1.1",
+    "lucide-react": "^0.469.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "tailwindcss": "^4.0.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.0.0",
+    "vitest": "^4.1.10"
   },
   "publishConfig": {
     "access": "public"

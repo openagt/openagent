@@ -1,8 +1,8 @@
 # End to end
 
 The dashboard as a person meets it, offline. Every project here is a fixture repo (`fixture.ts`),
-and its runs are the scripted host's (`fake-runs.ts`): this computer's own host, agent-runner's,
-whose runs' processes are `fake-run-bin.ts` in place of agent-runner's, a scripted coding agent in
+and its runs are the scripted host's (`fake-runs.ts`): this computer's own host, agent-driver's,
+whose runs' processes are `fake-run-bin.ts` in place of `agent-runner run`, a scripted coding agent in
 the seat of `claude` or `codex`. A Start goes the whole production way — the dashboard's call, the
 host, a detached run writing the files the dashboard reads — and costs nothing. A session with no
 project is not scripted: the host refuses it.

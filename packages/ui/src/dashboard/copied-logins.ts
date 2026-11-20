@@ -1,6 +1,6 @@
 import { chmodSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { copiedPath } from '@openagt/skill-account-rotation'
+import { copiedPath } from '@openagt/agent-driver'
 import { isServerName } from './machine-logins.js'
 
 // On a server, the logins of the person's own computers (`logins-sync.ts` is a computer's side).

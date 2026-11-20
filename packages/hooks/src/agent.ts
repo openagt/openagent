@@ -162,7 +162,7 @@ export interface DriverStartOptions {
   effort?: string
   /**
    * This session has nothing to do in its folder: it is asked one question and answers in words
-   * (naming a run, `agent-runner`'s `title.ts`). An agent that can be started without its built-in
+   * (naming a run, agent-driver's `engine/title.ts`). An agent that can be started without its built-in
    * tools is, which is both cheaper — the tools and what they bring are most of what such a turn
    * sends — and safer: with no tool to reach for, a small model cannot mistake the words it is
    * given for work to do. A driver whose agent has no such mode ignores it and runs as usual.

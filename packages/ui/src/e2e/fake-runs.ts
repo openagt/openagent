@@ -1,12 +1,12 @@
 // The run host of the E2E stories and the demo (see README.md): this computer's own host,
-// agent-runner's, with its checks, its steering and its Stop, whose runs' processes are
-// `fake-run-bin.js` in place of agent-runner's. So a Start goes the whole production way (the
+// agent-driver's, with its checks, its steering and its Stop, whose runs' processes are
+// `fake-run-bin.js` in place of `agent-runner run`. So a Start goes the whole production way (the
 // dashboard's call, the host, a detached run writing the files the dashboard reads) offline, and
 // only the coding agent is scripted.
 import { spawn } from 'node:child_process'
 import { appendFileSync } from 'node:fs'
 import { sessionsHomeOf } from '@openagt/agent-data'
-import { localHost, type SpawnedResume, type SpawnedRun } from '@openagt/agent-runner'
+import { localHost, type SpawnedResume, type SpawnedRun } from '@openagt/agent-driver'
 import type { RunHost } from '@openagt/hooks'
 import { FAKE_RUN } from './fixture.js'
 

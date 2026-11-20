@@ -6,7 +6,7 @@ import { askCodex, askOnce, type AskOptions } from './codex-ask.js'
 import { driverStateDir, personalCodexHome, prepareCodexHome } from './codex-home.js'
 import type { AgentAccount, DriverRateWindow } from '@openagt/hooks'
 
-// The Codex accounts runs may use (`@openagt/skill-account-rotation` keeps the list): the person's
+// The Codex accounts runs may use (`@openagt/agent-driver` keeps the list): the person's
 // own login, in their own Codex home, and the ones added beside it. Codex keeps a login and the
 // conversations in one home, so an added account is a folder of OpenAgent's own holding that
 // account's login, where Codex renews it, and a turn on it runs from a home that has that login and

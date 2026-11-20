@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { recordRun } from '@openagt/agent-runner'
+import { recordRun } from '@openagt/agent-driver'
 import { rpcKind } from '@openagt/hooks/rpc'
 import { rpcHost } from '@openagt/hooks/testing'
 import { run } from './server.js'

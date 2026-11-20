@@ -9,8 +9,7 @@ import { join } from 'node:path'
 import { createProjectRuntime } from './daemon-runtime.js'
 import { forgetStartedNames, nameStarted, startedName, withStartedNames } from './started-names.js'
 import type { AgentMeta } from './store/index.js'
-import { ReadyNaming } from '@openagt/agent-runner'
-import { readyPrompt } from '@openagt/agent-driver'
+import { ReadyNaming, readyPrompt } from '@openagt/agent-driver'
 import type { Hooks, ProjectRef, RunHost, RunOptions, Driver } from '@openagt/hooks'
 import { fakeHost, type FakeHost } from '@openagt/hooks/testing'
 import { OPENAGENT_DIR } from './openagent-dir.js'
@@ -526,7 +525,7 @@ test('removing a project with its files while a run of this machine is still ali
 
     const outcome = await runtime.onRemoveProject(project!.id, true)
     const cleanup = outcome.ok ? outcome.cleanup : undefined
-    assert.deepEqual(cleanup?.failed, ['@openagt/agent-runner: a run is still working here (booting): stop it first'])
+    assert.deepEqual(cleanup?.failed, ['@openagt/agent-driver: a run is still working here (booting): stop it first'])
     assert.deepEqual(cleanup?.kept.filter(kept => kept.reason === 'a clean-up before it did not finish'), [
       { path: `branch ${DATA_BRANCH}`, reason: 'a clean-up before it did not finish' },
       { path: '.openagent', reason: 'a clean-up before it did not finish' },

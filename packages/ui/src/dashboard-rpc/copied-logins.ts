@@ -7,7 +7,7 @@ import { isKind, isWord, readCopied, readUsage, same, writeCopied, type CopiedKi
 import { accountsWiring, type AccountResult } from './accounts.js'
 import { gitHostPackages } from './logins.js'
 import { readProvider } from '../dashboard/git-hosts.js'
-import { addAccount, changeAccounts, readAccounts, removeAccount } from '@openagt/skill-account-rotation'
+import { addAccount, changeAccounts, readAccounts, removeAccount } from '@openagt/agent-driver'
 import type { AgentAccount } from '@openagt/hooks'
 
 // What a server answers the person's own computers about their logins here (the logins, and what

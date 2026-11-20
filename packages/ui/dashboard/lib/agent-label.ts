@@ -6,7 +6,7 @@ import { formatDateTimeShort } from './format-date.js'
 // person's prompt and swap it a second later ({@link awaitingName}).
 //
 // The session's own short name comes first, the two to five words a small model gave it when the
-// session opened (`agent-runner`'s `title.ts`), as Claude Code on the web names one. It is what a
+// session opened (agent-driver's `engine/title.ts`), as Claude Code on the web names one. It is what a
 // list is for: "README.md condensing" over the paragraph the person typed.
 //
 // `intent` is what the user typed, and it is often absent: a session whose record carries no

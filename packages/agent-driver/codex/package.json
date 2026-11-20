@@ -37,7 +37,6 @@
     "@openagt/hooks": "workspace:*"
   },
   "devDependencies": {
-    "@openagt/skill-account-rotation": "workspace:*",
     "@types/node": "^20.0.0",
     "typescript": "^7.0.2"
   },

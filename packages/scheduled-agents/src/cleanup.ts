@@ -1,7 +1,7 @@
 import { rmdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { nodeGitRunner, removeOwnDirectory, type GitRunner, type KeptEntry } from '@openagt/agent-data'
-import { isPidAlive } from '@openagt/agent-runner'
+import { isPidAlive } from '@openagt/agent-driver'
 import { OWN_AUTOMATIONS_DIR, SCHEDULER_LOG, STATE_DIR, STATE_FILE } from './names.js'
 import { readState } from './state.js'
 import { readPicks, savePicks } from './picks.js'

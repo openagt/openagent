@@ -5,7 +5,7 @@ import { DISTRIBUTION_ENV, packageDirOf } from '@openagt/hooks'
 import type { DashboardDistribution, DashboardPackage } from './distribution-packages.js'
 
 /**
- * The packages `@openagt/dashboard`'s distribution lists, but agent-runner, whose module a demo
+ * The packages `@openagt/dashboard`'s distribution lists, but agent-driver, whose module a demo
  * gives a run host of its own: what this package's demo and tests run, resolved from this
  * package's install (its devDependencies), with whose each is, and which plugin starts on, as the
  * dashboard says it.
@@ -26,7 +26,6 @@ export const DASHBOARD_PACKAGES: DashboardDistribution = [
   { package: '@openagt/ui-card-waiting', for: 'computer' },
   { package: '@openagt/user-info', for: 'computer' },
   { package: '@openagt/devices', for: 'computer' },
-  { package: '@openagt/skill-account-rotation', for: 'computer' },
   { package: '@openagt/notifications-command', for: 'computer' },
   { package: '@openagt/notifications-browser', for: 'computer', on: true },
   { package: '@openagt/ui-renderer-mermaid', for: 'computer' },
@@ -43,12 +42,12 @@ export const DASHBOARD_PACKAGES: DashboardDistribution = [
 ]
 
 /**
- * The tests' distribution: `@openagt/dashboard`'s packages, agent-runner's among them, and devices
+ * The tests' distribution: `@openagt/dashboard`'s packages, agent-driver's among them, and devices
  * on: the tests' computer has its door and its other computers, which they exercise.
  */
 const TEST_DISTRIBUTION: DashboardDistribution = [
   ...DASHBOARD_PACKAGES.map(item => (!('module' in item) && item.package === '@openagt/devices' ? { ...item, on: true } : item)),
-  { package: '@openagt/agent-runner' },
+  { package: '@openagt/agent-driver', for: 'computer' },
 ]
 
 export default TEST_DISTRIBUTION

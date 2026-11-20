@@ -9,7 +9,7 @@ import { RPC_HANDLERS } from '../dashboard-rpc/index.js'
 import { presetLoginsOn, allowLogins, localLogins, serverLogins, settleLeft, syncLogins, syncWiring, type LocalLogin } from './logins-sync.js'
 import { readCopied } from './copied-logins.js'
 import type { MachineRecord, Preferences } from '../registry.js'
-import { readAccounts } from '@openagt/skill-account-rotation'
+import { readAccounts } from '@openagt/agent-driver'
 
 // A computer keeps its servers up to its logins: what can go as it is goes with nothing to
 // press, what cannot waits for the person's press and is made anew for the server, and what the

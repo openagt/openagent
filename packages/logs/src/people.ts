@@ -1,4 +1,4 @@
-import { readCard, runIdsOf, startOfId, type RecordsReader } from '@openagt/agent-driver'
+import { readCard, runIdsOf, startOfId, type RecordsReader } from '@openagt/agent-driver/record'
 
 // Who works in a project: whoever started runs there, as its records tell it (each run is kept
 // under the person who started it, so the people are the records' own folders), and whoever

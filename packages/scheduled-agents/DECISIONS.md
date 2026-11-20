@@ -20,16 +20,13 @@ already made, and lists it in its pull request; for anything else it proposes an
 - Two tools: `agent-runner` runs one agent from start to end, `scheduler` keeps the
   timetable and has `agent-runner` run what is due. Picked over one tool doing both: its
   name said schedule, yet it ran every agent, the Start box's too.
-- The scheduler uses `@openagt/agent-runner` as a library, not its command line: the tick writes
-  the marker, counts the cap again, and only then spawns the run, so it needs the run's id
-  before the run exists.
-- Standalone, beside `agent-driver`, not inside it. `agent-driver` depends on nothing; the
-  scheduler needs git for the checkouts and the records, and inside the driver every user of
-  the driver would get git and the skills with it. Either way was
-  open; this one for now.
-- The scheduler depends on `@openagt/agent-runner` for the runs, the records and the
-  sweep, on `@openagt/agent-driver` for the quota reading and to count the records, on
-  the branches package for the project root, and on `agent-data` for the branch. It
+- The scheduler uses `agent-driver`'s run engine as a library, not its command line: the tick
+  writes the marker, counts the cap again, and only then spawns the run, so it needs the run's
+  id before the run exists.
+- Standalone, beside `agent-driver`, not inside it: inside it, every user of the driver would
+  get the scheduler and its skills with it. Either way was open; this one for now.
+- The scheduler depends on `@openagt/agent-driver` for the runs, the records, the sweep and
+  the quota reading, on the branches package for the project root, and on `agent-data` for the branch. It
   depends on `@openagt/hooks` for its switches and paces, kept in OpenAgent's settings,
   and for the plugins' skills, read through the distribution OpenAgent hands down
   (#2394, decision 9); started by hand outside OpenAgent, it reads every command off.

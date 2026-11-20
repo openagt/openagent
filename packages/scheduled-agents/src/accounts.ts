@@ -1,5 +1,5 @@
 import { QUOTA_WEEK_MS, quotaBoundaryStatus, quotaHeadroom } from './quota-boundary.js'
-import { freesIn, isLimited } from '@openagt/skill-account-rotation'
+import { freesIn, isLimited } from '@openagt/agent-driver'
 import type { DriverQuota, DriverQuotaWindow, DriverRateWindow, AgentAccount } from '@openagt/hooks'
 
 // Unattended work on several accounts of one agent: it starts when any account is under its line,

@@ -10,7 +10,7 @@ import { sayToRun } from './run-inbox.js'
 
 // What a person says to a run goes to this computer's host, with the run and its project; what
 // the host refuses is said in its words. The host's own way with a working run and an ended one
-// is agent-runner's (`host.test.ts`).
+// is agent-driver's (`engine/host.test.ts`).
 
 test('a line goes to the host with the run and its project, and a session with no project names none', async () => {
   const dir = await realpath(await mkdtemp(join(tmpdir(), 'openagent-run-inbox-')))

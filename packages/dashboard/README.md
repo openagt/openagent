@@ -52,7 +52,7 @@ the command cannot start one at all.
 ## How it works
 
 OpenAgent runs no coding agent and makes no model call. A Start goes to **this computer's run
-host**, the `run.host` of the modules OpenAgent is distributed with (#2394): `agent-runner`'s,
+host**, the `run.host` of the modules OpenAgent is distributed with (#2394): `agent-driver`'s,
 which spawns the run's own process in the project with the prompt and the person's picks. From
 there the run belongs to that process. A distribution names its modules in one file, which the
 dashboard hands down to every run it starts (`OPENAGENT_DISTRIBUTION`); the demo's adds a host
@@ -63,17 +63,17 @@ project's main branch, fetched first; **My local branch**, the branch the projec
 on, with its commits that are not pushed (edits that are not committed are not carried); or
 another of the branches origin has now, fetched first. The pick is saved per project. The local
 pick names the branch, and another of origin's its full name (`refs/remotes/origin/<branch>`),
-so the run can tell them apart; `agent-runner` fetches it. The menu is shown for a project with
+so the run can tell them apart; `agent-driver` fetches it. The menu is shown for a project with
 a remote whose folder is on a branch.
 
 A run started from another branch origin has opens its pull request into that branch, unless the
 Auto menu says main. Otherwise the pull request goes to main.
 
 A session with no project may have repos as context, picked with **Add repo** beside "No project":
-`agent-runner` copies each into the session's folder.
+`agent-driver` copies each into the session's folder.
 
 The session's preset (the **Preset** menu under the box) and its GitHub account (the control at
-the right) go with the Start: `agent-runner` hands them to the run's process in its environment,
+the right) go with the Start: `agent-driver` hands them to the run's process in its environment,
 `OPENAGENT_PRESET` and `OPENAGENT_GIT_ACCOUNT`. A preset is a name and a saved set of run options
 (its accounts, the plugins its runs go without, and the project skills they get), kept with the
 person and edited on the Presets page; the run reads it as it starts, and again when it resumes.

@@ -7,7 +7,7 @@ import { accountsWiring, onAgentAccounts, sendRemoveAgentAccount } from './accou
 import { copiedWiring, onCopiedLogins, sendCopiedLogin, sendCopiedUsage, sendForgetCopiedLogin, sendKeepCopiedLogin } from './copied-logins.js'
 import { readCopied } from '../dashboard/copied-logins.js'
 import { provideTestContext } from './test-context.js'
-import { addAccount, copiedPath, OWN_NAME, readAccounts } from '@openagt/skill-account-rotation'
+import { addAccount, copiedPath, OWN_NAME, readAccounts } from '@openagt/agent-driver'
 import { claudeLogins } from '@openagt/agent-driver-claude-code'
 import { codexLogins } from '@openagt/agent-driver-codex'
 

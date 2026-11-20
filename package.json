@@ -35,7 +35,7 @@
     "@openagt/logs": "workspace:*",
     "@openagt/browser": "workspace:*",
     "@openagt/discord": "workspace:*",
-    "@openagt/agent-runner": "workspace:*",
+    "@openagt/agent-driver": "workspace:*",
     "@openagt/scheduled-agents": "workspace:*",
     "typescript": "^7.0.2"
   }

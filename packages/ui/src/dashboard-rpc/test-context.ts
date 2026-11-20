@@ -1,6 +1,6 @@
 import { appendFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { localHost } from '@openagt/agent-runner'
+import { localHost } from '@openagt/agent-driver'
 import type { RunHost } from '@openagt/hooks'
 import { setDashboardContext, type DashboardContext, type RemoteAgents } from './context.js'
 import { registryPreferencesStore } from '../registry.js'
@@ -27,7 +27,7 @@ export const NO_ELSEWHERE: Pick<RemoteAgents, 'elsewhere' | 'elsewhereRuns' | 'f
 export const RESUMED_FILE = 'resumed.txt'
 
 /**
- * This computer's host as a test has it: agent-runner's own, the runs' processes stood in for. A
+ * This computer's host as a test has it: agent-driver's own, the runs' processes stood in for. A
  * start is refused, as no coding agent may start in a test; a resume is written down in the
  * project's {@link RESUMED_FILE}, `<id>|<text>|<answer>`, once the host found the run's record.
  */

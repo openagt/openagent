@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { accountsWiring, onAgentAccounts, sendRemoveAgentAccount, sendUseAgentAccountFirst } from './accounts.js'
 import { provideTestContext } from './test-context.js'
 import type { QuotaView } from '../dashboard/quota.js'
-import { addAccount, markLimited, noteWindows, OWN_NAME, readAccounts } from '@openagt/skill-account-rotation'
+import { addAccount, markLimited, noteWindows, OWN_NAME, readAccounts } from '@openagt/agent-driver'
 import { claudeLogins } from '@openagt/agent-driver-claude-code'
 import { codexLogins } from '@openagt/agent-driver-codex'
 

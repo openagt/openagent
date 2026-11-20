@@ -46,7 +46,6 @@
   "dependencies": {
     "@openagt/agent-driver": "workspace:*",
     "@openagt/agent-driver-claude-code": "workspace:*",
-    "@openagt/agent-runner": "workspace:*",
     "@openagt/hooks": "workspace:*",
     "@openagt/github": "workspace:*"
   },

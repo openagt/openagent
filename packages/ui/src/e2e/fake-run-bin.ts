@@ -1,10 +1,10 @@
 // A run's process in the E2E stories and the demo (see README.md): the scripted host
-// (`fake-runs.ts`) spawns it detached, as agent-runner's host spawns agent-runner's run, with
+// (`fake-runs.ts`) spawns it detached, as agent-driver's host spawns `agent-runner run`, with
 //
 //   node <this file> run <id>        a fresh run: PROMPT, DRIVER, MODEL, PUBLISH in its environment
 //   node <this file> continue <id>   a resume: TEXT or ANSWER, and PUBLISH
 //
-// and it does what agent-runner's run does, offline: it makes the run's checkout, drives
+// and it does what `agent-runner run` does, offline: it makes the run's checkout, drives
 // agent-driver's scripted FakeDriver with the real session log and the real inbox, records the
 // run on the data branch through the `logs` skill, and reclaims the checkout by the branches
 // rule. So every file the dashboard reads is written by the same code a real run writes it with;
@@ -21,11 +21,10 @@
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { hostname } from 'node:os'
 import { join } from 'node:path'
-import { continuationPrompt, FakeDriver, findRun, logDiaryFile, parseRunCard, readDiary, startEvent, writeRun, type AnyDiaryLine, type RunCard } from '@openagt/agent-driver'
+import { continuationPrompt, FakeDriver, findRun, logDiaryFile, parseRunCard, readDiary, startEvent, writeRun, type AnyDiaryLine, type RunCard, NAME_FILE_ENV, givenName, isPublish, type Publish } from '@openagt/agent-driver'
 import type { DriverEvent, LogEndStatus, SessionLog } from '@openagt/hooks'
 import { parseQuestion, QUESTION_TAG } from '@openagt/ask/question'
 import { nodeGitRunner } from '@openagt/agent-data'
-import { NAME_FILE_ENV, givenName, isPublish, type Publish } from '@openagt/agent-runner'
 import { agentBranchName, attachCheckout, createCheckout, reclaimWorktree, worktreeBranch, worktreePath } from '@openagt/git-branches'
 import { OPENAGENT_DIR } from '../openagent-dir.js'
 

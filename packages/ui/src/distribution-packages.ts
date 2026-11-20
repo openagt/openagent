@@ -19,8 +19,11 @@ export interface DashboardPackage extends DistributionPackage {
   for?: 'computer'
 }
 
-/** What the dashboard's distribution lists: its packages, and modules as they are given (a demo's fakes). */
-export type DashboardDistribution = readonly (DashboardPackage | DistributionEntry)[]
+/** A module as it is given (a demo's fakes): with its package named, the rest of that package is read as the package's own. */
+export type DashboardEntry = DistributionEntry & Pick<DashboardPackage, 'for'>
+
+/** What the dashboard's distribution lists: its packages, and modules as they are given. */
+export type DashboardDistribution = readonly (DashboardPackage | DashboardEntry)[]
 
 /** One of the distribution's packages, resolved. */
 export interface OwnPackage extends ProjectPackage {
@@ -54,7 +57,7 @@ export async function distributionPlugins(): Promise<{ module: ModuleDefinition 
 async function readPackages(file: string): Promise<OwnPackage[]> {
   const packages: OwnPackage[] = []
   for (const item of (await distributionItems(file)) as DashboardDistribution) {
-    if ('module' in item) continue
+    if (item.package === undefined) continue
     const dir = await packageDirOf(file, item.package)
     const manifest = await readManifest(join(dir, 'package.json'))
     if (!manifest) throw new Error(`${item.package}, which the distribution ${file} lists, has no package.json that reads`)

@@ -12,7 +12,7 @@ import { readProvider, remoteHost, type GitHostProvider } from '../dashboard/git
 import { readCopied } from '../dashboard/copied-logins.js'
 import { syncLogins } from '../dashboard/logins-sync.js'
 import { refreshLoginShellPath } from '../shell-path.js'
-import { hasAddedAccount } from '@openagt/skill-account-rotation'
+import { hasAddedAccount } from '@openagt/agent-driver'
 import type { DriverFix, DriverReadiness } from '@openagt/hooks'
 
 export type { GitHostAccount, GitHostProvider } from '../dashboard/git-hosts.js'

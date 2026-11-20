@@ -8,9 +8,9 @@ importers:
 
   .:
     devDependencies:
-      '@openagt/agent-runner':
+      '@openagt/agent-driver':
         specifier: workspace:*
-        version: link:packages/agent-runner
+        version: link:packages/agent-driver/core
       '@openagt/browser':
         specifier: workspace:*
         version: link:packages/browser
@@ -57,9 +57,6 @@ importers:
         specifier: workspace:*
         version: link:../../hooks
     devDependencies:
-      '@openagt/skill-account-rotation':
-        specifier: workspace:*
-        version: link:../../skill-account-rotation
       '@types/node':
         specifier: ^20.0.0
         version: 20.19.43
@@ -76,9 +73,6 @@ importers:
         specifier: workspace:*
         version: link:../../hooks
     devDependencies:
-      '@openagt/skill-account-rotation':
-        specifier: workspace:*
-        version: link:../../skill-account-rotation
       '@types/node':
         specifier: ^20.0.0
         version: 20.19.43
@@ -91,59 +85,67 @@ importers:
       '@openagt/agent-data':
         specifier: workspace:*
         version: link:../../agent-data
+      '@openagt/git-branches':
+        specifier: workspace:*
+        version: link:../../git-branches
       '@openagt/hooks':
         specifier: workspace:*
         version: link:../../hooks
-    devDependencies:
-      '@types/node':
-        specifier: ^20.0.0
-        version: 20.19.43
-      typescript:
-        specifier: ^7.0.2
-        version: 7.0.2
-
-  packages/agent-runner:
-    dependencies:
-      '@openagt/agent-data':
-        specifier: workspace:*
-        version: link:../agent-data
-      '@openagt/agent-driver':
-        specifier: workspace:*
-        version: link:../agent-driver/core
-      '@openagt/git-branches':
-        specifier: workspace:*
-        version: link:../git-branches
-      '@openagt/hooks':
-        specifier: workspace:*
-        version: link:../hooks
-      '@openagt/skill-account-rotation':
-        specifier: workspace:*
-        version: link:../skill-account-rotation
       yaml:
         specifier: ^2.5.0
         version: 2.9.0
     devDependencies:
-      '@openagt/ask':
-        specifier: workspace:*
-        version: link:../ask
       '@openagt/github':
         specifier: workspace:*
-        version: link:../github
-      '@openagt/logs':
-        specifier: workspace:*
-        version: link:../logs
+        version: link:../../github
       '@openagt/notifications-command':
         specifier: workspace:*
-        version: link:../notifications-command
+        version: link:../../notifications-command
       '@openagt/skills':
         specifier: workspace:*
-        version: link:../skills
+        version: link:../../skills
+      '@tailwindcss/vite':
+        specifier: ^4.0.0
+        version: 4.3.2(vite@8.1.4(@types/node@20.19.43)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
+      '@testing-library/dom':
+        specifier: ^10.4.1
+        version: 10.4.1
+      '@testing-library/react':
+        specifier: ^16.3.2
+        version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@types/node':
         specifier: ^20.0.0
         version: 20.19.43
+      '@types/react':
+        specifier: ^19.2.0
+        version: 19.2.17
+      '@vitejs/plugin-react':
+        specifier: ^6.0.3
+        version: 6.0.3(vite@8.1.4(@types/node@20.19.43)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
+      jsdom:
+        specifier: ^29.1.1
+        version: 29.1.1
+      lucide-react:
+        specifier: ^0.469.0
+        version: 0.469.0(react@19.2.7)
+      react:
+        specifier: ^19.2.0
+        version: 19.2.7
+      react-dom:
+        specifier: ^19.2.0
+        version: 19.2.7(react@19.2.7)
+      tailwindcss:
+        specifier: ^4.0.0
+        version: 4.3.2
       typescript:
         specifier: ^7.0.2
         version: 7.0.2
+      vite:
+        specifier: ^8.0.0
+        version: 8.1.4(@types/node@20.19.43)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)
+      vitest:
+        specifier: ^4.1.10
+        version: 4.1.10(@types/node@20.19.43)(jsdom@29.1.1)(vite@8.1.4(@types/node@20.19.43)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
 
   packages/ask:
     dependencies:
@@ -251,15 +253,15 @@ importers:
 
   packages/dashboard:
     dependencies:
+      '@openagt/agent-driver':
+        specifier: workspace:*
+        version: link:../agent-driver/core
       '@openagt/agent-driver-claude-code':
         specifier: workspace:*
         version: link:../agent-driver/claude-code
       '@openagt/agent-driver-codex':
         specifier: workspace:*
         version: link:../agent-driver/codex
-      '@openagt/agent-runner':
-        specifier: workspace:*
-        version: link:../agent-runner
       '@openagt/ask':
         specifier: workspace:*
         version: link:../ask
@@ -311,9 +313,6 @@ importers:
       '@openagt/scheduled-agents':
         specifier: workspace:*
         version: link:../scheduled-agents
-      '@openagt/skill-account-rotation':
-        specifier: workspace:*
-        version: link:../skill-account-rotation
       '@openagt/skills':
         specifier: workspace:*
         version: link:../skills
@@ -512,9 +511,6 @@ importers:
       '@openagt/agent-driver':
         specifier: workspace:*
         version: link:../agent-driver/core
-      '@openagt/agent-runner':
-        specifier: workspace:*
-        version: link:../agent-runner
       '@openagt/github':
         specifier: workspace:*
         version: link:../github
@@ -576,9 +572,6 @@ importers:
       '@openagt/agent-driver-claude-code':
         specifier: workspace:*
         version: link:../agent-driver/claude-code
-      '@openagt/agent-runner':
-        specifier: workspace:*
-        version: link:../agent-runner
       '@openagt/github':
         specifier: workspace:*
         version: link:../github
@@ -956,76 +949,15 @@ importers:
       '@openagt/agent-driver-codex':
         specifier: workspace:*
         version: link:../agent-driver/codex
-      '@openagt/agent-runner':
-        specifier: workspace:*
-        version: link:../agent-runner
       '@openagt/git-branches':
         specifier: workspace:*
         version: link:../git-branches
       '@openagt/hooks':
         specifier: workspace:*
         version: link:../hooks
-      '@openagt/skill-account-rotation':
-        specifier: workspace:*
-        version: link:../skill-account-rotation
       yaml:
         specifier: ^2.5.0
         version: 2.9.0
-    devDependencies:
-      '@tailwindcss/vite':
-        specifier: ^4.0.0
-        version: 4.3.2(vite@8.1.4(@types/node@20.19.43)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
-      '@testing-library/dom':
-        specifier: ^10.4.1
-        version: 10.4.1
-      '@testing-library/react':
-        specifier: ^16.3.2
-        version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
-      '@types/node':
-        specifier: ^20.0.0
-        version: 20.19.43
-      '@types/react':
-        specifier: ^19.2.0
-        version: 19.2.17
-      '@vitejs/plugin-react':
-        specifier: ^6.0.3
-        version: 6.0.3(vite@8.1.4(@types/node@20.19.43)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
-      jsdom:
-        specifier: ^29.1.1
-        version: 29.1.1
-      lucide-react:
-        specifier: ^0.469.0
-        version: 0.469.0(react@19.2.7)
-      react:
-        specifier: ^19.2.0
-        version: 19.2.7
-      react-dom:
-        specifier: ^19.2.0
-        version: 19.2.7(react@19.2.7)
-      tailwindcss:
-        specifier: ^4.0.0
-        version: 4.3.2
-      typescript:
-        specifier: ^7.0.2
-        version: 7.0.2
-      vite:
-        specifier: ^8.0.0
-        version: 8.1.4(@types/node@20.19.43)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)
-      vitest:
-        specifier: ^4.1.10
-        version: 4.1.10(@types/node@20.19.43)(jsdom@29.1.1)(vite@8.1.4(@types/node@20.19.43)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
-
-  packages/skill-account-rotation:
-    dependencies:
-      '@openagt/agent-data':
-        specifier: workspace:*
-        version: link:../agent-data
-      '@openagt/agent-driver':
-        specifier: workspace:*
-        version: link:../agent-driver/core
-      '@openagt/hooks':
-        specifier: workspace:*
-        version: link:../hooks
     devDependencies:
       '@tailwindcss/vite':
         specifier: ^4.0.0
@@ -1254,9 +1186,6 @@ importers:
       '@openagt/agent-driver-codex':
         specifier: workspace:*
         version: link:../agent-driver/codex
-      '@openagt/agent-runner':
-        specifier: workspace:*
-        version: link:../agent-runner
       '@openagt/git-branches':
         specifier: workspace:*
         version: link:../git-branches
@@ -1269,9 +1198,6 @@ importers:
       '@openagt/scheduled-agents':
         specifier: workspace:*
         version: link:../scheduled-agents
-      '@openagt/skill-account-rotation':
-        specifier: workspace:*
-        version: link:../skill-account-rotation
       '@openagt/skills':
         specifier: workspace:*
         version: link:../skills

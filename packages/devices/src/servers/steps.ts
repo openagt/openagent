@@ -496,7 +496,7 @@ export const STEPS: readonly StepDef[] = [
   [ -d /run/systemd/system ] || fail "This server does not start its programs with systemd, which OpenAgent's service needs."
   # Nothing is changed under an agent at work: its own programs would be replaced while it runs.
   # Any person's agent: every OpenAgent on the server runs the Node and the OpenAgent the install brought.
-  if pgrep -f 'agent-runner/bin/agent-runner run' >/dev/null 2>&1; then
+  if pgrep -f '/bin/agent-runner run' >/dev/null 2>&1; then
     fail "An agent is working on this server. Stop it, or wait until it ends, then try again."
   fi
   echo "\${PRETTY_NAME:-$ID}, $(uname -m)"

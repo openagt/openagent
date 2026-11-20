@@ -44,7 +44,7 @@ pnpm --filter @openagt/ui dev:dashboard
 
 Populate a project to watch: run `dev:daemon` instead of `dev:dashboard`, which brings a real
 daemon up in the dev server's own process, and start an agent from the UI: Start goes to this
-computer's run host (`agent-runner`'s), and the dashboard shows the agent from the files the
+computer's run host (`agent-driver`'s), and the dashboard shows the agent from the files the
 run writes. The CLI keeps three options and no verbs; it starts no agent.
 
 ## Tests

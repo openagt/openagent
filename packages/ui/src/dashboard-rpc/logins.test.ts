@@ -10,7 +10,7 @@ import { readProvider, remoteHost } from '../dashboard/git-hosts.js'
 import { accountsWiring } from './accounts.js'
 import { loginsWiring, onAgentState, onGitHosts, runningFixes, sendAgentFix, sendStopAgentFix, sendForgetGitHostAccount, sendGitHostLogin, sendUseGitHostAccount } from './logins.js'
 import { provideTestContext } from './test-context.js'
-import { accountsPath, addAccount } from '@openagt/skill-account-rotation'
+import { accountsPath, addAccount } from '@openagt/agent-driver'
 import { claudeLogins } from '@openagt/agent-driver-claude-code'
 import { codexLogins } from '@openagt/agent-driver-codex'
 

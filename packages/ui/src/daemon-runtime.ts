@@ -1,7 +1,7 @@
 import { isAbsolute, join, resolve, sep } from 'node:path'
 import { hostname } from 'node:os'
 import { stat } from 'node:fs/promises'
-import type { ReadyNaming } from '@openagt/agent-runner'
+import type { ReadyNaming } from '@openagt/agent-driver'
 import { isDriverName } from './driver-names.js'
 import { isPresetId, MODULE_NAME, type Hooks, type ProjectRef, type RunHost, type RunOptions, type RunRequest } from '@openagt/hooks'
 import { sessionRepos } from '@openagt/git-branches'
@@ -57,7 +57,7 @@ const MAX_KEPT = 32
 /** How much of a failed clone's reason is kept and told: git passes on what the other side said. */
 const MAX_REASON = 600
 
-/** The coding agent a Start goes to when none was picked: this computer's host's own default (agent-runner's). */
+/** The coding agent a Start goes to when none was picked: this computer's host's own default (agent-driver's). */
 const DEFAULT_DRIVER = 'claude-code'
 
 /** A run's name as it is asked while the run starts: what the host is given of it, and what follows once it answered. */

@@ -49,9 +49,7 @@
     "@openagt/agent-data": "workspace:*",
     "@openagt/git-branches": "workspace:*",
     "@openagt/agent-driver": "workspace:*",
-    "@openagt/agent-runner": "workspace:*",
     "yaml": "^2.5.0",
-    "@openagt/skill-account-rotation": "workspace:*",
     "@openagt/hooks": "workspace:*"
   },
   "devDependencies": {

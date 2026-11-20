@@ -162,7 +162,7 @@ export interface Preferences {
   runOn?: string
   /**
    * Name each run: a small model is asked for the two to five words a list of runs shows in place
-   * of the first line of the prompt (`agent-runner`'s `title.ts`). It is one short turn of the
+   * of the first line of the prompt (agent-driver's `engine/title.ts`). It is one short turn of the
    * cheapest model with no tools, measured at a thirtieth of a cent a run, and it is the only
    * money OpenAgent spends on something a person only looks at — so it can be turned off, and the
    * run keeps the person's own words. **Absent = on.**

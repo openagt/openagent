@@ -9,7 +9,7 @@ import type { Driver } from '@openagt/hooks'
 // comments on an issue"): a line printing the new thing is a `gh api … --jq …` only someone who
 // knows the command line writes, and the form's "Write the line" asks the coding agent for it.
 //
-// The way a run is named (`agent-runner`'s `title.ts`): one throwaway session, no tools, in an empty
+// The way a run is named (agent-driver's `engine/title.ts`): one throwaway session, no tools, in an empty
 // folder of its own, one prompt, disposed straight after. A run with tools in the project would
 // take far longer than the 30 seconds a dashboard waits for a command, for a one-line answer. With
 // no tools the agent cannot look anything up, so the prompt hands it what it would have: how the

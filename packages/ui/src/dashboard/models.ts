@@ -1,7 +1,7 @@
 import { ClaudeCodeDriver, claudeLogins } from '@openagt/agent-driver-claude-code'
 import { CodexDriver, codexLogins } from '@openagt/agent-driver-codex'
 import { DRIVERS, type DriverName } from '../driver-names.js'
-import { accountRotation, accountsPath, pickAccount, readAccounts } from '@openagt/skill-account-rotation'
+import { accountRotation, accountsPath, pickAccount, readAccounts } from '@openagt/agent-driver'
 import type { Driver, DriverModel } from '@openagt/hooks'
 
 /** What one coding agent offers: its models, or why it could not say; `missing` when its CLI is not on the computer, or not one it can run. */

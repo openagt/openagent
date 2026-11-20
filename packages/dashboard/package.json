@@ -43,9 +43,9 @@
     "clean": "rm -rf dist dist-test"
   },
   "dependencies": {
+    "@openagt/agent-driver": "workspace:*",
     "@openagt/agent-driver-claude-code": "workspace:*",
     "@openagt/agent-driver-codex": "workspace:*",
-    "@openagt/agent-runner": "workspace:*",
     "@openagt/ask": "workspace:*",
     "@openagt/browser": "workspace:*",
     "@openagt/devices": "workspace:*",
@@ -63,7 +63,6 @@
     "@openagt/queue": "workspace:*",
     "@openagt/saved-prompts": "workspace:*",
     "@openagt/scheduled-agents": "workspace:*",
-    "@openagt/skill-account-rotation": "workspace:*",
     "@openagt/skills": "workspace:*",
     "@openagt/store-filesystem": "workspace:*",
     "@openagt/store-git-branch": "workspace:*",

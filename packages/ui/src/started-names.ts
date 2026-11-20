@@ -1,6 +1,6 @@
 import type { AgentMeta } from './store/index.js'
 
-// The names this daemon asked for as it started runs (`ReadyNaming` in agent-runner), kept by run
+// The names this daemon asked for as it started runs (`ReadyNaming` in agent-driver), kept by run
 // id for the few seconds before the run's own record has its name.
 //
 // A name is ready about a second after Start, and the run's row is in the list only once its agent
