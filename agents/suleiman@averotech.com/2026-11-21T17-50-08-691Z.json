@@ -1,0 +1,17 @@
+{
+  "id": "2026-11-21T17-50-08-691Z",
+  "startedAt": "2026-11-21T17:50:08.962Z",
+  "status": "running",
+  "intent": "New feature: drag or paste (Cmd+V) an image into the message box so the agent can look at it. It works in a new session and in follow-up messages, and shows in the chat after a reload.\n\nIn the box:\n\n- Images stand in a row above the text, 8px apart, as 120x120 tiles with 10px corners; the whole image fits, on a dark tile.\n- On hover, a small round X on the tile's top-right corner removes it.\n- A click opens the image large; X or Esc closes it.\n\nDecide the rest yourself and list your choices in the pull request. Keep the image files on this computer only: not in the checkout, not in the shared agent data. Add tests, test it by hand in a real browser with one real agent run that reads a word from a screenshot, and open a pull request that names no other product.",
+  "driver": "claude-code",
+  "model": "opus",
+  "caller": {
+    "runner": {
+      "host": "Suleimans-MacBook-Pro.local",
+      "pid": 92212,
+      "gitAccount": "suleimansh"
+    },
+    "host": "Suleimans-MacBook-Pro.local",
+    "gitAccount": "suleimansh"
+  }
+}
