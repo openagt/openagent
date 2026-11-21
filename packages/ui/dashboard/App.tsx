@@ -1,0 +1,794 @@
+import { PermissionsPage } from './components/Accounts.js'
+import { PresetsPage } from './components/PresetsPage.js'
+import { useEffect, useMemo, useReducer, useState, type CSSProperties } from 'react'
+import type { ProjectionRead, ProjectSummary, Waiting } from '../src/index.js'
+import { onProjectFiles, onWaiting, onStartedName } from './rpc/reads.js'
+import { sendStart } from './rpc/control.js'
+import { onProjects } from './rpc/projects.js'
+import { AgentHistory } from './components/AgentHistory.js'
+import { SidebarProvider } from './components/ui/sidebar.js'
+import { setSidebarHidden, useSidebarHidden, useSidebarWidth } from './lib/sidebar-width.js'
+import { ProjectHome, ProjectHomeShape } from './components/ProjectHome.js'
+import { DashboardPage } from './components/DashboardPage.js'
+import { SettingsDialog } from './components/SettingsDialog.js'
+import { AgentView } from './components/AgentView.js'
+import { ChatShape } from './components/ChatPane.js'
+import { PageShape } from './components/Page.js'
+import { agentLabel, awaitingName } from './lib/agent-label.js'
+import { callSubagents } from './lib/subagents.js'
+import { PaneLayout, PanesProvider } from './components/Panes.js'
+import { SubagentsPanel } from './components/SubagentsPanel.js'
+import { PagesBar, PhoneBar, PhoneBarCount } from './components/PhoneBar.js'
+import { cn } from './lib/utils.js'
+import { usePolled } from './lib/use-async.js'
+import { useIsMobile } from './lib/use-mobile.js'
+import { usePinnedPage } from './lib/use-pinned-page.js'
+import { NotFound } from './components/NotFound.js'
+import { ProjectRemovedReport } from './components/RemoveProjectDialog.js'
+import { ModulePageView, ModuleSlot } from './components/ModulePageView.js'
+import { useListedPages, useModules, ModulesContext, type ListedPage } from './lib/use-modules.js'
+import type { UiIcon } from './module/index.js'
+import { HostServicesContext, useSteadyServices } from './lib/host-services.js'
+import { DAEMON_SERVICES } from './lib/daemon-services.js'
+import { startPicks } from './lib/use-start-agent.js'
+import { stashPendingDraft } from './lib/draft-handoff.js'
+import { useLiveEvents } from './lib/use-live-events.js'
+import { useAgents, useRecentAgents } from './lib/use-agents.js'
+import { runsAgain } from './lib/runs-changed.js'
+import { PRESETS_PAGE, PERMISSIONS_PAGE, back, leaving, useRoute } from './lib/use-route.js'
+import { formatRoute, keepPageQuery, parseRoute, type Route } from './lib/route.js'
+import { projectAddresses, SESSIONS_ID } from '../src/project-address.js'
+import { startedAtFromAgentId } from '../src/agent-id.js'
+import { WaitingContext } from './lib/use-waiting.js'
+import { usePreferences, OpenProjectContext } from './lib/preferences.js'
+import { useDocumentTitle } from './lib/document-title.js'
+import { projectLabels, ProjectLabelsContext } from './lib/project-labels.js'
+import { useActiveAgents } from './lib/use-working.js'
+import { useFavicon } from './lib/favicon.js'
+import { DaemonDown, INSTALLED_RESTARTS, useDaemonHealth } from './lib/use-daemon-health.js'
+import { useContextSet } from './lib/use-context-set.js'
+import { Bot, KeyRound, TriangleAlert } from 'lucide-react'
+import type { StartPicks } from './lib/started-from.js'
+import { useShortcut } from './lib/shortcut.js'
+import { FocusHome } from './lib/focus-home.js'
+import { SHORTCUTS_ENTRY } from './components/ShortcutList.js'
+import { JumpPalette } from './components/JumpPalette.js'
+
+/** Stable, so `files` keeps one identity while no project is selected. */
+const EMPTY_FILES: string[] = []
+
+/** Stable initial for the projects load, so it does not churn on every render. */
+const EMPTY_PROJECTS: ProjectSummary[] = []
+
+/** Stable initial for the poll of what waits on the person, so it does not churn on every render. */
+const EMPTY_WAITING: ProjectionRead<Waiting> = { items: [], whole: [] }
+
+
+/** A module's page as the sidebar, the bar of pages and the jump list draw it: by its address word. */
+function barPage({ id, label, icon }: ListedPage): { segment: string; label: string; icon?: UiIcon } {
+  return { segment: id, label, ...(icon !== undefined ? { icon } : {}) }
+}
+/** The dashboard's own pages, by the name a phone's bar gives each, as it gives a module's page its label, and the icon the sidebar and the jump draw for it. */
+const OWN_PAGES = new Map([
+  [PRESETS_PAGE, { label: 'Presets', icon: Bot }],
+  [PERMISSIONS_PAGE, { label: 'Permissions', icon: KeyRound }],
+])
+
+/** The run this page started last: what the page says of it until the run's own record does. */
+interface StartedRun {
+  /** Bumped at each start but a continuation: the Sessions rail's "starting…" row comes up at each. */
+  tick: number
+  /** What the run was asked. */
+  intent: string
+  /** The id the run's host answered (#761): the URL already points there, and this is
+   *  what tells the main pane that a session missing from the list is starting, not gone. */
+  id: string | null
+  projectId: string | null
+  /** When it was started. */
+  at: number
+  /** The host a run on one beside this computer goes to, by its name, so the live view can mark where it runs. Absent for a run here. */
+  runsOn?: string
+  /** What the launcher said about the run as it started it. */
+  picks?: StartPicks
+  /** Its name, the moment the daemon has it, before the run's record has one. */
+  title?: string
+  /** A read list has had it: from then on, a list without it says it is gone. */
+  listed?: true
+}
+
+const NO_RUN_STARTED: StartedRun = { tick: 0, intent: '', id: null, projectId: null, at: 0 }
+
+// The dashboard shell (#405 phase 2): the sidebar | the main pane | the panes beside it. The main
+// pane is the page the address names: the Overview, a module's page, the Agents or Permissions
+// page, a project's "New agent session" page (ProjectHome), or one session's own view (AgentView),
+// live or finished — the same frame either way (#1026). Everything over the wire is
+// `POST /_rpc/<name>`. A projection of the files each run's own tool writes: its card and its diary.
+//
+// The selection IS the URL (#784): `/` the Overview, `/{project}` the project home,
+// `/{project}/{agentId}` one session. It used to be three pieces of React state — the
+// selected agent, the just-started agent, and a "follow the live feed" flag — reconciled at render,
+// and each of #761/#766/#768/#774 was a case where they disagreed about which run was in play.
+// A route cannot disagree with itself, and a session becomes a link: paste it, reload it,
+// bookmark it, open two side by side. A refresh returns to the same project for free, which is
+// what the remembered-project state (#475) was for.
+//
+// The project select at the top of the sidebar (#1513) is in the URL too: the one project every page
+// shows, or none for all of them. It filters what the pages show; it is not a page of its own, so it
+// rides along on every navigation as the address's first segment (`/{project}/overview`,
+// `/{project}/logs`). A project's own pages pick their project unless `?all` is there.
+export function App() {
+  // The registered projects, for the browser-tab title (#695/U3) — the selected project's name
+  // plus the needs-you count drive `document.title` so a backgrounded tab tells you which project
+  // needs attention — and for the sidebar's project select. Polled rather than read once (#1500):
+  // each project carries what the daemon currently finds wrong with it, a state that appears and
+  // clears on the daemon's own minute cadence, so the sidebar dot and the project's banner have to
+  // follow it. Slow, and reloadable so adding a project from the sidebar's "New" reflects at once
+  // (`reloadProjects` bumps the key).
+  const [projectsKey, reloadProjects] = useReducer((key: number) => key + 1, 0)
+  // Kept for the next visit too: the Overview's cards are drawn for the projects before they are read again.
+  const { value: projects, state: projectsState } = usePolled<ProjectSummary[]>(onProjects, EMPTY_PROJECTS, 30_000, [projectsKey], { remember: 'projects', stored: true })
+  // Read again when a project is added from the sidebar or removed from its project home: which
+  // project has which module changes then.
+  const modules = useModules(projectsKey)
+  const { loaded: modulesLoaded } = modules
+  const modulePages = modules.views['app.page']
+  // A project's address is its name unless another project or a page has it: what the address
+  // names is known once both are read, and until then nothing is said to be missing.
+  const projectIds = projects.map(p => p.id).join('\n')
+  const pageWords = modulePages.map(page => page.id).join('\n')
+  const addresses = useMemo(() => projectAddresses(projectIds ? projectIds.split('\n') : [], pageWords ? pageWords.split('\n') : []), [projectIds, pageWords])
+  const addressesRead = projectsState !== 'unknown' && modulesLoaded
+  // How each project is named where it is listed: two clones called `shop` say which folder each is in.
+  const labels = useMemo(() => projectLabels(projects), [projects])
+  const { route, go: navigate, adjust } = useRoute(addresses)
+  const { projectId, agentId } = route
+  // A session with no project, or the "New agent session" page with none: in place of a project, the sessions' own id.
+  const noProject = projectId === SESSIONS_ID
+  // A module's page (#1774): the route names it by its segment, with no project's own page open.
+  const pageSegment = route.page ?? null
+  // The address written as the route reads, once it can be read: a project named by its id, as
+  // `npx @openagt/dashboard` opens it, shows its name, in place of the entry rather than as a new one.
+  useEffect(() => {
+    if (addressesRead) adjust(route)
+    // The route is what the address says; only what names projects changes it here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [addressesRead, addresses])
+  // The one project every page shows (#1513), or null for all of them. A project that is not
+  // registered (removed, or a link from another machine) picks nothing.
+  const scope = route.scope && projects.some(p => p.id === route.scope) ? route.scope : null
+  // The address may name a project, and what it names is not read yet: until it is, the address's
+  // word is no project's id, so nothing is read for it, and nothing says every project shows either.
+  // A page's word counts: before the projects are read, a project's name reads as one.
+  const scopePending = scope === null && (route.scope !== undefined || pageSegment !== null) && !addressesRead
+  const scopedProjects = useMemo(() => (scope ? projects.filter(p => p.id === scope) : projects), [projects, scope])
+  // The modules' pages the dashboard has: every one, or with a project picked only the pages of the
+  // packages that project has. The sidebar lists these, and a URL names a page only among these.
+  const shownPages = useMemo(() => (scope ? modulePages.filter(page => page.projects.includes(scope)) : modulePages), [modulePages, scope])
+  const modulePage = pageSegment ? shownPages.find(page => page.id === pageSegment) : undefined
+  // The sidebar's rows of them, there from the first frame: the last load's until the modules are imported.
+  const listedPages = useListedPages(modules)
+
+  /** An address as the shell writes it once the projects are read: an id is its project's name. */
+  const readAs = (address: string) => keepPageQuery(formatRoute(parseRoute(address, addresses), addresses), address.split('?')[1] ?? '')
+
+  // Every navigation keeps the picked project, and one into another project's page, or into a
+  // page in a named project, picks that project: the pages never show a project the select does not name.
+  const scoped = (next: Route): Route => ({ ...next, ...(scope ? { scope: next.scope ?? next.projectId ?? scope } : {}) })
+  const go = (next: Route, options?: { beside?: boolean }) => navigate(scoped(next), options)
+  /** Where `go` would take the page: a link's address. */
+  const hrefOf = (next: Route) => formatRoute(scoped(next), addresses)
+  /** A module's page, at a sub-path, in `inProject` or the picked project. */
+  const pageRoute = (segment: string, path?: string[], inProject?: string): Route => ({ projectId: null, agentId: null, page: segment, ...(path && path.length ? { pagePath: path } : {}), ...(inProject ? { scope: inProject } : {}) })
+
+  // Pick the one project every page shows, or all of them. The page stays, with what it mirrored
+  // into the query (a list's filters), unless it is another project's: its launcher becomes the
+  // picked project's, and its agent's page the Overview. A module's page drops what follows its
+  // segment, which is the project just left's (a ticket of it), and one the picked project does
+  // not have becomes the Overview.
+  const selectScope = (next: string | null) => {
+    const { scope: _scope, ...here } = route
+    if (here.projectId !== null) {
+      if (next === null) return navigate(here, { keepQuery: true })
+      if (here.projectId !== next) return navigate(here.agentId === null ? { projectId: next, agentId: null, scope: next } : { projectId: null, agentId: null, scope: next })
+    }
+    const mounted = modulePages.find(page => page.id === here.page)
+    if (next !== null && mounted && !mounted.projects.includes(next)) return navigate({ projectId: null, agentId: null, scope: next })
+    const { pagePath, ...page } = here
+    navigate({ ...page, ...(next !== null ? { scope: next } : {}) }, { keepQuery: !pagePath?.length })
+  }
+
+  // A just-started run: the Sessions rail shows an optimistic "starting…" row with the typed prompt
+  // at once, before the run's tool writes its card, and its page says what the start said.
+  const [agentStart, setAgentStart] = useState<StartedRun>(NO_RUN_STARTED)
+  // The agents of the project on screen, for its pages, or of the picked project, for the sidebar:
+  // the same project whenever both are set. Read once the projects are: before, the address names
+  // the project by its address, not by its id.
+  // Every two seconds on the project's own pages, where a run's status is watched; every ten beside
+  // the Overview or a module's page, whose rail only lists them (as every project's rail does).
+  const agentsOf = projectsState !== 'unknown' ? (projectId ?? scope) : null
+  const { agents, reload, state: agentsState } = useAgents(agentsOf, agentStart.id !== null && agentStart.projectId === agentsOf ? agentStart.id : null, projectId !== null ? 2000 : 10_000)
+  useEffect(() => {
+    const startedId = agentStart.id
+    if (startedId === null || agentStart.listed || !agents.some(agent => agent.id === startedId)) return
+    setAgentStart(prev => (prev.id === startedId ? { ...prev, listed: true } : prev))
+  }, [agents, agentStart.id, agentStart.listed])
+
+  // The Context set lives in the shell (#492/#504) so the two surfaces that feed it share one
+  // source of truth: the launcher's `@`/`#` chips and Context picker, and the Files pane's tree.
+  const contextSet = useContextSet()
+  const { context, add: addContext, remove: removeContext, toggle: toggleContext, reset: resetContext } = contextSet
+
+  // The picked Context is one project's, and a session's box sends it with its next message, so
+  // changing projects or sessions starts fresh. Keyed off the route rather than the click, because
+  // Back/Forward change them too.
+  useEffect(() => {
+    resetContext()
+    // `resetContext` is a fresh closure each render; the project and the session are the trigger.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId, agentId])
+
+  // The selected project's files (git ls-files), handed to both the `#` picker and the tree.
+  // Empty when no project (no checkout). Scoped to the selected session's
+  // worktree (#815), the same checkout the action bar's branch, Serve and open-folder act on;
+  // polled so a file the agent creates shows up rather than waiting for a reload.
+  const { value: files } = usePolled<string[]>(
+    projectId && !noProject ? () => onProjectFiles(projectId, agentId ?? undefined) : null,
+    EMPTY_FILES,
+    10_000,
+    [projectId, agentId],
+  )
+
+  // The cross-project "needs you" queue (#632): open PRs to review, questions to answer, work left
+  // on this machine. Polled here in the shell so the sidebar badge, the Overview card and the
+  // launcher's "Waiting on you" share one poll. Read again the moment a run changes, as the sidebar
+  // is, and every five seconds for what no run tells (a pull request on the git host, read no more
+  // often for it, its listing being cached).
+  // The read as a whole goes to every part as `all` (a module's notifier among them), which tells of
+  // every project's items whichever one is picked, and also needs to know which projects the poll
+  // actually reached before it calls anything "new" (#1625).
+  const { value: waitingRead, state: waitingState } = usePolled<ProjectionRead<Waiting>>(
+    onWaiting,
+    EMPTY_WAITING,
+    5000,
+    [],
+    { remember: 'waiting', stored: true },
+    runsAgain(undefined),
+  )
+
+  const project = projectId ? projects.find(p => p.id === projectId) : undefined
+  const projectName = project ? (labels.get(project.id) ?? project.name) : null
+  // What waits on the person as the pages show it: the picked project's items, or every project's.
+  const waiting = useMemo(() => (scope ? waitingRead.items.filter(item => item.projectId === scope) : waitingRead.items), [waitingRead, scope])
+  // What every part that shows it reads, a module's card among them: one object while the read stands.
+  const waitingShown = useMemo(() => ({ items: waiting, state: waitingState, all: waitingRead }), [waiting, waitingState, waitingRead])
+  // A URL naming a project that is not registered (renamed, removed, mistyped). Only this load's
+  // read, and a non-empty one, is the answer: the list this browser kept from its last load may lack
+  // a project added since. Until that read, a project the kept list has is drawn from the first
+  // frame and any other address waits, so "No such project" never replaces a project's page.
+  const projectsRead = projectsState === 'fresh'
+  const projectAddress = projectId !== null && !noProject
+  const listedProject = projectAddress && projects.some(p => p.id === projectId)
+  const unknownProject = projectAddress && projectsRead && projects.length > 0 && !listedProject
+  const projectPending = projectAddress && !projectsRead && !listedProject
+
+  // The person's picks: whether runs are named, and what a run starts with.
+  const preferences = usePreferences()
+
+  // The shared sidebar's recents when all projects show (#shared-shell): the rail pools every
+  // project's sessions here.
+  const allShow = scope === null && !scopePending
+  const { recentAgents, reload: reloadRecent, state: recentState } = useRecentAgents(allShow, agentStart)
+  // The runs this page has read, which the jump finds at once: the picked project's own list, and every project's newest.
+  const pageRuns = useMemo(() => [...(agentsOf !== null ? agents.map(agent => ({ projectId: agentsOf, projectName: labels.get(agentsOf) ?? '', agent })) : []), ...recentAgents], [agents, agentsOf, recentAgents, labels])
+
+  // An agent just started in `inProject`, which is not always the selected one: the onboarding
+  // checklist starts one from the Overview, where nothing is selected (#1169).
+  const agentStarted = (inProject: string | null, intent: string, startedId: string, runsOn?: string, picks?: StartPicks) => {
+    // Continuing the agent already on screen (#762) starts no new run: its journal goes on, nothing
+    // truncates, and its row is in the rail already, so no "starting…" row comes up for it and it
+    // is not named again.
+    const continued = startedId === agentId && inProject === projectId
+    setAgentStart(prev => ({ tick: continued ? prev.tick : prev.tick + 1, intent, id: startedId, projectId: inProject, at: Date.now(), ...(runsOn ? { runsOn } : {}), ...(picks ? { picks } : {}) }))
+    // The picked Context went with that run; the next launch starts from a clean focus (#948). A continued run's went
+    // as its message did (AgentComposer): what is picked while it goes is the next message's, with its chips.
+    if (!continued) resetContext()
+    // Go to the run we just started — a real history entry, so Back returns to where you launched
+    // from. Its row does not exist yet; the main pane shows it live on the strength of the id.
+    go({ projectId: inProject, agentId: startedId })
+    // The new agent just appends to the rail; reload so its real row shows up quickly.
+    reload()
+    reloadRecent()
+    // Its name, the moment the daemon has it: about a second on, before the run's row is in any
+    // list (`started-names.ts`). Answered once, when it is in; nothing for a continued run.
+    if (!continued && preferences.nameRuns !== false && inProject !== null)
+      void onStartedName(startedId).then(
+        title => {
+          if (title !== undefined) setAgentStart(prev => (prev.id === startedId ? { ...prev, title } : prev))
+        },
+        () => {},
+      )
+  }
+
+  /** The same, for the surfaces that start an agent inside the selected project. */
+  const onAgentStarted = (intent: string, startedId: string, runsOn?: string, picks?: StartPicks) => agentStarted(projectId, intent, startedId, runsOn, picks)
+
+  // One of the project's sessions, or with none its launcher.
+  const selectAgent = (id: string | null) => {
+    go({ projectId, agentId: id })
+  }
+
+  const selectProject = (id: string) => {
+    go({ projectId: id, agentId: null }) // switching projects always returns to the home launcher
+  }
+
+  // Naming a session in another project. The Overview's cross-project rows — the sidebar recents,
+  // the Agents view (#1139), and the modules' cards — know which run they are about, and going through
+  // selectProject drops that on the way, landing on the launcher instead of the session the row was
+  // describing.
+  const selectAgentInProject = (inProject: string, id: string) => {
+    go({ projectId: inProject, agentId: id })
+  }
+
+  // "New" in the sidebar: start a fresh session in a named project (the sidebar decides which —
+  // the current one, the only one, or a picked one). resetContext explicitly, since staying in the
+  // same project would not trip the project-change effect above.
+  const newAgentInProject = (id: string) => {
+    go({ projectId: id, agentId: null })
+    resetContext()
+  }
+
+  // The Overview dashboard (#471): no project selected.
+  const showDashboard = () => {
+    go({ projectId: null, agentId: null })
+  }
+  // A phone's session page has no bar of pages: its top bar's back arrow goes to the page this app
+  // showed before it, and to the Overview when there is none (a link opened cold).
+  const backFromSession = () => back(() => true, showDashboard)
+
+  // Settings (#958): a dialog over the page you are on, which stays under it, its own query too;
+  // with `item`, at that page inside the entry. Moving between its entries, from its list or from a
+  // link inside one, replaces the address, so Back closes it rather than stepping through them.
+  // Opened over the page here, it closes by Back too: the page's own entry is there again, as the page left it.
+  const showSettings = (entry = '', item?: string) => {
+    const { settingsItem: _item, ...rest } = route
+    const next = { ...rest, settings: entry, ...(item ? { settingsItem: item } : {}) }
+    if (route.settings === undefined) navigate(next, { keepQuery: true })
+    else leaving(() => adjust(next))
+  }
+  useShortcut('shortcuts', () => showSettings(SHORTCUTS_ENTRY))
+  const closeSettings = () => {
+    const { settings: _settings, settingsItem: _item, ...under } = route
+    const page = keepPageQuery(formatRoute(under, addresses), window.location.search)
+    back(address => readAs(address) === page, () => navigate(under, { keepQuery: true }))
+  }
+
+  // A module's page (#1774): its own segment, in the picked project, like the Overview.
+  const showPage = (segment: string) => {
+    go({ projectId: null, agentId: null, page: segment })
+  }
+
+  // The shell's services for modules (#1774): what a module page or a link action may ask of the
+  // dashboard, none of it naming a skill. Bound to each module's package where its host is built.
+  // The daemon's questions are the same on every page (`daemon-services.ts`); what navigates is
+  // the shell's own.
+  const hostServices = useSteadyServices({
+    ...DAEMON_SERVICES,
+    openAgent: selectAgentInProject,
+    agentHref: (inProject, id) => hrefOf({ projectId: inProject, agentId: id }),
+    openPage: (segment, path, inProject, options) => go(pageRoute(segment, path, inProject), options),
+    adjustPage: (path, query) => adjust(path ? { ...route, pagePath: path } : route, query),
+    pageHref: (segment, path, inProject) => hrefOf(pageRoute(segment, path, inProject)),
+    backToPage: (segment, path = [], inProject) =>
+      back(
+        address => {
+          const behind = parseRoute(address, addresses)
+          return behind.page === segment && (behind.pagePath ?? []).join('/') === path.join('/')
+        },
+        () => go(pageRoute(segment, path, inProject)),
+      ),
+    openSettings: (entry, item) => showSettings(entry, item),
+    startRun: async (inProject, prompt, opts) => {
+      const result = await sendStart(inProject, prompt, startPicks(preferences))
+      if (!result.ok) return result
+      // A module starting several runs in a row asks not to land (#1818): the rail still learns of the run.
+      if (opts?.land ?? true) agentStarted(inProject, prompt, result.agentId)
+      else reload()
+      return result
+    },
+    // The launcher rehydrates a stashed draft once as it mounts (#1066): the same carry every
+    // "Configure first, then run" uses.
+    configureRun: (inProject, prompt) => {
+      stashPendingDraft(prompt)
+      selectProject(inProject)
+    },
+  })
+
+  // The live agent feed is owned here: the main view and the panes' count of its events read one
+  // shared event stream.
+  // The agent whose feed and controls are in play is simply the one in the URL; with none there is
+  // no feed.
+  const { events, lost, writing, replayed } = useLiveEvents(projectId, agentId)
+  // The run's feed says it ended before the runs poll does: read the runs now, so its page stops
+  // reading as running (and its handoff is read) without waiting up to a poll for it.
+  const ends = events.filter(e => e.kind === 'end').length
+  useEffect(() => {
+    if (ends > 0) reload()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ends])
+
+  // Is an agent working (#875)? Drives the mark and the tab icon, and the Overview's agents at work.
+  const activeAgents = useActiveAgents()
+  const working = activeAgents.active.length > 0
+  useFavicon(working)
+
+  // Whether the daemon answers at all (#948). Without this, a dead daemon froze every surface
+  // silently: the channels retry their transport without a verdict and the polls keep their
+  // last value, so "the agent went quiet" and "nothing on this page is live" looked identical.
+  // While the daemon is not answering, its banner says all of it: a run's "live stream lost" notice
+  // under it would only repeat one part, so a run's view is told the stream is lost only then.
+  const daemon = useDaemonHealth()
+  const healthy = daemon === 'answering'
+  // In a browser that kept no list, the sidebar holds back what stands under the modules' rows until
+  // they are known, so nothing moves; with the daemon not answering it draws the rest without them.
+  const sidebarPages = useMemo(() => {
+    const known = listedPages ?? (healthy ? null : [])
+    return known && (scope ? known.filter(page => page.projects.includes(scope)) : known).map(barPage)
+  }, [listedPages, healthy, scope])
+
+  // Route the main pane: the Overview dashboard when no project is selected (#471); else the
+  // project home/launcher, a running agent's live output, or a finished agent's replay. Each live
+  // run streams its own feed and is steered by its own id (#749).
+  // Until the project's own list is read, the row clicked in the all-projects list says who the
+  // agent is: without it a jump to another project's agent showed a page with no name, and its
+  // message box offered what an ended agent's does whatever the agent's state, for a moment.
+  const selectedAgent = agentId
+    ? (agents.find(agent => agent.id === agentId) ??
+      (agentsState === 'fresh' ? undefined : recentAgents.find(recent => recent.projectId === projectId && recent.agent.id === agentId)?.agent))
+    : undefined
+  // A session with no record in a list that was read: it was deleted, or never was here. The run
+  // just started is exempt only until a list has had it, the beat before its card lands.
+  const sessionGone = agentId !== null && !selectedAgent && agentsState === 'fresh' && (agentId !== agentStart.id || agentStart.listed === true)
+  // Whether the selected run's coding agent started subagents: they get a pane beside the chat.
+  const hasSubagents = useMemo(() => callSubagents(events).length > 0, [events])
+  // The project is off the list: read the list again and leave its page for the Overview of every
+  // project at once, since the one it was picked as is gone; "Project removed" is said over it.
+  const leaveRemovedProject = () => {
+    reloadProjects()
+    navigate({ projectId: null, agentId: null })
+  }
+  const justStarted = agentId === agentStart.id
+  // The name the daemon had for the run just started, before the run's record has one.
+  const startedTitle = justStarted ? agentStart.title : undefined
+  const namesRuns = preferences.nameRuns !== false
+  // What a listed session's page is called, in its heading and its tab.
+  const sessionLabel = selectedAgent ? (awaitingName(selectedAgent, namesRuns) ? startedTitle : agentLabel(selectedAgent)) : undefined
+  // Before the projects are read, a project's address reads as a page's word. A word no page this
+  // browser listed may be a project's: its page waits as its shape, the launcher's, or with a run's
+  // id after it a session's. Any other page word waits as its page's frame until its code is in.
+  const [run, ...pastRun] = route.pagePath ?? []
+  const listedPage = listedPages?.find(page => page.id === pageSegment)
+  const projectWord = pageSegment !== null && projectsState === 'unknown' && route.scope === undefined && !OWN_PAGES.has(pageSegment) && !listedPage
+  const projectShape = !projectWord ? null : run === undefined ? <ProjectHomeShape /> : pastRun.length === 0 && startedAtFromAgentId(run) !== undefined ? <ChatShape /> : null
+  const renderMain = () => {
+    if (pageSegment === PERMISSIONS_PAGE) return <PermissionsPage />
+    if (pageSegment === PRESETS_PAGE) return <PresetsPage />
+    if (pageSegment) {
+      if (modulePage)
+        return <ModulePageView page={modulePage} projects={scopedProjects} projectId={scope} path={route.pagePath ?? []} />
+      // Not read yet is not "no such page": the modules are imported after the first read, and
+      // until the projects are read too a project's name reads as a page's word.
+      if (!addressesRead) return projectWord ? projectShape : <PageShape title={listedPage?.label} />
+      // A page another project's package adds is not the picked project's.
+      const elsewhere = scope !== null && modulePages.some(page => page.id === pageSegment)
+      return (
+        <NotFound
+          title="No such page"
+          detail={
+            elsewhere
+              ? `The project "${projects.find(p => p.id === scope)?.name ?? scope}" has no package that adds a page at "${pageSegment}".`
+              : route.scope === undefined
+                ? `No project has the address "/${pageSegment}", and no installed package adds a page there.`
+                : `No installed package adds a page at "${pageSegment}".`
+          }
+          actionLabel="Go to the Overview"
+          href={hrefOf({ projectId: null, agentId: null })}
+          onAction={showDashboard}
+        />
+      )
+    }
+    if (!projectId) {
+      // A project's Overview whose project is not read yet: not every project's.
+      if (scopePending) return null
+      return (
+        <DashboardPage
+          onSelectProject={selectProject}
+          onSelectAgent={selectAgentInProject}
+          onAgentStarted={agentStarted}
+          waiting={waiting}
+          waitingState={waitingState}
+          active={activeAgents}
+          projects={projects}
+          scope={scope}
+          onProjectAdded={reloadProjects}
+          listedPages={listedPages}
+        />
+      )
+    }
+    // Which project the address names is not known yet: the page's shape, launcher or session.
+    if (projectPending) return agentId === null ? <ProjectHomeShape /> : <ChatShape />
+    if (unknownProject)
+      return (
+        <NotFound
+          title="No such project"
+          detail={`No project is registered as "${projectId}". It may have been removed, or the link may be from another machine.`}
+          actionLabel="Go to the Overview"
+          href={hrefOf({ projectId: null, agentId: null })}
+          onAction={showDashboard}
+        />
+      )
+    if (agentId === null) {
+      return (
+        <ProjectHome
+          projectId={projectId}
+          projectName={projectName}
+          waiting={waiting}
+          onAgentStarted={onAgentStarted}
+          files={files}
+          context={context}
+          addContext={addContext}
+          removeContext={removeContext}
+          toggleContext={toggleContext}
+          onOpenAgent={selectAgentInProject}
+          errors={project?.errors}
+          onProjectRemoved={leaveRemovedProject}
+          projects={projects}
+          onPickProject={newAgentInProject}
+          onProjectAdded={reloadProjects}
+        />
+      )
+    }
+    // What an agent's page is given whether its run is listed yet or not.
+    const agentPage = {
+      projectId,
+      agentId,
+      events,
+      projectName,
+      files,
+      lost: lost && healthy,
+      writing,
+      replayed,
+      startedWith: justStarted ? agentStart.intent : undefined,
+      picks: justStarted ? agentStart.picks : undefined,
+      onAgentStarted,
+      contextSet,
+      onProjectRemoved: leaveRemovedProject,
+      onBack: backFromSession,
+    }
+    if (!selectedAgent) {
+      // Not in the list: either the run we just started (its card lands a beat later) or a
+      // list we have not read yet, where whether the agent runs is not known. Only a session that
+      // is genuinely absent from a list we did read is gone.
+      if (!sessionGone)
+        return <AgentView {...agentPage} live={justStarted ? true : null} label={namesRuns ? startedTitle : (justStarted && agentStart.intent) || undefined} naming={justStarted && namesRuns && startedTitle === undefined} startedOn={justStarted ? agentStart.runsOn : undefined} />
+      return (
+        <NotFound
+          title="No such session"
+          detail="No session of this project has this address. It may have been deleted, or the link may be from another machine."
+          actionLabel="Back to the project"
+          href={hrefOf({ projectId, agentId: null })}
+          onAction={() => selectAgent(null)}
+        />
+      )
+    }
+    // Live and finished are the same view (#1026): only `live` changes, so an agent ending swaps
+    // what the bar, feed and composer say without remounting any of them.
+    return (
+      <AgentView
+        {...agentPage}
+        live={selectedAgent.status === 'running'}
+        card={selectedAgent}
+        label={sessionLabel}
+        naming={awaitingName(selectedAgent, namesRuns) && startedTitle === undefined}
+        target={selectedAgent.target}
+        onDeleted={() => {
+          // Its view is about to point at a session that no longer exists; go home and refresh
+          // the rail so the row is gone (#1032).
+          selectAgent(null)
+          reload()
+        }}
+      />
+    )
+  }
+
+  const isMobile = useIsMobile()
+  // The width its edge was dragged to (SidebarResizer), in place of the sidebar's own default.
+  const sidebarWidth = useSidebarWidth()
+  // Hidden by its button or Cmd/Ctrl+B, and remembered; a phone's sheet is opened apart from it.
+  const sidebarHidden = useSidebarHidden()
+  // An address that shows a "No such …" page: its own words are further down.
+  const notFound = unknownProject || sessionGone || (pageSegment !== null && addressesRead && !OWN_PAGES.has(pageSegment) && !modulePage)
+  // The name a phone's top bar gives the page; null on a project's own pages, which have a top row.
+  const phoneTitle = notFound ? 'Not found' : projectShape ? null : pageSegment ? (OWN_PAGES.get(pageSegment)?.label ?? modulePage?.label ?? listedPage?.label ?? '') : projectId === null ? 'Overview' : null
+  // A page with no chat (the Overview, a module's page) scrolls as a page: the browser's own
+  // scrolling, which bounces at either end, and its header goes up with the rest. On a phone its bar
+  // stays at the top; on a wider screen the sidebar stays beside it. A chat keeps its box at the
+  // bottom, and only its own columns scroll.
+  const pageScrolls = phoneTitle !== null
+  // A module's page opened below its own top (a ticket of the Tickets) goes back up to it from the phone's bar.
+  const backUp = modulePage && pageSegment && route.pagePath?.length ? () => hostServices.backToPage(pageSegment, [], scope ?? undefined) : undefined
+  // The tab says the page first, as its heading or the sidebar names it, then the project the count is scoped to (#1923).
+  const pageName =
+    route.settings !== undefined
+      ? 'Settings'
+      : pageSegment
+        ? (OWN_PAGES.get(pageSegment)?.label ?? modulePage?.label ?? (addressesRead ? 'No such page' : (listedPage?.label ?? null)))
+        : unknownProject
+          ? 'No such project'
+          : sessionGone
+            ? 'No such session'
+            : projectId === null
+              ? 'Overview'
+              : agentId === null
+                ? 'New agent session'
+                : (sessionLabel ?? startedTitle)
+  useDocumentTitle(waiting.length, projectName ?? (scope ? (labels.get(scope) ?? null) : null), pageName)
+  // The phone bar's place for the page's count, once the bar is drawn.
+  const [phoneCount, setPhoneCount] = useState<HTMLElement | null>(null)
+  // Every other page is pinned: only its own columns scroll.
+  usePinnedPage(!pageScrolls)
+
+  return (
+    // The whole shell lives inside the SidebarProvider so the sidebar's context (state + Cmd/Ctrl+B,
+    // the `--sidebar-width` var) is available on every route, home and session alike. Its wrapper is
+    // the column that used to be a plain div. The installed modules (#1774) are provided around it
+    // all, so the link actions they offer reach any page that shows a link.
+    <ModulesContext.Provider value={modules}>
+    <WaitingContext.Provider value={waitingShown}>
+    <HostServicesContext.Provider value={hostServices}>
+    <OpenProjectContext.Provider value={projectId}>
+    <ProjectLabelsContext.Provider value={labels}>
+    <DaemonDown.Provider value={!healthy}>
+    <ProjectRemovedReport>
+    {/* As tall as what the screen shows, never taller: a phone's 100vh reaches under its browser's
+        bars, and the page then scrolled around the column that scrolls. */}
+    {/* `--top-banner`: the height of the daemon's banner while it shows, which a page that scrolls
+        as a page starts its pinned sidebar under, as every other page has it above its sidebar. */}
+    <SidebarProvider open={!sidebarHidden} onOpenChange={open => setSidebarHidden(!open)} className={pageScrolls ? 'min-h-dvh flex-col' : 'fixed inset-x-0 top-(--shown-top,0px) h-(--shown-height,100dvh) min-h-0 flex-col overflow-hidden'} style={{ '--sidebar-width': `${sidebarWidth}px`, ...(healthy ? {} : { '--top-banner': '2.25rem' }) } as CSSProperties}>
+      {/* The top navbar is gone (#772 follow-up): its brand, global nav and utility controls moved
+          into the sidebar (AgentHistory), so the workspace and the panes get the full height. */}
+      {!healthy && (
+        // Kept at the top of a page that scrolls, over an opaque ground, as the pinned sidebar is under it.
+        <div role="alert" className={cn('h-(--top-banner) shrink-0 bg-background', pageScrolls && 'sticky top-0 z-30')}>
+          {/* The banners' strip: a tinted fill with no edge, its mark in the warning's colour, its words in the text's. One
+              line high on every screen (`--top-banner`): a phone draws its first sentence and says the rest to a screen reader. */}
+          <div className="flex h-full items-center gap-2 bg-warning/10 px-4 text-sm">
+            <TriangleAlert className="size-4 shrink-0 text-warning" aria-hidden />
+            {daemon === 'stopped' ? (
+              <span className="min-w-0 max-md:truncate">
+                OpenAgent has stopped.
+                <span className="max-md:sr-only">
+                  {' '}
+                  Start it again with <code className="font-mono">openagent</code> in a terminal; {INSTALLED_RESTARTS}.
+                </span>
+              </span>
+            ) : (
+              <span className="min-w-0 max-md:truncate">
+                OpenAgent is not answering — retrying.
+                <span className="max-md:sr-only"> Nothing can be sent, started, stopped, answered or published until it is back.</span>
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+      {/* The workspace row is fixed-height: each column scrolls internally, so the row itself
+          must never scroll. overflow-hidden clips any stray horizontal bleed (no page X-scroll).
+          `relative` is load-bearing (#904): overflow only clips a descendant this box is the
+          containing block for, and Tailwind's `.sr-only` is position:absolute. Without it those
+          labels resolve against the initial containing block, keep their static position deep in
+          the scrolled content, and give the document a phantom scrollbar that slides the whole
+          app off-screen. */}
+      {/* A page that scrolls as a page is clipped sideways only: a box that clips both ways holds its bar from sticking. */}
+      <div className={cn('relative flex min-h-0 flex-1', pageScrolls ? 'overflow-x-clip' : 'overflow-hidden')}>
+        <AgentHistory
+          pageScrolls={pageScrolls}
+          notFound={notFound}
+          projectId={projectId}
+          scope={scope}
+          scopePending={scopePending}
+          listLoaded={(scope === null ? recentState : agentsState) === 'fresh'}
+          onScope={selectScope}
+          homeHref={formatRoute({ projectId: null, agentId: null, ...(scope ? { scope } : {}) }, addresses)}
+          agents={agents}
+          selectedAgentId={agentId}
+          // A row of the picked project's list opens in that project, whichever page is showing.
+          onSelect={id => go({ projectId: scope ?? projectId, agentId: id })}
+          recentAgents={recentAgents}
+          onSelectRecent={selectAgentInProject}
+          projects={projects}
+          onNewAgentInProject={newAgentInProject}
+          onProjectAdded={() => {
+            reloadProjects()
+            reload()
+          }}
+          startTick={agentStart.tick}
+          startIntent={agentStart.intent}
+          startTitle={agentStart.title}
+          startId={agentStart.id}
+          startProjectName={agentStart.projectId !== null ? labels.get(agentStart.projectId) : undefined}
+          working={working}
+          onDashboard={showDashboard}
+          onSettings={showSettings}
+          pages={sidebarPages}
+          activePage={pageSegment}
+          onPage={showPage}
+          waiting={waiting}
+          hrefOf={hrefOf}
+        />
+        {/* A project's page and an agent's have panes beside them (Panes). A module's page takes
+            the full width itself (#1774), the way the Overview does. */}
+        <PanesProvider
+          projectId={projectId}
+          agentId={agentId}
+          // A session with no project has no files or changes of a project's to show beside it, and
+          // one that is gone, or a project that is not registered, has none at all.
+          enabled={!pageSegment && !noProject && !sessionGone && !unknownProject}
+          files={files}
+          context={context}
+          toggleContext={toggleContext}
+          activity={events.length}
+          // The run's subagents, when its coding agent started any, beside the chat.
+          subagents={projectId && agentId && hasSubagents ? <SubagentsPanel projectId={projectId} agentId={agentId} events={events} live={selectedAgent?.status === 'running'} /> : undefined}
+        >
+          <PaneLayout>
+            <FocusHome as="main" className="flex min-h-0 min-w-0 flex-1 flex-col">
+              {isMobile && phoneTitle !== null && <PhoneBar title={phoneTitle} countSlot={setPhoneCount} onBack={backUp} />}
+              <PhoneBarCount.Provider value={phoneCount}>{renderMain()}</PhoneBarCount.Provider>
+            </FocusHome>
+          </PaneLayout>
+        </PanesProvider>
+      </div>
+      {/* On a phone the sidebar is a sheet, opened from the bar of pages at the foot of every page
+          but a session's, whose message box is the page's foot (its top bar's arrow goes back). */}
+      {isMobile && agentId === null && (
+        <PagesBar
+          pages={sidebarPages}
+          activePage={pageSegment}
+          overviewActive={projectId === null && pageSegment === null}
+          overviewHref={hrefOf({ projectId: null, agentId: null })}
+          onOverview={showDashboard}
+          pageHref={segment => hrefOf({ projectId: null, agentId: null, page: segment })}
+          onPage={showPage}
+          newHref={hrefOf({ projectId: scope ?? SESSIONS_ID, agentId: null })}
+          newActive={!notFound && projectId !== null && agentId === null}
+          onNew={() => newAgentInProject(scope ?? SESSIONS_ID)}
+          waiting={waiting.length}
+        />
+      )}
+      {/* What a module of this computer's draws over every page: a popup it raises itself. */}
+      {modules.views['app.overlay'].map(({ View, id, package: pkg }) => (
+        <ModuleSlot key={`${pkg}:${id}`} package={pkg} label={`${pkg} popup`}>
+          <View />
+        </ModuleSlot>
+      ))}
+      <JumpPalette
+        waiting={waiting}
+        runs={pageRuns}
+        pages={[...shownPages.map(barPage), ...[...OWN_PAGES].map(([segment, page]) => ({ segment, ...page }))]}
+        projects={projects}
+        scope={scope}
+        here={route}
+        hrefOf={hrefOf}
+        go={go}
+      />
+      {/* Once what the address names is read: the project its "Project" group opens on, and the entries the projects and their packages add. */}
+      {route.settings !== undefined && addressesRead && <SettingsDialog entry={route.settings} openItem={route.settingsItem} onEntry={showSettings} onClose={closeSettings} scope={scope} projects={projects} />}
+    </SidebarProvider>
+    </ProjectRemovedReport>
+    </DaemonDown.Provider>
+    </ProjectLabelsContext.Provider>
+    </OpenProjectContext.Provider>
+    </HostServicesContext.Provider>
+    </WaitingContext.Provider>
+    </ModulesContext.Provider>
+  )
+}

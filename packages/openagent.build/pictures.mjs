@@ -1,6 +1,6 @@
 // The site's pictures of the dashboard (public/pictures/), taken again in one command whenever the
 // dashboard's look changes: `pnpm --filter __private__website pictures`. Each is the offline demo
-// (packages/dashboard/src/e2e/README.md) in Chrome, dark and light, at twice its pixels, once for each
+// (packages/ui/src/e2e/README.md) in Chrome, dark and light, at twice its pixels, once for each
 // width of room the site gives it, so the site shows it at its own size (Screenshot, pages/index/ui.tsx).
 // Needs `pnpm build` and the dashboard's test build (`pnpm exec tsc -p tsconfig.test.json` there), and a
 // Chrome (`CHROME_PATH`, or one where Chrome usually is). Run it without `claude` and `codex` on PATH, as
@@ -11,16 +11,16 @@ import { createRequire } from 'node:module'
 import { homedir, hostname } from 'node:os'
 import { pathToFileURL } from 'node:url'
 
-const dashboard = new URL('../dashboard/', import.meta.url)
+const dashboard = new URL('../ui/', import.meta.url)
 const demoBuild = new URL('dist-test/e2e/demo.js', dashboard)
-if (!existsSync(new URL('dist/cli/bin.js', dashboard)) || !existsSync(demoBuild)) {
-  console.error('The dashboard is not built: run `pnpm build` at the root, then `pnpm exec tsc -p tsconfig.test.json` in packages/dashboard.')
+if (!existsSync(new URL('dist/dashboard-bundle', dashboard)) || !existsSync(demoBuild)) {
+  console.error('The dashboard is not built: run `pnpm build` at the root, then `pnpm exec tsc -p tsconfig.test.json` in packages/ui.')
   process.exit(1)
 }
 // The browser the dashboard's own smoke stories drive, from the dashboard's dependencies.
 const require = createRequire(new URL('package.json', dashboard))
 const { chromium } = require('playwright-core')
-const { resolveChromePath } = await import(pathToFileURL(require.resolve('@openagt/skill-browser')).href)
+const { resolveChromePath } = await import(pathToFileURL(require.resolve('@openagt/browser')).href)
 const { startDemo } = await import(demoBuild.href)
 
 const out = new URL('public/pictures/', import.meta.url)

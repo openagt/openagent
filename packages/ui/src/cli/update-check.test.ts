@@ -1,0 +1,98 @@
+import { strict as assert } from 'node:assert'
+import { test } from 'node:test'
+import {
+  checkForUpdate,
+  compareVersions,
+  formatUpdateStatus,
+  updateCommand,
+  type VersionFetcher,
+} from './update-check.js'
+
+/** OpenAgent's package, as a test has it: the name the registry is asked about. */
+const PKG = '@acme/openagent'
+
+/** A {@link VersionFetcher} that always resolves `latest`, never hitting the network. */
+function fakeFetcher(latest: string | undefined): VersionFetcher {
+  return async () => latest
+}
+
+test('compareVersions: equal versions -> 0', () => {
+  assert.equal(compareVersions('1.2.3', '1.2.3'), 0)
+})
+
+test('compareVersions: 1.9.0 vs 1.10.0 compares numerically, not as strings', () => {
+  assert.ok(compareVersions('1.9.0', '1.10.0') < 0)
+  assert.ok(compareVersions('1.10.0', '1.9.0') > 0)
+})
+
+test('compareVersions: 2.0.0 vs 1.9.9 -> positive', () => {
+  assert.ok(compareVersions('2.0.0', '1.9.9') > 0)
+})
+
+test('compareVersions: prerelease/build suffix is stripped', () => {
+  assert.equal(compareVersions('1.2.3-beta.1', '1.2.3'), 0)
+  assert.equal(compareVersions('1.2.3+build.5', '1.2.3'), 0)
+})
+
+test('compareVersions: missing parts read as 0', () => {
+  assert.equal(compareVersions('1.2', '1.2.0'), 0)
+  assert.ok(compareVersions('1.2', '1.2.1') < 0)
+})
+
+test('checkForUpdate: same version -> up-to-date', async () => {
+  const status = await checkForUpdate('1.2.3', fakeFetcher('1.2.3'), PKG)
+  assert.deepEqual(status, { kind: 'up-to-date', current: '1.2.3' })
+})
+
+test('checkForUpdate: higher latest -> update-available with latest', async () => {
+  const status = await checkForUpdate('1.2.3', fakeFetcher('1.3.0'), PKG)
+  assert.deepEqual(status, { kind: 'update-available', current: '1.2.3', latest: '1.3.0' })
+})
+
+test('checkForUpdate: lower latest (local build ahead) -> up-to-date', async () => {
+  const status = await checkForUpdate('2.0.0', fakeFetcher('1.9.9'), PKG)
+  assert.deepEqual(status, { kind: 'up-to-date', current: '2.0.0' })
+})
+
+test('checkForUpdate: fetcher returns undefined -> unknown', async () => {
+  const status = await checkForUpdate('1.2.3', fakeFetcher(undefined), PKG)
+  assert.deepEqual(status, { kind: 'unknown', current: '1.2.3' })
+})
+
+test("checkForUpdate: asks the fetcher about OpenAgent's package", async () => {
+  const seen: string[] = []
+  const spy: VersionFetcher = async pkg => {
+    seen.push(pkg)
+    return '1.0.0'
+  }
+  await checkForUpdate('1.0.0', spy, PKG)
+  await checkForUpdate('1.0.0', spy, 'some-other-pkg')
+  assert.deepEqual(seen, [PKG, 'some-other-pkg'])
+})
+
+test('formatUpdateStatus: up-to-date line', () => {
+  assert.equal(formatUpdateStatus({ kind: 'up-to-date', current: '1.2.3' }, `npm i -g ${PKG}`), '  Up to date.')
+})
+
+test('formatUpdateStatus: update-available line', () => {
+  assert.equal(
+    formatUpdateStatus({ kind: 'update-available', current: '1.2.3', latest: '1.3.0' }, `npm i -g ${PKG}`),
+    `  v1.3.0 is out. Run: npm i -g ${PKG}`,
+  )
+})
+
+test("the update line names what updates OpenAgent's package where it runs: the install's own copy by its installer, any other by npm", () => {
+  const available = { kind: 'update-available', current: '0.65.0', latest: '0.66.0' } as const
+  const at = (dir: string) => ({ name: '@openagt/dashboard', dir })
+  assert.equal(formatUpdateStatus(available, updateCommand(at('/home/ada/.local/share/openagent/node_modules/@openagt/dashboard'), 'linux')), '  v0.66.0 is out. Run: npx @openagt/install@latest')
+  assert.equal(formatUpdateStatus(available, updateCommand(at('/Users/ada/Library/Application Support/OpenAgent/node_modules/@openagt/dashboard'), 'darwin')), '  v0.66.0 is out. Run: npx @openagt/install@latest')
+  assert.equal(formatUpdateStatus(available, updateCommand(at('/usr/lib/node_modules/@openagt/dashboard'), 'linux')), '  v0.66.0 is out. Run: npm i -g @openagt/dashboard')
+  assert.equal(formatUpdateStatus(available, updateCommand(at('/home/ada/.npm/_npx/1a2b/node_modules/@openagt/dashboard'), 'linux')), '  v0.66.0 is out. Run: npm i -g @openagt/dashboard')
+  // Another distribution's package, where the install keeps its own: its name, wherever it is.
+  assert.equal(updateCommand({ name: '@acme/openagent', dir: '/home/ada/.local/share/openagent/node_modules/@openagt/dashboard' }, 'linux'), 'npm i -g @acme/openagent')
+  assert.equal(updateCommand({ name: '@acme/openagent', dir: '/home/ada/.local/share/openagent/node_modules/@acme/openagent' }, 'linux'), 'npx @openagt/install@latest')
+})
+
+test('formatUpdateStatus: unknown -> undefined (print nothing)', () => {
+  assert.equal(formatUpdateStatus({ kind: 'unknown', current: '1.2.3' }, `npm i -g ${PKG}`), undefined)
+})

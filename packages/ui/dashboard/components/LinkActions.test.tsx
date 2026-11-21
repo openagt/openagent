@@ -1,0 +1,172 @@
+import { afterEach, describe, expect, test, vi } from 'vitest'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { ModulesContext, mountedOf, type MountedAction, type MountedModules } from '../lib/use-modules.js'
+import { forgetRemembered } from '../lib/use-async.js'
+
+const runModuleCommand = vi.hoisted(() => vi.fn())
+vi.mock('../rpc/modules.js', () => ({ runModuleCommand }))
+
+const { LinkActions } = await import('./LinkActions.js')
+
+type MountedLinkAction = MountedAction<'link.menu'>
+
+/** One mounted action, the queue module's shape, whose `run` is a spy answering `result`. */
+const mounted = (run: MountedLinkAction['run'], over: Partial<MountedLinkAction> = {}): MountedLinkAction => ({
+  place: 'link.menu',
+  id: 'add-to-queue',
+  label: 'Add to queue',
+  doneLabel: 'Queued',
+  run,
+  package: '@x/queue',
+  projects: ['p1'],
+  ...over,
+})
+
+const modules = (actions: MountedLinkAction[]): MountedModules => mountedOf({ actions: { 'link.menu': actions } })
+
+const LINK = { text: 'Do the thing', href: 'tickets/t.md', priority: 7 }
+
+afterEach(() => {
+  cleanup()
+  runModuleCommand.mockReset()
+  forgetRemembered()
+})
+
+// The slot for the modules' link actions (#1774 Q3): a page shows links, a module acts on them, and
+// this is where the dashboard puts the two together.
+describe('LinkActions', () => {
+  test('one button per mounted action whose package the project has; none for another project', () => {
+    const run = vi.fn()
+    const { rerender } = render(
+      <ModulesContext.Provider value={modules([mounted(run)])}>
+        <LinkActions projects={['p1']} targets={[{ projectId: 'p1', links: [LINK] }]} />
+      </ModulesContext.Provider>,
+    )
+    expect(screen.getByRole('button', { name: 'Add to queue' })).toBeTruthy()
+    rerender(
+      <ModulesContext.Provider value={modules([mounted(run)])}>
+        <LinkActions projects={['p2']} targets={[{ projectId: 'p2', links: [LINK] }]} />
+      </ModulesContext.Provider>,
+    )
+    expect(screen.queryByRole('button')).toBeNull()
+  })
+
+  test('an action that reads its links as done already rests on its done label from the start; a link it has not done is offered', async () => {
+    const done = vi.fn(async () => (link: { href?: string }) => link.href === 'tickets/t.md')
+    const shown = (links: { text: string; href?: string }[]) =>
+      render(
+        <ModulesContext.Provider value={modules([mounted(vi.fn(), { done })])}>
+          <LinkActions projects={['p1']} targets={[{ projectId: 'p1', links }]} />
+        </ModulesContext.Provider>,
+      )
+    shown([LINK])
+    const queued = await screen.findByRole('button', { name: 'Queued' })
+    expect(queued.getAttribute('aria-disabled')).toBe('true')
+    cleanup()
+    shown([LINK, { text: 'Other', href: 'tickets/other.md' }])
+    await waitFor(() => expect(done).toHaveBeenCalledTimes(2))
+    expect(screen.getByRole('button', { name: 'Add to queue' })).toBeTruthy()
+  })
+
+  test('a click runs the action with the links, in order, per project, through a host bound to the module\'s package', async () => {
+    const run = vi.fn().mockResolvedValue({ ok: true })
+    render(
+      <ModulesContext.Provider value={modules([mounted(run, { projects: ['p1', 'p2'] })])}>
+        <LinkActions
+          projects={['p1', 'p2']}
+          targets={[
+            { projectId: 'p1', links: [LINK, { text: 'Second' }] },
+            { projectId: 'p2', links: [{ text: 'Third', href: 'tickets/c.md', priority: 5 }] },
+          ]}
+        />
+      </ModulesContext.Provider>,
+    )
+    const press = screen.getByRole('button', { name: 'Add to queue' })
+    press.focus()
+    fireEvent.click(press)
+    await waitFor(() => expect(run).toHaveBeenCalledTimes(2))
+    expect(run.mock.calls[0]![1]).toEqual({ projectId: 'p1', links: [LINK, { text: 'Second' }] })
+    expect(run.mock.calls[1]![1]).toEqual({ projectId: 'p2', links: [{ text: 'Third', href: 'tickets/c.md', priority: 5 }] })
+    // The host runs only the module's own package's commands; its act is marked so, and the daemon
+    // converges the project's data and re-reads.
+    runModuleCommand.mockResolvedValue({ ok: true, output: null })
+    await run.mock.calls[0]![0].act('p1', ['add', 'x'])
+    expect(runModuleCommand).toHaveBeenCalledWith('p1', '@x/queue', ['add', 'x'], undefined, true, undefined)
+    // Done: the button says so and rests, with the keyboard still on it, and a second press sends nothing.
+    const rested = await screen.findByRole('button', { name: 'Queued' })
+    expect(rested.getAttribute('aria-disabled')).toBe('true')
+    // Not `disabled`: a browser moves the focus off a disabled button, to the page.
+    expect((rested as HTMLButtonElement).disabled).toBe(false)
+    expect(document.activeElement).toBe(rested)
+    fireEvent.click(rested)
+    expect(run).toHaveBeenCalledTimes(2)
+  })
+
+  test('a project the action\'s package is not in is skipped, and an empty group runs nothing', async () => {
+    const run = vi.fn().mockResolvedValue({ ok: true })
+    render(
+      <ModulesContext.Provider value={modules([mounted(run)])}>
+        <LinkActions
+          projects={['p1', 'p2']}
+          targets={[
+            { projectId: 'p2', links: [LINK] },
+            { projectId: 'p1', links: [] },
+          ]}
+        />
+      </ModulesContext.Provider>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Add to queue' }))
+    await screen.findByRole('button', { name: 'Queued' })
+    expect(run).not.toHaveBeenCalled()
+  })
+
+  test('the function form is resolved at click time, so a page can read what is already there first', async () => {
+    const run = vi.fn().mockResolvedValue({ ok: true })
+    const targets = vi.fn().mockResolvedValue([{ projectId: 'p1', links: [{ text: 'late' }] }])
+    render(
+      <ModulesContext.Provider value={modules([mounted(run)])}>
+        <LinkActions projects={['p1']} targets={targets} />
+      </ModulesContext.Provider>,
+    )
+    expect(targets).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Add to queue' }))
+    await waitFor(() => expect(run).toHaveBeenCalledWith(expect.anything(), { projectId: 'p1', links: [{ text: 'late' }] }))
+  })
+
+  test('while the action runs, the button says its busy word', async () => {
+    render(
+      <ModulesContext.Provider value={modules([mounted(() => new Promise(() => {}), { busyLabel: 'Adding…' })])}>
+        <LinkActions projects={['p1']} targets={[{ projectId: 'p1', links: [LINK] }]} />
+      </ModulesContext.Provider>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Add to queue' }))
+    expect(await screen.findByRole('button', { name: 'Adding…' })).toBeTruthy()
+  })
+
+  test('a failure shows the reason and leaves the button ready to try again', async () => {
+    const run = vi.fn().mockResolvedValue({ ok: false, error: 'the repository has no remote' })
+    render(
+      <ModulesContext.Provider value={modules([mounted(run)])}>
+        <LinkActions projects={['p1']} targets={[{ projectId: 'p1', links: [LINK] }]} />
+      </ModulesContext.Provider>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Add to queue' }))
+    expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'the repository has no remote')
+    expect(screen.queryByRole('button', { name: 'Queued' })).toBeNull()
+    expect((screen.getByRole('button', { name: 'Add to queue' }) as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  test('a rested button arms again when the set it acted on changes, and the label prop phrases the button', async () => {
+    const run = vi.fn().mockResolvedValue({ ok: true })
+    const page = (key: string) => (
+      <ModulesContext.Provider value={modules([mounted(run)])}>
+        <LinkActions projects={['p1']} targets={[{ projectId: 'p1', links: [LINK] }]} resetKey={key} label={(a, done) => `${done ? a.doneLabel : a.label}: ${a.left} of 3 tickets`} />
+      </ModulesContext.Provider>
+    )
+    const { rerender } = render(page('a'))
+    fireEvent.click(screen.getByRole('button', { name: 'Add to queue: 1 of 3 tickets' }))
+    await screen.findByRole('button', { name: 'Queued: 1 of 3 tickets' })
+    rerender(page('b'))
+    expect(await screen.findByRole('button', { name: 'Add to queue: 1 of 3 tickets' })).toBeTruthy()
+  })
+})

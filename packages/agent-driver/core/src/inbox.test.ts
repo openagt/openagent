@@ -5,12 +5,15 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { FakeDriver } from './fake.js'
 import { appendInbox, takeInbox } from './inbox.js'
-import type { DriverEvent } from './types.js'
+import type { Question, DriverEvent } from '@openagt/hooks'
 
 // The transport and the log, through the fake driver: what reaches a running agent, what the
 // driver reports when a turn ends on a question, and the two files the session keeps.
 
-const QUESTION = 'Done with the plan.\n\n```await-choices\n{ "title": "Ship it?", "options": [{ "label": "Approve" }, { "label": "Decline", "stop": true }], "recommended": "Approve" }\n```\n'
+/** A message that ends on a question, and the question the caller reads in it: the driver reads none itself. */
+const QUESTION = 'Done with the plan. Ship it?'
+const SHIP_IT: Question = { title: 'Ship it?', options: [{ id: 'opt:0', label: 'Approve' }, { id: 'opt:1', label: 'Decline', stop: true }], recommended: 'opt:0' }
+const questionIn = (text: string): Question | undefined => (text === QUESTION ? SHIP_IT : undefined)
 
 async function scratch(): Promise<string> {
   return mkdtemp(join(tmpdir(), 'agent-driver-inbox-'))
@@ -48,7 +51,7 @@ test('a turn ending on a question is reported as one event; the inbox is drained
     // Two lines wait before the turn ends: the answer, then a message.
     await appendInbox(inbox, { kind: 'answer', question: 'Ship it?', answer: 'Approve' })
     await appendInbox(inbox, { kind: 'message', text: 'Also add a test.' })
-    const turn = await session.prompt('/work-queue', { inbox })
+    const turn = await session.prompt('/work-queue', { inbox, questionIn })
     assert.equal(turn.text, 'And tested.', 'the prompt resolves with the last turn')
     assert.deepEqual(session.prompts, ['/work-queue', 'You paused to ask: "Ship it?". The user chose: Approve. Continue with that decision.', 'Also add a test.'])
     const question = events.find(e => e.type === 'question')
@@ -56,6 +59,21 @@ test('a turn ending on a question is reported as one event; the inbox is drained
     assert.equal(question.question.title, 'Ship it?')
     assert.equal(question.question.recommended, 'opt:0')
     assert.deepEqual(await takeInbox(inbox), [], 'nothing left, and nothing waited')
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('a message is no question unless the caller reads one in it; a question asked with the agent\'s own tool is one either way', async () => {
+  const dir = await scratch()
+  try {
+    const events: DriverEvent[] = []
+    const session = await new FakeDriver({ turns: [{ text: QUESTION }, { text: 'Which one?', question: SHIP_IT }] }).start({ cwd: dir, onEvent: e => events.push(e) })
+    await session.prompt('/plan')
+    assert.equal(events.some(e => e.type === 'question'), false, 'a message the caller reads nothing in asks nothing')
+    const asked = await session.prompt('go on')
+    assert.deepEqual(asked.question, SHIP_IT)
+    assert.deepEqual(events.filter(e => e.type === 'question'), [{ type: 'question', question: SHIP_IT }])
   } finally {
     await rm(dir, { recursive: true, force: true })
   }
@@ -128,7 +146,7 @@ test('the log: a card and a diary in the record shape, current as the turn strea
     assert.ok(session.log)
     await session.prompt('/work-queue')
     await session.log.patch({ branch: 'agent-fix-it', caller: { host: 'box' } })
-    await session.prompt('go on')
+    await session.prompt('go on', { questionIn })
     await session.log.end('done')
     await session.log.settled()
 

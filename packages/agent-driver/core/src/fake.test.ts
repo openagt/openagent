@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { FakeDriver } from './fake.js'
-import type { DriverEvent } from './types.js'
+import type { DriverEvent } from '@openagt/hooks'
 
 test('FakeDriver replays scripted turns in order and repeats the last', async () => {
   const driver = new FakeDriver({ turns: [{ text: 'one' }, { text: 'two' }] })

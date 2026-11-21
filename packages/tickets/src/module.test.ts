@@ -1,0 +1,121 @@
+import { strict as assert } from 'node:assert'
+import { test } from 'node:test'
+import { claimState, heldBack, holderAgent, hotLane, isHighPriority, namesOf, planAgentFor, planBody, planLink, planPath, planTicketPrompt, routeOf, ticketLink, workAgentFor, workOnTicketPrompt } from './module.js'
+
+const FILE = '2026-08-30_login-page.md'
+
+test('the prompts and paths are one wording each, made from the ticket\'s filename', () => {
+  assert.equal(planTicketPrompt(FILE), 'Create tickets/2026-08-30_login-page.plan.md')
+  assert.equal(workOnTicketPrompt(FILE), 'Work on tickets/2026-08-30_login-page.md. Do not start any other ticket.')
+  assert.equal(planPath(FILE), 'tickets/2026-08-30_login-page.plan.md')
+})
+
+test('planAgentFor picks the newest run whose ask names the plan; holderAgent the run the lock names', () => {
+  const agents = [
+    { id: 'a1', ask: 'Create tickets/2026-08-30_login-page.plan.md', status: 'done', startedAt: '2026-09-01T00:00:00Z' },
+    { id: 'a2', ask: 'Plan it: Create tickets/2026-08-30_login-page.plan.md please', status: 'running', startedAt: '2026-09-02T00:00:00Z' },
+    { id: 'a3', ask: 'Work on tickets/2026-08-30_login-page.md. Do not start any other ticket.', status: 'done', startedAt: '2026-09-03T00:00:00Z' },
+    { id: 'a4', status: 'done', startedAt: '2026-09-04T00:00:00Z' },
+  ]
+  assert.equal(planAgentFor(agents, FILE)?.id, 'a2')
+  assert.equal(planAgentFor(agents, '2026-01-01_other.md'), undefined)
+  assert.equal(holderAgent(agents, 'a3')?.id, 'a3')
+  assert.equal(holderAgent(agents, 'feature/x'), undefined)
+  assert.equal(holderAgent(agents, undefined), undefined)
+})
+
+test('routeOf reads the list, a new ticket, a ticket, its plan, and nothing else', () => {
+  assert.deepEqual(routeOf(null, []), { view: 'list' })
+  assert.deepEqual(routeOf('p1', []), { view: 'list' })
+  assert.deepEqual(routeOf('p1', [FILE]), { view: 'ticket', projectId: 'p1', file: FILE })
+  assert.deepEqual(routeOf('p1', [FILE, 'plan']), { view: 'plan', projectId: 'p1', file: FILE })
+  assert.deepEqual(routeOf(null, [FILE]), { view: 'unknown' })
+  assert.deepEqual(routeOf('p1', ['../x.md']), { view: 'unknown' })
+  assert.deepEqual(routeOf('p1', ['2026-08-30_login-page.plan.md']), { view: 'unknown' })
+  assert.deepEqual(routeOf('p1', [FILE, 'diff']), { view: 'unknown' })
+  assert.deepEqual(routeOf('p1', [FILE, 'plan', 'x']), { view: 'unknown' })
+  assert.deepEqual(routeOf('p1', ['new']), { view: 'new', projectId: 'p1' })
+  assert.deepEqual(routeOf(null, ['new']), { view: 'unknown' }, 'a new ticket is always some project\'s')
+  assert.deepEqual(routeOf('p1', ['new', 'plan']), { view: 'unknown' })
+})
+
+test('a ticket as a link points at its file at its own priority; a plan ask points nowhere', () => {
+  assert.deepEqual(ticketLink({ file: FILE, title: 'Login page', priority: '8' }), { text: 'Login page', href: `tickets/${FILE}`, priority: 8 })
+  assert.deepEqual(ticketLink({ file: FILE, title: 'Login page' }), { text: 'Login page', href: `tickets/${FILE}`, priority: 5 })
+  assert.deepEqual(planLink({ file: FILE, title: 'Login page', priority: '0' }), { text: planTicketPrompt(FILE), priority: 0 })
+})
+
+test('heldBack: a PR: line is in review, a Waiting: line is waiting, in review first when both; anything else is free to work', () => {
+  const pr = { label: '#12', url: 'https://example.com/pull/12' }
+  assert.equal(heldBack({ pr }), 'in-review')
+  assert.equal(heldBack({ waiting: 'the vendor' }), 'waiting')
+  assert.equal(heldBack({ pr, waiting: 'the vendor' }), 'in-review')
+  assert.equal(heldBack({}), undefined)
+  assert.equal(heldBack({ waiting: '' }), undefined)
+})
+
+test('hotLane: a ticket in review is in no lane; a waiting one is in Waiting at any priority; a claim outranks both', () => {
+  assert.equal(hotLane({ priority: '9', pr: { label: '#12', url: 'u' } }), null)
+  assert.equal(hotLane({ priority: '9', waiting: 'the vendor' }), 'waiting')
+  assert.equal(hotLane({ priority: '2', waiting: 'the vendor' }), 'waiting')
+  assert.equal(hotLane({ waiting: 'the vendor', pr: { label: '#12', url: 'u' } }), 'waiting')
+  assert.equal(hotLane({ locked: true, priority: '9', waiting: 'the vendor' }), 'claimed')
+})
+
+test('hotLane: a claimed ticket is in the claimed lane whatever its priority, an unclaimed one at 7 or up is high priority, the rest are off the card', () => {
+  assert.equal(hotLane({ locked: true }), 'claimed')
+  assert.equal(hotLane({ locked: true, priority: '2' }), 'claimed')
+  assert.equal(hotLane({ priority: '7' }), 'high-priority')
+  assert.equal(hotLane({ priority: '10' }), 'high-priority')
+  assert.equal(hotLane({ locked: false, priority: '6' }), null)
+  assert.equal(hotLane({}), null)
+  // The format's 0-10 scale, never a P0/P1 reading, never a word.
+  assert.equal(hotLane({ priority: '0' }), null)
+  assert.equal(hotLane({ priority: 'high' }), null)
+  assert.equal(isHighPriority(' 8 '), true)
+  assert.equal(isHighPriority(undefined), false)
+})
+
+test('claimState: a claim is worked while its run runs or waits on an answer, and held for nobody otherwise', () => {
+  assert.equal(claimState('running'), 'working')
+  assert.equal(claimState('waiting'), 'working')
+  for (const ended of ['done', 'stopped', 'failed']) assert.equal(claimState(ended), 'stale', ended)
+  assert.equal(claimState(undefined), 'stale', 'no run of the project holds it')
+})
+
+test('a path under tickets/ is called what its ticket is called: a ticket by its title, a plan as the plan of its ticket, which it opens', () => {
+  const tickets = [{ file: FILE, title: 'Login page' }]
+  assert.deepEqual(namesOf([`tickets/${FILE}`, 'tickets/2026-08-30_login-page.plan.md'], tickets), {
+    [`tickets/${FILE}`]: { title: 'Login page' },
+    'tickets/2026-08-30_login-page.plan.md': { title: 'Plan: Login page', href: `tickets/${FILE}` },
+  })
+  // A ticket that is not listed (closed, deleted), its plan, and a path that is no ticket's have no name.
+  assert.deepEqual(namesOf(['tickets/2026-01-01_gone.md', 'tickets/2026-01-01_gone.plan.md', 'docs/readme.md', 'tickets/'], tickets), {})
+})
+
+test('a plan its ticket already has is done, unless it is outdated: the ask to write it again is left over, and only that ask is called written already', () => {
+  const plan = 'tickets/2026-08-30_login-page.plan.md'
+  assert.deepEqual(namesOf([plan], [{ file: FILE, title: 'Login page', planned: true }]), { [plan]: { title: 'Plan: Login page', href: `tickets/${FILE}`, done: { ask: `Create ${plan}`, title: 'Plan: Login page · already written' } } })
+  assert.deepEqual(namesOf([plan], [{ file: FILE, title: 'Login page', planned: true, outdated: true }]), { [plan]: { title: 'Plan: Login page', href: `tickets/${FILE}` } })
+})
+
+test('the work on a ticket is the newest run asked about its file, never one asked for its plan', () => {
+  const runs = [
+    { id: 'plan', ask: planTicketPrompt(FILE), startedAt: '2026-08-31T00:00:00.000Z', status: 'done' },
+    { id: 'old', ask: workOnTicketPrompt(FILE), startedAt: '2026-09-01T00:00:00.000Z', status: 'done' },
+    { id: 'queued', ask: `[Login page](tickets/${FILE})`, startedAt: '2026-09-02T00:00:00.000Z', status: 'done' },
+    { id: 'other', ask: 'Work on tickets/2026-08-30_login-page.md.bak', startedAt: '2026-09-03T00:00:00.000Z', status: 'done' },
+    { id: 'drain', ask: '/work-queue', startedAt: '2026-09-04T00:00:00.000Z', status: 'done' },
+  ]
+  assert.equal(workAgentFor(runs, FILE)?.id, 'queued')
+  assert.equal(workAgentFor(runs.slice(0, 2), FILE)?.id, 'old', 'the start column\'s ask ends its sentence right after the file')
+  assert.equal(workAgentFor(runs.slice(0, 1), FILE), undefined, 'the plan\'s run did no work')
+})
+
+test('a plan shows under its page\'s heading without its preamble and its title', () => {
+  assert.equal(planBody('Effort: 2\nUncertainty: 1\nOutdated: yes\n\n# [Plan] Login page\n\nWhat this holds.\n\n## Problems\n'), 'What this holds.\n\n## Problems')
+  assert.equal(planBody('# [Plan] Login page\n\nText.'), 'Text.')
+  // Prose above the title is not a preamble: the plan is shown as written.
+  assert.equal(planBody('A note first.\n\n# [Plan] Login page\n\nText.'), 'A note first.\n\n# [Plan] Login page\n\nText.')
+  assert.equal(planBody('No title at all.'), 'No title at all.')
+})

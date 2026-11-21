@@ -2,12 +2,13 @@ import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { request } from 'node:https'
-import { createRequire } from 'node:module'
 import { connect } from 'node:net'
-import { dirname, join, sep } from 'node:path'
-import { joinRunningDashboard } from '@openagt/dashboard/join-dashboard'
-import { CERTIFICATE_FILE, KEY_FILE, readSecureAddress, secureAddressDir } from '@openagt/dashboard/secure-address'
+import { join, sep } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { joinRunningDashboard } from '@openagt/ui/join-dashboard'
+import { CERTIFICATE_FILE, KEY_FILE, readSecureAddress, secureAddressDir } from '@openagt/ui/secure-address'
 import { ADDRESS, CERTIFICATE_CONFIG, CERTIFICATE_DAYS, LOOPBACK_ADDRESS } from './address.js'
+import { LAUNCHER } from './launcher.js'
 import { linux } from './linux.js'
 import { mac } from './mac.js'
 import type { InstallIO, Platform } from './platform.js'
@@ -53,20 +54,31 @@ export function inCheckout(path: string): boolean {
   return !path.split(sep).includes('node_modules')
 }
 
+/** Whether this command runs from a checkout of the repository, not from a package a package manager installed. */
+async function fromCheckout(): Promise<boolean> {
+  return inCheckout(await realpath(fileURLToPath(import.meta.url)))
+}
+
 /**
- * The dashboard the computer starts at login, of the package whose real `package.json` is
- * `manifest`. Run from a checkout, it is the one this command
- * came with. Installed by a package manager (`npx`, `pnpm dlx`, `bunx`, `yarn dlx`, a global
- * install), it is in that manager's folder, which it empties or updates when it likes: the same
- * version is installed to a folder of OpenAgent's own.
+ * The dashboard the computer starts at login, and the `openagent` command runs. Run from a
+ * checkout, the install takes the one beside it there. Installed by a package manager (`npx`,
+ * `pnpm dlx`, `bunx`, `yarn dlx`), it installs the newest one to a folder of OpenAgent's own,
+ * which no package manager empties or updates. The dashboard is no package of the install's: the
+ * install is one of the dashboard's, for its `--uninstall`.
  */
-async function lastingDashboard(manifest: string, app: string, io: InstallIO): Promise<string> {
-  if (inCheckout(manifest)) return join(dirname(manifest), 'dist', 'cli', 'bin.js')
-  const { version } = JSON.parse(await readFile(manifest, 'utf8')) as { version: string }
-  io.out(`◆ installing OpenAgent v${version} in ${app}`)
+async function lastingDashboard(app: string, io: InstallIO): Promise<string> {
+  if (await fromCheckout()) return fileURLToPath(new URL('../../dashboard/dist/bin.js', import.meta.url))
+  io.out(`◆ installing the newest OpenAgent in ${app}`)
   await mkdir(app, { recursive: true })
-  await run('npm', ['install', '--prefix', app, '--no-fund', '--no-audit', `@openagt/dashboard@${version}`])
-  return join(app, 'node_modules', '@openagt', 'dashboard', 'dist', 'cli', 'bin.js')
+  await run('npm', ['install', '--prefix', app, '--no-fund', '--no-audit', '@openagt/dashboard@latest'])
+  return join(app, 'node_modules', '@openagt', 'dashboard', 'dist', 'bin.js')
+}
+
+/** The version of the dashboard whose command is `dashboard`, as its package says; none where it cannot be read. */
+async function versionOf(dashboard: string): Promise<string | undefined> {
+  const manifest = await readFile(join(dashboard, '..', '..', 'package.json'), 'utf8').catch(() => undefined)
+  const version = manifest === undefined ? undefined : (JSON.parse(manifest) as { version?: unknown }).version
+  return typeof version === 'string' ? version : undefined
 }
 
 /** The certificate for {@link ADDRESS}, and whether this run made it: one is made on this computer when there is none for it. */
@@ -131,8 +143,7 @@ export async function install(io: InstallIO = defaultIO, env: NodeJS.ProcessEnv 
     io.err(unable)
     return 1
   }
-  const manifest = await realpath(createRequire(import.meta.url).resolve('@openagt/dashboard/package.json'))
-  if (!inCheckout(manifest) && !(await installed('npm', env.PATH))) {
+  if (!(await fromCheckout()) && !(await installed('npm', env.PATH))) {
     io.err('OpenAgent installs its dashboard with npm, and this computer has no `npm`. Install npm (it comes with Node.js), then run this again.')
     return 1
   }
@@ -150,12 +161,12 @@ export async function install(io: InstallIO = defaultIO, env: NodeJS.ProcessEnv 
   let administered = false
   let madeCertificate = false
   try {
-    const dashboard = await lastingDashboard(manifest, platform.appDir(env), io)
+    const dashboard = await lastingDashboard(platform.appDir(env), io)
     await platform.prepare(io, env)
     const { cert, made } = await ensureCertificate(env)
     madeCertificate = made
     const certFile = join(secureAddressDir(env), CERTIFICATE_FILE)
-    await asAdmin(platform.adminInstall(certFile), io)
+    await asAdmin(platform.adminInstall(certFile, { node: process.execPath, dashboard }), io)
     administered = true
     await platform.trust(certFile, io, env)
 
@@ -164,20 +175,25 @@ export async function install(io: InstallIO = defaultIO, env: NodeJS.ProcessEnv 
       io.err(`The dashboard does not answer at https://${ADDRESS} yet. What it says is in ${output}.`)
       return 1
     }
-    io.out(`◆ OpenAgent is installed: https://${ADDRESS}`)
-    io.out('  It starts when you log in. `npx @openagt/uninstall` takes it off again.')
+    const version = await versionOf(dashboard)
+    io.out(`◆ OpenAgent${version ? ` v${version}` : ''} is installed: https://${ADDRESS}`)
+    io.out(`  It starts when you log in, and \`openagent\` (${LAUNCHER}) runs it in a terminal. \`openagent --uninstall\` takes it off again.`)
     openInBrowser(platform.openCommand, `https://${ADDRESS}`)
     return 0
   } catch (err) {
     io.err(`OpenAgent could not be installed: ${err instanceof Error ? err.message : String(err)}`)
-    if (administered) io.err('  `npx @openagt/uninstall` takes off what was put on this computer so far.')
+    if (administered) io.err('  `openagent --uninstall` takes off what was put on this computer so far.')
     // Every dashboard started here announces the address of a certificate it finds, which this computer answers only after the password step.
     else if (madeCertificate) await rm(secureAddressDir(env), { recursive: true, force: true })
     return 1
   }
 }
 
-/** `npx @openagt/uninstall`: everything {@link install} put on this computer, taken off. Each part is taken off even when another fails. */
+/**
+ * `openagent --uninstall`: everything {@link install} put on this computer, taken off. Each part
+ * is taken off even when another fails, but for OpenAgent's folders: while the administrator's
+ * step is not done, they stay, the dashboard the `openagent` command runs among them.
+ */
 export async function uninstall(io: InstallIO = defaultIO, env: NodeJS.ProcessEnv = process.env): Promise<number> {
   const platform = PLATFORMS[process.platform]
   if (!platform) {
@@ -200,12 +216,13 @@ export async function uninstall(io: InstallIO = defaultIO, env: NodeJS.ProcessEn
       () => true,
       () => false,
     ))
-  await rm(dir, { recursive: true, force: true })
-  for (const folder of platform.folders(env)) await rm(folder, { recursive: true, force: true })
   if (!admin) {
-    io.err('The hosts line and the port rule are still there: run this again to take them off.')
+    // OpenAgent's folders stay, the dashboard the command runs among them, so the command can run again.
+    io.err('The hosts line, the port rule and the `openagent` command are still there: run `openagent --uninstall` again to take them off.')
     return 1
   }
+  await rm(dir, { recursive: true, force: true })
+  for (const folder of platform.folders(env)) await rm(folder, { recursive: true, force: true })
   io.out('◆ OpenAgent is off this computer. Your projects and their agents’ records are left as they were.')
   if (left) io.out(`  ${left}`)
   return 0

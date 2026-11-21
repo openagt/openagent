@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
-import type { DriverEvent, DriverPromptOptions } from './types.js'
+import type { DriverEvent, DriverPromptOptions } from '@openagt/hooks'
 
 // The pieces every driver session needs but that are not agent-specific: emitting events
 // without letting a listener throw into the agent, folding the session + per-call signals and

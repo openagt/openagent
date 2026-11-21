@@ -20,13 +20,12 @@ test('against real git: everything under .openagent is hidden from git, the igno
     const fw = join(repo, '.openagent')
     await mkdir(join(fw, 'branches', 'agent-r9'), { recursive: true })
     await writeFile(join(fw, '.gitignore'), openagentGitignore())
-    await writeFile(join(fw, 'hooks.yml'), 'start: true\n')
     await writeFile(join(fw, 'r9.json'), '{}\n')
     await writeFile(join(fw, 'r9.jsonl'), '\n')
     await writeFile(join(fw, 'branches', 'agent-r9', 'file.txt'), 'x\n')
 
     const status = git('status', '--porcelain', '-uall')
-    assert.equal(status, '', 'the hooks file, a run\'s card and diary, a directory under it and the ignore file itself: git shows no trace of any')
+    assert.equal(status, '', 'a run\'s card and diary, a directory under it and the ignore file itself: git shows no trace of any')
   } finally {
     await rm(repo, { recursive: true, force: true })
   }

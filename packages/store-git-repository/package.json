@@ -1,0 +1,46 @@
+{
+  "name": "@openagt/store-git-repository",
+  "version": "0.1.0",
+  "description": "OpenAgent's store plugin that keeps the person's own folder, ~/.openagent, as a git repository: every save a commit, pushed to a repository of the person's when they give it one, and what their other computers pushed taken in before a fresh read.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/openagt/openagent.git",
+    "directory": "packages/store-git-repository"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./module": {
+      "types": "./dist/module.d.ts",
+      "default": "./dist/module.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "tsc -p tsconfig.test.json && node ../../scripts/test-node.mjs",
+    "clean": "rm -rf dist dist-test"
+  },
+  "dependencies": {
+    "@openagt/agent-data": "workspace:*",
+    "@openagt/hooks": "workspace:*",
+    "@openagt/store-filesystem": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^7.0.2"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

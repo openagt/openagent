@@ -1,0 +1,146 @@
+import { afterEach, describe, expect, test } from 'vitest'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { ModuleHostContext, type ModuleHost, type UiProject } from '@openagt/ui/module'
+import { SchedulerCard, offWords } from './SchedulerCard.js'
+import { ON_CLAUDE, STATUS, hostAnswering } from './fixtures.js'
+
+const GEMSTACK = { id: 'p1', name: 'gemstack', gitHost: true }
+const OTHER = { id: 'p2', name: 'other', gitHost: false }
+
+function show(host: ModuleHost, projects: UiProject[] = [GEMSTACK, OTHER]) {
+  return render(
+    <ModuleHostContext.Provider value={host}>
+      <SchedulerCard projects={projects} />
+    </ModuleHostContext.Provider>,
+  )
+}
+
+const ago = (ms: number): string => new Date(Date.now() - ms).toISOString()
+const HOUR = 3_600_000
+
+/** The fixture's two rows, the first with a start an hour ago: `post-merge-cleanup` is on and runs once a day, `work-queue` is off. */
+const RAN = { ...STATUS, schedule: [{ ...STATUS.schedule[0], lastRun: { id: '2026-10-03T10-00-00-000Z', at: ago(HOUR) } }, STATUS.schedule[1]] }
+const project = (name: string): HTMLElement => screen.getByRole('listitem', { name })
+
+afterEach(cleanup)
+
+describe('the Automations card of the Overview', () => {
+  test('it is called what its page is called, and its title opens that page', async () => {
+    const { host } = hostAnswering(() => ({ ok: true, output: RAN }))
+    show(host, [GEMSTACK])
+    const title = await screen.findByRole('link', { name: 'Automations' })
+    expect(title.getAttribute('href')).toBe('/automations')
+    fireEvent.click(title)
+    expect(host.openPage).toHaveBeenCalledWith('automations')
+  })
+
+  test('per project: the rows that are on, each with when it starts next, and one line for the rows that are off; a row whose last look started a run opens that agent', async () => {
+    const { host } = hostAnswering(projectId => ({ ok: true, output: projectId === 'p1' ? RAN : { ok: true, on: false, keepAlive: true, running: false, model: 'opus', spendOffset: 7 } }))
+    show(host)
+    const row = within(await screen.findByRole('listitem', { name: 'gemstack' }))
+    expect(row.getByText('/post-merge-cleanup')).toBeTruthy()
+    expect(row.getByText('Next start in 23h')).toBeTruthy()
+    // The row that is off is counted, not listed.
+    expect(row.queryByText(/work-queue/)).toBeNull()
+    expect(row.getByText('1 more is switched off.')).toBeTruthy()
+    expect(row.getByText('Scheduler on').className).toMatch(/text-success/)
+    row.getByRole('button', { name: /^Started an agent .*: open it$/ }).click()
+    expect(host.openAgent).toHaveBeenCalledWith('p1', '2026-10-03T10-00-00-000Z')
+    // A project whose scheduler is off, with nothing scheduled: its status, its keep-alive mark, no row.
+    const other = within(project('other'))
+    expect(other.getByText('Scheduler off')).toBeTruthy()
+    expect(other.getByText('keep-alive')).toBeTruthy()
+    expect(other.queryByText(/switched off/)).toBeNull()
+    // Nothing scheduled: the card leads to where one is made.
+    fireEvent.click(other.getByRole('link', { name: 'New automation' }))
+    expect(host.openPage).toHaveBeenCalledWith('automations')
+  })
+
+  test('Run now on a row starts one run of it at once (`scheduler now`), and the row says what it started, or why nothing did', async () => {
+    let now: { ok: true; output: unknown } | { ok: false; error: string } = { ok: true, output: { run: '2026-10-25T10-00-00-000Z' } }
+    const { host, runCommand } = hostAnswering((_projectId, args) => (args[0] === 'now' ? now : { ok: true, output: RAN }))
+    show(host, [GEMSTACK])
+    const row = await screen.findByRole('button', { name: 'Run /post-merge-cleanup now' })
+    fireEvent.click(row)
+    await screen.findByText('Started: open it')
+    expect(runCommand).toHaveBeenCalledWith('p1', ['now', 'post-merge-cleanup'])
+    fireEvent.click(screen.getByText('Started: open it'))
+    expect(host.openAgent).toHaveBeenCalledWith('p1', '2026-10-25T10-00-00-000Z')
+    now = { ok: false, error: 'not due' }
+    fireEvent.click(screen.getByRole('button', { name: 'Run /post-merge-cleanup now' }))
+    expect(await screen.findByText('Nothing started. No work: its shell line printed nothing.')).toBeTruthy()
+  })
+
+  test('a row with a shell line says its next start as its Edit panel would: the wait left, if there is work; then that it starts when there is work', async () => {
+    const queue = { command: 'work-queue', every: '6h', when: 'npx queue', waitsFor: 'when the queue holds a task', ...ON_CLAUDE }
+    const { host } = hostAnswering(() => ({ ok: true, output: { ...STATUS, switches: { 'work-queue': '2026-10-03T08:00:00.000Z', 'plan-tickets': '2026-10-03T08:00:00.000Z' }, lastTick: { at: STATUS.lastTick.at, decisions: [] }, schedule: [{ ...queue, lastRun: { id: 'r1', at: ago(3 * HOUR) } }, { ...queue, command: 'plan-tickets', lastRun: { id: 'r2', at: ago(9 * HOUR) } }] } }))
+    show(host, [GEMSTACK])
+    expect(await screen.findByText('Next start in 3h, if there is work')).toBeTruthy()
+    expect(screen.getByText('Starts when there is work')).toBeTruthy()
+    expect(screen.queryByText(/switched off/)).toBeNull()
+  })
+
+  test('with one project shown its name is not repeated; with nothing switched on the card says so and offers the page', async () => {
+    const { host } = hostAnswering(() => ({ ok: true, output: { ...STATUS, switches: {} } }))
+    show(host, [GEMSTACK])
+    expect(await screen.findByText('All 2 are switched off.')).toBeTruthy()
+    expect(screen.queryByText('gemstack')).toBeNull()
+    fireEvent.click(screen.getByRole('link', { name: 'Switch one on' }))
+    expect(host.openPage).toHaveBeenCalledWith('automations')
+  })
+
+  test('a scheduler whose process is gone: its rows are on and nothing starts, said once, with no next start on a row and no green dot', async () => {
+    const { host } = hostAnswering(() => ({ ok: true, output: { ...RAN, running: false } }))
+    show(host, [GEMSTACK])
+    expect((await screen.findByText('Scheduler on, not running')).className).toMatch(/text-warning/)
+    expect(screen.getByText(/^Nothing starts by itself/)).toBeTruthy()
+    // Said once: beside the name, not again in the line under it, which leads to the page that says how to start it.
+    expect(screen.getAllByText(/not running/)).toHaveLength(1)
+    fireEvent.click(screen.getByRole('link', { name: 'How to start it' }))
+    expect(host.openPage).toHaveBeenCalledWith('automations')
+    // Its dot is not the green of a row that starts.
+    expect(screen.getByText('/post-merge-cleanup').previousElementSibling!.className).not.toMatch(/bg-success/)
+    expect(screen.queryByText(/Next start|Starts /)).toBeNull()
+  })
+
+  test('a row the last look held back has no green dot, and says why as a warning', async () => {
+    const { host } = hostAnswering(() => ({ ok: true, output: { ...RAN, lastTick: { at: STATUS.lastTick.at, decisions: [{ command: 'post-merge-cleanup', outcome: 'not ready: `claude` not found' }] } } }))
+    show(host, [GEMSTACK])
+    const reason = (await screen.findByText(/^Not ready:/)).closest('span')!
+    expect(reason.className).toMatch(/text-warning/)
+    // Its backticked words as code, as on the page.
+    expect(within(reason).getByText('claude').tagName).toBe('CODE')
+    expect(screen.getByText('/post-merge-cleanup').previousElementSibling!.className).not.toMatch(/bg-success/)
+  })
+
+  test('"Run now" is offered on a row only where the last look did not hold every start back; the quota holds back only the scheduler\'s own', async () => {
+    for (const [outcome, offered] of [['not ready: `claude` not found', false], ["not on HEAD: a run's checkout starts from HEAD, and the command's skill is not there", false], ['quota: Current week is 99% used', true]] as const) {
+      const { host } = hostAnswering(() => ({ ok: true, output: { ...RAN, lastTick: { at: STATUS.lastTick.at, decisions: [{ command: 'post-merge-cleanup', outcome }] } } }))
+      show(host, [GEMSTACK])
+      await screen.findByText('/post-merge-cleanup')
+      expect(screen.queryByRole('button', { name: 'Run /post-merge-cleanup now' }) !== null, outcome).toBe(offered)
+      cleanup()
+    }
+  })
+
+  test('a look that decided nothing says why', async () => {
+    const { host } = hostAnswering(() => ({ ok: true, output: { ...STATUS, schedule: [], lastTick: { at: STATUS.lastTick.at, decisions: [], note: 'no skill of this project schedules a command' } } }))
+    show(host, [GEMSTACK])
+    expect(await screen.findByText('Its last look: no skill of this project schedules a command')).toBeTruthy()
+  })
+
+  test('a project whose status cannot be read says why', async () => {
+    const { host } = hostAnswering(() => ({ ok: false, error: 'not inside a git repository' }))
+    show(host, [GEMSTACK])
+    expect(await screen.findByText('Scheduler not readable')).toBeTruthy()
+    expect(screen.getByText('not inside a git repository')).toBeTruthy()
+  })
+
+  test('how the rows that are off are counted, in a line', () => {
+    expect(offWords(0, 3)).toBeUndefined()
+    expect(offWords(1, 2)).toBe('1 more is switched off')
+    expect(offWords(5, 1)).toBe('5 more are switched off')
+    expect(offWords(6, 0)).toBe('All 6 are switched off')
+    expect(offWords(1, 0)).toBe('Its one automation is switched off')
+  })
+})

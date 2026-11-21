@@ -5,7 +5,7 @@ import { listProjectDir, openProjectReader, readProjectFile, writeProjectDataDet
 
 /**
  * The contract every OpenAgent command keeps (`tickets`, `queue`, `logs`, `branches`, `github`,
- * `scheduler`, `orchestration`, `agent-runner`), so an agent, a person and OpenAgent read any of
+ * `scheduler`, `agent-runner`), so an agent, a person and OpenAgent read any of
  * them the same way: JSON on stdout, one line for a person on stderr, and the exit code says how
  * it went — 0 for a result, 1 for a refusal or a failure, 2 for a command line that could not be
  * read, said in one line with a pointer to `--help`; `--help` is the usage, for a person, on

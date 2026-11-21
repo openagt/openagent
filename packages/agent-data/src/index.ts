@@ -1,4 +1,4 @@
-export { AGENT_ENV, AGENT_ID_ENV, BRANCHES_DIR, DATA_BRANCH, OPENAGENT_DIR, PROJECT_SKILLS_ENV, SKILLS_ENV, SKILLS_OFF_ENV, SKILLS_ON_ENV, SKILL_CATALOGUE_ENV, isSkillName } from './names.js'
+export { AGENT_ID_ENV, BRANCHES_DIR, DATA_BRANCH, OPENAGENT_DIR, PLUGINS_WITHOUT_ENV, PRESET_ENV, PROJECT_SKILLS_ENV, isSkillName } from './names.js'
 export { installProject, nodeInstallFs, FIRST_COMMIT_MESSAGE, type InstallResult, type InstallDeps, type InstallFs } from './install.js'
 export { gitignorePath, openagentGitignore } from './openagent-gitignore.js'
 export {
@@ -15,6 +15,7 @@ export {
 } from './git.js'
 export { excludeFromGit, unexcludeFromGit, unexcludeOnceGone, repositoryCheckouts, type ExcludeFs } from './git-exclude.js'
 export { removeOwnDirectory, type KeptEntry, type OwnDirectoryRemoval } from './own-directory.js'
+export { withLockFile, type CheckoutLockDeps } from './checkout-lock.js'
 export {
   fileBranchPath,
   fileBranchRepo,
@@ -24,6 +25,7 @@ export {
   pullFileBranch,
   readBranchFile,
   listBranchDir,
+  listBranchFiles,
   openBranchReader,
   writeFileBranchDetached,
   nodeBranchFileFs,
@@ -43,9 +45,7 @@ export {
   type BranchReader,
 } from './file-branch.js'
 export { SESSIONS_DIR, sessionsHome, sessionFolder, sessionsHomeOf, runsRootOf, listSessionFolders } from './sessions.js'
-export { AGENTS_DIR, DEFAULT_AGENT, DEFAULT_AGENT_SKILLS, agentIdOf, agentsDir, builtInDefault, isAgentId, isAgentName, listAgents, readAgent, removeAgent, writeAgent, type AgentAccounts, type AgentRecord } from './agents.js'
 export { REPO_OWNERS_FILE, isRepoOwner, readRepoOwners, writeRepoOwners } from './repo-owners.js'
-export { PERSON_FILE, isPersonRecordName, isPictureAddress, readPersonRecord, removePersonRecord, writePersonRecord, type PersonRecord } from './person.js'
 export { NoRemoteAccountError, accountGit, clearRemoteAccount, noAccountSentence, readRemoteAccount, remoteHostOf, writeRemoteAccount, type RemoteAccount } from './remote-account.js'
 export { addressOfRemote, spellingOfRemote } from './repository-address.js'
 export { originUrl, repositoryAddress, repositorySpelling, projectNameOf } from './origin.js'
@@ -53,6 +53,7 @@ export {
   personalFolder,
   withPersonalFolder,
   readPersonalFolder,
+  personalFolderSyncs,
   syncPersonalFolder,
   sendPersonalFolderAs,
   stopSyncingPersonalFolder,
@@ -82,12 +83,9 @@ export { HELP_WIDTH, helpRows, helpText, type HelpRow } from './help.js'
 export { FAILED, GIT_FAILED, Refused, UsageError, commandReader, commandWrite, inRepo, parseCommandArgs, runCommandLine, unknownWord, usageError, wrongArguments, type Command, type CommandLine, type CommandOutput, type Failure, type Refusal } from './command-line.js'
 export {
   SKILLS_DIRS,
-  projectPackages,
   packageBins,
   readManifest,
   declaring,
-  lookupProvidedCommand,
-  readProvidedCommand,
   runPackageCommand,
   callPackageCommand,
   type PackageManifest,
@@ -96,3 +94,4 @@ export {
   type ProvidedCommandLookup,
   type PackageCommandResult,
 } from './provided-command.js'
+export { projectId } from './project-id.js'

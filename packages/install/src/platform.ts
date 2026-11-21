@@ -1,3 +1,5 @@
+import type { Launcher } from './launcher.js'
+
 /** Where the commands write. */
 export interface InstallIO {
   out: (line: string) => void
@@ -23,8 +25,8 @@ export interface Platform {
   appDir(env: NodeJS.ProcessEnv): string
   /** Before the certificate is made: the commands the install needs, put on this computer. */
   prepare(io: InstallIO, env: NodeJS.ProcessEnv): Promise<void>
-  /** The install's step as the administrator, for the certificate in `certFile`. */
-  adminInstall(certFile: string): AdminStep
+  /** The install's step as the administrator, for the certificate in `certFile`, with the `openagent` command running `launcher`. */
+  adminInstall(certFile: string, launcher: Launcher): AdminStep
   /** The browsers made to trust the certificate in `certFile`. */
   trust(certFile: string, io: InstallIO, env: NodeJS.ProcessEnv): Promise<void>
   /** The dashboard started now and at each login, from `node` and its `dashboard` file, with `vars`; says where its output is read. */

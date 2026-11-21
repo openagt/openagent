@@ -4,8 +4,8 @@ import { DATA_BRANCH, OPENAGENT_DIR } from './names.js'
 /**
  * The `.openagent/.gitignore` (#313): one file, one content, written at install.
  *
- * Everything under `.openagent/` is this machine's or transient: a run's live files, the
- * hooks file. The lasting records (the runs, the `logs` skill's) live on the data branch
+ * Everything under `.openagent/` is this machine's or transient: a run's live files. The
+ * lasting records (the runs, the `logs` skill's) live on the data branch
  * (#1582/#1769), so nothing is tracked, this file included: git shows no trace of the directory.
  */
 

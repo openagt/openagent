@@ -1,0 +1,46 @@
+{
+  "name": "@openagt/agent-driver-claude-code",
+  "version": "0.0.21",
+  "description": "Claude Code behind the agent-driver contract, on this machine; plus the reader of the account's quota.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/openagt/openagent.git",
+    "directory": "packages/agent-driver/claude-code"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./module": {
+      "types": "./dist/module.d.ts",
+      "default": "./dist/module.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "prepack": "node -e \"if(!process.env.npm_config_user_agent?.startsWith('pnpm/')){console.error('Pack and publish with pnpm: it replaces workspace:* with the real version, npm does not');process.exit(1)}\"",
+    "typecheck": "tsc --noEmit",
+    "test": "tsc -p tsconfig.test.json && node ../../../scripts/test-node.mjs",
+    "clean": "rm -rf dist dist-test"
+  },
+  "dependencies": {
+    "@openagt/agent-driver": "workspace:*",
+    "@openagt/hooks": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^7.0.2"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { spawn } from 'node:child_process'
 import { PassThrough, Readable, Writable } from 'node:stream'
 import { AgentExitError, runCliSession, type AgentCliParser, type CliIo, type SpawnLike, type SpawnedProcess } from './cli-session.js'
-import type { DriverEvent } from './types.js'
+import type { DriverEvent } from '@openagt/hooks'
 
 test('runCliSession streams the parser events and resolves the final turn', async () => {
   const events: DriverEvent[] = []
