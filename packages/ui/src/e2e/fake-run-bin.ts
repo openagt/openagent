@@ -151,7 +151,9 @@ async function session(id: string, checkout: string, prompt: string, card: Omit<
     }
     // Its prompt is in its log already, from before it held.
     // The run asks as one with ask on asks: its message's block is its question.
-    if (!fansOut) lastText = (await driverSession.prompt(prompt, { inbox: join(dir, 'inbox.jsonl'), questionIn: parseQuestion, ...(continued ? { resume: true } : {}) })).text
+    // The images its start or its resume went with, as agent-runner hands them to the agent with the prompt.
+    const images = process.env['IMAGES']?.split(',').filter(Boolean) ?? []
+    if (!fansOut) lastText = (await driverSession.prompt(prompt, { inbox: join(dir, 'inbox.jsonl'), questionIn: parseQuestion, ...(continued ? { resume: true } : {}), ...(images.length > 0 ? { images } : {}) })).text
   } catch {
     status = 'failed'
   }

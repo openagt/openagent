@@ -4,6 +4,8 @@ import { openInApp, type OpenTarget, type OpenResult } from '../dashboard/open-i
 import { contextPreferences, contextStartAgent, resolveProjectPath, resolveAgentPath, runHostOf } from './context.js'
 import { runRefAt } from '../distribution-hooks.js'
 import { errorMessage } from '@openagt/agent-data'
+import { hasImage, isImageName, keepImage } from '@openagt/agent-driver'
+import { IMAGES_PER_MESSAGE } from '../images.js'
 
 import { findAgent, isRunId, projectRuns, type AgentMeta } from '../store/index.js'
 import { withAgentLock } from '../agent-locks.js'
@@ -52,9 +54,12 @@ export async function sendStop(projectId: string, agentId?: string): Promise<Ste
  * its host resumes it with it. `id` names the message for {@link withdrawMessage} and for
  * the run's word that it landed.
  */
-export async function sendMessage(projectId: string, text: string, agentId?: string, publish?: PublishPick | null, sent?: { id?: string; later?: boolean }): Promise<SteerResult> {
+export async function sendMessage(projectId: string, text: string, agentId?: string, publish?: PublishPick | null, sent?: { id?: string; later?: boolean; images?: string[] }): Promise<SteerResult> {
   const message = text.trim()
   if (!message) return { ok: true }
+  const images = sent?.images ?? []
+  if (!Array.isArray(images) || images.length > IMAGES_PER_MESSAGE || !images.every(isImageName)) return { ok: false, error: 'Images are named by the names the dashboard kept them under.' }
+  if (!(await Promise.all(images.map(name => hasImage(name)))).every(Boolean)) return { ok: false, error: 'An image is no longer on this computer. Take it out and add it again.' }
   // A call that names how it is sent and no level passes the level as nothing.
   const level = publish ?? undefined
   if (level !== undefined && !isPublishPick(level)) return { ok: false, error: 'unknown publish level' }
@@ -62,8 +67,20 @@ export async function sendMessage(projectId: string, text: string, agentId?: str
   const later = sent?.later === true
   const cwd = await resolveProjectPath(projectId)
   if (!cwd || !agentId || !isRunId(agentId)) return { ok: false, error: 'unknown session' }
-  return (await startedElsewhere(cwd, agentId)) ?? sayToRun(projectId, cwd, agentId, { kind: 'message', text: message, ...(level !== undefined ? { publish: level } : {}), ...(id !== undefined ? { id } : {}), ...(later ? { later: true as const } : {}) })
+  return (await startedElsewhere(cwd, agentId)) ?? sayToRun(projectId, cwd, agentId, { kind: 'message', text: message, ...(level !== undefined ? { publish: level } : {}), ...(id !== undefined ? { id } : {}), ...(later ? { later: true as const } : {}), ...(images.length > 0 ? { images } : {}) })
 }
+
+/**
+ * Keep an image dropped or pasted into a message box on this computer (`@openagt/agent-driver`'s
+ * image store), its bytes sent as base64: answers the name a message names it by, or why it was
+ * not kept.
+ */
+export async function sendImage(type: string, data: string): Promise<{ ok: true; name: string } | { ok: false; error: string }> {
+  if (typeof type !== 'string' || typeof data !== 'string' || !BASE64.test(data)) return { ok: false, error: 'An image is sent as its kind and its bytes in base64.' }
+  return keepImage(type, Buffer.from(data, 'base64'))
+}
+
+const BASE64 = /^[A-Za-z0-9+/]*={0,2}$/
 
 /**
  * Take back a message sent to a working run that the agent has not read yet (Cancel and edit):

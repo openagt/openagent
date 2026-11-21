@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { type CliIo, toolQuestion, cutOutput, callArgument, lineCount, patchSize, oneLine } from '@openagt/agent-driver'
 import type { AccountReading, Question, DriverEvent, FileChange, DriverRateLimit, DriverRateWindow, DriverTurn, DriverUsage } from '@openagt/hooks'
+import { userContent } from './claude-code-content.js'
 
 // What Claude Code says on its `stream-json` output, read: one JSON object per line, turned into the
 // driver's events and the turn they add up to. The process it comes from, and what is written to
@@ -153,7 +154,7 @@ export class StreamJsonParser {
   /** The turn's `result` said it succeeded. */
   private succeeded = false
   /** The messages handed over while the turn runs and not read yet, by the uuid each went with. */
-  private readonly steering = new Map<string, { id: string; text: string }>()
+  private readonly steering = new Map<string, { id: string; text: string; images?: string[] }>()
   /** The tasks the agent waits on now, by their id: what Send now puts in the background. */
   private readonly foreground = new Set<string>()
   /** Send now came before any call the agent waits on: the next one goes in the background. */
@@ -172,11 +173,12 @@ export class StreamJsonParser {
    * Hand the agent a message while its turn runs: Claude Code queues it and reads it at its next
    * step, then says so by repeating it (`--replay-user-messages`) under the uuid it was sent with.
    */
-  steer(message: { id: string; text: string; words: string }): boolean {
+  steer(message: { id: string; text: string; words: string; images?: string[] }): boolean {
     if (!this.io || this.answered || this.stopping) return false
     const uuid = randomUUID()
-    this.steering.set(uuid, { id: message.id, text: message.text })
-    this.io.write(JSON.stringify({ type: 'user', message: { role: 'user', content: message.words }, parent_tool_use_id: null, uuid }))
+    const images = message.images !== undefined && message.images.length > 0 ? { images: message.images } : {}
+    this.steering.set(uuid, { id: message.id, text: message.text, ...images })
+    this.io.write(JSON.stringify({ type: 'user', message: { role: 'user', content: userContent(message.words, message.images) }, parent_tool_use_id: null, uuid }))
     return true
   }
 
@@ -302,7 +304,7 @@ export class StreamJsonParser {
       const landed = typeof uuid === 'string' ? this.steering.get(uuid) : undefined
       if (landed === undefined) return announced
       this.steering.delete(uuid as string)
-      return [...announced, { type: 'steered', text: landed.text, id: landed.id }]
+      return [...announced, { type: 'steered', text: landed.text, id: landed.id, ...(landed.images !== undefined ? { images: landed.images } : {}) }]
     }
     if (type === 'user') return [...announced, ...this.handleResults(obj)]
     // A subagent's message being written is not the agent's: only its whole message is shown, as the subagent's.

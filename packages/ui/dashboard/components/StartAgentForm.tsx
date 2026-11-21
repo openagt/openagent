@@ -12,7 +12,7 @@ import { useProjectLauncher } from '../lib/use-project-launcher.js'
 import { useLoaded } from '../lib/use-async.js'
 
 import { promptWithContext } from '../lib/use-context-set.js'
-import { keepDraft, stashPendingDraft } from '../lib/draft-handoff.js'
+import { keepDraft, keepDraftImages, stashPendingDraft } from '../lib/draft-handoff.js'
 import { AutoMenu } from './AutoMenu.js'
 import { ProjectContextMenu } from './ContextMenu.js'
 import { Composer, type ComposerHandle } from './Composer.js'
@@ -206,10 +206,12 @@ export function StartAgentForm({
   }
   const account = useSessionAccount(address, pickedAccount ?? onPreset?.options.github?.account)
 
-  const submit = async (text: string) => {
+  const submit = async (text: string, { images }: { images: string[] }) => {
     setNote(STARTING)
     const { publish: _publish, ...unpublished } = startPicks(preferences)
+    const withImages = images.length > 0 ? { images } : {}
     const result = await start(projectId, promptWithContext(text, context), {
+      ...withImages,
       ...(noProject ? unpublished : startPicks(preferences)),
       ...(startFrom ? startFromBase(startFromPick, startFrom.main, startFrom.local) : {}),
       ...(prInto !== undefined ? { prBase: prInto } : {}),
@@ -229,6 +231,7 @@ export function StartAgentForm({
       // The box keeps the words until the move has taken its picture of them; its draft goes with the page.
       void carryBox(() => {
         keepDraft(`launcher:${projectId}`, '')
+        keepDraftImages(`launcher:${projectId}`, [])
         onAgentStarted?.(text, result.agentId, host?.label, {
           ...(started !== undefined ? { branch: started } : {}),
           ...(!noProject && remote && account !== undefined ? { gitAccount: account } : {}),
@@ -239,6 +242,7 @@ export function StartAgentForm({
           ...(preferences.driver ? { driver: preferences.driver } : {}),
           ...(preferences.model ? { model: preferences.model } : {}),
           ...(preferences.effort ? { effort: preferences.effort } : {}),
+          ...withImages,
           ...(noProject && repos.length > 0 ? { repos: repos.map(repo => ({ name: repo.name, from: repo.path })) } : {}),
         }) // select the run we just started (#761)
       }).finally(() => composerRef.current?.clear())

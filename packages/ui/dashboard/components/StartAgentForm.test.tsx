@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { forgetRemembered } from '../lib/use-async.js'
 import { MARKDOWN_RENDER, openMenu } from '../test-utils.js'
 import { ModulesContext, mountedOf } from '../lib/use-modules.js'
-import { keepDraft, keptDraft, takePendingDraft } from '../lib/draft-handoff.js'
+import { keepDraft, keepDraftImages, keptDraft, keptDraftImages, takePendingDraft } from '../lib/draft-handoff.js'
 import { resetRunHostsForTest, selectHost } from '../lib/run-hosts.js'
 
 // Everything the form reads goes through a lib module, so the mocks stop at the `rpc/` stubs: an
@@ -70,6 +70,8 @@ vi.mock('../lib/host-services.js', async importOriginal => {
 })
 
 const start = vi.hoisted(() => vi.fn())
+/** An image the box holds, by the name the dashboard kept it under. */
+const SHOT = vi.hoisted(() => `${'a'.repeat(64)}.png`)
 // What the start says of itself beside its answer: why there is no run.
 const startReset = vi.hoisted(() => vi.fn())
 const startSays = vi.hoisted(() => ({ error: null as string | null }))
@@ -97,8 +99,11 @@ vi.mock('./Composer.js', async () => {
         <div data-testid="controls">{props.controls}</div>
         <div data-testid="controls-end">{props.controlsEnd}</div>
         <div data-testid="notes">{props.notes}</div>
-        <button type="button" onClick={() => props.onSubmit('do the thing')}>
+        <button type="button" onClick={() => props.onSubmit('do the thing', { later: false, images: [] })}>
           submit-typed
+        </button>
+        <button type="button" onClick={() => props.onSubmit('what does it say?', { later: false, images: [SHOT] })}>
+          submit-image
         </button>
       </>
     )
@@ -172,6 +177,18 @@ describe('StartAgentForm (#1774)', () => {
     fireEvent.click(screen.getByText('submit-typed'))
     await waitFor(() => expect(onAgentStarted).toHaveBeenCalledWith('do the thing', 'r1', undefined, expect.anything()))
     expect(start).toHaveBeenCalledWith('p1', 'do the thing', { driver: 'codex', model: 'gpt-5' })
+  })
+
+  test('the images go with the Start and to the run\'s page, and the draft lets them go with the words once the run is started', async () => {
+    onCommands.mockResolvedValue({ commands: [], gitHost: true })
+    start.mockResolvedValue({ agentId: 'r1' })
+    keepDraftImages('launcher:p1', [SHOT])
+    const onAgentStarted = vi.fn()
+    render(<StartAgentForm {...props} onAgentStarted={onAgentStarted} />)
+    fireEvent.click(screen.getByText('submit-image'))
+    await waitFor(() => expect(onAgentStarted).toHaveBeenCalledWith('what does it say?', 'r1', undefined, expect.objectContaining({ images: [SHOT] })))
+    expect(start).toHaveBeenCalledWith('p1', 'what does it say?', { images: [SHOT] })
+    expect(keptDraftImages('launcher:p1')).toEqual([])
   })
 
   test('a start carries the words: the box keeps them for the move\'s picture, its update drops the draft, and the box is emptied once the move is over, also where the page stayed', async () => {

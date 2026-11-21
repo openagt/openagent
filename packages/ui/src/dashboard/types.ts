@@ -54,6 +54,8 @@ export type RemoveProjectResult = { ok: true; cleanup?: CleanupReport } | { ok: 
  * options, each module's slice (#2394, decision 12). Absent leaves each to the run's own default.
  */
 export interface StartAgentOptions {
+  /** The images the prompt goes with, by the names the dashboard kept them under (`sendImage`): the agent looks at them with it. Only a run on this computer takes them. */
+  images?: string[]
   /** The model to run on. */
   model?: string
   /** How hard that model may think, by the coding agent's own names (`medium`, `high`, …): what the model lists as its efforts. */

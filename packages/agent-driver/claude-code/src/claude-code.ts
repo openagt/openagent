@@ -6,6 +6,7 @@ import { dirname, join } from 'node:path'
 import { readClaudeQuota } from './claude-code-quota.js'
 import { readClaudeModels } from './claude-code-models.js'
 import { StreamJsonParser } from './claude-code-stream.js'
+import { userContent } from './claude-code-content.js'
 import { accountEnv, CLAUDE_TOKEN_ENV } from './claude-accounts.js'
 import { accountTurn, type AgentCliParser, type CliIo, readyPrompt, combineFraming, combineSignals, makeEmit, promptSent, readWorkspaceFile, runCliSession, continuingTurn, checkCliReady, type CliSpec, type DriverReadyOptions, finishTurn, agentEnv, attachLog, type SpawnLike, steeredWords } from '@openagt/agent-driver'
 import type { AccountRotation, ReadyPrompt, DriverReadiness, PersonalSetup, SessionLog, Driver, DriverEvent, DriverModel, DriverPromptOptions, DriverQuota, DriverSession, DriverStartOptions, DriverTurn } from '@openagt/hooks'
@@ -228,10 +229,11 @@ export class ClaudeCodeSession implements DriverSession {
         prompt: said,
         ...(sent.added !== undefined ? { added: sent.added } : {}),
         ...(sent.attached !== undefined ? { attached: sent.attached } : {}),
+        ...(sent.images !== undefined ? { images: sent.images } : {}),
         spawn: this.config.spawn ?? (nodeSpawn as unknown as SpawnLike),
         emit: emitFn,
         signals: combineSignals(this.startOpts.signal, sent.signal),
-        parser: talking(parser, promptSent(said, sent)),
+        parser: talking(parser, promptSent(said, sent), sent.images),
         driver: 'claude-code',
         ...(this.startOpts.stop ? { stop: this.startOpts.stop } : {}),
         ...(sent.inbox !== undefined ? { inbox: sent.inbox, steered: line => steeredWords(line, sent) } : {}),
@@ -353,9 +355,9 @@ export class ClaudeCodeSession implements DriverSession {
  * `claude` talked to over stdin rather than handed its prompt: the words go once they are known,
  * and stdin stays open for the answers to what the CLI asks during the turn, until its `result`.
  */
-function talking(parser: StreamJsonParser, words: string | Promise<string>): AgentCliParser {
+function talking(parser: StreamJsonParser, words: string | Promise<string>, images?: readonly string[]): AgentCliParser {
   const send = (io: CliIo, text: string): void => {
-    for (const line of stdinLines(text).trimEnd().split('\n')) io.write(line)
+    for (const line of stdinLines(text, images).trimEnd().split('\n')) io.write(line)
   }
   return {
     push: line => parser.push(line),
@@ -375,12 +377,12 @@ function talking(parser: StreamJsonParser, words: string | Promise<string>): Age
 
 /**
  * The prompt as the CLI's stream-json input: first the request that turns thinking text on, then
- * the user's message. A plain `-p` run sends thinking blocks with their text empty; asked for
- * `summarized`, it fills them with its own short summary.
+ * the user's message, with the images it goes with. A plain `-p` run sends thinking blocks with
+ * their text empty; asked for `summarized`, it fills them with its own short summary.
  */
-function stdinLines(text: string): string {
+function stdinLines(text: string, images?: readonly string[]): string {
   const thinking = { type: 'control_request', request_id: 'thinking', request: { subtype: 'set_max_thinking_tokens', max_thinking_tokens: null, thinking_display: 'summarized' } }
-  const message = { type: 'user', message: { role: 'user', content: text } }
+  const message = { type: 'user', message: { role: 'user', content: userContent(text, images) } }
   return `${JSON.stringify(thinking)}\n${JSON.stringify(message)}\n`
 }
 

@@ -1,7 +1,7 @@
 import { readFile, stat } from 'node:fs/promises'
 import { hostname } from 'node:os'
 import { join } from 'node:path'
-import { appendInbox, promptLines, takeInbox } from '../inbox.js'
+import { appendInbox, imagesOf, promptLines, takeInbox } from '../inbox.js'
 import { findRun, listRuns } from '../record-store.js'
 import { isRunId, parseRunCard, type RunCard } from '../record.js'
 import { logCardFile } from '../session-log.js'
@@ -77,6 +77,7 @@ export function localHost(deps: LocalHostDeps = {}): RunHost {
       {
         id: run.id,
         ...(input.text !== undefined ? { text: input.text } : {}),
+        ...(input.images !== undefined && input.images.length > 0 ? { images: input.images } : {}),
         ...(input.answer !== undefined ? { answer: input.answer } : {}),
         ...(input.publish !== undefined ? { publish: input.publish } : {}),
       },
@@ -92,7 +93,7 @@ export function localHost(deps: LocalHostDeps = {}): RunHost {
       return ready(placeOf(project), options['agent-driver']?.driver)
     },
 
-    async start({ project, prompt, options, title }) {
+    async start({ project, prompt, images, options, title }) {
       refuse(project, options)
       const dir = placeOf(project)
       const driver = options['agent-driver']?.driver
@@ -101,7 +102,7 @@ export function localHost(deps: LocalHostDeps = {}): RunHost {
       const readiness = await ready(dir, driver, login)
       if (readiness.problems.length > 0) throw new Error(readiness.problems.join(' '))
       const name = nameHandOver(title)
-      const { id } = await detachRun(dir, { prompt, ...(driver !== undefined ? { driver } : {}), ...asked(options), env: { ...picks(options), ...name.env } }, deps.spawnRun ? { spawn: deps.spawnRun } : {})
+      const { id } = await detachRun(dir, { prompt, ...(images !== undefined && images.length > 0 ? { images } : {}), ...(driver !== undefined ? { driver } : {}), ...asked(options), env: { ...picks(options), ...name.env } }, deps.spawnRun ? { spawn: deps.spawnRun } : {})
       name.started()
       return { id }
     },
@@ -287,7 +288,7 @@ function picks(options: RunOptions): Record<string, string> {
 function inputOf(line: PromptLine): RunInput {
   if (line.kind === 'answer') return { answer: line.answer }
   const publish = line.publish
-  return { text: line.text, ...(publish !== undefined && (isPublish(publish) || publish === NO_PUBLISH) ? { publish } : {}) }
+  return { text: line.text, ...(publish !== undefined && (isPublish(publish) || publish === NO_PUBLISH) ? { publish } : {}), ...imagesOf(line) }
 }
 
 /** A run's record, as a host lists it. */

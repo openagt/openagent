@@ -2,6 +2,7 @@ import { appendFile, mkdir, readFile, rename, rm } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { continuationPrompt } from './question.js'
 import { promptSent } from './session-support.js'
+import { isImageName } from './images.js'
 import type { DriverPromptOptions, DriverSession, DriverTurn, InboxLine, PromptLine, Question } from '@openagt/hooks'
 
 /**
@@ -51,7 +52,7 @@ export async function takeInbox(path: string): Promise<InboxLine[]> {
 function isInboxLine(value: unknown): value is InboxLine {
   if (!value || typeof value !== 'object') return false
   const v = value as Record<string, unknown>
-  if (v['kind'] === 'message') return typeof v['text'] === 'string' && v['text'].trim().length > 0 && (v['publish'] === undefined || typeof v['publish'] === 'string') && (v['id'] === undefined || typeof v['id'] === 'string')
+  if (v['kind'] === 'message') return typeof v['text'] === 'string' && v['text'].trim().length > 0 && (v['publish'] === undefined || typeof v['publish'] === 'string') && (v['id'] === undefined || typeof v['id'] === 'string') && (v['images'] === undefined || (Array.isArray(v['images']) && v['images'].every(isImageName)))
   if (v['kind'] === 'answer') return typeof v['question'] === 'string' && typeof v['answer'] === 'string'
   if (v['kind'] === 'cancel') return typeof v['id'] === 'string'
   return v['kind'] === 'now'
@@ -72,9 +73,14 @@ export function promptLines(lines: readonly InboxLine[]): PromptLine[] {
  * sent after the turn would be.
  */
 export async function steeredWords(line: Extract<InboxLine, { kind: 'message' }>, sent: DriverPromptOptions): Promise<string> {
-  const { attached: _attached, ...rest } = sent
+  const { attached: _attached, images: _images, ...rest } = sent
   const further = sent.onInboxLine ? await sent.onInboxLine(line, rest) : rest
   return promptSent(line.text, further)
+}
+
+/** The images an inbox line goes with, as a prompt's options name them: none for a line without. */
+export function imagesOf(line: PromptLine): Pick<DriverPromptOptions, 'images'> {
+  return line.kind === 'message' && line.images !== undefined && line.images.length > 0 ? { images: line.images } : {}
 }
 
 /** The prompt one inbox line becomes. */
@@ -99,13 +105,13 @@ export async function finishTurn(
   // A turn stopped on purpose goes no further: what reached it meanwhile is the person's to send again.
   if (!opts.inbox || turn.stopped) return turn
   let last = turn
-  // What was handed over with the prompt went with it alone: a line from the inbox carries none of it.
-  const { attached: _attached, ...rest } = opts
+  // What was handed over with the prompt went with it alone: a line from the inbox carries none of it, but its own images.
+  const { attached: _attached, images: _images, ...rest } = opts
   let further: DriverPromptOptions = rest
   for (const line of promptLines([...(turn.held ?? []), ...(await takeInbox(opts.inbox))])) {
     // The caller says what the line changes, for it and the lines after it.
     if (opts.onInboxLine) further = await opts.onInboxLine(line, further)
-    last = await session.prompt(promptOf(line), { ...further, resume: true })
+    last = await session.prompt(promptOf(line), { ...further, resume: true, ...imagesOf(line) })
   }
   return last
 }

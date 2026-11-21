@@ -1,6 +1,6 @@
 import { AgentExitError } from '../cli-session.js'
 import { ConversationGoneError } from '../gone.js'
-import { promptLines, promptOf, takeInbox } from '../inbox.js'
+import { imagesOf, promptLines, promptOf, takeInbox } from '../inbox.js'
 import { errorMessage } from '@openagt/agent-data'
 import type { RunAsking, RunOutcome, DriverPromptOptions, DriverSession, DriverTurn, LogEndStatus, PromptLine, Question } from '@openagt/hooks'
 import type { Leg } from './leg.js'
@@ -75,11 +75,13 @@ export function effortOf(effort: string | undefined): { effort?: string } {
 interface Queued {
   prompt: string
   publish?: string
+  /** The images it goes with, by their names in the image store. */
+  images?: string[]
 }
 
 /** An inbox line as the prompt it becomes, with the level its message carries. */
 function queued(line: PromptLine): Queued {
-  return { prompt: promptOf(line), ...(line.kind === 'message' && line.publish !== undefined ? { publish: line.publish } : {}) }
+  return { prompt: promptOf(line), ...(line.kind === 'message' && line.publish !== undefined ? { publish: line.publish } : {}), ...imagesOf(line) }
 }
 
 /**
@@ -116,7 +118,7 @@ export async function sessionTurns(leg: Leg, workspace: string, dir: string, sto
     // The prompts this process owes the agent: the run's own, then the lines that reached the
     // inbox after the last turn took it but while the card still said running. Whoever wrote
     // them was told the run has them, so this process sends them before it lets the run go.
-    let queue: Queued[] = [{ prompt: leg.prompt }]
+    let queue: Queued[] = [{ prompt: leg.prompt, ...(leg.images !== undefined && leg.images.length > 0 ? { images: leg.images } : {}) }]
     let resume = continued
     // A continued run whose record names no conversation has none to go on with: it starts afresh.
     let fresh = continued && resumeSessionId === undefined
@@ -128,7 +130,7 @@ export async function sessionTurns(leg: Leg, workspace: string, dir: string, sto
       let lastText = ''
       let asked: Question | undefined
       try {
-        for (const [i, { prompt, publish }] of queue.entries()) {
+        for (const [i, { prompt, publish, images }] of queue.entries()) {
           // Stopped between two prompts: the rest are not sent.
           if (stopped.aborted) break
           await level.take(publish)
@@ -140,6 +142,7 @@ export async function sessionTurns(leg: Leg, workspace: string, dir: string, sto
             ...(last ? { inbox, onInboxLine: level.onInboxLine } : {}),
             ...(resume ? { resume: true } : {}),
             ...(handed !== undefined ? { attached: handed } : {}),
+            ...(images !== undefined ? { images } : {}),
             ...(asking ? { questionIn: asking.questionIn } : {}),
             ...level.added(),
           }

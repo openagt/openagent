@@ -74,6 +74,8 @@ export interface Leg {
   readonly prompt: string
   /** A text handed to the agent with that prompt alone (`run --attach`). */
   readonly attached?: string
+  /** The images that prompt goes with, by their names in the image store (`run --image`). */
+  readonly images?: string[]
   /** The record this leg goes on from, for a continued run; none for a fresh one. */
   readonly earlier?: EarlierLeg
   /** Another tool marked the fresh run before it was spawned: the record keeps that tool's fields. */

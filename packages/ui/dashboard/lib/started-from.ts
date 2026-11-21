@@ -27,6 +27,8 @@ export interface StartPicks {
   /** The session's picks: the plugins it goes without, by name, which of the project's own skills stay (`all`, `none`, or names; absent, its preset's). */
   pluginsWithout?: string[]
   projectSkills?: 'all' | 'none' | string[]
+  /** The images the prompt went with, by the names the dashboard kept them under. */
+  images?: string[]
 }
 
 /** Whether what the run started from is origin's default branch, whose name has to be read. */

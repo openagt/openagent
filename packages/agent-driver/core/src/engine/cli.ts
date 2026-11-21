@@ -6,6 +6,7 @@ import { GIT_ACCOUNT_ENV, detachResume, detachRun, presetLoginFor, readyToRun, r
 import { projectOf, type RunOutcome, type RunRequest } from './run.js'
 import { anyPick, handedDownSettings, presetNamed, runPreset, sessionPicksNamed } from './preset.js'
 import { cleanup } from './cleanup.js'
+import { hasImage, isImageName } from '../images.js'
 import { isPublish, NO_PUBLISH, PUBLISH_LEVELS } from './records.js'
 
 /**
@@ -27,6 +28,7 @@ ${helpRows([
   'Options of run:',
   ['--publish <commit|branch|pr|merge>', 'with --publish, the agent is told, in one sentence after the prompt, how far to take its work when it finishes: commit it, and from there push its branch, open its pull request, or set the request to merge once its checks pass; without it the prompt goes as written, and nothing is committed or published unless the prompt asks'],
   ['--attach <text>', `with --attach, the agent is handed <text> with the prompt, after it and before the --publish sentence, and with no later message; the run's record keeps it apart from the prompt, which alone names the run`],
+  ['--image <name>', `with --image, once per image, the prompt (a resume's text too) goes with the image this computer keeps under <name> in its image store (~/.openagent-images, or $XDG_CONFIG_HOME/openagent-images), and the agent looks at it with the prompt alone; the run's record names it`],
   ['--base <ref>', `with --base, the run's branch starts from <ref> instead of origin's default branch; refs/remotes/origin/<branch> is that branch as origin has it, fetched first`],
   ['--pr-base <branch>', `with --pr-base, the --publish sentence names <branch> as the branch its pull request goes into, instead of origin's default branch`],
   ['--branch <name>', `with --branch, the run works on <name>, a branch that exists, such as a person's pull request's, instead of a fresh one`],
@@ -72,6 +74,7 @@ const RUN_FLAGS = {
   driver: { type: 'string' },
   publish: { type: 'string' },
   attach: { type: 'string' },
+  image: { type: 'string', multiple: true },
   started: { type: 'string' },
   base: { type: 'string' },
   'pr-base': { type: 'string' },
@@ -116,6 +119,12 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
     if (values.branch !== undefined && !values.branch.trim()) throw new UsageError('--branch needs a branch name')
     if (values['pr-base'] !== undefined && !values['pr-base'].trim()) throw new UsageError('--pr-base needs a branch name')
     if (values.for !== undefined && !values.for.trim()) throw new UsageError('--for needs what the run is for')
+    const images = values.image ?? []
+    const notAnImage = images.find(name => !isImageName(name))
+    if (notAnImage !== undefined) throw new UsageError(`--image names an image of the image store, like <sha256>.png: not ${JSON.stringify(notAnImage)}`)
+    if (images.length > 0 && values.answer !== undefined) throw new UsageError('--answer takes no --image: images go with a text')
+    const missing = (await Promise.all(images.map(async name => ((await hasImage(name)) ? undefined : name)))).find(name => name !== undefined)
+    if (missing !== undefined) throw new UsageError(`the image ${missing} is not kept on this computer`)
     if (values.attach !== undefined && !values.attach.trim()) throw new UsageError('--attach needs a text')
     // A session with no project works in a folder with no git: no branch to start from or work on, nothing to commit or publish.
     const noProject = (await sessionsHomeOf(repo)) !== undefined
@@ -156,6 +165,7 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
         id: values.resume,
         ...(positionals[0] !== undefined ? { text: positionals[0] } : {}),
         ...(values.answer !== undefined ? { answer: values.answer } : {}),
+        ...(images.length > 0 ? { images } : {}),
         ...(values.model !== undefined ? { model: values.model } : {}),
         ...(values.effort !== undefined ? { effort: values.effort } : {}),
         ...(values.by !== undefined ? { by: values.by } : {}),
@@ -173,6 +183,7 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
       ...(driver !== undefined ? { driver } : {}),
       ...(publish !== undefined ? { publish } : {}),
       ...(values.attach !== undefined ? { attached: values.attach } : {}),
+      ...(images.length > 0 ? { images } : {}),
       ...(values.base !== undefined ? { base: values.base } : {}),
       ...(values['pr-base'] !== undefined ? { prBase: values['pr-base'].trim() } : {}),
       ...(values.branch !== undefined ? { branch: values.branch.trim() } : {}),

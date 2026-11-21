@@ -1,4 +1,4 @@
-import { createContext, forwardRef, useContext, useEffect, useImperativeHandle, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { createContext, forwardRef, useContext, useEffect, useImperativeHandle, useRef, useState, type ClipboardEvent, type DragEvent, type FormEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { ArrowUp, Loader2 } from 'lucide-react'
 import type { ProjectSummary } from '../../src/index.js'
@@ -30,6 +30,9 @@ import { Tooltip, TooltipTrigger, TooltipContent, TooltipsPastBox } from './ui/t
 import { RowAboveBox, rowClass, rowItemClass, rowLeftClass } from './ui/row-item.js'
 import { Skeleton } from './ui/skeleton.js'
 import { Slot } from './ui/slot.js'
+import { ImageTiles } from './ImageTiles.js'
+import { imageFiles, imageNames, imagesHold, useBoxImages } from '../lib/box-images.js'
+import { IMAGES_PER_MESSAGE } from '../../src/images.js'
 
 // The driver + model tree (#650/#656/#658): each driver lists ONLY its own models, since the
 // model passes straight through to that coding agent. Picking a model in a driver's submenu sets both, so an
@@ -55,7 +58,7 @@ const DRIVER_UI: Record<DriverName, { icon: DriverOption['icon'] }> = {
  * in the menu it opened, the edge is his 1 wide primary border, so the +'s own ring stands alone.
  */
 const BOX =
-  '[view-transition-name:composer] flex items-end rounded-box border border-hairline bg-card shadow-lg transition-colors focus-within:border-primary has-[[aria-expanded=true]]:border-primary has-[[role=textbox]:focus]:outline-2 has-[[role=textbox]:focus]:-outline-offset-1 has-[[role=textbox]:focus]:outline-focus'
+  '[view-transition-name:composer] flex flex-col rounded-box border border-hairline bg-card shadow-lg transition-colors focus-within:border-primary has-[[aria-expanded=true]]:border-primary has-[[role=textbox]:focus]:outline-2 has-[[role=textbox]:focus]:-outline-offset-1 has-[[role=textbox]:focus]:outline-focus'
 
 /**
  * The box while the page it stands on is read: a {@link Slot}'s shape at the three bands' heights,
@@ -70,11 +73,18 @@ export function ComposerShape() {
   )
 }
 
+/** What a box held, its text with its chips and its images, as `clear` hands it back for `restore`. */
+export interface ComposerDraft {
+  text: PromptDraft | undefined
+  /** Its images, by the names the dashboard kept them under. */
+  images: string[]
+}
+
 export interface ComposerHandle {
-  /** Empty the box. Returns what it held, chips and all, for `restore`. */
-  clear: () => PromptDraft | undefined
-  /** Put back a draft `clear` returned, after what is typed there, the caret left where it is. */
-  restore: (draft: PromptDraft) => void
+  /** Empty the box. Returns what it held, chips and images and all, for `restore`. */
+  clear: () => ComposerDraft
+  /** Put back a draft `clear` returned, after what is typed there, the caret left where it is; its images before those added since. */
+  restore: (draft: ComposerDraft) => void
   focus: () => void
   /** Put `text` in the box to edit, after what is typed there, and focus it. */
   edit: (text: string) => void
@@ -118,8 +128,8 @@ export const Composer = forwardRef<ComposerHandle, {
   sessionModel?: string | undefined
   /** Inside a session: how full its context is, beside the model. */
   sessionContext?: ReactNode
-  /** Run the composed text; `later` when it was sent with Cmd/Ctrl+Enter, which a working agent reads after its turn. */
-  onSubmit: (text: string, sent: { later: boolean }) => void | Promise<void>
+  /** Run the composed text; `later` when it was sent with Cmd/Ctrl+Enter, which a working agent reads after its turn; `images`, the names of the images it goes with. */
+  onSubmit: (text: string, sent: { later: boolean; images: string[] }) => void | Promise<void>
   /** Mirror the live prompt out, so the launcher can drive its note. */
   onPromptChange?: ((prompt: string) => void) | undefined
   /** A command or a saved prompt was loaded (so the launcher can flag it in its note);
@@ -193,16 +203,26 @@ export const Composer = forwardRef<ComposerHandle, {
   }
   // OpenAgent is not answering: nothing typed can be sent, and the box keeps it.
   const down = useContext(DaemonDown)
+  // The images dropped or pasted into the box, kept on this computer as they come, and with its draft.
+  const images = useBoxImages(draftKey)
+  // Words about what was dropped or pasted, above the box until the next drop or send.
+  const [imageNote, setImageNote] = useState<string | null>(null)
   // What holds a send, whatever the box holds: the one list the arrow and the keyboard both read.
-  const held = busy || down
+  // An image still being kept holds it too, and one that could not be, until it is taken out.
+  const imageHold = imagesHold(images.images)
+  const held = busy || down || imageHold !== undefined
 
   useImperativeHandle(ref, () => ({
     clear: () => {
-      const draft = editorRef.current?.clear()
+      const text = editorRef.current?.clear()
       setPrompt('')
-      return draft
+      setImageNote(null)
+      return { text, images: images.clear() }
     },
-    restore: draft => editorRef.current?.restore(draft),
+    restore: draft => {
+      if (draft.text) editorRef.current?.restore(draft.text)
+      images.restore(draft.images)
+    },
     focus: () => editorRef.current?.focus(),
     edit: text => {
       if (prompt.trim() !== '') editorRef.current?.append(text)
@@ -247,7 +267,7 @@ export const Composer = forwardRef<ComposerHandle, {
     const text = prompt.trim()
     if (!text || held || submittingRef.current) return
     submittingRef.current = true
-    void Promise.resolve(onSubmit(text, { later })).finally(() => {
+    void Promise.resolve(onSubmit(text, { later, images: imageNames(images.images) })).finally(() => {
       submittingRef.current = false
     })
   }
@@ -263,6 +283,44 @@ export const Composer = forwardRef<ComposerHandle, {
     setPrompt(value)
     if (draftKey !== undefined) keepDraft(draftKey, value)
     onPromptChange?.(value)
+  }
+
+  // An image dropped or pasted anywhere on the box goes with the message, above its text. A paste of
+  // words stays the editor's, as does a drop of anything else; the launcher's box takes none while it starts.
+  const takesImages = !(busy && !inAgent)
+  const addImages = (files: File[]) => {
+    const left = images.add(files)
+    setImageNote(left > 0 ? `${IMAGES_PER_MESSAGE} images go with one message at most: ${left === 1 ? 'one was' : `${left} were`} left out.` : null)
+    editorRef.current?.focus()
+  }
+  const [dragging, setDragging] = useState(false)
+  const onPaste = (event: ClipboardEvent) => {
+    const files = imageFiles(event.clipboardData, { pasted: true })
+    if (files.length === 0 || !takesImages) return
+    event.preventDefault()
+    event.stopPropagation()
+    addImages(files)
+  }
+  const carriesFiles = (event: DragEvent) => event.dataTransfer.types.includes('Files')
+  const onDragOver = (event: DragEvent) => {
+    if (!carriesFiles(event) || !takesImages) return
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'copy'
+    setDragging(true)
+  }
+  const onDragLeave = (event: DragEvent) => {
+    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragging(false)
+  }
+  const onDrop = (event: DragEvent) => {
+    setDragging(false)
+    if (!carriesFiles(event)) return
+    // A file that is no image is not dropped into the text either.
+    event.preventDefault()
+    event.stopPropagation()
+    if (!takesImages) return
+    const files = imageFiles(event.dataTransfer)
+    if (files.length > 0) addImages(files)
+    else setImageNote('Only images go with a message.')
   }
 
   const editorEl = (
@@ -334,7 +392,7 @@ export const Composer = forwardRef<ComposerHandle, {
   // smoothly; `aria-hidden` while empty keeps it out of the a11y tree. Its name and tooltip say what
   // it does ("Start agent" on the launcher).
   const hasPrompt = !!prompt.trim()
-  const submitTip = busy ? submitBusyLabel : down ? 'OpenAgent is not answering' : `${submitLabel}  (Enter · Shift+Enter for a new line)`
+  const submitTip = busy ? submitBusyLabel : down ? 'OpenAgent is not answering' : (imageHold ?? `${submitLabel}  (Enter · Shift+Enter for a new line)`)
   const submitButton = (
     <Tooltip>
       <TooltipTrigger
@@ -377,6 +435,7 @@ export const Composer = forwardRef<ComposerHandle, {
   const notesEl = (
     <div className="flex flex-col gap-3 pb-3 empty:hidden">
       {notes}
+      {imageNote !== null && <p role="status" className="rounded-md bg-background px-2 py-0.5 text-xs text-muted-foreground">{imageNote}</p>}
     </div>
   )
 
@@ -399,10 +458,22 @@ export const Composer = forwardRef<ComposerHandle, {
             line tall when empty, growing with what is typed. The editor is borderless: the edge is the box's.
             The two stand 5 from the box's edges on every side, their corners following its corner (IN_BOX);
             on a touch screen, where the text's line is 24 high, 7, so they sit on its middle. */}
-        <div ref={surface} className={BOX}>
-          <div className="-mr-2 flex shrink-0 items-center p-1 pointer-coarse:p-1.5 pointer-coarse:pr-1">{commandsEl}</div>
-          <div className="min-w-0 flex-1">{editorEl}</div>
-          <div className="flex shrink-0 items-center p-1 pointer-coarse:p-1.5 pointer-coarse:pl-1">{slotEl}</div>
+        {/* The images it goes with stand in a row above the text, inside the box; a drop anywhere on the
+            box, or a paste into it, adds one. Files dragged over it light its edge as the focus does. */}
+        <div
+          ref={surface}
+          className={cn(BOX, dragging && 'border-primary outline-2 -outline-offset-1 outline-focus')}
+          onPasteCapture={onPaste}
+          onDragOverCapture={onDragOver}
+          onDragLeave={onDragLeave}
+          onDropCapture={onDrop}
+        >
+          <ImageTiles tiles={images.images.map(image => ({ key: image.key, src: image.src, going: image.name === undefined && image.error === undefined, error: image.error }))} onRemove={images.remove} className="px-2 pt-2" />
+          <div className="flex items-end">
+            <div className="-mr-2 flex shrink-0 items-center p-1 pointer-coarse:p-1.5 pointer-coarse:pr-1">{commandsEl}</div>
+            <div className="min-w-0 flex-1">{editorEl}</div>
+            <div className="flex shrink-0 items-center p-1 pointer-coarse:p-1.5 pointer-coarse:pl-1">{slotEl}</div>
+          </div>
         </div>
 
         {/* How it runs, under the box: the caller's controls at the left, the model at the right. The

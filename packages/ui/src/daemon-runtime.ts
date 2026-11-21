@@ -1,7 +1,8 @@
 import { isAbsolute, join, resolve, sep } from 'node:path'
 import { hostname } from 'node:os'
 import { stat } from 'node:fs/promises'
-import type { ReadyNaming } from '@openagt/agent-driver'
+import { hasImage, isImageName, type ReadyNaming } from '@openagt/agent-driver'
+import { IMAGES_PER_MESSAGE } from './images.js'
 import { isDriverName } from './driver-names.js'
 import { isPresetId, MODULE_NAME, type Hooks, type ProjectRef, type RunHost, type RunOptions, type RunRequest } from '@openagt/hooks'
 import { sessionRepos } from '@openagt/git-branches'
@@ -55,6 +56,7 @@ function refusedPicks(options: StartAgentOptions, noProject: boolean): string | 
   if (noProject && (options.base !== undefined || options.prBase !== undefined || options.publish !== undefined || options.account !== undefined || options.projectSkills !== undefined)) {
     return 'A session with no project runs with no branch, nothing to publish, no account at a git host and no project skills.'
   }
+  if (options.images !== undefined && !(Array.isArray(options.images) && options.images.length <= IMAGES_PER_MESSAGE && options.images.every(isImageName))) return 'Images are named by the names the dashboard kept them under.'
   // Another host runs a project's run, on a machine of its own.
   if (options.host !== undefined && (typeof options.host !== 'string' || !MODULE_NAME.test(options.host))) return 'A host is named by its id.'
   if (noProject && options.host !== undefined) return 'A session with no project runs on this computer.'
@@ -160,11 +162,16 @@ export function createProjectRuntime({ cwd, env, naming, host, otherHosts = asyn
     // The host picked to run it, among the project's: one no module on in the project has refuses the Start.
     const runsOn = options.host === undefined || options.host === host.id ? host : (await otherHosts(project)).find(other => other.id === options.host)
     if (!runsOn) return { ok: false, error: `No host ${String(options.host)} is on in this project. Pick another place to run.` }
+    // The images stay on this computer, and so does a run that looks at them.
+    const images = options.images ?? []
+    if (images.length > 0 && runsOn !== host) return { ok: false, error: `Images stay on this computer: a session with images runs here, not on ${runsOn.label}.` }
+    if (!(await Promise.all(images.map(name => hasImage(name, env)))).every(Boolean)) return { ok: false, error: 'An image is no longer on this computer. Take it out and add it again.' }
     const name = await nameAsStarted(projectCwd, prompt, driver)
     const started = await runsOn
       .start({
         ...(project ? { project } : {}),
         prompt,
+        ...(images.length > 0 ? { images } : {}),
         // A run of another host's says which: its options and its record name it.
         options: { ...(runsOn !== host ? { host: runsOn.id } : {}), ...runOptionsOf(options, publish, repos?.given) },
         ...name.title,

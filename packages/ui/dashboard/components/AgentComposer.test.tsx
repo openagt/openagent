@@ -25,18 +25,21 @@ vi.mock('./GitHosts.js', () => ({ GitHostOff: ({ home, account }: { home: { name
 
 // The Composer is exercised by its own tests; here it only has to hand back a submit and report
 // the props this component sets on it.
-const box = vi.hoisted(() => ({ clear: vi.fn((): unknown => ({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'hello' }] }] })), restore: vi.fn(), focus: vi.fn(), edit: vi.fn(), append: vi.fn() }))
+const box = vi.hoisted(() => ({ clear: vi.fn((): unknown => ({ text: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'hello' }] }] }, images: [] })), restore: vi.fn(), focus: vi.fn(), edit: vi.fn(), append: vi.fn() }))
 vi.mock('./Composer.js', async () => {
   const { forwardRef, useImperativeHandle } = await import('react')
   const Composer = forwardRef((props: any, ref: any) => {
     useImperativeHandle(ref, () => box)
     return (
     <div>
-      <button type="button" disabled={props.busy} onClick={() => props.onSubmit('hello', { later: false })}>
+      <button type="button" disabled={props.busy} onClick={() => props.onSubmit('hello', { later: false, images: [] })}>
         submit
       </button>
-      <button type="button" disabled={props.busy} onClick={() => props.onSubmit('hello', { later: true })}>
+      <button type="button" disabled={props.busy} onClick={() => props.onSubmit('hello', { later: true, images: [] })}>
         submit later
+      </button>
+      <button type="button" disabled={props.busy} onClick={() => props.onSubmit('and this?', { later: false, images: [`${'a'.repeat(64)}.png`] })}>
+        submit with image
       </button>
       {props.notes}
       <span data-testid="composer-props">
@@ -402,6 +405,23 @@ describe('AgentComposer, ended (#720, #1774)', () => {
     renderComposer({ live: false })
     expect(props().placeholder).toMatch(/continue it/)
     expect(props().busyLabel).toBe('Continuing…')
+  })
+
+  test('a message\'s images go with it: to a working run, and shown waiting with it; to an ended run, and shown with it as it goes', async () => {
+    const shot = `${'a'.repeat(64)}.png`
+    sendMessage.mockResolvedValue({ ok: true })
+    const onQueued = vi.fn()
+    renderComposer({ onQueued })
+    fireEvent.click(screen.getByText('submit with image'))
+    await waitFor(() => expect(sendMessage).toHaveBeenCalledWith('p1', 'and this?', 'run-1', null, { id: expect.any(String), images: [shot] }))
+    await waitFor(() => expect(onQueued).toHaveBeenCalledWith({ id: expect.any(String), text: 'and this?', later: false, images: [shot] }))
+    cleanup()
+    sendMessage.mockClear()
+    const onSending = vi.fn()
+    renderComposer({ live: false, onSending })
+    fireEvent.click(screen.getByText('submit with image'))
+    expect(onSending).toHaveBeenCalledWith('and this?', [shot])
+    await waitFor(() => expect(sendMessage).toHaveBeenCalledWith('p1', 'and this?', 'run-1', null, { images: [shot] }))
   })
 
   test('a message sent to an ended run is not queued: it continues the run', async () => {

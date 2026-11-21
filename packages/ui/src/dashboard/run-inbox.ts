@@ -5,7 +5,7 @@ import { runHostOf } from '../dashboard-rpc/context.js'
 import { runRefAt } from '../distribution-hooks.js'
 import { withAgentLock } from '../agent-locks.js'
 import { findAgent } from '../store/index.js'
-import type { InboxLine } from '@openagt/hooks'
+import { LOCAL_HOST, type InboxLine } from '@openagt/hooks'
 
 /**
  * What a person says to a run (#1774): their own words, their answer to the question the run
@@ -42,7 +42,10 @@ export async function startedElsewhere(cwd: string, agentId: string): Promise<St
 export async function sayToRun(projectId: string, cwd: string, agentId: string, line: InboxLine): Promise<SteerResult> {
   try {
     const run = await runRefAt(projectId, cwd, agentId)
-    await (await runHostOf(run)).steer(run, line)
+    const host = await runHostOf(run)
+    // The images stay on this computer, and go only to a run that does.
+    if (line.kind === 'message' && line.images !== undefined && line.images.length > 0 && host.id !== LOCAL_HOST) return { ok: false, error: `Images stay on this computer: this run is on ${host.label}.` }
+    await host.steer(run, line)
     return { ok: true }
   } catch (err) {
     return { ok: false, error: errorMessage(err) }

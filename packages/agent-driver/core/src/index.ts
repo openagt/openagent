@@ -37,6 +37,8 @@ export { runIdsOf, runEntries, findEntry, readCard, readRunDiary, type RecordsRe
 export { listRuns, findRun, runFiles, readDiary, writeRun, patchRun, deleteRun, runsPath, recordFunnel, resolveRecordDeps, type RecordDeps, type RecordFiles, type RecordFunnel } from './record-store.js'
 export { accountTurn } from './accounts/turn.js'
 export { configFile, writePrivate } from './private-files.js'
+// The images a person's messages go with, kept on this computer only.
+export { imagesDir, isImageName, imageFile, imageMediaType, readImage, hasImage, keepImage, IMAGE_MAX_BYTES, type ImageMediaType } from './images.js'
 // The coding agents of the distribution (`run.agent`, #2394): the one a run is on, and the accounts each has.
 export { codingAgent, codingAgents, agentNames, UnknownAgent } from './agents.js'
 export {

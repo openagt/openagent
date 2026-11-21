@@ -9,8 +9,8 @@ import { PassThrough, Readable } from 'node:stream'
 import { CodexDriver, codexReady, parseCodexModels } from './codex.js'
 import { CodexAppServerParser, codexQuestion, parseCodexUsage } from './codex-app-server.js'
 import { defaultCodexHome } from './codex-home.js'
-import { AgentExitError, ConversationGoneError, type SpawnLike, type SpawnedProcess } from '@openagt/agent-driver'
-import type { Driver, DriverEvent } from '@openagt/hooks'
+import { AgentExitError, ConversationGoneError, keepImage, type SpawnLike, type SpawnedProcess } from '@openagt/agent-driver'
+import type { Driver, DriverEvent, DriverPromptOptions } from '@openagt/hooks'
 
 type Message = { method: string; params: Record<string, unknown> }
 const note = (method: string, params: Record<string, unknown>): Message => ({ method, params })
@@ -129,10 +129,10 @@ function requests(seen: Seen): { method: unknown; params: unknown }[] {
 }
 
 /** Runs one turn on a Codex driver with `opts` against a fake server, and answers what the server saw. */
-async function spawnedWith(opts: ConstructorParameters<typeof CodexDriver>[0], start: { cwd?: string; system?: string; model?: string; effort?: string; noTools?: boolean; env?: Record<string, string> } = {}): Promise<Seen> {
+async function spawnedWith(opts: ConstructorParameters<typeof CodexDriver>[0], start: { cwd?: string; system?: string; model?: string; effort?: string; noTools?: boolean; env?: Record<string, string> } = {}, sent: DriverPromptOptions = {}): Promise<Seen> {
   let seen: Seen | undefined
   const session = await new CodexDriver({ spawn: fakeAppServer({}, s => (seen = s)), ...opts }).start({ cwd: '/ws', ...start })
-  await session.prompt('go')
+  await session.prompt('go', sent)
   return seen!
 }
 
@@ -253,6 +253,35 @@ test('a Codex turn asks the app server for a sandboxed conversation in the works
     { method: 'thread/start', params: { cwd: '/ws', approvalPolicy: 'never', sandbox: 'workspace-write' } },
     { method: 'turn/start', params: { threadId: 'thread-1', input: [{ type: 'text', text: 'go', text_elements: [] }] } },
   ])
+})
+
+test('a prompt with images starts its turn with each image by its file on this computer, then its words, and a message handed over mid-turn takes its own', async () => {
+  const home = await mkdtemp(join(tmpdir(), 'codex-images-'))
+  const was = process.env['XDG_CONFIG_HOME']
+  process.env['XDG_CONFIG_HOME'] = home
+  try {
+    const kept = await keepImage('image/png', Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64'))
+    assert.ok(kept.ok)
+    const gone = `${'e'.repeat(64)}.jpg`
+    const file = join(home, 'openagent-images', kept.name)
+    const seen = await spawnedWith({}, { cwd: '/ws' }, { images: [kept.name, gone] })
+    assert.deepEqual(requests(seen).find(r => r.method === 'turn/start')?.params, {
+      threadId: 'thread-1',
+      input: [
+        { type: 'localImage', path: file },
+        { type: 'text', text: '(An image sent with this message is no longer on this computer.)', text_elements: [] },
+        { type: 'text', text: 'go', text_elements: [] },
+      ],
+    })
+    const { parser, written, answer } = talkedParser()
+    parser.steer({ id: 'm1', text: 'And this?', words: 'And this?', images: [kept.name] })
+    assert.deepEqual((written.at(-1)!['params'] as { input: unknown }).input, [{ type: 'localImage', path: file }, { type: 'text', text: 'And this?', text_elements: [] }])
+    assert.deepEqual(answer({}), [{ type: 'steered', text: 'And this?', id: 'm1', images: [kept.name] }])
+  } finally {
+    if (was === undefined) delete process.env['XDG_CONFIG_HOME']
+    else process.env['XDG_CONFIG_HOME'] = was
+    await rm(home, { recursive: true, force: true })
+  }
 })
 
 test('a session with nothing to do in its folder is started without what it would do it with', async () => {

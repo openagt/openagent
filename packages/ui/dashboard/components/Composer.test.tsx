@@ -25,6 +25,9 @@ const onCommands = vi.hoisted(() => vi.fn())
 // The hosts beside this computer the project's modules bring: none unless a test says.
 const onRunHosts = vi.hoisted(() => vi.fn(async () => [] as { id: string; label: string }[]))
 vi.mock('../rpc/projects.js', () => ({ onProjects: () => Promise.resolve([]), onCommands, onRunHosts }))
+// An image dropped or pasted is kept by the dashboard: here the call answers what the test says.
+const sendImage = vi.hoisted(() => vi.fn())
+vi.mock('../rpc/control.js', async original => ({ ...(await original<object>()), sendImage }))
 
 // Stub the Tiptap editor (it needs a real DOM/ProseMirror): a plain input driving onChange, a
 // "type-submit" button firing onSubmit, and a ref exposing the same handle the composer calls.
@@ -160,7 +163,7 @@ describe('Composer (#721)', () => {
     expect(screen.getByRole('button', { name: 'Commands' })).toBeTruthy()
     fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'follow-up' } })
     fireEvent.click(screen.getByRole('button', { name: 'Send' }))
-    expect(onSubmit).toHaveBeenCalledWith('follow-up', { later: false })
+    expect(onSubmit).toHaveBeenCalledWith('follow-up', { later: false, images: [] })
   })
 
   test("a session's box is called a message's, the launcher's a prompt's", () => {
@@ -179,18 +182,18 @@ describe('Composer (#721)', () => {
     const submit = screen.getByRole('button', { name: 'Send' })
     expect(submit.hasAttribute('disabled')).toBe(false)
     fireEvent.click(submit)
-    expect(onSubmit).toHaveBeenCalledWith('ship it', { later: false })
+    expect(onSubmit).toHaveBeenCalledWith('ship it', { later: false, images: [] })
   })
 
   test('the editor\'s Enter submits, and its Cmd/Ctrl+Enter submits for later', async () => {
     const { onSubmit } = renderComposer()
     fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'go' } })
     fireEvent.click(screen.getByText('editor-submit'))
-    expect(onSubmit).toHaveBeenCalledWith('go', { later: false })
+    expect(onSubmit).toHaveBeenCalledWith('go', { later: false, images: [] })
     // The latch against a double press holds until the first submit settled.
     await new Promise(resolve => setTimeout(resolve, 0))
     fireEvent.click(screen.getByText('editor-submit-later'))
-    expect(onSubmit).toHaveBeenLastCalledWith('go', { later: true })
+    expect(onSubmit).toHaveBeenLastCalledWith('go', { later: true, images: [] })
   })
 
   test('while OpenAgent is not answering, nothing is sent, by the button or by the keyboard, and the text stays', async () => {
@@ -225,7 +228,7 @@ describe('Composer (#721)', () => {
     expect(onLoaded).toHaveBeenCalledWith('/work-queue', false)
     fireEvent.change(screen.getByLabelText('prompt'), { target: { value: '/work-queue now' } })
     fireEvent.click(screen.getByRole('button', { name: 'Send' }))
-    expect(onSubmit).toHaveBeenCalledWith('/work-queue now', { later: false })
+    expect(onSubmit).toHaveBeenCalledWith('/work-queue now', { later: false, images: [] })
   })
 
   /** A module offering saved prompts, as `offered` holds them: deleting one takes it out; its panel saves at a press. */
@@ -295,7 +298,7 @@ describe('Composer (#721)', () => {
     sessionStorage.setItem('oa.pending-draft', 'carried from a ticket')
     const { onSubmit } = renderComposer({ submitLabel: 'Start session' })
     fireEvent.click(screen.getByRole('button', { name: /Start session/ }))
-    expect(onSubmit).toHaveBeenCalledWith('carried from a ticket', { later: false })
+    expect(onSubmit).toHaveBeenCalledWith('carried from a ticket', { later: false, images: [] })
     expect(sessionStorage.getItem('oa.pending-draft')).toBeNull() // taken once
   })
 
@@ -372,7 +375,7 @@ describe('Composer (#721)', () => {
     act(() => box.current!.append('the words it never read'))
     expect(localStorage.getItem('oa.draft:p1:run-2')).toBe('a new thought\n\nthe words it never read')
     fireEvent.click(screen.getByText('editor-submit'))
-    expect(onSubmit).toHaveBeenCalledWith('a new thought\n\nthe words it never read', { later: false })
+    expect(onSubmit).toHaveBeenCalledWith('a new thought\n\nthe words it never read', { later: false, images: [] })
   })
 
   test('a browser that keeps nothing still has the draft in the box, and it is sent', () => {
@@ -387,7 +390,7 @@ describe('Composer (#721)', () => {
       expect(editorText()).toBe('a draft with nowhere to go')
       expect(onPromptChange).toHaveBeenLastCalledWith('a draft with nowhere to go')
       fireEvent.click(screen.getByText('editor-submit'))
-      expect(onSubmit).toHaveBeenCalledWith('a draft with nowhere to go', { later: false })
+      expect(onSubmit).toHaveBeenCalledWith('a draft with nowhere to go', { later: false, images: [] })
     } finally {
       for (const spy of refused) spy.mockRestore()
     }
@@ -481,10 +484,12 @@ describe('the box', () => {
     renderComposer({ inAgent: true })
     const editor = screen.getByLabelText('prompt')
     const submit = box().querySelector('button[aria-label="Send"]')!
-    expect(box().firstElementChild!.contains(commands())).toBe(true)
+    // With no image, the box is the one row: the +, the text and the send, kept at its last line.
+    const row = box().firstElementChild as HTMLElement
+    expect(row.firstElementChild!.contains(commands())).toBe(true)
     expect(commands().compareDocumentPosition(editor) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(editor.compareDocumentPosition(submit) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(box().className).toContain('items-end')
+    expect(row.className).toContain('items-end')
   })
 
   test('a session\'s idle control takes the submit\'s place in the box', () => {
@@ -561,5 +566,111 @@ describe('in a session', () => {
   test('there is no row above the box: the box is the first thing the composer draws', () => {
     renderComposer({ inAgent: true })
     expect(box().previousElementSibling).toBeNull()
+  })
+})
+
+describe('images', () => {
+  const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+  const image = (name = 'shot.png', type = 'image/png') => new File([PNG], name, { type })
+  const kept = (n: number) => `${String(n).repeat(64)}.png`
+  /** A paste of `files`, and of words too when `text` is given, as a browser hands them to the box. */
+  const paste = (files: File[], text?: string) =>
+    fireEvent.paste(screen.getByLabelText('prompt'), { clipboardData: { files, types: [...(text !== undefined ? ['text/plain'] : []), 'Files'], getData: () => text ?? '' } })
+  const drop = (files: File[]) => fireEvent.drop(box(), { dataTransfer: { files, types: ['Files'] } })
+  const tiles = () => screen.queryAllByRole('button', { name: /^Open image / })
+
+  beforeEach(() => {
+    sendImage.mockReset()
+    let made = 0
+    URL.createObjectURL = vi.fn(() => `blob:image-${(made += 1)}`)
+    URL.revokeObjectURL = vi.fn()
+  })
+
+  test('a pasted screenshot is a tile in a row above the text, inside the box, kept at once; the send goes with its name', async () => {
+    sendImage.mockResolvedValue({ ok: true, name: kept(1) })
+    const { onSubmit } = renderComposer({ inAgent: true })
+    paste([image()])
+    expect(tiles()).toHaveLength(1)
+    const row = screen.getByRole('list', { name: 'Images' })
+    expect(box().contains(row)).toBe(true)
+    expect(row.compareDocumentPosition(screen.getByLabelText('prompt')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(row.className).toContain('gap-2')
+    expect(row.querySelector('li')!.className).toContain('size-[120px]')
+    expect(row.querySelector('li')!.className).toContain('rounded-[10px]')
+    expect(row.querySelector('img')!.className).toContain('object-contain')
+    await waitFor(() => expect(sendImage).toHaveBeenCalledWith('image/png', btoa(String.fromCharCode(...PNG))))
+    fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'What word is in it?' } })
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Send' }).hasAttribute('disabled')).toBe(false))
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    expect(onSubmit).toHaveBeenCalledWith('What word is in it?', { later: false, images: [kept(1)] })
+  })
+
+  test('the send waits while an image is still being kept, and while one could not be, until its X takes it out', async () => {
+    let answer: (value: unknown) => void = () => {}
+    sendImage.mockReturnValueOnce(new Promise(resolve => (answer = resolve))).mockResolvedValueOnce({ ok: false, error: 'The image is larger than the agent takes' })
+    const { onSubmit } = renderComposer({ inAgent: true })
+    fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'Look' } })
+    paste([image()])
+    await waitFor(() => expect(sendImage).toHaveBeenCalledTimes(1))
+    expect(screen.getByRole('status', { name: 'Keeping the image' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Send' }).hasAttribute('disabled')).toBe(true)
+    await act(async () => answer({ ok: true, name: kept(2) }))
+    expect(screen.getByRole('button', { name: 'Send' }).hasAttribute('disabled')).toBe(false)
+    drop([image('big.png')])
+    expect(await screen.findByRole('img', { name: 'Image 2: The image is larger than the agent takes' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Send' }).hasAttribute('disabled')).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: 'Remove image 2' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    expect(onSubmit).toHaveBeenCalledWith('Look', { later: false, images: [kept(2)] })
+  })
+
+  test('the X on a tile takes it out; a paste of words is the editor\'s, a kind the agent cannot read is refused on its tile, and a drop of no image says so', async () => {
+    sendImage.mockResolvedValue({ ok: true, name: kept(3) })
+    renderComposer({ inAgent: true })
+    drop([image('a.png'), image('b.png')])
+    expect(tiles()).toHaveLength(2)
+    fireEvent.click(screen.getByRole('button', { name: 'Remove image 1' }))
+    expect(tiles()).toHaveLength(1)
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:image-1')
+    // A copied page carries a picture of itself beside its words: the words go in the text.
+    paste([image()], 'some words')
+    expect(tiles()).toHaveLength(1)
+    paste([image('scan.heic', 'image/heic')])
+    expect(await screen.findByRole('img', { name: /^Image 2: HEIC is not an image the agent reads/ })).toBeTruthy()
+    drop([new File(['x'], 'notes.txt', { type: 'text/plain' })])
+    expect(screen.getByText('Only images go with a message.')).toBeTruthy()
+  })
+
+  test('the box keeps its images with its draft across a reload, and a cleared box hands them back for a restore', async () => {
+    sendImage.mockResolvedValue({ ok: true, name: kept(4) })
+    const ref = createRef<ComposerHandle>()
+    renderComposer({ inAgent: true, draftKey: 'p1:run-1', ref })
+    paste([image()])
+    await waitFor(() => expect(JSON.parse(localStorage.getItem('oa.draft-images:p1:run-1') ?? '[]')).toEqual([kept(4)]))
+    cleanup()
+    renderComposer({ inAgent: true, draftKey: 'p1:run-1', ref })
+    expect(screen.getByRole('list', { name: 'Images' }).querySelector('img')!.getAttribute('src')).toBe(`/_rpc/images/${kept(4)}`)
+    let draft: ReturnType<ComposerHandle['clear']> | undefined
+    act(() => void (draft = ref.current!.clear()))
+    expect(draft!.images).toEqual([kept(4)])
+    expect(tiles()).toHaveLength(0)
+    expect(localStorage.getItem('oa.draft-images:p1:run-1')).toBeNull()
+    act(() => ref.current!.restore(draft!))
+    expect(tiles()).toHaveLength(1)
+  })
+
+  test('a click on a tile shows the image large over the page; its X and Esc close it', async () => {
+    sendImage.mockResolvedValue({ ok: true, name: kept(5) })
+    renderComposer({ inAgent: true })
+    paste([image()])
+    fireEvent.click(tiles()[0]!)
+    const large = await screen.findByRole('dialog', { name: 'Image' })
+    expect(large.querySelector('img')!.getAttribute('src')).toBe('blob:image-1')
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Image' })).toBeNull())
+    fireEvent.click(tiles()[0]!)
+    await screen.findByRole('dialog', { name: 'Image' })
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' })
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Image' })).toBeNull())
   })
 })
