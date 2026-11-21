@@ -1,4 +1,5 @@
 import { createContext, isValidElement, useContext, useId, type ReactNode } from 'react'
+import type { LucideIcon } from 'lucide-react'
 import { cn } from '../../lib/utils.js'
 import { inPlace } from '../../lib/in-place.js'
 import { cardSurface } from './card.js'
@@ -16,7 +17,7 @@ export function Panel({ ordered = false, className, children, ...props }: { orde
   const List = ordered ? 'ol' : 'ul'
   const inPage = useContext(PageColumns)
   return (
-    <List {...props} className={cn(cardSurface, 'grid overflow-hidden *:col-span-full', ONE_SENTENCE, inPage ? 'col-span-full grid-cols-subgrid' : 'grid-cols-[minmax(0,1fr)_auto_auto]', className)}>
+    <List {...props} className={cn(cardSurface, 'grid overflow-hidden *:col-span-full', inPage ? 'col-span-full grid-cols-subgrid' : 'grid-cols-[minmax(0,1fr)_auto_auto]', className)}>
       {children}
     </List>
   )
@@ -50,7 +51,8 @@ export function PanelGroup({ title, badge, count, action, bare = false, children
   const Heading = useHeadingTag()
   const inPage = useContext(PageColumns)
   return (
-    <section aria-labelledby={heading} className={cn('min-w-0', inPage && 'grid grid-cols-subgrid content-start *:col-span-full')}>
+    // A column whose last part, its card, takes the height left: two groups side by side end on one line, the shorter one's card as tall as the other's.
+    <section aria-labelledby={heading} className={cn('min-w-0', inPage ? 'grid grid-cols-subgrid content-start *:col-span-full' : 'flex flex-col *:last:grow')}>
       {/* Its name 8 over its card, the row as tall as the name: a press or a link at its right stands out of it
           above and below, so groups side by side have their names on one line and their cards at one height.
           On a phone, where a link is 44 tall to touch and no group stands beside another, the row is the link's height. */}
@@ -80,13 +82,39 @@ export function PanelGroup({ title, badge, count, action, bare = false, children
   )
 }
 
-/** A {@link Panel} that holds its {@link PanelNote} alone is that sentence under the part's heading, with no card: a card is for rows. */
-const ONE_SENTENCE = 'has-[>[data-note]:only-child]:border-0 has-[>[data-note]:only-child]:bg-transparent has-[>[data-note]:only-child]:shadow-none'
+// What a card holds when it holds nothing: its sentence in the card's middle, under a quiet glyph that says what would be here.
+const EMPTY = 'flex-col items-center justify-center gap-3 px-4 py-8 text-center'
+const emptyGlyph = 'size-10 items-center justify-center rounded-full bg-foreground/5 text-faint-foreground'
 
-/** A {@link Panel}'s one sentence where its rows would be: what it holds when it holds none, on the rows' inset; alone in it, on the heading's edge. */
-export function PanelNote({ children }: { children: ReactNode }) {
+/**
+ * What a card holds when it holds nothing: its sentence in the card's middle, under a quiet glyph (`icon`)
+ * that says what would be here. The card keeps its surface, so an empty part stands on the page as a full one does.
+ */
+export function EmptyNote({ icon: Icon, children }: { icon?: LucideIcon | undefined; children: ReactNode }) {
   return (
-    <li data-note="" className="px-4 py-3 text-sm text-muted-foreground only:p-0">
+    <div className={cn('flex text-sm text-muted-foreground', EMPTY)}>
+      {Icon !== undefined && (
+        <span aria-hidden className={cn('flex', emptyGlyph)}>
+          <Icon className="size-5" strokeWidth={1.5} />
+        </span>
+      )}
+      <p>{children}</p>
+    </div>
+  )
+}
+
+/**
+ * A {@link Panel}'s one sentence where its rows would be: what it holds when it holds none. Among other
+ * children it is a line on the rows' inset; alone in the panel it is the card's {@link EmptyNote}, with its `icon`.
+ */
+export function PanelNote({ icon: Icon, children }: { icon?: LucideIcon; children: ReactNode }) {
+  return (
+    <li className="group/note px-4 py-3 text-sm text-muted-foreground only:flex only:flex-col only:items-center only:justify-center only:gap-3 only:py-8 only:text-center">
+      {Icon !== undefined && (
+        <span aria-hidden className={cn('hidden group-only/note:flex', emptyGlyph)}>
+          <Icon className="size-5" strokeWidth={1.5} />
+        </span>
+      )}
       {children}
     </li>
   )

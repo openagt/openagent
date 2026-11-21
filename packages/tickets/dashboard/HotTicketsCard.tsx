@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ArrowUp, Bot, CirclePause, Clock, type LucideIcon } from 'lucide-react'
+import { ArrowUp, Bot, CirclePause, Clock, Ticket, type LucideIcon } from 'lucide-react'
 import { Button, Card, Facts, LinkActions, PageLink, Panel, PanelGroup, PanelNote, Skeleton, Slot, cn, inPlace, runSaid, usePolled, useModuleHost, useOpenAgentDown, type UiCardProps, type UiProject, type ReadState } from '@openagt/ui/module'
 import { claimState, heldBack, holderAgent, hotLane, ticketLink, withHolder, type ClaimState, type HotLane } from '../src/module.js'
 import { holdingRun } from './lib/holding-run.js'
@@ -94,7 +94,7 @@ export function HotTicketsCard({ projects }: UiCardProps) {
         // Named lanes, not "no tickets": the list is a shortlist, and its empty state must not
         // claim the backlog is empty when merely nothing qualifies.
         <Panel>
-          <PanelNote>Nothing claimed, high priority or waiting.</PanelNote>
+          <PanelNote icon={Ticket}>Nothing claimed, high priority or waiting.</PanelNote>
         </Panel>
       ) : (
         <HotList hot={read.hot} errors={read.errors} state={state} showProject={projects.length > 1} reload={reload} />
