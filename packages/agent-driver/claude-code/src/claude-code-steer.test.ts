@@ -1,5 +1,6 @@
 import { strict as assert } from 'node:assert'
-import { test } from 'node:test'
+import { mock, test } from 'node:test'
+import { spawnSync } from 'node:child_process'
 import { StreamJsonParser } from './claude-code-stream.js'
 import type { CliIo } from '@openagt/agent-driver'
 
@@ -135,4 +136,93 @@ test('a result while the agent waits on work in the background is not the turnâ€
   assert.equal(io.ended, true)
   assert.equal(parser.answered, true)
   assert.equal(parser.result().text, 'Done.')
+})
+
+/** The lines Claude Code 2.1.330 writes as the agent starts a command in the background and goes idle on it. */
+function idleOnCommand(parser: StreamJsonParser, command: string, said: string): ReturnType<StreamJsonParser['push']> {
+  push(parser, { type: 'assistant', message: { id: 'msg_1', content: [{ type: 'tool_use', id: 'toolu_1', name: 'Bash', input: { command, description: 'Run the tests', run_in_background: true } }] }, session_id: 's1' })
+  push(parser, { type: 'system', subtype: 'background_tasks_changed', tasks: [{ task_id: 'b1', task_type: 'local_bash', description: 'Run the tests' }], session_id: 's1' })
+  push(parser, { type: 'system', subtype: 'task_started', task_id: 'b1', tool_use_id: 'toolu_1', description: 'Run the tests', is_backgrounded: true, task_type: 'local_bash', session_id: 's1' })
+  push(parser, { type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'toolu_1', content: 'Command running in background with ID: b1.' }] }, session_id: 's1' })
+  push(parser, { type: 'assistant', message: { id: 'msg_2', content: [{ type: 'text', text: said }] }, session_id: 's1' })
+  return push(parser, { type: 'result', subtype: 'success', is_error: false, result: said, session_id: 's1' })
+}
+
+test('an agent idle on a command in the background says which command it waits on and since when, and that it woke', () => {
+  const parser = new StreamJsonParser()
+  parser.talk(recordingIo())
+  const before = Date.now()
+  const waiting = idleOnCommand(parser, 'pnpm test > /tmp/test.log 2>&1;\n  echo exit=$?', 'Waiting for the tests.')
+  assert.deepEqual(waiting.map(e => (e.type === 'background' ? { ...e, tasks: e.tasks.map(({ since: _since, ...task }) => task) } : e)), [
+    { type: 'background', tasks: [{ id: 'b1', description: 'Run the tests', command: 'pnpm test > /tmp/test.log 2>&1; echo exit=$?' }] },
+  ])
+  const since = Date.parse(waiting[0]!.type === 'background' ? waiting[0]!.tasks[0]!.since : '')
+  assert.ok(since >= before && since <= Date.now(), 'since when the task began')
+  // The command's end wakes the agent: before what it says, it waits no more.
+  push(parser, { type: 'system', subtype: 'task_notification', task_id: 'b1', tool_use_id: 'toolu_1', status: 'completed', session_id: 's1' })
+  push(parser, { type: 'system', subtype: 'background_tasks_changed', tasks: [], session_id: 's1' })
+  const woke = push(parser, { type: 'assistant', message: { id: 'msg_3', content: [{ type: 'text', text: 'All pass.' }] }, session_id: 's1' })
+  assert.deepEqual(woke.slice(0, 2), [{ type: 'background', tasks: [] }, { type: 'text', text: 'All pass.' }])
+  assert.deepEqual(push(parser, { type: 'result', subtype: 'success', is_error: false, result: 'All pass.', session_id: 's1' }), [])
+  assert.equal(parser.answered, true)
+})
+
+test('work in the background that outlasts the wait is stopped, and the turn ends on the answer the agent gave', () => {
+  mock.timers.enable({ apis: ['setTimeout'] })
+  try {
+    const parser = new StreamJsonParser(60_000)
+    const io = recordingIo() as ReturnType<typeof recordingIo> & { ended?: boolean }
+    io.end = () => void (io.ended = true)
+    parser.talk(io)
+    idleOnCommand(parser, 'node dist/bin.js', 'It runs at http://127.0.0.1:4317.')
+    // A message wakes it within the wait: the wait starts again from its next result.
+    mock.timers.tick(50_000)
+    push(parser, { type: 'assistant', message: { id: 'msg_3', content: [{ type: 'text', text: 'Still up.' }] }, session_id: 's1' })
+    push(parser, { type: 'result', subtype: 'success', is_error: false, result: 'Still up at http://127.0.0.1:4317.', session_id: 's1' })
+    mock.timers.tick(59_999)
+    assert.deepEqual(io.lines, [], 'nothing stopped within the wait')
+    assert.equal(parser.answered, false)
+    mock.timers.tick(1)
+    assert.deepEqual(io.lines, [{ type: 'control_request', request_id: 'stop-b1', request: { subtype: 'stop_task', task_id: 'b1' } }])
+    assert.equal(io.ended, true, 'stdin closed: the CLI exits once its work is stopped')
+    assert.equal(parser.answered, true)
+    assert.deepEqual(parser.result(), { text: 'Still up at http://127.0.0.1:4317.', sessionId: 's1' })
+    // The person is told, with the CLI's next line.
+    const told = push(parser, { type: 'system', subtype: 'task_updated', task_id: 'b1', patch: { status: 'killed' }, session_id: 's1' })
+    assert.deepEqual(told, [{ type: 'notice', message: "`node dist/bin.js` still ran 1 minute after the agent's last message, so it was stopped and the turn ended there." }])
+  } finally {
+    mock.timers.reset()
+  }
+})
+
+test('a Stop while the agent waits on work in the background leaves nothing to stop after the wait', () => {
+  mock.timers.enable({ apis: ['setTimeout'] })
+  try {
+    const parser = new StreamJsonParser(60_000)
+    const io = recordingIo()
+    parser.talk(io)
+    idleOnCommand(parser, 'node dist/bin.js', 'It runs.')
+    assert.equal(parser.stop(), 'idle')
+    mock.timers.tick(60_000)
+    assert.deepEqual(io.lines, [])
+    assert.equal(parser.result().stopped, true)
+  } finally {
+    mock.timers.reset()
+  }
+})
+
+test('the wait holds the process until it ends the turn: with nothing else alive, the turn still ends', () => {
+  // A process with nothing but the parser in it, idle on its work in the background: an unref'd
+  // timer would let it exit with the turn never ended, as a test's fake CLI on CI did.
+  const script = `
+    import { StreamJsonParser } from ${JSON.stringify(new URL('./claude-code-stream.js', import.meta.url).href)}
+    const parser = new StreamJsonParser(50)
+    parser.talk({ write: () => {}, end: () => console.log('ended') })
+    const push = line => parser.push(JSON.stringify({ ...line, session_id: 's1' }))
+    push({ type: 'system', subtype: 'background_tasks_changed', tasks: [{ task_id: 'b1', task_type: 'local_bash' }] })
+    push({ type: 'result', subtype: 'success', is_error: false, result: 'It runs.' })
+  `
+  const run = spawnSync(process.execPath, ['--input-type=module', '-e', script], { encoding: 'utf8', timeout: 10_000 })
+  assert.equal(run.status, 0, run.stderr)
+  assert.equal(run.stdout.trim(), 'ended')
 })

@@ -366,3 +366,28 @@ test('the inbox is read while the turn runs: a message goes to the agent at once
   assert.deepEqual(done.held?.map(line => (line.kind === 'message' ? line.id : line.kind)), ['b', 'd'], 'what the agent never read is held, in order')
   assert.ok(events.some(e => e.type === 'steered' && e.id === 'a'), 'the landing is said')
 })
+
+test('the parser is told the turn is over however it ends, so nothing it holds keeps the process alive', async () => {
+  const run = (agent: ReturnType<typeof drivenProcess>, over: () => void, signals: AbortSignal[] = []) =>
+    runCliSession({ bin: 'agent', args: [], cwd: '/ws', env: {}, prompt: 'go', spawn: agent.spawn, emit: () => {}, signals, driver: 'agent', parser: { push: () => [], result: () => ({ text: 'done' }), over } })
+  let answered = 0
+  const exited = drivenProcess()
+  const turn = run(exited, () => answered++)
+  exited.exit(0)
+  await turn
+  assert.equal(answered, 1, 'an answered turn')
+
+  let failed = 0
+  const crashed = drivenProcess()
+  const crash = run(crashed, () => failed++)
+  crashed.exit(1)
+  await assert.rejects(crash)
+  assert.equal(failed, 1, 'a failed turn')
+
+  let killed = 0
+  const kill = new AbortController()
+  const turnKilled = run(drivenProcess(), () => killed++, [kill.signal])
+  kill.abort()
+  await assert.rejects(turnKilled, /aborted/)
+  assert.equal(killed, 1, 'a killed turn')
+})

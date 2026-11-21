@@ -484,6 +484,18 @@ export type DriverQuota =
   | { available: false; reason: DriverQuotaUnavailableReason }
 
 /**
+ * One piece of work the agent runs in the background, as its CLI names it: `id` is the CLI's own
+ * for it, `description` the agent's few words for it, `command` the shell command when it is one,
+ * and `since` when it began (ISO 8601).
+ */
+export interface BackgroundTask {
+  id: string
+  description?: string
+  command?: string
+  since: string
+}
+
+/**
  * One file a tool call changed, as the call's own CLI reports it: the path as the CLI names it,
  * how many lines the call added and how many it removed, and `created` when the call made the file.
  */
@@ -588,6 +600,13 @@ export type DriverEvent =
   | { type: 'thinking' }
   /** What the agent thought before it acted, as its CLI summarizes it. */
   | { type: 'thought'; text: string; subagent?: string }
+  /**
+   * The agent is idle, waiting on work it runs in the background: its turn goes on once that work
+   * ends and wakes it. `tasks` is the whole set it waits on, said each time the agent goes idle;
+   * none means it is awake again, waiting no more. A driver whose CLI runs nothing in the
+   * background sends none.
+   */
+  | { type: 'background'; tasks: BackgroundTask[] }
   /**
    * The turn settled with this final text. `sessionLink` is the real URL of the session,
    * for a driver whose session has one of its own (#1317) — a cloud session, say — so a

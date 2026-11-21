@@ -1,4 +1,5 @@
 import type { ChoiceRequest, OpenAgentEvent } from '../../src/index.js'
+import type { BackgroundTask } from '@openagt/hooks'
 import { foldScreenRows, formatOpenAgentEvent } from '../../src/client.js'
 import { answeredQuestion } from '@openagt/agent-driver/question'
 import { Fragment, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
@@ -18,7 +19,7 @@ import { ChangedFiles } from './ChangedFiles.js'
 import { turnChanges, type ChangedFile } from '../lib/turn-changes.js'
 import { SubagentSteps } from './SubagentLine.js'
 import { useSteadyText, useStillWriting } from '../lib/use-steady-text.js'
-import { Caret, LiveLine, ToolCalls, type CallOutput, type ToolStep } from './ToolCalls.js'
+import { BackgroundLine, Caret, LiveLine, ToolCalls, type CallOutput, type ToolStep } from './ToolCalls.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { ImageTiles } from './ImageTiles.js'
 import { imageAddress } from '../../src/images.js'
@@ -496,6 +497,19 @@ function Attached({ text }: { text: string }) {
 }
 
 /**
+ * What the agent waits on in the background in the turn going on: the set its driver said as the
+ * agent went idle, until it said none, the agent awake again. Nothing once a new prompt begins.
+ */
+function backgroundWait(told: readonly OpenAgentEvent[]): BackgroundTask[] | undefined {
+  for (let at = told.length - 1; at >= 0; at--) {
+    const e = told[at]!
+    if (isTurnBoundary(e)) return undefined
+    if (e.kind === 'driver' && e.event.type === 'background') return e.event.tasks.length > 0 ? e.event.tasks : undefined
+  }
+  return undefined
+}
+
+/**
  * How far the turn going on has got, what the live line says beside its seconds: the tokens it went
  * through, said once it has answered something, as Claude Code on the web says them; before that,
  * the line is the dots and the seconds.
@@ -627,7 +641,7 @@ const NONE_QUEUED: readonly WaitingMessage[] = []
  */
 function shownAsRow(e: OpenAgentEvent): boolean {
   if (e.kind === 'session-update' || e.kind === 'usage' || e.kind === 'title') return false
-  if (e.kind === 'driver' && (e.event.type === 'result' || e.event.type === 'tokens' || e.event.type === 'thinking')) return false
+  if (e.kind === 'driver' && (e.event.type === 'result' || e.event.type === 'tokens' || e.event.type === 'thinking' || e.event.type === 'background')) return false
   if (e.kind === 'driver' && e.event.type === 'rate-limit') return e.event.limit.status !== 'allowed'
   return true
 }
@@ -866,6 +880,7 @@ export function EventList({
     return report !== undefined ? [[`call:${call.id}`, report] as const] : []
   }))
   const tokens = turnTokens(told)
+  const background = working ? backgroundWait(told) : undefined
   // Once the coding agent said its session began, it is set up: what goes on is its own thinking.
   const begun = events.some(e => e.kind === 'session-update')
   // The call going on now is its steps row's, as Claude Code on the web's is: the row it continues,
@@ -1104,7 +1119,7 @@ export function EventList({
                 {/* Under the reply as it streams, too: the agent is still at it, and Claude Code on
                     the web keeps its dots and its count there. The line said a word before, which
                     under a streaming reply read as a second thing going on. */}
-                {working && !settingUp && !waitsOnItsOwn && current === undefined && <LiveLine since={turnStart} tokens={tokens} />}
+                {working && !settingUp && !waitsOnItsOwn && current === undefined && (background ? <BackgroundLine tasks={background} /> : <LiveLine since={turnStart} tokens={tokens} />)}
               </div>
             )}
             {queued.map(({ id, text, images, ...waiting }) => (

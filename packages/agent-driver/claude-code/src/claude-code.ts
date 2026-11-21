@@ -56,6 +56,12 @@ export interface ClaudeCodeDriverOptions {
    * always did.
    */
   accounts?: AccountRotation
+  /**
+   * How long the agent may stay idle on work it runs in the background (a command, a subagent)
+   * before that work is stopped and its turn ended on the answer it gave. Default 30 minutes
+   * (`BACKGROUND_WAIT_MS`).
+   */
+  backgroundWaitMs?: number
   /** `spawn` override for tests. Default `node:child_process.spawn`. */
   spawn?: SpawnLike
 }
@@ -199,11 +205,11 @@ export class ClaudeCodeSession implements DriverSession {
             this.lastSessionId = id
           },
           run: (account, said, sent) => {
-            const parser = new StreamJsonParser()
+            const parser = new StreamJsonParser(this.config.backgroundWaitMs)
             return accountTurn(() => this.turnOn(said, sent, parser, accountEnv(account, env), emit), failed => parser.accountReading(failed))
           },
         })
-      : await this.turnOn(text, opts, new StreamJsonParser(), env, emit)
+      : await this.turnOn(text, opts, new StreamJsonParser(this.config.backgroundWaitMs), env, emit)
     // Track the agent's session so a later resume continues this exact conversation.
     if (turn.sessionId) this.lastSessionId = turn.sessionId
     return finishTurn(this, turn, opts, emit)
@@ -258,7 +264,7 @@ export class ClaudeCodeSession implements DriverSession {
     return readyPrompt((words, stop) => {
       const env = this.config.env ?? process.env
       const first = this.config.accounts?.first(env)
-      const parser = new StreamJsonParser()
+      const parser = new StreamJsonParser(this.config.backgroundWaitMs)
       let answer: (turn: DriverTurn) => void = () => {}
       const answered = new Promise<DriverTurn>(resolve => {
         answer = resolve
@@ -366,6 +372,7 @@ function talking(parser: StreamJsonParser, words: string | Promise<string>, imag
     withdraw: id => parser.withdraw(id),
     hurry: () => parser.hurry(),
     stop: () => parser.stop(),
+    over: () => parser.over(),
     converse: io => {
       parser.talk(io)
       // Words already known go at once, before any line of the CLI's is read.

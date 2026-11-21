@@ -910,3 +910,78 @@ test('a ready prompt goes on the account a turn would take first', async () => {
   assert.equal(spawned[0]!.env['CLAUDE_CODE_OAUTH_TOKEN'], 'token-of-work')
   ready.cancel()
 })
+
+// A fake `claude` whose agent starts a server in the background and ends its turn on it, as
+// Claude Code 2.1.330 does: it says a result each time the agent goes idle, stops a task asked to
+// (`stop_task`), and exits only once its stdin is closed and nothing runs in the background.
+function claudeLeavingAServer(written: string[]): SpawnLike {
+  return () => {
+    const stdout = new PassThrough()
+    const say = (line: object): void => void stdout.write(JSON.stringify({ ...line, session_id: 'bg1' }) + '\n')
+    let running = true
+    let closed = false
+    const exitIfDone = (): void => {
+      if (closed && !running) stdout.end()
+    }
+    const stdin = new Writable({
+      write(chunk, _e, cb) {
+        for (const line of String(chunk).split('\n').filter(Boolean)) {
+          written.push(line)
+          const sent = JSON.parse(line) as { type?: string; request?: { subtype?: string; task_id?: string } }
+          if (sent.type === 'user') {
+            say({ type: 'system', subtype: 'init', model: 'claude-opus-5-5' })
+            say({ type: 'assistant', message: { id: 'm1', content: [{ type: 'tool_use', id: 'toolu_1', name: 'Bash', input: { command: 'node dist/bin.js', description: 'Start the dashboard', run_in_background: true } }] } })
+            say({ type: 'system', subtype: 'background_tasks_changed', tasks: [{ task_id: 'b1', task_type: 'local_bash', description: 'Start the dashboard' }] })
+            say({ type: 'system', subtype: 'task_started', task_id: 'b1', tool_use_id: 'toolu_1', is_backgrounded: true, task_type: 'local_bash' })
+            say({ type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'toolu_1', content: 'Command running in background with ID: b1.' }] } })
+            say({ type: 'assistant', message: { id: 'm2', content: [{ type: 'text', text: 'It runs at http://127.0.0.1:4317.' }] } })
+            say({ type: 'result', subtype: 'success', is_error: false, result: 'It runs at http://127.0.0.1:4317.' })
+          }
+          if (sent.type === 'control_request' && sent.request?.subtype === 'stop_task' && sent.request.task_id === 'b1') {
+            running = false
+            say({ type: 'system', subtype: 'task_updated', task_id: 'b1', patch: { status: 'killed' } })
+            say({ type: 'system', subtype: 'task_notification', task_id: 'b1', tool_use_id: 'toolu_1', status: 'stopped' })
+            say({ type: 'system', subtype: 'background_tasks_changed', tasks: [] })
+            exitIfDone()
+          }
+        }
+        cb()
+      },
+      final(cb) {
+        closed = true
+        exitIfDone()
+        cb()
+      },
+    })
+    const proc: SpawnedProcess = {
+      stdout,
+      stderr: Readable.from([]),
+      stdin,
+      on(event, listener) {
+        if (event === 'close') stdout.on('end', () => (listener as (c: number | null) => void)(0))
+        return proc
+      },
+      kill: () => {
+        stdout.end()
+        return true
+      },
+    }
+    return proc
+  }
+}
+
+test('a turn the agent ends with a server still running in the background ends once the wait is over, done on its answer', async () => {
+  const written: string[] = []
+  const events: DriverEvent[] = []
+  const driver = new ClaudeCodeDriver({ spawn: claudeLeavingAServer(written), backgroundWaitMs: 50 })
+  const session = await driver.start({ cwd: '/empty', onEvent: e => void events.push(e) })
+  const turn = await session.prompt('Start the dashboard for me.')
+  assert.equal(turn.text, 'It runs at http://127.0.0.1:4317.')
+  assert.equal(turn.stopped, undefined)
+  assert.ok(written.some(line => line.includes('"stop_task"')), 'the server was stopped')
+  const waits = events.filter(e => e.type === 'background')
+  assert.equal(waits.length, 1)
+  assert.equal(waits[0]!.type === 'background' && waits[0]!.tasks[0]!.command, 'node dist/bin.js')
+  assert.ok(events.some(e => e.type === 'notice' && e.message.includes('`node dist/bin.js` still ran')), JSON.stringify(events))
+  assert.equal(events.at(-1)?.type, 'result')
+})

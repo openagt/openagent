@@ -1,4 +1,5 @@
 import { createContext, Fragment, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
+import type { BackgroundTask } from '@openagt/hooks'
 import { callsSummary, doingOf, doneOf, summaryWords, toolCall, type ToolCall } from '../lib/tool-calls.js'
 import { usePreferences } from '../lib/preferences.js'
 import type { FileEdit } from '../lib/turn-changes.js'
@@ -352,6 +353,27 @@ export function LiveLine({ since, tokens }: { since?: string | undefined; tokens
       <LiveDots />
       {since !== undefined && <Seconds since={since} />}
       {tokens !== undefined && <TokenCount tokens={tokens} />}
+    </div>
+  )
+}
+
+// The last line of the chat while the agent is idle, waiting on work it runs in the background: a
+// test run it left going, a server it started. What it waits on, and how long that has run, so a
+// long wait reads as a wait and never as an agent that is stuck. Several: the oldest, and how many more.
+export function BackgroundLine({ tasks }: { tasks: readonly BackgroundTask[] }) {
+  const oldest = tasks.reduce((first, task) => (Date.parse(task.since) < Date.parse(first.since) ? task : first))
+  const commands = tasks.every(task => task.command !== undefined)
+  const kind = commands ? 'command' : 'task'
+  const what = tasks.length === 1 ? `a background ${kind}` : `${tasks.length} background ${kind}s`
+  return (
+    <div role="status" className="relative flex min-w-0 flex-1 items-center gap-2 font-sans text-sm text-muted-foreground">
+      <LiveDots />
+      <span className="shrink-0">Waiting on {what}:</span>
+      <code className="min-w-0 truncate font-mono text-chat-code text-foreground" title={tasks.map(task => task.command ?? task.description ?? task.id).join('\n')}>
+        {oldest.command ?? oldest.description ?? oldest.id}
+      </code>
+      {tasks.length > 1 && <span className="shrink-0">and {tasks.length - 1} more</span>}
+      <Seconds since={oldest.since} />
     </div>
   )
 }

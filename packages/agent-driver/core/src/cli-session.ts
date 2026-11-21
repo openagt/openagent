@@ -79,6 +79,8 @@ export interface AgentCliParser {
    * (it waits on work in the background): its turn is stopped, and its process ended at once.
    */
   stop?(): boolean | 'idle'
+  /** The turn is settled, however it ended (an answer, an exit, a kill): let go of what the parser holds, a timer of its own. */
+  over?(): void
 }
 
 /** Writing to the agent CLI's stdin, for a parser that converses with it. */
@@ -209,6 +211,7 @@ export function runCliSession(opts: RunCliSessionOptions): Promise<DriverTurn> {
       opts.stop?.removeEventListener('abort', onStop)
       if (stopTimer) clearTimeout(stopTimer)
       void reading?.over()
+      parser.over?.()
       fn()
     }
 

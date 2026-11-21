@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { type CliIo, toolQuestion, cutOutput, callArgument, lineCount, patchSize, oneLine } from '@openagt/agent-driver'
-import type { AccountReading, Question, DriverEvent, FileChange, DriverRateLimit, DriverRateWindow, DriverTurn, DriverUsage } from '@openagt/hooks'
+import type { AccountReading, BackgroundTask, Question, DriverEvent, FileChange, DriverRateLimit, DriverRateWindow, DriverTurn, DriverUsage } from '@openagt/hooks'
 import { userContent } from './claude-code-content.js'
 
 // What Claude Code says on its `stream-json` output, read: one JSON object per line, turned into the
@@ -110,6 +110,22 @@ function resultText(content: unknown): string {
 }
 
 /**
+ * How long the agent may stay idle on work it runs in the background before that work is stopped
+ * and its turn ended on the answer it gave. Claude Code says a result each time the agent goes idle
+ * on such work, and wakes it when the work ends; work that never ends (a server it started) would
+ * keep the turn going for ever. Long enough for a full test run the agent waits on, which can take
+ * twenty minutes here.
+ */
+export const BACKGROUND_WAIT_MS = 30 * 60_000
+
+/** What the person is told when the work in the background outlasted the wait ({@link BACKGROUND_WAIT_MS}). */
+function backgroundStopped(tasks: readonly BackgroundTask[], ms: number): string {
+  const named = tasks.map(task => `\`${task.command ?? task.description ?? task.id}\``)
+  const minutes = Math.round(ms / 60_000)
+  return `${named.join(', ')} still ran ${minutes} minute${minutes === 1 ? '' : 's'} after the agent's last message, so it was stopped and the turn ended there.`
+}
+
+/**
  * Incremental parser for Claude Code's `stream-json` output: newline-delimited
  * JSON, one object per line. We surface assistant text, thinking, tool calls and what each call
  * gave back as {@link DriverEvent}s and keep the final `result` line as the turn text.
@@ -159,10 +175,22 @@ export class StreamJsonParser {
   private readonly foreground = new Set<string>()
   /** Send now came before any call the agent waits on: the next one goes in the background. */
   private hurrying = false
-  /** How many tasks the CLI runs in the background now, as its last `background_tasks_changed` said. */
-  private background = 0
+  /** The tasks the CLI runs in the background now, by their id, as its last `background_tasks_changed` said. */
+  private readonly background = new Map<string, BackgroundTask>()
+  /** The shell command of each Bash call, by the call's id. */
+  private readonly commands = new Map<string, string>()
+  /** The shell command each task runs, by the task's id: what it is when it goes in the background. */
+  private readonly taskCommands = new Map<string, string>()
   /** The agent is idle, its turn waiting on work it runs in the background: nothing it is asked reaches it until that work ends. */
   private idle = false
+  /** The result the agent said as it went idle succeeded: the turn's success, if its wait is ended for it. */
+  private idleSucceeded = false
+  /** Ends the agent's wait on its work in the background once it has lasted {@link backgroundWaitMs}. */
+  private waitTimer: ReturnType<typeof setTimeout> | undefined
+  /** Events to say with the next line read: what happened between two lines, on a timer. */
+  private pending: DriverEvent[] = []
+
+  constructor(private readonly backgroundWaitMs: number = BACKGROUND_WAIT_MS) {}
 
   /** Answer the CLI's requests on `io` from now on, and close it when the turn is over. */
   talk(io: CliIo): void {
@@ -210,6 +238,7 @@ export class StreamJsonParser {
   stop(): boolean | 'idle' {
     if (!this.io || this.answered) return false
     this.stopping = true
+    this.clearWait()
     if (this.idle) return 'idle'
     this.control(`stop-${randomUUID()}`, { subtype: 'interrupt' })
     return true
@@ -229,6 +258,67 @@ export class StreamJsonParser {
 
   private control(id: string, request: Record<string, unknown>): void {
     this.io?.write(JSON.stringify({ type: 'control_request', request_id: id, request }))
+  }
+
+  /** The tasks in the background, as the CLI's list says them: one it names for the first time began now. */
+  private backgroundTasks(listed: unknown[]): void {
+    const now = new Date().toISOString()
+    const ids = new Set<string>()
+    for (const item of listed) {
+      if (typeof item !== 'object' || item === null) continue
+      const task = item as Record<string, unknown>
+      if (typeof task['task_id'] !== 'string') continue
+      const id = task['task_id']
+      ids.add(id)
+      const known = this.background.get(id)
+      const description = typeof task['description'] === 'string' && task['description'].trim() !== '' ? oneLine(task['description']) : undefined
+      const command = this.taskCommands.get(id)
+      this.background.set(id, { ...(known ?? { id, since: now }), ...(description !== undefined ? { description } : {}), ...(command !== undefined ? { command } : {}) })
+    }
+    for (const id of this.background.keys()) if (!ids.has(id)) this.background.delete(id)
+  }
+
+  /** The command a task runs, off the Bash call it came from: said on its row in the background, if it is there already. */
+  private taskCommand(id: string, call: string): void {
+    const command = this.commands.get(call)
+    if (command === undefined) return
+    this.taskCommands.set(id, command)
+    const task = this.background.get(id)
+    if (task !== undefined) this.background.set(id, { ...task, command })
+  }
+
+  /**
+   * The agent is idle on its work in the background, and may stay so for {@link backgroundWaitMs}:
+   * past it the work is stopped, stdin closed so the CLI exits once it is, and the turn is the
+   * answer the agent gave as it went idle.
+   */
+  private waitOn(): void {
+    this.clearWait()
+    // A transcript read after the fact has no turn to end.
+    if (!this.io) return
+    this.waitTimer = setTimeout(() => {
+      this.waitTimer = undefined
+      if (!this.idle || this.answered || this.stopping) return
+      const tasks = [...this.background.values()]
+      // Settled before a word goes out: the CLI's lines about it may be read at once.
+      this.succeeded = this.idleSucceeded
+      this.answered = this.succeeded
+      this.pending.push({ type: 'notice', message: backgroundStopped(tasks, this.backgroundWaitMs) })
+      for (const task of tasks) this.control(`stop-${task.id}`, { subtype: 'stop_task', task_id: task.id })
+      this.io?.end()
+    }, this.backgroundWaitMs)
+    // Not unref'd: it is what ends the turn, so it holds the process until then. The turn's end
+    // lets go of it ({@link over}).
+  }
+
+  /** The turn is settled, however it ended: nothing is left to end it, and no timer holds the process. */
+  over(): void {
+    this.clearWait()
+  }
+
+  private clearWait(): void {
+    if (this.waitTimer !== undefined) clearTimeout(this.waitTimer)
+    this.waitTimer = undefined
   }
 
   /** What the turn said of the account it ran on, once it is over: `failed` when it failed. */
@@ -258,14 +348,19 @@ export class StreamJsonParser {
     // Announced on the very first stream line, so it must not wait for `result`: a turn that is
     // stopped or dies mid-flight would take the id — the agent's `claude --resume` handle — with
     // it (#1322). Emitted only when it changes; every subsequent line repeats the same id.
-    const announced: DriverEvent[] = []
+    const announced: DriverEvent[] = this.pending
+    this.pending = []
     if (typeof obj['session_id'] === 'string' && obj['session_id'] !== this.sessionId) {
       this.sessionId = obj['session_id']
       announced.push({ type: 'session', sessionId: this.sessionId })
     }
     const type = obj['type']
-    // The agent writes or is written to: it is awake.
-    if (type === 'assistant' || type === 'stream_event' || type === 'user') this.idle = false
+    // The agent writes or is written to: it is awake, and waits on nothing.
+    if ((type === 'assistant' || type === 'stream_event' || type === 'user') && this.idle) {
+      this.idle = false
+      this.clearWait()
+      announced.push({ type: 'background', tasks: [] })
+    }
     // The CLI's first line names the model it resolved the pick to (`claude-opus-5-5` for `opus`),
     // or the one it chose when none was picked: what the turn runs on, said before it runs.
     if (type === 'system' && obj['subtype'] === 'init' && typeof obj['model'] === 'string' && obj['model'] !== '') {
@@ -277,6 +372,8 @@ export class StreamJsonParser {
     // The calls the agent waits on, for Send now, by their task: one begins in the foreground, and
     // is over when its task is or when it goes on in the background.
     if (type === 'system' && typeof obj['task_id'] === 'string') this.foregroundTask(obj['subtype'], obj['task_id'], obj)
+    // The call a task runs, which may go in the background now or later (Send now).
+    if (type === 'system' && obj['subtype'] === 'task_started' && typeof obj['task_id'] === 'string' && typeof obj['tool_use_id'] === 'string') this.taskCommand(obj['task_id'], obj['tool_use_id'])
     if (type === 'system' && obj['subtype'] === 'task_started' && obj['is_backgrounded'] === true && typeof obj['tool_use_id'] === 'string') {
       this.backgrounded.add(obj['tool_use_id'])
       return announced
@@ -316,7 +413,7 @@ export class StreamJsonParser {
       return limit ? [...announced, { type: 'rate-limit', limit }] : announced
     }
     // The work the CLI runs in the background, as a level: every change says the whole set.
-    if (type === 'system' && obj['subtype'] === 'background_tasks_changed' && Array.isArray(obj['tasks'])) this.background = obj['tasks'].length
+    if (type === 'system' && obj['subtype'] === 'background_tasks_changed' && Array.isArray(obj['tasks'])) this.backgroundTasks(obj['tasks'])
     if (type === 'result') {
       const result = obj['result']
       if (typeof result === 'string') this.finalText = result
@@ -326,10 +423,13 @@ export class StreamJsonParser {
       // agent is idle, and the work's end wakes it for another. The turn goes on, and a message
       // sent meanwhile still reaches it. Such a result is not the turn's success: a Stop while it
       // waits is a stop.
-      if (this.background > 0 && this.asked === undefined && !this.stopping) {
+      if (this.background.size > 0 && this.asked === undefined && !this.stopping) {
         this.idle = true
-        return announced
+        this.idleSucceeded = obj['subtype'] === 'success' && obj['is_error'] !== true
+        this.waitOn()
+        return [...announced, { type: 'background', tasks: [...this.background.values()] }]
       }
+      this.clearWait()
       this.succeeded = obj['subtype'] === 'success' && obj['is_error'] !== true
       // The turn's last line: nothing more is coming to answer, so the CLI may exit.
       this.io?.end()
@@ -386,6 +486,8 @@ export class StreamJsonParser {
       } else if (block['type'] === 'tool_use' && block['name'] === ASK_TOOL && within === undefined) {
         if (typeof block['id'] === 'string') this.askCalls.add(block['id'])
       } else if (block['type'] === 'tool_use' && typeof block['name'] === 'string') {
+        const input = typeof block['input'] === 'object' && block['input'] !== null ? (block['input'] as Record<string, unknown>) : {}
+        if (block['name'] === 'Bash' && typeof block['id'] === 'string' && typeof input['command'] === 'string') this.commands.set(block['id'], oneLine(input['command']))
         events.push({ type: 'action', label: block['name'], ...callArgument(toolArgument(block['input'])), ...callSummary(block['input']), ...(typeof block['id'] === 'string' ? { id: block['id'] } : {}), ...tag })
         // An `Agent` call is a subagent of its own: said beside its row, never instead of it. The
         // call's id is the subagent's, so its result ends the same row; a call without one cannot
