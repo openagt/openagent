@@ -455,3 +455,17 @@ describe('Markdown images and a README’s HTML', () => {
     expect(screen.getByRole('link', { name: 'the docs' }).getAttribute('href')).toBe('https://example.test/docs')
   })
 })
+
+describe('Markdown emphasis', () => {
+  test('a star with a space on its inner side is no emphasis: the stars of a pattern stay', () => {
+    const { container } = render(<Markdown text="the leaked GIT_AUTHOR_* and GIT_COMMITTER_* variables" />)
+    expect(container.querySelector('em')).toBeNull()
+    expect(container.textContent).toBe('the leaked GIT_AUTHOR_* and GIT_COMMITTER_* variables')
+  })
+
+  test('stars that hug their words still make italic and bold', () => {
+    const { container } = render(<Markdown text="an *italic* word and a **bold** one" />)
+    expect(container.querySelector('em')?.textContent).toBe('italic')
+    expect(container.querySelector('strong')?.textContent).toBe('bold')
+  })
+})

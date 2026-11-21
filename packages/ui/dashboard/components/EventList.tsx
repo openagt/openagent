@@ -350,6 +350,12 @@ function ReplyFooter({ text, at }: { text: string; at?: string | undefined }) {
 const PROMPT_LINES = 8
 const PROMPT_CHARS = 600
 
+// A long message, cut short: at its sixth line, as many lines as fill what a cut at a height did,
+// so its next line never shows the top of its letters under the cut (a height cuts wherever the
+// lines and the room between paragraphs fall), and that last line fades out into the "Show more"
+// under it. The clamp counts the lines of all its paragraphs; `1lh` is a chat line (`text-chat`).
+const PROMPT_CUT = 'line-clamp-6 text-chat [mask-image:linear-gradient(to_bottom,#000_calc(100%-1lh),transparent)]'
+
 function isTall(text: string): boolean {
   return text.length > PROMPT_CHARS || text.trim().split('\n').length > PROMPT_LINES
 }
@@ -399,7 +405,7 @@ function Prompt({ text, at, waiting, attached, images, fresh = false }: { text: 
     <div className={`group/prompt flex min-w-0 flex-1 flex-col items-end font-sans text-foreground ${fresh ? 'bubble-in' : ''}`}>
       {images !== undefined && images.length > 0 && <ImageTiles tiles={images.map((name, at) => ({ key: `${at}:${name}`, src: imageAddress(name) }))} className="mb-2 max-w-[80%] justify-end" />}
       <div role="group" aria-label={waiting ? 'Your message, waiting' : 'Your message'} className="max-w-[80%] min-w-0 rounded-lg rounded-br-sm bg-card px-4 py-2 shadow-sm ring-1 ring-hairline">
-        <div className={tall && !open ? 'max-h-40 overflow-hidden' : ''}>
+        <div className={tall && !open ? PROMPT_CUT : ''}>
           <Markdown text={text} />
         </div>
         {tall && (
