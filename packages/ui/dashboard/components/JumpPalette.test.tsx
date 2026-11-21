@@ -68,7 +68,8 @@ describe('the jump', () => {
     draw()
     const box = document.body.appendChild(Object.defineProperty(document.createElement('div'), 'isContentEditable', { value: true }))
     fireEvent.keyDown(box, { key: 'k', ctrlKey: true })
-    const input = await screen.findByRole('combobox', { name: 'Jump to' })
+    // The field has the caret as it is drawn, not a frame later: a letter typed straight after the press is the jump's, never the box's behind it.
+    const input = screen.getByRole('combobox', { name: 'Jump to' })
     expect(document.activeElement).toBe(input)
     expect(screen.getByRole('listbox')).toBeTruthy()
     expect(screen.getAllByRole('status')[0]!.textContent).toMatch(/^7 places/)
