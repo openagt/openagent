@@ -3,6 +3,7 @@ import { Check, Puzzle, Settings2 } from 'lucide-react'
 import type { Preset } from '../rpc/presets.js'
 import { onProjectSkillNames, onSkillChoices, type SkillChoices } from '../rpc/skill-choices.js'
 import { useLoaded, usePolled } from '../lib/use-async.js'
+import { pluginsAgain } from '../lib/plugins-switched.js'
 import { inWords } from '../lib/in-words.js'
 import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
 import { RowChevron, RowSaid, rowButtonClass, rowWideClass } from './ui/row-item.js'
@@ -74,13 +75,13 @@ export function skillPicksSaid(picks: { pluginsWithout?: readonly string[] | und
   return `${own}, and ${project}`
 }
 
-/** How often the plugins to pick from are read again: a person switches one in Settings. */
+/** How often the plugins to pick from are read again, besides at once when one is switched in Settings. */
 const CHOICES_MS = 30_000
 
 /** The plugins a session in the project picks from (none: a session with no project), kept in this browser so the menu and its count land whole. */
 export function useSkillChoices(projectId: string | undefined): SkillChoices | null | undefined {
   const id = projectId ?? SESSIONS_ID
-  return usePolled<SkillChoices | null | undefined>(() => onSkillChoices(id), undefined, CHOICES_MS, [id], { remember: `skill-choices:${id}`, stored: true }).value
+  return usePolled<SkillChoices | null | undefined>(() => onSkillChoices(id), undefined, CHOICES_MS, [id], { remember: `skill-choices:${id}`, stored: true }, pluginsAgain).value
 }
 
 /**

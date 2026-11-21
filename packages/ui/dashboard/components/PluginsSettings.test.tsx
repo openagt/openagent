@@ -8,8 +8,14 @@ const onComputerPlugins = vi.hoisted(() => vi.fn())
 const onProjectPlugins = vi.hoisted(() => vi.fn())
 const sendSwitchPlugin = vi.hoisted(() => vi.fn())
 vi.mock('../rpc/plugins.js', () => ({ onComputerPlugins, onProjectPlugins, sendSwitchPlugin }))
+const onModules = vi.hoisted(() => vi.fn())
+vi.mock('../rpc/modules.js', () => ({ onModules }))
+const onSkillChoices = vi.hoisted(() => vi.fn())
+vi.mock('../rpc/skill-choices.js', () => ({ onSkillChoices, onProjectSkillNames: vi.fn() }))
 
 const { ComputerPluginsSettings, ProjectPluginsSettings } = await import('./PluginsSettings.js')
+const { useModules } = await import('../lib/use-modules.js')
+const { useSkillChoices } = await import('./SkillsMenu.js')
 
 afterEach(() => {
   cleanup()
@@ -17,6 +23,8 @@ afterEach(() => {
   onComputerPlugins.mockReset()
   onProjectPlugins.mockReset()
   sendSwitchPlugin.mockReset()
+  onModules.mockReset()
+  onSkillChoices.mockReset()
 })
 
 const row = (name: string, on: boolean) => ({ name, description: `The ${name} plugin.`, scope: 'project', on })
@@ -34,6 +42,35 @@ describe('Settings › Plugins', () => {
     await waitFor(() => expect(sendSwitchPlugin).toHaveBeenCalledWith('tickets', true, 'p1'))
     await waitFor(() => expect(screen.getByRole('switch', { name: 'tickets' }).getAttribute('aria-checked')).toBe('true'))
     expect(onProjectPlugins).toHaveBeenCalledWith('p1')
+  })
+
+  test("a switch is seen at once wherever the plugins' state is read: the sidebar's pages and the Overview's cards (the modules), the Skills count, the first group's rows", async () => {
+    onProjectPlugins.mockResolvedValue([row('tickets', true)])
+    onComputerPlugins.mockResolvedValue([{ ...row('discord', false), scope: 'person' }])
+    onModules.mockResolvedValue([])
+    onSkillChoices.mockResolvedValue({ core: [], plugins: [] })
+    sendSwitchPlugin.mockResolvedValue({ ok: true })
+    function Page() {
+      useModules()
+      useSkillChoices('p1')
+      return (
+        <>
+          <ComputerPluginsSettings />
+          <ProjectPluginsSettings projectId="p1" />
+        </>
+      )
+    }
+    render(<Page />)
+    const tickets = await screen.findByRole('switch', { name: 'tickets' })
+    await waitFor(() => expect(onModules).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(onSkillChoices).toHaveBeenCalledTimes(1))
+    expect(onComputerPlugins).toHaveBeenCalledTimes(1)
+    fireEvent.click(tickets)
+    await waitFor(() => expect(sendSwitchPlugin).toHaveBeenCalledWith('tickets', false, 'p1'))
+    // Long before their next poll.
+    await waitFor(() => expect(onModules).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(onSkillChoices).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(onComputerPlugins).toHaveBeenCalledTimes(2))
   })
 
   test('a switch that is refused says why', async () => {

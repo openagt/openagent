@@ -4,6 +4,7 @@ import { RENDER_KINDS } from '@openagt/hooks/ui'
 import { onModules, type DashboardModule } from '../rpc/modules.js'
 import type { ActionPlace, OptionPlace, RenderKind, RenderKinds, UiAction, UiModuleDefinition, UiOption, UiRender, UiTextRender, UiView, ViewPlace } from '../module/index.js'
 import { usePolled } from './use-async.js'
+import { pluginsAgain } from './plugins-switched.js'
 import { isPageSegment, SESSIONS_ID } from '../../src/project-address.js'
 
 /**
@@ -154,12 +155,12 @@ export function byMountOrder(a: { order?: number; package: string }, b: { order?
  * projects that have it. `loaded` is false until the module list has
  * been read and every module in it imported, so the shell can tell "no such page" from "not
  * loaded yet"; what a module brings is there as soon as that module is imported, so a card is not
- * kept waiting for another package's code. A change of `reloadKey` reads the list again at once;
+ * kept waiting for another package's code. A change of `reloadKey`, and a plugin switched in Settings, read the list again at once;
  * what is mounted stays until it answers. The list is kept for the next visit too, so a page
  * opened again imports the modules at once.
  */
 export function useModules(reloadKey = 0): MountedModules {
-  const { value: modules, state: listState } = usePolled(onModules, NO_MODULES, 30_000, [reloadKey], { remember: 'modules', stored: true })
+  const { value: modules, state: listState } = usePolled(onModules, NO_MODULES, 30_000, [reloadKey], { remember: 'modules', stored: true }, pluginsAgain)
   const listed = listState !== 'unknown'
   const [state, setState] = useState<MountedModules>(NOTHING_MOUNTED)
   useEffect(() => {
