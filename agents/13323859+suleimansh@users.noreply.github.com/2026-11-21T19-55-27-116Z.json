@@ -1,17 +1,33 @@
 {
   "id": "2026-11-21T19-55-27-116Z",
   "startedAt": "2026-11-21T19:55:27.362Z",
-  "status": "running",
+  "endedAt": "2026-11-21T20:14:20.881Z",
+  "status": "done",
   "intent": "On the Logs page a session that waits on me looks finished: its row has the green \"Done\" icon and \"Done in 41m\", while the sidebar lists the same session under \"Waiting on you\" with the yellow icon and \"Needs merge\" (seen on session 2026-11-21T19-03-38-792Z while its pull request was open). The filter has only All, Done and Stopped. Make the Logs row use the same state as the sidebar row (same icon, same words, one source for both), and add a \"Waiting\" segment to the filter, shown first after All, with its count. Also check a session that was stopped and whose pull request later merged (2026-11-21, the image paste session, PR 2399): its Logs row says \"Stopped\" where the sidebar shows the merged icon. Add a test that fails without the fix, and open a pull request with a short title and body.",
+  "title": "Logs row state sync",
   "driver": "claude-code",
-  "model": "opus",
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "branch": "agent-logs-waiting-state",
+  "pr": {
+    "number": 2407,
+    "url": "https://github.com/openagt/openagent/pull/2407"
+  },
+  "cost": 2.6615113999999997,
+  "contextTokens": 131429,
   "caller": {
     "runner": {
       "host": "Suleimans-MacBook-Pro.local",
       "pid": 87800,
-      "gitAccount": "suleimansh"
+      "gitAccount": "suleimansh",
+      "baseCommit": "d54205a35e8db3ebffd0cfa7a81b8f821c1d39f1"
     },
+    "pid": 87800,
     "host": "Suleimans-MacBook-Pro.local",
-    "gitAccount": "suleimansh"
+    "gitAccount": "suleimansh",
+    "baseCommit": "d54205a35e8db3ebffd0cfa7a81b8f821c1d39f1",
+    "kind": "prompt",
+    "workspace": "/Users/suleiman/Projects/openagent/.branches/agent-2026-11-21T19-55-27-116Z",
+    "sessionId": "a4b25461-f29a-46eb-8b11-e03d2f51b569"
   }
 }
