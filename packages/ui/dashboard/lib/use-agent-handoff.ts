@@ -3,6 +3,7 @@ import type { AgentHandoff } from '../../src/index.js'
 import { onAgentHandoff } from '../rpc/reads.js'
 import { forgetRemembered, useAskOn, usePolled, type ReadState } from './use-async.js'
 import { useAction } from './use-action.js'
+import { prsAgain } from './runs-changed.js'
 
 /** What the agent view knows about the session's branch, and how it acts on it. */
 export type AgentHandoffState = {
@@ -110,6 +111,8 @@ export function useAgentHandoff(projectId: string, agentId: string | null | unde
     // Remembered per run, in this browser too: going back to a run, or loading it again, shows its
     // last answer at once while it is read again. Another run's answer is never shown.
     key !== undefined ? { remember: key, stored: true } : undefined,
+    // Its pull request moved: read again with the run's row, which says so at the same time.
+    prsAgain(),
   )
   // The run's turn has just ended: its branch is read every second until it has something to say,
   // since the run's own last commit lands moments after its turn does ({@link SETTLING_MS}).

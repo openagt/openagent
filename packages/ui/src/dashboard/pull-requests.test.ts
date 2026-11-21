@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { cachedOpenPrs, cachedPrStates, cachedPrView, forgetPr, linkedPrOf, openPrOf, openPrs, prStates, prView, prsForBranch, prsForBranchOrThrow, type OpenPr } from './pull-requests.js'
+import { cachedOpenPrs, cachedPrStates, cachedPrView, cachedPrsForBranch, forgetBranchPrs, forgetPr, linkedPrOf, onPrMoved, openPrOf, openPrs, prStates, prView, prsForBranch, prsForBranchOrThrow, type OpenPr } from './pull-requests.js'
 import type { GitHostFor, GitHostRequest, RequestsOutcome } from '../store/git-host.js'
 
 // The dashboard's pull request reads (#1820), all through the git host provider: what is asked of it,
@@ -77,27 +77,71 @@ test('how a project\'s PRs stand, with their titles, is one listing of every sta
 
 test('the cached states: a failed listing is kept as the states last read, so the git host is not asked at every poll; after a request was opened here, the rows keep their states while the next read is on its way', async () => {
   const cwd = '/repo-states'
+  const url = 'https://github.com/o/r/pull/41'
   let calls = 0
-  const listed = (state: 'open' | 'merged') => new Map([['u/1', { state, title: 'A fix' }]])
-  const said = async () => [...(await cachedPrStates(cwd, read))].map(([at, pr]) => [at, pr.state])
-  let answer: () => Promise<Map<string, { state: 'open' | 'merged'; title: string }>> = async () => listed('open')
-  const read = () => (calls++, answer())
-  assert.deepEqual(await said(), [['u/1', 'open']])
+  let answer: () => Promise<RequestsOutcome> = async () => ({ ok: true, requests: [{ ...REQUEST, number: 41, url, title: 'A fix' }] })
+  const gitHost: GitHostFor = async () => ({ ...(await fakeGitHost({ ok: true, requests: [] }).gitHost('/'))!, requests: () => (calls++, answer()) })
+  const said = async () => (await cachedPrStates(cwd, gitHost)).get(url)?.state
+  assert.equal(await said(), 'open')
   // Opened or merged here: the states are forgotten, and the next read is slow. The rows keep what they had.
   forgetPr(cwd, 'agent-x')
-  answer = () => new Promise(resolve => setTimeout(() => resolve(listed('merged')), 400))
-  assert.deepEqual(await said(), [['u/1', 'open']])
+  answer = () => new Promise(resolve => setTimeout(() => resolve({ ok: true, requests: [{ ...REQUEST, number: 41, url, state: 'merged' }] }), 400))
+  assert.equal(await said(), 'open')
   await new Promise(resolve => setTimeout(resolve, 450))
-  assert.deepEqual(await said(), [['u/1', 'merged']])
+  assert.equal(await said(), 'merged')
   // A git host that cannot answer: its failure is kept like an answer, as the last states, and not asked again at once.
   forgetPr(cwd, 'agent-x')
-  answer = () => Promise.reject(new Error('gh: not authenticated'))
+  answer = async () => ({ ok: false, error: 'gh: not authenticated' })
   const before = calls
   await new Promise(resolve => setTimeout(resolve, 10))
-  assert.deepEqual(await said(), [['u/1', 'merged']])
-  await cachedPrStates(cwd, read)
-  await cachedPrStates(cwd, read)
+  assert.equal(await said(), 'merged')
+  await cachedPrStates(cwd, gitHost)
+  await cachedPrStates(cwd, gitHost)
   assert.equal(calls, before + 1, 'one ask, then the kept answer')
+})
+
+test("a request merged is merged everywhere at once: the session's own read and the rows of the runs say what the newest read of it says, whichever was read last, and a read that moved one tells whoever listens", async () => {
+  const cwd = '/repo-together'
+  const url = 'https://github.com/o/r/pull/77'
+  const request: GitHostRequest = { ...REQUEST, number: 77, url, branch: 'agent-together', title: 'Image paste' }
+  const saying = (state: GitHostRequest['state']) => fakeGitHost({ ok: true, requests: [{ ...request, state }] }).gitHost
+  let moved = 0
+  const stop = onPrMoved(() => moved++)
+  try {
+    // Both read while it was open, each cached on its own clock.
+    assert.equal((await cachedPrStates(cwd, saying('open'))).get(url)?.state, 'open')
+    assert.equal((await cachedPrsForBranch(cwd, 'agent-together', saying('open'))).value?.[0]?.state, 'OPEN')
+    assert.equal((await cachedOpenPrs(cwd, async () => [openPrOf(request)])).length, 1)
+    assert.equal(moved, 0, 'nothing moved yet')
+    // Merged on the git host; the session's page reads its branch first. The listing is not read
+    // again before its minute is up, yet its row says merged with the header.
+    forgetBranchPrs(cwd, 'agent-together')
+    assert.equal((await cachedPrsForBranch(cwd, 'agent-together', saying('merged'))).value?.[0]?.state, 'MERGED')
+    assert.equal((await cachedPrStates(cwd, saying('open'))).get(url)?.state, 'merged')
+    assert.deepEqual(await cachedOpenPrs(cwd, async () => [openPrOf(request)]), [], 'off the queue of open requests too')
+    assert.equal(moved, 1, 'the page is told, so every place reads again together')
+    // And the other way: the listing reads it closed first, and the branch's cached read says so too.
+    forgetPr(cwd)
+    assert.equal((await cachedPrStates(cwd, saying('closed'))).get(url)?.state, 'closed')
+    assert.equal((await cachedPrsForBranch(cwd, 'agent-together', saying('merged'))).value?.[0]?.state, 'CLOSED')
+    assert.equal(moved, 2)
+  } finally {
+    stop()
+  }
+})
+
+test('an answer from a read asked before another is never newer than it, however late it comes', async () => {
+  const url = 'https://github.com/o/r/pull/88'
+  const request: GitHostRequest = { ...REQUEST, number: 88, url, branch: 'agent-late' }
+  let release: (outcome: RequestsOutcome) => void = () => {}
+  const slow: GitHostFor = async () => ({ ...(await fakeGitHost({ ok: true, requests: [] }).gitHost('/'))!, requests: () => new Promise(resolve => (release = resolve)) })
+  // The listing is asked while the request is open, and answers only after the branch's read found it merged.
+  const listing = prStates('/repo-late', slow)
+  await new Promise(resolve => setTimeout(resolve, 0))
+  assert.equal((await cachedPrsForBranch('/repo-late', 'agent-late', fakeGitHost({ ok: true, requests: [{ ...request, state: 'merged' }] }).gitHost)).value?.[0]?.state, 'MERGED')
+  release({ ok: true, requests: [request] })
+  await listing
+  assert.equal((await cachedPrStates('/repo-late', slow)).get(url)?.state, 'merged')
 })
 
 test('the open requests for the Human Queue: the first ask waits for them, the next ones are the list last read, and a request opened or merged here reads them again; a first read that fails is a failure', async () => {

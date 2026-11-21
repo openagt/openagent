@@ -1,16 +1,16 @@
 import { ownRunsWatch } from '../dashboard/runs-watch.js'
+import { onPrMoved } from '../dashboard/pull-requests.js'
 import { contextProjects } from './context.js'
 import { SESSIONS_ID } from '../project-address.js'
 
 // What the page is told the moment it should read the runs again (`GET /_rpc/changes`): a run of
-// one of the projects, or a session with no project, changed. The page reads the list itself, as
-// it always does; this only says when, so it reads at once instead of at its next poll.
+// one of the projects, or a session with no project, changed; or a pull request stands otherwise,
+// which every place that shows one reads again together, the rows of the runs with the run's own page.
+// The page reads the list itself, as it always does; this only says when, so it reads at once
+// instead of at its next poll.
 
-/** One thing the page is told: the runs of the project changed. */
-export interface RunsChanged {
-  kind: 'runs'
-  projectId: string
-}
+/** One thing the page is told: the runs of the project changed, or a pull request moved (merged, closed, opened). */
+export type RunsChanged = { kind: 'runs'; projectId: string } | { kind: 'prs' }
 
 /** How often the projects are listed again while a page listens: a project added since is followed too. */
 const PROJECTS_EVERY_MS = 30_000
@@ -22,16 +22,18 @@ export function followRunsChanged(send: (change: RunsChanged) => void): () => vo
   const followed = new Map<string, { path: string; stop: () => void }>()
   const told = new Map<string, ReturnType<typeof setTimeout>>()
   let stopped = false
-  const tell = (projectId: string): void => {
-    if (stopped || told.has(projectId)) return
+  const later = (key: string, change: RunsChanged): void => {
+    if (stopped || told.has(key)) return
     told.set(
-      projectId,
+      key,
       setTimeout(() => {
-        told.delete(projectId)
-        if (!stopped) send({ kind: 'runs', projectId })
+        told.delete(key)
+        if (!stopped) send(change)
       }, TOGETHER_MS),
     )
   }
+  const tell = (projectId: string): void => later(`runs:${projectId}`, { kind: 'runs', projectId })
+  const stopPrs = onPrMoved(() => later('prs', { kind: 'prs' }))
   const follow = async (): Promise<void> => {
     const [own, sessions] = await Promise.all([
       contextProjects()
@@ -61,6 +63,7 @@ export function followRunsChanged(send: (change: RunsChanged) => void): () => vo
   return () => {
     stopped = true
     clearInterval(timer)
+    stopPrs()
     for (const one of followed.values()) one.stop()
     followed.clear()
     for (const timeout of told.values()) clearTimeout(timeout)
