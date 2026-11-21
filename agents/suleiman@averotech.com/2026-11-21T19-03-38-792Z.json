@@ -1,0 +1,17 @@
+{
+  "id": "2026-11-21T19-03-38-792Z",
+  "startedAt": "2026-11-21T19:03:39.164Z",
+  "status": "running",
+  "intent": "Two tests fail on my Mac whatever the change, so every session has to work out that the failures are not its own:\n\n- One compares a path under /var/... with the same folder as /private/var/... (macOS's symlink).\n- One formats a date in my system's language, Hebrew; it passes with LANG=en_US. It is among the dashboard's UI tests (AgentDetails).\n\nRun the tests of all packages to find both, and any other test that depends on the machine's language, time zone or temp folder. Fix the tests, not the code they check, unless the code is wrong. Open a pull request with a short title and body.",
+  "driver": "claude-code",
+  "model": "opus",
+  "caller": {
+    "runner": {
+      "host": "Suleimans-MacBook-Pro.local",
+      "pid": 30398,
+      "gitAccount": "suleimansh"
+    },
+    "host": "Suleimans-MacBook-Pro.local",
+    "gitAccount": "suleimansh"
+  }
+}
