@@ -372,6 +372,7 @@ function talking(parser: StreamJsonParser, words: string | Promise<string>, imag
     withdraw: id => parser.withdraw(id),
     hurry: () => parser.hurry(),
     stop: () => parser.stop(),
+    over: () => parser.over(),
     converse: io => {
       parser.talk(io)
       // Words already known go at once, before any line of the CLI's is read.

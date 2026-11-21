@@ -1,5 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { mock, test } from 'node:test'
+import { spawnSync } from 'node:child_process'
 import { StreamJsonParser } from './claude-code-stream.js'
 import type { CliIo } from '@openagt/agent-driver'
 
@@ -208,4 +209,20 @@ test('a Stop while the agent waits on work in the background leaves nothing to s
   } finally {
     mock.timers.reset()
   }
+})
+
+test('the wait holds the process until it ends the turn: with nothing else alive, the turn still ends', () => {
+  // A process with nothing but the parser in it, idle on its work in the background: an unref'd
+  // timer would let it exit with the turn never ended, as a test's fake CLI on CI did.
+  const script = `
+    import { StreamJsonParser } from ${JSON.stringify(new URL('./claude-code-stream.js', import.meta.url).href)}
+    const parser = new StreamJsonParser(50)
+    parser.talk({ write: () => {}, end: () => console.log('ended') })
+    const push = line => parser.push(JSON.stringify({ ...line, session_id: 's1' }))
+    push({ type: 'system', subtype: 'background_tasks_changed', tasks: [{ task_id: 'b1', task_type: 'local_bash' }] })
+    push({ type: 'result', subtype: 'success', is_error: false, result: 'It runs.' })
+  `
+  const run = spawnSync(process.execPath, ['--input-type=module', '-e', script], { encoding: 'utf8', timeout: 10_000 })
+  assert.equal(run.status, 0, run.stderr)
+  assert.equal(run.stdout.trim(), 'ended')
 })

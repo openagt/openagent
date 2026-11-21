@@ -307,7 +307,13 @@ export class StreamJsonParser {
       for (const task of tasks) this.control(`stop-${task.id}`, { subtype: 'stop_task', task_id: task.id })
       this.io?.end()
     }, this.backgroundWaitMs)
-    this.waitTimer.unref?.()
+    // Not unref'd: it is what ends the turn, so it holds the process until then. The turn's end
+    // lets go of it ({@link over}).
+  }
+
+  /** The turn is settled, however it ended: nothing is left to end it, and no timer holds the process. */
+  over(): void {
+    this.clearWait()
   }
 
   private clearWait(): void {
