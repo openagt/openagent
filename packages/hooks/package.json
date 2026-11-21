@@ -1,0 +1,50 @@
+{
+  "name": "@openagt/hooks",
+  "version": "0.1.0",
+  "description": "OpenAgent's hooks: the contracts every module plugs in through (the run pipeline, coding agents, where runs live, skills, the store, accounts, the app's life, what needs the person, and the UI's places), a module's server functions, read or act, the run options, the settings catalog, and the loader that calls them in order. No features of its own.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/openagt/openagent.git",
+    "directory": "packages/hooks"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./testing": {
+      "types": "./dist/testing.d.ts",
+      "default": "./dist/testing.js"
+    },
+    "./ui": {
+      "types": "./dist/ui.d.ts",
+      "default": "./dist/ui.js"
+    },
+    "./rpc": {
+      "types": "./dist/rpc.d.ts",
+      "default": "./dist/rpc.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "tsc -p tsconfig.test.json && node ../../scripts/test-node.mjs",
+    "clean": "rm -rf dist dist-test"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^7.0.2",
+    "@types/react": "^19.2.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

@@ -4,15 +4,15 @@ import { existsSync } from 'node:fs'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { SessionLog, diaryLine } from './session-log.js'
+import { FileSessionLog, diaryLine } from './session-log.js'
 
-const kinds = async (log: SessionLog): Promise<string[]> =>
+const kinds = async (log: FileSessionLog): Promise<string[]> =>
   (await readFile(log.diaryPath, 'utf8')).trim().split('\n').filter(Boolean).map(line => JSON.parse(line).kind)
 
 test('the message being written goes in the live file, never the diary, and goes once the message is whole', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'session-log-live-'))
   try {
-    const log = new SessionLog(dir, { id: 'r1' })
+    const log = new FileSessionLog(dir, { id: 'r1' })
     await log.open()
     void log.record({ type: 'partial', text: 'Rivers car' })
     void log.record({ type: 'partial', text: 'Rivers carve' })
@@ -30,7 +30,7 @@ test('the message being written goes in the live file, never the diary, and goes
 test('a run that ends mid-message leaves no live file', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'session-log-live-'))
   try {
-    const log = new SessionLog(dir, { id: 'r1' })
+    const log = new FileSessionLog(dir, { id: 'r1' })
     await log.open()
     await log.record({ type: 'partial', text: 'Half a' })
     assert.equal(existsSync(log.livePath), true)
@@ -50,7 +50,7 @@ test('what a subagent said stays its own in the diary: it is no part of the agen
 test('a subagent of the agent\'s own is a diary line of its own kind, with every field its driver filled', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'session-log-subagent-'))
   try {
-    const log = new SessionLog(dir, { id: 'r1' }, false, () => '2026-10-16T10:00:00.000Z')
+    const log = new FileSessionLog(dir, { id: 'r1' }, false, () => '2026-10-16T10:00:00.000Z')
     await log.open()
     await log.record({ type: 'subagent', id: 'toolu_1', status: 'working', name: 'Map the serving', role: 'Explore', model: 'sonnet', prompt: 'Read how the pages are served.' })
     // The row ends under the same id; a field the CLI never said is absent on the line too.
@@ -68,7 +68,7 @@ test('a subagent of the agent\'s own is a diary line of its own kind, with every
 test('a tool call and what it gave back are two diary lines, the second naming the first by its id', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'session-log-output-'))
   try {
-    const log = new SessionLog(dir, { id: 'r1' }, false, () => '2026-10-04T10:00:00.000Z')
+    const log = new FileSessionLog(dir, { id: 'r1' }, false, () => '2026-10-04T10:00:00.000Z')
     await log.open()
     await log.record({ type: 'action', label: 'Bash', detail: 'pnpm test', id: 't1' })
     await log.record({ type: 'output', id: 't1', text: '1 failed', failed: true, exitCode: 1 })
@@ -85,7 +85,7 @@ test('a tool call and what it gave back are two diary lines, the second naming t
 test('the run can be named once: the name on the card and a line in the diary, and a second name is ignored', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'session-log-title-'))
   try {
-    const log = new SessionLog(dir, { id: 'r1' })
+    const log = new FileSessionLog(dir, { id: 'r1' })
     await log.open()
     await log.title('README.md condensing')
     await log.title('Something else')
@@ -102,7 +102,7 @@ test('the run can be named once: the name on the card and a line in the diary, a
 test('the card says how full the conversation is now, the newest reading replacing the one before', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'session-log-context-'))
   try {
-    const log = new SessionLog(dir, { id: 'r1' })
+    const log = new FileSessionLog(dir, { id: 'r1' })
     await log.open()
     const turn = (contextTokens: number) => log.record({ type: 'result', text: 'ok', usage: { inputTokens: 1, outputTokens: 1, cacheReadTokens: 0, cacheCreationTokens: 0, contextTokens } })
     await turn(20_000)

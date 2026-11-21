@@ -1,9 +1,9 @@
 import { createInterface } from 'node:readline'
 import { killTree, registerChild, unregisterChild } from './child-registry.js'
 import { randomUUID } from 'node:crypto'
-import type { DriverEvent, DriverTurn } from './types.js'
 import { promptSent, startEvent } from './session-support.js'
-import { takeInbox, type InboxLine, type PromptLine } from './inbox.js'
+import { takeInbox } from './inbox.js'
+import type { DriverEvent, DriverTurn, InboxLine, PromptLine } from '@openagt/hooks'
 
 // The agent-agnostic core for running one wrapped coding-agent CLI: spawn it in its own
 // process group, stream its output through a parser, and gate the turn on its exit. Each

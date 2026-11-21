@@ -16,6 +16,6 @@ dist-test/
 # Test output
 test-results/
 
-# A skill's text lives in skills/<name>/SKILL.md, where `npx skills add` finds it; its package's
-# build copies it in, so the npm package ships it too
-packages/skill-*/SKILL.md
+# The workflow a project adds to run its runs on GitHub Actions is this repository's own; the host's
+# build copies it in, so its npm package ships it
+packages/host-github-actions/workflow.yml

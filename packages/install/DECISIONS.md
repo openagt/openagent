@@ -9,9 +9,11 @@ already made, and lists it in its pull request; for anything else it proposes an
 
 ## Trying and installing
 - Trying OpenAgent is `npx @openagt/dashboard`, which installs nothing; installing it is
-  this package, after which the dashboard starts when the person logs in; `npx
-  @openagt/uninstall` takes off everything the install put on the computer. Picked over
-  one command that does both.
+  this package, after which the dashboard starts when the person logs in, and the
+  `openagent` command on the PATH runs the same copy; `openagent --uninstall` takes off
+  everything the install put on the computer (#2394, decisions 39 and 40). Picked over one
+  command that does both; over `@openagt/uninstall`, a package of its own to find; and
+  over `npm i -g`, a second copy in the person's global npm, of a version of its own.
 
 ## On Linux
 - A command the install needs and the computer lacks (`certutil`, `nft`, `openssl`) is

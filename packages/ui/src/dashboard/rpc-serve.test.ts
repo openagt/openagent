@@ -1,0 +1,220 @@
+import { strict as assert } from 'node:assert'
+import { test } from 'node:test'
+import { createServer, type IncomingMessage, type Server } from 'node:http'
+import { connect } from 'node:net'
+import { makeRpcMount } from './rpc-serve.js'
+import type { DashboardContext } from '../dashboard-rpc/context.js'
+import { RPC_HANDLERS } from '../dashboard-rpc/index.js'
+import { testDashboardContext } from '../dashboard-rpc/test-context.js'
+
+// F3: the dashboard's transport is `POST /_rpc/<name>` and `GET /_rpc/events`, where it used to be
+// Telefunc. The CSRF and rebound-Host guards are covered in server.test.ts, which exercises them
+// through the whole dashboard; these pin the dispatch itself.
+
+/** A server carrying just the mount, so a test can call it over real HTTP; `seen` is shown each request as it comes. */
+async function mounted(over: Partial<DashboardContext> = {}, seen: (req: IncomingMessage) => void = () => {}): Promise<{ url: string; close: () => Promise<void> }> {
+  const mount = makeRpcMount(testDashboardContext(over))
+  const server: Server = createServer((req, res) => {
+    seen(req)
+    void mount(req, res).then(handled => {
+      if (!handled) {
+        res.writeHead(404)
+        res.end()
+      }
+    })
+  })
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
+  const address = server.address()
+  const port = typeof address === 'object' && address ? address.port : 0
+  return {
+    url: `http://127.0.0.1:${port}`,
+    close: () => new Promise<void>(resolve => server.close(() => resolve())),
+  }
+}
+
+const call = async (url: string, name: string, args: unknown[] = []): Promise<{ status: number; body: string }> => {
+  const res = await fetch(`${url}/_rpc/${name}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(args),
+  })
+  return { status: res.status, body: await res.text() }
+}
+
+/** One request over a raw socket, so a header `fetch` refuses to send can be put on the wire. */
+const rawRequest = (url: string, hostHeader: string): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const socket = connect(Number(new URL(url).port), '127.0.0.1', () => {
+      socket.write(`POST /_rpc/onProjects HTTP/1.1\r\n${hostHeader}\r\nContent-Type: application/json\r\nContent-Length: 2\r\nConnection: close\r\n\r\n[]`)
+    })
+    let seen = ''
+    socket.setEncoding('utf8')
+    socket.on('data', chunk => (seen += chunk))
+    socket.on('end', () => resolve(seen))
+    socket.on('error', reject)
+  })
+
+test('a request whose Host header is malformed is answered, not thrown past the server', async () => {
+  // Node's parser accepts `Host:` (empty — so the `?? 'localhost'` fallback never applied) and
+  // `Host: foo bar`; interpolating either into the parse base threw where nothing caught it, so
+  // any local process could end the daemon with one request it never answered.
+  const server = await mounted()
+  try {
+    for (const host of ['Host:', 'Host: foo bar']) {
+      assert.match(await rawRequest(server.url, host), /^HTTP\/1\.1 \d{3}/, host)
+    }
+    // Still serving.
+    assert.equal((await call(server.url, 'onNothingLikeThis')).status, 404)
+  } finally {
+    await server.close()
+  }
+})
+
+test('every RPC the modules export is dispatchable by its own name', () => {
+  // The registry is built from the modules' exports rather than a hand-written list, which is what
+  // makes "exported but never registered" impossible — the failure that shipped per-project
+  // preferences broken (#866) as a 400 with nothing else to go on.
+  for (const name of ['onAgents', 'onProjects', 'sendStop', 'onPreferences', 'onQuota']) {
+    assert.equal(typeof RPC_HANDLERS[name], 'function', name)
+  }
+})
+
+test('a call reaches its handler and comes back as JSON', async () => {
+  const server = await mounted()
+  try {
+    const { status, body } = await call(server.url, 'sendStart', ['p1', 'do a thing', 'build'])
+    assert.equal(status, 200)
+    // The stub context refuses the start, which is the handler's own answer travelling back.
+    assert.deepEqual(JSON.parse(body), { ret: { ok: false, error: 'not wired in this test' } })
+  } finally {
+    await server.close()
+  }
+})
+
+test("a module's function is called at /_rpc/<module>/<name> with the project and its input; the page's own RPCs take no module", async () => {
+  const server = await mounted()
+  const files = `${encodeURIComponent('@openagt/ui-pane-files')}/tree`
+  try {
+    // A project this computer does not know: the call's own refusal, travelling back.
+    assert.deepEqual(JSON.parse((await call(server.url, files, ['nowhere-1', { agentId: 'run-1' }])).body), { ret: { ok: false, error: 'unknown project' } })
+    // The page's own RPCs are reached by their name alone: the call of a module's function is none of them, and a path with a bad escape names no module.
+    assert.equal((await call(server.url, 'callModule', ['p1', '@openagt/ui-pane-files', 'tree', {}])).status, 404)
+    assert.equal((await call(server.url, '%zz/tree', ['p1', {}])).status, 404)
+  } finally {
+    await server.close()
+  }
+})
+
+test('a call that is not sent as JSON is refused before its handler runs: what a page of another origin can send without asking', async () => {
+  let started = 0
+  const server = await mounted({ startAgent: async () => (started++, { ok: false, error: 'not wired in this test' }) })
+  try {
+    // The three kinds a browser sends across origins with no question asked, and no kind at all.
+    for (const type of ['text/plain', 'application/x-www-form-urlencoded', 'multipart/form-data; boundary=x', 'application/jsonp', undefined]) {
+      const res = await fetch(`${server.url}/_rpc/sendStart`, {
+        method: 'POST',
+        headers: { origin: 'http://localhost:3000', ...(type !== undefined ? { 'content-type': type } : {}) },
+        body: JSON.stringify(['p1', 'do a thing', 'build']),
+      })
+      assert.equal(res.status, 415, String(type))
+      assert.deepEqual(await res.json(), { error: 'a call is sent as application/json' })
+    }
+    assert.equal(started, 0)
+    const json = await fetch(`${server.url}/_rpc/sendStart`, { method: 'POST', headers: { 'content-type': 'Application/JSON; charset=utf-8' }, body: JSON.stringify(['p1', 'do a thing', 'build']) })
+    assert.equal(json.status, 200)
+    assert.equal(started, 1)
+    // The question a browser asks first is never answered with a yes.
+    const asked = await fetch(`${server.url}/_rpc/sendStart`, { method: 'OPTIONS', headers: { origin: 'http://localhost:3000', 'access-control-request-method': 'POST', 'access-control-request-headers': 'content-type' } })
+    assert.equal(asked.headers.get('access-control-allow-origin'), null)
+    assert.notEqual(asked.status, 200)
+  } finally {
+    await server.close()
+  }
+})
+
+test('an unknown RPC is a 404 naming it, not a hang or a crash', async () => {
+  const server = await mounted()
+  try {
+    const { status, body } = await call(server.url, 'onNothingLikeThis')
+    assert.equal(status, 404)
+    assert.match(body, /no such RPC: onNothingLikeThis/)
+  } finally {
+    await server.close()
+  }
+})
+
+test('an inherited Object member is not an RPC', async () => {
+  // The name is a path segment off an unauthenticated request, indexed straight into the handler
+  // table. With `Object.prototype` behind it, `/_rpc/constructor` found `Object` and answered 200
+  // with whatever the caller sent; `__proto__` and `toString` reached members that are not
+  // handlers and 500'd. None of them is an RPC, so all of them are 404s.
+  const server = await mounted()
+  try {
+    for (const name of ['constructor', '__proto__', 'toString', 'valueOf', 'hasOwnProperty']) {
+      const { status, body } = await call(server.url, name, [{ smuggled: true }])
+      assert.equal(status, 404, `${name} answered ${status}`)
+      assert.match(body, new RegExp(`no such RPC: ${name.replace(/\W/g, '.')}`))
+    }
+  } finally {
+    await server.close()
+  }
+})
+
+test('an RPC that throws answers 500 and the daemon stays up', async () => {
+  // A rejected promise inside the mount used to be an unhandled rejection, which takes the process
+  // with it. A failing call is a failing call.
+  const server = await mounted({
+    startAgent: () => {
+      throw new Error('the disk is on fire')
+    },
+  })
+  try {
+    const { status, body } = await call(server.url, 'sendStart', ['p1', 'x', 'build'])
+    assert.equal(status, 500)
+    assert.match(JSON.parse(body).error, /the disk is on fire/)
+    // Still serving.
+    assert.equal((await call(server.url, 'onNothingLikeThis')).status, 404)
+  } finally {
+    await server.close()
+  }
+})
+
+test('a request outside the RPC prefix is declined, so the static handler gets it', async () => {
+  const server = await mounted()
+  try {
+    const res = await fetch(`${server.url}/assets/app.js`)
+    assert.equal(res.status, 404) // the test server's own fallback, i.e. the mount said "not mine"
+  } finally {
+    await server.close()
+  }
+})
+
+test('the event stream ends cleanly when there is nothing to stream', async () => {
+  // An unknown project: the response ends rather than erroring, which is what the client reads as
+  // "done" instead of "lost" — the distinction that lets a dead daemon look different from a
+  // quiet agent (#948).
+  const server = await mounted()
+  try {
+    const res = await fetch(`${server.url}/_rpc/events?projectId=no-such-project`)
+    assert.equal(res.status, 200)
+    assert.match(res.headers.get('content-type') ?? '', /text\/event-stream/)
+    assert.equal(await res.text(), '')
+  } finally {
+    await server.close()
+  }
+})
+
+test('the changes stream answers as Server-Sent Events, and says at once that it listens', async () => {
+  const server = await mounted()
+  const page = new AbortController()
+  try {
+    const res = await fetch(`${server.url}/_rpc/changes`, { signal: page.signal })
+    assert.equal(res.status, 200)
+    assert.match(res.headers.get('content-type') ?? '', /text\/event-stream/)
+    const { value } = await res.body!.getReader().read()
+    assert.equal(new TextDecoder().decode(value), ': listening\n\n')
+  } finally {
+    page.abort()
+    await server.close()
+  }
+})

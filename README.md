@@ -21,7 +21,7 @@ Install OpenAgent, on macOS or Linux:
 npx @openagt/install
 ```
 
-From then on, https://openagent.build opens your dashboard, on this computer. It starts when you log in. `npx @openagt/uninstall` takes it off again.
+From then on, https://openagent.build opens your dashboard, on this computer. It starts when you log in, and `openagent` runs the same copy in a terminal. `openagent --uninstall` takes it off again.
 
 Or try it once, with nothing installed, in your project's folder:
 
@@ -29,16 +29,6 @@ Or try it once, with nothing installed, in your project's folder:
 npx @openagt/dashboard
 ```
 
-It opens the dashboard in your browser, on your project. Every agent you start gets the default skills (ask, and github on a GitHub project), with nothing written in your project; a skill of your own with the same name takes one's place.
+It opens the dashboard in your browser, on your project. Every agent you start gets the skills of OpenAgent's core modules (github's on a GitHub project) and of the plugins on in your project, with nothing written in your project; a skill of your own with the same name takes one's place. Each plugin is switched on or off in Settings › Plugins: ask and desktop notifications start on, the others (the tickets, the queue, the logs, the browser, the scheduler…) start off.
 
-To give the project more skills, as files of its own, tick them on the dashboard's Skills page, which the Skills button under the message box opens. The page lists the skills the dashboard is built on: tickets, the queue, automations, orchestration, logs. The [`skills`](./skills) folder has more (code reviews, research, ticket suggestions); pick any of them with [`skills`](https://github.com/vercel-labs/skills), for any agent:
-
-```bash
-npx skills add openagt/openagent
-```
-
-Or add one by its name:
-
-```bash
-npx skills add openagt/openagent@github
-```
+A project's own skills are files in it, which the dashboard lists in Settings › Skills; the Skills button under the message box picks the ones a run gets, and the plugins it goes without. A plugin's skills come with it, in its package, and reach OpenAgent's runs only: the tickets with the commands about them, the queue with work-queue, the logs, and the others.

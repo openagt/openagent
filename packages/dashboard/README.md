@@ -8,16 +8,30 @@ checkout of the repo, does its work, and hands the result off as a pull request.
 checkout is never touched.
 
 ```bash
-npm i -g @openagt/dashboard
+npx @openagt/install   # starts at login, at https://openagent.build, and puts `openagent` on the PATH
 
 cd ~/code/my-repo
-openagent          # serves the dashboard at http://127.0.0.1:4200
+openagent              # adds the repository to the dashboard's projects, and opens its page
 ```
 
-This package is OpenAgent: the server, its pages and the command that serves them and hands
-every run the skills it gets by default.
+This package is OpenAgent as it ships: the packages it runs, listed in `src/distribution.ts` with
+whose each is and which plugins start on, and the `openagent` command, which serves the dashboard
+([`@openagt/ui`](../ui/README.md)) with them. A project installs none of them.
 
-## The command is three options and no verbs
+The core modules are always on. A plugin has an Enabled row each, switched in **Settings ›
+Plugins**: `ask` and desktop notifications while the dashboard is open (**Settings ›
+Notifications**) start on, every other plugin starts off (the command this computer runs when a
+run needs you, typed in **Settings › Notification command**, the tickets, the queue, the logs, the browser, the scheduler,
+Discord, the commands that move a ticket to work, a mermaid block drawn as its diagram, GitHub
+Actions, which "Run on" then offers beside this computer in a project whose repository has the
+workflow it brings, and Claude Code on the web, which "Run on" then offers in a project on GitHub,
+through the browser extension it brings, set up in **Settings › Claude web**). The two git stores
+are on as their repositories stand: your folder's sync with a repository of yours, set in **Settings
+› Your agent data**, and a project's data on its own repository, set in the project's **Project
+agent data**. A run gets the skills of the core modules (github's on a GitHub project) and of the
+plugins on in its project, linked into its checkout; nothing is written into the project.
+
+## The command is four options and no verbs
 
 ```
 openagent              Serve the dashboard in the foreground. Ctrl+C closes it; the
@@ -26,6 +40,8 @@ openagent              Serve the dashboard in the foreground. Ctrl+C closes it; 
   --port <n>           Dashboard port (default: 4200).
   -h, --help           Show this help.
   -v, --version        Print the version.
+  --uninstall          Take OpenAgent off this computer: everything `npx @openagt/install`
+                       put on it, this command too.
 ```
 
 Everything else is the dashboard. It is the product's user interface, and where an agent's
@@ -34,72 +50,57 @@ the command cannot start one at all.
 
 ## How it works
 
-OpenAgent runs no coding agent and makes no model call. Starting an agent is running
-**one shell line the project itself names** — its `start` hook, in the project's own
-`.openagent/hooks.yml`:
-
-```yaml
-start: agent-runner run --detach "$PROMPT" ${DRIVER:+--driver "$DRIVER"} ${MODEL:+--model "$MODEL"} ${EFFORT:+--effort "$EFFORT"} ${PUBLISH:+--publish "$PUBLISH"} ${BASE:+--base "$BASE"} ${PR_BASE:+--pr-base "$PR_BASE"} ${REPOS:+--repos "$REPOS"}
-resume: agent-runner run --detach --resume "$RUN_ID" ${TEXT:+"$TEXT"} ${ANSWER:+--answer "$ANSWER"} ${PUBLISH:+--publish "$PUBLISH"}
-check: agent-runner check ${DRIVER:+--driver "$DRIVER"}
-```
-
-The line is given the prompt and the user's picks in its environment, and answers one JSON
-document whose `id` names the agent it began, and whose `driver` may name the coding agent that
-runs it. From there the agent belongs to whatever that
-line started. Adding a project writes these three lines into the file, so a new project, an
-empty folder included, starts an agent with nothing typed by hand. They are a default: a line
-already there is kept, and any of them can be changed or deleted. A line finds its tools in the
-packages the dashboard brings first, `agent-runner` and `scheduler` among them, then in the project's installed ones;
-nothing is downloaded to run a line. A project with no `start` line cannot start an agent from
-the dashboard, and the dashboard says so. `npx @openagt/skill-scheduler@0.1 init`, run in the project, writes
-the scheduler's `open` and `close` lines (they start it when the dashboard opens and stop it
-when it closes), keeping any line already there. The file's keys are `open`, `close`, `start`, `resume` and `check`; any other key
-is refused and the whole file ignored.
+OpenAgent runs no coding agent and makes no model call. A Start goes to **this computer's run
+host**, the `run.host` of the modules OpenAgent is distributed with (#2394): `agent-driver`'s,
+which spawns the run's own process in the project with the prompt and the person's picks. From
+there the run belongs to that process. A distribution names its modules in one file, which the
+dashboard hands down to every run it starts (`OPENAGENT_DISTRIBUTION`); the demo's adds a host
+whose runs are scripted.
 
 The launcher's branch menu above the box says which branch the agent starts from: the
 project's main branch, fetched first; **My local branch**, the branch the project's folder is
 on, with its commits that are not pushed (edits that are not committed are not carried); or
 another of the branches origin has now, fetched first. The pick is saved per project. The local
-pick puts the branch's name in `BASE`, and another of origin's its full name
-(`refs/remotes/origin/<branch>`), so the line can tell them apart; `agent-runner` fetches it. The
-menu is shown only when the `start` line mentions `$BASE`: a project whose line was written
-before the menu existed gets it by adding `${BASE:+--base "$BASE"}` to the line.
+pick names the branch, and another of origin's its full name (`refs/remotes/origin/<branch>`),
+so the run can tell them apart; `agent-driver` fetches it. The menu is shown for a project with
+a remote whose folder is on a branch.
 
-A run started from another branch origin has opens its pull request into that branch: the
-launcher puts its name in `PR_BASE`, unless the Auto menu says main. The Auto menu's section "The
-pull request goes into" is shown only when the `start` line mentions `$PR_BASE`: an older line
-gets it by adding `${PR_BASE:+--pr-base "$PR_BASE"}`. Without it the pull request goes to main.
+A run started from another branch origin has opens its pull request into that branch, unless the
+Auto menu says main. Otherwise the pull request goes to main.
 
 A session with no project may have repos as context, picked with **Add repo** beside "No project":
-their folders reach the line in `REPOS`, one per line, and `agent-runner` copies each into the
-session's folder. The sessions home's lines are OpenAgent's own, written fresh each time it starts.
+`agent-driver` copies each into the session's folder.
 
-The session's agent (the **Agent** menu under the box) and its GitHub account (the control at
-the right) reach the run through its environment, `OPENAGENT_AGENT` and `OPENAGENT_GIT_ACCOUNT`,
-never on the line: `agent-runner` reads them as the line's own child. An agent is a name, skills
-and accounts, a file in `~/.openagent/agents/`, edited on the Agents page; the skills it can be
-given are handed down with the default ones (`OPENAGENT_SKILL_CATALOGUE`).
+The session's preset (the **Preset** menu under the box) and its GitHub account (the control at
+the right) go with the Start: `agent-driver` hands them to the run's process in its environment,
+`OPENAGENT_PRESET` and `OPENAGENT_GIT_ACCOUNT`. A preset is a name and a saved set of run options
+(its accounts, the plugins its runs go without, and the project skills they get), kept with the
+person and edited on the Presets page; the run reads it as it starts, and again when it resumes.
 
-The **Skills** menu under the box picks, for this session alone, which skills the run gets: its
-agent's ticked, any other carried skill tickable, and which of the project's own skills stay in
-its checkout. The picks go the same way, in `OPENAGENT_SKILLS_ON`, `OPENAGENT_SKILLS_OFF` (names,
-comma-separated) and `OPENAGENT_PROJECT_SKILLS` (`all`, `none` or names): `agent-runner` links the
-agent's skills less the ones off plus the ones on, and leaves the project skills not picked out of
-the run's checkout with git's sparse checkout, nothing committed. The record keeps the picks, and
-a resume goes on with them.
+The **Skills** menu under the box picks, for this session alone, which skills the run gets: the
+plugins on in the project, each ticked, tickable off, and which of the project's own skills stay
+in its checkout, both as the preset has them until the session picks. The picks go the same way,
+in `OPENAGENT_PLUGINS_WITHOUT` (names, comma-separated; set to nothing, none of them) and
+`OPENAGENT_PROJECT_SKILLS` (`all`, `none` or names), the preset's where one is unset: the run
+gets none of the skills or steps of a plugin it goes without, and the project skills not picked
+are left out of its checkout with git's sparse checkout, nothing committed. The record keeps the
+picks, and a resume goes on with them.
 
-The `check` line is what the launcher runs before a Start, with the picked coding agent in
-`DRIVER`: it answers one JSON document with `problems` (a coding agent not installed or logged
-out: said in red) and `warnings` (said in amber), each line naming its own fix. A project
-with no `check` line shows nothing there.
+Before a Start, the launcher asks the host's check, for the picked coding agent: its
+`problems` (a coding agent not installed or logged out) are said in red and its `warnings` in
+amber, each line naming its own fix.
+
+A project's scheduler runs for as long as OpenAgent does wherever scheduled-agents is on: it
+starts as OpenAgent starts, as the project is added and within a minute of the plugin being
+switched on there, and stops as OpenAgent stops and as the project is removed, unless it was set
+to keep running, and within a minute of the plugin being switched off.
 
 A package's own settings are no hook. The scheduler's are the scheduler package's own part of
 the dashboard: its Automations page holds a switch, a pace, a number of agents at once and a
 publish pick per scheduled command, its Settings entry holds how far past the quota boundary
 it may start unattended work, and the handle on the usage bar is its stop line. That part reads
-them with `scheduler status` and saves them with `scheduler offset`, `switch`,
-`pace`, `agents` and `publish`.
+them through the package's server part, as `scheduler status` says them, and saves them with
+`scheduler offset`, `switch`, `pace`, `agents`, `agent`, `model` and `publish`.
 
 The dashboard is a **projection of the agent's own files**. The agent's tool keeps the
 agent's card (`<id>.json`) and diary (`<id>.jsonl`) under `.openagent/` in the agent's
@@ -112,7 +113,7 @@ Steering goes back the same way, never over a channel:
   tool reads while the agent works: the agent reads it at its next step, or, sent with ⌘Enter,
   when its turn ends.
 - **What you say to an agent that has ended** — your words, or your answer to the question it
-  stopped on — runs the project's `resume` hook, which continues that same agent.
+  stopped on — goes to the run's host, which continues that same agent.
 - **Stop** is a signal to the process the agent's card names: the agent ends its turn where it is,
   and a message continues it.
 
@@ -120,8 +121,7 @@ So a working agent and a finished one render identically, and an agent on anothe
 needs only its lines carried home.
 
 - **One daemon per machine.** Running the CLI in any registered repo finds it. It serves
-  the dashboard, runs each project's hooks, and runs the background work — the notifications
-  and the cloud sweeps.
+  the dashboard, runs each project's hooks, and runs the background work — the cloud sweeps.
 - **An agent is one task being worked**, in its own checkout on its own branch. You can watch
   it, answer its questions, and say more to it — or not be there at all.
 - **What you can ask for is your project's own commands**: its skills, read from
@@ -132,10 +132,11 @@ needs only its lines carried home.
 
 ## Layout
 
-- `src/` — the CLI, the daemon, the hooks, the reading of a project's agents, and the server
-  side of the dashboard. Node only.
-- `dashboard/` — the browser app: a Vite SPA the daemon serves as static files,
-  talking back over plain HTTP. See [its README](./dashboard/README.md).
+- `src/distribution.ts` — the modules OpenAgent runs, a package or a module each, handed down to
+  every process the dashboard starts.
+- `src/bin.ts` — `openagent`: `@openagt/ui`'s command, serving them.
+
+The dashboard itself, its server and its command are [`@openagt/ui`](../ui/README.md).
 
 ## Status
 

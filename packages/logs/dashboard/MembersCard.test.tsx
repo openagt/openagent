@@ -1,0 +1,144 @@
+import { afterEach, expect, test, vi } from 'vitest'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { ModuleHostContext, type ModuleAgent, type ModuleHost, type ModuleHostPerson } from '@openagt/ui/module'
+import { fakeHost, type FakeHost } from '@openagt/ui/module/testing'
+import { MembersCard } from './MembersCard.js'
+
+// The Overview's Members card, from the server part's `people` in each project and the git host's
+// accounts behind their emails. The tally itself is src/people.test.ts's.
+
+const NOW = new Date().toISOString()
+/** What a member did, as the card's line of facts says it: "3 runs · $1.50 · 2 commits", each fact joined by its one dot. */
+const did = (words: string) => (_: string, element: Element | null) => element?.tagName === 'P' && element.textContent === words.replaceAll(' · ', '·')
+const person = (email: string, over: Record<string, unknown> = {}) => ({ person: email, runs: 0, running: 0, waiting: 0, cost: 0, commits: 0, lastAt: NOW, ...over })
+
+/** A host whose server part's `people` says `people`; the runs it lists are `runs`, and with none it cannot list them. */
+function hostWith(people: unknown[], accounts: ModuleHostPerson[], runs?: unknown[]): FakeHost {
+  return fakeHost('@openagt/logs', {
+    call: async () => ({ ok: true as const, output: people }),
+    agents: async () => {
+      if (!runs) throw new Error('no runs listed')
+      return runs as ModuleAgent[]
+    },
+    gitHostPeople: async () => accounts,
+  })
+}
+
+const show = (host: ModuleHost) =>
+  render(
+    <ModuleHostContext.Provider value={host}>
+      <MembersCard projects={[{ id: 'p1', name: 'alpha', gitHost: true }]} />
+    </ModuleHostContext.Provider>,
+  )
+
+afterEach(cleanup)
+
+test("each member by the name git knows, their picture where the git host knows their account, else two letters; a picture that does not load gives way to the letters", async () => {
+  const host = hostWith(
+    [person('git@brillout.com', { name: 'Romuald Brillout', commits: 1 }), person('s@a.dev', { name: 'Suleiman Shahbari', runs: 3, cost: 1.5, commits: 2, you: true }), person('new@z.dev')],
+    [
+      { email: 'git@brillout.com', login: 'brillout', avatar: 'https://avatars.githubusercontent.com/u/1' },
+      { email: 's@a.dev', login: 'suleimansh', avatar: 'https://avatars.githubusercontent.com/u/2' },
+    ],
+  )
+  show(host)
+  const rom = await screen.findByRole('listitem', { name: 'Romuald Brillout' })
+  expect(rom.querySelector('img')!.getAttribute('src')).toBe('https://avatars.githubusercontent.com/u/1')
+  expect(within(rom).getByText('Romuald Brillout').getAttribute('title')).toBe('git@brillout.com · brillout')
+  expect(within(rom).getByText('1 commit')).toBeTruthy()
+  // The git host is asked of the project's own emails.
+  expect(host.gitHostPeople).toHaveBeenCalledWith('p1', ['git@brillout.com', 's@a.dev', 'new@z.dev'])
+  // No account known: the letters.
+  const fresh = screen.getByRole('listitem', { name: 'new' })
+  expect(fresh.querySelector('img')).toBeNull()
+  expect(within(fresh).getByText('NE')).toBeTruthy()
+  // A picture that fails to load: the letters.
+  const me = screen.getByRole('listitem', { name: 'Suleiman Shahbari' })
+  expect(within(me).getByText(did('3 runs · $1.50 · 2 commits'))).toBeTruthy()
+  fireEvent.error(me.querySelector('img')!)
+  expect(me.querySelector('img')).toBeNull()
+  expect(within(me).getByText('SS')).toBeTruthy()
+})
+
+test('a person with two emails on one git host account is one row, with their name, their picture and everything they did', async () => {
+  const host = hostWith(
+    [person('42+rom@users.noreply.github.com', { runs: 1, cost: 0.24 }), person('git@brillout.com', { name: 'Romuald Brillout', runs: 1, commits: 2 })],
+    [
+      { email: '42+rom@users.noreply.github.com', login: 'rom', avatar: 'https://avatars.githubusercontent.com/u/42' },
+      { email: 'git@brillout.com', login: 'rom', avatar: 'https://avatars.githubusercontent.com/u/42?v=4' },
+    ],
+  )
+  show(host)
+  // The card opens on the members it remembers: this waits for its own read.
+  await screen.findByText(did('2 runs · $0.24 · 2 commits'))
+  const [rom, ...others] = screen.getAllByRole('listitem')
+  expect(others).toHaveLength(0)
+  expect(rom!.getAttribute('aria-label')).toBe('Romuald Brillout')
+  expect(rom!.querySelector('img')).toBeTruthy()
+})
+
+test("a member's runs are counted as the dashboard lists them: a run its record still calls going is not working when the dashboard says it is not", async () => {
+  // The records are behind the runs: they say one run, going.
+  const host = hostWith(
+    [person('s@a.dev', { name: 'Suleiman Shahbari', runs: 1, running: 1, waiting: 0, cost: 0.5, commits: 2 })],
+    [],
+    [
+      // It stopped since, so it is not working.
+      { id: 'r1', status: 'stopped', startedAt: NOW, person: 's@a.dev', cost: 0.5 },
+      // A run the records do not have yet.
+      { id: 'r2', status: 'done', startedAt: NOW, person: 's@a.dev', cost: 1 },
+    ],
+  )
+  show(host)
+  const me = await screen.findByRole('listitem', { name: 'Suleiman Shahbari' })
+  expect(within(me).getByText(did('2 runs · $1.50 · 2 commits'))).toBeTruthy()
+  expect(within(me).queryByText(/working/)).toBeNull()
+  // Only the runs of the days the card counts are asked for: a project keeps hundreds.
+  const [[project, wanted]] = vi.mocked(host.agents).mock.calls as [[string, { since: string }]]
+  expect(project).toBe('p1')
+  expect(Date.now() - Date.parse(wanted.since)).toBeGreaterThanOrEqual(30 * 86_400_000)
+  expect(Date.now() - Date.parse(wanted.since)).toBeLessThan(31 * 86_400_000)
+})
+
+test('a run the dashboard says is going makes its person working, though no record says so yet', async () => {
+  const host = hostWith([person('s@a.dev', { name: 'Suleiman Shahbari', commits: 2 })], [], [{ id: 'r1', status: 'running', startedAt: NOW, person: 's@a.dev' }])
+  show(host)
+  const me = await screen.findByRole('listitem', { name: 'Suleiman Shahbari' })
+  expect(within(me).getByText('working')).toBeTruthy()
+})
+
+test('a member with runs that wait on an answer says so beside the ones working', async () => {
+  const host = hostWith(
+    [person('s@a.dev', { name: 'Suleiman Shahbari' })],
+    [],
+    [
+      { id: 'r1', status: 'running', startedAt: NOW, person: 's@a.dev' },
+      { id: 'r2', status: 'waiting', startedAt: NOW, person: 's@a.dev' },
+      { id: 'r3', status: 'waiting', startedAt: NOW, person: 's@a.dev' },
+    ],
+  )
+  show(host)
+  const member = await screen.findByRole('listitem', { name: 'Suleiman Shahbari' })
+  expect(within(member).getByText('working')).toBeTruthy()
+  // In the sidebar's amber for a run that waits: its mark, the hexagon (RunMark).
+  expect(within(member).getByText('2 need an answer').querySelector('svg')!.getAttribute('class')).toMatch(/text-warning/)
+})
+
+test("each project's people of the last 30 days are read through the server part; a project whose read fails counts no one, and the others still do", async () => {
+  const call = vi.fn(async (projectId: string) => (projectId === 'p2' ? { ok: false as const, error: 'not a repository' } : { ok: true as const, output: [person('s@a.dev', { name: 'Suleiman Shahbari', runs: 2 })] }))
+  render(
+    <ModuleHostContext.Provider value={fakeHost('@openagt/logs', { call, agents: async () => [], gitHostPeople: async () => [] })}>
+      <MembersCard
+        projects={[
+          { id: 'p1', name: 'alpha', gitHost: true },
+          { id: 'p2', name: 'beta', gitHost: true },
+        ]}
+      />
+    </ModuleHostContext.Provider>,
+  )
+  expect(await screen.findByText('Suleiman Shahbari')).toBeTruthy()
+  expect(call.mock.calls).toEqual([
+    ['p1', 'people', { days: 30 }],
+    ['p2', 'people', { days: 30 }],
+  ])
+})

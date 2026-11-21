@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { ConversationGoneError, continuingTurn } from './gone.js'
-import type { DriverEvent } from './types.js'
+import type { DriverEvent } from '@openagt/hooks'
 
 const isGone = (err: unknown): boolean => /gone/.test(String(err))
 

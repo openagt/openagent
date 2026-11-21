@@ -36,27 +36,11 @@ export function publishedBranch(base: string): string | undefined {
 }
 
 /**
- * The directory, under a project root, that holds OpenAgent's own files on this machine: the
- * hooks file, a run's live files. Hidden from git by an ignore file of its own, written when the
+ * The directory, under a project root, that holds OpenAgent's own files on this machine: a
+ * run's live files. Hidden from git by an ignore file of its own, written when the
  * folder becomes a project (`install.ts`).
  */
 export const OPENAGENT_DIR = '.openagent'
-
-/**
- * The environment variable that names the skills every run gets: the directories of their
- * packages, joined by the path delimiter. Set by the command that starts OpenAgent
- * (`@openagt/dashboard`), which owns the list, and inherited by every process OpenAgent starts: a
- * hook line, the runner, the scheduler, an agent and the runs its subagents start. Unset, a run
- * gets none of them.
- */
-export const SKILLS_ENV = 'OPENAGENT_SKILLS'
-
-/**
- * The environment variable that names every skill OpenAgent carries, beside the ones every run
- * gets: the directories of their packages, joined by the path delimiter. Set with {@link SKILLS_ENV}
- * by the same command, so a run on an agent that names a skill finds its text and its package here.
- */
-export const SKILL_CATALOGUE_ENV = 'OPENAGENT_SKILL_CATALOGUE'
 
 /**
  * The environment variable that names a running agent by its run's id, set by whoever starts the
@@ -67,22 +51,20 @@ export const SKILL_CATALOGUE_ENV = 'OPENAGENT_SKILL_CATALOGUE'
 export const AGENT_ID_ENV = 'AGENT_ID'
 
 /**
- * The environment variable that names the agent a run is on, by its id (`agents/<id>.json` in the
- * personal folder): set by whoever starts the run, for that run; unset, the run is on the default
- * agent. A scheduler's runs name none.
+ * The environment variable that names the preset a run is on, by its id (the catalog's
+ * `presets.saved`): set by whoever starts the run, for that run; unset, the run is on Default. A
+ * scheduler's runs name none.
  */
-export const AGENT_ENV = 'OPENAGENT_AGENT'
+export const PRESET_ENV = 'OPENAGENT_PRESET'
 
 /**
- * The environment variables that change the skills one run gets, a session's picks beside the
- * message box: {@link SKILLS_ON_ENV} names skills its agent lacks that it gets too, and
- * {@link SKILLS_OFF_ENV} skills of its agent's it does not get, each a comma-separated list of
- * names; {@link PROJECT_SKILLS_ENV} says which of the project's own skills stay in its checkout:
- * `all` (unset too), `none`, or their names comma-separated. Set by whoever starts the run; a
- * resumed run goes on with what its record kept.
+ * The environment variables that change what one run gets, a session's picks beside the message
+ * box: {@link PLUGINS_WITHOUT_ENV} names the enabled plugins it goes without, comma-separated, and
+ * {@link PROJECT_SKILLS_ENV} says which of the project's own skills stay in its checkout: `all`
+ * (unset too), `none`, or their names comma-separated. Set by whoever starts the run; a resumed
+ * run goes on with what its record kept.
  */
-export const SKILLS_ON_ENV = 'OPENAGENT_SKILLS_ON'
-export const SKILLS_OFF_ENV = 'OPENAGENT_SKILLS_OFF'
+export const PLUGINS_WITHOUT_ENV = 'OPENAGENT_PLUGINS_WITHOUT'
 export const PROJECT_SKILLS_ENV = 'OPENAGENT_PROJECT_SKILLS'
 
 /** Whether a word is a skill's name, as its text's front matter names it: `tickets`, `plan-tickets`. */

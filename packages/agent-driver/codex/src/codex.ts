@@ -5,7 +5,8 @@ import { join, resolve } from 'node:path'
 import { accountEnv, accountFolder, accountHome } from './codex-accounts.js'
 import { CodexAppServerParser, type CodexSandbox } from './codex-app-server.js'
 import { defaultCodexHome, personalCodexHome, prepareCodexHome } from './codex-home.js'
-import { type AccountRotation, accountTurn, type ReadyPrompt, readyPrompt, runCliSession, continuingTurn, finishTurn, agentEnv, attachLog, combineFraming, combineSignals, makeEmit, promptSent, readWorkspaceFile, oneLine, checkCliReady, type CliSpec, type DriverReadiness, type DriverReadyOptions, type PersonalSetup, type SpawnLike, type SessionLog, type Driver, type DriverEvent, type DriverModel, type DriverPromptOptions, type DriverSession, type DriverStartOptions, type DriverTurn, steeredWords } from '@openagt/agent-driver'
+import { accountTurn, readyPrompt, runCliSession, continuingTurn, finishTurn, agentEnv, attachLog, combineFraming, combineSignals, makeEmit, promptSent, readWorkspaceFile, oneLine, checkCliReady, type CliSpec, type DriverReadyOptions, type SpawnLike, steeredWords } from '@openagt/agent-driver'
+import type { AccountRotation, ReadyPrompt, DriverReadiness, PersonalSetup, SessionLog, Driver, DriverEvent, DriverModel, DriverPromptOptions, DriverSession, DriverStartOptions, DriverTurn } from '@openagt/hooks'
 
 /** Options for {@link CodexDriver}. */
 export interface CodexDriverOptions {
@@ -68,10 +69,13 @@ export class CodexDriver implements Driver {
   // No `ownQuestionTool`, though the agent has request_user_input: without the `ask` skill most
   // models ask in plain words instead (6 of 20 used the tool, measured on codex-cli 0.166.0 across
   // its 8 models), and with it they use the tool (15 of 20) or the skill's block (3).
+  /** Its smallest, quickest model: a run's short name is asked of it. */
+  readonly namingModel = 'gpt-5.6-luna'
   constructor(private readonly opts: CodexDriverOptions = {}) {}
 
   async start(opts: DriverStartOptions): Promise<DriverSession> {
-    const env = this.opts.env ?? process.env
+    // The run's own variables go over the driver's environment, for this session alone.
+    const env = opts.env !== undefined ? { ...(this.opts.env ?? process.env), ...opts.env } : (this.opts.env ?? process.env)
     const personal = this.opts.personal
     const args: string[] = []
     if (personal?.memory === false) args.push('-c', 'features.memories=false')

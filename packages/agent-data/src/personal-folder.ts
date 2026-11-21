@@ -135,6 +135,13 @@ export interface PersonalFolderState {
   unsent: number
 }
 
+/** Whether the personal folder syncs with a repository of the person's: it has a remote. A folder not made yet syncs with none. Never throws. */
+export async function personalFolderSyncs(deps: PersonalFolderDeps = {}): Promise<boolean> {
+  const folder = deps.folder ?? personalFolder()
+  if (!(await stat(join(folder, '.git')).then(() => true, () => false))) return false
+  return (await originUrl(folder, deps.git ?? nodeGitRunner())) !== undefined
+}
+
 /** Read how the personal folder stands, without changing it. A folder not made yet holds nothing. Never throws. */
 export async function readPersonalFolder(deps: PersonalFolderDeps = {}): Promise<PersonalFolderState> {
   const git = deps.git ?? nodeGitRunner()

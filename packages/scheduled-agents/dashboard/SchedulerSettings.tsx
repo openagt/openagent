@@ -1,0 +1,124 @@
+import { useEffect, useRef, useState } from 'react'
+import { Input, MAX_SPEND_OFFSET, inPlace, SettingsRow, SettingsRowShapes, SettingsSection, Slot, useModuleHost, useOpenAgentDown, usePolled, type UiSettingsProps } from '@openagt/ui/module'
+import { loosestSpendOffset, notAsked, offsetsThatDiffer, readSchedulers, schedulersKey, saveSpendOffset, typedOffset, type SchedulerRow } from './schedulers.js'
+
+// Settings › Scheduler: how far past the quota boundary scheduled work may still start. Each
+// project keeps its own, read with `scheduler status` and saved with `scheduler offset`
+// in each project Settings shows: one, or every project that has this package. What each
+// project's scheduler starts is not here: it is on the Automations page.
+
+const EMPTY: SchedulerRow[] = []
+
+/** How long the offset rests before it is saved: typing a number is several changes, each a command per project. */
+const OFFSET_SAVE_DELAY_MS = 500
+
+export function SchedulerSettings({ projects }: UiSettingsProps) {
+  const host = useModuleHost()
+  const key = projects.map(p => p.id).join(',')
+  const schedulers = usePolled(() => readSchedulers(host, projects), EMPTY, 10_000, [key], { remember: schedulersKey(key) })
+  const { value: rows, reload } = schedulers
+  const [error, setError] = useState<string | undefined>()
+  const down = useOpenAgentDown()
+  // The offset just saved, said until it is changed again.
+  const [offsetSaved, setOffsetSaved] = useState(false)
+
+  // The offset as typed, kept until a read made after the save brings it back.
+  const read = loosestSpendOffset(rows)
+  const [typed, setTyped] = useState<number | undefined>()
+  const [text, setText] = useState<string | undefined>()
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  // Saves go one at a time: each is a command per project that reads the state file, changes it and writes it back.
+  const queue = useRef<Promise<unknown>>(Promise.resolve())
+  useEffect(() => {
+    if (typed !== undefined && read === typed) setTyped(undefined)
+  }, [read, typed])
+  useEffect(() => () => clearTimeout(timer.current), [])
+  const offset = typed ?? read
+  const setOffset = (points: number): void => {
+    setTyped(points)
+    setOffsetSaved(false)
+    clearTimeout(timer.current)
+    timer.current = setTimeout(() => {
+      setError(undefined)
+      queue.current = queue.current.then(async () => {
+        // A command that could not even be asked is a save not taken, and the next save still runs.
+        const saved = await saveSpendOffset(host, projects, points).catch(notAsked)
+        if (!saved.ok) {
+          setTyped(undefined)
+          setError(`The spend offset was not saved: ${saved.error}`)
+        } else setOffsetSaved(true)
+        await reload().catch(() => {})
+      })
+    }, OFFSET_SAVE_DELAY_MS)
+  }
+
+  const differing = offsetsThatDiffer(rows)
+  const unread = rows.filter(row => row.error !== undefined)
+  if (projects.length === 0) return null
+  return (
+    <SettingsSection
+      description={
+        <>
+          How far past the quota scheduled work may go, on this machine. What a project starts by itself is on the{' '}
+          <a
+            href={host.pageHref('automations')}
+            onClick={inPlace(() => host.openPage('automations'))}
+            className="text-primary hover:underline"
+          >
+            Automations page
+          </a>
+          .
+        </>
+      }
+    >
+      <Slot of={schedulers} shape={<SettingsRowShapes rows={1} />}>
+        {() =>
+          offset !== undefined && (
+            <SettingsRow
+              label="Spend offset"
+              description={`Below 0 the scheduler stops short of the quota boundary, above 0 it borrows from the days ahead, up to ${MAX_SPEND_OFFSET} either way. The handle on the usage bar moves the same number.${differing.length > 0 ? ` Shown: the loosest. ${differing.map(d => `${d.name} is at ${d.offset}`).join(', ')}; saving sets each of them to the same number.` : ''}`}
+              control={
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    name="spend-offset"
+                    // The text as typed while the field has the focus, so a number can be typed through a state that is none yet ("-").
+                    value={text ?? String(Math.round(offset * 10) / 10)}
+                    min={-MAX_SPEND_OFFSET}
+                    max={MAX_SPEND_OFFSET}
+                    disabled={down}
+                    step={0.1}
+                    onChange={e => {
+                      const raw = e.target.value
+                      setText(raw)
+                      // Held to the handle's reach here as well as on the input: `min`/`max` only constrain the spinner.
+                      const points = typedOffset(raw)
+                      if (points !== undefined) setOffset(points)
+                    }}
+                    onBlur={() => setText(undefined)}
+                    aria-label="Spend offset"
+                    className="w-40 max-md:flex-1"
+                  />
+                  <span className="text-sm text-muted-foreground">% points</span>
+                </div>
+              }
+            />
+          )
+        }
+      </Slot>
+      {offsetSaved && (
+        <p role="status" className="text-xs text-muted-foreground">
+          Saved.
+        </p>
+      )}
+      {unread.map(row => (
+        <p key={row.project.id} role="alert" className="text-xs text-danger">{`The scheduler of ${row.project.name} could not be read: ${row.error}`}</p>
+      ))}
+      {error !== undefined && (
+        <p role="alert" className="text-xs text-danger">
+          {error}
+        </p>
+      )}
+    </SettingsSection>
+  )
+}

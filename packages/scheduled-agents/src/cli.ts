@@ -1,0 +1,287 @@
+import { Refused, UsageError, inRepo, nodeGitRunner, parseCommandArgs, runCommandLine, helpRows, helpText, type Command, type GitRunner } from '@openagt/agent-data'
+import { projectRoot } from '@openagt/git-branches'
+import { codingAgent, driverFor } from '@openagt/agent-driver'
+import { runNow, schedulerStatus, startScheduler, stopScheduler, tickProject } from './scheduler.js'
+import { cleanup } from './cleanup.js'
+import { PUBLISH_PICKS, agentInForce, readState, updateState, withAgent, withoutCommand, withoutListed, withPacePicked, withPick, withSwitchedOn, type PublishPick, type State } from './state.js'
+import { parseInterval, parseTimeOfDay, takesTimeOfDay } from './pace.js'
+import { AGENTS, AGENT_LABELS, AGENT_SKILLS_DIR, DEFAULT_AGENT, MAX_AGENTS, WRITE_LINE_TIMEOUT_MS, isAgent, isAgents } from './names.js'
+import { ableAgents, homeAgent, readSchedule, whyUnlisted, type ScheduledCommand } from './schedule.js'
+import { addAutomation, editAutomation, removeAutomation, shownAutomation, whyRefused } from './automation.js'
+import { tryCheck } from './check.js'
+import type { NewAutomation } from './automation-file.js'
+import { lineContext, writeLine } from './write-line.js'
+
+/**
+ * The command line: JSON on stdout, one line for a person on stderr, and the exit code says how
+ * it went — 0 for a result, 1 for a refusal or a failure, 2 for a command that could not be read.
+ * The same contract as the skills' commands, so a person and a dashboard read it the same way.
+ */
+
+const USAGE = `usage: scheduler <command>
+
+${helpRows([
+  ['tick', `pull agent-data, sweep, read the commands the project's skills schedule, start what is due, each a run of agent-runner`],
+  ['start [--keep-alive]', 'the scheduler on, ticking every minute in its own process; OpenAgent starts it in each project the plugin is on in, for as long as it runs itself'],
+  ['stop [--unless-keep-alive]', 'the scheduler off; runs in flight go to the end; with the flag a keep-alive scheduler is left running, as OpenAgent leaves it when it stops'],
+  ['status', `the state file with this machine's switches and paces, whether the scheduler's process is alive, and the schedule as the project's files say it now`],
+  ['model <id>', `the model a scheduled run on Claude Code starts on, where neither its command's skill nor you name another (this user)`],
+  ['model <command> <id|skill>', `the model this machine's runs of a scheduled command start on, by the id its coding agent knows it by, the command quoted when it has a word after it; kept with the agent the command runs on here, and holding only while it runs on that agent; skill for the model its skill names again, else the scheduler's own on Claude Code and the agent's own default on Codex, taken for any name`],
+  ['agent <command> <claude-code|codex|skill>', `the coding agent this machine's runs of a scheduled command are on; refused for an agent whose own skills folder does not hold the command's skill (.claude/skills for Claude Code, .agents/skills for Codex); skill for the agent its skill is made for again, taken for any name; the command quoted when it has a word after it. The model picked for the command goes with either: a model is one agent's. Only Claude's quota can be read: a run on Codex starts without that question`],
+  ['offset <points>', 'how far past the spend boundary a run may still start (this user)'],
+  ['switch <command> <on|off>', "whether a scheduled command runs on this machine, the command as status names it (quoted when it has a word after it); every one starts off, and off is taken for any name. Kept with its pace in OpenAgent's settings, so both are saved only where OpenAgent started this command: from its dashboard, or an agent it started"],
+  ['publish <command> <nothing|commit|branch|pr|merge>', `how far this machine's runs of a scheduled command publish; commit until picked. Of a row that also resumes runs, as its agent and model, only for the runs it starts: one it resumes goes on with its own`],
+  ['pace <command> <skill|work|N<m|h|d|w|mo>> [HH:MM]', `how often at most a scheduled command starts on this machine: an interval (15m, 6h, 2d, 2w, 1mo; 1 to 9999), with a time of day for days, weeks or months (2d 10:00, this machine's time); work for whenever its check finds work; skill for the skill's own pace again, taken for any name`],
+  ['agents <command> <skill|N>', `how many runs of a scheduled command may be in flight at once: this machine starts another only while fewer than N are in flight on any machine; a whole number from 1 to ${MAX_AGENTS}; skill for the skill's own number again, taken for any name`],
+  ['add <name> --prompt <text> [--every <N<m|h|d|w|mo>>] [--when <shell line>] [--waits-for <line>] [--private]', `a person's own automation, saved as a command skill of the project: the prompt is the skill's text, and its schedule a pace (--every), a check (--when, a shell line that prints what is new; it may read $LAST_RUN), or both; --waits-for says in one plain line what the check waits for. The file is yours to commit: its command starts no run before it is on the commit a run's checkout starts from. With --private it is kept on this machine alone, in this tool's own folder: nothing to commit, nobody else gets the row, and it can start at once: a run is named by the automation's name and handed the prompt. The prompt is in each run's record, which is shared where the project shares its records. Refused for a name a skill of the project, or an automation kept on this machine, already has`],
+  ['show <name>', 'an automation saved with add, as it stands: its prompt, its pace, its check, its file, whether it is kept on this machine alone, and its version, a name for what the file says now. Refused, like edit and remove, for anything whose file does not read as add writes one: a skill of the project, or an automation changed by hand since; those are edited and removed by hand'],
+  ['edit <name> [--prompt <text>] [--every <N<m|h|d|w|mo>>] [--when <shell line>] [--waits-for <line>] [--was <version>]', `save an automation again under its name: what is given takes the place of what its file said, what is left out stays, and --every, --when or --waits-for given empty (--when=) takes that part out; what a check waits for goes out with the check. Its past runs, its switch and your picks for it stay. A shared one is a change of yours to commit: a run is told the new prompt only once the change is on the commit a run's checkout starts from. With --was, the version show answered, it is refused when the file was changed since: a form opened a while ago writes over no change made by hand`],
+  ['remove <name>', `delete an automation's file, and what this machine held for it: its switch, its pace, its number of agents, its coding agent, its model, its publish pick. Nothing is committed: the deletion of a shared one is yours to commit, and everyone else keeps the command until it reaches them. What was never committed cannot be brought back: all of one kept on this machine, and a shared one's file or its last changes. The records of its past runs stay`],
+  ['now <command>', `start one run of a scheduled command now, whatever its switch, its pace and the quota left: a person asked for it. A command with a check starts only when the check finds work (it has 10 seconds); how many at once, where a run's checkout starts and whether the coding agent can start hold as on a tick. It needs no scheduler running. Not ready within 20 seconds, it starts nothing`],
+  ['try --when <shell line>', 'run a check once, as a tick would, asking what is new since a day ago: what it printed and whether an agent would start; nothing is saved or started; it has 20 seconds, less than a tick gives a check'],
+  ['write-line --words <plain words> [--agent <claude-code|codex>]', `a shell line for --when, written from what it waits for said in plain words, by one session of the coding agent (Claude Code unless named) with no tools: a fraction of a cent. The line is only printed, as {line}, or {none} with why no line can do it; nothing is run or saved. It has ${WRITE_LINE_TIMEOUT_MS / 1000} seconds`],
+  ['cleanup', `remove what this tool left in the project: this machine's switches and paces of its commands, the state file and the scheduler's log, then .scheduler/ and the rule hiding it from git once it is empty (the automations kept on this machine are your own writing and stay); refused while the state names a scheduler that is alive; the command a dashboard asks for when a project is removed with its files`],
+])}
+
+${helpText('JSON on stdout. Exit code 1 for a refusal or a failure (the reason on stderr), 2 for a usage error.')}`
+
+export interface CliIo {
+  cwd: string
+  stdout: (line: string) => void
+  stderr: (line: string) => void
+}
+
+export function runCli(argv: string[], io: CliIo, git: GitRunner = nodeGitRunner()): Promise<number> {
+  return runCommandLine(argv, io, { program: 'scheduler', usage: USAGE, commands: COMMANDS }, io, git)
+}
+
+const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
+  async tick(args, io, git) {
+    parseCommandArgs(args, {}, 0)
+    const repo = await project(io.cwd, git)
+    const record = await tickProject(repo, { git, log: io.stderr })
+    return { ok: true, ...record }
+  },
+
+  async start(args, io, git) {
+    const { values } = parseCommandArgs(args, { foreground: { type: 'boolean' }, 'keep-alive': { type: 'boolean' } }, 0)
+    const repo = await project(io.cwd, git)
+    const state = await startScheduler(repo, {
+      ...(values.foreground ? { foreground: true } : {}),
+      ...(values['keep-alive'] ? { keepAlive: true } : {}),
+      log: io.stderr,
+    })
+    return { ok: true, ...state }
+  },
+
+  async stop(args, io, git) {
+    const { values } = parseCommandArgs(args, { 'unless-keep-alive': { type: 'boolean' } }, 0)
+    const repo = await project(io.cwd, git)
+    const state = await stopScheduler(repo, { ...(values['unless-keep-alive'] ? { unlessKeepAlive: true } : {}) })
+    if (state.kept) io.stderr('keep-alive is on, the scheduler keeps running')
+    return { ok: true, ...state }
+  },
+
+  async status(args, io, git) {
+    parseCommandArgs(args, {}, 0)
+    const repo = await project(io.cwd, git)
+    return { ok: true, ...(await schedulerStatus(repo, git)) }
+  },
+
+  async model(args, io, git) {
+    const { positionals } = parseCommandArgs(args, {}, 1, 2)
+    const repo = await project(io.cwd, git)
+    if (positionals.length === 1) {
+      // One word is the scheduler's own model. A command's name, or `skill`, is a model's id forgotten: taken as an id it would be every row's model.
+      const word = positionals[0]!
+      if (word === 'skill' || (await readSchedule(repo)).commands.some(c => c.name === word || c.name.split(' ')[0] === word)) throw new UsageError(`${word} is no model: a command's model is set with model <command> <id|skill>`)
+      return saved(repo, s => ({ ...s, model: word }), git)
+    }
+    const [name, to] = positionals as [string, string]
+    // Taking a model back needs no scheduled command: one left for a skill that is gone can always be taken back.
+    if (to === 'skill') return saved(repo, s => withPick(s, 'models', name, undefined), git)
+    if (!to.trim()) throw new UsageError('a model is the id its coding agent knows it by')
+    const command = await scheduled(repo, name)
+    // A model is one agent's: the pick is kept with the agent the command runs on here, and holds only while it does.
+    return saved(repo, s => withPick(s, 'models', name, { agent: agentInForce(s, command), model: to }), git)
+  },
+
+  async agent(args, io, git) {
+    const { positionals } = parseCommandArgs(args, {}, 2)
+    const [name, to] = positionals as [string, string]
+    if (to !== 'skill' && !isAgent(to)) throw new UsageError(`${to} is none of skill, ${AGENTS.join(', ')}`)
+    const repo = await project(io.cwd, git)
+    // Taking an agent back needs no scheduled command: one left for a skill that is gone can always be taken back.
+    if (to === 'skill') return saved(repo, s => withAgent(s, name, undefined), git)
+    const command = await scheduled(repo, name)
+    if (!ableAgents(command).includes(to)) throw new Refused({ ok: false, reason: 'no-skill-there', command: name, agent: to }, `${AGENT_LABELS[to]} reads a project's skills from ${AGENT_SKILLS_DIR[to]}, and the skill of ${name} is only under ${command.dirs.join(' and ')}`)
+    // The agent the command is made for is no pick to keep: the command then follows its skill again. The model picked for the command goes either way: a model is one agent's.
+    return saved(repo, s => withAgent(s, name, to === homeAgent(command) ? undefined : to), git)
+  },
+
+  async offset(args, io, git) {
+    const { positionals } = parseCommandArgs(args, {}, 1)
+    const points = Number(positionals[0])
+    if (!Number.isFinite(points)) throw new UsageError(`${positionals[0]} is not a number of percentage points`)
+    const repo = await project(io.cwd, git)
+    return saved(repo, s => ({ ...s, spendOffset: points }), git)
+  },
+
+  async switch(args, io, git) {
+    const { positionals } = parseCommandArgs(args, {}, 2)
+    const [name, to] = positionals as [string, string]
+    if (to !== 'on' && to !== 'off') throw new UsageError(`${to} is neither on nor off`)
+    const repo = await project(io.cwd, git)
+    // Off needs no scheduled command: a switch left on for a skill that is gone can always be taken back.
+    if (to === 'off') return saved(repo, s => withPick(s, 'switches', name, undefined), git)
+    await scheduled(repo, name)
+    const now = new Date()
+    return saved(repo, s => withSwitchedOn(s, name, now), git)
+  },
+
+  async publish(args, io, git) {
+    const { positionals } = parseCommandArgs(args, {}, 2)
+    const [name, to] = positionals as [string, string]
+    if (!(PUBLISH_PICKS as readonly string[]).includes(to)) throw new UsageError(`${to} is none of ${PUBLISH_PICKS.join(', ')}`)
+    const repo = await project(io.cwd, git)
+    await scheduled(repo, name)
+    return saved(repo, s => withPick(s, 'publishes', name, to as PublishPick), git)
+  },
+
+  async pace(args, io, git) {
+    const { positionals } = parseCommandArgs(args, {}, 2, 3)
+    const [name, to, at] = positionals as [string, string, string | undefined]
+    const interval = parseInterval(to)
+    if (to !== 'skill' && to !== 'work' && !interval) throw new UsageError(`${to} is none of skill, work, or an interval like 15m, 6h, 2d, 2w, 1mo`)
+    const time = at === undefined ? undefined : parseTimeOfDay(at)
+    if (at !== undefined && !time) throw new UsageError(`${at} is no time of day like 10:00`)
+    if (time && !(interval && takesTimeOfDay(interval.unit))) throw new UsageError('a time of day goes with days, weeks or months')
+    const repo = await project(io.cwd, git)
+    // Taking a pace back needs no scheduled command: one left for a skill that is gone can always be taken back.
+    if (to === 'skill') return saved(repo, s => withPick(s, 'paces', name, undefined), git)
+    const command = await scheduled(repo, name)
+    if (to === 'work' && command.when === undefined) throw new Refused({ ok: false, reason: 'no-check', command: name }, `${name} has no check, so nothing would say when there is work`)
+    const pace = interval ? { every: interval.text, ...(time ? { at: time.text } : {}) } : { work: true as const }
+    return saved(repo, s => withPacePicked(s, name, pace, new Date()), git)
+  },
+
+  async agents(args, io, git) {
+    const { positionals } = parseCommandArgs(args, {}, 2)
+    const [name, to] = positionals as [string, string]
+    const count = /^\d+$/.test(to) ? Number(to) : undefined
+    if (to !== 'skill' && !isAgents(count)) throw new UsageError(`${to} is neither skill nor a whole number from 1 to ${MAX_AGENTS}`)
+    const repo = await project(io.cwd, git)
+    // Taking a number back needs no scheduled command: one left for a skill that is gone can always be taken back.
+    if (to !== 'skill') await scheduled(repo, name)
+    return saved(repo, s => withPick(s, 'agents', name, count), git)
+  },
+
+  async add(args, io, git) {
+    const { positionals, values } = parseCommandArgs(args, { prompt: { type: 'string' }, every: { type: 'string' }, when: { type: 'string' }, 'waits-for': { type: 'string' }, private: { type: 'boolean' } }, 1)
+    if (values.prompt === undefined) throw new UsageError('add needs --prompt, what the agent is told')
+    const repo = await project(io.cwd, git)
+    const outcome = await addAutomation(repo, typed(positionals[0]!, values.prompt, values), git, values.private ? { onThisMachine: true } : {})
+    if (outcome.ok) {
+      // A new command starts off, at its own pace, on this machine: nothing a command of that name left behind here decides for it.
+      await forget(repo, s => withoutCommand(s, outcome.command), git)
+      return outcome
+    }
+    throw new Refused(outcome, whyRefused(outcome))
+  },
+
+  async show(args, io, git) {
+    const { positionals } = parseCommandArgs(args, {}, 1)
+    const shown = await shownAutomation(await project(io.cwd, git), positionals[0]!)
+    if ('reason' in shown) throw new Refused(shown, whyRefused(shown))
+    return { ok: true, ...shown }
+  },
+
+  async edit(args, io, git) {
+    const { positionals, values } = parseCommandArgs(args, { prompt: { type: 'string' }, every: { type: 'string' }, when: { type: 'string' }, 'waits-for': { type: 'string' }, was: { type: 'string' } }, 1)
+    if (values.prompt === undefined && values.every === undefined && values.when === undefined && values['waits-for'] === undefined) throw new UsageError('edit needs what to change: --prompt, --every, --when or --waits-for')
+    // A flag left out leaves that part as the file says it; a schedule flag given empty takes its part out.
+    const part = (typed: string | undefined): string | null | undefined => (typed === undefined ? undefined : typed.trim() === '' ? null : typed)
+    const outcome = await editAutomation(await project(io.cwd, git), positionals[0]!, { prompt: values.prompt, every: part(values.every), when: part(values.when), waitsFor: part(values['waits-for']) }, git, values.was !== undefined ? { was: values.was } : {})
+    if (outcome.ok) return outcome
+    throw new Refused(outcome, whyRefused(outcome))
+  },
+
+  async remove(args, io, git) {
+    const { positionals } = parseCommandArgs(args, {}, 1)
+    const repo = await project(io.cwd, git)
+    const outcome = await removeAutomation(repo, positionals[0]!, git)
+    if (!outcome.ok) throw new Refused(outcome, whyRefused(outcome))
+    // What this machine held for the command goes with it, and the last tick's record stops naming it, so a dashboard stops listing it at once.
+    await forget(repo, s => withoutListed(withoutCommand(s, outcome.command), outcome.command), git)
+    return outcome
+  },
+
+  async now(args, io, git) {
+    const { positionals } = parseCommandArgs(args, {}, 1)
+    const repo = await project(io.cwd, git)
+    const command = await scheduled(repo, positionals[0]!)
+    const started = await runNow(repo, command, { git, log: io.stderr })
+    if (started.ok) return { ok: true, command: command.name, run: started.run.id, ...(started.resumed ? { resumed: true } : {}) }
+    throw new Refused({ ok: false, reason: 'not-started', command: command.name, outcome: started.outcome }, started.outcome)
+  },
+
+  async try(args, io, git) {
+    const { values } = parseCommandArgs(args, { when: { type: 'string' } }, 0)
+    if (values.when === undefined || !values.when.trim()) throw new UsageError('try needs --when, the shell line to run')
+    const repo = await project(io.cwd, git)
+    return { ok: true, ...(await tryCheck(repo, values.when.trim(), new Date())) }
+  },
+
+  async 'write-line'(args, io, git) {
+    const { values } = parseCommandArgs(args, { words: { type: 'string' }, agent: { type: 'string' } }, 0)
+    const words = values.words?.trim()
+    if (!words) throw new UsageError('write-line needs --words, what the line waits for in plain words')
+    const agent = values.agent ?? DEFAULT_AGENT
+    if (!isAgent(agent)) throw new UsageError(`--agent is one of ${AGENTS.join(', ')}`)
+    const repo = await project(io.cwd, git)
+    // None of the person's own setup: the session answers in words, and what it would load is only cost.
+    const driver = driverFor(await codingAgent(agent), 'write-line', { memory: false, connectors: false, skills: false })
+    const written = await writeLine(driver, words, await lineContext(repo, git))
+    if ('failed' in written) throw new Refused({ ok: false, reason: 'not-written', detail: written.failed }, `the line was not written: ${written.failed}`)
+    return { ok: true, ...written }
+  },
+
+  async cleanup(args, io, git) {
+    parseCommandArgs(args, {}, 0)
+    const outcome = await cleanup(await project(io.cwd, git), { git })
+    if (outcome.ok) return outcome
+    throw new Refused(outcome, `the scheduler is running here (pid ${outcome.pid}): stop it first with npx @openagt/scheduled-agents@0.1 stop`)
+  },
+}
+
+/** Write a change of the state, and answer the state as written: what a command that sets something answers. */
+async function saved(repo: string, change: (state: State) => State, git: GitRunner): Promise<{ ok: true } & State> {
+  return { ok: true, ...(await updateState(repo, change, git)) }
+}
+
+/** Take something out of the state, writing it only when it held that: a save of a dashboard's own may be writing the state at this moment, and a project with no state gets none for nothing. */
+async function forget(repo: string, without: (state: State) => State, git: GitRunner): Promise<void> {
+  const state = await readState(repo)
+  if (without(state) !== state) await updateState(repo, without, git)
+}
+
+/** An automation as the command line was given it: its name, its prompt, and the schedule flags that were typed. */
+function typed(name: string, prompt: string, values: { every?: string | undefined; when?: string | undefined; 'waits-for'?: string | undefined }): NewAutomation {
+  return { name, prompt, ...(values.every !== undefined ? { every: values.every } : {}), ...(values.when !== undefined ? { when: values.when } : {}), ...(values['waits-for'] !== undefined ? { waitsFor: values['waits-for'] } : {}) }
+}
+
+/** The scheduled command of that name; refused where no skill of the project schedules it, with why when its skill's schedule cannot be read. */
+async function scheduled(repo: string, name: string): Promise<ScheduledCommand> {
+  const schedule = await readSchedule(repo)
+  const command = schedule.commands.find(c => c.name === name)
+  if (command) return command
+  const skill = name.split(' ')[0]!
+  const unreadable = schedule.unreadable.find(u => u.skill === skill)
+  if (unreadable) throw new Refused(unreadable.own ? { ok: false, reason: 'unlisted-automation', automation: skill, detail: unreadable.reason } : { ok: false, reason: 'unreadable-schedule', skill, detail: unreadable.reason }, whyUnlisted(unreadable))
+  throw new Refused({ ok: false, reason: 'not-scheduled', command: name }, `no skill of this project schedules ${name}`)
+}
+
+/** The project the working directory belongs to, even from inside a checkout under `.branches/`. */
+function project(cwd: string, git: GitRunner): Promise<string> {
+  return inRepo(() => projectRoot(cwd, git))
+}

@@ -46,7 +46,7 @@ test('a logged-out CLI is a problem naming the command that fixes it', async () 
   assert.deepEqual(ready.problems, ['`agent` is not logged in. Run `agent login`, then start again.'])
 })
 
-test('a logged-out CLI is ready when an account is added beside it: runs use that login, as on a server with only the person\'s own computers\' logins', async () => {
+test('a logged-out CLI is ready when an account is added beside it: runs use that login', async () => {
   const loggedOut = probeFor({ auth: { ok: true, output: 'no' } })
   assert.equal((await checkCliReady(spec, { ...notRoot, probe: loggedOut, addedAccount: false })).problems.length, 1)
   assert.deepEqual(await checkCliReady(spec, { ...notRoot, probe: loggedOut, addedAccount: true }), { problems: [], warnings: [], ownLoggedOut: true })

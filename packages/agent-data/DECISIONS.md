@@ -8,8 +8,8 @@ implementer's judgment, not a decision. An AI writes a bullet only for a pick a 
 already made, and lists it in its pull request; for anything else it proposes and asks.
 
 ## The package
-- A **library, not a skill**: no `SKILL.md`, no command. Skills import it; they never
-  import each other.
+- A **library, not a skill**: no `SKILL.md`, no command. Modules import it; one imports
+  another only where it needs that one (#2394).
 - Named for the `agent-data` branch, but no function hardcodes it: every one that touches
   a branch takes it as an argument.
 - `.branches/` holds a project's persistent checkouts, one per branch at
@@ -25,14 +25,6 @@ already made, and lists it in its pull request; for anything else it proposes an
 - Every git call through the package's own runner has a time budget; a call that outruns
   it fails as a timeout, its own error kind, never as a plain failure: a killed `push` may
   have half landed.
-
-## The agents
-- An agent is a name, a set of skills and a set of accounts, one file each in the person's
-  folder (`agents/<id>.json`), so every computer that syncs the folder has the same agents. The
-  file names the accounts and never holds a token: an account the computer a run goes to does
-  not have is simply not there. `default` is the agent a run is on when none is picked, built
-  in until it is edited, never removed or renamed. Picked over agents kept beside the registry on
-  one computer, which Rom's design rules out: an agent is made once and used anywhere.
 
 ## Where a project's data is
 - By default in the person's own folder on the machine, `~/.openagent`: a git repository with

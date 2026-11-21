@@ -1,6 +1,6 @@
 import { appendFile, mkdir, rename, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { DriverEvent } from './types.js'
+import type { DriverEvent, LogCard, LogEndStatus, SessionLog, SessionLogOptions, WrittenCard } from '@openagt/hooks'
 
 /**
  * The session's log: two files at a directory the caller gives, written as the agent works, in
@@ -28,46 +28,6 @@ import type { DriverEvent } from './types.js'
  * this file, so the pieces live only as long as the run's own directory.
  */
 
-/** How the run ended: finished, stopped, failed, or waiting on an answer to the question its last turn asked. */
-export type LogEndStatus = 'done' | 'stopped' | 'failed' | 'waiting'
-
-/** What the card holds; every field but `id` is optional and the caller's to give or patch. */
-export interface LogCard {
-  id: string
-  startedAt?: string
-  intent?: string
-  /** The run's short name, two to five words, as a list shows it; absent until something names it. */
-  title?: string
-  driver?: string
-  model?: string
-  /** How hard the model thinks, by its agent's names: the one picked, or the one in force when the driver can tell. */
-  effort?: string
-  branch?: string
-  pr?: { number: number; url: string }
-  /** How much of the model's context the conversation filled at the last turn ({@link DriverUsage.contextTokens}). */
-  contextTokens?: number
-  caller?: Record<string, unknown>
-}
-
-/** Where the log goes, and the card it starts with. */
-export interface SessionLogOptions {
-  dir: string
-  card: LogCard
-  /**
-   * The files are there already, from an earlier session of the same run: the diary is kept and
-   * appended to, and the card is rewritten `running`. Without it the diary starts empty.
-   */
-  continue?: boolean
-}
-
-/** A card as written. */
-export interface WrittenCard extends LogCard {
-  startedAt: string
-  status: 'running' | LogEndStatus
-  endedAt?: string
-  cost?: number
-}
-
 /** The variable that names the diary in the agent's environment, when the session keeps one. */
 export const DIARY_ENV = 'AGENT_DIARY'
 
@@ -89,7 +49,7 @@ export function logLiveFile(id: string): string {
 }
 
 /** The session's log, kept current as events arrive. Writes stay ordered; a failed write never breaks the run. */
-export class SessionLog {
+export class FileSessionLog implements SessionLog {
   card: WrittenCard
   private tail: Promise<void> = Promise.resolve()
   private opened = false
@@ -275,7 +235,7 @@ export function diaryLine(event: DriverEvent): { kind: string } & Record<string,
  */
 export function attachLog<O extends { onEvent?: (event: DriverEvent) => void; log?: SessionLogOptions }>(opts: O): { opts: O; log?: SessionLog } {
   if (!opts.log) return { opts }
-  const log = new SessionLog(opts.log.dir, opts.log.card, opts.log.continue === true)
+  const log = new FileSessionLog(opts.log.dir, opts.log.card, opts.log.continue === true)
   void log.open()
   const onEvent = opts.onEvent
   return {

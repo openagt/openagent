@@ -1,7 +1,7 @@
 {
   "name": "@openagt/install",
   "version": "0.2.12",
-  "description": "Install OpenAgent on this computer: the dashboard starts when you log in, at https://openagent.build, which this computer then answers itself. `npx @openagt/uninstall` takes it all off again.",
+  "description": "Install OpenAgent on this computer: the dashboard starts when you log in, at https://openagent.build, which this computer then answers itself, and `openagent` runs it in a terminal. `openagent --uninstall` takes it all off again.",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -37,7 +37,7 @@
   },
   "dependencies": {
     "@openagt/agent-data": "workspace:*",
-    "@openagt/dashboard": "workspace:*"
+    "@openagt/ui": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

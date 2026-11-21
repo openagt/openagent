@@ -1,9 +1,8 @@
-import type { Driver, DriverEvent, DriverPromptOptions, DriverSession, DriverStartOptions, DriverTurn, DriverUsage } from './types.js'
 import { makeEmit, promptSent, startEvent } from './session-support.js'
 import { finishTurn } from './inbox.js'
-import { attachLog, type SessionLog } from './session-log.js'
+import { attachLog } from './session-log.js'
 import { ConversationGoneError } from './gone.js'
-import type { Question } from './question.js'
+import type { Driver, DriverEvent, DriverPromptOptions, DriverSession, DriverStartOptions, DriverTurn, DriverUsage, SessionLog, Question } from '@openagt/hooks'
 
 /** One scripted turn the {@link FakeDriver} replays. */
 export interface FakeTurn {
