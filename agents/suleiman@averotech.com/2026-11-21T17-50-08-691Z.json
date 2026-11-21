@@ -1,17 +1,33 @@
 {
   "id": "2026-11-21T17-50-08-691Z",
   "startedAt": "2026-11-21T17:50:08.962Z",
-  "status": "running",
+  "endedAt": "2026-11-21T18:36:48.341Z",
+  "status": "done",
   "intent": "New feature: drag or paste (Cmd+V) an image into the message box so the agent can look at it. It works in a new session and in follow-up messages, and shows in the chat after a reload.\n\nIn the box:\n\n- Images stand in a row above the text, 8px apart, as 120x120 tiles with 10px corners; the whole image fits, on a dark tile.\n- On hover, a small round X on the tile's top-right corner removes it.\n- A click opens the image large; X or Esc closes it.\n\nDecide the rest yourself and list your choices in the pull request. Keep the image files on this computer only: not in the checkout, not in the shared agent data. Add tests, test it by hand in a real browser with one real agent run that reads a word from a screenshot, and open a pull request that names no other product.",
+  "title": "Image paste and drag in agent chat",
   "driver": "claude-code",
-  "model": "opus",
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "branch": "agent-image-attachments",
+  "pr": {
+    "number": 2399,
+    "url": "https://github.com/openagt/openagent/pull/2399"
+  },
+  "cost": 19.711192800000006,
+  "contextTokens": 381582,
   "caller": {
     "runner": {
       "host": "Suleimans-MacBook-Pro.local",
       "pid": 92212,
-      "gitAccount": "suleimansh"
+      "gitAccount": "suleimansh",
+      "baseCommit": "fd8a8101021fe22866b567e539864c8453ff3578"
     },
+    "pid": 92212,
     "host": "Suleimans-MacBook-Pro.local",
-    "gitAccount": "suleimansh"
+    "gitAccount": "suleimansh",
+    "baseCommit": "fd8a8101021fe22866b567e539864c8453ff3578",
+    "kind": "prompt",
+    "workspace": "/Users/suleiman/Projects/openagent/.branches/agent-2026-11-21T17-50-08-691Z",
+    "sessionId": "98788b63-2311-4b34-9d16-ef73b6022cab"
   }
 }
