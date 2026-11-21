@@ -5,6 +5,7 @@ import StarterKit from '@tiptap/starter-kit'
 import { Markdown } from 'tiptap-markdown'
 import { createDocument, type Editor, type JSONContent, type Range } from '@tiptap/core'
 import { Token, type TokenSpec } from './prompt-editor/tokens.js'
+import { TypedBreak, TypedText } from './prompt-editor/as-typed.js'
 import { makeTrigger } from './prompt-editor/suggestion.js'
 import { ScrollArea } from './ui/scroll-area.js'
 import type { SuggestionItem } from './prompt-editor/SuggestionList.js'
@@ -210,7 +211,10 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
       if (autoFocus && keysUntaken()) created.commands.focus('end')
     },
     extensions: [
-      StarterKit,
+      // The words and the line breaks go out as typed, never escaped (as-typed.ts).
+      StarterKit.configure({ text: false, hardBreak: false }),
+      TypedText,
+      TypedBreak,
       // breaks:true keeps a single newline as a hard break, so a saved prompt's line-per-line
       // block survives the markdown round-trip instead of collapsing into one paragraph.
       Markdown.configure({ html: false, linkify: false, breaks: true, transformPastedText: true }),

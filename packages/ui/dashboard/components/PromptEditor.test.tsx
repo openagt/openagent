@@ -250,3 +250,38 @@ describe('words given back after the draft (append)', () => {
     expect(said(onChange)).toBe('the words it never read')
   })
 })
+
+describe('what the box sends is the text as typed', () => {
+  async function renderBox() {
+    const onChange = vi.fn()
+    render(<PromptEditor onChange={onChange} onSubmit={vi.fn()} projects={[]} commands={[]} />)
+    const box = await waitFor(() => {
+      const el = document.querySelector('[role="textbox"]')
+      if (!el) throw new Error('editor not mounted yet')
+      return el as HTMLElement & { editor: Editor }
+    })
+    // Typed: words go in as text, never read as markdown or HTML on the way in.
+    const type = (text: string) => act(() => void box.editor.commands.insertContent({ type: 'text', text }))
+    return { box, type, sent: () => onChange.mock.calls.at(-1)![0] as string }
+  }
+
+  test('a path under the home folder, a name with underscores and a star, and a tag keep no backslash nor entity', async () => {
+    const { type, sent } = await renderBox()
+    type('Recording: ~/Movies/a.mov, GIT_AUTHOR_* and GIT_COMMITTER_*, then [x] <div> & `a_b`')
+    expect(sent()).toBe('Recording: ~/Movies/a.mov, GIT_AUTHOR_* and GIT_COMMITTER_*, then [x] <div> & `a_b`')
+  })
+
+  test('a line broken with Shift+Enter is a newline, with no backslash ending the line before it', async () => {
+    const { box, type, sent } = await renderBox()
+    type('first line')
+    fireEvent.keyDown(box, { key: 'Enter', shiftKey: true })
+    type('second line')
+    expect(sent()).toBe('first line\nsecond line')
+  })
+
+  test('what the box marks as markdown is still written as markdown', async () => {
+    const { box, sent } = await renderBox()
+    act(() => void box.editor.commands.insertContent([{ type: 'text', text: 'keep ' }, { type: 'text', text: 'this', marks: [{ type: 'bold' }] }, { type: 'text', text: ' in ~/a' }]))
+    expect(sent()).toBe('keep **this** in ~/a')
+  })
+})

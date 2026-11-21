@@ -578,10 +578,11 @@ function renderBlocks(lines: string[], look: Look, depth = 0): ReactNode[] {
 
 // Inline spans: `code`, [text](url), **bold**, *italic*, bare URLs, `#12`. Applied left-to-right,
 // non-overlapping; code wins over the rest so a URL inside backticks stays literal, and what bold
-// or italic wraps is read the same way, so a file name in bold is still code. Links
-// render only for http(s) targets. A link to a file path (no scheme: `/repo/a.md`, `src/a.ts`)
-// is the file's name as inline code with the path on hover: the browser cannot open a file, and
-// the raw `[a.md](/repo/a.md)` read as noise. Anything else stays plain text.
+// or italic wraps is read the same way, so a file name in bold is still code. A star with a space
+// on its inner side opens or closes nothing, as in Markdown: `GIT_AUTHOR_* and GIT_COMMITTER_*`
+// keeps its stars. Links render only for http(s) targets. A link to a file path (no scheme:
+// `/repo/a.md`, `src/a.ts`) is the file's name as inline code with the path on hover: the browser
+// cannot open a file, and the raw `[a.md](/repo/a.md)` read as noise. Anything else stays plain text.
 const LINK_CLASS = 'text-primary underline underline-offset-2 break-all'
 // A name in the text (a file, a branch, a command) is on a faint fill, so it stands out from the
 // sentence around it, as Claude Code on the web sets one.
@@ -692,7 +693,7 @@ function link(href: string, label: string, key: number): ReactNode {
 
 function inline(text: string): ReactNode {
   const parts: ReactNode[] = []
-  const re = /(`[^`]+`|\[!\[[^\]]*\]\([^\s)]+\)\]\([^\s)]+\)|!\[[^\]]*\]\([^\s)]+\)|<img\b[^>]*>|<a\s[^>]*>[^<]*<\/a>|<br\s*\/?>|\[[^\]]+\]\((?:https?:\/\/)?[^\s):]+\)|\*\*[^*]+\*\*|\*[^*]+\*|https?:\/\/[^\s<>)\]]+|(?<![\w/&#])#\d+\b)/g
+  const re = /(`[^`]+`|\[!\[[^\]]*\]\([^\s)]+\)\]\([^\s)]+\)|!\[[^\]]*\]\([^\s)]+\)|<img\b[^>]*>|<a\s[^>]*>[^<]*<\/a>|<br\s*\/?>|\[[^\]]+\]\((?:https?:\/\/)?[^\s):]+\)|\*\*(?!\s)[^*]+(?<!\s)\*\*|\*(?!\s)[^*]+(?<!\s)\*|https?:\/\/[^\s<>)\]]+|(?<![\w/&#])#\d+\b)/g
   let last = 0
   let m: RegExpExecArray | null
   let key = 0

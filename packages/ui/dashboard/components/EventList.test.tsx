@@ -172,12 +172,22 @@ describe('EventList conversation rows', () => {
 
   test('a long prompt is cut short and offers "Show more", which opens it and turns to "Show less"', () => {
     render(<EventList events={[{ kind: 'driver', event: { type: 'start', prompt: 'word '.repeat(150) + 'end' } }]} stick={false} />)
-    const cut = () => screen.getByText(/end$/).closest('[class*="max-h"]')
+    const cut = () => screen.getByText(/end$/).closest('[class*="line-clamp"]')
     expect(cut()).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Show more' }))
     expect(cut()).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Show less' }))
     expect(cut()).toBeTruthy()
+  })
+
+  test('a long prompt is cut at a whole line, never at a height, and its last line fades out', () => {
+    // A height cut wherever the lines and the room between paragraphs fell: through a line, the
+    // top of its letters showing over "Show more". The cut is a count of lines, the last one faded.
+    render(<EventList events={[{ kind: 'driver', event: { type: 'start', prompt: Array.from({ length: 12 }, (_, n) => `paragraph ${n}`).join('\n\n') } }]} stick={false} />)
+    const cut = screen.getByText(/paragraph 11$/).closest('[class*="line-clamp"]')!
+    expect(cut.className).toMatch(/\bline-clamp-\d+\b/)
+    expect(cut.className).not.toMatch(/max-h/)
+    expect(cut.className).toMatch(/mask-image:linear-gradient\(to_bottom,#000_calc\(100%-1lh\),transparent\)/)
   })
 
   test('a prompt of many short lines is cut short too', () => {
@@ -188,7 +198,7 @@ describe('EventList conversation rows', () => {
   test('a prompt of a few lines renders whole, with no "Show more"', () => {
     render(<EventList events={[{ kind: 'driver', event: { type: 'start', prompt: 'word '.repeat(40) + 'do it' } }]} stick={false} />)
     expect(screen.queryByRole('button', { name: /Show more|Show less/ })).toBeNull()
-    expect(screen.getByText(/do it$/).closest('[class*="max-h"]')).toBeNull()
+    expect(screen.getByText(/do it$/).closest('[class*="line-clamp"]')).toBeNull()
   })
 
   test('a reply is shown whole however long, with no collapse control, in the page\'s font', () => {

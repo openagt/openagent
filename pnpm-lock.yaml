@@ -1140,6 +1140,12 @@ importers:
       '@tiptap/core':
         specifier: ^2.10.0
         version: 2.27.2(@tiptap/pm@2.27.2)
+      '@tiptap/extension-hard-break':
+        specifier: ^2.10.0
+        version: 2.27.2(@tiptap/core@2.27.2(@tiptap/pm@2.27.2))
+      '@tiptap/extension-text':
+        specifier: ^2.10.0
+        version: 2.27.2(@tiptap/core@2.27.2(@tiptap/pm@2.27.2))
       '@tiptap/pm':
         specifier: ^2.10.0
         version: 2.27.2
