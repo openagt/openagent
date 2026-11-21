@@ -1,17 +1,33 @@
 {
   "id": "2026-11-21T19-54-13-380Z",
   "startedAt": "2026-11-21T19:54:13.605Z",
-  "status": "running",
+  "endedAt": "2026-11-21T20:06:23.631Z",
+  "status": "done",
   "intent": "The dashboard starts a \"claude -p\" process to name a session (its folder is under the temp folder, named openagent-naming- and some letters). On 2026-11-21 one was still alive 12 minutes after it started, as a child of the dashboard. Find why the naming process is not ended once the name is given (or after a timeout), make sure it always ends, and add a test that fails without the fix. Open a pull request with a short title and body.",
+  "title": "Naming process not terminating",
   "driver": "claude-code",
-  "model": "opus",
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "branch": "agent-naming-process-ends",
+  "pr": {
+    "number": 2406,
+    "url": "https://github.com/openagt/openagent/pull/2406"
+  },
+  "cost": 1.5851678,
+  "contextTokens": 88611,
   "caller": {
     "runner": {
       "host": "Suleimans-MacBook-Pro.local",
       "pid": 36222,
-      "gitAccount": "suleimansh"
+      "gitAccount": "suleimansh",
+      "baseCommit": "d54205a35e8db3ebffd0cfa7a81b8f821c1d39f1"
     },
+    "pid": 36222,
     "host": "Suleimans-MacBook-Pro.local",
-    "gitAccount": "suleimansh"
+    "gitAccount": "suleimansh",
+    "baseCommit": "d54205a35e8db3ebffd0cfa7a81b8f821c1d39f1",
+    "kind": "prompt",
+    "workspace": "/Users/suleiman/Projects/openagent/.branches/agent-2026-11-21T19-54-13-380Z",
+    "sessionId": "53f884f3-0c48-4056-b9b2-914988218c75"
   }
 }
