@@ -1,17 +1,33 @@
 {
   "id": "2026-11-21T19-53-12-513Z",
   "startedAt": "2026-11-21T19:53:12.785Z",
-  "status": "running",
+  "endedAt": "2026-11-21T20:03:52.167Z",
+  "status": "done",
   "intent": "Two bugs in how my own message shows in the chat when it is long. First: the collapsed message cuts a line of text in half above \"Show more\", so the top of the next paragraph's letters shows. Cut it at a whole line (clamp by lines, or a height that is a multiple of the line height including the gap between paragraphs), with a soft fade over the last line. Second: the message shows backslashes I never typed: before the tilde of a path under my home folder in session 2026-11-21T19-17-06-311Z, and before the underscores and the star of the git author variable names in session 2026-11-21T19-02-26-646Z. The text I type in the box is escaped somewhere (the box's editor to markdown, probably) and the escapes are stored in the run's intent and sent to the agent. Find where, and keep my text exactly as typed, in the chat and in what the agent gets. Add a test for each that fails without the fix, and open a pull request with a short title and body.",
+  "title": "Collapsed message line clipping",
   "driver": "claude-code",
-  "model": "opus",
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "branch": "agent-chat-message-as-typed",
+  "pr": {
+    "number": 2405,
+    "url": "https://github.com/openagt/openagent/pull/2405"
+  },
+  "cost": 2.746652799999999,
+  "contextTokens": 113373,
   "caller": {
     "runner": {
       "host": "Suleimans-MacBook-Pro.local",
       "pid": 12698,
-      "gitAccount": "suleimansh"
+      "gitAccount": "suleimansh",
+      "baseCommit": "d54205a35e8db3ebffd0cfa7a81b8f821c1d39f1"
     },
+    "pid": 12698,
     "host": "Suleimans-MacBook-Pro.local",
-    "gitAccount": "suleimansh"
+    "gitAccount": "suleimansh",
+    "baseCommit": "d54205a35e8db3ebffd0cfa7a81b8f821c1d39f1",
+    "kind": "prompt",
+    "workspace": "/Users/suleiman/Projects/openagent/.branches/agent-2026-11-21T19-53-12-513Z",
+    "sessionId": "57435085-f863-47e6-8846-f59914078e23"
   }
 }
