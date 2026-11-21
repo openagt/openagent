@@ -265,8 +265,15 @@ test("a comment's first line: Codex's logo, light and dark, with its model as Co
     assert.equal(await byline(await record('o', { driver: 'other-agent', model: 'x' })), '🤖 *automated*')
     assert.equal(await byline(join(dir, 'missing.jsonl')), '🤖 *automated*')
     assert.equal(await byline(undefined), '🤖 *automated*')
-    assert.match(ASSETS_URL, /^https:\/\/cdn\.jsdelivr\.net\/npm\/@openagt\/github@\d+\.\d+\.\d+\/assets$/, "this package's own version")
   } finally {
     await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('every logo a comment shows is served, as an image', { skip: process.env['OPENAGENT_NETWORK_TESTS'] !== '1' && 'reaches jsDelivr: OPENAGENT_NETWORK_TESTS=1' }, async () => {
+  for (const logo of ['claude.svg', 'codex-dark.svg', 'codex-light.svg']) {
+    const answer = await fetch(`${ASSETS_URL}/${logo}`)
+    assert.equal(answer.status, 200, logo)
+    assert.equal(answer.headers.get('content-type')?.split(';')[0], 'image/svg+xml', logo)
   }
 })
