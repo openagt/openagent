@@ -1,8 +1,15 @@
 import { afterEach, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { ModuleHostContext, forgetRemembered, type ModuleAgent } from '@openagt/ui/module'
+import { ModuleHostContext, forgetRemembered, type ModuleAgent, type WaitingItem } from '@openagt/ui/module'
 import { fakeHost, type FakeHost } from '@openagt/ui/module/testing'
 import { LogsPage, dayOf } from './LogsPage.js'
+
+// What waits on the person as the shell read it for the sidebar's "Waiting on you", a test's: the page reads the shell's read.
+const shell = vi.hoisted(() => ({ items: [] as WaitingItem[] }))
+vi.mock('@openagt/ui/module', async original => ({
+  ...(await original<typeof import('@openagt/ui/module')>()),
+  useWaiting: () => ({ items: shell.items, state: 'fresh', all: { items: shell.items, whole: [] } }),
+}))
 
 // The Logs page: every run of the projects shown, newest first, in one list cut by day, each day
 // with what its runs cost; a word over the list picks one status.
@@ -19,6 +26,7 @@ function hostWith(cards: unknown[], runs: unknown[] = []): FakeHost {
 
 afterEach(() => {
   cleanup()
+  shell.items = []
   forgetRemembered()
   localStorage.clear()
   // A test that opened the page at a pick's query leaves the next one at none.
@@ -147,6 +155,43 @@ test("a run whose pull request merged reads as the sidebar's merged run, its num
   expect(within(row('Landed')).getByRole('link', { name: '#48' }).getAttribute('href')).toBe(pr.url)
   // A request still open: the run is done.
   expect(within(row('Open request')).getByText(/^Done/)).toBeTruthy()
+})
+
+test("a run stands as its sidebar row does: one that waits on the person waits, in the words of its item there, under a chip of its own first; one whose pull request merged after it was stopped is merged", async () => {
+  const open = { number: 50, url: 'https://example.com/pull/50' }
+  const landed = { number: 51, url: 'https://example.com/pull/51' }
+  const cards = [
+    { id: 'r1', startedAt: at(now - 41 * 60_000), endedAt: at(now - 1000), status: 'done', title: 'Open request', pr: open },
+    { id: 'r2', startedAt: at(now - 50 * 60_000), endedAt: at(now - 45 * 60_000), status: 'stopped', title: 'Image paste', pr: landed },
+    { id: 'r3', startedAt: at(now - 60 * 60_000), endedAt: at(now - 55 * 60_000), status: 'done', title: 'Plain done' },
+  ]
+  const host = hostWith(cards, [
+    { ...cards[0], pr: { ...open, state: 'open' } },
+    { ...cards[1], pr: { ...landed, state: 'merged' } },
+  ])
+  shell.items = [{ kind: 'waiting', module: 'github', scope: 'run', run: 'r1', id: open.url, words: 'Needs merge', title: 'Open request', detail: '#50', mark: 'pull-request', projectId: 'p1', projectName: 'alpha' }]
+  render(
+    <ModuleHostContext.Provider value={host}>
+      <LogsPage projects={[{ id: 'p1', name: 'alpha', gitHost: true }]} projectId={null} path={[]} />
+    </ModuleHostContext.Provider>,
+  )
+  const row = (title: string) => screen.getAllByText(title)[0]!.closest('li')!
+  await waitFor(() => expect(within(row('Image paste')).getByText('Merged')).toBeTruthy())
+  // Waiting, as the sidebar lists it under "Waiting on you": its hexagon waits, and its line says what it needs, not that it is done.
+  expect(within(row('Open request')).getByText('Needs merge')).toBeTruthy()
+  expect(row('Open request').textContent).not.toMatch(/Done/)
+  expect(row('Open request').querySelector('svg')!.getAttribute('class')).toContain('text-warning')
+  // Stopped, its pull request merged later: the merge glyph, as the sidebar marks it.
+  expect(row('Image paste').querySelector('svg.lucide-git-merge')).toBeTruthy()
+  expect(row('Image paste').textContent).not.toMatch(/Stopped/)
+  // The chips: All, then what waits on the person, each with its count; a run under one chip only.
+  const chips = screen.getAllByRole('button').filter(button => /^(All|Waiting|Done|Merged|Stopped)/.test(button.textContent ?? ''))
+  expect(chips.map(chip => chip.textContent)).toEqual(['All3', 'Waiting1', 'Done1', 'Merged1'])
+  fireEvent.click(chips[1]!)
+  expect(host.adjustPage).toHaveBeenLastCalledWith(undefined, 'status=waiting')
+  expect(screen.getAllByText('Open request').length).toBeGreaterThan(0)
+  expect(screen.queryAllByText('Plain done')).toHaveLength(0)
+  expect(screen.queryAllByText('Image paste')).toHaveLength(0)
 })
 
 test("a row's press opens the run: Answer where its question waits, Review for any other", async () => {

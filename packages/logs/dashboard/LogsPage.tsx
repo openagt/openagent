@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { Button, Empty, Facts, FilterChips, MiddleCut, Page, PanelGroup, PanelGroups, PanelRow, PanelShape, PersonMark, RunMark, Skeleton, Slot, WordsShape, formatDateTime, formatDuration, needsWord, personSaid, rpcClient, runName, runLineTone, useCodingAgents, useGitHostPeople, useIsMobile, runsAgain, runWord, useModuleHost, usePolled, type CodingAgent, type ModuleAgent, type ModuleHostPerson, type UiPageProps, type UiProject, type ReadState } from '@openagt/ui/module'
+import { Button, Empty, Facts, FilterChips, MiddleCut, Page, PanelGroup, PanelGroups, PanelRow, PanelShape, PersonMark, RunMark, Skeleton, Slot, WordsShape, formatDateTime, formatDuration, needsWord, personSaid, rpcClient, runName, runLineTone, runState, useCodingAgents, useGitHostPeople, useIsMobile, runsAgain, runWord, useModuleHost, usePolled, useWaiting, type CodingAgent, type ModuleAgent, type ModuleHostPerson, type UiPageProps, type UiProject, type ReadState, type WaitingItem } from '@openagt/ui/module'
 import type { RunCard } from '@openagt/agent-driver'
 
 /** How many runs each project lists: the command's own default page is 20; the page shows more. */
@@ -73,15 +73,31 @@ interface Read {
 
 const NOTHING_READ: Read = { rows: [], failed: [] }
 
-/** The statuses a chip picks, in this order: what is going, then how runs ended. */
-const STATUSES = ['running', 'waiting', 'done', 'stopped', 'failed']
+/** The states a chip picks, in this order: what waits on the person, what is going, then how runs ended. */
+const STATES = ['waiting', 'running', 'done', 'merged', 'stopped', 'failed']
 
-/** What a run's work still needs before it leaves this machine, in the sidebar's words, as two facts of its line: "Needs commit", "2 files". */
-export function leftParts(card: Pick<RunRow['card'], 'uncommitted' | 'unpublished'>, gitHost: boolean): string[] {
-  if (card.uncommitted) return [needsWord('uncommitted'), `${card.uncommitted} file${card.uncommitted === 1 ? '' : 's'}`]
-  if (card.unpublished) return [needsWord('unpushed', gitHost), `${card.unpublished} commit${card.unpublished === 1 ? '' : 's'}`]
-  return []
+/** A chip's word for a state: what waits on the person is "Waiting", as the sidebar's "Waiting on you"; any other the state's own word. */
+function chipWord(state: string): string {
+  const word = state === 'waiting' ? 'waiting' : runWord(state)
+  return word[0]!.toUpperCase() + word.slice(1)
 }
+
+/**
+ * What a run's work still needs before it leaves this machine, in the sidebar's words, as two facts
+ * of its line: "Needs commit", "2 files". Where the run's line already opens with what it needs (its
+ * item of "Waiting on you"), only the count.
+ */
+export function leftParts(card: Pick<RunRow['card'], 'uncommitted' | 'unpublished'>, gitHost: boolean, needSaid = false): string[] {
+  const parts = card.uncommitted
+    ? [needsWord('uncommitted'), `${card.uncommitted} file${card.uncommitted === 1 ? '' : 's'}`]
+    : card.unpublished
+      ? [needsWord('unpushed', gitHost), `${card.unpublished} commit${card.unpublished === 1 ? '' : 's'}`]
+      : []
+  return needSaid ? parts.slice(1) : parts
+}
+
+/** How a row stands: by the sidebar's rule ({@link runState}), given what waits on the person for its run, the sidebar's "Waiting on you". */
+type Standing = ReturnType<typeof runState>
 
 /** The day a run started, as a heading says it: "Today", "Yesterday", else the weekday and the date. */
 export function dayOf(iso: string, now: Date = new Date()): string {
@@ -109,9 +125,9 @@ export function byDay(rows: RunRow[], now: Date = new Date()): { day: string; ro
 /** The statuses of a run that is over: a waiting run's end is only its last turn's. */
 const ENDED = ['done', 'stopped', 'failed']
 
-/** How long a run took, from its start to its end; nothing for one not over. */
-function took(card: RunRow['card']): string | undefined {
-  return card.endedAt && ENDED.includes(card.status) ? formatDuration(Date.parse(card.endedAt) - Date.parse(card.startedAt)) : undefined
+/** How long a run took, from its start to its end; nothing for one not over, nor for one that waits on the person. */
+function took(card: RunRow['card'], { state }: Standing): string | undefined {
+  return card.endedAt && ENDED.includes(state) ? formatDuration(Date.parse(card.endedAt) - Date.parse(card.startedAt)) : undefined
 }
 
 /** The time of day a run started, its day being the heading's. */
@@ -125,18 +141,12 @@ const asks = (card: RunRow['card']): boolean => card.status === 'waiting'
 /** A run's press: Answer where its question waits, else Review. */
 const pressOf = (card: RunRow['card']): string => (asks(card) ? 'Answer' : 'Review')
 
-/** How a run is drawn and said: as its status, but a done run whose pull request merged as merged, the sidebar's word for it. */
-function shownStatus(card: RunRow['card']): string {
-  return card.status === 'done' && card.merged ? 'merged' : card.status
-}
-
 /** How a run stands, as its row's line opens: its state's word, with how long it took once it is over ("Done in 11m"). */
-function standing(card: RunRow['card']): string {
-  const word = runWord(shownStatus(card))
-  const said = word[0]!.toUpperCase() + word.slice(1)
-  const length = took(card)
-  if (length === undefined || card.merged) return said
-  return card.status === 'done' ? `${said} in ${length}` : `${said} after ${length}`
+function standingSaid(card: RunRow['card'], standing: Standing): string {
+  const said = standing.word[0]!.toUpperCase() + standing.word.slice(1)
+  const length = took(card, standing)
+  if (length === undefined) return said
+  return standing.state === 'done' ? `${said} in ${length}` : `${said} after ${length}`
 }
 
 /** The coding agent that ran it and its model, by the names the agent gives them ("Claude Code · Opus 5.5"). */
@@ -202,6 +212,11 @@ export function LogsPage({ projects }: UiPageProps) {
   const read = { ...recorded, rows: withLiveRuns(recorded.rows, live) }
   // The runs the dashboard lists show while the records are read; with none of those, the list waits for the records.
   const state: ReadState = recordedState === 'unknown' ? (read.rows.length > 0 ? liveState : 'unknown') : liveState === 'kept' ? 'kept' : recordedState
+  // What waits on the person, every project's, as the shell read it for the sidebar's "Waiting on you": a run there waits here too, in its words.
+  // Newest last, so a run that waits on two things is said by its newest.
+  const needs = new Map([...useWaiting().all.items].reverse().flatMap(item => (item.scope === 'run' && item.run !== undefined ? [[`${item.projectId}/${item.run}`, item] as const] : [])))
+  const needOf = (row: RunRow): WaitingItem | undefined => needs.get(`${row.project.id}/${row.card.id}`)
+  const standingOf = (row: RunRow): Standing => runState(row.card, needOf(row))
   const accountOf = useGitHostPeople(read.rows.map(({ project, card }) => ({ projectId: project.id, person: card.person })), host.gitHostPeople, 'logs:people')
 
   // Which status the list shows: every one, until a chip picks one, kept in the query (`?status=waiting`) as a list's view
@@ -215,9 +230,9 @@ export function LogsPage({ projects }: UiPageProps) {
     else query.set(STATUS_PARAM, value)
     host.adjustPage(undefined, query.toString())
   }
-  const counts = STATUSES.map(value => ({ value, label: runWord(value)[0]!.toUpperCase() + runWord(value).slice(1), count: read.rows.filter(row => row.card.status === value).length })).filter(c => c.count > 0)
+  const counts = STATES.map(value => ({ value, label: chipWord(value), count: read.rows.filter(row => standingOf(row).state === value).length })).filter(c => c.count > 0)
   const status = counts.some(c => c.value === picked) ? picked : null
-  const shown = status === null ? read.rows : read.rows.filter(row => row.card.status === status)
+  const shown = status === null ? read.rows : read.rows.filter(row => standingOf(row).state === status)
   const days = byDay(shown)
   const many = projects.length > 1
   // The one project shown, by its name: with every project picked, the page may still have only one.
@@ -267,21 +282,21 @@ export function LogsPage({ projects }: UiPageProps) {
               <PanelGroups className="gap-y-8">
                 {days.map(({ day, rows, cost }) => (
                   <PanelGroup key={day} title={day} {...(cost > 0 ? { count: dollars(cost) } : {})}>
-                    {rows.map(({ project, card }) => (
+                    {rows.map(row => ({ ...row, standing: standingOf(row), need: needOf(row) })).map(({ project, card, standing, need }) => (
                       <PanelRow
                         key={`${project.id}/${card.id}`}
-                        state={<RunMark status={shownStatus(card)} />}
+                        state={<RunMark status={standing.state} />}
                         // As every list names a run; a run with none of its names goes by its id. What it was asked, whole, under the pointer.
                         title={runName(card) ?? card.id}
                         titleHint={card.intent?.trim() || undefined}
                         href={host.agentHref(project.id, card.id)}
                         onClick={() => host.openAgent(project.id, card.id)}
                         meta={[
-                          <span className={runLineTone(shownStatus(card))}>{standing(card)}</span>,
+                          <span className={runLineTone(standing.state)}>{standingSaid(card, standing)}</span>,
                           // On a phone the time stands in the line, so the name has the row's width and the row keeps its two lines.
                           phone && <span title={formatDateTime(card.startedAt)}>{clock(card.startedAt)}</span>,
                           // What its work still needs before it leaves this machine, in the sidebar's words.
-                          ...leftParts(card, project.gitHost),
+                          ...leftParts(card, project.gitHost, need !== undefined),
                           many && project.name,
                           card.cost !== undefined && dollars(card.cost),
                           // Last, as the part that gives way, and cut in its middle: runs started the same minute differ only at

@@ -8,7 +8,6 @@ import { PersonMark } from './PersonMark.js'
 import type { ComponentType } from 'react'
 import type { AgentMeta, AgentStatus, RecentAgent, ProjectSummary, Waiting } from '../../src/index.js'
 import { needsWord, waitingKey } from '../../src/client.js'
-import { StateCell } from './ui/state.js'
 import type { ModuleHostPerson } from '../module/index.js'
 import { DRIVER_LABELS, driverFromImpl } from '../../src/client.js'
 import { buttonVariants } from './ui/button.js'
@@ -20,7 +19,7 @@ import { formatRelative, formatSince } from '../lib/format-date.js'
 import { updatePreferences, usePreferences } from '../lib/preferences.js'
 import { RECENTS_SORT_LABELS, sortRuns, type RecentsSort } from '../lib/recents-sort.js'
 import { useProjectLabel } from '../lib/project-labels.js'
-import { runWord } from '../lib/run-words.js'
+import { runState } from '../lib/run-words.js'
 import { RunMark } from './RunMark.js'
 import { DriverLogo } from './driver-logos.js'
 import { modelName, useModels } from '../lib/models.js'
@@ -590,7 +589,8 @@ function WaitingOnYou({
         <SidebarMenu className="gap-0.5">
           {shown.map(item => {
             const href = hrefOf(item)
-            const need = item.words
+            // Drawn and said by the rule a run's row is, the Logs' too: what waits on the person, in its item's words.
+            const { state, word: need } = runState({ status: 'waiting' }, item)
             const external = item.run === undefined
             const name = item.title ?? item.projectName
             return (
@@ -607,7 +607,7 @@ function WaitingOnYou({
                         name takes two lines before it is cut: what waits on the person is told apart by it. */}
                     <span className="flex min-w-0 items-start gap-3">
                       <span className="flex h-5 w-4 shrink-0 items-center justify-center">
-                        <StateCell state="waiting" />
+                        <RunMark status={state} />
                       </span>
                       <span className="line-clamp-2 min-w-0 flex-1 break-words">{name}</span>
                       <span aria-hidden className={cn(AGE, 'leading-5')}>
@@ -763,8 +763,6 @@ function AgentHistoryRow({
   /** Their picture when the git host has none to give: the person's own, for their own runs. */
   picture?: string | undefined
 }) {
-  // A run that ended on its question waits on you (#785).
-  const parked = status === 'waiting'
   const picked = driverFromImpl(driver)
   // The host it runs on, by the name its project's module gives it.
   const hostLabel = useRunHosts(host ? host.projectId : null).find(one => one.id === host?.id)?.label
@@ -776,11 +774,10 @@ function AgentHistoryRow({
   const titleClass = 'rail-title min-w-0 flex-1 truncate text-sm font-normal'
   // What the row says in a word, the one the status badge used to print: it names the circle, and
   // opens the sentence the row's hover says.
-  const word = parked ? runWord('waiting') : saving ? runWord('saving') : runWord(status)
-  // The mark: the state's hexagon, from the table every place reads (`run-words.ts`). Only a working
-  // run's ring turns: a run parked on you has been still for as long as you have not answered it (#785).
-  const working = status === 'running' || saving
-  const marked = saving ? 'saving' : parked ? 'waiting' : working ? 'running' : status
+  // The mark: the state's hexagon, by the rule every row of a run reads (`runState`, the Logs' too).
+  // A run that ended on its question waits on you (#785), and only a working run's ring turns. Its
+  // pull request merged is said by the request's own mark, beside it.
+  const { state: marked, word } = runState({ status, saving })
   const prMark = pr?.state ? PR_MARKS[pr.state] : undefined
   const prSaid = pr ? `PR #${pr.number}${prMark ? ` ${prMark.word}` : ''}` : undefined
   // Work that never left the machine, in the Human Queue's words and icon, gray (his pick): files left
