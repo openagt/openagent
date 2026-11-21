@@ -70,12 +70,12 @@ async function askProvider(host: string, root: string, command: ProvidedCommand)
 }
 
 /**
- * The hosts as last read, and the read under way: a git host's tool asks its host who is logged
- * in (GitHub's takes most of a second), so a page is answered at once with the last answer while
- * the hosts are read again behind it, and sees that one at its next ask.
+ * The hosts as last read, and the read under way, each for the projects it read: a git host's tool
+ * asks its host who is logged in (GitHub's takes most of a second), so a page is answered at once
+ * with the last answer while the hosts are read again behind it, and sees that one at its next ask.
  */
 let lastHosts: { projects: string; view: GitHostsView } | undefined
-let readingHosts: Promise<GitHostsView> | undefined
+let readingHosts: { projects: string; view: Promise<GitHostsView> } | undefined
 
 /**
  * The hosts the projects' remotes are on, in the projects' order, each with its package's answer:
@@ -83,13 +83,34 @@ let readingHosts: Promise<GitHostsView> | undefined
  */
 export async function onGitHosts(): Promise<GitHostsView> {
   const projects = (await contextProjects().list()).map(project => project.path).join('\n')
-  const reading = (readingHosts ??= readGitHosts()
-    .then(view => ((lastHosts = { projects, view }), view))
-    .finally(() => (readingHosts = undefined)))
+  const reading = readingHosts?.projects === projects ? readingHosts.view : readHosts(projects)
   if (lastHosts?.projects !== projects) return reading
   // Its answer is for the next ask; a read that failed leaves the last answer standing.
   reading.catch(() => undefined)
   return lastHosts.view
+}
+
+/** Read the hosts of `projects`. Its answer is the last one only if it is still the read under way when it lands: no press came since. */
+function readHosts(projects: string): Promise<GitHostsView> {
+  const read = {
+    projects,
+    view: readGitHosts()
+      .then(view => {
+        if (readingHosts === read) lastHosts = { projects, view }
+        return view
+      })
+      .finally(() => {
+        if (readingHosts === read) readingHosts = undefined
+      }),
+  }
+  readingHosts = read
+  return read.view
+}
+
+/** A press changed what a host's card says: what is answered after it is read after it, not by a read already under way. */
+function hostsChanged(): void {
+  lastHosts = undefined
+  readingHosts = undefined
 }
 
 /**
@@ -153,7 +174,7 @@ export const gitHostPackages = {
     const at = await providerOf(host)
     if (!at) return { ok: false, error: `No package answers for ${host}.` }
     const done = await loginsWiring.run(at.root, at.command, args, undefined, input)
-    lastHosts = undefined
+    hostsChanged()
     return done
   },
 }
@@ -168,8 +189,8 @@ async function act(host: string, args: string[]): Promise<{ ok: true; output: un
   const at = await providerOf(host)
   if (!at) return { ok: false, error: `No package answers for ${host}.` }
   const done = await loginsWiring.run(at.root, at.command, args)
-  // A press changed what the host's card says: the page reads it again, and waits for the change.
-  lastHosts = undefined
+  // The page reads the card again, and waits for the change.
+  hostsChanged()
   return done
 }
 

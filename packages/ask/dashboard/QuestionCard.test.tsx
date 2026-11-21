@@ -96,11 +96,16 @@ describe('QuestionCard', () => {
     await waitFor(() => expect(screen.getByRole('status').textContent).toBe('Sending your answer…'))
     for (const name of ['Submit', 'Skip']) expect((screen.getByRole('button', { name }) as HTMLButtonElement).disabled).toBe(true)
     for (const name of [/Postgres/, /Other/]) expect((option(name) as HTMLButtonElement).disabled).toBe(true)
+    // Its keys go with it: Ctrl+Enter pressed the moment it is gone, before anything else runs, does not send it again.
+    const watch = new MutationObserver(() => {
+      if (screen.queryByRole('region') !== null) return
+      watch.disconnect()
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true }))
+    })
+    watch.observe(document.body, { childList: true, subtree: true })
     taken({ ok: true, output: { ok: true, said: continuationPrompt('Which database?', 'SQLite') } })
     await waitFor(() => expect(screen.queryByRole('region')).toBeNull())
     expect(onSaid).toHaveBeenCalledWith(continuationPrompt('Which database?', 'SQLite'))
-    // Its keys went with it: Ctrl+Enter does not send it again.
-    fireEvent.keyDown(window, { key: 'Enter', ctrlKey: true })
     expect(host.call).toHaveBeenCalledTimes(1)
   })
 

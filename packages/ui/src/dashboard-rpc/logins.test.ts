@@ -8,7 +8,7 @@ import type { ProvidedCommand } from '@openagt/agent-data'
 import { addProject } from '../registry.js'
 import { readProvider, remoteHost } from '../dashboard/git-hosts.js'
 import { accountsWiring } from './accounts.js'
-import { loginsWiring, onAgentState, onGitHosts, runningFixes, sendAgentFix, sendStopAgentFix, sendForgetGitHostAccount, sendGitHostLogin, sendUseGitHostAccount } from './logins.js'
+import { loginsWiring, onAgentState, onGitHosts, runningFixes, type GitHostsView, sendAgentFix, sendStopAgentFix, sendForgetGitHostAccount, sendGitHostLogin, sendUseGitHostAccount } from './logins.js'
 import { provideTestContext } from './test-context.js'
 import { accountsPath, addAccount } from '@openagt/agent-driver'
 import { claudeLogins } from '@openagt/agent-driver-claude-code'
@@ -143,6 +143,37 @@ test('Git hosts: the last answer comes at once while the hosts are read again be
     accounts.pop()
     assert.equal((await sendUseGitHostAccount('github.com', 'octo')).ok, true)
     assert.deepEqual(logins(await onGitHosts()), ['octo'])
+  }, accounts)
+})
+
+test('Git hosts: a read under way when a press is made answers no one after it, nor is it the last answer when it lands', () => {
+  const accounts: { login: string; terminal?: boolean; runs?: boolean }[] = [{ login: 'octo', terminal: true, runs: true }]
+  return withProjects(async () => {
+    const logins = (view: GitHostsView) => view.hosts[0]!.provider?.accounts.map(a => a.login)
+    assert.equal((await sendUseGitHostAccount('github.com', 'octo')).ok, true)
+    assert.deepEqual(logins(await onGitHosts()), ['octo'])
+    // The read behind the next answer has the card's answer, and is held there, as GitHub's tool takes its time.
+    const run = loginsWiring.run
+    let read!: () => void
+    const answered = new Promise<void>(resolve => (read = resolve))
+    let letGo!: () => void
+    const held = new Promise<void>(resolve => (letGo = resolve))
+    loginsWiring.run = async (...call) => {
+      const said = await run(...call)
+      if (call[2][0] === 'accounts') {
+        read()
+        await held
+      }
+      return said
+    }
+    assert.deepEqual(logins(await onGitHosts()), ['octo'])
+    await answered
+    accounts.push({ login: 'octo-agent' })
+    assert.equal((await sendUseGitHostAccount('github.com', 'octo-agent')).ok, true)
+    const after = onGitHosts()
+    letGo()
+    assert.deepEqual(logins(await after), ['octo', 'octo-agent'])
+    assert.deepEqual(logins(await onGitHosts()), ['octo', 'octo-agent'])
   }, accounts)
 })
 

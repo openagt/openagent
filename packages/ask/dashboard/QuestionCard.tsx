@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { Check } from 'lucide-react'
 import { cn, isMobileScreen, MOD_KEY, pressed, Radio, RadioGroup, typedInto, useAction, useModuleHost, useOpenAgentDown, type UiQuestionProps } from '@openagt/ui/module'
 import { sendAnswer, type Answer } from './calls.js'
@@ -123,7 +123,8 @@ export function QuestionCard({ projectId, agentId, question: choice, active = fa
   // The latest of everything the key handler reads, so the handler is wired up once.
   const keys = useRef({ submit, pick, pickOther })
   keys.current = { submit, pick, pickOther }
-  useEffect(() => {
+  // A layout effect: its keys go as the card goes, so a key pressed the moment it is gone is not the card's.
+  useLayoutEffect(() => {
     // Answered: the card is gone, and its keys with it.
     if (!active || sent) return
     const onKey = (e: KeyboardEvent) => {
