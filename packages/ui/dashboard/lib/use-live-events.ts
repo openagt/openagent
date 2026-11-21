@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { OpenAgentEvent } from '../../src/index.js'
 import { onEvents, type EventChannel } from '../rpc/events.js'
+import { rememberUnder, rememberedUnder } from './use-async.js'
 
 // The live agent feed (#405), shared. The dashboard is a projection of the selected run's diary,
 // the file the run's own tool writes as the agent works, streamed over Server-Sent Events that
@@ -43,16 +44,39 @@ function retryDelay(attempt: number): number {
  */
 const SYNC_GRACE_MS = 1500
 
+/**
+ * The key the feed a run last had on this page is remembered under: going back to a run shows its
+ * chat at once, while its replay comes, as the chat it was and not its first prompt alone.
+ */
+function feedKey(projectId: string | null, agentId: string | null | undefined): string | null {
+  return projectId && agentId ? `live-feed:${projectId}:${agentId}` : null
+}
+
+function lastFeed(key: string | null): OpenAgentEvent[] {
+  return (key !== null && rememberedUnder<OpenAgentEvent[]>(key)) || []
+}
+
 export function useLiveEvents(projectId: string | null, agentId?: string | null): LiveEvents {
-  const [events, setEvents] = useState<OpenAgentEvent[]>([])
+  const key = feedKey(projectId, agentId)
+  // The events with the run they are of: the page swaps runs without a remount, and for the frame
+  // before the effect below runs, one run's events must not show as the next one's.
+  const [feed, setFeed] = useState<{ key: string | null; events: OpenAgentEvent[] }>(() => ({ key, events: lastFeed(key) }))
   const [lost, setLost] = useState(false)
   const [writing, setWriting] = useState('')
   const [replayedFor, setReplayedFor] = useState<string | null>(null)
 
-  // Another run, or one just started, is a feed of its own: it starts empty, and the live tail
-  // streams the run in as soon as its diary exists.
   useEffect(() => {
-    setEvents([])
+    if (feed.key !== null && feed.events.length > 0) rememberUnder(feed.key, feed.events)
+  }, [feed])
+
+  // Another run, or one just started, is a feed of its own: it starts as that run's feed was last
+  // seen here, or empty, and the live tail streams the run in as soon as its diary exists.
+  useEffect(() => {
+    const key = feedKey(projectId, agentId)
+    const kept = lastFeed(key)
+    const setEvents = (next: OpenAgentEvent[] | ((prev: OpenAgentEvent[]) => OpenAgentEvent[])) =>
+      setFeed(prev => ({ key, events: typeof next === 'function' ? next(prev.events) : next }))
+    setEvents(kept)
     setLost(false)
     setWriting('')
     setReplayedFor(null)
@@ -60,7 +84,8 @@ export function useLiveEvents(projectId: string | null, agentId?: string | null)
     let channel: EventChannel | undefined
     let cancelled = false
     let attempt = 0
-    let first = true
+    // A run seen before has its last feed on screen: its replay is swapped in whole, as a reconnect's is.
+    let first = kept.length === 0
     let timer: ReturnType<typeof setTimeout> | undefined
     let graceTimer: ReturnType<typeof setTimeout> | undefined
     // Out of sight, the feed is closed; each opening counts, so a stream that comes after the tab
@@ -81,7 +106,8 @@ export function useLiveEvents(projectId: string | null, agentId?: string | null)
 
     const subscribe = () => {
       // Every subscribe replays the whole log before following live. The FIRST one streams into
-      // a pane this effect just cleared, so it renders as it arrives. A RECONNECT has a populated
+      // a pane this effect just cleared, so it renders as it arrives. A RECONNECT, or the first
+      // subscribe to a run whose last feed is on screen, has a populated
       // feed on screen, and blanking it while history re-streamed was #1383's mid-run flicker:
       // the lost banner cleared on resubscribe, then the feed sat empty until the replay caught
       // up. So a reconnect buffers the replay and swaps atomically — on the server's stream-sync
@@ -198,5 +224,6 @@ export function useLiveEvents(projectId: string | null, agentId?: string | null)
   // An agent's own tail (#749) holds nothing but that agent, so the feed is its whole log: also the
   // second `session` boundary a resumed session (#762) appends to the SAME journal, where slicing
   // at the last one hid everything before the resume for as long as the agent was live.
+  const events = feed.key === key ? feed.events : lastFeed(key)
   return { events, lost, writing, replayed: replayedFor === agentId }
 }

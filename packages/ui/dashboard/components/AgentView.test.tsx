@@ -1172,6 +1172,23 @@ describe('a run just started', () => {
     expect(screen.getByText('Starting the coding agent')).toBeTruthy()
   })
 
+  test('a run long at work, switched to while its replay is out, never shows its prompt alone with the start line: its chat comes when its log does', () => {
+    const card = { status: 'running' as const, intent: 'Move the cart', workspace: '/repo/.branches/agent-1', branch: 'agent-1', driver: 'claude-code', startedAt: new Date(Date.now() - 756_000).toISOString() }
+    const { rerender } = render(view({ agentId: 'run-2', live: true, events: [], replayed: false, card }))
+    expect(screen.queryByText(/^Starting/)).toBeNull()
+    expect(screen.queryByText('Move the cart')).toBeNull()
+    expect(screen.queryByText('Waiting for the session to start…')).toBeNull()
+    const log = [
+      { kind: 'driver', event: { type: 'start', prompt: 'Move the cart' } },
+      { kind: 'session-update' },
+      { kind: 'driver', event: { type: 'text', text: 'The cart is moved.' } },
+    ] as OpenAgentEvent[]
+    rerender(view({ agentId: 'run-2', live: true, events: log, card }))
+    expect(screen.getByText('Move the cart')).toBeTruthy()
+    expect(screen.getByText('The cart is moved.')).toBeTruthy()
+    expect(screen.queryByText(/^Starting/)).toBeNull()
+  })
+
   test('an agent just started on a host says nothing of a set-up before its card is listed: no checkout is made for it here', () => {
     const events = [{ kind: 'driver', event: { type: 'start', prompt: 'Say hi' } }, { kind: 'driver', event: { type: 'text', text: 'Hi.' } }] as OpenAgentEvent[]
     render(view({ live: true, events, startedOn: 'GitHub Actions' }))

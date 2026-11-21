@@ -254,6 +254,51 @@ describe('useLiveEvents reconnect keeps the feed (#1383)', () => {
   })
 })
 
+// Switching between two runs in the sidebar: the run gone back to shows the chat it last had at
+// once, not nothing (which drew its first prompt alone, as a run just starting), and its replay swaps in whole.
+describe('useLiveEvents going back to a run', () => {
+  const log = (message: string) => ({ kind: 'log', message })
+
+  function FeedProbe({ agentId }: { agentId: string }) {
+    const { events, replayed } = useLiveEvents('p1', agentId)
+    return <span data-testid="feed">{`${events.map(e => (e.kind === 'log' ? e.message : e.kind)).join(',')} ${replayed ? 'replayed' : 'replaying'}`}</span>
+  }
+  const feed = () => screen.getByTestId('feed').textContent
+
+  test('shows its last feed from the first frame, and swaps its replay in whole', async () => {
+    const a = fakeChannel()
+    const b = fakeChannel()
+    const again = fakeChannel()
+    onEvents.mockResolvedValueOnce(a.channel).mockResolvedValueOnce(b.channel).mockResolvedValue(again.channel)
+    const { rerender } = render(<FeedProbe agentId="run-a" />)
+    await waitFor(() => expect(onEvents).toHaveBeenCalledTimes(1))
+    a.push(log('a1'))
+    a.push({ kind: 'stream-sync' })
+    a.push(log('a2'))
+    await waitFor(() => expect(feed()).toBe('a1,a2 replayed'))
+
+    // Another run never seen here starts empty: none of run A's lines show as its own.
+    rerender(<FeedProbe agentId="run-b" />)
+    expect(feed()).toBe(' replaying')
+    await waitFor(() => expect(onEvents).toHaveBeenCalledTimes(2))
+    b.push(log('b1'))
+    b.push({ kind: 'stream-sync' })
+    await waitFor(() => expect(feed()).toBe('b1 replayed'))
+
+    rerender(<FeedProbe agentId="run-a" />)
+    expect(feed()).toBe('a1,a2 replaying')
+    await waitFor(() => expect(onEvents).toHaveBeenCalledTimes(3))
+    again.push(log('a1'))
+    expect(feed()).toBe('a1,a2 replaying')
+    again.push(log('a2'))
+    again.push(log('a3'))
+    again.push({ kind: 'stream-sync' })
+    await waitFor(() => expect(feed()).toBe('a1,a2,a3 replayed'))
+    again.push(log('a4'))
+    await waitFor(() => expect(feed()).toBe('a1,a2,a3,a4 replayed'))
+  })
+})
+
 // A run's page tells the lines the run had written when it was opened from the ones that come after:
 // a continued run's leg before ended among the first.
 describe('useLiveEvents replay', () => {
