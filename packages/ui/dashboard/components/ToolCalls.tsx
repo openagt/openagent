@@ -9,6 +9,7 @@ import { formatElapsed } from '../lib/format-date.js'
 import { Markdown } from './Markdown.js'
 import { CROSS_FADE_MS, CrossFade } from './CrossFade.js'
 import { CopyButton } from './ui/copy-button.js'
+import { tokenWords } from './ContextCircle.js'
 import { ColouredLines, languageOf, Pieces, useHighlightedIn, type Piece } from '../lib/highlight.js'
 
 /**
@@ -411,10 +412,6 @@ function TokenCount({ tokens }: { tokens: number }) {
   )
 }
 
-/** A count of tokens as it is said: "96.9k", "842". */
-export function tokenWords(tokens: number): string {
-  return tokens >= 1000 ? `${(tokens / 1000).toFixed(1)}k` : String(tokens)
-}
 
 // The agent's steps between two messages, as Claude Code on the web draws them: one grey line
 // counting the commands and naming the file the edits changed with how much ("Ran 2 commands,

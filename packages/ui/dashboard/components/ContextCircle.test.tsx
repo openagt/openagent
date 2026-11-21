@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
-import { ContextCircle, tokens } from './ContextCircle.js'
+import { ContextCircle, tokenWords } from './ContextCircle.js'
 
 afterEach(cleanup)
 
@@ -25,9 +25,12 @@ describe('the context circle', () => {
   })
 
   test('a count reads the way a person says it', () => {
-    expect(tokens(840)).toBe('840')
-    expect(tokens(18_240)).toBe('18.2k')
-    expect(tokens(184_000)).toBe('184k')
-    expect(tokens(1_200_000)).toBe('1.2M')
+    expect(tokenWords(840)).toBe('840')
+    expect(tokenWords(18_240)).toBe('18.2k')
+    expect(tokenWords(184_000)).toBe('184k')
+    expect(tokenWords(1_200_000)).toBe('1.2M')
+    // A session's live line as Claude Code says it, never "8079.4k"; nor "1000k" on the way to a million.
+    expect(tokenWords(8_079_400)).toBe('8.1M')
+    expect(tokenWords(999_700)).toBe('1.0M')
   })
 })

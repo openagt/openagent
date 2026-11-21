@@ -19,7 +19,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip.js'
 import { EventList } from './EventList.js'
 import { PaneTitle } from './PaneHeader.js'
 import { RunMark } from './RunMark.js'
-import { Seconds, tokenWords } from './ToolCalls.js'
+import { Seconds } from './ToolCalls.js'
+import { tokenWords } from './ContextCircle.js'
 
 // The pane of a run's subagents, beside its chat: a calm list of them, one line each (its state's
 // mark, its name, how long it worked), what waits on the person and what failed first; and under

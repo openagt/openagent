@@ -261,6 +261,19 @@ describe('LiveLine', () => {
     expect(screen.getByRole('status').textContent).toBe('3s')
     expect(container.querySelector('.dot-wave')).toBeTruthy()
   })
+
+  test('a turn of millions of tokens says them in millions, as Claude Code does', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-10-04T10:00:03.000Z'))
+    // Under reduced motion the count is said at once, not counted up to.
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: query.includes('reduce'), media: query, addEventListener: () => {}, removeEventListener: () => {} }))
+    try {
+      render(<LiveLine since="2026-10-04T10:00:00.000Z" tokens={8_079_400} />)
+      expect(screen.getByRole('status').textContent).toContain('8.1M tokens')
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
 })
 
 // The files an edit changed, said by its coding agent on the call's output.
