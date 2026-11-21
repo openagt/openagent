@@ -4,6 +4,7 @@ import './tailwind.css'
 import './lib/fonts.js'
 import { AppFrame } from './components/AppFrame.js'
 import { App } from './App.js'
+import { onPageSwap } from './components/ViewToggle.js'
 
 // The dashboard's entry point. Everything here is the browser's: the daemon serves a static
 // `index.html` plus fingerprinted assets and answers RPCs, and the app routes itself client-side
@@ -16,6 +17,9 @@ import { App } from './App.js'
 //
 // No StrictMode: the live feed, the polls and the theme listener all mount real subscriptions, and
 // double-invoking them buys nothing here that the tests do not already cover.
+// Leaving the page animates only for the switch to the website's landing page (ViewToggle).
+addEventListener('pageswap', onPageSwap)
+
 const root = document.getElementById('root')
 if (!root) throw new Error('no #root in index.html')
 
