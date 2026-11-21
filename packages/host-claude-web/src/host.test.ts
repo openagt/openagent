@@ -47,7 +47,8 @@ test('a start takes the model and the account the Start picked (#2394)', async (
     assert.equal((await findWebRun(repo, id))?.card.caller?.['gitAccount'], 'octo-other')
     // A Stop while the session is being made gives the hand-off up.
     await web.stop({ id, project: projectAt(repo) })
-    const stopped = await until(() => findWebRun(repo, id), run => run?.card.status !== 'running', 'the run to stop')
+    // Read back, then stopped: the card is rewritten in place, and a read in the middle of the write finds no run.
+    const stopped = await until(() => findWebRun(repo, id), run => run !== undefined && run.card.status !== 'running', 'the run to stop')
     assert.equal(stopped!.card.status, 'stopped')
   } finally {
     await removeRepo(repo)
