@@ -3,6 +3,7 @@ import type { AgentWorktree } from '../../src/index.js'
 import { onAgentWorktree } from '../rpc/reads.js'
 import { PR_PENDING_MS, SETTLING_EVERY_MS, useSettling } from './use-agent-handoff.js'
 import { useAskOn, usePolled } from './use-async.js'
+import { prsAgain } from './runs-changed.js'
 
 /**
  * An agent's checkout, polled: its branch, its pull request, and its checkout while it has one.
@@ -26,6 +27,8 @@ export function useCheckoutStatus(projectId: string, agentId: string, turn?: boo
     // while it is read again. One never seen shows no facts until its own answer: never the
     // previous agent's, which read as this one's for the beat the read took.
     { remember: `worktree:${projectId}:${agentId}`, stored: true },
+    // Its pull request moved: read again with the run's row, which says so at the same time.
+    prsAgain(),
   )
   const settling = useSettling(turn === true)
   useEffect(() => setEveryMs(status?.prPending ? PR_PENDING_MS : settling ? SETTLING_EVERY_MS : 10_000), [status?.prPending, settling])

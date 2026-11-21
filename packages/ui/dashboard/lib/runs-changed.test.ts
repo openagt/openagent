@@ -20,6 +20,9 @@ class FakeStream {
   tell(projectId: string): void {
     act(() => this.onmessage?.({ data: JSON.stringify({ kind: 'runs', projectId }) }))
   }
+  tellPrs(): void {
+    act(() => this.onmessage?.({ data: JSON.stringify({ kind: 'prs' }) }))
+  }
 }
 
 beforeEach(() => {
@@ -52,6 +55,28 @@ test("a read of one project's runs is told of that project's changes, and of eve
   stopShop()
   stopAny()
   // Nobody reads: the stream is let go.
+  expect(stream.closed).toBe(true)
+})
+
+test('a pull request that moved is read again by every read that shows one together: the lists of runs, whatever their project, and the reads of a run\'s own request', async () => {
+  const { onPrsChanged, onRunsChanged } = await import('./runs-changed.js')
+  const shop: number[] = []
+  const pr: number[] = []
+  const stopShop = onRunsChanged('shop', change => shop.push(change))
+  const stopPr = onPrsChanged(change => pr.push(change))
+  const stream = FakeStream.made[0]!
+  stream.open()
+  stream.tell('shop')
+  expect([shop, pr]).toEqual([[1], []])
+  stream.tellPrs()
+  expect([shop, pr]).toEqual([[1, 2], [2]])
+  // It dropped and opened again: a request's read reads again too.
+  act(() => stream.onerror?.())
+  stream.open()
+  expect(pr).toEqual([2, 3])
+  stopShop()
+  expect(stream.closed).toBe(false)
+  stopPr()
   expect(stream.closed).toBe(true)
 })
 

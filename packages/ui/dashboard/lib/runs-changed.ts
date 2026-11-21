@@ -3,7 +3,9 @@ import type { RunsChanged } from '../../src/dashboard-rpc/runs-changed.js'
 import type { Again } from './use-async.js'
 
 // The daemon tells the page the moment the runs of a project change, here or on another computer
-// (`GET /_rpc/changes`), and the reads that list runs read again at once. While it tells, those
+// (`GET /_rpc/changes`), and the reads that list runs read again at once; and the moment a pull
+// request stands otherwise, when the reads that show one (the rows of the runs, a run's own page)
+// read again together, so none says "open" of a request another already says is merged. While it tells, those
 // reads poll only as a safety, slowly: a told change is never waited for. One stream for the
 // whole page, open while a read listens and the tab is shown; `EventSource` opens it again by
 // itself when it drops, and every listener reads again then, for what changed meanwhile.
@@ -15,6 +17,8 @@ export const TOLD_EVERY_MS = 15_000
 type Listener = (projectId: string | undefined, turn: number) => void
 
 const listeners = new Set<Listener>()
+/** The reads of a run's pull request, told each time a request moved, and when the stream opened again. */
+const prListeners = new Set<(turn: number) => void>()
 const openListeners = new Set<() => void>()
 let stream: EventSource | undefined
 let open = false
@@ -32,16 +36,24 @@ function tell(projectId: string | undefined): void {
   for (const listener of [...listeners]) listener(projectId, turn)
 }
 
+/** Everything reads again: what changed while the stream was down, or a pull request that moved, which every list of runs marks too. */
+function tellAll(): void {
+  tell(undefined)
+  for (const listener of [...prListeners]) listener(turn)
+}
+
+const listening = (): number => listeners.size + prListeners.size
+
 const shown = (): boolean => typeof document === 'undefined' || document.visibilityState !== 'hidden'
 
 function connect(): void {
-  if (stream || typeof EventSource === 'undefined' || listeners.size === 0 || !shown()) return
+  if (stream || typeof EventSource === 'undefined' || listening() === 0 || !shown()) return
   const source = new EventSource('/_rpc/changes')
   stream = source
   source.onopen = () => {
     setOpen(true)
     // Opened again: what changed while it was not is read now.
-    if (opened) tell(undefined)
+    if (opened) tellAll()
     opened = true
   }
   source.onerror = () => setOpen(false)
@@ -49,6 +61,7 @@ function connect(): void {
     try {
       const change = JSON.parse(String(message.data)) as RunsChanged
       if (change.kind === 'runs' && typeof change.projectId === 'string') tell(change.projectId)
+      else if (change.kind === 'prs') tellAll()
     } catch {
       // A torn message is one change missed, which the next poll reads.
     }
@@ -81,7 +94,18 @@ export function onRunsChanged(projectId: string | undefined, read: (turn: number
   connect()
   return () => {
     listeners.delete(listener)
-    if (listeners.size === 0) disconnect()
+    if (listening() === 0) disconnect()
+  }
+}
+
+/** Call `read` each time a pull request moved (merged, closed, opened), with the number of that change. Until the answer is called. */
+export function onPrsChanged(read: (turn: number) => void): () => void {
+  const listener = (number: number): void => read(number)
+  prListeners.add(listener)
+  connect()
+  return () => {
+    prListeners.delete(listener)
+    if (listening() === 0) disconnect()
   }
 }
 
@@ -100,6 +124,11 @@ function useRunsTold(): boolean {
 /** For a read of the runs of `projectId` (of every project, when it is `undefined`): read again at each change. */
 export function runsAgain(projectId: string | undefined): Again {
   return read => onRunsChanged(projectId, read)
+}
+
+/** For a read that shows a run's pull request: read again each time a request moved. */
+export function prsAgain(): Again {
+  return read => onPrsChanged(read)
 }
 
 /** How often a read of the runs polls: `everyMs`, or slowly while the daemon tells of every change. */

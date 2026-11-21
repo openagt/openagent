@@ -1,4 +1,4 @@
-import { projectGitHost, type GitHostFor, type GitHostRequest } from '../store/git-host.js'
+import { projectGitHost, type GitHostFor, type GitHostRequest, type GitHostSource, type RequestsOutcome } from '../store/git-host.js'
 import { cachedRead, invalidate, type Cached } from './cache.js'
 
 /**
@@ -11,7 +11,54 @@ import { cachedRead, invalidate, type Cached } from './cache.js'
  * The shapes are OpenAgent's own ({@link LinkedPr}, {@link OpenPr}), copied out of what the
  * provider answers rather than passed through, so a field a provider adds cannot leak into what
  * callers store.
+ *
+ * Every read here keeps what it answered of each request as the newest word on it ({@link readRequests}),
+ * and every cached read answers each request as that newest word says: a branch's read and the
+ * project's listing are cached apart, each on its own clock, and a request merged said "merged"
+ * in the session's header and "open" in its sidebar row until the listing's turn came.
  */
+
+/** Every request read here, by its address, as the read asked last said it, and that read's turn. */
+const newest = new Map<string, { request: GitHostRequest; turn: number }>()
+
+/** The turn of the last read asked: an answer from a read asked earlier never overwrites a later one's, however late it comes. */
+let turns = 0
+
+/** Who is told each time a read says a request stands otherwise than the read before it said. */
+const moveListeners = new Set<() => void>()
+
+/**
+ * Call `listener` each time a read finds a request standing otherwise than it was last read (opened,
+ * merged, closed, out of draft), until the answer is called: once for each read, however many it
+ * found moved. A request read for the first time moved nowhere.
+ */
+export function onPrMoved(listener: () => void): () => void {
+  const own = (): void => listener()
+  moveListeners.add(own)
+  return () => void moveListeners.delete(own)
+}
+
+/** Ask a project's git host for requests, and keep each one it answered as the newest word on it. */
+async function readRequests(source: GitHostSource, query: Parameters<GitHostSource['requests']>[0]): Promise<RequestsOutcome> {
+  const turn = ++turns
+  const listed = await source.requests(query)
+  if (!listed.ok) return listed
+  let moved = false
+  for (const request of listed.requests) {
+    const before = newest.get(request.url)
+    if (before && before.turn > turn) continue
+    if (before && listedStateOf(before.request) !== listedStateOf(request)) moved = true
+    newest.set(request.url, { request, turn })
+  }
+  if (moved) for (const listener of [...moveListeners]) listener()
+  return listed
+}
+
+/** A request as the newest read says it: the newest word on the same address, else as it was read. */
+function newestOf(pr: LinkedPr): LinkedPr {
+  const known = newest.get(pr.url)
+  return known ? linkedPrOf(known.request) : pr
+}
 
 /** The PR opened for a branch, when there is one. */
 export interface LinkedPr {
@@ -115,7 +162,7 @@ export async function prsForBranch(cwd: string, branch: string, gitHost: GitHost
 export async function prsForBranchOrThrow(cwd: string, branch: string, gitHost: GitHostFor = projectGitHost): Promise<LinkedPr[]> {
   const source = await gitHost(cwd)
   if (!source) return []
-  const listed = await source.requests({ branch, state: 'all' })
+  const listed = await readRequests(source, { branch, state: 'all' })
   if (!listed.ok) throw new Error(listed.error)
   return listed.requests.map(linkedPrOf)
 }
@@ -133,10 +180,12 @@ export async function prView(cwd: string, branch: string, gitHost: GitHostFor = 
  * the worktree bar and the handoff summary, and refreshed behind whoever asks. `pending` says the
  * answer is not known yet rather than that there is no PR — the difference matters to a caller
  * deciding whether to offer "Open PR". A read with no branch to ask about answers nothing at once.
+ * The request is as the newest read of it says, whichever read that was.
  */
-export async function cachedPrView(cwd: string, branch?: string): Promise<Cached<LinkedPr | undefined>> {
+export async function cachedPrView(cwd: string, branch?: string, gitHost: GitHostFor = projectGitHost): Promise<Cached<LinkedPr | undefined>> {
   if (branch === undefined) return { value: undefined, pending: false }
-  return cachedRead(prCacheKey(cwd, branch), () => prView(cwd, branch))
+  const read = await cachedRead(prCacheKey(cwd, branch), () => prView(cwd, branch, gitHost))
+  return read.value ? { ...read, value: newestOf(read.value) } : read
 }
 
 /** Forget a branch's PR, after an action that changes whether it has one, and with it how the project's PRs stand and which are open. */
@@ -155,6 +204,16 @@ export interface ListedPr {
   title: string
 }
 
+/** How a request stands, as its row marks it: an open draft is a draft. */
+function listedStateOf(request: GitHostRequest): PrState {
+  return request.state === 'open' && request.draft ? 'draft' : request.state
+}
+
+/** How the project's requests stand, by address: what {@link cachedPrStates} answers. */
+export interface PrStates {
+  get(url: string): ListedPr | undefined
+}
+
 /**
  * How each of a project's newest pull requests stands, and its title, by its address: what the list
  * of runs marks each run's PR with. One listing of the project's requests, whatever their state,
@@ -164,34 +223,38 @@ export interface ListedPr {
 export async function prStates(cwd: string, gitHost: GitHostFor = projectGitHost): Promise<Map<string, ListedPr>> {
   const source = await gitHost(cwd)
   if (!source) return new Map()
-  const listed = await source.requests({ state: 'all' })
+  const listed = await readRequests(source, { state: 'all' })
   if (!listed.ok) throw new Error(listed.error)
-  return new Map(listed.requests.map(request => [request.url, { state: request.state === 'open' && request.draft ? 'draft' : request.state, title: request.title }]))
+  return new Map(listed.requests.map(request => [request.url, { state: listedStateOf(request), title: request.title }]))
 }
-
-/** The states each project last read, so a read that fails or is on its way shows those rather than none. */
-const lastStates = new Map<string, Map<string, ListedPr>>()
 
 /**
  * The cached form of {@link prStates} (#1028): the list of runs is polled every few seconds, and a
- * PR's state changes far less often. A listing that fails is kept like an answer, as the states
- * last read, so a git host that cannot answer is asked again a minute later, not at every poll;
- * and while a read is on its way, after a request was opened or merged here, the rows keep the
- * states they had.
+ * PR's state changes far less often. Each request stands as the newest read of it says, the
+ * listing's or a branch's, so a row says "merged" with its session's header and not a minute after.
+ * A listing that fails is kept like an answer, so a git host that cannot answer is asked again a
+ * minute later, not at every poll; and while a read is on its way, after a request was opened or
+ * merged here, the rows keep the states they had.
  */
-export async function cachedPrStates(cwd: string, read: (cwd: string) => Promise<Map<string, ListedPr>> = prStates): Promise<Map<string, ListedPr>> {
-  const cached = await cachedRead(prStatesCacheKey(cwd), () =>
-    read(cwd).then(
-      states => (lastStates.set(cwd, states), states),
-      () => lastStates.get(cwd) ?? new Map<string, ListedPr>(),
+export async function cachedPrStates(cwd: string, gitHost: GitHostFor = projectGitHost): Promise<PrStates> {
+  await cachedRead(prStatesCacheKey(cwd), () =>
+    prStates(cwd, gitHost).then(
+      () => true,
+      () => false,
     ),
   )
-  return cached.value ?? lastStates.get(cwd) ?? new Map()
+  return {
+    get: url => {
+      const known = newest.get(url)?.request
+      return known && { state: listedStateOf(known), title: known.title }
+    },
+  }
 }
 
-/** The cached form of {@link prsForBranch}, shared through the same read-through cache (#1028). */
-export async function cachedPrsForBranch(cwd: string, branch: string): Promise<Cached<LinkedPr[]>> {
-  return cachedRead(branchPrsCacheKey(cwd, branch), () => prsForBranch(cwd, branch))
+/** The cached form of {@link prsForBranch}, shared through the same read-through cache (#1028), each request as the newest read of it says. */
+export async function cachedPrsForBranch(cwd: string, branch: string, gitHost: GitHostFor = projectGitHost): Promise<Cached<LinkedPr[]>> {
+  const read = await cachedRead(branchPrsCacheKey(cwd, branch), () => prsForBranch(cwd, branch, gitHost))
+  return read.value ? { ...read, value: read.value.map(newestOf) } : read
 }
 
 /** Forget a branch's PR history, after an action that changes it (opening one). */
@@ -256,7 +319,7 @@ export function pickAgentPr(prs: LinkedPr[], since?: string, order: 'first' | 'l
 export async function openPrs(cwd: string, gitHost: GitHostFor = projectGitHost): Promise<OpenPr[]> {
   const source = await gitHost(cwd)
   if (!source) return []
-  const listed = await source.requests({ state: 'open' })
+  const listed = await readRequests(source, { state: 'open' })
   if (!listed.ok) throw new Error(listed.error)
   return listed.requests.map(openPrOf)
 }
@@ -273,10 +336,14 @@ const OPEN_PRS_FIRST_MS = 15_000
  * that the list last read answers at once and is read again behind it once it is
  * {@link OPEN_PRS_TTL_MS} old. A request opened or merged here is read again at once
  * ({@link forgetPr}). A first read that fails rejects, as {@link openPrs} does; a later one keeps
- * the list last read.
+ * the list last read. A request a newer read found merged, closed or out of draft is as that read says.
  */
 export async function cachedOpenPrs(cwd: string, read: (cwd: string) => Promise<OpenPr[]> = openPrs): Promise<OpenPr[]> {
   const cached = await cachedRead(openPrsCacheKey(cwd), () => read(cwd), { ttlMs: OPEN_PRS_TTL_MS, budgetMs: OPEN_PRS_FIRST_MS })
   if (cached.value === undefined) throw new Error('the open pull requests could not be read')
-  return cached.value
+  return cached.value.flatMap(pr => {
+    const known = newest.get(pr.url)?.request
+    if (!known) return [pr]
+    return known.state === 'open' ? [{ ...pr, isDraft: known.draft }] : []
+  })
 }

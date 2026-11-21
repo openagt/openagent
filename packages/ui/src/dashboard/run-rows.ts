@@ -1,7 +1,7 @@
 import { hostname } from 'node:os'
 import { nodeGitRunner } from '@openagt/agent-data'
 import { isPidAlive, readAllAgents, type AgentMeta, type BranchesFor } from '../store/index.js'
-import { cachedOpenPrs, cachedPrStates, type ListedPr } from './pull-requests.js'
+import { cachedOpenPrs, cachedPrStates, type PrStates } from './pull-requests.js'
 import { projectGitHost } from '../store/git-host.js'
 import { unpublishedRuns, type Unpublished } from './unpublished.js'
 import { isHostName } from '../registry.js'
@@ -52,7 +52,7 @@ export async function withRowMarks(cwd: string, agents: AgentMeta[]): Promise<Ag
  * with its title, so the jump finds the run by it: from one cached listing of the project's
  * requests, read only when one of the runs has a request.
  */
-export async function withPrStates(cwd: string, agents: AgentMeta[], states: (cwd: string) => Promise<Map<string, ListedPr>> = cachedPrStates): Promise<AgentMeta[]> {
+export async function withPrStates(cwd: string, agents: AgentMeta[], states: (cwd: string) => Promise<PrStates> = cachedPrStates): Promise<AgentMeta[]> {
   if (!agents.some(agent => agent.pr !== undefined || agent.earlierPrs?.length)) return agents
   const known = await states(cwd)
   return agents.map(agent => {
