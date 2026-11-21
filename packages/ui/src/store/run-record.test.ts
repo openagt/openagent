@@ -102,6 +102,13 @@ test('a subagent of the coding agent\'s own reads as its event, and what it said
   assert.deepEqual(fromDiaryLine({ kind: 'action', label: 'Bash', id: 'toolu_b', subagent: 'toolu_a' }), { kind: 'driver', event: { type: 'action', label: 'Bash', id: 'toolu_b', subagent: 'toolu_a' } })
 })
 
+test('what the agent waited on in the background reads back as its event: a page opened during the wait says it', () => {
+  const at = '2026-11-21T19:13:12.000Z'
+  const tasks = [{ id: 'b1', description: 'Run the tests', command: 'pnpm test', since: '2026-11-21T19:13:10.000Z' }]
+  assert.deepEqual(fromDiaryLine({ kind: 'background', tasks, at }), { kind: 'driver', event: { type: 'background', tasks }, at })
+  assert.deepEqual(fromDiaryLine({ kind: 'background', tasks: [] }), { kind: 'driver', event: { type: 'background', tasks: [] } })
+})
+
 test('a line whose kind is no longer an event reads as nothing, so an old run shows no empty rows', () => {
   // Kinds runs wrote before OpenAgent stopped running agents: nothing reads them any more.
   assert.equal(fromDiaryLine({ kind: 'handoff', outcome: 'done', pushed: true, url: 'https://x/pr/1' }), undefined)

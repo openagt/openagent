@@ -21,9 +21,10 @@ const skip = installed.status === 0 ? false : 'no `claude` on PATH: the wire tes
 
 /**
  * Anthropic's Messages API, as far as `claude` needs it: a call with no tool result in it yet is
- * answered with a Bash call of `command`; any other with "Done.". Every call's messages are kept.
+ * answered with a Bash call of `command`, run in the background when `background` says so; any
+ * other with "Done.". Every call's messages are kept.
  */
-function standIn(command: string, asked: unknown[][]): Promise<Server> {
+function standIn(command: string, asked: unknown[][], background: boolean): Promise<Server> {
   const server = createServer((req, res) => {
     let body = ''
     req.on('data', chunk => (body += String(chunk)))
@@ -42,7 +43,7 @@ function standIn(command: string, asked: unknown[][]): Promise<Server> {
       sse('message_start', { message: { id: `msg_${asked.length}`, type: 'message', role: 'assistant', model: call.model, content: [], stop_reason: null, usage: { input_tokens: 10, output_tokens: 1 } } })
       if (run) {
         sse('content_block_start', { index: 0, content_block: { type: 'tool_use', id: `toolu_${asked.length}`, name: 'Bash', input: {} } })
-        sse('content_block_delta', { index: 0, delta: { type: 'input_json_delta', partial_json: JSON.stringify({ command, description: 'Wait' }) } })
+        sse('content_block_delta', { index: 0, delta: { type: 'input_json_delta', partial_json: JSON.stringify({ command, description: 'Wait', ...(background ? { run_in_background: true } : {}) }) } })
       } else {
         sse('content_block_start', { index: 0, content_block: { type: 'text', text: '' } })
         sse('content_block_delta', { index: 0, delta: { type: 'text_delta', text: 'Done.' } })
@@ -66,9 +67,9 @@ function within<T>(work: Promise<T>, what: string): Promise<T> {
 }
 
 /** A session of the installed claude against the stand-in, and its clean-up. */
-async function wired(command: string) {
+async function wired(command: string, { background = false, backgroundWaitMs }: { background?: boolean; backgroundWaitMs?: number } = {}) {
   const asked: unknown[][] = []
-  const server = await standIn(command, asked)
+  const server = await standIn(command, asked, background)
   const home = mkdtempSync(join(tmpdir(), 'claude-steer-home-'))
   const cwd = mkdtempSync(join(tmpdir(), 'claude-steer-cwd-'))
   const kill = new AbortController()
@@ -88,7 +89,7 @@ async function wired(command: string) {
   const events: DriverEvent[] = []
   let onAction: () => void = () => {}
   const acted = new Promise<void>(resolve => (onAction = resolve))
-  const session = await new ClaudeCodeDriver({ env, permissionMode: 'bypassPermissions' }).start({
+  const session = await new ClaudeCodeDriver({ env, permissionMode: 'bypassPermissions', ...(backgroundWaitMs !== undefined ? { backgroundWaitMs } : {}) }).start({
     cwd,
     model: 'claude-sonnet-5-5',
     signal: kill.signal,
@@ -142,6 +143,23 @@ test('the installed claude stopped mid-command ends its turn at once, stopped an
     const done = await within(turn, 'end the stopped turn')
     assert.equal(done.stopped, true)
     assert.ok(Date.now() - pressed < 8_000, `stopped in ${Date.now() - pressed} ms, not killed after the grace`)
+    assert.ok(!wire.events.some(e => e.type === 'error'), JSON.stringify(wire.events.filter(e => e.type === 'error')))
+  } finally {
+    wire.done()
+  }
+})
+
+test('the installed claude idle on a command it left running in the background says so, and its turn ends once the wait is over', { skip, timeout: 120_000 }, async () => {
+  const wire = await wired('sleep 600', { background: true, backgroundWaitMs: 3_000 })
+  try {
+    const started = Date.now()
+    const done = await within(wire.session.prompt('Go.'), 'end the turn its command outlasted')
+    assert.equal(done.text, 'Done.')
+    assert.equal(done.stopped, undefined)
+    assert.ok(Date.now() - started < 30_000, `ended in ${Date.now() - started} ms`)
+    const waits = wire.events.filter(e => e.type === 'background')
+    assert.equal(waits[0]?.type === 'background' && waits[0].tasks[0]?.command, 'sleep 600', JSON.stringify(waits))
+    assert.ok(wire.events.some(e => e.type === 'notice' && e.message.includes('`sleep 600` still ran')), JSON.stringify(wire.events.map(e => e.type)))
     assert.ok(!wire.events.some(e => e.type === 'error'), JSON.stringify(wire.events.filter(e => e.type === 'error')))
   } finally {
     wire.done()

@@ -1448,3 +1448,53 @@ describe('EventList a message just sent', () => {
     expect(screen.getByTestId('live-line').textContent).toContain('31s')
   })
 })
+
+// The agent idle on a command it left running in the background: a full test run can take twenty
+// minutes, and a line that only counts from the turn's start reads the same as a stuck agent.
+describe('EventList an agent waiting on work in the background', () => {
+  const waiting: OpenAgentEvent[] = [
+    { kind: 'driver', event: { type: 'start', prompt: 'run the tests' }, at: '2026-11-21T19:13:00.000Z' },
+    { kind: 'driver', event: { type: 'action', label: 'Bash', detail: 'pnpm test > /tmp/test.log 2>&1', id: 'toolu_1' }, at: '2026-11-21T19:13:09.000Z' },
+    { kind: 'driver', event: { type: 'output', id: 'toolu_1', text: 'Command running in background with ID: b1.' }, at: '2026-11-21T19:13:10.000Z' },
+    { kind: 'driver', event: { type: 'text', text: 'Waiting for the tests.' }, at: '2026-11-21T19:13:11.000Z' },
+    { kind: 'driver', event: { type: 'background', tasks: [{ id: 'b1', description: 'Run the tests', command: 'pnpm test > /tmp/test.log 2>&1', since: '2026-11-21T19:13:10.000Z' }] }, at: '2026-11-21T19:13:12.000Z' },
+  ]
+
+  test('says which command it waits on and how long that has run, until the agent wakes', () => {
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(new Date('2026-11-21T19:30:15.000Z'))
+      const { rerender } = render(<EventList events={waiting} working stick={false} />)
+      act(() => void vi.advanceTimersByTime(1000))
+      const line = screen.getByTestId('live-line')
+      expect(line.textContent).toContain('Waiting on a background command:')
+      expect(line.textContent).toContain('pnpm test > /tmp/test.log 2>&1')
+      expect(line.textContent).toContain('17m 6s')
+      // Not a row of the chat: the line under it says it.
+      expect(screen.queryAllByText(/pnpm test/).filter(el => !line.contains(el))).toHaveLength(1)
+      const woke: OpenAgentEvent[] = [
+        { kind: 'driver', event: { type: 'background', tasks: [] }, at: '2026-11-21T19:30:20.000Z' },
+        { kind: 'driver', event: { type: 'text', text: 'All pass.' }, at: '2026-11-21T19:30:21.000Z' },
+      ]
+      rerender(<EventList events={[...waiting, ...woke]} working stick={false} />)
+      expect(screen.getByTestId('live-line').textContent).not.toContain('Waiting on')
+      expect(screen.getByTestId('live-line').querySelector('[role="status"]')).toBeTruthy()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  test('several: names the oldest and how many more', () => {
+    const two: OpenAgentEvent = { kind: 'driver', event: { type: 'background', tasks: [{ id: 'b2', command: 'node dist/bin.js', since: '2026-11-21T19:20:00.000Z' }, { id: 'b1', command: 'pnpm test', since: '2026-11-21T19:13:10.000Z' }] } }
+    render(<EventList events={[...waiting, two]} working stick={false} />)
+    const line = screen.getByTestId('live-line')
+    expect(line.textContent).toContain('Waiting on 2 background commands:')
+    expect(line.textContent).toContain('pnpm test')
+    expect(line.textContent).toContain('and 1 more')
+  })
+
+  test('says nothing of it once the run is over', () => {
+    render(<EventList events={waiting} stick={false} />)
+    expect(screen.queryByText(/Waiting on/)).toBeNull()
+  })
+})

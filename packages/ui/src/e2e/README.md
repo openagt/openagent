@@ -16,6 +16,7 @@ A word in the prompt picks what the scripted agent does:
 | `commit` | commits a file, so its branch holds work to push |
 | `refuse` | the host refuses it, and the page says why |
 | `agents` | its coding agent starts subagents of its own, one of which fails, and it keeps working until it is stopped; with `many`, more of them |
+| `background` | its coding agent leaves the test run going in the background and waits on it, until `<checkout>/.openagent/go` or it is stopped |
 | anything else | answers `done: <prompt>`, and the run ends |
 
 ## The backend stories: `story-*.test.ts`

@@ -28,6 +28,7 @@ export {
   type DriverStartOptions,
   type DriverTurn,
   type DriverUsage,
+  type BackgroundTask,
   type FileChange,
   type InboxLine,
   type LogCard,

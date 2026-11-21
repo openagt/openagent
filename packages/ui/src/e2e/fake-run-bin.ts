@@ -17,6 +17,8 @@
 //   "commit"  the run commits a file, so its branch holds work to push;
 //   "agents"  the run's coding agent starts subagents of its own, one of which fails, and the run
 //             keeps working until it is stopped; "many" starts more of them;
+//   "background" the run's coding agent leaves the test run going in the background and waits on
+//             it, until `<checkout>/.openagent/go` (the run passes) or it is stopped;
 //   "fails"   the run fails.
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { hostname } from 'node:os'
@@ -45,6 +47,16 @@ const CALL_SUBAGENTS: Array<[string, 'working' | 'ended' | 'failed', number]> = 
 /** What "many" adds: ended ones, so the list holds more than it shows at once. */
 const MORE_SUBAGENTS = ['Order table contrast', 'Dark images for the avatars', 'Focus rings in dark', 'Charts in dark', 'Email preview in dark', 'Print styles', 'Docs for the switch', 'Changelog line']
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+
+/** What a `background` run does before it holds: its prompt, the test run it leaves going in the background, and its wait on it. */
+async function startInBackground(prompt: string, log: SessionLog): Promise<void> {
+  const command = 'pnpm test > /tmp/test.log 2>&1; echo exit=$?'
+  await log.record(startEvent(prompt, {}))
+  await log.record({ type: 'action', label: 'Bash', detail: command, summary: 'Run the whole suite', id: 'toolu_tests' })
+  await log.record({ type: 'output', id: 'toolu_tests', text: 'Command running in background with ID: b1. You will be notified when it completes.' })
+  await log.record({ type: 'text', text: 'The whole suite takes about 15 minutes. I will check its result when it finishes.' })
+  await log.record({ type: 'background', tasks: [{ id: 'b1', description: 'Run the whole suite', command, since: new Date().toISOString() }] })
+}
 
 /**
  * What an `agents` run does before it holds: its prompt, a word on the plan, and its coding agent's
@@ -131,13 +143,15 @@ async function session(id: string, checkout: string, prompt: string, card: Omit<
   let lastText = ''
   const fansOut = prompt.includes('agents') && !continued
   const told = fansOut ? await startSubagents(prompt, log, stop.signal) : undefined
+  const waitsOnCommand = prompt.includes('background') && !continued
+  if (waitsOnCommand) await startInBackground(prompt, log)
   const ended = told?.()
   try {
     if (prompt.includes('fails')) {
       await log.record({ type: 'error', message: FAILURE })
       throw new Error(FAILURE)
     }
-    if (prompt.includes('hold') || fansOut) {
+    if (prompt.includes('hold') || fansOut || waitsOnCommand) {
       while (!stop.signal.aborted && !(await exists(join(dir, 'go')))) {
         // Its checkout removed under it (the demo's home gone): nothing is left to release it or to write to.
         if (!(await exists(checkout))) return
@@ -153,7 +167,12 @@ async function session(id: string, checkout: string, prompt: string, card: Omit<
     // The run asks as one with ask on asks: its message's block is its question.
     // The images its start or its resume went with, as agent-runner hands them to the agent with the prompt.
     const images = process.env['IMAGES']?.split(',').filter(Boolean) ?? []
-    if (!fansOut) lastText = (await driverSession.prompt(prompt, { inbox: join(dir, 'inbox.jsonl'), questionIn: parseQuestion, ...(continued ? { resume: true } : {}), ...(images.length > 0 ? { images } : {}) })).text
+    if (waitsOnCommand && !stop.signal.aborted) {
+      await log.record({ type: 'background', tasks: [] })
+      await log.record({ type: 'text', text: 'All 665 tests pass.' })
+      lastText = 'All 665 tests pass.'
+    }
+    if (!fansOut && !waitsOnCommand) lastText = (await driverSession.prompt(prompt, { inbox: join(dir, 'inbox.jsonl'), questionIn: parseQuestion, ...(continued ? { resume: true } : {}), ...(images.length > 0 ? { images } : {}) })).text
   } catch {
     status = 'failed'
   }

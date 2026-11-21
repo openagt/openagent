@@ -87,6 +87,7 @@ function eventOf(line: AnyDiaryLine): OpenAgentEvent | undefined {
     case 'subagent':
     case 'tokens':
     case 'thinking':
+    case 'background':
     case 'rate-limit':
     case 'notice': {
       const { kind, ...rest } = line

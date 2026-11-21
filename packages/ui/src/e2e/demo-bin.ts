@@ -59,6 +59,7 @@ console.log(`
     commit   commits a file, so its branch has work on it
     refuse   fails to start, and the page says why
     agents   starts subagents, and keeps working until you stop it
+    background  leaves a test run going in the background, and waits on it until you stop it
   Any other prompt is answered at once, and the run ends.
 
   The project "shop" has a run in each state, and two tickets.
