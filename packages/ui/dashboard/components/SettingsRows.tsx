@@ -81,7 +81,7 @@ export function SettingsRow({
 }
 
 /**
- * Things listed in an entry (devices, folders): rows on the dialog's inset with no card and no rule,
+ * Things listed in an entry (folders, skills): rows on the dialog's inset with no card and no rule,
  * 24 apart (44 from row to row with one line, 64 with two), each lit by a fill its own padding
  * pulls out past the inset, so lighting one moves nothing. As a {@link Panel} does, it lays out its
  * rows' columns: what a row has at its right stands in one column as wide as the widest row's, its

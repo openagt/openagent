@@ -5,9 +5,9 @@ import { membersOf, peopleWithRuns, type Member, type PersonActivity } from '../
 // package's server part reads each (what `logs people --local` prints), the same person counted
 // once, across projects and across the emails of one account at the git host: whoever started
 // agents or committed to the main branch. Each by the name git knows them by, with their runs and
-// what they cost (as the dashboard lists the runs, so another computer's are as it says them),
-// their commits, whether a run of theirs is going now or waits on an answer, and when they last did
-// either; the person at this computer marked. Its title opens the Logs page, where each run is.
+// what they cost (as the dashboard lists the runs), their commits, whether a run of theirs is
+// going now or waits on an answer, and when they last did either; the person at this computer
+// marked. Its title opens the Logs page, where each run is.
 // Each with their picture, where the project's git host knows the account behind their email
 // (asked of the shell, which keeps the answer a day); else two letters of their name.
 

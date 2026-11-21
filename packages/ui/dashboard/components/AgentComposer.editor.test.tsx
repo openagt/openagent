@@ -15,23 +15,20 @@ vi.mock('../lib/preferences.js', () => ({
 }))
 vi.mock('../lib/editors.js', () => ({ useDetectedEditors: () => [] }))
 vi.mock('../rpc/projects.js', () => ({ onProjects: () => Promise.resolve([]), onCommands: vi.fn(async () => ({ commands: [] })) }))
-vi.mock('../rpc/machines.js', async () => (await import('../test-machines.js')).machinesRpc)
 vi.mock('../lib/use-project-launcher.js', async importOriginal => ({ ...(await importOriginal<object>()), useProjectLauncher: () => ({ gitHost: true, remote: true }) }))
 vi.mock('./AutoMenu.js', () => ({ AutoMenu: () => null }))
 vi.mock('./ContextMenu.js', () => ({ ProjectContextMenu: ({ context }: { context: Set<string> }) => <span data-testid="context">{[...context].join(', ')}</span> }))
 vi.mock('./PresetMenu.js', () => ({ PresetOff: () => null }))
 vi.mock('./SkillsMenu.js', () => ({ SkillsOff: () => null }))
 vi.mock('./GitHosts.js', () => ({ GitHostOff: () => null }))
-import { saveMachines } from '../test-machines.js'
 import { keptDraft } from '../lib/draft-handoff.js'
 
 const { AgentComposer } = await import('./AgentComposer.js')
 const { useContextSet } = await import('../lib/use-context-set.js')
 
-beforeEach(async () => {
+beforeEach(() => {
   localStorage.clear()
   sendMessage.mockReset()
-  await saveMachines()
 })
 afterEach(cleanup)
 

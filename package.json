@@ -15,8 +15,6 @@
     "demo": "pnpm build && pnpm -C packages/ui demo",
     "typecheck": "pnpm -r run typecheck",
     "clean": "pnpm -r run clean",
-    "// Try this checkout on a server before publishing: what Update does, with this build in place of npm's": "",
-    "try-on-server": "node scripts/try-on-server.mjs",
     "// Every package's tests, also after one fails: one run says everything that is wrong": "",
     "test": "pnpm -r --workspace-concurrency=1 --no-bail run test",
     "========= Website": "",

@@ -5,16 +5,7 @@ import { connect } from 'node:net'
 import { makeRpcMount } from './rpc-serve.js'
 import type { DashboardContext } from '../dashboard-rpc/context.js'
 import { RPC_HANDLERS } from '../dashboard-rpc/index.js'
-import { NO_ELSEWHERE, testDashboardContext } from '../dashboard-rpc/test-context.js'
-import { elsewhereId } from './elsewhere.js'
-import { mkdtemp, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { projectId } from '@openagt/agent-data'
-import { addProject } from '../registry.js'
-import { EventStream } from '../event-stream.js'
-import type { OpenAgentEvent } from '../events.js'
-import type { LiveFeedEvent } from '../dashboard-rpc/events.js'
+import { testDashboardContext } from '../dashboard-rpc/test-context.js'
 
 // F3: the dashboard's transport is `POST /_rpc/<name>` and `GET /_rpc/events`, where it used to be
 // Telefunc. The CSRF and rebound-Host guards are covered in server.test.ts, which exercises them
@@ -83,7 +74,7 @@ test('every RPC the modules export is dispatchable by its own name', () => {
   // The registry is built from the modules' exports rather than a hand-written list, which is what
   // makes "exported but never registered" impossible — the failure that shipped per-project
   // preferences broken (#866) as a 400 with nothing else to go on.
-  for (const name of ['onAgents', 'onProjects', 'sendStop', 'onPreferences', 'onQuota', 'onMachines']) {
+  for (const name of ['onAgents', 'onProjects', 'sendStop', 'onPreferences', 'onQuota']) {
     assert.equal(typeof RPC_HANDLERS[name], 'function', name)
   }
 })
@@ -100,58 +91,15 @@ test('a call reaches its handler and comes back as JSON', async () => {
   }
 })
 
-test("a module's function is called at /_rpc/<module>/<name> with the project and its input, another computer's project's at that computer; the page's own RPCs take no module", async () => {
-  const forwarded: [string, string, unknown[]][] = []
-  const base = testDashboardContext()
-  const server = await mounted({
-    remote: {
-      ...base.remote,
-      ...NO_ELSEWHERE,
-      forward: async (project, fn, args) => {
-        forwarded.push([project, fn, args])
-        return { ok: true, output: 'by the laptop' }
-      },
-    },
-  })
+test("a module's function is called at /_rpc/<module>/<name> with the project and its input; the page's own RPCs take no module", async () => {
+  const server = await mounted()
   const files = `${encodeURIComponent('@openagt/ui-pane-files')}/tree`
-  const there = elsewhereId('shop-1abc', 'http://127.0.0.1:4210')
   try {
     // A project this computer does not know: the call's own refusal, travelling back.
     assert.deepEqual(JSON.parse((await call(server.url, files, ['nowhere-1', { agentId: 'run-1' }])).body), { ret: { ok: false, error: 'unknown project' } })
-    // Another computer's project: passed on as the relay names the call, with the module and the function the path says.
-    assert.deepEqual(JSON.parse((await call(server.url, files, [there, { agentId: 'run-1' }])).body), { ret: { ok: true, output: 'by the laptop' } })
-    assert.deepEqual(forwarded, [[there, 'callModule', [there, '@openagt/ui-pane-files', 'tree', { agentId: 'run-1' }]]])
     // The page's own RPCs are reached by their name alone: the call of a module's function is none of them, and a path with a bad escape names no module.
     assert.equal((await call(server.url, 'callModule', ['p1', '@openagt/ui-pane-files', 'tree', {}])).status, 404)
     assert.equal((await call(server.url, '%zz/tree', ['p1', {}])).status, 404)
-  } finally {
-    await server.close()
-  }
-})
-
-test("a call about another computer's project goes to that computer, as it is; a start, and any call about a project of this computer's, run here", async () => {
-  const forwarded: [string, string, unknown[]][] = []
-  const base = testDashboardContext()
-  const server = await mounted({
-    remote: {
-      ...base.remote,
-      ...NO_ELSEWHERE,
-      forward: async (project, fn, args) => {
-        forwarded.push([project, fn, args])
-        return { said: 'by the laptop' }
-      },
-    },
-  })
-  const there = elsewhereId('shop-1abc', 'http://127.0.0.1:4210')
-  try {
-    assert.deepEqual(JSON.parse((await call(server.url, 'onCommands', [there])).body), { ret: { said: 'by the laptop' } })
-    assert.deepEqual(forwarded, [[there, 'onCommands', [there]]])
-    // A start goes where "Run on" says, which the daemon decides: the handler runs.
-    assert.deepEqual(JSON.parse((await call(server.url, 'sendStart', [there, 'do a thing'])).body), { ret: { ok: false, error: 'not wired in this test' } })
-    // A call no other computer answers, and one about a project of this computer's, are this computer's.
-    await call(server.url, 'onAgents', [there])
-    await call(server.url, 'onCommands', ['shop-1abc'])
-    assert.equal(forwarded.length, 1)
   } finally {
     await server.close()
   }
@@ -256,191 +204,17 @@ test('the event stream ends cleanly when there is nothing to stream', async () =
   }
 })
 
-test('the event stream sends one SSE frame per event', async () => {
-  // A relayed agent (#1067): an in-memory source, which is the branch that does not tail a file.
-  async function* source() {
-    yield { kind: 'session-update', sessionId: 'one' } as const
-    yield { kind: 'session-update', sessionId: 'two' } as const
-  }
-  const server = await mounted({ eventsSource: () => ({ length: 2, [Symbol.asyncIterator]: source }) })
-  try {
-    const res = await fetch(`${server.url}/_rpc/events?projectId=p1&agentId=r1`)
-    const text = await res.text()
-    const events = text
-      .split('\n\n')
-      .filter(Boolean)
-      .map(frame => JSON.parse(frame.replace(/^data: /, '')) as LiveFeedEvent)
-    assert.deepEqual(events.map(e => (e.kind === 'session-update' ? e.sessionId : e.kind)), ['one', 'two', 'stream-sync'])
-  } finally {
-    await server.close()
-  }
-})
-
-test('the event stream of a run held here marks the end of what it held when the page subscribed, at once when it held none', async () => {
-  // A run relayed from a saved machine: the page tells the events this computer held from the ones that come after.
-  const held = new EventStream<OpenAgentEvent>()
-  held.push({ kind: 'session-update', sessionId: 'one' })
-  held.push({ kind: 'session-update', sessionId: 'two' })
-  const streams: Record<string, EventStream<OpenAgentEvent>> = { held, none: new EventStream<OpenAgentEvent>() }
-  let subscribed = (): void => {}
-  const server = await mounted({
-    eventsSource: (_projectId, agentId) => {
-      subscribed()
-      return streams[agentId!]
-    },
-  })
-  const frames = async (agentId: string): Promise<string[]> => {
-    const subscribing = new Promise<void>(resolve => (subscribed = resolve))
-    const res = await fetch(`${server.url}/_rpc/events?projectId=p1&agentId=${agentId}`)
-    await subscribing
-    streams[agentId]!.push({ kind: 'session-update', sessionId: 'later' })
-    streams[agentId]!.close()
-    return (await res.text())
-      .split('\n\n')
-      .filter(Boolean)
-      .map(frame => JSON.parse(frame.replace(/^data: /, '')) as LiveFeedEvent)
-      .map(event => (event.kind === 'session-update' ? event.sessionId : event.kind))
-  }
-  try {
-    assert.deepEqual(await frames('held'), ['one', 'two', 'stream-sync', 'later'])
-    assert.deepEqual(await frames('none'), ['stream-sync', 'later'])
-  } finally {
-    await server.close()
-  }
-})
-
-/** A run's live source that says nothing until it is stopped, counting how often it was started and stopped. */
-function quietSource() {
-  const counts = { started: 0, stopped: 0 }
-  const source = (): AsyncIterable<never> & { length: number } => ({
-    length: 0,
-    [Symbol.asyncIterator]() {
-      counts.started++
-      let said: ((result: IteratorResult<never>) => void) | undefined
-      return {
-        next: () => new Promise(resolve => (said = resolve)),
-        return: async () => {
-          counts.stopped++
-          said?.({ done: true, value: undefined })
-          return { done: true, value: undefined }
-        },
-      }
-    },
-  })
-  return { counts, source }
-}
-
-/** Until `done` holds, or a second has gone. */
-async function until(done: () => boolean): Promise<void> {
-  for (let i = 0; i < 100 && !done(); i++) await new Promise(resolve => setTimeout(resolve, 10))
-}
-
-test('the event stream of a run that has said nothing yet answers its headers at once, and the page leaving stops its source', async () => {
-  const { counts, source } = quietSource()
-  const server = await mounted({ eventsSource: source })
-  const page = new AbortController()
-  try {
-    const answered = fetch(`${server.url}/_rpc/events?projectId=p1&agentId=r1`, { signal: page.signal })
-    const res = await Promise.race([answered, new Promise<'no headers'>(resolve => setTimeout(() => resolve('no headers'), 1000))])
-    assert.notEqual(res, 'no headers')
-    assert.match((res as Response).headers.get('content-type') ?? '', /text\/event-stream/)
-    await until(() => counts.started === 1)
-    page.abort()
-    await until(() => counts.stopped === 1)
-    assert.deepEqual(counts, { started: 1, stopped: 1 })
-  } finally {
-    page.abort()
-    await server.close()
-  }
-})
-
-test('a page that leaves while its feed is still being set up stops the source that comes up after', async () => {
-  // The run is on a saved machine whose lookup is slow: the headers have gone, the source is not there yet.
-  let looking = (): void => {}
-  const looked = new Promise<void>(resolve => (looking = resolve))
-  let answerLookup = (): void => {}
-  const lookup = new Promise<void>(resolve => (answerLookup = resolve))
-  let left = (): void => {}
-  const gone = new Promise<void>(resolve => (left = resolve))
-  const { counts, source } = quietSource()
-  const base = testDashboardContext()
-  const server = await mounted(
-    {
-      eventsSource: source,
-      remote: {
-        ...base.remote,
-        follow: async () => {
-          looking()
-          await lookup
-        },
-      },
-    },
-    req => req.on('close', left),
-  )
-  const page = new AbortController()
-  try {
-    const res = await fetch(`${server.url}/_rpc/events?projectId=p1&agentId=r1`, { signal: page.signal })
-    assert.match(res.headers.get('content-type') ?? '', /text\/event-stream/)
-    await looked
-    page.abort()
-    await gone
-    answerLookup()
-    await until(() => counts.stopped === 1)
-    assert.deepEqual(counts, { started: 1, stopped: 1 })
-  } finally {
-    page.abort()
-    answerLookup()
-    await server.close()
-  }
-})
-
-test("the changes stream tells the page each time a project's runs change on a saved machine, until the page goes", async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'openagent-changes-'))
-  await addProject(dir, new Date().toISOString())
-  const listening = new Map<string, () => void>()
-  let stopped = 0
-  const remote = testDashboardContext().remote
-  const server = await mounted({
-    remote: {
-      ...remote,
-      followRuns: (path, changed) => {
-        listening.set(path, changed)
-        return () => void stopped++
-      },
-    },
-  })
+test('the changes stream answers as Server-Sent Events, and says at once that it listens', async () => {
+  const server = await mounted()
   const page = new AbortController()
   try {
     const res = await fetch(`${server.url}/_rpc/changes`, { signal: page.signal })
     assert.equal(res.status, 200)
     assert.match(res.headers.get('content-type') ?? '', /text\/event-stream/)
-    const reader = res.body!.getReader()
-    const decoder = new TextDecoder()
-    let text = ''
-    const frames = async (count: number): Promise<string[]> => {
-      for (;;) {
-        const told = text.split('\n\n').filter(frame => frame.startsWith('data: '))
-        if (told.length >= count) return told.map(frame => frame.slice('data: '.length))
-        const { value, done } = await reader.read()
-        if (done) return told
-        text += decoder.decode(value, { stream: true })
-      }
-    }
-    // Waited for as long as a busy test machine takes to start listening: the wait ends once it does.
-    for (let i = 0; i < 500 && !listening.has(dir); i++) await new Promise(resolve => setTimeout(resolve, 10))
-    // Two changes at once are told once.
-    listening.get(dir)!()
-    listening.get(dir)!()
-    assert.deepEqual((await frames(1)).map(frame => JSON.parse(frame) as unknown), [{ kind: 'runs', projectId: projectId(dir) }])
-    listening.get(dir)!()
-    assert.equal((await frames(2)).length, 2)
-    page.abort()
-    // Both followed on the machines stop with the page: the project, and the sessions with no project.
-    for (let i = 0; i < 500 && stopped < 2; i++) await new Promise(resolve => setTimeout(resolve, 10))
-    assert.equal(stopped, 2)
+    const { value } = await res.body!.getReader().read()
+    assert.equal(new TextDecoder().decode(value), ': listening\n\n')
   } finally {
     page.abort()
     await server.close()
-    await rm(dir, { recursive: true, force: true })
   }
 })

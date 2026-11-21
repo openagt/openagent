@@ -29,8 +29,6 @@ const RUN_STATES: Record<string, RunState> = {
   stopped: { word: 'stopped', said: 'stopped', cell: 'stopped', tone: 'text-warning', line: QUIET },
   failed: { word: 'failed', said: 'failed', cell: 'failed', tone: 'text-danger', line: 'text-danger' },
   merged: { word: 'merged', said: 'merged', cell: 'merged', tone: 'text-muted-foreground', line: QUIET },
-  // Its computer does not answer: nothing known to be going.
-  unknown: { word: 'status unknown', said: 'its computer is offline', cell: 'idle', tone: 'text-muted-foreground', line: QUIET },
 }
 
 /** A state this table does not name reads as itself, its hexagon empty. */

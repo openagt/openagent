@@ -38,7 +38,7 @@ test('a distribution that is wrong is refused, saying what is wrong', () => {
   refused([{ module: defineModule({ name: 'github', hooks: {} }) }, { module: defineModule({ name: 'github', hooks: {} }) }], /Two modules are named github/)
   refused([{ module: { name: 'github', hooks: { 'run.steps': [] } } as unknown as ModuleDefinition }], /github fills run.steps, which is no hook/)
   refused([{ module: defineModule({ name: 'github', hooks: {} }), on: true }], /github is a core module, always on/)
-  refused([{ module: { name: 'devices', plugin: { scope: 'machine' }, hooks: {} } as unknown as ModuleDefinition }], /devices keeps its Enabled row nowhere/)
+  refused([{ module: { name: 'notifications-command', plugin: { scope: 'machine' }, hooks: {} } as unknown as ModuleDefinition }], /notifications-command keeps its Enabled row nowhere/)
   refused([{ module: defineModule({ name: 'github', hooks: { 'run.step': [{ order: Number.NaN, name: 'account', run: () => {} }] } }) }], /github's step "account" stands at no order/)
   refused([{ module: defineModule({ name: 'store-git-branch', plugin: { scope: 'project', row: { read: async () => false, settings: 'project-agent-data' } }, hooks: {} }), on: true }], /store-git-branch keeps its own row: it starts as its row says/)
   refused([{ module: defineModule({ name: 'host-claude-web', hooks: { 'app.route': [{ path: '/bridge', handle: () => {} }] } }) }], /host-claude-web's route "\/bridge" is no route's path/)
@@ -65,17 +65,17 @@ test('a plugin is off until its Enabled row is on, in the scope it keeps the row
   const hooks = hooksOf([
     { module: defineModule({ name: 'tickets', plugin: { scope: 'project' }, hooks: {} }) },
     { module: defineModule({ name: 'queue', plugin: { scope: 'project' }, hooks: {} }), on: true },
-    { module: defineModule({ name: 'devices', plugin: { scope: 'computer' }, hooks: {} }) },
+    { module: defineModule({ name: 'notifications-command', plugin: { scope: 'computer' }, hooks: {} }) },
     { module: defineModule({ name: 'ask', plugin: { scope: 'computer' }, hooks: {} }), on: true },
     { module: defineModule({ name: 'github', hooks: {} }) },
   ])
   assert.equal(await hooks.enabled('github'), true)
   assert.equal(await hooks.enabled('ask'), true, 'the distribution starts ask on')
-  assert.equal(await hooks.enabled('devices'), false)
+  assert.equal(await hooks.enabled('notifications-command'), false)
   assert.equal(await hooks.enabled('tickets', P1), false)
   await hooks.setEnabled('tickets', true, P1)
   await hooks.setEnabled('queue', false, P1)
-  await hooks.setEnabled('devices', true)
+  await hooks.setEnabled('notifications-command', true)
   await hooks.setEnabled('ask', false)
   assert.equal(await hooks.enabled('tickets', P1), true)
   assert.equal(await hooks.enabled('tickets', P2), false, 'each project has its own row')
@@ -83,7 +83,7 @@ test('a plugin is off until its Enabled row is on, in the scope it keeps the row
   assert.equal(await hooks.enabled('queue', P2), true)
   assert.equal(await hooks.enabled('tickets'), false, 'a plugin kept per project, where no project is named, is as the distribution starts it: off')
   assert.equal(await hooks.enabled('queue'), true, 'or on')
-  assert.equal(await hooks.enabled('devices'), true)
+  assert.equal(await hooks.enabled('notifications-command'), true)
   assert.equal(await hooks.enabled('ask'), false)
   assert.equal(await hooks.enabled('nothing'), false)
   await assert.rejects(hooks.setEnabled('github', false), /github is a core module, always on/)
@@ -143,15 +143,15 @@ test("a question of every module's rows reads each scope's settings once, and on
       { module: defineModule({ name: 'tickets', plugin: { scope: 'project' }, hooks: { 'run.step': [step('tickets')] } }), on: true },
       { module: defineModule({ name: 'queue', plugin: { scope: 'project' }, hooks: { 'run.step': [step('queue')] } }), on: true },
       { module: defineModule({ name: 'browser', plugin: { scope: 'project' }, hooks: { 'run.step': [step('browser')] } }) },
-      { module: defineModule({ name: 'devices', plugin: { scope: 'computer' }, hooks: { 'run.step': [step('devices')] } }), on: true },
+      { module: defineModule({ name: 'notifications-command', plugin: { scope: 'computer' }, hooks: { 'run.step': [step('notifications-command')] } }), on: true },
       { module: defineModule({ name: 'discord', plugin: { scope: 'person' }, hooks: { 'app.attention': async () => [] } }), on: true },
     ],
     { onError: () => {} },
   )
-  assert.deepEqual((await hooks.steps({ project: P1, options: {} })).map(one => one.name), ['tickets', 'queue', 'devices'])
+  assert.deepEqual((await hooks.steps({ project: P1, options: {} })).map(one => one.name), ['tickets', 'queue', 'notifications-command'])
   assert.deepEqual(reads.sort(), ['computer settings.json', 'project settings.json'], "discord's row is not read: it gives no step")
   reads.length = 0
-  assert.deepEqual((await hooks.on(P1)).map(module => module.name), ['store-filesystem', 'tickets', 'queue', 'devices', 'discord'])
+  assert.deepEqual((await hooks.on(P1)).map(module => module.name), ['store-filesystem', 'tickets', 'queue', 'notifications-command', 'discord'])
   assert.deepEqual(reads.sort(), ['computer settings.json', 'person settings.json', 'project settings.json'])
 })
 
@@ -211,7 +211,7 @@ test('a second skill, coding agent or host of one name is left out and told; a h
       },
       {
         module: defineModule({
-          name: 'devices',
+          name: 'notifications-command',
           hooks: {
             'run.host': [fakeHost({ id: 'here' }), fakeHost({ id: 'there' })],
             'app.attention': () => [{ kind: 'waiting', scope: 'run', run: 'r1', words: 'Needs an answer', fix: { label: 'Answer', action: 'answer' } }],
@@ -225,12 +225,12 @@ test('a second skill, coding agent or host of one name is left out and told; a h
   assert.deepEqual((await hooks.agents()).map(agent => agent.id), ['claude-code'])
   assert.deepEqual((await hooks.hosts()).map(host => host.id), ['here', 'there'])
   // The module that threw gave nothing, and says the read is not whole: its items are not known to be gone.
-  assert.deepEqual(await hooks.attention({}), { items: [{ kind: 'waiting', scope: 'run', run: 'r1', words: 'Needs an answer', fix: { label: 'Answer', action: 'answer' }, module: 'devices' }], whole: false })
+  assert.deepEqual(await hooks.attention({}), { items: [{ kind: 'waiting', scope: 'run', run: 'r1', words: 'Needs an answer', fix: { label: 'Answer', action: 'answer' }, module: 'notifications-command' }], whole: false })
   assert.deepEqual(messages(errors), [
     'broken run.skills: no skills today',
     'copycat run.skills: agent-driver-claude-code gives a skill named shared already',
     'copycat run.agent: agent-driver-claude-code gives a coding agent claude-code already',
-    'devices run.host: broken gives a host here already',
+    'notifications-command run.host: broken gives a host here already',
     'broken app.attention: no idea',
   ])
 })
@@ -294,7 +294,7 @@ test("the app's life: modules start where they are on, one that keeps its own ro
     [
       { module: defineModule({ name: 'projects', hooks: { 'app.lifecycle': lifecycle('projects') } }) },
       { module: defineModule({ name: 'github-auto-reply', plugin: { scope: 'project' }, hooks: { 'app.lifecycle': lifecycle('auto-reply') } }) },
-      { module: defineModule({ name: 'devices', plugin: { scope: 'computer' }, hooks: { 'app.lifecycle': lifecycle('devices') } }) },
+      { module: defineModule({ name: 'notifications-command', plugin: { scope: 'computer' }, hooks: { 'app.lifecycle': lifecycle('notifications-command') } }) },
       {
         module: defineModule({
           name: 'scheduled-agents',
@@ -328,7 +328,7 @@ test("the app's life: modules start where they are on, one that keeps its own ro
     'scheduler added p3',
     'projects removed p1',
     'auto-reply removed p1',
-    'devices removed p1',
+    'notifications-command removed p1',
     'scheduler removed p1',
     'folder sync removed p1',
     'folder sync stopping',
@@ -345,38 +345,38 @@ test('once the app started, a plugin kept per person or per computer starts and 
   const lifecycle = (name: string): AppLifecycle => ({
     started: app => {
       signals.push(app.signal)
-      seen.push(`${name} started at ${app.url} as ${app.computer}`)
+      seen.push(`${name} started at ${app.url}`)
     },
     stopping: () => void seen.push(`${name} stopping`),
   })
   const hooks = hooksOf([
     { module: defineModule({ name: 'projects', hooks: { 'app.lifecycle': lifecycle('projects') } }) },
-    { module: defineModule({ name: 'devices', plugin: { scope: 'computer' }, hooks: { 'app.lifecycle': lifecycle('devices') } }) },
+    { module: defineModule({ name: 'notifications-command', plugin: { scope: 'computer' }, hooks: { 'app.lifecycle': lifecycle('notifications-command') } }) },
     { module: defineModule({ name: 'discord', plugin: { scope: 'person' }, hooks: { 'app.lifecycle': lifecycle('discord') } }), on: true },
     { module: defineModule({ name: 'tickets', plugin: { scope: 'project' }, hooks: { 'app.lifecycle': lifecycle('tickets') } }) },
   ])
-  await hooks.setEnabled('devices', false)
+  await hooks.setEnabled('notifications-command', false)
   const app = new AbortController()
-  await hooks.started({ signal: app.signal, url: 'http://127.0.0.1:4200', computer: 'c1' })
-  await hooks.setEnabled('devices', true)
-  await hooks.setEnabled('devices', true)
+  await hooks.started({ signal: app.signal, url: 'http://127.0.0.1:4200' })
+  await hooks.setEnabled('notifications-command', true)
+  await hooks.setEnabled('notifications-command', true)
   await hooks.setEnabled('tickets', true, P1)
   await hooks.setEnabled('discord', false)
   assert.deepEqual(seen.splice(0), [
-    'projects started at http://127.0.0.1:4200 as c1',
-    'discord started at http://127.0.0.1:4200 as c1',
-    'tickets started at http://127.0.0.1:4200 as c1',
-    'devices started at http://127.0.0.1:4200 as c1',
+    'projects started at http://127.0.0.1:4200',
+    'discord started at http://127.0.0.1:4200',
+    'tickets started at http://127.0.0.1:4200',
+    'notifications-command started at http://127.0.0.1:4200',
     'discord stopping',
   ])
   assert.deepEqual(signals.map(signal => signal.aborted), [false, true, false, false], "discord's signal is aborted: it was switched off")
   app.abort()
   await hooks.stopping()
-  assert.deepEqual(seen, ['devices stopping', 'tickets stopping', 'projects stopping'], 'the last started stops first')
+  assert.deepEqual(seen, ['notifications-command stopping', 'tickets stopping', 'projects stopping'], 'the last started stops first')
   assert.deepEqual(signals.map(signal => signal.aborted), [true, true, true, true])
-  await hooks.setEnabled('devices', false)
-  await hooks.setEnabled('devices', true)
-  assert.deepEqual(seen, ['devices stopping', 'tickets stopping', 'projects stopping'], 'nothing starts once the app stopped')
+  await hooks.setEnabled('notifications-command', false)
+  await hooks.setEnabled('notifications-command', true)
+  assert.deepEqual(seen, ['notifications-command stopping', 'tickets stopping', 'projects stopping'], 'nothing starts once the app stopped')
 })
 
 test("a distribution is loaded from its packages' ./module entries, through the import it passes", async () => {
@@ -432,7 +432,7 @@ test("a distribution handed down is loaded from its file, each package resolved 
 
 test('with no store in the distribution, a plugin is off, and why is told', async () => {
   const errors: HandlerError[] = []
-  const hooks = createHooks([{ module: defineModule({ name: 'devices', plugin: { scope: 'computer' }, hooks: {} }), on: true }], { onError: error => errors.push(error) })
-  assert.equal(await hooks.enabled('devices'), false)
-  assert.deepEqual(messages(errors), ['devices enabled: No store keeps the computer data'])
+  const hooks = createHooks([{ module: defineModule({ name: 'notifications-command', plugin: { scope: 'computer' }, hooks: {} }), on: true }], { onError: error => errors.push(error) })
+  assert.equal(await hooks.enabled('notifications-command'), false)
+  assert.deepEqual(messages(errors), ['notifications-command enabled: No store keeps the computer data'])
 })

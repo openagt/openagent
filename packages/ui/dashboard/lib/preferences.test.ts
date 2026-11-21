@@ -123,8 +123,8 @@ describe('preferences', () => {
 
   test('a failed write leaves the optimistic value in place', async () => {
     onPreferences.mockResolvedValue({ theme: 'dark' })
-    // What a host with no preferences store (the relay) answers.
-    patchPreferences.mockResolvedValue({ ok: false, error: 'preferences are not enabled on this server' })
+    // What a daemon that could not save answers.
+    patchPreferences.mockResolvedValue({ ok: false, error: 'failed to save preferences' })
     const { usePreferences, updatePreferences } = await import('./preferences.js')
 
     const { result } = renderHook(() => usePreferences())

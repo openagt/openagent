@@ -1,11 +1,11 @@
 import { strict as assert } from 'node:assert'
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, stat } from 'node:fs/promises'
 import { hostname, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import type { AgentAccount, AgentLogins, SignInSaid } from '@openagt/hooks'
 import { runAdding, type AddingNow } from './adding.js'
-import { accountsPath, addAccount, copiedPath, markLimited, nameOwnAccount, readAccounts } from './accounts.js'
+import { accountsPath, addAccount, markLimited, nameOwnAccount, readAccounts } from './accounts.js'
 import { runCli, USAGE } from './cli.js'
 import { testLogins } from './test-logins.js'
 import { loginWiring, type LoginWiring } from './wiring.js'
@@ -46,7 +46,10 @@ async function run(argv: string[], env: NodeJS.ProcessEnv, more: Partial<LoginWi
   return { code, out, err }
 }
 
-const adding = async (env: NodeJS.ProcessEnv, list: 'claude' | 'codex' = 'claude'): Promise<AddingNow> => (JSON.parse((await run(['adding'], env)).out[0]!) as Record<string, AddingNow>)[list]!
+const adding = async (env: NodeJS.ProcessEnv, list: 'claude' | 'codex' = 'claude', more: Partial<LoginWiring> = {}): Promise<AddingNow> => (JSON.parse((await run(['adding'], env, more)).out[0]!) as Record<string, AddingNow>)[list]!
+
+/** A computer with no browser: the person signs in on another device. */
+const noBrowser: Partial<LoginWiring> = { headless: () => true }
 
 const names = (answer: Run, list?: 'claude' | 'codex'): string[] => {
   const said = JSON.parse(answer.out[0]!) as { name: string }[] | Record<string, { name: string }[]>
@@ -155,25 +158,9 @@ test('list names the lists whose agent is not installed, and only those', () =>
     assert.deepEqual(await said(['claude', 'codex']), [])
   }))
 
-test('list says which computer handed an account over, only the list it is of, and only on a row it has', () =>
-  inDir(async env => {
-    addAccount('Dani', 'login-dani', accountsPath('claude', env))
-    addAccount('Rom', 'login-rom', accountsPath('claude', env))
-    addAccount('Dani', 'codex-dani', accountsPath('codex', env))
-    await mkdir(env['XDG_CONFIG_HOME']!, { recursive: true })
-    await writeFile(copiedPath(env), JSON.stringify({ logins: [{ kind: 'claude', name: 'Dani', from: 'Studio' }, { kind: 'git', host: 'github.com', name: 'Rom', from: 'Studio' }, { kind: 'claude', name: 'Gone', from: 'Studio' }, 'not a login', null] }))
-    const answer = JSON.parse((await run(['list'], env)).out[0]!) as Record<string, { name: string; from?: string }[]>
-    assert.equal(answer['claude']!.find(a => a.name === 'Dani')!.from, 'Studio')
-    assert.equal(answer['claude']!.find(a => a.name === 'Rom')!.from, undefined)
-    assert.equal(answer['codex']!.find(a => a.name === 'Dani')!.from, undefined)
-    await writeFile(copiedPath(env), 'not json')
-    assert.equal((await run(['list'], env)).code, 0)
-  }))
-
-test('adding says a computer has no browser on a server, and on Linux with no display', () =>
+test('adding says a computer has no browser on Linux with no display', () =>
   inDir(async env => {
     assert.deepEqual(await adding(env), {})
-    assert.deepEqual(await adding({ ...env, OPENAGENT_SERVER: '1' }), { noBrowser: true })
     const { DISPLAY: _, ...noScreen } = env
     assert.deepEqual(await adding(noScreen), process.platform === 'linux' ? { noBrowser: true } : {})
     assert.deepEqual(await adding({ ...noScreen, WAYLAND_DISPLAY: 'wayland-0' }), {})
@@ -226,37 +213,6 @@ test('use-first moves the account to the front; a name not there is refused, and
     assert.deepEqual(readAccounts(accountsPath('claude', env)).map(a => a.name), ['Dani', 'This computer'])
   }))
 
-test('on a server an account made here is removed; one a computer handed over is too, and forgotten, unless it would only come back', () =>
-  inDir(async env => {
-    const server = { ...env, OPENAGENT_SERVER: '1' }
-    addAccount('Here', 'x', accountsPath('claude', server))
-    addAccount('Added there', 'y', accountsPath('claude', server))
-    addAccount('Own there', 'z', accountsPath('claude', server))
-    addAccount('Sam', 'codex-sam', accountsPath('codex', server))
-    const handed = [
-      { kind: 'claude', source: 'Dani', name: 'Added there', from: 'Studio' },
-      { kind: 'claude', source: 'own', name: 'Own there', from: 'Studio' },
-      { kind: 'codex', source: 'own', name: 'Sam', from: 'Studio' },
-    ]
-    await mkdir(env['XDG_CONFIG_HOME']!, { recursive: true })
-    await writeFile(copiedPath(server), JSON.stringify({ logins: handed }))
-    const said = JSON.parse((await run(['list'], server)).out[0]!) as Record<string, { name: string; comesBack?: true }[]>
-    assert.deepEqual(said['claude']!.filter(a => a.comesBack).map(a => a.name), ['Added there'])
-    assert.deepEqual(said['codex']!.filter(a => a.comesBack).map(a => a.name), [])
-    assert.equal((await run(['remove', 'claude', 'Here'], server)).code, 0)
-    const back = await run(['remove', 'claude', 'Added there'], server)
-    assert.equal(back.code, 1)
-    assert.match(back.err.join('\n'), /comes from Studio: remove it there/)
-    assert.equal((await run(['remove', 'claude', 'Own there'], server)).code, 0)
-    assert.equal((await run(['remove', 'codex', 'Sam'], server)).code, 0)
-    assert.deepEqual(readAccounts(accountsPath('claude', server)).map(a => a.name), ['This computer', 'Added there'])
-    assert.deepEqual(readAccounts(accountsPath('codex', server)).map(a => a.name), ['This computer'])
-    // Forgotten here: that computer sees it gone, and offers it again.
-    assert.deepEqual((JSON.parse(await readFile(copiedPath(server), 'utf8')) as { logins: { name: string }[] }).logins.map(login => login.name), ['Added there'])
-    assert.equal((await stat(copiedPath(server))).mode & 0o777, 0o600)
-    assert.equal((await run(['use-first', 'claude', 'Added there'], server)).code, 0)
-  }))
-
 test("logout runs the agent's own logout, of the person's own login, in the user's environment, and answers its list with the row out", () =>
   inDir(async env => {
     let there = true
@@ -279,9 +235,8 @@ test("logout says why not: a login from the environment is not the agent's to en
     assert.match(broke.err.join('\n'), /did not go through: no codex here/)
   }))
 
-test('on a server adding says the page to open, and the code brought back on standard input goes to the agent', () =>
+test('with no browser here, adding says the page to open, and the code brought back on standard input goes to the agent', () =>
   inDir(async env => {
-    const server = { ...env, OPENAGENT_SERVER: '1' }
     const pasted: string[] = []
     let said: SignInSaid | undefined
     let during: AddingNow | undefined
@@ -297,27 +252,26 @@ test('on a server adding says the page to open, and the code brought back on sta
             return true
           })
           void (async () => {
-            during = await adding(server)
-            refusedCode = await run(['add-code', 'claude'], server, {}, 'not a code!')
-            goodCode = await run(['add-code', 'claude'], server, {}, ' the-code-here\n')
+            during = await adding(env, 'claude', noBrowser)
+            refusedCode = await run(['add-code', 'claude'], env, noBrowser, 'not a code!')
+            goodCode = await run(['add-code', 'claude'], env, noBrowser, ' the-code-here\n')
           })()
         }),
     })
-    assert.equal((await run(['add-code', 'claude'], server, {}, 'the-code-here')).code, 1)
-    assert.equal((await run(['add', 'claude', 'Dani'], server, claude)).code, 0)
+    assert.equal((await run(['add-code', 'claude'], env, noBrowser, 'the-code-here')).code, 1)
+    assert.equal((await run(['add', 'claude', 'Dani'], env, { ...claude, ...noBrowser })).code, 0)
     assert.deepEqual(Object.keys(said!).sort(), ['onCode', 'onLink', 'onRefused'], 'no browser here: a page whose code comes back, or a code to type at one')
     assert.deepEqual(during, { noBrowser: true, adding: { name: 'Dani', url: 'https://claude.example/sign-in', paste: true } })
     assert.match(refusedCode!.err.join('\n'), /not the code the page shows/)
     assert.equal(goodCode!.code, 0)
     assert.deepEqual(pasted, ['the-code-here'])
-    assert.deepEqual(names(await run(['list'], server), 'claude'), ['This computer', 'Dani'])
-    assert.match((await run(['add-code', 'claude'], server, {}, 'too-late-code')).err.join('\n'), /No login waits/)
-    await assert.rejects(stat(`${loginWiring(server).addingPath('claude')}.code`))
+    assert.deepEqual(names(await run(['list'], env), 'claude'), ['This computer', 'Dani'])
+    assert.match((await run(['add-code', 'claude'], env, noBrowser, 'too-late-code')).err.join('\n'), /No login waits/)
+    await assert.rejects(stat(`${loginWiring(env).addingPath('claude')}.code`))
   }))
 
-test('on a server a code is said to be with the agent while it checks it, and to be refused when it does not take it, ready for another', () =>
+test('with no browser here, a code is said to be with the agent while it checks it, and to be refused when it does not take it, ready for another', () =>
   inDir(async env => {
-    const server = { ...env, OPENAGENT_SERVER: '1' }
     const said: (AddingNow | undefined)[] = []
     const wait = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms))
     const claude = agents({
@@ -331,38 +285,37 @@ test('on a server a code is said to be with the agent while it checks it, and to
             return true
           })
           void (async () => {
-            await run(['add-code', 'claude'], server, {}, 'first-code-here')
+            await run(['add-code', 'claude'], env, noBrowser, 'first-code-here')
             await wait(300)
-            said.push(await adding(server))
+            said.push(await adding(env, 'claude', noBrowser))
             await wait(500)
-            said.push(await adding(server))
-            await run(['add-code', 'claude'], server, {}, 'second-code-here')
+            said.push(await adding(env, 'claude', noBrowser))
+            await run(['add-code', 'claude'], env, noBrowser, 'second-code-here')
           })()
         }),
     })
-    await run(['add', 'claude', 'Dani'], server, claude)
+    await run(['add', 'claude', 'Dani'], env, { ...claude, ...noBrowser })
     assert.deepEqual(said, [
       { noBrowser: true, adding: { name: 'Dani', url: 'https://claude.example/sign-in', paste: true, checking: true } },
       { noBrowser: true, adding: { name: 'Dani', url: 'https://claude.example/sign-in', paste: true, refused: true } },
     ])
-    assert.deepEqual(names(await run(['list'], server), 'claude'), ['This computer', 'Dani'])
+    assert.deepEqual(names(await run(['list'], env), 'claude'), ['This computer', 'Dani'])
   }))
 
-test('on a server adding says the code to type and where', () =>
+test('with no browser here, adding says the code to type and where', () =>
   inDir(async env => {
-    const server = { ...env, OPENAGENT_SERVER: '1' }
     let during: AddingNow | undefined
     const codex = agents(
       {},
       {
         signIn: async (_accounts, { onCode }) => {
           onCode?.('ABCD-1234', 'https://auth.example/device')
-          during = await adding(server, 'codex')
+          during = await adding(env, 'codex', noBrowser)
           return { ok: false, error: 'stopped' }
         },
       },
     )
-    await run(['add', 'codex', 'Dani'], server, codex)
+    await run(['add', 'codex', 'Dani'], env, { ...codex, ...noBrowser })
     assert.deepEqual(during, { noBrowser: true, adding: { name: 'Dani', url: 'https://auth.example/device', code: 'ABCD-1234' } })
   }))
 

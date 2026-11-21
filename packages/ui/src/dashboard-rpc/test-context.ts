@@ -2,7 +2,7 @@ import { appendFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { localHost } from '@openagt/agent-driver'
 import type { RunHost } from '@openagt/hooks'
-import { setDashboardContext, type DashboardContext, type RemoteAgents } from './context.js'
+import { setDashboardContext, type DashboardContext } from './context.js'
 import { registryPreferencesStore } from '../registry.js'
 import type { QuotaSource } from '../dashboard/quota.js'
 import type { DashboardOptions } from '../dashboard/server.js'
@@ -10,18 +10,6 @@ import { handDownTestDistribution } from '../test-distribution.js'
 
 handDownTestDistribution()
 
-/** No other computer of the person's: what a test that builds its own `remote` spreads in when it is about none. */
-export const NO_ELSEWHERE: Pick<RemoteAgents, 'elsewhere' | 'elsewhereRuns' | 'followElsewhereRuns' | 'elsewhereHome' | 'bringHere' | 'forward' | 'machinesQueue'> = {
-  elsewhere: async () => [],
-  machinesQueue: async () => ({ said: [], unread: [] }),
-  elsewhereRuns: async () => [],
-  followElsewhereRuns: () => () => {},
-  elsewhereHome: async () => undefined,
-  bringHere: async () => ({ state: 'missing' }),
-  forward: async () => {
-    throw new Error('no other computer is wired in this test')
-  },
-}
 
 /**
  * The usage panel's meter as a test has it: no reading, and none asked for. The daemon's own
@@ -64,8 +52,6 @@ export function testDashboardContext(over: Partial<DashboardContext> = {}): Dash
     startedIn: () => ({ ok: false, error: 'not wired in this test' }),
     prepareStart: () => {},
     removeProject: () => ({ ok: false, error: 'not wired in this test' }),
-    eventsSource: () => undefined,
-    remote: { target: () => undefined, list: () => [], working: () => false, rekey: () => {}, sent: () => true, home: async () => undefined, follow: async () => {}, machineNames: async () => () => undefined, machineRuns: async () => [], followRuns: () => () => {}, ...NO_ELSEWHERE },
     host: testHost(),
     otherHosts: async () => [],
     preferences: registryPreferencesStore(),

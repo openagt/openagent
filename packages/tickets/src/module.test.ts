@@ -76,10 +76,9 @@ test('hotLane: a claimed ticket is in the claimed lane whatever its priority, an
   assert.equal(isHighPriority(undefined), false)
 })
 
-test('claimState: a claim is worked while its run runs or waits on an answer, offline while its computer is, and held for nobody otherwise', () => {
+test('claimState: a claim is worked while its run runs or waits on an answer, and held for nobody otherwise', () => {
   assert.equal(claimState('running'), 'working')
   assert.equal(claimState('waiting'), 'working')
-  assert.equal(claimState('unknown'), 'offline')
   for (const ended of ['done', 'stopped', 'failed']) assert.equal(claimState(ended), 'stale', ended)
   assert.equal(claimState(undefined), 'stale', 'no run of the project holds it')
 })

@@ -47,8 +47,7 @@ export interface DriverReadyOptions {
   sudoUser?: string | undefined
   /**
    * Whether the person added an account beside the CLI's own login: one is a login runs use, so the
-   * CLI's own is not needed, as on a server that has only the person's own computers' logins.
-   * Unsaid, only the CLI's own login counts.
+   * CLI's own is not needed. Unsaid, only the CLI's own login counts.
    */
   addedAccount?: boolean
 }

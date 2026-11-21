@@ -3,13 +3,11 @@ import { Combobox } from '@base-ui/react/combobox'
 import { addressOfRemote } from '@openagt/agent-data/repository-address'
 import { Cloud, Check, ChevronsUpDown, Folder, FolderGit2, FolderPlus, FolderSearch, Layers, Plus, Search } from 'lucide-react'
 import type { ProjectSummary } from '../../src/index.js'
-import { machineKind, machineName, typedRepository } from '../../src/client.js'
+import { typedRepository } from '../../src/client.js'
 import { onRepos, sendAddRepoFolder, type ReposRead } from '../rpc/projects.js'
 import { useLoaded } from '../lib/use-async.js'
-import { useMachines } from '../lib/machines.js'
 import { useProjectLabel } from '../lib/project-labels.js'
 import { cn } from '../lib/utils.js'
-import { MACHINE_ICONS } from './MachineMark.js'
 import { rowButtonClass, RowChevron } from './ui/row-item.js'
 import { buttonVariants } from './ui/button.js'
 import { ScrollArea } from './ui/scroll-area.js'
@@ -110,20 +108,7 @@ function ProjectName({ name, label }: { name: string; label: string }) {
   )
 }
 
-/** Where a project only another computer of the person's has is (elsewhere.ts): that computer, by its name and its kind's icon. */
-function ElsewhereLine({ machineId }: { machineId: string }) {
-  const machine = useMachines().find(saved => saved.id === machineId)
-  if (!machine) return null
-  const Icon = MACHINE_ICONS[machineKind(machine).kind]
-  return (
-    <span data-line2 className="flex items-center gap-1 text-xs leading-4 text-muted-foreground">
-      <Icon className="h-3 w-3 shrink-0" aria-hidden />
-      <span className="truncate">on {machineName(machine)}</span>
-    </span>
-  )
-}
-
-/** A project's row: its dot, its name, and under it where it is, what is wrong with it, or how its records are kept. */
+/** A project's row: its dot, its name, and under it what is wrong with it, or how its records are kept. */
 function ProjectLine({ project, label }: { project: ProjectSummary; label: string }) {
   return (
     <>
@@ -133,7 +118,6 @@ function ProjectLine({ project, label }: { project: ProjectSummary; label: strin
       </MenuMark>
       <span className="min-w-0 flex-1 leading-5">
         <ProjectName name={project.name} label={label} />
-        {project.machine !== undefined && <ElsewhereLine machineId={project.machine} />}
         {/* What the person has to fix there, in words: the project's own page carries the detail. */}
         {project.errors?.map(e => (
           <span key={e.id} data-line2 title={e.message} className="block truncate text-xs leading-4 text-danger">
@@ -221,7 +205,7 @@ export function ProjectPicker({
   useEffect(() => {
     if (added === null) return
     if (picked !== added.over) return setAdded(null)
-    const project = projects.find(p => p.path === added.path && p.machine === undefined)
+    const project = projects.find(p => p.path === added.path)
     if (!project) return
     setAdded(null)
     onPick(project.id)
@@ -229,7 +213,7 @@ export function ProjectPicker({
 
   const NONE: Row = useMemo(() => ({ value: 'none', label: none.label, pick: { kind: 'none' }, search: '' }), [none.label])
   const projectRows = useMemo<Row[]>(
-    () => projects.map(p => ({ value: `project:${p.id}`, label: label(p.id, p.name), pick: { kind: 'project', project: p }, search: p.machine === undefined ? p.path : '' })),
+    () => projects.map(p => ({ value: `project:${p.id}`, label: label(p.id, p.name), pick: { kind: 'project', project: p }, search: p.path })),
     [projects, label],
   )
   const repoRows = useMemo<Row[]>(

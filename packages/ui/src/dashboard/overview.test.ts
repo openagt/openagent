@@ -127,10 +127,9 @@ test('buildOverview lists a run at work on a host beside this computer\'s, and s
       run('on-the-web', { target: 'web' }),
       run('on-actions', { target: 'actions' }),
       run('ended', { target: 'web', status: 'done' }),
-      // This computer's and a saved machine's are listed by what runs them: a checkout, the machine.
+      // This computer's are listed by the checkouts they run in.
       run('here', {}),
       run('local', { target: 'local' }),
-      run('relayed', { target: 'remote' }),
     ],
     queue: async () => [],
   })
@@ -173,57 +172,6 @@ test('buildOverview names the machine that started a run when it is not this one
       { id: 'mine', computer: undefined },
       { id: 'theirs', computer: { name: 'rom-thinkpad-x280' } },
       { id: 'unknown', computer: undefined },
-    ],
-  )
-})
-
-test('buildOverview lists the runs the other computers say are running, by the machine they are on', async () => {
-  const at = (minute: number) => `2026-07-13T12:${String(minute).padStart(2, '0')}:00Z`
-  const run = (id: string, status: AgentMeta['status'], minute: number, over: Partial<AgentMeta> = {}): AgentMeta =>
-    ({ version: 1, status, id, startedAt: at(minute), updatedAt: at(minute), intent: id, ...over }) as AgentMeta
-  const theirs = { ...project('them~m1', '/home/them'), machine: 'http://laptop' }
-  const overview = await buildOverview([project('a', '/a'), theirs], {
-    liveAgents: async cwd => (cwd === '/a' ? [{ ...run('here', 'running', 1), cwd: '/wt/here' }] : []),
-    agents: async () => [],
-    queue: async () => [],
-    machineRuns: async ({ id }) =>
-      id === 'a'
-        ? [run('sent', 'running', 2, { remoteLabel: 'Droplet', remoteKind: 'server' }), run('asked', 'waiting', 3, { remoteLabel: 'Droplet' }), run('here', 'running', 1, { remoteLabel: 'Droplet' })]
-        : [run('there', 'running', 4, { remoteLabel: 'MacBook' }), run('gone', 'unknown', 5, { remoteLabel: 'MacBook' })],
-  })
-  assert.deepEqual(
-    overview.active.map(r => ({ project: r.projectId, id: r.agentId, computer: r.computer })),
-    [
-      { project: 'them~m1', id: 'there', computer: { name: 'MacBook' } },
-      { project: 'a', id: 'sent', computer: { name: 'Droplet', kind: 'server' } },
-      { project: 'a', id: 'here', computer: undefined },
-    ],
-  )
-})
-
-test('buildOverview reads no folder of a project only another computer has', async () => {
-  const read: string[] = []
-  const theirs = { ...project('them~m1', '/home/them'), machine: 'http://laptop' }
-  const queued: string[][] = []
-  await buildOverview([project('a', '/a'), theirs], {
-    liveAgents: async cwd => (read.push(cwd), []),
-    agents: async cwd => (read.push(cwd), []),
-    queue: async projects => (queued.push(projects.map(p => p.id)), []),
-  })
-  assert.deepEqual(read, ['/a', '/a'])
-  assert.deepEqual(queued, [['a']])
-})
-
-test('buildRecentAgents asks for the runs by the project, so another computer\'s project is read as its computer says it', async () => {
-  const theirs = { ...project('them~m1', '/home/them'), machine: 'http://laptop' }
-  const recent = await buildRecentAgents([project('a', '/a'), theirs], {
-    agents: async ({ machine }) => (machine ? [agent('there', '2026-07-13T11:00:00Z')] : [agent('here', '2026-07-13T10:00:00Z')]),
-  })
-  assert.deepEqual(
-    recent.map(r => [r.projectId, r.agent.id]),
-    [
-      ['them~m1', 'there'],
-      ['a', 'here'],
     ],
   )
 })

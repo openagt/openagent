@@ -13,15 +13,12 @@ vi.mock('../lib/preferences.js', () => ({
 }))
 vi.mock('../lib/editors.js', () => ({ useDetectedEditors: () => [] }))
 vi.mock('../rpc/projects.js', () => ({ onProjects: () => Promise.resolve([]), onCommands: vi.fn(async () => ({ commands: [] })) }))
-vi.mock('../rpc/machines.js', async () => (await import('../test-machines.js')).machinesRpc)
-import { saveMachines } from '../test-machines.js'
 
 const { Composer } = await import('./Composer.js')
 type ComposerHandle = import('./Composer.js').ComposerHandle
 
-beforeEach(async () => {
+beforeEach(() => {
   localStorage.clear()
-  await saveMachines()
 })
 afterEach(cleanup)
 

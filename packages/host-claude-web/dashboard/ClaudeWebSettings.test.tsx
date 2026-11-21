@@ -63,9 +63,8 @@ describe('your own Chrome (#1237)', () => {
     expect(screen.getByRole('button', { name: 'Copy the folder' })).toBeTruthy()
   })
 
-  test('the token shows on request, read by an act only then, and hides again', async () => {
-    // A secret on screen for good is in every screen recording; and an act, not a read, so a
-    // device that may only watch this computer never has it.
+  test('the token shows on request, read only then, and hides again', async () => {
+    // A secret on screen for good is in every screen recording.
     const asked = shown()
     fireEvent.click(await screen.findByRole('button', { name: 'Reveal' }))
     expect(await screen.findByText('tok-1')).toBeTruthy()

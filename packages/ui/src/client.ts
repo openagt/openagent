@@ -1,7 +1,7 @@
 // Browser-safe entry for the dashboard client (#431). Only pure event projections live
 // here — `formatOpenAgentEvent` and the run-view derivations — with no Node imports, so
-// the client can import these at runtime without dragging the server barrel (relay,
-// sandbox, node:fs/http, …) into the browser bundle. Types come from the root entry.
+// the client can import these at runtime without dragging the server barrel (sandbox,
+// node:fs/http, …) into the browser bundle. Types come from the root entry.
 export { DRIVERS, DRIVER_LABELS, isDriverName, driverFromImpl, type DriverName } from './driver-names.js'
 export { PUBLISH_LABELS, isPublishPick, offeredPublishPicks, publishPickIn, type PublishPick } from './publish-levels.js'
 /** Default's id: the preset a run is on when none is picked (`@openagt/hooks`' catalog, which a page does not import). */
@@ -31,12 +31,8 @@ export { waitingKey } from './dashboard/keys.js'
 export { needsWord, type RunNeed } from './dashboard/waiting-words.js'
 export type { ProjectionRead } from './dashboard/projects.js'
 export { MAX_SPEND_OFFSET } from './preference-defaults.js'
-// How a pasted machine link is read, so the dialog and the daemon read a paste the same way.
-export { parseMachineLink } from './machine-link.js'
-// Which saved machine is a person's own computer that keeps a line open here, so the daemon and the pages say it by one rule.
-export { machineKind, machineName, reachedByLine, reachedThrough, type MachineKind } from './reached-by-line.js'
-// Which names are this computer's own, so a page knows whether it was opened on the computer it is served from.
-export { isLoopbackHost } from './loopback-host.js'
+
+
 // How long a run just started counts as starting, so the page and a Stop wait for it alike.
 export { STARTING_AT_MOST_MS } from './starting.js'
 export { ALL_PROJECTS, CARD_WIDTHS, arrangeCards, widthsFor, type CardPlace, type CardWidth, type LayoutCard, type OverviewLayouts } from './overview-layout.js'

@@ -86,8 +86,7 @@ interface StartedRun {
   projectId: string | null
   /** When it was started. */
   at: number
-  /** The machine a remote run executes on (#1067), so the live view can mark where it runs and
-   *  degrade the panels that are local-only. Absent for a local run. */
+  /** The host a run on one beside this computer goes to, by its name, so the live view can mark where it runs. Absent for a run here. */
   runsOn?: string
   /** What the launcher said about the run as it started it. */
   picks?: StartPicks
@@ -302,7 +301,7 @@ export function App() {
     // Its name, the moment the daemon has it: about a second on, before the run's row is in any
     // list (`started-names.ts`). Answered once, when it is in; nothing for a continued run.
     if (!continued && preferences.nameRuns !== false && inProject !== null)
-      void onStartedName(inProject, startedId).then(
+      void onStartedName(startedId).then(
         title => {
           if (title !== undefined) setAgentStart(prev => (prev.id === startedId ? { ...prev, title } : prev))
         },
@@ -311,11 +310,7 @@ export function App() {
   }
 
   /** The same, for the surfaces that start an agent inside the selected project. */
-  // A run of another computer's project started on this one starts in the copy cloned here: a project the list has yet to read.
-  const onAgentStarted = (intent: string, startedId: string, runsOn?: string, startedIn?: string, picks?: StartPicks) => {
-    if (startedIn !== undefined && startedIn !== projectId) reloadProjects()
-    agentStarted(startedIn ?? projectId, intent, startedId, runsOn, picks)
-  }
+  const onAgentStarted = (intent: string, startedId: string, runsOn?: string, picks?: StartPicks) => agentStarted(projectId, intent, startedId, runsOn, picks)
 
   // One of the project's sessions, or with none its launcher.
   const selectAgent = (id: string | null) => {
@@ -467,8 +462,6 @@ export function App() {
   const namesRuns = preferences.nameRuns !== false
   // What a listed session's page is called, in its heading and its tab.
   const sessionLabel = selectedAgent ? (awaitingName(selectedAgent, namesRuns) ? startedTitle : agentLabel(selectedAgent)) : undefined
-  // Another computer's project is removed there, not here.
-  const removableHere = project?.machine === undefined ? leaveRemovedProject : undefined
   // Before the projects are read, a project's address reads as a page's word. A word no page this
   // browser listed may be a project's: its page waits as its shape, the launcher's, or with a run's
   // id after it a session's. Any other page word waits as its page's frame until its code is in.
@@ -538,7 +531,6 @@ export function App() {
         <ProjectHome
           projectId={projectId}
           projectName={projectName}
-          home={project?.machine}
           waiting={waiting}
           onAgentStarted={onAgentStarted}
           files={files}
@@ -569,7 +561,7 @@ export function App() {
       picks: justStarted ? agentStart.picks : undefined,
       onAgentStarted,
       contextSet,
-      onProjectRemoved: removableHere,
+      onProjectRemoved: leaveRemovedProject,
       onBack: backFromSession,
     }
     if (!selectedAgent) {
@@ -577,7 +569,7 @@ export function App() {
       // list we have not read yet, where whether the agent runs is not known. Only a session that
       // is genuinely absent from a list we did read is gone.
       if (!sessionGone)
-        return <AgentView {...agentPage} live={justStarted ? true : null} label={namesRuns ? startedTitle : (justStarted && agentStart.intent) || undefined} naming={justStarted && namesRuns && startedTitle === undefined} remoteLabel={justStarted ? agentStart.runsOn : undefined} />
+        return <AgentView {...agentPage} live={justStarted ? true : null} label={namesRuns ? startedTitle : (justStarted && agentStart.intent) || undefined} naming={justStarted && namesRuns && startedTitle === undefined} startedOn={justStarted ? agentStart.runsOn : undefined} />
       return (
         <NotFound
           title="No such session"
@@ -598,7 +590,6 @@ export function App() {
         label={sessionLabel}
         naming={awaitingName(selectedAgent, namesRuns) && startedTitle === undefined}
         target={selectedAgent.target}
-        remoteLabel={selectedAgent.remoteLabel}
         onDeleted={() => {
           // Its view is about to point at a session that no longer exists; go home and refresh
           // the rail so the row is gone (#1032).

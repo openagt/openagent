@@ -1,9 +1,8 @@
 import { projectBranches, readLiveMeta, type AgentMeta, type Checkout } from '../store/index.js'
-import { shownOf } from './machine-runs.js'
 
 /**
- * Who is told at once when this computer's runs of a project change: another computer that waits
- * for them (machine-runs.ts), and a page that lists them (`/_rpc/changes`). Nothing tells
+ * Who is told at once when this computer's runs of a project change: a page that lists them
+ * (`/_rpc/changes`). Nothing tells
  * OpenAgent when a run changes: a run's tool writes its card in the run's checkout. So while
  * someone listens, the cards are read every second and compared by what a list shows of a run;
  * the checkouts themselves are listed again less often, since that runs the branches provider,
@@ -28,10 +27,19 @@ const LIST_EVERY_MS = 15_000
  */
 const POKED_MS = 10_000
 /**
- * How long a project is still read after its last listener left: a computer that waits for the
- * runs asks again the moment it was answered, and its checkouts are not listed again for that.
+ * How long a project is still read after its last listener left: a page that reloads listens again
+ * at once, and its checkouts are not listed again for that.
  */
 const LINGER_MS = 30_000
+
+/**
+ * What a list shows of a run, as one string to compare: what it is, how it stands, and its name or its wait for one.
+ * A run's card is written at every step it takes, with a later time and a higher cost, and none
+ * of that is a change a person waits on.
+ */
+function shownOf(run: AgentMeta): string {
+  return JSON.stringify([run.id, run.status, run.title, run.naming, run.branch, run.pr?.number, run.endedAt])
+}
 
 /** One project's watch, while someone listens. */
 interface Watched {

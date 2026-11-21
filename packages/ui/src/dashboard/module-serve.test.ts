@@ -106,19 +106,19 @@ test('the computer\'s module files are served by their package alone, with no pr
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
   try {
-    const url = computerModuleUrl({ package: '@openagt/devices', entry: 'dashboard.js' })
-    assert.equal(url, `${COMPUTER_MODULES_PREFIX}/%40openagt%2Fdevices/dashboard.js`)
+    const url = computerModuleUrl({ package: '@openagt/agent-driver', entry: 'dashboard.js' })
+    assert.equal(url, `${COMPUTER_MODULES_PREFIX}/%40openagt%2Fagent-driver/dashboard.js`)
     const response = await fetch(base + url)
     assert.equal(response.status, 200)
     assert.match(response.headers.get('content-type') ?? '', /javascript/)
     assert.equal(response.headers.get('cache-control'), 'no-cache')
-    assert.equal((await fetch(`${base}${COMPUTER_MODULES_PREFIX}/%40openagt%2Fdevices/classes.txt`)).status, 200)
+    assert.equal((await fetch(`${base}${COMPUTER_MODULES_PREFIX}/%40openagt%2Fagent-driver/classes.txt`)).status, 200)
 
     for (const path of [
       `${COMPUTER_MODULES_PREFIX}/%40openagt%2Fui-pane-files/dashboard.js`, // every project's, not the computer's
-      `${COMPUTER_MODULES_PREFIX}/%40openagt%2Fdevices/..%2F..%2Fpackage.json`, // out of the module's directory
-      `${COMPUTER_MODULES_PREFIX}/%40openagt%2Fdevices/..%2Fcli.js`, // the package's own code, not its browser part
-      `${COMPUTER_MODULES_PREFIX}/%40openagt%2Fdevices`, // no file
+      `${COMPUTER_MODULES_PREFIX}/%40openagt%2Fagent-driver/..%2F..%2Fpackage.json`, // out of the module's directory
+      `${COMPUTER_MODULES_PREFIX}/%40openagt%2Fagent-driver/..%2Findex.js`, // the package's own code, not its browser part
+      `${COMPUTER_MODULES_PREFIX}/%40openagt%2Fagent-driver`, // no file
       `${COMPUTER_MODULES_PREFIX}/%zz/dashboard.js`, // a malformed escape
     ])
       assert.equal((await fetch(base + path)).status, 404, path)
@@ -137,7 +137,7 @@ test("the files of a module OpenAgent brings to projects are served from its own
     assert.equal(url, `${BROUGHT_MODULES_PREFIX}/%40openagt%2Fqueue/dashboard.js`)
     assert.equal((await fetch(base + url)).status, 200)
     for (const path of [
-      `${BROUGHT_MODULES_PREFIX}/%40openagt%2Fdevices/dashboard.js`, // the computer's, not a project's
+      `${BROUGHT_MODULES_PREFIX}/%40openagt%2Fagent-driver/dashboard.js`, // the computer's, not a project's
       `${BROUGHT_MODULES_PREFIX}/left-pad/index.js`, // not OpenAgent's
       `${BROUGHT_MODULES_PREFIX}/%40openagt%2Fqueue/..%2F..%2Fpackage.json`, // out of the module's directory
     ])

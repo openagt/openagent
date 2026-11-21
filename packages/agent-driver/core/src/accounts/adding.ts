@@ -10,8 +10,8 @@ import type { LoginWiring } from './wiring.js'
 // it needs them twice: to open a page on another device, and to bring its code back. A command ends
 // long before that, and a page's call sooner. So the sign-in runs in a process of its own, and the
 // commands only start it, read how it goes from one file beside the accounts, hand it the code, or
-// stop it: the same for an agent, a card on any page, and Settings, here and on a server. It
-// outlives whoever started it, OpenAgent restarting included.
+// stop it: the same for an agent, a card on any page, and Settings. It outlives whoever started
+// it, OpenAgent restarting included.
 
 /** One sign-in, as far as it got. The file may hold a page to sign in at: readable by this user only. */
 interface AddingFile {
@@ -47,7 +47,7 @@ export interface Adding {
 export interface AddingNow {
   adding?: Adding
   failed?: string
-  /** This computer has no browser (a server, or Linux with no display): the person signs in on their own device. */
+  /** This computer has no browser (Linux with no display): the person signs in on their own device. */
   noBrowser?: true
 }
 

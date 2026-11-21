@@ -1,4 +1,4 @@
-import { addAccount, forgetHandedOver, handedOverBy, nameRefused, OWN_NAME, readAccounts, removeAccount } from './accounts.js'
+import { addAccount, nameRefused, OWN_NAME, readAccounts, removeAccount } from './accounts.js'
 import type { LoginWiring } from './wiring.js'
 import type { AgentAccount, AgentLogins, SignInSaid } from '@openagt/hooks'
 
@@ -44,24 +44,14 @@ export async function signIn(logins: AgentLogins, name: string, wiring: LoginWir
   return undefined
 }
 
-/** The computer an account came from, when taking it off here would only bring it back. */
-export function comesBackFrom(list: string, name: string, wiring: LoginWiring): string | undefined {
-  const handed = handedOverBy(list, wiring.env).get(name)
-  return handed?.comesBack ? handed.from : undefined
-}
-
 /**
  * Take an added account off the list, and say which it was: none when no added account has the
- * name. What the agent keeps of it beside the list goes with it ({@link AgentLogins.forget}). One a
- * computer handed over is forgotten here too: that computer offers it again.
+ * name. What the agent keeps of it beside the list goes with it ({@link AgentLogins.forget}).
  */
 export async function removeAdded(logins: AgentLogins, name: string, wiring: LoginWiring): Promise<AgentAccount | undefined> {
   const path = wiring.path(logins.list)
   const gone = readAccounts(path).find(a => a.name === name && a.login !== undefined)
   removeAccount(name, path)
-  if (gone) {
-    await logins.forget(gone, wiring.env)
-    forgetHandedOver(logins.list, name, wiring.env)
-  }
+  if (gone) await logins.forget(gone, wiring.env)
   return gone
 }

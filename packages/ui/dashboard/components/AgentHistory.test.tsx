@@ -401,40 +401,13 @@ describe('AgentHistory (#785)', () => {
 // bespoke collapsing <aside> of #862 — the shadcn Sidebar owns collapse, and the shell never drove
 // the old prop, so those strip/float tests are retired with it.
 describe('AgentHistory rows', () => {
-  test('a run on a saved machine shows a machine glyph naming the machine (#1067)', () => {
-    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent({ target: 'remote', remoteLabel: 'my-laptop' })]} selectedAgentId={null} onSelect={() => {}} />)
-    expect(screen.getByLabelText('Runs on my-laptop')).toBeTruthy()
-  })
-
-  test('the coding agent\'s logo is the last mark of every row, after the machine glyph, so the logos stand in one column', () => {
-    const main = agent({ id: 'main', target: 'remote', remoteLabel: 'my-laptop', driver: 'codex' })
+  test('the coding agent\'s logo is the last mark of every row, after the host\'s glyph, so the logos stand in one column', async () => {
+    const main = agent({ id: 'main', target: 'web', driver: 'codex' })
     renderRail(<AgentHistory projectId="p1" scope="p1" agents={[main, agent({ id: 'other', driver: 'claude-code' })]} selectedAgentId={null} onSelect={() => {}} />)
-    const row = screen.getByLabelText('Runs on my-laptop').closest('a')!
+    const row = (await screen.findByLabelText('Runs on Claude Code on the web')).closest('a')!
     const marks = [...row.querySelectorAll('[aria-label]')].map(mark => mark.getAttribute('aria-label'))
     expect(marks.at(-1)).toBe('Codex')
-    expect(marks.indexOf('Runs on my-laptop')).toBeLessThan(marks.indexOf('Codex'))
-  })
-
-  test('a run on another machine shows that machine\'s kind as every list of machines draws it: a computer, a server at home, a server', () => {
-    const agents = [
-      agent({ id: 'on-computer', target: 'remote', remoteLabel: 'MacBook', remoteKind: 'computer' }),
-      agent({ id: 'at-home', target: 'remote', remoteLabel: 'experiment', remoteKind: 'home' }),
-      agent({ id: 'on-server', target: 'remote', remoteLabel: 'Server' }),
-    ]
-    renderRail(<AgentHistory projectId="p1" scope="p1" agents={agents} selectedAgentId={null} onSelect={() => {}} />)
-    expect(screen.getByLabelText('Runs on MacBook').querySelector('svg')!.getAttribute('class')).toContain('lucide-laptop')
-    expect(screen.getByLabelText('Runs on experiment').querySelector('svg')!.getAttribute('class')).toContain('lucide-house')
-    expect(screen.getByLabelText('Runs on Server').querySelector('svg')!.getAttribute('class')).toContain('lucide-server')
-  })
-
-  test('a run whose computer does not answer says its status is unknown, which computer is offline and when it was last seen, and does not pulse', () => {
-    const seenAt = new Date(Date.now() - 12 * 60_000).toISOString()
-    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent({ status: 'unknown', target: 'remote', remoteLabel: 'MacBook', remoteKind: 'computer', seenAt })]} selectedAgentId={null} onSelect={() => {}} />)
-    expect(screen.getByLabelText('MacBook offline · last seen 12m ago')).toBeTruthy()
-    const dot = screen.getByRole('img', { name: 'status unknown' })
-    expect(dot.getAttribute('data-state')).toBe('idle')
-    expect(dot.querySelector('.motion-safe\\:animate-spin')).toBeNull()
-    expect(dot.closest('a')!.getAttribute('aria-label')).toContain('status unknown')
+    expect(marks.indexOf('Runs on Claude Code on the web')).toBeLessThan(marks.indexOf('Codex'))
   })
 
   test('a run another machine started says whose it is; this daemon\'s own does not (#1067, #1648)', () => {
@@ -501,11 +474,6 @@ describe('AgentHistory rows', () => {
     const marks = [...row.querySelectorAll('[aria-label]')].map(mark => mark.getAttribute('aria-label'))
     expect(marks.slice(-2)).toEqual(['PR #12 open', 'Claude Code'])
     expect(row.getAttribute('aria-label')).toContain('PR #12 open')
-  })
-
-  test('a local run has no machine glyph (#1067)', () => {
-    renderRail(<AgentHistory projectId="p1" scope="p1" agents={[agent()]} selectedAgentId={null} onSelect={() => {}} />)
-    expect(screen.queryByLabelText(/Runs on/)).toBeNull()
   })
 
   // The shared shell: the rail is present on the home/Overview too (no project selected), showing

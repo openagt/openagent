@@ -11,23 +11,17 @@ import { readDocs, type WorkspaceDoc } from '../dashboard/docs.js'
 import { collectQueue, type ProjectQueue } from '../dashboard/queue.js'
 import { buildOverview, buildRecentAgents, type FoundAgent, type Overview, type RecentAgent } from '../dashboard/overview.js'
 import { buildWaiting, type Waiting } from '../dashboard/waiting.js'
-import { withMachinesQueue, type MachinesQueue } from '../dashboard/machine-waiting.js'
 import type { ProjectionRead, ProjectSummary } from '../dashboard/projects.js'
 import { buildActivity, type Activity } from '../dashboard/activity.js'
 import { buildDashboard, type DashboardData } from '../dashboard/dashboard.js'
-import { readGitStatus, type GitStatus } from '../dashboard/git-status.js'
+import { readGitStatus } from '../dashboard/git-status.js'
 import { readRunHandoff, resolveAgentPr, type AgentHandoff } from '../dashboard/agent-handoff.js'
 import type { AgentWorktree } from '../dashboard/types.js'
 import { crawlRepoFiles } from '../project.js'
-import { contextProjects, contextRemote, resolveProjectPath, resolveAgentPath } from './context.js'
-import { relayOr } from './relay-agent.js'
+import { contextProjects, resolveProjectPath, resolveAgentPath } from './context.js'
 import type { OpenAgentEvent } from '../events.js'
-import { hostname } from 'node:os'
-import { RUNS_WAIT_MS, RunChanges, withMachineRuns, type MachineRuns, type OwnRuns } from '../dashboard/machine-runs.js'
-import { ownRunsWatch } from '../dashboard/runs-watch.js'
 import { startedName, withStartedNames } from '../started-names.js'
-import { isElsewhereId } from '../dashboard/elsewhere.js'
-import { asRecorded, forDashboard, markMachine, recordedRuns, withFollowed, withRowMarks } from '../dashboard/run-rows.js'
+import { forDashboard, recordedRuns, withRowMarks } from '../dashboard/run-rows.js'
 
 // The read model behind the dashboard (#405): the agent history, an agent's replay, and the
 // surfaced PLAN/TODO docs — each keyed by project id and backed by
@@ -55,99 +49,32 @@ async function withProjects<T>(build: (projects: ProjectSummary[]) => Promise<T>
  * would otherwise show a running agent as finished. The status is not filtered on: `readLiveMeta`
  * may have just self-healed a dead agent to `stopped` (#716), and that freshly-archived row can
  * lag `listAgents` by a poll — keeping it regardless leaves the row visible with no flicker.
- *
- * An agent relayed to a saved machine (#1067) lives only in the daemon's memory, never on disk, so
- * its in-memory stub is merged in too (#1077): that is what re-opens it after a dashboard reload
- * instead of losing it.
  */
 export async function onAgents(projectId: string): Promise<AgentMeta[]> {
-  return runRows(projectId, await resolveProjectPath(projectId))
+  return runRows(await resolveProjectPath(projectId))
 }
 
 /**
  * The name asked for a run just started, answered once it is in (`started-names.ts`): the run's
- * row is not in the list yet when it is, and the page shows it where the row will be. A run that
- * runs on a saved machine was named there, so the machine is asked. Nothing when no name came.
+ * row is not in the list yet when it is, and the page shows it where the row will be. Nothing
+ * when no name came.
  */
-export async function onStartedName(projectId: string, agentId: string): Promise<string | undefined> {
-  return relayOr(agentId, 'onStartedName', [projectId, agentId], () => startedName(agentId), undefined)
+export async function onStartedName(agentId: string): Promise<string | undefined> {
+  return startedName(agentId)
 }
 
-/** A project's runs as its list shows them: off its folder here (`cwd`), else as the computer it is on says them. */
-async function runRows(projectId: string, cwd: string | undefined): Promise<AgentMeta[]> {
-  // The relayed-agent stubs (#1077): a run this daemon follows on a machine lives in its memory only.
-  const remote = contextRemote().list(projectId)
-  const machineOf = await contextRemote().machineNames()
-  const local = cwd ? withStartedNames(await withRowMarks(cwd, (await listedRuns(cwd)).map(agent => forDashboard(agent, machineOf)))) : isElsewhereId(projectId) ? (await elsewhereRuns(projectId)).map(agent => forDashboard(agent, machineOf)) : []
-  return withFollowed(remote, local, agentId => contextRemote().sent(agentId))
-}
-
-/** The runs of another computer's project (elsewhere.ts), as that computer says them: there are no records of them here. */
-function elsewhereRuns(projectId: string): Promise<AgentMeta[]> {
-  return saidByMachines(contextRemote().elsewhereRuns(projectId))
-}
-
-/** The runs the saved machines say they run, as recorded: one a machine that does not answer runs is not known to go on. */
-async function saidByMachines(asked: Promise<MachineRuns[]>): Promise<AgentMeta[]> {
-  const machines = await asked.catch((): MachineRuns[] => [])
-  return withMachineRuns([], machines.map(machine => ({ ...machine, runs: machine.runs.map(asRecorded) })))
+/** A project's runs as its list shows them, off its folder here (`cwd`): none for a project with no folder here. */
+async function runRows(cwd: string | undefined): Promise<AgentMeta[]> {
+  return cwd ? withStartedNames(await withRowMarks(cwd, (await recordedRuns(cwd)).map(forDashboard))) : []
 }
 
 /**
  * A project's runs as a module sees them ({@link ModuleAgent}), only the ones it asks for: a card
  * shows a few of the hundreds a project keeps, and each run in the few fields a module reads, so
- * what a phone downloads for it is that much smaller. The same runs as {@link onAgents}.
+ * what the page reads for it is that much smaller. The same runs as {@link onAgents}.
  */
 export async function onModuleAgents(projectId: string, wanted: ModuleAgentsWanted = {}): Promise<ModuleAgent[]> {
   return moduleAgents(await onAgents(projectId), wanted)
-}
-
-/**
- * A project's runs as the dashboard lists them: its records, with what each saved machine says of
- * its own runs right now taking over theirs (machine-runs.ts). Not marked yet for the dashboard.
- */
-async function listedRuns(cwd: string): Promise<AgentMeta[]> {
-  const [records, machines] = await Promise.all([recordedRuns(cwd), contextRemote().machineRuns(cwd).catch((): MachineRuns[] => [])])
-  return withMachineRuns(records, machines.map(machine => ({ ...machine, runs: machine.runs.map(asRecorded) })))
-}
-
-/** What this computer's own runs answer to another computer that asks for them: counted per project, as they change. */
-const ownRunChanges = new RunChanges()
-
-/**
- * This computer's own runs of a project, for another computer that lists them (machine-runs.ts):
- * the ones that changed since `since`, the answer it had last, as they stand right now. Only this
- * computer's: what another computer's records say is that computer's to answer. With `wait` (ms,
- * up to {@link RUNS_WAIT_MS}) and no change a list shows since `since`, the answer waits for the
- * first such change, or says what changed otherwise once the wait is up.
- */
-export async function onOwnRuns(projectId: string, since?: unknown, wait?: unknown): Promise<OwnRuns> {
-  const cwd = await resolveProjectPath(projectId)
-  const thisHost = hostname()
-  const answer = async (): Promise<OwnRuns> => ownRunChanges.answer(cwd ?? projectId, cwd ? (await recordedRuns(cwd)).filter(run => run.host === thisHost) : [], since)
-  if (cwd === undefined || typeof wait !== 'number' || !(wait > 0)) return answer()
-  // Listened to before the runs are read: a change while they are read is a change all the same.
-  let changed = false
-  let woken: (() => void) | undefined
-  const stop = ownRunsWatch.follow(cwd, () => {
-    changed = true
-    woken?.()
-  })
-  try {
-    const now = await answer()
-    // A step of a run (its later time, its cost) is no change a list shows: it waits for one, and goes with it.
-    if (changed || ownRunChanges.shownSince(cwd, since)) return now
-    await new Promise<void>(resolve => {
-      const timer = setTimeout(resolve, Math.min(wait, RUNS_WAIT_MS))
-      woken = () => {
-        clearTimeout(timer)
-        resolve()
-      }
-    })
-    return await answer()
-  } finally {
-    stop()
-  }
 }
 
 /**
@@ -176,59 +103,55 @@ export async function onRetainedWorktrees(projectId: string): Promise<string[]> 
  * branch, their "clean") as the run's.
  */
 export async function onAgentWorktree(projectId: string, agentId: string): Promise<AgentWorktree | null> {
-  return relayOr(agentId, 'onAgentWorktree', [projectId, agentId], async () => {
-    const root = await resolveProjectPath(projectId)
-    if (!root || !isRunId(agentId)) return null
-    const checkout = await findCheckout(root, agentId, projectBranches)
-    // Since-filtered like every run-scoped PR read (#1255): the checkout's branch is the agent's,
-    // but a reused pinned branch has a predecessor's PR history.
-    const since = startedAtFromAgentId(agentId)
-    // Read only while the checkout's own `.git` is there: without it git reads the project's
-    // checkout the run's folder sits in, and answered with the person's branch as the run's.
-    const linked = checkout ? await stat(join(checkout.path, '.git')).then(() => true, () => false) : false
-    const [status, live] = checkout && linked
-      ? await Promise.all([
-          readGitStatus(checkout.path, { prRoot: root, ...(since !== undefined ? { since } : {}) }).catch(() => undefined),
-          readLiveMetas(root).catch(() => []),
-        ])
-      : [undefined, []]
-    if (!checkout || !status) {
-      // The checkout's branch was the agent's; with no checkout the record is the only witness. So
-      // it is for a checkout git cannot read: the run's clean-up is removing it, and an answer
-      // without its branch put the bar above the message box away until the next read.
-      const agent = await findAgent(root, agentId).catch(() => undefined)
-      if (!agent) return null
-      const pr = await resolveAgentPr(root, agent).catch(() => ({ value: undefined, pending: false }))
-      return {
-        ...(agent.branch ? { branch: agent.branch } : {}),
-        ...(pr.value ? { pr: pr.value } : {}),
-        ...(pr.pending ? { prPending: true } : {}),
-      }
-    }
-    // Size is only read for a checkout nothing is writing to: a live agent's tree changes under the
-    // poll, and a size over a build directory mid-build is a cost with no answer worth having. The
-    // provider's sized listing is where a checkout's size comes from (#1774).
-    const running = live.some(agent => agent.id === agentId && agent.status === 'running')
-    const size = running ? undefined : (await (await projectBranches(root).catch(() => undefined))?.list({ sizes: true }).catch(() => []))?.find(row => row.id === agentId)?.sizeBytes
+  const root = await resolveProjectPath(projectId)
+  if (!root || !isRunId(agentId)) return null
+  const checkout = await findCheckout(root, agentId, projectBranches)
+  // Since-filtered like every run-scoped PR read (#1255): the checkout's branch is the agent's,
+  // but a reused pinned branch has a predecessor's PR history.
+  const since = startedAtFromAgentId(agentId)
+  // Read only while the checkout's own `.git` is there: without it git reads the project's
+  // checkout the run's folder sits in, and answered with the person's branch as the run's.
+  const linked = checkout ? await stat(join(checkout.path, '.git')).then(() => true, () => false) : false
+  const [status, live] = checkout && linked
+    ? await Promise.all([
+        readGitStatus(checkout.path, { prRoot: root, ...(since !== undefined ? { since } : {}) }).catch(() => undefined),
+        readLiveMetas(root).catch(() => []),
+      ])
+    : [undefined, []]
+  if (!checkout || !status) {
+    // The checkout's branch was the agent's; with no checkout the record is the only witness. So
+    // it is for a checkout git cannot read: the run's clean-up is removing it, and an answer
+    // without its branch put the bar above the message box away until the next read.
+    const agent = await findAgent(root, agentId).catch(() => undefined)
+    if (!agent) return null
+    const pr = await resolveAgentPr(root, agent).catch(() => ({ value: undefined, pending: false }))
     return {
-      checkout: { path: checkout.path, dirty: status.dirty, ...(size !== undefined ? { sizeBytes: size } : {}) },
-      branch: status.branch,
-      // A session's branch is exactly the thing that has a PR (#809), so the bar can show it
-      // like the project's does.
-      ...(status.pr ? { pr: status.pr } : {}),
-      // Still being looked up rather than absent (#1028), so the bar can ask again shortly.
-      ...(status.prPending ? { prPending: true } : {}),
+      ...(agent.branch ? { branch: agent.branch } : {}),
+      ...(pr.value ? { pr: pr.value } : {}),
+      ...(pr.pending ? { prPending: true } : {}),
     }
-  }, null)
+  }
+  // Size is only read for a checkout nothing is writing to: a live agent's tree changes under the
+  // poll, and a size over a build directory mid-build is a cost with no answer worth having. The
+  // provider's sized listing is where a checkout's size comes from (#1774).
+  const running = live.some(agent => agent.id === agentId && agent.status === 'running')
+  const size = running ? undefined : (await (await projectBranches(root).catch(() => undefined))?.list({ sizes: true }).catch(() => []))?.find(row => row.id === agentId)?.sizeBytes
+  return {
+    checkout: { path: checkout.path, dirty: status.dirty, ...(size !== undefined ? { sizeBytes: size } : {}) },
+    branch: status.branch,
+    // A session's branch is exactly the thing that has a PR (#809), so the bar can show it
+    // like the project's does.
+    ...(status.pr ? { pr: status.pr } : {}),
+    // Still being looked up rather than absent (#1028), so the bar can ask again shortly.
+    ...(status.prPending ? { prPending: true } : {}),
+  }
 }
 
 /** One archived agent's event log for replay (or `[]` when the agent or project is gone). */
 export async function onAgent(projectId: string, agentId: string): Promise<OpenAgentEvent[]> {
-  return relayOr(agentId, 'onAgent', [projectId, agentId], async () => {
-    const cwd = await resolveProjectPath(projectId)
-    if (!cwd) return []
-    return (await loadAgentEvents(cwd, agentId).catch(() => undefined)) ?? []
-  }, [])
+  const cwd = await resolveProjectPath(projectId)
+  if (!cwd) return []
+  return (await loadAgentEvents(cwd, agentId).catch(() => undefined)) ?? []
 }
 
 /** What each of the named runs of a project is doing now, by id; a run that is not working has no entry. */
@@ -251,15 +174,7 @@ export async function onQueue(): Promise<ProjectQueue[]> {
 
 /** The cross-project Overview (#437): what is running now, the queue size, and recent projects. */
 export async function onOverview(): Promise<Overview> {
-  // The runs going on the person's other computers too, of a project here and of one only they have.
-  const remote = contextRemote()
-  const [machineOf, elsewhere] = await Promise.all([remote.machineNames(), remote.elsewhere().catch((): ProjectSummary[] => [])])
-  return withProjects(projects =>
-    buildOverview([...projects, ...elsewhere], {
-      machineRuns: async project =>
-        (await saidByMachines(project.machine === undefined ? remote.machineRuns(project.path) : remote.elsewhereRuns(project.id))).map(agent => markMachine(agent, machineOf)),
-    }),
-  )
+  return withProjects(projects => buildOverview(projects))
 }
 
 /** Recent sessions pooled across every project and the sessions with no project (#shared-shell), newest first, for the home rail. */
@@ -276,17 +191,14 @@ export async function onAllAgents(): Promise<FoundAgent[]> {
   }))
 }
 
-/** The runs of every project, as each project's own list shows them, the projects only the person's other computers have too: the newest `limit`. */
+/** The runs of every project, as each project's own list shows them: the newest `limit`. */
 async function pooledRuns(limit?: number): Promise<RecentAgent[]> {
-  const elsewhere = await contextRemote()
-    .elsewhere()
-    .catch((): ProjectSummary[] => [])
   return withProjects(projects =>
     buildRecentAgents(
-      [...projects, ...elsewhere],
+      projects,
       {
-        agents: project => runRows(project.id, project.machine === undefined ? project.path : undefined),
-        sessions: async () => runRows(SESSIONS_ID, await resolveProjectPath(SESSIONS_ID)),
+        agents: project => runRows(project.path),
+        sessions: async () => runRows(await resolveProjectPath(SESSIONS_ID)),
       },
       limit,
     ),
@@ -305,22 +217,6 @@ async function pooledRuns(limit?: number): Promise<RecentAgent[]> {
  * backlog the moment the git host answers.
  */
 export async function onWaiting(): Promise<ProjectionRead<Waiting>> {
-  // What needs the person on their other computers too: a run's question there, the PRs of a project only they have.
-  const remote = contextRemote()
-  const [own, machines, elsewhere] = await Promise.all([
-    withProjects(projects => buildWaiting(projects).then(read => ({ read, projects }))),
-    remote.machinesQueue().catch((): MachinesQueue => ({ said: [], unread: [] })),
-    remote.elsewhere().catch((): ProjectSummary[] => []),
-  ])
-  return withMachinesQueue(own.read, machines, new Map([...own.projects, ...elsewhere].map(project => [project.id, project.name])))
-}
-
-/**
- * What waits on the person on this computer, for another computer of the person's that shows it beside its
- * own (machine-waiting.ts): the items of this computer's projects only, never of the
- * projects it lists of other computers, so no computer asks back the one that asked it.
- */
-export async function onOwnWaiting(): Promise<ProjectionRead<Waiting>> {
   return withProjects(projects => buildWaiting(projects))
 }
 
@@ -329,12 +225,7 @@ export async function onOwnWaiting(): Promise<ProjectionRead<Waiting>> {
  * first, with the projects that were read whole beside them (#1625) — see {@link onWaiting}.
  */
 export async function onActivity(): Promise<ProjectionRead<Activity>> {
-  // Another computer's runs start and end by its own word, as the lists show them, and so do the
-  // runs of a project only another computer has.
-  const elsewhere = await contextRemote()
-    .elsewhere()
-    .catch((): ProjectSummary[] => [])
-  return withProjects(projects => buildActivity([...projects, ...elsewhere], { readAgents: project => (project.machine === undefined ? listedRuns(project.path) : elsewhereRuns(project.id)) }))
+  return withProjects(projects => buildActivity(projects, { readAgents: project => recordedRuns(project.path) }))
 }
 
 /** The Overview dashboard page (#471): the {@link onOverview} rollup plus agent counts, run-status totals, and activity. */
@@ -366,25 +257,21 @@ let buildingDashboard: Promise<DashboardData> | undefined
  * Files pane reads its own list, through its module.
  */
 export async function onProjectFiles(projectId: string, agentId?: string): Promise<string[]> {
-  return relayOr(agentId, 'onProjectFiles', [projectId, agentId], async () => {
-    // The checkout `agentId` names: its own while the run is live, else the project's root (#738).
-    const cwd = await resolveAgentPath(projectId, agentId)
-    return cwd ? crawlRepoFiles(cwd).catch(() => []) : []
-  }, [])
+  // The checkout `agentId` names: its own while the run is live, else the project's root (#738).
+  const cwd = await resolveAgentPath(projectId, agentId)
+  return cwd ? crawlRepoFiles(cwd).catch(() => []) : []
 }
 
 /**
- * The name of origin's default branch on the computer a run is on: what a run that made its own
- * branch and was told no other started from, read by the rule the start itself goes by. Null for a
- * clone with none: such a run started from whatever was checked out, which nobody wrote down.
+ * The name of origin's default branch in the project's clone: what a run that made its own branch
+ * and was told no other started from, read by the rule the start itself goes by. Null for a clone
+ * with none: such a run started from whatever was checked out, which nobody wrote down.
  */
-export async function onAgentMainBranch(projectId: string, agentId: string): Promise<string | null> {
-  return relayOr(agentId, 'onAgentMainBranch', [projectId, agentId], async () => {
-    const root = await resolveProjectPath(projectId)
-    if (!root) return null
-    const main = await originDefaultBranch(root).catch(() => undefined)
-    return main?.slice('origin/'.length) ?? null
-  }, null)
+export async function onAgentMainBranch(projectId: string): Promise<string | null> {
+  const root = await resolveProjectPath(projectId)
+  if (!root) return null
+  const main = await originDefaultBranch(root).catch(() => undefined)
+  return main?.slice('origin/'.length) ?? null
 }
 
 /** The project's page on its git host and the git host's name (#489, #1820), or null: no git host package, or no remote there. */
@@ -402,20 +289,6 @@ export async function onRepositoryOffer(projectId: string): Promise<RepositoryOf
   return (await repositoryOffer(cwd)) ?? null
 }
 
-/**
- * The project's git status (#491): active branch, dirty flag, linked PR. Null when not a repo.
- * Pass a live `agentId` to read that agent's worktree, which is the branch and the dirty
- * state that actually belong to it (#738). A run-scoped read is since-filtered (#1255): an agent on
- * a reused pinned branch must not wear a predecessor's merged PR as its own badge.
- */
-export async function onGitStatus(projectId: string, agentId?: string): Promise<GitStatus | null> {
-  return relayOr(agentId, 'onGitStatus', [projectId, agentId], async () => {
-    const cwd = await resolveAgentPath(projectId, agentId)
-    if (!cwd) return null
-    const since = agentId !== undefined ? startedAtFromAgentId(agentId) : undefined
-    return (await readGitStatus(cwd, since !== undefined ? { since } : {})) ?? null
-  }, null)
-}
 
 /**
  * The end-of-session handoff (#799): the branch a finished session left its work on, what it
@@ -428,10 +301,8 @@ export async function onGitStatus(projectId: string, agentId?: string): Promise<
  * the branch is what this asks about.
  */
 export async function onAgentHandoff(projectId: string, agentId: string): Promise<AgentHandoff | null> {
-  return relayOr(agentId, 'onAgentHandoff', [projectId, agentId], async () => {
-    const cwd = await resolveProjectPath(projectId)
-    if (!cwd || !isRunId(agentId)) return null
-    const agent = await findAgent(cwd, agentId).catch(() => undefined)
-    return (agent && (await readRunHandoff(cwd, agent).catch(() => undefined))) ?? null
-  }, null)
+  const cwd = await resolveProjectPath(projectId)
+  if (!cwd || !isRunId(agentId)) return null
+  const agent = await findAgent(cwd, agentId).catch(() => undefined)
+  return (agent && (await readRunHandoff(cwd, agent).catch(() => undefined))) ?? null
 }

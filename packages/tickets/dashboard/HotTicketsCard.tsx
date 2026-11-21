@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { ArrowUp, Bot, CirclePause, Clock, WifiOff, type LucideIcon } from 'lucide-react'
-import { Button, Card, Facts, LinkActions, PageLink, Panel, PanelGroup, PanelNote, Skeleton, Slot, cn, formatDateTime, inPlace, runSaid, usePolled, useModuleHost, useOpenAgentDown, type UiCardProps, type UiProject, type ReadState } from '@openagt/ui/module'
+import { ArrowUp, Bot, CirclePause, Clock, type LucideIcon } from 'lucide-react'
+import { Button, Card, Facts, LinkActions, PageLink, Panel, PanelGroup, PanelNote, Skeleton, Slot, cn, inPlace, runSaid, usePolled, useModuleHost, useOpenAgentDown, type UiCardProps, type UiProject, type ReadState } from '@openagt/ui/module'
 import { claimState, heldBack, holderAgent, hotLane, ticketLink, withHolder, type ClaimState, type HotLane } from '../src/module.js'
 import { holdingRun } from './lib/holding-run.js'
 import { listTickets } from './lib/list.js'
@@ -24,8 +24,8 @@ interface HotTicket {
   project: UiProject
   lane: CardLane
   ticket: WorkspaceTicket
-  /** The run holding it: how it stands, and, while its computer does not answer, which computer and when it was last seen. */
-  holder?: { id: string; status: string; machine?: string; seenAt?: string }
+  /** The run holding it, and how it stands. */
+  holder?: { id: string; status: string }
 }
 
 /** What one read of every project answered: the hot tickets, and the projects whose tickets could not be read. */
@@ -40,7 +40,6 @@ const NOTHING_READ: Read = { hot: [], errors: [] }
 const LANES: { key: CardLane; heading: string }[] = [
   { key: 'stale', heading: 'Claimed, run stopped' },
   { key: 'working', heading: 'Being worked on' },
-  { key: 'offline', heading: 'Claimed, computer offline' },
   { key: 'high-priority', heading: 'High priority' },
   { key: 'waiting', heading: 'Waiting' },
 ]
@@ -70,7 +69,7 @@ export function HotTicketsCard({ projects }: UiCardProps) {
               project,
               lane,
               ticket: withHolder(ticket, holdingRun(agent)),
-              ...(agent ? { holder: { id: agent.id, status: agent.status, ...(agent.machine ? { machine: agent.machine } : {}), ...(agent.seenAt ? { seenAt: agent.seenAt } : {}) } } : {}),
+              ...(agent ? { holder: { id: agent.id, status: agent.status } } : {}),
             })
           }
           return { project, hot }
@@ -171,10 +170,6 @@ function stateOf(hot: HotTicket): { Icon: LucideIcon; says: string; tone: string
   const holder = hot.ticket.lockedByAgent?.name ?? hot.ticket.lockedBy
   const by = holder ? `, claimed by ${holder}` : ''
   if (hot.lane === 'working') return { Icon: Bot, says: `Its run ${hot.holder?.status === 'waiting' ? runSaid('waiting') : `is ${runSaid('running')}`}${by}: open the run`, tone: 'text-success' }
-  if (hot.lane === 'offline') {
-    const seen = hot.holder?.seenAt ? `, last seen ${formatDateTime(hot.holder.seenAt)}` : ''
-    return { Icon: WifiOff, says: `${hot.holder?.machine ?? 'Its computer'} is offline${seen}: how its run stands is unknown${by}`, tone: 'text-muted-foreground' }
-  }
   if (hot.lane === 'stale') return { Icon: CirclePause, says: `${hot.holder ? (ENDED[hot.holder.status] ?? 'Run stopped') : 'No run holds it any more'}${by}`, tone: 'text-warning' }
   if (hot.lane === 'high-priority') return { Icon: ArrowUp, says: `Priority ${hot.ticket.priority ?? ''}`.trim(), tone: priorityTone(hot.ticket.priority) }
   return { Icon: Clock, says: `Waiting${hot.ticket.waiting ? ` on ${hot.ticket.waiting}` : ''}`, tone: 'text-muted-foreground' }

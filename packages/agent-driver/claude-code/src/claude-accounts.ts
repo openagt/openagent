@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import type { AgentAccount } from '@openagt/hooks'
 
 // The Claude accounts runs may use (`@openagt/agent-driver` keeps the list): the person's
-// own login, which Claude Code keeps (the Mac's Keychain, a server's login file), and the ones added
+// own login, which Claude Code keeps (the Mac's Keychain, else its own login file), and the ones added
 // beside it, each a login Claude Code made for a computer nobody sits at (`claude setup-token`). A
 // turn on an added account has its login in the turn's environment alone, where Claude Code reads
 // it before its own: the person's terminal never changes account.

@@ -5,11 +5,8 @@ import { certificateNames } from '../secure-address.js'
 import { setDashboardContext, type DashboardContext } from '../dashboard-rpc/context.js'
 import { RPC_HANDLERS, RPC_EVENT_STREAM } from '../dashboard-rpc/index.js'
 import { followRunsChanged } from '../dashboard-rpc/runs-changed.js'
-import { ELSEWHERE_FORWARDED } from '../dashboard-rpc/relay-dispatch.js'
 import { callModule } from '../dashboard-rpc/module-calls.js'
-import { isElsewhereId } from './elsewhere.js'
 import { errorMessage } from '../error-message.js'
-import { PERSON_HEADER, asCaller } from './person.js'
 import { sendBody } from './compress.js'
 
 /**
@@ -133,12 +130,12 @@ async function serveEventStream(req: IncomingMessage, res: ServerResponse, url: 
     'content-type': 'text/event-stream',
     'cache-control': 'no-store',
     connection: 'keep-alive',
-    // What passes a device's request on to the daemon must not hold the lines back.
+    // A proxy in front of the dashboard must not hold the lines back.
     'x-accel-buffering': 'no',
   })
   // The first line may be a while away: the headers go now.
   res.flushHeaders()
-  // Heard from the start: the page can go while the source is set up (a saved machine's lookup can take seconds).
+  // Heard from the start: the page can go while the source is set up.
   let gone = false
   let stop: (() => void) | undefined
   const finish = (): void => {
@@ -149,31 +146,22 @@ async function serveEventStream(req: IncomingMessage, res: ServerResponse, url: 
   }
   req.on('close', finish)
   req.on('error', finish)
-  let finished = false
-  stop = await RPC_EVENT_STREAM(
-    projectId,
-    agentId,
-    value => {
-      res.write(`data: ${JSON.stringify(value)}\n\n`)
-    },
-    () => {
-      finished = true
-      res.end()
-    },
-  )
+  stop = await RPC_EVENT_STREAM(projectId, agentId, value => {
+    res.write(`data: ${JSON.stringify(value)}\n\n`)
+  })
   if (!stop) {
     // Nothing to stream (unknown project): end cleanly, which the client reads as "done", not
     // "lost" — the same distinction the Channel's clean-vs-errored close carried.
     res.end()
     return
   }
-  // A source that came up after the page left is stopped at once; one exhausted before it was wired has nothing to stop.
-  if (gone && !finished) stop()
+  // A source that came up after the page left is stopped at once.
+  if (gone) stop()
 }
 
 /**
- * Tell the page each time the runs of a project change, here or on a saved machine
- * (runs-changed.ts), as Server-Sent Events, until it goes away: it reads them again at once. A
+ * Tell the page each time the runs of a project change (runs-changed.ts), as Server-Sent Events,
+ * until it goes away: it reads them again at once. A
  * comment line now and then keeps whatever passes the page's request on from taking it for idle.
  */
 function serveChangesStream(req: IncomingMessage, res: ServerResponse): void {
@@ -236,13 +224,11 @@ export function makeRpcMount(context: DashboardContext): (req: IncomingMessage, 
     const name = url.pathname.slice(RPC_PREFIX.length + 1)
     try {
       if (req.method === 'GET' && name === 'events') {
-        // As the person whose device asks: a run of the owner's other computer is not followed for a person the owner invited.
-        await asCaller(req.headers[PERSON_HEADER], () => serveEventStream(req, res, url))
+        await serveEventStream(req, res, url)
         return true
       }
       if (req.method === 'GET' && name === 'changes') {
-        // As the person whose device asks, for as long as it listens: the owner's other computers' projects are no one else's to hear of.
-        await asCaller(req.headers[PERSON_HEADER], async () => serveChangesStream(req, res))
+        serveChangesStream(req, res)
         return true
       }
       const moduleCall = moduleCallOf(name)
@@ -261,12 +247,9 @@ export function makeRpcMount(context: DashboardContext): (req: IncomingMessage, 
         await sendJson(req, res, 400, { error: 'the request body must be a JSON array of arguments' })
         return true
       }
-      // A module's function is called as the relay names it, with the module and the function the path says.
-      const [fn, fnArgs] = moduleCall ? ['callModule', [args[0], moduleCall.pkg, moduleCall.name, args[1]]] : [name, args]
-      const local = moduleCall ? () => callModule(...(fnArgs as Parameters<typeof callModule>)) : () => Promise.resolve(handler!(...(args as never[])))
-      // A call about another computer's project is that computer's to answer (elsewhere.ts).
-      const call = isElsewhereId(fnArgs[0]) && ELSEWHERE_FORWARDED.has(fn) ? () => context.remote.forward(fnArgs[0] as string, fn, fnArgs) : local
-      await sendJson(req, res, 200, { ret: await asCaller(req.headers[PERSON_HEADER], call) })
+      // A module's function, with the module and the function the path says, in the project sent first.
+      const ret = moduleCall ? await callModule(args[0] as string | null, moduleCall.pkg, moduleCall.name, args[1]) : await handler!(...(args as never[]))
+      await sendJson(req, res, 200, { ret })
     } catch (err) {
       // An RPC that throws is a failed call, not a dead daemon: answer it and stay up. Without
       // this a rejected promise inside the mount became an unhandled rejection.

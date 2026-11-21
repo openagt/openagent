@@ -19,15 +19,8 @@ import { SESSIONS_ID } from '../project-address.js'
 export interface ProjectSummary {
   /** Registry id (stable, URL-safe). */
   id: string
-  /** Absolute repo path: on the computer the project is on. */
+  /** Absolute repo path. */
   path: string
-  /**
-   * The saved machine the project is on, when it is not on this computer (elsewhere.ts): what the
-   * page asks of it is asked there, and a run of it starts there unless another computer is picked.
-   */
-  machine?: string
-  /** The packages that bring a module's pages to a project of another computer's, as that computer said them. */
-  modules?: string[]
   /** Display name (the path's basename). */
   name: string
   /** True when the repo still has its `.openagent/` marker. */

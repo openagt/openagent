@@ -90,7 +90,7 @@ export function SessionRepoPicks({
     return () => clearTimeout(later)
   }, [open, repos])
   const projectRows = useMemo<Row[]>(
-    () => projects.filter(p => p.machine === undefined).map(p => ({ value: `project:${p.id}`, label: folderName(p.path), detail: p.path, path: p.path, search: p.path })),
+    () => projects.map(p => ({ value: `project:${p.id}`, label: folderName(p.path), detail: p.path, path: p.path, search: p.path })),
     [projects],
   )
   const repoRows = useMemo<Row[]>(

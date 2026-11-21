@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import type { ReactNode } from 'react'
+
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { forgetRemembered } from '../lib/use-async.js'
 
@@ -7,8 +7,7 @@ const accounts = vi.hoisted(() => ({ onAgentAccounts: vi.fn(), sendUseAgentAccou
 vi.mock('../rpc/accounts.js', () => accounts)
 const logins = vi.hoisted(() => ({ onAgentState: vi.fn(), sendAgentFix: vi.fn(), sendStopAgentFix: vi.fn(), onGitHosts: vi.fn(), sendGitHostInstall: vi.fn(), sendGitHostLogin: vi.fn(), sendUseGitHostAccount: vi.fn() }))
 vi.mock('../rpc/logins.js', () => logins)
-const servers = vi.hoisted(() => ({ onServerLogins: vi.fn(), sendUseLoginsOn: vi.fn(), sendAllowLogins: vi.fn(), sendSettleLogin: vi.fn() }))
-vi.mock('../rpc/server-logins.js', () => servers)
+
 
 const { AddedAccountsUsage, freeIn } = await import('./AgentAccounts.js')
 const { AccountsList } = await import('./Accounts.js')
@@ -41,7 +40,7 @@ function states(claude: object, codex: object = { driver: 'codex', ready: true }
 beforeEach(() => {
   states({ driver: 'claude-code', ready: true })
   logins.onGitHosts.mockResolvedValue({ hosts: [] })
-  servers.onServerLogins.mockResolvedValue({ computer: 'Studio', servers: [] })
+
 })
 
 afterEach(() => {
@@ -49,7 +48,7 @@ afterEach(() => {
   forgetRemembered()
   for (const fn of Object.values(accounts)) fn.mockReset()
   for (const fn of Object.values(logins)) fn.mockReset()
-  for (const fn of Object.values(servers)) fn.mockReset()
+
 })
 
 describe('Agent accounts', () => {
@@ -185,7 +184,7 @@ describe('Agent accounts', () => {
     expect(runAccounts(alone).map(account => account.name)).toEqual(['Claude login on VPS'])
   })
 
-  test("the Permissions page draws the modules' parts, each with the line under an account; with none, the rest of the page", async () => {
+  test("the Permissions page draws the modules' parts; with none, the rest of the page", async () => {
     views(TWO)
     const part = {
       place: 'permissions.section' as const,
@@ -194,12 +193,7 @@ describe('Agent accounts', () => {
       package: 'an-accounts-module',
       projects: [],
       computer: true as const,
-      View: ({ accountWhere }: { accountWhere?: (account: { agent: 'claude' | 'codex'; own: boolean; name: string }) => ReactNode }) => (
-        <div>
-          <p>The module's part</p>
-          <p>{accountWhere ? 'with the line under an account' : 'without'}</p>
-        </div>
-      ),
+      View: () => <p>The module's part</p>,
     }
     const { unmount } = render(
       <ModulesContext.Provider value={mountedOf({ views: { 'permissions.section': [part] } })}>
@@ -207,7 +201,6 @@ describe('Agent accounts', () => {
       </ModulesContext.Provider>,
     )
     expect(await screen.findByText("The module's part")).toBeTruthy()
-    expect(screen.getByText('with the line under an account')).toBeTruthy()
     unmount()
     render(
       <ModulesContext.Provider value={mountedOf()}>

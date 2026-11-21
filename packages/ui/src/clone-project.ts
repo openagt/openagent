@@ -56,8 +56,6 @@ const nodeCloneRunner: CloneRunner = (args, env, timeoutMs) =>
 
 /** How long a clone may take: a large repository over a slow line, not a hang. */
 const CLONE_TIMEOUT_MS = 15 * 60_000
-/** How long asking a repository's host whether it is readable may take. */
-const READ_TIMEOUT_MS = 30_000
 
 /** What git says when it has no login that can read a repository. */
 const NO_LOGIN = /could not read Username|Authentication failed|terminal prompts disabled|Repository not found/i
@@ -130,22 +128,6 @@ async function cloneTo({ url, address, path }: CloneTarget, opts: CloneOptions):
 }
 
 /**
- * Whether this computer's logins read the repository at the address, asked of its host without
- * cloning anything: what a run of a project cloned here first would hit before it starts. The
- * answer is the clone's own words when they cannot.
- */
-export async function canRead(typed: string, opts: CloneOptions = {}, subject = 'This computer'): Promise<{ ok: true } | { ok: false; error: string }> {
-  const target = cloneTarget(typed, opts.home)
-  if (!target) return { ok: false, error: `"${typed.trim().slice(0, 80)}" ${NOT_AN_ADDRESS}` }
-  const ssh = overSsh(target.url, target.address, opts)
-  if (ssh) return ssh
-  const said = await askGit(['ls-remote', '--heads', '--', target.url], opts, READ_TIMEOUT_MS)
-  if (said.ok) return { ok: true }
-  if (said.timedOut) return { ok: false, error: `${target.address} did not answer in time.` }
-  return { ok: false, error: gitRefusal(said.said, target.address, 'git could not read it.', subject) }
-}
-
-/**
  * An SSH address would be read with the person's own key: refused, unless the account's settings
  * take that host's SSH addresses over the web, where the account's login is the one asked.
  */
@@ -170,9 +152,9 @@ function askGit(args: readonly string[], opts: CloneOptions, timeoutMs: number):
   )
 }
 
-/** What git said when it could not reach the repository, in a person's words, of the computer it ran on. */
-function gitRefusal(said: string, address: string, otherwise: string, subject = 'This computer'): string {
+/** What git said when it could not reach the repository, in a person's words. */
+function gitRefusal(said: string, address: string, otherwise: string): string {
   const lines = said.split('\n').map(line => line.trim().replace(/^(fatal|error): /i, '')).filter(line => line && !SAID_EVERY_TIME.test(line))
   const words = lines.slice(-2).join(' ') || otherwise
-  return NO_LOGIN.test(said) ? `${subject} has no account of OpenAgent's that can read ${address}, or there is no such repository: a private one needs one, added in Permissions. git said: ${words}` : words
+  return NO_LOGIN.test(said) ? `This computer has no account of OpenAgent's that can read ${address}, or there is no such repository: a private one needs one, added in Permissions. git said: ${words}` : words
 }

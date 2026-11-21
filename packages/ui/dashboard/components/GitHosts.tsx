@@ -1,9 +1,7 @@
 import { useState } from 'react'
 import { Check, ChevronDown, Loader2, MoreHorizontal, Plus } from 'lucide-react'
 import type { GitHostHome } from '../../src/index.js'
-import { sendForgetGitHostAccount, sendUseGitHostAccount, type GitHostRow, type GitHostsView } from '../rpc/logins.js'
-import { onMachineGitHosts } from '../rpc/machines.js'
-import { readAhead, usePolled } from '../lib/use-async.js'
+import { sendForgetGitHostAccount, sendUseGitHostAccount, type GitHostRow } from '../rpc/logins.js'
 import { cn } from '../lib/utils.js'
 import { FocusHome } from '../lib/focus-home.js'
 import { Button } from './ui/button.js'
@@ -11,7 +9,6 @@ import { Panel, PanelGroup, PanelRow } from './ui/panel.js'
 import { Slot, WordsShape } from './ui/slot.js'
 import { HostFix, useAddGitAccount } from './AddGitAccount.js'
 import { PackageLogo, hostWords, useGitHosts } from './Logins.js'
-import { AccountWhere, useServers } from './ServerLogins.js'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu.js'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip.js'
 import { RowSaid, rowButtonClass, RowChevron } from './ui/row-item.js'
@@ -109,7 +106,6 @@ function NoPackage({ row }: { row: GitHostRow }) {
 function HostAccounts({ row, onChanged }: { row: GitHostRow; onChanged: () => Promise<void> }) {
   const p = row.provider!
   const [error, setError] = useState<string | undefined>()
-  const servers = useServers()
   // The account whose removal waits for the person's yes, and the press under way: its words say so until the answer.
   const [removing, setRemoving] = useState<string | undefined>()
   const [pending, setPending] = useState<{ login: string; press: 'use' | 'remove' } | undefined>()
@@ -120,8 +116,7 @@ function HostAccounts({ row, onChanged }: { row: GitHostRow; onChanged: () => Pr
       const done = await go()
       if (!done.ok) setError(done.error)
       setRemoving(undefined)
-      // What the servers said of an account goes with it.
-      await Promise.all([onChanged(), servers.reload()])
+      await onChanged()
     } finally {
       setPending(undefined)
     }
@@ -146,7 +141,7 @@ function HostAccounts({ row, onChanged }: { row: GitHostRow; onChanged: () => Pr
                 state={<Avatar src={account.avatar} login={account.login} />}
                 title={`@${account.login}`}
                 meta={[
-                  <span className={cn(!account.ok && 'text-warning')}>{!account.ok ? `${p.name} no longer takes this login: add it again` : account.from !== undefined ? `From ${account.from}` : 'Added to OpenAgent'}</span>,
+                  <span className={cn(!account.ok && 'text-warning')}>{!account.ok ? `${p.name} no longer takes this login: add it again` : 'Added to OpenAgent'}</span>,
                   account.runs && <span className="text-success">Runs use this</span>,
                 ]}
                 under={
@@ -166,8 +161,6 @@ function HostAccounts({ row, onChanged }: { row: GitHostRow; onChanged: () => Pr
                         </Button>
                       </span>
                     )}
-                    {/* Where it works: this computer, and the person's servers that use its logins. */}
-                    <AccountWhere account={{ kind: 'git', host: row.host, login: account.login }} />
                   </>
                 }
                 // Its menu stands at rest, faint, on the inset: the row has no fact that could give way to it.
@@ -222,28 +215,12 @@ function Avatar({ src, login }: { src: string | undefined; login: string }) {
   )
 }
 
-/** Where a saved machine's git hosts are remembered on the page: a switch back to it shows its account at once. */
-const machineGitHostsKey = (machineId: string): string => `machine-git-hosts:${machineId}`
-
-/** Ask a saved machine for its git hosts before it is picked, so the pick shows its account from its first frame. */
-export function readMachineGitHostsAhead(machineId: string): void {
-  readAhead(machineGitHostsKey(machineId), () => onMachineGitHosts(machineId))
-}
-
-/** A git host's accounts on the computer a run goes to: this computer's, or a saved machine's, asked there. */
-function useGitHostsOn(machineId: string | undefined): GitHostsView | undefined {
-  const own = useGitHosts()
-  const theirs = usePolled<GitHostsView | null | undefined>(machineId !== undefined ? () => onMachineGitHosts(machineId) : null, undefined, 30_000, [machineId], machineId !== undefined ? { remember: machineGitHostsKey(machineId) } : undefined)
-  return machineId === undefined ? own.view : (theirs.value ?? undefined)
-}
-
 /**
- * The account a session works as at the project's host, on the computer the run goes to: the one
- * picked for this session, while that computer still has it; else the one that computer's runs
- * use. Undefined with no account there.
+ * The account a session works as at the project's host: the one picked for this session, while
+ * this computer still has it; else the one its runs use. Undefined with no account there.
  */
-export function useSessionAccount(address: string | undefined, machineId: string | undefined, picked: string | undefined): string | undefined {
-  const view = useGitHostsOn(machineId)
+export function useSessionAccount(address: string | undefined, picked: string | undefined): string | undefined {
+  const { view } = useGitHosts()
   const host = address?.split('/')[0]
   const accounts = view?.hosts.find(one => one.host === host)?.provider?.accounts
   return (picked !== undefined && accounts?.some(account => account.login === picked && account.ok) ? picked : undefined) ?? accounts?.find(account => account.runs)?.login
@@ -251,21 +228,21 @@ export function useSessionAccount(address: string | undefined, machineId: string
 
 /**
  * The git host account a session pushes and opens its pull request with, under the message box
- * at the right: the project's host, on the computer the run goes to. Its menu picks another of
- * the accounts there, for this session only: the computer's own pick, which the Permissions page
- * makes, stays what it is; or adds one. A host with no account logged in says so, and its press
- * goes where one is. Nothing for a project with no remote, or a host no package answers for.
+ * at the right: the project's host. Its menu picks another of the accounts there, for this session
+ * only: the computer's own pick, which the Permissions page makes, stays what it is; or adds one.
+ * A host with no account logged in says so, and its press adds one. Nothing for a project with no
+ * remote, or a host no package answers for.
  */
-export function GitAccountMenu({ address, machineId, on, busy, picked, onPick, onAddThere }: { address: string | undefined; machineId: string | undefined; on: string | undefined; busy: boolean; picked: string | undefined; onPick: (login: string) => void; /** Where another computer's accounts are added: its own page. */ onAddThere: () => void }) {
-  const view = useGitHostsOn(machineId)
-  const account = useSessionAccount(address, machineId, picked)
+export function GitAccountMenu({ address, busy, picked, onPick }: { address: string | undefined; busy: boolean; picked: string | undefined; onPick: (login: string) => void }) {
+  const { view } = useGitHosts()
+  const account = useSessionAccount(address, picked)
   // One added from here is the one this session works as.
   const adding = useAddGitAccount(login => onPick(login))
   const host = address?.split('/')[0]
   const row = host === undefined ? undefined : view?.hosts.find(one => one.host === host)
   const p = row?.provider
   if (!row || !p) return null
-  const onAdd = machineId === undefined ? () => adding.add(row.host) : onAddThere
+  const onAdd = () => adding.add(row.host)
   if (account === undefined)
     return (
       <>
@@ -276,7 +253,7 @@ export function GitAccountMenu({ address, machineId, on, busy, picked, onPick, o
         {adding.dialog}
       </>
     )
-  const said = `This session pushes and opens pull requests as @${account}${on !== undefined ? ` on ${on}` : ''}`
+  const said = `This session pushes and opens pull requests as @${account}`
   return (
     <>
     <DropdownMenu>
@@ -291,7 +268,7 @@ export function GitAccountMenu({ address, machineId, on, busy, picked, onPick, o
       {/* Opens rightward from its button, and the tick leads its rows (his picks). */}
       <DropdownMenuContent align="start" className="min-w-[14rem]">
         <DropdownMenuGroup>
-          <DropdownMenuLabel>{`${p.name} account for this session${on !== undefined ? `, on ${on}` : ''}`}</DropdownMenuLabel>
+          <DropdownMenuLabel>{`${p.name} account for this session`}</DropdownMenuLabel>
           {p.accounts.map(login => (
             <DropdownMenuItem key={login.login} disabled={!login.ok} onClick={() => onPick(login.login)}>
               <Check className={cn('h-3.5 w-3.5 shrink-0', login.login === account ? 'opacity-100' : 'opacity-0')} aria-hidden />

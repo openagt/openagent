@@ -6,23 +6,13 @@ import { isDriverName } from './driver-names.js'
 import { isPresetId, MODULE_NAME, type Hooks, type ProjectRef, type RunHost, type RunOptions, type RunRequest } from '@openagt/hooks'
 import { sessionRepos } from '@openagt/git-branches'
 import { nameStarted } from './started-names.js'
-import { findCheckout, fromDiaryLine, isPidAlive, isRunId, projectBranches, readLiveMetas, resolveAgentDiary, type AgentMeta, type AnyDiaryLine } from './store/index.js'
+import { findCheckout, isPidAlive, projectBranches, readLiveMetas } from './store/index.js'
 import { OPENAGENT_DIR } from './openagent-dir.js'
-import type { OpenAgentEvent } from './events.js'
 import type { StartAgentOptions, StartAgentResult, AddProjectResult, RemoveProjectResult, StartedInResult } from './dashboard/types.js'
-import type { EventsSource, RemoteAgents } from './dashboard-rpc/context.js'
-import { relayRpc, startRemoteAgent, targetOf, type BringProject, type RelayProject, type RemoteTarget } from './dashboard/remote-run.js'
-import { idInLineName, isElsewhereId } from './dashboard/elsewhere.js'
-import { createRemoteAgents } from './remote-agents.js'
 import { ownRunsWatch } from './dashboard/runs-watch.js'
-import { cloneProject, cloneTarget } from './clone-project.js'
-import { copyLoginsTo, loginsAreThere, ownLogins, type OwnLogins } from './dashboard/copy-logins.js'
 import { screenInDiary } from './dashboard/screen.js'
-import { gitUserOf, onMachine } from './dashboard/run-rows.js'
-import { tailAgentEvents } from './dashboard-rpc/events-tail.js'
-import { addProject, listProjects, readPreferences, removeProject, type MachineRecord } from './registry.js'
-import { savedMachines } from './other-computers.js'
-import { errorMessage, fileBranchRepo, installProject, projectKey, projectNameOf, repositoryAddress, sessionsHome, writeSharing, isSkillName, projectId } from '@openagt/agent-data'
+import { addProject, listProjects, readPreferences, removeProject } from './registry.js'
+import { errorMessage, fileBranchRepo, installProject, projectKey, sessionsHome, writeSharing, isSkillName, projectId } from '@openagt/agent-data'
 import { publishedBranch } from '@openagt/agent-data/names'
 import { branchesOnOrigin } from './dashboard/start-branch.js'
 import { removeProjectFiles } from './remove-files.js'
@@ -36,26 +26,11 @@ import { projectAddresses, SESSIONS_ID } from './project-address.js'
 import { readySessionsHome } from './sessions-home.js'
 
 /**
- * What the daemon does for a project (#393): start a run, here or on a saved machine, add, find
- * and remove a project, and stream a run here back to the machine that sent it. What this
- * computer knows of the runs on the person's other computers is remote-agents.ts's. Split from
- * daemon.ts so that file reads as the daemon's lifecycle (ports, boot, shutdown). The daemon runs
- * no agent itself: a Start here goes to this computer's host (`run.host`, #2394), the module of
- * the distribution that gives it, and the run belongs to that module.
+ * What the daemon does for a project (#393): start a run, add, find and remove a project. Split
+ * from daemon.ts so that file reads as the daemon's lifecycle (ports, boot, shutdown). The daemon
+ * runs no agent itself: a Start here goes to this computer's host (`run.host`, #2394), the module
+ * of the distribution that gives it, and the run belongs to that module.
  */
-
-/** How long a project folder's repository address is trusted before git is asked again. */
-const ADDRESS_KEPT_MS = 10_000
-
-/** How long a coding agent's name may be that another machine answers: a row shows it. */
-const MAX_DRIVER_NAME = 64
-
-/** How many projects this computer clones at once for other machines; one more is told to ask again. */
-const MAX_COMING = 3
-/** How many clones are remembered at once, on their way or failed. */
-const MAX_KEPT = 32
-/** How much of a failed clone's reason is kept and told: git passes on what the other side said. */
-const MAX_REASON = 600
 
 /** The coding agent a Start goes to when none was picked: this computer's host's own default (agent-driver's). */
 const DEFAULT_DRIVER = 'claude-code'
@@ -72,8 +47,7 @@ interface StartName {
 
 /**
  * Why a Start's picks are refused before anything is asked of the project, or nothing: only what
- * reads as the thing it names goes on to the host. The branches are checked once the run is known
- * to start here: a machine picked to run on is sent none.
+ * reads as the thing it names goes on to the host.
  */
 function refusedPicks(options: StartAgentOptions, noProject: boolean): string | undefined {
   // A session with no project: with no branch, and nothing committed or published; the repos it
@@ -83,10 +57,7 @@ function refusedPicks(options: StartAgentOptions, noProject: boolean): string | 
   }
   // Another host runs a project's run, on a machine of its own.
   if (options.host !== undefined && (typeof options.host !== 'string' || !MODULE_NAME.test(options.host))) return 'A host is named by its id.'
-  if (options.host !== undefined && options.machine !== undefined) return 'A run goes to a machine or to a host, not both.'
-  if (noProject && options.host !== undefined) return 'A session with no project runs on this computer or a machine of yours.'
-  // Its repos are folders on this computer, copied into its folder here: on a machine there is nothing to copy.
-  if (noProject && options.machine !== undefined && options.repos !== undefined) return 'The repos are folders on this computer: a session with them runs here. Pick this computer, or start without them.'
+  if (noProject && options.host !== undefined) return 'A session with no project runs on this computer.'
   // A login is one word.
   if (options.account !== undefined && !(typeof options.account === 'string' && /^\S+$/.test(options.account))) return 'An account is named by its login.'
   if (options.preset !== undefined && !isPresetId(options.preset)) return 'A preset is named by its id.'
@@ -108,10 +79,6 @@ export interface ProjectRuntimeOptions {
   cwd: string
   /** Env for the registry lookups (#393). */
   env: NodeJS.ProcessEnv
-  /** How a project another machine asks for is cloned; `cloneProject` when unsaid. */
-  clone?: (address: string) => ReturnType<typeof cloneProject>
-  /** The logins this OpenAgent copies to another person's computer; its user's `gh` and its own Claude login when unsaid. */
-  logins?: (env: NodeJS.ProcessEnv) => Promise<OwnLogins>
   /** The naming sessions kept waiting for runs started here; without, each run asks for its own name. */
   naming?: ReadyNaming
   /** This computer's host, the distribution's (`distribution-hooks.ts`): where a run started here runs. */
@@ -136,28 +103,10 @@ export interface ProjectRuntime {
   onRemoveProject: (projectId: string, files?: boolean) => Promise<RemoveProjectResult>
   /** A Start is near in a project, on a coding agent: the run's naming session is started for it. */
   onPrepareStart: (projectId: string, driver?: string) => void
-  /** The live event stream for an agent this daemon is relaying from a machine (#1067), else undefined
-   *  so `onEvents` falls back to tailing the on-disk log. Wired as the dashboard's events source. */
-  remoteEventsSource: EventsSource
-  /** This machine's own id for its project cloned from `address`, the name a relayed call gives a
-   *  project; undefined when no project here is cloned from it. */
-  projectAt: (address: string) => Promise<string | undefined>
-  /**
-   * Where this computer's copy of the project at `address` stands, for a machine that sends a run
-   * here. With `bring`, a project this computer does not have is cloned and added, on its own:
-   * the answer comes at once, and says `coming` until the project is there.
-   */
-  bringProject: (address: string, bring?: BringProject) => Promise<RelayProject>
-  /** Tail a relay-started agent's on-disk events (#1067): the daemon's `/_relay/events` endpoint uses
-   *  it to stream one agent back to whichever daemon relayed it here. */
-  tailRelayEvents: (projectId: string, agentId: string, onEvent: (event: OpenAgentEvent) => void) => () => void
-  /** The relayed-agent lookup the dashboard's read RPCs consult (#1067 slice 2): which machine a remote
-   *  run runs on, so a run-scoped RPC forwards there instead of resolving a local checkout. */
-  remoteAgents: RemoteAgents
   /** Where the live screen of a run on this computer answers, as its diary names it; nothing when
    *  the run has none: it opened no screen, closed it, or ended. */
   screenOf: (projectId: string, agentId: string) => Promise<string | undefined>
-  /** Let go of the relayed streams. */
+  /** Let go of the naming sessions kept waiting. */
   dispose: () => Promise<void>
 }
 
@@ -165,7 +114,7 @@ export interface ProjectRuntime {
  * The daemon's per-project runtime (#393). The home `cwd` is the default target: a request with
  * no project id (or the home id) resolves to it without a registry lookup.
  */
-export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = ownLogins, naming, host, otherHosts = async () => [], lifecycle }: ProjectRuntimeOptions): ProjectRuntime {
+export function createProjectRuntime({ cwd, env, naming, host, otherHosts = async () => [], lifecycle }: ProjectRuntimeOptions): ProjectRuntime {
   const homeId = projectId(resolve(cwd))
 
   // A project id resolves to its repo path via the registry; the home id (or none)
@@ -177,57 +126,15 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
     return records.find(record => record.id === id)?.path
   }
 
-  // The project here that a relayed call names by its repository's address: the first on the list
-  // cloned from it, every time, so a run's later calls reach the project it started in. A folder's
-  // address is kept for a few seconds, so a run's reads, which poll, do not ask git about every
-  // project each time. Only an address is kept: a folder that had none is asked again.
-  const addresses = new Map<string, { address: string; until: number }>()
-  const addressOf = async (path: string): Promise<string | undefined> => {
-    // The sessions with no project go by their own name on every machine: each has a sessions home of its own, which answers to it.
-    if (path === sessionsHome(env)) return SESSIONS_ID
-    const kept = addresses.get(path)
-    if (kept && kept.until > Date.now()) return kept.address
-    const address = await repositoryAddress(path)
-    if (address === undefined) addresses.delete(path)
-    else addresses.set(path, { address, until: Date.now() + ADDRESS_KEPT_MS })
-    return address
-  }
-  const projectAt = async (address: string): Promise<string | undefined> => {
-    // The sessions with no project: every OpenAgent has a home of its own for them, under the one id.
-    if (address === SESSIONS_ID) return SESSIONS_ID
-    // A project with no address is named by its id here, by the person's other computer that lists it.
-    const id = idInLineName(address)
-    if (id !== undefined) return (await listProjects(env)).some(record => record.id === id) ? id : undefined
-    for (const record of await listProjects(env)) {
-      if ((await addressOf(record.path)) === address) return record.id
-    }
-    return undefined
-  }
-
-  // What this computer knows of the runs and projects on the person's other computers, and the
-  // runs it follows there (remote-agents.ts): the lookup the dashboard's RPCs consult.
-  const remote = createRemoteAgents({ env, resolveProject, addressOf, bringHere: (address, bring) => bringProject(address, bring) })
-
   // Start: this computer's host, which answers the id of the run it began. The daemon holds nothing
   // about the run: no slot, no cap (a person's click is the brake), no process to stop at shutdown.
   const onStart = async (prompt: string, options: StartAgentOptions = {}, targetProjectId?: string): Promise<StartAgentResult> => {
-    if (isElsewhereId(targetProjectId)) return startElsewhere(prompt, options, targetProjectId)
     // A session with no project runs in a folder of its own in the sessions home, on this computer.
     const noProject = targetProjectId === SESSIONS_ID
     const refused = refusedPicks(options, noProject)
     if (refused !== undefined) return { ok: false, error: refused }
     const projectCwd = noProject ? await readySessionsHome(sessionsHome(env)) : await resolveProject(targetProjectId)
     if (!projectCwd) return { ok: false, error: `unknown project: ${targetProjectId}` }
-    // Run on a saved machine (#1067): forward the start to its daemon, which starts it in its own
-    // copy of this project, and relay the run's events back. The project is named by its
-    // repository's address, the one name both machines have for it.
-    if (options.machine !== undefined) {
-      // A session with no project is named by the sessions' own id: the machine works in its own sessions home.
-      if (noProject) return sendToMachine(prompt, options, options.machine, { id: SESSIONS_ID, name: 'A session with no project', address: SESSIONS_ID })
-      const project = await repositoryAddress(projectCwd)
-      if (!project) return { ok: false, error: 'This project has no repository address, so it cannot be sent to another machine.' }
-      return sendToMachine(prompt, options, options.machine, { id: targetProjectId ?? homeId, name: await projectNameOf(projectCwd), address: project, cwd: projectCwd })
-    }
     // The branch to start from ends up on the run's command line: only a branch name goes there.
     // Refused, not dropped: a run started from the main branch instead would be a silent swap.
     if (options.base !== undefined && !isBranchName(options.base)) return { ok: false, error: `not a branch name: ${String(options.base)}` }
@@ -293,93 +200,6 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
     }
   }
 
-  // Send a start to a saved machine, which starts the run in its own copy of the project and is
-  // followed from here. `machine` is stripped so the other side does not relay onward, and `base`
-  // because a branch of this machine names nothing there (it drops both too).
-  const sendToMachine = async (prompt: string, options: StartAgentOptions, id: string, project: { id: string; name: string; address: string; cwd?: string }): Promise<StartAgentResult> => {
-    const { machine: _id, base: _thisMachines, prBase: _thisMachinesToo, repos: _folders, ...forwarded } = options
-    const machine = (await savedMachines(env)).find(saved => saved.id === id)
-    if (!machine) return { ok: false, error: 'That machine is no longer saved. Pick another place to run.' }
-    const target = targetOf(machine, project.address)
-    // Another person's computer: a run there uses this person's own logins, which this server
-    // copies there first. Only a server's OpenAgent copies: a laptop's logins are made for it
-    // alone, so a laptop only looks that they are there.
-    if (machine.owner !== undefined) {
-      // Copied only once the person read that they are, and said OK: the page says so before a first run there.
-      if (env.OPENAGENT_SERVER === '1' && machine.told !== true) return { ok: false, error: `Your own logins are used on ${machine.owner}'s computer for a run there: say OK to that above the message box first.` }
-      const there = env.OPENAGENT_SERVER === '1' ? await copyLoginsTo({ ...target, label: machine.label }, { own: () => logins(env) }) : await loginsAreThere({ ...target, label: machine.label })
-      if (!there.ok) return there
-    }
-    const result = await startRemoteAgent(target, { prompt, options: forwarded })
-    if (!result.ok) {
-      // A machine from before sessions with no project could go there knows no project by that name: nothing to clone.
-      if ('noProject' in result && project.address === SESSIONS_ID) return { ok: false, error: `${machine.label} runs an older OpenAgent, which takes no session with no project. Update it, or pick a project.` }
-      // The one refusal the page can do something about: it has the machine clone the project, and starts again.
-      return 'noProject' in result ? { ok: false, error: `${project.name} is not on ${machine.label} yet.`, notThere: true } : result
-    }
-    // The run's id is the machine's word, and from here on every call about that id goes to the
-    // machine: what the person reads of the run, and what they click and type in its browser.
-    // An id that is no run's, or that is a run of this computer's own, is not taken.
-    if (!isRunId(result.agentId) || (project.cwd !== undefined && (await findCheckout(project.cwd, result.agentId, projectBranches)))) {
-      return { ok: false, error: `${machine.label} answered with a run this computer cannot follow.` }
-    }
-    return followSent(result.agentId, result.driver, prompt, machine, target, project.id, project.cwd)
-  }
-
-  // A run this computer sent to a machine, followed from here as a run of the project.
-  const followSent = async (agentId: string, driver: unknown, prompt: string, machine: MachineRecord, target: RemoteTarget, project: string, cwd?: string): Promise<StartAgentResult> => {
-    // A relayed agent has no local checkout or pid, so its list row is a memory-only stub (#1077):
-    // registered here so onAgents can show it and a dashboard reload re-opens it. Never written to disk.
-    const now = new Date().toISOString()
-    // Whose run it is: this computer's git user, as the record the machine writes will say of its own.
-    const person = await gitUserOf(cwd ?? sessionsHome(env))
-    const meta: AgentMeta = {
-      status: 'running',
-      id: agentId,
-      startedAt: now,
-      updatedAt: now,
-      target: 'remote',
-      intent: prompt,
-      ...(person !== undefined ? { person } : {}),
-      ...onMachine(machine),
-      // The machine's word, as the run is: its record, which names the coding agent, never comes here.
-      ...(typeof driver === 'string' && driver.length <= MAX_DRIVER_NAME ? { driver } : {}),
-    }
-    remote.followSent(agentId, target, meta, project)
-    // Only what was checked goes on to the page, not whatever else the machine answered.
-    return { ok: true, agentId, ...(meta.driver !== undefined ? { driver: meta.driver } : {}) }
-  }
-
-  // A project only another computer of the person's has (elsewhere.ts). On that computer, the run
-  // starts there as its own page starts one: in the project as it stands there, from the branch
-  // picked among its own. On this computer, in its copy here once there is one: the page has it
-  // cloned when there is none, and is told the project the run started in. On any other, as a
-  // project of this computer's is sent there, by its address.
-  const startElsewhere = async (prompt: string, options: StartAgentOptions, id: string): Promise<StartAgentResult> => {
-    const at = await remote.elsewhereAt(id)
-    if (!at) return { ok: false, error: 'That project is no longer listed on any of your computers.' }
-    const { home, target } = at
-    const { address, name } = home.project
-    if (options.machine === home.machine.id) {
-      const { machine: _there, ...there } = options
-      const said = await relayRpc(target, 'sendStart', [null, prompt, there]).then(
-        answer => answer as StartAgentResult,
-        (err: unknown): StartAgentResult => ({ ok: false, error: `could not reach ${home.machine.label}: ${err instanceof Error ? err.message : String(err)}` }),
-      )
-      if (!said.ok) return { ok: false, error: typeof said.error === 'string' ? said.error : `${home.machine.label} did not start the run.` }
-      if (!isRunId(said.agentId)) return { ok: false, error: `${home.machine.label} answered with a run this computer cannot follow.` }
-      return followSent(said.agentId, said.driver, prompt, home.machine, target, id)
-    }
-    if (address === undefined) return { ok: false, error: `${name} has no repository address, so it runs on ${home.machine.label} only.` }
-    if (options.machine === undefined) {
-      const here = await projectAt(address)
-      if (here === undefined) return { ok: false, error: `${name} is not on this computer yet.`, notThere: true }
-      const started = await onStart(prompt, options, here)
-      return started.ok ? { ...started, projectId: here } : started
-    }
-    return sendToMachine(prompt, options, options.machine, { id, name, address })
-  }
-
   // Add a project (#396): install the repo, then register it so it appears in the Projects
   // list. installProject is idempotent (an already-activated repo is a no-op success). `share`
   // is the person's answer on the agents' records, written before the project is registered:
@@ -425,42 +245,6 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
     return { ok: true, id, path: holding?.path ?? path, added: !holding, address: projectAddresses(present.flat(), []).addressOf(id) }
   }
 
-  // A project another machine asks for, to send a run here (the machine side of "Run on"): cloned
-  // from its address with this computer's own logins and added like any other, once, by itself.
-  // The asking machine is answered at once and asks again: a clone can take minutes, and no call
-  // is held open that long. What is kept is only what is on its way and how the last try failed,
-  // by address; a project that is there is read off the list.
-  const coming = new Map<string, { error?: string }>()
-  const bringProject = async (address: string, bring?: BringProject): Promise<RelayProject> => {
-    const onItsWay = coming.get(address)?.error === undefined && coming.has(address)
-    if ((await projectAt(address)) !== undefined) return { state: 'there' }
-    // It landed while the list was read: the list is read once more, not taken for missing.
-    if (onItsWay && !coming.has(address) && (await projectAt(address)) !== undefined) return { state: 'there' }
-    const now = coming.get(address)
-    if (now && now.error === undefined) return { state: 'coming' }
-    if (!bring) return now?.error !== undefined ? { state: 'failed', error: now.error } : { state: 'missing' }
-    // Only what reads as an address, and as this very one: the project is found again by it. The
-    // asking machine's own spelling of it is what is cloned when it is the same `host/path` in
-    // other letters, and nothing more: no way in, user or port of the caller's choosing.
-    if (cloneTarget(address)?.address !== address) return { state: 'failed', error: `${address.slice(0, 80)} is not a repository's address.` }
-    const from = bring.from !== undefined && bring.from.toLowerCase() === address ? bring.from : address
-    const atWork = [...coming.values()].filter(entry => entry.error === undefined).length
-    if (atWork >= MAX_COMING) return { state: 'failed', error: 'This machine is cloning other projects. Send again in a few minutes.' }
-    // The failures kept are the last few: one per address a machine ever asked for would grow for ever.
-    for (const [failed, entry] of coming) if (coming.size >= MAX_KEPT && entry.error !== undefined) coming.delete(failed)
-    const entry: { error?: string } = {}
-    coming.set(address, entry)
-    void (async () => {
-      const cloned = await clone(from)
-      const added = cloned.ok ? await onAddProject(cloned.path, bring.share) : cloned
-      if (added.ok) coming.delete(address)
-      else entry.error = added.error.slice(0, MAX_REASON)
-    })().catch((err: unknown) => {
-      entry.error = (err instanceof Error ? err.message : String(err)).slice(0, MAX_REASON)
-    })
-    return { state: 'coming' }
-  }
-
   // Remove a project: it leaves the Projects list and nothing in its folder is deleted. Found in
   // the list by its id and not through its folder, so a project whose folder is gone goes too.
   const onRemoveProject = async (id: string, files = false): Promise<RemoveProjectResult> => {
@@ -501,21 +285,6 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
     return { ok: true, cleanup }
   }
 
-  // Tail a relay-started run's own log (#1067) for the `/_relay/events` endpoint: the diary the
-  // run's tool keeps, its lines turned into events. The relocating tail, for the same reason as
-  // the dashboard's onEvents: the diary becomes the finished run's when the run ends.
-  const tailRelayEvents = (project: string, agentId: string, onEvent: (event: OpenAgentEvent) => void): (() => void) =>
-    tailAgentEvents<AnyDiaryLine>(
-      async () => {
-        const projectCwd = await resolveProject(project)
-        return projectCwd ? resolveAgentDiary(projectCwd, agentId) : undefined
-      },
-      line => {
-        const event = fromDiaryLine(line)
-        if (event) onEvent(event)
-      },
-    )
-
   // A screen lives while its run has a checkout: a finished run's diary names none that answers,
   // so it is not read. Asked of the shared list only: a tab open on a run asks every few seconds.
   const screenOf = async (project: string, agentId: string): Promise<string | undefined> => {
@@ -527,7 +296,7 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
   // A Start is near: the launcher opened, or its agent changed. The naming session that run will
   // take is started now, while the person types, unless one already waits.
   const onPrepareStart = (targetProjectId: string, driver?: string): void => {
-    if (naming === undefined || isElsewhereId(targetProjectId)) return
+    if (naming === undefined) return
     const picked = driver ?? DEFAULT_DRIVER
     if (!isDriverName(picked)) return
     void (async () => {
@@ -538,11 +307,10 @@ export function createProjectRuntime({ cwd, env, clone = cloneProject, logins = 
   }
 
   const dispose = async (): Promise<void> => {
-    remote.dispose()
     await naming?.close()
   }
 
-  return { onStart, onAddProject, onStartedIn, onRemoveProject, onPrepareStart, remoteEventsSource: remote.events, projectAt, bringProject, tailRelayEvents, remoteAgents: remote.agents, screenOf, dispose }
+  return { onStart, onAddProject, onStartedIn, onRemoveProject, onPrepareStart, screenOf, dispose }
 }
 
 /** A Start's picks as the run's options: one slice per module that acts on them (#2394). */

@@ -4,10 +4,10 @@ import { distributionSettings } from '../distribution-hooks.js'
 import { distributionPlugins } from '../distribution-packages.js'
 import { onAgentAccounts, type AccountResult, type AccountRow } from './accounts.js'
 import { onGitHosts } from './logins.js'
-import { presetLoginsOn, syncLogins, type PresetLoginsOn } from '../dashboard/logins-sync.js'
+
 
 export type { Preset, RunOptions } from '@openagt/hooks'
-export type { PresetLoginsOn } from '../dashboard/logins-sync.js'
+
 
 // The Presets page (#2394): a preset is a name and a saved set of run options, made once and used
 // in any project or none, kept with the person through the store (the catalog's `presets.saved`),
@@ -96,8 +96,6 @@ export async function sendSavePreset(change: PresetChange): Promise<({ ok: true;
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }
   }
-  // Its GitHub account goes to every device of the person's now, not a minute from now; the page follows it.
-  if (options.github?.account !== undefined && process.env['OPENAGENT_SERVER'] !== '1') void syncLogins().catch(() => [])
   return { ok: true, id }
 }
 
@@ -125,18 +123,6 @@ async function presetOptions(given: RunOptions): Promise<RunOptions | string> {
   }
 }
 
-/** How the presets' GitHub accounts stand on each device of the person's. A server copies to no device: none. */
-export async function onPresetLogins(): Promise<PresetLoginsOn[]> {
-  if (process.env['OPENAGENT_SERVER'] === '1') return []
-  return presetLoginsOn()
-}
-
-/** Copy the presets' GitHub accounts to every device again, now: the press for one that failed. */
-export async function sendCopyPresetLogins(): Promise<AccountResult> {
-  if (process.env['OPENAGENT_SERVER'] === '1') return { ok: false, error: 'A server copies logins to no device.' }
-  await syncLogins()
-  return { ok: true }
-}
 
 /** Remove a preset; Default stays. */
 export async function sendRemovePreset(id: string): Promise<AccountResult> {

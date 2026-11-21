@@ -31,8 +31,8 @@ import { usePaneOpeners } from '../lib/reveal-change.js'
 import { modelContextWindow, modelName, useModels } from '../lib/models.js'
 import { ContextCircle } from './ContextCircle.js'
 import { effortLabel } from '../lib/effort.js'
-import { thisMachineName } from '../lib/this-machine.js'
 import { hostOf, useRunHosts } from '../lib/run-hosts.js'
+import { THIS_MACHINE } from './RunOnMenu.js'
 import { driverFromImpl } from '../../src/client.js'
 
 // One session's view, whether it is running or finished (#1026).
@@ -63,7 +63,7 @@ export function AgentView({
   naming,
   projectName,
   target,
-  remoteLabel,
+  startedOn,
   files,
   lost = false,
   writing = '',
@@ -83,7 +83,7 @@ export function AgentView({
   /** Whether the agent is still running; `null` while the daemon's list of agents has not been read, so it is not known yet. */
   live: boolean | null
   /** What the run's card says, off the runs poll: what the feed cannot carry (the details strip's facts, how the agent was set up, whether its record is being saved). Absent until the card is listed. */
-  card?: (AgentDetailsCard & Pick<AgentMeta, 'status' | 'intent' | 'saving' | 'workspace' | 'branch' | 'base' | 'baseCommit' | 'host' | 'otherHost' | 'publish' | 'prBase' | 'gitAccount' | 'earlierPrs' | 'remoteKind' | 'repos' | 'preset' | 'pluginsWithout' | 'projectSkills'> & Partial<Pick<AgentMeta, 'endedAt'>>) | undefined
+  card?: (AgentDetailsCard & Pick<AgentMeta, 'status' | 'intent' | 'saving' | 'workspace' | 'branch' | 'base' | 'baseCommit' | 'host' | 'otherHost' | 'publish' | 'prBase' | 'gitAccount' | 'earlierPrs' | 'repos' | 'preset' | 'pluginsWithout' | 'projectSkills'> & Partial<Pick<AgentMeta, 'endedAt'>>) | undefined
   /** What the launcher said about this run as it started it: shown until the run's record says it. */
   picks?: StartPicks | undefined
   /** The session's own name — the same label the rail shows (#1030). It leads the action bar as
@@ -94,11 +94,10 @@ export function AgentView({
   naming?: boolean | undefined
   /** The session's project, said in the row above the message box. */
   projectName?: string | null | undefined
-  /** Where the agent executes: `remote` is relayed to a machine (#1067); any other is a host beside this computer's, by its id (`run.host`: GitHub Actions' `actions`, Claude Code on the web's `web`). */
+  /** Where the agent executes: a host beside this computer's, by its id (`run.host`: GitHub Actions' `actions`, Claude Code on the web's `web`); none, or `local`, for this computer's. */
   target?: string | undefined
-  /** The machine this agent executes on (#1067), when it is relayed to another one, by the name it
-   *  was given: the row above the message box says it. */
-  remoteLabel?: string | undefined
+  /** The host a run just started goes to, by its name, until its card says where it runs: the row above the message box says it. */
+  startedOn?: string | undefined
   files: string[]
   /** The live channel's health (#948) — surfaced as a banner under the top bar. */
   lost?: boolean
@@ -143,8 +142,8 @@ export function AgentView({
 
   // What was set up for the agent before it began, off its card: the chat's "Initialized session" line.
   const { workspace, branch, base, driver, model } = card ?? {}
-  // An agent just started on a machine has no card listed yet: the machine's name says where it runs.
-  const elsewhere = (target !== undefined && target !== 'local') || remoteLabel !== undefined
+  // An agent just started on a host has no card listed yet: the host's name says where it runs.
+  const elsewhere = (target !== undefined && target !== 'local') || startedOn !== undefined
   const setup = useMemo(() => ({ workspace, branch, base, driver, model, elsewhere }), [workspace, branch, base, driver, model, elsewhere])
   // The model by the name its coding agent gives it, for the row under the message box.
   const picked = driverFromImpl(driver ?? picks?.driver)
@@ -160,16 +159,15 @@ export function AgentView({
   // How full this session's context is: the run's own last reading, against what the agent says
   // the model holds. Either missing, no circle.
   const contextWindow = modelContextWindow(models, picked, model)
-  // Where the agent runs, for the row above the message box: a machine by the name it was given, a
-  // host by its own name. A run another computer started, which is no saved machine, is named by
-  // that computer: it did not run here.
+  // Where the agent runs, for the row above the message box: a host by its own name. A run another
+  // computer started is named by that computer: it did not run here.
   const host = hostOf(target)
   const hosts = useRunHosts(host !== undefined ? projectId : null)
-  const runsOn = remoteLabel ?? (target === 'remote' ? 'Another machine' : host !== undefined ? (hosts.find(one => one.id === host)?.label ?? 'Another host') : card?.otherHost && card.host ? card.host : thisMachineName())
+  const runsOn = startedOn ?? (host !== undefined ? (hosts.find(one => one.id === host)?.label ?? 'Another host') : card?.otherHost && card.host ? card.host : THIS_MACHINE)
   // The branch it started from, for that row: its card's, or, where the card says it was origin's
-  // default branch, the name that has on the computer the run is on. Read once: it never changes.
+  // default branch, the name that has in the project's clone. Read once: it never changes.
   const fromMain = startedFromMain(card)
-  const mainBranch = useLoaded<string | null>(fromMain ? () => onAgentMainBranch(projectId, agentId) : null, null, [projectId, agentId, fromMain], { remember: `main-branch:${projectId}:${agentId}` })
+  const mainBranch = useLoaded<string | null>(fromMain ? () => onAgentMainBranch(projectId) : null, null, [projectId, fromMain], { remember: `main-branch:${projectId}` })
   const startedFrom = startedFromBranch(card, mainBranch) ?? picks?.branch
   const [open, setOpen] = useState(false)
   // What the installed modules add to this run's page: a summary in the bar above the message box.
@@ -313,7 +311,7 @@ export function AgentView({
   const prs = useMemo(() => [...(earlierPrs ?? []), ...(pr && !earlierPrs?.some(earlier => earlier.url === pr.url) ? [pr] : [])], [earlierPrs, pr])
   // Where the session started, right above the message box, as the "New agent session" page has it. It is
   // there whatever stands in the box's place.
-  const row = <SessionRow runsOn={runsOn} target={target} remoteKind={card?.remoteKind} elsewhere={elsewhere || card?.otherHost === true} projectName={projectName} startedFrom={startedFrom} worksOn={barCheckout?.branch ?? branch} repos={card?.repos ?? picks?.repos} />
+  const row = <SessionRow runsOn={runsOn} target={target} elsewhere={elsewhere || card?.otherHost === true} projectName={projectName} startedFrom={startedFrom} worksOn={barCheckout?.branch ?? branch} repos={card?.repos ?? picks?.repos} />
   // What the bar is about right now, so the ✕ hides this and not the next thing the agent does:
   // the run, its branch, how much work is on it, and where that work has got to.
   const workState = [agentId, barCheckout?.branch ?? '', onBranch?.commits.length ?? 0, onBranch?.pendingFiles?.length ?? 0, onBranch?.insertions ?? 0, onBranch?.deletions ?? 0, onBranch?.pushed ?? false, pr?.number ?? '', pr?.state ?? ''].join('|')
@@ -383,7 +381,7 @@ export function AgentView({
           />
           {/* Until the run's record or its feed says whether it works, no box: it would say an ended run's words. */}
           {live === null && !feedLive ? null : card?.otherHost && card.host ? (
-            // A run another computer started, which is no saved machine, is only read here: a
+            // A run another computer started is only read here: a
             // message would continue it on this computer, under its id, with this computer's
             // logins and none of its conversation.
             <div className="@container mx-auto w-full max-w-3xl px-4 pt-2 pb-4">

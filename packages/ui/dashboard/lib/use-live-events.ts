@@ -71,7 +71,7 @@ export function useLiveEvents(projectId: string | null, agentId?: string | null)
     // A dead stream used to be silent: the daemon restarts, events just stop, and "the agent
     // went quiet" is indistinguishable from "the feed died" (#948). Now an errored close (or a
     // failed subscribe) flips `lost` and retries with backoff. A clean close is the server being
-    // done with the channel on purpose (relay stream ended, unknown project) — not an outage —
+    // done with the channel on purpose (an unknown project) — not an outage —
     // so it neither retries nor alarms, matching the old behavior.
     const retry = () => {
       if (cancelled) return

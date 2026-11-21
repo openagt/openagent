@@ -5,7 +5,6 @@ import { OPENAGENT_DIR } from '../openagent-dir.js'
 import { projectBranches, type BranchesFor, type Checkout } from './branches.js'
 import { isRunId, parseRunCard, projectRuns, type AnyDiaryLine, type RunsFor } from './runs.js'
 import { eventsOf, fromRunCard } from './run-record.js'
-import type { MachineKind } from '../reached-by-line.js'
 
 /**
  * The read side of a project's runs (#1774). The daemon runs no agent and writes no run: a run's
@@ -15,11 +14,8 @@ import type { MachineKind } from '../reached-by-line.js'
  * projection of those files and that answer.
  */
 
-/**
- * How a run stands. `unknown` is never recorded: it is how a run of another computer reads while
- * that computer does not answer, whatever its record last said, so it is never taken for working.
- */
-export type AgentStatus = 'running' | 'done' | 'stopped' | 'failed' | 'waiting' | 'unknown'
+/** How a run stands. */
+export type AgentStatus = 'running' | 'done' | 'stopped' | 'failed' | 'waiting'
 
 /**
  * A queryable snapshot of the agent, derived entirely from the event log. Lets the
@@ -148,9 +144,8 @@ export interface AgentMeta {
   pendingChoice?: { id: string; title: string }
   /**
    * The run was started by another machine's daemon (#1648): its {@link host} is not this one.
-   * Not stored: annotated on the way to the dashboard, the way a relayed run's label is, since
-   * the shared data branch shows every machine's runs here and only this daemon knows which host
-   * it is.
+   * Not stored: annotated on the way to the dashboard, since the shared data branch shows every
+   * machine's runs here and only this daemon knows which host it is.
    */
   otherHost?: boolean
   /**
@@ -188,22 +183,13 @@ export interface AgentMeta {
    */
   browserStreamPort?: number
   /**
-   * Where this run executes (#1050): `remote` when relayed to a saved machine (#1067), a host's id
-   * for a run on a host beside this computer's (`run.host`: a GitHub Actions runner's `actions`, a
-   * Claude Code cloud session's `web`), absent or `local` for a run on this computer.
+   * Where this run executes (#1050): a host's id for a run on a host beside this computer's
+   * (`run.host`: a GitHub Actions runner's `actions`, a Claude Code cloud session's `web`), absent
+   * or `local` for a run on this computer.
    * Kept on the run's record by the host that runs it, so the run's page names where it is and
    * draws that host's notice after a reload.
    */
   target?: string
-  /** The saved machine a remote agent (#1067) executes on, by its own name, for the session list + notice after a reload. */
-  remoteLabel?: string
-  /** What that saved machine is (reached-by-line.ts): the run is drawn with its kind's icon. */
-  remoteKind?: MachineKind
-  /**
-   * While the run's status is `unknown`: when its computer last answered this one, ISO, when it
-   * did since this computer knows it. Not stored: annotated on the way to the dashboard.
-   */
-  seenAt?: string
   /**
    * The flow this agent started under (#1467): `build` for the scope→build orchestration, `prompt`
    * for the direct-prompt path (research and transparent runs record `prompt` too). Persisted so a

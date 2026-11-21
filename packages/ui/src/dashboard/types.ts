@@ -67,27 +67,19 @@ export interface StartAgentOptions {
    * branch as this computer has it, commits that are not pushed included ("My local branch"). A
    * `publishedBase`: that branch as origin has it, fetched at the Start; one origin no longer has,
    * or an origin that cannot be read, refuses the Start. Absent, origin's default branch. A word
-   * that is no branch name refuses the Start. Not sent to a machine picked to run on: the launcher
-   * read this computer's branches, and that machine's copy is its own.
+   * that is no branch name refuses the Start.
    */
   base?: string
   /**
    * The branch the run's pull request goes into, from the launcher's Auto menu, kept on the run's
    * record for its agent and the Open PR press. Absent, the repository's default branch. A word
-   * that is no branch name refuses the Start. Not sent to a machine picked to run on, as {@link base}.
+   * that is no branch name refuses the Start.
    */
   prBase?: string
   /**
-   * Run this session on a saved machine (#1067), named by its id: the local daemon relays the
-   * start to that machine's daemon, which starts it in its own copy of the project, and streams
-   * its events back into the local agent view. Absent = run on this machine. Stripped before the
-   * start is forwarded, so the machine starts an ordinary local run and does not relay onward.
-   */
-  machine?: string
-  /**
    * Where the run runs, by its host's id (`RunHost.id`): one of the hosts beside this computer's of
-   * the modules on in the project, such as a GitHub Actions runner. Absent, this computer, or the
-   * machine picked. Refused with a machine, and for a session with no project.
+   * the modules on in the project, such as a GitHub Actions runner. Absent, this computer. Refused
+   * for a session with no project.
    */
   host?: string
   /**
@@ -96,9 +88,9 @@ export interface StartAgentOptions {
    */
   repos?: string[]
   /**
-   * The account at the git host this session works as, by its login: one of the accounts the
-   * computer the run goes to has there. Absent, the one that computer's runs use. The run's record
-   * keeps it, and a resume goes on as it.
+   * The account at the git host this session works as, by its login: one of the accounts this
+   * computer has there. Absent, the one its runs use. The run's record keeps it, and a resume goes
+   * on as it.
    */
   account?: string
   /**
@@ -118,13 +110,9 @@ export interface StartAgentOptions {
 
 /**
  * The outcome of a Start attempt (#345): the id of the run the run's host began, or why there is
- * none. `driver` is the coding agent that runs it: what another computer that
- * follows the run shows, since the run's record stays on this one. `notThere` marks the one
- * refusal a page can do something about: the machine the run was sent to does not have the
- * project yet, and can clone it. `projectId` is the project the run started in, when it is not the
- * one the start named: this computer's own copy of a project another computer of the person's has.
+ * none. `driver` is the coding agent that runs it.
  */
-export type StartAgentResult = { ok: true; agentId: string; driver?: string; projectId?: string } | { ok: false; error: string; notThere?: true }
+export type StartAgentResult = { ok: true; agentId: string; driver?: string } | { ok: false; error: string }
 
 /**
  * Where a session is working (#798): its checkout, its branch, and what it is holding. Read by

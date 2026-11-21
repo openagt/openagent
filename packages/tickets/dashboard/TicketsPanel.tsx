@@ -215,9 +215,9 @@ export function StageWord({ ticket, standing = false }: { ticket: WorkspaceTicke
 }
 
 /**
- * How a claim stands, as the ticket's page says it: its run at work or waiting on the person, its
- * computer offline, or the run ended ("Run done"); a claim held by anything but one of the
- * project's runs, a person or another machine, by its holder's name.
+ * How a claim stands, as the ticket's page says it: its run at work or waiting on the person, or
+ * the run ended ("Run done"); a claim held by anything but one of the project's runs, a person or
+ * another machine, by its holder's name.
  */
 function claimSaid(ticket: WorkspaceTicket): string {
   const holder = ticket.lockedByAgent?.name ?? ticket.lockedBy

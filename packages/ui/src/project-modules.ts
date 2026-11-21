@@ -105,8 +105,6 @@ export async function runModuleCommand(
   module: ProjectModule,
   args: readonly string[],
   command?: string,
-  /** What the command is started with, beside what this process itself has. */
-  more?: NodeJS.ProcessEnv,
   /** What the command reads on standard input. */
   input?: string,
 ): Promise<ModuleCommandResult> {
@@ -117,7 +115,7 @@ export async function runModuleCommand(
     return { ok: false, error: command !== undefined ? `${module.package} has no command ${command}` : `${module.package} has ${names.length === 0 ? 'no command' : 'several commands; name one'}` }
   if (args.length > MAX_ARGS || args.some(arg => typeof arg !== 'string' || arg.length > MAX_ARG_LENGTH))
     return { ok: false, error: 'too many or too long arguments' }
-  return runPackageCommand(root, { name: name!, bin }, args, more, input)
+  return runPackageCommand(root, { name: name!, bin }, args, undefined, input)
 }
 
 /**

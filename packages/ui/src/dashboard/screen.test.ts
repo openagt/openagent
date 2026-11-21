@@ -5,12 +5,11 @@ import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test, type TestContext } from 'node:test'
-import { handleRelayRequest } from './relay-endpoints.js'
-import { handleScreenRequest, kept, screenCallAddress, screenInDiary, SCREEN_PREFIX, type ScreenHandlers } from './screen.js'
+import { handleScreenRequest, kept, screenCallAddress, screenInDiary, SCREEN_PREFIX, type ScreenOf } from './screen.js'
 
 // A screen as a command of the agent's serves it (a browser's process), faked: `/stream` writes
-// what it is told and stays open, `/input` records what it is sent. And two OpenAgents' own
-// routes, each a bare server over the real handlers.
+// what it is told and stays open, `/input` records what it is sent. And OpenAgent's own routes, a
+// bare server over the real handler.
 
 async function listen(t: TestContext, handle: (req: IncomingMessage, res: ServerResponse) => void): Promise<{ server: Server; url: string }> {
   const server = createServer(handle)
@@ -51,12 +50,12 @@ async function fakeScreen(t: TestContext) {
   return { screen: `${url}/?t=view`, inputs, asked, watching: () => watching, write: (bytes: string) => write!(bytes) }
 }
 
-/** An OpenAgent's `/_screen` routes, over `handlers`. */
-function openAgent(t: TestContext, handlers: ScreenHandlers | undefined) {
-  return listen(t, (req, res) => void handleScreenRequest(req, res, new URL(req.url ?? '/', 'http://x').pathname, handlers))
+/** OpenAgent's `/_screen` routes, finding a run's screen by `screenOf`. */
+function openAgent(t: TestContext, screenOf: ScreenOf | undefined) {
+  return listen(t, (req, res) => void handleScreenRequest(req, res, new URL(req.url ?? '/', 'http://x').pathname, screenOf))
 }
 
-const local = (screen: string | undefined): ScreenHandlers => ({ local: async () => screen, remote: () => undefined })
+const local = (screen: string | undefined): ScreenOf => async () => screen
 const until = async (check: () => boolean): Promise<void> => {
   for (let i = 0; i < 100 && !check(); i++) await new Promise(resolve => setTimeout(resolve, 20))
   assert.ok(check(), 'waited two seconds')
@@ -145,40 +144,6 @@ test('only a screen on this computer\'s own loopback is called, at its own two p
     if (elsewhere.startsWith('http://user:pass@')) assert.equal(call, 'http://127.0.0.1:5123/stream?t=abc')
     else assert.equal(call, undefined, elsewhere)
   }
-})
-
-test('a run on another machine: its screen is asked of that machine, with this computer\'s key there', async t => {
-  const screen = await fakeScreen(t)
-  const keys: Array<string | undefined> = []
-  // The machine: its relay's routes, as its OpenAgent serves them to a computer that is in.
-  const machine = await listen(t, (req, res) => {
-    keys.push(req.headers.authorization)
-    void handleRelayRequest(req, res, new URL(req.url ?? '/', 'http://x').pathname, {
-      project: async address => (address === 'github.com/acme/app' ? 'app-here' : undefined),
-      start: async () => ({ ok: false, error: 'not in this test' }),
-      tailEvents: () => () => {},
-      screen: async (projectId, agentId) => (projectId === 'app-here' && agentId === 'r' ? screen.screen : undefined),
-    })
-  })
-  const target = { url: `${machine.url}/`, key: 'id.key', project: 'github.com/acme/app' }
-  const { url } = await openAgent(t, { local: async () => assert.fail('the run is not on this computer'), remote: (_projectId, agentId) => (agentId === 'r' ? target : undefined) })
-
-  const watching = new AbortController()
-  const answer = await fetch(`${url}${SCREEN_PREFIX}/stream?project=mine&run=r`, { signal: watching.signal })
-  assert.equal(answer.status, 200)
-  assert.equal(answer.headers.get('content-type'), 'application/octet-stream')
-  assert.equal(new TextDecoder().decode((await answer.body!.getReader().read()).value), '<script>alert(1)</script>')
-  assert.equal(screen.watching(), 1)
-  watching.abort()
-  await until(() => screen.watching() === 0)
-
-  assert.equal((await fetch(`${url}${SCREEN_PREFIX}/input?project=mine&run=r`, { method: 'POST', body: JSON.stringify({ type: 'reload' }) })).status, 204)
-  assert.deepEqual(screen.inputs, [{ type: 'reload' }])
-  assert.deepEqual(new Set(keys), new Set(['Bearer id.key']))
-
-  // A project the machine does not have, and a machine whose relay shows no screens.
-  const elsewhere = await openAgent(t, { local: async () => undefined, remote: () => ({ ...target, project: 'github.com/acme/other' }) })
-  assert.equal((await fetch(`${elsewhere.url}${SCREEN_PREFIX}/stream?project=mine&run=r`)).status, 404)
 })
 
 test('where a run\'s screen answers is read off its diary', async () => {

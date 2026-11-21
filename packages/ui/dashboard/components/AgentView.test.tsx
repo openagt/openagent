@@ -608,8 +608,8 @@ describe("a strip above the chat, a module's word on the run (#2394)", () => {
     render(withNotice(view({ live: true, target: 'actions' })))
     expect(screen.getByText('notice run-1 true actions')).toBeTruthy()
     cleanup()
-    render(withNotice(view({ live: false, target: 'remote', remoteLabel: 'Studio' })))
-    expect(screen.getByText('notice run-1 false here'), "a saved machine's run is on no host of the project's").toBeTruthy()
+    render(withNotice(view({ live: false })))
+    expect(screen.getByText('notice run-1 false here'), "a run on this computer is on no host").toBeTruthy()
   })
 
   test('a project without the module gets none of it', () => {
@@ -723,8 +723,8 @@ describe('a message sent while the agent works', () => {
     expect(within(first!).getByText("Read at the agent's next step")).toBeTruthy()
     fireEvent.click(within(last!).getByRole('button', { name: 'Send now' }))
     expect((await within(last!).findByRole('button', { name: 'Sending…' })) as HTMLButtonElement).toHaveProperty('disabled', true)
-    act(() => answer({ ok: false, error: 'could not reach the machine' }))
-    expect((await screen.findByRole('alert')).textContent).toBe('could not reach the machine')
+    act(() => answer({ ok: false, error: 'could not reach the run' }))
+    expect((await screen.findByRole('alert')).textContent).toBe('could not reach the run')
   })
 
   test('what Send now said is the session’s it was pressed in: another session picked shows its own, and an answer that comes back later shows in its session alone', async () => {
@@ -959,16 +959,12 @@ describe('a message sent while the agent works', () => {
 })
 
 describe('where the agent runs, for the row above the message box', () => {
-  test("this machine by itself; another machine by the name it was given; a host by the name the project's module gives it", () => {
+  test("this machine by itself; a host by the name the project's module gives it", () => {
     const runsOn = () => screen.getByTestId('row-runs-on').textContent
     const { rerender } = render(view({ live: true }))
     expect(runsOn()).toBe('This machine')
     rerender(view({ live: true, target: 'local' }))
     expect(runsOn()).toBe('This machine')
-    rerender(view({ live: true, target: 'remote', remoteLabel: 'Studio' }))
-    expect(runsOn()).toBe('Studio')
-    rerender(view({ live: true, target: 'remote' }))
-    expect(runsOn()).toBe('Another machine')
     rerender(view({ live: true, target: 'web' }))
     expect(runsOn()).toBe('Claude Code on the web')
     rerender(view({ live: true, target: 'actions' }))
@@ -978,13 +974,13 @@ describe('where the agent runs, for the row above the message box', () => {
     expect(runsOn()).toBe('Another host')
   })
 
-  test('a run of a computer that is no saved machine is named by that computer: it did not run on this one', () => {
+  test('a run of another computer is named by that computer: it did not run on this one', () => {
     const card = { status: 'done' as const, host: 'rom-thinkpad-x280', otherHost: true }
     render(view({ card }))
     expect(screen.getByTestId('row-runs-on').textContent).toBe('rom-thinkpad-x280')
   })
 
-  test('a run of a computer that is no saved machine is only read: in place of the message box, a line says where to continue it', () => {
+  test('a run of another computer is only read: in place of the message box, a line says where to continue it', () => {
     const { rerender } = render(view({ card: { status: 'done' as const, host: 'rom-thinkpad-x280', otherHost: true } }))
     expect(screen.getByRole('note').textContent).toBe('This run is on rom-thinkpad-x280. Continue it there.')
     expect(screen.queryByTestId('composer-live')).toBeNull()
@@ -992,25 +988,12 @@ describe('where the agent runs, for the row above the message box', () => {
     expect(within(screen.getByTestId('chat-bottom')).getByTestId('row-runs-on').textContent).toBe('rom-thinkpad-x280')
     expect(screen.getByTestId('row').compareDocumentPosition(screen.getByRole('note')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(screen.getByTestId('row-elsewhere').textContent).toBe('true')
-    // This computer's own run, and one on a saved machine, keep their box.
+    // This computer's own run keeps its box.
     rerender(view({ card: { status: 'done' as const, host: 'this-mac' } }))
     expect(screen.getByTestId('composer-live')).toBeTruthy()
     expect(screen.queryByRole('note')).toBeNull()
   })
 
-  test('on a page opened from somewhere else, this machine goes by the name the page was reached at', () => {
-    const page = (globalThis as unknown as { jsdom: { reconfigure(to: { url: string }): void } }).jsdom
-    const own = window.location.href
-    page.reconfigure({ url: 'https://165.245.244.10/' })
-    try {
-      const { rerender } = render(view({ live: true }))
-      expect(screen.getByTestId('row-runs-on').textContent).toBe('165.245.244.10')
-      rerender(view({ live: true, target: 'remote', remoteLabel: 'Studio' }))
-      expect(screen.getByTestId('row-runs-on').textContent).toBe('Studio')
-    } finally {
-      page.reconfigure({ url: own })
-    }
-  })
 })
 
 describe('the page\'s two bars', () => {
@@ -1030,9 +1013,9 @@ describe('the page\'s two bars', () => {
     expect(within(screen.getByTestId('chat-top')).getByRole('status')).toBeTruthy()
   })
 
-  test('an agent on another machine has no notice of it: the row above the box says where it runs', () => {
-    render(view({ live: true, target: 'remote', remoteLabel: 'MacBook' }))
-    expect(screen.getByTestId('row-runs-on').textContent).toBe('MacBook')
+  test('an agent on a host has no notice of it: the row above the box says where it runs', () => {
+    render(view({ live: true, target: 'web' }))
+    expect(screen.getByTestId('row-runs-on').textContent).toBe('Claude Code on the web')
     expect(screen.queryByText(/Running on/)).toBeNull()
     expect(within(screen.getByTestId('chat-top')).queryByRole('status')).toBeNull()
   })
@@ -1070,7 +1053,7 @@ describe('the branch the row says the session started from', () => {
   test('a run that made its own branch and was told none: origin\'s default branch, by the name it has where the run is', async () => {
     render(view({ card: { status: 'done' as const, baseCommit: 'abc123' } }))
     await waitFor(() => expect(screen.getByTestId('row-started-from').dataset['value']).toBe('trunk'))
-    expect(onAgentMainBranch).toHaveBeenCalledWith('p1', 'run-1')
+    expect(onAgentMainBranch).toHaveBeenCalledWith('p1')
     expect(onAgentMainBranch).toHaveBeenCalledTimes(1)
   })
 
@@ -1189,9 +1172,9 @@ describe('a run just started', () => {
     expect(screen.getByText('Starting the coding agent')).toBeTruthy()
   })
 
-  test('an agent just started on a machine says nothing of a set-up before its card is listed: no checkout is made for it here', () => {
+  test('an agent just started on a host says nothing of a set-up before its card is listed: no checkout is made for it here', () => {
     const events = [{ kind: 'driver', event: { type: 'start', prompt: 'Say hi' } }, { kind: 'driver', event: { type: 'text', text: 'Hi.' } }] as OpenAgentEvent[]
-    render(view({ live: true, events, remoteLabel: 'laptop' }))
+    render(view({ live: true, events, startedOn: 'GitHub Actions' }))
     expect(screen.queryByText('Initialized session')).toBeNull()
   })
 

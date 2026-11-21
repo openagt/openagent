@@ -2,11 +2,8 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { createRef } from 'react'
 import type { Preferences } from '../../src/index.js'
-import { selectMachine } from '../lib/remote-target.js'
 import { resetRunHostsForTest } from '../lib/run-hosts.js'
 import { hoverTooltip, openMenu } from '../test-utils.js'
-import { Laptop } from 'lucide-react'
-import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
 import { ModulesContext, mountedOf, type MountedView } from '../lib/use-modules.js'
 import { forgetRemembered } from '../lib/use-async.js'
 import type { UiPrompt, UiPromptSaveProps } from '../module/index.js'
@@ -28,10 +25,6 @@ const onCommands = vi.hoisted(() => vi.fn())
 // The hosts beside this computer the project's modules bring: none unless a test says.
 const onRunHosts = vi.hoisted(() => vi.fn(async () => [] as { id: string; label: string }[]))
 vi.mock('../rpc/projects.js', () => ({ onProjects: () => Promise.resolve([]), onCommands, onRunHosts }))
-// The saved machines and their health poll (#1072) are the daemon's, reached over an RPC: a
-// pretend daemon each test seeds, and answers online/offline through, for the "Run on" target (#1073).
-vi.mock('../rpc/machines.js', async () => (await import('../test-machines.js')).machinesRpc)
-import { daemon, machinesRpc, saveMachines } from '../test-machines.js'
 
 // Stub the Tiptap editor (it needs a real DOM/ProseMirror): a plain input driving onChange, a
 // "type-submit" button firing onSubmit, and a ref exposing the same handle the composer calls.
@@ -113,29 +106,28 @@ beforeEach(async () => {
   updatePreferences.mockReset()
   sessionStorage.clear()
   localStorage.clear()
-  selectMachine(null)
   resetRunHostsForTest()
   onRunHosts.mockResolvedValue([])
-  await saveMachines() // default: no machine saved
   onCommands.mockReset()
   onCommands.mockResolvedValue({ commands: [{ name: 'work-queue', description: 'Work the agent queue' }], gitHost: true, remote: true, address: 'github.com/acme/shop' })
 })
 afterEach(cleanup)
 
-const STUDIO = 'http://192.168.1.5:4200'
-const STUDIO_MACHINE = { id: STUDIO, label: 'Studio', url: STUDIO }
+/** The project's modules bring a host beside this computer: "Run on" offers it. */
+const withHost = () => onRunHosts.mockResolvedValue([{ id: 'actions', label: 'GitHub Actions' }])
 
 // The driver/model trigger names both in its own label (#1143): with no model pinned it is a logo
 // and a chevron, so the name cannot come from the rendered text the way it used to.
 const agentTrigger = () => screen.getByRole('button', { name: /^Coding agent: / })
 
 describe('Composer (#721)', () => {
-  test('renders the commands menu, the agent/model select, "Run on", and the submit button', async () => {
+  test('renders the commands menu, the agent/model select and the submit button; with no host beside this machine, no "Run on"', async () => {
     renderComposer({ submitLabel: 'Start session' })
     // Commands have a visible surface (#948): the `/` menu stays the fast path, the button is
     // the discoverable one.
     expect(screen.getByRole('button', { name: 'Commands' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: /^Run on: / })).toBeTruthy()
+    await waitFor(() => expect(onRunHosts).toHaveBeenCalledWith('p1'))
+    expect(screen.queryByRole('button', { name: /^Run on: / })).toBeNull()
     expect((await hoverTooltip(agentTrigger())).textContent).toContain('Coding agent: Claude Code')
     // The launcher's send is the session's arrow, named for what it does, shown once the prompt has text.
     expect(screen.queryByRole('button', { name: /Start session/ })).toBeNull()
@@ -143,26 +135,8 @@ describe('Composer (#721)', () => {
     expect((screen.getByRole('button', { name: /Start session/ }) as HTMLButtonElement).disabled).toBe(false)
   })
 
-  test('where devices is off, no Settings entry adds a machine: with none saved there is no "Run on"; with devices, "Add a machine…" leads to its entry', async () => {
-    const devices: MountedView<'settings.section'> = { place: 'settings.section', id: 'devices', title: 'Devices', icon: Laptop, order: 90, View: () => null, package: '@openagt/devices', projects: [], computer: true }
-    const openSettings = vi.fn()
-    const composer = (sections: MountedView<'settings.section'>[]) => (
-      <HostServicesContext.Provider value={{ ...INERT_HOST_SERVICES, openSettings }}>
-        <ModulesContext.Provider value={mountedOf({ views: { 'settings.section': sections } })}>
-          <Composer files={[]} onSubmit={vi.fn()} busy={false} submitLabel="Send" submitBusyLabel="Sending…" />
-        </ModulesContext.Provider>
-      </HostServicesContext.Provider>
-    )
-    const { rerender } = render(composer([]))
-    expect(screen.queryByRole('button', { name: /^Run on: / })).toBeNull()
-    rerender(composer([devices]))
-    await openMenu(screen.getByRole('button', { name: /^Run on: / }))
-    fireEvent.click(await screen.findByRole('menuitem', { name: /Add a machine/ }))
-    expect(openSettings).toHaveBeenCalledWith('devices')
-  })
-
-  test(`a host the project's modules bring is offered in "Run on", with devices off too, and picking it or this machine leaves the other unpicked (#2394)`, async () => {
-    onRunHosts.mockResolvedValue([{ id: 'actions', label: 'GitHub Actions' }])
+  test(`a host the project's modules bring is offered in "Run on", and picking it or this machine leaves the other unpicked (#2394)`, async () => {
+    withHost()
     render(
       <ModulesContext.Provider value={mountedOf()}>
         <Composer files={[]} onSubmit={vi.fn()} busy={false} submitLabel="Send" submitBusyLabel="Sending…" />
@@ -307,22 +281,12 @@ describe('Composer (#721)', () => {
     expect(screen.queryByRole('button', { name: 'module-save' })).toBeNull()
   })
 
-  test("with no module offering saved prompts, the Commands menu has none and no way to save one; a project only another computer has offers the person's, as a session with no project (#2394)", async () => {
+  test('with no module offering saved prompts, the Commands menu has none and no way to save one (#2394)', async () => {
     forgetRemembered()
     render(<Composer files={[]} onSubmit={vi.fn()} busy={false} submitLabel="Send" submitBusyLabel="Sending…" />)
     await openMenu(screen.getByRole('button', { name: 'Commands' }))
     expect(await screen.findByText('/work-queue')).toBeTruthy()
     expect(screen.queryByRole('menuitem', { name: /Save prompt/ })).toBeNull()
-    cleanup()
-
-    const { entry, list } = promptsModule([{ id: 'person:a', label: 'Deep review', text: 'Audit this PR.', group: 'Your saved prompts' }], { sessions: true })
-    render(
-      <ModulesContext.Provider value={mountedOf({ views: { 'composer.prompts': [entry] } })}>
-        <Composer files={[]} onSubmit={vi.fn()} busy={false} submitLabel="Send" submitBusyLabel="Sending…" home="studio" />
-      </ModulesContext.Provider>,
-    )
-    await waitFor(() => expect(list).toHaveBeenCalledWith(expect.anything(), 'session'))
-    expect(list).not.toHaveBeenCalledWith(expect.anything(), 'p1')
   })
 
   // #1139: a draft carried across a navigation lands in sessionStorage; the launcher seeds it into
@@ -436,7 +400,8 @@ describe('Composer (#721)', () => {
     expect(screen.queryByRole('button', { name: 'Send' })).toBeNull() // nothing seeded
   })
 
-  test('the row above the box: the launcher\'s, led by "Run on"; inside a session, the one it is given, in the same place, and no "Run on" of its own', () => {
+  test('the row above the box: the launcher\'s, led by "Run on"; inside a session, the one it is given, in the same place, and no "Run on" of its own', async () => {
+    withHost()
     renderComposer({ startsAt: <span>the launcher's place</span> })
     // In the row that stands right before the box.
     const followedByBox = (el: Element) => {
@@ -444,89 +409,16 @@ describe('Composer (#721)', () => {
       return false
     }
     expect(followedByBox(screen.getByText("the launcher's place"))).toBe(true)
-    expect(followedByBox(screen.getByRole('button', { name: /^Run on: / }))).toBe(true)
+    expect(followedByBox(await screen.findByRole('button', { name: /^Run on: / }))).toBe(true)
     cleanup()
     renderComposer({ inAgent: true, sessionRow: <div><span>where it started</span></div> })
     expect(followedByBox(screen.getByText('where it started'))).toBe(true)
     expect(screen.queryByRole('button', { name: /^Run on: / })).toBeNull()
   })
 
-  // #1073: pressing Start on an offline "Run on" machine would silently attempt the ~15s relay, so
-  // Start is blocked with a reason pointing back to the "Run on" pick. No auto-fallback: the target stays.
-  test('the agents and models offered are those of the machine picked in "Run on"; inside a session, never', async () => {
-    await saveMachines(STUDIO_MACHINE)
-    selectMachine(STUDIO)
-    renderComposer()
-    await waitFor(() => expect(machinesRpc.onMachineModels).toHaveBeenCalledWith(STUDIO))
-    cleanup()
-    machinesRpc.onMachineModels.mockClear()
-    renderComposer({ inAgent: true })
-    await new Promise(resolve => setTimeout(resolve, 20))
-    expect(machinesRpc.onMachineModels).not.toHaveBeenCalled()
-  })
-
-  test('an agent not installed on the machine picked in "Run on" is said so in the menu, naming that machine', async () => {
-    await saveMachines(STUDIO_MACHINE)
-    selectMachine(STUDIO)
-    machinesRpc.onMachineModels.mockResolvedValueOnce({ 'claude-code': { models: [{ id: 'opus', name: 'Opus 5.5' }] }, codex: { models: [], error: '`codex` could not start: spawn codex ENOENT', missing: true } })
-    renderComposer()
-    await waitFor(() => expect(machinesRpc.onMachineModels).toHaveBeenCalledWith(STUDIO))
-    fireEvent.click(await screen.findByRole('button', { name: /^Coding agent: / }))
-    fireEvent.click(await screen.findByText('Codex'))
-    expect(await screen.findByText('Codex is not installed on Studio.')).toBeTruthy()
-    expect(screen.queryByText(/ENOENT/)).toBeNull()
-  })
-
-  test('an offline "Run on" machine disables Start and shows the reason (#1073)', async () => {
-    await saveMachines(STUDIO_MACHINE)
-    daemon.reachable = { [STUDIO]: false }
-    selectMachine(STUDIO)
-    const { onSubmit } = renderComposer()
-    fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'ship it' } })
-    await waitFor(() => expect(screen.getByText(/Studio is offline/)).toBeTruthy())
-    const submit = screen.getByRole('button', { name: 'Send' })
-    expect(submit.hasAttribute('disabled')).toBe(true)
-    // Both the click and the editor shortcut are blocked.
-    fireEvent.click(submit)
-    fireEvent.click(screen.getByText('editor-submit'))
-    expect(onSubmit).not.toHaveBeenCalled()
-  })
-
-  test('another person\'s computer as the "Run on" pick says once that the person\'s logins are copied there, and starts nothing before OK; OK ends it for good', async () => {
-    const box = { id: 'box', url: 'http://127.0.0.1:4311', label: 'rom-desktop', owner: 'rom' }
-    await saveMachines(box)
-    selectMachine(box.id)
-    const { onSubmit } = renderComposer()
-    const words = "Your own logins are used on rom's computer: copied there by a server of yours, or logged in on its page. rom can see what is on it. Runs there start once you say OK."
-    const note = (): HTMLElement | null => screen.queryByRole('note')
-    await waitFor(() => expect(note()?.querySelector("p")?.textContent).toBe(words))
-    fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'ship it' } })
-    const submit = screen.getByRole('button', { name: 'Send' })
-    expect(submit.hasAttribute('disabled')).toBe(true)
-    // Held, it looks held: faded, not the full colour of a press that would start.
-    expect(submit.className).toContain('disabled:opacity-40')
-    fireEvent.click(submit)
-    fireEvent.click(screen.getByText('editor-submit'))
-    expect(onSubmit).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('button', { name: 'OK' }))
-    expect(note()).toBeNull()
-    expect(screen.getByRole('button', { name: 'Send' }).hasAttribute('disabled')).toBe(false)
-    await waitFor(() => expect(machinesRpc.sendMachineTold).toHaveBeenCalledWith('box'))
-    cleanup()
-    // Told: the next page says nothing.
-    renderComposer()
-    await waitFor(() => expect(machinesRpc.onMachines).toHaveBeenCalled())
-    expect(note()).toBeNull()
-  })
-
-  test('every note lies over the page above the box, the caller\'s and its own in one place, none in the box\'s flow; a page that keeps a place for them gets them there', async () => {
-    const box = { id: 'box', url: 'http://127.0.0.1:4311', label: 'rom-desktop', owner: 'rom' }
-    await saveMachines(box)
-    selectMachine(box.id)
+  test('the caller\'s notes lie over the page above the box, none in the box\'s flow; a page that keeps a place for them gets them there', () => {
     renderComposer({ notes: <p role="alert">Could not send.</p> })
-    await waitFor(() => expect(screen.queryByRole('note')).not.toBeNull())
-    const notes = screen.getByRole('note').parentElement!
-    expect(screen.getByRole('alert').parentElement).toBe(notes)
+    const notes = screen.getByRole('alert').parentElement!
     expect(notes.parentElement!.className).toContain('absolute')
     expect(notes.parentElement!.className).toContain('bottom-full')
     expect(screen.getByLabelText('prompt').closest('.border')!.contains(notes)).toBe(false)
@@ -553,19 +445,6 @@ describe('Composer (#721)', () => {
     expect(editorText()).toBe('ship it')
   })
 
-  test('an online "Run on" machine leaves Start enabled with no offline note (#1073)', async () => {
-    await saveMachines(STUDIO_MACHINE)
-    daemon.reachable = { [STUDIO]: true }
-    selectMachine(STUDIO)
-    const { onSubmit } = renderComposer()
-    fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'ship it' } })
-    await waitFor(() => expect(machinesRpc.onMachinesReachable).toHaveBeenCalled())
-    expect(screen.queryByText(/is offline/)).toBeNull()
-    const submit = screen.getByRole('button', { name: 'Send' })
-    expect(submit.hasAttribute('disabled')).toBe(false)
-    fireEvent.click(submit)
-    expect(onSubmit).toHaveBeenCalledWith('ship it', { later: false })
-  })
 })
 
 // The bordered box: the nearest element around the editor that draws the border.
@@ -584,13 +463,14 @@ describe('the box', () => {
     expect(cls.filter(c => c.startsWith('focus-within:outline') || c.startsWith('has-[[aria-expanded=true]]:outline'))).toEqual([])
   })
 
-  test('it holds the commands menu, the text and the submit: the model and "Run on" are outside it, on rows of their own', () => {
+  test('it holds the commands menu, the text and the submit: the model and "Run on" are outside it, on rows of their own', async () => {
+    withHost()
     renderComposer()
     fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'x' } })
     expect(box().contains(screen.getByRole('button', { name: 'Send' }))).toBe(true)
     expect(box().contains(commands())).toBe(true)
     expect(box().contains(agentTrigger())).toBe(false)
-    expect(box().contains(screen.getByRole('button', { name: /^Run on: / }))).toBe(false)
+    expect(box().contains(await screen.findByRole('button', { name: /^Run on: / }))).toBe(false)
     cleanup()
     renderComposer({ inAgent: true })
     fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'x' } })
@@ -616,8 +496,10 @@ describe('the box', () => {
 const runOn = () => screen.getByRole('button', { name: /^Run on: / })
 
 describe('the rows around the box', () => {
-  test('where the agent starts is a row above the box: "Run on", then the caller\'s words; under it, the caller\'s controls, then the caller\'s end controls and the model at the right', () => {
+  test('where the agent starts is a row above the box: "Run on", then the caller\'s words; under it, the caller\'s controls, then the caller\'s end controls and the model at the right', async () => {
+    withHost()
     renderComposer({ startsAt: <span>a-place</span>, controls: <span>a-control</span>, controlsEnd: <span>an-end-control</span> })
+    await screen.findByRole('button', { name: /^Run on: / })
     const above = box().previousElementSibling!
     const under = box().nextElementSibling!
     const place = screen.getByText('a-place')
@@ -646,9 +528,10 @@ describe('the rows around the box', () => {
     expect(select.parentElement!.className).toContain('shrink-0')
   })
 
-  test('with nothing of the caller\'s, the row above still carries "Run on", and the row under the select', () => {
+  test('with nothing of the caller\'s, the row above still carries "Run on", and the row under the select', async () => {
+    withHost()
     renderComposer()
-    expect(box().previousElementSibling!.contains(runOn())).toBe(true)
+    expect(box().previousElementSibling!.contains(await screen.findByRole('button', { name: /^Run on: / }))).toBe(true)
     expect(box().nextElementSibling!.contains(agentTrigger())).toBe(true)
   })
 
@@ -666,40 +549,6 @@ describe('the rows around the box', () => {
     expect(box().nextElementSibling!.textContent).toBe('')
   })
 
-  test('the "Run on" pick reads the picked machine, and its menu picks a machine and this machine again', async () => {
-    await saveMachines(STUDIO_MACHINE)
-    renderComposer()
-    expect(runOn().textContent).toBe('This machine')
-    await openMenu(runOn())
-    fireEvent.click(screen.getByRole('menuitem', { name: /^Studio/ }))
-    await waitFor(() => expect(runOn().textContent).toBe('Studio'))
-    await openMenu(runOn())
-    fireEvent.click(screen.getByRole('menuitem', { name: /^This machine/ }))
-    await waitFor(() => expect(runOn().textContent).toBe('This machine'))
-  })
-
-  test('in a project with no repository address the pick reads "This machine" whatever was picked before, and an offline machine does not block the Start', async () => {
-    // Its origin is a folder on this disk: a remote, and still no name another machine knows it by.
-    onCommands.mockResolvedValue({ commands: [], gitHost: false, remote: true })
-    await saveMachines(STUDIO_MACHINE)
-    daemon.reachable = { [STUDIO]: false }
-    selectMachine(STUDIO)
-    const { onSubmit } = renderComposer()
-    await waitFor(() => expect(runOn().textContent).toBe('This machine'))
-    fireEvent.change(screen.getByLabelText('prompt'), { target: { value: 'ship it' } })
-    expect(screen.queryByText(/is offline/)).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
-    expect(onSubmit).toHaveBeenCalledWith('ship it', { later: false })
-  })
-
-  test('an offline picked machine still reads its label, with the note under the box', async () => {
-    await saveMachines(STUDIO_MACHINE)
-    daemon.reachable = { [STUDIO]: false }
-    selectMachine(STUDIO)
-    renderComposer()
-    await waitFor(() => expect(screen.getByText(/Studio is offline/)).toBeTruthy())
-    expect(runOn().textContent).toBe('Studio')
-  })
 })
 
 describe('in a session', () => {

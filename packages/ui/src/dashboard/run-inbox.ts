@@ -1,7 +1,7 @@
 import { hostname } from 'node:os'
 import { errorMessage } from '@openagt/agent-data'
 import { runHostOf } from '../dashboard-rpc/context.js'
-import { isArrived } from '../dashboard-rpc/relay-agent.js'
+
 import { runRefAt } from '../distribution-hooks.js'
 import { withAgentLock } from '../agent-locks.js'
 import { findAgent } from '../store/index.js'
@@ -29,13 +29,11 @@ export function agentLockKey(cwd: string, agentId: string): string {
 }
 
 /**
- * Why a run is not continued from here: one another computer started, which is no saved machine,
- * is only read. Continued here it would move to this computer under its id, with this
- * computer's logins and none of its conversation. A call another computer passed on was sent
- * to the run's own computer already, and is not asked.
+ * Why a run is not continued from here: one another computer started, whose record came through
+ * the project's shared records, is only read. Continued here it would move to this computer under
+ * its id, with this computer's logins and none of its conversation.
  */
 export async function startedElsewhere(cwd: string, agentId: string): Promise<SteerResult | undefined> {
-  if (isArrived()) return undefined
   const host = (await findAgent(cwd, agentId).catch(() => undefined))?.host
   return host !== undefined && host !== hostname() ? { ok: false, error: `This run is on ${host}. Continue it there.` } : undefined
 }

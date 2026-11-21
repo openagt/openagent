@@ -8,8 +8,7 @@ export interface GitHostAccount {
   runs: boolean
   /** Whether the tool could use it when asked. */
   ok: boolean
-  /** On a server: the computer of the person's whose login it is. */
-  from?: string
+
   /** Its public picture at the host, as the package said it: an https address. */
   avatar?: string
 }

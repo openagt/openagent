@@ -9,7 +9,7 @@ already made, and lists it in its pull request; for anything else it proposes an
 
 ## The profile
 - The person's name and picture are their own in OpenAgent (Settings › Profile), kept in their
-  own folder so every computer of theirs shows the same, and told to the servers they join.
+  own folder so every computer of theirs shows the same.
   "Sync from GitHub" copies a GitHub profile's name and picture once, read with no login; no git
   host is asked after. With none set, the name is git's and there is no picture. Picked over
   the name being git's and the picture the git host's, read live (Rom: decoupled from GitHub).

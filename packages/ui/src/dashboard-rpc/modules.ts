@@ -1,22 +1,12 @@
 import { homedir } from 'node:os'
-import { contextProjects, contextRemote, resolveProjectPath } from './context.js'
+import { contextProjects, resolveProjectPath } from './context.js'
 import { SESSIONS_ID } from '../project-address.js'
-import { findBroughtModule, findComputerModule, findProjectModule, readComputerModules, readProjectModules, runModuleCommand as runCommand, type ModuleCommandResult } from '../project-modules.js'
+import { findComputerModule, findProjectModule, readComputerModules, readProjectModules, runModuleCommand as runCommand, type ModuleCommandResult } from '../project-modules.js'
 import { broughtModuleUrl, computerModuleUrl, moduleUrl, versionedModuleUrl } from '../dashboard/module-serve.js'
 import { providedDataChanged } from '../store/provided.js'
-import { relayOr } from './relay-agent.js'
-import { computerSaid, ownUrlSaid } from '../dashboard/machine-call.js'
-import { CALLER_ENV, callerAtPage } from '../dashboard/person.js'
-import { THROUGH_PATH, remoteComputerCommand } from '../dashboard/remote-run.js'
 import { pullProjectData } from '@openagt/agent-data'
-import { savedMachines } from '../other-computers.js'
 
 export type { ModuleCommandResult } from '../project-modules.js'
-
-/** How a command of the computer's packages is told which computer this is. */
-const COMPUTER_ENV = 'OPENAGENT_COMPUTER'
-/** How a command of the computer's packages is told where OpenAgent answers on it. */
-const URL_ENV = 'OPENAGENT_URL'
 
 /** One module as the dashboard loads it: where its module is, and which projects have it. */
 export interface DashboardModule {
@@ -65,20 +55,6 @@ export async function onModules(): Promise<DashboardModule[]> {
     if (known) known.sessions = true
     else byPackage.set(module.package, { package: module.package, url: await versionedModuleUrl(broughtModuleUrl(module), module), projects: [], sessions: true })
   }
-  // Another computer's projects have the pages their computer said they have, from a copy of the
-  // module here: a project's of this computer's, else OpenAgent's own. One with no copy here has none.
-  for (const project of await contextRemote().elsewhere().catch(() => [])) {
-    for (const pkg of project.modules ?? []) {
-      const known = byPackage.get(pkg)
-      if (known?.computer) continue
-      if (known) {
-        known.projects.push(project.id)
-        continue
-      }
-      const brought = await findBroughtModule(pkg).catch(() => undefined)
-      if (brought) byPackage.set(pkg, { package: pkg, url: await versionedModuleUrl(broughtModuleUrl(brought), brought), projects: [project.id] })
-    }
-  }
   return [...byPackage.values()]
 }
 
@@ -103,7 +79,7 @@ export async function runModuleCommand(projectId: string, pkg: string, args: str
   if (!Array.isArray(args)) return { ok: false, error: 'arguments must be a list' }
   const module = await findProjectModule(root, pkg)
   if (!module) return { ok: false, error: `${pkg} brings no module to this project` }
-  const result = await runCommand(root, module, args, command, {}, typeof input === 'string' ? input : undefined)
+  const result = await runCommand(root, module, args, command, typeof input === 'string' ? input : undefined)
   if (acts) {
     await pullProjectData(root, { log: () => {} }).catch(() => {})
     providedDataChanged(root, pkg)
@@ -113,38 +89,14 @@ export async function runModuleCommand(projectId: string, pkg: string, args: str
 
 /**
  * Run one of the commands of a package that is this computer's, in no project, and answer its
- * JSON output: how the door's page and the servers' page read and change what they keep, which is
- * in the person's home folder, where the command runs. Refused for any other package: a project's
- * module runs its commands in its project ({@link runModuleCommand}). `input` is what the command
- * reads on standard input: a login handed over there is on no command line.
- *
- * The command is told which computer this is and where this OpenAgent answers: what it sets up on
- * another machine is listed there as this computer's, and what it asks of a saved machine it asks
- * through this OpenAgent, which holds the keys.
+ * JSON output: how such a package's page (the Accounts card) reads and changes what it keeps,
+ * which is in the person's home folder, where the command runs. Refused for any other package: a
+ * project's module runs its commands in its project ({@link runModuleCommand}). `input` is what
+ * the command reads on standard input: a login is on no command line.
  */
 export async function runComputerCommand(pkg: string, args: string[], command?: string | null, input?: string | null): Promise<ModuleCommandResult> {
   if (!Array.isArray(args)) return { ok: false, error: 'arguments must be a list' }
   const module = await findComputerModule(pkg)
   if (!module) return { ok: false, error: `${pkg} is not this computer's` }
-  // Told which computer this is, in the word OpenAgent's own calls are made from: what such a command sets up on another machine is listed there as this computer's.
-  const computer = computerSaid()
-  const url = ownUrlSaid()
-  // Told whose device asks, when it is a person's the owner invited: the package decides what such a person may see and do.
-  const caller = callerAtPage()
-  const more = { ...(computer !== undefined ? { [COMPUTER_ENV]: computer } : {}), ...(url !== undefined ? { [URL_ENV]: url } : {}), ...(caller !== undefined ? { [CALLER_ENV]: encodeURIComponent(caller) } : {}) }
-  return runCommand(homedir(), module, args, typeof command === 'string' ? command : undefined, more, typeof input === 'string' ? input : undefined)
-}
-
-/**
- * Run one of the commands of a package that is this computer's on a saved machine, where the
- * same package is that machine's: a module reads and changes what it keeps over there, with this
- * computer's key there, as the machine's own page would. Not for a computer reached through a
- * server: what comes down a line is a machine's calls, not its page's.
- */
-export async function runComputerCommandOn(pkg: string, machineId: string, args: string[], command?: string | null, input?: string | null): Promise<ModuleCommandResult> {
-  if (!Array.isArray(args) || args.some(arg => typeof arg !== 'string')) return { ok: false, error: 'arguments must be a list of words' }
-  if (!(await findComputerModule(pkg))) return { ok: false, error: `${pkg} is not this computer's` }
-  const machine = (await savedMachines()).find(saved => saved.id === machineId)
-  if (!machine || machine.url.includes(THROUGH_PATH)) return { ok: false, error: 'That machine is no longer saved.' }
-  return remoteComputerCommand(machine, pkg, args, typeof command === 'string' ? command : undefined, typeof input === 'string' ? input : undefined)
+  return runCommand(homedir(), module, args, typeof command === 'string' ? command : undefined, typeof input === 'string' ? input : undefined)
 }

@@ -7,7 +7,7 @@ import { ACTED, CONSOLE, CURSOR, FRAME, jpegSize, MAX_SELECTION, readActed, read
 
 /** How long until a session with no browser is asked again whether it has one. */
 const ASK_AGAIN_MS = 3_000
-/** The largest picture drawn, a side: the browser's own are 1280 by 800, and the stream may come from another computer. */
+/** The largest picture drawn, a side: the browser's own are 1280 by 800. */
 const MAX_SIDE = 4096
 /** The keys passed on by name; any other key that is one character is passed on as text. */
 const NAMED_KEYS = new Set(['Enter', 'Tab', 'Escape', 'Backspace', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'])
@@ -100,7 +100,7 @@ export function BrowserPanel({ projectId, agentId, activity }: UiPaneProps) {
             className={live ? 'max-h-full max-w-full touch-none outline-none focus-visible:ring-2 focus-visible:ring-ring' : 'hidden'}
             onKeyDown={onKey}
             // What the page has selected is already in hand, so a copy answers at once, as a
-            // copy must: there is no asking the other computer in the moment the keys are down.
+            // copy must: there is no asking the agent's browser in the moment the keys are down.
             onCopy={e => {
               if (!selected.current) return
               e.clipboardData.setData('text/plain', selected.current)
@@ -357,8 +357,7 @@ function usePageVisible(): boolean {
 
 /**
  * Draw one picture; how large it was, or nothing when the bytes were no picture. Its size is read
- * off its header first: decoding is where a picture's size is paid for, and the bytes may come
- * from another computer.
+ * off its header first: decoding is where a picture's size is paid for.
  */
 async function draw(canvas: HTMLCanvasElement | null, jpeg: Uint8Array): Promise<{ width: number; height: number } | undefined> {
   const size = jpegSize(jpeg)

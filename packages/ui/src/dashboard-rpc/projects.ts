@@ -1,7 +1,7 @@
-import { contextAddProject, contextHost, contextOtherHosts, contextPrepareStart, contextProjectState, contextProjects, contextRemote, contextRemoveProject, contextStartedIn, resolveProjectPath } from './context.js'
+import { contextAddProject, contextHost, contextOtherHosts, contextPrepareStart, contextProjectState, contextProjects, contextRemoveProject, contextStartedIn, resolveProjectPath } from './context.js'
 import { projectRefAt } from '../distribution-hooks.js'
 import { readProjectSkills } from '@openagt/skills'
-import { DATA_BRANCH, addressOfRemote, errorMessage, isRepoOwner, originDefaultBranch, readRepoOwners, readSharing, repositoryAddress, repositorySpelling, shareProjectData, writeRepoOwners } from '@openagt/agent-data'
+import { DATA_BRANCH, addressOfRemote, errorMessage, isRepoOwner, originDefaultBranch, readRepoOwners, repositoryAddress, shareProjectData, writeRepoOwners } from '@openagt/agent-data'
 import { readHosted, refreshHosted, type HostedRepo } from './hosted-repos.js'
 import { cloneAccountFor, originHost, remoteAccount } from './send-as.js'
 import type { StartReadiness } from '../start-readiness.js'
@@ -12,14 +12,10 @@ import { currentBranch } from '../dashboard/git-status.js'
 import { branchesOnOrigin, waitingSkills } from '../dashboard/start-branch.js'
 import { addRepoFolder, listProjects, listRepoFolders, removeRepoFolder, startFromPick, type StartFromPick } from '../registry.js'
 import { thisComputersRepos, type FoundRepo } from '../dashboard/repos.js'
-import { canRead, cloneProject, cloneTargetOf } from '../clone-project.js'
-import { isDriverName } from '../driver-names.js'
-import { loginsWiring } from './logins.js'
+import { cloneProject, cloneTargetOf } from '../clone-project.js'
 import { canPickDirectory, pickDirectory, type PickDirectoryResult } from '../pick-directory.js'
 import { projectGitHost } from '../store/git-host.js'
-import { readProjectModules } from '../project-modules.js'
 import type { ProjectSummary } from '../dashboard/projects.js'
-import type { OwnProject } from '../dashboard/elsewhere.js'
 import type { AddProjectResult, RemoveProjectResult, StartedInResult } from '../dashboard/types.js'
 
 // The Projects sidebar behind the new dashboard (#405): the global registry (#390) the
@@ -33,42 +29,10 @@ import type { AddProjectResult, RemoveProjectResult, StartedInResult } from '../
 // project's banner with nothing new to subscribe to.
 export async function onProjects(): Promise<ProjectSummary[]> {
   const state = contextProjectState()
-  const [own, elsewhere] = await Promise.all([contextProjects().list(), contextRemote().elsewhere()])
-  const here = await Promise.all(
-    own.map(async project => {
-      const { errors, local } = await state(project)
-      return { ...project, ...(errors.length > 0 ? { errors } : {}), ...(local ? { local } : {}) }
-    }),
-  )
-  return [...here, ...elsewhere]
-}
-
-/**
- * This computer's own projects, for another computer of the person's that lists them beside its
- * own (elsewhere.ts): each with the address another computer names it by and clones it from, and
- * whether its agents' records are shared. Never the projects this computer lists of others.
- */
-export async function onOwnProjects(): Promise<OwnProject[]> {
   return Promise.all(
     (await contextProjects().list()).map(async project => {
-      const [address, spelling, share, modules] = await Promise.all([
-        repositoryAddress(project.path),
-        repositorySpelling(project.path),
-        readSharing(project.path).catch(() => false),
-        readProjectModules(project.path).catch(() => []),
-      ])
-      return {
-        id: project.id,
-        name: project.name,
-        path: project.path,
-        ...(address !== undefined ? { address } : {}),
-        ...(spelling !== undefined ? { spelling } : {}),
-        share,
-        gitHost: project.gitHost,
-        activated: project.activated,
-        ...(project.lastActivityAt !== undefined ? { lastActivityAt: project.lastActivityAt } : {}),
-        modules: modules.map(module => module.package),
-      }
+      const { errors, local } = await state(project)
+      return { ...project, ...(errors.length > 0 ? { errors } : {}), ...(local ? { local } : {}) }
     }),
   )
 }
@@ -283,7 +247,7 @@ export interface ProjectLauncher {
   gitHost: boolean
   /** Whether the project's repository has an `origin` remote; without one nothing can be published, so the publish menu stops at the commit. */
   remote: boolean
-  /** The address the project's repository was cloned from, the name another machine knows the project by; absent, the project cannot be sent to one. */
+  /** The address the project's repository was cloned from (`github.com/acme/shop`): its host is the git host a session pushes to, as the account it picks there. */
   address?: string
   /**
    * What the launcher's branch menu always lists: `main`, the name of origin's default branch, and
@@ -380,16 +344,4 @@ export async function onStartCheck(projectId: string, driver?: string, host?: st
   }
 }
 
-/**
- * What would stop a run of a project this computer clones first, asked before it does: its coding
- * agent, installed and logged in, and whether its logins read the repository at the address. `as`
- * is what the asker calls this computer, so the words read right on its page.
- */
-export async function onCloneCheck(address: string, driver?: string, as?: string): Promise<StartReadiness> {
-  const ready = await loginsWiring.ready(typeof driver === 'string' && isDriverName(driver) ? driver : 'claude-code')
-  const typed = typeof address === 'string' ? address : ''
-  const account = await cloneAccountFor(typed)
-  const read = await canRead(typed, account ? { account } : {}, typeof as === 'string' && as.trim() ? as.trim() : undefined)
-  return { problems: [...ready.problems, ...(read.ok ? [] : [read.error])], warnings: ready.warnings, ...(ready.fix ? { fix: ready.fix } : {}) }
-}
 

@@ -74,7 +74,7 @@ export async function tokenOf(login: string, dir: string, cwd: string, gh: GhRun
 }
 
 /** Who GitHub says a token is, asked with that token alone: no account's folder, and not the person's. `login`, when given, names the account it was asked for. */
-export async function factsOfToken(token: string, cwd: string, gh: GhRunner, login?: string): Promise<AccountFacts> {
+async function factsOfToken(token: string, cwd: string, gh: GhRunner, login?: string): Promise<AccountFacts> {
   const none = mkdtempSync(join(tmpdir(), 'openagent-gh-'))
   try {
     return await whoAmI((args, at, env, input) => asAccount(gh, none)(args, at, { ...env, GH_TOKEN: token }, input), cwd)

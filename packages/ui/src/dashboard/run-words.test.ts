@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url'
 
 const PACKAGES = fileURLToPath(new URL('../../../', import.meta.url))
 
-const STATES = 'running|waiting|saving|done|stopped|failed|merged|unknown'
+const STATES = 'running|waiting|saving|done|stopped|failed|merged'
 
 /** A state given a colour: a map from it to a class of a text, a fill or a border. */
 const COLOURED = new RegExp(`\\b(${STATES})\\s*:\\s*'(text|bg|border)-`, 'g')
@@ -21,7 +21,7 @@ const WORDED = new RegExp(`[sS]tatus\\s*===\\s*'(${STATES})'\\s*\\?\\s*'(?!(${ST
 /** The files that may, with the reason. */
 const ALLOWED: Record<string, string> = {
   'ui/dashboard/lib/run-words.ts': 'the one table',
-  'ui/dashboard/components/ServerLogins.tsx': "a login's states, not a run's",
+
   'ui/dashboard/components/ui/state.tsx': "where any piece of work stands (a queue entry, a ticket, a run), drawn as the look's cell: a run's state is mapped to one, its word and colour stay in the table",
 }
 

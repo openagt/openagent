@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type Ref } from 'react'
 import { Ellipsis, Loader2, Plus } from 'lucide-react'
-import { onPresetLogins, onPresetsList, sendCopyPresetLogins, sendRemovePreset, sendSavePreset, type Preset, type PresetAccountChoice, type PresetLoginsOn, type PresetsView, type RunOptions } from '../rpc/presets.js'
+import { onPresetsList, sendRemovePreset, sendSavePreset, type Preset, type PresetAccountChoice, type PresetsView, type RunOptions } from '../rpc/presets.js'
 import { DEFAULT_PRESET } from '../../src/client.js'
 import { holdEntry } from '../lib/use-route.js'
 import { usePolled, type ReadState } from '../lib/use-async.js'
@@ -38,15 +38,6 @@ const SELDOM_MS = 30_000
 export function usePresetsList(): { view: PresetsView | undefined; state: ReadState; failing: boolean; reload: () => Promise<void> } {
   const { value, state, failing, reload } = usePolled<PresetsView | undefined>(onPresetsList, undefined, SELDOM_MS, [], { remember: 'presets', stored: true })
   return { view: value, state, failing, reload }
-}
-
-/** How often the devices are asked how the presets' GitHub accounts stand there. */
-const DEVICES_MS = 15_000
-
-/** How the presets' GitHub accounts stand on each device of the person's. */
-function usePresetLogins(): { devices: PresetLoginsOn[] | undefined; reload: () => Promise<void> } {
-  const { value, reload } = usePolled<PresetLoginsOn[] | undefined>(onPresetLogins, undefined, DEVICES_MS, [], 'previous')
-  return { devices: value, reload }
 }
 
 /** A preset's name by its id, once the presets are read; the id itself for one this computer does not have; nothing for none. */
@@ -110,7 +101,6 @@ function projectSaid(project: ProjectPick): string {
 /** The Presets page. */
 export function PresetsPage() {
   const { view, state, failing, reload } = usePresetsList()
-  const { devices, reload: reloadDevices } = usePresetLogins()
   const [adding, setAdding] = useState(false)
   const newPreset = useRef<HTMLButtonElement>(null)
   // The preset just removed: once the list is read without it, its Remove press is gone with its card, and the focus goes to "New preset".
@@ -127,10 +117,7 @@ export function PresetsPage() {
     removed.current = undefined
     newPreset.current?.focus()
   }, [view])
-  const changed = async () => {
-    await reload()
-    await reloadDevices()
-  }
+  const changed = reload
   return (
     <Page
       title="Presets"
@@ -147,7 +134,7 @@ export function PresetsPage() {
           view && (
             <Panel aria-label="Presets">
               {view.presets.map(preset => (
-                <PresetRow key={preset.id} preset={preset} view={view} devices={devices} onChanged={changed} onRemoved={() => void (removed.current = preset.id)} {...(preset.id === made.current ? { editRef: madeEdit } : {})} />
+                <PresetRow key={preset.id} preset={preset} view={view} onChanged={changed} onRemoved={() => void (removed.current = preset.id)} {...(preset.id === made.current ? { editRef: madeEdit } : {})} />
               ))}
             </Panel>
           )
@@ -162,13 +149,10 @@ export function PresetsPage() {
 /**
  * One preset, a row of the page's panel: its name (Default says it is used unless another is
  * picked), under it what its runs get (the accounts they work as, the plugins they go without, and
- * the project's own skills),
- * then a line that says where its GitHub account is, device by device, a device it could not be
- * copied to in the warning colour with why. Edit and Remove come under the pointer and the
- * keyboard, and "Copy again" beside them where a copy failed; on a phone the row's one press is a
- * menu of them. `onRemoved` is told before the list is read again without it.
+ * the project's own skills). Edit and Remove come under the pointer and the keyboard; on a phone
+ * the row's one press is a menu of them. `onRemoved` is told before the list is read again without it.
  */
-function PresetRow({ preset, view, devices, onChanged, onRemoved, editRef }: { preset: Preset; view: PresetsView; devices: PresetLoginsOn[] | undefined; onChanged: () => Promise<void>; onRemoved: () => void; editRef?: Ref<HTMLButtonElement> }) {
+function PresetRow({ preset, view, onChanged, onRemoved, editRef }: { preset: Preset; view: PresetsView; onChanged: () => Promise<void>; onRemoved: () => void; editRef?: Ref<HTMLButtonElement> }) {
   const [editing, setEditing] = useState(false)
   const [removing, setRemoving] = useState(false)
   const phone = useIsMobile()
@@ -182,20 +166,6 @@ function PresetRow({ preset, view, devices, onChanged, onRemoved, editRef }: { p
     ...(plugins?.without ? [`Without ${inWords(plugins.without)}`] : []),
     `${said.charAt(0).toUpperCase()}${said.slice(1)}`,
   ]
-  const login = github?.account
-  const where = login !== undefined && devices && devices.length > 0 ? devices : undefined
-  const failed = where?.some(device => device.reachable && device.github[login!]?.state === 'failed') ?? false
-  const copy = useCopyAgain(onChanged)
-  const under = where !== undefined && (
-    <>
-      <OnDevices login={login!} devices={where} />
-      {copy.error !== undefined && (
-        <span role="alert" className="block text-danger">
-          {copy.error}
-        </span>
-      )}
-    </>
-  )
   return (
     <>
       <PanelRow
@@ -207,7 +177,6 @@ function PresetRow({ preset, view, devices, onChanged, onRemoved, editRef }: { p
         }
         titleHint={facts.join(' · ')}
         meta={facts}
-        {...(under ? { under } : {})}
         actions={
           phone ? (
             <DropdownMenu>
@@ -216,21 +185,11 @@ function PresetRow({ preset, view, devices, onChanged, onRemoved, editRef }: { p
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onClick={() => setEditing(true)}>Edit</DropdownMenuItem>
-                {failed && (
-                  <DropdownMenuItem disabled={copy.busy} onClick={copy.run}>
-                    Copy again
-                  </DropdownMenuItem>
-                )}
                 {!isDefault && <DropdownMenuItem onClick={() => setRemoving(true)}>Remove</DropdownMenuItem>}
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (
             <>
-              {failed && (
-                <Button size="sm" variant="ghost" loading={copy.busy} onClick={copy.run}>
-                  Copy again
-                </Button>
-              )}
               <Button ref={editRef} size="sm" variant="secondary" aria-label={`Edit ${preset.name}`} onClick={() => setEditing(true)}>
                 Edit
               </Button>
@@ -264,54 +223,6 @@ function PresetRow({ preset, view, devices, onChanged, onRemoved, editRef }: { p
       {editing && <PresetEditor preset={preset} view={view} onAccounts={onChanged} onDone={async saved => (setEditing(false), saved ? onChanged() : undefined)} />}
     </>
   )
-}
-
-/**
- * Where a preset's GitHub account is: one line, a device after another, as the last copy left it. The
- * account goes to every device by itself when the preset is saved and every minute after, so a device
- * it could not reach is the one said in the warning colour, with why.
- */
-function OnDevices({ login, devices }: { login: string; devices: PresetLoginsOn[] }) {
-  return (
-    <ul aria-label={`Where @${login} is`} className="flex flex-wrap gap-x-1.5 text-faint-foreground">
-      {devices.map(device => {
-        const on = device.github[login]
-        return (
-          <li key={device.machineId} className="not-first:before:mr-1.5 not-first:before:content-['·']">
-            {!device.reachable ? (
-              `${device.label}: not reached`
-            ) : on?.state === 'there' ? (
-              `On ${device.label}`
-            ) : on?.state === 'failed' ? (
-              <span className="text-warning">{`${device.label}: not copied — ${on.error ?? 'it did not take it'}`}</span>
-            ) : (
-              `${device.label}: not copied yet`
-            )}
-          </li>
-        )
-      })}
-    </ul>
-  )
-}
-
-/** "Copy again": the presets' GitHub accounts sent to every device once more, then the list read again; why it failed, when it did. */
-function useCopyAgain(onCopied: () => Promise<void>): { busy: boolean; error: string | undefined; run: () => void } {
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | undefined>()
-  const run = (): void => {
-    setBusy(true)
-    setError(undefined)
-    void (async () => {
-      try {
-        const done = await sendCopyPresetLogins()
-        if (!done.ok) setError(done.error)
-        await onCopied()
-      } finally {
-        setBusy(false)
-      }
-    })()
-  }
-  return { busy, error, run }
 }
 
 /** No account of the preset's own, whatever the computer uses: the value of the select for a preset that names none. */

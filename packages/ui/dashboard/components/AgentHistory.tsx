@@ -2,7 +2,6 @@ import { PRESETS_PAGE, PERMISSIONS_PAGE } from '../lib/use-route.js'
 import { RevealedTitle } from './RevealedTitle.js'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Plus, Bot, ArrowDownUp, Check, Laptop, LayoutDashboard, Blocks, FilePen, GitBranch, KeyRound } from 'lucide-react'
-import { MACHINE_ICONS } from './MachineMark.js'
 import { HOST_ICON } from './RunOnMenu.js'
 import { hostOf, useRunHosts } from '../lib/run-hosts.js'
 import { PersonMark } from './PersonMark.js'
@@ -11,7 +10,7 @@ import type { AgentMeta, AgentStatus, RecentAgent, ProjectSummary, Waiting } fro
 import { needsWord, waitingKey } from '../../src/client.js'
 import { StateCell } from './ui/state.js'
 import type { ModuleHostPerson } from '../module/index.js'
-import { DRIVER_LABELS, driverFromImpl, type MachineKind } from '../../src/client.js'
+import { DRIVER_LABELS, driverFromImpl } from '../../src/client.js'
 import { buttonVariants } from './ui/button.js'
 import { inPlace } from '../lib/in-place.js'
 import { formatRoute, type Route } from '../lib/route.js'
@@ -309,12 +308,8 @@ export function AgentHistory({
       subtitle={formatRelative(row.agent.startedAt)}
       age={formatSince(row.agent.startedAt)}
       active={row.active}
-      remote={row.agent.target === 'remote'}
       {...(hostOf(row.agent.target) !== undefined ? { host: { id: hostOf(row.agent.target)!, projectId: row.projectId } } : {})}
       {...(row.agent.otherHost && row.agent.host ? { startedOn: row.agent.host } : {})}
-      {...(row.agent.remoteLabel ? { remoteLabel: row.agent.remoteLabel } : {})}
-      {...(row.agent.remoteKind ? { remoteKind: row.agent.remoteKind } : {})}
-      seenAt={row.agent.seenAt}
       {...(row.agent.pr ? { pr: { number: row.agent.pr.number, ...(row.agent.prState ? { state: row.agent.prState } : {}) } } : {})}
       {...(row.agent.unpublished ? { unpublished: row.agent.unpublished } : {})}
       {...(row.agent.uncommitted ? { uncommitted: row.agent.uncommitted } : {})}
@@ -710,11 +705,7 @@ function AgentHistoryRow({
   model,
   standIn = false,
   saving = false,
-  remote = false,
   host,
-  remoteLabel,
-  remoteKind = 'server',
-  seenAt,
   startedOn,
   pr,
   unpublished,
@@ -751,17 +742,9 @@ function AgentHistoryRow({
   /** Ended clean, its process still saving its record and cleaning up its checkout (#1455): the row must
    *  not say "done" while the session's own pill says "saving…". */
   saving?: boolean
-  /** Runs on a saved machine (#1067): the row gets a machine glyph next to the agent logo. */
-  remote?: boolean
   /** Runs on a host beside this computer's (`run.host`, #1263, #2394), by its id, a host of its project's: the row gets the host's glyph beside the agent logo. */
   host?: { id: string; projectId: string | null } | undefined
-  /** The machine's label, for the glyph's tooltip. */
-  remoteLabel?: string | undefined
-  /** What that machine is: the glyph is its kind's icon, as every list of machines draws it. */
-  remoteKind?: MachineKind
-  /** While the status is unknown: when the run's computer last answered, if it did. */
-  seenAt?: string | undefined
-  /** The machine whose daemon started the run, when that is another machine (#1648): a glyph names it. */
+  /** The computer whose daemon started the run, when that is another computer (#1648): a glyph names it. */
   startedOn?: string | undefined
   /** The run's pull request, and how it stands when the git host said: a glyph before the agent's logo. */
   pr?: { number: number; state?: PrState } | undefined
@@ -783,7 +766,6 @@ function AgentHistoryRow({
   // A run that ended on its question waits on you (#785).
   const parked = status === 'waiting'
   const picked = driverFromImpl(driver)
-  const MachineIcon = MACHINE_ICONS[remoteKind]
   // The host it runs on, by the name its project's module gives it.
   const hostLabel = useRunHosts(host ? host.projectId : null).find(one => one.id === host?.id)?.label
   const onHost = host ? `Runs on ${hostLabel ?? 'another host'}` : undefined
@@ -795,8 +777,6 @@ function AgentHistoryRow({
   // What the row says in a word, the one the status badge used to print: it names the circle, and
   // opens the sentence the row's hover says.
   const word = parked ? runWord('waiting') : saving ? runWord('saving') : runWord(status)
-  // A run whose computer does not answer: which computer, and when it was last seen.
-  const offline = status === 'unknown' ? `${remoteLabel ?? 'Its computer'} offline${seenAt ? ` · last seen ${formatRelative(seenAt)}` : ''}` : undefined
   // The mark: the state's hexagon, from the table every place reads (`run-words.ts`). Only a working
   // run's ring turns: a run parked on you has been still for as long as you have not answered it (#785).
   const working = status === 'running' || saving
@@ -813,7 +793,7 @@ function AgentHistoryRow({
   const personWords = person ? personSaid(person, account) : undefined
   // Everything the two-line row used to print, in one sentence, for a reader that cannot see the
   // marks: the word, where the run is and when it started, which coding agent ran it, and the
-  // machine or host it ran on.
+  // computer or host it ran on.
   const said = [
     word,
     ...(project ? [project] : []),
@@ -821,7 +801,6 @@ function AgentHistoryRow({
     ...(personWords ? [personWords] : []),
     ...(picked ? [DRIVER_LABELS[picked]] : []),
     ...(startedOn ? [`started on ${startedOn}`] : []),
-    ...(offline ? [offline] : remote ? [remoteLabel ? `runs on ${remoteLabel}` : 'runs on another machine'] : []),
     ...(host ? [`runs on ${hostLabel ?? 'another host'}`] : []),
     ...(prSaid ? [prSaid] : []),
     ...(left ? [left.said] : []),
@@ -850,16 +829,10 @@ function AgentHistoryRow({
         </TooltipContent>
       </Tooltip>
       {/* What is unusual about where the run is, kept on the row as one small glyph: another
-          machine, a person's own computer, a host. Rare, so the row stays a circle and a
-          name nearly always. */}
+          computer, a host. Rare, so the row stays a circle and a name nearly always. */}
       {startedOn && (
         <RowMark said={`Started on ${startedOn}`}>
           <Laptop className="size-3.5 text-muted-foreground" />
-        </RowMark>
-      )}
-      {remote && (
-        <RowMark said={offline ?? (remoteLabel ? `Runs on ${remoteLabel}` : 'Runs on another machine')}>
-          <MachineIcon className="size-3.5 text-muted-foreground" />
         </RowMark>
       )}
       {onHost && (

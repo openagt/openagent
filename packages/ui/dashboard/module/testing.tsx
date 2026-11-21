@@ -20,7 +20,7 @@ export type FakeHost = { [K in keyof ModuleHost]: ModuleHost[K] extends (...args
 
 /**
  * A host for the module of `pkg`. Each service answers as a dashboard with nothing to give would
- * (no commands, no agents, no machines), unless `services` says how it answers in this test.
+ * (no commands, no agents), unless `services` says how it answers in this test.
  */
 export function fakeHost(pkg: string, services: Partial<Omit<ModuleHost, 'package'>> = {}): FakeHost {
   const nothing = async () => ({ ok: false as const, error: 'not in this test' })
@@ -28,7 +28,6 @@ export function fakeHost(pkg: string, services: Partial<Omit<ModuleHost, 'packag
     runCommand: nothing,
     act: nothing,
     runComputerCommand: nothing,
-    runComputerCommandOn: nothing,
     call: nothing,
     callComputer: nothing,
     openAgent: () => {},
@@ -43,22 +42,6 @@ export function fakeHost(pkg: string, services: Partial<Omit<ModuleHost, 'packag
     configureRun: () => {},
     agents: async () => [],
     activity: async () => ({ items: [], whole: [] }),
-    machines: async () => ({ version: '0.0.0', machines: [] }),
-    addMachine: nothing,
-    removeMachine: nothing,
-    renameMachine: nothing,
-    renameComputer: nothing,
-    letMachineIn: nothing,
-    machineCode: nothing,
-    computersThrough: async () => ({ ok: true as const, computers: [] }),
-    addComputerThrough: nothing,
-    machinePerson: async () => ({ ok: false as const, error: 'not in this test', unknown: true as const }),
-    useLoginsOn: nothing,
-    syncDataOn: nothing,
-    agentDataRemote: async () => undefined,
-    machineAccounts: async () => null,
-    removeMachineAccount: nothing,
-    removeMachineDevice: nothing,
     watchScreen: async () => undefined,
     sendToScreen: async () => false,
     ...services,

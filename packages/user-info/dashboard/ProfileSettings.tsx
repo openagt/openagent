@@ -4,8 +4,7 @@ import { copyFromGitHub, removePicture, saveName } from './calls.js'
 
 /**
  * Settings › Profile (Rom's design: the person's name and picture are OpenAgent's own, not a git
- * host's): the name the sidebar's foot shows and the servers they join are told, and their
- * picture. Saved with the person, so each computer of theirs shows the same. "Sync from GitHub"
+ * host's): the name the sidebar's foot shows, and their picture. Saved with the person, so each computer of theirs shows the same. "Sync from GitHub"
  * copies a GitHub profile's name and picture once, read with no login. What it shows is the
  * person as the shell reads them, the computer's name for them until they set their own.
  */

@@ -33,7 +33,6 @@ export function ProjectHome({
   onOpenAgent,
   errors,
   onProjectRemoved,
-  home,
   projects,
   onPickProject,
   onProjectAdded,
@@ -50,7 +49,7 @@ export function ProjectHome({
   /** The Human Queue, already only the project picked in the sidebar's (#1513) when one is picked. */
   waiting: readonly Waiting[]
   /** Carries the started agent's id through to the shell; dropping it is what #1169 was. */
-  onAgentStarted?: ((intent: string, agentId: string, runsOn?: string, startedIn?: string, picks?: StartPicks) => void) | undefined
+  onAgentStarted?: ((intent: string, agentId: string, runsOn?: string, picks?: StartPicks) => void) | undefined
   files: string[]
   /** The Context set and its edits, owned by the shell and shared with the file tree (#492). */
   context: Set<string>
@@ -63,8 +62,6 @@ export function ProjectHome({
   errors?: ProjectError[] | undefined
   /** Told once the project is off the list, so the shell leaves its page. */
   onProjectRemoved?: (() => void) | undefined
-  /** The saved machine the project is on, when only another computer of the person's has it (elsewhere.ts): it is removed there, not here. */
-  home?: string | undefined
 }) {
   // The list comes first, the box at the foot: while something waits, and on a phone.
   const isMobile = useIsMobile()
@@ -87,7 +84,7 @@ export function ProjectHome({
           It stops short of the list's scroll bar (ui/scroll-area, 10 wide), which is drawn over the
           page's whole height; only the bar's line crosses it, to the page's edge. */}
       <div ref={top} data-testid="home-top" className="absolute top-0 right-2.5 left-0 z-20 bg-background/80 backdrop-blur-md">
-        <ProjectActions projectId={projectId} onProjectRemoved={home === undefined ? onProjectRemoved : undefined} />
+        <ProjectActions projectId={projectId} onProjectRemoved={onProjectRemoved} />
         {/* Above everything, because an agent started on a project whose agent-data branch cannot
             reach origin (#1599) works from stale tickets and a queue nobody else will see. */}
         <ProjectErrorBanner errors={errors} />
@@ -110,7 +107,6 @@ export function ProjectHome({
             addContext={addContext}
             removeContext={removeContext}
             toggleContext={toggleContext}
-            home={home}
             projects={projects}
             onPickProject={onPickProject}
             onProjectAdded={onProjectAdded}

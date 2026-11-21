@@ -300,7 +300,7 @@ test('a fix needs no bash: on a computer with only sh, a log-in runs there', asy
   }
 })
 
-test('a computer with no browser: the log-in is typed in a terminal there, an install is still a press; on a server neither log-in is offered', async () => {
+test('a computer with no browser: the log-in is typed in a terminal there, an install is still a press', async () => {
   const before = { ...loginsWiring }
   const headless = accountsWiring.headless
   accountsWiring.headless = () => true
@@ -308,13 +308,9 @@ test('a computer with no browser: the log-in is typed in a terminal there, an in
   Object.assign(loginsWiring, { ready: async () => ({ problems: ['`codex` is not logged in.'], warnings: [], fix }) })
   try {
     assert.deepEqual(await onAgentState('codex'), { driver: 'codex', ready: false, problem: '`codex` is not logged in.', fix, typed: true })
-    process.env['OPENAGENT_SERVER'] = '1'
-    assert.deepEqual(await onAgentState('codex'), { driver: 'codex', ready: false, problem: '`codex` is not logged in.' })
-    delete process.env['OPENAGENT_SERVER']
     fix = { kind: 'install', command: 'curl -fsSL https://chatgpt.com/codex/install.sh | sh' }
     assert.deepEqual(await onAgentState('codex'), { driver: 'codex', ready: false, problem: '`codex` is not logged in.', fix })
   } finally {
-    delete process.env['OPENAGENT_SERVER']
     Object.assign(loginsWiring, before)
     accountsWiring.headless = headless
   }

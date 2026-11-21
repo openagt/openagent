@@ -176,7 +176,6 @@ export function createHooks(entries: readonly DistributionEntry[], opts: HooksOp
       return live.get(module)?.signal ?? app?.signal ?? new AbortController().signal
     },
     ...(app !== undefined ? { url: app.url } : {}),
-    ...(app?.computer !== undefined ? { computer: app.computer } : {}),
   })
   const startOne = async (module: ModuleDefinition, start: AppStart): Promise<void> => {
     const stop = new AbortController()

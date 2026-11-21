@@ -18,8 +18,6 @@ export interface AppContext {
   readonly signal: AbortSignal
   /** Where the app answers on this computer, for a module's own process to call it at; none before the app started. */
   readonly url?: string
-  /** Which computer this is, by the id other computers know it by; none where it has none. */
-  readonly computer?: string
 }
 
 /** What the app says of itself as it starts its modules ({@link AppContext}). */
@@ -27,7 +25,6 @@ export interface AppStart {
   /** Aborted when the app stops. */
   signal: AbortSignal
   url: string
-  computer?: string
 }
 
 /** The app's life, for a module that does work of its own: its timers, its own process. */

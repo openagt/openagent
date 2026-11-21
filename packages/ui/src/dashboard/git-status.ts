@@ -4,7 +4,7 @@ import { cachedPrView, cachedPrsForBranch, pickAgentPr, type LinkedPr, type PrLo
 // The project panel's git status (#491, part of #488): the active branch, whether the tree is
 // dirty, and the linked PR. Branch + dirty are a local git read; the PR is a best-effort read
 // through the project's git host that simply degrades to nothing when the project has no git host or
-// there is no PR. Safe anywhere — the relay has no local checkout, so it resolves to nothing there.
+// there is no PR.
 
 /** A project's git status for the panel. */
 export interface GitStatus {

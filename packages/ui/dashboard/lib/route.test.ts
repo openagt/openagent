@@ -77,14 +77,14 @@ describe('parseRoute', () => {
   it('reads the Settings dialog over any page, by its entry', () => {
     expect(parse('/?settings=agent')).toEqual({ projectId: null, agentId: null, settings: 'agent' })
     expect(parse('/?settings=')).toEqual({ projectId: null, agentId: null, settings: '' })
-    expect(parse('/app/1-run?settings=machines')).toEqual({ projectId: 'app-a1', agentId: '1-run', scope: 'app-a1', settings: 'machines' })
+    expect(parse('/app/1-run?settings=skills')).toEqual({ projectId: 'app-a1', agentId: '1-run', scope: 'app-a1', settings: 'skills' })
     expect(parse('/app/logs/x?settings=agent')).toEqual({ projectId: null, agentId: null, page: 'logs', pagePath: ['x'], scope: 'app-a1', settings: 'agent' })
   })
 
   it("reads the old Settings page's address as the dialog over the Overview (#958)", () => {
     expect(parse('/settings')).toEqual({ projectId: null, agentId: null, settings: '' })
     expect(parse('/settings/')).toEqual({ projectId: null, agentId: null, settings: '' })
-    expect(parse('/settings/machines')).toEqual({ projectId: null, agentId: null, settings: 'machines' })
+    expect(parse('/settings/skills')).toEqual({ projectId: null, agentId: null, settings: 'skills' })
   })
 
   it('reads `/overview` as the Overview of every project', () => {
@@ -99,13 +99,13 @@ describe('parseRoute', () => {
 
 describe('a page inside a Settings entry, as a link from elsewhere names it', () => {
   it('rides the address beside its entry, only while Settings is open, and goes when the page under it is kept', () => {
-    const at = 'https://203.0.113.5/_devices/via/b0x1'
-    const route = parse(`/app?settings=devices&item=${encodeURIComponent(at)}`)
-    expect(route).toEqual({ projectId: 'app-a1', agentId: null, scope: 'app-a1', settings: 'devices', settingsItem: at })
+    const at = 'shop-b2/a & b?'
+    const route = parse(`/app?settings=skills&item=${encodeURIComponent(at)}`)
+    expect(route).toEqual({ projectId: 'app-a1', agentId: null, scope: 'app-a1', settings: 'skills', settingsItem: at })
     expect(parse(format(route))).toEqual(route)
     // Settings closed, no item; an item with no Settings is none.
     expect(parse(`/app?item=${encodeURIComponent(at)}`)).toEqual({ projectId: 'app-a1', agentId: null, scope: 'app-a1' })
-    expect(keepPageQuery('/app', `?settings=devices&item=x&filter=open`)).toBe('/app?filter=open')
+    expect(keepPageQuery('/app', `?settings=skills&item=x&filter=open`)).toBe('/app?filter=open')
   })
 })
 

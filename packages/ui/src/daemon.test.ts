@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { mkdtemp, writeFile, rm, mkdir, readFile, readdir, realpath } from 'node:fs/promises'
+import { mkdtemp, writeFile, rm, mkdir, readdir, realpath } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createHooks, LOCAL_HOST, type AppContext } from '@openagt/hooks'
@@ -103,15 +103,15 @@ test('runDaemon serves the dashboard, and shuts down when the signal aborts', as
   }
 })
 
-test("the modules' own work starts once the dashboard listens, told its address and which computer this is, and stops while it still answers", async () => {
+test("the modules' own work starts once the dashboard listens, told its address, and stops while it still answers", async () => {
   const cwd = await tmpWorkspace()
   const env = await configEnv(cwd)
   const ac = new AbortController()
-  const started: { url: string | undefined; computer: string | undefined }[] = []
+  const started: (string | undefined)[] = []
   let answeredAtStop: number | undefined
   let url = ''
   const lifecycle = {
-    started: (app: AppContext) => void started.push({ url: app.url, computer: app.computer }),
+    started: (app: AppContext) => void started.push(app.url),
     stopping: async () => {
       answeredAtStop = (await fetch(url)).status
     },
@@ -122,10 +122,8 @@ test("the modules' own work starts once the dashboard listens, told its address 
     url = state.url
     // Started once the dashboard listens: never a reason the address came late.
     for (let i = 0; i < 250 && started.length === 0; i++) await sleep(20)
-    // Told where OpenAgent is and which computer this is: the word the home file keeps, made at this first start.
-    const computer = JSON.parse(await readFile(join(env.XDG_CONFIG_HOME!, 'openagent.json'), 'utf8')).computer as string
-    assert.match(computer, /^[a-f0-9]{32}$/)
-    assert.deepEqual(started, [{ url: state.url, computer }])
+    // Told where OpenAgent is.
+    assert.deepEqual(started, [state.url])
     ac.abort()
     await done
     assert.equal(answeredAtStop, 200, "the modules' work stops first, before the dashboard closes")

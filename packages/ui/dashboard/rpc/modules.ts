@@ -13,7 +13,6 @@ export type { ModuleCallResult } from '../../src/dashboard-rpc/module-calls.js'
 export const onModules = rpc<typeof impl.onModules>('onModules')
 export const runModuleCommand = rpc<typeof impl.runModuleCommand>('runModuleCommand')
 export const runComputerCommand = rpc<typeof impl.runComputerCommand>('runComputerCommand')
-export const runComputerCommandOn = rpc<typeof impl.runComputerCommandOn>('runComputerCommandOn')
 /** Call function `name` of the server part of the module package `pkg`, in one project, or with `null` for a package that is this computer's, with `input`. */
 export function callModule(pkg: string, name: string, projectId: string | null, input: object): Promise<ModuleCallResult> {
   return rpc<(projectId: string | null, input: object) => ReturnType<typeof callModuleImpl>>(`${encodeURIComponent(pkg)}/${encodeURIComponent(name)}`)(projectId, input)

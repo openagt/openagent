@@ -112,9 +112,9 @@ test("a git account forgotten from its row leaves the keyboard in its host's sec
     await page.getByRole('menuitem', { name: 'Remove' }).click()
     await page.getByRole('group', { name: 'Remove @bob' }).getByRole('button', { name: 'Remove' }).click()
     await page.getByRole('listitem', { name: '@bob' }).waitFor({ state: 'detached' })
-    // The section's presses wait until the accounts and the servers' logins are read again, and the
-    // keyboard lands on one once they are back: waited for, since on a busy machine that read takes
-    // longer than any fixed pause.
+    // The section's presses wait until the accounts are read again, and the keyboard lands on one
+    // once they are back: waited for, since on a busy machine that read takes longer than any
+    // fixed pause.
     const inSection = `!!document.activeElement?.closest('[aria-label="GitHub"]')`
     await page.waitForFunction(inSection, undefined, { timeout: 10_000 }).catch(() => {})
     assert.ok(await page.evaluate(inSection), `the keyboard is in GitHub's section, not on ${await focused(page)}`)

@@ -62,14 +62,6 @@ describe('AccountsCard', () => {
     expect(screen.queryByRole('button', { name: "What happens at an account's limit" })).toBeNull()
   })
 
-  test('the page it is on may say where each account works: its line under the row, asked with the account', async () => {
-    const { host } = hostFor(async args => (args[0] === 'usage' ? { ok: true, output: { claude: [], codex: [] } } : listed([{ name: 'This computer', who: 'Ada', own: true }, { name: 'Work', own: false }], [{ name: 'This computer', who: 'Ada C', own: true }])()))
-    renderWithHost(<AccountsCard accountWhere={account => <span>{`where ${account.agent} ${account.own ? 'own' : account.name}`}</span>} />, host)
-    expect(await screen.findByText('where claude own')).toBeTruthy()
-    expect(screen.getByText('where claude Work')).toBeTruthy()
-    expect(screen.getByText('where codex own')).toBeTruthy()
-  })
-
   afterEach(() => {
     cleanup()
     forgetRemembered()
@@ -371,7 +363,7 @@ describe('AccountsCard', () => {
     expect(screen.getByRole('textbox', { name: 'Whose account' })).toBeTruthy()
   })
 
-  test('on a server, Claude: the page to open, and the code goes to the command on standard input, never among its arguments', async () => {
+  test('with no browser here, Claude: the page to open, and the code goes to the command on standard input, never among its arguments', async () => {
     const calls = renderAdding(() => ({ claude: { adding: { name: 'Dani', url: 'https://claude.example/sign-in', paste: true } }, codex: {} }))
     const link = await screen.findByRole('link', { name: /Open Claude and press Authorize/ })
     expect(link.getAttribute('href')).toBe('https://claude.example/sign-in')
@@ -393,59 +385,26 @@ describe('AccountsCard', () => {
     expect(screen.getByRole('button', { name: 'Done' })).toBeTruthy()
   })
 
-  test('on a server, Codex: the code to type, and where', async () => {
+  test('with no browser here, Codex: the code to type, and where', async () => {
     renderAdding(() => ({ claude: { adding: { name: 'Dani', url: 'https://auth.example/device', code: 'ABCD-1234' } }, codex: {} }))
     expect(await screen.findByText('ABCD-1234')).toBeTruthy()
     expect(screen.getByRole('link', { name: 'auth.example/device' })).toBeTruthy()
   })
 
-  test('on a server using a computer\'s logins, adding there is said first, and signing in here is one press further', async () => {
-    const calls = renderAdding(() => ({ claude: { noBrowser: true }, codex: { noBrowser: true } }), () => ({ ok: true, output: {} }), { claude: [], codex: [{ name: 'Sam', own: false, from: 'Studio' }] })
-    await openRow('Sam')
-    expect(screen.getByRole('button', { name: 'Details of Sam' }).textContent).toContain('from Studio')
-    const claude = await add('Claude Code')
-    // No Claude account came from Studio, yet this server uses Studio's logins.
-    expect(within(claude).getByText('Easiest: add it on Studio, and it comes here by itself.')).toBeTruthy()
-    expect(within(claude).queryByRole('textbox', { name: 'Whose account' })).toBeNull()
-    fireEvent.click(within(claude).getByRole('button', { name: 'Sign in here instead' }))
-    expect(within(claude).getByText(/press Authorize there.*paste the code/)).toBeTruthy()
-    expect(within(claude).queryByText(/Opens this computer's browser/)).toBeNull()
-    fireEvent.change(within(claude).getByRole('textbox', { name: 'Whose account' }), { target: { value: 'Dani' } })
-    fireEvent.click(within(claude).getByRole('button', { name: 'Log in to Claude' }))
-    await waitFor(() => expect(calls.some(call => call.args.join(' ') === 'add claude Dani')).toBe(true))
-    // Closed and opened again, it starts from the easiest way.
-    fireEvent.click(within(claude).getByRole('button', { name: 'Cancel' }))
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-    const again = await add('Claude Code')
-    expect(within(again).getByText(/^Easiest:/)).toBeTruthy()
-    fireEvent.click(within(again).getByRole('button', { name: 'Cancel' }))
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-    // A Codex account made there waits for that computer's press: "by itself" would be false.
-    expect(within(await add('Codex')).getByText('Easiest: add it on Studio and press Allow there, and it comes here.')).toBeTruthy()
-  })
-
-  test('on a server with no computer\'s logins, signing in here is the only way, in its own words', async () => {
+  test('with no browser here, signing in is said in its own words', async () => {
     renderAdding(() => ({ claude: { noBrowser: true }, codex: { noBrowser: true } }))
     await add('Codex')
-    expect(screen.queryByText(/^Easiest:/)).toBeNull()
     expect(await screen.findByText(/Gives you a code to type at ChatGPT's page/)).toBeTruthy()
   })
 
-  test('an added account has Remove; one a computer would only hand back has none; the press runs the command', async () => {
-    const run = renderCard(
-      listed([{ name: 'This computer', who: 'Ada', own: true, signedOut: true }, { name: 'Here', own: false }, { name: 'Back', own: false, from: 'Studio', comesBack: true }], [{ name: 'Sam', own: false, from: 'Studio' }]),
-    )
+  test('an added account has Remove, and the press runs the command', async () => {
+    const run = renderCard(listed([{ name: 'This computer', who: 'Ada', own: true, signedOut: true }, { name: 'Here', own: false }]))
     await openRow('Here')
     fireEvent.click(screen.getByRole('button', { name: "Remove Here's account" }))
     expect(screen.getByText(/take it back on claude.ai/)).toBeTruthy()
     expect(run).not.toHaveBeenCalledWith(['remove', 'claude', 'Here'], 'account-rotation')
     fireEvent.click(within(screen.getByRole('group', { name: "Remove Here's account" })).getByRole('button', { name: 'Remove' }))
     await waitFor(() => expect(run).toHaveBeenCalledWith(['remove', 'claude', 'Here'], 'account-rotation'))
-    await openRow('Back')
-    expect(screen.queryByRole('button', { name: "Remove Back's account" })).toBeNull()
-    await openRow('Sam')
-    fireEvent.click(screen.getByRole('button', { name: "Remove Sam's account" }))
-    expect(screen.getByText(/It stays off until you press Allow on Studio\./)).toBeTruthy()
   })
 
   test('Log out of the person\'s own login first says the terminal goes with it, and only the second press runs it', async () => {

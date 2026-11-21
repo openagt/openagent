@@ -25,7 +25,6 @@ test("the dashboard runs the modules of the distribution handed down, and this c
     'agent-driver-claude-code',
     'agent-driver-codex',
     // The plugins, ask and notifications-browser on until a person switches them off: those kept per computer or per person first.
-    'devices',
     'notifications-command',
     'notifications-browser',
     'ui-renderer-mermaid',

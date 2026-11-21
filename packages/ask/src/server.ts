@@ -36,7 +36,7 @@ const text = (value: unknown): string | undefined => (typeof value === 'string' 
 
 /**
  * Answer question `question` that run `agentId` waits on (#304, #1774). Answered once, a question
- * takes no second answer, from any tab or device, until the run goes on from it: the resumed run
+ * takes no second answer, from any tab, until the run goes on from it: the resumed run
  * writes its first line seconds later, and until then the question is still open.
  */
 export const answer = act(async (host: RpcHost, input: { agentId: string; question: string } & Answer): Promise<Answered> => {

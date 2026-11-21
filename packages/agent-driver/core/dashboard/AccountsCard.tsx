@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import { Check, ChevronDown, Copy, Info, MoreHorizontal, Plus } from 'lucide-react'
-import { Button, useAskOn, ClaudeLogo, CodexLogo, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, GaugeFace, Input, Panel, PanelGroup, Skeleton, Slot, Tooltip, TooltipContent, TooltipTrigger, cn, computerRpcClient, useModuleHost, useOpenAgentDown, usePolled, WordsShape, type UiPermissionsProps, type ModuleHost } from '@openagt/ui/module'
+import { Button, useAskOn, ClaudeLogo, CodexLogo, Dialog, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, GaugeFace, Input, Panel, PanelGroup, Skeleton, Slot, Tooltip, TooltipContent, TooltipTrigger, cn, computerRpcClient, useModuleHost, useOpenAgentDown, usePolled, WordsShape, type ModuleHost } from '@openagt/ui/module'
 
 // The accounts each coding agent's runs try, in order: how full each one is, whether it is at a
 // limit, adding one: the command's own sign-in, which goes on by itself while the card follows it,
 // in a dialog the "Add" at the card's title opens (his pick over a sign-in unfolding inside the card).
 // A row looks as the Overview's other cards' do: the agent's mark, who, where it comes from, and how
-// full it is in rings as Devices has them. Pressing it opens what can be done with it: putting it
-// first, removing it, logging out.
+// full it is in rings. Pressing it opens what can be done with it: putting it first, removing it,
+// logging out.
 
 /** How often the order and the limits are asked again. */
 const LIST_EVERY_MS = 30_000
@@ -26,7 +26,6 @@ const AGENTS = [
     logIn: 'Log in to Claude',
     help: "Opens this computer's browser, where you say yes once, signed in to that account. The login is kept on this computer alone and lasts a year.",
     helpNoBrowser: "Gives you a page to open on your own device: press Authorize there, signed in to that account, and paste the code it shows back here. The login is kept on this computer alone and lasts a year.",
-    easiest: (computer: string) => `Easiest: add it on ${computer}, and it comes here by itself.`,
     remove: 'Runs no longer use it. Its login is not ended: take it back on claude.ai to end it.',
     adding: (name: string) => `Adding ${name}'s account: say yes in the page this computer's browser opened, signed in to ${name}'s Claude account.`,
   },
@@ -38,7 +37,6 @@ const AGENTS = [
     logIn: 'Log in to Codex',
     help: "Opens this computer's browser, where you sign in once to that account. If the browser is signed in to another account, copy the link into a private window. The login is kept on this computer alone.",
     helpNoBrowser: "Gives you a code to type at ChatGPT's page on your own device, signed in to that account: in a private window if the browser is signed in to another. If it asks, first allow device code sign-in in ChatGPT's security settings. The login is kept on this computer alone.",
-    easiest: (computer: string) => `Easiest: add it on ${computer} and press Allow there, and it comes here.`,
     remove: 'Runs no longer use it, and its login is taken off this computer.',
     adding: (name: string) => `Adding ${name}'s account: sign in to ${name}'s ChatGPT account in the page this computer's browser opened.`,
   },
@@ -60,10 +58,6 @@ interface Account {
   own: boolean
   /** The computer the person's own login is on. */
   computer?: string
-  /** The computer of the person's that handed it to this server. */
-  from?: string
-  /** Removed here it would only be handed over again: it is removed on that computer. */
-  comesBack?: true
   /** When an added one was added. */
   added?: string
   limitedUntil?: number
@@ -82,7 +76,7 @@ interface Usage {
 interface AddingNow {
   adding?: { name: string; url?: string; code?: string; paste?: true; checking?: true; refused?: true }
   failed?: string
-  /** This computer has no browser (a server, or Linux with no display): the person signs in on their own device. */
+  /** This computer has no browser (Linux with no display): the person signs in on their own device. */
   noBrowser?: true
 }
 
@@ -126,7 +120,6 @@ const WINDOWS: Record<string, { label: string; said: string }> = {
 /** Where an account comes from, in a line. */
 function source(account: Account): string {
   if (account.own) return account.computer !== undefined ? `login on ${account.computer}` : 'your login'
-  if (account.from !== undefined) return `from ${account.from}`
   return account.added !== undefined ? `added ${new Date(account.added).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}` : 'added'
 }
 
@@ -220,19 +213,17 @@ function SigningIn({ agent, adding, noBrowser, onChanged }: { agent: (typeof AGE
 
 /**
  * What the dialog that adds an account holds: asking whose account it is, the sign-in under way,
- * and why the last one did not go through. On a server that uses a computer's logins, `from`,
- * adding it there is said first: signing in here is the longer way. `onClose` closes the dialog,
- * which gives up a sign-in under way.
+ * and why the last one did not go through. `onClose` closes the dialog, which gives up a sign-in
+ * under way.
  */
-function AddAccount({ agent, now, failed, from, field, onChanged, onClose }: { agent: (typeof AGENTS)[number]; now: AddingNow; failed: string | undefined; from: string | undefined; /** The dialog's `initialFocus`. */ field: RefObject<HTMLInputElement | null>; onChanged: () => void; onClose: () => void }) {
+function AddAccount({ agent, now, failed, field, onChanged, onClose }: { agent: (typeof AGENTS)[number]; now: AddingNow; failed: string | undefined; /** The dialog's `initialFocus`. */ field: RefObject<HTMLInputElement | null>; onChanged: () => void; onClose: () => void }) {
   const host = useModuleHost()
   const [name, setName] = useState('')
-  // The dialog focuses the field it opens on; one shown later, after "Sign in here instead" or a sign-in that did not go through, takes the focus itself.
+  // The dialog focuses the field it opens on; one shown later, after a sign-in that did not go through, takes the focus itself.
   const [opened, setOpened] = useState(false)
   useEffect(() => setOpened(true), [])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string>()
-  const [here, setHere] = useState(false)
   const down = useOpenAgentDown()
   // The read shown when `add` answered that the sign-in began: any read after it is that sign-in's, the same words as the last one's included.
   const shown = useRef(now)
@@ -259,13 +250,6 @@ function AddAccount({ agent, now, failed, from, field, onChanged, onClose }: { a
     <div className="space-y-3">
       {now.adding ? (
         <SigningIn agent={agent} adding={now.adding} noBrowser={now.noBrowser === true} onChanged={onChanged} />
-      ) : from !== undefined && !here ? (
-        <>
-          <p className="text-sm">{agent.easiest(from)}</p>
-          <Button variant="secondary" onClick={() => setHere(true)}>
-            Sign in here instead
-          </Button>
-        </>
       ) : (
         <>
           <form
@@ -300,7 +284,7 @@ function AddAccount({ agent, now, failed, from, field, onChanged, onClose }: { a
 /** An open row, and the press that waits for a yes in it: taking an account off is a sign-in to undo. */
 type Opened = { asking?: 'remove' | 'logout' }
 
-function AgentAccounts({ agent, accounts, usage, reading, where, onPress, busy }: { agent: (typeof AGENTS)[number]; accounts: Account[]; usage: Usage[]; reading: boolean; where: UiPermissionsProps['accountWhere']; onPress: (args: string[]) => void; busy: boolean }) {
+function AgentAccounts({ agent, accounts, usage, reading, onPress, busy }: { agent: (typeof AGENTS)[number]; accounts: Account[]; usage: Usage[]; reading: boolean; onPress: (args: string[]) => void; busy: boolean }) {
   // One row is open at a time.
   const [open, setOpen] = useState<{ name: string } & Opened>()
   const now = Date.now()
@@ -327,7 +311,6 @@ function AgentAccounts({ agent, accounts, usage, reading, where, onPress, busy }
               inUse={accounts.length > 1 && free[0] === account}
               next={accounts.length > 1 && free[1] === account}
               first={index === 0}
-              where={where}
               open={open?.name === account.name ? open : undefined}
               onOpen={opened => setOpen(opened && { ...opened, name: account.name })}
               onPress={press}
@@ -350,7 +333,6 @@ function AccountRow({
   inUse,
   next,
   first,
-  where,
   open,
   onOpen,
   onPress,
@@ -367,7 +349,6 @@ function AccountRow({
   next: boolean
   /** First in the order already. */
   first: boolean
-  where: UiPermissionsProps['accountWhere']
   /** Undefined while the row is closed. */
   open: Opened | undefined
   onOpen: (open: Opened | undefined) => void
@@ -430,15 +411,12 @@ function AccountRow({
           </span>
         )}
       </button>
-      {/* Where it works, as the page it is on says it (the Permissions page: the person's devices). */}
-      {where && <div className="relative pl-7">{where({ agent: agent.id, own: account.own, name: account.name })}</div>}
       {isOpen && (
         <div className="relative space-y-1.5 pt-2 pl-7">
           {open.asking ? (
             <>
               <p className="text-xs text-muted-foreground">
                 {open.asking === 'logout' ? `Logs ${agent.name} out on ${account.computer ?? 'this computer'}, your terminal too.` : agent.remove}
-                {open.asking === 'remove' && account.from !== undefined ? ` It stays off until you press Allow on ${account.from}.` : ''}
               </p>
               <div role="group" aria-label={open.asking === 'logout' ? `Log out ${shown}` : `Remove ${shown}'s account`} className="flex items-center gap-1">
                 <Button size="sm" variant="destructive" disabled={busy} onClick={() => onPress(open.asking === 'logout' ? ['logout', agent.id] : ['remove', agent.id, account.name])}>
@@ -463,8 +441,7 @@ function AccountRow({
                     Log out
                   </Button>
                 )}
-                {/* One a computer hands over as it is would be back within a minute: it is removed there. */}
-                {!account.own && !account.comesBack && (
+                {!account.own && (
                   <Button variant="ghost" size="sm" className="hover:text-danger" disabled={busy} aria-label={`Remove ${shown}'s account`} onClick={() => onOpen({ asking: 'remove' })}>
                     Remove
                   </Button>
@@ -478,7 +455,7 @@ function AccountRow({
   )
 }
 
-export function AccountsCard({ accountWhere }: UiPermissionsProps) {
+export function AccountsCard() {
   const host = useModuleHost()
   const { value: list, state, reload } = usePolled<Read<Account, Listed> | undefined>(() => read<Account, Listed>(host, 'list'), undefined, LIST_EVERY_MS, [], { remember: 'account-rotation:list', stored: true })
   const { value: usage, reload: reloadUsage } = usePolled<Read<Usage> | undefined>(() => read<Usage>(host, 'usage'), undefined, USAGE_EVERY_MS, [], { remember: 'account-rotation:usage', stored: true })
@@ -628,11 +605,10 @@ export function AccountsCard({ accountWhere }: UiPermissionsProps) {
                 <AgentAccounts
                   key={agent.id}
                   agent={agent}
-                  // A login that is not there has no row. With none at all the part says so in place of the card, with the press to add one, a server's first included.
+                  // A login that is not there has no row. With none at all the part says so in place of the card, with the press to add one.
                   accounts={shown(agent.id)}
                   usage={usage?.ok ? (usage.accounts[agent.id] ?? []) : []}
                   reading={usage === undefined}
-                  where={accountWhere}
                   busy={busy || down}
                   onPress={press}
                 />
@@ -658,7 +634,6 @@ export function AccountsCard({ accountWhere }: UiPermissionsProps) {
             agent={namingAgent}
             now={namingNow}
             failed={namingNow.failed !== dismissed ? namingNow.failed : undefined}
-            from={list?.ok ? AGENTS.flatMap(each => list.accounts[each.id] ?? []).find(account => account.from !== undefined)?.from : undefined}
             field={nameField}
             onChanged={changed}
             onClose={close}

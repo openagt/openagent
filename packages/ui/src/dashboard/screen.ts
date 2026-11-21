@@ -4,38 +4,26 @@ import { Readable } from 'node:stream'
 import { eventsOf, isRunId, type AnyDiaryLine } from '../store/index.js'
 import { liveScreen } from '../screens.js'
 import { end, readJsonBody } from './http.js'
-import { machineFetch } from './machine-call.js'
-import type { RemoteTarget } from './remote-run.js'
 
 /**
- * A run's live screen, for whoever watches the run from this OpenAgent: on this computer, on a
- * phone that got in, or on another computer that follows the run. A `screen` line in the run's
- * diary names where the screen answers, on the loopback of the computer the run is on. That
- * address is reached by nothing but the OpenAgent of that computer, which passes on two calls
- * and no other:
+ * A run's live screen, for whoever watches the run on this computer's dashboard. A `screen` line
+ * in the run's diary names where the screen answers, on this computer's loopback. That address is
+ * reached by nothing but this OpenAgent, which passes on two calls and no other:
  *
  * - `GET  /_screen/stream?project=<id>&run=<id>`: what the screen shows, as the screen's own bytes.
  * - `POST /_screen/input?project=<id>&run=<id>`: what the person did on it, as JSON.
  *
- * For a run this computer follows on another machine, both are asked of that machine
- * (`/_relay/screen/…`), with this computer's key there.
- *
- * What a screen answers is written by whatever the agent ran, and for a run on another machine
- * it comes from that machine. So it is never a page here: the bytes are answered as bytes no
+ * What a screen answers is written by whatever the agent ran. So it is never a page here: the bytes are answered as bytes no
  * browser renders or runs, and the answer to an input is its status alone. What draws the screen
  * is this OpenAgent's own.
  */
 export const SCREEN_PREFIX = '/_screen'
 
 /** The two calls a screen takes. */
-export type ScreenCall = 'stream' | 'input'
+type ScreenCall = 'stream' | 'input'
 
-export interface ScreenHandlers {
-  /** Where the live screen of a run on this computer answers; nothing when the run has none. */
-  local: (projectId: string, agentId: string) => Promise<string | undefined>
-  /** The machine a run of the project that this computer follows is on; nothing for a run of this computer's own. */
-  remote: (projectId: string, agentId: string) => RemoteTarget | undefined
-}
+/** Where the live screen of a run on this computer answers; nothing when the run has none. */
+export type ScreenOf = (projectId: string, agentId: string) => Promise<string | undefined>
 
 /** A person's click or a few typed letters, generously. */
 const MAX_INPUT = 16 * 1024
@@ -51,9 +39,9 @@ const INERT = {
 }
 
 /** The call a path names, when it names one. */
-export function screenCallOf(pathname: string, prefix: string): ScreenCall | undefined {
-  const rest = pathname.slice(prefix.length + 1)
-  return pathname.startsWith(`${prefix}/`) && (rest === 'stream' || rest === 'input') ? rest : undefined
+function screenCallOf(pathname: string): ScreenCall | undefined {
+  const rest = pathname.slice(SCREEN_PREFIX.length + 1)
+  return pathname.startsWith(`${SCREEN_PREFIX}/`) && (rest === 'stream' || rest === 'input') ? rest : undefined
 }
 
 /**
@@ -97,7 +85,7 @@ const KEPT_MS = 2_000
  * moment: where a screen answers changes only when a browser opens or closes. Only a run's own
  * screen is kept: an ask that found none is asked again, and keeps nothing.
  */
-export function kept(find: ScreenHandlers['local'], now: () => number = Date.now): ScreenHandlers['local'] {
+export function kept(find: ScreenOf, now: () => number = Date.now): ScreenOf {
   const answers = new Map<string, { screen: Promise<string | undefined>; until: number }>()
   return (projectId, agentId) => {
     const key = `${projectId}\n${agentId}`
@@ -118,23 +106,20 @@ export function kept(find: ScreenHandlers['local'], now: () => number = Date.now
   }
 }
 
-/** Route a `/_screen/*` request of this computer's own dashboard, or of a device that got in. */
-export async function handleScreenRequest(req: IncomingMessage, res: ServerResponse, pathname: string, handlers: ScreenHandlers | undefined): Promise<void> {
-  const call = screenCallOf(pathname, SCREEN_PREFIX)
-  if (!handlers || !call) return end(res, 404, 'not found')
+/** Route a `/_screen/*` request of this computer's own dashboard. */
+export async function handleScreenRequest(req: IncomingMessage, res: ServerResponse, pathname: string, screenOf: ScreenOf | undefined): Promise<void> {
+  const call = screenCallOf(pathname)
+  if (!screenOf || !call) return end(res, 404, 'not found')
   const query = new URL(req.url ?? '/', 'http://localhost').searchParams
   const projectId = query.get('project')
   const agentId = query.get('run')
   if (!projectId || !agentId) return end(res, 400, 'missing project or run')
   if (!isRunId(agentId)) return end(res, 400, 'not a run')
-  const remote = handlers.remote(projectId, agentId)
-  if (!remote) return passToScreen(req, res, call, await handlers.local(projectId, agentId).catch(() => undefined))
-  const at = `${remote.url.replace(/\/+$/, '')}/_relay/screen/${call}?run=${encodeURIComponent(agentId)}&project=${encodeURIComponent(remote.project)}`
-  await pass(req, res, call, init => machineFetch(at, remote.pin, { ...init, headers: { ...init.headers, authorization: `Bearer ${remote.key}` } }))
+  return passToScreen(req, res, call, await screenOf(projectId, agentId).catch(() => undefined))
 }
 
 /** Pass one call on to the screen at `screen`, on this computer; a 404 when there is none. */
-export async function passToScreen(req: IncomingMessage, res: ServerResponse, call: ScreenCall, screen: string | undefined): Promise<void> {
+async function passToScreen(req: IncomingMessage, res: ServerResponse, call: ScreenCall, screen: string | undefined): Promise<void> {
   const at = screen === undefined ? undefined : screenCallAddress(screen, call)
   if (at === undefined) return end(res, 404, 'no screen')
   await pass(req, res, call, init => fetch(at, { ...init, redirect: 'error' }))

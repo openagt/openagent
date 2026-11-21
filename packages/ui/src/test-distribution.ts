@@ -25,7 +25,7 @@ export const DASHBOARD_PACKAGES: DashboardDistribution = [
   { package: '@openagt/ui-renderer-markdown', for: 'computer' },
   { package: '@openagt/ui-card-waiting', for: 'computer' },
   { package: '@openagt/user-info', for: 'computer' },
-  { package: '@openagt/devices', for: 'computer' },
+
   { package: '@openagt/notifications-command', for: 'computer' },
   { package: '@openagt/notifications-browser', for: 'computer', on: true },
   { package: '@openagt/ui-renderer-mermaid', for: 'computer' },
@@ -41,14 +41,8 @@ export const DASHBOARD_PACKAGES: DashboardDistribution = [
   { package: '@openagt/host-github-actions' },
 ]
 
-/**
- * The tests' distribution: `@openagt/dashboard`'s packages, agent-driver's among them, and devices
- * on: the tests' computer has its door and its other computers, which they exercise.
- */
-const TEST_DISTRIBUTION: DashboardDistribution = [
-  ...DASHBOARD_PACKAGES.map(item => (!('module' in item) && item.package === '@openagt/devices' ? { ...item, on: true } : item)),
-  { package: '@openagt/agent-driver', for: 'computer' },
-]
+/** The tests' distribution: `@openagt/dashboard`'s packages, agent-driver's among them. */
+const TEST_DISTRIBUTION: DashboardDistribution = [...DASHBOARD_PACKAGES, { package: '@openagt/agent-driver', for: 'computer' }]
 
 export default TEST_DISTRIBUTION
 

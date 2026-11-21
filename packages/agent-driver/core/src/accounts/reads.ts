@@ -1,6 +1,6 @@
 import { hostname } from 'node:os'
 import type { AgentLogins } from '@openagt/hooks'
-import { handedOverBy, OWN_NAME, readAccounts, shownAccounts, type ShownAccount } from './accounts.js'
+import { OWN_NAME, readAccounts, shownAccounts, type ShownAccount } from './accounts.js'
 import { addingNow, type AddingNow } from './adding.js'
 import type { LoginWiring } from './wiring.js'
 
@@ -8,13 +8,12 @@ import type { LoginWiring } from './wiring.js'
 // card reads through alike.
 
 /** An agent's account as `list` says it. */
-export type ListedAccount = ShownAccount & { who?: string; signedOut?: true; computer?: string; from?: string; comesBack?: true }
+export type ListedAccount = ShownAccount & { who?: string; signedOut?: true; computer?: string }
 
 /**
  * A list's accounts as `list` says them. The person's own says the computer it is a login on, who
  * it is while it goes by no name they gave it, as `who`, and `signedOut` when the agent has no login
- * of theirs: runs skip it then. Commands still take its `name`. On a server, one a computer of the
- * person's handed over says which, as `from`, and `comesBack` when removing it here would only bring it back.
+ * of theirs: runs skip it then. Commands still take its `name`.
  */
 export async function listed(logins: AgentLogins, wiring: LoginWiring): Promise<ListedAccount[]> {
   const accounts = shownAccounts(readAccounts(wiring.path(logins.list)))
@@ -22,12 +21,7 @@ export async function listed(logins: AgentLogins, wiring: LoginWiring): Promise<
   const unnamed = (a: ShownAccount): boolean => a.name === OWN_NAME
   const who = accounts.some(a => a.own && unnamed(a)) ? await logins.ownName(wiring.env) : undefined
   const computer = hostname().replace(/\.local$/i, '')
-  const handedOver = handedOverBy(logins.list, wiring.env)
-  return accounts.map(a => {
-    if (a.own) return { ...a, computer, ...(unnamed(a) && who !== undefined ? { who } : {}), ...(there ? {} : { signedOut: true as const }) }
-    const handed = handedOver.get(a.name)
-    return handed ? { ...a, from: handed.from, ...(handed.comesBack ? { comesBack: true as const } : {}) } : a
-  })
+  return accounts.map(a => (a.own ? { ...a, computer, ...(unnamed(a) && who !== undefined ? { who } : {}), ...(there ? {} : { signedOut: true as const }) } : a))
 }
 
 /** What `list` answers: each list's accounts by its name, in the order runs try them, and the lists whose agent's program this computer does not have. */

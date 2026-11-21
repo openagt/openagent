@@ -1,24 +1,19 @@
 import { accentOf, isCodeFont, isDocumentFont, isFont, isPalette, type Accent, type CodeFont, type DocumentFont, type Font, type Palette } from './appearance.js'
 import { sanitizeOverviewLayouts, type OverviewLayouts } from './overview-layout.js'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
-import { randomBytes } from 'node:crypto'
 import { projectId } from '@openagt/agent-data'
 import { DEFAULT_PRESET, isPresetId } from '@openagt/hooks'
 import { isBranchName } from './branch-name.js'
 import { isDriverName } from './driver-names.js'
 import { isPublishPick, type PublishPick } from './publish-levels.js'
 import { nodeFs } from './node-fs.js'
-import { ownProjectsOf, type OwnProject } from './dashboard/elsewhere.js'
-import { computerName } from './computer-name.js'
-import { isDeviceId } from './machine-link.js'
 
 /**
  * The multi-project registry (#390): the list of projects the user has
  * installed OpenAgent into, kept as a single JSON file `.bashrc`-style —
  * `$HOME/.openagent.json` — so it is the user's responsibility to re-create
- * per machine. The same file also holds the user's dashboard preferences (#410)
- * and the machines they saved, so the daemon owns one user file and the UI never
- * needs localStorage.
+ * per machine. The same file also holds the user's dashboard preferences (#410),
+ * so the daemon owns one user file and the UI never needs localStorage.
  */
 
 /** One registered project. */
@@ -31,82 +26,7 @@ export interface ProjectRecord {
   addedAt: string
 }
 
-/**
- * A saved machine: another computer running OpenAgent that a run can be sent to. Kept in this
- * file, the person's own, so every browser on this computer shows the same machines and the
- * key that reaches one never leaves the two machines.
- */
-export interface MachineRecord {
-  /** The machine's address, which is also what names it: saving the same address again replaces it. */
-  id: string
-  /** The name the person gave it, or its host when they gave none. */
-  label: string
-  /** Where its OpenAgent answers, as an origin (`http://studio.local:4201`). */
-  url: string
-  /** This computer's own key on that machine. Never handed to a browser. */
-  key: string
-  /** Where this computer was let in there, and where it takes itself out when the machine is removed. */
-  door: string
-  /** What the machine's key is known by, when its link said: every call goes only to a machine that shows that key. */
-  pin?: string
-  /**
-   * The computer's own name, as the machine says it: what the records of its runs carry, so a
-   * run in a project's shared records is known as this machine's. A computer can be renamed, and
-   * its runs go on under the new name ({@link nameMachine}).
-   */
-  host?: string
-  /** The names it went by before: its earlier runs' records still carry them. */
-  formerHosts?: string[]
-  /** It said it is a server: reached by its line, it is still no computer someone sits at. */
-  server?: true
-  /**
-   * Whose computer it is, by the person's name, when it is another person's: a computer that
-   * keeps a line to a server for everyone there. A run started on it uses this person's own logins
-   * there, which reach it as copies.
-   */
-  owner?: string
-  /** The person was told, once, that their logins are copied to that other person's computer. */
-  told?: true
-  /** A server of the person's own that uses this computer's logins: they said so once (`logins-sync.ts`). */
-  logins?: true
-  /**
-   * The ids the machine is listed under at the doors of the machines it saved, as it last said:
-   * kept, so it is known to be in at this computer's door too while it does not answer.
-   */
-  listed?: string[]
-  /** When the machine last answered for its runs, ISO, kept to the minute: what its runs say while it does not answer. */
-  seenAt?: string
-  /** Its own projects, as it said them last (elsewhere.ts): a computer of the person's own lists them while it does not answer. */
-  projects?: OwnProject[]
-  /** When it was first saved here, ISO: of two computers' word on it, a removal after this is the one that stands (computers-sync.ts). */
-  added?: string
-}
-
-/**
- * A computer the person removed, by its address: one of their other computers that still has it
- * does not bring it back here, and takes it out too (computers-sync.ts). Saved again by the person,
- * it is no longer one.
- */
-export interface ForgottenMachine {
-  url: string
-  /** When it was removed, ISO. */
-  at: string
-}
-
-/** A GitHub account's name: letters, digits and single dashes, at most 39. */
-export function isAccount(value: unknown): value is string {
-  return typeof value === 'string' && /^[a-z0-9](?:[a-z0-9]|-(?=[a-z0-9])){0,38}$/.test(value)
-}
-
-/** A person's name as a computer several people use knows them: letters of any language, digits, spaces, dots, apostrophes and dashes, at most 40. */
-export function isPersonName(value: unknown): value is string {
-  return typeof value === 'string' && /^[\p{L}\p{N}][\p{L}\p{M}\p{N} .'’-]{0,39}$/u.test(value) && !/\s\s|\s$/.test(value)
-}
-
-/** The cap on saved machines and on a name's length, so a hand-edited file cannot bloat. */
-const MACHINE_LIMITS = { count: 50, label: 60 } as const
-
-/** The cap on the projects `startFrom` lists, for the same reason. */
+/** The cap on the projects `startFrom` lists, so a hand-edited file cannot bloat. */
 const START_FROM_LIMIT = 200
 
 /**
@@ -154,12 +74,6 @@ export interface Preferences {
    * writes it. **Absent = Default.**
    */
   preset?: string
-  /**
-   * Where a run started from the launcher goes: a saved machine, by its id. The "Run on" pick
-   * writes it, and the page picks it again at its next opening. **Absent = this machine.** A
-   * machine no longer saved, or offline when the page opens, is not picked: the run starts here.
-   */
-  runOn?: string
   /**
    * Name each run: a small model is asked for the two to five words a list of runs shows in place
    * of the first line of the prompt (agent-driver's `engine/title.ts`). It is one short turn of the
@@ -209,33 +123,12 @@ export interface Preferences {
 export interface Registry {
   projects: ProjectRecord[]
   preferences: Preferences
-  /**
-   * The saved machines. A top-level field, deliberately not a {@link Preferences} one: each one
-   * carries a key, so the list is never part of what the browser is handed.
-   */
-  machines?: MachineRecord[]
-  /**
-   * Which computer this is, as it says to the machines it gets into: a word made once and kept,
-   * so a machine lists this computer once, and takes what it had there for replaced when it gets
-   * in again. Top-level, and never part of what the browser is handed. Absent until first needed.
-   */
-  computer?: string
-  /** This computer's name as the person named it, the one every page shows it under: absent, its host name. */
-  name?: string
-  /** The computers the person removed, the newest last (computers-sync.ts). */
-  forgotten?: ForgottenMachine[]
   /** The folders the person added to look for repos in, besides the home folder (dashboard/repos.ts), absolute. */
   repoFolders?: string[]
 }
 
 /** The cap on added repo folders, so a hand-edited file cannot make a crawl of everything. */
 const MAX_REPO_FOLDERS = 50
-
-/** How many removed computers are remembered: the oldest is let go first. */
-const MAX_FORGOTTEN = 64
-
-/** What a computer says it is: made here, and read back only as what was made. */
-const isComputerId = (value: unknown): value is string => typeof value === 'string' && /^[a-z0-9]{16,64}$/.test(value)
 
 /** A read/write handle for the user preferences, wired into the dashboard's context by the daemon. */
 export interface PreferencesStore {
@@ -251,7 +144,7 @@ export interface PreferencesStore {
 /** The registry file name: a single file under `$XDG_CONFIG_HOME` (dotted under `$HOME`). */
 export const REGISTRY_FILE = 'openagent.json'
 
-/** Owner read/write only: the file holds the saved machines' keys. */
+/** Owner read/write only: the file is the person's own. */
 export const REGISTRY_FILE_MODE = 0o600
 
 /**
@@ -274,9 +167,8 @@ export interface RegistryFs {
   /** Replace `to` with `from`, atomically: how {@link writeRegistry} avoids a truncate-then-write (#991). */
   rename(from: string, to: string): Promise<void>
   /**
-   * Narrow a file's permissions. Best-effort at the call site: this file holds the saved machines'
-   * keys, so it is written owner-only — but a filesystem that cannot express that (Windows, a FAT
-   * volume) must not fail the write.
+   * Narrow a file's permissions. Best-effort at the call site: this file is written owner-only,
+   * but a filesystem that cannot express that (Windows, a FAT volume) must not fail the write.
    */
   chmod(path: string, mode: number): Promise<void>
 }
@@ -356,12 +248,9 @@ function sanitizePreferences(value: unknown): Preferences {
   if (isDriverName(input['driver'] as string | undefined)) preferences.driver = input['driver'] as string
   // `publish` is constrained to the picks the launcher's menu lists.
   if (isPublishPick(input['publish'])) preferences.publish = input['publish']
-  // `runOn` names a saved machine by its id, which is its address; a blank one is this machine, the absent entry.
   // `preset` names a preset by its id; Default is the absent entry.
   const preset = typeof input['preset'] === 'string' ? input['preset'].trim() : ''
   if (isPresetId(preset) && preset !== DEFAULT_PRESET) preferences.preset = preset
-  const runOn = typeof input['runOn'] === 'string' ? input['runOn'].trim() : ''
-  if (/^https?:\/\/\S+$/.test(runOn) && runOn.length <= 2048) preferences.runOn = runOn
   const startFrom = sanitizeStartFrom(input['startFrom'])
   if (Object.keys(startFrom).length) preferences.startFrom = startFrom
   // `editor` (#727) is a free-form CLI name, trimmed and length-capped so junk / a huge string
@@ -406,56 +295,6 @@ export function isHostName(value: unknown): value is string {
   return typeof value === 'string' && /^[A-Za-z0-9._-]{1,253}$/.test(value)
 }
 
-/** Keep well-formed machines, one per address (first wins), names and count capped. */
-function sanitizeMachines(value: unknown): MachineRecord[] {
-  if (!Array.isArray(value)) return []
-  const machines: MachineRecord[] = []
-  const seen = new Set<string>()
-  for (const raw of value) {
-    if (machines.length >= MACHINE_LIMITS.count) break
-    if (typeof raw !== 'object' || raw === null) continue
-    const { label, url, key, door, pin, host, formerHosts, server, owner, told, logins, listed, seenAt, projects, added } = raw as Record<string, unknown>
-    const ids = Array.isArray(listed) ? listed.filter(isDeviceId).slice(0, MACHINE_LIMITS.count) : []
-    if (typeof label !== 'string' || typeof url !== 'string' || typeof key !== 'string' || typeof door !== 'string') continue
-    if (!url || !key || !door || seen.has(url)) continue
-    seen.add(url)
-    machines.push({
-      id: url,
-      label: label.trim().slice(0, MACHINE_LIMITS.label) || url,
-      url,
-      key,
-      door,
-      ...(typeof pin === 'string' && pin ? { pin } : {}),
-      ...(isHostName(host) ? { host } : {}),
-      ...(Array.isArray(formerHosts) && formerHosts.some(isHostName) ? { formerHosts: formerHosts.filter(isHostName).slice(-MACHINE_LIMITS.count) } : {}),
-      ...(server === true ? { server: true as const } : {}),
-      ...(isPersonName(owner) ? { owner } : {}),
-      ...(told === true ? { told: true as const } : {}),
-      ...(logins === true ? { logins: true as const } : {}),
-      ...(ids.length ? { listed: ids } : {}),
-      ...(isTime(seenAt) ? { seenAt } : {}),
-      ...(Array.isArray(projects) ? { projects: ownProjectsOf(projects) } : {}),
-      ...(isTime(added) ? { added } : {}),
-    })
-  }
-  return machines
-}
-
-const isTime = (value: unknown): value is string => typeof value === 'string' && !Number.isNaN(Date.parse(value))
-
-/** The removed computers as the file keeps them: one each, by address, the newest last. */
-function sanitizeForgotten(value: unknown): ForgottenMachine[] {
-  if (!Array.isArray(value)) return []
-  const kept = new Map<string, ForgottenMachine>()
-  for (const raw of value) {
-    const { url, at } = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
-    if (typeof url !== 'string' || !/^https?:\/\//.test(url) || !isTime(at)) continue
-    kept.delete(url)
-    kept.set(url, { url, at })
-  }
-  return [...kept.values()].slice(-MAX_FORGOTTEN)
-}
-
 /**
  * Read the whole registry. Forgiving: a missing / unreadable / malformed file — or one in a shape
  * this no longer writes — yields an empty registry, never throws. Projects are deduped by resolved
@@ -475,16 +314,10 @@ export async function readRegistry(
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return empty
   const obj = parsed as Record<string, unknown>
   const projects = Array.isArray(obj.projects) ? dedupeProjects(obj.projects) : []
-  const machines = sanitizeMachines(obj.machines)
-  const forgotten = sanitizeForgotten(obj.forgotten)
   const repoFolders = Array.isArray(obj.repoFolders) ? [...new Set(obj.repoFolders.filter((folder): folder is string => typeof folder === 'string' && isAbsolute(folder)))].slice(0, MAX_REPO_FOLDERS) : []
   return {
     projects,
     preferences: sanitizePreferences(obj.preferences),
-    ...(machines.length ? { machines } : {}),
-    ...(isComputerId(obj.computer) ? { computer: obj.computer } : {}),
-    ...(computerNameOf(obj.name) !== undefined ? { name: computerNameOf(obj.name)! } : {}),
-    ...(forgotten.length ? { forgotten } : {}),
     ...(repoFolders.length ? { repoFolders } : {}),
   }
 }
@@ -498,21 +331,17 @@ export async function readRegistry(
  * preference vanished silently. A failed write now only ever damages the temp file. The temp is
  * left behind on failure rather than swept up: one stray file is the cheaper half of that trade.
  *
- * Written owner-only (#1095): the file carries the saved machines' keys, so a default-umask 0644 in a
- * shared home would hand it to every other account on the machine.
+ * Written owner-only (#1095): a default-umask 0644 in a shared home would hand the person's
+ * projects and preferences to every other account on the machine.
  * The mode is set on the temp file, before the rename — narrowing after it would leave a window
  * where the real path is readable. Best-effort: a filesystem with no permission bits still writes.
  */
 async function writeRegistry(registry: Registry, env: NodeJS.ProcessEnv, fs: RegistryFs): Promise<void> {
   const file = registryPath(env)
-  const { projects, preferences, machines, computer, name, forgotten, repoFolders } = registry
+  const { projects, preferences, repoFolders } = registry
   const contents = {
     projects,
     preferences,
-    ...(machines?.length ? { machines } : {}),
-    ...(computer ? { computer } : {}),
-    ...(name ? { name } : {}),
-    ...(forgotten?.length ? { forgotten } : {}),
     ...(repoFolders?.length ? { repoFolders } : {}),
   }
   const json = JSON.stringify(contents, null, 2)
@@ -526,8 +355,7 @@ async function writeRegistry(registry: Registry, env: NodeJS.ProcessEnv, fs: Reg
 /**
  * Serializes the read-modify-write mutators below (#991). Each reads the whole registry, edits it
  * and writes it back, and one daemon runs several concurrently: a project added while the
- * dashboard's savePreferences RPC writes through {@link registryPreferencesStore}, a machine's
- * name noted while another is saved. Interleaved, the later write was computed from a read taken
+ * dashboard's savePreferences RPC writes through {@link registryPreferencesStore}. Interleaved, the later write was computed from a read taken
  * before the earlier one landed, so it silently dropped it. One tail promise for the module, not
  * one per file: the writes are small, and the registry is a single file per machine anyway.
  */
@@ -672,246 +500,6 @@ export async function patchPreferences(
     await writeRegistry({ ...registry, preferences }, env, fs)
     return preferences
   })
-}
-
-/**
- * Which computer this is: read the word the home file keeps, or make one and keep it now.
- * Serialized with the other mutators, so two starts at once do not each make another.
- */
-export async function ensureComputerId(
-  env: NodeJS.ProcessEnv = process.env,
-  fs: RegistryFs = nodeRegistryFs(),
-): Promise<string> {
-  return serialize(async () => {
-    const registry = await readRegistry(env, fs)
-    if (registry.computer) return registry.computer
-    const computer = randomBytes(16).toString('hex')
-    await writeRegistry({ ...registry, computer }, env, fs)
-    return computer
-  })
-}
-
-/** A computer's name as it may be kept and shown: no control characters, trimmed, capped; `undefined` for none. */
-export function computerNameOf(value: unknown): string | undefined {
-  if (typeof value !== 'string') return undefined
-  const name = value.replace(/[\x00-\x1f\x7f]/g, ' ').trim().slice(0, MACHINE_LIMITS.label).trim()
-  return name || undefined
-}
-
-/** This computer's own name: the one the person gave it, else its host name. */
-export async function thisComputerName(env: NodeJS.ProcessEnv = process.env, fs: RegistryFs = nodeRegistryFs()): Promise<string> {
-  return (await readRegistry(env, fs)).name ?? computerName()
-}
-
-/** Give this computer the name the person picked. Answers the name as kept; nothing for an empty one. */
-export async function renameThisComputer(picked: string, env: NodeJS.ProcessEnv = process.env, fs: RegistryFs = nodeRegistryFs()): Promise<string | undefined> {
-  const name = computerNameOf(picked)
-  if (name === undefined) return undefined
-  return serialize(async () => {
-    await writeRegistry({ ...(await readRegistry(env, fs)), name }, env, fs)
-    return name
-  })
-}
-
-/** The saved machines, newest first. Forgiving like every read of this file: none on a bad file. */
-export async function listMachines(
-  env: NodeJS.ProcessEnv = process.env,
-  fs: RegistryFs = nodeRegistryFs(),
-): Promise<MachineRecord[]> {
-  return (await readRegistry(env, fs)).machines ?? []
-}
-
-/**
- * Save a machine, newest first. One per address: saving an address again replaces its name and
- * its key, which is how a machine whose key changed is fixed. Answers the stored record, and the
- * records it took the place of (the one saved at that address before, the oldest past the cap):
- * each still holds a key the caller takes out of its machine.
- */
-export async function addMachine(
-  machine: { url: string; key: string; door: string; pin?: string; label?: string; owner?: string },
-  env: NodeJS.ProcessEnv = process.env,
-  fs: RegistryFs = nodeRegistryFs(),
-): Promise<{ record: MachineRecord; displaced: MachineRecord[] }> {
-  return serialize(async () => {
-    const registry = await readRegistry(env, fs)
-    const before = registry.machines ?? []
-    const record: MachineRecord = {
-      id: machine.url,
-      label: machine.label?.trim().slice(0, MACHINE_LIMITS.label) || hostOf(machine.url),
-      url: machine.url,
-      key: machine.key,
-      door: machine.door,
-      ...(machine.pin ? { pin: machine.pin } : {}),
-      ...(isPersonName(machine.owner) ? { owner: machine.owner } : {}),
-      // Saved again (a new key), it was saved here all the same since then.
-      added: before.find(saved => saved.id === machine.url)?.added ?? new Date().toISOString(),
-    }
-    const machines = [record, ...before.filter(saved => saved.id !== record.id)].slice(0, MACHINE_LIMITS.count)
-    await writeRegistry({ ...registry, machines }, env, fs)
-    return { record, displaced: before.filter(saved => !machines.includes(saved)) }
-  })
-}
-
-/**
- * Keep the computer's own name a saved machine says, and the one it went by before, whose runs are
- * still known as its. One saved again (a new link) starts without one: a machine saved anew since
- * is not named by an answer to the old one ({@link changeMachine}). A name another saved machine
- * goes by is not taken, nor does another person's computer change its name: it would be given runs
- * that are not its. Answers whether the name was written.
- */
-export async function nameMachine(machine: { id: string; key: string }, host: string, env: NodeJS.ProcessEnv = process.env, fs: RegistryFs = nodeRegistryFs()): Promise<boolean> {
-  if (!isHostName(host)) return false
-  const named = await changeMachine(
-    machine,
-    (saved, machines) => {
-      if (saved.host === host) return undefined
-      if (saved.host !== undefined) {
-        if (saved.owner !== undefined) return undefined
-        if (machines.some(other => other !== saved && (other.host === host || other.formerHosts?.includes(host)))) return undefined
-      }
-      const formerHosts = [...(saved.formerHosts ?? []), ...(saved.host !== undefined ? [saved.host] : [])].filter(name => name !== host)
-      const { formerHosts: _before, ...rest } = saved
-      return { ...rest, host, ...(formerHosts.length > 0 ? { formerHosts } : {}) }
-    },
-    env,
-    fs,
-  )
-  return named === 'changed'
-}
-
-/** Keep whether a saved machine says it is a server, as it was asked. */
-export async function noteServer(machine: { id: string; key: string }, server: boolean, env: NodeJS.ProcessEnv = process.env, fs: RegistryFs = nodeRegistryFs()): Promise<void> {
-  await changeMachine(machine, ({ server: was, ...rest }) => ((was === true) === server ? undefined : { ...rest, ...(server ? { server: true as const } : {}) }), env, fs)
-}
-
-/** The one saved machine a run's recorded name belongs to: the one going by it now, else the one that went by it. A name two say is neither's. */
-export function machineNamed(machines: readonly MachineRecord[], host: string): MachineRecord | undefined {
-  const now = machines.filter(machine => machine.host === host)
-  if (now.length > 0) return now.length === 1 ? now[0] : undefined
-  const before = machines.filter(machine => machine.formerHosts?.includes(host))
-  return before.length === 1 ? before[0] : undefined
-}
-
-/** Keep the ids a saved machine said it is listed under at the doors it saved, when they changed. */
-export async function noteListed(machine: { id: string; key: string }, listed: string[], env: NodeJS.ProcessEnv = process.env, fs: RegistryFs = nodeRegistryFs()): Promise<void> {
-  const ids = listed.filter(isDeviceId).slice(0, MACHINE_LIMITS.count)
-  await changeMachine(machine, ({ listed: was, ...rest }) => ((was ?? []).join(' ') === ids.join(' ') ? undefined : ids.length ? { ...rest, listed: ids } : rest), env, fs)
-}
-
-/**
- * Keep the name a saved machine says it has now, when it changed: a page shows a machine under its
- * own name, and the one kept here is what it is shown under while it does not answer.
- */
-export async function noteName(machine: { id: string; key: string }, said: string, env: NodeJS.ProcessEnv = process.env, fs: RegistryFs = nodeRegistryFs()): Promise<void> {
-  const label = computerNameOf(said)
-  if (label === undefined) return
-  await changeMachine(machine, saved => (saved.label === label ? undefined : { ...saved, label }), env, fs)
-}
-
-/**
- * Keep whose computer a saved machine is, once its door said this computer's person is not its
- * owner: another person's, which this computer's syncs hand nothing of this computer's to. One
- * that is another person's already stays theirs. Answers whether the owner was written.
- */
-export async function noteOwner(machine: { id: string; key: string }, owner: string, env: NodeJS.ProcessEnv = process.env, fs: RegistryFs = nodeRegistryFs()): Promise<boolean> {
-  if (!isPersonName(owner)) return false
-  return (await changeMachine(machine, saved => (saved.owner !== undefined ? undefined : { ...saved, owner }), env, fs)) === 'changed'
-}
-
-/** How stale the kept time a machine was last seen may be before it is written again. */
-const SEEN_KEPT_MS = 60_000
-
-/** Keep when a saved machine last answered, once a minute at most: the file is not written at each answer. */
-export async function noteSeen(machine: { id: string; key: string }, at: string, env: NodeJS.ProcessEnv = process.env, fs: RegistryFs = nodeRegistryFs()): Promise<void> {
-  await changeMachine(machine, saved => (saved.seenAt !== undefined && Date.parse(at) - Date.parse(saved.seenAt) < SEEN_KEPT_MS ? undefined : { ...saved, seenAt: at }), env, fs)
-}
-
-/** Keep what a saved machine said of its own projects. */
-export async function noteProjects(machine: { id: string; key: string }, projects: OwnProject[], env: NodeJS.ProcessEnv = process.env, fs: RegistryFs = nodeRegistryFs()): Promise<void> {
-  await changeMachine(machine, saved => ({ ...saved, projects }), env, fs)
-}
-
-/** Write down that the person was told their logins are copied to a saved machine of another person's. Answers whether it is saved. */
-export async function tellMachine(id: string, env: NodeJS.ProcessEnv = process.env, fs: RegistryFs = nodeRegistryFs()): Promise<boolean> {
-  return (await changeMachine({ id }, saved => (saved.told ? undefined : { ...saved, told: true as const }), env, fs)) !== 'unsaved'
-}
-
-/** Say whether a saved server uses this computer's logins. Answers whether it is saved. */
-export async function useLoginsOn(id: string, on: boolean, env: NodeJS.ProcessEnv = process.env, fs: RegistryFs = nodeRegistryFs()): Promise<boolean> {
-  return (await changeMachine({ id }, ({ logins: _was, ...rest }) => (on ? { ...rest, logins: true as const } : rest), env, fs)) !== 'unsaved'
-}
-
-/**
- * Change one saved machine, serialized with the other mutators: `change` is handed the machine as
- * saved, and the whole list, and answers the record that takes its place, or nothing to write
- * nothing. A machine asked about with a `key` is only the one saved with that key, the key it was
- * asked with: a machine saved anew since (a new link, a new key) says for itself, and is not
- * changed by an answer to the old one. Answers `unsaved` when there is no such machine.
- */
-async function changeMachine(
-  machine: { id: string; key?: string },
-  change: (saved: MachineRecord, machines: readonly MachineRecord[]) => MachineRecord | undefined,
-  env: NodeJS.ProcessEnv,
-  fs: RegistryFs,
-): Promise<'unsaved' | 'unchanged' | 'changed'> {
-  return serialize(async () => {
-    const registry = await readRegistry(env, fs)
-    const machines = registry.machines ?? []
-    const saved = machines.find(candidate => candidate.id === machine.id)
-    if (!saved || (machine.key !== undefined && saved.key !== machine.key)) return 'unsaved'
-    const changed = change(saved, machines)
-    if (changed === undefined) return 'unchanged'
-    await writeRegistry({ ...registry, machines: machines.map(candidate => (candidate === saved ? changed : candidate)) }, env, fs)
-    return 'changed'
-  })
-}
-
-/** Take a saved machine off the list, by id. Answers the one that was there. */
-export async function removeMachine(
-  id: string,
-  env: NodeJS.ProcessEnv = process.env,
-  fs: RegistryFs = nodeRegistryFs(),
-): Promise<MachineRecord | undefined> {
-  return serialize(async () => {
-    const registry = await readRegistry(env, fs)
-    const removed = (registry.machines ?? []).find(saved => saved.id === id)
-    if (!removed) return undefined
-    await writeRegistry({ ...registry, machines: (registry.machines ?? []).filter(saved => saved.id !== id) }, env, fs)
-    return removed
-  })
-}
-
-/** The computers the person removed, the newest last. */
-export async function listForgotten(env: NodeJS.ProcessEnv = process.env, fs: RegistryFs = nodeRegistryFs()): Promise<ForgottenMachine[]> {
-  return (await readRegistry(env, fs)).forgotten ?? []
-}
-
-/** Remember that the person removed the computer at `url`, at `at`; a later removal of it replaces an earlier one. */
-export async function forgetMachine(url: string, at: string, env: NodeJS.ProcessEnv = process.env, fs: RegistryFs = nodeRegistryFs()): Promise<void> {
-  await serialize(async () => {
-    const registry = await readRegistry(env, fs)
-    const was = (registry.forgotten ?? []).find(gone => gone.url === url)
-    if (was && Date.parse(was.at) >= Date.parse(at)) return
-    await writeRegistry({ ...registry, forgotten: [...(registry.forgotten ?? []).filter(gone => gone.url !== url), { url, at }].slice(-MAX_FORGOTTEN) }, env, fs)
-  })
-}
-
-/** The person saved the computer at `url` again: it is no longer one they removed. */
-export async function unforgetMachine(url: string, env: NodeJS.ProcessEnv = process.env, fs: RegistryFs = nodeRegistryFs()): Promise<void> {
-  await serialize(async () => {
-    const registry = await readRegistry(env, fs)
-    if (!(registry.forgotten ?? []).some(gone => gone.url === url)) return
-    await writeRegistry({ ...registry, forgotten: (registry.forgotten ?? []).filter(gone => gone.url !== url) }, env, fs)
-  })
-}
-
-/** An address's host and port (`192.168.1.5:4200`): a machine's name when the person gave none. */
-function hostOf(url: string): string {
-  try {
-    return new URL(url).host
-  } catch {
-    return url
-  }
 }
 
 /** A {@link PreferencesStore} bound to the real registry file, wired by the daemon so the

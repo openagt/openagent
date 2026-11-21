@@ -20,9 +20,8 @@ whose each is and which plugins start on, and the `openagent` command, which ser
 
 The core modules are always on. A plugin has an Enabled row each, switched in **Settings ›
 Plugins**: `ask` and desktop notifications while the dashboard is open (**Settings ›
-Notifications**) start on, every other plugin starts off (devices, which is the door to this
-computer and your other computers, the command this computer runs when a run needs you, typed in
-**Settings › Notification command**, the tickets, the queue, the logs, the browser, the scheduler,
+Notifications**) start on, every other plugin starts off (the command this computer runs when a
+run needs you, typed in **Settings › Notification command**, the tickets, the queue, the logs, the browser, the scheduler,
 Discord, the commands that move a ticket to work, a mermaid block drawn as its diagram, GitHub
 Actions, which "Run on" then offers beside this computer in a project whose repository has the
 workflow it brings, and Claude Code on the web, which "Run on" then offers in a project on GitHub,

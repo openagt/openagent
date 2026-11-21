@@ -9,8 +9,7 @@ import { readPreferences } from '../registry.js'
 import { accountsWiring, type AccountResult } from './accounts.js'
 import { contextProjects } from './context.js'
 import { readProvider, remoteHost, type GitHostProvider } from '../dashboard/git-hosts.js'
-import { readCopied } from '../dashboard/copied-logins.js'
-import { syncLogins } from '../dashboard/logins-sync.js'
+
 import { refreshLoginShellPath } from '../shell-path.js'
 import { hasAddedAccount } from '@openagt/agent-driver'
 import type { DriverFix, DriverReadiness } from '@openagt/hooks'
@@ -141,16 +140,7 @@ async function readGitHostsOnce(): Promise<GitHostsView> {
     found.set(host, { root: home, command })
     hosts.push({ host, projects: [], provider })
   }
-  return { hosts: hosts.map(row => withCopies(row)) }
-}
-
-/** A host's accounts, each that a computer of the person's handed over saying which: on a server, the person's own computers' logins. */
-function withCopies(row: GitHostRow): GitHostRow {
-  if (!row.provider) return row
-  const copies = readCopied().filter(login => login.kind === 'git' && login.host === row.host)
-  if (copies.length === 0) return row
-  const fromOf = (login: string): string | undefined => copies.find(copy => copy.name.toLowerCase() === login.toLowerCase())?.from
-  return { ...row, provider: { ...row.provider, accounts: row.provider.accounts.map(account => ({ ...account, ...(fromOf(account.login) !== undefined ? { from: fromOf(account.login)! } : {}) })) } }
+  return { hosts }
 }
 
 /**
@@ -192,16 +182,12 @@ export async function sendUseGitHostAccount(host: string, login: string): Promis
 /**
  * Take an account off at `host`, on this computer: its tool forgets it, and its token goes on
  * working wherever else it is. The account runs use is not taken off: another is picked first.
- * The servers that use this computer's logins are asked again at once, so what they said of it
- * goes with it.
  */
 export async function sendForgetGitHostAccount(host: string, login: string): Promise<AccountResult> {
   const runs = (await onGitHosts()).hosts.find(row => row.host === host)?.provider?.accounts.find(account => account.runs)
   if (runs?.login === login) return { ok: false, error: `Runs use @${login}: pick another account for runs first.` }
   const done = await act(host, ['forget', login])
-  if (!done.ok) return done
-  await syncLogins().catch(() => [])
-  return { ok: true }
+  return done.ok ? { ok: true } : done
 }
 
 /** Log another account in at `host`, in the browser: the code the person types, and where. */
@@ -258,9 +244,9 @@ export async function onAgentState(driver?: string): Promise<AgentState> {
     ready = await loginsWiring.ready(name)
   }
   const press = fixes.get(name)
-  // A computer with no browser cannot log its agent in by a press: on a server the person adds an account in its card instead; elsewhere the command is typed there.
+  // A computer with no browser cannot log its agent in by a press: the command is typed there.
   const noPress = ready.fix?.kind === 'log-in' && accountsWiring.headless()
-  const fix = ready.fix && !(noPress && process.env['OPENAGENT_SERVER'] === '1') ? ready.fix : undefined
+  const fix = ready.fix
   return {
     driver: name,
     ready: ready.problems.length === 0,

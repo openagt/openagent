@@ -78,12 +78,8 @@ describe('Agents (#1648)', () => {
     render(<Agents state="fresh" working={[active('theirs', { computer: { name: 'rom-thinkpad-x280' } }), active('mine')]} namesRuns onSelectAgent={vi.fn()} />)
     expect(screen.getByText('on rom-thinkpad-x280')).toBeTruthy()
     expect(screen.getAllByText(/^on /)).toHaveLength(1)
-    // A computer whose kind is not known is drawn a laptop; a server as a server.
+    // Drawn as a computer.
     expect(document.querySelector('.lucide-laptop')).toBeTruthy()
-    cleanup()
-    render(<Agents state="fresh" working={[active('sent', { computer: { name: 'Droplet', kind: 'server' } })]} namesRuns onSelectAgent={vi.fn()} />)
-    expect(screen.getByText('on Droplet')).toBeTruthy()
-    expect(document.querySelector('.lucide-server')).toBeTruthy()
   })
 })
 

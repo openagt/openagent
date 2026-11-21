@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useRef, useState, type ComponentType, type ReactNode } from 'react'
+import { useContext, useEffect, useRef, useState, type ComponentType, type ReactNode } from 'react'
 import { Dialog as BaseDialog } from '@base-ui/react/dialog'
 import { ArrowLeft, Blocks, Bot, ChevronRight, ChevronsUpDown, Database, FolderGit2, Keyboard, Layers, Palette, X, FolderSearch } from 'lucide-react'
 import { DRIVERS, DRIVER_LABELS, isDriverName } from '../../src/client.js'
@@ -6,9 +6,8 @@ import { driverOptions, useModels } from '../lib/models.js'
 import type { DriverOption } from './DriverModelMenu.js'
 import type { ProjectSummary } from '../../src/index.js'
 import { DEFAULT_ORDER, useMountedModules, type MountedView } from '../lib/use-modules.js'
-import { SettingsCrumbContext, type SettingsCrumb } from '../lib/settings-crumb.js'
-import { SettingsHoldContext } from '../lib/settings-hold.js'
-import { PERMISSIONS_PAGE, holdEntry } from '../lib/use-route.js'
+
+import { PERMISSIONS_PAGE } from '../lib/use-route.js'
 import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
 import { inPlace } from '../lib/in-place.js'
 import { useIsMobile } from '../lib/use-mobile.js'
@@ -22,7 +21,6 @@ import { ProjectDot } from './ProjectPicker.js'
 import { PROJECT_AGENT_DATA_ENTRY, ProjectAgentDataSettings } from './ProjectAgentDataSettings.js'
 import { COMPUTER_PLUGINS_ENTRY, ComputerPluginsSettings, PLUGINS_ENTRY, ProjectPluginsSettings } from './PluginsSettings.js'
 import { ModuleSlot, projectsHaving } from './ModulePageView.js'
-import { ConfirmDialog } from './ui/confirm-dialog.js'
 import { buttonVariants } from './ui/button.js'
 import { BACKDROP_CLASS, DIALOG_PRESSES_CLASS } from './ui/dialog.js'
 import { ScrollArea } from './ui/scroll-area.js'
@@ -40,7 +38,7 @@ import { SettingsFootContext, SettingsSection, SettingsSelectRow as SelectRow, T
 //
 // The list has two groups, by whose the settings are. First, with no title: the dashboard's own
 // (how it looks, what it tells you, which agent runs) and the entries of the packages that are
-// the computer's (Profile, Devices), in one order by number: the dashboard's own stand at 20 to
+// the computer's (Profile, Notifications), in one order by number: the dashboard's own stand at 20 to
 // 80, so a package's entry goes before them, between two, or after them; the plugins kept per person
 // or per computer, switched on and off, among them. Then "Project": the entries of the packages a
 // project has (its Skills first), each saved in that project's own folder, its plugins, switched on
@@ -105,18 +103,9 @@ export function SettingsDialog({
   const project = projects.find(p => p.id === picked) ?? null
   const label = useProjectLabel()
   const own = useOwnEntries()
-  // A page inside the entry shown, which the entry says it opened: its title in the header, and the back arrow to the entry.
-  const [crumb, setCrumb] = useState<SettingsCrumb | undefined>()
+
   // Where an entry's presses go (`SettingsFoot`): under what scrolls, so they hold their place.
   const [foot, setFoot] = useState<HTMLDivElement | null>(null)
-  // A change the entry holds and has not saved: leaving it, by Back too, asks first, and the step asked about waits here.
-  const [leaving, setLeaving] = useState<(() => void) | undefined>()
-  const held = useRef<(() => void) | null>(null)
-  const setHeld = useCallback((now: boolean) => {
-    held.current?.()
-    held.current = now ? holdEntry(step => setLeaving(() => step)) : null
-  }, [])
-  const leave = (step: () => void): void => (held.current ? setLeaving(() => step) : step())
   const moduleEntry = (section: MountedView<'settings.section'>, of: ProjectSummary[]): Entry => {
     const Body = section.View
     return {
@@ -170,8 +159,8 @@ export function SettingsDialog({
           type="button"
           aria-current={e === current ? 'page' : undefined}
           onClick={() => {
-            // The entry shown, pressed again, goes nowhere: it asks nothing, and what it holds stays held.
-            if (e !== current || listOnly) leave(() => onEntry(e.id))
+            // The entry shown, pressed again, goes nowhere.
+            if (e !== current || listOnly) onEntry(e.id)
           }}
           // The sidebar's row. On a phone the list is a page of its own: none is marked, since no entry is open beside it.
           className={cn(navRowClass(e === current && !phone), 'text-left')}
@@ -186,7 +175,7 @@ export function SettingsDialog({
   const iconPress = cn(buttonVariants({ variant: 'ghost', size: 'icon-bar' }), 'text-muted-foreground hover:text-foreground')
 
   return (
-    <BaseDialog.Root open onOpenChange={open => !open && leave(onClose)}>
+    <BaseDialog.Root open onOpenChange={open => !open && onClose()}>
       <BaseDialog.Portal>
         <BaseDialog.Backdrop className={BACKDROP_CLASS} />
         <BaseDialog.Popup
@@ -221,7 +210,7 @@ export function SettingsDialog({
               </section>
               <section aria-label="Project">
                 <p className="flex h-8 items-center px-2 text-xs font-medium text-faint-foreground">Project</p>
-                <ProjectSelect projects={projects} value={project?.id ?? ALL_PROJECTS} onChange={id => leave(() => setPicked(id))} />
+                <ProjectSelect projects={projects} value={project?.id ?? ALL_PROJECTS} onChange={setPicked} />
                 {projectEntries.length > 0 ? (
                   <ul className="mt-0.5 flex flex-col gap-0.5">{projectEntries.map(item)}</ul>
                 ) : (
@@ -237,34 +226,20 @@ export function SettingsDialog({
               {/* The dialog's head on its one inset, as every dialog's (ui/dialog.tsx): 24 on a computer, a phone's top bar on a phone. */}
               <div className={cn('flex shrink-0 items-center gap-2', phone ? 'h-12 px-4' : 'h-6 box-content px-6 pt-4.5 pb-4')}>
                 {phone && (
-                  <button type="button" aria-label={crumb ? `Back to ${current.title}` : 'All settings'} onClick={crumb ? crumb.back : () => leave(() => onEntry(''))} className={cn(iconPress, '-ml-1.5')}>
+                  <button type="button" aria-label="All settings" onClick={() => onEntry('')} className={cn(iconPress, '-ml-1.5')}>
                     <ArrowLeft className="size-4" aria-hidden />
                   </button>
                 )}
-                {/* The entry's title leads; where it is (the project, the entry a page is in) quieter before it, the entry its way back. */}
+                {/* The entry's title leads; the project it is of quieter before it. */}
                 <BaseDialog.Title className="flex min-w-0 flex-1 items-center gap-2 text-base font-semibold">
                   <span className="sr-only">Settings</span>
-                  {inProject && !(phone && crumb) && (
+                  {inProject && (
                     <>
                       <span className="truncate font-medium text-faint-foreground">{project ? label(project.id, project.name) : 'All projects'}</span>
                       <ChevronRight className="size-3.5 shrink-0 text-faint-foreground" aria-hidden />
                     </>
                   )}
-                  {crumb ? (
-                    <>
-                      {!phone && (
-                        <>
-                          <button type="button" onClick={crumb.back} className="focus-ring -mx-1 truncate rounded-sm px-1 font-medium text-faint-foreground transition-colors hover:text-foreground">
-                            {current.title}
-                          </button>
-                          <ChevronRight className="size-3.5 shrink-0 text-faint-foreground" aria-hidden />
-                        </>
-                      )}
-                      <span className="truncate">{crumb.title}</span>
-                    </>
-                  ) : (
-                    <span className="truncate">{current.title}</span>
-                  )}
+                  <span className="truncate">{current.title}</span>
                 </BaseDialog.Title>
                 <BaseDialog.Close aria-label="Close settings" className={cn(iconPress, '-my-1 -mr-1.5')}>
                   <X className="size-4" aria-hidden />
@@ -281,14 +256,10 @@ export function SettingsDialog({
                   )}
                   {/* Keyed by the projects too: an entry's reads and picks are of the projects it was drawn for. */}
                   <div key={`${current.id}/${project?.id ?? ALL_PROJECTS}`}>
-                    <SettingsCrumbContext.Provider value={setCrumb}>
-                      <SettingsHoldContext.Provider value={setHeld}>
-                        <SettingsFootContext.Provider value={foot}>
-                          {/* Under the entry's title, a section is a group of it. */}
-                          <InSection>{current.body}</InSection>
-                        </SettingsFootContext.Provider>
-                      </SettingsHoldContext.Provider>
-                    </SettingsCrumbContext.Provider>
+                    <SettingsFootContext.Provider value={foot}>
+                      {/* Under the entry's title, a section is a group of it. */}
+                      <InSection>{current.body}</InSection>
+                    </SettingsFootContext.Provider>
                   </div>
                 </div>
               </ScrollArea>
@@ -296,17 +267,6 @@ export function SettingsDialog({
               <div ref={setFoot} data-foot className={cn('shrink-0 border-t border-hairline empty:hidden', phone ? 'px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))]' : 'px-6 pt-4 pb-6', DIALOG_PRESSES_CLASS)} />
             </div>
           )}
-          <ConfirmDialog
-            open={leaving !== undefined}
-            onOpenChange={open => !open && setLeaving(undefined)}
-            title={`Discard your changes to ${current.title}?`}
-            body={`What you changed in ${current.title} is not saved.`}
-            confirmLabel="Discard"
-            onSuccess={() => {
-              setHeld(false)
-              leaving?.()
-            }}
-          />
         </BaseDialog.Popup>
       </BaseDialog.Portal>
     </BaseDialog.Root>

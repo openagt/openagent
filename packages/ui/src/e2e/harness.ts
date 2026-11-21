@@ -140,8 +140,6 @@ export async function makeWorld(): Promise<StoryWorld> {
     startedIn: runtime.onStartedIn,
     removeProject: runtime.onRemoveProject,
     prepareStart: runtime.onPrepareStart,
-    eventsSource: runtime.remoteEventsSource,
-    remote: runtime.remoteAgents,
     preferences: registryPreferencesStore(),
     // The story sets one view; both questions are answered off it, since a story that cares about
     // the model's own week states that window in the view it sets (#1619).

@@ -36,7 +36,7 @@ const BIN = fileURLToPath(new URL('../../bin/agent-runner', import.meta.url))
  */
 export async function readyToRun(repo: string, driver: string | undefined, deps: { agent?: RunAgent; gitHostEnv?: typeof gitHostEnv; login?: string } = {}): Promise<DriverReadiness> {
   const agent = deps.agent ?? (await codingAgent(driver))
-  // An added account is a login runs use: a server with only the person's own computers' logins runs on them.
+  // An added account is a login runs use: the CLI's own is not needed beside it.
   const ready = await agent.ready({ personal: await readPersonal(repo, () => {}), addedAccount: agent.accounts !== undefined && hasAddedAccount(agent.accounts.list) })
   const given = await (deps.gitHostEnv ?? gitHostEnv)(repo, deps.login)
   if (!given.ok) ready.problems.push(deps.login !== undefined ? cannotWorkAs(deps.login, given.error) : given.error)

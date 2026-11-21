@@ -1,6 +1,6 @@
 import { readAccounts, shownAccounts, useFirst } from './accounts.js'
 import { addingNow, beginAdding, bringCode, cancelAdding, runAdding } from './adding.js'
-import { comesBackFrom, logOut, removeAdded } from './login.js'
+import { logOut, removeAdded } from './login.js'
 import { addingAll, listed, listing } from './reads.js'
 import { loginWiring, type LoginWiring } from './wiring.js'
 import { readUsage } from './usage.js'
@@ -106,8 +106,6 @@ export async function runCli(argv: readonly string[], io: CliIo): Promise<number
     return answer(shownAccounts(useFirst(name, wiring.path(list))))
   }
   if (command === 'remove') {
-    const from = comesBackFrom(list, name, wiring)
-    if (from !== undefined) return refuse(`${name}'s account comes from ${from}: remove it there.`)
     const gone = await removeAdded(logins, name, wiring)
     if (!gone) return refuse(`There is no added ${list} account named ${name}.`)
     return answer(shownAccounts(readAccounts(wiring.path(list))))

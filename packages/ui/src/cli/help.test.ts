@@ -13,8 +13,6 @@ const require = createRequire(import.meta.url)
 const PROGRAMS: [pkg: string, args: string[], bin?: string][] = [
   ['@openagt/agent-driver', [], 'agent-runner'],
   ['@openagt/agent-driver', [], 'account-rotation'],
-  ['@openagt/devices', []],
-  ['@openagt/devices', ['server']],
   ['@openagt/git-branches', []],
   ['@openagt/browser', []],
   ['@openagt/discord', []],

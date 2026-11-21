@@ -59,7 +59,7 @@ describe('useLiveEvents addressing (#770)', () => {
 })
 
 // #948: a dead stream used to be silent — events just stopped. An errored close must flip `lost`
-// and retry; a clean close is the server being done on purpose (relay ended, unknown project) and
+// and retry; a clean close is the server being done on purpose (an unknown project) and
 // must do neither.
 describe('useLiveEvents stream loss (#948)', () => {
   test('an errored close reports the stream lost and resubscribes', async () => {

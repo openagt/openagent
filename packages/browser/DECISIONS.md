@@ -21,8 +21,7 @@ already made, and lists it in its pull request; for anything else it proposes an
   says how many errors the page has; a click opens it. The agent reads the same lines
   with `browser console`. Picked over a console that is always open, which takes the room
   of the picture, most of all on a phone.
-- The picture is streamed from the computer the agent runs on, so the pane shows the same
-  on that computer, on a phone and on another computer.
+- The picture is streamed from the computer the agent runs on into the pane.
 - The person's pointer reaches the page as a mouse, not as bare clicks: where it moved,
   when it went down and when it came up. So the page hovers under it as it would under
   their own mouse, a drag drags (a slider, a selection), a second click in a place is said
@@ -36,8 +35,8 @@ already made, and lists it in its pull request; for anything else it proposes an
 - What a person watching pastes goes into the page as typing, and what the page has
   selected is theirs to copy: the browser tells whoever watches what is selected as it
   changes, so their own browser has it in hand when they press the keys. Picked over
-  asking the browser for the selection at the moment of the press, which is a call to
-  another computer in a moment that does not wait. Select-all is sent as the command the
+  asking the browser for the selection at the moment of the press, which is a call to the
+  agent's browser in a moment that does not wait. Select-all is sent as the command the
   keys stand for, so no letter is typed into a field.
 - The agent's own pointer is drawn on the picture where the agent last clicked or typed,
   and stays there until it acts again or the page goes elsewhere. Picked over drawing

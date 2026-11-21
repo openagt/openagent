@@ -6,7 +6,6 @@ import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { cn } from '../lib/utils.js'
 import { inPlace } from '../lib/in-place.js'
 import { formatRelative } from '../lib/format-date.js'
-import { OnComputer } from './MachineMark.js'
 import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
 
 /** How many rows show before the list offers the rest. */
@@ -38,7 +37,7 @@ function pageOf(item: Waiting): string | undefined {
 interface WaitingRow {
   key: string
   item: Waiting
-  /** Where a click takes the person, and the computer it runs on, said under the pointer. */
+  /** Where a click takes the person, said under the pointer. */
   hint: string
   /** How long ago, "2d ago"; empty when not known. */
   since: string
@@ -66,7 +65,7 @@ function useWaitingRows(items: readonly Waiting[], onOpenAgent: (projectId: stri
     return {
       key: waitingKey(item),
       item,
-      hint: item.computer ? `${hoverOf(item)} · runs on ${item.computer.name}` : hoverOf(item),
+      hint: hoverOf(item),
       since: formatRelative(item.since, ''),
       href: run !== undefined ? services.agentHref(item.projectId, run) : page,
       open: run !== undefined ? () => onOpenAgent(item.projectId, run) : page !== undefined ? () => window.open(page, '_blank', 'noreferrer') : onOpenProject && (() => onOpenProject(item.projectId)),
@@ -131,9 +130,6 @@ export function WaitingList({
               <span className="min-w-0 shrink truncate text-foreground md:max-w-[50%] max-md:order-1 max-md:basis-full">{item.title}</span>
               {/* A count is never cut; a question keeps room for its first words. */}
               <span className={cn('truncate text-muted-foreground md:grow max-md:order-2 max-md:basis-full', item.mark === 'question' ? 'max-md:min-w-0 md:min-w-24' : 'min-w-0 shrink-0')}>{item.detail}</span>
-              {/* A run on another of the person's computers is marked by its kind's icon before the
-                  project, as the list of runs marks it: a row has no room for its name too. */}
-              {item.computer && <OnComputer computer={item.computer} named={false} />}
               {projects && <span className="shrink-0 text-xs text-muted-foreground">{item.projectName}</span>}
               <span className="min-w-14 shrink-0 text-right text-xs tabular-nums text-muted-foreground">{since}</span>
               <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />

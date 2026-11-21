@@ -285,8 +285,8 @@ export interface RunFound {
 export const LOCAL_HOST = 'here'
 
 /**
- * Where runs live and are read: this computer by default; plugins add another computer, a GitHub
- * Actions runner, a cloud session. What a host refuses (a run that already ended, a coding agent
+ * Where runs live and are read: this computer by default; plugins add a GitHub Actions runner, a
+ * cloud session. What a host refuses (a run that already ended, a coding agent
  * that cannot start) throws, its message in words for the person.
  */
 export interface RunHost {

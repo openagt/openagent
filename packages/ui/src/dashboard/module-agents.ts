@@ -8,7 +8,7 @@ export interface ModuleAgent {
   name?: string
   /** What the run was asked, as typed or as queued; absent when its record carries none. */
   ask?: string
-  /** How it stands: `unknown` while the computer it runs on does not answer, whatever its record last said. */
+  /** How it stands. */
   status: AgentStatus
   /** ISO 8601. */
   startedAt: string
@@ -23,10 +23,6 @@ export interface ModuleAgent {
   /** The coding agent that runs it (`claude-code`, `codex`, …) and its model. */
   driver?: string
   model?: string
-  /** The saved machine it runs on, by the name it was given; absent for a run of this computer's. */
-  machine?: string
-  /** While its status is `unknown`: when its computer was last seen, ISO, if it was. */
-  seenAt?: string
   /** Its pull request, with how it stands as the git host last said (`merged`: the sidebar's merged run), once read. */
   pr?: { number: number; url: string; state?: AgentMeta['prState'] }
   /** Its work that never left this machine: files its checkout left uncommitted, and commits never pushed. */
@@ -59,8 +55,6 @@ export function moduleAgentOf(agent: AgentMeta): ModuleAgent {
     ...(agent.cost !== undefined ? { cost: agent.cost } : {}),
     ...(agent.driver ? { driver: agent.driver } : {}),
     ...(agent.model ? { model: agent.model } : {}),
-    ...(agent.remoteLabel ? { machine: agent.remoteLabel } : {}),
-    ...(agent.seenAt ? { seenAt: agent.seenAt } : {}),
     ...(agent.pr ? { pr: { ...agent.pr, ...(agent.prState ? { state: agent.prState } : {}) } } : {}),
     ...(agent.uncommitted ? { uncommitted: agent.uncommitted } : {}),
     ...(agent.unpublished ? { unpublished: agent.unpublished } : {}),

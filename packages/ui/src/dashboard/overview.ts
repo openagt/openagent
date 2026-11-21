@@ -2,7 +2,6 @@ import { readAllAgents, readLiveMetas, type LiveAgent, type AgentMeta, type Agen
 import type { ProjectSummary } from './projects.js'
 import { collectQueue, type ProjectQueue } from './queue.js'
 import { hostname } from 'node:os'
-import type { MachineKind } from '../reached-by-line.js'
 import { SESSIONS_ID } from '../project-address.js'
 
 // The first-sidebar Overview (#437, part of #314): a cross-project glance at what the agent
@@ -37,11 +36,8 @@ export interface ActiveAgent {
    * its record says it is at work: "no agents working" over a cloud session at work was a lie (#1668).
    */
   host?: string
-  /**
-   * The computer it runs on, only when that is not this one: the saved machine's name and kind for
-   * a run of one of the person's other computers, else the computer its record names (#1648).
-   */
-  computer?: { name: string; kind?: MachineKind }
+  /** The computer it runs on, only when that is not this one: the computer its record names (#1648). */
+  computer?: { name: string }
 }
 
 /** One recently active project, most-recent first. */
@@ -118,28 +114,20 @@ export interface OverviewDeps {
   queue?: (projects: ProjectSummary[]) => Promise<ProjectQueue[]>
   /** Every run of a project, archived included (default {@link readAllAgents}): where the runs on other hosts are. */
   agents?: (cwd: string) => Promise<AgentMeta[]>
-  /**
-   * The runs the person's other computers say they run of a project, each marked with the saved
-   * machine it is (`remoteLabel`): of a project this computer has too, and of one only they have.
-   */
-  machineRuns?: (project: ProjectSummary) => Promise<AgentMeta[]>
   /** This machine's hostname; `node:os` in production. */
   host?: string
 }
 
 /**
  * Build the cross-project Overview: the running agents (every live agent of each project, one per
- * worktree since #736, and every run the person's other computers say is running), the total of
- * open queue entries (from {@link collectQueue}), and the most recently active projects (by
- * {@link ProjectSummary.lastActivityAt}). A project of another computer's ({@link ProjectSummary.machine})
- * has no folder here: only what its computer says of its runs is read. Forgiving — a project
- * with no live run, or none running, simply contributes nothing to `active`.
+ * worktree since #736), the total of open queue entries (from {@link collectQueue}), and the most
+ * recently active projects (by {@link ProjectSummary.lastActivityAt}). Forgiving — a project with
+ * no live run, or none running, simply contributes nothing to `active`.
  */
 export async function buildOverview(projects: ProjectSummary[], deps: OverviewDeps = {}): Promise<Overview> {
   const liveAgents = deps.liveAgents ?? readLiveMetas
   const queue = deps.queue ?? (p => collectQueue(p))
   const agents = deps.agents ?? readAllAgents
-  const machineRuns = deps.machineRuns ?? (async () => [])
   const thisHost = deps.host ?? hostname()
 
   const active: ActiveAgent[] = []
@@ -158,18 +146,10 @@ export async function buildOverview(projects: ProjectSummary[], deps: OverviewDe
     ...(meta.branch ? { branch: meta.branch } : {}),
     startedAt: meta.startedAt,
     ...(meta.updatedAt ? { updatedAt: meta.updatedAt } : {}),
-    // A saved machine's run by the machine's name; another computer's daemon started it otherwise
-    // (#1648): the shared data branch shows its runs here too.
-    ...(meta.remoteLabel !== undefined
-      ? { computer: { name: meta.remoteLabel, ...(meta.remoteKind !== undefined ? { kind: meta.remoteKind } : {}) } }
-      : meta.host !== undefined && meta.host !== thisHost
-        ? { computer: { name: meta.host } }
-        : {}),
+    // Another computer's daemon started it (#1648): the shared data branch shows its runs here too.
+    ...(meta.host !== undefined && meta.host !== thisHost ? { computer: { name: meta.host } } : {}),
   })
-  const own = projects.filter(project => project.machine === undefined)
-  // What the person's other computers run, once each: a run listed here as this computer's is not listed again.
-  const theirs = await Promise.all(projects.map(project => machineRuns(project).catch((): AgentMeta[] => [])))
-  for (const project of own) {
+  for (const project of projects) {
     // Every live agent of the project (#738), not just the one that used to sit at its path.
     for (const meta of await liveAgents(project.path).catch(() => [])) {
       if (meta.status !== 'running') continue
@@ -179,22 +159,14 @@ export async function buildOverview(projects: ProjectSummary[], deps: OverviewDe
     // them, so they are read from their records and keyed to the project's own path.
     for (const meta of await agents(project.path).catch((): AgentMeta[] => [])) {
       const host = meta.target
-      if (host === undefined || host === 'local' || host === 'remote' || meta.status !== 'running' || elsewhere.has(meta.id)) continue
+      if (host === undefined || host === 'local' || meta.status !== 'running' || elsewhere.has(meta.id)) continue
       elsewhere.add(meta.id)
       active.push({ ...entry(project, meta, project.path), host })
     }
   }
-  const listed = new Set(active.map(agent => agent.agentId))
-  projects.forEach((project, at) => {
-    for (const meta of theirs[at] ?? []) {
-      if (meta.status !== 'running' || listed.has(meta.id)) continue
-      listed.add(meta.id)
-      active.push(entry(project, meta, project.path))
-    }
-  })
   active.sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''))
 
-  const queues = await queue(own)
+  const queues = await queue(projects)
   const queueOpen = queues.reduce((sum, q) => sum + q.entries.length, 0)
 
   const recent = projects

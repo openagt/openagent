@@ -1,23 +1,18 @@
 import { strict as assert } from 'node:assert'
 import { mock, test } from 'node:test'
-import { createServer } from 'node:http'
-import type { AddressInfo } from 'node:net'
 import { join } from 'node:path'
 import { mkdtemp, rm, mkdir, writeFile, readFile, realpath, stat } from 'node:fs/promises'
 import { hostname, tmpdir } from 'node:os'
 import { sendStop, sendMessage, sendRemoveWorktree, sendOpenPullRequest } from './control.js'
 import { callModule } from './module-calls.js'
-import { onRetainedWorktrees, onAgents, onRecentAgents, onAgent } from './reads.js'
-import { asArrived } from './relay-agent.js'
-import { dispatchRelayRpc } from './relay-dispatch.js'
+import { onRetainedWorktrees, onAgents, onRecentAgents } from './reads.js'
 import { addProject } from '../registry.js'
 import { DATA_BRANCH, fileBranchPath, nodeGitRunner, projectId as idFor } from '@openagt/agent-data'
 import { worktreePath, addWorktree, agentBranchName } from '@openagt/git-branches'
 import { OPENAGENT_DIR } from '../openagent-dir.js'
 import { INBOX_FILE, writeRun } from '@openagt/agent-driver'
-import { NO_ELSEWHERE, RESUMED_FILE, provideTestContext } from './test-context.js'
+import { RESUMED_FILE, provideTestContext } from './test-context.js'
 import { testPackagesBut, withDistribution } from '../test-distribution.js'
-import { elsewhereId } from '../dashboard/elsewhere.js'
 import { STARTING_AT_MOST_MS } from '../starting.js'
 
 // #749, #1774: what is addressed at a RUN has to resolve the run's own checkout, not the project:
@@ -492,146 +487,13 @@ test('sendOpenPullRequest opens the pull request as a draft when asked to, and a
   }
 })
 
-test('a run on a saved machine reads the same in the project\'s list and in every project\'s, by the machine\'s name; and a message typed on it goes to the machine, not to this computer\'s host', async () => {
-  // Its record came through the project's shared records: started on the machine's own page, this computer never sent it.
-  const ctx = await projectWithWorktreeAgent({ pid: 0, host: 'server-box' }, { status: 'waiting' })
-  // The machine: it takes the calls about its run.
-  const got: { fn: string; args: unknown[]; project: string }[] = []
-  const machine = createServer((req, res) => {
-    let body = ''
-    req.on('data', chunk => (body += chunk)).on('end', () => {
-      got.push(JSON.parse(body) as { fn: string; args: unknown[]; project: string })
-      res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ result: { ok: true } }))
-    })
-  })
-  await new Promise<void>(resolve => machine.listen(0, '127.0.0.1', resolve))
-  const target = { url: `http://127.0.0.1:${(machine.address() as AddressInfo).port}`, key: 'id.key', project: 'github.com/acme/shop' }
-  // A run this computer sent there, which lives in its memory only.
-  const sent = { status: 'running' as const, id: '2026-07-19T11-00-00-000Z', startedAt: '2026-07-19T11:00:00.000Z', updatedAt: '2026-07-19T11:00:00.000Z', target: 'remote' as const, remoteLabel: 'Server' }
-  const asked: string[] = []
-  provideTestContext({
-    remote: {
-      ...NO_ELSEWHERE,
-      target: () => undefined,
-      // And one followed by a record that was deleted since: it is listed no longer.
-      list: projectId => (projectId === ctx.projectId ? [sent, { ...sent, id: 'followed-by-a-record-that-is-gone' }] : []),
-      working: () => false,
-      rekey: () => {},
-      sent: agentId => agentId !== 'followed-by-a-record-that-is-gone',
-      home: async (projectId, agentId) => {
-        asked.push(`${projectId} ${agentId}`)
-        return projectId === ctx.projectId && agentId === ctx.agentId ? target : undefined
-      },
-      follow: async () => {},
-      machineNames: async () => host => (host === 'server-box' ? { label: 'Server', url: 'https://server.example' } : undefined),
-      machineRuns: async () => [],
-      followRuns: () => () => {},
-    },
-  })
-  try {
-    const where = (rows: { id: string; target?: string; remoteLabel?: string; otherHost?: boolean }[]) => rows.map(row => [row.id, row.target, row.remoteLabel, row.otherHost])
-    const both = [[sent.id, 'remote', 'Server', undefined], [ctx.agentId, 'remote', 'Server', undefined]]
-    assert.deepEqual(where(await onAgents(ctx.projectId)), both)
-    assert.deepEqual(where((await onRecentAgents()).filter(row => row.projectId === ctx.projectId).map(row => row.agent)), both)
-
-    assert.deepEqual(await sendMessage(ctx.projectId, 'go on', ctx.agentId), { ok: true })
-    assert.deepEqual(asked, [`${ctx.projectId} ${ctx.agentId}`])
-    assert.deepEqual(got, [{ fn: 'sendMessage', args: [ctx.projectId, 'go on', ctx.agentId], project: 'github.com/acme/shop' }])
-    // This computer resumed nothing, and nothing was put in an inbox here.
-    await assert.rejects(stat(join(ctx.dir, RESUMED_FILE)), { code: 'ENOENT' })
-    await assert.rejects(stat(ctx.agentInbox), { code: 'ENOENT' })
-  } finally {
-    ctx.restore()
-    machine.closeAllConnections()
-    machine.close()
-    await rm(ctx.dir, { recursive: true, force: true })
-  }
-})
-
-test('a call that arrived from another computer is run here whatever the run\'s record says; with the machine down a read is answered from the record, and a message is not delivered here in its place', async () => {
-  const ctx = await projectWithWorktreeAgent({ pid: 0, host: 'server-box' }, { status: 'waiting', diary: [{ kind: 'said', text: 'kept in the record' }] })
-  // A machine nobody answers at.
-  const down = { url: 'http://127.0.0.1:1', key: 'id.key', project: 'github.com/acme/shop' }
-  let asked = 0
-  provideTestContext({
-    remote: {
-      ...NO_ELSEWHERE,
-      target: () => undefined,
-      list: () => [],
-      working: () => false,
-      rekey: () => {},
-      sent: agentId => agentId !== 'followed-by-a-record-that-is-gone',
-      home: async () => (asked++, down),
-      follow: async () => {},
-      machineNames: async () => () => ({ label: 'Server', url: 'https://server.example' }),
-      machineRuns: async () => [],
-      followRuns: () => () => {},
-    },
-  })
-  try {
-    // The machine cannot be asked: what this computer holds of the run is read, and nothing is done to the run here.
-    const events = await onAgent(ctx.projectId, ctx.agentId)
-    assert.equal(JSON.stringify(events).includes('kept in the record'), true)
-    assert.deepEqual(await sendMessage(ctx.projectId, 'go on', ctx.agentId), { ok: false, error: 'could not reach the machine' })
-    await assert.rejects(stat(join(ctx.dir, RESUMED_FILE)), { code: 'ENOENT' })
-    assert.equal(asked, 2)
-
-    // The same message, come in from another computer: this one is the run's, and no machine is asked.
-    assert.deepEqual(await asArrived(() => sendMessage(ctx.projectId, 'go on', ctx.agentId)), { ok: true })
-    assert.deepEqual(await dispatchRelayRpc(ctx.projectId, 'sendMessage', ['their-id-for-the-project', 'and on', ctx.agentId]), { ok: true })
-    assert.equal(asked, 2)
-    assert.equal(await readFile(join(ctx.dir, RESUMED_FILE), 'utf8'), `${ctx.agentId}|go on|\n${ctx.agentId}|and on|\n`)
-  } finally {
-    ctx.restore()
-    await rm(ctx.dir, { recursive: true, force: true })
-  }
-})
-
-test('a run another computer started, which is no saved machine, is not continued from here: a message and an answer are refused with where it runs, and nothing is resumed', async () => {
+test('a run another computer started is not continued from here: a message and an answer are refused with where it runs, and nothing is resumed', async () => {
   const ctx = await projectWithWorktreeAgent({ pid: 0, host: 'ubuntu-s-1vcpu-2gb-fra1' }, { status: 'waiting', diary: [QUESTION, { kind: 'ended', status: 'waiting' }] })
   try {
     const refused = { ok: false, error: 'This run is on ubuntu-s-1vcpu-2gb-fra1. Continue it there.' }
     assert.deepEqual(await sendMessage(ctx.projectId, 'go on', ctx.agentId), refused)
     assert.deepEqual(await answer(ctx, 'question', 'a'), refused)
     await assert.rejects(stat(join(ctx.dir, RESUMED_FILE)), { code: 'ENOENT' })
-  } finally {
-    ctx.restore()
-    await rm(ctx.dir, { recursive: true, force: true })
-  }
-})
-
-test('a machine that refuses what would change a run, and says why, is answered in its own words; nothing is done here in its place', async () => {
-  const ctx = await projectWithWorktreeAgent({ pid: 0, host: 'server-box' }, { status: 'waiting', diary: [{ kind: 'said', text: 'kept in the record' }] })
-  // A computer that only lets its server watch: it refuses a call that acts, in words for the person.
-  const WHY = 'This computer only lets its server watch. Turn on "From anywhere" through this server in its Settings, under Devices.'
-  const machine = createServer((req, res) => {
-    req.resume()
-    res.writeHead(403, { 'content-type': 'text/plain' }).end(WHY)
-  })
-  await new Promise<void>(resolve => machine.listen(0, '127.0.0.1', resolve))
-  const target = { url: `http://127.0.0.1:${(machine.address() as AddressInfo).port}`, key: 'id.key', project: 'github.com/acme/shop' }
-  provideTestContext({
-    remote: { ...NO_ELSEWHERE, target: () => undefined, list: () => [], working: () => false, rekey: () => {}, sent: () => true, home: async () => target, follow: async () => {}, machineNames: async () => () => undefined, machineRuns: async () => [], followRuns: () => () => {} },
-  })
-  try {
-    assert.deepEqual(await sendMessage(ctx.projectId, 'go on', ctx.agentId), { ok: false, error: WHY })
-    assert.deepEqual(await sendOpenPullRequest(ctx.projectId, ctx.agentId), { ok: false, error: WHY })
-    assert.deepEqual(await sendStop(ctx.projectId, ctx.agentId), { ok: false, error: WHY })
-    await assert.rejects(stat(join(ctx.dir, RESUMED_FILE)), { code: 'ENOENT' })
-    await assert.rejects(stat(ctx.agentInbox), { code: 'ENOENT' })
-  } finally {
-    ctx.restore()
-    machine.closeAllConnections()
-    machine.close()
-    await rm(ctx.dir, { recursive: true, force: true })
-  }
-})
-
-test('a record that calls its own run a saved machine\'s is not believed: the row says whose computer it is', async () => {
-  const ctx = await projectWithWorktreeAgent({ pid: 0, host: 'their-laptop', target: 'remote', remoteLabel: 'Server' } as unknown as { pid: number; host: string }, { status: 'waiting' })
-  try {
-    const [row] = (await onAgents(ctx.projectId)) as { target?: string; remoteLabel?: string; otherHost?: boolean; host?: string }[]
-    assert.deepEqual([row!.target, row!.remoteLabel, row!.otherHost, row!.host], [undefined, undefined, true, 'their-laptop'])
   } finally {
     ctx.restore()
     await rm(ctx.dir, { recursive: true, force: true })
@@ -650,136 +512,6 @@ test('a project\'s list of runs and all projects\' together mark a run\'s row al
     assert.equal(own.length, 1)
     assert.ok((own[0]![0] ?? 0) > 0, 'the uncommitted file is marked')
     assert.deepEqual(marks((await onRecentAgents()).filter(row => row.projectId === ctx.projectId).map(row => row.agent)), own)
-  } finally {
-    ctx.restore()
-    await rm(ctx.dir, { recursive: true, force: true })
-  }
-})
-
-test("a saved machine's run is listed as the machine says it, and is never going while the machine does not answer", async () => {
-  const ctx = await projectWithWorktreeAgent({ pid: 0, host: 'laptop' }, { status: 'running' })
-  const unrecorded = { id: '2026-07-19T12-00-00-000Z', startedAt: '2026-07-19T12:00:00.000Z', updatedAt: '2026-07-19T12:00:00.000Z', status: 'running' as const, host: 'laptop', person: 'me@laptop' }
-  let answered = true
-  provideTestContext({
-    remote: {
-      ...NO_ELSEWHERE,
-      target: () => undefined,
-      list: () => [],
-      working: () => false,
-      rekey: () => {},
-      sent: () => true,
-      home: async () => undefined,
-      follow: async () => {},
-      machineNames: async () => host => (host === 'laptop' ? { label: 'Laptop', url: 'http://127.0.0.1:4310' } : undefined),
-      machineRuns: async () => [{ host: 'laptop', answered, runs: answered ? [unrecorded] : [], seenAt: '2026-07-19T12:30:00.000Z' }],
-      followRuns: () => () => {},
-    },
-  })
-  try {
-    const rows = (all: { id: string; status: string; remoteLabel?: string; seenAt?: string; person?: string }[]) => all.map(row => [row.id, row.status, row.remoteLabel, row.seenAt, row.person])
-    // Online: its run with no record here yet is listed, by its machine's name; the run whose
-    // record says it goes, which the machine did not say, is unknown.
-    assert.deepEqual(rows(await onAgents(ctx.projectId)), [
-      [unrecorded.id, 'running', 'Laptop', undefined, 'me@laptop'],
-      [ctx.agentId, 'unknown', 'Laptop', '2026-07-19T12:30:00.000Z', undefined],
-    ])
-    // Offline: nothing of it is going, in a project's list and in all projects' together.
-    answered = false
-    assert.deepEqual(rows(await onAgents(ctx.projectId)), [[ctx.agentId, 'unknown', 'Laptop', '2026-07-19T12:30:00.000Z', undefined]])
-    assert.deepEqual(rows((await onRecentAgents()).filter(row => row.projectId === ctx.projectId).map(row => row.agent)), [[ctx.agentId, 'unknown', 'Laptop', '2026-07-19T12:30:00.000Z', undefined]])
-  } finally {
-    ctx.restore()
-    await rm(ctx.dir, { recursive: true, force: true })
-  }
-})
-
-test("another computer's project lists that computer's runs as it says them, marked as its, and the runs this computer sent there", async () => {
-  const laptopRun = { id: '2026-07-19T12-00-00-000Z', startedAt: '2026-07-19T12:00:00.000Z', updatedAt: '2026-07-19T12:00:00.000Z', status: 'running' as const, host: 'laptop', person: 'me@laptop' }
-  const sent = { id: '2026-07-19T13-00-00-000Z', startedAt: '2026-07-19T13:00:00.000Z', updatedAt: '2026-07-19T13:00:00.000Z', status: 'running' as const, target: 'remote' as const, remoteLabel: 'Laptop' }
-  const there = elsewhereId('shop-1abc', 'http://127.0.0.1:4310')
-  const askedFor: string[] = []
-  provideTestContext({
-    remote: {
-      ...NO_ELSEWHERE,
-      target: () => undefined,
-      list: project => (project === there ? [sent] : []),
-      working: () => false,
-      rekey: () => {},
-      sent: () => true,
-      home: async () => undefined,
-      follow: async () => {},
-      machineNames: async () => host => (host === 'laptop' ? { label: 'Laptop', url: 'http://127.0.0.1:4310' } : undefined),
-      machineRuns: async () => [],
-      followRuns: () => () => {},
-      elsewhereRuns: async project => {
-        askedFor.push(project)
-        return [{ host: 'laptop', answered: true, runs: [laptopRun] }]
-      },
-    },
-  })
-  assert.deepEqual(
-    (await onAgents(there)).map(row => [row.id, row.status, row.remoteLabel, row.person]),
-    [
-      [sent.id, 'running', 'Laptop', undefined],
-      [laptopRun.id, 'running', 'Laptop', 'me@laptop'],
-    ],
-  )
-  assert.deepEqual(askedFor, [there])
-  // A project of this computer's that is not there has no runs, and asks no other computer for any.
-  assert.deepEqual(await onAgents('shop-1abc'), [])
-  assert.deepEqual(askedFor, [there])
-})
-
-test('a computer answers another one over the relay with its own runs only, each with whose it is', async () => {
-  const ctx = await projectWithWorktreeAgent({ pid: 0, host: hostname() }, { status: 'running' })
-  try {
-    const first = (await dispatchRelayRpc(ctx.projectId, 'onOwnRuns', ['their-id-for-it', null])) as { at: string; runs: { id: string; person?: string }[]; ids: string[] }
-    // Its own live run, by the project's git user, as its record will be kept.
-    assert.deepEqual(first.runs.map(run => [run.id, run.person]), [[ctx.agentId, 't@t']])
-    assert.deepEqual(first.ids, [ctx.agentId])
-    // Asked again from that answer: nothing changed, nothing is sent.
-    const again = (await dispatchRelayRpc(ctx.projectId, 'onOwnRuns', ['their-id-for-it', first.at])) as { runs: unknown[]; ids: string[] }
-    assert.deepEqual(again.runs, [])
-    assert.deepEqual(again.ids, [ctx.agentId])
-  } finally {
-    ctx.restore()
-    await rm(ctx.dir, { recursive: true, force: true })
-  }
-})
-
-test('a computer holds the call of another one that waits for its runs, and answers it when a run changes how it stands', async () => {
-  const ctx = await projectWithWorktreeAgent({ pid: 0, host: hostname() }, { status: 'running' })
-  const card = join(worktreePath(ctx.dir, ctx.agentId), OPENAGENT_DIR, `${ctx.agentId}.json`)
-  const write = (status: string, more: Record<string, unknown> = {}): Promise<void> =>
-    writeFile(card, JSON.stringify({ id: ctx.agentId, startedAt: '2026-07-19T10:00:00.000Z', status, caller: { pid: 0, host: hostname() }, ...more }))
-  try {
-    const first = (await dispatchRelayRpc(ctx.projectId, 'onOwnRuns', ['x', null, 5_000])) as { at: string }
-    // Nothing a list shows changes while it waits: the run's step (its cost) goes with the answer at the end of the wait.
-    const started = Date.now()
-    const held = dispatchRelayRpc(ctx.projectId, 'onOwnRuns', ['x', first.at, 1_500]) as Promise<{ at: string; runs: { cost?: number }[] }>
-    await new Promise(resolve => setTimeout(resolve, 300))
-    await write('running', { cost: 0.5 })
-    const quiet = await held
-    assert.ok(Date.now() - started >= 1_400, 'it answered before the wait was up with nothing a list shows changed')
-    assert.deepEqual(quiet.runs.map(run => run.cost), [0.5])
-    // The run waits on the person: answered at once.
-    const asked = Date.now()
-    const waiting = dispatchRelayRpc(ctx.projectId, 'onOwnRuns', ['x', quiet.at, 10_000]) as Promise<{ runs: { status: string }[] }>
-    await new Promise(resolve => setTimeout(resolve, 300))
-    await write('waiting', { cost: 0.5 })
-    assert.deepEqual((await waiting).runs.map(run => run.status), ['waiting'])
-    assert.ok(Date.now() - asked < 3_000, 'it waited past the change')
-  } finally {
-    ctx.restore()
-    await rm(ctx.dir, { recursive: true, force: true })
-  }
-})
-
-test("another computer's run is not answered as this one's", async () => {
-  const ctx = await projectWithWorktreeAgent({ pid: 0, host: 'elsewhere' }, { status: 'running' })
-  try {
-    const said = (await dispatchRelayRpc(ctx.projectId, 'onOwnRuns', ['x', null])) as { runs: unknown[]; ids: string[] }
-    assert.deepEqual([said.runs, said.ids], [[], []])
   } finally {
     ctx.restore()
     await rm(ctx.dir, { recursive: true, force: true })

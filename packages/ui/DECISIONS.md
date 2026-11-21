@@ -245,7 +245,7 @@ already made, and lists it in its pull request; for anything else it proposes an
 - A plugin is a project's while its Enabled row is on there (#2394, decision 31): its page, its
   cards, its data, and its skills, which reach the project's runs and are never written into the
   project. A row starts as the distribution starts the plugin, and is kept where the plugin
-  works: per project for the tickets, per computer for the devices. Picked over a project
+  works: per project for the tickets, per computer for the browser's notifications. Picked over a project
   having a plugin while its skill's text was in the project (`.claude/skills/<name>`,
   `.agents/skills/<name>`), where picking one wrote files into the person's repository and
   deleting the folder took its pages away; and over a project's pages coming from its own
@@ -261,12 +261,11 @@ already made, and lists it in its pull request; for anything else it proposes an
   are not read.
   Picked over three lists in the dashboard's code, and over a project's own copy winning,
   which gave one package two ways into a project.
-- The door to this computer and the servers it installed OpenAgent on are the
-  computer's, not a project's: their entries in Settings are there with no project
-  added, and their commands run in no project. Picked over giving them to every project
-  and running their commands in the first one, which left a computer with no project, as
-  a server is when it was just connected, with no way to let a phone in; and over a
-  starter project made on every server, one nobody asked for.
+- The coding agents' accounts are the computer's, not a project's: their entries in
+  Settings are there with no project added, and their commands run in no project. Picked
+  over giving them to every project and running their commands in the first one, which
+  left a computer with no project with no way to add an account; and over a starter
+  project made on every computer, one nobody asked for.
 - "Add project" stays small: it writes no skill. The launcher's row under the box then has
   "Skills", after Auto, whose menu ends in that project's plugins and skills in Settings. Picked over "Add project"
   writing the skills itself, which put files into every project a person adds. The control was picked over a line of its own on the
@@ -288,9 +287,9 @@ already made, and lists it in its pull request; for anything else it proposes an
   the plugin's own `app.lifecycle` (#2394, decision 13). Picked over its two lines in the
   project's hooks file (#1774), which `scheduler init` wrote and the dashboard ran as it opened
   and closed: `.openagent/hooks.yml` is gone, and the dashboard runs no project's lines.
-- A project is also added by its repository's address, for a computer that does not have
-  its folder, as a server: OpenAgent clones it into `~/projects/<its name>` and says where
-  it went. Picked over asking for the folder at every add, one more thing to read.
+- A project is also added by its repository's address, for a repository the computer does
+  not have yet: OpenAgent clones it into `~/projects/<its name>` and says where it went.
+  Picked over asking for the folder at every add, one more thing to read.
 - A clone, and the check that a repository can be read, go over the web only, as the account
   runs use at the repository's host, the person's credential helpers dropped; with none
   there, only a public repository is read. An SSH address is refused unless the account's
@@ -370,7 +369,7 @@ already made, and lists it in its pull request; for anything else it proposes an
   verdict about them. Picked over reading only through the package's command, a new process
   for every read of a tree that polls every 8 seconds and an opened file read again every few
   seconds.
-- A module may run a process of its own, devices' door, from its `app.lifecycle` (#2394): for
+- A module may run a process of its own, as the scheduler, from its `app.lifecycle` (#2394): for
   as long as OpenAgent runs and the module is on, told OpenAgent's own address. Picked over a
   line in each project's hooks file, which is a project's and shared with its team, where such
   a process is one computer's; and over running it inside OpenAgent's own process, where a
@@ -385,10 +384,9 @@ already made, and lists it in its pull request; for anything else it proposes an
   commands, edited README.md +12 −54". Picked over the count alone, which Claude Code said
   before.
 - The chat shows a `screen` line as one line, which opens the pane its package brings, and
-  knows nothing of what the screen is. What the screen shows is streamed from the computer
-  the run is on, through OpenAgent, as pictures: to this computer, to a phone, to another
-  computer. Picked over framing the page that computer serves, which showed on that
-  computer only; and over a `browser` kind the dashboard renders itself, which the next
+  knows nothing of what the screen is. What the screen shows is streamed from the run,
+  through OpenAgent, as pictures. Picked over framing the page the run serves, which
+  showed only where that page can be reached; and over a `browser` kind the dashboard renders itself, which the next
   package showing something would have had to repeat.
 
 - A run goes by one name in every list: its short name, else what was asked, else its branch.
@@ -422,31 +420,19 @@ already made, and lists it in its pull request; for anything else it proposes an
   the computer uses", one plain item: the computer's account repeated in it read as a
   duplicate of the account's own item. Picked over presets per project: a project is context,
   a preset is how its runs work, anywhere.
-- A preset's GitHub account goes to every device of the person's, server or not, told to use
-  this computer's logins or not: as soon as the preset is saved, and every minute after,
-  through the same sync that keeps a server up to this computer's logins; a device added later
-  gets it on its next minute. A git host's token goes as it is, so no press is needed, and a
-  device that is no server takes a git host's copy alone. The Presets page says where it is,
-  and "Copy again" is for one that failed. Picked over the switch per server, which stays for
-  the coding agents' logins: a preset is the same on every device, and its account is what
-  makes it one.
 
 ## What runs log in with
 - One page has it, Permissions: the coding agents' cards, then the git hosts', each a card
   per tool drawn from its package's answers. Picked over two pages, Agent accounts and
-  Git hosts, which a server's logins would have split in two: a git host's card says the package's name for the host, its
+  Git hosts, for the one question of what runs log in with. A git host's card says the package's name for the host, its
   word for a pull request, the accounts its tool knows and the one runs use, so OpenAgent
   names no git host. One card per host the projects' remotes are on, a self-hosted one its
   own; a host no package answers for is a plain line, and a project with no remote is none.
-- Each account is said once, the coding agents' in the account-rotation skill's card ("Coding
-  agent accounts") and the git hosts' in one card ("Git host accounts", a section per host by
-  its package's name and logo, so a host added later is one more section), in the same rows, and where an account works
-  is a line of chips under its row: this computer, then each server, its dot green, amber, red
-  or grey, its press there (Allow, Take off, the pick of a switched account) on the chip. The
-  dashboard fills that line in the skill's card through the card's `accountWhere`, so the skill
-  knows no server. Above the accounts stands only what a server asks of the person. Picked over
-  a card that listed every account again under each server, and over one card holding the
-  skill's accounts and the git hosts', which would have made the skill the dashboard's.
+- Each account is said once, the coding agents' in agent-driver's card ("Coding agent
+  accounts") and the git hosts' in one card ("Git host accounts", a section per host by its
+  package's name and logo, so a host added later is one more section), in the same rows.
+  Picked over one card holding agent-driver's accounts and the git hosts', which would have
+  made agent-driver's card the dashboard's.
 - A git host's account shows its picture at the host, the address its package gives (the
   dashboard names no host's), and its ⋯ is always there: Use for runs, and Remove for any
   account, the one runs use too, after a yes that says runs then have none until one is added.
@@ -458,14 +444,14 @@ already made, and lists it in its pull request; for anything else it proposes an
   as OpenAgent needs an account of its own there on every new install; the same press on the
   start form's red line, and a dot on the person's picture whose menu says what. Picked over
   a login step for the coding agent every new install walks through: most have it already.
-- The accounts a run takes are picked beside the message box, for the computer the run goes
-  to: a coding agent's in the agent picker, under its models, the pick that computer's runs
-  take from then on, as on the Permissions page; the git host's under the box at the right,
+- The accounts a run takes are picked beside the message box: a coding agent's in the agent
+  picker, under its models, the pick this computer's runs take from then on, as on the
+  Permissions page; the git host's under the box at the right,
   before the model, a pick for this session alone, which goes with the Start and is kept on
   the run's record, the computer's own pick staying as the Permissions page made it. The
-  person's menu has none of them. Picked over a row per account in the person's menu, which
-  said this computer's alone, over having them in both places, and over accounts named per
-  project in its settings: whose account a session works as is a pick made for that session.
+  person's menu has none of them. Picked over a row per account in the person's menu, over
+  having them in both places, and over accounts named per project in its settings: whose
+  account a session works as is a pick made for that session.
 - Every coding agent's accounts are the same card, picker part and pick, with the agent's own
   words: adding one asks whose it is, then the agent's sign-in in this computer's browser.
   Picked over showing the email Codex's sign-in tells, which only Codex could, and would
@@ -473,31 +459,6 @@ already made, and lists it in its pull request; for anything else it proposes an
 - How full an account is reads as each of its windows by how long it lasts (5 h, week,
   month), the longest on its bar. Picked over a week and a session, which is Claude's
   shape: Codex's free plan has one window, a month.
-- A page never says "this computer": a login is named by the computer it is on. Picked over
-  "this computer", which a phone reading a server's page read as the phone or the laptop.
-
-## A server uses the person's own logins
-- A server of the person's uses the accounts their own computer is logged in to, every coding
-  agent's and git host's, each a login of the server's own that the computer makes for it. One
-  that can go as it is goes with nothing to press (a git host's token, a Claude account added
-  on the computer); one that cannot is made anew with one press in the computer's browser (the
-  computer's own Claude login, any Codex account). Picked over copying every login as it is,
-  where the computer and the server renew the same login and one of them is logged out, and
-  over logging in again on the server.
-- A login on a server never logs another device out, and taking it off deletes it there only.
-- The person says once that a server uses their computer's logins: a step of setting the
-  server up, or a bar in Accounts for a server set up before. Picked over a login step for
-  each login of each server.
-- A login the computer no longer has, or another account it switched to, changes nothing on
-  the server until the person says: the server keeps what it has meanwhile. A new account just
-  goes there. Picked over the server following at once, which could leave its runs with no login.
-- Only a person's own computers' logins are used. A person with no computer of their own logs
-  in on the server's own page, in the same cards, the browser step on their own device.
-- The person's settings follow the same way: how OpenAgent looks, what a run starts with, the
-  onboarding hidden. One changed on the server's own page stays until the same
-  one changes on the computer. A computer's own settings (its editor, its plugins' own) stay
-  its own. Picked over each OpenAgent keeping its own settings, where a phone showed what the
-  laptop had hidden.
 
 ## Starting a run
 - A Start goes to a run host, a `run.host` of the modules OpenAgent is distributed with
@@ -568,9 +529,8 @@ already made, and lists it in its pull request; for anything else it proposes an
   of that name differs. A pick that has since gone from origin refuses the Start, and says so.
   Picked over starting from the main branch instead, which would be a silent swap, and over
   this clone's last copy, which is not the branch as it stands.
-- The menu is shown only where the pick is obeyed: the repository has a remote, the folder is
-  on a branch, and the run is on this machine. Picked over a menu shown everywhere, where a pick
-  could silently do nothing.
+- The menu is shown only where the pick is obeyed: the repository has a remote and the folder
+  is on a branch. Picked over a menu shown everywhere, where a pick could silently do nothing.
 - A branch name that could be read as an option on the run's command line refuses the Start.
   Picked over dropping it and starting from the main branch, which would be a silent swap.
 - No cap on a person's runs: the click is the brake. Picked over the one-run-per-checkout
@@ -579,59 +539,18 @@ already made, and lists it in its pull request; for anything else it proposes an
   fixes it inside the same box: logging the coding agent in, on this computer. Picked over
   saying it under the box, where it was missed, with the press on a line of its own.
 
-## Running on another machine
-- The machines a person saved are kept in their home file, beside their projects and their
-  settings, and a machine's key is never handed to a browser. Picked over the browser's own
-  storage, where each browser had its own list and the daemon, which makes the calls, did
-  not know the machines.
-- A machine is added with the link it gives for a new device, pasted. This computer gets a
-  key of its own there, and removing the machine takes that key out. Picked over starting
-  the other machine open to the network with one key every caller shared, and over removing
-  the list of machines until a server can be connected.
-- A server is reached through what it opened to the network, as a phone reaches a laptop,
-  with a key of this computer's own. Picked over a line held open over SSH, a second way in
-  to keep safe, which has to be opened again after every sleep.
-- This computer remembers what a server's key is known by, from the server's link, and
-  calls only what shows that key. Picked over trusting any certificate for the server's
-  number, which the number's next owner can get.
-- A run sent to another machine names its project by the address its repository was cloned
-  from, and starts in that machine's own copy of it. Picked over the folder's name, where
-  two projects named alike are mixed up and a renamed folder breaks the link, and over
-  linking the two folders by hand, a step for every project on every machine.
-- A machine that does not have the project clones it first, by itself, from the project's
-  repository address and with its own logins, into `~/projects/<its name>`, and the launcher
-  says so while it waits; the run then starts. Picked over starting nothing and telling the person to add the project
-  there, a step on another computer for every project, and over starting in the folder that
-  machine's OpenAgent was started in, which may be another project.
-- With a machine picked, what would stop a run is asked of that machine as soon as it is
-  picked, from its own copy of the project, and said naming the machine. A coding agent
-  logged out there comes with this computer's logins for the machine, as the Permissions page
-  offers them. Picked over learning it only after the Start, from the machine's refusal, in
-  words written for that machine's own terminal.
-- A machine is picked in "Run on" and removed on its page under Devices. Picked over a remove
-  in the menu, one slip of the pointer from picking it.
-- The person's computers are the same on every one of them: a computer one of them saves,
-  the others save too, each with a key of its own there, and one reached only through a server,
-  or by the line it keeps to a server, is told of the others the same way, by the server down
-  the line and by the laptop through it. So a server at home lists the laptop's and the server's
-  projects, and runs on them, as the laptop does. Picked over each computer knowing only the
-  computers that were saved on it by hand, which left a server at home knowing nothing but itself.
-- The machine picked in "Run on" is kept for the next opening of the page, as the model is.
-  One no longer saved, or offline as the page opens, is not picked: the run starts on this
-  machine, and the page says so. Picked over going back to this machine at each opening.
-- Another person's computer that lacks the person's own logins says so as soon as it is picked,
-  with a press that opens its page under Devices, where they are logged in. Picked over a refusal
-  after the Start, with no way on from it.
-- A project with no repository address runs on this machine only, and "Run on" says so.
-  Picked over sending the repository straight to the other machine, a second road for
-  code beside the git host.
-- On screen, a computer that runs agents is a machine. Device is kept for a phone or a
-  browser that gets in. Picked over device for both.
-- A run shows where it runs, on this computer, on a saved machine or on a host, as one icon
-  with its words on hover, and the same wherever it is listed and however it was started.
-  Picked over showing where it was started from, and over more words in the run's header.
-- On a page a phone opened, the computer that runs OpenAgent is named by the address the phone
-  reached it at. Picked over "This machine", which the phone's holder reads as the phone.
+## Where a run runs
+- OpenAgent runs on one computer, the person's, and reaches no other: no phone, other
+  computer or server of theirs is saved, paired or let in, and no login is copied anywhere.
+  A run goes elsewhere only through a host a plugin on in the project brings (`run.host`:
+  GitHub Actions, Claude Code on the web), which reaches its machines through its own
+  service. Picked over devices of OpenAgent's own (saved machines, a door to the network,
+  phones let in, servers on this computer's logins): a second way in to keep safe, and a
+  second road for code and logins beside the git host and the hosts' own services.
+
+- A run shows where it runs, on this computer or on a host, as one icon with its words on
+  hover, and the same wherever it is listed and however it was started. Picked over showing
+  where it was started from, and over more words in the run's header.
 
 ## Saying something to a run
 - What a person says reaches a run through its host (#2394): on this computer, a line in the
@@ -658,8 +577,8 @@ already made, and lists it in its pull request; for anything else it proposes an
 - Stop is Claude Code's: a square in the message box, Esc its key, and the turn ends where
   the agent was, with no line after it; a message continues the run. Picked over a stop that
   ended the run for good, a "Stopped" line and a Resume button.
-- A run another computer started, which is no saved machine, is only read here: in place
-  of the message box a line says where it runs. Picked over a box that continued it here,
+- A run another computer started is only read here: in place of the message box a line
+  says where it runs. Picked over a box that continued it here,
   which moved the run to this computer under its id, with this computer's logins and none
   of its conversation. A press that continues it as a new run here can come later.
 

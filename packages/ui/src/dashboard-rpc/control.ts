@@ -4,7 +4,7 @@ import { openInApp, type OpenTarget, type OpenResult } from '../dashboard/open-i
 import { contextPreferences, contextStartAgent, resolveProjectPath, resolveAgentPath, runHostOf } from './context.js'
 import { runRefAt } from '../distribution-hooks.js'
 import { errorMessage } from '@openagt/agent-data'
-import { relayOr } from './relay-agent.js'
+
 import { findAgent, isRunId, projectRuns, type AgentMeta } from '../store/index.js'
 import { withAgentLock } from '../agent-locks.js'
 import { removeProjectWorktree, deleteProjectAgent } from '../worktrees.js'
@@ -32,17 +32,15 @@ import { isPublishPick, type PublishPick } from '../publish-levels.js'
  * is answered why.
  */
 export async function sendStop(projectId: string, agentId?: string): Promise<SteerResult> {
-  return relayOr(agentId, 'sendStop', [projectId, agentId], async (): Promise<SteerResult> => {
-    const cwd = await resolveProjectPath(projectId)
-    if (!cwd || !agentId || !isRunId(agentId)) return { ok: false, error: 'unknown session' }
-    try {
-      const run = await runRefAt(projectId, cwd, agentId)
-      await (await runHostOf(run)).stop(run)
-      return { ok: true }
-    } catch (err) {
-      return { ok: false, error: errorMessage(err) }
-    }
-  }, { ok: false, error: 'could not reach the machine' })
+  const cwd = await resolveProjectPath(projectId)
+  if (!cwd || !agentId || !isRunId(agentId)) return { ok: false, error: 'unknown session' }
+  try {
+    const run = await runRefAt(projectId, cwd, agentId)
+    await (await runHostOf(run)).stop(run)
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: errorMessage(err) }
+  }
 }
 
 /**
@@ -62,14 +60,9 @@ export async function sendMessage(projectId: string, text: string, agentId?: str
   if (level !== undefined && !isPublishPick(level)) return { ok: false, error: 'unknown publish level' }
   const id = typeof sent?.id === 'string' && sent.id !== '' ? sent.id : undefined
   const later = sent?.later === true
-  const how = id !== undefined || later ? { ...(id !== undefined ? { id } : {}), ...(later ? { later } : {}) } : undefined
-  // Passed on as it came: a level only when one was picked or something follows it.
-  const passed = [projectId, text, agentId, ...(level !== undefined || how ? [level ?? null] : []), ...(how ? [how] : [])]
-  return relayOr(agentId, 'sendMessage', passed, async (): Promise<SteerResult> => {
-    const cwd = await resolveProjectPath(projectId)
-    if (!cwd || !agentId || !isRunId(agentId)) return { ok: false, error: 'unknown session' }
-    return (await startedElsewhere(cwd, agentId)) ?? sayToRun(projectId, cwd, agentId, { kind: 'message', text: message, ...(level !== undefined ? { publish: level } : {}), ...(id !== undefined ? { id } : {}), ...(later ? { later: true as const } : {}) })
-  }, { ok: false, error: 'could not reach the machine' })
+  const cwd = await resolveProjectPath(projectId)
+  if (!cwd || !agentId || !isRunId(agentId)) return { ok: false, error: 'unknown session' }
+  return (await startedElsewhere(cwd, agentId)) ?? sayToRun(projectId, cwd, agentId, { kind: 'message', text: message, ...(level !== undefined ? { publish: level } : {}), ...(id !== undefined ? { id } : {}), ...(later ? { later: true as const } : {}) })
 }
 
 /**
@@ -78,11 +71,9 @@ export async function sendMessage(projectId: string, text: string, agentId?: str
  */
 export async function withdrawMessage(projectId: string, agentId: string, id: string): Promise<SteerResult> {
   if (typeof id !== 'string' || id === '') return { ok: false, error: 'unknown message' }
-  return relayOr(agentId, 'withdrawMessage', [projectId, agentId, id], async (): Promise<SteerResult> => {
-    const cwd = await resolveProjectPath(projectId)
-    if (!cwd || !isRunId(agentId)) return { ok: false, error: 'unknown session' }
-    return sayToRun(projectId, cwd, agentId, { kind: 'cancel', id })
-  }, { ok: false, error: 'could not reach the machine' })
+  const cwd = await resolveProjectPath(projectId)
+  if (!cwd || !isRunId(agentId)) return { ok: false, error: 'unknown session' }
+  return sayToRun(projectId, cwd, agentId, { kind: 'cancel', id })
 }
 
 /**
@@ -90,11 +81,9 @@ export async function withdrawMessage(projectId: string, agentId: string, id: st
  * going on in the background, as Claude Code's Send now does.
  */
 export async function sendNow(projectId: string, agentId: string): Promise<SteerResult> {
-  return relayOr(agentId, 'sendNow', [projectId, agentId], async (): Promise<SteerResult> => {
-    const cwd = await resolveProjectPath(projectId)
-    if (!cwd || !isRunId(agentId)) return { ok: false, error: 'unknown session' }
-    return sayToRun(projectId, cwd, agentId, { kind: 'now' })
-  }, { ok: false, error: 'could not reach the machine' })
+  const cwd = await resolveProjectPath(projectId)
+  if (!cwd || !isRunId(agentId)) return { ok: false, error: 'unknown session' }
+  return sayToRun(projectId, cwd, agentId, { kind: 'now' })
 }
 
 /**
@@ -133,8 +122,7 @@ export async function sendDeleteAgent(projectId: string, agentId: string): Promi
 
 /**
  * Start a run in the project (#405, #1774): the project's own `start` hook line, reached through
- * the daemon's wired `startAgent` (which relays to a saved machine when the options name
- * one). Answers the id of the run the hook began, or why there is none: a project without the
+ * the daemon's wired `startAgent`. Answers the id of the run the hook began, or why there is none: a project without the
  * line cannot start a run from here.
  */
 export async function sendStart(projectId: string, prompt: string, options: StartAgentOptions = {}): Promise<StartAgentResult> {
@@ -189,21 +177,19 @@ async function handoffTargetFor(
  * of the user, which is the point of "offer the next step rather than describe it".
  */
 export async function sendOpenPullRequest(projectId: string, agentId: string, options: { draft?: boolean } = {}): Promise<HandoffResult> {
-  return relayOr(agentId, 'sendOpenPullRequest', [projectId, agentId, options], async () => {
-    const target = await handoffTargetFor(projectId, agentId)
-    if (!target) return { ok: false, error: 'unknown session' }
-    // Under the agent lock, so the provider's push inside `openAgentPullRequest` cannot race a
-    // Remove of the same checkout.
-    const opened = await withAgentLock(agentLockKey(target.cwd, agentId), () => openAgentPullRequest(target.cwd, target.agent, options.draft === true ? { draft: true } : {}))
-    // Record it on the finished run (E6), through the project's runs provider. The session's own
-    // process is gone by now, so there is no event stream to carry the fact — but it is the same
-    // fact, and every surface reads it from the same place either way rather than re-deriving it
-    // from branch names. No provider: there is no record to carry it, and the PR is still open.
-    if (opened.ok && opened.number !== undefined && opened.url) {
-      await (await projectRuns(target.cwd).catch(() => undefined))?.patch(agentId, { pr: { number: opened.number, url: opened.url } })
-    }
-    return opened
-  }, { ok: false, error: 'could not reach the machine' })
+  const target = await handoffTargetFor(projectId, agentId)
+  if (!target) return { ok: false, error: 'unknown session' }
+  // Under the agent lock, so the provider's push inside `openAgentPullRequest` cannot race a
+  // Remove of the same checkout.
+  const opened = await withAgentLock(agentLockKey(target.cwd, agentId), () => openAgentPullRequest(target.cwd, target.agent, options.draft === true ? { draft: true } : {}))
+  // Record it on the finished run (E6), through the project's runs provider. The session's own
+  // process is gone by now, so there is no event stream to carry the fact — but it is the same
+  // fact, and every surface reads it from the same place either way rather than re-deriving it
+  // from branch names. No provider: there is no record to carry it, and the PR is still open.
+  if (opened.ok && opened.number !== undefined && opened.url) {
+    await (await projectRuns(target.cwd).catch(() => undefined))?.patch(agentId, { pr: { number: opened.number, url: opened.url } })
+  }
+  return opened
 }
 
 /**
@@ -211,12 +197,10 @@ export async function sendOpenPullRequest(projectId: string, agentId: string, op
  * the last step where the project has no git host package. Under the agent lock, as Open PR is, so the push cannot race a Remove.
  */
 export async function sendPush(projectId: string, agentId: string): Promise<HandoffResult> {
-  return relayOr(agentId, 'sendPush', [projectId, agentId], async () => {
-    const target = await handoffTargetFor(projectId, agentId)
-    if (!target) return { ok: false, error: 'unknown session' }
-    if (target.agent.status === 'running') return { ok: false, error: 'that session is still going' }
-    return withAgentLock(agentLockKey(target.cwd, agentId), () => pushAgentBranch(target.cwd, target.agent))
-  }, { ok: false, error: 'could not reach the machine' })
+  const target = await handoffTargetFor(projectId, agentId)
+  if (!target) return { ok: false, error: 'unknown session' }
+  if (target.agent.status === 'running') return { ok: false, error: 'that session is still going' }
+  return withAgentLock(agentLockKey(target.cwd, agentId), () => pushAgentBranch(target.cwd, target.agent))
 }
 
 /**
@@ -238,12 +222,10 @@ export async function sendCreateRepository(projectId: string): Promise<CreateRep
  * push is, so the merge cannot race a Remove.
  */
 export async function sendMergeBranch(projectId: string, agentId: string): Promise<HandoffResult> {
-  return relayOr(agentId, 'sendMergeBranch', [projectId, agentId], async () => {
-    const target = await handoffTargetFor(projectId, agentId)
-    if (!target) return { ok: false, error: 'unknown session' }
-    if (target.agent.status === 'running') return { ok: false, error: 'that session is still going' }
-    return withAgentLock(agentLockKey(target.cwd, agentId), () => mergeAgentBranch(target.cwd, target.agent))
-  }, { ok: false, error: 'could not reach the machine' })
+  const target = await handoffTargetFor(projectId, agentId)
+  if (!target) return { ok: false, error: 'unknown session' }
+  if (target.agent.status === 'running') return { ok: false, error: 'that session is still going' }
+  return withAgentLock(agentLockKey(target.cwd, agentId), () => mergeAgentBranch(target.cwd, target.agent))
 }
 
 /**
@@ -252,10 +234,8 @@ export async function sendMergeBranch(projectId: string, agentId: string): Promi
  * with the ended view.
  */
 export async function sendMerge(projectId: string, agentId: string): Promise<HandoffResult> {
-  return relayOr(agentId, 'sendMerge', [projectId, agentId], async () => {
-    const target = await handoffTargetFor(projectId, agentId)
-    if (!target) return { ok: false, error: 'unknown session' }
-    if (target.agent.status === 'running') return { ok: false, error: 'that session is still going' }
-    return mergeAgentPr(target.cwd, target.agent)
-  }, { ok: false, error: 'could not reach the machine' })
+  const target = await handoffTargetFor(projectId, agentId)
+  if (!target) return { ok: false, error: 'unknown session' }
+  if (target.agent.status === 'running') return { ok: false, error: 'that session is still going' }
+  return mergeAgentPr(target.cwd, target.agent)
 }

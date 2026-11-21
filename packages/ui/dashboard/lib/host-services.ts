@@ -33,54 +33,6 @@ export const INERT_HOST_SERVICES: HostServices = {
   async activity() {
     return { items: [], whole: [] }
   },
-  async machines() {
-    return { version: 'unknown', machines: [] }
-  },
-  async addMachine() {
-    return { ok: false, error: 'no dashboard to save a machine in' }
-  },
-  async removeMachine() {
-    return { ok: false, error: 'no dashboard to remove a machine from' }
-  },
-  async renameMachine() {
-    return { ok: false, error: 'no dashboard to rename a machine in' }
-  },
-  async renameComputer() {
-    return { ok: false, error: 'no dashboard to rename this computer in' }
-  },
-  async letMachineIn() {
-    return { ok: false, error: 'no dashboard to ask a machine from' }
-  },
-  async machineCode() {
-    return { ok: false, error: 'no dashboard to ask a machine from' }
-  },
-  async computersThrough() {
-    return { ok: true, computers: [] }
-  },
-  async addComputerThrough() {
-    return { ok: false, error: 'no dashboard to save a machine in' }
-  },
-  async machinePerson() {
-    return { ok: false, error: 'no dashboard to ask a machine from', unknown: true }
-  },
-  async removeMachineDevice() {
-    return { ok: false, error: 'no dashboard to ask a machine from' }
-  },
-  async machineAccounts() {
-    return null
-  },
-  async removeMachineAccount() {
-    return { ok: false, error: 'no dashboard to ask a machine from' }
-  },
-  async useLoginsOn() {
-    return { ok: false, error: 'no dashboard to give a server logins from' }
-  },
-  async syncDataOn() {
-    return { ok: false, error: 'no dashboard to sync a server from' }
-  },
-  async agentDataRemote() {
-    return undefined
-  },
   async watchScreen() {
     return undefined
   },

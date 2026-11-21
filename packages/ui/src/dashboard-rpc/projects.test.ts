@@ -9,10 +9,9 @@ import type { RunHost } from '@openagt/hooks'
 import { fakeHost } from '@openagt/hooks/testing'
 import type { ProjectState } from '../project-state.js'
 import { provideTestContext } from './test-context.js'
-import { onCloneCheck, onCommands, onOwnProjects, onProjects, onRunHosts, onStartBranches, onStartCheck, sendAddProject, sendRemoveProject, sendShareRecords } from './projects.js'
+import { onCommands, onProjects, onRunHosts, onStartBranches, onStartCheck, sendAddProject, sendRemoveProject, sendShareRecords } from './projects.js'
 import { SESSIONS_ID } from '../project-address.js'
 import { onProjectAgentData } from './project-agent-data.js'
-import { loginsWiring } from './logins.js'
 
 // Against the real registry, pointed at a temp $XDG_CONFIG_HOME so the user's own is never touched.
 async function registered(): Promise<{ dir: string; restore: () => Promise<void> }> {
@@ -146,7 +145,7 @@ test('onCommands names the two branches an agent can start from only when the re
     git('commit', '-q', '--allow-empty', '-m', 'first')
     git('checkout', '-q', '-b', 'my/work')
     assert.equal(await startFrom(), undefined, 'no remote: one place to start from, nothing to pick')
-    assert.equal((await onCommands(id))?.address, undefined, 'no remote: no name another machine knows the project by')
+    assert.equal((await onCommands(id))?.address, undefined, 'no remote: no address, so no git host to push to')
 
     git('remote', 'add', 'origin', 'https://example.com/x.git')
     git('update-ref', 'refs/remotes/origin/main', 'main')
@@ -245,38 +244,6 @@ test('sendRemoveProject hands the project’s id to the daemon, with whether its
   assert.deepEqual(await sendRemoveProject('busy-1', false), { ok: false, error: 'An agent is working in this project. Stop it, then remove the project.' })
   assert.deepEqual(await sendRemoveProject('', true), { ok: false, error: 'a project id is required' })
   assert.deepEqual(asked, ['app-1', 'app-2 with files', 'app-3', 'busy-1'])
-})
-
-test('a project cloned here first is asked about before it is: the coding agent picked, with its fix, and whether the repository can be read, in words of the computer as its asker calls it', async () => {
-  const before = { ...loginsWiring }
-  const asked: string[] = []
-  const missing = '`codex` not found: install the Codex CLI.'
-  Object.assign(loginsWiring, {
-    ready: async (driver: string) => (asked.push(driver), { problems: [missing], warnings: ['a warning'], fix: { kind: 'install', command: 'npm i -g @openai/codex', problem: missing } }),
-  })
-  try {
-    // An address no repository has is refused before git is asked: nothing here reaches a network.
-    const unread = '"nowhere" is not a repository\'s address. One looks like github.com/you/project.'
-    assert.deepEqual(await onCloneCheck('nowhere', 'codex', 'experiment'), { problems: [missing, unread], warnings: ['a warning'], fix: { kind: 'install', command: 'npm i -g @openai/codex', problem: missing } })
-    // No pick, or one that is no agent: Claude Code, as a run without one.
-    await onCloneCheck('nowhere')
-    await onCloneCheck('nowhere', 'rm -rf')
-    assert.deepEqual(asked, ['codex', 'claude-code', 'claude-code'])
-  } finally {
-    Object.assign(loginsWiring, before)
-  }
-})
-
-test("this computer's projects, as another computer of the person's asks for them, say which pages each has", async () => {
-  const { restore } = await registered()
-  try {
-    provideTestContext()
-    const [app] = await onOwnProjects()
-    // The pages OpenAgent brings to every project, here those of a folder that holds nothing else, and ask's, which starts on: no Logs page.
-    assert.deepEqual(app!.modules, ['@openagt/ask', '@openagt/saved-prompts', '@openagt/skills', '@openagt/ui-pane-changes', '@openagt/ui-pane-files'])
-  } finally {
-    await restore()
-  }
 })
 
 test("the launcher's check is this computer's host's, for the agent picked, and a Start drawing near: the run's naming session is started for its project and agent", async () => {

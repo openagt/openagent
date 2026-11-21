@@ -3,8 +3,8 @@
 // each wrapped as `read(fn)` or `act(fn)`, and `ui` serves each one at `/_rpc/<module>/<name>`.
 // Its UI part calls them through a client typed with `typeof import('./server')` ({@link RpcClient},
 // {@link ComputerRpcClient}), so renaming a function on one side is a type error on the other.
-// Whether a function only reads is its own word: a computer that lets its server only watch calls
-// the reads alone.
+// Whether a function only reads is its own word: after one that changes something, the project's
+// data is taken in from origin again, and what was read of it is read anew.
 import type { InboxLine } from './agent.js'
 import type { ProjectRef } from './project.js'
 import type { RunFound, RunQuestion } from './run.js'
@@ -47,9 +47,8 @@ export type RpcKind = 'read' | 'act'
 /**
  * One function of a module's server part: called with a JSON object, bounded in size, its answer
  * JSON. A project's module's is called in one project (`RpcHost`); the input's `agentId`, when it
- * has one, names the run the call is about, and a run that works on a saved machine is called over
- * there. A module of the computer's is called in none, and handed only what every function is
- * (`RpcComputerHost`).
+ * has one, names the run the call is about. A module of the computer's is called in none, and
+ * handed only what every function is (`RpcComputerHost`).
  */
 export interface RpcFunction<I extends object = object, O = unknown, H extends RpcComputerHost = RpcHost> {
   (host: H, input: I): Promise<O>
@@ -61,12 +60,12 @@ function wrapped<I extends object, O, H extends RpcComputerHost>(rpc: RpcKind, f
   return Object.assign((host: H, input: I) => fn(host, input), { rpc })
 }
 
-/** A function that only reads: a computer that lets its server only watch calls it. */
+/** A function that only reads. */
 export function read<I extends object, O, H extends RpcComputerHost = RpcHost>(fn: (host: H, input: I) => Promise<O>): RpcFunction<I, O, H> {
   return wrapped('read', fn)
 }
 
-/** A function that changes something: refused to a caller that may only watch. */
+/** A function that changes something: what was read of the project's data is read anew after it. */
 export function act<I extends object, O, H extends RpcComputerHost = RpcHost>(fn: (host: H, input: I) => Promise<O>): RpcFunction<I, O, H> {
   return wrapped('act', fn)
 }

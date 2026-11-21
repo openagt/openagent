@@ -3,14 +3,12 @@ import type { AppRoute } from '@openagt/hooks'
 import { createServer as createSecureServer } from 'node:https'
 import type { AddressInfo } from 'node:net'
 import { serveClientBundle } from './static.js'
-import { makeRpcMount, RPC_PREFIX, isSameOriginRequest, isExpectedHost, isJsonRequest, isSecureAddressRequest } from './rpc-serve.js'
+import { makeRpcMount, RPC_PREFIX, isSameOriginRequest, isExpectedHost, isSecureAddressRequest } from './rpc-serve.js'
 import type { DashboardContext } from '../dashboard-rpc/context.js'
 import { handleViewRequest, keepView, serveWebsite, VIEW_PREFIX } from './website.js'
 import { requestPathname } from '../request-path.js'
 import { BROUGHT_MODULES_PREFIX, COMPUTER_MODULES_PREFIX, MODULES_PREFIX, PAGE_SHEET_PATH, serveModuleFile, servePageSheet } from './module-serve.js'
-import { handleRelayRequest, RELAY_PREFIX, type RelayHandlers } from './relay-endpoints.js'
-import { noteOwnersName, OWNERS_NAME_HEADER } from './machine-call.js'
-import { handleScreenRequest, kept, SCREEN_PREFIX, type ScreenHandlers } from './screen.js'
+import { handleScreenRequest, kept, SCREEN_PREFIX, type ScreenOf } from './screen.js'
 import { SECURE_PORT, type SecureAddress } from '../secure-address.js'
 
 /** Options for {@link startDashboard}. */
@@ -30,20 +28,10 @@ export interface DashboardOptions {
    */
   clientBundleDir?: string
   /**
-   * Serve a relay-started run's events back to the daemon that relayed it here (#1067): the
-   * `/_relay/*` endpoints (start, events, the slice-2 `rpc`, the machine-wide calls, a run's screen,
-   * and a project asked for), a start going to the context's `startAgent` and a screen to
-   * {@link screen}. The daemon listens on its own computer only, so a call from another machine
-   * reaches them through whatever this computer opened to the network, which lets in only a
-   * machine that holds a key of its own.
-   */
-  relay?: Omit<RelayHandlers, 'start' | 'screen'>
-  /**
    * Where the live screen of a run on this computer answers (screen.ts): what the `/_screen/*`
-   * routes, and the relay's for another machine, pass a watcher's calls on to. Absent leaves
-   * every screen route 404.
+   * routes pass a watcher's calls on to. Absent leaves every screen route 404.
    */
-  screen?: (projectId: string, agentId: string) => Promise<string | undefined>
+  screen?: ScreenOf
   /**
    * The routes the modules on this computer answer (`app.route`, #2394): a path `/_<name>` and every
    * path below it, after the dashboard's own, which no module's shadows. Asked for on each call, so
@@ -86,7 +74,7 @@ export async function startDashboard(opts: DashboardOptions): Promise<Dashboard>
   const port = opts.port ?? 4200
   const clientBundleDir = opts.clientBundleDir
 
-  // What the RPCs act through is wired first: the daemon's own callers of them (its syncs) need it
+  // What the RPCs act through is wired first: the daemon's own callers of them need it
   // whether or not a page is served.
   const { context } = opts
   const rpcMount = makeRpcMount(context)
@@ -102,10 +90,7 @@ export async function startDashboard(opts: DashboardOptions): Promise<Dashboard>
     return listenDashboard(server, port, () => closeServer(server))
   }
 
-  // The machine-to-daemon relay endpoints (#1067): wired only when an events tail is supplied.
-  const localScreen = opts.screen ? kept(opts.screen) : undefined
-  const relayHandlers: RelayHandlers | undefined = opts.relay ? { ...opts.relay, start: context.startAgent, ...(localScreen ? { screen: localScreen } : {}) } : undefined
-  const screenHandlers: ScreenHandlers | undefined = localScreen ? { local: localScreen, remote: (projectId, agentId) => context.remote.target(agentId, projectId) } : undefined
+  const screenOf = opts.screen ? kept(opts.screen) : undefined
 
   const handle = (req: IncomingMessage, res: ServerResponse): void => {
     const pathname = requestPathname(req)
@@ -113,31 +98,11 @@ export async function startDashboard(opts: DashboardOptions): Promise<Dashboard>
       res.writeHead(400, { 'content-type': 'text/plain' }).end('bad request')
       return
     }
-    // A person's own OpenAgent on a computer several people use goes by the name its owner gave the
-    // computer: the door says it with each call it passes on.
-    noteOwnersName(req.headers[OWNERS_NAME_HEADER])
-    // The machine relay (#1067): another daemon posts a start here and streams the run's events back.
-    // Exactly like the RPC mount below, the relay carries its own CSRF + DNS-rebinding guard, or a
-    // page the user merely visited could POST /_relay/start to start a run (a machine's call
-    // arrives with no Origin and a loopback Host, so both checks pass it; only a browser's
-    // cross-origin/rebound request is turned away).
-    // And like the RPC mount, a call that changes something says its body is JSON: a page another
-    // program serves on this computer passes the origin check, and a browser sends its POST
-    // unasked only while it is not JSON. Every machine's call is.
-    if (pathname === RELAY_PREFIX || pathname.startsWith(`${RELAY_PREFIX}/`)) {
-      if (!guardBrowserOrigin(req, res)) return
-      if (req.method !== 'GET' && req.method !== 'HEAD' && !isJsonRequest(req)) {
-        res.writeHead(403, { 'content-type': 'text/plain' }).end('forbidden')
-        return
-      }
-      void handleRelayRequest(req, res, pathname, relayHandlers)
-      return
-    }
     // A run's live screen (screen.ts): a click on it acts in the agent's browser, so it carries
     // the same guard as the RPC mount.
     if (pathname === SCREEN_PREFIX || pathname.startsWith(`${SCREEN_PREFIX}/`)) {
       if (!guardBrowserOrigin(req, res) || !guardOwnPageFetch(req, res)) return
-      void handleScreenRequest(req, res, pathname, screenHandlers).catch(() => {
+      void handleScreenRequest(req, res, pathname, screenOf).catch(() => {
         if (!res.headersSent) res.writeHead(500, { 'content-type': 'text/plain' }).end('the screen failed')
         else res.destroy()
       })
@@ -252,7 +217,7 @@ function listen(server: Server, port: number): Promise<number> {
 }
 
 function closeServer(server: Server): Promise<void> {
-  // Force-close keep-alive + streaming sockets (e.g. an open /_relay/events body, #1067) so close() resolves instead of waiting on them.
+  // Force-close keep-alive + streaming sockets (e.g. an open /_rpc/events body) so close() resolves instead of waiting on them.
   server.closeAllConnections()
   return new Promise(resolvePromise => server.close(() => resolvePromise()))
 }
@@ -261,8 +226,8 @@ function closeServer(server: Server): Promise<void> {
  * A watched screen makes the run's computer draw pictures, and watching is a plain GET, which a
  * browser sends with no `Origin`. So a screen's routes also read what a browser says of where a
  * request comes from: one another site's page made, and one that is the address bar's own (a
- * download with no end), is turned away. A browser that says nothing (a page reached over plain
- * HTTP on the Wi-Fi) is let by, as before. Returns true to admit; on rejection it has answered 403.
+ * download with no end), is turned away. A browser that says nothing is let by, as before.
+ * Returns true to admit; on rejection it has answered 403.
  */
 function guardOwnPageFetch(req: IncomingMessage, res: ServerResponse): boolean {
   const site = req.headers['sec-fetch-site']
@@ -272,10 +237,10 @@ function guardOwnPageFetch(req: IncomingMessage, res: ServerResponse): boolean {
 }
 
 /**
- * The CSRF + DNS-rebinding guard the RPC mount applies, lifted to the machine relay, which
- * dispatches outside it. The relay is state-changing (it starts a run on this machine), so
- * without this a page the user merely visited reaches it. Returns true to admit the request; on rejection
- * it has already answered 403.
+ * The CSRF + DNS-rebinding guard the RPC mount applies, lifted to a run's screen, which is served
+ * outside it. A click on a screen acts in the agent's browser, so without this a page the user
+ * merely visited reaches it. Returns true to admit the request; on rejection it has already
+ * answered 403.
  */
 function guardBrowserOrigin(req: IncomingMessage, res: ServerResponse): boolean {
   if (isSameOriginRequest(req) && isExpectedHost(req)) return true

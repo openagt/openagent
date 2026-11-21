@@ -1,8 +1,8 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 
 /**
- * The plumbing of the daemon's one HTTP surface past its RPC, the machine relay (`/_relay`):
- * plain-text statuses, JSON payloads, and capped JSON request bodies.
+ * The plumbing of the daemon's one HTTP surface past its RPC, the screen (`/_screen`): plain-text
+ * statuses and capped JSON request bodies.
  */
 
 /** Answer with a plain-text status line. */
@@ -11,11 +11,6 @@ export function end(res: ServerResponse, status: number, message: string, header
   res.end(message)
 }
 
-/** Answer with a JSON payload. */
-export function sendJson(res: ServerResponse, payload: unknown, status = 200): void {
-  res.writeHead(status, { 'content-type': 'application/json' })
-  res.end(JSON.stringify(payload))
-}
 
 /**
  * Read a JSON body, refusing anything past the cap rather than buffering it. Rejects with

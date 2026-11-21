@@ -24,8 +24,7 @@ import {
  * checkout, so only the other projects are offered (#665).
  */
 export function ProjectContextMenu({ projectId, context, busy, onToggle }: { projectId: string; context: Set<string>; busy: boolean; onToggle: (path: string) => void }) {
-  // This computer's projects only: another computer's folder is not here to add (elsewhere.ts).
-  const projects = useLoaded<ProjectSummary[]>(onProjects, [], []).filter(p => p.machine === undefined)
+  const projects = useLoaded<ProjectSummary[]>(onProjects, [], [])
   const projectPaths = new Set(projects.map(p => p.path))
   const contextFiles = [...context].filter(path => !projectPaths.has(path))
   const otherProjects = projects.filter(p => p.id !== projectId)

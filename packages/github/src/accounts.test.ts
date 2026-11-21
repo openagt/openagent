@@ -285,27 +285,11 @@ test(
 )
 
 test(
-  'token, take and forget: an account\u2019s own token is handed out, checked to be its own; a token handed over becomes an account of its own; forgetting one takes only OpenAgent\u2019s copy',
+  'forget: forgetting an account takes only OpenAgent\u2019s copy, and the runs\u2019 pick that named it',
   withDir(async dir => {
     const env = { XDG_CONFIG_HOME: dir }
     const root = join(dir, 'openagent-github')
     account(root, 'octo-agent')
-    assert.deepEqual((await run(['token', '--user', 'octo-agent'], { gh: ghWith(), env })).out, { ok: true, login: 'octo-agent', token: 'tok-octo-agent' })
-    assert.equal((await run(['token', '--user', 'stranger'], { gh: ghWith(), env })).out['reason'], 'no-account')
-    assert.equal((await run(['token', '--user', 'octo-agent'], { gh: ghWith([], { whose: { 'octo-agent': 'octo' } }), env })).out['reason'], 'not-that-account')
-
-    const token = `gho_${'a1B2'.repeat(5)}`
-    const asked: { args: string[]; env?: Record<string, string>; input?: string }[] = []
-    assert.deepEqual((await run(['take'], { gh: ghWith(asked), env, stdin: async () => `${token}\n` })).out, { ok: true, login: 'a1B2a1B2a1B2a1B2a1B2' })
-    // The token reaches gh on its input, never among its arguments, into the account's own folder.
-    const login = asked.find(a => a.args[1] === 'login')!
-    assert.deepEqual(login.args, ['auth', 'login', '--hostname', 'github.com', '--with-token', '--insecure-storage'])
-    assert.equal(login.input, token)
-    assert.ok(asked.every(a => !a.args.join(' ').includes(token)))
-    assert.deepEqual(accountLogins(root), ['a1B2a1B2a1B2a1B2a1B2', 'octo-agent'])
-    assert.deepEqual(JSON.parse(readFileSync(join(root, 'a1B2a1B2a1B2a1B2a1B2', 'account.json'), 'utf8')), { login: 'a1B2a1B2a1B2a1B2a1B2', id: 42, name: 'Octo Cat' })
-    assert.equal((await run(['take'], { gh: ghWith(), env, stdin: async () => 'not a token' })).out['reason'], 'no-token')
-
     assert.equal((await run(['use', 'octo-agent'], { gh: ghWith(), env })).code, 0)
     assert.deepEqual((await run(['forget', 'octo-agent'], { gh: ghWith(), env })).out, { ok: true, login: 'octo-agent' })
     assert.ok(!existsSync(join(root, 'octo-agent')))

@@ -105,7 +105,7 @@ test("a project's people with their runs counted as the dashboard lists them: th
   const people = peopleWithRuns(
     recorded,
     [
-      { person: 's@a.dev', startedAt: at(1), status: 'unknown', cost: 0.5 },
+      { person: 's@a.dev', startedAt: at(1), status: 'stopped', cost: 0.5 },
       { person: 's@a.dev', startedAt: at(0), status: 'running', cost: 0.25 },
       { person: 's@a.dev', startedAt: at(40), status: 'done', cost: 9 },
       { person: 'rom@b.dev', startedAt: at(2), status: 'done', cost: 1 },

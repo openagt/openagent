@@ -4,7 +4,7 @@ import { stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { makeWorld } from './harness.js'
 import { onProjects, sendAddProject } from '../dashboard-rpc/projects.js'
-import { onGitStatus, onAgents, onDocs } from '../dashboard-rpc/reads.js'
+import { onGitHostHome, onAgents, onDocs } from '../dashboard-rpc/reads.js'
 import { onPreferences, patchPreferences } from '../dashboard-rpc/preferences.js'
 import { onQuota } from '../dashboard-rpc/quota.js'
 import { sendStart } from '../dashboard-rpc/control.js'
@@ -28,9 +28,7 @@ test('add a project: it is installed, registered, and readable like the sidebar 
     assert.equal(mine?.path, project.cwd)
     assert.equal(mine?.activated, true)
 
-    // The project header's reads answer: the branch, an empty docs rail, an empty agent history.
-    const status = await rpc(onGitStatus)(project.id)
-    assert.equal(status?.branch, 'main')
+    // The project's reads answer: an empty docs rail, an empty agent history.
     assert.deepEqual(await rpc(onDocs)(project.id), [])
     assert.deepEqual(await rpc(onAgents)(project.id), [])
 
@@ -53,7 +51,7 @@ test('unknown projects degrade quietly: reads are empty, writes are refused (#42
   try {
     await world.addProject()
     assert.deepEqual(await rpc(onAgents)('no-such-project'), [])
-    assert.equal(await rpc(onGitStatus)('no-such-project'), null)
+    assert.equal(await rpc(onGitHostHome)('no-such-project'), null)
     const refused = await rpc(sendStart)('no-such-project', 'do something')
     assert.equal(refused.ok, false)
   } finally {

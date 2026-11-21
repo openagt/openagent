@@ -30,8 +30,9 @@ export interface Route {
    */
   settings?: string
   /**
-   * A page inside the Settings entry shown, by what the entry knows it as (a saved machine's id,
-   * under Devices): what a link from elsewhere on the page opens. Carried as `&item=<it>`.
+   * What the Settings entry shown is opened at, by what the entry knows it as (the project whose
+   * Skills a link from the message box opens): what a link from elsewhere on the page opens.
+   * Carried as `&item=<it>`.
    */
   settingsItem?: string
   /** The project whose agent or "New agent session" page shows, by id; null for an Overview and a module's page. */

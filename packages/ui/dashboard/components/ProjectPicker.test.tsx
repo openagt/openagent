@@ -10,8 +10,6 @@ const sendAddProject = vi.hoisted(() => vi.fn())
 const onCloneTarget = vi.hoisted(() => vi.fn())
 const sendAddProjectFromAddress = vi.hoisted(() => vi.fn())
 vi.mock('../rpc/projects.js', () => ({ onRepos, sendAddRepoFolder, sendAddProject, sendPickProjectDirectory: vi.fn(), onCloneTarget, sendAddProjectFromAddress }))
-const MACBOOK = { id: 'http://127.0.0.1:4210', url: 'http://127.0.0.1:4210', label: 'Suleimans-MacBook-Pro' }
-vi.mock('../lib/machines.js', () => ({ useMachines: () => [MACBOOK] }))
 
 const { ProjectPicker, REPOS_SHOWN, repoDetail, shownAddress } = await import('./ProjectPicker.js')
 
@@ -92,13 +90,12 @@ describe('ProjectPicker', () => {
     expect((screen.getByRole('combobox', { name: 'Project: loading' }) as HTMLButtonElement).disabled).toBe(true)
   })
 
-  test("a project's row says what is wrong with it, that it is not activated, how its records are kept, or which other computer of the person's has it", async () => {
+  test("a project's row says what is wrong with it, that it is not activated, or how its records are kept", async () => {
     const stranded: ProjectSummary = { ...ALPHA, errors: [{ id: 'store-git-branch:data-sync', title: 'Not syncing with the remote', message: 'the data branch could not be pushed: Permission denied (publickey)', since: '2026-08-20T10:00:00.000Z' }] }
     const idle: ProjectSummary = { id: 'beta-2', path: '/home/me/beta', name: 'beta', activated: false, gitHost: true }
     const local: ProjectSummary = { id: 'gamma-3', path: '/home/me/gamma', name: 'gamma', activated: true, gitHost: true, local: 'no-remote' }
     const kept: ProjectSummary = { id: 'delta-4', path: '/home/me/delta', name: 'delta', activated: true, gitHost: true, local: 'kept' }
-    const there: ProjectSummary = { id: 'test-project-2~abc', path: '/Users/me/test-project', name: 'test-project', activated: true, gitHost: true, machine: MACBOOK.id }
-    renderPicker({ projects: [stranded, idle, local, kept, there] })
+    renderPicker({ projects: [stranded, idle, local, kept] })
     await openMenu(trigger())
     const broken = screen.getByRole('option', { name: /alpha/ })
     expect(broken.querySelector('.bg-danger')).toBeTruthy()
@@ -106,8 +103,6 @@ describe('ProjectPicker', () => {
     expect(within(screen.getByRole('option', { name: /beta/ })).getByText('Not activated')).toBeTruthy()
     expect(within(screen.getByRole('option', { name: /gamma/ })).getByText('Local only, no remote').className).toContain('text-muted-foreground')
     expect(within(screen.getByRole('option', { name: /delta/ })).getByText('Records kept on this machine')).toBeTruthy()
-    expect(within(screen.getByRole('option', { name: /test-project/ })).getByText('on Suleimans-MacBook-Pro')).toBeTruthy()
-    expect(within(screen.getByRole('option', { name: /gamma/ })).queryByText(/^on /)).toBeNull()
   })
 
   test("a repository's address typed into the search is offered to add, unless a project or repo has it; picked, the trust question says where it is cloned to, and on a yes it is a project", async () => {

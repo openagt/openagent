@@ -41,8 +41,8 @@ function packageAbove(file: string): OpenAgentPackage | undefined {
 }
 
 /**
- * OpenAgent's version (#312): its package's ({@link openagentPackage}), what this computer tells
- * the machines it gets into and a phone. `unknown` when no distribution was handed down, not
+ * OpenAgent's version (#312): its package's ({@link openagentPackage}), as the CLI and the
+ * dashboard say it. `unknown` when no distribution was handed down, not
  * `0.0.0`: the packages are unreleased and legitimately versioned `0.0.0`, so a numeric stand-in
  * would read as a real version.
  */

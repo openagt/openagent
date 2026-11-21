@@ -26,7 +26,7 @@ async function withConfigHome(body: (env: { XDG_CONFIG_HOME: string }) => Promis
   }
 }
 
-test('a Start with no project goes to the host with none, and no level, its home made first; a branch, a level or an account is refused, and a machine takes it', async () => {
+test('a Start with no project goes to the host with none, and no level, its home made first; a branch, a level or an account is refused', async () => {
   await withConfigHome(async env => {
     const cwd = await realpath(await mkdtemp(join(tmpdir(), 'openagent-daemon-cwd-')))
     const host = fakeHost()
@@ -38,8 +38,6 @@ test('a Start with no project goes to the host with none, and no level, its home
       const refused = { ok: false, error: 'A session with no project runs with no branch, nothing to publish, no account at a git host and no project skills.' }
       assert.deepEqual(await runtime.onStart('x', { publish: 'pr' }, SESSIONS_ID), refused)
       assert.deepEqual(await runtime.onStart('x', { base: 'main' }, SESSIONS_ID), refused)
-      // A machine takes a session with no project: this one is not saved, which is the only thing against it.
-      assert.deepEqual(await runtime.onStart('x', { machine: 'm-1' }, SESSIONS_ID), { ok: false, error: 'That machine is no longer saved. Pick another place to run.' })
       assert.deepEqual(await runtime.onStart('x', { account: 'octo-agent' }, SESSIONS_ID), refused)
       assert.deepEqual(await runtime.onStart('x', { projectSkills: 'none' }, SESSIONS_ID), refused)
       assert.equal(host.requests.length, 1)

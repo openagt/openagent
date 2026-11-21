@@ -3,7 +3,6 @@ import { Skeleton } from './ui/skeleton.js'
 import { SentenceShape, Slot } from './ui/slot.js'
 import { takeLostFocus } from '../lib/lost-focus.js'
 import { useMountedModules } from '../lib/use-modules.js'
-import { useAgentAccounts } from './AgentAccounts.js'
 import { GitHostsCard } from './GitHosts.js'
 import { AgentFix, agentLoginState, agentWords, useAgentState, type LoginState } from './Logins.js'
 import type { AgentState } from '../rpc/logins.js'
@@ -11,16 +10,11 @@ import { Badge, type BadgeTone } from './ui/badge.js'
 import { ModuleSlot } from './ModulePageView.js'
 import { Page } from './Page.js'
 import { PanelGroup } from './ui/panel.js'
-import { AccountWhere, ServerAsks, ServersProvider } from './ServerLogins.js'
 
 // The Permissions page: every account OpenAgent's agents work with, in one place. An agent can
-// reach what its accounts can, and nothing else is a permission. Each account is said once, with
-// where it works under it (this computer and the person's servers, `ServerLogins.tsx`), and only
-// what a server asks of the person stands above them (his pick over a card that listed every
-// account again under each server). The modules' parts of the page (`permissions.section`) come
-// next, the coding agents' accounts among them, the dashboard filling the line under each account
-// row through their `accountWhere`; the git hosts' are the dashboard's (`GitHosts.tsx`), in the
-// same rows. On a server, the page says whose computer's logins it uses.
+// reach what its accounts can, and nothing else is a permission. What a coding agent still needs
+// before it can run stands first; the modules' parts of the page (`permissions.section`) come next,
+// the coding agents' accounts among them; the git hosts' are the dashboard's (`GitHosts.tsx`).
 
 /** The Permissions page. */
 export function PermissionsPage() {
@@ -44,17 +38,13 @@ export function AccountsList() {
       </div>
     )
   return (
-    <ServersProvider>
-      <div className="space-y-8">
-        <FromLine />
-        {/* Claude Code's press is the page's one primary, as the Overview draws it: the agent runs start on unless a person picks another. */}
-        <AgentSetup state={claude.state} reload={claude.reload} title="Claude Code" primary />
-        <AgentSetup state={codex.state} reload={codex.reload} title="Codex" primary={false} />
-        <ServerAsks />
-        <ModuleSections />
-        <GitHostsCard />
-      </div>
-    </ServersProvider>
+    <div className="space-y-8">
+      {/* Claude Code's press is the page's one primary, as the Overview draws it: the agent runs start on unless a person picks another. */}
+      <AgentSetup state={claude.state} reload={claude.reload} title="Claude Code" primary />
+      <AgentSetup state={codex.state} reload={codex.reload} title="Codex" primary={false} />
+      <ModuleSections />
+      <GitHostsCard />
+    </div>
   )
 }
 
@@ -72,7 +62,7 @@ function ModuleSections() {
           <div className="space-y-8">
             {sections.map(section => (
               <ModuleSlot key={`${section.package} ${section.id}`} package={section.package} label={section.label}>
-                <section.View accountWhere={account => <AccountWhere account={{ kind: account.agent, own: account.own, name: account.name }} />} />
+                <section.View />
               </ModuleSlot>
             ))}
           </div>
@@ -128,17 +118,5 @@ function StateWords({ state, children }: { state: AgentState; children: ReactNod
     <Badge tone={TONE[agentLoginState(state)!]} className="text-sm font-normal whitespace-normal text-muted-foreground">
       {children}
     </Badge>
-  )
-}
-
-/** On a server: whose computer's logins it uses. Nothing elsewhere. */
-function FromLine() {
-  const from = useAgentAccounts('claude').view?.from
-  if (from === undefined) return null
-  return (
-    <div className="rounded-lg bg-muted px-3 py-3">
-      <p className="text-sm font-medium">{`Your logins and settings from ${from}`}</p>
-      <p className="text-xs text-muted-foreground">Log in or out there, or change a setting, and this server follows.</p>
-    </div>
   )
 }

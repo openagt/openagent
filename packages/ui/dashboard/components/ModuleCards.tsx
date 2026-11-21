@@ -37,7 +37,7 @@ type KeptCard = Pick<OverviewCard, 'id' | 'label' | 'order' | 'width' | 'minWidt
  * own slot, given the projects that have its package, in the order the shell mounted them (by
  * `order`, then package). A project's view is listed only when one of the projects handed in has
  * its package: with one project picked, the views of the packages that project does not have are
- * not, and before the projects are first read none is. A view of this computer's (its devices) is
+ * not, and before the projects are first read none is. A view of this computer's package is
  * always listed. Each is known by its package and its own id. `loaded` once every package's code is in.
  */
 export function useModuleCards(projects: ProjectSummary[]): { cards: OverviewCard[]; line: OverviewCard[]; loaded: boolean } {

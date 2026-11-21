@@ -11,7 +11,7 @@ import { ACTED, CONSOLE, CURSOR, FRAME, jsonPart, PULSE, SELECTED, STATE, stream
  * queue of old ones; anything else it could not take it is told at a later turn.
  */
 
-/** How many may watch one browser at once: a person and their devices, generously. */
+/** How many may watch one browser at once: a person's tabs, generously. */
 const MAX_VIEWERS = 8
 
 /** One person watching: the answer their stream is written to, the picture kept for when it can take one, what it was last told the address bar says, the pointer looks like and the page has selected, and the number of the console line it gets next. */

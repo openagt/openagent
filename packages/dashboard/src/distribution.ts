@@ -42,9 +42,6 @@ const DISTRIBUTION: DashboardDistribution = [
   { package: '@openagt/ui-card-waiting', for: 'computer' },
   // The person's name and picture, Settings › Profile.
   { package: '@openagt/user-info', for: 'computer' },
-  // devices, a plugin that starts off: the door to this computer, and its other computers and
-  // servers.
-  { package: '@openagt/devices', for: 'computer' },
   // notifications-command, a plugin that starts off: the person's command, run when a run on this
   // computer needs them.
   { package: '@openagt/notifications-command', for: 'computer' },

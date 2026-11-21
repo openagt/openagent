@@ -1,11 +1,10 @@
 import { ownRunsWatch } from '../dashboard/runs-watch.js'
-import { contextProjects, contextRemote } from './context.js'
+import { contextProjects } from './context.js'
 import { SESSIONS_ID } from '../project-address.js'
 
 // What the page is told the moment it should read the runs again (`GET /_rpc/changes`): a run of
-// one of the projects, or a session with no project, changed, here or on a saved machine, or a run of another computer's project
-// (elsewhere.ts) changed there. The page reads the list itself, as it always does; this only says
-// when, so it reads at once instead of at its next poll.
+// one of the projects, or a session with no project, changed. The page reads the list itself, as
+// it always does; this only says when, so it reads at once instead of at its next poll.
 
 /** One thing the page is told: the runs of the project changed. */
 export interface RunsChanged {
@@ -34,20 +33,17 @@ export function followRunsChanged(send: (change: RunsChanged) => void): () => vo
     )
   }
   const follow = async (): Promise<void> => {
-    const [own, elsewhere, sessions] = await Promise.all([
+    const [own, sessions] = await Promise.all([
       contextProjects()
         .list()
         .catch(() => undefined),
-      contextRemote()
-        .elsewhere()
-        .catch(() => []),
       contextProjects()
         .resolvePath(SESSIONS_ID)
         .catch(() => undefined),
     ])
     if (stopped || own === undefined) return
     // The sessions with no project are followed as a project's runs are, in their home.
-    const projects: { id: string; path: string; machine?: unknown }[] = [...own, ...elsewhere, ...(sessions !== undefined ? [{ id: SESSIONS_ID, path: sessions }] : [])]
+    const projects: { id: string; path: string }[] = [...own, ...(sessions !== undefined ? [{ id: SESSIONS_ID, path: sessions }] : [])]
     const paths = new Map(projects.map(project => [project.id, project.path]))
     for (const [id, one] of followed) {
       if (paths.get(id) === one.path) continue
@@ -56,18 +52,7 @@ export function followRunsChanged(send: (change: RunsChanged) => void): () => vo
     }
     for (const project of projects) {
       if (followed.has(project.id)) continue
-      // Another computer's project has no runs here: that computer's are all it has.
-      const elsewhere = project.machine !== undefined
-      const own = elsewhere ? () => {} : ownRunsWatch.follow(project.path, () => tell(project.id))
-      // The sessions with no project are followed on the machines too: each runs its own, under the same name.
-      const machines = elsewhere ? contextRemote().followElsewhereRuns(project.id, () => tell(project.id)) : contextRemote().followRuns(project.path, () => tell(project.id))
-      followed.set(project.id, {
-        path: project.path,
-        stop: () => {
-          own()
-          machines()
-        },
-      })
+      followed.set(project.id, { path: project.path, stop: ownRunsWatch.follow(project.path, () => tell(project.id)) })
     }
   }
   void follow()

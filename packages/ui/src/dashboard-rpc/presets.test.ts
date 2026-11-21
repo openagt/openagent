@@ -7,7 +7,7 @@ import type { ProvidedCommand } from '@openagt/agent-data'
 import { accountsPath, addAccount } from '@openagt/agent-driver'
 import { accountsWiring } from './accounts.js'
 import { loginsWiring } from './logins.js'
-import { onPresetLogins, onPresetsList, sendCopyPresetLogins, sendRemovePreset, sendSavePreset } from './presets.js'
+import { onPresetsList, sendRemovePreset, sendSavePreset } from './presets.js'
 import { provideTestContext } from './test-context.js'
 import { handDownTestDistribution } from '../test-distribution.js'
 import { claudeLogins } from '@openagt/agent-driver-claude-code'
@@ -99,15 +99,3 @@ test('the presets and the accounts this computer knows; a preset saved, edited, 
     assert.equal((await sendRemovePreset('default')).ok, false)
     assert.equal((await sendRemovePreset('../x')).ok, false)
   }))
-
-test('a server copies the presets\' accounts to no device: it says none, and refuses the press', async () => {
-  const before = process.env['OPENAGENT_SERVER']
-  process.env['OPENAGENT_SERVER'] = '1'
-  try {
-    assert.deepEqual(await onPresetLogins(), [])
-    assert.deepEqual(await sendCopyPresetLogins(), { ok: false, error: 'A server copies logins to no device.' })
-  } finally {
-    if (before === undefined) delete process.env['OPENAGENT_SERVER']
-    else process.env['OPENAGENT_SERVER'] = before
-  }
-})

@@ -66,9 +66,6 @@ export { NAME_FILE_ENV, givenName, nameHandOver } from './engine/title.js'
 // the limits, and the next free one taking over a turn at a usage limit.
 export {
   accountsPath,
-  copiedPath,
-  handedOverBy,
-  type HandedOver,
   hasAddedAccount,
   readAccounts,
   changeAccounts,
@@ -85,5 +82,5 @@ export {
   OWN_NAME,
 } from './accounts/accounts.js'
 export { accountRotation, goOn, UsageLimitError, type AccountsOption } from './accounts/rotation.js'
-export { comesBackFrom, removeAdded } from './accounts/login.js'
+export { removeAdded } from './accounts/login.js'
 export { loginWiring, type LoginWiring } from './accounts/wiring.js'

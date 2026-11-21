@@ -145,7 +145,7 @@ describe('module pages in the shell (#1774)', () => {
       const host = useModuleHost()
       return createElement('div', null, createElement('button', { onClick: () => host.openPage('permissions') }, 'open Permissions'), createElement('button', { onClick: () => host.openPage('presets') }, 'open Presets'))
     }
-    answerShell([{ package: '@acme/door', url: moduleModule('__doorOpensPages', { place: 'app.overlay', id: 'overlay', View: Opens }), projects: [], computer: true }])
+    answerShell([{ package: '@acme/overlay', url: moduleModule('__overlayOpensPages', { place: 'app.overlay', id: 'overlay', View: Opens }), projects: [], computer: true }])
     window.history.replaceState(null, '', '/app/overview')
     render(<App />)
     fireEvent.click(await screen.findByRole('button', { name: 'open Permissions' }))
@@ -165,17 +165,17 @@ describe('module pages in the shell (#1774)', () => {
   test('a module opens a Settings entry over the page it is on, its own query kept, as a step Back undoes; from inside Settings, in place', async () => {
     function Opens() {
       const host = useModuleHost()
-      return createElement('button', { onClick: () => host.openSettings('devices', 'd3') }, 'open Devices')
+      return createElement('button', { onClick: () => host.openSettings('profile', 'name') }, 'open Profile')
     }
-    answerShell([{ package: '@acme/door', url: moduleModule('__doorOpensSettings', { place: 'app.overlay', id: 'overlay', View: Opens }), projects: [], computer: true }])
+    answerShell([{ package: '@acme/profile', url: moduleModule('__opensSettings', { place: 'app.overlay', id: 'overlay', View: Opens }), projects: [], computer: true }])
     window.history.replaceState(null, '', '/?view=wide')
     render(<App />)
     const entries = window.history.length
-    fireEvent.click(await screen.findByRole('button', { name: 'open Devices' }))
-    expect([window.location.pathname + window.location.search, window.history.length]).toEqual(['/?view=wide&settings=devices&item=d3', entries + 1])
+    fireEvent.click(await screen.findByRole('button', { name: 'open Profile' }))
+    expect([window.location.pathname + window.location.search, window.history.length]).toEqual(['/?view=wide&settings=profile&item=name', entries + 1])
     fireEvent.click(await screen.findByRole('button', { name: 'to Agent' }))
-    fireEvent.click(screen.getByRole('button', { name: 'open Devices' }))
-    expect([window.location.pathname + window.location.search, window.history.length]).toEqual(['/?view=wide&settings=devices&item=d3', entries + 1])
+    fireEvent.click(screen.getByRole('button', { name: 'open Profile' }))
+    expect([window.location.pathname + window.location.search, window.history.length]).toEqual(['/?view=wide&settings=profile&item=name', entries + 1])
     fireEvent.click(screen.getByRole('button', { name: 'shut the dialog' }))
     await waitFor(() => expect(window.location.pathname + window.location.search).toBe('/?view=wide'))
   })
@@ -248,7 +248,7 @@ describe('module pages in the shell (#1774)', () => {
       const host = useModuleHost()
       return createElement('button', { onClick: () => host.openAgent(PROJECT.id, '3-a') }, 'open a run')
     }
-    answerShell([{ package: '@acme/door', url: moduleModule('__doorOpensRun', { place: 'app.overlay', id: 'overlay', View: OpensRun }), projects: [], computer: true }])
+    answerShell([{ package: '@acme/overlay', url: moduleModule('__overlayOpensRun', { place: 'app.overlay', id: 'overlay', View: OpensRun }), projects: [], computer: true }])
     window.history.replaceState(null, '', '/?settings=')
     render(<App />)
     fireEvent.click(await screen.findByRole('button', { name: 'hold a change' }))
@@ -286,17 +286,17 @@ describe('module pages in the shell (#1774)', () => {
       return createElement('p', null, `a popup of ${useModuleHost().package}`)
     }
     answerShell([
-      { package: '@acme/door', url: moduleModule('__doorPopup', { place: 'app.overlay', id: 'overlay', View: Popup }), projects: [], computer: true },
+      { package: '@acme/overlay', url: moduleModule('__overlayPopup', { place: 'app.overlay', id: 'overlay', View: Popup }), projects: [], computer: true },
       { package: '@acme/logs', url: moduleModule('__logsPopup', { place: 'app.overlay', id: 'overlay', View: Popup }), projects: [PROJECT.id] },
     ])
     render(<App />)
-    expect(await screen.findByText('a popup of @acme/door')).toBeTruthy()
+    expect(await screen.findByText('a popup of @acme/overlay')).toBeTruthy()
     expect(screen.queryByText('a popup of @acme/logs')).toBeNull()
     cleanup()
     window.history.replaceState(null, '', '/nothing')
     render(<App />)
     expect(await screen.findByText('No such page')).toBeTruthy()
-    expect(screen.getByText('a popup of @acme/door')).toBeTruthy()
+    expect(screen.getByText('a popup of @acme/overlay')).toBeTruthy()
   })
 
   test('a URL no installed module claims says so once the modules are loaded', async () => {
@@ -613,7 +613,7 @@ describe('module cards on the Overview (#1818)', () => {
       function Popup() {
         return createElement('p', null, `the popup's saves: ${useOpenAgentDown() ? 'off' : 'on'}`)
       }
-      answerShell([{ package: '@acme/door', url: moduleModule('__downPopup', { place: 'app.overlay', id: 'overlay', View: Popup }), projects: [], computer: true }])
+      answerShell([{ package: '@acme/overlay', url: moduleModule('__downPopup', { place: 'app.overlay', id: 'overlay', View: Popup }), projects: [], computer: true }])
       window.history.replaceState(null, '', '/?settings=scheduler')
       render(<App />)
       expect(await screen.findByText('its saves: on')).toBeTruthy()
@@ -629,10 +629,10 @@ describe('module cards on the Overview (#1818)', () => {
   })
 
   test("a card of this computer's package is on the Overview though no project has the package", async () => {
-    answerOverview([{ package: '@acme/devices', url: moduleModule('__devicesCard', { place: 'overview.card', id: 'devices', label: 'Devices', View: () => createElement('p', null, 'devices card') }), projects: [], computer: true }])
+    answerOverview([{ package: '@acme/accounts', url: moduleModule('__accountsCard', { place: 'overview.card', id: 'accounts', label: 'Accounts', View: () => createElement('p', null, 'accounts card') }), projects: [], computer: true }])
     window.history.replaceState(null, '', '/')
     render(<App />)
-    expect(await screen.findByText('devices card')).toBeTruthy()
+    expect(await screen.findByText('accounts card')).toBeTruthy()
   })
 
   test('cards come out by order, then by package name; a card that throws shows only its own error', async () => {
@@ -692,7 +692,7 @@ describe('module cards on the Overview (#1818)', () => {
     render(<App />)
     fireEvent.click(await screen.findByRole('button', { name: 'start' }))
     await waitFor(() => expect(window.location.pathname).toBe('/app/9-n'))
-    expect(calls.find(call => call.name === 'onStartedName')?.args).toEqual([PROJECT.id, '9-n'])
+    expect(calls.find(call => call.name === 'onStartedName')?.args).toEqual(['9-n'])
     // The header's title, revealed letter by letter, while the list still has no row for the run.
     await waitFor(() => expect(document.querySelector('[title="Fix flaky login test"]')).toBeTruthy())
     expect(screen.queryByTestId('title-placeholder')).toBeNull()
@@ -1057,7 +1057,7 @@ describe('the project select (#1513)', () => {
     expect(url()).toBe('/')
   })
 
-  test('a project removed from a session\'s page leaves the page for the Overview, with the projects read again; another computer\'s project offers no removal here', async () => {
+  test('a project removed from a session\'s page leaves the page for the Overview, with the projects read again', async () => {
     answerTwo()
     window.history.replaceState(null, '', '/site/3-s')
     render(<App />)
@@ -1067,12 +1067,6 @@ describe('the project select (#1513)', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'remove the project from its menu' }))
     await waitFor(() => expect(reads()).toBe(before + 1))
     expect(url()).toBe('/')
-    cleanup()
-    answers.set('onProjects', () => [{ ...OTHER, machine: 'studio' }])
-    window.history.replaceState(null, '', '/site/3-s')
-    render(<App />)
-    await screen.findByRole('button', { name: /session actions/i })
-    expect(screen.queryByRole('button', { name: 'remove the project from its menu' })).toBeNull()
   })
 
   test('a link to a project\'s page shows nothing, not "No such page", while the projects are still being read', async () => {

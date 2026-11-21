@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { forgetRemembered } from '../lib/use-async.js'
 import { DaemonDown } from '../lib/use-daemon-health.js'
 
-const rpc = vi.hoisted(() => ({ onPresetsList: vi.fn(), sendSavePreset: vi.fn(), sendRemovePreset: vi.fn(), onPresetLogins: vi.fn(), sendCopyPresetLogins: vi.fn() }))
+const rpc = vi.hoisted(() => ({ onPresetsList: vi.fn(), sendSavePreset: vi.fn(), sendRemovePreset: vi.fn() }))
 vi.mock('../rpc/presets.js', () => rpc)
 const logins = vi.hoisted(() => ({ onGitHosts: vi.fn(), sendGitHostLogin: vi.fn(), sendStopGitHostLogin: vi.fn(), sendGitHostInstall: vi.fn(), onAgentState: vi.fn(), sendAgentFix: vi.fn() }))
 vi.mock('../rpc/logins.js', () => logins)
@@ -37,8 +37,6 @@ const VIEW = {
 
 beforeEach(() => {
   rpc.onPresetsList.mockResolvedValue(VIEW)
-  rpc.onPresetLogins.mockResolvedValue([])
-  rpc.sendCopyPresetLogins.mockResolvedValue({ ok: true })
   rpc.sendSavePreset.mockResolvedValue({ ok: true, id: 'social' })
   rpc.sendRemovePreset.mockResolvedValue({ ok: true })
 })
@@ -332,24 +330,6 @@ describe('the Presets page', () => {
     fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Discard' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     expect(rpc.sendSavePreset).not.toHaveBeenCalled()
-  })
-
-  test('where a preset\u2019s GitHub account is: one line per device, on it or not, with why; "Copy again" for one that failed copies now and reads again; nothing for a preset that names none', async () => {
-    rpc.onPresetLogins.mockResolvedValue([
-      { machineId: 'm1', label: 'Droplet', reachable: true, github: { 'octo-agent': { state: 'there' } } },
-      { machineId: 'm2', label: 'Laptop', reachable: true, github: { 'octo-agent': { state: 'failed', error: 'GitHub did not take the login' } } },
-      { machineId: 'm3', label: 'Studio', reachable: false, github: {} },
-    ])
-    render(<PresetsPage />)
-    const where = await screen.findByRole('list', { name: 'Where @octo-agent is' })
-    expect([...where.querySelectorAll('li')].map(li => li.textContent)).toEqual(['On Droplet', 'Laptop: not copied — GitHub did not take the login', 'Studio: not reached'])
-    // The failure alone in the warning colour.
-    expect(where.querySelectorAll('.text-warning')).toHaveLength(1)
-    fireEvent.click(within(where.closest('li')!).getByRole('button', { name: 'Copy again' }))
-    await waitFor(() => expect(rpc.sendCopyPresetLogins).toHaveBeenCalled())
-    await waitFor(() => expect(rpc.onPresetLogins).toHaveBeenCalledTimes(2))
-    expect(screen.queryByRole('list', { name: /Where @/ })).toBe(where)
-    expect(screen.getAllByRole('list', { name: /Where @/ })).toHaveLength(1)
   })
 
   test('removing a preset asks first, then removes it and reads the list again', async () => {

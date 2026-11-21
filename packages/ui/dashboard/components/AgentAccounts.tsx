@@ -1,17 +1,16 @@
 import type { ReactNode } from 'react'
 import { Check, Plus } from 'lucide-react'
-import { onMachineAgentAccounts, sendMachineAgentAccountFirst } from '../rpc/machines.js'
 import { onAgentAccounts, sendUseAgentAccountFirst, type AccountRow, type AccountWindow, type AccountsAgent, type AccountsView } from '../rpc/accounts.js'
 import { AccountBar } from './ui/account-bar.js'
-import { readAhead, usePolled } from '../lib/use-async.js'
+import { usePolled } from '../lib/use-async.js'
 import { cn } from '../lib/utils.js'
 import { DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from './ui/dropdown-menu.js'
 import { Facts } from './ui/panel.js'
 
 // The accounts runs use, per coding agent, as the run's own places read them. Adding and removing
 // them is agent-driver's (`@openagt/agent-driver`, its card on the Overview and its part of
-// the Permissions page). Here: the agent's part of the agent picker under the message box (which one is first,
-// on the computer the run goes to) and the Overview's usage card (how full each added Claude one is).
+// the Permissions page). Here: the agent's part of the agent picker under the message box (which one is first)
+// and the Overview's usage card (how full each added Claude one is).
 
 /** How often a page that shows the accounts asks again. */
 const SELDOM_MS = 30_000
@@ -51,32 +50,14 @@ function usageWords(account: AccountRow): ReactNode {
   return <Facts facts={[`${Math.round(window.percent)}% ${window.label === '5 h' ? 'of 5 h' : `this ${window.label}`}`, account.asOf !== undefined && `as of ${clock(account.asOf)}`]} />
 }
 
-/** Where a saved machine's accounts of an agent are remembered on the page: a switch back to it shows them at once. */
-const machineAccountsKey = (machineId: string, agent: AccountsAgent): string => `machine-agent-accounts:${machineId}:${agent}`
-
-/** Ask a saved machine for each agent's accounts before it is picked, so the pick shows them from its first frame. */
-export function readMachineAccountsAhead(machineId: string): void {
-  for (const agent of ['claude', 'codex'] as const) readAhead(machineAccountsKey(machineId, agent), () => onMachineAgentAccounts(machineId, agent))
-}
-
 /**
- * An agent's accounts on the computer a run goes to: this computer's, read as Settings reads them,
- * or a saved machine's, asked there; `unanswered` when that machine does not say. A pick makes one
- * the first its runs take, there, as the Permissions page does: the next run goes with it.
+ * An agent's accounts for the launcher's agent picker, read as Settings reads them; none asked
+ * while `on` is off. A pick makes one the first its runs take, as the Permissions page does: the
+ * next run goes with it.
  */
-export function useAccountsOn(
-  agent: AccountsAgent,
-  machineId: string | undefined,
-  on = true,
-): {
-  view: AccountsView | undefined
-  unanswered: boolean
-  pick: (account: string) => Promise<void>
-} {
-  const own = usePolled<AccountsView | undefined>(on && machineId === undefined ? () => onAgentAccounts(agent) : null, undefined, SELDOM_MS, [agent, on, machineId === undefined], { remember: `agent-accounts:${agent}` })
-  const theirs = usePolled<AccountsView | null | undefined>(on && machineId !== undefined ? () => onMachineAgentAccounts(machineId, agent) : null, undefined, SELDOM_MS, [agent, on, machineId], machineId !== undefined ? { remember: machineAccountsKey(machineId, agent) } : undefined)
-  if (machineId === undefined) return { view: own.value, unanswered: false, pick: account => sendUseAgentAccountFirst(agent, account).then(own.reload) }
-  return { view: theirs.value ?? undefined, unanswered: theirs.value === null, pick: account => sendMachineAgentAccountFirst(machineId, agent, account).then(theirs.reload) }
+export function useAccountsOn(agent: AccountsAgent, on = true): { view: AccountsView | undefined; pick: (account: string) => Promise<void> } {
+  const own = usePolled<AccountsView | undefined>(on ? () => onAgentAccounts(agent) : null, undefined, SELDOM_MS, [agent, on], { remember: `agent-accounts:${agent}` })
+  return { view: own.value, pick: account => sendUseAgentAccountFirst(agent, account).then(own.reload) }
 }
 
 /** The accounts a run can take: the person's own is left out when the agent has no such login and another account is there. */
@@ -95,15 +76,15 @@ export function firstAccount(view: AccountsView | undefined): { name: string; pe
 
 /**
  * An agent's accounts in its part of the agent picker, under its models: the one its runs take
- * first checked, how full each is, and adding one. `on` names the computer they are another's of.
- * A pick keeps the menu open, so the check is seen to move.
+ * first checked, how full each is, and adding one. A pick keeps the menu open, so the check is
+ * seen to move.
  */
-export function AgentAccountItems({ view, on, onPick, onAdd }: { view: AccountsView; on?: string | undefined; onPick: (account: string) => void; onAdd: () => void }) {
+export function AgentAccountItems({ view, onPick, onAdd }: { view: AccountsView; onPick: (account: string) => void; onAdd: () => void }) {
   return (
     <>
       <DropdownMenuSeparator />
       <DropdownMenuGroup>
-        <DropdownMenuLabel>{on !== undefined ? `Accounts on ${on}` : 'Accounts'}</DropdownMenuLabel>
+        <DropdownMenuLabel>Accounts</DropdownMenuLabel>
         {runAccounts(view).map((account, i) => (
           <DropdownMenuItem key={account.id} closeOnClick={false} onClick={() => onPick(account.id)}>
             <Check className={cn('h-3.5 w-3.5 shrink-0', i === 0 ? 'opacity-100' : 'opacity-0')} aria-hidden />

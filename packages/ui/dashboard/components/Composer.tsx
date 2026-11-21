@@ -1,10 +1,10 @@
-import { createContext, forwardRef, useContext, useEffect, useImperativeHandle, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { createContext, forwardRef, useContext, useEffect, useImperativeHandle, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { ArrowUp, Loader2 } from 'lucide-react'
 import type { ProjectSummary } from '../../src/index.js'
-import { machineName, type DriverName } from '../../src/client.js'
+import type { DriverName } from '../../src/client.js'
 import { SESSIONS_ID } from '../../src/project-address.js'
-import { usePreferences, usePreferencesLoaded, updatePreferences, useActiveProjectId } from '../lib/preferences.js'
+import { usePreferences, updatePreferences, useActiveProjectId } from '../lib/preferences.js'
 import { useLoaded } from '../lib/use-async.js'
 import { Button } from './ui/button.js'
 import { cn } from '../lib/utils.js'
@@ -19,19 +19,13 @@ import { DriverModelMenu, type DriverOption } from './DriverModelMenu.js'
 import { RunOnMenu } from './RunOnMenu.js'
 import { PERMISSIONS_PAGE } from '../lib/use-route.js'
 import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
-import { useMountedModules } from '../lib/use-modules.js'
-import { useMachines, useMachinesRead, tellMachine, type Machine } from '../lib/machines.js'
-import { restoreRunOn, runTarget, useRunOnFallback, useSelectedMachineId, selectMachine } from '../lib/remote-target.js'
 import { selectHost, useRunHosts, useSelectedHost } from '../lib/run-hosts.js'
-import { thisMachineName } from '../lib/this-machine.js'
-import { useMachineStatus } from '../lib/use-machine-status.js'
 import { keepDraft, keptDraft, takePendingDraft } from '../lib/draft-handoff.js'
 import { DaemonDown } from '../lib/use-daemon-health.js'
 import { useIsMobile } from '../lib/use-mobile.js'
-import { driverOptions, modelEfforts, readMachineModelsAhead, useModelsOn } from '../lib/models.js'
+import { driverOptions, modelEfforts, useModels } from '../lib/models.js'
 import { readyCommands, useProjectLauncher } from '../lib/use-project-launcher.js'
-import { AgentAccountItems, firstAccount, readMachineAccountsAhead, useAccountsOn } from './AgentAccounts.js'
-import { readMachineGitHostsAhead } from './GitHosts.js'
+import { AgentAccountItems, firstAccount, useAccountsOn } from './AgentAccounts.js'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipsPastBox } from './ui/tooltip.js'
 import { RowAboveBox, rowClass, rowItemClass, rowLeftClass } from './ui/row-item.js'
 import { Skeleton } from './ui/skeleton.js'
@@ -146,8 +140,6 @@ export const Composer = forwardRef<ComposerHandle, {
    *  like Claude Code's composer. Typing swaps it for the arrow (a live send still queues), and
    *  without one the slot keeps its collapse-when-empty behavior for the launcher. */
   idleControl?: ReactNode
-  /** The saved machine the project is on, when only another computer of the person's has it (elsewhere.ts). */
-  home?: string | undefined
   /** What the caller says about the box: laid over the page above it with the box's own notes,
    *  never in its flow, so the text being typed does not move when one comes or goes. */
   notes?: ReactNode
@@ -156,99 +148,53 @@ export const Composer = forwardRef<ComposerHandle, {
   /** The box takes the caret when it opens. */
   autoFocus?: boolean | undefined
 }>(function Composer(
-  { files, addContext, removeContext, startsAt, controls, controlsEnd, sessionModel, sessionContext, onSubmit, onPromptChange, onLoaded, busy, submitLabel, submitBusyLabel, placeholder, inAgent = false, sessionRow, idleControl, home, notes, draftKey, autoFocus = false },
+  { files, addContext, removeContext, startsAt, controls, controlsEnd, sessionModel, sessionContext, onSubmit, onPromptChange, onLoaded, busy, submitLabel, submitBusyLabel, placeholder, inAgent = false, sessionRow, idleControl, notes, draftKey, autoFocus = false },
   ref,
 ) {
   const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
-  const modules = useMountedModules()
   const [prompt, setPrompt] = useState('')
   // The panel that saves what the box holds as a prompt is open.
   const [savingPrompt, setSavingPrompt] = useState(false)
   const editorRef = useRef<PromptEditorHandle>(null)
   // The box's edge, which the tooltips of its last line's items open past.
   const surface = useRef<HTMLDivElement>(null)
-  // The machines saved on this dashboard's own machine (#1052).
-  const machines = useMachines()
-  const machineStatus = useMachineStatus(machines) // #1072: online/offline per saved machine
-  // The registered projects for the `@` picker — the same list the launcher reads, but another
-  // computer's: its folder is not here to add (elsewhere.ts).
-  const listed = useLoaded<ProjectSummary[]>(onProjects, [], [])
-  const projects = useMemo(() => listed.filter(p => p.machine === undefined), [listed])
+  // The registered projects for the `@` picker: the same list the launcher reads.
+  const projects = useLoaded<ProjectSummary[]>(onProjects, [], [])
 
   const preferences = usePreferences()
   const model = preferences.model ?? '' // #628: empty = the coding agent's own default model
   const driver = preferences.driver ?? 'claude-code' // which coding agent does the work (#650)
   const activeProjectId = useActiveProjectId() // the project whose commands the `/` list offers
-  // The saved prompts the modules offer the box (#2394). A project only another computer of the
-  // person's has is not here to read, so its box offers what a session with no project's does.
-  const promptsIn = home !== undefined ? SESSIONS_ID : activeProjectId
-  const prompts = usePrompts(promptsIn)
+  // The saved prompts the modules offer the box (#2394).
+  const prompts = usePrompts(activeProjectId)
   const savePrompt = prompts.saver ? () => setSavingPrompt(true) : undefined
   const launcher = useProjectLauncher(activeProjectId)
   const commands = launcher?.commands ?? []
-  // A session with no project runs on any machine, in that machine's own folder for them.
+  // A session with no project runs in a folder of its own.
   const noProject = activeProjectId === SESSIONS_ID
-  // A project with no repository address has no name another machine knows it by, so it runs here
-  // only and a machine picked on another project's launcher is not its target. Another computer's
-  // such project runs on that computer only: this one cannot clone it.
-  const onlyHere = !noProject && home === undefined && launcher !== null && launcher.address === undefined
-  const onlyThere = home !== undefined && launcher !== null && launcher.address === undefined
-  const selectedMachineId = useSelectedMachineId() // #1067: the machine this run targets, if any
   // The hosts beside this computer the project's modules bring, and the one picked: none for a session with no project.
   const hosts = useRunHosts(inAgent || noProject ? null : activeProjectId)
   const selectedHostId = useSelectedHost()
-  // The pick saved at the last opening is picked again, once the preferences and the machines are
-  // read; one gone, or offline at its first check, is not, and the note under the box says so.
-  const preferencesLoaded = usePreferencesLoaded()
-  const machinesRead = useMachinesRead()
-  useEffect(() => {
-    if (!inAgent) restoreRunOn(preferences.runOn, preferencesLoaded && machinesRead ? machines : null, machineStatus)
-  }, [inAgent, preferences.runOn, preferencesLoaded, machinesRead, machines, machineStatus])
-  // Each saved machine that answers is asked once, ahead, what the pickers show of it: a switch
-  // in "Run on" then shows its models and accounts from its first frame, never a blank or an id.
-  useEffect(() => {
-    if (inAgent) return
-    for (const machine of machines) {
-      if (machineStatus[machine.id] !== 'online') continue
-      readMachineModelsAhead(machine.id)
-      readMachineAccountsAhead(machine.id)
-      readMachineGitHostsAhead(machine.id)
-    }
-  }, [inAgent, machines, machineStatus])
-  const fallback = useRunOnFallback()
-  const fellBackFrom = fallback?.why === 'offline' ? machines.find(machine => machine.id === fallback.id) : undefined
-  const selectedMachine = runTarget(machines, selectedMachineId, noProject ? { address: SESSIONS_ID } : launcher, home)
-  // The agents and models of the machine the run goes to: a run there is given one of its own.
-  const { models, theirs } = useModelsOn(inAgent ? undefined : selectedMachine?.id)
-  // Each agent's accounts on that computer, in its part of the agent picker: the one picked is the
-  // one its runs take first there, so the run goes with it. An agent not installed there has none
-  // to pick, and Codex's accounts are there once it is installed or has some added, as on Settings.
-  const accountsOn = inAgent ? undefined : selectedMachine?.id
-  const claudeAccounts = useAccountsOn('claude', accountsOn, !inAgent)
-  const codexAccounts = useAccountsOn('codex', accountsOn, !inAgent)
+  const models = useModels()
+  // Each agent's accounts, in its part of the agent picker: the one picked is the one its runs take
+  // first, so the run goes with it. An agent not installed here has none to pick, and Codex's
+  // accounts are there once it is installed or has some added, as on Settings.
+  const claudeAccounts = useAccountsOn('claude', !inAgent)
+  const codexAccounts = useAccountsOn('codex', !inAgent)
   const accountsOf = (name: DriverName): Pick<DriverOption, 'account' | 'accounts'> => {
     const { view, pick } = name === 'codex' ? codexAccounts : claudeAccounts
     const answer = models?.[name]
     const installed = answer !== undefined && !('error' in answer && answer.missing)
     if (!view || view.accounts.length === 0 || (name === 'codex' && view.accounts.length < 2 && !installed)) return {}
-    const on = selectedMachine ? machineName(selectedMachine) : undefined
     return {
       account: firstAccount(view),
-      accounts: <AgentAccountItems view={view} on={on} onPick={account => void pick(account)} onAdd={() => (selectedMachine ? services.openSettings('devices', selectedMachine.id) : services.openPage(PERMISSIONS_PAGE))} />,
+      accounts: <AgentAccountItems view={view} onPick={account => void pick(account)} onAdd={() => services.openPage(PERMISSIONS_PAGE)} />,
     }
   }
-  // #1073: block Start when the target machine is known-offline; an absent/unknown status must not block.
-  const targetOffline = !!selectedMachine && machineStatus[selectedMachine.id] === 'offline'
-  // Another person's computer: the person is told once that their logins are copied there, and
-  // starts nothing there until they said OK. Gone at once on OK, before the list is read again.
-  const [toldNow, setToldNow] = useState<string | null>(null)
-  const owner = selectedMachine?.owner
-  const untold = !inAgent && !!selectedMachine && owner !== undefined && !selectedMachine.told && toldNow !== selectedMachine.id
   // OpenAgent is not answering: nothing typed can be sent, and the box keeps it.
   const down = useContext(DaemonDown)
   // What holds a send, whatever the box holds: the one list the arrow and the keyboard both read.
-  // #1073: a keyboard submit is held too when the target machine is offline.
-  const held = busy || targetOffline || untold || down
+  const held = busy || down
 
   useImperativeHandle(ref, () => ({
     clear: () => {
@@ -346,7 +292,7 @@ export const Composer = forwardRef<ComposerHandle, {
   // next start runs on, wherever that start is made.
   const driverModelEl = !inAgent && (
     <DriverModelMenu
-      drivers={driverOptions(models, theirs && selectedMachine ? machineName(selectedMachine) : undefined).map(d => ({ ...d, ...DRIVER_UI[d.value as DriverName], ...accountsOf(d.value as DriverName) }))}
+      drivers={driverOptions(models).map(d => ({ ...d, ...DRIVER_UI[d.value as DriverName], ...accountsOf(d.value as DriverName) }))}
       driver={driver}
       model={model}
       onChange={(a, m) => updatePreferences({ driver: a, model: m })}
@@ -367,38 +313,17 @@ export const Composer = forwardRef<ComposerHandle, {
       onDelete={prompt => void prompts.remove(prompt)}
     />
   )
-  // Where the next run starts (#1052/#1067): this machine, a host the project's modules bring, or a
-  // saved machine. Launcher-only: a session already runs where it was started. A machine is added
-  // where every device is, Settings › Devices, devices' entry: with devices off there is none, and
-  // no machine to pick.
-  const devices = !modules.loaded || modules.views['settings.section'].some(view => view.id === 'devices')
-  const runOnEl = inAgent || (!devices && machines.length === 0 && hosts.length === 0) ? null : (
+  // Where the next run starts (#2394): this machine, or a host the project's modules bring.
+  // Launcher-only: a session already runs where it was started. With no host there is nothing to pick.
+  const runOnEl = inAgent || hosts.length === 0 ? null : (
     <RunOnMenu
       busy={busy}
       connection={{
-        machines,
-        selectedMachineId,
-        onlyHere,
         noProject,
-        home,
-        onlyThere,
-        // #1067: selecting a machine makes it the run target in place, no navigation.
-        onSelect: (m: Machine) => {
-          selectHost(null)
-          selectMachine(m.id)
-        },
-        onSelectLocal: () => {
-          selectHost(null)
-          selectMachine(null)
-        },
-        onAddMachine: devices ? () => services.openSettings('devices') : undefined,
-        status: machineStatus,
+        onSelectLocal: () => selectHost(null),
         hosts,
         selectedHostId,
-        onSelectHost: (id: string) => {
-          selectMachine(null)
-          selectHost(id)
-        },
+        onSelectHost: (id: string) => selectHost(id),
       }}
     />
   )
@@ -428,7 +353,7 @@ export const Composer = forwardRef<ComposerHandle, {
               'relative shrink-0 transition-[margin,opacity,scale] duration-180 ease-out motion-reduce:transition-none max-md:after:absolute max-md:after:-inset-2',
               IN_BOX,
               hasPrompt
-                ? // Full while busy, for its spinner; faded while something else holds the start (the note's OK, a machine offline).
+                ? // Full while busy, for its spinner; faded while something else holds the start (OpenAgent not answering).
                   cn('ml-0 scale-100 opacity-100', busy ? 'disabled:opacity-100' : 'disabled:opacity-40')
                 // The hidden submit takes no room: its own width (1.75rem) back.
                 : 'pointer-events-none -ml-7 scale-50 opacity-0 disabled:opacity-0',
@@ -446,50 +371,12 @@ export const Composer = forwardRef<ComposerHandle, {
   // and typing swaps in the send arrow — instead of the launcher's collapse-to-nothing.
   const slotEl = !hasPrompt && idleControl ? idleControl : submitButton
 
-  // #1073: an offline target blocks Start; say so and point back to the pick of where it runs. No auto-fallback.
-  const offlineNote = targetOffline && (
-    <p role="alert" className="rounded-md bg-background px-2 py-0.5 text-xs text-danger">
-      {`${selectedMachine ? machineName(selectedMachine) : 'The selected machine'} is offline. Pick another place to run, then start.`}
-    </p>
-  )
-  // The saved pick, let go as the page opened: where the run goes instead, and why.
-  const here = thisMachineName() === 'This machine' ? 'this machine' : thisMachineName()
-  const fallbackNote = !inAgent && fallback && !selectedMachine && (
-    <p role="status" className="rounded-md bg-background px-2 py-0.5 text-xs text-muted-foreground">
-      {fallback.why === 'gone'
-        ? `The computer you last picked to run on is no longer saved, so runs start on ${here}.`
-        : `${fellBackFrom ? machineName(fellBackFrom) : 'The computer you last picked'} is offline, so runs start on ${here}. Pick it again once it is on.`}
-    </p>
-  )
-  const loginsNote = untold && (
-    <div role="note" className="flex items-center gap-3 rounded-md border border-border bg-background px-3 py-2 text-xs">
-      <p className="min-w-0 flex-1">
-        <span className="text-foreground">{`Your own logins are used on ${owner}'s computer: copied there by a server of yours, or logged in on its page.`}</span>{' '}
-        <span className="text-muted-foreground">{`${owner} can see what is on it. Runs there start once you say OK.`}</span>
-      </p>
-      <Button
-        type="button"
-        size="sm"
-        variant="outline"
-        onClick={() => {
-          setToldNow(selectedMachine!.id)
-          void tellMachine(selectedMachine!.id)
-        }}
-      >
-        OK
-      </Button>
-    </div>
-  )
-
   // Every note at once, stacked up from the prompt area; none moves the box or what is typed in it. A note
   // is a card, so it stands the step between two cards from the prompt area and from the next note: 12.
   const notesSlot = useContext(BoxNotes)
   const notesEl = (
     <div className="flex flex-col gap-3 pb-3 empty:hidden">
       {notes}
-      {loginsNote}
-      {offlineNote}
-      {fallbackNote}
     </div>
   )
 
@@ -545,10 +432,10 @@ export const Composer = forwardRef<ComposerHandle, {
         {notesSlot ? createPortal(notesEl, notesSlot) : <div className="absolute inset-x-0 bottom-full">{notesEl}</div>}
       </div>
 
-      {savingPrompt && prompts.saver && promptsIn !== null && (
+      {savingPrompt && prompts.saver && activeProjectId !== null && (
         <ModuleSlot package={prompts.saver.package} label="Save prompt dialog">
           <prompts.saver.View
-            projectId={promptsIn}
+            projectId={activeProjectId}
             text={prompt}
             onDone={saved => {
               setSavingPrompt(false)

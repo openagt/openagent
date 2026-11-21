@@ -1,9 +1,9 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { accountsWiring, onAgentAccounts, sendRemoveAgentAccount, sendUseAgentAccountFirst } from './accounts.js'
+import { accountsWiring, onAgentAccounts, sendUseAgentAccountFirst } from './accounts.js'
 import { provideTestContext } from './test-context.js'
 import type { QuotaView } from '../dashboard/quota.js'
 import { addAccount, markLimited, noteWindows, OWN_NAME, readAccounts } from '@openagt/agent-driver'
@@ -77,15 +77,11 @@ test('the person\'s own login not there: it says so, and the first account with 
     {},
   ))
 
-test('an added account is removed and another put first; never the person\'s own removed', () =>
+test('another account is put first', () =>
   withAccounts(async path => {
     addAccount('Dani', LOGIN, path)
     assert.deepEqual(await sendUseAgentAccountFirst('claude', 'Dani'), { ok: true })
     assert.deepEqual(readAccounts(path).map(a => a.name), ['Dani', OWN_NAME])
-    await sendRemoveAgentAccount('claude', OWN_NAME)
-    await sendRemoveAgentAccount('claude', 'Dani')
-    assert.deepEqual(readAccounts(path).map(a => a.name), [OWN_NAME])
-    assert.equal(readFileSync(path, 'utf8').includes(LOGIN), false)
   }))
 
 /** A Codex account's folder and its own home, by the name the list gives its login, under `dir`. */

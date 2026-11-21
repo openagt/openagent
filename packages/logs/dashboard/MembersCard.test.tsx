@@ -78,14 +78,14 @@ test('a person with two emails on one git host account is one row, with their na
 })
 
 test("a member's runs are counted as the dashboard lists them: a run its record still calls going is not working when the dashboard says it is not", async () => {
-  // The records froze while the laptop's run went on: they say one run, going.
+  // The records are behind the runs: they say one run, going.
   const host = hostWith(
     [person('s@a.dev', { name: 'Suleiman Shahbari', runs: 1, running: 1, waiting: 0, cost: 0.5, commits: 2 })],
     [],
     [
-      // Its computer does not answer: how it stands is unknown, so it is not working.
-      { id: 'r1', status: 'unknown', startedAt: NOW, person: 's@a.dev', cost: 0.5 },
-      // A run the records do not have yet, from the laptop itself.
+      // It stopped since, so it is not working.
+      { id: 'r1', status: 'stopped', startedAt: NOW, person: 's@a.dev', cost: 0.5 },
+      // A run the records do not have yet.
       { id: 'r2', status: 'done', startedAt: NOW, person: 's@a.dev', cost: 1 },
     ],
   )

@@ -148,8 +148,7 @@ function AppBrowser({ bridge, onChanged }: { bridge: BridgeView; onChanged: () =
 /**
  * The person's own Chrome (#1237): the folder the extension is loaded from, and the token it shows
  * on each call. The token is shown on request, not outright: a secret on screen for good is in every
- * screen recording, and OpenAgent is demoed. An act reads it, so a device that may only watch
- * this computer never has it.
+ * screen recording, and OpenAgent is demoed.
  */
 function YourChrome({ folder }: { folder: string | undefined }) {
   const host = useModuleHost()

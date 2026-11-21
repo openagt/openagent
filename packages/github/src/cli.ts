@@ -11,9 +11,9 @@ import { publicProfile, type ProfileFetch } from './profile.js'
 import { listRepos } from './repos.js'
 import { DIARY_ENV, byline, writeComment } from './comment.js'
 import { readFileSync } from 'node:fs'
-import { HOST, accountDir, accountsRoot, asAccount, forgetAccount, ghState, gitConfig, installedAccounts, isGithubLogin, loginUnderWay, picksPath, stopLogin, readFacts, runEnv, runsAccount, settleAdded, startLogin, takeToken, useForRuns, type LoggingIn } from './accounts.js'
+import { HOST, accountsRoot, asAccount, forgetAccount, ghState, gitConfig, installedAccounts, isGithubLogin, loginUnderWay, picksPath, stopLogin, readFacts, runEnv, runsAccount, settleAdded, startLogin, useForRuns, type LoggingIn } from './accounts.js'
 import { jobFiles, jobState, startJob, type JobState } from './job.js'
-import { accountNamed, factsOfToken, tokenOf, workingGh } from './working-account.js'
+import { accountNamed, tokenOf, workingGh } from './working-account.js'
 
 /**
  * The command line over the package (#1820): the same functions for an agent in a shell, and for
@@ -48,8 +48,6 @@ ${helpRows([
   ['install', `put gh on this computer with no admin: Homebrew where it is, else GitHub's build into ~/.local/bin; answers once it started, and accounts says installing until it ended, then installFailed if it did`],
   ['env [--user <login>]', 'the environment a run gets to work as <login> (default: the account runs use): { env }, its gh folder, its token for gh and for git, its name on commits; refused (no-account) when OpenAgent has no account'],
   ['git-config [--user <login>]', `the git settings that make git push and fetch as <login> (default: the account runs use), asking gh for its login when git needs it: { login, host, config: [[key, value]] }; no secret in them, so they may be kept in a repository's own config`],
-  ['token --user <login>', `<login>'s token as OpenAgent keeps it, checked with GitHub to be that account's: { login, token }; what OpenAgent copies to a server of the person's, which then uses the same login, never a new one`],
-  ['take', `add the login whose token is on standard input as one of OpenAgent's accounts: { login }`],
   ['forget <login>', 'OpenAgent forgets <login>; the token is not ended, and goes on working wherever else it is'],
   ['create [--check]', 'create a private repository for a project with no origin, named <account>/<folder>, set it as origin and push; --check only says which repository that would be'],
 ])}
@@ -83,8 +81,6 @@ interface Services {
   underWay: () => LoggingIn | undefined
   /** Give up the browser login under way; the default stops its gh. */
   stopLogin: (root: string) => void
-  /** What the command was handed on standard input; the default reads the process's. */
-  stdin: () => Promise<string>
   /** What reads a public profile from GitHub; the default is `fetch`. */
   fetch: ProfileFetch
 }
@@ -92,7 +88,7 @@ interface Services {
 /** What a run of the CLI may be given instead of the real services: for tests. */
 export type CliDeps = Partial<Services>
 
-/** The real services: this process's gh, git, environment, standard input and network. */
+/** The real services: this process's gh, git, environment and network. */
 function realServices(): Services {
   return {
     gh: nodeGhRunner(),
@@ -105,7 +101,6 @@ function realServices(): Services {
     login: startLogin,
     underWay: loginUnderWay,
     stopLogin,
-    stdin: readStdin,
     fetch,
   }
 }
@@ -125,13 +120,6 @@ export function runCli(argv: string[], io: CliIo, deps: CliDeps = {}): Promise<n
 /** A failure no command meant: the git host, or `gh` talking to it, said no in a way no rule names. */
 const GIT_HOST_FAILED: Failure = { reason: 'git-host-failed', detail: errorMessage }
 
-/** All of the process's standard input, as text. */
-async function readStdin(): Promise<string> {
-  let said = ''
-  for await (const chunk of process.stdin.setEncoding('utf8')) said += chunk
-  return said
-}
-
 /** A command that talks to GitHub: it works as one of OpenAgent's accounts, its `gh` made so before it runs (`working-account.ts`). */
 function asOpenAgent(command: Command<[Context]>): Command<[Context]> {
   return async (args, ctx) => command(args, { ...ctx, gh: await workingGh(ctx) })
@@ -146,9 +134,6 @@ async function gitHostAnswer<T>(what: string, ask: () => Promise<T>): Promise<T>
     throw new Refused({ ok: false, reason: 'git-host-failed', detail }, `${what}: ${detail}`)
   }
 }
-
-/** What a GitHub token reads as: letters, digits and underscores, nothing a line could break on. */
-const TOKEN = /^[A-Za-z0-9_]{20,255}$/
 
 /** The logo OpenAgent draws the host's card with. */
 const LOGO = readFileSync(new URL('../assets/github.svg', import.meta.url), 'utf8').trim()
@@ -309,29 +294,6 @@ const COMMANDS: Record<string, Command<[Context]>> = {
     const { values } = parseCommandArgs(args, { user: { type: 'string' } }, 0)
     const { login, dir } = await accountNamed(values.user, cwd, gh, env)
     return { ok: true, login, host: HOST, config: gitConfig(dir) }
-  },
-
-  async token(args, { cwd, gh, env }) {
-    const { values } = parseCommandArgs(args, { user: { type: 'string' } }, 0)
-    const login = values.user
-    if (login === undefined) throw new UsageError('token needs --user <login>')
-    const root = accountsRoot(env)
-    if (!(await installedAccounts(root, cwd, gh)).some(a => a.login === login)) throw new Refused({ ok: false, reason: 'no-account', login }, `OpenAgent has no GitHub account ${login} on this computer`)
-    return { ok: true, login, token: await tokenOf(login, accountDir(root, login), cwd, gh) }
-  },
-
-  async take(args, { cwd, gh, env, stdin }) {
-    parseCommandArgs(args, {}, 0)
-    const token = (await stdin()).trim()
-    if (!TOKEN.test(token)) throw new Refused({ ok: false, reason: 'no-token' }, 'what was handed over is no GitHub token')
-    const facts = await factsOfToken(token, cwd, gh)
-    try {
-      await takeToken(accountsRoot(env), token, facts, gh, cwd)
-    } catch (err) {
-      const detail = errorMessage(err)
-      throw new Refused({ ok: false, reason: 'login-failed', login: facts.login, detail }, `gh did not take ${facts.login}'s login: ${detail}`)
-    }
-    return { ok: true, login: facts.login }
   },
 
   async forget(args, { env }) {

@@ -8,8 +8,8 @@ import { isPageSegment, SESSIONS_ID } from '../../src/project-address.js'
 
 /**
  * Where a thing a module brings came from: its package, the projects that have it, whether the
- * sessions with no project have it too, and whether the package is this computer's (its devices)
- * rather than a project's.
+ * sessions with no project have it too, and whether the package is this computer's rather than a
+ * project's.
  */
 interface Of {
   package: string

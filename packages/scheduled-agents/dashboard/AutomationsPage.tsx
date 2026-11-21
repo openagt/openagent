@@ -292,8 +292,8 @@ export function AutomationsPage({ projects }: UiPageProps) {
                                 >
                                   <div className="flex items-start gap-3">
                                     <span className="flex h-5 w-4 shrink-0 items-center">
-                                      {/* Its last run's state; an empty outline for one that never ran, as its line says. */}
-                                      <RunMark status={scheduled.lastRun === undefined ? 'unknown' : scheduled.lastRun.failed ? 'failed' : scheduled.lastRun.running ? 'running' : 'done'} />
+                                      {/* Its last run's state; an empty outline for one that never ran (a state the run words do not name), as its line says. */}
+                                      <RunMark status={scheduled.lastRun === undefined ? 'never ran' : scheduled.lastRun.failed ? 'failed' : scheduled.lastRun.running ? 'running' : 'done'} />
                                     </span>
                                     <div className="min-w-0 flex-1">
                                       <p className="truncate leading-5 max-md:line-clamp-2 max-md:whitespace-normal">

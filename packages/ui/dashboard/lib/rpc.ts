@@ -51,8 +51,8 @@ export function rpc<F extends (...args: never[]) => unknown>(
  * A live feed of one agent's events.
  *
  * The contract the dashboard relies on, unchanged from the Channel it replaced: `listen` per
- * event, and `onClose` telling a clean end (the server is done — an unknown project, a finished
- * relay stream) apart from a dropped one (retry with backoff). That distinction is the whole
+ * event, and `onClose` telling a clean end (the server is done — an unknown project) apart from a
+ * dropped one (retry with backoff). That distinction is the whole
  * reason the feed can say "the daemon is not answering" instead of looking like a quiet agent.
  */
 export interface EventChannel {

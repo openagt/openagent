@@ -17,7 +17,7 @@ export interface LoginWiring {
   now: () => number
   /** The environment the agents' own logins are read in. */
   env: NodeJS.ProcessEnv
-  /** No browser on this computer: a server's, or a Linux computer with no display. The person signs in on another device. */
+  /** No browser on this computer: a Linux computer with no display. The person signs in on another device. */
   headless: () => boolean
   /** Where a list's sign-in says how it goes. */
   addingPath: (list: string) => string
@@ -45,7 +45,7 @@ export function loginWiring(env: NodeJS.ProcessEnv = process.env): LoginWiring {
     path: list => accountsPath(list, env),
     now: Date.now,
     env,
-    headless: () => env['OPENAGENT_SERVER'] === '1' || (process.platform === 'linux' && !env['DISPLAY'] && !env['WAYLAND_DISPLAY']),
+    headless: () => process.platform === 'linux' && !env['DISPLAY'] && !env['WAYLAND_DISPLAY'],
     addingPath: list => addingPath(list, env),
     startAdding: startAddingProcess,
     ownPid: () => process.pid,

@@ -239,14 +239,13 @@ test('the runs the dashboard lists show while the records are still read, with n
   expect(screen.queryByText('Loading…')).toBeNull()
 })
 
-test('each run as the dashboard says it stands: a record that still says running reads unknown while its computer is offline, and a run with no record yet is listed', async () => {
-  const seenAt = at(now - HOUR)
+test('each run as the dashboard says it stands: a record that still says running reads as the run ended, and a run with no record yet is listed', async () => {
   const host = hostWith(
-    // The records froze while the laptop worked on.
-    [{ id: 'r1', startedAt: at(now - 5000), status: 'running', intent: 'frozen in the records' }],
+    // The records are behind the runs.
+    [{ id: 'r1', startedAt: at(now - 5000), status: 'running', intent: 'behind in the records' }],
     [
-      { id: 'r1', startedAt: at(now - 5000), status: 'unknown', ask: 'frozen in the records', machine: 'MacBook', seenAt },
-      { id: 'r2', startedAt: at(now - 1000), endedAt: at(now), status: 'done', title: 'Only on the laptop', cost: 0.3 },
+      { id: 'r1', startedAt: at(now - 5000), endedAt: at(now - 4000), status: 'stopped', ask: 'behind in the records' },
+      { id: 'r2', startedAt: at(now - 1000), endedAt: at(now), status: 'done', title: 'Not recorded yet', cost: 0.3 },
     ],
   )
   render(
@@ -254,10 +253,10 @@ test('each run as the dashboard says it stands: a record that still says running
       <LogsPage projects={[{ id: 'p1', name: 'alpha', gitHost: true }]} projectId={null} path={[]} />
     </ModuleHostContext.Provider>,
   )
-  const added = (await screen.findAllByText('Only on the laptop'))[0]!.closest('li')!
+  const added = (await screen.findAllByText('Not recorded yet'))[0]!.closest('li')!
   expect(added.textContent).toContain('Done')
-  const frozen = screen.getAllByText('frozen in the records')[0]!.closest('li')!
-  expect(within(frozen).getByText('Status unknown').closest('[title]')!.getAttribute('title')).toBe(`MacBook offline · last seen ${new Date(seenAt).toLocaleString()}`)
+  const behind = screen.getAllByText('behind in the records')[0]!.closest('li')!
+  expect(behind.textContent).toContain('Stopped')
   expect(screen.queryAllByText(/^Working/)).toHaveLength(0)
 })
 

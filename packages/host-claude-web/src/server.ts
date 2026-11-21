@@ -97,11 +97,8 @@ export const bridge = read(async (host: RpcComputerHost, _input: object): Promis
   }
 })
 
-/**
- * The bridge's key, for a person to paste into the extension in their own Chrome. An act, not a
- * read: a device that may only watch this computer never has it.
- */
-export const token = act(async (_host: RpcComputerHost, _input: object): Promise<string | null> => (await readToken(claudeWebDir())) ?? null)
+/** The bridge's key, for a person to paste into the extension in their own Chrome. */
+export const token = read(async (_host: RpcComputerHost, _input: object): Promise<string | null> => (await readToken(claudeWebDir())) ?? null)
 
 /** Pick which browser does the extension's work: the one OpenAgent runs starts with the pick, and stops with the other. */
 export const pickBrowser = act(async (host: RpcComputerHost, input: { browser: 'app' | 'yours' }): Promise<void> => {

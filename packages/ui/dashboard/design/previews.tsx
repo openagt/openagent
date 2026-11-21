@@ -23,7 +23,7 @@ import { ComposedField, ComposedFieldFoot, ComposedFieldInput } from '../compone
 import { Empty } from '../components/ui/empty.js'
 import { FilterChips } from '../components/FilterChips.js'
 import { RowShapes, Slot } from '../components/ui/slot.js'
-import { ChevronRight, CornerDownLeft, Ellipsis, Folder, Monitor, Play, Smartphone, Trash2 } from 'lucide-react'
+import { ChevronRight, CornerDownLeft, Ellipsis, Folder, Play, Trash2 } from 'lucide-react'
 import { SettingsItem, SettingsItems, SettingsRow, SettingsSection } from '../components/SettingsRows.js'
 import { JumpPalette, openJump } from '../components/JumpPalette.js'
 import { ShortcutList } from '../components/ShortcutList.js'
@@ -740,10 +740,10 @@ function SettingsRows() {
         <SettingsRow label="Name each run" description="A small model is asked for the two to five words a run's row shows." control={<Switch aria-label="Name each run" defaultChecked />} />
         <SettingsRow label="Show what the coding agent thought" description="Inside a run of steps, a row for each thought between them." control={<Switch aria-label="Show what the coding agent thought" />} />
       </SettingsSection>
-      <Section title="Your devices">
-        <SettingsItems aria-label="Your devices">
-          <SettingsItem icon={Smartphone} title="iPhone, Safari" detail={<Facts facts={['Phone', 'on this Wi-Fi', 'last seen 2m ago']} />} actions={<Button variant="ghost" size="icon-sm" className="-mr-1.5" aria-label="iPhone, Safari: more"><Ellipsis className="size-4" aria-hidden /></Button>} />
-          <SettingsItem icon={Monitor} title="Studio Mac" detail={<Facts facts={['Computer', 'runs go both ways']} />} end={<><Badge tone="success">Online</Badge><ChevronRight aria-hidden /></>} onClick={() => {}} />
+      <Section title="Folders searched on this computer">
+        <SettingsItems aria-label="Folders searched">
+          <SettingsItem icon={Folder} title="~/oss" detail={<Facts facts={['12 repositories', 'added 2d ago']} />} actions={<Button variant="ghost" size="icon-sm" className="-mr-1.5" aria-label="~/oss: more"><Ellipsis className="size-4" aria-hidden /></Button>} />
+          <SettingsItem icon={Folder} title="~/work" detail={<Facts facts={['3 repositories']} />} end={<><Badge tone="success">Searched</Badge><ChevronRight aria-hidden /></>} onClick={() => {}} />
         </SettingsItems>
       </Section>
     </div>

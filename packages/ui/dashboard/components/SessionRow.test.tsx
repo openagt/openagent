@@ -64,15 +64,13 @@ describe('a session\'s row above the box', () => {
     expect(words(container).join()).not.toContain('agent-fix-login')
   })
 
-  test('a machine and a host say what they are: their name, and the mark of not being this computer', () => {
+  test('a host says what it is: its name, and the mark of not being this computer', () => {
     const dot = (container: HTMLElement) => container.querySelector('[data-hover] .rounded-full')
     const { container, rerender } = render(<SessionRow {...facts} />)
     expect(dot(container)).toBeNull()
-    rerender(<SessionRow {...facts} runsOn="Studio" target="remote" remoteKind="server" elsewhere />)
-    expect(words(container)[0]).toBe('Studio')
-    expect(dot(container)).toBeTruthy()
     rerender(<SessionRow {...facts} runsOn="Claude Code on the web" target="web" elsewhere />)
     expect(words(container)[0]).toBe('Claude Code on the web')
+    expect(dot(container)).toBeTruthy()
     rerender(<SessionRow {...facts} runsOn="GitHub Actions" target="actions" elsewhere />)
     expect(words(container)[0]).toBe('GitHub Actions')
   })

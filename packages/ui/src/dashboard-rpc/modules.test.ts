@@ -9,9 +9,8 @@ import { addProject } from '../registry.js'
 import { projectQueue } from '../store/queue.js'
 import { onModules, runComputerCommand, runModuleCommand } from './modules.js'
 import { callModule } from './module-calls.js'
-import { asCaller } from '../dashboard/person.js'
-import { setDashboardContext } from './context.js'
-import { NO_ELSEWHERE, provideTestContext, testDashboardContext } from './test-context.js'
+
+import { provideTestContext } from './test-context.js'
 import { testPackagesBut, withDistribution } from '../test-distribution.js'
 import { distributionHooks, projectRefAt } from '../distribution-hooks.js'
 
@@ -92,10 +91,9 @@ test('the dashboard\'s modules are every registered project\'s, one per package,
 
     await withDistribution(dir, [...COMPUTER, '@openagt/store-filesystem', '@openagt/ui-pane-changes', '@openagt/ui-pane-files', 'logs', 'plain', 'queue'], async () => {
       await switchOn(b, 'queue')
-      // The computer's modules (Devices, the notifications, the accounts, the Human Queue, how markdown looks, Profile) come first, and are no project's. Then the ones every project has, from the first, which the sessions with no project have too; then queue, which only the project it is on in has.
+      // The computer's modules (the notifications, the accounts, the Human Queue, how markdown looks, Profile) come first, and are no project's. Then the ones every project has, from the first, which the sessions with no project have too; then queue, which only the project it is on in has.
       assert.deepEqual(await listed(), [
         { package: '@openagt/agent-driver', url: '/_computer-modules/%40openagt%2Fagent-driver/dashboard.js', projects: [], computer: true },
-        { package: '@openagt/devices', url: '/_computer-modules/%40openagt%2Fdevices/dashboard.js', projects: [], computer: true },
         { package: '@openagt/notifications-browser', url: '/_computer-modules/%40openagt%2Fnotifications-browser/dashboard.js', projects: [], computer: true },
         { package: '@openagt/ui-card-waiting', url: '/_computer-modules/%40openagt%2Fui-card-waiting/dashboard.js', projects: [], computer: true },
         { package: '@openagt/ui-renderer-markdown', url: '/_computer-modules/%40openagt%2Fui-renderer-markdown/dashboard.js', projects: [], computer: true },
@@ -123,17 +121,12 @@ test("with no project added, the computer's modules are there and run their own 
   const dir = await realpath(await mkdtemp(join(tmpdir(), 'openagent-modules-rpc-')))
   const previous = process.env.XDG_CONFIG_HOME
   process.env.XDG_CONFIG_HOME = join(dir, 'cfg')
-  // A run of these tests on a server: the commands answer as on a person's own computer.
-  const onServer = process.env.OPENAGENT_SERVER
-  delete process.env.OPENAGENT_SERVER
   try {
     await mkdir(process.env.XDG_CONFIG_HOME, { recursive: true })
     await install(dir, { queue: module('queue') })
-    // The store keeps devices' row, which the tests' distribution starts on.
     await withDistribution(dir, [...COMPUTER, '@openagt/store-filesystem', '@openagt/ui-pane-files', 'queue'], async () => {
       assert.deepEqual(await listed(), [
         { package: '@openagt/agent-driver', url: '/_computer-modules/%40openagt%2Fagent-driver/dashboard.js', projects: [], computer: true },
-        { package: '@openagt/devices', url: '/_computer-modules/%40openagt%2Fdevices/dashboard.js', projects: [], computer: true },
         { package: '@openagt/notifications-browser', url: '/_computer-modules/%40openagt%2Fnotifications-browser/dashboard.js', projects: [], computer: true },
         { package: '@openagt/ui-card-waiting', url: '/_computer-modules/%40openagt%2Fui-card-waiting/dashboard.js', projects: [], computer: true },
         { package: '@openagt/ui-renderer-markdown', url: '/_computer-modules/%40openagt%2Fui-renderer-markdown/dashboard.js', projects: [], computer: true },
@@ -141,15 +134,13 @@ test("with no project added, the computer's modules are there and run their own 
         { package: '@openagt/ui-pane-files', url: '/_brought-modules/%40openagt%2Fui-pane-files/dashboard.js', projects: [], sessions: true },
         { package: 'queue', url: '/_brought-modules/queue/w.js', projects: [], sessions: true },
       ])
-      // The door's own command, answering what it keeps for this computer: nobody is in, and it is shut.
-      assert.deepEqual(await runComputerCommand('@openagt/devices', ['status']), { ok: true, output: { on: false, listening: false, devices: [], lines: [], persons: [] } })
-      assert.deepEqual(await runComputerCommand('@openagt/devices', ['server', 'status']), { ok: true, output: { servers: [] } })
-      assert.deepEqual(await runComputerCommand('@openagt/devices', ['status'], 'servers'), { ok: false, error: '@openagt/devices has no command servers' })
-      // A command is told when a person the owner invited asks, and decides what such a person may do: no computer of theirs is let in here.
-      assert.deepEqual(await runComputerCommand('@openagt/devices', ['allow', 'a1b2c3d4e5f6']), { ok: false, error: 'That computer is no longer asking.' })
-      assert.deepEqual(await asCaller(encodeURIComponent('Rom Ö'), () => runComputerCommand('@openagt/devices', ['allow', 'a1b2c3d4e5f6'])), { ok: false, error: "Only this computer's owner lets a computer in." })
-      // What a command reads on standard input is handed over as it is.
-      assert.deepEqual(await runComputerCommand('@openagt/devices', ['ask-cancel', 'http://127.0.0.1:9', '-'], null, ''), { ok: false, error: 'no secret on standard input' })
+      // agent-driver's own command, answering what it keeps for this computer: no sign-in under way,
+      // and, on Linux with no display, no browser to sign in with.
+      const where = process.platform === 'linux' && !process.env['DISPLAY'] && !process.env['WAYLAND_DISPLAY'] ? { noBrowser: true } : {}
+      assert.deepEqual(await runComputerCommand('@openagt/agent-driver', ['adding'], 'account-rotation'), { ok: true, output: { claude: where, codex: where } })
+      assert.deepEqual(await runComputerCommand('@openagt/agent-driver', ['adding'], 'servers'), { ok: false, error: '@openagt/agent-driver has no command servers' })
+      // A command that reads standard input is handed it, and answers: here a code, with no sign-in waiting for one.
+      assert.deepEqual(await runComputerCommand('@openagt/agent-driver', ['add-code', 'claude'], 'account-rotation', 'KQ7M-4XPD'), { ok: false, error: 'No login waits for a code: start it again.' })
       assert.deepEqual(await runComputerCommand('@openagt/ui-pane-files', []), { ok: false, error: "@openagt/ui-pane-files is not this computer's" })
       assert.deepEqual(await runComputerCommand('queue', []), { ok: false, error: "queue is not this computer's" })
 
@@ -157,12 +148,11 @@ test("with no project added, the computer's modules are there and run their own 
       await project(a)
       await addProject(a, '2026-09-19T00:00:00.000Z')
       assert.deepEqual(await runComputerCommand('queue', []), { ok: false, error: "queue is not this computer's" })
-      assert.deepEqual(await runModuleCommand(projectId(a), '@openagt/devices', ['status']), { ok: false, error: '@openagt/devices brings no module to this project' })
+      assert.deepEqual(await runModuleCommand(projectId(a), '@openagt/agent-driver', ['adding']), { ok: false, error: '@openagt/agent-driver brings no module to this project' })
     })
   } finally {
     if (previous === undefined) delete process.env.XDG_CONFIG_HOME
     else process.env.XDG_CONFIG_HOME = previous
-    if (onServer !== undefined) process.env.OPENAGENT_SERVER = onServer
     await rm(dir, { recursive: true, force: true })
   }
 })
@@ -224,36 +214,6 @@ test("a module calls its own server part's functions, in its own project, which 
       assert.ok(files.ok && Array.isArray(files.output))
     })
   } finally {
-    if (previous === undefined) delete process.env.XDG_CONFIG_HOME
-    else process.env.XDG_CONFIG_HOME = previous
-    await rm(dir, { recursive: true, force: true })
-  }
-})
-
-test("another computer's project has the pages its computer said, from a copy here: a project's of this computer's, else the distribution's own; one with no copy here has none", async () => {
-  const dir = await realpath(await mkdtemp(join(tmpdir(), 'openagent-modules-elsewhere-')))
-  const previous = process.env.XDG_CONFIG_HOME
-  process.env.XDG_CONFIG_HOME = join(dir, 'cfg')
-  try {
-    await mkdir(process.env.XDG_CONFIG_HOME, { recursive: true })
-    await install(dir, { logs: module('logs') })
-    const a = join(dir, 'a')
-    await project(a)
-    await addProject(a, '2026-09-19T00:00:00.000Z')
-    const theirs = { id: 'shop-1~abc', path: '/Users/ada/shop', name: 'shop', activated: true, gitHost: true, machine: 'http://127.0.0.1:4210', modules: ['logs', '@openagt/queue', '@openagt/devices', 'left-pad'] }
-    setDashboardContext(testDashboardContext({ remote: { ...testDashboardContext().remote, ...NO_ELSEWHERE, elsewhere: async () => [theirs] } }))
-    await withDistribution(dir, [...COMPUTER, '@openagt/store-filesystem', 'logs', '@openagt/queue'], async () => {
-      const modules = await listed()
-      // A package a project here has: its page is that one, for theirs too.
-      assert.deepEqual(modules.find(m => m.package === 'logs')?.projects, [projectId(a), 'shop-1~abc'])
-      // One no project here has (its plugin is on in none), that the distribution brings: from the distribution's own copy.
-      assert.deepEqual(modules.find(m => m.package === '@openagt/queue'), { package: '@openagt/queue', url: '/_brought-modules/%40openagt%2Fqueue/dashboard.js', projects: ['shop-1~abc'] })
-      // The computer's own modules are no project's, and a package with no copy here brings nothing.
-      assert.deepEqual(modules.find(m => m.package === '@openagt/devices')?.projects, [])
-      assert.equal(modules.find(m => m.package === 'left-pad'), undefined)
-    })
-  } finally {
-    setDashboardContext(testDashboardContext())
     if (previous === undefined) delete process.env.XDG_CONFIG_HOME
     else process.env.XDG_CONFIG_HOME = previous
     await rm(dir, { recursive: true, force: true })

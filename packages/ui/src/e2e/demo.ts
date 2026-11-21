@@ -196,9 +196,7 @@ export async function startDemo(options: DemoOptions = {}): Promise<Demo> {
     // Its records go to its remote, as a team's do.
     const shared = await call<{ ok: boolean; error?: string }>('sendShareRecords', id, true)
     if (!shared.ok) throw new Error(`could not share the demo project's records: ${shared.error}`)
-    // This computer has its door, so Settings › Devices can be walked too.
-    const devices = await call<{ ok: boolean; error?: string }>('sendSwitchPlugin', 'devices', true)
-    if (!devices.ok) throw new Error(`could not switch devices on: ${devices.error}`)
+
     // It has on every plugin with a page of its own, so each page can be walked.
     for (const plugin of SHOP_PLUGINS) {
       const switched = await call<{ ok: boolean; error?: string }>('sendSwitchPlugin', plugin, true, id)

@@ -74,22 +74,6 @@ describe('the rows of what waits on the person', () => {
     expect(screen.getByText('shop')).toBeTruthy()
   })
 
-  test('a run on another of the person\'s computers says which; one of this computer\'s says nothing more', () => {
-    render(
-      <WaitingList
-        items={[asks('r1', 'Asks there', 'q?', { computer: { name: 'Suleimans-MacBook-Pro', kind: 'computer' } }), uncommitted('r2', 'Left here')]}
-        onOpenAgent={() => {}}
-      />,
-    )
-    const rows = screen.getAllByRole('listitem').map(row => row.textContent)
-    expect(rows).toEqual(['Needs answerAsks thereq?', 'Needs commitLeft here'])
-    expect(screen.getByRole('img', { name: 'Runs on Suleimans-MacBook-Pro' })).toBeTruthy()
-    // The icon of the computer's kind, as the list of runs marks a run there, named to a screen reader.
-    const [there, here] = screen.getAllByRole('listitem')
-    expect(there!.querySelector('.lucide-laptop')).toBeTruthy()
-    expect(here!.querySelector('.lucide-laptop')).toBeNull()
-  })
-
   test('the words are one rule, for every list that shows what a run needs', () => {
     expect((['awaiting', 'uncommitted', 'unpushed', 'pr'] as RunNeed[]).map(need => needsWord(need))).toEqual(['Needs answer', 'Needs commit', 'Needs PR', 'Needs merge'])
     expect(needsWord('unpushed', false)).toBe('Needs push')

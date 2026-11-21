@@ -2,9 +2,8 @@ import type { IncomingMessage, OutgoingHttpHeaders, ServerResponse } from 'node:
 import { promisify } from 'node:util'
 import { gzip } from 'node:zlib'
 
-// What the dashboard sends goes gzipped to a browser that takes it: a phone on its own network,
-// reaching a server through its door, waits for every byte of the page's code and of each answer,
-// and text like these shrinks to an eighth. A short answer goes as it is.
+// What the dashboard sends goes gzipped to a browser that takes it: the page's code and its answers
+// are text, which shrinks to an eighth. A short answer goes as it is.
 
 const gzipped = promisify(gzip)
 

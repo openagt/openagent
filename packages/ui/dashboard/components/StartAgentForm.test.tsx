@@ -10,13 +10,13 @@ import { resetRunHostsForTest, selectHost } from '../lib/run-hosts.js'
 // unmocked one reaches for `/_rpc/<name>`, and there is no daemon behind jsdom to answer.
 const onCommands = vi.hoisted(() => vi.fn())
 const onStartCheck = vi.hoisted(() => vi.fn())
-const onCloneCheck = vi.hoisted(() => vi.fn())
+
 const onProjects = vi.hoisted(() => vi.fn(async () => [] as unknown[]))
 const onStartBranches = vi.hoisted(() => vi.fn(async () => ({ branches: ['feature-x'] }) as { branches?: string[] }))
 const onRepos = vi.hoisted(() => vi.fn(async () => ({ repos: [] as { path: string; name: string; url?: string }[], canAddFolder: false })))
 // The hosts beside this computer the project's modules bring: none unless a test says.
 const onRunHosts = vi.hoisted(() => vi.fn(async () => [] as { id: string; label: string }[]))
-vi.mock('../rpc/projects.js', () => ({ onCommands, onStartBranches, onStartCheck, onCloneCheck, onProjects, onRepos, onRunHosts, sendAddRepoFolder: vi.fn() }))
+vi.mock('../rpc/projects.js', () => ({ onCommands, onStartBranches, onStartCheck, onProjects, onRepos, onRunHosts, sendAddRepoFolder: vi.fn() }))
 
 // Mutable so a test can pick the coding agent and the model; reset after each.
 const prefs = vi.hoisted(() => ({ current: {} as Record<string, unknown> }))
@@ -24,20 +24,10 @@ const updatePreferences = vi.hoisted(() => vi.fn())
 // Whether the saved preferences have been read: a test turns it off to see what waits for them.
 const prefsLoaded = vi.hoisted(() => ({ current: true }))
 vi.mock('../lib/preferences.js', () => ({ usePreferences: () => prefs.current, usePreferencesLoaded: () => prefsLoaded.current, updatePreferences }))
-const machine = vi.hoisted(() => ({ current: null as null | { id: string; url: string; label: string } }))
-vi.mock('../lib/machines.js', () => ({ useMachines: () => (machine.current ? [machine.current] : []) }))
-const followProjectHome = vi.hoisted(() => vi.fn())
-vi.mock('../lib/remote-target.js', async () => ({
-  ...(await vi.importActual<typeof import('../lib/remote-target.js')>('../lib/remote-target.js')),
-  useSelectedMachineId: () => machine.current?.id ?? null,
-  followProjectHome,
-}))
+
 const logins = vi.hoisted(() => ({ onAgentState: vi.fn(), sendAgentFix: vi.fn(), onGitHosts: vi.fn(), sendGitHostInstall: vi.fn(), sendGitHostLogin: vi.fn(), sendUseGitHostAccount: vi.fn() }))
 vi.mock('../rpc/logins.js', () => logins)
-// A picked machine's own check, and how this computer's logins stand on the machines that take them.
-const onMachineStartCheck = vi.hoisted(() => vi.fn())
-const onMachineLogins = vi.hoisted(() => vi.fn())
-vi.mock('../rpc/machines.js', () => ({ onMachineStartCheck, onMachineLogins }))
+
 // The presets as read, and the menu as a press that picks the second one.
 const presetsList = vi.hoisted(() => ({
   presets: [
@@ -69,10 +59,9 @@ vi.mock('./SkillsMenu.js', () => ({
 const runsAccount = vi.hoisted(() => ({ login: undefined as string | undefined }))
 vi.mock('./GitHosts.js', () => ({
   GitAccountMenu: ({ onPick }: { onPick: (login: string) => void }) => <button type="button" onClick={() => onPick('octo-agent')}>pick-octo-agent</button>,
-  useSessionAccount: (_address: string | undefined, _machineId: string | undefined, picked: string | undefined) => picked ?? runsAccount.login,
+  useSessionAccount: (_address: string | undefined, picked: string | undefined) => picked ?? runsAccount.login,
 }))
-const serverLogins = vi.hoisted(() => ({ onServerLogins: vi.fn(), sendUseLoginsOn: vi.fn(), sendAllowLogins: vi.fn(), sendSettleLogin: vi.fn() }))
-vi.mock('../rpc/server-logins.js', () => serverLogins)
+
 const openSettings = vi.hoisted(() => vi.fn())
 const openPage = vi.hoisted(() => vi.fn())
 vi.mock('../lib/host-services.js', async importOriginal => {
@@ -81,12 +70,12 @@ vi.mock('../lib/host-services.js', async importOriginal => {
 })
 
 const start = vi.hoisted(() => vi.fn())
-// What the start says of itself beside its answer: that the machine is cloning the project, or why there is no run.
+// What the start says of itself beside its answer: why there is no run.
 const startReset = vi.hoisted(() => vi.fn())
-const startSays = vi.hoisted(() => ({ cloning: false, error: null as string | null }))
+const startSays = vi.hoisted(() => ({ error: null as string | null }))
 vi.mock('../lib/use-start-agent.js', async () => ({
   ...(await vi.importActual<typeof import('../lib/use-start-agent.js')>('../lib/use-start-agent.js')),
-  useStartAgent: () => ({ busy: false, cloning: startSays.cloning, error: startSays.error, reset: startReset, start }),
+  useStartAgent: () => ({ busy: false, error: startSays.error, reset: startReset, start }),
 }))
 
 // The Composer is exercised by its own tests; here it hands back a typed submit, shows whether
@@ -125,10 +114,7 @@ const { StartAgentForm } = await import('./StartAgentForm.js')
 // No check hook unless a test gives one: nothing to say.
 beforeEach(() => {
   onStartCheck.mockResolvedValue(null)
-  onCloneCheck.mockResolvedValue({ problems: [], warnings: [] })
-  onMachineStartCheck.mockResolvedValue(null)
-  onMachineLogins.mockResolvedValue({ ok: true, logins: { github: { source: 'made' }, claude: { source: 'made' } } })
-  serverLogins.onServerLogins.mockResolvedValue({ computer: 'Mac', servers: [] })
+
 })
 
 afterEach(() => {
@@ -138,20 +124,17 @@ afterEach(() => {
   start.mockReset()
   composerFocus.mockReset()
   composerClear.mockReset()
-  startSays.cloning = false
+
   startSays.error = null
   onCommands.mockReset()
   onStartCheck.mockReset()
-  onCloneCheck.mockReset()
-  onMachineStartCheck.mockReset()
-  onMachineLogins.mockReset()
-  for (const fn of Object.values(serverLogins)) fn.mockReset()
+
   openSettings.mockReset()
-  followProjectHome.mockReset()
+
   updatePreferences.mockReset()
   prefs.current = {}
   prefsLoaded.current = true
-  machine.current = null
+
   onRunHosts.mockReset()
   onRunHosts.mockResolvedValue([])
   resetRunHostsForTest()
@@ -187,7 +170,7 @@ describe('StartAgentForm (#1774)', () => {
     const onAgentStarted = vi.fn()
     render(<StartAgentForm {...props} onAgentStarted={onAgentStarted} />)
     fireEvent.click(screen.getByText('submit-typed'))
-    await waitFor(() => expect(onAgentStarted).toHaveBeenCalledWith('do the thing', 'r1', undefined, undefined, expect.anything()))
+    await waitFor(() => expect(onAgentStarted).toHaveBeenCalledWith('do the thing', 'r1', undefined, expect.anything()))
     expect(start).toHaveBeenCalledWith('p1', 'do the thing', { driver: 'codex', model: 'gpt-5' })
   })
 
@@ -273,37 +256,9 @@ describe('StartAgentForm (#1774)', () => {
     vi.unstubAllGlobals()
   })
 
-  test("while this computer clones another computer's project for the run, the form says so, naming this computer", async () => {
-    onCommands.mockResolvedValue({ commands: [], gitHost: true, address: 'github.com/acme/shop' })
-    start.mockReturnValue(new Promise(() => {}))
-    const { rerender } = render(<StartAgentForm {...props} projectName="shop" home="laptop" />)
-    fireEvent.click(screen.getByText('submit-typed'))
-    await waitFor(() => expect(screen.getByRole('status').textContent).toBe('Starting session'))
-    startSays.cloning = true
-    rerender(<StartAgentForm {...props} projectName="shop" home="laptop" />)
-    // The page is open on the computer itself here: a phone's says the name the page was reached at.
-    expect(screen.getByRole('status').textContent).toBe('Cloning shop on this computer, the first time only')
-  })
-
-  test('while the machine the run was sent to clones the project, the form says so, with the project and the machine by name', async () => {
-    onCommands.mockResolvedValue({ commands: [], gitHost: true, address: 'github.com/acme/shop' })
-    machine.current = { id: 'm1', label: 'Studio', url: 'https://studio.example' }
-    start.mockReturnValue(new Promise(() => {}))
-    const { rerender } = render(<StartAgentForm {...props} projectName="shop" />)
-    fireEvent.click(screen.getByText('submit-typed'))
-    await waitFor(() => expect(screen.getByRole('status').textContent).toBe('Starting session'))
-    startSays.cloning = true
-    rerender(<StartAgentForm {...props} projectName="shop" />)
-    expect(screen.getByRole('status').textContent).toBe('Cloning shop on Studio, the first time only')
-    // The machine it was sent to, also when another is picked meanwhile.
-    machine.current = { id: 'm2', label: 'Other', url: 'https://other.example' }
-    rerender(<StartAgentForm {...props} projectName="shop" />)
-    expect(screen.getByRole('status').textContent).toBe('Cloning shop on Studio, the first time only')
-  })
-
   test('why no run started is a box above the message box: what is wrong as its title, in the page\'s own text size, then what follows smaller; nothing of the page shows through it', async () => {
     onCommands.mockResolvedValue({ commands: [], gitHost: true })
-    startSays.error = 'shop could not be cloned on Studio. Studio says: This computer has no login that can read github.com/acme/shop.'
+    startSays.error = 'The run could not start: its worktree could not be made. Git says: fatal: invalid reference: my/work.'
     render(<StartAgentForm {...props} />)
     const alert = await screen.findByRole('alert')
     expect(alert.textContent).toBe(startSays.error)
@@ -311,9 +266,9 @@ describe('StartAgentForm (#1774)', () => {
     expect(alert.className).toContain('var(--color-danger)_8%,var(--color-background)')
     expect(alert.className).toContain('text-foreground')
     expect(alert.querySelector('svg')!.getAttribute('class')).toContain('text-danger')
-    const title = within(alert).getByText('shop could not be cloned on Studio.')
+    const title = within(alert).getByText('The run could not start: its worktree could not be made.')
     expect(title.className).toContain('text-sm')
-    expect(within(alert).getByText('Studio says: This computer has no login that can read github.com/acme/shop.').className).toContain('text-xs')
+    expect(within(alert).getByText('Git says: fatal: invalid reference: my/work.').className).toContain('text-xs')
     expect(alert.parentElement!.dataset.testid).toBe('notes')
   })
 
@@ -453,7 +408,7 @@ describe('StartAgentForm (#1774)', () => {
     await waitFor(() => expect(autoMenu().textContent).toBe('Auto: Open PR → feature-x'))
     fireEvent.click(screen.getByText('submit-typed'))
     await waitFor(() => expect(onAgentStarted).toHaveBeenCalled())
-    expect(onAgentStarted.mock.lastCall![4]).toEqual({ branch: 'feature-x', gitAccount: 'octo', publish: 'pr', prBase: 'feature-x', driver: 'codex', model: 'gpt-5', effort: 'high' })
+    expect(onAgentStarted.mock.lastCall![3]).toEqual({ branch: 'feature-x', gitAccount: 'octo', publish: 'pr', prBase: 'feature-x', driver: 'codex', model: 'gpt-5', effort: 'high' })
     expect((start.mock.lastCall![2] as { account?: string }).account).toBe('octo')
     runsAccount.login = undefined
   })
@@ -479,7 +434,7 @@ describe('StartAgentForm (#1774)', () => {
     fireEvent.click(screen.getByText('submit-typed'))
     await waitFor(() => expect(start).toHaveBeenCalledTimes(2))
     expect((start.mock.lastCall![2] as { preset?: string; account?: string })).toMatchObject({ preset: 'reviewer', account: 'octo-agent' })
-    expect((onAgentStarted.mock.lastCall![4] as { preset?: string; gitAccount?: string })).toMatchObject({ preset: 'reviewer', gitAccount: 'octo-agent' })
+    expect((onAgentStarted.mock.lastCall![3] as { preset?: string; gitAccount?: string })).toMatchObject({ preset: 'reviewer', gitAccount: 'octo-agent' })
     runsAccount.login = undefined
   })
 
@@ -493,7 +448,7 @@ describe('StartAgentForm (#1774)', () => {
     fireEvent.click(screen.getByText('submit-typed'))
     await waitFor(() => expect(onAgentStarted).toHaveBeenCalled())
     expect((start.mock.lastCall![2] as { account?: string }).account).toBe('octo-agent')
-    expect((onAgentStarted.mock.lastCall![4] as { gitAccount?: string }).gitAccount).toBe('octo-agent')
+    expect((onAgentStarted.mock.lastCall![3] as { gitAccount?: string }).gitAccount).toBe('octo-agent')
     runsAccount.login = undefined
   })
 
@@ -514,25 +469,11 @@ describe('StartAgentForm (#1774)', () => {
     expect((screen.getByText('submit-typed') as HTMLButtonElement).disabled).toBe(false)
   })
 
-  test("a picked machine starts the run in its own copy: the start names it by its id and carries no key, and this computer's check is not asked", async () => {
-    onCommands.mockResolvedValue({ commands: [], gitHost: true, remote: true, address: 'github.com/acme/shop' })
-    machine.current = { id: 'd1', url: 'http://box:4200', label: 'box' }
-    start.mockResolvedValue({ agentId: 'r2' })
-    const onAgentStarted = vi.fn()
-    render(<StartAgentForm {...props} onAgentStarted={onAgentStarted} />)
-    await waitFor(() => expect(onCommands).toHaveBeenCalled())
-    expect(screen.queryByRole('alert')).toBeNull()
-    fireEvent.click(screen.getByText('submit-typed'))
-    await waitFor(() => expect(onAgentStarted).toHaveBeenCalledWith('do the thing', 'r2', 'box', undefined, expect.anything()))
-    expect(start).toHaveBeenCalledWith('p1', 'do the thing', { machine: 'd1' })
-    expect(onStartCheck).not.toHaveBeenCalled()
-  })
-
-  test("a host picked in \"Run on\" runs the run, over a machine picked before: the check is that host's, the Start names it, and the run's page says it by its name (#2394)", async () => {
+  test("a host picked in \"Run on\" runs the run: the check is that host's, the Start names it, and the run's page says it by its name (#2394)", async () => {
     onCommands.mockResolvedValue({ commands: [], gitHost: true, remote: true, address: 'github.com/acme/shop' })
     onRunHosts.mockResolvedValue([{ id: 'actions', label: 'GitHub Actions' }])
-    onStartCheck.mockResolvedValue({ problems: ['Its repository has no workflow openagent-agent.yml yet.'], warnings: [] })
-    machine.current = { id: 'd1', url: 'http://box:4200', label: 'box' }
+    // This computer's check finds nothing; the host's what would stop a run there.
+    onStartCheck.mockImplementation(async (_projectId: string, _driver: unknown, on?: string) => (on === 'actions' ? { problems: ['Its repository has no workflow openagent-agent.yml yet.'], warnings: [] } : null))
     selectHost('actions')
     start.mockResolvedValue({ agentId: 'r4' })
     const onAgentStarted = vi.fn()
@@ -540,9 +481,8 @@ describe('StartAgentForm (#1774)', () => {
     await waitFor(() => expect(onStartCheck).toHaveBeenCalledWith('p1', undefined, 'actions'))
     expect((await screen.findByRole('alert')).textContent).toContain('Its repository has no workflow openagent-agent.yml yet.')
     fireEvent.click(screen.getByText('submit-typed'))
-    await waitFor(() => expect(onAgentStarted).toHaveBeenCalledWith('do the thing', 'r4', 'GitHub Actions', undefined, expect.anything()))
+    await waitFor(() => expect(onAgentStarted).toHaveBeenCalledWith('do the thing', 'r4', 'GitHub Actions', expect.anything()))
     expect(start.mock.calls[0]![2]).toMatchObject({ host: 'actions' })
-    expect(start.mock.calls[0]![2]).not.toHaveProperty('machine')
   })
 
   test('a host picked on a project that has none is no target: the run starts on this computer', async () => {
@@ -554,19 +494,6 @@ describe('StartAgentForm (#1774)', () => {
     fireEvent.click(screen.getByText('submit-typed'))
     await waitFor(() => expect(start).toHaveBeenCalled())
     expect(start.mock.calls[0]![2]).not.toHaveProperty('host')
-  })
-
-  test('a project with no repository address runs here only: a machine picked on another project is not its target', async () => {
-    onCommands.mockResolvedValue({ commands: [], gitHost: false, remote: true })
-    machine.current = { id: 'd1', url: 'http://box:4200', label: 'box' }
-    start.mockResolvedValue({ agentId: 'r3' })
-    const onAgentStarted = vi.fn()
-    render(<StartAgentForm {...props} onAgentStarted={onAgentStarted} />)
-    await waitFor(() => expect(onCommands).toHaveBeenCalled())
-    fireEvent.click(screen.getByText('submit-typed'))
-    await waitFor(() => expect(start).toHaveBeenCalled())
-    expect(start.mock.calls[0]![2]).not.toHaveProperty('machine')
-    expect(onAgentStarted).toHaveBeenCalledWith('do the thing', 'r3', undefined, undefined, expect.anything())
   })
 
   test('what would stop the run is said before the Start, for the coding agent picked; a warning is said too, and neither turns Start off', async () => {
@@ -592,54 +519,6 @@ describe('StartAgentForm (#1774)', () => {
     expect(problem!.parentElement!.dataset.testid).toBe('notes')
   })
 
-  test('with a machine picked, the machine is asked whether a run would start there, and its logged-out agent is said in words naming it, with this computer\'s logins to use there', async () => {
-    onCommands.mockResolvedValue({ commands: [], gitHost: true, remote: true, address: 'github.com/acme/shop' })
-    machine.current = { id: 'd1', url: 'https://box/_devices/via/1', label: 'experiment' }
-    const line = '`claude` is not logged in. Run `claude auth login`, then start again.'
-    onMachineStartCheck.mockResolvedValue({ problems: [line, 'something else'], warnings: [], fix: { kind: 'log-in', command: 'claude auth login', problem: line } })
-    serverLogins.onServerLogins.mockResolvedValue({ computer: 'Mac', servers: [{ machineId: 'd1', label: 'experiment', on: false, reachable: true, logins: [], left: [] }] })
-    serverLogins.sendUseLoginsOn.mockResolvedValue({ ok: true })
-    render(<StartAgentForm {...props} />)
-    const press = await screen.findByRole('button', { name: 'Use them' })
-    expect(onMachineStartCheck).toHaveBeenCalledWith('p1', 'd1', undefined)
-    expect(onStartCheck).not.toHaveBeenCalled()
-    const [refusal, other] = screen.getAllByRole('alert')
-    expect(refusal!.textContent).toContain('Claude Code is not logged in on experiment.')
-    expect(refusal!.textContent).not.toContain('claude auth login')
-    expect(refusal!.contains(press)).toBe(true)
-    expect(other!.textContent).toBe('something else')
-    // This computer's own login press is no fix for the machine.
-    expect(screen.queryByRole('button', { name: 'Log this computer in to Claude Code' })).toBeNull()
-    fireEvent.click(press)
-    await waitFor(() => expect(serverLogins.sendUseLoginsOn).toHaveBeenCalledWith('d1'))
-  })
-
-  test('another person\'s computer that lacks this person\'s logins says so as soon as it is picked, with the way to its page where they are logged in', async () => {
-    onCommands.mockResolvedValue({ commands: [], gitHost: true, remote: true, address: 'github.com/acme/shop' })
-    machine.current = { id: 'https://203.0.113.5/_devices/via/b0x1', url: 'https://203.0.113.5/_devices/via/b0x1', label: 'experiment (through 203.0.113.5)', owner: 'Suleiman' } as typeof machine.current
-    onMachineLogins.mockResolvedValue({ ok: true, logins: { github: { source: 'made' } } })
-    // The start a press would make anyway: its refusal says nothing the box does not.
-    startSays.error = 'Your GitHub and Claude logins are not on experiment (through 203.0.113.5) yet.'
-    render(<StartAgentForm {...props} />)
-    const press = await screen.findByRole('button', { name: 'Log in on experiment' })
-    expect(onMachineLogins).toHaveBeenCalledWith('https://203.0.113.5/_devices/via/b0x1')
-    const [box, ...others] = screen.getAllByRole('alert')
-    expect(others).toHaveLength(0)
-    expect(within(box!).getByText('Your Claude login is not on experiment yet.')).toBeTruthy()
-    expect(box!.textContent).toContain('start your first run there from your page on 203.0.113.5, which copies yours')
-    expect(box!.contains(press)).toBe(true)
-    fireEvent.click(press)
-    expect(openSettings).toHaveBeenCalledWith('devices', 'https://203.0.113.5/_devices/via/b0x1')
-  })
-
-  test('another person\'s computer that has this person\'s logins says nothing of them', async () => {
-    onCommands.mockResolvedValue({ commands: [], gitHost: true, remote: true, address: 'github.com/acme/shop' })
-    machine.current = { id: 'm2', url: 'https://203.0.113.5/_devices/via/b0x2', label: 'experiment (through 203.0.113.5)', owner: 'Suleiman' } as typeof machine.current
-    render(<StartAgentForm {...props} />)
-    await waitFor(() => expect(onMachineLogins).toHaveBeenCalled())
-    expect(screen.queryByRole('alert')).toBeNull()
-  })
-
   test("the plugins this session goes without and its project skills go with the Start and to the run's page; none picked, nothing is sent; the next session starts from none again", async () => {
     onCommands.mockResolvedValue({ commands: [], gitHost: true, remote: true, address: 'github.com/acme/shop' })
     start.mockResolvedValue({ agentId: 'r1' })
@@ -650,7 +529,7 @@ describe('StartAgentForm (#1774)', () => {
     fireEvent.click(screen.getByText('submit-typed'))
     await waitFor(() => expect(onAgentStarted).toHaveBeenCalled())
     expect(start.mock.lastCall![2]).toMatchObject({ pluginsWithout: ['ask', 'tickets'], projectSkills: 'none' })
-    expect(onAgentStarted.mock.lastCall![4]).toMatchObject({ pluginsWithout: ['ask', 'tickets'], projectSkills: 'none' })
+    expect(onAgentStarted.mock.lastCall![3]).toMatchObject({ pluginsWithout: ['ask', 'tickets'], projectSkills: 'none' })
     expect(screen.getByText('skills:p1:/all')).toBeTruthy()
     fireEvent.click(screen.getByText('submit-typed'))
     await waitFor(() => expect(start).toHaveBeenCalledTimes(2))
@@ -686,37 +565,6 @@ describe('StartAgentForm (#1774)', () => {
     fireEvent.click(screen.getByText('submit-typed'))
     await waitFor(() => expect(start).toHaveBeenCalledTimes(2))
     expect(start.mock.lastCall![2]).toMatchObject({ preset: 'lean', pluginsWithout: [] })
-  })
-
-  test('a machine that takes no logins of this computer\'s sends the person to the Permissions page', async () => {
-    onCommands.mockResolvedValue({ commands: [], gitHost: true, remote: true, address: 'github.com/acme/shop' })
-    machine.current = { id: 'd2', url: 'https://box/_devices/via/2', label: 'Dani\'s PC' }
-    const line = '`codex` is not logged in. Run `codex login`, then start again.'
-    prefs.current = { driver: 'codex' }
-    onMachineStartCheck.mockResolvedValue({ problems: [line], warnings: [], fix: { kind: 'log-in', command: 'codex login', problem: line } })
-    render(<StartAgentForm {...props} />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Open Accounts' }))
-    expect(screen.getByRole('alert').textContent).toContain('Codex is not logged in on Dani\'s PC.')
-    expect(onMachineStartCheck).toHaveBeenCalledWith('p1', 'd2', 'codex')
-    expect(openPage).toHaveBeenCalledWith('permissions')
-  })
-
-  test('a machine without the picked agent says so in words naming it, and the press opens its page, where an update brings it', async () => {
-    onCommands.mockResolvedValue({ commands: [], gitHost: true, remote: true, address: 'github.com/acme/shop' })
-    machine.current = { id: 'd3', url: 'https://box/_devices/via/3', label: 'experiment' }
-    const line = '`codex` not found — install the Codex CLI and make sure `codex` is on your PATH: https://developers.openai.com/codex/cli'
-    prefs.current = { driver: 'codex' }
-    onMachineStartCheck.mockResolvedValue({ problems: [line], warnings: [], fix: { kind: 'install', command: 'curl -fsSL https://chatgpt.com/codex/install.sh | sh', problem: line } })
-    render(<StartAgentForm {...props} />)
-    const press = await screen.findByRole('button', { name: 'Update experiment' })
-    const box = screen.getByRole('alert')
-    expect(within(box).getByText('Codex is not installed on experiment.')).toBeTruthy()
-    expect(within(box).getByText('Update experiment to get it.')).toBeTruthy()
-    // This computer's install command is no fix for the machine.
-    expect(box.textContent).not.toContain('install.sh')
-    expect(box.contains(press)).toBe(true)
-    fireEvent.click(press)
-    expect(openSettings).toHaveBeenCalledWith('devices', 'd3')
   })
 
   test('a problem a press fixes has its button on the red line, with the command it runs; once fixed, the check is asked again and the line goes', async () => {
@@ -801,7 +649,7 @@ describe('StartAgentForm (#1774)', () => {
     expect(startsAt()).toBe('No projectvikeAdd repo')
     fireEvent.click(screen.getByText('submit-typed'))
     await waitFor(() => expect(start).toHaveBeenCalledWith('session', 'do the thing', { repos: ['/home/me/oss/vike'] }))
-    await waitFor(() => expect(onAgentStarted).toHaveBeenCalledWith('do the thing', 'r1', undefined, undefined, { repos: [{ name: 'vike', from: '/home/me/oss/vike' }] }))
+    await waitFor(() => expect(onAgentStarted).toHaveBeenCalledWith('do the thing', 'r1', undefined, { repos: [{ name: 'vike', from: '/home/me/oss/vike' }] }))
     // Started: the next session starts with none.
     expect(startsAt()).toBe('No projectAdd repo')
   })
@@ -905,61 +753,6 @@ describe('StartAgentForm (#1774)', () => {
     await waitFor(() => expect(start).toHaveBeenCalledWith('p1', 'do the thing', {}))
     expect(startFromChip()).toBeNull()
     expect(startsAt()).toBe('gemstack')
-  })
-
-  test("another computer's project has its computer picked, and on it the run starts as on a project here: that computer's branches, and its own check", async () => {
-    onCommands.mockResolvedValue(WITH_BRANCHES)
-    machine.current = { id: 'laptop', url: 'http://127.0.0.1:4210', label: 'MacBook' }
-    start.mockResolvedValue({ agentId: 'r5' })
-    prefs.current = { startFrom: { p1: LOCAL } }
-    render(<StartAgentForm {...props} projectName="shop" home="laptop" />)
-    expect(followProjectHome).toHaveBeenCalledWith('laptop')
-    await waitFor(() => expect(startFromChip()).not.toBeNull())
-    fireEvent.click(screen.getByText('submit-typed'))
-    await waitFor(() => expect(start).toHaveBeenCalledWith('p1', 'do the thing', { base: 'my/work', machine: 'laptop' }))
-    // Its own check is that computer's, asked as of a machine: never this one's.
-    await waitFor(() => expect(onMachineStartCheck).toHaveBeenCalledWith('p1', 'laptop', undefined))
-    expect(onStartCheck).not.toHaveBeenCalled()
-  })
-
-  test("another computer's project started on this one is cloned here first: no branch of that computer, and no check of a copy that is not here yet", async () => {
-    onCommands.mockResolvedValue(WITH_BRANCHES)
-    start.mockResolvedValue({ agentId: 'r6', projectId: 'shop-here' })
-    const onAgentStarted = vi.fn()
-    render(<StartAgentForm {...props} projectName="shop" home="laptop" onAgentStarted={onAgentStarted} />)
-    await waitFor(() => expect(onCommands).toHaveBeenCalled())
-    expect(startFromChip()).toBeNull()
-    fireEvent.click(screen.getByText('submit-typed'))
-    await waitFor(() => expect(start).toHaveBeenCalledWith('p1', 'do the thing', {}))
-    expect(onStartCheck).not.toHaveBeenCalled()
-    // The run is in that copy, which the page goes to.
-    await waitFor(() => expect(onAgentStarted).toHaveBeenCalledWith('do the thing', 'r6', undefined, 'shop-here', expect.anything()))
-  })
-
-  test("before another computer's project is cloned here, this computer says what its clone and the run would hit; a start that hit it says nothing more", async () => {
-    onCommands.mockResolvedValue(WITH_BRANCHES)
-    const unread = 'This computer has no login that can read github.com/acme/shop, or there is no such repository: a private one needs a login.'
-    onCloneCheck.mockResolvedValue({ problems: [unread], warnings: [] })
-    startSays.error = 'shop could not be cloned here.'
-    prefs.current = { driver: 'codex' }
-    render(<StartAgentForm {...props} projectName="shop" home="laptop" />)
-    // Asked by the repository's address, with the agent picked: the project is not here to run its own check in.
-    await waitFor(() => expect(onCloneCheck).toHaveBeenCalledWith('github.com/acme/shop', 'codex'))
-    expect(onStartCheck).not.toHaveBeenCalled()
-    await screen.findByText(/no login that can read github.com\/acme\/shop/)
-    expect(screen.queryByText('shop could not be cloned here.')).toBeNull()
-  })
-
-  test('with a machine picked there is no "start from" chip, and the Start names no branch of this machine', async () => {
-    onCommands.mockResolvedValue(WITH_BRANCHES)
-    machine.current = { id: 'd1', url: 'http://box:4200', label: 'box' }
-    start.mockResolvedValue({ agentId: 'r2' })
-    prefs.current = { startFrom: { p1: LOCAL } }
-    render(<StartAgentForm {...props} projectName="gemstack" />)
-    await waitFor(() => expect(onCommands).toHaveBeenCalled())
-    fireEvent.click(screen.getByText('submit-typed'))
-    await waitFor(() => expect(start).toHaveBeenCalledWith('p1', 'do the thing', { machine: 'd1' }))
-    expect(startFromChip()).toBeNull()
   })
 
   test('the "start from" chip waits for the project\'s name and for the saved pick, so it never moves and its words never flip', async () => {

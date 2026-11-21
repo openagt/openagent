@@ -9,8 +9,7 @@ import { jobFiles, jobState, lastLines, startJob, stopJob, type JobFiles } from 
  * The GitHub accounts OpenAgent has, and the one its runs use. They are OpenAgent's own, never the
  * person's: each account is a folder of its own, the folder `gh` keeps that account's login in
  * (`GH_CONFIG_DIR`), so nothing OpenAgent does reads or changes the person's own `gh`, git or
- * keychain. An account is added by logging it in here, in the browser, or by handing its token
- * over (a server of the person's gets theirs that way).
+ * keychain. An account is added by logging it in here, in the browser.
  *
  * The runs' pick is kept in a file of its own, logins only.
  */
@@ -254,22 +253,6 @@ export async function startLogin(root: string, files = jobFiles('login'), waitMs
       throw new Error(said.replaceAll('\n', '; '))
     }
     await new Promise(resolve => setTimeout(resolve, 200))
-  }
-}
-
-/** Keep a login handed over as a token as one of OpenAgent's accounts: its folder, its facts. */
-export async function takeToken(root: string, token: string, facts: AccountFacts, gh: GhRunner, cwd: string): Promise<void> {
-  const dir = accountDir(root, facts.login)
-  const next = join(root, `.taking-${process.pid}`)
-  rmSync(next, { recursive: true, force: true })
-  mkdirSync(next, { recursive: true, mode: 0o700 })
-  try {
-    await asAccount(gh, next)(['auth', 'login', '--hostname', HOST, '--with-token', '--insecure-storage'], cwd, undefined, token)
-    writeFile600(join(next, 'account.json'), `${JSON.stringify(facts, null, 2)}\n`)
-    rmSync(dir, { recursive: true, force: true })
-    renameSync(next, dir)
-  } finally {
-    rmSync(next, { recursive: true, force: true })
   }
 }
 

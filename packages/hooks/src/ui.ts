@@ -4,7 +4,7 @@
 // Four hooks, each taking a place: a component at a place (`ui.view`), something to do at one
 // (`ui.action`), something to pick in a shared menu (`ui.option`), and how a kind of content looks
 // (`ui.render`). Each place's props are typed here, so a new place needs no new hook.
-import type { ComponentType, ReactNode } from 'react'
+import type { ComponentType } from 'react'
 
 /** An icon, drawn at the size its `className` gives. */
 export type UiIcon = ComponentType<{ className?: string; 'aria-hidden'?: boolean }>
@@ -59,24 +59,10 @@ export interface UiFileName {
   done?: { ask: string; title: string }
 }
 
-/** A coding agent's account, as a card that lists them names it to {@link UiCardProps.accountWhere}. */
-export interface UiAccount {
-  agent: 'claude' | 'codex'
-  /** The person's own login on this computer, not one added to OpenAgent. */
-  own: boolean
-  /** What the card's commands know it by. */
-  name: string
-}
-
 /** What an Overview card, or a part of the line under the Overview's title, is given. */
 export interface UiCardProps {
   /** The registered projects that have the module, in the registry's order; with a project picked, that one alone. */
   projects: UiProject[]
-  /**
-   * The shell's line under one account's row, for a card that lists a coding agent's accounts:
-   * where the account works, on the person's devices. Absent where the page has nothing to add.
-   */
-  accountWhere?: (account: UiAccount) => ReactNode
 }
 
 /** The Context as a pane sees it: the files the next run is pointed at. */
@@ -137,12 +123,6 @@ export interface UiPromptSaveProps {
   onDone(saved: boolean): void
 }
 
-/** What a part of the Permissions page is given. */
-export interface UiPermissionsProps {
-  /** The shell's line under one account's row, for a part that lists a coding agent's accounts: where the account works, on the person's devices. */
-  accountWhere?: (account: UiAccount) => ReactNode
-}
-
 /** What a Settings entry is given: the projects whose settings it shows and saves. */
 export interface UiSettingsProps {
   /** The projects the entry is for: the one picked in Settings, or every project that has the module with "All projects"; none for a module of the computer's. */
@@ -185,7 +165,7 @@ export interface ViewPlaces {
     }
     props: UiPageProps
   }
-  /** Drawn over every page, for as long as the dashboard is open: a module of the computer's, such as another computer asking to connect. */
+  /** Drawn over every page, for as long as the dashboard is open: a module of the computer's, such as the browser's notifier. */
   'app.overlay': { entry: { id: string }; props: Record<string, never> }
   /** An Overview card. */
   'overview.card': {
@@ -275,7 +255,7 @@ export interface ViewPlaces {
       /** Its place among every module's parts, lower first; 50 when unsaid, ties by package name. */
       order?: number
     }
-    props: UiPermissionsProps
+    props: Record<string, never>
   }
   /** The line on the usage bar where the module's unattended work stops; the first module's that has one. */
   'usage.line': { entry: { id: string }; props: UiUsageLineProps }

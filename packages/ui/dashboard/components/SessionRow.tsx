@@ -1,15 +1,13 @@
 import { Folder, GitBranch, Laptop, type LucideIcon } from 'lucide-react'
 import type { AgentMeta } from '../../src/index.js'
 import { hostOf } from '../lib/run-hosts.js'
-import { MACHINE_ICONS } from './MachineMark.js'
 import { HOST_ICON, RunOnWords } from './RunOnMenu.js'
 import { RowAboveBox, RowSaid } from './ui/row-item.js'
 import { RepoChip } from './SessionRepos.js'
 
-/** The icon of where a session runs, as "Run on" has a machine's or a host's. */
-function runsOnIcon(target: AgentMeta['target'], kind: AgentMeta['remoteKind']): LucideIcon {
-  if (hostOf(target) !== undefined) return HOST_ICON
-  return kind ? MACHINE_ICONS[kind] : Laptop
+/** The icon of where a session runs, as "Run on" has a host's. */
+function runsOnIcon(target: AgentMeta['target']): LucideIcon {
+  return hostOf(target) !== undefined ? HOST_ICON : Laptop
 }
 
 // A session's row above the message box: the "New agent session" page's row, in its place, each item
@@ -23,17 +21,15 @@ function runsOnIcon(target: AgentMeta['target'], kind: AgentMeta['remoteKind']):
 export function SessionRow({
   runsOn,
   target,
-  remoteKind,
   elsewhere,
   projectName,
   startedFrom,
   worksOn,
   repos,
 }: {
-  /** Where the session runs, in a few words: this machine, another machine by its name, a host by its own. */
+  /** Where the session runs, in a few words: this machine, another computer by its name, a host by its own. */
   runsOn: string
   target?: AgentMeta['target'] | undefined
-  remoteKind?: AgentMeta['remoteKind'] | undefined
   /** Whether that is not this computer. */
   elsewhere: boolean
   projectName?: string | null | undefined
@@ -48,7 +44,7 @@ export function SessionRow({
   return (
     <RowAboveBox>
       <RowSaid tip={`Runs on — ${runsOn}`}>
-        <RunOnWords icon={runsOnIcon(target, remoteKind)} elsewhere={elsewhere} label={runsOn} />
+        <RunOnWords icon={runsOnIcon(target)} elsewhere={elsewhere} label={runsOn} />
       </RowSaid>
       {projectName && (
         <>

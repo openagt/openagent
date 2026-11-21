@@ -1,16 +1,15 @@
 import { useState } from 'react'
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { refreshPreferences } from '../lib/preferences.js'
 import { forgetRemembered } from '../lib/use-async.js'
-import { DaemonDown } from '../lib/use-daemon-health.js'
-import { useSettingsHold } from '../lib/settings-hold.js'
+
 import { ModulesContext, byMountOrder, mountedOf, type MountedModules, type MountedView } from '../lib/use-modules.js'
-import { CalendarClock, Puzzle, Smartphone, Ticket } from 'lucide-react'
+import { CalendarClock, Globe, Puzzle, Ticket, UserRound } from 'lucide-react'
 import { checked, choices, closeList, offered, openList, pick, showing } from '../test-controls.js'
 
-// The reads Settings makes, answered as an empty machine: no saved machines, no editors detected, no
-// stored preferences.
+// The reads Settings makes, answered as an empty computer: no editors detected, no stored
+// preferences.
 const prefsRead = vi.hoisted(() => vi.fn(async (): Promise<Record<string, unknown>> => ({})))
 // What the page saves, one call per pick with the keys it changed. Answered as a daemon that could
 // not store it: the page then keeps showing the pick it was given, which is what the tests read.
@@ -20,7 +19,7 @@ vi.mock('../rpc/preferences.js', async importOriginal => ({
   onPreferences: prefsRead,
   patchPreferences: prefsSaved,
 }))
-vi.mock('../rpc/machines.js', async () => (await import('../test-machines.js')).machinesRpc)
+
 // The coding agents' own lists, as the daemon asked them: Claude Code answered, Codex could not.
 const onModels = vi.hoisted(() =>
   vi.fn(async () => ({
@@ -41,8 +40,7 @@ vi.mock('../rpc/reads.js', async importOriginal => ({
 }))
 
 import { SettingsDialog } from './SettingsDialog.js'
-import { useRoute } from '../lib/use-route.js'
-import { NO_PROJECTS } from '../../src/project-address.js'
+
 import type { ProjectSummary } from '../../src/index.js'
 
 const onClose = vi.fn()
@@ -264,10 +262,9 @@ describe('the Settings list', () => {
   const Broken = () => {
     throw new Error('boom')
   }
-  /** A package's entry with a tick per project it was given, held until it is saved, as an entry's form holds what was typed. */
+  /** A package's entry with a tick per project it was given. */
   const Ticks = ({ projects }: { projects: { name: string }[] }) => {
     const [ticked, setTicked] = useState<string[]>([])
-    useSettingsHold(ticked.length > 0)
     return (
       <>
         {projects.map(p => (
@@ -276,10 +273,10 @@ describe('the Settings list', () => {
       </>
     )
   }
-  const PROFILE: MountedView<'settings.section'> = { place: 'settings.section', id: 'profile', title: 'Profile', icon: Smartphone, order: 10, View: () => <p>Your name and picture</p>, package: '@openagt/user-info', projects: [], computer: true }
+  const PROFILE: MountedView<'settings.section'> = { place: 'settings.section', id: 'profile', title: 'Profile', icon: UserRound, order: 10, View: () => <p>Your name and picture</p>, package: '@openagt/user-info', projects: [], computer: true }
   const MODULES = mounted([
     PROFILE,
-    { place: 'settings.section', id: 'devices', title: 'Devices', icon: Smartphone, order: 90, View: Given, package: '@openagt/devices', projects: [], computer: true },
+    { place: 'settings.section', id: 'claude-web', title: 'Claude web', icon: Globe, order: 90, View: Given, package: '@openagt/host-claude-web', projects: [], computer: true },
     { place: 'settings.section', id: 'tickets', title: 'Tickets', icon: Ticket, View: Given, package: '@openagt/tickets', projects: ['p1', 'p2', 'gone'] },
     { place: 'settings.section', id: 'scheduler', title: 'Scheduler', icon: CalendarClock, View: Broken, package: '@openagt/scheduled-agents', projects: ['p2'] },
     { place: 'settings.section', id: 'skills', title: 'Skills', icon: Puzzle, order: 10, View: Ticks, package: '@openagt/skills', projects: ['p1', 'p2', 'p3'] },
@@ -296,7 +293,7 @@ describe('the Settings list', () => {
 
   test("two groups: yours and this computer's, the computer's packages among them; then the picked project's packages", () => {
     show('', 'p1')
-    expect(entries('You and this computer')).toEqual(['Profile', 'Appearance', 'Coding agent', 'Plugins', 'Your agent data', 'Repos', 'Keyboard shortcuts', 'Devices'])
+    expect(entries('You and this computer')).toEqual(['Profile', 'Appearance', 'Coding agent', 'Plugins', 'Your agent data', 'Repos', 'Keyboard shortcuts', 'Claude web'])
     // gemstack has tickets and no scheduler; every project has its skills, whose entry says it goes first, and its plugins.
     expect(entries('Project')).toEqual(['Skills', 'Plugins', 'Project agent data', 'Tickets', 'List'])
     expect(showing(select('Project'))).toBe('gemstack')
@@ -310,8 +307,8 @@ describe('the Settings list', () => {
     expect(title()).toBe('SettingsgemstackTickets')
     expect(screen.getByText('for: gemstack')).toBeTruthy()
     expect(screen.queryByText(/^Saved to/)).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'Devices' }))
-    expect(title()).toBe('SettingsDevices')
+    fireEvent.click(screen.getByRole('button', { name: 'Claude web' }))
+    expect(title()).toBe('SettingsClaude web')
     expect(screen.getByText('for: no project')).toBeTruthy()
   })
 
@@ -352,99 +349,6 @@ describe('the Settings list', () => {
     expect(await screen.findByRole('checkbox', { name: 'tick of gemstack' })).toBeTruthy()
     expect(screen.queryByRole('checkbox', { name: 'tick of other' })).toBeNull()
     expect(title()).toBe('SettingsgemstackSkills')
-  })
-
-  test("a tick in an entry not saved asks before another entry shows: Cancel keeps it, Discard goes", async () => {
-    show('skills', 'p1')
-    fireEvent.click(await screen.findByRole('checkbox', { name: 'tick of gemstack' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Appearance' }))
-    const asked = await screen.findByRole('alertdialog', { name: 'Discard your changes to Skills?' })
-    fireEvent.click(within(asked).getByRole('button', { name: 'Cancel' }))
-    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
-    expect(screen.getByRole('checkbox', { name: 'tick of gemstack' }).getAttribute('aria-checked')).toBe('true')
-    fireEvent.click(screen.getByRole('button', { name: 'Appearance' }))
-    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Discard' }))
-    await waitFor(() => expect(title()).toBe('SettingsAppearance'))
-    // Nothing held any more: the next step asks nothing.
-    fireEvent.click(screen.getByRole('button', { name: 'Skills' }))
-    await waitFor(() => expect(title()).toBe('SettingsgemstackSkills'))
-    expect(screen.queryByRole('alertdialog')).toBeNull()
-  })
-
-  test('a press on the entry already shown asks nothing and keeps the tick held: the next entry still asks', async () => {
-    show('skills', 'p1')
-    fireEvent.click(await screen.findByRole('checkbox', { name: 'tick of gemstack' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Skills' }))
-    expect(screen.queryByRole('alertdialog')).toBeNull()
-    expect(screen.getByRole('checkbox', { name: 'tick of gemstack' }).getAttribute('aria-checked')).toBe('true')
-    expect(title()).toBe('SettingsgemstackSkills')
-    fireEvent.click(screen.getByRole('button', { name: 'Appearance' }))
-    expect(await screen.findByRole('alertdialog', { name: 'Discard your changes to Skills?' })).toBeTruthy()
-  })
-
-  test('with OpenAgent not answering, Discard still goes: it sends nothing', async () => {
-    render(
-      <DaemonDown.Provider value={true}>
-        <ModulesContext.Provider value={MODULES}>
-          <Shown start="skills" scope="p1" projects={PROJECTS as ProjectSummary[]} />
-        </ModulesContext.Provider>
-      </DaemonDown.Provider>,
-    )
-    fireEvent.click(await screen.findByRole('checkbox', { name: 'tick of gemstack' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Appearance' }))
-    const leave = within(await screen.findByRole('alertdialog', { name: 'Discard your changes to Skills?' })).getByRole('button', { name: 'Discard' }) as HTMLButtonElement
-    expect(leave.disabled).toBe(false)
-    fireEvent.click(leave)
-    await waitFor(() => expect(title()).toBe('SettingsAppearance'))
-  })
-
-  test('Back with a tick in an entry not saved asks first, and the address stays on Settings: Cancel keeps the tick, Discard goes back', async () => {
-    window.history.replaceState(null, '', '/page')
-    window.history.pushState(null, '', '/page?settings=skills')
-    // The app's route, which follows Back.
-    const Routed = () => (useRoute(NO_PROJECTS), null)
-    render(<Routed />)
-    show('skills', 'p1')
-    fireEvent.click(await screen.findByRole('checkbox', { name: 'tick of gemstack' }))
-    const back = async () => {
-      const popped = new Promise(resolve => window.addEventListener('popstate', resolve, { once: true }))
-      window.history.back()
-      await act(async () => void (await popped))
-    }
-    await back()
-    const asked = await screen.findByRole('alertdialog', { name: 'Discard your changes to Skills?' })
-    await waitFor(() => expect(window.location.search).toBe('?settings=skills'))
-    fireEvent.click(within(asked).getByRole('button', { name: 'Cancel' }))
-    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
-    expect(screen.getByRole('checkbox', { name: 'tick of gemstack' }).getAttribute('aria-checked')).toBe('true')
-    await back()
-    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Discard' }))
-    await waitFor(() => expect(window.location.pathname + window.location.search).toBe('/page'))
-  })
-
-  test("Forward with a tick in an entry not saved asks as Back does, and the tab's list stays as it was: Cancel keeps Settings, Discard goes on to the later page, and Back from there reaches Settings once", async () => {
-    window.history.replaceState(null, '', '/page?settings=skills')
-    window.history.pushState(null, '', '/later')
-    const Routed = () => (useRoute(NO_PROJECTS), null)
-    render(<Routed />)
-    const entries = window.history.length
-    /** The tab is at `address`, its list as long as it was. */
-    const at = (address: string) => waitFor(() => expect([window.location.pathname + window.location.search, window.history.length]).toEqual([address, entries]))
-    window.history.back()
-    await at('/page?settings=skills')
-    show('skills', 'p1')
-    fireEvent.click(await screen.findByRole('checkbox', { name: 'tick of gemstack' }))
-    window.history.forward()
-    const asked = await screen.findByRole('alertdialog', { name: 'Discard your changes to Skills?' })
-    await at('/page?settings=skills')
-    fireEvent.click(within(asked).getByRole('button', { name: 'Cancel' }))
-    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
-    await at('/page?settings=skills')
-    window.history.forward()
-    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Discard' }))
-    await at('/later')
-    window.history.back()
-    await at('/page?settings=skills')
   })
 
   test("a project's entry with no project given follows the sidebar's pick", async () => {

@@ -9,21 +9,14 @@ import { agentUpdates } from './dashboard/agent-updates.js'
 import { projectStateReader } from './project-state.js'
 import { resolveDashboardBundle } from './dashboard/bundle.js'
 import { resolveWebsite } from './dashboard/website.js'
-import { ensureComputerId, registryPreferencesStore, thisComputerName } from './registry.js'
-import { sayComputer, sayName, sayOwnUrl } from './dashboard/machine-call.js'
+import { registryPreferencesStore } from './registry.js'
 import { readySessionsHome, startSessionsSweep } from './sessions-home.js'
 import { distributionHooks, localHostOf } from './distribution-hooks.js'
-import { devicesOn, otherComputers } from './other-computers.js'
 import type { Hooks, ProjectRef, RunHost } from '@openagt/hooks'
 import { sessionsHome } from '@openagt/agent-data'
 import { readSecureAddress, SECURE_PORT, type SecureAddress } from './secure-address.js'
 import type { StartedProject } from './dashboard/types.js'
-import { personLogins } from './dashboard/copy-logins.js'
-import { startLoginsSync } from './dashboard/logins-sync.js'
-import { startComputersSync } from './dashboard/computers-sync.js'
-import { runComputerCommand } from './dashboard-rpc/modules.js'
 import { runningFixes } from './dashboard-rpc/logins.js'
-import { dispatchMachineRpc, dispatchRelayRpc, isRelayReadCall } from './dashboard-rpc/relay-dispatch.js'
 
 /**
  * The dashboard process (#302). It is a pure projection of files: a run's tool keeps the run's
@@ -95,13 +88,8 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
   // What the person's terminal runs is found by the checks and by every run started from here: the
   // service's own PATH is the one its install's terminal had.
   await refreshLoginShellPath()
-  // Which computer this is, said to every machine it gets into and to the modules: a machine
-  // lists this computer once by it. A home file that cannot be written says nothing.
-  const computer = await ensureComputerId(env).catch(() => undefined)
-  sayComputer(computer)
-  sayName(await thisComputerName(env))
-  // Everything the dashboard drives per project (a run's start, project install, the machine
-  // relay) lives in the runtime, so this body stays about the daemon's own lifecycle.
+  // Everything the dashboard drives per project (a run's start, project install) lives in the
+  // runtime, so this body stays about the daemon's own lifecycle.
   // A run's name is asked of a naming session kept waiting for it (agent-driver's `ReadyNaming`), so
   // the page has it about a second after Start. A run starts on this computer's host, the
   // distribution's (#2394).
@@ -109,8 +97,6 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
   const host = await localHostOf(hooks)
   // The hosts beside it, of the modules on in a project (a GitHub Actions runner): a run may be picked to run on one.
   const otherHosts = async (project?: ProjectRef): Promise<RunHost[]> => (await hooks.hosts(project)).filter(other => other.id !== host.id)
-  // The person's other computers are reached where devices is on (`other-computers.ts`).
-  otherComputers.on = () => devicesOn(hooks)
   // A project added or removed is told to the modules (`app.lifecycle`): a scheduler starts or stops with it.
   const runtime = createProjectRuntime({ cwd, env, naming: new ReadyNaming(), host, otherHosts, lifecycle: hooks })
   // The daemon serves the built dashboard bundle (#405/#426): the SPA reads each run's files over
@@ -136,11 +122,6 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
       startedIn: runtime.onStartedIn,
       prepareStart: runtime.onPrepareStart,
       removeProject: runtime.onRemoveProject,
-      // Relay an agent to/from a saved machine (#1067): the events source streams an agent this daemon
-      // is relaying, and `remote` lets the read RPCs forward a remote agent's reads/steer/push to its
-      // machine (slice 2).
-      eventsSource: runtime.remoteEventsSource,
-      remote: runtime.remoteAgents,
       host,
       otherHosts,
       preferences: registryPreferencesStore(env),
@@ -150,10 +131,6 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
       // What a project's page and row say of it beside its runs: the modules on in it say what needs setting up.
       projectState: projectStateReader({ hooks: async () => hooks }),
     },
-    // The `/_relay/*` endpoints let another daemon run + read + steer a session here. A person's own
-    // OpenAgent on a computer several people use keeps their logins there: another OpenAgent of
-    // theirs hands them over through the relay.
-    relay: { project: runtime.projectAt, tailEvents: runtime.tailRelayEvents, rpc: dispatchRelayRpc, reads: isRelayReadCall, machine: dispatchMachineRpc, bring: runtime.bringProject, ...(env.OPENAGENT_PERSON ? { logins: personLogins(runComputerCommand) } : {}) },
     screen: runtime.screenOf,
     // What the modules on answer on the dashboard's address (`app.route`): host-claude-web's bridge.
     routes: () => hooks.routes(),
@@ -168,7 +145,6 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
     throw err
   })
 
-  sayOwnUrl(dashboard.url)
   try {
     const actualPort = Number(new URL(dashboard.url).port) || port
     opts.onListening?.({ pid: process.pid, port: actualPort, url: dashboard.secureUrl ?? dashboard.url, startedAt: new Date().toISOString() })
@@ -192,21 +168,13 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
   const stopSessionsSweep = startSessionsSweep(sessions)
 
   // The modules' own work (`app.lifecycle`), once the dashboard listens, so it never delays the
-  // URL: devices' door, the projects' schedulers. Each module on starts it, told where OpenAgent
-  // answers and which computer this is, and a plugin kept per computer starts and stops with its
-  // switch from then on.
+  // URL: the projects' schedulers. Each module on starts it, told where OpenAgent answers, and a
+  // plugin kept per computer starts and stops with its switch from then on.
   const lifecycle = new AbortController()
-  await hooks.started({ signal: lifecycle.signal, url: dashboard.url, ...(computer !== undefined ? { computer } : {}) })
-
-  // A computer keeps the servers that use its logins up to them (`logins-sync.ts`); a server makes none for another.
-  const stopLoginsSync = env.OPENAGENT_SERVER === '1' ? () => {} : startLoginsSync(env)
-  // Every computer of the person's keeps the same computers as the others (`computers-sync.ts`), a server too.
-  const stopComputersSync = startComputersSync(env)
+  await hooks.started({ signal: lifecycle.signal, url: dashboard.url })
 
   await waitForShutdown(opts.signal)
   stopSessionsSweep()
-  stopLoginsSync()
-  stopComputersSync()
 
   await stopWithin(opts.shutdownDeadlineMs ?? SHUTDOWN_DEADLINE_MS, async step => {
     step("the modules' own work")
@@ -220,7 +188,7 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
     // Stopped here as well as by the dashboard: a broken install serves 503s without ever taking
     // ownership of the source we handed in, and that poller would go on reading by itself.
     quota.stop()
-    step('the relayed runs')
+    step('the naming sessions')
     await runtime.dispose()
   })
 }

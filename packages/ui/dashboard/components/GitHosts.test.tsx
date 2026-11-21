@@ -5,7 +5,6 @@ import { openMenu } from '../test-utils.js'
 
 const logins = vi.hoisted(() => ({ onGitHosts: vi.fn(), sendUseGitHostAccount: vi.fn(), sendForgetGitHostAccount: vi.fn(), sendGitHostLogin: vi.fn(), sendStopGitHostLogin: vi.fn(), sendGitHostInstall: vi.fn(), onAgentState: vi.fn(), sendAgentFix: vi.fn() }))
 vi.mock('../rpc/logins.js', () => logins)
-vi.mock('../rpc/server-logins.js', () => ({ onServerLogins: vi.fn(async () => ({ computer: 'Studio', servers: [] })), sendUseLoginsOn: vi.fn(), sendAllowLogins: vi.fn(), sendSettleLogin: vi.fn() }))
 
 const { GitHostOff, GitHostsCard, useSessionAccount } = await import('./GitHosts.js')
 
@@ -38,7 +37,7 @@ afterEach(() => {
 })
 
 describe('the account a run started now would work as', () => {
-  const Says = ({ address, picked }: { address: string | undefined; picked?: string }) => <span data-testid="login">{useSessionAccount(address, undefined, picked) ?? 'none'}</span>
+  const Says = ({ address, picked }: { address: string | undefined; picked?: string }) => <span data-testid="login">{useSessionAccount(address, picked) ?? 'none'}</span>
 
   test('the one the project\'s host marks as the runs\' own; none for a host no package answers for', async () => {
     logins.onGitHosts.mockResolvedValue({ hosts: [{ host: 'github.com', projects: [], provider: provider({ accounts: [{ login: 'other', runs: false, ok: true }, { login: 'octo', runs: true, ok: true }] }) }] })

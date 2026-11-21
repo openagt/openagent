@@ -362,18 +362,12 @@ already made, and lists it in its pull request; for anything else it proposes an
   beside its title, only while an agent has two accounts or more: with one each, nothing
   rotates. Rotation is the runner's for every run: the skill only teaches an agent to change
   the accounts when asked.
-- Under each account's row the card draws the line the page it is on gives it
-  (`accountWhere`), the account named by its agent, whether it is the own login, and its name:
-  the Permissions page says there where the account works, on the person's servers. Picked over
-  the skill reading the dashboard's servers, which it would then depend on.
-- One way to add an account, the same for an agent, a card and Settings, here and on a server: the
-  sign-in runs in a process of its own, and commands start it, read it and hand it the code. Picked
-  over the sign-in staying in OpenAgent's process, where only Settings could reach it, and over
-  refusing to add on a server.
+- One way to add an account, the same for an agent, a card and Settings, on a computer with a
+  browser or with none: the sign-in runs in a process of its own, and commands start it, read it
+  and hand it the code. Picked over the sign-in staying in OpenAgent's process, where only
+  Settings could reach it.
 - The card adds an account from "Add" at its title, a menu of the coding agents, and the sign-in
   is a dialog: whose account it is, then the sign-in followed there until the account is in the
   list, which closes it; closing it stops the sign-in. A card with no account at all also says so
   in its body, with a press for each agent. Picked over the sign-in unfolding inside the card
   under a row of agent names that read as a label.
-- On a server `remove` is refused and says where to do it: the page keeps its own record of logins
-  copied from a computer.

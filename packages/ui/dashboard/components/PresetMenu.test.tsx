@@ -3,7 +3,7 @@ import { cleanup, render, screen } from '@testing-library/react'
 import { cloneElement, type ReactElement, type ReactNode } from 'react'
 import { forgetRemembered } from '../lib/use-async.js'
 
-vi.mock('../rpc/presets.js', () => ({ onPresetsList: async () => ({ presets: [{ id: 'default', name: 'Default', options: {} }, { id: 'reviewer', name: 'Reviewer', options: {} }], claude: [], codex: [] }), onPresetLogins: async () => [] }))
+vi.mock('../rpc/presets.js', () => ({ onPresetsList: async () => ({ presets: [{ id: 'default', name: 'Default', options: {} }, { id: 'reviewer', name: 'Reviewer', options: {} }], claude: [], codex: [] }) }))
 // What each item's hover says is on the page as a line, and its trigger is what holds the button.
 vi.mock('./ui/tooltip.js', () => ({
   Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,

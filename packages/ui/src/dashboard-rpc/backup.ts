@@ -44,7 +44,6 @@ export async function onBackup(): Promise<BackupView> {
     gaps.push({ kind: 'personal', address: shown.remote ?? state.remote!, ...(shown.remoteUrl ? { url: shown.remoteUrl } : {}), host: personalHost, waiting: state.unsent })
   }
   for (const project of projects) {
-    if (project.machine !== undefined) continue
     if (!(await readSharing(project.path).catch(() => false))) continue
     const host = await originHost(project.path).catch(() => undefined)
     if (host === undefined || (await readRemoteAccount(project.path).catch(() => undefined))) continue

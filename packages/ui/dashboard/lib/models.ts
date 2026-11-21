@@ -1,8 +1,7 @@
 import { DRIVERS, DRIVER_LABELS, type DriverName } from '../../src/client.js'
 import type { DriverOption } from '../components/DriverModelMenu.js'
-import { readAhead, useLoaded } from './use-async.js'
+import { useLoaded } from './use-async.js'
 import { onModels, type DriverModels, type ModelsView } from '../rpc/models.js'
-import { onMachineModels } from '../rpc/machines.js'
 
 // Which models each coding agent offers, as the daemon asked the agents themselves. The daemon
 // asks once and keeps the answer, so every surface that names a model reads it freely.
@@ -16,37 +15,15 @@ export function useModels(): ModelsView | undefined {
   return useLoaded<ModelsView | undefined>(onModels, undefined, [], { remember: 'models' })
 }
 
-/** Where a saved machine's models are remembered on the page: a switch back to it shows them at once. */
-const machineModelsKey = (machineId: string): string => `machine-models:${machineId}`
-
-/** Ask a saved machine for its models before it is picked, so the pick names them from its first frame. */
-export function readMachineModelsAhead(machineId: string): void {
-  readAhead(machineModelsKey(machineId), () => onMachineModels(machineId))
-}
-
-/**
- * The models a run started on the machine picked in "Run on" can be given: that machine's own, as
- * it asked its agents, which need not be this computer's (`theirs`). `undefined` while it is first
- * asked, the last answer while it is asked again; this computer's when none is picked, or the
- * machine does not say (an OpenAgent that is not asked this).
- */
-export function useModelsOn(machineId: string | undefined): { models: ModelsView | undefined; theirs: boolean } {
-  const own = useModels()
-  const theirs = useLoaded<ModelsView | null | undefined>(machineId === undefined ? null : () => onMachineModels(machineId), undefined, [machineId], machineId === undefined ? undefined : { remember: machineModelsKey(machineId) })
-  return machineId === undefined || theirs === null ? { models: own, theirs: false } : { models: theirs, theirs: true }
-}
-
 /**
  * Every coding agent with the models it listed, by the names it gives them, or a line saying why
  * there are none: the one list every surface that picks a model offers (the start menu, Settings),
  * so the two can never disagree on what a pick may be. No icons: those are the menu's own.
- * `on` names the computer the models are another's of, for an agent not installed there.
  */
-export function driverOptions(models: ModelsView | undefined, on?: string): DriverOption[] {
+export function driverOptions(models: ModelsView | undefined): DriverOption[] {
   return DRIVERS.map(name => {
     const answer = models?.[name]
-    const missing = `${DRIVER_LABELS[name]} is not installed${on !== undefined ? ` on ${on}` : ''}.`
-    const modelsNote = !answer ? `Asking ${DRIVER_LABELS[name]}…` : 'error' in answer ? (answer.missing ? missing : answer.error) : 'No models listed'
+    const modelsNote = !answer ? `Asking ${DRIVER_LABELS[name]}…` : 'error' in answer ? (answer.missing ? `${DRIVER_LABELS[name]} is not installed.` : answer.error) : 'No models listed'
     return {
       value: name,
       label: DRIVER_LABELS[name],

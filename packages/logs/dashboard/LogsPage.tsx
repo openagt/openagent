@@ -8,11 +8,7 @@ const LIMIT = 50
 /** One run, with the project it was recorded in. */
 export interface RunRow {
   project: UiProject
-  card: Omit<RunCard, 'caller' | 'status'> & {
-    /** As recorded, or `unknown` while the computer it runs on does not answer. */
-    status: RunCard['status'] | 'unknown'
-    /** While it is unknown: which computer, and since when it was not seen. */
-    offline?: string
+  card: Omit<RunCard, 'caller'> & {
     /** Whose run it is, by the email its record is kept under; a very old card has none. */
     person?: string
     /** Its pull request merged, as the git host last said, read where the sidebar reads it: the run reads as merged there and here. */
@@ -66,7 +62,6 @@ function cardOf(run: ModuleAgent): Omit<RunRow['card'], 'id' | 'startedAt'> {
     ...(run.pr ? { pr: { number: run.pr.number, url: run.pr.url }, ...(run.pr.state === 'merged' ? { merged: true } : {}) } : {}),
     ...(run.uncommitted ? { uncommitted: run.uncommitted } : {}),
     ...(run.unpublished ? { unpublished: run.unpublished } : {}),
-    ...(run.status === 'unknown' ? { offline: `${run.machine ?? 'Its computer'} offline${run.seenAt ? ` · last seen ${formatDateTime(run.seenAt)}` : ''}` } : {}),
   }
 }
 
@@ -78,11 +73,8 @@ interface Read {
 
 const NOTHING_READ: Read = { rows: [], failed: [] }
 
-/** The statuses a chip picks, in this order: what is going, then how runs ended, then the runs whose computer does not answer. */
-const STATUSES = ['running', 'waiting', 'done', 'stopped', 'failed', 'unknown']
-
-/** A status as its chip says it: the word every place says, and a computer that does not answer in one. */
-const chipWord = (value: string): string => (value === 'unknown' ? 'unknown' : runWord(value))
+/** The statuses a chip picks, in this order: what is going, then how runs ended. */
+const STATUSES = ['running', 'waiting', 'done', 'stopped', 'failed']
 
 /** What a run's work still needs before it leaves this machine, in the sidebar's words, as two facts of its line: "Needs commit", "2 files". */
 export function leftParts(card: Pick<RunRow['card'], 'uncommitted' | 'unpublished'>, gitHost: boolean): string[] {
@@ -223,7 +215,7 @@ export function LogsPage({ projects }: UiPageProps) {
     else query.set(STATUS_PARAM, value)
     host.adjustPage(undefined, query.toString())
   }
-  const counts = STATUSES.map(value => ({ value, label: chipWord(value)[0]!.toUpperCase() + chipWord(value).slice(1), count: read.rows.filter(row => row.card.status === value).length })).filter(c => c.count > 0)
+  const counts = STATUSES.map(value => ({ value, label: runWord(value)[0]!.toUpperCase() + runWord(value).slice(1), count: read.rows.filter(row => row.card.status === value).length })).filter(c => c.count > 0)
   const status = counts.some(c => c.value === picked) ? picked : null
   const shown = status === null ? read.rows : read.rows.filter(row => row.card.status === status)
   const days = byDay(shown)
@@ -285,9 +277,7 @@ export function LogsPage({ projects }: UiPageProps) {
                         href={host.agentHref(project.id, card.id)}
                         onClick={() => host.openAgent(project.id, card.id)}
                         meta={[
-                          <span className={runLineTone(shownStatus(card))} {...(card.offline ? { title: card.offline } : {})}>
-                            {standing(card)}
-                          </span>,
+                          <span className={runLineTone(shownStatus(card))}>{standing(card)}</span>,
                           // On a phone the time stands in the line, so the name has the row's width and the row keeps its two lines.
                           phone && <span title={formatDateTime(card.startedAt)}>{clock(card.startedAt)}</span>,
                           // What its work still needs before it leaves this machine, in the sidebar's words.

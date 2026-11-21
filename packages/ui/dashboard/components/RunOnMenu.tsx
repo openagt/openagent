@@ -1,68 +1,32 @@
-import { Check, Laptop, Plus, Workflow, type LucideIcon } from 'lucide-react'
-import type { Machine } from '../lib/machines.js'
-import type { MachineStatus } from '../lib/use-machine-status.js'
-import { thisMachineName } from '../lib/this-machine.js'
-import { machineKind, machineName, reachedByLine } from '../../src/client.js'
-import { MACHINE_ICONS, MachineMark } from './MachineMark.js'
-import { cn } from '../lib/utils.js'
+import { Check, Laptop, Workflow, type LucideIcon } from 'lucide-react'
 import { rowButtonClass, RowChevron } from './ui/row-item.js'
 import { OptionLabel } from './ui/option-label.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel } from './ui/dropdown-menu.js'
 
 /**
- * Where the next run starts (#1052/#1067): the machine this dashboard is on, a host the project's
- * modules bring (a GitHub Actions runner, `run.host`), or one of the machines saved on it. A
- * machine or a host is a run TARGET, selected in place: picking one does not navigate the browser.
- * The daemon starts the run on the host, or relays the start to the machine, which starts the run
- * in its own copy of the project. The dashboard is always its own machine's, also when a phone
- * shows it: the first row is the computer that runs this OpenAgent, "This machine" on that
- * computer's own screen and its name anywhere else (this-machine.ts).
- *
- * Each machine is said as a person knows it: its name, then what it is and where, never the
- * address that stands for it here. A person's own computer reached by the line it keeps open to
- * this server is a computer (reached-by-line.ts); a computer at home reached through a server is
- * a server at home, through that server; another person's computer, shared with everyone on a
- * server, says whose it is and that a run there uses this person's own logins. A machine is
- * picked here and removed on its page under Devices, never by a slip of the pointer in a menu.
+ * Where the next run starts (#2394): this computer, or a host the project's modules bring (a GitHub
+ * Actions runner, `run.host`). A host is a run TARGET, selected in place: picking one does not
+ * navigate the browser. The daemon starts the run on the host, which runs it on a machine of its own.
  */
 export type ConnectionControl = {
-  /** The saved machines a run can be sent to. */
-  machines: Machine[]
-  /** The machine selected as the run target (its id), or null when the dashboard's own machine is (#1067). */
-  selectedMachineId: string | null
-  /** The project has no repository address, the one name another machine would know it by: it runs here only. */
-  onlyHere: boolean
-  /** A session with no project: it runs in a folder of its own, here or on the machine picked. */
+  /** A session with no project: it runs in a folder of its own. */
   noProject?: boolean | undefined
-  /** The saved machine the project is on, when only another computer of the person's has it (elsewhere.ts): this computer clones it first. */
-  home?: string | undefined
-  /** Such a project with no repository address: it runs on its own computer only. */
-  onlyThere?: boolean | undefined
-  /** Select a saved machine as the run target, with no navigation (#1067). */
-  onSelect: (machine: Machine) => void
-  /** Clear the selection back to the dashboard's own machine (#1067). */
+  /** Clear the pick back to this computer. */
   onSelectLocal: () => void
-  /** Add a machine, where the person's devices are; none where there is no such place (devices is off). */
-  onAddMachine?: (() => void) | undefined
-  /** Each machine's online/offline status (#1072); an id absent from the map is still being checked. */
-  status: Record<string, MachineStatus>
-  /** The hosts beside this computer the project's modules bring (`run.host`): where a run may be picked to run, on no machine of the person's. */
-  hosts?: readonly { id: string; label: string }[] | undefined
-  /** The host picked as the run target, by its id; null or absent when none is. */
-  selectedHostId?: string | null | undefined
+  /** The hosts beside this computer the project's modules bring (`run.host`): where a run may be picked to run. */
+  hosts: readonly { id: string; label: string }[]
+  /** The host picked as the run target, by its id; null when none is. */
+  selectedHostId: string | null
   /** Select a host as the run target, with no navigation. */
-  onSelectHost?: ((id: string) => void) | undefined
+  onSelectHost: (id: string) => void
 }
 
-/** The icon of a host that is no machine of the person's. */
+/** The icon of a host beside this computer. */
 export const HOST_ICON: LucideIcon = Workflow
 
-/** What a saved machine is, as its row says it: what and where, and for another person's computer whose logins a run uses. */
-function wordsOf(machine: Machine): string {
-  const { kind, place } = machineKind(machine)
-  return kind === 'shared' ? `${place}. Runs use your own logins.` : place
-}
+/** What this computer is called in "Run on" and wherever a run's place is said. */
+export const THIS_MACHINE = 'This machine'
 
 /** The target in words, as the row above the box draws it: its icon, with a dot when it is not this machine, and its name. The menu adds its chevron. */
 export function RunOnWords({ icon: Icon, elsewhere, label }: { icon: LucideIcon; elsewhere: boolean; label: string }) {
@@ -77,23 +41,13 @@ export function RunOnWords({ icon: Icon, elsewhere, label }: { icon: LucideIcon;
   )
 }
 
-// One flat "Run on" list (#1067): this machine, then the saved machines and "Add a machine",
-// with a single checkmark. Its button is the target in words, drawn as the rows around the box draw
-// their items, for the row above it.
+// One flat "Run on" list: this machine, then the project's hosts, with a single checkmark. Its
+// button is the target in words, drawn as the rows around the box draw their items, for the row
+// above it.
 export function RunOnMenu({ connection, busy }: { connection: ConnectionControl; busy: boolean }) {
-  // The selected machine (#1067). An id pointing at a removed machine reads as none, and so does
-  // any pick on a project that runs here only.
-  const selectedMachine =
-    connection.selectedMachineId && !connection.onlyHere && (!connection.onlyThere || connection.selectedMachineId === connection.home)
-      ? connection.machines.find(m => m.id === connection.selectedMachineId)
-      : undefined
-  const hosts = connection.hosts ?? []
-  // A host picked is the target, where the project has it; a machine is none then.
-  const selectedHost = connection.selectedHostId ? hosts.find(host => host.id === connection.selectedHostId) : undefined
-  const here = thisMachineName()
-  const summary = selectedHost ? selectedHost.label : selectedMachine ? machineName(selectedMachine) : here
-  const onThisMachine = !selectedMachine && !selectedHost
-  const Icon = selectedHost ? HOST_ICON : selectedMachine ? MACHINE_ICONS[machineKind(selectedMachine).kind] : Laptop
+  // A host picked is the target, where the project has it.
+  const selectedHost = connection.selectedHostId ? connection.hosts.find(host => host.id === connection.selectedHostId) : undefined
+  const summary = selectedHost ? selectedHost.label : THIS_MACHINE
   return (
     <DropdownMenu>
       <Tooltip>
@@ -102,68 +56,30 @@ export function RunOnMenu({ connection, busy }: { connection: ConnectionControl;
             <DropdownMenuTrigger type="button" disabled={busy} aria-label={`Run on: ${summary}`} className={rowButtonClass} />
           }
         >
-          <RunOnWords icon={Icon} elsewhere={!onThisMachine} label={summary} />
+          <RunOnWords icon={selectedHost ? HOST_ICON : Laptop} elsewhere={selectedHost !== undefined} label={summary} />
           <RowChevron />
         </TooltipTrigger>
-        <TooltipContent>{`Run on — ${selectedHost?.label ?? selectedMachine?.label ?? here}`}</TooltipContent>
+        <TooltipContent>{`Run on — ${summary}`}</TooltipContent>
       </Tooltip>
       {/* The words are at the row's left: the menu opens inward. */}
       <DropdownMenuContent align="start" className="min-w-[19rem] max-w-[22rem]">
         <DropdownMenuGroup>
           <DropdownMenuLabel>Run on</DropdownMenuLabel>
-          {/* Each row leads with its machine's mark, its words at the menu's gap from it as "Add a machine…"'s
-              are; the pick is the tick at the row's end. */}
-          <DropdownMenuItem className={cn('items-start', connection.onlyThere && 'opacity-60')} disabled={connection.onlyThere} onClick={() => connection.onSelectLocal()}>
+          {/* Each row leads with its mark; the pick is the tick at the row's end. */}
+          <DropdownMenuItem className="items-start" onClick={() => connection.onSelectLocal()}>
             <Laptop className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
-            <OptionLabel
-              label={here}
-              description={connection.noProject ? 'Runs here, in a folder of its own.' : connection.home === undefined ? 'Runs here, in this project.' : connection.onlyThere ? 'It has no repository address to clone it here from.' : 'Cloned here first, then runs here.'}
-            />
-            {onThisMachine && <Check className="ml-auto mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />}
+            <OptionLabel label={THIS_MACHINE} description={connection.noProject ? 'Runs here, in a folder of its own.' : 'Runs here, in this project.'} />
+            {!selectedHost && <Check className="ml-auto mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />}
           </DropdownMenuItem>
           {/* The project's hosts: a click selects the host as the run target, which runs it on a machine of its own. */}
-          {hosts.map(host => (
-            <DropdownMenuItem key={`host:${host.id}`} className="items-start" onClick={() => connection.onSelectHost?.(host.id)}>
+          {connection.hosts.map(host => (
+            <DropdownMenuItem key={`host:${host.id}`} className="items-start" onClick={() => connection.onSelectHost(host.id)}>
               <HOST_ICON className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
               <OptionLabel label={host.label} description="Runs this project on a machine of its own." />
               {selectedHost?.id === host.id && <Check className="ml-auto mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />}
             </DropdownMenuItem>
           ))}
-          {/* Saved machines: a click SELECTS the machine as the run target (no navigation). */}
-          {connection.machines.map(machine => {
-            const status = connection.status[machine.id]
-            const offline = status === 'offline'
-            const words = wordsOf(machine)
-            // On another computer's project, what each computer does with it: it has it, or clones it first.
-            const withProject = connection.noProject ? `${words}. Runs there, in a folder of its own.` : connection.home === undefined ? words : machine.id === connection.home ? `${words}. Has this project.` : `${words}. Cloned there first, then runs there.`
-            const description = offline ? (reachedByLine(machine.url) ? 'Not connected. It must be on, with OpenAgent running.' : `Offline · ${withProject}`) : withProject
-            // Another computer's project with no address goes nowhere but its own computer.
-            const closed = connection.onlyHere || (connection.onlyThere === true && machine.id !== connection.home)
-            return (
-              <DropdownMenuItem
-                key={machine.id}
-                className={cn('items-start', (offline || closed) && 'opacity-60')}
-                disabled={closed}
-                onClick={() => connection.onSelect(machine)}
-              >
-                <MachineMark kind={machineKind(machine).kind} online={status === 'online'} className="mt-0.5" />
-                <OptionLabel label={machineName(machine)} description={description} />
-                {!selectedHost && selectedMachine?.id === machine.id && <Check className="ml-auto mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />}
-              </DropdownMenuItem>
-            )
-          })}
         </DropdownMenuGroup>
-        {connection.onlyHere && connection.machines.length > 0 && (
-          <p className="px-2 py-1.5 text-xs text-muted-foreground">
-            This project has no repository address, so it cannot be sent to another machine.
-          </p>
-        )}
-        {connection.onAddMachine && (
-          <DropdownMenuItem className="items-start" disabled={busy} onClick={connection.onAddMachine}>
-            <Plus className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
-            <OptionLabel label="Add a machine…" description="Connect a computer, or join with a code." />
-          </DropdownMenuItem>
-        )}
       </DropdownMenuContent>
     </DropdownMenu>
   )

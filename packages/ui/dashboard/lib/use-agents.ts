@@ -76,8 +76,7 @@ const NO_RECENTS: RecentAgent[] = []
  * while `shown`, since a picked project's own agents carry its rail. Every ten seconds, but a run
  * just started (`started`) is read every second until its row and its name are in, as a project's
  * own list reads it: the name is the first thing a person waits on. Only for a run just started:
- * one that never shows in that list (it runs on another machine) is not read for again each time
- * the list is shown.
+ * one that never shows in that list is not read for again each time the list is shown.
  */
 export function useRecentAgents(shown: boolean, started: { id: string | null; projectId: string | null; at: number }): { recentAgents: RecentAgent[]; reload: () => Promise<void>; state: ReadState } {
   const [pace, waitFor] = useStartPace(1000, useRunsPace(10_000))

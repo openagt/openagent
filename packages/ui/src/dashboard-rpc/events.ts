@@ -1,8 +1,7 @@
 import { fromDiaryLine, resolveAgentDiary, type AgentDiarySource, type AnyDiaryLine } from '../store/index.js'
-import { contextEventsSource, contextRemote, resolveProjectPath } from './context.js'
+import { resolveProjectPath } from './context.js'
 import type { OpenAgentEvent } from '../events.js'
 import { partialReader, tailAgentEvents } from './events-tail.js'
-import { forwardStream } from './stream-forward.js'
 
 // The live event stream behind the dashboard (#405): the selected run's diary, the file the run's
 // tool writes as the agent works. Each new line becomes one `send(event)`, which the mount writes
@@ -39,39 +38,14 @@ export type LiveFeedEvent = OpenAgentEvent | StreamSync | PartialMessage
  * a clean close — mirroring the read model's empty results rather than throwing at the client.
  *
  * The `agentId` names the run whose diary is followed; without one there is nothing to stream.
- *
- * Two sources, chosen by what is wired. An in-memory stream wins: an agent the daemon is relaying
- * from a machine (#1067). Otherwise the on-disk log. The daemon's source answers only for relayed
- * runs, so an ordinary local agent falls through to tailing the log.
- *
- * Both send the {@link StreamSync} marker once their replay is sent: the events held in memory
- * when the page subscribed, or the lines on disk. What comes after it is live.
+ * The {@link StreamSync} marker is sent once the lines on disk are: what comes after it is live.
  */
 export async function streamAgentEvents(
   projectId: string,
   agentId: string | undefined,
   send: (value: LiveFeedEvent) => void,
-  onDone?: () => void,
 ): Promise<(() => void) | undefined> {
-  // A run on a saved machine that this daemon does not follow yet, one started on the machine's own page: followed from here on.
-  if (agentId !== undefined) await contextRemote().follow(projectId, agentId).catch(() => {})
-  const stream = contextEventsSource()(projectId, agentId)
-  // An in-memory agent: replay + follow it, and end when it ends — a relayed agent that finished has
-  // nothing more to say, and leaving the response open would read as a live feed gone quiet.
-  if (stream) {
-    let held = stream.length
-    if (held === 0) send({ kind: 'stream-sync' })
-    return forwardStream(
-      stream,
-      event => {
-        send(event)
-        if (--held === 0) send({ kind: 'stream-sync' })
-      },
-      onDone,
-    )
-  }
-
-  // Everywhere else: tail the run's diary. The relocating tail, because the diary moves
+  // Tail the run's diary. The relocating tail, because the diary moves
   // mid-subscription: when the run ends its tool records it and reclaims the checkout, and a
   // fixed-path tail whose fs.watch missed the final appends went silent without the run's `end`.
   // On the move it asks again and sends the finished run's lines it had not sent, so the feed

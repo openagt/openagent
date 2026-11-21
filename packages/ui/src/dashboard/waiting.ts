@@ -11,7 +11,7 @@ import { needsWord } from './waiting-words.js'
 import { runName } from '../run-name.js'
 import { withStartedNames } from '../started-names.js'
 import { distributionHooks, projectRefAt } from '../distribution-hooks.js'
-import type { MachineKind } from '../reached-by-line.js'
+
 
 // Pure identity + diff, in the leaf `keys.ts` so the dashboard shares them rather than copying.
 export { waitingKey } from './keys.js'
@@ -27,14 +27,12 @@ export { waitingKey } from './keys.js'
 /**
  * One thing waiting on the person, as every list of them shows it (the Human Queue, a project's
  * "Waiting on you", the sidebar, the notifications): a `waiting` item of `app.attention`, with the
- * project it is in, and the computer the run it is about runs on when that is another of the person's.
+ * project it is in.
  */
 export interface Waiting extends Attention {
   kind: 'waiting'
   projectId: string
   projectName: string
-  /** The computer the run it is about runs on, when that is one of the person's other computers: the saved machine's name and kind, and its id, which the run is opened on. */
-  computer?: { name: string; kind: MachineKind; id?: string }
 }
 
 /** Injectable seam so {@link buildWaiting} is unit-testable off disk. */

@@ -68,8 +68,8 @@ test('a pick is queued for the extension only as the labels of the question park
   }
 })
 
-test('Settings › Claude web reads where the bridge stands, the folder the extension is loaded from, and the key only by an act (#1237, #1519, #2394)', async () => {
-  assert.deepEqual([rpcKind(bridge), rpcKind(token)], ['read', 'act'])
+test('Settings › Claude web reads where the bridge stands, the folder the extension is loaded from, and the key (#1237, #1519, #2394)', async () => {
+  assert.deepEqual([rpcKind(bridge), rpcKind(token)], ['read', 'read'])
   resetBridgeQuestions()
   const config = await mkdtemp(join(tmpdir(), 'claude-web-server-'))
   const was = process.env.XDG_CONFIG_HOME

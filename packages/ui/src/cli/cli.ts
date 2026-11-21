@@ -34,7 +34,7 @@ ${helpRows([
   ...(uninstall ? [['--uninstall', 'Take OpenAgent off this computer: everything `npx @openagt/install` put on it.'] as [string, string]] : []),
 ])}
 
-${helpText("The dashboard listens on this computer only. A phone, or another computer's OpenAgent, gets in from Settings › Devices.")}
+${helpText('The dashboard listens on this computer only.')}
 
 ${helpText("Everything else is the dashboard: it shows a project's runs from their files, and starts one on this computer's run host, the module OpenAgent is distributed with that runs it.")}`
 
@@ -142,9 +142,7 @@ async function runForegroundDaemonCmd(args: CliArgs, io: CliIO): Promise<number>
   const port = args.port ?? DEFAULT_DAEMON_PORT
   let project: string | undefined
   try {
-    // A server's service starts in its user's home, which is no project however it looks: a home
-    // made a repository would be added again at every start.
-    project = process.env.OPENAGENT_SERVER === '1' ? undefined : await repositoryOf(cwd)
+    project = await repositoryOf(cwd)
     let url = ''
     await runDaemon(cwd, {
       port,
