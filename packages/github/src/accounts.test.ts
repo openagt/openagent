@@ -7,6 +7,8 @@ import { basename, join } from 'node:path'
 import type { GhRunner } from './gh.js'
 import { accountLogins, ghState, isAccountDir, loginUnderWay, runEnv, runsAccount, settleAdded, startLogin, stopLogin, useForRuns } from './accounts.js'
 import { jobState, startJob } from './job.js'
+import { gitDirsOf } from './module.js'
+import { sessionFolder, sessionsHome } from '@openagt/agent-data'
 import { runCli, type CliDeps } from './cli.js'
 
 // OpenAgent's own GitHub accounts, one gh folder each, and the one runs use: the person's own gh,
@@ -114,13 +116,10 @@ test(
   }),
 )
 
-test('runEnv: the account\u2019s folder for gh, its name on commits; git asks the token of the helper set here alone, ssh addresses go over https, settings already given are kept', () => {
+test('runEnv: the account\u2019s folder for gh; git asks the token of the helper set here alone, ssh addresses go over https, settings already given are kept', () => {
   const env = runEnv('tok', '/cfg/openagent-github/octo', { login: 'octo', id: 42, name: 'Octo Cat' }, { GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: 'core.x', GIT_CONFIG_VALUE_0: 'y' })
   assert.equal(env['GH_TOKEN'], 'tok')
   assert.equal(env['GH_CONFIG_DIR'], '/cfg/openagent-github/octo')
-  assert.deepEqual([env['GIT_AUTHOR_NAME'], env['GIT_AUTHOR_EMAIL'], env['GIT_COMMITTER_NAME'], env['GIT_COMMITTER_EMAIL']], ['Octo Cat', '42+octo@users.noreply.github.com', 'Octo Cat', '42+octo@users.noreply.github.com'])
-  assert.equal(runEnv('tok', '/d', { login: 'octo', id: 42 })['GIT_AUTHOR_NAME'], 'octo', 'no name: the login')
-  assert.equal(runEnv('tok', '/d', undefined)['GIT_AUTHOR_NAME'], undefined, 'no facts kept: git signs as it would')
   assert.equal(env['GIT_CONFIG_COUNT'], '5')
   assert.equal(env['GIT_CONFIG_KEY_0'], undefined, 'the one given stays as it was')
   assert.equal(env['GIT_CONFIG_KEY_1'], 'credential.https://github.com.helper')
@@ -135,6 +134,45 @@ test('runEnv: the account\u2019s folder for gh, its name on commits; git asks th
   const url = execFileSync('git', ['ls-remote', '--get-url', 'git@github.com:o/r.git'], { env: { ...process.env, ...runEnv('t', '/d', undefined) }, encoding: 'utf8' })
   assert.equal(url.trim(), 'https://github.com/o/r.git')
 })
+
+test(
+  'runEnv: the account\u2019s name is on the commits of the run\u2019s project and its worktrees, or of its session\u2019s folder, and on no other repository\u2019s: a test\u2019s own commits keep the user it gave them',
+  withDir(async dir => {
+    // The environment as a run's agent has it, less any author or git settings a run this test runs in was given.
+    const gitEnv = Object.fromEntries(Object.entries(process.env).filter(([name]) => !/^GIT_(AUTHOR|COMMITTER|CONFIG)_/.test(name) && name !== 'GIT_CONFIG_COUNT'))
+    let working: Record<string, string> = {}
+    const git = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8', env: { ...gitEnv, ...working } }).trim()
+    const project = join(dir, 'shop')
+    mkdirSync(project)
+    git(project, 'init', '-q')
+    git(project, '-c', 'user.name=p', '-c', 'user.email=p@p', 'commit', '-q', '--allow-empty', '-m', 'init')
+    git(project, 'worktree', 'add', '-q', join(project, '.branches', 'agent-x'), '-b', 'agent-x')
+    const tests = join(dir, 'tmp', 'fixture')
+    mkdirSync(tests, { recursive: true })
+    git(tests, 'init', '-q')
+    git(tests, 'config', 'user.name', 'Tester')
+    git(tests, 'config', 'user.email', 'tester@example.com')
+    const author = (cwd: string) => git(cwd, 'var', 'GIT_AUTHOR_IDENT').replace(/ \d+ [+-]\d{4}$/, '')
+    const committer = (cwd: string) => git(cwd, 'var', 'GIT_COMMITTER_IDENT').replace(/ \d+ [+-]\d{4}$/, '')
+    const account = join(dir, 'openagent-github', 'octo')
+    const facts = { login: 'octo', id: 42, name: 'Octo "the" Cat' }
+    working = runEnv('tok', account, facts, gitEnv, await gitDirsOf({ project }))
+    const octo = 'Octo "the" Cat <42+octo@users.noreply.github.com>'
+    assert.deepEqual([author(project), author(join(project, '.branches', 'agent-x')), committer(join(project, '.branches', 'agent-x'))], [octo, octo, octo])
+    assert.deepEqual([author(tests), committer(tests)], ['Tester <tester@example.com>', 'Tester <tester@example.com>'])
+    assert.equal(Object.keys(working).filter(name => /^GIT_(AUTHOR|COMMITTER)_/.test(name)).length, 0, 'no author for every repository')
+    // A session with no project: the copies of its repos in its folder, which is made after its account is picked.
+    const session = await gitDirsOf({ session: '2026-11-21T19-02-26-646Z' })
+    const folder = sessionFolder(sessionsHome(), '2026-11-21T19-02-26-646Z')
+    working = runEnv('tok', account, { login: 'octo', id: 42 }, gitEnv, session)
+    execFileSync('git', ['clone', '-q', project, join(folder, 'shop')], { env: gitEnv })
+    assert.deepEqual([author(join(folder, 'shop')), author(tests)], ['octo <42+octo@users.noreply.github.com>', 'Tester <tester@example.com>'], 'no name: the login')
+    rmSync(folder, { recursive: true, force: true })
+    // No facts kept, or nowhere given: git signs as it would.
+    assert.equal(runEnv('tok', account, undefined, gitEnv, session)['GIT_CONFIG_COUNT'], '4')
+    assert.equal(runEnv('tok', account, facts, gitEnv)['GIT_CONFIG_COUNT'], '4')
+  }),
+)
 
 test(
   'accounts: the card\u2019s facts, the runs\u2019 account marked; another host refused; no gh is not installed with the command that installs it',
@@ -169,7 +207,7 @@ test(
 )
 
 test(
-  'use, then env: a run gets the picked account\u2019s folder, token and name; --user names another; no account, or one OpenAgent does not have, is refused, never the person\u2019s gh',
+  'use, then env: a run gets the picked account\u2019s folder and token; --user names another; no account, or one OpenAgent does not have, is refused, never the person\u2019s gh',
   withDir(async dir => {
     const env = { XDG_CONFIG_HOME: dir }
     const root = join(dir, 'openagent-github')
@@ -186,7 +224,7 @@ test(
     const picked = await run(['env'], { gh, env })
     assert.equal(picked.out['login'], 'octo-agent')
     const given = picked.out['env'] as Record<string, string>
-    assert.deepEqual([given['GH_TOKEN'], given['GH_CONFIG_DIR'], given['GIT_AUTHOR_EMAIL']], ['tok-octo-agent', join(root, 'octo-agent'), '42+octo-agent@users.noreply.github.com'])
+    assert.deepEqual([given['GH_TOKEN'], given['GH_CONFIG_DIR'], given['GIT_AUTHOR_EMAIL']], ['tok-octo-agent', join(root, 'octo-agent'), undefined], 'no author: its fetches and pushes make no commit')
     assert.equal(((await run(['env', '--user', 'octo'], { gh, env })).out['env'] as Record<string, string>)['GH_TOKEN'], 'tok-octo')
     const stranger = await run(['env', '--user', 'stranger'], { gh, env })
     assert.equal(stranger.code, 1)

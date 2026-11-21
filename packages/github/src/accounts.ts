@@ -293,10 +293,16 @@ export function gitConfig(dir: string): [string, string][] {
 /**
  * The environment to work as an account: its folder for `gh`, its token for `gh` and for git's
  * pushes and fetches to GitHub, whatever the person's own git keeps for it (the keychain, a
- * different helper, an ssh key), and its name on the commits. Set through git's environment, so
- * nothing of the person's own settings changes. The settings already in the environment are kept.
+ * different helper, an ssh key). Set through git's environment, so nothing of the person's own
+ * settings changes. The settings already in the environment are kept.
+ *
+ * Its name goes on the commits made in `commitsIn` alone, git directories as git's `gitdir:`
+ * matches them (the run's project, or its session's folder): a file of the account's folder that
+ * git includes there. Not git's own variables for a commit's author, which every repository a
+ * command makes would take over its own: a project's tests that commit as their own user would
+ * commit as the account. None given, or no facts kept: git signs as it would.
  */
-export function runEnv(token: string, dir: string, facts: AccountFacts | undefined, env: NodeJS.ProcessEnv = process.env): Record<string, string> {
+export function runEnv(token: string, dir: string, facts: AccountFacts | undefined, env: NodeJS.ProcessEnv = process.env, commitsIn: readonly string[] = []): Record<string, string> {
   const given = Number(env['GIT_CONFIG_COUNT'] ?? 0) || 0
   const lines: [string, string][] = [
     // An empty helper drops every helper set before it; then one that answers with the token.
@@ -306,16 +312,25 @@ export function runEnv(token: string, dir: string, facts: AccountFacts | undefin
     [`url.https://${HOST}/.insteadOf`, `git@${HOST}:`],
     [`url.https://${HOST}/.insteadOf`, `ssh://git@${HOST}/`],
   ]
+  if (facts && commitsIn.length > 0) {
+    const identity = writeIdentity(dir, facts)
+    for (const gitDir of commitsIn) lines.push([`includeIf.gitdir:${gitDir}.path`, identity])
+  }
   const out: Record<string, string> = { GH_CONFIG_DIR: dir, GH_TOKEN: token, GIT_CONFIG_COUNT: String(given + lines.length) }
   lines.forEach(([key, value], i) => {
     out[`GIT_CONFIG_KEY_${given + i}`] = key
     out[`GIT_CONFIG_VALUE_${given + i}`] = value
   })
-  if (facts) {
-    // The commits are the account's: its name, and GitHub's own address for it, which hides the person's own.
-    const name = facts.name ?? facts.login
-    const email = `${facts.id}+${facts.login}@users.noreply.github.com`
-    Object.assign(out, { GIT_AUTHOR_NAME: name, GIT_AUTHOR_EMAIL: email, GIT_COMMITTER_NAME: name, GIT_COMMITTER_EMAIL: email })
-  }
   return out
+}
+
+/**
+ * The account's name on commits, as git reads it from a config file kept in its folder: its name
+ * (its login when it has none) and GitHub's own address for it, which hides the person's own.
+ */
+function writeIdentity(dir: string, facts: AccountFacts): string {
+  const quoted = (text: string) => `"${text.replace(/[\r\n]+/g, ' ').replace(/[\\"]/g, c => `\\${c}`)}"`
+  const path = join(dir, 'commits.gitconfig')
+  writeFile600(path, `[user]\n\tname = ${quoted(facts.name ?? facts.login)}\n\temail = ${quoted(`${facts.id}+${facts.login}@users.noreply.github.com`)}\n`)
+  return path
 }

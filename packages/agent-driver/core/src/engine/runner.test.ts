@@ -10,10 +10,11 @@ import { PRESETS, RunOrder, chainStore, settingsIn, type DistributionEntry, type
 import { memoryStore } from '@openagt/hooks/testing'
 import { markerCard, writeMarker } from './records.js'
 import { runCommand } from './run.js'
-import { ACCOUNT_ENV, detachResume, detachRun, driverFor, readyToRun, resumeArgs, resumeProject, runArgs } from './runner.js'
+import { ACCOUNT_ENV, GIT_ACCOUNT_ENV, detachResume, detachRun, driverFor, readyToRun, resumeArgs, resumeProject, runArgs } from './runner.js'
+import { PLUGINS_WITHOUT_ENV, PRESET_ENV, PROJECT_SKILLS_ENV } from '@openagt/agent-data'
 import { handDownAgents, removeRepo, testRepo } from './test-repo.js'
 import { fakeGithub, testAgent, testModules } from './run-test-support.js'
-import { TITLE_SYSTEM } from './title.js'
+import { NAME_FILE_ENV, TITLE_SYSTEM } from './title.js'
 
 // The detached start, with the spawn faked: the process asked for, the id answered. The marker is
 // the run's process's to write: pushing it takes seconds, and the page waits on the id.
@@ -100,6 +101,25 @@ test("a run's driver is its coding agent's own, built with the run's id in its e
   const own = testAgent('own')
   driverFor(own, 'run-1', personal)
   assert.equal(own.built[0]?.accounts, undefined)
+})
+
+test("a run's agent gets none of the picks its process was started with: a dashboard it starts in its checkout runs on its own, and continues its runs", () => {
+  const picks = { [ACCOUNT_ENV]: 'Dani', [GIT_ACCOUNT_ENV]: 'octo-agent', [PRESET_ENV]: 'p1', [PLUGINS_WITHOUT_ENV]: 'discord', [PROJECT_SKILLS_ENV]: 'all', [NAME_FILE_ENV]: '/tmp/name.json' }
+  const before = Object.fromEntries(Object.keys(picks).map(name => [name, process.env[name]]))
+  Object.assign(process.env, picks)
+  try {
+    const codex = testAgent('codex', { accounts: 'codex' })
+    driverFor(codex, 'run-1', { memory: true, connectors: true, skills: true })
+    const env = codex.built[0]!.env
+    assert.deepEqual(Object.keys(picks).filter(name => env[name] !== undefined), [])
+    assert.equal(env['AGENT_ID'], 'run-1', 'the run its claims name')
+    assert.equal(env['PATH'], process.env['PATH'], 'the rest of the environment as it is')
+  } finally {
+    for (const [name, value] of Object.entries(before)) {
+      if (value === undefined) delete process.env[name]
+      else process.env[name] = value
+    }
+  }
 })
 
 test('a run goes on its accounts, starting on the one whoever started it named, on Claude and on Codex alike', async () => {

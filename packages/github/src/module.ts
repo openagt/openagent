@@ -1,4 +1,6 @@
-import { errorMessage } from '@openagt/agent-data'
+import { realpathSync } from 'node:fs'
+import { basename, dirname, join } from 'node:path'
+import { errorMessage, nodeGitRunner, sessionFolder, sessionsHome } from '@openagt/agent-data'
 import { defineModule, RunOrder, type ModuleDefinition, type PullRequest, type RunContext } from '@openagt/hooks'
 import { readFacts, runEnv } from './accounts.js'
 import { nodeGhRunner } from './gh.js'
@@ -26,9 +28,12 @@ export interface GithubDeps {
   requestOfBranch?: (dir: string, branch: string) => Promise<PullRequest | undefined>
   /** Whether the repository at `dir` is on GitHub. */
   onGithub?: (dir: string) => Promise<boolean>
-  /** OpenAgent's account `user`, else the one runs use, as a run in the repository at `dir` works as it; throws when OpenAgent has no such account. */
-  workAs?: (dir: string, user: string | undefined) => Promise<WorkingAs>
+  /** OpenAgent's account `user`, else the one runs use, as a run in the repository at `dir` works as it, its commits made in `commitsIn`; throws when OpenAgent has no such account. */
+  workAs?: (dir: string, user: string | undefined, commitsIn: CommitsIn) => Promise<WorkingAs>
 }
+
+/** Where a run's commits are made, and go as its account: its project's repository, or a session's own folder, with the copies of its repos. */
+export type CommitsIn = { project: string } | { session: string }
 
 export function githubModule(deps: GithubDeps = {}): ModuleDefinition {
   const requestOfBranch = deps.requestOfBranch ?? branchRequest
@@ -48,11 +53,33 @@ export function githubModule(deps: GithubDeps = {}): ModuleDefinition {
 
 export default githubModule()
 
-/** OpenAgent's account `user`, else the one runs use, with the token GitHub said is its own. */
-async function openagentAccount(dir: string, user: string | undefined): Promise<WorkingAs> {
+/** OpenAgent's account `user`, else the one runs use, with the token GitHub said is its own, and its name on the commits made in `commitsIn`. */
+async function openagentAccount(dir: string, user: string | undefined, commitsIn: CommitsIn): Promise<WorkingAs> {
   const gh = nodeGhRunner()
   const { login, dir: home } = await accountNamed(user, dir, gh, process.env)
-  return { login, env: runEnv(await tokenOf(login, home, dir, gh), home, readFacts(home), process.env) }
+  return { login, env: runEnv(await tokenOf(login, home, dir, gh), home, readFacts(home), process.env, await gitDirsOf(commitsIn)) }
+}
+
+/**
+ * The git directories of `commitsIn`, as git's `gitdir:` matches them, by their real path: a
+ * project's own (its common directory, its main checkout's) and its worktrees' (in it), the run's
+ * among them; or every repository in a session's folder. A repository elsewhere, such as one a
+ * test makes in the temporary folder, is not among them, and commits as its own config says.
+ */
+export async function gitDirsOf(commitsIn: CommitsIn): Promise<string[]> {
+  if ('session' in commitsIn) return [`${realPath(sessionFolder(sessionsHome(), commitsIn.session))}/**`]
+  const common = realpathSync((await nodeGitRunner()(['rev-parse', '--path-format=absolute', '--git-common-dir'], commitsIn.project)).trim())
+  return [common, `${common}/**`]
+}
+
+/** `path` with its links resolved, as far as it exists: a session's folder is made after its account is picked. */
+function realPath(path: string): string {
+  try {
+    return realpathSync(path)
+  } catch {
+    const parent = dirname(path)
+    return parent === path ? path : join(realPath(parent), basename(path))
+  }
 }
 
 /**
@@ -64,7 +91,7 @@ async function openagentAccount(dir: string, user: string | undefined): Promise<
  * on no GitHub repository works as no account of this module's; one picked an account it cannot
  * work as there is refused, rather than run as someone else.
  */
-async function workAsAccount(ctx: RunContext, onGithub: (dir: string) => Promise<boolean>, workAs: (dir: string, user: string | undefined) => Promise<WorkingAs>): Promise<void> {
+async function workAsAccount(ctx: RunContext, onGithub: (dir: string) => Promise<boolean>, workAs: NonNullable<GithubDeps['workAs']>): Promise<void> {
   const picked = ctx.options.github?.account
   const candidates = ctx.project ? [ctx.project.dir] : (ctx.options['git-branches']?.repos ?? []).map(repo => repo.from)
   let dir: string | undefined
@@ -80,7 +107,7 @@ async function workAsAccount(ctx: RunContext, onGithub: (dir: string) => Promise
   }
   let working: WorkingAs
   try {
-    working = await workAs(dir, picked)
+    working = await workAs(dir, picked, ctx.project ? { project: ctx.project.dir } : { session: ctx.id })
   } catch (err) {
     throw new Error(picked !== undefined ? `This session works as @${picked} on GitHub, and it cannot be used here: ${errorMessage(err)}` : errorMessage(err))
   }

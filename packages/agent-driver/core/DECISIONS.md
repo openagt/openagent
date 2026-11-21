@@ -73,6 +73,11 @@ already made, and lists it in its pull request; for anything else it proposes an
 - A session that keeps a log names its diary in the agent's environment (`AGENT_DIARY`),
   so a command the agent runs can add a line of its own to the run's chat. Picked over
   the scheduler letting each package hook into a run's start.
+- The agent's environment keeps what its own commands read (`AGENT_ID`, `AGENT_DIARY`,
+  `OPENAGENT_DISTRIBUTION`, the account's token) and leaves out what only the run's process
+  reads: the picks it was started with (`RUN_PICKS_ENV`). Picked over handing everything down,
+  which gave a dashboard the agent started in its checkout the run's account for every run it
+  started, and refused every run it continued.
 - The card says how hard the model thought: the effort picked, else the one in force when
   the driver can tell (Codex says it, or its model list gives the model's default; Claude
   Code's settings may set one, and with none set it says nothing). Picked over the card

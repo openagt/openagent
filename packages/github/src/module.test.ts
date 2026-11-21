@@ -53,8 +53,8 @@ test("a run in a project on GitHub gets the module's skill, with its command; on
 function accountStep(onGithub: string[], accounts: Record<string, string>, runs: string | undefined, asked: string[] = []) {
   return stepOf("work as the run's account", {
     onGithub: async dir => onGithub.includes(dir),
-    workAs: async (dir, user) => {
-      asked.push(`${dir} ${user ?? '(the account runs use)'}`)
+    workAs: async (dir, user, commitsIn) => {
+      asked.push(`${dir} ${user ?? '(the account runs use)'}, commits in ${'project' in commitsIn ? commitsIn.project : `session ${commitsIn.session}`}`)
       const login = user ?? runs
       if (login === undefined || accounts[login] === undefined) throw new Error(`OpenAgent has no GitHub account${user !== undefined ? ` ${user}` : ''}`)
       return { login, env: { GH_TOKEN: accounts[login] } }
@@ -73,7 +73,7 @@ test("a run on GitHub works as the account picked for it, else the one runs use:
   await step.run(unpicked)
   assert.deepEqual(unpicked.env, { GH_TOKEN: 'octo-token' })
   assert.deepEqual(unpicked.facts.github, { pr: PR_12, account: 'octo' }, 'the facts it had are kept')
-  assert.deepEqual(asked, ['/projects/shop octo-agent', '/projects/shop (the account runs use)'])
+  assert.deepEqual(asked, ['/projects/shop octo-agent, commits in /projects/shop', '/projects/shop (the account runs use), commits in /projects/shop'])
 })
 
 test('a session with no project works as the account on the first of its repos that is on GitHub; one on none works as no account', async () => {
@@ -87,7 +87,7 @@ test('a session with no project works as the account on the first of its repos t
   const session = fakeRun({ options: { 'git-branches': { repos } } })
   await step.run(session)
   assert.deepEqual([session.env, session.facts.github], [{ GH_TOKEN: 'octo-token' }, { account: 'octo' }])
-  assert.deepEqual(asked, ['/repos/site (the account runs use)'])
+  assert.deepEqual(asked, ['/repos/site (the account runs use), commits in session run-1'], 'its commits are in its own folder, where its repos are copied')
   for (const ctx of [fakeRun({}), fakeRun({ options: { 'git-branches': { repos: [repos[0]!] } } }), fakeRun({ project: { ...SHOP, dir: '/projects/elsewhere' } })]) {
     await step.run(ctx)
     assert.deepEqual([ctx.env, ctx.facts.github], [{}, undefined])

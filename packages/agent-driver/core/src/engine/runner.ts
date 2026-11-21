@@ -9,12 +9,12 @@ import { readPersonal } from './config.js'
 import { runPreset, type SessionPicks } from './preset.js'
 import { gitHostCommand, gitHostEnv } from './git-host.js'
 import { namedAtStart, resumeRun, runCommand, runIdFrom, type RunOutcome, type RunRequest } from './run.js'
-import { askName } from './title.js'
+import { NAME_FILE_ENV, askName } from './title.js'
 import { publishChange, runnerMark, type NO_PUBLISH, type Publish } from './records.js'
 import { acquireRunLock, handOverRunLock, isPidAlive, releaseRunLock, runStderrPath } from './run-lock.js'
 import { accountRotation } from '../accounts/rotation.js'
 import { accountsPath, hasAddedAccount, readAccounts } from '../accounts/accounts.js'
-import { AGENT_ID_ENV } from '@openagt/agent-data'
+import { AGENT_ID_ENV, PLUGINS_WITHOUT_ENV, PRESET_ENV, PROJECT_SKILLS_ENV } from '@openagt/agent-data'
 
 /**
  * The tool's process side: a run in this process, the same run detached in its own process and
@@ -329,9 +329,19 @@ export function accountsOn(preset: Pick<Preset, 'options'>, agent: Pick<RunAgent
 }
 
 /**
+ * What whoever starts a run tells its process in the environment, and the run's process alone
+ * reads: the session's picks, its preset, its accounts, the file its name comes in. Its agent
+ * never gets them: they are no part of the agent's own work, and an OpenAgent the agent starts in
+ * its checkout (a dashboard to try its change) would take them for its own runs' picks, and
+ * refuse to continue any of them.
+ */
+export const RUN_PICKS_ENV: readonly string[] = [ACCOUNT_ENV, GIT_ACCOUNT_ENV, PRESET_ENV, PLUGINS_WITHOUT_ENV, PROJECT_SKILLS_ENV, NAME_FILE_ENV]
+
+/**
  * The driver of a run on `agent`, as the agent builds it for a run: unrestricted, as nobody is
  * there to approve what it does in the run's checkout. The run's id is in the agent's
- * environment, so the claim it makes names the run (the tickets skill reads `AGENT_ID`).
+ * environment, so the claim it makes names the run (the tickets skill reads `AGENT_ID`); the
+ * picks this process was started with are not ({@link RUN_PICKS_ENV}).
  *
  * The coding agent starts with the person's own setup, as when started by hand, less the parts
  * this machine's config turns off (`personal:` in `config.ts`). How a part is turned off is the
@@ -339,9 +349,10 @@ export function accountsOn(preset: Pick<Preset, 'options'>, agent: Pick<RunAgent
  */
 export function driverFor(agent: RunAgent, id: string | undefined, personal: PersonalSetup, only?: string[]): Driver {
   // Without an id, a driver for no run's agent: a session that only names one.
-  const env: NodeJS.ProcessEnv = { ...process.env, ...(id !== undefined ? { [AGENT_ID_ENV]: id } : {}) }
+  const env: NodeJS.ProcessEnv = Object.fromEntries(Object.entries(process.env).filter(([name]) => !RUN_PICKS_ENV.includes(name)))
+  if (id !== undefined) env[AGENT_ID_ENV] = id
   // On the computer's accounts of the agent's list, or the few the run's preset names, the next free one taking over at a limit; the one to start on, when whoever started the run said.
-  const prefer = env[ACCOUNT_ENV]?.trim()
+  const prefer = process.env[ACCOUNT_ENV]?.trim()
   const accounts = agent.accounts ? accountRotation(agent.accounts, { ...(prefer ? { prefer } : {}), ...(only ? { only } : {}) }) : undefined
   return agent.driver({ env, personal, ...(accounts ? { accounts } : {}) })
 }
