@@ -249,6 +249,9 @@ export function JumpPalette({ waiting, runs, pages, projects, scope, here, hrefO
               <Search className="size-4 shrink-0 text-muted-foreground" aria-hidden />
               <Autocomplete.Input
                 ref={input}
+                // The caret is in the field as it is drawn: Base UI's `initialFocus` moves it a frame later, and a
+                // letter typed in that frame went to the box behind, which kept it and grew its send under the jump.
+                autoFocus
                 aria-label="Jump to"
                 placeholder="Jump to a run, a project or a page"
                 className="h-5 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-faint-foreground max-md:text-base"
