@@ -12,20 +12,22 @@ import type { Driver, ReadyPrompt } from '@openagt/hooks'
 // login for about a second before it asks anything, Codex starts its server and opens a
 // conversation for two. Measured on the same prompt: two seconds fresh, one ready (Claude Code);
 // four fresh, two with the conversation open (Codex). So a long-lived process that starts runs —
-// the dashboard's — keeps one naming session started and waiting, takes it for a run the moment
-// the run is started, and starts the next one for the run after.
+// the dashboard's — starts a naming session when a Start is near (the launcher opened, or its
+// agent changed: {@link ReadyNaming.prepare}), and takes it for the run the moment the run is started.
 //
 // One waits per setup a run would name with: the coding agent and the person's setup parts that
-// are off on this machine. A project like most shares the one. A coding agent nobody starts a run on has none waiting: one is made after its
-// first run, which is named the way it always was, by a session started then.
+// are off on this machine. A project like most shares the one. A run started with none waiting (a
+// schedule's) is named the way it always was, by a session started then.
 //
-// A session waits a while at most and is replaced: its process holds a login that may be refreshed
-// under it, and a prompt it was started with that names the day.
+// A naming session's process is ended once it answered, and one that waited a while for a Start
+// that never came is ended too. Neither is replaced: the next is started when the next Start is
+// near. A process kept waiting for whatever run came next was a `claude -p` the dashboard always
+// had, started anew each time the one before was ended — for a person who started nothing more.
 
-/** How long a naming session waits for a run before it is replaced by a fresh one. */
-export const READY_NAMING_MAX_WAIT_MS = 20 * 60_000
+/** How long a naming session waits for its run before its process is ended: a person who opened the launcher starts within a few minutes. */
+export const READY_NAMING_MAX_WAIT_MS = 5 * 60_000
 
-/** How often the waiting sessions are looked over: replaced when old, or when their process ended. */
+/** How often the waiting sessions are looked over: ended when old, or forgotten when their process ended. */
 const LOOK_OVER_EVERY_MS = 60_000
 
 /**
@@ -53,7 +55,6 @@ interface Waiting {
   ready: ReadyPrompt
   naming: NamingSession
   since: number
-  setup: NamingSetup
 }
 
 export interface ReadyNamingDeps {
@@ -89,7 +90,7 @@ export class ReadyNaming {
 
   /**
    * The name of a run of `driver` started in `repo` with `prompt`: asked of the session waiting for
-   * it, or of one started now when none waits, and the next one started once it answered.
+   * it, or of one started now when none waits, its process ended once it answered.
    * `undefined` when this run is not named here (a bare command, named from its report), when its
    * agent has no small model to name with, or when no name came: the run's words stay its name.
    * Never throws.
@@ -111,7 +112,7 @@ export class ReadyNaming {
       clearTimeout(timer)
       signal?.removeEventListener('abort', stop)
       // Not waited on: the name is what the caller waits for.
-      void this.end(taken).then(() => this.keep(setup))
+      void this.end(taken)
     }
   }
 
@@ -180,7 +181,7 @@ export class ReadyNaming {
       await naming.close()
       return undefined
     }
-    return { ready, naming, since: this.now(), setup }
+    return { ready, naming, since: this.now() }
   }
 
   private async end(one: Waiting): Promise<void> {
@@ -188,12 +189,12 @@ export class ReadyNaming {
     await one.naming.close()
   }
 
-  /** Replace each waiting session that is too old, or whose process ended on its own. */
+  /** End each waiting session that is too old, or whose process ended on its own. */
   private lookOver(): void {
     for (const [key, one] of [...this.waiting]) {
       if (this.fresh(one)) continue
       this.waiting.delete(key)
-      void this.end(one).then(() => this.keep(one.setup))
+      void this.end(one)
     }
   }
 }
