@@ -1,7 +1,8 @@
 {
   "id": "2026-11-21T19-53-43-674Z",
   "startedAt": "2026-11-21T19:53:43.907Z",
-  "status": "running",
+  "endedAt": "2026-11-21T21:52:20.002Z",
+  "status": "done",
   "intent": "When the agent starts a long command in the background and waits for it, the session's page shows nothing new for many minutes (session 2026-11-21T19-03-38-792Z: 17 minutes with no line while \"pnpm test\" ran), so I can't tell it from a stuck session. And a session whose agent ends its turn with a background command still running stays \"Working\" forever. Show on the page that the agent is waiting on a background command, which one, and for how long. Find why a turn that ends with a background command still running never ends the session, and end it properly. Add tests that fail without the fixes, and open a pull request with a short title and body.",
   "title": "Background command status on session page",
   "driver": "claude-code",
@@ -12,8 +13,8 @@
     "number": 2408,
     "url": "https://github.com/openagt/openagent/pull/2408"
   },
-  "cost": 7.618957600000001,
-  "contextTokens": 264768,
+  "cost": 19.1233386,
+  "contextTokens": 288762,
   "caller": {
     "runner": {
       "host": "Suleimans-MacBook-Pro.local",
