@@ -8,7 +8,9 @@
 // - None of the variables an OpenAgent run hands its agent (`OPENAGENT_*`, `AGENT_ID`). An agent
 //   that ran a project's tests passed its own skills on, so a test's empty project held tickets and
 //   a queue, and seven tests failed in every agent's checkout alone. Kept: `OPENAGENT_NETWORK_TESTS`,
-//   which a person sets to run the tests that reach the network.
+//   which a person sets to run the tests that reach the network. Nor the git identity a run hands
+//   its agent, its account's (`GIT_AUTHOR_NAME`, …): it outranks the name a test's repository is
+//   given, and a test that read its commit's author read the person's.
 // - No coding agent's own CLI: `claude` and `codex` are stand-ins first on PATH that refuse, as on
 //   CI where neither is installed. A test that forgot its own stand-in (a `spawn`, a fake driver, a
 //   quota source) would start the person's real agent, with its MCP servers and its login: one run
@@ -25,7 +27,8 @@ import { delimiter, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const KEPT = new Set(['OPENAGENT_NETWORK_TESTS'])
-const handedToAgents = name => (name.startsWith('OPENAGENT_') || name === 'AGENT_ID') && !KEPT.has(name)
+const GIT_IDENTITY = new Set(['GIT_AUTHOR_NAME', 'GIT_AUTHOR_EMAIL', 'GIT_COMMITTER_NAME', 'GIT_COMMITTER_EMAIL'])
+const handedToAgents = name => (name.startsWith('OPENAGENT_') || name === 'AGENT_ID' || GIT_IDENTITY.has(name)) && !KEPT.has(name)
 
 const scratch = mkdtempSync(join(tmpdir(), 'openagent-test-'))
 const configHome = join(scratch, 'config')

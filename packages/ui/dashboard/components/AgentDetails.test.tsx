@@ -45,9 +45,11 @@ describe('AgentDetails', () => {
     expect(screen.queryByText('Model')).toBeNull()
   })
 
-  test('when the run started, off its card', () => {
-    render(<AgentDetails events={[]} card={{ driver: 'claude-code', startedAt: new Date(2026, 10, 13, 12, 9, 57, 484).toISOString() }} />)
-    expect(shown('Started')).toMatch(/^Nov 13, 12:09/)
+  test('when the run started, off its card, to the minute', () => {
+    const at = new Date(2026, 10, 13, 12, 9, 57, 484)
+    render(<AgentDetails events={[]} card={{ driver: 'claude-code', startedAt: at.toISOString() }} />)
+    // In the machine's language, as the person reads it: "Nov 13, 12:09 PM" in American English.
+    expect(shown('Started')).toBe(at.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }))
   })
 
   test('before the card is listed, no agent or model is named', () => {
