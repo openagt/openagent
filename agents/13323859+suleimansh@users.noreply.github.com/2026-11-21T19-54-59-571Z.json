@@ -1,0 +1,17 @@
+{
+  "id": "2026-11-21T19-54-59-571Z",
+  "startedAt": "2026-11-21T19:54:59.781Z",
+  "status": "running",
+  "intent": "scripts/test-node.mjs drops the four git author and committer variables, and its comment says an OpenAgent run hands them to its agent. Since PR 2401 a run no longer does. Decide whether the drop is still worth keeping (a person's own shell may set them), and either remove it or correct the comment. Open a pull request with a short title and body.",
+  "driver": "claude-code",
+  "model": "opus",
+  "caller": {
+    "runner": {
+      "host": "Suleimans-MacBook-Pro.local",
+      "pid": 65320,
+      "gitAccount": "suleimansh"
+    },
+    "host": "Suleimans-MacBook-Pro.local",
+    "gitAccount": "suleimansh"
+  }
+}
