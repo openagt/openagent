@@ -48,3 +48,15 @@ export const runLineTone = (status: string): string => stateOf(status).line
 
 /** The state of work a run's mark draws. */
 export const runCell = (status: string): WorkState => stateOf(status).cell
+
+/**
+ * How a run stands, as every row of it says it, the one rule for them: the state its mark draws
+ * ({@link runCell}) and the word its line opens with. A run something waits on the person for (an
+ * item of "Waiting on you": its question, its files to commit, its pull request to merge) waits, in
+ * that item's words; else a run still going says so; else one whose pull request merged is merged,
+ * however it ended; else it is as it ended.
+ */
+export function runState(run: { status: string; saving?: boolean | undefined; merged?: boolean | undefined }, need?: { words: string } | undefined): { state: string; word: string } {
+  const state = need || run.status === 'waiting' ? 'waiting' : run.saving ? 'saving' : run.status === 'running' ? 'running' : run.merged ? 'merged' : run.status
+  return { state, word: need?.words ?? runWord(state) }
+}
