@@ -1,17 +1,33 @@
 {
   "id": "2026-11-21T19-54-23-953Z",
   "startedAt": "2026-11-21T19:54:24.163Z",
-  "status": "running",
+  "endedAt": "2026-11-21T21:47:05.676Z",
+  "status": "done",
   "intent": "The test \"Ctrl+K, a few letters and Enter…\" in packages/ui/src/e2e/smoke-runs.test.ts fails now and then (1 of 4 runs on its own on my Mac, in English and in Hebrew). Run it many times to reproduce, find the race, and fix the test or the code, whichever is wrong. Do not run the whole test suite more than once: other sessions are running on this machine. Open a pull request with a short title and body.",
+  "title": "Flaky Ctrl+K smoke test",
   "driver": "claude-code",
-  "model": "opus",
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "branch": "agent-jump-focus-race",
+  "pr": {
+    "number": 2409,
+    "url": "https://github.com/openagt/openagent/pull/2409"
+  },
+  "cost": 2.2687539999999995,
+  "contextTokens": 90923,
   "caller": {
     "runner": {
       "host": "Suleimans-MacBook-Pro.local",
       "pid": 44833,
-      "gitAccount": "suleimansh"
+      "gitAccount": "suleimansh",
+      "baseCommit": "d54205a35e8db3ebffd0cfa7a81b8f821c1d39f1"
     },
+    "pid": 44833,
     "host": "Suleimans-MacBook-Pro.local",
-    "gitAccount": "suleimansh"
+    "gitAccount": "suleimansh",
+    "baseCommit": "d54205a35e8db3ebffd0cfa7a81b8f821c1d39f1",
+    "kind": "prompt",
+    "workspace": "/Users/suleiman/Projects/openagent/.branches/agent-2026-11-21T19-54-23-953Z",
+    "sessionId": "1351bf99-2590-43a6-949d-cf0d90dc4100"
   }
 }
