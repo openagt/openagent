@@ -181,7 +181,7 @@ export function AgentView({
 
   // The messages on their way to the agent, from the box under the chat to the feed above it.
   // The prompt this page started the run with is on its way only until the run has ended.
-  const { sending: shownSending, sentAt, onSending, waiting, onQueued, editInBox, giveBack } = useMessagesOnTheirWay(projectId, agentId, shown, live === false && archived !== null && !feedLive, card?.status === 'stopped', card?.endedAt, live === false ? undefined : startedWith)
+  const { sending: shownSending, sendingImages, sentAt, onSending, waiting, onQueued, editInBox, giveBack } = useMessagesOnTheirWay(projectId, agentId, shown, live === false && archived !== null && !feedLive, card?.status === 'stopped', card?.endedAt, live === false ? undefined : startedWith, picks?.images)
   // A question answered from its card hands the focus on to the box, for what the person says next.
   const focusBox = useRef<(() => void) | null>(null)
   // A run writes its prompt line once its coding agent begins. Until then its prompt, off its card,
@@ -446,7 +446,7 @@ export function AgentView({
           onSaid={onSending}
           focusNext={() => focusBox.current?.()}
           writing={feedLive ? writing : ''}
-          {...(shownSending !== undefined ? { sending: shownSending } : {})}
+          {...(shownSending !== undefined ? { sending: shownSending, sendingImages } : {})}
           {...(sentAt !== undefined ? { sendingAt: sentAt } : {})}
           working={feedLive || shownSending !== undefined}
           queued={waiting}
@@ -469,7 +469,7 @@ export function AgentView({
 /** A message sent to a working agent, with how many prompts its log held then: a later prompt of its text is it, read. */
 type Queued = QueuedMessage & { prompts: number }
 /** A message sent to continue an ended run: how many prompts the run had then, when its record said it ended then, and when it was sent. */
-type Sending = { text: string; prompts: number; endedAt: string | null; at: string }
+type Sending = { text: string; images?: string[]; prompts: number; endedAt: string | null; at: string }
 
 function onVisibilityChange(changed: () => void): () => void {
   document.addEventListener('visibilitychange', changed)
@@ -493,17 +493,21 @@ function useMessagesOnTheirWay(
   /** When its record says it last ended. */
   endedAt: string | undefined,
   startedWith: string | undefined,
+  /** The images this page just started the agent with. */
+  startedImages: string[] | undefined,
 ): {
   sending: string | undefined
+  /** The images that message goes with. */
+  sendingImages: string[] | undefined
   /** When that message was sent. */
   sentAt: string | undefined
-  onSending: (text: string | null) => void
+  onSending: (text: string | null, images?: string[]) => void
   waiting: WaitingMessage[]
   onQueued: (message: QueuedMessage) => void
   /** Set by the composer to what puts a text back in its box: Cancel and edit on a waiting message. */
-  editInBox: MutableRefObject<((text: string) => void) | null>
-  /** Set by the composer to what hands its box the messages the run ended without reading. */
-  giveBack: MutableRefObject<((text: string) => void) | null>
+  editInBox: MutableRefObject<((text: string, images?: string[]) => void) | null>
+  /** Set by the composer to what hands its box the messages the run ended without reading, with their images. */
+  giveBack: MutableRefObject<((text: string, images?: string[]) => void) | null>
 } {
   // The message just sent to an ended run, shown at the end of the feed until its own prompt line
   // arrives: the continuation writes that line only once its coding agent answers, seconds later.
@@ -518,7 +522,10 @@ function useMessagesOnTheirWay(
   useEffect(() => {
     if (sending && prompts > sending.prompts) setSending(null)
   }, [sending, prompts, setSending])
-  const onSending = useCallback((text: string | null) => setSending(text === null ? null : { text, prompts, endedAt: endedAt ?? null, at: new Date().toISOString() }), [prompts, endedAt, setSending])
+  const onSending = useCallback(
+    (text: string | null, images?: string[]) => setSending(text === null ? null : { text, ...(images !== undefined && images.length > 0 ? { images } : {}), prompts, endedAt: endedAt ?? null, at: new Date().toISOString() }),
+    [prompts, endedAt, setSending],
+  )
   // The messages sent while the agent works that it has not read yet, each shown waiting until the
   // agent reads it: at its next step, where its `steered` line lands, or, sent for later or not
   // taken in time, as the prompt of its next turn. An agent that stopped working without reading
@@ -544,7 +551,7 @@ function useMessagesOnTheirWay(
   useEffect(() => {
     if (unread.length !== queued.length) setQueued(() => unread)
   }, [unread.length, queued.length]) // eslint-disable-line react-hooks/exhaustive-deps
-  const giveBack = useRef<((text: string) => void) | null>(null)
+  const giveBack = useRef<((text: string, images?: string[]) => void) | null>(null)
   const unreadNow = useRef(queued)
   unreadNow.current = queued
   // With the session open in two tabs, the words go to the one the person looks at.
@@ -553,7 +560,7 @@ function useMessagesOnTheirWay(
     if (queued.length === 0 || !ended || !onScreen) return
     const timer = setTimeout(
       () => {
-        giveBack.current?.(unreadNow.current.map(message => message.text).join('\n\n'))
+        giveBack.current?.(unreadNow.current.map(message => message.text).join('\n\n'), unreadNow.current.flatMap(message => message.images ?? []))
         setQueued(() => [])
       },
       stopped ? 0 : QUEUED_UNREAD_MS,
@@ -567,14 +574,14 @@ function useMessagesOnTheirWay(
   useEffect(() => {
     if (!sending || endedAt === undefined || endedAt === sending.endedAt || !ended || !onScreen) return
     const timer = setTimeout(() => {
-      giveBack.current?.(sending.text)
+      giveBack.current?.(sending.text, sending.images)
       setSending(null)
     }, QUEUED_UNREAD_MS)
     return () => clearTimeout(timer)
   }, [sending, endedAt, ended, onScreen, setSending])
   const onQueued = useCallback((message: QueuedMessage) => setQueued(was => [...was, { ...message, prompts }]), [setQueued, prompts])
   // Cancel and edit puts the message back in the box; the composer says how.
-  const editInBox = useRef<((text: string) => void) | null>(null)
+  const editInBox = useRef<((text: string, images?: string[]) => void) | null>(null)
   // Send now asks the run to read every message it has not yet: one press, under the last of them, which says how it went, in that run.
   const now = useAction(agentId)
   const sendsNow = [...unread].reverse().find(message => !message.later)?.id
@@ -584,7 +591,7 @@ function useMessagesOnTheirWay(
     onEdit: () => {
       setQueued(was => was.filter(other => other.id !== message.id))
       void withdrawMessage(projectId, agentId, message.id)
-      editInBox.current?.(message.text)
+      editInBox.current?.(message.text, message.images)
     },
   }))
   return {
@@ -592,6 +599,7 @@ function useMessagesOnTheirWay(
     // Told apart from the prompts in the same draw that brings the prompt's line, not an effect
     // later: for that one frame the message was in the chat twice.
     sending: (sending && prompts <= sending.prompts ? sending.text : undefined) ?? (startedWith && prompts === 0 ? startedWith : undefined),
+    sendingImages: sending && prompts <= sending.prompts ? sending.images : startedWith && prompts === 0 ? startedImages : undefined,
     sentAt: sending && prompts <= sending.prompts ? sending.at : undefined,
     onSending,
     waiting,

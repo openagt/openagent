@@ -83,7 +83,7 @@ export async function turnOnAccounts(on: TurnOnAccounts): Promise<DriverTurn> {
     if (result.sessionId !== undefined) on.continueFrom(result.sessionId)
     // The prompt is in the conversation already: the next account is told to go on with it, and
     // nothing of what went with it is handed over twice.
-    const { attached: _attached, added: _added, inbox: _inbox, onInboxLine: _onInboxLine, ...rest } = on.opts
+    const { attached: _attached, added: _added, images: _images, inbox: _inbox, onInboxLine: _onInboxLine, ...rest } = on.opts
     said = goOn(on.agent)
     sent = { ...rest, resume: true }
   }

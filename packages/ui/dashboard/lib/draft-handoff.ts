@@ -70,6 +70,24 @@ export function useKeptDraft<T>(key: string, empty: T): [T, (change: (current: T
   return [draft, set, forget]
 }
 
+/** localStorage key prefix of the images each box keeps with its draft, by the names the dashboard kept them under. */
+const KEPT_IMAGES_KEY = 'oa.draft-images:'
+
+/** The images the box `key` names was left with. */
+export function keptDraftImages(key: string): string[] {
+  try {
+    const names: unknown = JSON.parse(kept(KEPT_IMAGES_KEY + key) ?? '[]')
+    return Array.isArray(names) ? names.filter((name): name is string => typeof name === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+/** Keep the images the box `key` names holds; none keeps nothing. */
+export function keepDraftImages(key: string, names: readonly string[]): void {
+  keep(KEPT_IMAGES_KEY + key, names.length === 0 ? undefined : JSON.stringify(names))
+}
+
 /** localStorage key prefix of the messages each run has not read yet. */
 const KEPT_WAITING_KEY = 'oa.waiting:'
 

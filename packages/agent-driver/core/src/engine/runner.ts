@@ -59,6 +59,7 @@ export function runArgs(run: SpawnedRun): string[] {
   if (run.publish !== undefined) args.push('--publish', run.publish)
   // One argument, flag and text: a text that opens with a dash would read as a flag of its own.
   if (run.attached !== undefined) args.push(`--attach=${run.attached}`)
+  for (const image of run.images ?? []) args.push('--image', image)
   if (run.base !== undefined) args.push('--base', run.base)
   if (run.prBase !== undefined) args.push('--pr-base', run.prBase)
   if (run.branch !== undefined) args.push('--branch', run.branch)
@@ -87,6 +88,8 @@ export interface SpawnedRun extends RunRequest {
 export interface SpawnedResume {
   id: string
   text?: string
+  /** The images the text goes with, by their names in this computer's image store. */
+  images?: string[]
   answer?: string
   model?: string
   effort?: string
@@ -102,6 +105,7 @@ export interface SpawnedResume {
 export function resumeArgs(run: SpawnedResume): string[] {
   const args = ['run', '--resume', run.id]
   if (run.text !== undefined) args.push(run.text)
+  for (const image of run.images ?? []) args.push('--image', image)
   if (run.answer !== undefined) args.push('--answer', run.answer)
   if (run.model !== undefined) args.push('--model', run.model)
   if (run.effort !== undefined) args.push('--effort', run.effort)
@@ -262,6 +266,7 @@ export async function resumeProject(
     id: opts.id,
     modules,
     ...(opts.text !== undefined ? { text: opts.text } : {}),
+    ...(opts.images !== undefined ? { images: opts.images } : {}),
     ...(opts.answer !== undefined ? { answer: opts.answer } : {}),
     ...(opts.model !== undefined ? { model: opts.model } : {}),
     ...(opts.effort !== undefined ? { effort: opts.effort } : {}),

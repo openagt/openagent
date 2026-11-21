@@ -568,6 +568,23 @@ describe('EventList session line', () => {
     expect(container.querySelector('pre')).toBeNull()
   })
 
+  test('a message\'s images stand as tiles over its box, from the dashboard\'s copy, for a message read mid-turn and one still waiting too; one this computer no longer keeps says so', () => {
+    const shot = `${'a'.repeat(64)}.png`
+    const other = `${'b'.repeat(64)}.jpg`
+    const events: OpenAgentEvent[] = [
+      { kind: 'driver', event: { type: 'start', prompt: 'What word is in it?', images: [shot] } },
+      said,
+      { kind: 'driver', event: { type: 'steered', text: 'And this one?', id: 'm1', images: [other] } },
+    ]
+    render(<EventList events={events} working queued={[{ id: 'm2', text: 'And a third', later: false, images: [shot] }]} setup={{ workspace: '/w', branch: 'agent-1' }} stick={false} />)
+    const rows = screen.getAllByRole('list', { name: 'Images' })
+    expect(rows.map(row => [...row.querySelectorAll('img')].map(img => img.getAttribute('src')))).toEqual([[`/_rpc/images/${shot}`], [`/_rpc/images/${other}`], [`/_rpc/images/${shot}`]])
+    // In the chat a tile has no X: what was sent stays sent.
+    expect(screen.queryByRole('button', { name: /^Remove image/ })).toBeNull()
+    fireEvent.error(rows[1]!.querySelector('img')!)
+    expect(screen.getByRole('img', { name: 'Image 1: Not on this computer' })).toBeTruthy()
+  })
+
   test('it sits right under the first prompt, and opens to what was set up', () => {
     render(<EventList events={[prompt, said, { ...prompt }]} setup={setup} stick={false} />)
     expect(ids()).toEqual(['turn:1', 'setup', '1', 'turn:2'])

@@ -8,7 +8,7 @@ import { Composer, type ComposerHandle } from './Composer.js'
 import { sendMessage } from '../rpc/control.js'
 import { useAction } from '../lib/use-action.js'
 import { useStop } from '../lib/use-stop.js'
-import { keepDraft, keptDraft } from '../lib/draft-handoff.js'
+import { keepDraft, keepDraftImages, keptDraft, keptDraftImages } from '../lib/draft-handoff.js'
 import { DaemonDown } from '../lib/use-daemon-health.js'
 import { Button } from './ui/button.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
@@ -32,6 +32,8 @@ export interface QueuedMessage {
   text: string
   /** Sent with ⌘Enter: the agent reads it when its turn ends, not at its next step. */
   later: boolean
+  /** The images it goes with, by the names the dashboard kept them under. */
+  images?: string[] | undefined
 }
 
 // One composer for a session, live or finished (#1026). Above the box is only where the session
@@ -83,15 +85,15 @@ export function AgentComposer({
   files: string[]
   /** An ended run was continued: the shell follows the same run as it goes live again. */
   onAgentStarted?: ((intent: string, agentId: string) => void) | undefined
-  /** A message is on its way to an ended run (`null`: it did not go through), so the feed shows it at once. */
-  onSending?: ((text: string | null) => void) | undefined
+  /** A message is on its way to an ended run, with its images (`null`: it did not go through), so the feed shows it at once. */
+  onSending?: ((text: string | null, images?: string[]) => void) | undefined
   /** A message went into a working run's inbox: until the agent reads it, the feed shows it
    *  waiting, or the send would look like nothing happened (#948). */
   onQueued?: ((message: QueuedMessage) => void) | undefined
-  /** Set here to what puts a text in the box to edit: Cancel and edit on a waiting message. */
-  editInBox?: MutableRefObject<((text: string) => void) | null> | undefined
-  /** Set here to what hands the box back what the run ended without reading, after any draft, and says it was not sent. */
-  giveBack?: MutableRefObject<((text: string) => void) | null> | undefined
+  /** Set here to what puts a text and its images in the box to edit: Cancel and edit on a waiting message. */
+  editInBox?: MutableRefObject<((text: string, images?: string[]) => void) | null> | undefined
+  /** Set here to what hands the box back what the run ended without reading, with its images, after any draft, and says it was not sent. */
+  giveBack?: MutableRefObject<((text: string, images?: string[]) => void) | null> | undefined
   /** Set here to what gives the box the focus: a question answered from its card. */
   focusBox?: MutableRefObject<(() => void) | null> | undefined
   /** The model the session runs on, by its name: said under the box. */
@@ -121,7 +123,10 @@ export function AgentComposer({
   const composerRef = useRef<ComposerHandle>(null)
   useEffect(() => {
     if (!editInBox) return
-    editInBox.current = text => composerRef.current?.edit(text)
+    editInBox.current = (text, images = []) => {
+      composerRef.current?.edit(text)
+      composerRef.current?.restore({ text: undefined, images })
+    }
     return () => {
       editInBox.current = null
     }
@@ -131,8 +136,9 @@ export function AgentComposer({
   useEffect(() => setNotSent(false), [agentId])
   useEffect(() => {
     if (!giveBack) return
-    giveBack.current = text => {
+    giveBack.current = (text, images = []) => {
       composerRef.current?.append(text)
+      composerRef.current?.restore({ text: undefined, images })
       setNotSent(true)
     }
     return () => {
@@ -171,14 +177,24 @@ export function AgentComposer({
   // The session shown now: a send's answer, back after another was picked, leaves that one's box and menus alone.
   const shown = useRef(agentId)
   shown.current = agentId
-  /** Say `text` to the run, `later` for after its turn. Resolves whether it went through; a refusal's words are shown. */
-  const say = async (text: string, later: boolean): Promise<boolean> => {
+  /** Say `text` to the run with `images`, `later` for after its turn. Resolves whether it went through; a refusal's words are shown. */
+  const say = async (text: string, later: boolean, images: string[]): Promise<boolean> => {
     const wasLive = live
     // An ended run's continuation takes seconds to write its first line; the message shows now.
-    if (!wasLive) onSending?.(text)
+    if (!wasLive) {
+      if (images.length > 0) onSending?.(text, images)
+      else onSending?.(text)
+    }
     const id = crypto.randomUUID()
+    const withImages = images.length > 0 ? { images } : {}
+    // To an ended run, the level goes only when one was picked, and how it is sent only with images.
+    const send = () => {
+      if (wasLive) return sendMessage(projectId, text, agentId, picked, { id, ...(later ? { later } : {}), ...withImages })
+      if (images.length > 0) return sendMessage(projectId, text, agentId, picked, withImages)
+      return picked !== null ? sendMessage(projectId, text, agentId, picked) : sendMessage(projectId, text, agentId)
+    }
     const outcome = await run(
-      () => (wasLive ? sendMessage(projectId, text, agentId, picked, { id, ...(later ? { later } : {}) }) : sendMessage(projectId, text, agentId, ...(picked !== null ? [picked] : []))),
+      send,
       'Could not send. Your text is kept, try again.',
     )
     if (!outcome.ok) {
@@ -186,13 +202,13 @@ export function AgentComposer({
       return false
     }
     if (!wasLive && shown.current === agentId) setPicked(null)
-    if (wasLive) onQueued?.({ id, text, later })
+    if (wasLive) onQueued?.({ id, text, later, ...withImages })
     // An ended run goes live again under the same id: tell the shell, which keeps its feed (#762).
     else onAgentStarted?.(text, agentId)
     return true
   }
 
-  const send = async (text: string, { later }: { later: boolean } = { later: false }): Promise<void> => {
+  const send = async (text: string, { later, images }: { later: boolean; images: string[] }): Promise<void> => {
     // The box is emptied as the message goes, so what is typed meanwhile stays; a message refused comes back to it
     // as the same draft: its chips, and the Context it went with.
     const sent = contextSet?.context
@@ -203,7 +219,7 @@ export function AgentComposer({
     // The box takes the next message at once, after a click on Send too; the answer leaves its focus and caret alone.
     composerRef.current?.focus()
     const message = sent ? promptWithContext(text, sent) : text
-    const went = await say(message, later)
+    const went = await say(message, later, images)
     const box = shown.current === agentId ? composerRef.current : null
     if (box) {
       if (went) setNotSent(false)
@@ -217,6 +233,7 @@ export function AgentComposer({
       const draftKey = `${projectId}:${agentId}`
       const kept = keptDraft(draftKey)
       keepDraft(draftKey, kept === undefined ? message : `${kept}\n\n${message}`)
+      keepDraftImages(draftKey, [...images, ...keptDraftImages(draftKey)])
     }
   }
 

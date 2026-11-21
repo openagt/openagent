@@ -1,10 +1,12 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { PassThrough, Readable, Writable } from 'node:stream'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { ClaudeCodeDriver, settingsEffort, claudeCodeReady } from './claude-code.js'
 import { StreamJsonParser } from './claude-code-stream.js'
-import { ConversationGoneError, runCliSession, type SpawnLike, type SpawnedProcess } from '@openagt/agent-driver'
+import { ConversationGoneError, keepImage, runCliSession, type SpawnLike, type SpawnedProcess } from '@openagt/agent-driver'
 import type { DriverEvent } from '@openagt/hooks'
 
 test('StreamJsonParser surfaces assistant text + tool names, keeps the result', () => {
@@ -271,6 +273,57 @@ test('ClaudeCodeDriver asks for thinking text, then sends the prompt, both as st
   await given.prompt('/answer-comments', { attached: 'Found:\n[1]', added: 'Commit your work.' })
   assert.deepEqual(JSON.parse(written.trim().split('\n')[1]!).message, { role: 'user', content: '/answer-comments\n\nFound:\n[1]\n\nCommit your work.' })
   assert.deepEqual(handed.find(e => e.type === 'start'), { type: 'start', prompt: '/answer-comments', attached: 'Found:\n[1]', added: 'Commit your work.' })
+})
+
+test('a prompt with images goes as image blocks, then its words; the start event names the images, and one no longer kept is said in words', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'claude-images-'))
+  const was = process.env['XDG_CONFIG_HOME']
+  process.env['XDG_CONFIG_HOME'] = home
+  try {
+    const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64')
+    const kept = await keepImage('image/png', png)
+    assert.ok(kept.ok)
+    const gone = `${'e'.repeat(64)}.jpg`
+    let written = ''
+    const spawn: SpawnLike = () => {
+      const child = {
+        stdout: Readable.from([JSON.stringify({ type: 'result', subtype: 'success', result: 'It says hello.' }) + '\n']),
+        stderr: Readable.from([]),
+        stdin: new Writable({ write: (c, _e, cb) => { written += String(c); cb() } }),
+        pid: 1,
+        kill: () => true,
+        on(event: string, cb: (...a: unknown[]) => void) {
+          if (event === 'close') setTimeout(() => cb(0, null), 5)
+          return child
+        },
+      }
+      return child as unknown as SpawnedProcess
+    }
+    const events: DriverEvent[] = []
+    const session = await new ClaudeCodeDriver({ spawn }).start({ cwd: process.cwd(), onEvent: e => events.push(e) })
+    await session.prompt('What word is in it?', { images: [kept.name, gone], added: 'Commit your work.' })
+    assert.deepEqual(JSON.parse(written.trim().split('\n')[1]!).message, {
+      role: 'user',
+      content: [
+        { type: 'image', source: { type: 'base64', media_type: 'image/png', data: png.toString('base64') } },
+        { type: 'text', text: '(An image sent with this message is no longer on this computer.)' },
+        { type: 'text', text: 'What word is in it?\n\nCommit your work.' },
+      ],
+    })
+    assert.deepEqual(events.find(e => e.type === 'start'), { type: 'start', prompt: 'What word is in it?', added: 'Commit your work.', images: [kept.name, gone] })
+
+    // Handed over mid-turn, a message's images go in its own user line, and its landing names them.
+    const parser = new StreamJsonParser()
+    const lines: Record<string, unknown>[] = []
+    parser.talk({ write: line => void lines.push(JSON.parse(line) as Record<string, unknown>), end: () => {} })
+    parser.steer({ id: 'm1', text: 'And this?', words: 'And this?', images: [kept.name] })
+    assert.deepEqual((lines[0]!['message'] as { content: unknown }).content, [{ type: 'image', source: { type: 'base64', media_type: 'image/png', data: png.toString('base64') } }, { type: 'text', text: 'And this?' }])
+    assert.deepEqual(parser.push(JSON.stringify({ type: 'user', isReplay: true, uuid: lines[0]!['uuid'], message: { role: 'user', content: 'And this?' }, session_id: 's1' })).filter(e => e.type !== 'session'), [{ type: 'steered', text: 'And this?', id: 'm1', images: [kept.name] }])
+  } finally {
+    if (was === undefined) delete process.env['XDG_CONFIG_HOME']
+    else process.env['XDG_CONFIG_HOME'] = was
+    rmSync(home, { recursive: true, force: true })
+  }
 })
 
 test('StreamJsonParser pulls token + cost usage off the result line (#322)', () => {

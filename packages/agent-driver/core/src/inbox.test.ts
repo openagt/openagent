@@ -97,6 +97,29 @@ test('a text attached to a prompt goes with that prompt alone: an inbox line it 
   }
 })
 
+test('images go with their own prompt alone: an inbox line carries its own, and a line naming anything but an image is dropped', async () => {
+  const dir = await scratch()
+  try {
+    const inbox = join(dir, 'inbox.jsonl')
+    const events: DriverEvent[] = []
+    const first = `${'a'.repeat(64)}.png`
+    const second = `${'b'.repeat(64)}.jpg`
+    const session = await new FakeDriver({ turns: [{ text: 'Seen.' }, { text: 'Seen too.' }, { text: 'Done.' }] }).start({ cwd: dir, onEvent: e => events.push(e) })
+    await appendInbox(inbox, { kind: 'message', text: 'And this one?', images: [second] })
+    await appendInbox(inbox, { kind: 'message', text: 'Thanks.' })
+    // A path is no image's name: the line goes, as a torn one does.
+    await (await import('node:fs/promises')).appendFile(inbox, `${JSON.stringify({ kind: 'message', text: 'sneaky', images: ['/etc/passwd'] })}\n`)
+    await session.prompt('What does it say?', { inbox, images: [first] })
+    assert.deepEqual(events.filter(e => e.type === 'start'), [
+      { type: 'start', prompt: 'What does it say?', images: [first] },
+      { type: 'start', prompt: 'And this one?', images: [second] },
+      { type: 'start', prompt: 'Thanks.' },
+    ])
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
 test('a sentence added after a prompt follows every inbox line that prompt goes on to send', async () => {
   const dir = await scratch()
   try {

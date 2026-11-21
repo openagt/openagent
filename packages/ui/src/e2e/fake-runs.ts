@@ -27,6 +27,8 @@ export interface HostCall {
   base?: string
   text?: string
   answer?: string
+  /** The images the prompt or the text went with, by their names. */
+  images?: string[]
 }
 
 function record(call: HostCall): void {
@@ -41,16 +43,16 @@ function detach(repo: string, args: string[], env: Record<string, string | undef
 }
 
 async function spawnRun(repo: string, run: SpawnedRun): Promise<void> {
-  record({ call: 'start', id: run.id, prompt: run.prompt, ...pick(run, ['driver', 'model', 'publish', 'base']) })
+  record({ call: 'start', id: run.id, prompt: run.prompt, ...pick(run, ['driver', 'model', 'publish', 'base']), ...(run.images ? { images: run.images } : {}) })
   // A run its process cannot make: refused before it begins, as a run whose checkout cannot be made is.
   if (run.prompt.includes('refuse')) throw new Error('the project has no such command')
   if ((await sessionsHomeOf(repo)) !== undefined) throw new Error('The scripted runs are runs of a project: start this one in a project.')
-  detach(repo, ['run', run.id], { ...run.env, PROMPT: run.prompt, DRIVER: run.driver, MODEL: run.model, PUBLISH: run.publish })
+  detach(repo, ['run', run.id], { ...run.env, PROMPT: run.prompt, DRIVER: run.driver, MODEL: run.model, PUBLISH: run.publish, IMAGES: run.images?.join(',') })
 }
 
 async function spawnResume(repo: string, run: SpawnedResume): Promise<void> {
-  record({ call: 'resume', id: run.id, ...pick(run, ['text', 'answer', 'publish']) })
-  detach(repo, ['continue', run.id], { TEXT: run.text, ANSWER: run.answer, PUBLISH: run.publish })
+  record({ call: 'resume', id: run.id, ...pick(run, ['text', 'answer', 'publish']), ...(run.images ? { images: run.images } : {}) })
+  detach(repo, ['continue', run.id], { TEXT: run.text, ANSWER: run.answer, PUBLISH: run.publish, IMAGES: run.images?.join(',') })
 }
 
 /** The fields of `from` named, those it has. */

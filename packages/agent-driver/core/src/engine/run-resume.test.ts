@@ -577,6 +577,34 @@ test('a line written after the last turn took the inbox, while the card still sa
   }
 })
 
+test('the images a run is started with go with its own prompt, a resume\'s with its text, and the record names each with the prompt it went with', async () => {
+  const repo = await testRepo()
+  try {
+    const screenshot = `${'a'.repeat(64)}.png`
+    const another = `${'b'.repeat(64)}.webp`
+    const images: (string[] | undefined)[] = []
+    const seeing = (): Driver => {
+      const driver = new FakeDriver({ turns: [{ text: 'It says hello.' }] })
+      return {
+        id: 'fake',
+        start: async opts => {
+          const fake = await driver.start(opts)
+          return { id: fake.id, cwd: fake.cwd, ...(fake.log ? { log: fake.log } : {}), prompt: (text, sent) => (images.push(sent?.images), fake.prompt(text, sent)), dispose: () => fake.dispose() }
+        },
+      }
+    }
+    const first = await runCommand(repo, { prompt: 'What word is in this screenshot?', images: [screenshot], driver: seeing(), now: () => NOW, modules: testModules() })
+    assert.equal(first.status, 'done')
+    const second = await resumeRun(repo, { id: first.id, text: 'And in this one?', images: [another], driver: seeing(), now: () => NOW, modules: testModules() })
+    assert.equal(second.status, 'done')
+    assert.deepEqual(images, [[screenshot], [another]])
+    const diary = await readUntimedDiary(repo, first.id)
+    assert.deepEqual(diary.filter(l => l.kind === 'start').map(l => [l['prompt'], l['images']]), [['What word is in this screenshot?', [screenshot]], ['And in this one?', [another]]])
+  } finally {
+    await removeRepo(repo)
+  }
+})
+
 test('a signal that comes while the run records and reclaims is ignored: the run ends as it ended', async () => {
   const repo = await testRepo()
   try {

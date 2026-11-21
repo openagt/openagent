@@ -126,6 +126,8 @@ export interface RunInput {
   answer?: string
   /** With a message: how far the run takes its work from it on, when the person changed it: a level, or `nothing`. */
   publish?: Publish | 'nothing'
+  /** With a message: the images it goes with, by the names this computer keeps them under ({@link DriverPromptOptions.images}). */
+  images?: string[]
 }
 
 /**
@@ -224,6 +226,8 @@ export interface RunRequest {
   /** The project the run is in; none for a session with no project. */
   project?: ProjectRef
   prompt: string
+  /** The images the prompt goes with, by the names this computer keeps them under ({@link DriverPromptOptions.images}): only a host on this computer takes them. */
+  images?: string[]
   options: RunOptions
   /**
    * The run's short name, as whoever starts the run is already asking for it, so the run does not

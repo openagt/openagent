@@ -269,6 +269,7 @@ export class CodexSession implements DriverSession {
     const framing = resumeId === undefined ? combineFraming(this.startOpts.system, opts.system) : ''
     return new CodexAppServerParser({
       text: typeof text === 'string' ? promptSent(text, opts) : text.then(words => promptSent(words, opts)),
+      ...(opts.images !== undefined && opts.images.length > 0 ? { images: opts.images } : {}),
       cwd: this.cwd,
       sandbox: this.config.sandbox ?? 'workspace-write',
       ...(framing ? { framing } : {}),
@@ -291,6 +292,7 @@ export class CodexSession implements DriverSession {
         prompt: text,
         ...(opts.added !== undefined ? { added: opts.added } : {}),
         ...(opts.attached !== undefined ? { attached: opts.attached } : {}),
+        ...(opts.images !== undefined ? { images: opts.images } : {}),
         spawn: this.config.spawn ?? (nodeSpawn as unknown as SpawnLike),
         emit: emitFn,
         signals: combineSignals(this.startOpts.signal, opts.signal),

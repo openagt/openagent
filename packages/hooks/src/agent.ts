@@ -293,6 +293,12 @@ export interface DriverPromptOptions {
    */
   attached?: string
   /**
+   * The images the person's message goes with, by the names this computer keeps them under
+   * (`@openagt/agent-driver`'s image store): the agent looks at them with this one prompt. No inbox
+   * line this prompt goes on to send carries them; a line brings its own. The `start` event names them.
+   */
+  images?: string[]
+  /**
    * The question a turn's last message ends on, as the caller reads it (the block a skill taught
    * the agent), for a turn whose agent asked with no tool of its own; absent, a message asks
    * nothing. The turn reports it as it reports a question asked with the agent's own tool.
@@ -499,9 +505,9 @@ export type DriverEvent =
    * `id` is the one its inbox line carried. The agent read it with what it was doing, in the same
    * turn, so a reader shows it here, where it landed.
    */
-  | { type: 'steered'; text: string; id?: string }
-  /** A prompt was sent; the agent's loop is starting. `attached` is the text the caller handed over with it ({@link DriverPromptOptions.attached}) and `added` the sentence the caller put after it ({@link DriverPromptOptions.added}): the agent got all of it. */
-  | { type: 'start'; prompt: string; attached?: string; added?: string }
+  | { type: 'steered'; text: string; id?: string; images?: string[] }
+  /** A prompt was sent; the agent's loop is starting. `attached` is the text the caller handed over with it ({@link DriverPromptOptions.attached}), `added` the sentence the caller put after it ({@link DriverPromptOptions.added}) and `images` the images it went with ({@link DriverPromptOptions.images}): the agent got all of it. */
+  | { type: 'start'; prompt: string; attached?: string; added?: string; images?: string[] }
   /**
    * The agent announced its session id, at the start of the turn (#1322). `result` repeats it,
    * but a turn that never settles — a manual Stop, an error, a kill — used to take the id down
@@ -642,9 +648,10 @@ export type InboxLine =
    * message on, in the words of the tool that runs it, which reads it (`agent-runner`'s levels, or
    * `nothing`): a driver sends the words alone. `id` names the message for the lines that act on
    * it and for the `steered` event that says it landed. `later` keeps it for after the turn, as
-   * Claude Code's ⌘Enter does, rather than handing it to the agent while it works.
+   * Claude Code's ⌘Enter does, rather than handing it to the agent while it works. `images` are the
+   * images it goes with, by the names this computer keeps them under ({@link DriverPromptOptions.images}).
    */
-  | { kind: 'message'; text: string; publish?: string; id?: string; later?: true }
+  | { kind: 'message'; text: string; publish?: string; id?: string; later?: true; images?: string[] }
   /** The user's answer to the question the agent stopped on: the question's title and the chosen label or labels. */
   | { kind: 'answer'; question: string; answer: string }
   /** Take back the message `id`, which has not reached the agent yet: the person edits it instead. */

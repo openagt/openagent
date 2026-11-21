@@ -26,16 +26,22 @@ export function makeEmit(onEvent: ((event: DriverEvent) => void) | undefined, dr
 }
 
 /** What a caller says around a prompt ({@link DriverPromptOptions}): the text handed over with it, the sentence added after it. */
-export type PromptExtras = Pick<DriverPromptOptions, 'attached' | 'added'>
+export type PromptExtras = Pick<DriverPromptOptions, 'attached' | 'added' | 'images'>
 
 /** What the agent is sent: the prompt, then the caller's attached text, then its added sentence, each after an empty line when there is one. */
 export function promptSent(prompt: string, extras: PromptExtras): string {
   return [prompt, extras.attached, extras.added].filter(part => part !== undefined).join('\n\n')
 }
 
-/** The `start` event of a prompt: the prompt as written, the attached text and the added sentence named apart. */
+/** The `start` event of a prompt: the prompt as written, the attached text, the added sentence and the images named apart. */
 export function startEvent(prompt: string, extras: PromptExtras): Extract<DriverEvent, { type: 'start' }> {
-  return { type: 'start', prompt, ...(extras.attached !== undefined ? { attached: extras.attached } : {}), ...(extras.added !== undefined ? { added: extras.added } : {}) }
+  return {
+    type: 'start',
+    prompt,
+    ...(extras.attached !== undefined ? { attached: extras.attached } : {}),
+    ...(extras.added !== undefined ? { added: extras.added } : {}),
+    ...(extras.images !== undefined && extras.images.length > 0 ? { images: extras.images } : {}),
+  }
 }
 
 /** The live AbortSignals for a prompt — the session's and the per-call one, minus the absent. */

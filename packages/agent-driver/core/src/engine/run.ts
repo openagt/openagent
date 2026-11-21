@@ -70,6 +70,8 @@ export interface RunRequest {
   publish?: Publish
   /** A text handed to the agent with the prompt, after it (`run --attach`), such as what a scheduler's check found: the record keeps it apart from the prompt, which stays the run's name. */
   attached?: string
+  /** The images the prompt goes with, by their names in this computer's image store (`run --image`): the agent looks at them with it. */
+  images?: string[]
   /** The branch the run's fresh branch starts from (`run --base`); origin's default branch when absent. */
   base?: string
   /** The branch the run's pull request goes into (`run --pr-base`); the repository's default branch when absent. */
@@ -166,6 +168,7 @@ export async function runCommand(repo: string, opts: RunOptions): Promise<RunOut
         ...(opts.effort !== undefined ? { effort: opts.effort } : {}),
         prompt: opts.prompt,
         ...(opts.attached !== undefined ? { attached: opts.attached } : {}),
+        ...(opts.images !== undefined && opts.images.length > 0 ? { images: opts.images } : {}),
         ...(opts.marked ? { marked: true } : {}),
         ...(named ? { named } : {}),
         mark,
@@ -181,6 +184,8 @@ export interface ResumeOptions extends RunDeps, OnPreset {
   id: string
   /** The user's words to the agent; or, with `answer`, absent. */
   text?: string
+  /** The images the words go with, by their names in this computer's image store. */
+  images?: string[]
   /** The chosen label or labels, answering the question the run's last turn asked. */
   answer?: string
   /** How far the run takes its work from here on: a level, or `null` for none; the level its record names when absent. */
@@ -232,7 +237,7 @@ export async function resumeRun(repo: string, opts: ResumeOptions): Promise<RunO
     } else if (opts.text) {
       // A run stopped before its agent took its own prompt never had it: it goes first, the words after it.
       prompt = card.intent !== undefined && !diary.some(line => line.kind === 'start') ? `${card.intent}\n\n${opts.text}` : opts.text
-      resume = { text: opts.text }
+      resume = { text: opts.text, ...(opts.images !== undefined && opts.images.length > 0 ? { images: opts.images } : {}) }
     } else {
       throw new Error('a text or an answer is needed to resume a run')
     }
@@ -253,6 +258,7 @@ export async function resumeRun(repo: string, opts: ResumeOptions): Promise<RunO
         ...(model !== undefined ? { model } : {}),
         ...(effort !== undefined ? { effort } : {}),
         prompt,
+        ...(resume.images !== undefined ? { images: resume.images } : {}),
         earlier: { diary, ...(sessionId !== undefined ? { sessionId } : {}) },
         mark,
         card,

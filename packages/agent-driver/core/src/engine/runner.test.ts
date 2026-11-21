@@ -56,6 +56,10 @@ test('run --detach --resume spawns the resume of a recorded run and answers its 
     assert.deepEqual(resumeArgs({ id: 'r1', text: 'ship it', publish: 'pr' }), ['run', '--resume', 'r1', 'ship it', '--publish', 'pr'])
     assert.deepEqual(resumeArgs({ id: 'r1', text: 'keep it', publish: 'nothing' }), ['run', '--resume', 'r1', 'keep it', '--publish', 'nothing'])
     assert.deepEqual(resumeArgs({ id: 'r1', text: '/reply', by: 'reply' }), ['run', '--resume', 'r1', '/reply', '--by', 'reply'])
+    // The images a text goes with, each by its name in the image store: one flag apiece.
+    const images = [`${'a'.repeat(64)}.png`, `${'b'.repeat(64)}.jpg`]
+    assert.deepEqual(resumeArgs({ id: 'r1', text: 'and these?', images }), ['run', '--resume', 'r1', 'and these?', '--image', images[0], '--image', images[1]])
+    assert.deepEqual(runArgs({ id: 'r1', prompt: 'what does it say?', images }), ['run', 'what does it say?', '--id', 'r1', '--image', images[0], '--image', images[1]])
   } finally {
     await removeRepo(repo)
   }

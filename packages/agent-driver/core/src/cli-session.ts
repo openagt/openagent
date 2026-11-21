@@ -2,7 +2,7 @@ import { createInterface } from 'node:readline'
 import { killTree, registerChild, unregisterChild } from './child-registry.js'
 import { randomUUID } from 'node:crypto'
 import { promptSent, startEvent } from './session-support.js'
-import { takeInbox } from './inbox.js'
+import { imagesOf, takeInbox } from './inbox.js'
 import type { DriverEvent, DriverTurn, InboxLine, PromptLine } from '@openagt/hooks'
 
 // The agent-agnostic core for running one wrapped coding-agent CLI: spawn it in its own
@@ -68,7 +68,7 @@ export interface AgentCliParser {
    * `steered` event with the text and the id once the agent read it. False when the turn takes none
    * now: it has not begun, or it is over.
    */
-  steer?(message: { id: string; text: string; words: string }): boolean
+  steer?(message: { id: string; text: string; words: string; images?: string[] }): boolean
   /** Take back a message {@link steer} handed over that the agent has not read yet. */
   withdraw?(id: string): void
   /** Let the messages handed over reach the agent now: what it is running goes on in the background. */
@@ -100,6 +100,8 @@ export interface RunCliSessionOptions {
   added?: string
   /** The text the caller hands over with the prompt; the `start` event names it apart. */
   attached?: string
+  /** The images the prompt goes with, by their names in the image store; the `start` event names them. The parser hands them to the agent. */
+  images?: string[]
   /** What goes to the CLI's stdin, for a CLI that reads the prompt wrapped. Default the prompt with the attached text and the added sentence after it. Unused when the parser converses. */
   stdin?: string
   spawn: SpawnLike
@@ -349,7 +351,7 @@ function readInbox(path: string, parser: AgentCliParser, steered: RunCliSessionO
       taken.push(named)
       if (named.kind !== 'message' || named.later || over) continue
       const words = steered ? await steered(named) : named.text
-      if (!over && !cancelled.has(named.id!)) parser.steer!({ id: named.id!, text: named.text, words })
+      if (!over && !cancelled.has(named.id!)) parser.steer!({ id: named.id!, text: named.text, words, ...imagesOf(named) })
     }
   }
   const timer = setInterval(() => {

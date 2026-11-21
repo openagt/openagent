@@ -1,5 +1,6 @@
 import { codexWindows } from './codex-accounts.js'
-import { type AgentCliParser, type CliIo, toolQuestion, callArgument, cutOutput, hunkLines, lineCount, oneLine, patchSize } from '@openagt/agent-driver'
+import { existsSync } from 'node:fs'
+import { type AgentCliParser, type CliIo, toolQuestion, callArgument, cutOutput, hunkLines, lineCount, oneLine, imageFile, patchSize } from '@openagt/agent-driver'
 import type { AccountReading, Question, DriverEvent, DriverRateWindow, DriverTurn, DriverUsage, FileChange } from '@openagt/hooks'
 
 // One turn of Codex's app server (`codex app-server`, JSON-RPC over stdio), talked to and read: the
@@ -133,6 +134,8 @@ function codexFileChange(raw: unknown): FileChange[] {
 export interface CodexTurnRequest {
   /** The prompt; one still to come is sent once the conversation is open ({@link CodexSession.ready}). */
   text: string | Promise<string>
+  /** The images the prompt goes with, by their names in this computer's image store. */
+  images?: readonly string[]
   /** The workspace. */
   cwd: string
   sandbox: CodexSandbox
@@ -141,6 +144,19 @@ export interface CodexTurnRequest {
   model?: string
   /** The conversation to continue; without it, a fresh one starts. */
   resumeId?: string
+}
+
+/**
+ * A user message as Codex's app server takes it: the images it goes with first, each by its file
+ * on this computer (`localImage`), then the words. An image no longer kept here is said in words in
+ * its place, so the message still goes.
+ */
+export function userInput(words: string, images: readonly string[] = []): Record<string, unknown>[] {
+  const pictures = images.map(name => {
+    const path = imageFile(name)
+    return existsSync(path) ? { type: 'localImage', path } : { type: 'text', text: '(An image sent with this message is no longer on this computer.)', text_elements: [] }
+  })
+  return [...pictures, { type: 'text', text: words, text_elements: [] }]
 }
 
 /** What Codex says when the account's usage limit stops a turn (codex-cli 0.144.4). */
@@ -204,12 +220,13 @@ export class CodexAppServerParser implements AgentCliParser {
    * way, and the agent reads it at its next step. Taken, it has landed; refused (the turn ended
    * meanwhile), it waits for the turn's end with the rest.
    */
-  steer(message: { id: string; text: string; words: string }): boolean {
+  steer(message: { id: string; text: string; words: string; images?: string[] }): boolean {
     if (this.ended || this.stopping || this.sessionId === undefined || this.turnId === undefined) return false
+    const images = message.images !== undefined && message.images.length > 0 ? { images: message.images } : {}
     this.request(
       'turn/steer',
-      { threadId: this.sessionId, expectedTurnId: this.turnId, input: [{ type: 'text', text: message.words, text_elements: [] }] },
-      () => [{ type: 'steered', text: message.text, id: message.id }],
+      { threadId: this.sessionId, expectedTurnId: this.turnId, input: userInput(message.words, message.images) },
+      () => [{ type: 'steered', text: message.text, id: message.id, ...images }],
       () => [],
     )
     return true
@@ -317,7 +334,7 @@ export class CodexAppServerParser implements AgentCliParser {
     // Announced at once: a turn that is stopped or fails before its result must not take the id,
     // the handle a later resume needs, with it.
     this.sessionId = threadId
-    const start = (text: string) => this.request('turn/start', { threadId, input: [{ type: 'text', text, text_elements: [] }] }, started => this.onTurn(started['turn']))
+    const start = (text: string) => this.request('turn/start', { threadId, input: userInput(text, this.turn.images) }, started => this.onTurn(started['turn']))
     if (typeof this.turn.text === 'string') start(this.turn.text)
     else void this.turn.text.then(start)
     const events: DriverEvent[] = [{ type: 'session', sessionId: threadId }]

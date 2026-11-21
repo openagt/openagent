@@ -20,6 +20,8 @@ import { SubagentSteps } from './SubagentLine.js'
 import { useSteadyText, useStillWriting } from '../lib/use-steady-text.js'
 import { Caret, LiveLine, ToolCalls, type CallOutput, type ToolStep } from './ToolCalls.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
+import { ImageTiles } from './ImageTiles.js'
+import { imageAddress } from '../../src/images.js'
 import {
   MessageScroller,
   MessageScrollerButton,
@@ -385,14 +387,17 @@ function TurnFiles({ files, onOpen, footer }: { files: readonly ChangedFile[]; o
 // under it, when the agent reads it and Send now, or "Queued" for one sent for after the turn, and
 // on hover the copy and Cancel and edit, which takes it back into the box.
 // `attached`: what the run handed the agent with this message, folded under the box.
+// `images`: the images it went with, by their names, as tiles in a row over the box, at its right;
+// one this computer no longer keeps (a record from another computer) says so on its tile.
 // `fresh`: a message just sent, which slides in where it lands, as Claude Code on the web's does.
-function Prompt({ text, at, waiting, attached, fresh = false }: { text: string; at?: string | undefined; waiting?: Waiting | undefined; attached?: string | undefined; fresh?: boolean }) {
+function Prompt({ text, at, waiting, attached, images, fresh = false }: { text: string; at?: string | undefined; waiting?: Waiting | undefined; attached?: string | undefined; images?: string[] | undefined; fresh?: boolean }) {
   const [open, setOpen] = useState(false)
   const tall = isTall(text)
   // OpenAgent is not answering: a waiting message can be neither sent now nor taken back.
   const down = useContext(DaemonDown)
   return (
     <div className={`group/prompt flex min-w-0 flex-1 flex-col items-end font-sans text-foreground ${fresh ? 'bubble-in' : ''}`}>
+      {images !== undefined && images.length > 0 && <ImageTiles tiles={images.map((name, at) => ({ key: `${at}:${name}`, src: imageAddress(name) }))} className="mb-2 max-w-[80%] justify-end" />}
       <div role="group" aria-label={waiting ? 'Your message, waiting' : 'Your message'} className="max-w-[80%] min-w-0 rounded-lg rounded-br-sm bg-card px-4 py-2 shadow-sm ring-1 ring-hairline">
         <div className={tall && !open ? 'max-h-40 overflow-hidden' : ''}>
           <Markdown text={text} />
@@ -465,6 +470,8 @@ export interface Waiting {
 export interface WaitingMessage extends Waiting {
   id: string
   text: string
+  /** The images it goes with, by the names the dashboard kept them under. */
+  images?: string[] | undefined
 }
 
 // What the run handed the agent with a message, after it: a scheduled run carries what its
@@ -692,6 +699,7 @@ export function EventList({
   events,
   writing = '',
   sending,
+  sendingImages,
   sendingAt,
   working = false,
   queued = NONE_QUEUED,
@@ -717,6 +725,8 @@ export function EventList({
   /** A message just sent: its turn's prompt row, the first in a run with no prompt yet, until the
    *  prompt's own line arrives and takes the same row. Being a prompt, the scroller brings it into view. */
   sending?: string | undefined
+  /** The images that message goes with, by the names the dashboard kept them under. */
+  sendingImages?: string[] | undefined
   /** When that message was sent, where this page did not see it go (a reload): its live line counts from then. */
   sendingAt?: string | undefined
   /** The agent is working: while it writes nothing, a moving line closes the feed: the call going
@@ -791,7 +801,7 @@ export function EventList({
   // is sent, not seconds later when the run writes its first line.
   const sentAt = useMemo(() => (sending !== undefined ? (sendingAt ?? new Date().toISOString()) : undefined), [sending, sendingAt])
   // Its row holds no time, as one being sent shows none.
-  const sent: OpenAgentEvent | undefined = sending !== undefined ? { kind: 'driver', event: { type: 'start', prompt: sending } } : undefined
+  const sent: OpenAgentEvent | undefined = sending !== undefined ? { kind: 'driver', event: { type: 'start', prompt: sending, ...(sendingImages !== undefined && sendingImages.length > 0 ? { images: sendingImages } : {}) } } : undefined
   // Every row and every passed end, in their turns; `shown` is the rows alone.
   const kept = inTurns(events, answeredInPlace ? undefined : sent).filter(e => shownAsRow(e) && !choiceRows?.hidden.has(e) && !screenRows.hidden.has(e) && !theirs.has(e))
   // Every event and the message just sent: what the turn going on is read off.
@@ -1017,7 +1027,7 @@ export function EventList({
                   ) : inPlace && sentAnswer ? (
                     <Answer {...sentAnswer} />
                   ) : own && message !== null ? (
-                    <Prompt text={message} at={at} attached={e.kind === 'driver' && e.event.type === 'start' ? e.event.attached : undefined} fresh={e === sent} />
+                    <Prompt text={message} at={at} attached={e.kind === 'driver' && e.event.type === 'start' ? e.event.attached : undefined} images={e.kind === 'driver' && (e.event.type === 'start' || e.event.type === 'steered') ? e.event.images : undefined} fresh={e === sent} />
                   ) : message !== null ? (
                     // The agent's reply, shown whole, and the last of a finished turn with its footer.
                     footer ? (
@@ -1091,9 +1101,9 @@ export function EventList({
                 {working && !settingUp && !waitsOnItsOwn && current === undefined && <LiveLine since={turnStart} tokens={tokens} />}
               </div>
             )}
-            {queued.map(({ id, text, ...waiting }) => (
+            {queued.map(({ id, text, images, ...waiting }) => (
               <MessageScrollerItem key={`queued-${id}`} messageId={`queued-${id}`} className="-mx-1.5 flex items-start gap-2 rounded-sm px-1.5">
-                <Prompt text={text} waiting={waiting} fresh />
+                <Prompt text={text} images={images} waiting={waiting} fresh />
               </MessageScrollerItem>
             ))}
             {tail}
