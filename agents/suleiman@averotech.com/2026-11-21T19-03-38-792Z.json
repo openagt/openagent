@@ -1,17 +1,33 @@
 {
   "id": "2026-11-21T19-03-38-792Z",
   "startedAt": "2026-11-21T19:03:39.164Z",
-  "status": "running",
+  "endedAt": "2026-11-21T19:45:06.350Z",
+  "status": "done",
   "intent": "Two tests fail on my Mac whatever the change, so every session has to work out that the failures are not its own:\n\n- One compares a path under /var/... with the same folder as /private/var/... (macOS's symlink).\n- One formats a date in my system's language, Hebrew; it passes with LANG=en_US. It is among the dashboard's UI tests (AgentDetails).\n\nRun the tests of all packages to find both, and any other test that depends on the machine's language, time zone or temp folder. Fix the tests, not the code they check, unless the code is wrong. Open a pull request with a short title and body.",
+  "title": "Fix macOS locale and path test failures",
   "driver": "claude-code",
-  "model": "opus",
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "branch": "agent-machine-independent-tests",
+  "pr": {
+    "number": 2403,
+    "url": "https://github.com/openagt/openagent/pull/2403"
+  },
+  "cost": 1.5049396000000004,
+  "contextTokens": 79920,
   "caller": {
     "runner": {
       "host": "Suleimans-MacBook-Pro.local",
       "pid": 30398,
-      "gitAccount": "suleimansh"
+      "gitAccount": "suleimansh",
+      "baseCommit": "a3caf53ae7daab2e23f150808ab652eb65f0a2fe"
     },
+    "pid": 30398,
     "host": "Suleimans-MacBook-Pro.local",
-    "gitAccount": "suleimansh"
+    "gitAccount": "suleimansh",
+    "baseCommit": "a3caf53ae7daab2e23f150808ab652eb65f0a2fe",
+    "kind": "prompt",
+    "workspace": "/Users/suleiman/Projects/openagent/.branches/agent-2026-11-21T19-03-38-792Z",
+    "sessionId": "964ebf94-b5aa-4aad-aafb-071a3bd119f6"
   }
 }
