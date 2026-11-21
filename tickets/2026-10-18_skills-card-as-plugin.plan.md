@@ -3,78 +3,46 @@ Uncertainty: 5
 
 # [Plan] The skills card as a plugin of the package that installs skills
 
-How to move the skills card, its "Skills…" list and their sending code out of the dashboard into a module of the package that installs skills, plus an Overview card. This file is that plan.
+How to move the project skills UI (the New agent page's card, the Overview's Skills card, Settings › Skills) and the code behind it out of the dashboard core into a module package of its own.
 
-## Where things stand
+## Where things stand (2026-11-13)
 
-- The dashboard core owns all of it today:
-  - `packages/openagent/dashboard/components/ProjectSkills.tsx`: `ProjectSkillsLine`, the card and the list with ticks. `ProjectHome.tsx:77` mounts it, and the project's ⋮ menu opens the list through `door`.
-  - `packages/openagent/dashboard/rpc/skills.ts` and `src/dashboard-rpc/skills.ts`: `onProjectSkills`, `sendChangeSkills` and `sendProjectSkills`. They call `@openagt/init` (`readProject`, `applyChange`, `GROUPS`, `carriedSkills`, `uncommittedSkills`, `skillsOn`).
-  - `src/dashboard/send-skills.ts`: commit, push to the default branch, or `openagent/skills` with a pull request through the project's git host package.
-  - `src/dashboard/start-branch.ts`: `waitingSkills`. The launcher uses it too (`src/dashboard-rpc/projects.ts:160`): it does not take a command whose skill has not reached the branch agents start from.
-- Tickets and queue show how a module works. The package exports `./dashboard` (`defineModule` with `pages` and `cards`) and an `openagent` key in its package.json. The module reads and writes through the package's own command (`host.runCommand` / `host.act`). A `./server` part is optional; it gets `ModuleServerHost` (the folder, run facts, `mergeCommit`).
-- The `openagent` DECISIONS that apply: "An Overview card belongs to the package whose data it shows". "The dashboard grows by modules". "Three lists name the packages OpenAgent brings" (`src/built-in.ts`). "Skills…" in the ⋮ menu opens the same list `npx @openagt/init` shows, "through that package's own code". There is also the skills card under the waiting agents, and the send rule (commit, push, or a PR).
+- The ticket's two candidate owners are both gone or outside the repository. `@openagt/init` was removed (#2269 "One entry point"; `packages/init` holds only a stale `node_modules`), and `packages/dashboard/DECISIONS.md` records "OpenAgent has no command of its own to give a project skills: the Skills page in the dashboard, or `npx skills add openagt/openagent`", picked over `npx @openagt/init`. `npx skills add` is a third-party CLI, so we can't put a module in it.
+- The Overview card the ticket asks for already exists: `packages/dashboard/dashboard/components/SkillsCard.tsx` (#2271/#2023 work), registered as a built-in card in `DashboardPage.tsx:146`. It says the same things `ProjectSkillsLine` says (shared `skillsSay`) and adds skill use from `logs skills`.
+- All of the skills code lives in the dashboard package today:
+  - UI: `dashboard/components/ProjectSkills.tsx` (`ProjectSkillsLine`, `SkillsSettings`, `skillsSay`, `updateSkills`), `SkillsCard.tsx`, `dashboard/rpc/skills.ts`, `lib/skills-saved.ts`, the Settings entry `SKILLS_ENTRY` in `SettingsDialog.tsx`. `ProjectHome.tsx:93` shows the line.
+  - Server: `src/dashboard-rpc/skills.ts` (`onProjectSkills`, change, send), `src/project-skills/*` (catalogue, apply, change, commit, branch, project), `src/dashboard/send-skills.ts`, plus the scheduler hook lines written when the scheduler skill is ticked (`project-hooks.ts`).
+- These stay in core because running agents needs them, not the skills card: `src/cli/skills.ts` (`DEFAULT_SKILLS`, `handDownSkills`, which reads `SKILL_NAMES`), the launcher's per-session Skills menu (`SkillsMenu.tsx`, `AgentComposer.tsx`, `StartAgentForm.tsx`, `AgentsPage.tsx`'s agent skill picks), and `built-in.ts`'s picked-package rule.
 
 ## Problems
 
-1. **Which package owns it** (the ticket's open question). `@openagt/init` already holds the list, the groups, the texts, writing/deleting, `skillsOn`, the commit and the scheduler tick. The dashboard already calls it. Rom's skills tool (`use-skills` / GemSkills) is not in this repository, and nothing here names it. Its command line, its output and whether it can carry a `./dashboard` export are unknown from here.
-2. **Sending needs the git host.** Pushing, and otherwise opening a pull request, goes through the project's git host package, which only the core reaches (`projectGitHost`, `cachedPrView`). A module's command and its `./server` part have no way to reach it.
-3. **The launcher's gate is core.** The core needs to know which skills have not reached the start branch, apart from the card. Today it gets that from `@openagt/init`'s `skillsOn`, a skill name in the core.
-4. **The door is a core menu.** "Skills…" sits in the project's ⋮ menu. The module contract (`dashboard/module/index.ts`) has no slot for a project menu item.
-5. **The scheduler tick.** After a change that switches the scheduler on, `sendChangeSkills` runs the newly added `open` hook lines (`runProjectHooks`). That is core work, done on the module's behalf.
-6. **Which projects have the module.** A card is drawn only where a project has the package. Every project can add skills, so the package must count as one every project has.
+1. **Who owns it.** The ticket leaves this open, and both options it names are gone (see above).
+2. **No module slot on a project's own page.** Modules contribute `pages`, `cards`, `settings`, `panels`, `run`, `everyPage`, `linkActions`, but nothing on the New agent page (`ProjectHome`), where `ProjectSkillsLine` lives.
+3. **The catalogue is shared.** `SKILL_NAMES`/`GROUPS` (`src/project-skills/catalogue.ts`) feed both the skills card (what can be ticked) and the core (`handDownSkills` → `SKILL_CATALOGUE_ENV`, the launcher's "More skills").
+4. **Data goes through a command.** The module contract has no RPC of its own. A module reads through its package's command (`openagent.reads` in `package.json`, `host.read` / `runModuleCommand`), as Tickets and Queue do. Today's `onProjectSkills` etc. are dashboard RPCs that use core internals: `cachedPrView`, `originAccountOf`, `remoteHostName`, `waitingSkills`, `runProjectHooks`, `providedDataChanged`.
 
 ## Solutions
 
-1. **Owner: `@openagt/init`** (recommended). It is the code the card already runs ("through that package's own code, so the two cannot drift apart"). The terminal and the card then stay one package. If a person picks Rom's tool instead, the contract below stays the same, but that tool needs a JSON command with the same reads and writes plus a `./dashboard` export. That is work in another repository, and this ticket waits on it. **A person decides this** before the work starts.
-2. **Sending becomes a core service with no skill in it.** This is the recommended way. Generalize `send-skills.ts` and `start-branch.ts` over *paths*: "these files, to where agents start from" (commit, push or PR, with an `openagent/<name>` branch). Add a second call, "where do these files stand": waiting, here, the open request, a pushed branch. Expose both on `ModuleHost` (e.g. `host.deliver(projectId, { paths, branch, message })` and `host.delivery(projectId, { paths, branch })`). The module maps skills to paths with `skillPaths`. Alternatives:
-   - (a) The init command pushes itself and opens the PR with `gh`. Rejected: it puts a git host inside init, which the git-host decisions forbid.
-   - (b) Keep sending in the core under the skills name. Rejected: the core would still know skills, which defeats the ticket.
-3. **Launcher gate:** the core already reads the commands from the skills folders, so it knows their paths. It asks the same generic "which of these paths are on the start branch" from step 2 and drops the `@openagt/init` import. After that, the core depends on `@openagt/init` only to bring it as a package.
-4. **The door:**
-   - (a) Recommended: a small contract slot, `projectMenu: [{ label, open: (host, projectId) => … }]`. It opens the module's page `/<project>/skills`, which holds the list with ticks. A link opens it, and a reload keeps it open.
-   - (b) The list stays a dialog the module renders, opened from the card or the Overview card. But the card shows only while there is something to do, so it does not work as a door.
+1. **Owner.** Recommended: a new package, `@openagt/dashboard-skills`, in `BUILT_IN_PACKAGES`. Every project needs it, including one that has no skills yet, since this is where skills get added. It is named `dashboard-<name>` because it carries no agent instructions (DECISIONS: "A module that is no skill is named `dashboard-<name>`"). Alternatives: put the module into an existing skill package (no fit: none of them installs skills), or ask Rom's external skills tool to ship a module (out of our hands, and a project would need it installed). **A person confirms the owner** before the work starts. That is why Uncertainty is 5.
+2. **Project page slot.** Recommended: drop `ProjectSkillsLine` from `ProjectHome`. With a project picked, the Overview already shows module cards for that project alone, and the Skills card says the same things. The alternative is a new module slot (`projectHome?: ComponentType<{ projectId }>`) in `ModuleDefinition`, if the person wants the notice kept under the agents that wait. Removing it is the cleaner default. The DECISIONS bullet about the card on the project's page has to be reconsidered by a person in either case.
+3. **Catalogue.** Keep `SKILL_NAMES`/`GROUPS` where the core needs them. The package's command reads the catalogue's directories from `SKILL_CATALOGUE_ENV`, which module commands inherit (`runPackageCommand` spreads `process.env`; check that the env is set on the daemon's `process.env`, not only on a child's). It reads each skill's `SKILL.md` front matter for name and description. The groups move into the skills' front matter (`group:`) or stay as one exported list in `@openagt/agent-data`. Prefer front matter, so the core keeps only names.
+4. **Command.** The package gets a bin (`openagent-skills`) with `show` (today's `ProjectSkills` JSON), `change --write a,b --remove c`, and `send [names]`, declared under `openagent.reads`. The project-skills code and `send-skills.ts` move into it. What it needs from the core (opening a pull request with the git host package, the origin's account, the scheduler's hook lines) goes through what `@openagt/agent-data` and the git-host provided commands already offer. Anything that is still dashboard-only gets moved to `agent-data`, or replaced by the provided-command route that other modules use (look at how `skill-queue`/`skill-tickets` reach the git host and how `skill-scheduler` writes hooks).
 
-   (a) changes the DECISIONS bullet "Skills… opens the same list": the list becomes a page instead of a dialog. That is a person's pick, so the pull request should name it.
-5. **Scheduler tick:**
-   - (a) Recommended: the core, after any module `act`, re-reads the project's hooks and runs the `open` lines it added. This is generic and serves any package that adds a hook line.
-   - (b) Move the tick to the scheduler module's own Settings entry. That changes the init list the terminal shows, which is a person's pick.
-6. **Every project has it:** add `@openagt/init` to `BUILT_IN_PACKAGES` in `src/built-in.ts`, with a test.
+## Implementation
 
-## Implementation (with the recommended picks)
-
-1. `packages/init`:
-   - CLI commands that print JSON for the module:
-     - `status`: the `ProjectSkills` shape without the delivery fields: groups, standing, scheduler, uncommitted, git.
-     - `change --write a,b --remove c [--scheduler on|off]`: the `ChangeSkillsResult` shape.
-   - Tests in `cli.test.ts`.
-   - Move `ProjectSkills.tsx` (+ test) into `packages/init/dashboard/`, using the same layout as `skill-tickets/dashboard`: `index.tsx`, `vite.config.ts`, `vitest.config.ts`, `tsconfig.json`, `dashboard.css`, `test-host.tsx`.
-   - Export `./dashboard`; add the build and test scripts and the devDependencies the tickets package has.
-   - The card reads `status` through `host.runCommand` and `delivery` through the new host call, and polls every 15s as now.
-   - "Update" and "Send" go through `host.act` and `host.deliver`.
-2. Module contents:
-   - `cards`: the project-page card, under the waiting agents. Check whether the project page draws module cards; if it does not, add a slot for it.
-   - An Overview card with the same data across `projects`: per project, the newer versions and the skills not yet with agents, each with its press. It shows only while something is due, as the project card does.
-   - `pages: [{ segment: 'skills', … }]`: the list with ticks.
-   - `projectMenu`: "Skills…".
-3. `packages/openagent`:
-   - Generalize `send-skills.ts` / `start-branch.ts` over paths (rename them, e.g. `deliver-files.ts`) and add `deliver` / `delivery` to `ModuleHost`, with their RPCs.
-   - Add the `projectMenu` slot and drawing.
-   - Run added `open` hook lines after `act`.
-   - Delete `ProjectSkills.tsx`, `dashboard/rpc/skills.ts` and `src/dashboard-rpc/skills.ts`, and remove their tests and their entries in `dashboard-rpc/index.ts`.
-   - The launcher gate uses the generic path check.
-   - `@openagt/init` goes into `BUILT_IN_PACKAGES`.
-   - Delete the ⋮ menu's hard-coded "Skills…".
-4. DECISIONS:
-   - `packages/init/DECISIONS.md` gains the dashboard caller, the way skill-tickets states its two callers.
-   - Amend the `openagent` bullets: the skills card and list are init's module, and sending files to the start branch is a core service.
-   - List these in the pull request; they are proposals until a person confirms them.
-5. Version bumps for `@openagt/init` and `openagent`, as the recent "New version numbers" commits do.
+1. Create `packages/dashboard-skills` and copy the layout of `packages/dashboard-files` (`src/`, `dashboard/`, `tsconfig*`, vite build of `./dashboard`, `bin`). Add it to `BUILT_IN_PACKAGES` and to the dashboard's dependencies.
+2. Move `src/project-skills/*`, `src/dashboard/send-skills.ts` and the logic of `src/dashboard-rpc/skills.ts` into the package's `src/`, behind its CLI (`show`, `change`, `send`), printing JSON like `skill-tickets`. Move their tests along with them.
+3. Module (`dashboard/index.tsx`, `defineModule`):
+   - `cards: [{ id: 'skills', label: 'Skills', order: 8, width: '1/3', minWidth: '1/4', Card }]`: today's `SkillsCard`, reading through `host.read` instead of `onProjectSkills`. Its `logs skills` part runs the logs package's command through the host's computer/project command API. Check that a module can run another package's command; if it can't, that part stays a known gap or goes behind a link action.
+   - `settings: [{ id: 'skills', title: 'Skills', icon: Puzzle, Section }]`: today's `SkillsSettings`. `openSettings('skills', …)` from the launcher's Skills menu keeps working, because the entry id stays `skills`.
+   - The "saved" signal (`lib/skills-saved.ts`) becomes internal to the module.
+4. Remove from core: `ProjectSkills.tsx`, `SkillsCard.tsx`, `dashboard/rpc/skills.ts`, the `skills` RPCs and their dispatch entries, the built-in Overview card entry, `ProjectSkillsLine` in `ProjectHome.tsx` and its `onSkillsChanged` plumbing, and the core Settings entry for `SKILLS_ENTRY`. Keep `held` (the launcher's per-session menu): either keep a small core read through `projectSkillNames` from `@openagt/agent-runner` (already what the RPC uses), or read it from the package's `show`. Prefer the former, so the core doesn't depend on the module.
+5. Update `packages/dashboard/DECISIONS.md` only for the picks a person makes (owner, project-page notice). Put a `DECISIONS.md` in the new package.
+6. Tests: package node tests for the CLI (ported `project-skills` tests and `dashboard-rpc/skills.test.ts`), vitest for the card and the settings section (ported from `ProjectSkills.test.tsx`), and the dashboard's tests minus the removed parts. Run `pnpm demo` and check that the Overview card and Settings › Skills still work from the module.
 
 ## Considerations
 
-- Polling `status` through `npx` every 15s per project costs a process per read. That is acceptable, since tickets does the same. If it is too slow, a `./server` read of `status` is the fallback, because it needs only the folder.
-- `delivery` fetches origin at most once a minute per project (`FRESH_MS`). Keep that throttle in the core service.
-- Keep the copy as it is: the sentences, "Send to GitHub", "Commit". It moves with the component and its test unchanged.
-- A project picked as "all projects" in the Overview: the card lists each project that has something due, and none otherwise.
-- A project without git, or without a remote: the same three outcomes `SendSkillsResult` has today (committed, pushed, request, branch).
+- The Overview counts as "drawn only when a project shown has the package". Being a built-in package, every project has it, so the card shows where it does today.
+- The scheduler tick writes hook lines (`project-hooks.ts`). The package's `change` has to do the same, or call the scheduler package's command for it.
+- `SendSkillsResult`'s pull request path uses the dashboard's PR cache. The module re-reads instead, which costs at most one `gh`/host call per poll (15 s today). Keep the poll interval.
+- Ticket order: none blocking. #2117 (the card itself) is done.

@@ -1,0 +1,19 @@
+{"kind":"title","text":"Simple question handling","at":"2026-11-21T16:48:05.620Z"}
+{"kind":"start","prompt":"ask me simple question","at":"2026-11-21T16:48:05.621Z"}
+{"kind":"session","sessionId":"484040bc-5e80-4781-a13d-9823f4a28ecc","at":"2026-11-21T16:48:05.851Z"}
+{"kind":"thinking","at":"2026-11-21T16:48:08.404Z"}
+{"kind":"tokens","tokens":20819,"at":"2026-11-21T16:48:09.704Z"}
+{"kind":"thought","text":"I'm going to ask the user a quick clarifying question, so I'll reach for the AskUserQuestion tool. It's likely what this is meant to test.","at":"2026-11-21T16:48:09.704Z"}
+{"kind":"rate-limit","limit":{"status":"allowed","window":"five_hour","resetsAt":1795292400000,"windows":[{"window":"five_hour","percentUsed":12,"resetsAt":1795292400000},{"window":"seven_day","percentUsed":2,"resetsAt":1795838400000}]},"at":"2026-11-21T16:48:10.722Z"}
+{"kind":"result","text":"","sessionId":"484040bc-5e80-4781-a13d-9823f4a28ecc","at":"2026-11-21T16:48:11.466Z"}
+{"kind":"cost","usd":0.0584644,"at":"2026-11-21T16:48:11.466Z"}
+{"kind":"question","title":"Which would you like me to work on next in OpenAgent?","header":"Next task","options":[{"id":"opt:0","label":"Fix a bug","detail":"You describe a bug and I track it down and fix it."},{"id":"opt:1","label":"Build a feature","detail":"You describe a feature and I build it."},{"id":"opt:2","label":"Review code","detail":"I review the current branch's changes for bugs."},{"id":"opt:3","label":"Just testing","detail":"You were only checking that questions work."}],"at":"2026-11-21T16:48:11.466Z"}
+{"kind":"ended","status":"waiting","at":"2026-11-21T16:48:11.466Z"}
+{"kind":"start","prompt":"nothing, no need to do anything","at":"2026-11-21T16:49:29.856Z"}
+{"kind":"session","sessionId":"484040bc-5e80-4781-a13d-9823f4a28ecc","at":"2026-11-21T16:49:29.857Z"}
+{"kind":"tokens","tokens":21207,"at":"2026-11-21T16:49:30.406Z"}
+{"kind":"said","text":"Understood, I'll leave it there.","at":"2026-11-21T16:49:30.406Z"}
+{"kind":"rate-limit","limit":{"status":"allowed","window":"five_hour","resetsAt":1795292400000,"windows":[{"window":"five_hour","percentUsed":12,"resetsAt":1795292400000},{"window":"seven_day","percentUsed":2,"resetsAt":1795838400000}]},"at":"2026-11-21T16:49:30.418Z"}
+{"kind":"result","text":"Understood, I'll leave it there.","sessionId":"484040bc-5e80-4781-a13d-9823f4a28ecc","at":"2026-11-21T16:49:30.949Z"}
+{"kind":"cost","usd":0.0659946,"at":"2026-11-21T16:49:30.949Z"}
+{"kind":"ended","status":"done","at":"2026-11-21T16:49:30.949Z"}

@@ -1,74 +1,67 @@
 Effort: 6
-Uncertainty: 7
+Uncertainty: 6
 
 # [Plan] Reach a local machine from anywhere, without a VPS
 
-This file holds the plan for reaching a computer at home or in the office from a phone outside, with no VPS in between.
+How a computer behind a home or office router becomes reachable from a phone outside with no server: what exists already, which of the ticket's ways to build, in what order, and what a person decides first.
 
-## What is there already
+## Where things stand
 
-- `remote-access https <at>` (packages/remote-access/src/cli.ts, serve.ts) already turns any computer into a "server": the door listens on 443 for every network, asks Let's Encrypt for a certificate for `<at>` (a number *or* a name, `acme.ts` picks `ip` or `dns`), proves it over plain HTTP on port 80 (`http-01`, the only challenge it answers), and renews it.
-- So **way 3 (a static IP with ports 80 and 443 forwarded by hand) works today**, and so does way 3 with a dynamic-DNS name the person set up themselves: `remote-access https my-home.duckdns.org`. Nothing tells the person so; the dashboard offers only "Your own server (a VPS)".
-- Way 1 is way 3 with the router opened by OpenAgent and the address kept up to date by OpenAgent. Way 2 is way 3 with an IPv6 address. Way 4 is a different shape: the TLS ends at the tunnel company, not at the door.
+`packages/dashboard-devices` already has three ways in (`src/door/serve.ts`):
+
+- **On this Wi-Fi**: plain HTTP, home only.
+- **On your Tailscale network** (`src/door/tailscale.ts`): the door listens on 127.0.0.1 and `tailscale serve` takes it to the person's devices over HTTPS. This is the ticket's way 4 ("tunnel service with the person's own account") and way 5 ("direct peer-to-peer, relay when needed"), through Tailscale's network. It needs the Tailscale app on the phone.
+- **On a server** (`store.https`): the door speaks HTTPS on every network, with a Let's Encrypt certificate for the server's **IP address** that it asks for and renews itself (`acme.ts`, `certificate.ts`, port 80 for the proof). A computer at home reaches people through its line to a server (`line-out.ts`).
+
+So without a VPS the one way left out is a phone with no Tailscale on a network outside. The rest of this plan covers that.
+
+## What to build, in order
+
+1. **Tailscale Funnel**, a small step: behind Tailscale, a second switch, "Also devices not on Tailscale", runs `tailscale funnel` in place of `tailscale serve` for the same door. Funnel answers at the same `*.ts.net` name on the public internet, with Tailscale's certificate. It works behind carrier-grade NAT and needs nothing on the phone. Like Serve, Funnel is turned on once in the person's Tailscale account (`fixAt` already handles this). The phone still gets in with a code, like at any door. This stands in for Cloudflare Tunnel and ngrok: the person already has the Tailscale account, and there is no second account or binary.
+2. **Through your router** (ticket way 1, plus way 2 later): the computer asks its router to open a port, and the door then works like a server's door at the router's public address. It needs no account and costs nothing. When it fails, the door says why and points to Tailscale or a server.
+3. Ways 5 (our own meeting point / WebRTC) and 6 (our relay) stay deferred, as in #1824. Funnel and Tailscale cover the same need for free.
 
 ## Problems
 
-1. **A decision says no.** packages/remote-access/DECISIONS.md, "Reaching a computer from its server": the line was "picked over opening the computer itself to the internet". Ways 1-4 open the computer itself to the internet (the door, with the same per-device keys a server's door has). The ticket asks for exactly that, so the person who wrote it seems to accept it, but the decision must be changed by a person before this ships (a bullet saying a home computer may open its door to the internet when the person asks, on a switch that is off by default, like Phone on Wi-Fi).
-2. **The address changes, and the address is the origin.** A device is in through a cookie on the door's origin (`https://<at>`), and a computer that keeps a line or added the machine by its link knows it by that address. A home line's public number changes (daily on some providers, after a router restart on most). With a bare number every change means every phone scans again. Way 1 is only useful with a **name that follows the number**, and the ticket's "free name service, no account" has no clean answer:
-   - DuckDNS / deSEC (dedyn.io): free, but an account and a token the person pastes. Small and reliable.
-   - A name service of OpenAgent's own (`<id>.openagent.build`, updated by the computer with a key, like the ones the door already keeps): no account for the person, but a service to run and pay for, much cheaper than the relay of way 6, and a company (us) in the middle of the name, not of the traffic.
-   - The bare number, re-certified on change, and the person told to scan again: no account, no service, poor.
-   This is the pick a person has to make; the rest of way 1 does not depend on it.
-3. **Port 80.** `http-01` needs port 80 from outside; many home providers block inbound 80 (and some 443). `tls-alpn-01` (Let's Encrypt allows it for numbers and names) proves on 443 alone. When 443 itself is blocked, only a name proved over DNS (`dns-01`, needs the name service to set a TXT record: easy with our own service or deSEC, possible with DuckDNS) gives a certificate, and the door then listens on another external port.
-4. **Shared addresses (CGNAT).** The router opens the port, but the address it has is not the one the internet sees (100.64.0.0/10, or a private range), and nothing comes in. Must be found and said, not left as a certificate that never arrives.
+- **Can the router be asked at all?** UPnP IGD and NAT-PMP/PCP are often on, but some routers have them off and some ISP boxes refuse. We only find out by trying.
+- **Carrier-grade NAT**: the router's own WAN address is shared (100.64.0.0/10, or a private range), so a mapping on it reaches nothing. Many mobile/fiber ISPs do this.
+- **The proof for the certificate** needs public port 80 (HTTP-01) or 443 (TLS-ALPN-01). `acme.ts` does HTTP-01, so public 80 is mapped as well as 443. A router that already uses 80/443 for itself on the WAN side refuses the mapping.
+- **The public address changes**: home addresses are usually stable for weeks but not always. A device saved the old address and cannot reach the computer to learn the new one, because its page is served by the computer itself.
+- **Hairpin NAT**: a request coming in through the router can reach the door with a LAN source address. The Wi-Fi door takes asks with no code from its own network, so the internet door must never be the Wi-Fi door.
 
 ## Solutions
 
-### Way 1: the router opens the port (first, as the ticket suggests)
-
-- **Opening the port**, in a new `src/router.ts`, no dependency (all small UDP/HTTP protocols):
-  - PCP / NAT-PMP (RFC 6887 / 6886): UDP to the gateway on 5351. The gateway's number: macOS `route -n get default`, Linux `/proc/net/route`; Windows `route print` (or skip Windows at first).
-  - UPnP IGD: SSDP M-SEARCH to 239.255.255.250:1900, read the device description, SOAP `AddPortMapping` / `GetExternalIPAddress` on `WANIPConnection` (or `WANPPPConnection`).
-  - Try PCP/NAT-PMP first (simpler, has leases), then UPnP. Map external 443 (and 80 while `http-01` is used) to the door's port; ask for a lease (e.g. 2 h) and renew it at half-life from the door's process (serve.ts already runs the renewal loop of the certificate; the mapping lives beside it). Remove the mappings when the switch goes off.
-- **Finding a shared address**: the external number the router reports is private or in 100.64.0.0/10 → say "Your provider shares one internet address between customers: nothing from outside reaches this computer. Use a VPS (Machines) instead." Otherwise the certificate's own proof is the test from outside: a proof that fails after the port opened says "The router opened the door, but nothing from outside reached it" and points to the VPS way.
-- **Following the number**: poll the router's external number (cheap, local) every few minutes; on change, update the name (per Problem 2's pick). With a name nothing else changes: the certificate is for the name, devices and lines keep working.
-- **Proof**: add `tls-alpn-01` to `acme.ts` (a self-signed certificate with the `acmeIdentifier` extension served on 443 for the ALPN `acme-tls/1`; `der.ts` already writes certificates' parts) and prefer it, so only 443 has to be opened. Keep `http-01` for servers as they are.
-- **The switch**: `remote-access internet on|off` (name to pick; "Reach from anywhere" in the Devices section), off by default, saying first what it means: the door is open to the internet, a device still needs a scanned code. It reuses the `https` path of serve.ts with the address it found, so `store.https` gets a `router: true` (or similar) to know to keep the mapping and follow the number.
-
-### Way 2: IPv6
-
-- Same switch, an option, not a way of its own: when the computer has a global, *non-temporary* IPv6 address (`networkInterfaces()`, skip privacy/temporary ones; macOS marks them, Linux shows `temporary` only via `ip -6 addr`), the name gets an AAAA record beside the A record. A phone on IPv6 reaches it even behind a shared IPv4 address. The router's IPv6 firewall still has to let 443 in: PCP can ask for that (`MAP` with an IPv6 address); UPnP's `WANIPv6FirewallControl` is rarely there. Without a name (Problem 2) IPv6 is not worth doing: a bare IPv6 number in the code fails on every IPv4-only phone network, and the prefix changes too.
-
-### Way 3: by hand
-
-- No code in the door. In the dashboard, beside "Your own server (a VPS)": "This computer, with ports 443 and 80 forwarded on your router" → asks the address or name and runs `remote-access https <at>`. Comes for free once way 1's switch exists: way 1 is this with the forwarding done for the person, and when way 1 fails its message can name this.
-
-### Way 4: a tunnel with the person's own account (the fallback)
-
-- Cloudflare named tunnel (`cloudflared tunnel run --token <token>`, needs an account and a domain on Cloudflare) or ngrok (one free fixed domain per account, `ngrok http --domain=…`). Quick tunnels (`trycloudflare.com`) need no account but give a new random name each start: same problem as a changing number, not usable.
-- The tunnel program is run by the door's process as a child, pointed at the door on 127.0.0.1; the person pastes the token once.
-- Two things in the door change: the tunnel's requests arrive from 127.0.0.1, so `knocks` must let them in as from the internet (`knocks: () => true`, like a server) and nothing may treat a loopback peer as this computer; and the TLS ends at the tunnel, so a computer keeping a line to this one cannot pin the door's key (`NOT_THE_SERVER` in line-out.ts) and must trust the name's certificate instead.
-- Separate ticket: it is independent of way 1 and asks a person whether OpenAgent should depend on cloudflared/ngrok being installed.
-
-### Way 5 and way 6
-
-- Out of this ticket. Way 5 (WebRTC) needs a page served from an HTTPS origin that is not the computer, a WebRTC stack in Node (node-datachannel or werift), a meeting point, and a relay (TURN) for the networks where it fails: a project of its own, as the ticket says; open a ticket for it. Way 6 stays deferred (#1824).
+- Router: try PCP / NAT-PMP first (UDP 5351 to the gateway; a few bytes, simple), then UPnP IGD (SSDP multicast on 239.255.255.250:1900, then a SOAP `AddPortMapping` / `GetExternalIPAddress` to the URL from the description XML). Write both by hand in `src/door/router.ts`, as `acme.ts` and `wifi.ts` do; the package has almost no dependencies. Alternative: `@achingbrain/nat-port-mapper` (libp2p's, maintained), at the price of a dependency.
+- Gateway address for NAT-PMP: there is no Node API for it, so read it from `route -n get default` (macOS) or `ip route show default` (Linux), behind an injectable dep.
+- CGNAT: an external address in 100.64/10 or a private range means "your internet provider shares one address between homes", and the door stops there with that sentence. If the router's address looks public but the address is still shared further up, Let's Encrypt's own check fails ("could not reach this computer from the internet"); that check is the reachability test, and no outside echo service is needed.
+- Certificate: reuse the server path as it is. An IP certificate for the external address, with the proof served on the internal port that public 80 maps to (`openProof` takes a port already).
+- Address change: every few minutes, ask the router for its external address. When it changes, get a new certificate and show "The address changed: devices outside scan the new code" on This computer, with the new code from a device on the Wi-Fi or Tailscale. A free dynamic name would fix this properly, but every free one needs an account (DuckDNS, dynv6), which loses the "no account" point. **A person picks** (see Considerations).
+- Hairpin: the internet door is its own listener, beside the Wi-Fi's, the way the Tailscale door is (`wifiListening` / `wifiProblem`). It follows the HTTPS door's rules (a code, always) and takes no Wi-Fi asks, whatever the source address.
 
 ## Considerations
 
-- Security: the door on the internet is what a VPS's door already is (per-device keys, codes valid five minutes once). The new risk is the home network: the router mapping only opens the door's port, never OpenAgent's own (127.0.0.1:4200). Say it in the switch's text.
-- Routers with UPnP off, double NAT (a provider box in front of the person's router: the inner router's external number is private → found as Problem 4), and mappings the router forgets on restart (the lease renewal puts them back).
-- macOS asks once whether node may accept incoming connections; the first time the switch is on, say so.
-- Testing: router.ts against a fake gateway on localhost (UDP and an HTTP SOAP endpoint), like `test-office.ts` fakes the certificate office; `tls-alpn-01` against Pebble or the fake office.
-- Phone on Wi-Fi and the internet switch both open the door; with the internet switch on, the Wi-Fi link should be the name too, so a device scanned at home keeps working outside (one origin, one cookie).
+- **DECISIONS.md conflict to flag in the PR, not decide**: "Reaching a computer from its server" says the line to a server was "picked over opening the computer at home to the internet first, which needs a port on its router and fails where the internet provider shares one address". Way 1 is that rejected alternative, offered as an extra way for people with no server. The person decides, and records the bullet, before step 2 starts. Step 1 (Funnel) does not touch that decision.
+- Funnel ports: Funnel serves only on public 443, 8443 or 10000. The door already uses 443 behind Serve, so the same Serve config just gets the funnel flag. Turning the switch off has to run `tailscale funnel ... off` and leave Serve on.
+- The internet door on a laptop is as exposed as a server's. The server door's protections apply as they are: headersTimeout, maxConnections, codes that work once for ten minutes, a wait after five wrong codes. Say so on the switch's confirm, the way On this Wi-Fi warns about plain HTTP.
+- Leases: NAT-PMP/PCP mappings get a lifetime (2 h) renewed at half-life. UPnP mappings ask for a lease of 3600 s, renewed the same way; some routers only take 0 (forever), so fall back to it. Remove the mappings when the switch goes off and when the door's process ends cleanly. A mapping left behind by a crash is replaced at the next start; this is safe because the mapping names this computer's internal address and port.
+- Several OpenAgents behind one router: the second gets public 443 refused. Use another public port for the door, but port 80 still has to be free for the proof. The door says the router's ports are taken by another computer.
+- IPv6 (way 2): later, the same switch tries a pinhole (PCP, or UPnP `WANIPv6FirewallControl`) on the computer's global IPv6 address when IPv4 fails. Let's Encrypt issues IPv6 IP certificates, and most mobile networks are IPv6. Out of scope for the first PR.
+- Manual port forwarding (way 3): the CLI's `https <at>` is close already. A "Forwarded by hand at <address>" field can come later; the first PR does not need it.
+- macOS lets an ordinary user listen below 1024; Linux does not. With router mapping the internal port can be any port (the one after the Wi-Fi's door, as for Tailscale), so this does not matter.
 
 ## Implementation
 
-Ask the person first: Problem 1 (change the decision) and Problem 2 (where the name comes from). Then, each its own pull request:
+### PR 1: Funnel
+- `tailscale.ts`: `serveDoor(..., { funnel })` runs `tailscale funnel --bg --https=443 <door>` (or `serve` as today), and `stopServing` turns funnel off.
+- `store.ts`: `tailscale.funnel?: true`. `cli.ts`: `tailscale funnel on|off`. `serve.ts` asks again until Funnel serves, like Serve. `fixAt` points to the admin page that turns Funnel on when Tailscale answers so.
+- Dashboard `ThisComputer.tsx` and `devices.ts`: under "On your Tailscale network", a switch "Also devices not on Tailscale", with words saying the address is public and a device still needs a code.
+- Tests: `tailscale.test.ts` with the fake `TailscaleRun`; `serve.test.ts`; `DevicesSettings.test.tsx`.
 
-1. `acme.ts`: `tls-alpn-01`, preferred when offered; servers keep working (tests in acme.test.ts / serve-https.test.ts).
-2. `router.ts`: PCP/NAT-PMP and UPnP IGD, map / renew / remove / external number, with a fake gateway in tests.
-3. The name: per the pick (a DuckDNS/deSEC token field, or a client for our own name service, plus the service itself if chosen).
-4. The switch: CLI command, `store.https` remembers it is the router's, serve.ts keeps the mapping and follows the number, the messages for a shared address and an unreachable port; the Devices section gets the switch, the Machines section's "Your own server" text names it as the way without a VPS. DECISIONS.md bullet as the person words it.
-5. IPv6 as an AAAA record on the name, when step 3 can set one.
-6. New tickets: way 4 (a tunnel with the person's account), way 5 (direct phone-to-computer).
+### PR 2: Through your router (after the person's go on the DECISIONS conflict and the address-change pick)
+- `src/door/router.ts`: `gateway()`, `natPmp` / `pcp` map / unmap / externalAddress, `upnp` discover / map / unmap / externalAddress, `openPorts({ internal, external: [443, 80] })` → `{ address, via, ports } | { problem }`. All transports are injectable.
+- `store.ts`: `internet?: { address: string; via: 'pcp' | 'nat-pmp' | 'upnp'; port: number; proofPort: number }` beside `https` / `tailscale`, plus `internetListening` / `internetProblem`.
+- `serve.ts`: when `internet` is on, open the mappings, then a third listener with the HTTPS door's rules, `keepCertificate` for the external address with the proof on the mapped internal port. Keep the mappings alive, watch the external address, and run the problem sentences listed above.
+- `cli.ts`: `internet on|off`, and `status` says it; the code link (`codeLink`) uses the internet address when asked for "from anywhere".
+- Dashboard: a Way "From anywhere, through your router", with a switch, a confirm, the problem, and links to Tailscale / Connect a server when it fails.
+- Tests: a fake NAT-PMP UDP responder and a fake IGD (an SSDP answer plus a SOAP HTTP server on 127.0.0.1) in `router.test.ts`. `serve-internet.test.ts` reuses the fake ACME office from `serve-https.test.ts`. A network test (`OPENAGENT_NETWORK_TESTS=1`) against the real router is optional and manual.
+- Real-world check before merge: one home router with UPnP, one with it off, one CGNAT mobile hotspot.
