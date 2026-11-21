@@ -1,0 +1,17 @@
+{
+  "id": "2026-11-21T19-00-33-564Z",
+  "startedAt": "2026-11-21T19:00:33.803Z",
+  "status": "running",
+  "intent": "Bug: after a session's pull request is merged, the session's header and the bar under the box say \"merged\" at once, but its row in the sidebar keeps the green \"open\" icon for a long time. See the screenshot.\n\nFind why the sidebar's row is behind and make every place that shows a pull request's state change together. Add a test that fails without the fix, and open a pull request with a short title and body.",
+  "driver": "claude-code",
+  "model": "opus",
+  "caller": {
+    "runner": {
+      "host": "Suleimans-MacBook-Pro.local",
+      "pid": 85801,
+      "gitAccount": "suleimansh"
+    },
+    "host": "Suleimans-MacBook-Pro.local",
+    "gitAccount": "suleimansh"
+  }
+}
