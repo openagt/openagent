@@ -409,6 +409,20 @@ test('a finished run that left files uncommitted is "not committed", even with c
   assert.deepEqual(parked.items.map(i => i.words), ['Needs push'], 'its question is its next step; its commits still wait')
 })
 
+test('a run waits on one step at a time: files left uncommitted after its request opened, then its merge', async () => {
+  const open = async (): Promise<OpenPr[]> => [{ number: 4, title: 'Add the cart', url: 'u4', isDraft: false, headRefName: 'agent-add-cart', createdAt: '2026-07-16T00:30:00Z' }]
+  const left = (uncommitted: number) => build([project('a', '/a')], { ...onlyUnpushed([doneMeta({ pr: { number: 4, url: 'u4' } })], counting(branch => waiting({ branch, ahead: 0, pushed: true, uncommitted }))), prs: open })
+  assert.deepEqual((await left(3)).items.map(i => [i.run, i.words, i.detail]), [['r1', 'Needs commit', '3 files']], 'one row, and the notification of it says what the row says')
+  assert.deepEqual((await left(0)).items.map(i => [i.run, i.words, i.detail]), [['r1', 'Needs merge', '#4']])
+})
+
+test('a run waiting on its question waits on that first, though its request is open', async () => {
+  const liveAgents = async (): Promise<LiveAgent[]> => [live(runningAgentMeta({ status: 'waiting', branch: 'agent-add-cart' }))]
+  const prs = async (): Promise<OpenPr[]> => [{ number: 4, title: 'Add the cart', url: 'u4', isDraft: false, headRefName: 'agent-add-cart' }]
+  const { items } = await build([project('a', '/a')], { prs, liveAgents, events: async () => waitingOn('gate-1', 'q?'), hooks: withAsk, branches: async () => undefined })
+  assert.deepEqual(items.map(i => [i.run, i.words]), [['r1', 'Needs answer']])
+})
+
 test('an open request a run opened opens that run: by the request its record names, else by its branch; one opened anywhere else names no run', async () => {
   const prs = async (): Promise<OpenPr[]> => [
     { number: 6, title: 'recorded', url: 'u6', isDraft: false, headRefName: 'agent-other-name' },

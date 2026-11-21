@@ -75,7 +75,31 @@ export async function buildWaiting(projects: ProjectSummary[], deps: WaitingDeps
   const seen = new Set<string>()
   const identity = (item: Waiting) => (item.module === 'github' ? `github:${item.id ?? ''}` : item.scope === 'run' ? `${item.module}:run:${item.run ?? ''}:${item.id ?? ''}` : waitingKey(item))
   const unique = items.filter(item => (seen.has(identity(item)) ? false : (seen.add(identity(item)), true)))
-  return { items: unique, whole }
+  return { items: oneStepPerRun(unique), whole }
+}
+
+/** A run's steps, the first one first: its question answered, its files committed, its work published, its pull request merged. */
+const STEP_ORDER: readonly (Waiting['mark'] | undefined)[] = ['question', 'changes', 'branch', 'pull-request']
+
+/**
+ * What waits on one run is one item: its next step. A run can wait on two at once, its pull request
+ * open and files left uncommitted after it, and each list showed one of them or both: the sidebar
+ * drew the run twice, and a notification said "Needs commit" of the run its row said "Needs merge"
+ * of. An item of a step this list does not know comes after every known one. The order stays the
+ * list's.
+ */
+function oneStepPerRun(items: Waiting[]): Waiting[] {
+  const rank = (item: Waiting) => {
+    const at = STEP_ORDER.indexOf(item.mark)
+    return at === -1 ? STEP_ORDER.length : at
+  }
+  const next = new Map<string, Waiting>()
+  for (const item of items) {
+    if (item.scope !== 'run' || item.run === undefined) continue
+    const kept = next.get(item.run)
+    if (kept === undefined || rank(item) < rank(kept)) next.set(item.run, item)
+  }
+  return items.filter(item => item.scope !== 'run' || item.run === undefined || next.get(item.run) === item)
 }
 
 /** One project's items, and whether every one of its sources answered. */
