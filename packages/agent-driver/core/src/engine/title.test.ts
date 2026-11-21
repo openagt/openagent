@@ -1,6 +1,7 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { FakeDriver } from '../fake.js'
+import { readyPrompt } from '../ready-prompt.js'
 import type { Driver, DriverStartOptions } from '@openagt/hooks'
 import { readdir } from 'node:fs/promises'
 import { MAX_TITLE, isBareCommand, nameRun, titleOf, titlePrompt, TITLE_SYSTEM } from './title.js'
@@ -89,4 +90,32 @@ test('an agent with no small model named for it, and one that fails, name nothin
   assert.equal(await nameRun(new FakeDriver({ respond: () => 'Anything' }), { prompt: 'do it' }), undefined)
   const broken: Driver = { id: 'claude-code', namingModel: 'haiku', start: () => Promise.reject(new Error('not logged in')) }
   assert.equal(await nameRun(broken, { prompt: 'do it' }), undefined)
+})
+
+test('the process that named the run is ended once it answered, never left to exit on its own', async () => {
+  // `claude` takes a while to exit after its answer, and may not exit at all: nothing but the
+  // naming may end it.
+  let ended = false
+  const lingering: Driver = {
+    id: 'claude-code',
+    namingModel: 'haiku',
+    start: async opts => ({
+      id: 'naming',
+      cwd: opts.cwd,
+      prompt: () => Promise.reject(new Error('asked ready')),
+      ready: () =>
+        readyPrompt(
+          (words, stop) =>
+            new Promise(resolve => {
+              stop.addEventListener('abort', () => {
+                ended = true
+              })
+              void words.then(() => resolve({ text: 'README.md condensing' }))
+            }),
+        ),
+      dispose: () => Promise.resolve(),
+    }),
+  }
+  assert.equal(await nameRun(lingering, { prompt: 'make readme.md shorter' }), 'README.md condensing')
+  assert.equal(ended, true)
 })

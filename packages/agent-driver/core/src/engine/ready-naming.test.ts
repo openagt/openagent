@@ -9,12 +9,16 @@ import { ReadyNaming, type NamingSetup } from './ready-naming.js'
 import { askName, givenName, NAME_FILE_ENV, TITLE_SYSTEM } from './title.js'
 
 // A run's name, from a naming session started before the run was: the session waiting is taken
-// for the run, the next is started for the run after, and a run handed its name does not ask again.
+// for the run, its process ended once it answered, and a run handed its name does not ask again.
 
-/** A naming agent whose sessions are started ready; `said` answers each prompt. */
+/**
+ * A naming agent whose sessions are started ready; `said` answers each prompt. Its process lives
+ * on after it answered, as `claude` does for a while, until it is cancelled: `alive` counts them.
+ */
 function namingAgent(said: (prompt: string) => string = () => 'Fix flaky login test') {
   const starts: DriverStartOptions[] = []
   const asked: string[] = []
+  let readies = 0
   let cancelled = 0
   const driver: Driver = {
     id: 'claude-code',
@@ -25,8 +29,9 @@ function namingAgent(said: (prompt: string) => string = () => 'Fix flaky login t
         id: `naming-${starts.length}`,
         cwd: opts.cwd,
         prompt: () => Promise.reject(new Error('a naming session is only asked ready')),
-        ready: () =>
-          readyPrompt(
+        ready: () => {
+          readies++
+          return readyPrompt(
             (words, stop) =>
               new Promise((resolve, reject) => {
                 stop.addEventListener('abort', () => {
@@ -38,13 +43,14 @@ function namingAgent(said: (prompt: string) => string = () => 'Fix flaky login t
                   resolve({ text: said(prompt) })
                 })
               }),
-          ),
+          )
+        },
         dispose: () => Promise.resolve(),
       }
       return session
     },
   }
-  return { driver, starts, asked, cancelled: () => cancelled }
+  return { driver, starts, asked, cancelled: () => cancelled, alive: () => readies - cancelled }
 }
 
 const setupOf =
@@ -54,7 +60,7 @@ const setupOf =
 /** Let the pool's background work (starting the next session) settle. */
 const settle = () => new Promise(resolve => setTimeout(resolve, 20))
 
-test('a run is named by the session waiting for it, and the next one is started for the run after', async () => {
+test('a run is named by the session waiting for it, and no naming process is left once it answered', async () => {
   const agent = namingAgent()
   const pool = new ReadyNaming({ setup: setupOf(agent.driver) })
   await pool.prepare('/repo', 'claude-code')
@@ -69,16 +75,34 @@ test('a run is named by the session waiting for it, and the next one is started 
   assert.equal(agent.starts.length, 1, 'the waiting session was the one asked')
   assert.match(agent.asked[0]!, /--------\nfix the flaky login test\n--------/)
   await settle()
-  assert.equal(agent.starts.length, 2, 'the next run has one waiting')
+  // None is started for whatever run comes next: that one waited for a Start nobody made, and was
+  // replaced by another each time it was ended — a `claude -p` under the dashboard for good.
+  assert.equal(agent.starts.length, 1, 'no next one is started')
+  assert.equal(agent.alive(), 0, 'the process that answered is ended')
   await pool.close()
 })
 
-test('with none waiting, a run is still named, by a session started then', async () => {
+test('with none waiting, a run is still named, by a session started then, and ended after', async () => {
   const agent = namingAgent()
   const pool = new ReadyNaming({ setup: setupOf(agent.driver) })
   assert.equal(await pool.name('/repo', 'make the readme shorter', 'claude-code'), 'Fix flaky login test')
   await settle()
-  assert.equal(agent.starts.length, 2, 'the one asked, and the one now waiting')
+  assert.equal(agent.starts.length, 1)
+  assert.equal(agent.alive(), 0)
+  await pool.close()
+})
+
+test('a session that waited too long for a Start is ended, and none is started in its place', async () => {
+  const agent = namingAgent()
+  let now = 0
+  const pool = new ReadyNaming({ setup: setupOf(agent.driver), now: () => now, maxWaitMs: 1000 })
+  await pool.prepare('/repo', 'claude-code')
+  assert.equal(agent.alive(), 1, 'one waits')
+  now = 5000
+  ;(pool as unknown as { lookOver(): void }).lookOver()
+  await settle()
+  assert.equal(agent.alive(), 0, 'its process is ended')
+  assert.equal(agent.starts.length, 1, 'none replaces it: the next Start near starts one')
   await pool.close()
 })
 

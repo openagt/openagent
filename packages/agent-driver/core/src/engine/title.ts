@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { RunRequest, Driver, DriverSession } from '@openagt/hooks'
+import type { RunRequest, Driver, DriverSession, ReadyPrompt } from '@openagt/hooks'
 
 // A run's short name, the way Claude Code on the web names a session: "README.md condensing" for
 // "make readme.md shorter". The person's own words are the whole prompt — too long for a list and
@@ -155,17 +155,20 @@ export async function nameRun(
   opts.signal?.addEventListener('abort', onAbort)
   const timer = setTimeout(() => stop.abort(), opts.timeoutMs ?? 60_000)
   let naming: NamingSession | undefined
+  let ready: ReadyPrompt | undefined
   try {
     naming = await startNaming(driver, stop.signal)
     if (!naming) return undefined
     // Through a ready prompt where the driver has one: the same fresh turn, over at its answer
     // rather than when the agent's process is gone (`DriverSession.ready`).
     const asked = titlePrompt(opts.prompt, opts.from)
-    const ready = naming.session.ready?.()
+    ready = naming.session.ready?.()
     return titleOf((ready ? await ready.prompt(asked) : await naming.session.prompt(asked)).text)
   } catch {
     return undefined
   } finally {
+    // Over at its answer is not over: the process is ended here, never left to exit on its own.
+    ready?.cancel()
     await naming?.close()
     clearTimeout(timer)
     opts.signal?.removeEventListener('abort', onAbort)
