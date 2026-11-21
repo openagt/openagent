@@ -1,17 +1,33 @@
 {
   "id": "2026-11-21T19-02-26-646Z",
   "startedAt": "2026-11-21T19:02:26.892Z",
-  "status": "running",
+  "endedAt": "2026-11-21T19:27:47.256Z",
+  "status": "done",
   "intent": "Bug: the environment OpenAgent sets for a run leaks into the commands the agent runs. In session 2026-11-21T17-50-08-691Z the agent had 4 tests fail because GIT_AUTHOR\\_\\* and GIT_COMMITTER\\_\\* overrode the identity the tests give their own commits, and it had to unset 8 variables (OPENAGENT_GIT_ACCOUNT, OPENAGENT_DISTRIBUTION, AGENT_ID, AGENT_DIARY and the four GIT\\_ ones) to start a dashboard from its checkout and to open its pull request.\n\nFind which of these the agent's own commands really need and how to give them without breaking a project's tests or a dashboard started inside a run. Add a test that fails without the fix, and open a pull request with a short title and body.",
+  "title": "Env var leak in agent runs",
   "driver": "claude-code",
-  "model": "opus",
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "branch": "agent-run-env-leak",
+  "pr": {
+    "number": 2401,
+    "url": "https://github.com/openagt/openagent/pull/2401"
+  },
+  "cost": 4.1816946,
+  "contextTokens": 169285,
   "caller": {
     "runner": {
       "host": "Suleimans-MacBook-Pro.local",
       "pid": 7828,
-      "gitAccount": "suleimansh"
+      "gitAccount": "suleimansh",
+      "baseCommit": "a3caf53ae7daab2e23f150808ab652eb65f0a2fe"
     },
+    "pid": 7828,
     "host": "Suleimans-MacBook-Pro.local",
-    "gitAccount": "suleimansh"
+    "gitAccount": "suleimansh",
+    "baseCommit": "a3caf53ae7daab2e23f150808ab652eb65f0a2fe",
+    "kind": "prompt",
+    "workspace": "/Users/suleiman/Projects/openagent/.branches/agent-2026-11-21T19-02-26-646Z",
+    "sessionId": "d925c8eb-7bdd-4c69-9a7a-3d4fc47ad2c6"
   }
 }
