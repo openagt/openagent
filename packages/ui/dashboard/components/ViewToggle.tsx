@@ -43,4 +43,21 @@ export function ViewToggle() {
  * could only show the view just left. It names that page, which the landing page's "Dashboard"
  * opens again. A click with a modifier, or another button, is the browser's.
  */
-const switchInPlace = inPlace<HTMLAnchorElement>(event => location.replace(`${event.currentTarget.href}?back=${encodeURIComponent(`${location.pathname}${location.search}`)}`))
+const switchInPlace = inPlace<HTMLAnchorElement>(event => {
+  switching = true
+  location.replace(`${event.currentTarget.href}?back=${encodeURIComponent(`${location.pathname}${location.search}`)}`)
+})
+
+/** The page is being left by the switch. */
+let switching = false
+
+/**
+ * The page is being left for another document: only the switch animates. The stylesheet asks for
+ * the animation on every move between two of the address's documents (`@view-transition`,
+ * tailwind.css), and while it plays the page coming in takes no click: a press on its message box
+ * goes to the page, and what is typed next goes nowhere. So any other move skips it, such as a
+ * session's link opened in this tab or the address typed by an automation.
+ */
+export function onPageSwap(event: PageSwapEvent): void {
+  if (!switching) event.viewTransition?.skipTransition()
+}

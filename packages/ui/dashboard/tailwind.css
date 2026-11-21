@@ -716,7 +716,8 @@ html[data-pinned] body {
  * The switch between the dashboard and the website's landing page (#1919), two pages of one
  * address: the logo and the toggle stay where they are (both pages draw them at the same place),
  * the toggle's lit side slides over, and the rest fades. The website's stylesheet says the same:
- * a page switch animates only when both pages ask for it. A browser without it just switches.
+ * a page switch animates only when both pages ask for it. A browser without it just switches. Any
+ * other move off a dashboard page skips it (ViewToggle's `onPageSwap`).
  */
 @media (prefers-reduced-motion: no-preference) {
   @view-transition {

@@ -51,6 +51,23 @@ test('a working run is stopped from its page', needsChrome, async () => {
   })
 })
 
+test('a prompt typed the moment the launcher is there after a move from another page starts its run', needsChrome, async () => {
+  await flow('start-after-a-move', async page => {
+    const box = (await page.getByLabel('Prompt').boundingBox())!
+    // A move the page makes itself, as a link or an automation does, not a reload: the browser
+    // animates such a move between two documents where both ask for it, and the page coming in
+    // takes no click while it plays.
+    await page.evaluate('location.assign(location.href)')
+    await page.waitForEvent('load')
+    // The box is drawn and has the keyboard: a person who sees it there clicks it, then at once types the prompt and presses Enter.
+    await page.waitForFunction(`document.activeElement?.getAttribute('aria-label') === 'Prompt'`)
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
+    await page.keyboard.type('typed at once')
+    await page.keyboard.press('Enter')
+    await runIn('typed at once', ['done'])
+  })
+})
+
 test('a start the project refuses says why, and keeps the prompt for another try', needsChrome, async () => {
   await flow('refused', async page => {
     await start(page, 'refuse this one')
