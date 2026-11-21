@@ -18,6 +18,8 @@ jobs:
         include:
           - name: typecheck
             run: pnpm typecheck
+          - name: scripts tests
+            run: pnpm test:scripts
           - name: dashboard browser tests
             run: pnpm -C packages/ui test:dashboard
           - name: dashboard node tests
