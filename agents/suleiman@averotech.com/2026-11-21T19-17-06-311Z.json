@@ -1,17 +1,33 @@
 {
   "id": "2026-11-21T19-17-06-311Z",
   "startedAt": "2026-11-21T19:17:06.980Z",
-  "status": "running",
+  "endedAt": "2026-11-21T19:31:42.552Z",
+  "status": "done",
   "intent": "Bug: when I switch between two running sessions in the sidebar, the session's page shows for a moment only my first message and the line \"Starting Claude Code 12m 36s\", as if the agent had not started, and then the whole chat appears. The run is 12 minutes in and has a long chat. Recording: \\~/Movies/oa-switch-flash-2026-11-21.mov (the flash is around 0.8s).\n\nThe line comes from packages/ui/dashboard/components/SessionLine.tsx: it says \"Starting …\" while the run's log is not loaded yet. Find why a run that is known to be working shows the start line while its log loads, and show the chat it last had (or nothing new) until the log arrives, never the start line. Check the same switch for the branch bar's \"3 files +14 −7\", which also appears late. Add a test that fails without the fix, and open a pull request with a short title and body.",
+  "title": "Sidebar session switch flash",
   "driver": "claude-code",
-  "model": "opus",
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "branch": "agent-switch-keeps-chat",
+  "pr": {
+    "number": 2402,
+    "url": "https://github.com/openagt/openagent/pull/2402"
+  },
+  "cost": 2.1202886000000003,
+  "contextTokens": 114496,
   "caller": {
     "runner": {
       "host": "Suleimans-MacBook-Pro.local",
       "pid": 8712,
-      "gitAccount": "suleimansh"
+      "gitAccount": "suleimansh",
+      "baseCommit": "714168b8d5e9ee984b22e30908ee25ddd1b89878"
     },
+    "pid": 8712,
     "host": "Suleimans-MacBook-Pro.local",
-    "gitAccount": "suleimansh"
+    "gitAccount": "suleimansh",
+    "baseCommit": "714168b8d5e9ee984b22e30908ee25ddd1b89878",
+    "kind": "prompt",
+    "workspace": "/Users/suleiman/Projects/openagent/.branches/agent-2026-11-21T19-17-06-311Z",
+    "sessionId": "3fc3c5cb-21ec-4762-8788-43df399c9537"
   }
 }
