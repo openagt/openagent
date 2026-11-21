@@ -185,9 +185,12 @@ export function AgentView({
   // A question answered from its card hands the focus on to the box, for what the person says next.
   const focusBox = useRef<(() => void) | null>(null)
   // A run writes its prompt line once its coding agent begins. Until then its prompt, off its card,
-  // is the chat's first row, after a reload and on a run stopped before it began too.
+  // is the chat's first row, after a reload and on a run stopped before it began too. Not while a
+  // working run's replay is still coming: its log is not read yet, and its prompt alone was the
+  // chat of a run just starting ("Starting Claude Code 12m 36s"), for the moment the replay took.
+  const replaying = working && !replayed
   const standIn = card?.intent ?? startedWith
-  const standsIn = standIn !== undefined && !(live !== false && startedWith !== undefined) && !shown.some(e => e.kind === 'driver' && e.event.type === 'start')
+  const standsIn = standIn !== undefined && !replaying && !(live !== false && startedWith !== undefined) && !shown.some(e => e.kind === 'driver' && e.event.type === 'start')
   const startedAt = card?.startedAt
   const chat = useMemo<OpenAgentEvent[]>(
     () => (standsIn ? [{ kind: 'driver', event: { type: 'start', prompt: standIn }, ...(startedAt !== undefined ? { at: startedAt } : {}) }, ...shown] : shown),
@@ -244,11 +247,12 @@ export function AgentView({
   // Whether the feed shows this agent yet. On a first visit it would otherwise pass through what
   // each read still out has to say: "Waiting for the session to start…" while the list of agents
   // is unread, the live channel's events, "Loading agent…" while the archive is out, and only then
-  // the archived log. It stays blank instead until the agent is known to run, its archive has answered, or the second
-  // has passed, so it fills in one step. Once it has shown this agent it keeps showing it: an
-  // agent that stops while watched keeps its events on screen while the archive is read.
+  // the archived log. It stays blank instead until the agent is known to run and its replay has
+  // something to show, its archive has answered, or the second has passed, so it fills in one step.
+  // Once it has shown this agent it keeps showing it: an agent that stops while watched keeps its
+  // events on screen while the archive is read.
   const [settledFor, setSettledFor] = useState<string | null>(null)
-  const feedSettled = settledFor === agentId || working || archived !== null || waitedFor === agentId
+  const feedSettled = settledFor === agentId || (working && (!replaying || chat.length > 0 || shownSending !== undefined)) || archived !== null || waitedFor === agentId
   useEffect(() => {
     if (feedSettled) setSettledFor(agentId)
   }, [feedSettled, agentId])

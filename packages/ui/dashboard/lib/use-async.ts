@@ -75,6 +75,16 @@ function store(key: string, value: unknown): void {
   }
 }
 
+/** What is remembered under a key, for the page's life: what a stream last brought, kept as a read's answer is. */
+export function rememberedUnder<T>(key: string): T | undefined {
+  return remembered.get(key) as T | undefined
+}
+
+/** Remember a value under a key, as a read's answer is: a stream's, for the next time its page is opened. */
+export function rememberUnder(key: string, value: unknown): void {
+  remember(key, value)
+}
+
 /** Forget the answer remembered under a key, for a target known to have changed since; with no key, every answer (for tests). */
 export function forgetRemembered(key?: string): void {
   if (key === undefined) {

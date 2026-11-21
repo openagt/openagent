@@ -8,7 +8,7 @@ const render = (ui: Parameters<typeof renderWithHost>[0]) => renderWithHost(ui, 
 const readCounts = vi.fn(async () => [] as unknown)
 vi.mock('./reads.js', () => ({ readCounts }))
 
-const { ChangesSummary } = await import('./ChangesSummary.js')
+const { ChangesSummary, forgetLastCounts } = await import('./ChangesSummary.js')
 
 const CHANGES = [
   { path: 'src/a.ts', status: 'modified', added: 3, removed: 1, binary: false },
@@ -19,7 +19,10 @@ beforeEach(() => {
   readCounts.mockClear()
   readCounts.mockResolvedValue(CHANGES)
 })
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  forgetLastCounts()
+})
 
 describe('a working run’s changes (#817)', () => {
   test('the bar counts the files and lines the run changed, read from its own checkout, and names no file (#1023)', async () => {
@@ -53,6 +56,19 @@ describe('a working run’s changes (#817)', () => {
     await waitFor(() => expect(screen.getByText('2 files')).toBeTruthy())
     rerender(<ChangesSummary projectId="p1" agentId="run-2" working={false} />)
     expect(container.textContent).toBe('')
+  })
+
+  test('going back to a working run shows its count at once, with the rest of its page, while it is read again', async () => {
+    const { rerender } = render(<ChangesSummary projectId="p1" agentId="run-1" working />)
+    await waitFor(() => expect(screen.getByText('2 files')).toBeTruthy())
+    readCounts.mockResolvedValue([])
+    rerender(<ChangesSummary projectId="p1" agentId="run-2" working />)
+    await waitFor(() => expect(readCounts).toHaveBeenCalledWith(expect.anything(), 'p1', 'run-2'))
+    // The read of run 1 is out: its count is there in the frame that shows it, not when the read answers.
+    readCounts.mockReturnValue(new Promise(() => {}))
+    rerender(<ChangesSummary projectId="p1" agentId="run-1" working />)
+    expect(screen.getByText('2 files')).toBeTruthy()
+    expect(screen.getByText('+13')).toBeTruthy()
   })
 
   test('a run never seen working reads nothing: its checkout may be gone', async () => {
