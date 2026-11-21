@@ -1,0 +1,17 @@
+{
+  "id": "2026-11-21T19-54-13-380Z",
+  "startedAt": "2026-11-21T19:54:13.605Z",
+  "status": "running",
+  "intent": "The dashboard starts a \"claude -p\" process to name a session (its folder is under the temp folder, named openagent-naming- and some letters). On 2026-11-21 one was still alive 12 minutes after it started, as a child of the dashboard. Find why the naming process is not ended once the name is given (or after a timeout), make sure it always ends, and add a test that fails without the fix. Open a pull request with a short title and body.",
+  "driver": "claude-code",
+  "model": "opus",
+  "caller": {
+    "runner": {
+      "host": "Suleimans-MacBook-Pro.local",
+      "pid": 36222,
+      "gitAccount": "suleimansh"
+    },
+    "host": "Suleimans-MacBook-Pro.local",
+    "gitAccount": "suleimansh"
+  }
+}
