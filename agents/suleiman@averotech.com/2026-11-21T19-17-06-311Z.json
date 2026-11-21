@@ -1,0 +1,17 @@
+{
+  "id": "2026-11-21T19-17-06-311Z",
+  "startedAt": "2026-11-21T19:17:06.980Z",
+  "status": "running",
+  "intent": "Bug: when I switch between two running sessions in the sidebar, the session's page shows for a moment only my first message and the line \"Starting Claude Code 12m 36s\", as if the agent had not started, and then the whole chat appears. The run is 12 minutes in and has a long chat. Recording: \\~/Movies/oa-switch-flash-2026-11-21.mov (the flash is around 0.8s).\n\nThe line comes from packages/ui/dashboard/components/SessionLine.tsx: it says \"Starting …\" while the run's log is not loaded yet. Find why a run that is known to be working shows the start line while its log loads, and show the chat it last had (or nothing new) until the log arrives, never the start line. Check the same switch for the branch bar's \"3 files +14 −7\", which also appears late. Add a test that fails without the fix, and open a pull request with a short title and body.",
+  "driver": "claude-code",
+  "model": "opus",
+  "caller": {
+    "runner": {
+      "host": "Suleimans-MacBook-Pro.local",
+      "pid": 8712,
+      "gitAccount": "suleimansh"
+    },
+    "host": "Suleimans-MacBook-Pro.local",
+    "gitAccount": "suleimansh"
+  }
+}
