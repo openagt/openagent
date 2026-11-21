@@ -1,17 +1,33 @@
 {
   "id": "2026-11-21T19-00-33-564Z",
   "startedAt": "2026-11-21T19:00:33.803Z",
-  "status": "running",
+  "endedAt": "2026-11-21T19:09:38.280Z",
+  "status": "done",
   "intent": "Bug: after a session's pull request is merged, the session's header and the bar under the box say \"merged\" at once, but its row in the sidebar keeps the green \"open\" icon for a long time. See the screenshot.\n\nFind why the sidebar's row is behind and make every place that shows a pull request's state change together. Add a test that fails without the fix, and open a pull request with a short title and body.",
+  "title": "Sidebar PR status lags behind",
   "driver": "claude-code",
-  "model": "opus",
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "branch": "agent-pr-state-together",
+  "pr": {
+    "number": 2400,
+    "url": "https://github.com/openagt/openagent/pull/2400"
+  },
+  "cost": 2.724325799999999,
+  "contextTokens": 128227,
   "caller": {
     "runner": {
       "host": "Suleimans-MacBook-Pro.local",
       "pid": 85801,
-      "gitAccount": "suleimansh"
+      "gitAccount": "suleimansh",
+      "baseCommit": "a3caf53ae7daab2e23f150808ab652eb65f0a2fe"
     },
+    "pid": 85801,
     "host": "Suleimans-MacBook-Pro.local",
-    "gitAccount": "suleimansh"
+    "gitAccount": "suleimansh",
+    "baseCommit": "a3caf53ae7daab2e23f150808ab652eb65f0a2fe",
+    "kind": "prompt",
+    "workspace": "/Users/suleiman/Projects/openagent/.branches/agent-2026-11-21T19-00-33-564Z",
+    "sessionId": "93d350ba-bc00-408a-8321-77986bb90e47"
   }
 }
