@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { DISTRIBUTION_ENV } from '@openagt/hooks'
@@ -19,7 +19,9 @@ test("the plugins' skills are read off the distribution handed down, as a run's 
 ]\n`,
     )
     const read = await pluginSkills(dir, undefined, { [DISTRIBUTION_ENV]: file })
-    assert.deepEqual(read.skills.map(skill => ({ ...skill, dir: resolve(skill.dir) })), [{ name: 'nightly', dir: join(dir, 'nightly'), plugin: 'nightly' }])
+    // Under the folder's real path: node imports the distribution from there, so its `import.meta.url` is
+    // the temp folder with its links followed (macOS's /var is /private/var).
+    assert.deepEqual(read.skills.map(skill => ({ ...skill, dir: resolve(skill.dir) })), [{ name: 'nightly', dir: join(await realpath(dir), 'nightly'), plugin: 'nightly' }])
     assert.deepEqual(read.unreadable, [{ skill: "the broken plugin's skills", reason: 'no skills today' }])
     // Another file: a module once imported is the one every import of its file gets.
     const wrong = join(dir, 'wrong.mjs')
