@@ -9,9 +9,9 @@ import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 // fullness nobody can measure is worse than none. With one and no reading yet the ring is there and
 // empty, as Claude Code's is from the session's first frame, rather than appearing mid-turn.
 
-/** A token count as a person reads it: `18.2k`, `184k`, `1.2M`. */
-export function tokens(count: number): string {
-  if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}M`
+/** A token count as a person reads it, as Claude Code says it: `18.2k`, `184k`, `8.1M`. Every place that says a count says it so. */
+export function tokenWords(count: number): string {
+  if (count >= 999_500) return `${(count / 1_000_000).toFixed(1)}M`
   if (count >= 100_000) return `${Math.round(count / 1_000)}k`
   if (count >= 1_000) return `${(count / 1_000).toFixed(1)}k`
   return String(count)
@@ -25,7 +25,7 @@ export function ContextCircle({ used, size }: { used: number; size: number }) {
   const r = 5
   const circumference = 2 * Math.PI * r
   const left = Math.round((1 - part) * 100)
-  const said = `${tokens(used)} of ${tokens(size)} used · ${left}% of the context left`
+  const said = `${tokenWords(used)} of ${tokenWords(size)} used · ${left}% of the context left`
   return (
     <Tooltip>
       <TooltipTrigger render={<span className="flex shrink-0 items-center px-1" role="img" aria-label={said} />}>

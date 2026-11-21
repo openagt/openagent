@@ -1,5 +1,4 @@
 import { readFile } from 'node:fs/promises'
-import { createRequire } from 'node:module'
 import type { GhRunner } from './gh.js'
 
 /**
@@ -22,8 +21,12 @@ export const COMMENT_MARK = '<!-- openagent -->'
 /** Where the agent's runner put its log: its run record is beside it. */
 export const DIARY_ENV = 'AGENT_DIARY'
 
-/** Where this package's pictures are served from: its own version's, on the npm registry. */
-export const ASSETS_URL = `https://cdn.jsdelivr.net/npm/@openagt/github@${(createRequire(import.meta.url)('../package.json') as { version: string }).version}/assets`
+/**
+ * Where this package's pictures are served from: the repository's main branch, through jsDelivr,
+ * which serves them as images. Not this package's version on npm: a version nobody published
+ * answered 404, and every comment showed a broken picture.
+ */
+export const ASSETS_URL = 'https://cdn.jsdelivr.net/gh/openagt/openagent@main/packages/github/assets'
 
 /** The coding agents' logos, by the id a run record names them by. */
 const LOGOS: Record<string, string> = {
