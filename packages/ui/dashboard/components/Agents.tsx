@@ -1,4 +1,5 @@
 import { useContext } from 'react'
+import { Moon } from 'lucide-react'
 import type { ActiveAgent, AgentDoing } from '../../src/index.js'
 import { Panel, PanelGroup, PanelNote, PanelRow } from './ui/panel.js'
 import { Skeleton } from './ui/skeleton.js'
@@ -51,7 +52,7 @@ export function Agents({
       <Slot of={{ state, value: working }} shape={<PanelShape />}>
         {() => (
           <Panel>
-            {working.length === 0 && <PanelNote>No agent is at work.</PanelNote>}
+            {working.length === 0 && <PanelNote icon={Moon}>No agent is at work.</PanelNote>}
             {working.map(agent => (
               <RunRow
                 key={`${agent.projectId}:${agent.agentId}`}

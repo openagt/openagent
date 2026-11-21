@@ -1,3 +1,4 @@
+import { Users } from 'lucide-react'
 import { Facts, PageLink, Panel, PanelGroup, PanelNote, PartDescription, PersonMark, PanelShape, RunMark, Slot, Tooltip, TooltipContent, TooltipTrigger, formatAge, formatDateTime, personName, personSaid, rpcClient, runWord, useModuleHost, usePolled, type UiCardProps, type ModuleHostPerson } from '@openagt/ui/module'
 import { membersOf, peopleWithRuns, type Member, type PersonActivity } from '../src/people.js'
 
@@ -80,7 +81,7 @@ export function MembersCard({ projects }: UiCardProps) {
       <Slot of={{ state, value: members }} shape={<PanelShape />}>
         {() => (
           <Panel>
-            {members.length === 0 && <PanelNote>No one has started an agent here yet.</PanelNote>}
+            {members.length === 0 && <PanelNote icon={Users}>No one has started an agent here yet.</PanelNote>}
             {members.map(member => (
               <li key={member.person} aria-label={personName(member.person, member.name)} className="relative flex min-w-0 items-center gap-3 px-4 py-3 before:absolute before:top-0 before:right-4 before:left-4 before:h-px not-first:before:bg-hairline">
                 <PersonMark email={member.person} name={member.name} picture={member.account?.avatar} you={member.you} />

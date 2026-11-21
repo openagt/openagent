@@ -87,14 +87,16 @@ describe('the Overview', () => {
     await screen.findByText('Human Queue')
     expect(drawn().map(card => card.id)).toEqual(['human-queue', 'working', 'usage', '@x/notes/recent', '@x/tickets/hot'])
     expect(screen.getByText('No agent is at work.')).toBeTruthy()
-    // Two columns once the page has the room: what needs the person and what is at work two thirds
-    // wide, the usage a third beside them; in a middling column each is a half, in a narrow one the
+    // Two columns once the page has the room: what needs the person two thirds wide, what is at work
+    // and the usage a half each, side by side; in a middling column each is a half, in a narrow one the
     // whole row; a half is a half from a middling column on; a row's cards fill it.
     expect(drawn()[0]!.spans).toContain('@max-2xl:basis-full')
     expect(drawn()[0]!.spans).toContain('@2xl:basis-[calc(50%_-_1rem)]')
     expect(drawn()[0]!.spans).toContain('@4xl:basis-[calc(66.667%_-_0.667rem)]')
-    expect(drawn()[1]!.spans).toContain('@4xl:basis-[calc(66.667%_-_0.667rem)]')
-    expect(drawn()[2]!.spans).toContain('@4xl:basis-[calc(33.333%_-_1.333rem)]')
+    expect(drawn()[1]!.spans).toContain('@2xl:basis-[calc(50%_-_1rem)]')
+    expect(drawn()[1]!.spans).not.toContain('@4xl:')
+    expect(drawn()[2]!.spans).toContain('@2xl:basis-[calc(50%_-_1rem)]')
+    expect(drawn()[2]!.spans).not.toContain('@4xl:')
     expect(drawn()[4]!.spans).toContain('@2xl:basis-[calc(50%_-_1rem)]')
     expect(drawn()[4]!.spans).not.toContain('@4xl:')
     expect(drawn()[4]!.spans).toContain('grow-[6]')

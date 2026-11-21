@@ -32,7 +32,7 @@ const PACKAGES_PLACE = 3
 // Queue, `ui-card-waiting`'s card) first, the first steps under it, then usage and the agents
 // working now, then the other cards the installed packages declare, in two columns (#1818: the
 // queue package's AI Queue, the tickets package's hot tickets, the scheduler package's
-// Automations). A card with nothing to show says so in a sentence ("No agent is at work.").
+// Automations). A card with nothing to show says so in its middle, a sentence under a quiet glyph ("No agent is at work.").
 // OpenAgent's own cards are projections of the same .openagent files over the shell's own polls
 // (the agents at work, what waits on the person), so they stay live; selecting a row jumps into its project or
 // straight into a session. With one project picked in the sidebar's project select (#1513), every
@@ -130,7 +130,7 @@ export function DashboardPage({
     ...(placeKnown ? [{ id: 'your-presets', order: 4, node: <YourPresetsPart /> }] : []),
   ].sort((one, other) => one.order - other.order)
   const cards: OverviewCard[] = [
-    // Under what needs the person, a column two thirds wide down the page's left and one a third wide
+    // Under what needs the person, what is at work and the usage a half each (his pick: the usage's sentence needs the room), then a column two thirds wide down the page's left and one a third wide
     // beside it, the packages' cards taking their turns in both: each third comes after the card it
     // stands beside (the hot tickets beside what is at work, the account's usage, the one figure that
     // governs everything the agent may do next (#1139), beside the queue), so the first steps under
@@ -140,7 +140,7 @@ export function DashboardPage({
       stale: active.state === 'kept',
       label: 'At work',
       order: 6,
-      width: '2/3',
+      width: '1/2',
       minWidth: '1/2',
       node: (
         <div id={WORKING_ID} className="flex scroll-mt-6 flex-col *:flex-1">
@@ -148,7 +148,7 @@ export function DashboardPage({
         </div>
       ),
     },
-    { id: 'usage', label: 'Usage', order: 9, width: '1/3', minWidth: '1/3', node: <Quota projects={projects} /> },
+    { id: 'usage', label: 'Usage', order: 9, width: '1/2', minWidth: '1/3', node: <Quota projects={projects} /> },
     // The cards the installed packages declare (#1818): a package's own summary of its data, only
     // when one of the projects shown (every registered one, or the picked one alone) has the package.
     ...moduleCards,

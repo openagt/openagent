@@ -1,4 +1,4 @@
-import { FastForward, Play } from 'lucide-react'
+import { FastForward, ListTodo, Play } from 'lucide-react'
 import { PageLink, Panel, PanelGroup, PanelNote, PanelRow, PartDescription, Slot, StartAgentButton, useIsMobile, useModuleHost, WordsShape, type FileNames, type UiCardProps } from '@openagt/ui/module'
 import { fanOutLabel, fanOutPress, unclaimedEntries, workOnEntryPrompt } from '../src/module.js'
 import { EntryTitle, entryView } from './entry.js'
@@ -55,7 +55,7 @@ export function QueueCard({ projects }: UiCardProps) {
         of={{ state, value: shown }}
         shape={
           <Panel>
-            <PanelNote>
+            <PanelNote icon={ListTodo}>
               <WordsShape words="Nothing queued." />
             </PanelNote>
           </Panel>
@@ -64,7 +64,7 @@ export function QueueCard({ projects }: UiCardProps) {
         {() =>
           shown.length === 0 ? (
             <Panel>
-              <PanelNote>Nothing queued.</PanelNote>
+              <PanelNote icon={ListTodo}>Nothing queued.</PanelNote>
             </Panel>
           ) : (
             <ul className="space-y-4">
