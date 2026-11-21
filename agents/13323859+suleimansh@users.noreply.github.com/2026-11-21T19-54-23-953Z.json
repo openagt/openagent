@@ -1,0 +1,17 @@
+{
+  "id": "2026-11-21T19-54-23-953Z",
+  "startedAt": "2026-11-21T19:54:24.163Z",
+  "status": "running",
+  "intent": "The test \"Ctrl+K, a few letters and Enter…\" in packages/ui/src/e2e/smoke-runs.test.ts fails now and then (1 of 4 runs on its own on my Mac, in English and in Hebrew). Run it many times to reproduce, find the race, and fix the test or the code, whichever is wrong. Do not run the whole test suite more than once: other sessions are running on this machine. Open a pull request with a short title and body.",
+  "driver": "claude-code",
+  "model": "opus",
+  "caller": {
+    "runner": {
+      "host": "Suleimans-MacBook-Pro.local",
+      "pid": 44833,
+      "gitAccount": "suleimansh"
+    },
+    "host": "Suleimans-MacBook-Pro.local",
+    "gitAccount": "suleimansh"
+  }
+}
