@@ -1,5 +1,6 @@
 import { appendFile, mkdir, rename, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { writeFileWhole } from '@openagt/agent-data'
 import type { DriverEvent, LogCard, LogEndStatus, SessionLog, SessionLogOptions, WrittenCard } from '@openagt/hooks'
 
 /**
@@ -206,7 +207,7 @@ export class FileSessionLog implements SessionLog {
   }
 
   private writeCard(): Promise<void> {
-    return writeFile(this.cardPath, JSON.stringify(this.card, null, 2) + '\n')
+    return writeFileWhole(this.cardPath, JSON.stringify(this.card, null, 2) + '\n')
   }
 }
 
