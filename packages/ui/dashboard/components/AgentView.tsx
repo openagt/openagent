@@ -252,7 +252,11 @@ export function AgentView({
   // Once it has shown this agent it keeps showing it: an agent that stops while watched keeps its
   // events on screen while the archive is read.
   const [settledFor, setSettledFor] = useState<string | null>(null)
-  const feedSettled = settledFor === agentId || (working && (!replaying || chat.length > 0 || shownSending !== undefined)) || archived !== null || waitedFor === agentId
+  // Nor before the plugins are in, which draw its texts: on a page just loaded the feed came up
+  // with its frame and no words (an empty message, "Initialized session"), then filled. Held back
+  // the same second at most.
+  const pluginsIn = useMountedModules().loaded || waitedFor === agentId
+  const feedSettled = pluginsIn && (settledFor === agentId || (working && (!replaying || chat.length > 0 || shownSending !== undefined)) || archived !== null || waitedFor === agentId)
   useEffect(() => {
     if (feedSettled) setSettledFor(agentId)
   }, [feedSettled, agentId])

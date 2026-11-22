@@ -35,6 +35,22 @@ describe('a text in markdown (#2394: the shell draws no kind of content itself)'
     expect(inline.container.querySelector('p')!.innerHTML).toBe('Run `pnpm install`.')
   })
 
+  test('while the modules are still coming, a text is not drawn yet: never as written first, then drawn', () => {
+    const coming = render(
+      <ModulesContext.Provider value={mountedOf({ loaded: false })}>
+        <Markdown text={'# Title'} />
+      </ModulesContext.Provider>,
+    )
+    expect(coming.container.textContent).toBe('')
+    cleanup()
+    const come = render(
+      <ModulesContext.Provider value={mountedOf({ loaded: true })}>
+        <Markdown text={'# Title'} />
+      </ModulesContext.Provider>,
+    )
+    expect(come.container.querySelector('[data-markdown]')!.textContent).toBe('# Title')
+  })
+
   test("a module of the computer's that draws markdown draws it on every page, given the text and how it is set", () => {
     withMarkdown(
       <>

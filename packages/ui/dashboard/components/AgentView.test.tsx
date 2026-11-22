@@ -535,6 +535,16 @@ describe('the feed fills in one step (first visit)', () => {
     await waitFor(() => expect(screen.getByText(/the archive delivered this line/)).toBeTruthy())
   })
 
+  test('the feed waits for the plugins that draw its texts, then shows whole', async () => {
+    onAgent.mockResolvedValue(ARCHIVED)
+    const { rerender } = render(<ModulesContext.Provider value={mountedOf({ loaded: false })}>{view()}</ModulesContext.Provider>)
+    await waitFor(() => expect(onAgent).toHaveBeenCalled())
+    await act(async () => {})
+    expect(screen.queryByText(/the archive delivered this line/)).toBeNull()
+    rerender(<ModulesContext.Provider value={mountedOf({ loaded: true })}>{view()}</ModulesContext.Provider>)
+    await waitFor(() => expect(screen.getByText(/the archive delivered this line/)).toBeTruthy())
+  })
+
   test('an agent not known to run yet says nothing and reads nothing', () => {
     render(view({ live: null, events: [] }))
     expect(screen.queryByText('Waiting for the session to start…')).toBeNull()
