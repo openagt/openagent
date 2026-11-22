@@ -1,17 +1,29 @@
 {
   "id": "2026-11-22T02-26-23-580Z",
   "startedAt": "2026-11-22T02:26:23.824Z",
-  "status": "running",
+  "endedAt": "2026-11-22T02:26:33.139Z",
+  "status": "waiting",
   "intent": "ask me question with options",
+  "title": "Asking with options",
   "driver": "claude-code",
-  "model": "opus",
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "branch": "agent-2026-11-22T02-26-23-580Z",
+  "cost": 0.0699832,
+  "contextTokens": 20946,
   "caller": {
     "runner": {
       "host": "Suleimans-MacBook-Pro.local",
       "pid": 83846,
-      "gitAccount": "suleimansh"
+      "gitAccount": "suleimansh",
+      "baseCommit": "8057affc10f686c9c3e56d9f3c251a8db07e3f90"
     },
+    "pid": 83846,
     "host": "Suleimans-MacBook-Pro.local",
-    "gitAccount": "suleimansh"
+    "gitAccount": "suleimansh",
+    "baseCommit": "8057affc10f686c9c3e56d9f3c251a8db07e3f90",
+    "kind": "prompt",
+    "workspace": "/Users/suleiman/Projects/openagent/.branches/agent-2026-11-22T02-26-23-580Z",
+    "sessionId": "31503315-86a5-41b0-8416-19674ed0c29f"
   }
 }
