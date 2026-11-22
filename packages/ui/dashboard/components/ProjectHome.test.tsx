@@ -79,6 +79,23 @@ describe('ProjectHome', () => {
     expect(line.parentElement).toBe(waiting.parentElement)
   })
 
+  test('with nothing waiting, the line for a folder behind stands over the box, at the page’s top, not under it', () => {
+    render(<ProjectHome projectId="p1" waiting={[]} files={[]} context={new Set()} addContext={() => {}} removeContext={() => {}} toggleContext={() => {}} onOpenAgent={() => {}} projects={[]} onPickProject={() => {}} onProjectAdded={() => {}} />)
+    const lines = screen.getAllByText('folder of p1 behind')
+    expect(lines).toHaveLength(1)
+    expect(lines[0]!.compareDocumentPosition(screen.getByText('start form')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(lines[0]!.closest('.max-w-3xl')!.className.split(' ')).toContain('pt-(--home-top)')
+  })
+
+  test('the page’s first row stands 48px under the top bar, with something waiting and with nothing (his pick)', () => {
+    const page = (waiting: Waiting[]) => render(<ProjectHome projectId="p1" waiting={waiting} files={[]} context={new Set()} addContext={() => {}} removeContext={() => {}} toggleContext={() => {}} onOpenAgent={() => {}} projects={[]} onPickProject={() => {}} onProjectAdded={() => {}} />)
+    page([WAITS])
+    expect(screen.getByRole('region', { name: 'Waiting on you' }).parentElement!.className.split(' ')).toContain('pt-12')
+    cleanup()
+    page([])
+    expect(screen.getByText('folder of p1 behind').parentElement!.className.split(' ')).toContain('pt-12')
+  })
+
   test('nothing waits: no section, no heading', () => {
     render(<ProjectHome projectId="p1" waiting={[]} files={[]} context={new Set()} addContext={() => {}} removeContext={() => {}} toggleContext={() => {}} onOpenAgent={() => {}} projects={[]} onPickProject={() => {}} onProjectAdded={() => {}} />)
     expect(screen.queryByRole('region', { name: 'Waiting on you' })).toBeNull()

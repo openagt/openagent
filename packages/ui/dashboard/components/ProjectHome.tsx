@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef } from 'react'
+import { useLayoutEffect, useRef, type ReactNode } from 'react'
 import { cn } from '../lib/utils.js'
 import type { ProjectError, ProjectSummary, Waiting } from '../../src/index.js'
 import { StartAgentForm } from './StartAgentForm.js'
@@ -97,7 +97,12 @@ export function ProjectHome({
           box (his pick): the bar names the page, and the box says what it is for. The column keeps a scroll bar's room at its right, as the chat's does
           (ChatPane), so the box stands on a session's box's edges and is carried without a sideways step. */}
       <div className="scrollbar-thin scrollbar-gutter-stable flex min-h-0 flex-1 flex-col overflow-y-auto">
-        {!listFirst && <Lift />}
+        {/* With nothing waiting the list is empty, so the folder's line stands in the room over the box: at the page's top either way. */}
+        {!listFirst && (
+          <Lift>
+            <FolderBehindLine projectId={projectId} />
+          </Lift>
+        )}
         <div className={cn('shrink-0', listFirst && 'order-last')}>
           <StartAgentForm
             projectId={projectId}
@@ -116,7 +121,7 @@ export function ProjectHome({
         <ScrollArea className="min-h-0 flex-1" viewportClassName="h-full">
           {/* Its rows start under the top bar, which lies over the list's start, where the list is first. */}
           <div className={cn('mx-auto w-full max-w-3xl', listFirst && 'pt-(--home-top)')}>
-            <div className="space-y-8 px-4 pt-6 pb-4 md:pt-4">
+            <div className="space-y-8 px-4 pt-12 pb-4">
               {/* No part at all when nothing waits: an empty "Waiting on you" is noise on every launch. On
                   the box's edges, as an agent's chat is: its name and its card start where the box does. */}
               {waiting.length > 0 && (
@@ -126,7 +131,7 @@ export function ProjectHome({
                 </section>
               )}
               {/* Under what waits (his pick): the folder behind its remote, and the press that updates it. */}
-              <FolderBehindLine projectId={projectId} />
+              {listFirst && <FolderBehindLine projectId={projectId} />}
             </div>
           </div>
         </ScrollArea>
@@ -135,9 +140,18 @@ export function ProjectHome({
   )
 }
 
-/** The room over the box when nothing waits, so the box stands where the eye lands (about a third down the page). */
-function Lift() {
-  return <div className="shrink-0 basis-[30%]" aria-hidden />
+/**
+ * The room over the box when nothing waits, so the box stands where the eye lands (about a third
+ * down the page). What it is given stands at its top, under the top bar, in the box's column.
+ */
+function Lift({ children }: { children?: ReactNode }) {
+  return (
+    <div className="shrink-0 basis-[30%]">
+      <div className="mx-auto w-full max-w-3xl px-4 pt-(--home-top)">
+        <div className="pt-12 pb-4">{children}</div>
+      </div>
+    </div>
+  )
 }
 
 /**
