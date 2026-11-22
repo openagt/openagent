@@ -83,7 +83,7 @@ export function AgentView({
   /** Whether the agent is still running; `null` while the daemon's list of agents has not been read, so it is not known yet. */
   live: boolean | null
   /** What the run's card says, off the runs poll: what the feed cannot carry (the details strip's facts, how the agent was set up, whether its record is being saved). Absent until the card is listed. */
-  card?: (AgentDetailsCard & Pick<AgentMeta, 'status' | 'intent' | 'saving' | 'workspace' | 'branch' | 'base' | 'baseCommit' | 'host' | 'otherHost' | 'publish' | 'prBase' | 'gitAccount' | 'earlierPrs' | 'repos' | 'preset' | 'pluginsWithout' | 'projectSkills'> & Partial<Pick<AgentMeta, 'endedAt'>>) | undefined
+  card?: (AgentDetailsCard & Pick<AgentMeta, 'status' | 'intent' | 'saving' | 'workspace' | 'branch' | 'base' | 'baseCommit' | 'host' | 'otherHost' | 'publish' | 'prBase' | 'gitAccount' | 'earlierPrs' | 'prState' | 'repos' | 'preset' | 'pluginsWithout' | 'projectSkills'> & Partial<Pick<AgentMeta, 'endedAt'>>) | undefined
   /** What the launcher said about this run as it started it: shown until the run's record says it. */
   picks?: StartPicks | undefined
   /** The session's own name — the same label the rail shows (#1030). It leads the action bar as
@@ -269,6 +269,17 @@ export function AgentView({
     return branch === undefined ? checkout : { ...checkout, branch, ...(pr ? { pr } : {}) }
   }, [checkout, onBranch])
   const pr = barCheckout?.pr
+  // The run's state after its name. The list of runs already says how an ended run ended and
+  // whether its pull request merged, as its row in the sidebar shows, so the bar says that from
+  // the first frame and never waits for this page's own reads: waiting for them, a switch to a
+  // merged run showed nothing, then "Done", then "Merged". Once the reads are in, the chat's own
+  // events say a question waits or how the last turn ended.
+  const merged = pr?.state === 'MERGED' || card?.prState === 'merged'
+  const status = ready
+    ? shownStatus(live === null && !feedLive ? null : feedLive, feedLive && pendingChoices(shown).length > 0, outcome, merged)
+    : live === false && card
+      ? shownStatus(false, false, cardOutcome(card.status), card.prState === 'merged')
+      : undefined
   // Over: the pull request is merged or closed (his pick: the bar goes, it does not stay as a
   // label), or the work was landed without one, and the branch holds nothing the request does not.
   // There is no step left. The request itself is not lost with the bar: it is under the message box.
@@ -342,7 +353,7 @@ export function AgentView({
             onToggle={toggle}
             ready={ready}
             checkout={checkout}
-            status={ready ? shownStatus(live === null && !feedLive ? null : feedLive, feedLive && pendingChoices(shown).length > 0, outcome, pr?.state === 'MERGED') : undefined}
+            status={status}
             {...(workBar.away && say ? { onShowWorkBar: workBar.show } : {})}
           />
           {/* The always-available session-details strip: agent + spend (#322). What the run changed is
