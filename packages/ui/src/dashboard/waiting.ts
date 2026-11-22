@@ -11,6 +11,7 @@ import { needsWord } from './waiting-words.js'
 import { runName } from '../run-name.js'
 import { withStartedNames } from '../started-names.js'
 import { distributionHooks, projectRefAt } from '../distribution-hooks.js'
+import { SESSIONS_ID } from '../project-address.js'
 
 
 // Pure identity + diff, in the leaf `keys.ts` so the dashboard shares them rather than copying.
@@ -61,11 +62,11 @@ export interface WaitingDeps {
  * whole backlog announce itself as new the moment it came back. The lists ignore this; the
  * notification watcher is the caller that cannot.
  */
-export async function buildWaiting(projects: ProjectSummary[], deps: WaitingDeps = {}): Promise<ProjectionRead<Waiting>> {
+export async function buildWaiting(projects: ProjectSummary[], deps: WaitingDeps = {}, sessions?: string): Promise<ProjectionRead<Waiting>> {
   // Every project at once, and each one's sources at once: a project's open requests are a git host
   // read, and asking them one project after the other kept the list waiting seconds.
   const hooks = await (deps.hooks ?? distributionHooks)()
-  const read = await Promise.all(projects.map(project => projectWaiting(project, deps, hooks)))
+  const read = await Promise.all([...projects.map(project => projectWaiting(project, deps, hooks)), ...(sessions !== undefined ? [sessionsWaiting(sessions, deps, hooks)] : [])])
   const items = read.flatMap(project => project.items)
   const whole = read.flatMap(project => (project.whole ? [project.id] : []))
   items.sort((a, b) => (b.since ?? '').localeCompare(a.since ?? ''))
@@ -171,11 +172,26 @@ async function projectWaiting(project: ProjectSummary, deps: WaitingDeps, hooks:
   return { id: project.id, items, whole: sawEverything }
 }
 
-/** What the modules on in the project say waits on the person there, given its runs that wait; asked only of a distribution where one says anything. */
-async function modulesWaiting(project: ProjectSummary, hooks: Hooks, waiting: () => Promise<WaitingRun[]>): Promise<{ items: (Attention & { kind: 'waiting' })[]; whole: boolean }> {
+/**
+ * What waits on the person in the sessions with no project, whose home is `home`: what the modules
+ * say of the ones that wait, as a session's question. They are in no project's list, so nothing
+ * said they waited: not "Waiting on you", not its count, not a notification. A session has no
+ * branch of the project's and no pull request the shell finds, so the modules are all that is asked.
+ */
+async function sessionsWaiting(home: string, deps: WaitingDeps, hooks: Hooks): Promise<{ id: string; items: Waiting[]; whole: boolean }> {
+  const live = (deps.liveAgents ?? readLiveMetas)(home)
+    .then(agents => withStartedNames(agents))
+    .catch(() => undefined)
+  const sessions = { id: SESSIONS_ID, name: 'the sessions with no project', path: home }
+  const modules = await modulesWaiting(undefined, hooks, () => waitingRuns(sessions, live, deps.events ?? loadAgentEvents))
+  return { id: SESSIONS_ID, items: modules.items.map(item => ({ ...item, projectId: SESSIONS_ID, projectName: '' })), whole: modules.whole && (await live) !== undefined }
+}
+
+/** What the modules on in the project say waits on the person there, given its runs that wait; asked only of a distribution where one says anything. No project: the sessions that have none. */
+async function modulesWaiting(project: ProjectSummary | undefined, hooks: Hooks, waiting: () => Promise<WaitingRun[]>): Promise<{ items: (Attention & { kind: 'waiting' })[]; whole: boolean }> {
   if (!hooks.modules.some(module => module.hooks['app.attention'])) return { items: [], whole: true }
   try {
-    const read = await hooks.attention({ project: await projectRefAt(project.id, project.path), waiting })
+    const read = await hooks.attention({ ...(project ? { project: await projectRefAt(project.id, project.path) } : {}), waiting })
     return { items: read.items.filter((item): item is Attention & { kind: 'waiting' } => item.kind === 'waiting'), whole: read.whole }
   } catch {
     return { items: [], whole: false }
@@ -188,7 +204,7 @@ async function modulesWaiting(project: ProjectSummary, hooks: Hooks, waiting: ()
  * for the answer (#1774), so the runs that have one are the ones read. A run whose diary cannot be
  * read waits on no question it can be asked. Throws when the runs could not be read at all.
  */
-async function waitingRuns(project: ProjectSummary, live: Promise<LiveAgent[] | undefined>, events: NonNullable<WaitingDeps['events']>): Promise<WaitingRun[]> {
+async function waitingRuns(project: Pick<ProjectSummary, 'name' | 'path'>, live: Promise<LiveAgent[] | undefined>, events: NonNullable<WaitingDeps['events']>): Promise<WaitingRun[]> {
   const runs = await live
   if (runs === undefined) throw new Error(`the runs of ${project.name} could not be read`)
   const waiting = runs.filter(meta => meta.status === 'waiting').sort((a, b) => b.startedAt.localeCompare(a.startedAt))

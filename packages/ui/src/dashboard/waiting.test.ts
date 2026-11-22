@@ -138,6 +138,20 @@ test("a run waiting on the question it ended on is ask's to say, given the proje
   assert.deepEqual((await build([project('a', '/a')], { prs: noPrs, liveAgents, events })).items, [])
 })
 
+test('a session with no project that waits on its question is in the list too, and its sessions are read whole', async () => {
+  const liveAgents = async (cwd: string): Promise<LiveAgent[]> => (cwd === '/sessions' ? [live(runningAgentMeta({ id: 's1', status: 'waiting', title: 'Greeting exchange' }), '/sessions/s1')] : [])
+  const events = async () => waitingOn('gate-1', 'What would you like to do?')
+  const { items, whole } = await buildWaiting([project('a', '/a')], { prs: noPrs, liveAgents, events, hooks: withAsk }, '/sessions')
+
+  assert.deepEqual(items, [
+    { kind: 'waiting', module: 'ask', scope: 'run', run: 's1', id: 's1:gate-1', words: 'Needs answer', title: 'Greeting exchange', detail: 'What would you like to do?', mark: 'question', since: '2026-07-16T00:00:00Z', projectId: 'session', projectName: '' },
+  ])
+  // Read whole, so a notification says a session's question as it says a project's.
+  assert.deepEqual(whole, ['a', 'session'])
+  // No sessions home named: the projects alone.
+  assert.deepEqual((await buildWaiting([project('a', '/a')], { prs: noPrs, liveAgents, events, hooks: withAsk })).items, [])
+})
+
 test('a module is given the runs of its project that wait, newest first, each with its name, when it ended and the questions it still waits on; their diaries read only when it asks', async () => {
   const given: WaitingRun[][] = []
   const asking = (read: boolean) => async (): Promise<Hooks> =>
