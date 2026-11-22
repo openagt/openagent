@@ -11,9 +11,10 @@ const mermaid = vi.hoisted(() => ({
 }))
 vi.mock('mermaid', () => ({ default: mermaid }))
 
-const { DRAW_AFTER_MS, MermaidDiagram } = await import('./MermaidDiagram.js')
+const { DRAW_AFTER_MS, MermaidDiagram, forgetDiagrams, readKeptDiagrams } = await import('./MermaidDiagram.js')
 
 beforeEach(() => {
+  forgetDiagrams()
   vi.useFakeTimers()
   mermaid.initialize.mockClear()
   mermaid.render.mockClear()
@@ -59,6 +60,35 @@ describe('a mermaid block', () => {
     expect(diagram()).toBeUndefined()
     expect(document.querySelector('pre')!.textContent).toBe('graph TD\n  oops -->')
     expect(screen.getByRole('button', { name: 'Copy the code' })).toBeTruthy()
+  })
+
+  test('shown again, as on a switch back to its session, it is its diagram at once and is not drawn again', async () => {
+    const first = render(<MermaidDiagram content={'graph TD\n  a --> b'} />)
+    await settle()
+    first.unmount()
+    render(<MermaidDiagram content={'graph TD\n  a --> b'} />)
+    expect(diagram()).toBe('graph TD   a --> b')
+    expect(document.querySelector('pre')).toBeNull()
+    await act(async () => vi.advanceTimersByTimeAsync(DRAW_AFTER_MS * 2))
+    expect(mermaid.render).toHaveBeenCalledTimes(1)
+  })
+
+  test('a block is drawn as soon as it is shown: only a text that changes after waits to stand still', async () => {
+    render(<MermaidDiagram content={'graph TD\n  a --> b'} />)
+    await act(async () => vi.advanceTimersByTimeAsync(0))
+    await act(async () => void (await Promise.allSettled(mermaid.render.mock.results.map(result => result.value))))
+    expect(diagram()).toBe('graph TD   a --> b')
+  })
+
+  test('after the page is loaded again in the same tab, it is its diagram at once and is not drawn again', async () => {
+    const first = render(<MermaidDiagram content={'graph TD\n  a --> b'} />)
+    await settle()
+    first.unmount()
+    readKeptDiagrams()
+    render(<MermaidDiagram content={'graph TD\n  a --> b'} />)
+    expect(diagram()).toBe('graph TD   a --> b')
+    await act(async () => vi.advanceTimersByTimeAsync(DRAW_AFTER_MS * 2))
+    expect(mermaid.render).toHaveBeenCalledTimes(1)
   })
 
   test('the page turning dark draws it again, dark', async () => {
