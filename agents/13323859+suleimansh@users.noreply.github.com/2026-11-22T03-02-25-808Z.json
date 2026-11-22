@@ -1,19 +1,35 @@
 {
   "id": "2026-11-22T03-02-25-808Z",
   "startedAt": "2026-11-22T03:02:26.030Z",
-  "status": "running",
+  "endedAt": "2026-11-22T03:10:57.011Z",
+  "status": "done",
   "intent": "I think on the topbar at **new agent session**, should have title 'New agent session'",
+  "title": "Topbar title for new agent session",
   "driver": "claude-code",
-  "model": "opus",
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "branch": "agent-2026-11-22T03-02-25-808Z",
+  "pr": {
+    "number": 2419,
+    "url": "https://github.com/openagt/openagent/pull/2419"
+  },
+  "cost": 0.653212,
+  "contextTokens": 50929,
   "caller": {
     "runner": {
       "host": "Suleimans-MacBook-Pro.local",
       "pid": 19053,
       "publish": "merge",
-      "gitAccount": "suleimansh"
+      "gitAccount": "suleimansh",
+      "baseCommit": "e9d752021ac4949d8b7a9bce7127b8a8fcd3bc56"
     },
+    "pid": 19053,
     "host": "Suleimans-MacBook-Pro.local",
     "gitAccount": "suleimansh",
-    "publish": "merge"
+    "baseCommit": "e9d752021ac4949d8b7a9bce7127b8a8fcd3bc56",
+    "publish": "merge",
+    "kind": "prompt",
+    "workspace": "/Users/suleiman/Projects/openagent/.branches/agent-2026-11-22T03-02-25-808Z",
+    "sessionId": "2d96de6b-f727-40ca-922a-478d1e8c8380"
   }
 }
