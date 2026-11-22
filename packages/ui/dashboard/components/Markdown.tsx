@@ -6,12 +6,15 @@ import { ModuleSlot } from './ModulePageView.js'
 
 // A text in markdown, wherever the dashboard shows one (an agent's reply, a ticket, a file read as a
 // page): as the module that draws markdown draws it (`ui.render`), in its slot (#2394: ui draws no
-// kind of content itself). Where none does, or before the modules have come, it is the text as
-// written, its lines kept.
+// kind of content itself). Where none does, it is the text as written, its lines kept; before the
+// modules have come, nothing yet.
 
 export function Markdown(props: UiMarkdownProps) {
-  const render = renderFor(useMountedModules(), 'markdown')
-  if (!render) return <AsWritten {...props} />
+  const modules = useMountedModules()
+  const render = renderFor(modules, 'markdown')
+  // Nothing while the modules are still coming: shown as written first, a page loaded again had
+  // every answer as its raw text for a moment, then drawn, at another size.
+  if (!render) return modules.loaded ? <AsWritten {...props} /> : null
   const Render = render.Render
   return (
     <ModuleSlot package={render.package} label="markdown">

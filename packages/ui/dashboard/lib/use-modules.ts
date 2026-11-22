@@ -275,10 +275,10 @@ export function withoutBlocks(text: string, languages: readonly string[]): strin
 /**
  * The mounted modules, for any component in the shell (#1774): the shell reads them once with
  * {@link useModules} and provides them here, so a page deep in the tree finds the link actions
- * without the shell threading them through every prop. Outside the provider: nothing mounted,
- * not loaded.
+ * without the shell threading them through every prop. Outside the provider there are no modules
+ * to wait for: nothing mounted, and loaded, so a text is drawn as written there.
  */
-export const ModulesContext = createContext<MountedModules>(NOTHING_MOUNTED)
+export const ModulesContext = createContext<MountedModules>(nothingAt(true))
 
 /** What the installed modules bring, as the shell mounted it. */
 export function useMountedModules(): MountedModules {

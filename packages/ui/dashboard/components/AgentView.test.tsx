@@ -58,8 +58,9 @@ vi.mock('../lib/run-hosts.js', async importOriginal => ({
 // The `actions` and `summary` slots of the bar above the message box ARE rendered, so the handoff
 // cluster and the modules' summaries stay reachable.
 vi.mock('./AgentActionBar.js', () => ({
-  AgentActionBar: ({ live, ready, checkout, onToggle, onProjectRemoved, onShowWorkBar }: { live?: boolean; ready?: boolean; checkout: unknown; onToggle?: () => void; onProjectRemoved?: () => void; onShowWorkBar?: () => void }) => (
+  AgentActionBar: ({ live, ready, checkout, status, onToggle, onProjectRemoved, onShowWorkBar }: { live?: boolean; ready?: boolean; checkout: unknown; status?: string; onToggle?: () => void; onProjectRemoved?: () => void; onShowWorkBar?: () => void }) => (
     <>
+      <span data-testid="bar-status">{String(status)}</span>
       <span data-testid="bar-frame" />
       <span data-testid="bar-live">{String(live)}</span>
       {onShowWorkBar && <button type="button" onClick={onShowWorkBar}>Show the work bar</button>}
@@ -494,6 +495,27 @@ describe('the bar shows its facts together (run switch)', () => {
     await waitFor(() => expect(screen.getByTestId('bar-ready').textContent).toBe('true'), { timeout: 3000 })
   })
 
+  test("an ended run's state is said from the first frame, as its row says it, and stays while the page's reads are out", async () => {
+    let log: (v: unknown) => void = () => {}
+    let branch: (v: unknown) => void = () => {}
+    onAgent.mockReturnValue(new Promise(resolve => (log = resolve)))
+    onAgentHandoff.mockReturnValue(new Promise(resolve => (branch = resolve)))
+    render(view({ card: { status: 'done', prState: 'merged' } }))
+    expect(screen.getByTestId('bar-ready').textContent).toBe('false')
+    expect(screen.getByTestId('bar-status').textContent).toBe('merged')
+    // The branch's read answers before the git host has said the request merged: still merged, never "done" in between.
+    log(ARCHIVED)
+    branch({ branch: 'b', exists: false, commits: [], files: [] })
+    await waitFor(() => expect(screen.getByTestId('bar-ready').textContent).toBe('true'))
+    expect(screen.getByTestId('bar-status').textContent).toBe('merged')
+  })
+
+  test("an ended run with no merged request says how it ended from the first frame", () => {
+    onAgent.mockReturnValue(new Promise(() => {}))
+    render(view({ card: { status: 'stopped' } }))
+    expect(screen.getByTestId('bar-status').textContent).toBe('stopped')
+  })
+
   test('a running run is ready at once: its channel is its log', () => {
     render(view({ live: true }))
     expect(screen.getByTestId('bar-ready').textContent).toBe('true')
@@ -510,6 +532,16 @@ describe('the feed fills in one step (first visit)', () => {
     expect(screen.queryByText(/a different run wrote this line/)).toBeNull()
     expect(screen.queryByText('Loading agent…')).toBeNull()
     log(ARCHIVED)
+    await waitFor(() => expect(screen.getByText(/the archive delivered this line/)).toBeTruthy())
+  })
+
+  test('the feed waits for the plugins that draw its texts, then shows whole', async () => {
+    onAgent.mockResolvedValue(ARCHIVED)
+    const { rerender } = render(<ModulesContext.Provider value={mountedOf({ loaded: false })}>{view()}</ModulesContext.Provider>)
+    await waitFor(() => expect(onAgent).toHaveBeenCalled())
+    await act(async () => {})
+    expect(screen.queryByText(/the archive delivered this line/)).toBeNull()
+    rerender(<ModulesContext.Provider value={mountedOf({ loaded: true })}>{view()}</ModulesContext.Provider>)
     await waitFor(() => expect(screen.getByText(/the archive delivered this line/)).toBeTruthy())
   })
 
@@ -1348,6 +1380,23 @@ describe('AgentView: the bar when the work is landed', () => {
     onAgentHandoff.mockResolvedValue({ ...PUSHED, pushed: true })
     render(view({ agentId: 'run-two', events: ENDED, card: { status: 'done', earlierPrs: [{ number: 4, url: 'https://x/pull/4', state: 'merged' }] } as never }))
     await waitFor(() => expect(within(screen.getByTestId('composer-controls')).getAllByRole('link').map(link => link.getAttribute('aria-label'))).toEqual(['PR #4 merged, on the git host', 'PR #5 open, on the git host']))
+  })
+
+  test("a merged request's label says merged from the first frame, and while the page's read still calls it open", async () => {
+    let lookup: (v: unknown) => void = () => {}
+    onAgent.mockResolvedValue(ENDED)
+    onAgentWorktree.mockReturnValue(new Promise(() => {}))
+    const read = { ...PUSHED, pushed: true, pr: { number: 7, url: 'https://x/pull/7', state: 'OPEN', title: 'T' } }
+    onAgentHandoff.mockResolvedValueOnce({ ...read, prPending: true })
+    onAgentHandoff.mockReturnValue(new Promise(resolve => (lookup = resolve)))
+    const labels = () => within(screen.getByTestId('composer-controls')).getAllByRole('link').map(link => link.getAttribute('aria-label'))
+    render(view({ agentId: 'run-m', events: ENDED, card: { status: 'done', pr: { number: 7, url: 'https://x/pull/7' }, prState: 'merged' } }))
+    expect(labels()).toEqual(['PR #7 merged, on the git host'])
+    await waitFor(() => expect(onAgentHandoff).toHaveBeenCalledTimes(2))
+    expect(labels()).toEqual(['PR #7 merged, on the git host'])
+    lookup({ ...read, merged: true, pr: { ...read.pr, state: 'MERGED' } })
+    await waitFor(() => expect(screen.getByTestId('bar-ready').textContent).toBe('true'))
+    expect(labels()).toEqual(['PR #7 merged, on the git host'])
   })
 
   test('work left uncommitted after the merge keeps the bar: that work is not landed', async () => {

@@ -83,7 +83,7 @@ export function AgentView({
   /** Whether the agent is still running; `null` while the daemon's list of agents has not been read, so it is not known yet. */
   live: boolean | null
   /** What the run's card says, off the runs poll: what the feed cannot carry (the details strip's facts, how the agent was set up, whether its record is being saved). Absent until the card is listed. */
-  card?: (AgentDetailsCard & Pick<AgentMeta, 'status' | 'intent' | 'saving' | 'workspace' | 'branch' | 'base' | 'baseCommit' | 'host' | 'otherHost' | 'publish' | 'prBase' | 'gitAccount' | 'earlierPrs' | 'repos' | 'preset' | 'pluginsWithout' | 'projectSkills'> & Partial<Pick<AgentMeta, 'endedAt'>>) | undefined
+  card?: (AgentDetailsCard & Pick<AgentMeta, 'status' | 'intent' | 'saving' | 'workspace' | 'branch' | 'base' | 'baseCommit' | 'host' | 'otherHost' | 'publish' | 'prBase' | 'gitAccount' | 'earlierPrs' | 'pr' | 'prState' | 'repos' | 'preset' | 'pluginsWithout' | 'projectSkills'> & Partial<Pick<AgentMeta, 'endedAt'>>) | undefined
   /** What the launcher said about this run as it started it: shown until the run's record says it. */
   picks?: StartPicks | undefined
   /** The session's own name — the same label the rail shows (#1030). It leads the action bar as
@@ -252,7 +252,11 @@ export function AgentView({
   // Once it has shown this agent it keeps showing it: an agent that stops while watched keeps its
   // events on screen while the archive is read.
   const [settledFor, setSettledFor] = useState<string | null>(null)
-  const feedSettled = settledFor === agentId || (working && (!replaying || chat.length > 0 || shownSending !== undefined)) || archived !== null || waitedFor === agentId
+  // Nor before the plugins are in, which draw its texts: on a page just loaded the feed came up
+  // with its frame and no words (an empty message, "Initialized session"), then filled. Held back
+  // the same second at most.
+  const pluginsIn = useMountedModules().loaded || waitedFor === agentId
+  const feedSettled = pluginsIn && (settledFor === agentId || (working && (!replaying || chat.length > 0 || shownSending !== undefined)) || archived !== null || waitedFor === agentId)
   useEffect(() => {
     if (feedSettled) setSettledFor(agentId)
   }, [feedSettled, agentId])
@@ -269,6 +273,17 @@ export function AgentView({
     return branch === undefined ? checkout : { ...checkout, branch, ...(pr ? { pr } : {}) }
   }, [checkout, onBranch])
   const pr = barCheckout?.pr
+  // The run's state after its name. The list of runs already says how an ended run ended and
+  // whether its pull request merged, as its row in the sidebar shows, so the bar says that from
+  // the first frame and never waits for this page's own reads: waiting for them, a switch to a
+  // merged run showed nothing, then "Done", then "Merged". Once the reads are in, the chat's own
+  // events say a question waits or how the last turn ended.
+  const merged = pr?.state === 'MERGED' || card?.prState === 'merged'
+  const status = ready
+    ? shownStatus(live === null && !feedLive ? null : feedLive, feedLive && pendingChoices(shown).length > 0, outcome, merged)
+    : live === false && card
+      ? shownStatus(false, false, cardOutcome(card.status), card.prState === 'merged')
+      : undefined
   // Over: the pull request is merged or closed (his pick: the bar goes, it does not stay as a
   // label), or the work was landed without one, and the branch holds nothing the request does not.
   // There is no step left. The request itself is not lost with the bar: it is under the message box.
@@ -312,7 +327,20 @@ export function AgentView({
   lastSay.current = { agentId, say }
   // Every pull request the run opened, for the row under the message box: the ones before, then the one it is on.
   const earlierPrs = card?.earlierPrs
-  const prs = useMemo(() => [...(earlierPrs ?? []), ...(pr && !earlierPrs?.some(earlier => earlier.url === pr.url) ? [pr] : [])], [earlierPrs, pr])
+  // How the request it is on stands is the git host's to say, and until it has answered the
+  // page's read calls the request open: a merged request's label said "open" for a second, then
+  // "merged", and pushed the labels beside it over. The list of runs has the git host's last word
+  // already, as the run's row shows, so the label says that until this page's read is in, and
+  // from the first frame, before the read has named the request at all.
+  const prStateOut = checkout?.prPending === true || onBranch?.prPending === true
+  const listedPr = card?.pr
+  const listedState = card?.prState
+  const labelPr = useMemo(() => {
+    if (pr === undefined) return listedPr ? { ...listedPr, state: listedState } : undefined
+    if (!prStateOut) return pr
+    return { number: pr.number, url: pr.url, state: listedPr?.number === pr.number ? listedState : undefined }
+  }, [pr, prStateOut, listedPr, listedState])
+  const prs = useMemo(() => [...(earlierPrs ?? []), ...(labelPr && !earlierPrs?.some(earlier => earlier.url === labelPr.url) ? [labelPr] : [])], [earlierPrs, labelPr])
   // Where the session started, right above the message box, as the "New agent session" page has it. It is
   // there whatever stands in the box's place.
   const row = <SessionRow runsOn={runsOn} target={target} elsewhere={elsewhere || card?.otherHost === true} projectName={projectName} startedFrom={startedFrom} worksOn={barCheckout?.branch ?? branch} repos={card?.repos ?? picks?.repos} />
@@ -342,7 +370,7 @@ export function AgentView({
             onToggle={toggle}
             ready={ready}
             checkout={checkout}
-            status={ready ? shownStatus(live === null && !feedLive ? null : feedLive, feedLive && pendingChoices(shown).length > 0, outcome, pr?.state === 'MERGED') : undefined}
+            status={status}
             {...(workBar.away && say ? { onShowWorkBar: workBar.show } : {})}
           />
           {/* The always-available session-details strip: agent + spend (#322). What the run changed is
