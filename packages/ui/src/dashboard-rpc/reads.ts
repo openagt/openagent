@@ -217,7 +217,7 @@ async function pooledRuns(limit?: number): Promise<RecentAgent[]> {
  * backlog the moment the git host answers.
  */
 export async function onWaiting(): Promise<ProjectionRead<Waiting>> {
-  return withProjects(projects => buildWaiting(projects))
+  return withProjects(async projects => buildWaiting(projects, {}, await resolveProjectPath(SESSIONS_ID).catch(() => undefined)))
 }
 
 /**
