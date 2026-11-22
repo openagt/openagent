@@ -2,5 +2,5 @@
   "ask.enabled": true,
   "browser.enabled": true,
   "logs.enabled": true,
-  "tickets.enabled": false
+  "tickets.enabled": true
 }
