@@ -77,14 +77,49 @@ test('a start the project refuses says why, and keeps the prompt for another try
   })
 })
 
+/**
+ * Run in the launcher's page: `window.shifts` names what moves behind the jump from then on, and
+ * `window.lastShift` is when anything last moved. The jump's own rows are not counted: they move as
+ * its list narrows to what is typed, and the rest of a name moves as more of it is found, which
+ * Chrome reports only when it draws a frame between two letters. What moved and is gone by the time
+ * Chrome says so has no node to tell by, so it is told by where it was: in the jump's box, as each
+ * key found it (the box at its full size, whatever its opening has drawn of it so far).
+ */
+const SHIFTS_BEHIND_THE_JUMP = `(() => {
+  window.shifts = []
+  window.lastShift = performance.now()
+  let box
+  addEventListener('keydown', () => {
+    const jump = document.querySelector('[role=dialog][aria-label="Jump to"]')
+    if (!jump) return
+    const drawn = jump.getBoundingClientRect()
+    const left = drawn.x + drawn.width / 2 - jump.offsetWidth / 2
+    box = { left, top: drawn.y, right: left + jump.offsetWidth, bottom: drawn.y + jump.offsetHeight }
+  }, true)
+  const inBox = rect => box !== undefined && rect.left >= box.left && rect.right <= box.right && rect.top >= box.top && rect.bottom <= box.bottom
+  new PerformanceObserver(list => {
+    for (const shift of list.getEntries()) {
+      window.lastShift = performance.now()
+      for (const { node, previousRect, currentRect } of shift.sources) {
+        const element = node && (node.nodeType === 1 ? node : node.parentElement)
+        if (element ? element.closest('[role=dialog][aria-label="Jump to"]') : inBox(previousRect) && inBox(currentRect)) continue
+        window.shifts.push(element?.getAttribute('aria-label') ?? node?.textContent?.slice(0, 40) ?? 'gone since')
+      }
+    }
+  }).observe({ type: 'layout-shift' })
+})()`
+
 test('Ctrl+K, a few letters and Enter land on a run from the launcher, and nothing behind the jump moves', needsChrome, async () => {
   await flow('jump', async page => {
     await start(page, 'ask about the jump colour')
     await page.getByRole('region', { name: 'Which way?' }).waitFor()
     // Back to the launcher as a person goes, by the sidebar: no reload redraws the lists under the jump.
     await page.getByRole('link', { name: 'New agent session' }).click()
+    // The sidebar lists the run as waiting on a read of its own, which can come after the run's page
+    // has drawn the question: its row coming in moves what is under it.
+    await page.getByRole('link', { name: /ask about the jump colour.*Needs answer/ }).waitFor()
     // The launcher at rest, as a person sees it before reaching for the keys: a second with nothing moving.
-    await page.evaluate("window.shifts = []; window.lastShift = performance.now(); new PerformanceObserver(list => { for (const shift of list.getEntries()) { window.lastShift = performance.now(); window.shifts.push(shift.sources.map(source => source.node?.getAttribute?.('aria-label') ?? source.node?.textContent?.slice(0, 40))) } }).observe({ type: 'layout-shift' })")
+    await page.evaluate(SHIFTS_BEHIND_THE_JUMP)
     await page.waitForFunction('performance.now() - window.lastShift > 1000')
     await page.evaluate('window.shifts = []')
     await page.getByRole('textbox', { name: 'Prompt' }).click()
