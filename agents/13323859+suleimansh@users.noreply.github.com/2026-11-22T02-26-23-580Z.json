@@ -1,0 +1,17 @@
+{
+  "id": "2026-11-22T02-26-23-580Z",
+  "startedAt": "2026-11-22T02:26:23.824Z",
+  "status": "running",
+  "intent": "ask me question with options",
+  "driver": "claude-code",
+  "model": "opus",
+  "caller": {
+    "runner": {
+      "host": "Suleimans-MacBook-Pro.local",
+      "pid": 83846,
+      "gitAccount": "suleimansh"
+    },
+    "host": "Suleimans-MacBook-Pro.local",
+    "gitAccount": "suleimansh"
+  }
+}
