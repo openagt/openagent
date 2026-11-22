@@ -29,6 +29,7 @@ export {
   openBranchReader,
   writeFileBranchDetached,
   nodeBranchFileFs,
+  writeFileWhole,
   SHARE_SETTING,
   readSharing,
   writeSharing,

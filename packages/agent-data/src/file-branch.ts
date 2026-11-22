@@ -1,6 +1,7 @@
-import { lstat, mkdir, mkdtemp, readdir, readFile, realpath, rm, rmdir, writeFile } from 'node:fs/promises'
+import { randomBytes } from 'node:crypto'
+import { lstat, mkdir, mkdtemp, readdir, readFile, realpath, rename, rm, rmdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { BRANCHES_DIR } from './names.js'
 import { EMPTY_TREE, errorMessage, nodeGitRunner, type GitRunner } from './git.js'
 import { accountGit } from './remote-account.js'
@@ -707,13 +708,30 @@ export interface BranchFileFs {
   list: (dir: string) => Promise<string[]>
 }
 
+/**
+ * Write one file whole: written aside in its directory, then moved over the old one. A write in
+ * place empties the file before it fills it, so a read in between found half a run's card, which
+ * does not parse, and the run was not there for that read. A write that fails leaves the old file
+ * as it was and nothing beside it.
+ */
+export async function writeFileWhole(path: string, content: string): Promise<void> {
+  const aside = join(dirname(path), `.${basename(path)}.${process.pid}-${randomBytes(4).toString('hex')}.tmp`)
+  try {
+    await writeFile(aside, content, 'utf8')
+    await rename(aside, path)
+  } catch (err) {
+    await rm(aside, { force: true }).catch(() => {})
+    throw err
+  }
+}
+
 /** {@link BranchFileFs} over `node:fs/promises`. */
 export function nodeBranchFileFs(): BranchFileFs {
   return {
     read: path => readFile(path, 'utf8'),
     write: async (path, content) => {
       await mkdir(dirname(path), { recursive: true })
-      await writeFile(path, content, 'utf8')
+      await writeFileWhole(path, content)
     },
     remove: path => rm(path),
     list: dir => readdir(dir).catch((): string[] => []),

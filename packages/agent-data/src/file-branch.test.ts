@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { spawn } from 'node:child_process'
-import { mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readdir, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { test } from 'node:test'
@@ -20,6 +20,7 @@ import {
   readBranchFile,
   readSharing,
   withFileBranch,
+  nodeBranchFileFs,
   writeFileBranchDetached,
   writeSharing,
 } from './file-branch.js'
@@ -756,5 +757,36 @@ test('the checkouts directory stays, with its rule, while anything else is in it
     assert.equal((await git(['status', '--porcelain'], repo)).trim(), '')
   } finally {
     await rm(repo, RETRIED_RM)
+  }
+})
+
+test('a file is written whole: a read during a write finds the old text or the new, never part of one, and nothing is left beside it', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'file-whole-'))
+  try {
+    const fs = nodeBranchFileFs()
+    const path = join(dir, 'agents', 'someone', 'card.json')
+    // Long enough that a write in place takes more than one step to fill the file.
+    const texts = ['a', 'b'].map(letter => letter.repeat(8 * 1024 * 1024))
+    await fs.write(path, texts[0]!)
+    let writing = true
+    const parts: number[] = []
+    const reads = (async () => {
+      while (writing) {
+        const text = await fs.read(path)
+        if (!texts.includes(text)) parts.push(text.length)
+      }
+    })()
+    for (let turn = 1; turn <= 20; turn++) await fs.write(path, texts[turn % 2]!)
+    writing = false
+    await reads
+    assert.deepEqual(parts, [], 'a read found part of a write')
+    assert.deepEqual(await readdir(dirname(path)), ['card.json'])
+
+    // A write that cannot land leaves what was there, and nothing beside it.
+    await mkdir(join(dir, 'taken', 'inside'), { recursive: true })
+    await assert.rejects(fs.write(join(dir, 'taken'), 'text'))
+    assert.deepEqual(await readdir(dir), ['agents', 'taken'])
+  } finally {
+    await rm(dir, { recursive: true, force: true })
   }
 })

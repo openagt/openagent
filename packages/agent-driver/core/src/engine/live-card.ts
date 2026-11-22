@@ -1,5 +1,6 @@
 import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { writeFileWhole } from '@openagt/agent-data'
 import { logCardFile, logDiaryFile } from '../session-log.js'
 import { parseDiary, parseRunCard, type AnyDiaryLine, type RunCard, type RunStatus } from '../record.js'
 import { DASHBOARD_DIR } from './names.js'
@@ -56,6 +57,6 @@ export async function readLiveDiary(checkout: string, id: string): Promise<AnyDi
 export async function endLiveCard(checkout: string, card: RunCard, status: Exclude<RunStatus, 'running'>, detail: string, at: string): Promise<RunCard> {
   const ended: RunCard = { ...card, status, endedAt: at }
   await appendFile(join(liveDir(checkout), logDiaryFile(card.id)), JSON.stringify({ kind: 'ended', status, detail, at }) + '\n').catch(() => {})
-  await writeFile(join(liveDir(checkout), logCardFile(card.id)), JSON.stringify(ended, null, 2) + '\n').catch(() => {})
+  await writeFileWhole(join(liveDir(checkout), logCardFile(card.id)), JSON.stringify(ended, null, 2) + '\n').catch(() => {})
   return ended
 }
