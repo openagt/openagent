@@ -463,6 +463,11 @@ already made, and lists it in its pull request; for anything else it proposes an
   shape: Codex's free plan has one window, a month.
 
 ## Starting a run
+- A project's folder that is behind its remote's main branch is said on the "New agent session"
+  page, under what waits on the person, in a line like the one for a newer coding agent: by how
+  many commits, and a press that updates the folder (a fast-forward only). Picked first of
+  #2421's three ways, as the safe one; over updating the folder without a word, and over leaving
+  it unsaid, where a folder 1,863 commits behind listed 25 skills its main branch had deleted.
 - A Start goes to a run host, a `run.host` of the modules OpenAgent is distributed with
   (#2394): this computer's, `agent-driver`'s, which spawns the run's process with the prompt
   and the person's picks and answers the new run's id, or one a plugin on in the project

@@ -3,13 +3,14 @@ import { projectRefAt } from '../distribution-hooks.js'
 import { readProjectSkills } from '@openagt/skills'
 import { DATA_BRANCH, addressOfRemote, errorMessage, isRepoOwner, originDefaultBranch, readRepoOwners, repositoryAddress, shareProjectData, writeRepoOwners } from '@openagt/agent-data'
 import { readHosted, refreshHosted, type HostedRepo } from './hosted-repos.js'
-import { cloneAccountFor, originHost, remoteAccount } from './send-as.js'
+import { cloneAccountFor, originGit, originHost, remoteAccount } from './send-as.js'
 import type { StartReadiness } from '../start-readiness.js'
 import { SESSIONS_ID } from '../project-address.js'
 import { hasRemote } from '../has-remote.js'
 import { openagentVersion } from '../version.js'
 import { currentBranch } from '../dashboard/git-status.js'
 import { branchesOnOrigin, waitingSkills } from '../dashboard/start-branch.js'
+import { readFolderBehind, updateFolder, type FolderBehind } from '../dashboard/folder-behind.js'
 import { addRepoFolder, listProjects, listRepoFolders, removeRepoFolder, startFromPick, type StartFromPick } from '../registry.js'
 import { thisComputersRepos, type FoundRepo } from '../dashboard/repos.js'
 import { cloneProject, cloneTargetOf } from '../clone-project.js'
@@ -279,6 +280,25 @@ export async function onCommands(projectId: string, from?: StartFromPick): Promi
     return waits ? { ...command, waiting: waits.branch } : command
   })
   return { commands: listed, gitHost: gitHost !== undefined, remote, ...(address ? { address } : {}), ...(startFrom ? { startFrom } : {}) }
+}
+
+/**
+ * How far the project's folder is behind its remote's main branch (#2421); `null` when it is not, or
+ * for a project with no folder here. Origin is asked as one of OpenAgent's accounts, never the
+ * person's own login; where it cannot be asked, the clone's own copy of the branch is what counts.
+ */
+export async function onFolderBehind(projectId: string): Promise<FolderBehind | null> {
+  const cwd = await resolveProjectPath(projectId)
+  if (!cwd) return null
+  const origin = await originGit(cwd).catch(() => undefined)
+  return (await readFolderBehind(cwd, { origin })) ?? null
+}
+
+/** Bring the project's folder up to its remote's main branch: a fast-forward, or git's refusal in its words. */
+export async function sendUpdateFolder(projectId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  const cwd = await resolveProjectPath(projectId)
+  if (!cwd) return { ok: false, error: 'this project has no local path on this server' }
+  return updateFolder(cwd)
 }
 
 /** The other branches the launcher's menu lists; `branches` is absent where origin could not be read. */
