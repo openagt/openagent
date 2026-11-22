@@ -121,7 +121,7 @@ export function ProjectHome({
         <ScrollArea className="min-h-0 flex-1" viewportClassName="h-full">
           {/* Its rows start under the top bar, which lies over the list's start, where the list is first. */}
           <div className={cn('mx-auto w-full max-w-3xl', listFirst && 'pt-(--home-top)')}>
-            <div className="space-y-8 px-4 pt-6 pb-4 md:pt-4">
+            <div className="space-y-8 px-4 pt-12 pb-4">
               {/* No part at all when nothing waits: an empty "Waiting on you" is noise on every launch. On
                   the box's edges, as an agent's chat is: its name and its card start where the box does. */}
               {waiting.length > 0 && (
@@ -148,7 +148,7 @@ function Lift({ children }: { children?: ReactNode }) {
   return (
     <div className="shrink-0 basis-[30%]">
       <div className="mx-auto w-full max-w-3xl px-4 pt-(--home-top)">
-        <div className="pt-6 pb-4 md:pt-4">{children}</div>
+        <div className="pt-12 pb-4">{children}</div>
       </div>
     </div>
   )
