@@ -1,0 +1,11 @@
+{"kind":"title","text":"Pull request lifecycle flowchart","at":"2026-11-22T01:00:46.426Z"}
+{"kind":"start","prompt":"Do not change any file and run no command. Answer with one short mermaid flowchart, inside a fenced code block whose language is mermaid, that shows how a pull request goes from opened to merged.","at":"2026-11-22T01:00:46.429Z"}
+{"kind":"session","sessionId":"07c3a470-f250-46c8-8934-5d37e8ed7e53","at":"2026-11-22T01:00:46.751Z"}
+{"kind":"thinking","at":"2026-11-22T01:00:48.551Z"}
+{"kind":"tokens","tokens":21024,"at":"2026-11-22T01:00:50.220Z"}
+{"kind":"thought","text":"I'm weighing whether the flowchart should stay generic or follow this repo's AGENTS.md steps like typecheck and test:changed. I'm not running any commands for this.","at":"2026-11-22T01:00:50.220Z"}
+{"kind":"said","text":"```mermaid\nflowchart LR\n    A[PR opened] --> B[CI runs: build, typecheck, tests]\n    B -->|fails| C[Push fixes]\n    C --> B\n    B -->|passes| D[Code review]\n    D -->|changes requested| C\n    D -->|approved| E[Merge into main]\n```","at":"2026-11-22T01:00:50.322Z"}
+{"kind":"rate-limit","limit":{"status":"allowed","window":"five_hour","resetsAt":1795310400000,"windows":[{"window":"five_hour","percentUsed":31,"resetsAt":1795310400000},{"window":"seven_day","percentUsed":12,"resetsAt":1795838400000}]},"at":"2026-11-22T01:00:50.331Z"}
+{"kind":"result","text":"```mermaid\nflowchart LR\n    A[PR opened] --> B[CI runs: build, typecheck, tests]\n    B -->|fails| C[Push fixes]\n    C --> B\n    B -->|passes| D[Code review]\n    D -->|changes requested| C\n    D -->|approved| E[Merge into main]\n```","sessionId":"07c3a470-f250-46c8-8934-5d37e8ed7e53","at":"2026-11-22T01:00:51.075Z"}
+{"kind":"cost","usd":0.06895520000000001,"at":"2026-11-22T01:00:51.075Z"}
+{"kind":"ended","status":"done","at":"2026-11-22T01:00:51.076Z"}

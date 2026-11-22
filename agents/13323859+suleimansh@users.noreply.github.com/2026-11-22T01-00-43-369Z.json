@@ -1,17 +1,29 @@
 {
   "id": "2026-11-22T01-00-43-369Z",
   "startedAt": "2026-11-22T01:00:43.809Z",
-  "status": "running",
+  "endedAt": "2026-11-22T01:00:51.076Z",
+  "status": "done",
   "intent": "Do not change any file and run no command. Answer with one short mermaid flowchart, inside a fenced code block whose language is mermaid, that shows how a pull request goes from opened to merged.",
+  "title": "Pull request lifecycle flowchart",
   "driver": "claude-code",
-  "model": "opus",
+  "model": "claude-opus-5-5",
+  "effort": "high",
+  "branch": "agent-2026-11-22T01-00-43-369Z",
+  "cost": 0.06895520000000001,
+  "contextTokens": 21024,
   "caller": {
     "runner": {
       "host": "Suleimans-MacBook-Pro.local",
       "pid": 43667,
-      "gitAccount": "suleimansh"
+      "gitAccount": "suleimansh",
+      "baseCommit": "f27340ffd48af33b9e6456bcbd3af01aa296346f"
     },
+    "pid": 43667,
     "host": "Suleimans-MacBook-Pro.local",
-    "gitAccount": "suleimansh"
+    "gitAccount": "suleimansh",
+    "baseCommit": "f27340ffd48af33b9e6456bcbd3af01aa296346f",
+    "kind": "prompt",
+    "workspace": "/Users/suleiman/Projects/openagent/.branches/agent-2026-11-22T01-00-43-369Z",
+    "sessionId": "07c3a470-f250-46c8-8934-5d37e8ed7e53"
   }
 }
