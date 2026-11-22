@@ -92,8 +92,8 @@ export function ProjectHome({
       <div aria-hidden className="pointer-events-none absolute top-[calc(2.75rem-1px)] right-0 z-20 h-px w-2.5 bg-border" />
       {/* What waits for the person comes first, and the box under it, at the bottom, as an agent's
           page has its chat (his pick); so on a phone, where the box is in the thumb's reach. With
-          nothing waiting, from 768px up the box stands where the eye lands. The page has no heading
-          (his pick): the box says what it is for. The column keeps a scroll bar's room at its right, as the chat's does
+          nothing waiting, from 768px up the box stands where the eye lands. No question stands over the
+          box (his pick): the bar names the page, and the box says what it is for. The column keeps a scroll bar's room at its right, as the chat's does
           (ChatPane), so the box stands on a session's box's edges and is carried without a sideways step. */}
       <div className="scrollbar-thin scrollbar-gutter-stable flex min-h-0 flex-1 flex-col overflow-y-auto">
         {!listFirst && <Lift />}

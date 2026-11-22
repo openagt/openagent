@@ -8,13 +8,12 @@ const onDocs = vi.hoisted(() => vi.fn())
 vi.mock('../rpc/reads.js', () => ({ onDocs }))
 
 // The sections are tested on their own; here they are stand-ins.
-vi.mock('./ProjectActions.js', () => ({ ProjectActions: ({ name }: { name?: string }) => (name === undefined ? null : <h1 data-testid="bar-name">{name}</h1>), BAR_NAME: '' }))
+vi.mock('./ProjectActions.js', () => ({ ProjectActions: () => <h1>New agent session</h1> }))
 vi.mock('./ProjectErrorBanner.js', () => ({ ProjectErrorBanner: () => null }))
 vi.mock('./StartAgentForm.js', () => ({ StartAgentForm: () => <div>start form</div> }))
 vi.mock('./WaitingList.js', () => ({ WaitingList: ({ items }: { items: unknown[] }) => <div>{items.length} rows</div>, holdsBack: (items: unknown[]) => items.length > 6 }))
 
 const { ProjectHome } = await import('./ProjectHome.js')
-const { phoneScreen } = await import('../test-utils.js')
 
 const WAITS: Waiting = { projectId: 'p1', projectName: 'p1', kind: 'waiting', module: 'ask', scope: 'run', run: 'r1', id: 'r1:q1', words: 'Needs answer', title: 'Auth store', detail: 'Cache it?', mark: 'question' }
 
@@ -25,7 +24,7 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe('ProjectHome', () => {
-  test('it has no heading of its own, and shows the launcher and what waits on you, and no Docs section', async () => {
+  test('its top bar names it, no question stands over the box, and it shows the launcher and what waits on you, and no Docs section', async () => {
     render(
       <ProjectHome
         projectId="p1"
@@ -48,8 +47,8 @@ describe('ProjectHome', () => {
     // What waits comes first and the box is drawn last, at the bottom, on every screen: no room is
     // kept above the box to stand it at 38% of the page while something waits.
     expect(screen.getByRole('region', { name: 'Waiting on you' })).toBeTruthy()
-    // The box says what the page is for: no question over it (his pick).
-    expect(screen.queryByRole('heading', { level: 1 })).toBeNull()
+    // The bar names the page; the box says what it is for: no question over it (his pick).
+    expect(screen.getAllByRole('heading', { level: 1 }).map(h => h.textContent)).toEqual(['New agent session'])
     expect(screen.getByRole('heading', { name: 'Waiting on you · 1' })).toBeTruthy()
     const questions = screen.getByText('1 rows')
     const form = screen.getByText('start form')
@@ -68,16 +67,6 @@ describe('ProjectHome', () => {
     expect(screen.queryByRole('heading', { name: 'Docs' })).toBeNull()
     expect(screen.queryByText('PLAN.md')).toBeNull()
     expect(onDocs).not.toHaveBeenCalled()
-  })
-
-  test('on a phone the top bar names no page either', () => {
-    const wide = phoneScreen()
-    try {
-      render(<ProjectHome projectId="p1" waiting={[]} files={[]} context={new Set()} addContext={() => {}} removeContext={() => {}} toggleContext={() => {}} onOpenAgent={() => {}} projects={[]} onPickProject={() => {}} onProjectAdded={() => {}} />)
-      expect(screen.queryByRole('heading', { level: 1 })).toBeNull()
-    } finally {
-      wide()
-    }
   })
 
   test('nothing waits: no section, no heading', () => {
