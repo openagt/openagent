@@ -63,11 +63,11 @@ test('a backend keeps the scope it owns and passes every other one on', async ()
   const store = chainStore([base, branch])
   await store.save(projectScope(SHARED), { 'tickets/a.md': '# A' }, 'ticket a')
   await store.save(projectScope(MINE), { 'tickets/b.md': '# B' }, 'ticket b')
-  await store.save(PERSON, { 'presets/default.json': '{}' }, 'preset')
+  await store.save(PERSON, { 'profiles/default.json': '{}' }, 'profile')
   assert.deepEqual(branch.own.files(projectScope(SHARED)), { 'tickets/a.md': '# A' })
   assert.deepEqual(base.files(projectScope(SHARED)), {}, 'the shared project never reached the store below')
   assert.deepEqual(base.files(projectScope(MINE)), { 'tickets/b.md': '# B' })
-  assert.deepEqual(base.files(PERSON), { 'presets/default.json': '{}' })
+  assert.deepEqual(base.files(PERSON), { 'profiles/default.json': '{}' })
 })
 
 test('a call no backend keeps is refused, naming its scope', async () => {

@@ -73,9 +73,9 @@ export interface AgentMeta {
    * it: each one's name, which its copy's folder in the session's folder has, and the folder it was copied from.
    */
   repos?: { name: string; from: string }[]
-  /** The preset the run is on, by its id, written on the card by the tool that runs it; absent, Default. */
-  preset?: string
-  /** The session's picks, written on the card by the tool that runs it: the plugins it went without, by name, which of the project's own skills stayed in its checkout (`all`, `none`, or names); each its preset's when absent. */
+  /** The profile the run is on, by its id, written on the card by the tool that runs it; absent, Default. */
+  profile?: string
+  /** The session's picks, written on the card by the tool that runs it: the plugins it went without, by name, which of the project's own skills stayed in its checkout (`all`, `none`, or names); each its profile's when absent. */
   pluginsWithout?: string[]
   projectSkills?: 'all' | 'none' | string[]
   /**

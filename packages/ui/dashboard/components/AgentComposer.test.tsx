@@ -19,7 +19,7 @@ vi.mock('../lib/use-project-launcher.js', () => ({ useProjectLauncher: () => ({ 
 // The Context picker reads the projects; here it is a stand-in that says what it was given.
 vi.mock('./ContextMenu.js', () => ({ ProjectContextMenu: ({ context }: { context: Set<string> }) => <span>Context · {[...context].join(', ')}</span> }))
 // The launcher's other items, each tested on its own: stand-ins that say what they were given.
-vi.mock('./PresetMenu.js', () => ({ PresetOff: ({ preset }: { preset?: string }) => <span>Preset · {preset ?? 'default'}</span> }))
+vi.mock('./ProfileMenu.js', () => ({ ProfileOff: ({ profile }: { profile?: string }) => <span>Profile · {profile ?? 'default'}</span> }))
 vi.mock('./SkillsMenu.js', () => ({ SkillsOff: ({ projectId, pluginsWithout, projectSkills }: { projectId?: string; pluginsWithout?: string[]; projectSkills?: 'all' | 'none' | string[] }) => <span>Skills · {projectId === undefined ? 'no project' : `${(pluginsWithout ?? []).join('+') || 'all'}/${projectSkills === undefined || projectSkills === 'all' ? 'all' : projectSkills === 'none' ? 'none' : projectSkills.join('+')}`}</span> }))
 vi.mock('./GitHosts.js', () => ({ GitHostOff: ({ home, account }: { home: { name: string } | null; account?: string }) => (home ? <span>Account · {account ?? home.name}</span> : null) }))
 
@@ -98,16 +98,16 @@ describe('AgentComposer row', () => {
 })
 
 describe('AgentComposer row under the box', () => {
-  test('the launcher\'s items in the launcher\'s places, the session\'s own off: the preset, Skills, Context, then the run\'s pull requests; at the right the account the run worked as, then Auto', () => {
+  test('the launcher\'s items in the launcher\'s places, the session\'s own off: the profile, Skills, Context, then the run\'s pull requests; at the right the account the run worked as, then Auto', () => {
     const contextSet = { context: new Set(['src/app.ts']), add: vi.fn(), remove: vi.fn(), toggle: vi.fn(), reset: vi.fn() }
-    renderComposer({ preset: 'reviewer', gitHost: { url: 'https://github.com/o/r', name: 'GitHub' }, gitAccount: 'octo-agent', publish: 'pr', contextSet, controls: <span>PR #7</span>, pluginsWithout: ['tickets'], projectSkills: ['deploy'] })
-    expect(screen.getByTestId('composer-controls').textContent).toBe('Preset · reviewerSkills · tickets/deployContext · src/app.tsPR #7')
+    renderComposer({ profile: 'reviewer', gitHost: { url: 'https://github.com/o/r', name: 'GitHub' }, gitAccount: 'octo-agent', publish: 'pr', contextSet, controls: <span>PR #7</span>, pluginsWithout: ['tickets'], projectSkills: ['deploy'] })
+    expect(screen.getByTestId('composer-controls').textContent).toBe('Profile · reviewerSkills · tickets/deployContext · src/app.tsPR #7')
     expect(screen.getByTestId('composer-controls-end').textContent).toBe('Account · octo-agentAuto: prpick Open PRpick Commit')
   })
 
-  test('a session with no project: the preset, its skills and its pull requests alone, no Context, Auto or account, as the launcher with no project', () => {
+  test('a session with no project: the profile, its skills and its pull requests alone, no Context, Auto or account, as the launcher with no project', () => {
     renderComposer({ projectId: 'session', controls: <span>PR #7</span> })
-    expect(screen.getByTestId('composer-controls').textContent).toBe('Preset · defaultSkills · no projectPR #7')
+    expect(screen.getByTestId('composer-controls').textContent).toBe('Profile · defaultSkills · no projectPR #7')
     expect(screen.getByTestId('composer-controls-end').textContent).toBe('')
   })
 })

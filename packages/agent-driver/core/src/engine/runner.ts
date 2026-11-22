@@ -4,9 +4,9 @@ import { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { codingAgent } from '../agents.js'
 import { findRun } from '../record-store.js'
-import { createHooks, DISTRIBUTION_ENV, loadHandedDown, type DistributionEntry, type Driver, type DriverReadiness, type PersonalSetup, type Preset, type RunAgent } from '@openagt/hooks'
+import { createHooks, DISTRIBUTION_ENV, loadHandedDown, type DistributionEntry, type Driver, type DriverReadiness, type PersonalSetup, type Profile, type RunAgent } from '@openagt/hooks'
 import { readPersonal } from './config.js'
-import { runPreset, type SessionPicks } from './preset.js'
+import { runProfile, type SessionPicks } from './profile.js'
 import { gitHostCommand, gitHostEnv } from './git-host.js'
 import { namedAtStart, resumeRun, runCommand, runIdFrom, type RunOutcome, type RunRequest } from './run.js'
 import { NAME_FILE_ENV, askName } from './title.js'
@@ -14,7 +14,7 @@ import { publishChange, runnerMark, type NO_PUBLISH, type Publish } from './reco
 import { acquireRunLock, handOverRunLock, isPidAlive, releaseRunLock, runStderrPath } from './run-lock.js'
 import { accountRotation } from '../accounts/rotation.js'
 import { accountsPath, hasAddedAccount, readAccounts } from '../accounts/accounts.js'
-import { AGENT_ID_ENV, PLUGINS_WITHOUT_ENV, PRESET_ENV, PROJECT_SKILLS_ENV } from '@openagt/agent-data'
+import { AGENT_ID_ENV, PLUGINS_WITHOUT_ENV, PROFILE_ENV, PROJECT_SKILLS_ENV } from '@openagt/agent-data'
 
 /**
  * The tool's process side: a run in this process, the same run detached in its own process and
@@ -196,10 +196,10 @@ export interface ProjectRun extends RunRequest {
   mark?: boolean
   /** The coding agent, by its id; the distribution's first when absent. */
   driver?: string
-  /** The account at the git host picked for this session ({@link GIT_ACCOUNT_ENV}); its preset's, else the computer's, when absent. */
+  /** The account at the git host picked for this session ({@link GIT_ACCOUNT_ENV}); its profile's, else the computer's, when absent. */
   gitAccount?: string
-  /** The preset the run is on, by its id; Default when absent. */
-  preset?: string
+  /** The profile the run is on, by its id; Default when absent. */
+  profile?: string
   /** The session's picks: the plugins the run goes without, the project's skills it gets. */
   picks?: SessionPicks
   log?: (line: string) => void
@@ -213,21 +213,21 @@ export interface ProjectRun extends RunRequest {
  */
 export async function runProject(repo: string, opts: ProjectRun, deps: { modules?: readonly DistributionEntry[] } = {}): Promise<RunOutcome> {
   const modules = deps.modules ?? (await distributionModules())
-  // What the run is asked, its start, its preset and its log go on to it as they are; the rest is read here.
+  // What the run is asked, its start, its profile and its log go on to it as they are; the rest is read here.
   const { id: given, mark, driver, gitAccount, picks = {}, ...rest } = opts
   const id = given ?? runIdFrom(new Date().toISOString())
   const log = rest.log ?? (() => {})
   const agent = await codingAgent(driver, modules)
   const setup = await readPersonal(repo, log)
-  // The preset the run is on, as the person's store keeps it: its options are the run's where the session picked none.
-  const preset = await runPreset(rest.preset, createHooks(modules).settings, log)
-  const accounts = accountsOn(preset, agent)
+  // The profile the run is on, as the person's store keeps it: its options are the run's where the session picked none.
+  const profile = await runProfile(rest.profile, createHooks(modules).settings, log)
+  const accounts = accountsOn(profile, agent)
   // A run given its id was marked by whoever spawned it, unless it was told to mark itself.
   const marked = given !== undefined && mark !== true
   // The name is asked for first of all: the run's account at the git host is read by its first
   // step, which takes a second or more, and is nothing the small model naming the run needs.
   const naming = namedAtStart({ ...rest, marked }) ? askName(driverFor(agent, undefined, setup, accounts), rest.prompt) : undefined
-  const asked = gitAccount ?? (await presetLoginFor(repo, preset))
+  const asked = gitAccount ?? (await profileLoginFor(repo, profile))
   return runCommand(repo, {
     ...rest,
     ...(naming !== undefined ? { naming } : {}),
@@ -235,7 +235,7 @@ export async function runProject(repo: string, opts: ProjectRun, deps: { modules
     modules,
     marked,
     driver: driverFor(agent, id, setup, accounts),
-    presetOptions: preset.options,
+    profileOptions: profile.options,
     ...(asked !== undefined ? { gitAccount: asked } : {}),
     ...(picks.without !== undefined ? { pluginsWithout: picks.without } : {}),
     ...(picks.project !== undefined ? { projectSkills: picks.project } : {}),
@@ -259,9 +259,9 @@ export async function resumeProject(
   const log = opts.log ?? (() => {})
   const setup = await readPersonal(repo, log)
   const previous = card ? runnerMark(card) : undefined
-  // The preset the record names, as it stands now: its accounts on this computer. The session's picks are the record's (`run.ts` optionsOf).
-  const preset = await runPreset(previous?.preset, createHooks(modules).settings, log)
-  const accounts = accountsOn(preset, agent)
+  // The profile the record names, as it stands now: its accounts on this computer. The session's picks are the record's (`run.ts` optionsOf).
+  const profile = await runProfile(previous?.profile, createHooks(modules).settings, log)
+  const accounts = accountsOn(profile, agent)
   return resumeRun(repo, {
     id: opts.id,
     modules,
@@ -273,7 +273,7 @@ export async function resumeProject(
     ...(opts.by !== undefined ? { by: opts.by } : {}),
     ...(opts.publish !== undefined ? { publish: publishChange(opts.publish) ?? null } : {}),
     driver: (deps.driverFor ?? driverFor)(agent, opts.id, setup, accounts),
-    presetOptions: preset.options,
+    profileOptions: profile.options,
     ...(opts.log ? { log: opts.log } : {}),
   })
 }
@@ -301,26 +301,26 @@ export const ACCOUNT_ENV = 'OPENAGENT_ACCOUNT'
 export const GIT_ACCOUNT_ENV = 'OPENAGENT_GIT_ACCOUNT'
 
 /**
- * The login a run on `preset` works as at the git host, where the project has one: a preset's
+ * The login a run on `profile` works as at the git host, where the project has one: a profile's
  * account at GitHub means nothing in a session with no project, or in a project on another host,
  * and such a run goes as no account rather than refused. (A pick made for the session is another
  * matter: it was made among the host's accounts, and is asked for as it is.)
  */
-export async function presetLoginFor(repo: string, preset: Pick<Preset, 'options'>): Promise<string | undefined> {
-  const account = preset.options.github?.account
+export async function profileLoginFor(repo: string, profile: Pick<Profile, 'options'>): Promise<string | undefined> {
+  const account = profile.options.github?.account
   if (account === undefined) return undefined
   return (await gitHostCommand(repo)) ? account : undefined
 }
 
 /**
- * The accounts of `agent`'s list the run's preset names (`RunOptions['agent-driver']`), those this
+ * The accounts of `agent`'s list the run's profile names (`RunOptions['agent-driver']`), those this
  * computer has: an account named on another computer applies only where it is. None of them here,
  * none named, or an agent with no list: every account of the computer's.
  */
-export function accountsOn(preset: Pick<Preset, 'options'>, agent: Pick<RunAgent, 'accounts'>, env: NodeJS.ProcessEnv = process.env): string[] | undefined {
+export function accountsOn(profile: Pick<Profile, 'options'>, agent: Pick<RunAgent, 'accounts'>, env: NodeJS.ProcessEnv = process.env): string[] | undefined {
   const list = agent.accounts?.list
   if (list === undefined) return undefined
-  const picks: Record<string, unknown> = { ...preset.options['agent-driver'] }
+  const picks: Record<string, unknown> = { ...profile.options['agent-driver'] }
   const named = picks[list]
   if (!Array.isArray(named)) return undefined
   const have = new Set(readAccounts(accountsPath(list, env)).map(account => account.name))
@@ -330,12 +330,12 @@ export function accountsOn(preset: Pick<Preset, 'options'>, agent: Pick<RunAgent
 
 /**
  * What whoever starts a run tells its process in the environment, and the run's process alone
- * reads: the session's picks, its preset, its accounts, the file its name comes in. Its agent
+ * reads: the session's picks, its profile, its accounts, the file its name comes in. Its agent
  * never gets them: they are no part of the agent's own work, and an OpenAgent the agent starts in
  * its checkout (a dashboard to try its change) would take them for its own runs' picks, and
  * refuse to continue any of them.
  */
-export const RUN_PICKS_ENV: readonly string[] = [ACCOUNT_ENV, GIT_ACCOUNT_ENV, PRESET_ENV, PLUGINS_WITHOUT_ENV, PROJECT_SKILLS_ENV, NAME_FILE_ENV]
+export const RUN_PICKS_ENV: readonly string[] = [ACCOUNT_ENV, GIT_ACCOUNT_ENV, PROFILE_ENV, PLUGINS_WITHOUT_ENV, PROJECT_SKILLS_ENV, NAME_FILE_ENV]
 
 /**
  * The driver of a run on `agent`, as the agent builds it for a run: unrestricted, as nobody is
@@ -351,7 +351,7 @@ export function driverFor(agent: RunAgent, id: string | undefined, personal: Per
   // Without an id, a driver for no run's agent: a session that only names one.
   const env: NodeJS.ProcessEnv = Object.fromEntries(Object.entries(process.env).filter(([name]) => !RUN_PICKS_ENV.includes(name)))
   if (id !== undefined) env[AGENT_ID_ENV] = id
-  // On the computer's accounts of the agent's list, or the few the run's preset names, the next free one taking over at a limit; the one to start on, when whoever started the run said.
+  // On the computer's accounts of the agent's list, or the few the run's profile names, the next free one taking over at a limit; the one to start on, when whoever started the run said.
   const prefer = process.env[ACCOUNT_ENV]?.trim()
   const accounts = agent.accounts ? accountRotation(agent.accounts, { ...(prefer ? { prefer } : {}), ...(only ? { only } : {}) }) : undefined
   return agent.driver({ env, personal, ...(accounts ? { accounts } : {}) })

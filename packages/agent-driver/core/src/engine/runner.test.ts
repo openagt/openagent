@@ -6,12 +6,12 @@ import { join } from 'node:path'
 import { FakeDriver } from '../fake.js'
 import { findRun } from '../record-store.js'
 import { accountsPath, addAccount } from '../accounts/accounts.js'
-import { PRESETS, RunOrder, chainStore, settingsIn, type DistributionEntry, type RunContext, type AccountRotation, type Driver, type DriverTurn } from '@openagt/hooks'
+import { PROFILES, RunOrder, chainStore, settingsIn, type DistributionEntry, type RunContext, type AccountRotation, type Driver, type DriverTurn } from '@openagt/hooks'
 import { memoryStore } from '@openagt/hooks/testing'
 import { markerCard, writeMarker } from './records.js'
 import { runCommand } from './run.js'
 import { ACCOUNT_ENV, GIT_ACCOUNT_ENV, detachResume, detachRun, driverFor, readyToRun, resumeArgs, resumeProject, runArgs } from './runner.js'
-import { PLUGINS_WITHOUT_ENV, PRESET_ENV, PROJECT_SKILLS_ENV } from '@openagt/agent-data'
+import { PLUGINS_WITHOUT_ENV, PROFILE_ENV, PROJECT_SKILLS_ENV } from '@openagt/agent-data'
 import { handDownAgents, removeRepo, testRepo } from './test-repo.js'
 import { fakeGithub, testAgent, testModules } from './run-test-support.js'
 import { NAME_FILE_ENV, TITLE_SYSTEM } from './title.js'
@@ -104,7 +104,7 @@ test("a run's driver is its coding agent's own, built with the run's id in its e
 })
 
 test("a run's agent gets none of the picks its process was started with: a dashboard it starts in its checkout runs on its own, and continues its runs", () => {
-  const picks = { [ACCOUNT_ENV]: 'Dani', [GIT_ACCOUNT_ENV]: 'octo-agent', [PRESET_ENV]: 'p1', [PLUGINS_WITHOUT_ENV]: 'discord', [PROJECT_SKILLS_ENV]: 'all', [NAME_FILE_ENV]: '/tmp/name.json' }
+  const picks = { [ACCOUNT_ENV]: 'Dani', [GIT_ACCOUNT_ENV]: 'octo-agent', [PROFILE_ENV]: 'p1', [PLUGINS_WITHOUT_ENV]: 'discord', [PROJECT_SKILLS_ENV]: 'all', [NAME_FILE_ENV]: '/tmp/name.json' }
   const before = Object.fromEntries(Object.keys(picks).map(name => [name, process.env[name]]))
   Object.assign(process.env, picks)
   try {
@@ -185,29 +185,29 @@ test('a resumed run continues on the tool its record names, and a Codex run with
         return new FakeDriver({ turns: [{ text: turn }], sessionId: 's-codex' }).start(opts)
       },
     })
-    // The run is on a preset, kept with the person through the store: the record keeps its id, and the resume goes on with its accounts as this computer has them.
-    const home = await mkdtemp(join(tmpdir(), 'runner-preset-'))
+    // The run is on a profile, kept with the person through the store: the record keeps its id, and the resume goes on with its accounts as this computer has them.
+    const home = await mkdtemp(join(tmpdir(), 'runner-profile-'))
     const homeBefore = process.env.XDG_CONFIG_HOME
     process.env.XDG_CONFIG_HOME = home
     try {
       const store = memoryStore()
-      await settingsIn(chainStore([store])).set(PRESETS, [{ id: 'reviewer', name: 'Reviewer', options: { github: { account: 'octo-one' }, 'agent-driver': { claude: ['Dani', 'Nobody'] } } }])
+      await settingsIn(chainStore([store])).set(PROFILES, [{ id: 'reviewer', name: 'Reviewer', options: { github: { account: 'octo-one' }, 'agent-driver': { claude: ['Dani', 'Nobody'] } } }])
       addAccount('Dani', 'x', accountsPath('claude'))
       // The computer's own account at GitHub is another one by the time the run resumes.
       const github = fakeGithub({ 'octo-computer': { GH_TOKEN: 'tok-computer' }, 'octo-one': { GH_TOKEN: 'tok-one' } })
       const modules: DistributionEntry[] = testModules({ github, store })
-      const first = await runCommand(repo, { prompt: 'Read the docs', driver: codex('Read.'), host: 'this-box', pid: 4242, now: () => NOW, modules, gitAccount: 'octo-one', preset: 'reviewer', pluginsWithout: ['ask'], projectSkills: 'none' })
+      const first = await runCommand(repo, { prompt: 'Read the docs', driver: codex('Read.'), host: 'this-box', pid: 4242, now: () => NOW, modules, gitAccount: 'octo-one', profile: 'reviewer', pluginsWithout: ['ask'], projectSkills: 'none' })
       assert.equal(first.status, 'done')
-      assert.equal((await findRun(repo, first.id))?.caller?.['preset'], 'reviewer')
+      assert.equal((await findRun(repo, first.id))?.caller?.['profile'], 'reviewer')
       assert.deepEqual((await findRun(repo, first.id))?.caller?.['pluginsWithout'], ['ask'], "the session's picks are on the record")
       assert.equal((await findRun(repo, first.id))?.caller?.['projectSkills'], 'none')
       const asked: string[] = []
       const second = await resumeProject(repo, { id: first.id, text: 'And the tests?' }, { driverFor: (agent, _id, setup, only) => { asked.push(`${agent.id} ${JSON.stringify(setup)} ${JSON.stringify(only)}`); return codex('Read too.') }, modules })
       assert.equal(second.status, 'done')
-      assert.deepEqual(asked, ['codex {"memory":true,"connectors":true,"skills":true} undefined'], "no config on this machine: the run loads the person's setup, on every Codex account this computer has: the preset names only Claude accounts")
+      assert.deepEqual(asked, ['codex {"memory":true,"connectors":true,"skills":true} undefined'], "no config on this machine: the run loads the person's setup, on every Codex account this computer has: the profile names only Claude accounts")
       assert.deepEqual(github.workedAs, ['octo-one', 'octo-one'], 'the resume goes on as the account the record names, not whatever the computer\'s pick is by then')
       assert.equal((await findRun(repo, first.id))?.caller?.['gitAccount'], 'octo-one')
-      assert.equal((await findRun(repo, first.id))?.caller?.['preset'], 'reviewer', 'the preset stays on the record')
+      assert.equal((await findRun(repo, first.id))?.caller?.['profile'], 'reviewer', 'the profile stays on the record')
       assert.deepEqual((await findRun(repo, first.id))?.caller?.['pluginsWithout'], ['ask'], 'and so do the picks')
       assert.equal((await findRun(repo, first.id))?.caller?.['projectSkills'], 'none')
     } finally {
@@ -221,23 +221,23 @@ test('a resumed run continues on the tool its record names, and a Codex run with
   }
 })
 
-test("a run goes without the plugins its preset leaves out, where the session picked none; the session's pick goes over them, none of them too", async () => {
+test("a run goes without the plugins its profile leaves out, where the session picked none; the session's pick goes over them, none of them too", async () => {
   const repo = await testRepo()
   try {
     const store = memoryStore()
-    await settingsIn(chainStore([store])).set(PRESETS, [{ id: 'quiet', name: 'Quiet', options: { plugins: { without: ['logs'] } } }])
+    await settingsIn(chainStore([store])).set(PROFILES, [{ id: 'quiet', name: 'Quiet', options: { plugins: { without: ['logs'] } } }])
     const seen: { without: readonly string[] | undefined; skills: string[] }[] = []
     const looking = { name: 'looking', hooks: { 'run.step': [{ order: RunOrder.CONTEXT, name: 'look', run: (ctx: RunContext) => void seen.push({ without: ctx.options.plugins?.without, skills: ctx.skills.map(skill => skill.name) }) }] } }
     const modules = testModules({ store, also: [looking] })
     const codex = (): Driver => ({ id: 'codex', namingModel: 'gpt-5.6-luna', start: opts => new FakeDriver({ turns: [{ text: 'Read.' }], sessionId: 's-codex' }).start(opts) })
-    // Started as `runProject` starts it, on the preset's options as the store keeps them.
+    // Started as `runProject` starts it, on the profile's options as the store keeps them.
     const run = (at: number, picks: { pluginsWithout?: string[] }) =>
-      runCommand(repo, { prompt: 'Read the docs', driver: codex(), host: 'this-box', pid: 4242, now: () => new Date(NOW.getTime() + at), modules, preset: 'quiet', presetOptions: { plugins: { without: ['logs'] } }, ...picks })
-    const onPreset = await run(0, {})
+      runCommand(repo, { prompt: 'Read the docs', driver: codex(), host: 'this-box', pid: 4242, now: () => new Date(NOW.getTime() + at), modules, profile: 'quiet', profileOptions: { plugins: { without: ['logs'] } }, ...picks })
+    const onProfile = await run(0, {})
     const none = await run(1000, { pluginsWithout: [] })
     const ask = await run(2000, { pluginsWithout: ['ask'] })
-    // A resume reads the preset its record names through the store.
-    await resumeProject(repo, { id: onPreset.id, text: 'And the tests?' }, { driverFor: codex, modules })
+    // A resume reads the profile its record names through the store.
+    await resumeProject(repo, { id: onProfile.id, text: 'And the tests?' }, { driverFor: codex, modules })
     assert.deepEqual(
       seen.map(({ without, skills }) => ({ without, logs: skills.includes('logs'), ask: skills.includes('ask') })),
       [
@@ -247,7 +247,7 @@ test("a run goes without the plugins its preset leaves out, where the session pi
         { without: ['logs'], logs: false, ask: true },
       ],
     )
-    assert.equal((await findRun(repo, onPreset.id))?.caller?.['pluginsWithout'], undefined, "the preset's, not the session's: its record names no pick")
+    assert.equal((await findRun(repo, onProfile.id))?.caller?.['pluginsWithout'], undefined, "the profile's, not the session's: its record names no pick")
     assert.deepEqual((await findRun(repo, none.id))?.caller?.['pluginsWithout'], [], 'the pick of none is on the record')
     assert.deepEqual((await findRun(repo, ask.id))?.caller?.['pluginsWithout'], ['ask'])
   } finally {

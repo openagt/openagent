@@ -81,7 +81,7 @@ export interface RunAgent {
   readonly ownQuestionTool?: boolean
   /**
    * Its accounts on this computer: the list its turns take, the accounts a person added for it in
-   * OpenAgent beside its own login, and a preset's picks among them (`RunOptions['agent-driver']`).
+   * OpenAgent beside its own login, and a profile's picks among them (`RunOptions['agent-driver']`).
    * None: it runs on whatever login it has.
    */
   readonly accounts?: AgentLogins
@@ -870,7 +870,7 @@ export type SignedIn = { ok: true; login: string } | { ok: false; error: string 
 
 /** A coding agent's accounts on this computer, as only the agent knows them. */
 export interface AgentLogins {
-  /** The list, by the name its file and a preset's pick go by: `claude`, `codex`. */
+  /** The list, by the name its file and a profile's pick go by: `claude`, `codex`. */
   readonly list: string
   /** The service an account is at, as a person reads it in a sentence: `Claude`, `Codex`. */
   readonly service: string

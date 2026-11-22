@@ -37,11 +37,11 @@ test("each scope has a folder of its own: the person's and each project's in the
   const { folders, cleanup } = await setup()
   try {
     const store = chainStore([filesystemBackend({ folders })])
-    await store.save(PERSON, { 'presets/default.json': '{}\n' }, 'preset')
+    await store.save(PERSON, { 'profiles/default.json': '{}\n' }, 'profile')
     await store.save(COMPUTER, { 'settings.json': '{}\n' }, 'setting')
     await store.save(projectScope(SHOP), { 'tickets/a.md': '# A\n' }, 'ticket')
     await store.save(projectScope(NOTES), { 'queue.md': '- one\n' }, 'queue')
-    assert.equal(await readFile(join(folders.personal, 'person', 'presets', 'default.json'), 'utf8'), '{}\n')
+    assert.equal(await readFile(join(folders.personal, 'person', 'profiles', 'default.json'), 'utf8'), '{}\n')
     assert.equal(await readFile(join(folders.computer, 'data', 'settings.json'), 'utf8'), '{}\n')
     assert.equal(await readFile(join(folders.personal, 'projects', 'github.com', 'acme', 'shop', 'tickets', 'a.md'), 'utf8'), '# A\n')
     assert.equal(await readFile(join(folders.personal, 'projects', 'local', 'home', 'me', 'notes', 'queue.md'), 'utf8'), '- one\n')

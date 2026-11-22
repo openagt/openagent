@@ -71,17 +71,18 @@ Auto menu says main. Otherwise the pull request goes to main.
 A session with no project may have repos as context, picked with **Add repo** beside "No project":
 `agent-driver` copies each into the session's folder.
 
-The session's preset (the **Preset** menu under the box) and its GitHub account (the control at
+The session's profile (the **Profile** menu under the box) and its GitHub account (the control at
 the right) go with the Start: `agent-driver` hands them to the run's process in its environment,
-`OPENAGENT_PRESET` and `OPENAGENT_GIT_ACCOUNT`. A preset is a name and a saved set of run options
+`OPENAGENT_PROFILE` and `OPENAGENT_GIT_ACCOUNT`. A profile is a name and a saved set of run options
 (its accounts, the plugins its runs go without, and the project skills they get), kept with the
-person and edited on the Presets page; the run reads it as it starts, and again when it resumes.
+person and edited on the Agent profiles page; the run reads it as it starts, and again when it
+resumes.
 
 The **Skills** menu under the box picks, for this session alone, which skills the run gets: the
 plugins on in the project, each ticked, tickable off, and which of the project's own skills stay
-in its checkout, both as the preset has them until the session picks. The picks go the same way,
+in its checkout, both as the profile has them until the session picks. The picks go the same way,
 in `OPENAGENT_PLUGINS_WITHOUT` (names, comma-separated; set to nothing, none of them) and
-`OPENAGENT_PROJECT_SKILLS` (`all`, `none` or names), the preset's where one is unset: the run
+`OPENAGENT_PROJECT_SKILLS` (`all`, `none` or names), the profile's where one is unset: the run
 gets none of the skills or steps of a plugin it goes without, and the project skills not picked
 are left out of its checkout with git's sparse checkout, nothing committed. The record keeps the
 picks, and a resume goes on with them.

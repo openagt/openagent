@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type Ref } from 'react'
 import { Ellipsis, Loader2, Plus } from 'lucide-react'
-import { onPresetsList, sendRemovePreset, sendSavePreset, type Preset, type PresetAccountChoice, type PresetsView, type RunOptions } from '../rpc/presets.js'
-import { DEFAULT_PRESET } from '../../src/client.js'
+import { onProfilesList, sendRemoveProfile, sendSaveProfile, type Profile, type ProfileAccountChoice, type ProfilesView, type RunOptions } from '../rpc/profiles.js'
+import { DEFAULT_PROFILE } from '../../src/client.js'
 import { holdEntry } from '../lib/use-route.js'
 import { usePolled, type ReadState } from '../lib/use-async.js'
 import { useAddGitAccount } from './AddGitAccount.js'
@@ -21,36 +21,36 @@ import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip.js'
 import { cn } from '../lib/utils.js'
 import { inWords } from '../lib/in-words.js'
 
-// The Presets page (#2394): a preset is a name and a saved set of run options, made once and used
-// in any project or none. One row per preset, Default first, each edited in a dialog over the
-// page: its name, its accounts among the ones the Permissions page knows, the plugins its runs go
-// without, and whether they get the project's own skills. The presets are kept with the person,
-// through the store, so every computer of theirs has them; a computer without an account a preset
+// The Agent profiles page (#2394): a profile is a name and a saved set of run options, made once
+// and used in any project or none. One row per profile, Default first, each edited in a dialog over
+// the page: its name, its accounts among the ones the Permissions page knows, the plugins its runs
+// go without, and whether they get the project's own skills. The profiles are kept with the person,
+// through the store, so every computer of theirs has them; a computer without an account a profile
 // names runs it without that account.
 
-/** How often the presets are read again while the page is open. */
+/** How often the profiles are read again while the page is open. */
 const SELDOM_MS = 30_000
 
 /**
- * The presets as the dashboard reads them, remembered across pages and loads so a menu lands
- * whole and the box's row that names the preset is drawn from the first frame.
+ * The profiles as the dashboard reads them, remembered across pages and loads so a menu lands
+ * whole and the box's row that names the profile is drawn from the first frame.
  */
-export function usePresetsList(): { view: PresetsView | undefined; state: ReadState; failing: boolean; reload: () => Promise<void> } {
-  const { value, state, failing, reload } = usePolled<PresetsView | undefined>(onPresetsList, undefined, SELDOM_MS, [], { remember: 'presets', stored: true })
+export function useProfilesList(): { view: ProfilesView | undefined; state: ReadState; failing: boolean; reload: () => Promise<void> } {
+  const { value, state, failing, reload } = usePolled<ProfilesView | undefined>(onProfilesList, undefined, SELDOM_MS, [], { remember: 'profiles', stored: true })
   return { view: value, state, failing, reload }
 }
 
-/** A preset's name by its id, once the presets are read; the id itself for one this computer does not have; nothing for none. */
-export function usePresetName(id: string | undefined): string | undefined {
-  const { view } = usePresetsList()
+/** A profile's name by its id, once the profiles are read; the id itself for one this computer does not have; nothing for none. */
+export function useProfileName(id: string | undefined): string | undefined {
+  const { view } = useProfilesList()
   if (id === undefined || !view) return undefined
-  return view.presets.find(preset => preset.id === id)?.name ?? id
+  return view.profiles.find(profile => profile.id === id)?.name ?? id
 }
 
-/** Which of the project's own skills a preset's runs get: every one when absent. */
+/** Which of the project's own skills a profile's runs get: every one when absent. */
 type ProjectPick = NonNullable<RunOptions['skills']>['project']
 
-/** What the editor holds: the preset as it stands, or a new one. */
+/** What the editor holds: the profile as it stands, or a new one. */
 interface Draft {
   id?: string
   name: string
@@ -62,12 +62,12 @@ interface Draft {
   project?: ProjectPick
 }
 
-function draftOf(preset?: Preset): Draft {
-  const options = preset?.options ?? {}
+function draftOf(profile?: Profile): Draft {
+  const options = profile?.options ?? {}
   const project = options.skills?.project
   return {
-    ...(preset ? { id: preset.id } : {}),
-    name: preset?.name ?? '',
+    ...(profile ? { id: profile.id } : {}),
+    name: profile?.name ?? '',
     ...(options.github?.account !== undefined ? { github: options.github.account } : {}),
     claude: new Set(options['agent-driver']?.claude ?? []),
     codex: new Set(options['agent-driver']?.codex ?? []),
@@ -87,25 +87,25 @@ function optionsOf(draft: Draft, plugins: readonly string[]): RunOptions {
   }
 }
 
-/** Whether two drafts hold the same preset. */
+/** Whether two drafts hold the same profile. */
 function sameDraft(a: Draft, b: Draft): boolean {
   const same = (x: Set<string>, y: Set<string>) => x.size === y.size && [...x].every(one => y.has(one))
   return a.name === b.name && a.github === b.github && JSON.stringify(a.project) === JSON.stringify(b.project) && same(a.claude, b.claude) && same(a.codex, b.codex) && same(a.without, b.without)
 }
 
-/** What a preset says of the project's own skills, in a few words. */
+/** What a profile says of the project's own skills, in a few words. */
 function projectSaid(project: ProjectPick): string {
   return project === undefined || project === 'all' ? 'every project skill' : project === 'none' ? 'no project skills' : `the project skills ${project.join(', ')}`
 }
 
-/** The Presets page. */
-export function PresetsPage() {
-  const { view, state, failing, reload } = usePresetsList()
+/** The Agent profiles page. */
+export function ProfilesPage() {
+  const { view, state, failing, reload } = useProfilesList()
   const [adding, setAdding] = useState(false)
-  const newPreset = useRef<HTMLButtonElement>(null)
-  // The preset just removed: once the list is read without it, its Remove press is gone with its card, and the focus goes to "New preset".
+  const newProfile = useRef<HTMLButtonElement>(null)
+  // The profile just removed: once the list is read without it, its Remove press is gone with its card, and the focus goes to "New profile".
   const removed = useRef<string | undefined>(undefined)
-  // The preset just made: once the list is read with it, the focus goes to its row's Edit (on a phone its menu).
+  // The profile just made: once the list is read with it, the focus goes to its row's Edit (on a phone its menu).
   const made = useRef<string | undefined>(undefined)
   const madeEdit = useRef<HTMLButtonElement>(null)
   useEffect(() => {
@@ -113,51 +113,51 @@ export function PresetsPage() {
       made.current = undefined
       madeEdit.current.focus()
     }
-    if (removed.current === undefined || view?.presets.some(preset => preset.id === removed.current)) return
+    if (removed.current === undefined || view?.profiles.some(profile => profile.id === removed.current)) return
     removed.current = undefined
-    newPreset.current?.focus()
+    newProfile.current?.focus()
   }, [view])
   const changed = reload
   return (
     <Page
-      title="Presets"
-      description="A preset is a name and a saved set of run options: the accounts a run works as, the plugins it goes without, and the project skills it gets. Pick one under the message box; it works in any project, or in none."
+      title="Agent profiles"
+      description="An agent profile is a name and a saved set of run options: the accounts a run works as, the plugins it goes without, and the project skills it gets. Pick one under the message box; it works in any project, or in none."
       actions={
-        <Button ref={newPreset} disabled={!view || adding} onClick={() => setAdding(true)}>
+        <Button ref={newProfile} disabled={!view || adding} onClick={() => setAdding(true)}>
           <Plus className="size-4" aria-hidden />
-          New preset
+          New profile
         </Button>
       }
     >
       <Slot of={{ state, value: view, failing }} shape={<PanelShape />}>
         {view =>
           view && (
-            <Panel aria-label="Presets">
-              {view.presets.map(preset => (
-                <PresetRow key={preset.id} preset={preset} view={view} onChanged={changed} onRemoved={() => void (removed.current = preset.id)} {...(preset.id === made.current ? { editRef: madeEdit } : {})} />
+            <Panel aria-label="Profiles">
+              {view.profiles.map(profile => (
+                <ProfileRow key={profile.id} profile={profile} view={view} onChanged={changed} onRemoved={() => void (removed.current = profile.id)} {...(profile.id === made.current ? { editRef: madeEdit } : {})} />
               ))}
             </Panel>
           )
         }
       </Slot>
       {/* Over the page, so it opens at the press even while the list's shape still holds. */}
-      {adding && view && <PresetEditor view={view} onAccounts={reload} onDone={async saved => (setAdding(false), saved ? ((made.current = saved), changed()) : undefined)} />}
+      {adding && view && <ProfileEditor view={view} onAccounts={reload} onDone={async saved => (setAdding(false), saved ? ((made.current = saved), changed()) : undefined)} />}
     </Page>
   )
 }
 
 /**
- * One preset, a row of the page's panel: its name (Default says it is used unless another is
+ * One profile, a row of the page's panel: its name (Default says it is used unless another is
  * picked), under it what its runs get (the accounts they work as, the plugins they go without, and
  * the project's own skills). Edit and Remove come under the pointer and the keyboard; on a phone
  * the row's one press is a menu of them. `onRemoved` is told before the list is read again without it.
  */
-function PresetRow({ preset, view, onChanged, onRemoved, editRef }: { preset: Preset; view: PresetsView; onChanged: () => Promise<void>; onRemoved: () => void; editRef?: Ref<HTMLButtonElement> }) {
+function ProfileRow({ profile, view, onChanged, onRemoved, editRef }: { profile: Profile; view: ProfilesView; onChanged: () => Promise<void>; onRemoved: () => void; editRef?: Ref<HTMLButtonElement> }) {
   const [editing, setEditing] = useState(false)
   const [removing, setRemoving] = useState(false)
   const phone = useIsMobile()
-  const isDefault = preset.id === DEFAULT_PRESET
-  const { github, 'agent-driver': driver, skills, plugins } = preset.options
+  const isDefault = profile.id === DEFAULT_PROFILE
+  const { github, 'agent-driver': driver, skills, plugins } = profile.options
   const said = projectSaid(skills?.project)
   const facts = [
     github?.account !== undefined ? `@${github.account} on GitHub` : 'GitHub: whatever the computer uses',
@@ -171,7 +171,7 @@ function PresetRow({ preset, view, onChanged, onRemoved, editRef }: { preset: Pr
       <PanelRow
         title={
           <>
-            {preset.name}
+            {profile.name}
             {isDefault && <span className="font-normal text-muted-foreground"> used unless you pick another</span>}
           </>
         }
@@ -180,7 +180,7 @@ function PresetRow({ preset, view, onChanged, onRemoved, editRef }: { preset: Pr
         actions={
           phone ? (
             <DropdownMenu>
-              <DropdownMenuTrigger render={<Button ref={editRef} variant="ghost" size="icon-sm" aria-label={`More for ${preset.name}`} className="-mr-1.5" />}>
+              <DropdownMenuTrigger render={<Button ref={editRef} variant="ghost" size="icon-sm" aria-label={`More for ${profile.name}`} className="-mr-1.5" />}>
                 <Ellipsis className="size-4" aria-hidden />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
@@ -190,12 +190,12 @@ function PresetRow({ preset, view, onChanged, onRemoved, editRef }: { preset: Pr
             </DropdownMenu>
           ) : (
             <>
-              <Button ref={editRef} size="sm" variant="secondary" aria-label={`Edit ${preset.name}`} onClick={() => setEditing(true)}>
+              <Button ref={editRef} size="sm" variant="secondary" aria-label={`Edit ${profile.name}`} onClick={() => setEditing(true)}>
                 Edit
               </Button>
               {/* Unpainted at the row's end: pulled out by its own padding, its word ends on the inset. */}
               {!isDefault && (
-                <Button size="sm" variant="ghost" className="-mr-2 hover:text-danger" aria-label={`Remove ${preset.name}`} onClick={() => setRemoving(true)}>
+                <Button size="sm" variant="ghost" className="-mr-2 hover:text-danger" aria-label={`Remove ${profile.name}`} onClick={() => setRemoving(true)}>
                   Remove
                 </Button>
               )}
@@ -207,11 +207,11 @@ function PresetRow({ preset, view, onChanged, onRemoved, editRef }: { preset: Pr
         <ConfirmDialog
           open={removing}
           onOpenChange={setRemoving}
-          title={`Remove ${preset.name}?`}
+          title={`Remove ${profile.name}?`}
           body="Sessions that ran on it keep their records. Nothing is removed from any account."
           confirmLabel="Remove"
           onConfirm={async () => {
-            const done = await sendRemovePreset(preset.id)
+            const done = await sendRemoveProfile(profile.id)
             if (!done.ok) throw new Error(done.error)
           }}
           onSuccess={() => {
@@ -220,25 +220,25 @@ function PresetRow({ preset, view, onChanged, onRemoved, editRef }: { preset: Pr
           }}
         />
       )}
-      {editing && <PresetEditor preset={preset} view={view} onAccounts={onChanged} onDone={async saved => (setEditing(false), saved ? onChanged() : undefined)} />}
+      {editing && <ProfileEditor profile={profile} view={view} onAccounts={onChanged} onDone={async saved => (setEditing(false), saved ? onChanged() : undefined)} />}
     </>
   )
 }
 
-/** No account of the preset's own, whatever the computer uses: the value of the select for a preset that names none. */
+/** No account of the profile's own, whatever the computer uses: the value of the select for a profile that names none. */
 const COMPUTERS = ''
 
 /**
- * A preset edited, or a new one, in a dialog over the page: the name, the accounts picked, the
+ * A profile edited, or a new one, in a dialog over the page: the name, the accounts picked, the
  * plugins its runs go without, the project's own skills on or off; Save, or Enter in the name, writes it, and Cancel, Esc, the ✕, Back or a reload
  * ask first once something is changed. Its parts scroll under the title while Save
  * and Cancel stay in view, and a click beside it closes nothing: much is typed here. A GitHub
  * account OpenAgent does not have yet is added from here, in its own dialog over this one, and is
  * then the one picked; `onAccounts` reads the accounts again.
  */
-function PresetEditor({ preset, view, onAccounts, onDone }: { preset?: Preset; view: PresetsView; onAccounts: () => Promise<void>; onDone: (savedId: string | undefined) => Promise<void> | void }) {
-  // What is being typed is the editor's own from its first frame: the page reading the presets again changes nothing in it.
-  const [draft, setDraft] = useState<Draft>(() => draftOf(preset))
+function ProfileEditor({ profile, view, onAccounts, onDone }: { profile?: Profile; view: ProfilesView; onAccounts: () => Promise<void>; onDone: (savedId: string | undefined) => Promise<void> | void }) {
+  // What is being typed is the editor's own from its first frame: the page reading the profiles again changes nothing in it.
+  const [draft, setDraft] = useState<Draft>(() => draftOf(profile))
   const opened = useRef(draft).current
   const changed = !sameDraft(draft, opened)
   // Leaving what is changed asks first, and the step asked about waits here.
@@ -261,7 +261,7 @@ function PresetEditor({ preset, view, onAccounts, onDone }: { preset?: Preset; v
     setDraft(d => ({ ...d, github: login }))
     await onAccounts()
   })
-  const isDefault = preset?.id === DEFAULT_PRESET
+  const isDefault = profile?.id === DEFAULT_PROFILE
   const tick = (set: 'claude' | 'codex' | 'without', name: string, on: boolean) =>
     setDraft(d => {
       const next = new Set(d[set])
@@ -274,7 +274,7 @@ function PresetEditor({ preset, view, onAccounts, onDone }: { preset?: Preset; v
     setError(undefined)
     setNameRefused(false)
     try {
-      const done = await sendSavePreset({ ...(draft.id !== undefined ? { id: draft.id } : {}), name: draft.name, options: optionsOf(draft, view.plugins) })
+      const done = await sendSaveProfile({ ...(draft.id !== undefined ? { id: draft.id } : {}), name: draft.name, options: optionsOf(draft, view.plugins) })
       if (!done.ok) {
         setError(done.error)
         setNameRefused(done.field === 'name')
@@ -300,11 +300,11 @@ function PresetEditor({ preset, view, onAccounts, onDone }: { preset?: Preset; v
       onOpenChange={open => {
         if (!open && !busy) close()
       }}
-      title={preset ? `Editing ${preset.name}` : 'New preset'}
+      title={profile ? `Editing ${profile.name}` : 'New profile'}
       footer={
         <div className="space-y-2">
           {error !== undefined && (
-            <p id="preset-refused" role="alert" className="text-xs text-danger">
+            <p id="profile-refused" role="alert" className="text-xs text-danger">
               {error}
             </p>
           )}
@@ -320,7 +320,7 @@ function PresetEditor({ preset, view, onAccounts, onDone }: { preset?: Preset; v
           <ConfirmDialog
             open={leaving !== undefined}
             onOpenChange={open => !open && setLeaving(undefined)}
-            title={preset ? `Discard your changes to ${preset.name}?` : 'Discard the new preset?'}
+            title={profile ? `Discard your changes to ${profile.name}?` : 'Discard the new profile?'}
             body="What you typed and ticked here is not saved."
             confirmLabel="Discard"
             onSuccess={() => {
@@ -339,9 +339,9 @@ function PresetEditor({ preset, view, onAccounts, onDone }: { preset?: Preset; v
         <div className="grid gap-x-4 gap-y-6 md:grid-cols-2">
           {!isDefault && (
             <div className="space-y-1.5">
-              <Label htmlFor="preset-name">Name</Label>
+              <Label htmlFor="profile-name">Name</Label>
               <Input
-                id="preset-name"
+                id="profile-name"
                 ref={nameField}
                 value={draft.name}
                 readOnly={busy}
@@ -349,7 +349,7 @@ function PresetEditor({ preset, view, onAccounts, onDone }: { preset?: Preset; v
                 // On a phone a finger's 44, as the foot's presses.
                 className="max-md:h-11"
                 aria-invalid={nameMissing || nameRefused}
-                {...(nameMissing ? { 'aria-describedby': 'preset-name-missing' } : nameRefused ? { 'aria-describedby': 'preset-refused' } : {})}
+                {...(nameMissing ? { 'aria-describedby': 'profile-name-missing' } : nameRefused ? { 'aria-describedby': 'profile-refused' } : {})}
                 onChange={event => {
                   setNameMissing(false)
                   setNameRefused(false)
@@ -357,19 +357,19 @@ function PresetEditor({ preset, view, onAccounts, onDone }: { preset?: Preset; v
                 }}
               />
               {nameMissing && (
-                <p id="preset-name-missing" className="text-xs text-danger">
-                  Give the preset a name.
+                <p id="profile-name-missing" className="text-xs text-danger">
+                  Give the profile a name.
                 </p>
               )}
             </div>
           )}
           <div className="space-y-1.5">
-            <Label htmlFor="preset-github">On GitHub as</Label>
+            <Label htmlFor="profile-github">On GitHub as</Label>
             {/* The pick, and beside it a square of its height that adds an account: the block stays as
                 short as the name's beside it. */}
             <div className="flex items-center gap-2">
               <Select items={githubItems} value={draft.github ?? COMPUTERS} onValueChange={next => setDraft(d => ({ ...d, ...(next ? { github: String(next) } : {}), ...(next ? {} : { github: undefined }) }))} disabled={busy}>
-                <SelectTrigger id="preset-github" aria-label="GitHub account" className="min-w-0 grow basis-auto max-md:h-11">
+                <SelectTrigger id="profile-github" aria-label="GitHub account" className="min-w-0 grow basis-auto max-md:h-11">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -401,13 +401,13 @@ function PresetEditor({ preset, view, onAccounts, onDone }: { preset?: Preset; v
         <AccountPicks label="Codex" accounts={view.codex} picked={draft.codex} busy={busy} onTick={(id, on) => tick('codex', id, on)} onAll={() => setDraft(d => ({ ...d, codex: new Set() }))} />
         {/* A plugin ticked off is one its runs go without. */}
         <PluginPicks plugins={view.plugins} without={draft.without} busy={busy} onTick={(name, on) => tick('without', name, !on)} />
-        {/* A preset set to never pick up the project's own skills; a session can still pick them. */}
+        {/* A profile set to never pick up the project's own skills; a session can still pick them. */}
         <WordedTick
           name="Project skills"
           description={
             Array.isArray(draft.project)
               ? `Its sessions get ${projectSaid(draft.project)}. Off, a session starts without them and can still pick them under the box.`
-              : 'The skills a project keeps in its repo go to this preset’s sessions too. Off, a session starts without them and can still pick them under the box.'
+              : 'The skills a project keeps in its repo go to this profile’s sessions too. Off, a session starts without them and can still pick them under the box.'
           }
           checked={draft.project !== 'none'}
           onChange={on =>
@@ -429,7 +429,7 @@ function PresetEditor({ preset, view, onAccounts, onDone }: { preset?: Preset; v
  * A coding agent's accounts to pick from: "Every account, also new ones", ticked while none is picked, is every one of this computer's, also one added later; one or more ticked, those alone, where the computer has them.
  * This computer's own login, logged out, is offered only while it is picked, and says so.
  */
-function AccountPicks({ label, accounts: all, picked, busy, onTick, onAll }: { label: string; accounts: readonly PresetAccountChoice[]; picked: Set<string>; busy: boolean; onTick: (id: string, on: boolean) => void; onAll: () => void }) {
+function AccountPicks({ label, accounts: all, picked, busy, onTick, onAll }: { label: string; accounts: readonly ProfileAccountChoice[]; picked: Set<string>; busy: boolean; onTick: (id: string, on: boolean) => void; onAll: () => void }) {
   const accounts = all.filter(account => !account.loggedOut || picked.has(account.id))
   if (accounts.length === 0) return null
   return (
@@ -457,7 +457,7 @@ function AccountPicks({ label, accounts: all, picked, busy, onTick, onAll }: { l
 }
 
 /**
- * The plugins a preset's sessions get, each ticked, where it is on in their project: one ticked off
+ * The plugins a profile's sessions get, each ticked, where it is on in their project: one ticked off
  * is left out of them, none of its skills nor its steps, until a session ticks it on under the box.
  */
 function PluginPicks({ plugins, without, busy, onTick }: { plugins: readonly string[]; without: Set<string>; busy: boolean; onTick: (name: string, on: boolean) => void }) {

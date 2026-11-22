@@ -93,7 +93,7 @@ function answerShell(modules: unknown[]): void {
   answers.set('onRecentAgents', () => [])
   answers.set('onAgents', () => [])
   answers.set('onOverview', () => ({ active: [] }))
-  answers.set('onPresetsList', () => ({ presets: [], claude: [], codex: [], plugins: [] }))
+  answers.set('onProfilesList', () => ({ profiles: [], claude: [], codex: [], plugins: [] }))
   answers.set('onSkillChoices', () => ({ core: [], plugins: [] }))
   answers.set('onAgentUpdates', () => [])
   // The Overview draws its cards once the person's layout is read.
@@ -143,7 +143,7 @@ describe('module pages in the shell (#1774)', () => {
   test("a module opens the dashboard's own pages in the project the address picks, every project where none is, and the page it is on adds no entry", async () => {
     function Opens() {
       const host = useModuleHost()
-      return createElement('div', null, createElement('button', { onClick: () => host.openPage('permissions') }, 'open Permissions'), createElement('button', { onClick: () => host.openPage('presets') }, 'open Presets'))
+      return createElement('div', null, createElement('button', { onClick: () => host.openPage('permissions') }, 'open Permissions'), createElement('button', { onClick: () => host.openPage('profiles') }, 'open Profiles'))
     }
     answerShell([{ package: '@acme/overlay', url: moduleModule('__overlayOpensPages', { place: 'app.overlay', id: 'overlay', View: Opens }), projects: [], computer: true }])
     window.history.replaceState(null, '', '/app/overview')
@@ -153,13 +153,13 @@ describe('module pages in the shell (#1774)', () => {
     const entries = window.history.length
     fireEvent.click(screen.getByRole('button', { name: 'open Permissions' }))
     expect(window.history.length).toBe(entries)
-    fireEvent.click(screen.getByRole('button', { name: 'open Presets' }))
-    expect(window.location.pathname).toBe('/app/presets')
+    fireEvent.click(screen.getByRole('button', { name: 'open Profiles' }))
+    expect(window.location.pathname).toBe('/app/profiles')
     cleanup()
     window.history.replaceState(null, '', '/')
     render(<App />)
-    fireEvent.click(await screen.findByRole('button', { name: 'open Presets' }))
-    expect(window.location.pathname).toBe('/presets')
+    fireEvent.click(await screen.findByRole('button', { name: 'open Profiles' }))
+    expect(window.location.pathname).toBe('/profiles')
   })
 
   test('a module opens a Settings entry over the page it is on, its own query kept, as a step Back undoes; from inside Settings, in place', async () => {
@@ -317,7 +317,7 @@ describe('module pages in the shell (#1774)', () => {
     answerShell([{ package: '@acme/logs', url: moduleModule('__phoneLogs', { place: 'app.page', id: 'logs', label: 'Logs', View: () => null }), projects: [PROJECT.id] }])
     const wide = phoneScreen()
     try {
-      for (const [path, name] of [['/logs', 'Logs'], ['/presets', 'Presets'], ['/permissions', 'Permissions']]) {
+      for (const [path, name] of [['/logs', 'Logs'], ['/profiles', 'Agent profiles'], ['/permissions', 'Permissions']]) {
         window.history.replaceState(null, '', path)
         render(<App />)
         // The name alone: the page's count stands beside it in the bar once the page has read it. Read in the wait: the first
@@ -454,10 +454,10 @@ describe('a first visit, the projects not read yet', () => {
     holdProjects()
     const wide = phoneScreen()
     try {
-      window.history.replaceState(null, '', '/presets')
+      window.history.replaceState(null, '', '/profiles')
       render(<App />)
       // The bar holds the page's name alone.
-      expect(document.querySelector('[data-phone-bar]')!.textContent).toBe('Presets')
+      expect(document.querySelector('[data-phone-bar]')!.textContent).toBe('Agent profiles')
     } finally {
       wide()
     }

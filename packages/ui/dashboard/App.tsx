@@ -1,5 +1,5 @@
 import { PermissionsPage } from './components/Accounts.js'
-import { PresetsPage } from './components/PresetsPage.js'
+import { ProfilesPage } from './components/ProfilesPage.js'
 import { useEffect, useMemo, useReducer, useState, type CSSProperties } from 'react'
 import type { ProjectionRead, ProjectSummary, Waiting } from '../src/index.js'
 import { onProjectFiles, onWaiting, onStartedName } from './rpc/reads.js'
@@ -35,7 +35,7 @@ import { stashPendingDraft } from './lib/draft-handoff.js'
 import { useLiveEvents } from './lib/use-live-events.js'
 import { useAgents, useRecentAgents } from './lib/use-agents.js'
 import { runsAgain } from './lib/runs-changed.js'
-import { PRESETS_PAGE, PERMISSIONS_PAGE, back, leaving, useRoute } from './lib/use-route.js'
+import { PROFILES_PAGE, PERMISSIONS_PAGE, back, leaving, useRoute } from './lib/use-route.js'
 import { formatRoute, keepPageQuery, parseRoute, type Route } from './lib/route.js'
 import { projectAddresses, SESSIONS_ID } from '../src/project-address.js'
 import { startedAtFromAgentId } from '../src/agent-id.js'
@@ -70,7 +70,7 @@ function barPage({ id, label, icon }: ListedPage): { segment: string; label: str
 }
 /** The dashboard's own pages, by the name a phone's bar gives each, as it gives a module's page its label, and the icon the sidebar and the jump draw for it. */
 const OWN_PAGES = new Map([
-  [PRESETS_PAGE, { label: 'Presets', icon: Bot }],
+  [PROFILES_PAGE, { label: 'Agent profiles', icon: Bot }],
   [PERMISSIONS_PAGE, { label: 'Permissions', icon: KeyRound }],
 ])
 
@@ -471,7 +471,7 @@ export function App() {
   const projectShape = !projectWord ? null : run === undefined ? <ProjectHomeShape /> : pastRun.length === 0 && startedAtFromAgentId(run) !== undefined ? <ChatShape /> : null
   const renderMain = () => {
     if (pageSegment === PERMISSIONS_PAGE) return <PermissionsPage />
-    if (pageSegment === PRESETS_PAGE) return <PresetsPage />
+    if (pageSegment === PROFILES_PAGE) return <ProfilesPage />
     if (pageSegment) {
       if (modulePage)
         return <ModulePageView page={modulePage} projects={scopedProjects} projectId={scope} path={route.pagePath ?? []} />

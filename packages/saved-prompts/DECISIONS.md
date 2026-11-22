@@ -10,4 +10,5 @@ already made, and lists it in its pull request; for anything else it proposes an
 ## What a saved prompt is
 - A name and the text it loads into the message box, and it is called a saved prompt, in the
   code too (#2394). Picked over calling it a custom preset (`CustomPreset`,
-  `custom-presets.json`): a preset is a saved set of run options, and only that.
+  `custom-presets.json`): a preset was a saved set of run options then, a profile now, and
+  only that.

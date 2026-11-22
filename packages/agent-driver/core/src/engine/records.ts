@@ -1,6 +1,6 @@
 import { isSkillName, type FileBranchWrite } from '@openagt/agent-data'
-import { isPresetId, MODULE_NAME } from '@openagt/hooks'
-import type { ProjectSkillsPick } from './preset.js'
+import { isProfileId, MODULE_NAME } from '@openagt/hooks'
+import type { ProjectSkillsPick } from './profile.js'
 import { publishedBranch } from '@openagt/agent-data/names'
 import { deleteRun, writeRun, type RecordDeps } from '../record-store.js'
 import { type AnyDiaryLine, type RunCard } from '../record.js'
@@ -67,11 +67,11 @@ export interface Lasting {
   for?: string
   /** The repos a session with no project has as context (`run --repos`), each a copy in its folder. */
   repos?: SessionRepo[]
-  /** The preset the run is on, by its id (`OPENAGENT_PRESET`): each leg runs on its options as it stands then; Default when absent. */
-  preset?: string
-  /** The enabled plugins the run goes without (`OPENAGENT_PLUGINS_WITHOUT`), by name: the session's pick, none of them for an empty list; its preset's when absent. */
+  /** The profile the run is on, by its id (`OPENAGENT_PROFILE`): each leg runs on its options as it stands then; Default when absent. */
+  profile?: string
+  /** The enabled plugins the run goes without (`OPENAGENT_PLUGINS_WITHOUT`), by name: the session's pick, none of them for an empty list; its profile's when absent. */
   pluginsWithout?: string[]
-  /** Which of the project's own skills stay in the run's checkout (`OPENAGENT_PROJECT_SKILLS`), the session's pick: every one, none, or the ones named; its preset's when absent, and every one when that names none. */
+  /** Which of the project's own skills stay in the run's checkout (`OPENAGENT_PROJECT_SKILLS`), the session's pick: every one, none, or the ones named; its profile's when absent, and every one when that names none. */
   projectSkills?: ProjectSkillsPick
 }
 
@@ -105,7 +105,7 @@ export function earlierPrs(card: RunCard): { number: number; url: string }[] {
 /** A list of names, as a mark keeps one, each one `isName` says is one; nothing for anything else, or an empty list. */
 const namesOf = (value: unknown, isName: (name: unknown) => boolean): string[] | undefined => (Array.isArray(value) && value.length > 0 && value.every(isName) ? (value as string[]) : undefined)
 const isPluginName = (name: unknown): boolean => typeof name === 'string' && MODULE_NAME.test(name)
-/** The plugins a mark says the run goes without: an empty list too, a pick of none over its preset's. */
+/** The plugins a mark says the run goes without: an empty list too, a pick of none over its profile's. */
 const pluginsOf = (value: unknown): string[] | undefined => (Array.isArray(value) && value.every(isPluginName) ? (value as string[]) : undefined)
 
 /** What `mark` keeps for the run's whole life ({@link Lasting}), as far as each is what it should be: anything else there is left out. */
@@ -121,7 +121,7 @@ export function lasting(mark: { [K in keyof Lasting]?: unknown }): Lasting {
     ...(typeof mark.baseCommit === 'string' ? { baseCommit: mark.baseCommit } : {}),
     ...(typeof mark.for === 'string' ? { for: mark.for } : {}),
     ...(repos !== undefined && repos.length > 0 ? { repos } : {}),
-    ...(isPresetId(mark.preset) ? { preset: mark.preset } : {}),
+    ...(isProfileId(mark.profile) ? { profile: mark.profile } : {}),
     ...(pluginsWithout ? { pluginsWithout } : {}),
     ...(projectSkills !== undefined ? { projectSkills } : {}),
   }
@@ -157,7 +157,7 @@ export function forReaders(mark: Lasting): Lasting {
     ...(mark.publish !== undefined ? { publish: mark.publish } : {}),
     ...(mark.for !== undefined ? { for: mark.for } : {}),
     ...(mark.repos !== undefined ? { repos: mark.repos } : {}),
-    ...(mark.preset !== undefined ? { preset: mark.preset } : {}),
+    ...(mark.profile !== undefined ? { profile: mark.profile } : {}),
     ...(mark.pluginsWithout !== undefined ? { pluginsWithout: mark.pluginsWithout } : {}),
     ...(mark.projectSkills !== undefined ? { projectSkills: mark.projectSkills } : {}),
   }

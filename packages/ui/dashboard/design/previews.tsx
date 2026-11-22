@@ -250,7 +250,7 @@ function Buttons() {
       </Labelled>
       <p className="text-xs text-muted-foreground">
         There is no destructive variant, so every irreversible action in the app (remove worktree,
-        delete preset, stop a run) is styled ad hoc at the call site.
+        delete profile, stop a run) is styled ad hoc at the call site.
       </p>
     </div>
   )

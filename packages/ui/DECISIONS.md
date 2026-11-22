@@ -158,7 +158,7 @@ already made, and lists it in its pull request; for anything else it proposes an
   person who liked the work had no way to have it published but a new run.
 - A session's box has the launcher's two rows, item for item in the same places and the same
   look, each item a session cannot change off: above the box where it runs, the project and the
-  branch; under the box the preset, then Skills and Context, and at the right the git host
+  branch; under the box the profile, then Skills and Context, and at the right the git host
   account and Auto, then the model. The branch is the one it started from, with the one it works on in
   its hover: the same meaning as on the launcher, and it does not flip as the agent renames its
   own. Where the record cannot vouch for that branch the row leaves it out. The account is the
@@ -275,12 +275,12 @@ already made, and lists it in its pull request; for anything else it proposes an
 - The "Skills" menu under the box picks the skills one session gets, as the account beside it
   is picked (#2394): the plugins on in the project that give its runs something, each ticked,
   tickable off, so the session goes without its skills and its steps; the project's own skills
-  all, none or each; both as the session's preset has them until the session picks. Nothing is
-  saved, so the next session starts from its preset's. The picks reach the run in its
-  environment with the preset and the account, its record keeps them, and a resume applies them
+  all, none or each; both as the session's profile has them until the session picks. Nothing is
+  saved, so the next session starts from its profile's. The picks reach the run in its
+  environment with the profile and the account, its record keeps them, and a resume applies them
   again; the session page says them in the item's hover, off. A session with no project has the
   first part alone. A plugin is switched on in Settings, not in the menu. Picked over a pick
-  saved like the model's, which Rom's design ruled out: the preset is the lasting set, the
+  saved like the model's, which Rom's design ruled out: the profile is the lasting set, the
   session the exception. Picked over "More skills", every other skill OpenAgent carries,
   tickable on for one session: a plugin's Enabled row is the source of truth (decision 31).
 - A project's scheduler starts and stops with OpenAgent wherever scheduled-agents is on, from
@@ -307,7 +307,7 @@ already made, and lists it in its pull request; for anything else it proposes an
   host is not named like an agent's own (`-agent`), the page says to make one with limited
   access. Picked over the accounts being one entry among the Settings.
 - An account at a git host is added in one dialog, the same wherever one is added: "Add" at the
-  title of the git hosts' card, the Overview's first step, a preset's accounts on the Presets
+  title of the git hosts' card, the Overview's first step, a profile's accounts on the Agent profiles
   page, the account under the message box, "Back up as". It installs the host's tool where it
   is missing, shows the code to type at the host, says the advice of an account of the agents'
   own, and closes on the account once it is there, which is then the one picked where it was
@@ -405,21 +405,23 @@ already made, and lists it in its pull request; for anything else it proposes an
   went, and over the last update as the default, Claude Code's, which moves a row while a
   person talks to it.
 
-## The presets
-- A preset (#2394) is a name and a saved set of run options, made once on the Presets page and
-  used in any project or none, kept with the person through the store, so every computer of
-  theirs has it: the page lists them, Default first, and edits each in a dialog over the page,
-  as a new one is made: its accounts among the ones the Permissions page knows, the plugins its
-  runs go without (#2394, decision 37), and whether they get the project's own skills. The
-  dialog scrolls under its title with Save and Cancel always in view, and a click beside it
-  closes nothing: a form that long is not lost to a stray click (before, the editor took the
-  card's place in the list, which moved the page under the person). The session's preset is the "Preset" menu first under the box, saved like
-  the model; its GitHub account is what the account control shows until the person picks
-  another for the session. The run's record keeps the preset, and the session's box says it
-  where the launcher's menu is. A preset that names no GitHub account is on "None — whatever
-  the computer uses", one plain item: the computer's account repeated in it read as a
-  duplicate of the account's own item. Picked over presets per project: a project is context,
-  a preset is how its runs work, anywhere.
+## The profiles
+- A profile (#2394) is a name and a saved set of run options, made once on the Agent profiles page
+  and used in any project or none, kept with the person through the store, so every computer of
+  theirs has it: the page lists them, Default first, and edits each in a dialog over the page, as
+  a new one is made: its accounts among the ones the Permissions page knows, the plugins its runs
+  go without (#2394, decision 37), and whether they get the project's own skills. The dialog
+  scrolls under its title with Save and Cancel always in view, and a click beside it closes
+  nothing: a form that long is not lost to a stray click (before, the editor took the card's place
+  in the list, which moved the page under the person). The session's profile is the "Profile" menu
+  first under the box, saved like the model; its GitHub account is what the account control shows
+  until the person picks another for the session. The run's record keeps the profile, and the
+  session's box says it where the launcher's menu is. A profile that names no GitHub account is on
+  "None — whatever the computer uses", one plain item: the computer's account repeated in it read
+  as a duplicate of the account's own item. Picked over profiles per project: a project is
+  context, a profile is how its runs work, anywhere.
+- They are called profiles, agent profiles in full, in the code too. Picked over presets, the
+  name they had first.
 
 ## What runs log in with
 - One page has it, Permissions: the coding agents' cards, then the git hosts', each a card

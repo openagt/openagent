@@ -28,25 +28,25 @@ vi.mock('../lib/preferences.js', () => ({ usePreferences: () => prefs.current, u
 const logins = vi.hoisted(() => ({ onAgentState: vi.fn(), sendAgentFix: vi.fn(), onGitHosts: vi.fn(), sendGitHostInstall: vi.fn(), sendGitHostLogin: vi.fn(), sendUseGitHostAccount: vi.fn() }))
 vi.mock('../rpc/logins.js', () => logins)
 
-// The presets as read, and the menu as a press that picks the second one.
-const presetsList = vi.hoisted(() => ({
-  presets: [
+// The profiles as read, and the menu as a press that picks the second one.
+const profilesList = vi.hoisted(() => ({
+  profiles: [
     { id: 'default', name: 'Default', options: {} },
     { id: 'reviewer', name: 'Reviewer', options: { github: { account: 'octo-agent' }, skills: { project: 'none' } } },
     { id: 'lean', name: 'Lean', options: { plugins: { without: ['logs'] } } },
   ],
 }))
-vi.mock('./PresetsPage.js', () => ({ usePresetsList: () => ({ view: presetsList, reload: async () => {} }) }))
-vi.mock('./PresetMenu.js', () => ({
-  PresetMenu: ({ picked, onPick }: { picked: string | undefined; onPick: (id: string) => void }) => (
-    <button type="button" onClick={() => onPick('reviewer')}>{`preset:${picked ?? ''}`}</button>
+vi.mock('./ProfilesPage.js', () => ({ useProfilesList: () => ({ view: profilesList, reload: async () => {} }) }))
+vi.mock('./ProfileMenu.js', () => ({
+  ProfileMenu: ({ picked, onPick }: { picked: string | undefined; onPick: (id: string) => void }) => (
+    <button type="button" onClick={() => onPick('reviewer')}>{`profile:${picked ?? ''}`}</button>
   ),
 }))
 // What this session gets: a press that picks some, a double press that ticks every plugin on, and what it was given.
 vi.mock('./SkillsMenu.js', () => ({
-  presetPicks: (preset: { options: { plugins?: { without?: string[] }; skills?: { project?: 'all' | 'none' | string[] } } } | undefined) => {
-    const without = preset?.options.plugins?.without ?? []
-    const project = preset?.options.skills?.project
+  profilePicks: (profile: { options: { plugins?: { without?: string[] }; skills?: { project?: 'all' | 'none' | string[] } } } | undefined) => {
+    const without = profile?.options.plugins?.without ?? []
+    const project = profile?.options.skills?.project
     return project === undefined || project === 'all' ? { without } : { without, project }
   },
   SkillsMenu: ({ projectId, picks, onChange }: { projectId: string | undefined; picks: { without: string[]; project?: 'none' | string[] }; onChange: (picks: { without: string[]; project?: 'none' | string[] }) => void }) => (
@@ -289,13 +289,13 @@ describe('StartAgentForm (#1774)', () => {
     expect(alert.parentElement!.dataset.testid).toBe('notes')
   })
 
-  test('under the box, at the left: the preset, then Skills, then the Context picker; at the right, before the model: the account, then the "Auto" menu', async () => {
+  test('under the box, at the left: the profile, then Skills, then the Context picker; at the right, before the model: the account, then the "Auto" menu', async () => {
     onCommands.mockResolvedValue({ commands: [], gitHost: true, remote: true })
     render(<StartAgentForm {...props} />)
     const below = screen.getByTestId('controls')
     const end = screen.getByTestId('controls-end')
     await waitFor(() => expect(end.contains(autoMenu())).toBe(true))
-    expect(within(below).getAllByRole('button').map(button => button.textContent)).toEqual(['preset:default', 'skills:p1:/all', 'Context'])
+    expect(within(below).getAllByRole('button').map(button => button.textContent)).toEqual(['profile:default', 'skills:p1:/all', 'Context'])
     expect(within(end).getAllByRole('button').map(button => button.textContent)).toEqual(['pick-octo-agent', 'Auto: Commit'])
   })
 
@@ -430,28 +430,28 @@ describe('StartAgentForm (#1774)', () => {
     runsAccount.login = undefined
   })
 
-  test('the preset picked goes with the Start and to the run\'s page, and its GitHub account is the session\'s until another is picked; Default sends none', async () => {
+  test('the profile picked goes with the Start and to the run\'s page, and its GitHub account is the session\'s until another is picked; Default sends none', async () => {
     onCommands.mockResolvedValue(WITH_BRANCHES)
     runsAccount.login = 'octo'
     start.mockResolvedValue({ agentId: 'r1' })
     const onAgentStarted = vi.fn()
     render(<StartAgentForm {...props} projectName="gemstack" onAgentStarted={onAgentStarted} />)
-    expect((await screen.findByText('preset:default')).textContent).toBe('preset:default')
+    expect((await screen.findByText('profile:default')).textContent).toBe('profile:default')
     fireEvent.click(screen.getByText('submit-typed'))
     await waitFor(() => expect(onAgentStarted).toHaveBeenCalled())
-    expect((start.mock.lastCall![2] as { preset?: string; account?: string }).preset).toBeUndefined()
+    expect((start.mock.lastCall![2] as { profile?: string; account?: string }).profile).toBeUndefined()
     expect((start.mock.lastCall![2] as { account?: string }).account).toBe('octo')
     // The reviewer picked: the pick is saved, and with it the session goes as its account.
-    fireEvent.click(screen.getByText('preset:default'))
-    expect(updatePreferences).toHaveBeenCalledWith({ preset: 'reviewer' })
-    prefs.current = { ...prefs.current, preset: 'reviewer' }
+    fireEvent.click(screen.getByText('profile:default'))
+    expect(updatePreferences).toHaveBeenCalledWith({ profile: 'reviewer' })
+    prefs.current = { ...prefs.current, profile: 'reviewer' }
     cleanup()
     render(<StartAgentForm {...props} projectName="gemstack" onAgentStarted={onAgentStarted} />)
-    await screen.findByText('preset:reviewer')
+    await screen.findByText('profile:reviewer')
     fireEvent.click(screen.getByText('submit-typed'))
     await waitFor(() => expect(start).toHaveBeenCalledTimes(2))
-    expect((start.mock.lastCall![2] as { preset?: string; account?: string })).toMatchObject({ preset: 'reviewer', account: 'octo-agent' })
-    expect((onAgentStarted.mock.lastCall![3] as { preset?: string; gitAccount?: string })).toMatchObject({ preset: 'reviewer', gitAccount: 'octo-agent' })
+    expect((start.mock.lastCall![2] as { profile?: string; account?: string })).toMatchObject({ profile: 'reviewer', account: 'octo-agent' })
+    expect((onAgentStarted.mock.lastCall![3] as { profile?: string; gitAccount?: string })).toMatchObject({ profile: 'reviewer', gitAccount: 'octo-agent' })
     runsAccount.login = undefined
   })
 
@@ -554,34 +554,34 @@ describe('StartAgentForm (#1774)', () => {
     expect('pluginsWithout' in sent || 'projectSkills' in sent).toBe(false)
   })
 
-  test('on a preset set to never pick up project skills, the session starts from none and the Start says so; the next session starts from none again', async () => {
+  test('on a profile set to never pick up project skills, the session starts from none and the Start says so; the next session starts from none again', async () => {
     onCommands.mockResolvedValue({ commands: [], gitHost: true, remote: true, address: 'github.com/acme/shop' })
     start.mockResolvedValue({ agentId: 'r1' })
-    prefs.current = { ...prefs.current, preset: 'reviewer' }
+    prefs.current = { ...prefs.current, profile: 'reviewer' }
     render(<StartAgentForm {...props} projectName="gemstack" />)
-    await screen.findByText('preset:reviewer')
+    await screen.findByText('profile:reviewer')
     expect(await screen.findByText('skills:p1:/none')).toBeTruthy()
     fireEvent.click(screen.getByText('submit-typed'))
     await waitFor(() => expect(start).toHaveBeenCalled())
-    expect(start.mock.lastCall![2]).toMatchObject({ preset: 'reviewer', projectSkills: 'none' })
+    expect(start.mock.lastCall![2]).toMatchObject({ profile: 'reviewer', projectSkills: 'none' })
     expect(screen.getByText('skills:p1:/none')).toBeTruthy()
   })
 
-  test('on a preset that leaves plugins out, the session starts without them and the Start says so; every plugin ticked on again goes as none of them, over the preset\'s', async () => {
+  test('on a profile that leaves plugins out, the session starts without them and the Start says so; every plugin ticked on again goes as none of them, over the profile\'s', async () => {
     onCommands.mockResolvedValue({ commands: [], gitHost: true, remote: true, address: 'github.com/acme/shop' })
     start.mockResolvedValue({ agentId: 'r1' })
-    prefs.current = { ...prefs.current, preset: 'lean' }
+    prefs.current = { ...prefs.current, profile: 'lean' }
     render(<StartAgentForm {...props} projectName="gemstack" />)
-    await screen.findByText('preset:lean')
+    await screen.findByText('profile:lean')
     expect(await screen.findByText('skills:p1:logs/all')).toBeTruthy()
     fireEvent.click(screen.getByText('submit-typed'))
     await waitFor(() => expect(start).toHaveBeenCalled())
-    expect(start.mock.lastCall![2]).toMatchObject({ preset: 'lean', pluginsWithout: ['logs'] })
+    expect(start.mock.lastCall![2]).toMatchObject({ profile: 'lean', pluginsWithout: ['logs'] })
     fireEvent.doubleClick(await screen.findByText('skills:p1:logs/all'))
     expect(screen.getByText('skills:p1:/all')).toBeTruthy()
     fireEvent.click(screen.getByText('submit-typed'))
     await waitFor(() => expect(start).toHaveBeenCalledTimes(2))
-    expect(start.mock.lastCall![2]).toMatchObject({ preset: 'lean', pluginsWithout: [] })
+    expect(start.mock.lastCall![2]).toMatchObject({ profile: 'lean', pluginsWithout: [] })
   })
 
   test('a problem a press fixes has its button on the red line, with the command it runs; once fixed, the check is asked again and the line goes', async () => {

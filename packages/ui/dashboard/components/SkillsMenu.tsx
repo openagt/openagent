@@ -1,15 +1,15 @@
 import { useContext } from 'react'
 import { Check, Puzzle, Settings2 } from 'lucide-react'
-import type { Preset } from '../rpc/presets.js'
+import type { Profile } from '../rpc/profiles.js'
 import { onProjectSkillNames, onSkillChoices, type SkillChoices } from '../rpc/skill-choices.js'
 import { useLoaded, usePolled } from '../lib/use-async.js'
 import { pluginsAgain } from '../lib/plugins-switched.js'
 import { inWords } from '../lib/in-words.js'
 import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
 import { RowChevron, RowSaid, rowButtonClass, rowWideClass } from './ui/row-item.js'
-import { usePresetsList } from './PresetsPage.js'
+import { useProfilesList } from './ProfilesPage.js'
 import { PLUGINS_ENTRY } from './PluginsSettings.js'
-import { DEFAULT_PRESET } from '../../src/client.js'
+import { DEFAULT_PROFILE } from '../../src/client.js'
 import { SESSIONS_ID } from '../../src/project-address.js'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip.js'
 import {
@@ -28,10 +28,10 @@ import {
 // The "Skills" menu under the launcher's box (the session's picks): what the session gets, for
 // this session alone, as the account beside it is picked. The plugins on in the project that give
 // its runs something, each ticked, tickable off: the session goes without it, so it gets none of
-// its skills nor its steps; then the project's own skills, all, none or each; both as its preset
+// its skills nor its steps; then the project's own skills, all, none or each; both as its profile
 // has them until the session picks. Then the project's plugins and its skills in Settings. The
 // picks go with the Start in the run's environment and its record keeps them, so a resume applies
-// them again. The pick is not saved: the next session starts from its preset's. A session with no
+// them again. The pick is not saved: the next session starts from its profile's. A session with no
 // project has no project skills. The skills module's own control under the box, once the box has
 // places for them (#2394).
 
@@ -46,10 +46,10 @@ export interface SkillPicks {
 
 export const NO_PICKS: SkillPicks = { without: [] }
 
-/** The picks a session starts from on its preset: every plugin on but the ones it leaves out, and the project skills it names (the session still overrides). */
-export function presetPicks(preset: Pick<Preset, 'options'> | undefined): SkillPicks {
-  const without = preset?.options.plugins?.without ?? []
-  const project = preset?.options.skills?.project
+/** The picks a session starts from on its profile: every plugin on but the ones it leaves out, and the project skills it names (the session still overrides). */
+export function profilePicks(profile: Pick<Profile, 'options'> | undefined): SkillPicks {
+  const without = profile?.options.plugins?.without ?? []
+  const project = profile?.options.skills?.project
   return { without: [...without], ...(project !== undefined && project !== 'all' ? { project } : {}) }
 }
 
@@ -201,15 +201,15 @@ export function SkillsMenu({
 /**
  * The session page's "Skills", in the launcher's place, as words, not a press: a session keeps the
  * picks it started with, counted as the launcher counts them, which their hover says as its record
- * keeps them; as its preset has them where the session picked none. Drawn once the plugins to pick
- * from, the presets and the project's skills are read, so the count lands whole.
+ * keeps them; as its profile has them where the session picked none. Drawn once the plugins to pick
+ * from, the profiles and the project's skills are read, so the count lands whole.
  */
-export function SkillsOff({ projectId, preset, pluginsWithout, projectSkills }: { projectId: string | undefined; preset: string | undefined; pluginsWithout?: string[] | undefined; projectSkills?: 'all' | 'none' | string[] | undefined }) {
+export function SkillsOff({ projectId, profile, pluginsWithout, projectSkills }: { projectId: string | undefined; profile: string | undefined; pluginsWithout?: string[] | undefined; projectSkills?: 'all' | 'none' | string[] | undefined }) {
   const choices = useSkillChoices(projectId)
-  const { view } = usePresetsList()
+  const { view } = useProfilesList()
   const project = useProjectSkills(projectId)
   if (!choices || !view || (projectId !== undefined && project === null)) return null
-  const on = view.presets.find(one => one.id === (preset ?? DEFAULT_PRESET))?.options
+  const on = view.profiles.find(one => one.id === (profile ?? DEFAULT_PROFILE))?.options
   const without = pluginsWithout ?? on?.plugins?.without ?? []
   const got = projectSkills ?? on?.skills?.project
   const count = skillCount(sessionSkills(choices, without), projectId !== undefined ? projectKept(project ?? [], got) : [])

@@ -116,13 +116,13 @@ describe('AgentHistory (#785)', () => {
   test('while the modules\' pages are not known, what stands under them waits, then fades in at its place; known from the start, it is there at once', () => {
     const rail = (pages: { segment: string; label: string }[] | null) => <AgentHistory projectId="p1" scope="p1" agents={[agent({ status: 'done' })]} selectedAgentId={null} onSelect={() => {}} pages={pages} />
     const { rerender, unmount } = renderRail(rail(null))
-    expect([screen.queryByRole('link', { name: 'Presets' }), screen.queryByText('Log'), screen.queryByRole('link', { name: /Welcome/ })]).toEqual([null, null, null])
+    expect([screen.queryByRole('link', { name: 'Agent profiles' }), screen.queryByText('Log'), screen.queryByRole('link', { name: /Welcome/ })]).toEqual([null, null, null])
     rerender(<SidebarProvider>{rail([{ segment: 'logs', label: 'Logs' }])}</SidebarProvider>)
     expect(screen.getByRole('link', { name: 'Logs' }).parentElement?.className).toContain('starting:opacity-0')
     expect(screen.getByRole('link', { name: /Welcome/ })).toBeTruthy()
     unmount()
     renderRail(rail([]))
-    expect(screen.getByRole('link', { name: 'Presets' }).parentElement?.className).not.toContain('starting:opacity-0')
+    expect(screen.getByRole('link', { name: 'Agent profiles' }).parentElement?.className).not.toContain('starting:opacity-0')
   })
 
   test('a failed run\'s mark is the failed hexagon, still', () => {
@@ -899,7 +899,7 @@ describe('AgentHistory reads a log ahead', () => {
 })
 
 // The accounts the agents work with: a page of the dashboard's own, under the modules' pages.
-test('Presets and Permissions are rows of the rail, after the modules\u2019 pages, and open their pages; the one open is the active one', () => {
+test('Agent profiles and Permissions are rows of the rail, after the modules\u2019 pages, and open their pages; the one open is the active one', () => {
   const onPage = vi.fn()
   const { rerender } = render(
     <SidebarProvider>
@@ -907,10 +907,10 @@ test('Presets and Permissions are rows of the rail, after the modules\u2019 page
     </SidebarProvider>,
   )
   const labels = screen.getAllByRole('link').map(link => link.textContent)
-  expect(labels.indexOf('Presets')).toBe(labels.indexOf('Logs') + 1)
-  expect(labels.indexOf('Permissions')).toBe(labels.indexOf('Presets') + 1)
-  fireEvent.click(screen.getByRole('link', { name: 'Presets' }))
-  expect(onPage).toHaveBeenCalledWith('presets')
+  expect(labels.indexOf('Agent profiles')).toBe(labels.indexOf('Logs') + 1)
+  expect(labels.indexOf('Permissions')).toBe(labels.indexOf('Agent profiles') + 1)
+  fireEvent.click(screen.getByRole('link', { name: 'Agent profiles' }))
+  expect(onPage).toHaveBeenCalledWith('profiles')
   fireEvent.click(screen.getByRole('link', { name: 'Permissions' }))
   expect(onPage).toHaveBeenCalledWith('permissions')
   rerender(

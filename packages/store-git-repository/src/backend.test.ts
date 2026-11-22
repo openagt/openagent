@@ -32,10 +32,10 @@ test("every save kept in the person's folder is a commit there, a project's too;
   const { base, cleanup } = await setup()
   try {
     const { folders, store } = computer(base, 'laptop')
-    await store.save(PERSON, { 'presets/default.json': '{}\n' }, 'the default preset')
+    await store.save(PERSON, { 'profiles/default.json': '{}\n' }, 'the default profile')
     await store.save(projectScope(SHOP), { 'tickets/a.md': '# A\n' }, () => 'ticket a')
     await store.save(COMPUTER, { 'settings.json': '{}\n' }, 'a setting of this computer')
-    assert.deepEqual(await subjects(folders.personal), ['ticket a', 'the default preset', 'create the personal folder'])
+    assert.deepEqual(await subjects(folders.personal), ['ticket a', 'the default profile', 'create the personal folder'])
     assert.equal((await git(['status', '--porcelain'], folders.personal)).trim(), '', 'nothing is left uncommitted')
     assert.equal(await store.read(COMPUTER, 'settings.json'), '{}\n')
     assert.ok(!(await readdir(folders.computer)).includes('.git'), "this computer's folder is no repository")

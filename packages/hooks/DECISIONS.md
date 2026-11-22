@@ -65,16 +65,16 @@ already made, and lists it in its pull request; for anything else it proposes an
 - Three scopes: the person's, which follows them to every computer; this computer's; a
   project's.
 
-## Presets
-- A preset is a saved set of run options, and can go without enabled plugins
-  (`plugins.without`). A setting that needs to differ per preset becomes a run option of its
-  module, with the setting as its default. Picked over presets that override any setting.
-- Presets replace agents: a preset's skills are the project's own agent skills, all, none or the
+## Profiles
+- A profile is a saved set of run options, and can go without enabled plugins
+  (`plugins.without`). A setting that needs to differ per profile becomes a run option of its
+  module, with the setting as its default. Picked over profiles that override any setting.
+- Profiles replace agents: a profile's skills are the project's own agent skills, all, none or the
   ones named, and the skills a module gives come with its module. Picked over agents that each
   named their own set of skills.
-- A preset is made once and used in any project or none, kept with the person (the catalog's
-  `presets.saved`), so every computer of theirs has the same presets. It names the accounts and
+- A profile is made once and used in any project or none, kept with the person (the catalog's
+  `profiles.saved`), so every computer of theirs has the same profiles. It names the accounts and
   never holds a token: an account the computer a run goes to does not have is simply not there.
-  `Default` is the preset a run is on when none is picked, built in until it is changed, never
-  removed or renamed. Picked over presets kept beside the registry on one computer, which Rom's
+  `Default` is the profile a run is on when none is picked, built in until it is changed, never
+  removed or renamed. Picked over profiles kept beside the registry on one computer, which Rom's
   design rules out for agents.
