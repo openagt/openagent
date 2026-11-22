@@ -19,9 +19,9 @@ const at = (ms: number) => new Date(ms).toISOString()
 const now = Date.now()
 const noon = new Date(new Date().setHours(12, 0, 0, 0)).getTime()
 
-/** A host whose server part reads `cards`, and whose dashboard lists `runs` right now. */
-function hostWith(cards: unknown[], runs: unknown[] = []): FakeHost {
-  return fakeHost('@openagt/logs', { call: async () => ({ ok: true as const, output: cards }), agents: async () => runs as ModuleAgent[] })
+/** A host whose server part reads `cards`, and whose dashboard lists `runs` right now in a project, and `sessions` with no project. */
+function hostWith(cards: unknown[], runs: unknown[] = [], sessions: unknown[] = []): FakeHost {
+  return fakeHost('@openagt/logs', { call: async () => ({ ok: true as const, output: cards }), agents: async (projectId: string) => (projectId === 'session' ? sessions : runs) as ModuleAgent[] })
 }
 
 afterEach(() => {
@@ -41,6 +41,27 @@ test('a project with no run recorded says so where the runs would stand, and lis
   )
   expect(await screen.findByText('No runs recorded yet. A run is listed here from the moment an agent starts on this project.')).toBeTruthy()
   expect(screen.queryByRole('list')).toBeNull()
+})
+
+test('with every project showing, the sessions with no project are listed too, as the dashboard lists them; with one project picked, they are not', async () => {
+  const host = hostWith([{ id: 'r1', startedAt: at(now - 2000), endedAt: at(now), status: 'done', title: 'In the project' }], [], [{ id: 's1', startedAt: at(now - 1000), status: 'waiting', title: 'Greeting exchange' }])
+  const page = (projectId: string | null) => (
+    <ModuleHostContext.Provider value={host}>
+      <LogsPage projects={[{ id: 'p1', name: 'alpha', gitHost: true }]} projectId={projectId} path={[]} />
+    </ModuleHostContext.Provider>
+  )
+  const every = render(page(null))
+  expect(await screen.findByText('Greeting exchange')).toBeTruthy()
+  expect(screen.getByText('In the project')).toBeTruthy()
+  expect(screen.getByText('Every run recorded in alpha, and the sessions with no project, newest first.')).toBeTruthy()
+  // Its row opens the session where its address is, under no project.
+  expect(screen.getByText('Greeting exchange').closest('a')!.getAttribute('href')).toBe(host.agentHref('session', 's1'))
+  every.unmount()
+  forgetRemembered()
+  localStorage.clear()
+  render(page('p1'))
+  expect(await screen.findByText('In the project')).toBeTruthy()
+  expect(screen.queryByText('Greeting exchange')).toBeNull()
 })
 
 test('a day is said as Today, Yesterday, else its weekday and date', () => {
@@ -272,7 +293,7 @@ test('a second visit opens with the last list at once, while the runs are read a
 test('the runs the dashboard lists show while the records are still read, with no "Loading…" over them', async () => {
   const host = fakeHost('@openagt/logs', {
     call: () => new Promise(() => {}),
-    agents: async () => [{ id: 'r1', startedAt: at(now - 1000), status: 'running', title: 'Going' }] as ModuleAgent[],
+    agents: async (projectId: string) => (projectId === 'session' ? [] : [{ id: 'r1', startedAt: at(now - 1000), status: 'running', title: 'Going' }]) as ModuleAgent[],
   })
   render(
     <ModuleHostContext.Provider value={host}>
