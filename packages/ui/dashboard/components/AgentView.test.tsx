@@ -1372,6 +1372,23 @@ describe('AgentView: the bar when the work is landed', () => {
     await waitFor(() => expect(within(screen.getByTestId('composer-controls')).getAllByRole('link').map(link => link.getAttribute('aria-label'))).toEqual(['PR #4 merged, on the git host', 'PR #5 open, on the git host']))
   })
 
+  test("a merged request's label says merged from the first frame, and while the page's read still calls it open", async () => {
+    let lookup: (v: unknown) => void = () => {}
+    onAgent.mockResolvedValue(ENDED)
+    onAgentWorktree.mockReturnValue(new Promise(() => {}))
+    const read = { ...PUSHED, pushed: true, pr: { number: 7, url: 'https://x/pull/7', state: 'OPEN', title: 'T' } }
+    onAgentHandoff.mockResolvedValueOnce({ ...read, prPending: true })
+    onAgentHandoff.mockReturnValue(new Promise(resolve => (lookup = resolve)))
+    const labels = () => within(screen.getByTestId('composer-controls')).getAllByRole('link').map(link => link.getAttribute('aria-label'))
+    render(view({ agentId: 'run-m', events: ENDED, card: { status: 'done', pr: { number: 7, url: 'https://x/pull/7' }, prState: 'merged' } }))
+    expect(labels()).toEqual(['PR #7 merged, on the git host'])
+    await waitFor(() => expect(onAgentHandoff).toHaveBeenCalledTimes(2))
+    expect(labels()).toEqual(['PR #7 merged, on the git host'])
+    lookup({ ...read, merged: true, pr: { ...read.pr, state: 'MERGED' } })
+    await waitFor(() => expect(screen.getByTestId('bar-ready').textContent).toBe('true'))
+    expect(labels()).toEqual(['PR #7 merged, on the git host'])
+  })
+
   test('work left uncommitted after the merge keeps the bar: that work is not landed', async () => {
     onAgent.mockResolvedValue(ENDED)
     onAgentWorktree.mockResolvedValue({ branch: 'agent-p', pr: { number: 9, url: 'https://x/pull/9', state: 'MERGED', title: 'T' } })

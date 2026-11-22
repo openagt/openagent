@@ -83,7 +83,7 @@ export function AgentView({
   /** Whether the agent is still running; `null` while the daemon's list of agents has not been read, so it is not known yet. */
   live: boolean | null
   /** What the run's card says, off the runs poll: what the feed cannot carry (the details strip's facts, how the agent was set up, whether its record is being saved). Absent until the card is listed. */
-  card?: (AgentDetailsCard & Pick<AgentMeta, 'status' | 'intent' | 'saving' | 'workspace' | 'branch' | 'base' | 'baseCommit' | 'host' | 'otherHost' | 'publish' | 'prBase' | 'gitAccount' | 'earlierPrs' | 'prState' | 'repos' | 'preset' | 'pluginsWithout' | 'projectSkills'> & Partial<Pick<AgentMeta, 'endedAt'>>) | undefined
+  card?: (AgentDetailsCard & Pick<AgentMeta, 'status' | 'intent' | 'saving' | 'workspace' | 'branch' | 'base' | 'baseCommit' | 'host' | 'otherHost' | 'publish' | 'prBase' | 'gitAccount' | 'earlierPrs' | 'pr' | 'prState' | 'repos' | 'preset' | 'pluginsWithout' | 'projectSkills'> & Partial<Pick<AgentMeta, 'endedAt'>>) | undefined
   /** What the launcher said about this run as it started it: shown until the run's record says it. */
   picks?: StartPicks | undefined
   /** The session's own name — the same label the rail shows (#1030). It leads the action bar as
@@ -323,7 +323,20 @@ export function AgentView({
   lastSay.current = { agentId, say }
   // Every pull request the run opened, for the row under the message box: the ones before, then the one it is on.
   const earlierPrs = card?.earlierPrs
-  const prs = useMemo(() => [...(earlierPrs ?? []), ...(pr && !earlierPrs?.some(earlier => earlier.url === pr.url) ? [pr] : [])], [earlierPrs, pr])
+  // How the request it is on stands is the git host's to say, and until it has answered the
+  // page's read calls the request open: a merged request's label said "open" for a second, then
+  // "merged", and pushed the labels beside it over. The list of runs has the git host's last word
+  // already, as the run's row shows, so the label says that until this page's read is in, and
+  // from the first frame, before the read has named the request at all.
+  const prStateOut = checkout?.prPending === true || onBranch?.prPending === true
+  const listedPr = card?.pr
+  const listedState = card?.prState
+  const labelPr = useMemo(() => {
+    if (pr === undefined) return listedPr ? { ...listedPr, state: listedState } : undefined
+    if (!prStateOut) return pr
+    return { number: pr.number, url: pr.url, state: listedPr?.number === pr.number ? listedState : undefined }
+  }, [pr, prStateOut, listedPr, listedState])
+  const prs = useMemo(() => [...(earlierPrs ?? []), ...(labelPr && !earlierPrs?.some(earlier => earlier.url === labelPr.url) ? [labelPr] : [])], [earlierPrs, labelPr])
   // Where the session started, right above the message box, as the "New agent session" page has it. It is
   // there whatever stands in the box's place.
   const row = <SessionRow runsOn={runsOn} target={target} elsewhere={elsewhere || card?.otherHost === true} projectName={projectName} startedFrom={startedFrom} worksOn={barCheckout?.branch ?? branch} repos={card?.repos ?? picks?.repos} />
