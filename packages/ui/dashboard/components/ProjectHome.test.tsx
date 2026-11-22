@@ -13,6 +13,8 @@ vi.mock('./ProjectErrorBanner.js', () => ({ ProjectErrorBanner: () => null }))
 vi.mock('./StartAgentForm.js', () => ({ StartAgentForm: () => <div>start form</div> }))
 vi.mock('./WaitingList.js', () => ({ WaitingList: ({ items }: { items: unknown[] }) => <div>{items.length} rows</div>, holdsBack: (items: unknown[]) => items.length > 6 }))
 
+vi.mock('./FolderBehind.js', () => ({ FolderBehindLine: ({ projectId }: { projectId: string }) => <div>folder of {projectId} behind</div> }))
+
 const { ProjectHome } = await import('./ProjectHome.js')
 
 const WAITS: Waiting = { projectId: 'p1', projectName: 'p1', kind: 'waiting', module: 'ask', scope: 'run', run: 'r1', id: 'r1:q1', words: 'Needs answer', title: 'Auth store', detail: 'Cache it?', mark: 'question' }
@@ -67,6 +69,14 @@ describe('ProjectHome', () => {
     expect(screen.queryByRole('heading', { name: 'Docs' })).toBeNull()
     expect(screen.queryByText('PLAN.md')).toBeNull()
     expect(onDocs).not.toHaveBeenCalled()
+  })
+
+  test('the line for a folder behind its remote is the project’s, under what waits on you', () => {
+    render(<ProjectHome projectId="p1" waiting={[WAITS]} files={[]} context={new Set()} addContext={() => {}} removeContext={() => {}} toggleContext={() => {}} onOpenAgent={() => {}} projects={[]} onPickProject={() => {}} onProjectAdded={() => {}} />)
+    const line = screen.getByText('folder of p1 behind')
+    const waiting = screen.getByRole('region', { name: 'Waiting on you' })
+    expect(waiting.compareDocumentPosition(line) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(line.parentElement).toBe(waiting.parentElement)
   })
 
   test('nothing waits: no section, no heading', () => {

@@ -4,6 +4,7 @@ import { rpc } from '../lib/rpc.js'
 // The types the RPCs speak in, straight from the implementations — erased at build, so importing
 // them here pulls no server code into the bundle.
 export type * from '../../src/dashboard-rpc/projects.js'
+export type { FolderBehind } from '../../src/dashboard/folder-behind.js'
 
 // Typed stubs for the `projects` RPCs (F3). Each is checked against the implementation's own
 // signature, so a rename or a changed argument is a type error here rather than a 404 at runtime.
@@ -27,3 +28,5 @@ export const onRepoSources = rpc<typeof impl.onRepoSources>('onRepoSources')
 export const sendAddRepoOwner = rpc<typeof impl.sendAddRepoOwner>('sendAddRepoOwner')
 export const sendRemoveRepoOwner = rpc<typeof impl.sendRemoveRepoOwner>('sendRemoveRepoOwner')
 export const sendRemoveRepoFolder = rpc<typeof impl.sendRemoveRepoFolder>('sendRemoveRepoFolder')
+export const onFolderBehind = rpc<typeof impl.onFolderBehind>('onFolderBehind')
+export const sendUpdateFolder = rpc<typeof impl.sendUpdateFolder>('sendUpdateFolder')

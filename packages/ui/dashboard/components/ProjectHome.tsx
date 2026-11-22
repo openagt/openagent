@@ -7,6 +7,7 @@ import { ComposerShape } from './Composer.js'
 import { TopBar } from './Panes.js'
 import { ProjectErrorBanner } from './ProjectErrorBanner.js'
 import { WaitingList } from './WaitingList.js'
+import { FolderBehindLine } from './FolderBehind.js'
 import { ScrollArea } from './ui/scroll-area.js'
 import type { StartPicks } from '../lib/started-from.js'
 import { useIsMobile } from '../lib/use-mobile.js'
@@ -124,6 +125,8 @@ export function ProjectHome({
                   <WaitingList key={projectId} items={waiting} onOpenAgent={onOpenAgent} />
                 </section>
               )}
+              {/* Under what waits (his pick): the folder behind its remote, and the press that updates it. */}
+              <FolderBehindLine projectId={projectId} />
             </div>
           </div>
         </ScrollArea>
