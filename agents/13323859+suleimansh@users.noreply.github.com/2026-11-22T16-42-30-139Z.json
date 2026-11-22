@@ -8,7 +8,6 @@
   "driver": "claude-code",
   "model": "claude-opus-5-5",
   "effort": "high",
-  "branch": "agent-2026-11-22T16-42-30-139Z",
   "cost": 0.0645032,
   "contextTokens": 21002,
   "caller": {
