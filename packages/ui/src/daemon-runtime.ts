@@ -4,7 +4,7 @@ import { stat } from 'node:fs/promises'
 import { hasImage, isImageName, type ReadyNaming } from '@openagt/agent-driver'
 import { IMAGES_PER_MESSAGE } from './images.js'
 import { isDriverName } from './driver-names.js'
-import { isPresetId, MODULE_NAME, type Hooks, type ProjectRef, type RunHost, type RunOptions, type RunRequest } from '@openagt/hooks'
+import { isProfileId, MODULE_NAME, type Hooks, type ProjectRef, type RunHost, type RunOptions, type RunRequest } from '@openagt/hooks'
 import { sessionRepos } from '@openagt/git-branches'
 import { nameStarted } from './started-names.js'
 import { findCheckout, isPidAlive, projectBranches, readLiveMetas } from './store/index.js'
@@ -62,7 +62,7 @@ function refusedPicks(options: StartAgentOptions, noProject: boolean): string | 
   if (noProject && options.host !== undefined) return 'A session with no project runs on this computer.'
   // A login is one word.
   if (options.account !== undefined && !(typeof options.account === 'string' && /^\S+$/.test(options.account))) return 'An account is named by its login.'
-  if (options.preset !== undefined && !isPresetId(options.preset)) return 'A preset is named by its id.'
+  if (options.profile !== undefined && !isProfileId(options.profile)) return 'A profile is named by its id.'
   // The picks are lists of names.
   const skillList = (value: unknown): value is string[] => Array.isArray(value) && value.length > 0 && value.every(isSkillName)
   if (options.pluginsWithout !== undefined && !(Array.isArray(options.pluginsWithout) && options.pluginsWithout.every(name => typeof name === 'string' && MODULE_NAME.test(name)))) return 'Plugins are named by their names.'
@@ -336,6 +336,6 @@ function runOptionsOf(options: StartAgentOptions, publish: RunOptions['publish']
     ...(Object.keys(github).length > 0 ? { github } : {}),
     ...(options.projectSkills !== undefined ? { skills: { project: options.projectSkills } } : {}),
     ...(options.pluginsWithout !== undefined ? { plugins: { without: options.pluginsWithout } } : {}),
-    ...(options.preset !== undefined ? { presets: { preset: options.preset } } : {}),
+    ...(options.profile !== undefined ? { profiles: { profile: options.profile } } : {}),
   }
 }

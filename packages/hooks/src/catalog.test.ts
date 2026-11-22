@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { COMPUTER, PERSON, SETTINGS_FILE, chainStore, settingsIn } from './index.js'
-import { DEFAULT_PRESET, PERSON_INFO, PRESETS, SCHEDULED_COMMANDS, isPersonName, isPresetName, presetIdOf, presetOf, presetsIn } from './catalog.js'
+import { DEFAULT_PROFILE, PERSON_INFO, PROFILES, SCHEDULED_COMMANDS, isPersonName, isProfileName, profileIdOf, profileOf, profilesIn } from './catalog.js'
 import { memoryStore } from './testing.js'
 
 test("the person's name and picture: saved with the person, each part read strictly, and none set is the computer's", async () => {
@@ -23,25 +23,25 @@ test("the person's name and picture: saved with the person, each part read stric
   assert.equal(isPersonName('x'.repeat(61)), false)
 })
 
-test('the presets: saved with the person, Default first and built in until changed, each read strictly; a preset not there is Default', async () => {
+test('the profiles: saved with the person, Default first and built in until changed, each read strictly; a profile not there is Default', async () => {
   const store = chainStore([memoryStore()])
   const settings = settingsIn(store)
-  assert.deepEqual(presetsIn(await settings.get(PRESETS)), [{ id: DEFAULT_PRESET, name: 'Default', options: {} }])
+  assert.deepEqual(profilesIn(await settings.get(PROFILES)), [{ id: DEFAULT_PROFILE, name: 'Default', options: {} }])
   const reviewer = { id: 'reviewer', name: 'Reviewer', options: { github: { account: 'ada-agent' }, 'agent-driver': { claude: ['Work'] }, skills: { project: 'none' as const }, plugins: { without: ['logs', 'tickets'] } } }
   const writer = { id: 'writer', name: 'Writer', options: {} }
-  await settings.set(PRESETS, [writer, reviewer, { id: DEFAULT_PRESET, name: 'Default', options: { 'agent-driver': { codex: ['Home'] } } }])
-  const all = presetsIn(await settings.get(PRESETS))
-  assert.deepEqual(all.map(preset => preset.id), [DEFAULT_PRESET, 'reviewer', 'writer'])
+  await settings.set(PROFILES, [writer, reviewer, { id: DEFAULT_PROFILE, name: 'Default', options: { 'agent-driver': { codex: ['Home'] } } }])
+  const all = profilesIn(await settings.get(PROFILES))
+  assert.deepEqual(all.map(profile => profile.id), [DEFAULT_PROFILE, 'reviewer', 'writer'])
   assert.deepEqual(all[0]?.options, { 'agent-driver': { codex: ['Home'] } }, 'Default as it was changed')
-  assert.deepEqual(presetOf(all, 'reviewer'), reviewer)
-  assert.equal(presetOf(all, 'gone').id, DEFAULT_PRESET)
-  assert.equal(presetOf(all, undefined).id, DEFAULT_PRESET)
+  assert.deepEqual(profileOf(all, 'reviewer'), reviewer)
+  assert.equal(profileOf(all, 'gone').id, DEFAULT_PROFILE)
+  assert.equal(profileOf(all, undefined).id, DEFAULT_PROFILE)
 
-  // What is not a preset, or not an option one holds, is left out.
-  await store.save(PERSON, { [SETTINGS_FILE]: JSON.stringify({ 'presets.saved': [{ id: 'Bad Id', name: 'x', options: {} }, { id: 'ok', name: ' Ok ', options: { github: { account: 7 }, model: 'x', skills: { project: ['a', 3] }, plugins: { without: ['Not A Plugin'] } } }, { id: 'quiet', name: 'Quiet', options: { plugins: { without: ['logs', 'Not A Plugin'] } } }] }) }, 'by hand')
-  assert.deepEqual(await settings.get(PRESETS), [{ id: 'ok', name: 'Ok', options: {} }, { id: 'quiet', name: 'Quiet', options: { plugins: { without: ['logs'] } } }])
-  assert.equal(presetIdOf(' Social Media! '), 'social-media')
-  assert.deepEqual([isPresetName('Reviewer'), isPresetName('!!!'), isPresetName('x'.repeat(41))], [true, false, false])
+  // What is not a profile, or not an option one holds, is left out.
+  await store.save(PERSON, { [SETTINGS_FILE]: JSON.stringify({ 'profiles.saved': [{ id: 'Bad Id', name: 'x', options: {} }, { id: 'ok', name: ' Ok ', options: { github: { account: 7 }, model: 'x', skills: { project: ['a', 3] }, plugins: { without: ['Not A Plugin'] } } }, { id: 'quiet', name: 'Quiet', options: { plugins: { without: ['logs', 'Not A Plugin'] } } }] }) }, 'by hand')
+  assert.deepEqual(await settings.get(PROFILES), [{ id: 'ok', name: 'Ok', options: {} }, { id: 'quiet', name: 'Quiet', options: { plugins: { without: ['logs'] } } }])
+  assert.equal(profileIdOf(' Social Media! '), 'social-media')
+  assert.deepEqual([isProfileName('Reviewer'), isProfileName('!!!'), isProfileName('x'.repeat(41))], [true, false, false])
 })
 
 test("the scheduled commands a computer runs: kept on the computer, by project then command, each with its switch and pace read strictly; one with neither is none", async () => {

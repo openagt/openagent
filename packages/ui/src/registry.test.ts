@@ -257,12 +257,12 @@ test('sanitizePreferences reads only the current spellings', async () => {
   assert.deepEqual(await stored({ handoff: 'local', vanilla: true, transparent: true, browser: true, target: 'actions', autoPm: true }), {})
   assert.deepEqual(await stored({ driver: 'claude' }), {})
   assert.deepEqual(await stored({ driver: 'claude-code' }), { driver: 'claude-code' })
-  // The preset a run is on, by its id; Default is the absent entry, and a word that is no id is dropped.
-  assert.deepEqual(await stored({ preset: 'reviewer' }), { preset: 'reviewer' })
-  assert.deepEqual(await stored({ preset: ' social-media ' }), { preset: 'social-media' })
-  assert.deepEqual(await stored({ preset: 'default' }), {})
-  for (const off of ['', 'Not An Id', '../etc', 42, null]) assert.deepEqual(await stored({ preset: off }), {}, String(off))
-  assert.deepEqual(await stored({ agent: 'reviewer' }), {}, 'the agent it was on before presets is no preset')
+  // The profile a run is on, by its id; Default is the absent entry, and a word that is no id is dropped.
+  assert.deepEqual(await stored({ profile: 'reviewer' }), { profile: 'reviewer' })
+  assert.deepEqual(await stored({ profile: ' social-media ' }), { profile: 'social-media' })
+  assert.deepEqual(await stored({ profile: 'default' }), {})
+  for (const off of ['', 'Not An Id', '../etc', 42, null]) assert.deepEqual(await stored({ profile: off }), {}, String(off))
+  assert.deepEqual(await stored({ agent: 'reviewer' }), {}, 'the agent it was on before profiles is no profile')
   assert.deepEqual(await stored({ publish: 'merge' }), { publish: 'merge' })
   assert.deepEqual(await stored({ publish: 'nothing' }), { publish: 'nothing' })
   assert.deepEqual(await stored({ publish: 'push' }), {}, 'a word the launcher\'s menu does not list is dropped')
@@ -277,7 +277,7 @@ test('sanitizePreferences reads only the current spellings', async () => {
   assert.deepEqual(await stored({ startFrom: ['app-1a2b'] }), {})
   assert.deepEqual(await stored({ startFrom: 'local' }), {})
   const many = Object.fromEntries(Array.from({ length: 250 }, (_, i) => [`p-${i}`, local]))
-  assert.equal(Object.keys((await stored({ startFrom: many })).startFrom ?? {}).length, 200, 'bounded, like the presets')
+  assert.equal(Object.keys((await stored({ startFrom: many })).startFrom ?? {}).length, 200, 'bounded, like the profiles')
 })
 
 test('the sidebar\'s order keeps only the orders it offers; the default, by creation, is stored as nothing', async () => {

@@ -52,11 +52,12 @@ export const PERSON_INFO = defineSetting<PersonInfo>({
 })
 
 /**
- * A preset (#2394): a name and a saved set of run options, made once and used in any project or
- * none. A run on it gets its options under the ones picked for that run alone. Default is the one
- * a run is on when none is picked: built in until it is changed, never removed or renamed.
+ * An agent profile, a profile for short (#2394): a name and a saved set of run options, made once
+ * and used in any project or none. A run on it gets its options under the ones picked for that run
+ * alone. Default is the one a run is on when none is picked: built in until it is changed, never
+ * removed or renamed.
  */
-export interface Preset {
+export interface Profile {
   /** The name as a path-safe word: what a pick and a run's record name it by. */
   id: string
   name: string
@@ -64,17 +65,17 @@ export interface Preset {
 }
 
 /** Default's id. */
-export const DEFAULT_PRESET = 'default'
+export const DEFAULT_PROFILE = 'default'
 
-/** A preset's id: lower-case words joined by dashes. */
-const PRESET_ID = /^[a-z0-9][a-z0-9-]{0,63}$/
+/** A profile's id: lower-case words joined by dashes. */
+const PROFILE_ID = /^[a-z0-9][a-z0-9-]{0,63}$/
 
-export function isPresetId(id: unknown): id is string {
-  return typeof id === 'string' && PRESET_ID.test(id)
+export function isProfileId(id: unknown): id is string {
+  return typeof id === 'string' && PROFILE_ID.test(id)
 }
 
-/** The id a preset's name gives: lower-case, every run of other characters one dash. */
-export function presetIdOf(name: string): string {
+/** The id a profile's name gives: lower-case, every run of other characters one dash. */
+export function profileIdOf(name: string): string {
   return name
     .trim()
     .toLowerCase()
@@ -82,41 +83,41 @@ export function presetIdOf(name: string): string {
     .replace(/^-+|-+$/g, '')
 }
 
-/** What a person may name a preset: a line of at most 40 characters that gives an id. */
-export function isPresetName(name: unknown): name is string {
-  return typeof name === 'string' && name.trim().length > 0 && name.trim().length <= 40 && isPresetId(presetIdOf(name))
+/** What a person may name a profile: a line of at most 40 characters that gives an id. */
+export function isProfileName(name: unknown): name is string {
+  return typeof name === 'string' && name.trim().length > 0 && name.trim().length <= 40 && isProfileId(profileIdOf(name))
 }
 
 /** Default as it is before anyone changes it: no option of its own, so the computer's picks apply. */
-export function builtInDefault(): Preset {
-  return { id: DEFAULT_PRESET, name: 'Default', options: {} }
+export function builtInDefault(): Profile {
+  return { id: DEFAULT_PROFILE, name: 'Default', options: {} }
 }
 
-/** presets': the presets the person made, and Default once it was changed. One that is no preset reads as none. */
-export const PRESETS = defineSetting<Preset[]>({
-  key: 'presets.saved',
+/** profiles': the profiles the person made, and Default once it was changed. One that is no profile reads as none. */
+export const PROFILES = defineSetting<Profile[]>({
+  key: 'profiles.saved',
   scope: 'person',
   default: [],
-  parse: value => (Array.isArray(value) ? value.flatMap(item => presetFrom(item) ?? []) : undefined),
+  parse: value => (Array.isArray(value) ? value.flatMap(item => profileFrom(item) ?? []) : undefined),
 })
 
-/** Every preset, as a list shows them: Default first, as saved or built in, then the others by name. */
-export function presetsIn(saved: readonly Preset[]): Preset[] {
-  const others = saved.filter(preset => preset.id !== DEFAULT_PRESET).sort((a, b) => a.name.localeCompare(b.name))
-  return [saved.find(preset => preset.id === DEFAULT_PRESET) ?? builtInDefault(), ...others]
+/** Every profile, as a list shows them: Default first, as saved or built in, then the others by name. */
+export function profilesIn(saved: readonly Profile[]): Profile[] {
+  const others = saved.filter(profile => profile.id !== DEFAULT_PROFILE).sort((a, b) => a.name.localeCompare(b.name))
+  return [saved.find(profile => profile.id === DEFAULT_PROFILE) ?? builtInDefault(), ...others]
 }
 
-/** The preset `id` names among `saved`; Default for none, or for one that is not there. */
-export function presetOf(saved: readonly Preset[], id: string | undefined): Preset {
-  const all = presetsIn(saved)
-  return (id !== undefined ? all.find(preset => preset.id === id) : undefined) ?? all[0]!
+/** The profile `id` names among `saved`; Default for none, or for one that is not there. */
+export function profileOf(saved: readonly Profile[], id: string | undefined): Profile {
+  const all = profilesIn(saved)
+  return (id !== undefined ? all.find(profile => profile.id === id) : undefined) ?? all[0]!
 }
 
-/** A saved preset, read strictly: the options a preset holds, each as it should be; anything else there is left out. */
-function presetFrom(value: unknown): Preset | undefined {
+/** A saved profile, read strictly: the options a profile holds, each as it should be; anything else there is left out. */
+function profileFrom(value: unknown): Profile | undefined {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined
   const { id, name, options } = value as Record<string, unknown>
-  if (!isPresetId(id) || typeof name !== 'string' || !name.trim()) return undefined
+  if (!isProfileId(id) || typeof name !== 'string' || !name.trim()) return undefined
   const given = typeof options === 'object' && options !== null ? (options as Record<string, unknown>) : {}
   const slice = (key: string): Record<string, unknown> => {
     const part = given[key]

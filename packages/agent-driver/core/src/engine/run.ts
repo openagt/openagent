@@ -6,7 +6,7 @@ import { createHooks, type DistributionEntry, type ProjectRef, type RunFacts, ty
 import type { SessionRepo } from '@openagt/git-branches'
 import { runProcess, withLeg, type Leg, type RunDeps } from './leg.js'
 import { earlierPrs, lasting, markerCard, runnerMark, type Publish, type RunnerMark } from './records.js'
-import type { ProjectSkillsPick } from './preset.js'
+import type { ProjectSkillsPick } from './profile.js'
 import { withRunLock } from './run-lock.js'
 import { askName, isBareCommand, type AskedName } from './title.js'
 import { detailOf, modelOf } from './session.js'
@@ -84,13 +84,13 @@ export interface RunRequest {
   repos?: SessionRepo[]
 }
 
-/** What the preset a run is on brings each of its legs. */
-interface OnPreset {
-  /** The preset's run options, as it stands at this leg: the ones the run's record keeps go over them. None when absent. */
-  presetOptions?: ModuleOptions
+/** What the profile a run is on brings each of its legs. */
+interface OnProfile {
+  /** The profile's run options, as it stands at this leg: the ones the run's record keeps go over them. None when absent. */
+  profileOptions?: ModuleOptions
 }
 
-export interface RunOptions extends RunRequest, RunDeps, OnPreset {
+export interface RunOptions extends RunRequest, RunDeps, OnProfile {
   /**
    * The run's name, already being asked for by whoever starts the run, from before it could make
    * this run's driver ({@link namedAtStart}); asked for here as the run begins when absent.
@@ -107,13 +107,13 @@ export interface RunOptions extends RunRequest, RunDeps, OnPreset {
   /** Whether the run's marker is already on the branch: a scheduler's tick writes it before it spawns. A person's run marks itself. */
   marked?: boolean
   /**
-   * The account asked for at the git host: the session's pick, or its preset's; the account runs
+   * The account asked for at the git host: the session's pick, or its profile's; the account runs
    * use when absent. The run's record keeps the one it works as, as its git host's module says.
    */
   gitAccount?: string
-  /** The preset the run is on, by its id (`OPENAGENT_PRESET`), kept on its mark; Default when absent. */
-  preset?: string
-  /** The session's picks, kept on its mark (`preset.ts` SessionPicks): the enabled plugins it goes without, which of the project's own skills stay in its checkout. */
+  /** The profile the run is on, by its id (`OPENAGENT_PROFILE`), kept on its mark; Default when absent. */
+  profile?: string
+  /** The session's picks, kept on its mark (`profile.ts` SessionPicks): the enabled plugins it goes without, which of the project's own skills stay in its checkout. */
   pluginsWithout?: string[]
   projectSkills?: ProjectSkillsPick
 }
@@ -174,12 +174,12 @@ export async function runCommand(repo: string, opts: RunOptions): Promise<RunOut
         mark,
         card,
       },
-      { modules: opts.modules, facts: {}, ...(opts.branch !== undefined ? { branch: opts.branch } : {}), ...(opts.presetOptions ? { preset: opts.presetOptions } : {}) },
+      { modules: opts.modules, facts: {}, ...(opts.branch !== undefined ? { branch: opts.branch } : {}), ...(opts.profileOptions ? { profile: opts.profileOptions } : {}) },
     )
   })
 }
 
-export interface ResumeOptions extends RunDeps, OnPreset {
+export interface ResumeOptions extends RunDeps, OnProfile {
   /** The run to continue: one that ended `waiting`, or any ended run whose session the driver can resume. */
   id: string
   /** The user's words to the agent; or, with `answer`, absent. */
@@ -263,7 +263,7 @@ export async function resumeRun(repo: string, opts: ResumeOptions): Promise<RunO
         mark,
         card,
       },
-      { modules: opts.modules, resume, facts: recordedFacts(card, previous), ...(opts.presetOptions ? { preset: opts.presetOptions } : {}) },
+      { modules: opts.modules, resume, facts: recordedFacts(card, previous), ...(opts.profileOptions ? { profile: opts.profileOptions } : {}) },
     )
   })
 }
@@ -283,22 +283,22 @@ function recordedFacts(card: RunCard, mark: RunnerMark): RunFacts {
 
 /**
  * The run's options, one slice per module, as the run was asked them and its record keeps them,
- * over its preset's: the plugins it goes without and the project's skills it gets, where the
- * session picked none. (Its accounts were the preset's already, where the session picked none:
+ * over its profile's: the plugins it goes without and the project's skills it gets, where the
+ * session picked none. (Its accounts were the profile's already, where the session picked none:
  * the driver is made on them, and the account at the git host is the record's.)
  */
-function optionsOf(mark: RunnerMark, branch: string | undefined, preset: ModuleOptions = {}): ModuleOptions {
+function optionsOf(mark: RunnerMark, branch: string | undefined, profile: ModuleOptions = {}): ModuleOptions {
   const branches = { ...(mark.base !== undefined ? { base: mark.base } : {}), ...(branch !== undefined ? { branch } : {}), ...(mark.repos !== undefined ? { repos: mark.repos } : {}) }
   const github = { ...(mark.prBase !== undefined ? { prBase: mark.prBase } : {}), ...(mark.gitAccount !== undefined ? { account: mark.gitAccount } : {}) }
-  const without = mark.pluginsWithout ?? preset.plugins?.without
-  const project = mark.projectSkills ?? preset.skills?.project
+  const without = mark.pluginsWithout ?? profile.plugins?.without
+  const project = mark.projectSkills ?? profile.skills?.project
   return {
     ...(mark.publish !== undefined ? { publish: mark.publish } : {}),
     ...(Object.keys(branches).length > 0 ? { 'git-branches': branches } : {}),
     ...(Object.keys(github).length > 0 ? { github } : {}),
     ...(project !== undefined ? { skills: { project } } : {}),
     ...(without !== undefined ? { plugins: { without } } : {}),
-    ...(mark.preset !== undefined ? { presets: { preset: mark.preset } } : {}),
+    ...(mark.profile !== undefined ? { profiles: { profile: mark.profile } } : {}),
   }
 }
 
@@ -318,8 +318,8 @@ interface LegStart {
   facts: RunFacts
   /** The branch a fresh run was told to work on (`run --branch`). */
   branch?: string
-  /** The run options of the preset the run is on, as it stands at this leg. */
-  preset?: ModuleOptions
+  /** The run options of the profile the run is on, as it stands at this leg. */
+  profile?: ModuleOptions
 }
 
 /**
@@ -340,7 +340,7 @@ async function runLeg(given: Omit<Leg, 'killed'>, start: LegStart): Promise<RunO
   try {
     const hooks = createHooks(start.modules)
     const project = await projectOf(leg.repo, leg.here.git)
-    const options = optionsOf(leg.mark, start.branch, start.preset)
+    const options = optionsOf(leg.mark, start.branch, start.profile)
     // The skills the modules on for this run give it, for the agent it is on: the skills module links them where it works.
     const skills = await hooks.skills({ ...(project ? { project } : {}), agent: leg.driver, options })
     const ctx = withLeg(

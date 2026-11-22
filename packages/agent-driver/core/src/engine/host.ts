@@ -5,14 +5,14 @@ import { appendInbox, imagesOf, promptLines, takeInbox } from '../inbox.js'
 import { findRun, listRuns } from '../record-store.js'
 import { isRunId, parseRunCard, type RunCard } from '../record.js'
 import { logCardFile } from '../session-log.js'
-import { PLUGINS_WITHOUT_ENV, PRESET_ENV, PROJECT_SKILLS_ENV, isSkillName, sessionFolder, sessionsHome, sessionsHomeOf } from '@openagt/agent-data'
-import { LOCAL_HOST, MODULE_NAME, isPresetId, type ProjectRef, type RunFound, type RunHost, type RunInput, type RunOptions, type RunReadiness, type RunRef, type RunStatus, type RunSummary, type InboxLine, type PromptLine } from '@openagt/hooks'
+import { PLUGINS_WITHOUT_ENV, PROFILE_ENV, PROJECT_SKILLS_ENV, isSkillName, sessionFolder, sessionsHome, sessionsHomeOf } from '@openagt/agent-data'
+import { LOCAL_HOST, MODULE_NAME, isProfileId, type ProjectRef, type RunFound, type RunHost, type RunInput, type RunOptions, type RunReadiness, type RunRef, type RunStatus, type RunSummary, type InboxLine, type PromptLine } from '@openagt/hooks'
 import { currentBranch, worktreePath } from '@openagt/git-branches'
-import { handedDownSettings, runPreset } from './preset.js'
+import { handedDownSettings, runProfile } from './profile.js'
 import { inboxPath, liveDir } from './live-card.js'
 import { isPublish, NO_PUBLISH } from './records.js'
 import { isPidAlive } from './run-lock.js'
-import { presetLoginFor, detachResume, detachRun, GIT_ACCOUNT_ENV, readyToRun, spawnResume, spawnRun } from './runner.js'
+import { profileLoginFor, detachResume, detachRun, GIT_ACCOUNT_ENV, readyToRun, spawnResume, spawnRun } from './runner.js'
 import type { RunRequest as AskedRun } from './run.js'
 import { nameHandOver } from './title.js'
 
@@ -30,8 +30,8 @@ export interface LocalHostDeps {
   spawnResume?: typeof spawnResume
   /** Whether a run on the coding agent `driver` (the distribution's first when none is named) can start here, working as `login` at the git host when one is named. */
   ready?: (dir: string, driver: string | undefined, login?: string) => Promise<RunReadiness>
-  /** The account at the git host a run on `preset` works as when it names none: its preset's. */
-  loginFor?: (dir: string, preset: string | undefined) => Promise<string | undefined>
+  /** The account at the git host a run on `profile` works as when it names none: its profile's. */
+  loginFor?: (dir: string, profile: string | undefined) => Promise<string | undefined>
   isAlive?: (pid: number) => boolean
   /** This computer's name, as the cards of its runs say it. */
   host?: string
@@ -44,7 +44,7 @@ const STARTING_MS = 30_000
 
 export function localHost(deps: LocalHostDeps = {}): RunHost {
   const ready = deps.ready ?? ((dir, driver, login) => readyToRun(dir, driver, login !== undefined ? { login } : {}))
-  const loginFor = deps.loginFor ?? (async (dir, preset) => presetLoginFor(dir, await runPreset(preset, await handedDownSettings())))
+  const loginFor = deps.loginFor ?? (async (dir, profile) => profileLoginFor(dir, await runProfile(profile, await handedDownSettings())))
   const isAlive = deps.isAlive ?? isPidAlive
   const here = deps.host ?? hostname()
   const startingMs = deps.startingMs ?? STARTING_MS
@@ -98,7 +98,7 @@ export function localHost(deps: LocalHostDeps = {}): RunHost {
       const dir = placeOf(project)
       const driver = options['agent-driver']?.driver
       // A run is refused before it spends a checkout when its coding agent cannot start, or the account it works as cannot be used here.
-      const login = options.github?.account ?? (await loginFor(dir, options.presets?.preset))
+      const login = options.github?.account ?? (await loginFor(dir, options.profiles?.profile))
       const readiness = await ready(dir, driver, login)
       if (readiness.problems.length > 0) throw new Error(readiness.problems.join(' '))
       const name = nameHandOver(title)
@@ -248,8 +248,8 @@ function refuse(project: ProjectRef | undefined, options: RunOptions): void {
   if (project && branches.repos !== undefined) throw new Error('The repos are for a session with no project: a run in a project works in its own checkout.')
   if (branches.branch !== undefined && branches.base !== undefined) throw new Error('A run given a branch to work on starts from no other.')
   if (options.github?.account !== undefined && !/^\S+$/.test(options.github.account)) throw new Error('An account is named by its login.')
-  const preset = options.presets?.preset
-  if (preset !== undefined && !isPresetId(preset)) throw new Error('A preset is named by its id.')
+  const profile = options.profiles?.profile
+  if (profile !== undefined && !isProfileId(profile)) throw new Error('A profile is named by its id.')
   const kept = options.skills?.project
   if (kept !== undefined && kept !== 'all' && kept !== 'none' && !kept.every(isSkillName)) throw new Error('Skills are named by their names.')
   if (options.plugins?.without?.every(name => MODULE_NAME.test(name)) === false) throw new Error('Plugins are named by their names.')
@@ -270,15 +270,15 @@ function asked(options: RunOptions): Omit<AskedRun, 'prompt'> {
   }
 }
 
-/** The picks the run's own process reads off its environment: the account it works as, its preset, the plugins it goes without and the project's skills it gets. */
+/** The picks the run's own process reads off its environment: the account it works as, its profile, the plugins it goes without and the project's skills it gets. */
 function picks(options: RunOptions): Record<string, string> {
-  const preset = options.presets?.preset
+  const profile = options.profiles?.profile
   const without = options.plugins?.without
   const project = options.skills?.project
   return {
     ...(options.github?.account !== undefined ? { [GIT_ACCOUNT_ENV]: options.github.account } : {}),
-    ...(preset !== undefined ? { [PRESET_ENV]: preset } : {}),
-    // Set, even to nothing: a session that goes without none of them, where its preset leaves some out.
+    ...(profile !== undefined ? { [PROFILE_ENV]: profile } : {}),
+    // Set, even to nothing: a session that goes without none of them, where its profile leaves some out.
     ...(without !== undefined ? { [PLUGINS_WITHOUT_ENV]: without.join(',') } : {}),
     ...(project !== undefined ? { [PROJECT_SKILLS_ENV]: project === 'all' || project === 'none' ? project : project.join(',') } : {}),
   }

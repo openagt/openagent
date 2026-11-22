@@ -9,7 +9,7 @@ export type Publish = (typeof PUBLISH_LEVELS)[number]
 
 /**
  * A run's options: one slice per module, each written by the module's control under the message
- * box, read by its run step, and kept on the run's record. A preset is a saved set of them. A
+ * box, read by its run step, and kept on the run's record. A profile is a saved set of them. A
  * module's slice is declared here when the module moves onto the hooks.
  */
 export interface RunOptions {
@@ -22,7 +22,7 @@ export interface RunOptions {
   /** The Auto menu's pick, which git-branches and github act on: how far the run takes its work; absent, only what its prompt asks. */
   publish?: Publish
   plugins?: PluginsOptions
-  presets?: PresetsOptions
+  profiles?: ProfilesOptions
 }
 
 /** agent-driver's slice: the coding agent, its model and effort, and the accounts its turns take. */
@@ -59,7 +59,7 @@ export interface GitBranchesOptions {
 export interface SkillsOptions {
   /**
    * Which of the project's own skills the run gets: every one, none, or the ones named. Absent, its
-   * preset's, and every one when that names none. A named skill the project does not have is not there.
+   * profile's, and every one when that names none. A named skill the project does not have is not there.
    */
   project?: 'all' | 'none' | string[]
 }
@@ -70,10 +70,10 @@ export interface PluginsOptions {
   without?: string[]
 }
 
-/** presets' slice: the preset the run is on, whose options it gets under the ones picked for it. */
-export interface PresetsOptions {
-  /** The preset, by its id; Default when absent. */
-  preset?: string
+/** profiles' slice: the profile the run is on, whose options it gets under the ones picked for it. */
+export interface ProfilesOptions {
+  /** The profile, by its id; Default when absent. */
+  profile?: string
 }
 
 /**

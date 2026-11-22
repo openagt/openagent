@@ -161,32 +161,32 @@ test('a Start hands the host the branch to start from, and refuses a word that i
   }
 })
 
-test("a Start hands the host the session's account at the git host, its preset and its picks, and refuses what is no login, no preset id, no plugin name or no skill name before the host is asked", async () => {
+test("a Start hands the host the session's account at the git host, its profile and its picks, and refuses what is no login, no profile id, no plugin name or no skill name before the host is asked", async () => {
   const home = await project()
   const env = { XDG_CONFIG_HOME: join(home, 'cfg') }
   await mkdir(env.XDG_CONFIG_HOME, { recursive: true })
   const host = fakeHost()
   const runtime = createProjectRuntime({ cwd: home, env, host })
   try {
-    await runtime.onStart('Fix it', { account: 'octo-agent', preset: 'reviewer', pluginsWithout: ['ask', 'tickets'], projectSkills: ['deploy', 'lint'] })
+    await runtime.onStart('Fix it', { account: 'octo-agent', profile: 'reviewer', pluginsWithout: ['ask', 'tickets'], projectSkills: ['deploy', 'lint'] })
     const { options } = lastStart(host)
-    assert.deepEqual([options?.github, options?.presets, options?.plugins, options?.skills], [{ account: 'octo-agent' }, { preset: 'reviewer' }, { without: ['ask', 'tickets'] }, { project: ['deploy', 'lint'] }])
+    assert.deepEqual([options?.github, options?.profiles, options?.plugins, options?.skills], [{ account: 'octo-agent' }, { profile: 'reviewer' }, { without: ['ask', 'tickets'] }, { project: ['deploy', 'lint'] }])
     await runtime.onStart('Fix it', { projectSkills: 'none' })
     assert.deepEqual(lastStart(host).options?.skills, { project: 'none' })
     await runtime.onStart('Fix it', { projectSkills: 'all' })
-    assert.deepEqual(lastStart(host).options?.skills, { project: 'all' }, 'every project skill, over its preset\'s')
+    assert.deepEqual(lastStart(host).options?.skills, { project: 'all' }, 'every project skill, over its profile\'s')
     await runtime.onStart('Fix it', { pluginsWithout: [] })
-    assert.deepEqual(lastStart(host).options?.plugins, { without: [] }, "none of them, over its preset's")
+    assert.deepEqual(lastStart(host).options?.plugins, { without: [] }, "none of them, over its profile's")
     await runtime.onStart('Fix it')
-    assert.deepEqual(lastStart(host).options, { publish: 'commit' }, "no pick: the run goes as the computer's account, on Default, with its preset's plugins and project skills")
+    assert.deepEqual(lastStart(host).options, { publish: 'commit' }, "no pick: the run goes as the computer's account, on Default, with its profile's plugins and project skills")
     const asked = host.requests.length
     const notALogin = { ok: false, error: 'An account is named by its login.' }
     assert.deepEqual(await runtime.onStart('Fix it', { account: 'octo agent' }), notALogin)
     assert.deepEqual(await runtime.onStart('Fix it', { account: '' }), notALogin)
     assert.deepEqual(await runtime.onStart('Fix it', { account: 42 as unknown as string }), notALogin)
-    const notAPreset = { ok: false, error: 'A preset is named by its id.' }
-    assert.deepEqual(await runtime.onStart('Fix it', { preset: 'Not An Id' }), notAPreset)
-    assert.deepEqual(await runtime.onStart('Fix it', { preset: '../x' }), notAPreset)
+    const notAProfile = { ok: false, error: 'A profile is named by its id.' }
+    assert.deepEqual(await runtime.onStart('Fix it', { profile: 'Not An Id' }), notAProfile)
+    assert.deepEqual(await runtime.onStart('Fix it', { profile: '../x' }), notAProfile)
     const notPlugins = { ok: false, error: 'Plugins are named by their names.' }
     assert.deepEqual(await runtime.onStart('Fix it', { pluginsWithout: ['Not A Plugin'] }), notPlugins)
     assert.deepEqual(await runtime.onStart('Fix it', { pluginsWithout: 'ask' as unknown as string[] }), notPlugins)

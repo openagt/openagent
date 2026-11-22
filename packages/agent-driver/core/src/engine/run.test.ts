@@ -77,7 +77,7 @@ test('a run: marker, checkout, the live card, the prompt once, the record, the c
     assert.deepEqual(diary.at(-1), { kind: 'ended', status: 'done' })
 
     // The live directory was hidden in the run's checkout alone: the project's own is still
-    // one it can track a file in, as a project that shares its presets does.
+    // one it can track a file in, as a project that shares its profiles does.
     await mkdir(join(repo, '.openagent'))
     await writeFile(join(repo, '.openagent', '.gitignore'), '*\n!.gitignore\n')
     await git(['add', '.openagent'], repo)

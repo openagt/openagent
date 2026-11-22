@@ -249,29 +249,29 @@ already made, and lists it in its pull request; for anything else it proposes an
   runs when a project is removed with its files. Picked over a dashboard deleting
   `.agent-runner` itself.
 
-## Presets and accounts
-- A run is on a preset (#2394): a name and a saved set of run options, kept with the person
-  through the store (the catalog's `presets.saved`), named in the run's environment by whoever
+## Profiles and accounts
+- A run is on a profile (#2394): a name and a saved set of run options, kept with the person
+  through the store (the catalog's `profiles.saved`), named in the run's environment by whoever
   started it, Default when nobody did. Its options are the run's where the session picked
   none: its accounts, the plugins it goes without, and which of the project's own skills stay
-  in its checkout. Its other skills are its modules' (above). The record keeps the preset, and each leg of the run, a resume too, is on it as it stands then.
-  Picked over the dashboard resolving a preset's options per run: a scheduler's runs name no
-  preset and are on Default, so its edits reach them with nothing restarted.
+  in its checkout. Its other skills are its modules' (above). The record keeps the profile, and each leg of the run, a resume too, is on it as it stands then.
+  Picked over the dashboard resolving a profile's options per run: a scheduler's runs name no
+  profile and are on Default, so its edits reach them with nothing restarted.
 - The account a run works as at the git host is the session's: the one whoever started the run
-  picked for it, in the run's environment, else its preset's, else the computer's. The git host's
+  picked for it, in the run's environment, else its profile's, else the computer's. The git host's
   module works as it at the run's first step (`RunOrder.ACCOUNTS`, #2394): the account's
   environment is the run's (`ctx.env`), handed to the agent and this process's own until the leg
   ends, so the run's marker, its checkout's fetch and its record go as that account too. The
   record keeps the login it worked as, and a resumed run goes on as it, never as whatever the
   computer's pick is by then. An account this computer cannot use stops the run before it
   starts, naming it (the host's check); one that goes by then fails the run at that step. A
-  preset's account applies only where the project has a git host: in a session with no project,
+  profile's account applies only where the project has a git host: in a session with no project,
   or a project on another host, the run goes as no account rather than refused. On
-  Claude and Codex a preset's accounts apply where this computer has them, and none of them here
-  is every account of the computer's: a preset made on another computer runs here without them.
+  Claude and Codex a profile's accounts apply where this computer has them, and none of them here
+  is every account of the computer's: a profile made on another computer runs here without them.
   Picked over accounts named per project, which were kept on one computer for a repository
   that is the same everywhere: whose account a session uses is a pick made for that session.
-- A session's picks are the run's, in its environment with its preset, each over its preset's
+- A session's picks are the run's, in its environment with its profile, each over its profile's
   (#2394, decision 37): the enabled plugins it goes without, none of whose skills or steps it
   gets, and which of the project's own skills stay in its checkout. The record keeps the picks
   and a resumed run goes on with them.

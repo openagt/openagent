@@ -4,7 +4,7 @@ import { CircleAlert, TriangleAlert } from 'lucide-react'
 import type { ProjectSummary, StartFromPick } from '../../src/index.js'
 import { onStartBranches, onStartCheck } from '../rpc/projects.js'
 import { usePreferences, usePreferencesLoaded, updatePreferences } from '../lib/preferences.js'
-import { DEFAULT_PRESET, isDriverName, offeredPublishPicks, publishPickIn } from '../../src/client.js'
+import { DEFAULT_PROFILE, isDriverName, offeredPublishPicks, publishPickIn } from '../../src/client.js'
 import { hostTarget, useRunHosts, useSelectedHost } from '../lib/run-hosts.js'
 import type { StartPicks } from '../lib/started-from.js'
 import { startPicks, useStartAgent } from '../lib/use-start-agent.js'
@@ -21,10 +21,10 @@ import { ProjectPicker } from './ProjectPicker.js'
 import { SessionRepoPicks, type PickedRepo } from './SessionRepos.js'
 import { Dots } from './ToolCalls.js'
 import { AgentFix, agentWords, useAgentState } from './Logins.js'
-import { presetPicks, SkillsMenu, type SkillPicks } from './SkillsMenu.js'
+import { profilePicks, SkillsMenu, type SkillPicks } from './SkillsMenu.js'
 import { GitAccountMenu, useSessionAccount } from './GitHosts.js'
-import { PresetMenu } from './PresetMenu.js'
-import { usePresetsList } from './PresetsPage.js'
+import { ProfileMenu } from './ProfileMenu.js'
+import { useProfilesList } from './ProfilesPage.js'
 import { SESSIONS_ID } from '../../src/project-address.js'
 import { shortcut } from '../lib/shortcut.js'
 import { useIsMobile } from '../lib/use-mobile.js'
@@ -64,8 +64,8 @@ const STARTING_SAID_AFTER_MS = 300
 // At the right of that row, before the model: the git host account this session pushes as. A pick
 // there is for this session alone: it goes with the Start, and the computer's own pick, the
 // Permissions page's, stays. Not saved: the next session starts on the computer's again.
-// First under the box, the "Preset" menu: which preset the session is on, its accounts and the
-// project skills it gets (PresetMenu.tsx); saved, like the model. Its GitHub account is what the
+// First under the box, the "Profile" menu: which profile the session is on, its accounts and the
+// project skills it gets (ProfileMenu.tsx); saved, like the model. Its GitHub account is what the
 // account control shows until the person picks another for the session.
 // With no project (`SESSIONS_ID`), the run starts in a folder of its own on this computer: the row
 // says "No project", and nothing about a repository is offered, no branch, no account, no Auto
@@ -187,24 +187,24 @@ export function StartAgentForm({
     wasReady.current = ready
   }, [fixable, agent?.ready])
 
-  // The preset the session is on: the saved pick, while there is such a preset; Default otherwise.
-  const { view: presetsView } = usePresetsList()
-  const onPreset = presetsView?.presets.find(one => one.id === (preferences.preset ?? DEFAULT_PRESET)) ?? presetsView?.presets[0]
-  const presetId = onPreset !== undefined && onPreset.id !== DEFAULT_PRESET ? onPreset.id : undefined
-  // The git host account picked for this session, when the person picked one; the preset's, else the computer's, otherwise.
+  // The profile the session is on: the saved pick, while there is such a profile; Default otherwise.
+  const { view: profilesView } = useProfilesList()
+  const onProfile = profilesView?.profiles.find(one => one.id === (preferences.profile ?? DEFAULT_PROFILE)) ?? profilesView?.profiles[0]
+  const profileId = onProfile !== undefined && onProfile.id !== DEFAULT_PROFILE ? onProfile.id : undefined
+  // The git host account picked for this session, when the person picked one; the profile's, else the computer's, otherwise.
   const [pickedAccount, setPickedAccount] = useState<string | undefined>()
   useEffect(() => setPickedAccount(undefined), [projectId])
-  // The plugins this session goes without and the project skills it gets: what its preset starts from, until the person picks.
-  const [skillPicks, setSkillPicks] = useState<SkillPicks>(() => presetPicks(onPreset))
-  const presetProject = onPreset?.options.skills?.project
-  const presetWithout = onPreset?.options.plugins?.without
-  useEffect(() => setSkillPicks(presetPicks(onPreset)), [projectId, onPreset?.id, JSON.stringify(presetProject), JSON.stringify(presetWithout)])
-  // None left out, and every project skill, are said where the preset names its own: the session's pick goes over the preset's.
+  // The plugins this session goes without and the project skills it gets: what its profile starts from, until the person picks.
+  const [skillPicks, setSkillPicks] = useState<SkillPicks>(() => profilePicks(onProfile))
+  const profileProject = onProfile?.options.skills?.project
+  const profileWithout = onProfile?.options.plugins?.without
+  useEffect(() => setSkillPicks(profilePicks(onProfile)), [projectId, onProfile?.id, JSON.stringify(profileProject), JSON.stringify(profileWithout)])
+  // None left out, and every project skill, are said where the profile names its own: the session's pick goes over the profile's.
   const pickedSkills = {
-    ...(skillPicks.without.length > 0 || presetWithout !== undefined ? { pluginsWithout: skillPicks.without } : {}),
-    ...(noProject ? {} : skillPicks.project !== undefined ? { projectSkills: skillPicks.project } : presetProject !== undefined && presetProject !== 'all' ? { projectSkills: 'all' as const } : {}),
+    ...(skillPicks.without.length > 0 || profileWithout !== undefined ? { pluginsWithout: skillPicks.without } : {}),
+    ...(noProject ? {} : skillPicks.project !== undefined ? { projectSkills: skillPicks.project } : profileProject !== undefined && profileProject !== 'all' ? { projectSkills: 'all' as const } : {}),
   }
-  const account = useSessionAccount(address, pickedAccount ?? onPreset?.options.github?.account)
+  const account = useSessionAccount(address, pickedAccount ?? onProfile?.options.github?.account)
 
   const submit = async (text: string, { images }: { images: string[] }) => {
     setNote(STARTING)
@@ -218,7 +218,7 @@ export function StartAgentForm({
       ...(host ? { host: host.id } : {}),
       ...(noProject && repos.length > 0 ? { repos: repos.map(repo => repo.path) } : {}),
       ...(!noProject && remote && account !== undefined ? { account } : {}),
-      ...(presetId !== undefined ? { preset: presetId } : {}),
+      ...(profileId !== undefined ? { profile: profileId } : {}),
       ...pickedSkills,
     })
     setNote(null)
@@ -235,7 +235,7 @@ export function StartAgentForm({
         onAgentStarted?.(text, result.agentId, host?.label, {
           ...(started !== undefined ? { branch: started } : {}),
           ...(!noProject && remote && account !== undefined ? { gitAccount: account } : {}),
-          ...(presetId !== undefined ? { preset: presetId } : {}),
+          ...(profileId !== undefined ? { profile: profileId } : {}),
           ...pickedSkills,
           ...(noProject ? {} : { publish: publishPick }),
           ...(prInto !== undefined ? { prBase: prInto } : {}),
@@ -247,7 +247,7 @@ export function StartAgentForm({
         }) // select the run we just started (#761)
       }).finally(() => composerRef.current?.clear())
       setRepos([])
-      setSkillPicks(presetPicks(onPreset))
+      setSkillPicks(profilePicks(onProfile))
     } else setRefused(true)
   }
 
@@ -284,12 +284,12 @@ export function StartAgentForm({
             {!noProject && projectName && startFrom && preferencesLoaded && <StartFromMenu projectId={projectId} main={startFrom.main} local={startFrom.local} pick={startFromPick} onPick={pickStartFrom} busy={busy} />}
           </>
         }
-        // Who runs, under the box at the left (his order): the preset, the skills this session gets, then the Context picker.
-        // All three land together once the presets are read, so the preset's and the skills' landing moves no Context.
+        // Who runs, under the box at the left (his order): the profile, the skills this session gets, then the Context picker.
+        // All three land together once the profiles are read, so the profile's and the skills' landing moves no Context.
         controls={
-          presetsView !== undefined && (
+          profilesView !== undefined && (
           <>
-            <PresetMenu presets={presetsView.presets} picked={onPreset?.id} busy={busy} onPick={id => updatePreferences({ preset: id === DEFAULT_PRESET ? '' : id })} />
+            <ProfileMenu profiles={profilesView.profiles} picked={onProfile?.id} busy={busy} onPick={id => updatePreferences({ profile: id === DEFAULT_PROFILE ? '' : id })} />
             <SkillsMenu projectId={noProject ? undefined : projectId} picks={skillPicks} onChange={setSkillPicks} busy={busy} />
             {!noProject && <ProjectContextMenu projectId={projectId} context={context} busy={busy} onToggle={toggleContext} />}
           </>

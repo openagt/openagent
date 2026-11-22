@@ -70,12 +70,12 @@ test('the mark keeps the publish level a run was given, and drops a word that is
   assert.equal(runnerMark({ ...card, caller: { runner: { ...mark, publish: 'push' } } })?.publish, undefined)
 })
 
-test("a session's picks last on the mark, for its readers too, its preset with them: the plugins it goes without, the project's skills it gets, over its preset's; a list that is no names, or a word that is no preset id, is dropped", () => {
-  assert.deepEqual(lasting({ pluginsWithout: ['tickets', 'ask'], projectSkills: 'none', preset: 'reviewer' }), { pluginsWithout: ['tickets', 'ask'], projectSkills: 'none', preset: 'reviewer' })
+test("a session's picks last on the mark, for its readers too, its profile with them: the plugins it goes without, the project's skills it gets, over its profile's; a list that is no names, or a word that is no profile id, is dropped", () => {
+  assert.deepEqual(lasting({ pluginsWithout: ['tickets', 'ask'], projectSkills: 'none', profile: 'reviewer' }), { pluginsWithout: ['tickets', 'ask'], projectSkills: 'none', profile: 'reviewer' })
   assert.deepEqual(lasting({ projectSkills: ['deploy', 'lint'] }), { projectSkills: ['deploy', 'lint'] })
   assert.deepEqual(lasting({ projectSkills: 'all' }), { projectSkills: 'all' })
-  assert.deepEqual(lasting({ pluginsWithout: [] }), { pluginsWithout: [] }, "none of them, over the preset's")
-  assert.deepEqual(lasting({ pluginsWithout: ['Not A Plugin'], projectSkills: 'some', preset: '../me' }), {})
+  assert.deepEqual(lasting({ pluginsWithout: [] }), { pluginsWithout: [] }, "none of them, over the profile's")
+  assert.deepEqual(lasting({ pluginsWithout: ['Not A Plugin'], projectSkills: 'some', profile: '../me' }), {})
   const card = markerCard({ id: '2026-09-16T14-01-00-000Z', startedAt: '2026-09-16T14:01:00.000Z', prompt: 'Review', driver: 'claude-code', mark: { ...mark, pluginsWithout: ['ask'], projectSkills: 'none' } })
   assert.deepEqual(card.caller?.['pluginsWithout'], ['ask'])
   assert.equal(card.caller?.['projectSkills'], 'none')

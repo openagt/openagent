@@ -14,7 +14,7 @@ import { Button } from './ui/button.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { ProjectContextMenu } from './ContextMenu.js'
 import { AutoMenu } from './AutoMenu.js'
-import { PresetOff } from './PresetMenu.js'
+import { ProfileOff } from './ProfileMenu.js'
 import { GitHostOff } from './GitHosts.js'
 import { SkillsOff } from './SkillsMenu.js'
 import { isPublishPick, offeredPublishPicks, type PublishPick } from '../../src/client.js'
@@ -69,7 +69,7 @@ export function AgentComposer({
   publish,
   prBase,
   row,
-  preset,
+  profile,
   gitHost,
   gitAccount,
   pluginsWithout,
@@ -110,8 +110,8 @@ export function AgentComposer({
   prBase?: string | undefined
   /** The row above the box: where the session started. */
   row?: ReactNode
-  /** The preset the session is on, by its id, as its record says; Default when absent. */
-  preset?: string | undefined
+  /** The profile the session is on, by its id, as its record says; Default when absent. */
+  profile?: string | undefined
   /** The project's page on its git host, when it has one. */
   gitHost?: GitHostHome | null | undefined
   /** The account the run worked as there, as its record says. */
@@ -311,15 +311,15 @@ export function AgentComposer({
         sessionModel={model}
         sessionContext={context}
         {...(contextSet ? { addContext: contextSet.add, removeContext: contextSet.remove } : {})}
-        // The launcher's row under the box, item for item in its places: the preset, off, since a session
+        // The launcher's row under the box, item for item in its places: the profile, off, since a session
         // keeps the one it started on; "Skills", off, the picks it started with in its hover; the Context
         // picker; the run's own pull requests after them; and at the right, before the model, the account
         // the run worked as, off, then the "Auto" menu. A session with no project has no project to take
         // Context from and no git to take its work further with.
         controls={
           <>
-            <PresetOff preset={preset} />
-            <SkillsOff projectId={projectId === SESSIONS_ID ? undefined : projectId} preset={preset} pluginsWithout={pluginsWithout} projectSkills={projectSkills} />
+            <ProfileOff profile={profile} />
+            <SkillsOff projectId={projectId === SESSIONS_ID ? undefined : projectId} profile={profile} pluginsWithout={pluginsWithout} projectSkills={projectSkills} />
             {projectId !== SESSIONS_ID && contextSet && <ProjectContextMenu projectId={projectId} context={contextSet.context} busy={busy} onToggle={contextSet.toggle} />}
             {controls}
           </>

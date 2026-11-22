@@ -16,9 +16,9 @@ const onSkillChoices = vi.hoisted(() => vi.fn())
 // The project's own skills, by name, as a run's checkout has them.
 const onProjectSkillNames = vi.hoisted(() => vi.fn())
 vi.mock('../rpc/skill-choices.js', () => ({ onSkillChoices, onProjectSkillNames }))
-vi.mock('../rpc/presets.js', () => ({
-  onPresetsList: async () => ({
-    presets: [
+vi.mock('../rpc/profiles.js', () => ({
+  onProfilesList: async () => ({
+    profiles: [
       { id: 'default', name: 'Default', options: {} },
       { id: 'quiet', name: 'Quiet', options: { skills: { project: 'none' } } },
       { id: 'lean', name: 'Lean', options: { plugins: { without: ['readability'] } } },
@@ -34,7 +34,7 @@ vi.mock('../lib/host-services.js', async importOriginal => {
   return { ...actual, INERT_HOST_SERVICES: { ...actual.INERT_HOST_SERVICES, openSettings } }
 })
 
-const { NO_PICKS, SkillsMenu, SkillsOff, presetPicks, sessionSkills, skillPicksSaid } = await import('./SkillsMenu.js')
+const { NO_PICKS, SkillsMenu, SkillsOff, profilePicks, sessionSkills, skillPicksSaid } = await import('./SkillsMenu.js')
 
 beforeEach(() => {
   onSkillChoices.mockResolvedValue(CHOICES)
@@ -169,13 +169,13 @@ describe("the Skills menu under the launcher's box", () => {
 })
 
 describe('what the picks say', () => {
-  test('a session starts on its preset with every plugin on but the ones it leaves out, and from the project skills it names', () => {
-    expect(presetPicks(undefined)).toEqual(NO_PICKS)
-    expect(presetPicks({ options: {} })).toEqual(NO_PICKS)
-    expect(presetPicks({ options: { skills: { project: 'all' } } })).toEqual(NO_PICKS)
-    expect(presetPicks({ options: { skills: { project: 'none' } } })).toEqual({ without: [], project: 'none' })
-    expect(presetPicks({ options: { skills: { project: ['tickets'] } } })).toEqual({ without: [], project: ['tickets'] })
-    expect(presetPicks({ options: { plugins: { without: ['ask'] }, skills: { project: 'none' } } })).toEqual({ without: ['ask'], project: 'none' })
+  test('a session starts on its profile with every plugin on but the ones it leaves out, and from the project skills it names', () => {
+    expect(profilePicks(undefined)).toEqual(NO_PICKS)
+    expect(profilePicks({ options: {} })).toEqual(NO_PICKS)
+    expect(profilePicks({ options: { skills: { project: 'all' } } })).toEqual(NO_PICKS)
+    expect(profilePicks({ options: { skills: { project: 'none' } } })).toEqual({ without: [], project: 'none' })
+    expect(profilePicks({ options: { skills: { project: ['tickets'] } } })).toEqual({ without: [], project: ['tickets'] })
+    expect(profilePicks({ options: { plugins: { without: ['ask'] }, skills: { project: 'none' } } })).toEqual({ without: ['ask'], project: 'none' })
   })
 
   test("the skills a session gets of its modules': the core modules', then those of each plugin it does not go without", () => {
@@ -204,54 +204,54 @@ const skillsSaid = (count: number) => screen.findByText((_, el) => el?.getAttrib
 describe("the session page's Skills, as words", () => {
   test('words the keyboard stops on, counted as the launcher counts, their hover saying what the session got', async () => {
     onProjectSkillNames.mockResolvedValue(['tickets', 'queue'])
-    render(<SkillsOff projectId="p1" preset={undefined} pluginsWithout={['readability']} projectSkills={['tickets']} />)
+    render(<SkillsOff projectId="p1" profile={undefined} pluginsWithout={['readability']} projectSkills={['tickets']} />)
     // The plugins' two less readability's, and one of the project's two.
     const said = await skillsSaid(2)
     expect(said.tabIndex).toBe(0)
     expect(screen.queryByRole('button')).toBeNull()
     expect((await hoverTooltip(said)).textContent).toBe('This session got the skills of every plugin on but readability, and the project skills tickets')
     cleanup()
-    render(<SkillsOff projectId={undefined} preset="default" />)
+    render(<SkillsOff projectId={undefined} profile="default" />)
     const alone = await skillsSaid(2)
     expect((await hoverTooltip(alone)).textContent).toBe('This session got the skills of every plugin on, and no project skill')
   })
 
-  test("a session that picked no project skills got its preset's", async () => {
+  test("a session that picked no project skills got its profile's", async () => {
     onProjectSkillNames.mockResolvedValue(['tickets', 'queue'])
-    render(<SkillsOff projectId="p1" preset="quiet" />)
+    render(<SkillsOff projectId="p1" profile="quiet" />)
     const said = await skillsSaid(2)
     expect((await hoverTooltip(said)).textContent).toBe('This session got the skills of every plugin on, and no project skill')
     cleanup()
-    render(<SkillsOff projectId="p1" preset="quiet" projectSkills="all" />)
+    render(<SkillsOff projectId="p1" profile="quiet" projectSkills="all" />)
     expect(await skillsSaid(4)).toBeTruthy()
   })
 
-  test("a session that picked no plugins went without its preset's; one that picked none of them got every plugin on", async () => {
+  test("a session that picked no plugins went without its profile's; one that picked none of them got every plugin on", async () => {
     onProjectSkillNames.mockResolvedValue(['tickets', 'queue'])
-    render(<SkillsOff projectId="p1" preset="lean" />)
+    render(<SkillsOff projectId="p1" profile="lean" />)
     const said = await skillsSaid(3)
     expect((await hoverTooltip(said)).textContent).toBe('This session got the skills of every plugin on but readability, and every project skill')
     cleanup()
-    render(<SkillsOff projectId="p1" preset="lean" pluginsWithout={[]} />)
+    render(<SkillsOff projectId="p1" profile="lean" pluginsWithout={[]} />)
     expect(await skillsSaid(4)).toBeTruthy()
   })
 
   test("a plugin's skill that the project holds too is counted once, as the launcher counts it", async () => {
     onProjectSkillNames.mockResolvedValue(['ask', 'tickets'])
-    render(<SkillsOff projectId="p1" preset="default" />)
+    render(<SkillsOff projectId="p1" profile="default" />)
     expect(await skillsSaid(3)).toBeTruthy()
   })
 
   test('a session opened again after a reload has its Skills from the first frame, so nothing after it in the row moves', async () => {
     onProjectSkillNames.mockResolvedValue(['tickets'])
-    render(<SkillsOff projectId="p1" preset="default" />)
+    render(<SkillsOff projectId="p1" profile="default" />)
     await skillsSaid(3)
     cleanup()
     // The reload: the page's memory gone, this browser's store as the last load left it, the reads not answered yet.
     forgetRemembered()
     onProjectSkillNames.mockReturnValue(new Promise(() => {}))
     onSkillChoices.mockReturnValue(new Promise(() => {}))
-    render(<SkillsOff projectId="p1" preset="default" />)
+    render(<SkillsOff projectId="p1" profile="default" />)
     expect(screen.getByText((_, el) => el?.getAttribute('tabindex') === '0' && el.textContent!.startsWith('Skills: 3.'))).toBeTruthy()
   })
 })

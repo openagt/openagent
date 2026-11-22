@@ -19,9 +19,9 @@
   - GitHub CI red
   - Sentry red
   - Production errors (e.g. Cloudflare logs)
-- Presets
-  - High-quality presets
-  - Bring your presets
+- Agent profiles
+  - High-quality profiles
+  - Bring your profiles
 - Notifications
 - Swarm of local machines
 

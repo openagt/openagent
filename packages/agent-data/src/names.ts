@@ -51,11 +51,11 @@ export const OPENAGENT_DIR = '.openagent'
 export const AGENT_ID_ENV = 'AGENT_ID'
 
 /**
- * The environment variable that names the preset a run is on, by its id (the catalog's
- * `presets.saved`): set by whoever starts the run, for that run; unset, the run is on Default. A
+ * The environment variable that names the profile a run is on, by its id (the catalog's
+ * `profiles.saved`): set by whoever starts the run, for that run; unset, the run is on Default. A
  * scheduler's runs name none.
  */
-export const PRESET_ENV = 'OPENAGENT_PRESET'
+export const PROFILE_ENV = 'OPENAGENT_PROFILE'
 
 /**
  * The environment variables that change what one run gets, a session's picks beside the message

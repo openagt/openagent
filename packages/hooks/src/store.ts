@@ -9,7 +9,7 @@ import type { ProjectRef } from './project.js'
 /** Whose data it is: the person's, which follows them to every computer; this computer's alone; or one project's. */
 export type Scope = { readonly kind: 'person' } | { readonly kind: 'computer' } | { readonly kind: 'project'; readonly project: ProjectRef }
 
-/** The person's scope: what follows them to every computer (their presets, their name and picture). */
+/** The person's scope: what follows them to every computer (their agent profiles, their name and picture). */
 export const PERSON: Scope = { kind: 'person' }
 
 /** This computer's scope: what stays on it (its editor, its logins). */

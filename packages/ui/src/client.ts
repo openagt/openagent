@@ -4,8 +4,8 @@
 // node:fs/http, …) into the browser bundle. Types come from the root entry.
 export { DRIVERS, DRIVER_LABELS, isDriverName, driverFromImpl, type DriverName } from './driver-names.js'
 export { PUBLISH_LABELS, isPublishPick, offeredPublishPicks, publishPickIn, type PublishPick } from './publish-levels.js'
-/** Default's id: the preset a run is on when none is picked (`@openagt/hooks`' catalog, which a page does not import). */
-export const DEFAULT_PRESET = 'default'
+/** Default's id: the profile a run is on when none is picked (`@openagt/hooks`' catalog, which a page does not import). */
+export const DEFAULT_PROFILE = 'default'
 export { formatOpenAgentEvent } from './terminal.js'
 export { ACCENTS, DEFAULT_ACCENT_LABELS, accentOf, CODE_FONTS, DOCUMENT_FONTS, FONTS, fontFace, PALETTES, PALETTE_LABELS, type Accent, type CodeFont, type DocumentFont, type Font, type Palette } from './appearance.js'
 // What every list calls a run, so the same run never goes by two names.

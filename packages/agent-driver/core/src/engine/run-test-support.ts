@@ -210,7 +210,7 @@ export const TEST_AGENTS: ModuleDefinition = { name: 'test-agents', hooks: { 'ru
 
 /**
  * The modules a test's run goes through, as OpenAgent's distribution lists them for a run: a store
- * kept in memory (the person's settings: the plugins' Enabled rows, the presets), git-branches and
+ * kept in memory (the person's settings: the plugins' Enabled rows, the profiles), git-branches and
  * github, each with what the test stands in for, the skills module, agent-driver, the plugins
  * logs and ask, and any module of the test's own.
  */

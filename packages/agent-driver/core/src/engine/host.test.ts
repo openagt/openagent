@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { logCardFile } from '../session-log.js'
 import { patchRun } from '../record-store.js'
-import { PLUGINS_WITHOUT_ENV, PRESET_ENV, PROJECT_SKILLS_ENV, sessionFolder, sessionsHome } from '@openagt/agent-data'
+import { PLUGINS_WITHOUT_ENV, PROFILE_ENV, PROJECT_SKILLS_ENV, sessionFolder, sessionsHome } from '@openagt/agent-data'
 import { LOCAL_HOST, type ProjectRef, type RunHost, type RunReadiness, type InboxLine } from '@openagt/hooks'
 import { worktreePath } from '@openagt/git-branches'
 import { localHost, type LocalHostDeps } from './host.js'
@@ -62,7 +62,7 @@ test("a start is this computer's: the run's process is spawned with what it was 
       prompt: 'fix the login',
       options: {
         'agent-driver': { driver: 'codex', model: 'gpt-5', effort: 'high' },
-        presets: { preset: 'reviewer' },
+        profiles: { profile: 'reviewer' },
         publish: 'pr',
         'git-branches': { base: 'origin/develop' },
         github: { prBase: 'develop', account: 'octo-bot' },
@@ -80,12 +80,12 @@ test("a start is this computer's: the run's process is spawned with what it was 
     )
     assert.deepEqual(run?.env, {
       [GIT_ACCOUNT_ENV]: 'octo-bot',
-      [PRESET_ENV]: 'reviewer',
+      [PROFILE_ENV]: 'reviewer',
       [PLUGINS_WITHOUT_ENV]: 'ask,tickets',
       [PROJECT_SKILLS_ENV]: 'none',
       OPENAGENT_NAME_RUN: '0',
     })
-    // None of them, over a preset that leaves some out: the variable is set, to nothing.
+    // None of them, over a profile that leaves some out: the variable is set, to nothing.
     await here.start({ project, prompt: 'fix the logout', options: { plugins: { without: [] } }, title: false })
     assert.equal(runs[1]?.env?.[PLUGINS_WITHOUT_ENV], '')
   } finally {
@@ -123,7 +123,7 @@ test('a start that cannot make a run is refused before anything is spawned: a pi
     const project = projectAt(repo)
     await assert.rejects(here.start({ prompt: 'x', options: { 'git-branches': { base: 'main' } } }), /A session with no project has no git/)
     await assert.rejects(here.start({ project, prompt: 'x', options: { 'git-branches': { repos: [{ name: 'a', from: '/a' }] } } }), /The repos are for a session with no project/)
-    await assert.rejects(here.start({ project, prompt: 'x', options: { presets: { preset: '../me' } } }), /A preset is named by its id/)
+    await assert.rejects(here.start({ project, prompt: 'x', options: { profiles: { profile: '../me' } } }), /A profile is named by its id/)
     await assert.rejects(here.start({ project, prompt: 'x', options: { skills: { project: ['a skill'] } } }), /Skills are named by their names/)
     await assert.rejects(here.start({ project, prompt: 'x', options: { plugins: { without: ['A Plugin'] } } }), /Plugins are named by their names/)
     await assert.rejects(here.start({ project, prompt: 'x', options: { 'agent-driver': { driver: 'codex' } } }), /^Error: Codex is not logged in\.$/)

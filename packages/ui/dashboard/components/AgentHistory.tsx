@@ -1,4 +1,4 @@
-import { PRESETS_PAGE, PERMISSIONS_PAGE } from '../lib/use-route.js'
+import { PROFILES_PAGE, PERMISSIONS_PAGE } from '../lib/use-route.js'
 import { RevealedTitle } from './RevealedTitle.js'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Plus, Bot, ArrowDownUp, Check, Laptop, LayoutDashboard, Blocks, FilePen, GitBranch, KeyRound } from 'lucide-react'
@@ -393,7 +393,7 @@ export function AgentHistory({
                   <NavRow key={page.segment} icon={page.icon ?? Blocks} label={page.label} active={activePage === page.segment} href={pageHref(page.segment)} onClick={leave(() => onPage(page.segment))} />
                 ))}
                 {/* The agents (Rom): each a name, skills and accounts, on a page of the dashboard's own; then the accounts they work with. */}
-                <NavRow icon={Bot} label="Presets" active={activePage === PRESETS_PAGE} href={pageHref(PRESETS_PAGE)} onClick={leave(() => onPage(PRESETS_PAGE))} />
+                <NavRow icon={Bot} label="Agent profiles" active={activePage === PROFILES_PAGE} href={pageHref(PROFILES_PAGE)} onClick={leave(() => onPage(PROFILES_PAGE))} />
                 <NavRow icon={KeyRound} label="Permissions" active={activePage === PERMISSIONS_PAGE} href={pageHref(PERMISSIONS_PAGE)} onClick={leave(() => onPage(PERMISSIONS_PAGE))} />
               </>
             )}
