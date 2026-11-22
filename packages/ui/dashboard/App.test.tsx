@@ -317,7 +317,7 @@ describe('module pages in the shell (#1774)', () => {
     answerShell([{ package: '@acme/logs', url: moduleModule('__phoneLogs', { place: 'app.page', id: 'logs', label: 'Logs', View: () => null }), projects: [PROJECT.id] }])
     const wide = phoneScreen()
     try {
-      for (const [path, name] of [['/logs', 'Logs'], ['/profiles', 'Agent profiles'], ['/permissions', 'Permissions']]) {
+      for (const [path, name] of [['/logs', 'Logs'], ['/profiles', 'Profiles'], ['/permissions', 'Permissions']]) {
         window.history.replaceState(null, '', path)
         render(<App />)
         // The name alone: the page's count stands beside it in the bar once the page has read it. Read in the wait: the first
@@ -457,7 +457,7 @@ describe('a first visit, the projects not read yet', () => {
       window.history.replaceState(null, '', '/profiles')
       render(<App />)
       // The bar holds the page's name alone.
-      expect(document.querySelector('[data-phone-bar]')!.textContent).toBe('Agent profiles')
+      expect(document.querySelector('[data-phone-bar]')!.textContent).toBe('Profiles')
     } finally {
       wide()
     }

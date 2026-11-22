@@ -75,7 +75,7 @@ The session's profile (the **Profile** menu under the box) and its GitHub accoun
 the right) go with the Start: `agent-driver` hands them to the run's process in its environment,
 `OPENAGENT_PROFILE` and `OPENAGENT_GIT_ACCOUNT`. A profile is a name and a saved set of run options
 (its accounts, the plugins its runs go without, and the project skills they get), kept with the
-person and edited on the Agent profiles page; the run reads it as it starts, and again when it
+person and edited on the Profiles page; the run reads it as it starts, and again when it
 resumes.
 
 The **Skills** menu under the box picks, for this session alone, which skills the run gets: the

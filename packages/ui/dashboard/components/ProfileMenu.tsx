@@ -14,7 +14,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem,
  * The launcher's "Profile" menu, first under the box: which profile the session is on, by name. Its
  * options are the session's where the session picks none: the accounts it works as, and the
  * project's own skills it gets. The pick is saved, as the model's is, and "Manage profiles…" opens
- * the Agent profiles page. Drawn once the profiles are read, so the name lands whole.
+ * the Profiles page. Drawn once the profiles are read, so the name lands whole.
  */
 export function ProfileMenu({ profiles, picked, busy, onPick }: { profiles: readonly Profile[] | undefined; picked: string | undefined; busy: boolean; onPick: (id: string) => void }) {
   const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES

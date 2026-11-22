@@ -61,7 +61,7 @@ async function profileRows(hidden = false): Promise<HTMLElement[]> {
   return within(list).getAllByRole('listitem', { hidden }).filter(item => item.parentElement === list && item.classList.contains('group/row'))
 }
 
-describe('the Agent profiles page', () => {
+describe('the Profiles page', () => {
   test("while the profiles are first read, rows' shapes stand where the profiles will, and the profiles take their place", async () => {
     let answer = () => {}
     rpc.onProfilesList.mockImplementationOnce(() => new Promise(resolve => (answer = () => resolve(VIEW))))

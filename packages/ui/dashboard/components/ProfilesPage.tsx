@@ -21,7 +21,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip.js'
 import { cn } from '../lib/utils.js'
 import { inWords } from '../lib/in-words.js'
 
-// The Agent profiles page (#2394): a profile is a name and a saved set of run options, made once
+// The Profiles page (#2394): a profile is a name and a saved set of run options, made once
 // and used in any project or none. One row per profile, Default first, each edited in a dialog over
 // the page: its name, its accounts among the ones the Permissions page knows, the plugins its runs
 // go without, and whether they get the project's own skills. The profiles are kept with the person,
@@ -98,7 +98,7 @@ function projectSaid(project: ProjectPick): string {
   return project === undefined || project === 'all' ? 'every project skill' : project === 'none' ? 'no project skills' : `the project skills ${project.join(', ')}`
 }
 
-/** The Agent profiles page. */
+/** The Profiles page. */
 export function ProfilesPage() {
   const { view, state, failing, reload } = useProfilesList()
   const [adding, setAdding] = useState(false)
@@ -120,7 +120,7 @@ export function ProfilesPage() {
   const changed = reload
   return (
     <Page
-      title="Agent profiles"
+      title="Profiles"
       description="An agent profile is a name and a saved set of run options: the accounts a run works as, the plugins it goes without, and the project skills it gets. Pick one under the message box; it works in any project, or in none."
       actions={
         <Button ref={newProfile} disabled={!view || adding} onClick={() => setAdding(true)}>

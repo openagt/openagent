@@ -6,7 +6,7 @@ import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.j
 import { LinePart, counted } from './LinePart.js'
 
 // The Overview's line on the person's profiles: how many, by name on a hover, and their page a press
-// away. The Agent profiles page's own read, kept under its name, so either shows the other's at once.
+// away. The Profiles page's own read, kept under its name, so either shows the other's at once.
 
 /** Read again this seldom: profiles change when the person changes them, on their page. */
 const EVERY_MS = 60_000

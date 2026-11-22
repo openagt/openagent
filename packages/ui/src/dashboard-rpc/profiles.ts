@@ -9,7 +9,7 @@ import { onGitHosts } from './logins.js'
 export type { Profile, RunOptions } from '@openagt/hooks'
 
 
-// The Agent profiles page (#2394): a profile is a name and a saved set of run options, made once
+// The Profiles page (#2394): a profile is a name and a saved set of run options, made once
 // and used in any project or none, kept with the person through the store (the catalog's
 // `profiles.saved`), so every computer of theirs has the same profiles. The page lists them, edits
 // them in a dialog, makes new ones and removes them; Default is edited like the others and never
