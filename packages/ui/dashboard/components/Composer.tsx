@@ -15,7 +15,8 @@ import { CommandsMenu } from './CommandsMenu.js'
 import { ModuleSlot } from './ModulePageView.js'
 import { usePrompts } from '../lib/use-prompts.js'
 import { IN_BOX } from '../lib/in-box.js'
-import { DriverModelMenu, type DriverOption } from './DriverModelMenu.js'
+import { DriverModelMenu, ModelWords, type DriverOption } from './DriverModelMenu.js'
+import { SessionSetupMenu, type SessionSetup } from './SessionSetup.js'
 import { RunOnMenu } from './RunOnMenu.js'
 import { PERMISSIONS_PAGE } from '../lib/use-route.js'
 import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
@@ -52,13 +53,13 @@ const DRIVER_UI: Record<DriverName, { icon: DriverOption['icon'] }> = {
 /**
  * The message box, as Claude Code's (DECISIONS.md, his pick): the raised surface with the hairline,
  * holding only the +, the text and the send. Where the agent starts is a row above it, how it runs a
- * row under it. It is focused almost all the time it is on screen, so focus is its own edge and nothing
- * more: the caret says the rest. While its text has the keyboard the edge is a field's focus, 2 wide in
- * the focus colour over its edge, as the presses' ring is 2 wide. While the keyboard is on the + or
- * in the menu it opened, the edge is his 1 wide primary border, so the +'s own ring stands alone.
+ * row under it. It is focused almost all the time it is on screen, so focus is quiet, as Claude Code
+ * web's box (his pick, over a 2 wide edge in the focus colour and over shadcn's ring): no ring and no
+ * colour. With the keyboard in it, or in the menu its + opened, its hairline is a step brighter and
+ * its shadow a step deeper; the caret says the rest, and the +'s own ring stands alone.
  */
 const BOX =
-  '[view-transition-name:composer] flex flex-col rounded-box border border-hairline bg-card shadow-lg transition-colors focus-within:border-primary has-[[aria-expanded=true]]:border-primary has-[[role=textbox]:focus]:outline-2 has-[[role=textbox]:focus]:-outline-offset-1 has-[[role=textbox]:focus]:outline-focus'
+  '[view-transition-name:composer] flex flex-col rounded-box border border-hairline bg-card shadow-lg transition-[border-color,box-shadow] focus-within:border-hairline-strong focus-within:shadow-lift has-[[aria-expanded=true]]:border-hairline-strong has-[[aria-expanded=true]]:shadow-lift'
 
 /**
  * The box while the page it stands on is read: a {@link Slot}'s shape at the three bands' heights,
@@ -71,6 +72,13 @@ export function ComposerShape() {
       {() => null}
     </Slot>
   )
+}
+
+/** The model a session runs on, as the row under its box says it: its coding agent, for the logo, the model's name and how hard it thinks. */
+export interface SessionModel {
+  driver?: DriverName | undefined
+  name?: string | undefined
+  effort?: string | undefined
 }
 
 /** What a box held, its text with its chips and its images, as `clear` hands it back for `restore`. */
@@ -101,7 +109,8 @@ export const BoxNotes = createContext<HTMLElement | null>(null)
 
 // The shared agent composer (#721), laid out as Claude Code's: a box one line tall when empty that
 // holds the commands menu (+), the text (the Tiptap editor, `/` `@` `#` triggers) and the submit at
-// its right; a row under it with the caller's controls at the left and the model at the right; and
+// its right; a row under it with the gear (the session's setup) and the caller's controls at the
+// left and the model at the right; and
 // a row above it saying where the agent starts (led by the "Run on" pick), or, inside a session,
 // where it started (`sessionRow`).
 // Factored out of the launcher (StartAgentForm) so the run-view chat (AgentComposer) gets the
@@ -119,13 +128,13 @@ export const Composer = forwardRef<ComposerHandle, {
   /** Where the agent starts, in the row above the box after the "Run on" pick: the launcher's
    *  project and the branch it starts from. */
   startsAt?: ReactNode
-  /** The caller's controls in the row under the box: the launcher's Context picker and "Auto" menu. */
+  /** The session's setup, behind the gear that leads the row under the box: the profile, the skills, the git host account and the Auto level. */
+  setup?: SessionSetup | undefined
+  /** The caller's controls in the row under the box, after the gear: the Context picker. */
   controls?: ReactNode
-  /** The caller's controls at that row's other end, before the model: who the run pushes as, the git host account, on both pages. */
-  controlsEnd?: ReactNode
   /** Inside a session: the model it runs on, said at the right of the row under the box, where
    *  the launcher has its select. Words, not a menu: a session keeps the model it started with. */
-  sessionModel?: string | undefined
+  sessionModel?: SessionModel | undefined
   /** Inside a session: how full its context is, beside the model. */
   sessionContext?: ReactNode
   /** Run the composed text; `later` when it was sent with Cmd/Ctrl+Enter, which a working agent reads after its turn; `images`, the names of the images it goes with. */
@@ -158,7 +167,7 @@ export const Composer = forwardRef<ComposerHandle, {
   /** The box takes the caret when it opens. */
   autoFocus?: boolean | undefined
 }>(function Composer(
-  { files, addContext, removeContext, startsAt, controls, controlsEnd, sessionModel, sessionContext, onSubmit, onPromptChange, onLoaded, busy, submitLabel, submitBusyLabel, placeholder, inAgent = false, sessionRow, idleControl, notes, draftKey, autoFocus = false },
+  { files, addContext, removeContext, startsAt, setup, controls, sessionModel, sessionContext, onSubmit, onPromptChange, onLoaded, busy, submitLabel, submitBusyLabel, placeholder, inAgent = false, sessionRow, idleControl, notes, draftKey, autoFocus = false },
   ref,
 ) {
   const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
@@ -459,10 +468,10 @@ export const Composer = forwardRef<ComposerHandle, {
             The two stand 5 from the box's edges on every side, their corners following its corner (IN_BOX);
             on a touch screen, where the text's line is 24 high, 7, so they sit on its middle. */}
         {/* The images it goes with stand in a row above the text, inside the box; a drop anywhere on the
-            box, or a paste into it, adds one. Files dragged over it light its edge as the focus does. */}
+            box, or a paste into it, adds one. Files dragged over it light its edge in the primary colour: a place to drop, which focus is not. */}
         <div
           ref={surface}
-          className={cn(BOX, dragging && 'border-primary outline-2 -outline-offset-1 outline-focus')}
+          className={cn(BOX, dragging && 'border-primary!')}
           onPasteCapture={onPaste}
           onDragOverCapture={onDragOver}
           onDragLeave={onDragLeave}
@@ -476,27 +485,28 @@ export const Composer = forwardRef<ComposerHandle, {
           </div>
         </div>
 
-        {/* How it runs, under the box: the caller's controls at the left, the model at the right. The
-            left side is the one that gives way: a longer label there never moves the model or the
-            page below. */}
+        {/* How it runs, under the box (his pick): the gear and the caller's controls at the left, the
+            model at the right, each end's item starting or ending on the box's own edge. The left
+            side is the one that gives way: a longer label there never moves the model or the page below. */}
         <TooltipsPastBox value={surface}>
           <div className={cn('mt-1', rowClass)}>
-            {/* In a narrow box, where its items say their icons only, each stays whole and the side scrolls, as the row above the box does. */}
-            <div className={cn(rowLeftClass, '@max-xl:overflow-x-auto @max-xl:[scrollbar-width:none] @max-xl:[mask-image:linear-gradient(to_right,#000_85%,transparent)] @max-xl:*:shrink-0')}>
+            <div className={rowLeftClass}>
+              {setup && <SessionSetupMenu setup={setup} box={surface} busy={busy} />}
               {controls}
             </div>
-            <div className="flex shrink-0 items-center gap-0.5">
-              {controlsEnd}
-              {driverModelEl ||
-                // Only with something in it: an empty one would still take the row's gap, and the
-                // row's last item would end off the row's end.
-                ((sessionModel !== undefined || sessionContext) && (
-                  <span className="flex items-center">
-                    {sessionModel !== undefined && <span className={rowItemClass}>{sessionModel}</span>}
-                    {sessionContext}
-                  </span>
-                ))}
-            </div>
+            {driverModelEl ||
+              // Only with something in it: an empty one would still take the row's gap, and the
+              // row's last item would end off the row's end.
+              ((sessionModel !== undefined || sessionContext) && (
+                <span className="flex shrink-0 items-center">
+                  {sessionModel !== undefined && (
+                    <span className={rowItemClass}>
+                      <ModelWords icon={sessionModel.driver ? DRIVER_UI[sessionModel.driver].icon : undefined} name={sessionModel.name} effort={sessionModel.effort} />
+                    </span>
+                  )}
+                  {sessionContext}
+                </span>
+              ))}
           </div>
         </TooltipsPastBox>
         {/* Last, so the box is the first thing drawn; laid over the page above the prompt area all the same. */}

@@ -7,7 +7,7 @@ export type PrState = NonNullable<AgentMeta['prState']>
 
 /**
  * A run's pull request, one glyph per state in the git host's own colours, wherever the run's
- * request is marked (its row in the sidebar, the row under its message box), so a list of runs
+ * request is marked (its row in the sidebar, the row above its message box), so a list of runs
  * says which have work waiting for review and which landed without opening one. Each state has its
  * own shape too, for a reader who cannot tell the colours apart. A request whose state is not
  * known, older than the git host lists or not read yet, has no mark: a plain one read as one more

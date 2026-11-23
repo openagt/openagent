@@ -1,4 +1,6 @@
+import { useRef, type ReactNode } from 'react'
 import { fireEvent, screen, waitFor } from '@testing-library/react'
+import { SessionSetupMenu } from './components/SessionSetup.js'
 import { continuationPrompt } from '@openagt/agent-driver/question'
 import { mountedOf, type Mounted, type MountedModules } from './lib/use-modules.js'
 import type { UiMarkdownProps, UiQuestionProps, UiRender } from './module/index.js'
@@ -40,6 +42,43 @@ export async function openMenu(trigger: Element): Promise<void> {
     if (trigger.getAttribute('aria-expanded') !== 'true') fireEvent.click(trigger)
     if (trigger.getAttribute('aria-expanded') !== 'true') throw new Error('the menu did not open')
   })
+}
+
+/**
+ * The gear under a message box around `lines` of its menu (SessionSetup.tsx): a line is a part of
+ * that menu and is drawn only inside it. `said` is what the gear's hover says.
+ */
+export function GearMenu({ lines, said = '', warn, busy = false }: { lines: ReactNode; said?: string; warn?: boolean; busy?: boolean }) {
+  const box = useRef<HTMLDivElement>(null)
+  return (
+    <>
+      <div ref={box} />
+      <SessionSetupMenu setup={{ lines, said, warn }} box={box} busy={busy} />
+    </>
+  )
+}
+
+/** The gear's button. */
+export const gear = (): HTMLElement => screen.getByRole('button', { name: 'Session setup' })
+
+/**
+ * Open the gear's menu and hand back its line named `label` ("Profile", "When it finishes"): the
+ * line's own words are its label, then its value ("Profile: Default").
+ */
+export async function setupLine(label: string): Promise<HTMLElement> {
+  await openMenu(gear())
+  return await waitFor(() => {
+    const line = screen.getAllByRole('menuitem').find(item => item.textContent?.startsWith(`${label}: `))
+    if (!line) throw new Error(`the gear's menu has no "${label}" line`)
+    return line
+  })
+}
+
+/** Open the list of the gear's line named `label`, and hand the line back. */
+export async function openSetupLine(label: string): Promise<HTMLElement> {
+  const line = await setupLine(label)
+  await openMenu(line)
+  return line
 }
 
 /**

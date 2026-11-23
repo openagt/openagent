@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Check, ChevronDown, Loader2, MoreHorizontal, Plus } from 'lucide-react'
 import type { GitHostHome } from '../../src/index.js'
 import { sendForgetGitHostAccount, sendUseGitHostAccount, type GitHostRow } from '../rpc/logins.js'
@@ -11,7 +11,7 @@ import { HostFix, useAddGitAccount } from './AddGitAccount.js'
 import { PackageLogo, hostWords, useGitHosts } from './Logins.js'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu.js'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip.js'
-import { RowSaid, rowButtonClass, RowChevron } from './ui/row-item.js'
+import { SetupLine, SetupPress, SetupSaid } from './SessionSetup.js'
 
 // The git hosts of the Permissions page: one card, "Git host accounts", with a section for each
 // host the projects' remotes are on and the host of the git host package OpenAgent brings, drawn
@@ -226,14 +226,25 @@ export function useSessionAccount(address: string | undefined, picked: string | 
   return (picked !== undefined && accounts?.some(account => account.login === picked && account.ok) ? picked : undefined) ?? accounts?.find(account => account.runs)?.login
 }
 
+/** A session's git host account in the gear's menu: its line, what the gear's hover says of it, and the dialog its "Add account…" opens. */
+export interface GitAccountSetup {
+  /** The line; none for a project with no remote, or a host no package answers for. */
+  line: ReactNode
+  /** The account in a few words; none with no line, or no account. */
+  said: string | undefined
+  /** The host has no account logged in: a run could push nothing. */
+  missing: boolean
+  /** The dialog that adds an account, which outlives the menu its press closes: the page draws it beside the box. */
+  dialog: ReactNode
+}
+
 /**
- * The git host account a session pushes and opens its pull request with, under the message box
- * at the right: the project's host. Its menu picks another of the accounts there, for this session
+ * The git host account a session pushes and opens its pull request with, a line of the launcher's
+ * gear menu: the project's host. Its list picks another of the accounts there, for this session
  * only: the computer's own pick, which the Permissions page makes, stays what it is; or adds one.
- * A host with no account logged in says so, and its press adds one. Nothing for a project with no
- * remote, or a host no package answers for.
+ * A host with no account logged in says so, and the line's press adds one.
  */
-export function GitAccountMenu({ address, busy, picked, onPick }: { address: string | undefined; busy: boolean; picked: string | undefined; onPick: (login: string) => void }) {
+export function useGitAccountSetup(address: string | undefined, picked: string | undefined, onPick: (login: string) => void): GitAccountSetup {
   const { view } = useGitHosts()
   const account = useSessionAccount(address, picked)
   // One added from here is the one this session works as.
@@ -241,67 +252,71 @@ export function GitAccountMenu({ address, busy, picked, onPick }: { address: str
   const host = address?.split('/')[0]
   const row = host === undefined ? undefined : view?.hosts.find(one => one.host === host)
   const p = row?.provider
-  if (!row || !p) return null
+  if (!row || !p) return { line: null, said: undefined, missing: false, dialog: adding.dialog }
   const onAdd = () => adding.add(row.host)
-  if (account === undefined)
-    return (
-      <>
-        <button type="button" disabled={busy} onClick={onAdd} className={cn(rowButtonClass, 'text-warning')}>
-          <PackageLogo svg={p.logo} className="size-4" />
-          <span className="truncate">{p.installed ? `Add a ${p.name} account` : `${p.tool} not installed`}</span>
-        </button>
-        {adding.dialog}
-      </>
-    )
-  const said = `This session pushes and opens pull requests as @${account}`
-  return (
-    <>
-    <DropdownMenu>
-      <Tooltip>
-        <TooltipTrigger render={<DropdownMenuTrigger type="button" disabled={busy} aria-label={`${p.name} account: @${account}`} className={rowButtonClass} />}>
-          <PackageLogo svg={p.logo} className="size-4" />
-          <span className="max-w-32 truncate">@{account}</span>
-          <RowChevron />
-        </TooltipTrigger>
-        <TooltipContent>{said}</TooltipContent>
-      </Tooltip>
-      {/* Opens rightward from its button, and the tick leads its rows (his picks). */}
-      <DropdownMenuContent align="start" className="min-w-[14rem]">
-        <DropdownMenuGroup>
-          <DropdownMenuLabel>{`${p.name} account for this session`}</DropdownMenuLabel>
-          {p.accounts.map(login => (
-            <DropdownMenuItem key={login.login} disabled={!login.ok} onClick={() => onPick(login.login)}>
-              <Check className={cn('h-3.5 w-3.5 shrink-0', login.login === account ? 'opacity-100' : 'opacity-0')} aria-hidden />
-              <span className="flex-1 truncate">@{login.login}</span>
-            </DropdownMenuItem>
-          ))}
-        </DropdownMenuGroup>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={onAdd}>
-          <Plus className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
-          Add account…
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-    {adding.dialog}
-    </>
+  const label = `${p.name} account`
+  const logo = <PackageLogo svg={p.logo} className="size-4" />
+  if (account === undefined) {
+    const value = p.installed ? 'Add one…' : `${p.tool} not installed`
+    return { line: <SetupPress icon={logo} label={label} value={value} onClick={onAdd} />, said: p.installed ? `no ${p.name} account` : `${p.tool} not installed`, missing: true, dialog: adding.dialog }
+  }
+  const line = (
+    <SetupLine
+      icon={logo}
+      label={label}
+      value={
+        <>
+          <Avatar src={p.accounts.find(one => one.login === account)?.avatar} login={account} />
+          <span className="truncate">@{account}</span>
+        </>
+      }
+      className="min-w-[14rem]"
+    >
+      <DropdownMenuGroup>
+        <DropdownMenuLabel>{`${p.name} account for this session`}</DropdownMenuLabel>
+        {/* The tick leads its rows (his pick). */}
+        {p.accounts.map(login => (
+          <DropdownMenuItem key={login.login} disabled={!login.ok} onClick={() => onPick(login.login)}>
+            <Check className={cn('h-3.5 w-3.5 shrink-0', login.login === account ? 'opacity-100' : 'opacity-0')} aria-hidden />
+            <span className="flex-1 truncate">@{login.login}</span>
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuGroup>
+      <DropdownMenuSeparator />
+      <DropdownMenuItem onClick={onAdd}>
+        <Plus className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
+        Add account…
+      </DropdownMenuItem>
+    </SetupLine>
   )
+  return { line, said: `@${account}`, missing: false, dialog: adding.dialog }
 }
 
 /**
- * The project's git host under a session's message box at the right, where the launcher has the
- * account's menu: the account this run worked as, which its record keeps. A run recorded before that was
- * kept says the host's name: the one its project's runs use today need not be the one it pushed as.
- * Nothing for a project with no page on a git host, and until the logo is read, so it lands whole.
+ * The project's git host in a session's gear menu, where the launcher has the account's line: the
+ * account this run worked as, which its record keeps. A run recorded before that was kept says the
+ * host's name: the one its project's runs use today need not be the one it pushed as. Nothing for a
+ * project with no page on a git host, and until the logo is read, so it lands whole.
  */
 export function GitHostOff({ home, account }: { home: GitHostHome | null; account?: string | undefined }) {
   const { view } = useGitHosts()
   if (!home || !view) return null
-  const logo = view.hosts.find(row => row.host === home.url.split('/')[2])?.provider?.logo
+  const provider = view.hosts.find(row => row.host === home.url.split('/')[2])?.provider
   return (
-    <RowSaid tip={account !== undefined ? `This run works as @${account} on ${home.name}` : `This project is on ${home.name}`}>
-      <PackageLogo svg={logo} className="size-4" />
-      <span className="max-w-32 truncate">{account !== undefined ? `@${account}` : home.name}</span>
-    </RowSaid>
+    <SetupSaid
+      icon={<PackageLogo svg={provider?.logo} className="size-4" />}
+      label={`${home.name} account`}
+      value={
+        account !== undefined ? (
+          <>
+            <Avatar src={provider?.accounts.find(one => one.login === account)?.avatar} login={account} />
+            <span className="truncate">@{account}</span>
+          </>
+        ) : (
+          'Not recorded'
+        )
+      }
+      tip={account !== undefined ? `This run works as @${account} on ${home.name}` : `This project is on ${home.name}`}
+    />
   )
 }

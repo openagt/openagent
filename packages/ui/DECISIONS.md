@@ -145,21 +145,43 @@ already made, and lists it in its pull request; for anything else it proposes an
   blur, the theme's card on light and its fill on dark. Picked over shadcn's own near-black
   and grey, which did not match the page, and over opaque menus on the page's card.
 - The message box is laid out as Claude Code's: a filled box with rounder corners holding the
-  "+" menu, the text and the send; a row under it with the Context and Auto menus, and the
-  model at the right with its effort in a quieter tone, one menu for both. Where the agent
-  starts (the machine, the project, the branch) is a row above the box, in the same plain
-  words. Picked over bordered chips above the box, over every item in one row under it, and
-  over the effort as a menu of its own.
-- A session's box has the launcher's Context and Auto menus too, and its pull requests, every
-  one the run opened, each a label with its number and state. Picked over the last one alone:
+  "+" menu, the text and the send; one line tall when empty, growing as it is typed in. Where
+  the agent starts (the machine, the project, the branch) is a row above the box, in the same
+  plain words. Picked over bordered chips above the box, and over a taller box with its
+  controls in a row inside it.
+- The row under the box is short: a gear and Context at the left, the model at the right, with
+  its logo, its name and its effort as smaller, quieter words on the line's middle, one menu
+  for both. The gear's menu, "This session", has a line each for the profile, Skills with
+  their count and the git host account with its picture, and, set apart, "When it finishes",
+  the Auto level; each line says its value and opens its list. Its hover says the four with
+  the menu shut. The menu stands above the box on its left edge and covers none of it; a
+  line's list stands from the line's foot up. Before, each of the four was an item of the row
+  with a menu of its own: six items did not fit the box's width at their default values, their
+  labels were cut mid-word, and on a phone the row slid off the edge. Picked over icons alone
+  in the row, over chips or a sentence under the box, over the count or the account's picture
+  as a badge on an icon, over the gear inside the box or above it, and over the Auto level
+  kept in the row. It costs one more press to change the four, and the row no longer says them
+  at rest. The gear has no mark at rest, whatever the Auto level; it is in the warning's
+  colour only while the project's host has no account, which a press in its menu adds.
+- Each row stands 6 from the box, and an item at a row's end starts or ends on the box's own
+  edge, its hover never past it.
+- With the caret in it the box has no ring and no colour, as Claude Code web's: its hairline a
+  step brighter and its shadow a step deeper. It is focused nearly all the time it is on
+  screen. Picked over a 2 wide edge in the focus colour, and over shadcn's ring.
+- A session's box has the launcher's Context menu and its gear too, and its pull requests,
+  every one the run opened, each a label at the right end of the row above the box, the last
+  ending on the box's edge: its mark in the colour of its state, and its number; the state's
+  word is in the hover. Picked over the labels in the row under the box, where they took the
+  room of its items, over the word drawn on each, and over the last one alone:
   a run that moved its work to a new branch opened another. What the Context picks and a changed Auto go with the next
   message: the Context as the line at its end, Auto as how far the run takes its work from that
   message on. Picked over a session bound for its whole life to the level it started at, where a
   person who liked the work had no way to have it published but a new run.
 - A session's box has the launcher's two rows, item for item in the same places and the same
-  look, each item a session cannot change off: above the box where it runs, the project and the
-  branch; under the box the profile, then Skills and Context, and at the right the git host
-  account and Auto, then the model. The branch is the one it started from, with the one it works on in
+  look, each item a session cannot change said and not offered: above the box where it runs, the
+  project and the branch; under the box the gear, Context, and at the right the model, with its
+  logo as on the launcher. In the gear's menu the profile, Skills and the git host account are
+  said with why they stay in their hover, and "When it finishes" is still a pick. The branch is the one it started from, with the one it works on in
   its hover: the same meaning as on the launcher, and it does not flip as the agent renames its
   own. Where the record cannot vouch for that branch the row leaves it out. The account is the
   one the run worked as, which its record keeps; a run recorded before that says the host's
@@ -172,7 +194,7 @@ already made, and lists it in its pull request; for anything else it proposes an
   actions stay under the ⌄ on its name. Picked over one menu per page, which left the project's
   actions out of reach on a session's page.
 - The bar above a session's box goes once its pull request is merged or closed. Picked over the
-  bar staying with the request as a label: the labels under the box already say it.
+  bar staying with the request as a label: the labels above the box already say it.
 - The foot of the sidebar is the person: their picture and first name, as one row that opens
   one menu with their whole name, the theme and Settings. The project select stays at the
   top, beside the pages it changes. Picked over a row of three icons, and over the project
@@ -266,13 +288,13 @@ already made, and lists it in its pull request; for anything else it proposes an
   over giving them to every project and running their commands in the first one, which
   left a computer with no project with no way to add an account; and over a starter
   project made on every computer, one nobody asked for.
-- "Add project" stays small: it writes no skill. The launcher's row under the box then has
-  "Skills", after Auto, whose menu ends in that project's plugins and skills in Settings. Picked over "Add project"
+- "Add project" stays small: it writes no skill. The launcher's gear menu then has
+  "Skills", whose list ends in that project's plugins and skills in Settings. Picked over "Add project"
   writing the skills itself, which put files into every project a person adds. The control was picked over a line of its own on the
   project's page ("This project has 4 of 25 skills", with an "Add skills" button), which
   stood there also when it had nothing to offer, and over an item in the project's ⋮ menu,
   where it was not seen.
-- The "Skills" menu under the box picks the skills one session gets, as the account beside it
+- The "Skills" line of the gear's menu picks the skills one session gets, as the account under it
   is picked (#2394): the plugins on in the project that give its runs something, each ticked,
   tickable off, so the session goes without its skills and its steps; the project's own skills
   all, none or each; both as the session's profile has them until the session picks. Nothing is
@@ -413,10 +435,10 @@ already made, and lists it in its pull request; for anything else it proposes an
   go without (#2394, decision 37), and whether they get the project's own skills. The dialog
   scrolls under its title with Save and Cancel always in view, and a click beside it closes
   nothing: a form that long is not lost to a stray click (before, the editor took the card's place
-  in the list, which moved the page under the person). The session's profile is the "Profile" menu
-  first under the box, saved like the model; its GitHub account is what the account control shows
+  in the list, which moved the page under the person). The session's profile is the "Profile" line,
+  first in the gear's menu, saved like the model; its GitHub account is what the account line shows
   until the person picks another for the session. The run's record keeps the profile, and the
-  session's box says it where the launcher's menu is. A profile that names no GitHub account is on
+  session's gear says it where the launcher's has it. A profile that names no GitHub account is on
   "None — whatever the computer uses", one plain item: the computer's account repeated in it read
   as a duplicate of the account's own item. Picked over profiles per project: a project is
   context, a profile is how its runs work, anywhere.
@@ -449,8 +471,8 @@ already made, and lists it in its pull request; for anything else it proposes an
   a login step for the coding agent every new install walks through: most have it already.
 - The accounts a run takes are picked beside the message box: a coding agent's in the agent
   picker, under its models, the pick this computer's runs take from then on, as on the
-  Permissions page; the git host's under the box at the right,
-  before the model, a pick for this session alone, which goes with the Start and is kept on
+  Permissions page; the git host's in the gear's menu,
+  a pick for this session alone, which goes with the Start and is kept on
   the run's record, the computer's own pick staying as the Permissions page made it. The
   person's menu has none of them. Picked over a row per account in the person's menu, over
   having them in both places, and over accounts named per project in its settings: whose

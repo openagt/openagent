@@ -142,11 +142,13 @@ export function DropdownMenuSubTrigger({ className, children, ...props }: Compon
   )
 }
 
-export function DropdownMenuSubContent({ className, children, ...props }: ComponentProps<typeof Menu.Popup>) {
+/** A submenu beside its row: from the row's top down, or with `align="end"` from its foot up, for a menu that stands above what it must not cover. */
+export function DropdownMenuSubContent({ className, align = 'start', children, ...props }: ComponentProps<typeof Menu.Popup> & { align?: 'start' | 'end' }) {
   const position = usePopupPosition()
   return (
     <Menu.Portal>
-      <Menu.Positioner {...position} side="right" align="start" sideOffset={2} className="z-50 outline-none">
+      {/* From the foot up, a list too tall for the room above slides down only as far as it must: turned to stand from the row's top, it would cover everything under the row. With no room beside the row, on a phone, it stands over it. */}
+      <Menu.Positioner {...position} side="right" align={align} {...(align === 'end' ? { collisionAvoidance: { side: 'flip' as const, align: 'shift' as const, fallbackAxisSide: 'start' as const } } : {})} sideOffset={2} className="z-50 outline-none">
         <Menu.Popup data-overlay="menu" className={cn(MENU_POPUP_CLASS, className)} {...props}>
           <PopupBody>{children}</PopupBody>
         </Menu.Popup>

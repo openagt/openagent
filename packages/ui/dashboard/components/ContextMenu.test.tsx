@@ -25,7 +25,7 @@ function open(over: Partial<Parameters<typeof ContextMenu>[0]> = {}) {
   return { onToggle }
 }
 
-// #1046: the Context picker moved from an inline disclosure to a dropdown on the "In play" row.
+// #1046: the Context picker moved from an inline disclosure to a dropdown, now beside the gear in the row under the box.
 describe('ContextMenu (#1046)', () => {
   test('lists the other repos and reflects which are already in context', () => {
     open()
@@ -45,8 +45,16 @@ describe('ContextMenu (#1046)', () => {
     render(
       <ContextMenu otherProjects={others} context={new Set()} contextFiles={[]} summary="2 projects" busy={false} onToggle={() => {}} />,
     )
-    const trigger = screen.getByRole('button', { name: /Context/ })
-    expect(trigger.textContent).toContain('2 projects')
+    const trigger = screen.getByRole('button', { name: 'Context: 2 projects' })
+    expect(trigger.textContent).toBe('Context · 2 projects')
+  })
+
+  test('with nothing picked the trigger is named "Context", and its word is drawn at every width, a narrow box too', () => {
+    render(<ContextMenu otherProjects={others} context={new Set()} contextFiles={[]} summary="" busy={false} onToggle={() => {}} />)
+    const trigger = screen.getByRole('button', { name: 'Context' })
+    expect(trigger.textContent).toBe('Context')
+    expect(trigger.querySelector('svg')).toBeTruthy()
+    expect(trigger.innerHTML).not.toContain('sr-only')
   })
 
   test('shows picked files, removable, and the empty hint otherwise', () => {

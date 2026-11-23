@@ -2,8 +2,7 @@ import type { ProjectSummary } from '../../src/index.js'
 import { Layers } from 'lucide-react'
 import { onProjects } from '../rpc/projects.js'
 import { useLoaded } from '../lib/use-async.js'
-import { cn } from '../lib/utils.js'
-import { rowButtonClass, rowWideClass } from './ui/row-item.js'
+import { rowButtonClass } from './ui/row-item.js'
 import { ContextFiles } from './ContextFiles.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import {
@@ -38,7 +37,7 @@ export function ProjectContextMenu({ projectId, context, busy, onToggle }: { pro
   return <ContextMenu otherProjects={otherProjects} context={context} contextFiles={contextFiles} summary={summary} busy={busy} onToggle={onToggle} />
 }
 
-// The agent Context picker (#439/#314) as a dropdown on the launcher's "In play" row. It was an
+// The agent Context picker (#439/#314) as a dropdown in the row under the box, beside the gear. It was an
 // inline disclosure that pushed the whole form down when opened; a dropdown keeps it folded away
 // until asked for. Ticking other repos narrows the agent's focus (it can still reach every repo);
 // the Files list shows what a `#` mention or the file tree added, each removable.
@@ -70,12 +69,13 @@ export function ContextMenu({
             <DropdownMenuTrigger
               type="button"
               disabled={busy}
+              aria-label={summary ? `Context: ${summary}` : 'Context'}
               className={rowButtonClass}
             />
           }
         >
-          <Layers className={cn('size-4 shrink-0', summary && '@max-xl:text-primary')} aria-hidden />
-          <span className={cn('truncate', rowWideClass)}>
+          <Layers className="size-4 shrink-0" aria-hidden />
+          <span className="truncate">
             Context{summary && <span className="text-primary"> · {summary}</span>}
           </span>
         </TooltipTrigger>

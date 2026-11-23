@@ -9,7 +9,7 @@ import { FixAction, Linked, hostWords, useGitHosts, type FixVariant } from './Lo
 
 // Adding an account of OpenAgent's at a git host, the same dialog wherever one is added (his pick
 // over a code shown in each place's own layout): the Permissions page, the Overview's first steps,
-// an agent's accounts, the account under the message box, "Back up as". It installs the host's
+// an agent's accounts, the account in the gear's menu under the message box, "Back up as". It installs the host's
 // tool where it is missing, asks the host's package for a code, shows it while the person signs in
 // at the host, and closes on the account once it is there. Closing it gives the login up.
 
