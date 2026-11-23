@@ -56,6 +56,18 @@ vi.mock('./components/ProjectHome.js', async importOriginal => ({
   ProjectHome: ({ projectName, onProjectRemoved }: { projectName?: string; onProjectRemoved?: () => void }) =>
     createElement('p', null, `the launcher of ${projectName}`, createElement('button', { onClick: onProjectRemoved }, 'remove the project')),
 }))
+// The Overview's box, stood in for: it says the project it starts in, and has a press that picks the project `app`, one that picks none, and one that starts.
+vi.mock('./components/StartAgentForm.js', () => ({
+  StartAgentForm: ({ projectId, projectName, onPickProject, onAgentStarted }: { projectId: string; projectName?: string | null; onPickProject: (id: string) => void; onAgentStarted?: (intent: string, agentId: string) => void }) =>
+    createElement(
+      'p',
+      null,
+      `the box of ${projectName ?? projectId}`,
+      createElement('button', { onClick: () => onPickProject('app') }, 'pick app in the box'),
+      createElement('button', { onClick: () => onPickProject('session') }, 'pick no project in the box'),
+      createElement('button', { onClick: () => onAgentStarted?.('from the box', '9-box') }, 'start from the box'),
+    ),
+}))
 vi.mock('./components/ProjectActions.js', async importOriginal => ({
   ...(await importOriginal<typeof import('./components/ProjectActions.js')>()),
   ProjectMenu: ({ onProjectRemoved }: { onProjectRemoved?: () => void }) => (onProjectRemoved ? createElement('button', { onClick: onProjectRemoved }, 'remove the project from its menu') : null),
@@ -96,6 +108,8 @@ function answerShell(modules: unknown[]): void {
   answers.set('onProfilesList', () => ({ profiles: [], claude: [], codex: [], plugins: [] }))
   answers.set('onSkillChoices', () => ({ core: [], plugins: [] }))
   answers.set('onAgentUpdates', () => [])
+  // A project's Overview reads its files, for its box's `#`.
+  answers.set('onProjectFiles', () => [])
   // The Overview draws its cards once the person's layout is read.
   answers.set('onPreferences', () => ({}))
 }
@@ -906,6 +920,22 @@ describe('the project select (#1513)', () => {
     // All projects stay shown there.
     expect(url()).toBe('/site/3-s?all')
     await waitFor(() => expect(document.querySelector('button[aria-label="site ran, session actions"]')).toBeTruthy())
+  })
+
+  test('the Overview has the box that starts a session: in no project, in the picked one; a project picked in the box is the Overview\'s, and a start opens the session there', async () => {
+    answerTwo()
+    render(<App />)
+    expect(await screen.findByText('the box of session')).toBeTruthy()
+    fireEvent.click(screen.getByText('pick app in the box'))
+    expect(url()).toBe('/app/overview')
+    expect(await screen.findByText('the box of app')).toBeTruthy()
+    expect(await screen.findByRole('combobox', { name: 'Project: app' })).toBeTruthy()
+    fireEvent.click(screen.getByText('pick no project in the box'))
+    expect(url()).toBe('/')
+    expect(await screen.findByText('the box of session')).toBeTruthy()
+    fireEvent.click(screen.getByText('pick app in the box'))
+    fireEvent.click(await screen.findByText('start from the box'))
+    expect(url()).toBe('/app/9-box')
   })
 
   test('New agent session starts in the picked project; picking another on the launcher moves to its launcher, and all keeps the page', async () => {

@@ -28,8 +28,8 @@ import { useIsMobile } from '../lib/use-mobile.js'
  */
 const PACKAGES_PLACE = 3
 
-// The Overview landing page (#1139): a focused at-a-glance board — what needs a human (the Human
-// Queue, `ui-card-waiting`'s card) first, the first steps under it, then usage and the agents
+// The Overview landing page (#1139): the box that starts a session first, then a focused at-a-glance
+// board — what needs a human (the Human Queue, `ui-card-waiting`'s card), the first steps under it, then usage and the agents
 // working now, then the other cards the installed packages declare, in two columns (#1818: the
 // queue package's AI Queue, the tickets package's hot tickets, the scheduler package's
 // Automations). A card with nothing to show says so in its middle, a sentence under a quiet glyph ("No agent is at work.").
@@ -55,7 +55,10 @@ export function DashboardPage({
   scope,
   onProjectAdded,
   listedPages,
+  start,
 }: {
+  /** The box that starts a session (StartAgentForm), the page's first part: in the picked project, else in none. */
+  start: ReactNode
   onSelectProject: (id: string) => void
   /** Open one session (project + run): the Agents rows link straight to a session. */
   onSelectAgent: (projectId: string, agentId: string) => void
@@ -245,6 +248,8 @@ export function DashboardPage({
     >
       {/* Arranging keeps the parts in their order and where they stand: the first steps and the updates stay, and what arranging adds comes after the parts. */}
       <div className="space-y-10">
+        {/* The page's own, before every card (his and Rom's pick): arranging the cards neither moves it nor takes it off. */}
+        {start}
         {!layoutRead ? null : editing ? (
           <EditOverview
             arranged={arranged}

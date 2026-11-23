@@ -10,6 +10,7 @@ import { SidebarProvider } from './components/ui/sidebar.js'
 import { setSidebarHidden, useSidebarHidden, useSidebarWidth } from './lib/sidebar-width.js'
 import { ProjectHome, ProjectHomeShape } from './components/ProjectHome.js'
 import { DashboardPage } from './components/DashboardPage.js'
+import { StartAgentForm } from './components/StartAgentForm.js'
 import { SettingsDialog } from './components/SettingsDialog.js'
 import { AgentView } from './components/AgentView.js'
 import { ChatShape } from './components/ChatPane.js'
@@ -225,17 +226,19 @@ export function App() {
     resetContext()
     // `resetContext` is a fresh closure each render; the project and the session are the trigger.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId, agentId])
+  }, [projectId, agentId, scope])
 
   // The selected project's files (git ls-files), handed to both the `#` picker and the tree.
   // Empty when no project (no checkout). Scoped to the selected session's
   // worktree (#815), the same checkout the action bar's branch, Serve and open-folder act on;
   // polled so a file the agent creates shows up rather than waiting for a reload.
+  // On the Overview of one project, that project's: its box starts a session there.
+  const filesOf = projectId !== null ? (noProject ? null : projectId) : pageSegment === null ? scope : null
   const { value: files } = usePolled<string[]>(
-    projectId && !noProject ? () => onProjectFiles(projectId, agentId ?? undefined) : null,
+    filesOf !== null ? () => onProjectFiles(filesOf, agentId ?? undefined) : null,
     EMPTY_FILES,
     10_000,
-    [projectId, agentId],
+    [filesOf, agentId],
   )
 
   // The cross-project "needs you" queue (#632): open PRs to review, questions to answer, work left
@@ -511,6 +514,22 @@ export function App() {
           scope={scope}
           onProjectAdded={reloadProjects}
           listedPages={listedPages}
+          start={
+            <StartAgentForm
+              onOverview
+              projectId={scope ?? SESSIONS_ID}
+              projectName={scope !== null ? (projects.find(one => one.id === scope)?.name ?? null) : null}
+              onAgentStarted={(intent, startedId, runsOn, picks) => agentStarted(scope ?? SESSIONS_ID, intent, startedId, runsOn, picks)}
+              files={files}
+              context={context}
+              addContext={addContext}
+              removeContext={removeContext}
+              toggleContext={toggleContext}
+              projects={projects}
+              onPickProject={id => selectScope(id === SESSIONS_ID ? null : id)}
+              onProjectAdded={reloadProjects}
+            />
+          }
         />
       )
     }
