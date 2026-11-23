@@ -70,7 +70,7 @@ function barPage({ id, label, icon }: ListedPage): { segment: string; label: str
 }
 /** The dashboard's own pages, by the name a phone's bar gives each, as it gives a module's page its label, and the icon the sidebar and the jump draw for it. */
 const OWN_PAGES = new Map([
-  [PROFILES_PAGE, { label: 'Agent profiles', icon: Bot }],
+  [PROFILES_PAGE, { label: 'Profiles', icon: Bot }],
   [PERMISSIONS_PAGE, { label: 'Permissions', icon: KeyRound }],
 ])
 

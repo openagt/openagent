@@ -329,7 +329,7 @@ already made, and lists it in its pull request; for anything else it proposes an
   host is not named like an agent's own (`-agent`), the page says to make one with limited
   access. Picked over the accounts being one entry among the Settings.
 - An account at a git host is added in one dialog, the same wherever one is added: "Add" at the
-  title of the git hosts' card, the Overview's first step, a profile's accounts on the Agent profiles
+  title of the git hosts' card, the Overview's first step, a profile's accounts on the Profiles
   page, the account under the message box, "Back up as". It installs the host's tool where it
   is missing, shows the code to type at the host, says the advice of an account of the agents'
   own, and closes on the account once it is there, which is then the one picked where it was
@@ -428,7 +428,7 @@ already made, and lists it in its pull request; for anything else it proposes an
   person talks to it.
 
 ## The profiles
-- A profile (#2394) is a name and a saved set of run options, made once on the Agent profiles page
+- A profile (#2394) is a name and a saved set of run options, made once on the Profiles page
   and used in any project or none, kept with the person through the store, so every computer of
   theirs has it: the page lists them, Default first, and edits each in a dialog over the page, as
   a new one is made: its accounts among the ones the Permissions page knows, the plugins its runs
@@ -442,8 +442,9 @@ already made, and lists it in its pull request; for anything else it proposes an
   "None — whatever the computer uses", one plain item: the computer's account repeated in it read
   as a duplicate of the account's own item. Picked over profiles per project: a project is
   context, a profile is how its runs work, anywhere.
-- They are called profiles, agent profiles in full, in the code too. Picked over presets, the
-  name they had first.
+- They are called profiles, agent profiles in full, in the code too, and just Profiles on the rail
+  and in the page's title. Picked over presets, the name they had first, and over "Agent profiles"
+  on the rail and the title.
 
 ## What runs log in with
 - One page has it, Permissions: the coding agents' cards, then the git hosts', each a card
