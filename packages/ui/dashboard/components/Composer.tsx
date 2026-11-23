@@ -159,6 +159,8 @@ export const Composer = forwardRef<ComposerHandle, {
    *  like Claude Code's composer. Typing swaps it for the arrow (a live send still queues), and
    *  without one the slot keeps its collapse-when-empty behavior for the launcher. */
   idleControl?: ReactNode
+  /** The notes hang under the box's row, over what follows it, where the page has words of its own right above the box (the Overview's line): above, a note would be drawn across them. */
+  notesUnder?: boolean | undefined
   /** What the caller says about the box: laid over the page above it with the box's own notes,
    *  never in its flow, so the text being typed does not move when one comes or goes. */
   notes?: ReactNode
@@ -167,7 +169,7 @@ export const Composer = forwardRef<ComposerHandle, {
   /** The box takes the caret when it opens. */
   autoFocus?: boolean | undefined
 }>(function Composer(
-  { files, addContext, removeContext, startsAt, setup, controls, sessionModel, sessionContext, onSubmit, onPromptChange, onLoaded, busy, submitLabel, submitBusyLabel, placeholder, inAgent = false, sessionRow, idleControl, notes, draftKey, autoFocus = false },
+  { files, addContext, removeContext, startsAt, setup, controls, sessionModel, sessionContext, onSubmit, onPromptChange, onLoaded, busy, submitLabel, submitBusyLabel, placeholder, inAgent = false, sessionRow, idleControl, notes, notesUnder = false, draftKey, autoFocus = false },
   ref,
 ) {
   const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
@@ -442,7 +444,7 @@ export const Composer = forwardRef<ComposerHandle, {
   // is a card, so it stands the step between two cards from the prompt area and from the next note: 12.
   const notesSlot = useContext(BoxNotes)
   const notesEl = (
-    <div className="flex flex-col gap-3 pb-3 empty:hidden">
+    <div className={cn('flex flex-col gap-3 empty:hidden', notesUnder ? 'pt-2' : 'pb-3')}>
       {notes}
       {imageNote !== null && <p role="status" className="rounded-md bg-background px-2 py-0.5 text-xs text-muted-foreground">{imageNote}</p>}
     </div>
@@ -510,7 +512,7 @@ export const Composer = forwardRef<ComposerHandle, {
           </div>
         </TooltipsPastBox>
         {/* Last, so the box is the first thing drawn; laid over the page above the prompt area all the same. */}
-        {notesSlot ? createPortal(notesEl, notesSlot) : <div className="absolute inset-x-0 bottom-full">{notesEl}</div>}
+        {notesSlot ? createPortal(notesEl, notesSlot) : <div className={cn('absolute inset-x-0 z-10', notesUnder ? 'top-full' : 'bottom-full')}>{notesEl}</div>}
       </div>
 
       {savingPrompt && prompts.saver && activeProjectId !== null && (

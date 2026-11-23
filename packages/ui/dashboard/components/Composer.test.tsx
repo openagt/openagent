@@ -424,6 +424,10 @@ describe('Composer (#721)', () => {
     const notes = screen.getByRole('alert').parentElement!
     expect(notes.parentElement!.className).toContain('absolute')
     expect(notes.parentElement!.className).toContain('bottom-full')
+    cleanup()
+    // Where the page's own words are right above the box, they hang under its row.
+    render(<Composer files={[]} onSubmit={vi.fn()} busy={false} submitLabel="Send" submitBusyLabel="Sending…" notesUnder notes={<p role="alert">Could not send.</p>} />)
+    expect(screen.getByRole('alert').parentElement!.parentElement!.className).toContain('top-full')
     expect(screen.getByLabelText('prompt').closest('.border')!.contains(notes)).toBe(false)
     cleanup()
     const place = document.createElement('div')
