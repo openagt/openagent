@@ -4,7 +4,7 @@ import { useContext, useEffect, useRef, useState, type MutableRefObject, type Re
 import { Loader2 } from 'lucide-react'
 import { cn } from '../lib/utils.js'
 import { IN_BOX } from '../lib/in-box.js'
-import { Composer, type ComposerHandle } from './Composer.js'
+import { Composer, type ComposerHandle, type SessionModel } from './Composer.js'
 import { sendMessage } from '../rpc/control.js'
 import { useAction } from '../lib/use-action.js'
 import { useStop } from '../lib/use-stop.js'
@@ -13,10 +13,12 @@ import { DaemonDown } from '../lib/use-daemon-health.js'
 import { Button } from './ui/button.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { ProjectContextMenu } from './ContextMenu.js'
-import { AutoMenu } from './AutoMenu.js'
+import { AutoMenu, autoSaid } from './AutoMenu.js'
 import { ProfileOff } from './ProfileMenu.js'
+import { useProfileName } from './ProfilesPage.js'
 import { GitHostOff } from './GitHosts.js'
-import { SkillsOff } from './SkillsMenu.js'
+import { SkillsOff, useRecordedSkillCount } from './SkillsMenu.js'
+import { DEFAULT_PROFILE } from '../../src/client.js'
 import { isPublishPick, offeredPublishPicks, type PublishPick } from '../../src/client.js'
 import { useProjectLauncher } from '../lib/use-project-launcher.js'
 import { promptWithContext, type ContextSet } from '../lib/use-context-set.js'
@@ -64,7 +66,6 @@ export function AgentComposer({
   focusBox,
   model,
   context,
-  controls,
   contextSet,
   publish,
   prBase,
@@ -96,12 +97,10 @@ export function AgentComposer({
   giveBack?: MutableRefObject<((text: string, images?: string[]) => void) | null> | undefined
   /** Set here to what gives the box the focus: a question answered from its card. */
   focusBox?: MutableRefObject<(() => void) | null> | undefined
-  /** The model the session runs on, by its name: said under the box. */
-  model?: string | undefined
+  /** The model the session runs on: said under the box, at the right. */
+  model?: SessionModel | undefined
   /** How full the session's context is, as a circle beside the model. */
   context?: ReactNode
-  /** What stands at the left of the row under the box after the launcher's items: the run's pull requests. */
-  controls?: ReactNode
   /** The shell's Context (#492), as the launcher's box has it (his pick): what is picked goes with the next message, said at its end, and is cleared once it went. */
   contextSet?: ContextSet | undefined
   /** How far the run takes its work, as its record says (`commit`, `branch`, `pr`, `merge`); absent, none. The "Auto" menu shows it and changes it from the next message on. */
@@ -290,6 +289,20 @@ export function AgentComposer({
 
   const surfacedError = error ?? stopError
 
+  // What the gear's hover says of the session's setup with its menu shut.
+  const noProject = projectId === SESSIONS_ID
+  const profileName = useProfileName(profile ?? DEFAULT_PROFILE)
+  const skillCount = useRecordedSkillCount(noProject ? undefined : projectId, profile, pluginsWithout, projectSkills)
+  const autoTarget = prBase !== undefined ? { into: prBase } : undefined
+  const setupSaid = [
+    profileName !== undefined && `Profile ${profileName}`,
+    skillCount !== undefined && `${skillCount} skill${skillCount === 1 ? '' : 's'}`,
+    gitAccount !== undefined && `@${gitAccount}`,
+    !noProject && autoSaid(picked ?? recorded, autoTarget),
+  ]
+    .filter(Boolean)
+    .join(' · ')
+
   return (
     // The box stands on the chat's 16 inset at every width, as the chat's cards do, so on a desktop its
     // words, 16 inside it, stand on the chat's column (32 in, EventList).
@@ -311,33 +324,23 @@ export function AgentComposer({
         sessionModel={model}
         sessionContext={context}
         {...(contextSet ? { addContext: contextSet.add, removeContext: contextSet.remove } : {})}
-        // The launcher's row under the box, item for item in its places: the profile, off, since a session
-        // keeps the one it started on; "Skills", off, the picks it started with in its hover; the Context
-        // picker; the run's own pull requests after them; and at the right, before the model, the account
-        // the run worked as, off, then the "Auto" menu. A session with no project has no project to take
-        // Context from and no git to take its work further with.
-        controls={
-          <>
-            <ProfileOff profile={profile} />
-            <SkillsOff projectId={projectId === SESSIONS_ID ? undefined : projectId} profile={profile} pluginsWithout={pluginsWithout} projectSkills={projectSkills} />
-            {projectId !== SESSIONS_ID && contextSet && <ProjectContextMenu projectId={projectId} context={contextSet.context} busy={busy} onToggle={contextSet.toggle} />}
-            {controls}
-          </>
-        }
-        controlsEnd={
-          <>
-            <GitHostOff home={gitHost ?? null} account={gitAccount} />
-            {projectId !== SESSIONS_ID && (
-              <AutoMenu
-                publish={picked ?? recorded}
-                picks={offeredPublishPicks(launcher?.gitHost ?? true, launcher?.remote ?? true)}
-                onPublish={pick => setPicked(pick === recorded ? null : pick)}
-                target={prBase !== undefined ? { into: prBase } : undefined}
-                busy={busy}
-              />
-            )}
-          </>
-        }
+        // The launcher's gear, line for line in its places: the profile, said and not offered, since a
+        // session keeps the one it started on; "Skills", the picks it started with in its hover; the
+        // account the run worked as; then, set apart and still a pick, "When it finishes". After the
+        // gear, the Context picker. A session with no project has no project to take Context from and
+        // no git to take its work further with.
+        setup={{
+          said: setupSaid,
+          lines: (
+            <>
+              <ProfileOff profile={profile} />
+              <SkillsOff projectId={noProject ? undefined : projectId} profile={profile} pluginsWithout={pluginsWithout} projectSkills={projectSkills} />
+              <GitHostOff home={gitHost ?? null} account={gitAccount} />
+              {!noProject && <AutoMenu publish={picked ?? recorded} picks={offeredPublishPicks(launcher?.gitHost ?? true, launcher?.remote ?? true)} onPublish={pick => setPicked(pick === recorded ? null : pick)} target={autoTarget} />}
+            </>
+          ),
+        }}
+        controls={!noProject && contextSet && <ProjectContextMenu projectId={projectId} context={contextSet.context} busy={busy} onToggle={contextSet.toggle} />}
         idleControl={idleControl}
         notes={
           <>

@@ -19,11 +19,26 @@ const words = (container: HTMLElement) =>
   [...container.querySelectorAll<HTMLElement>('[data-hover]')].map(item => [...item.childNodes].filter(node => !(node instanceof HTMLElement && node.classList.contains('sr-only'))).map(node => node.textContent).join(''))
 
 describe('a session\'s row above the box', () => {
-  test('where it runs, the project, the branch: each said in words the keyboard stops on, none a menu, and nothing else, as the launcher\'s row (the agent and the account are under the box)', () => {
+  test('where it runs, the project, the branch: each said in words the keyboard stops on, none a menu, and nothing else, as the launcher\'s row (the setup and the model are under the box)', () => {
     const { container } = render(<SessionRow {...facts} />)
     expect(words(container)).toEqual(['This machine', 'site', 'main'])
     expect(container.querySelector('button')).toBeNull()
     for (const item of container.querySelectorAll<HTMLElement>('[data-hover]')) expect(item.tabIndex).toBe(0)
+  })
+
+  test("the run's pull requests stand at the row's right end, after the side that gives way, so the last one ends on the box's edge and stays whole in a narrow box; none, nothing there", () => {
+    const { container, rerender } = render(<SessionRow {...facts} prs={[{ number: 4, url: 'https://x/pull/4', state: 'merged' }, { number: 5, url: 'https://x/pull/5', state: 'OPEN' }]} />)
+    const row = container.firstElementChild!
+    const links = screen.getAllByRole('link')
+    expect(links.map(link => link.textContent)).toEqual(['#4', '#5'])
+    expect(row.lastElementChild!.contains(links[1]!)).toBe(true)
+    expect(row.lastElementChild!.className.split(' ')).toContain('shrink-0')
+    // Not in the left side, which scrolls and fades in a narrow box.
+    expect(row.firstElementChild!.contains(links[0]!)).toBe(false)
+    expect(row.firstElementChild!.textContent).toContain('site')
+    rerender(<SessionRow {...facts} />)
+    expect(screen.queryByRole('link')).toBeNull()
+    expect(container.firstElementChild!.childElementCount).toBe(1)
   })
 
   test('a session with no project shows the repos it has, each said with where it was copied from', () => {

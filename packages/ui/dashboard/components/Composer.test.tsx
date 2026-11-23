@@ -501,19 +501,21 @@ describe('the box', () => {
 const runOn = () => screen.getByRole('button', { name: /^Run on: / })
 
 describe('the rows around the box', () => {
-  test('where the agent starts is a row above the box: "Run on", then the caller\'s words; under it, the caller\'s controls, then the caller\'s end controls and the model at the right', async () => {
+  test('where the agent starts is a row above the box: "Run on", then the caller\'s words; under it, the gear, then the caller\'s controls, and the model at the right', async () => {
     withHost()
-    renderComposer({ startsAt: <span>a-place</span>, controls: <span>a-control</span>, controlsEnd: <span>an-end-control</span> })
+    renderComposer({ startsAt: <span>a-place</span>, controls: <span>a-control</span>, setup: { said: 'Profile Default · 3 skills', lines: <span>a-line</span> } })
     await screen.findByRole('button', { name: /^Run on: / })
     const above = box().previousElementSibling!
     const under = box().nextElementSibling!
     const place = screen.getByText('a-place')
     const control = screen.getByText('a-control')
-    const endControl = screen.getByText('an-end-control')
+    const gear = screen.getByRole('button', { name: 'Session setup' })
     const select = agentTrigger()
-    expect(under.contains(endControl)).toBe(true)
-    expect(control.compareDocumentPosition(endControl) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(endControl.compareDocumentPosition(select) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    // The gear leads the row, on the box's left edge; its lines are in its menu, not in the row.
+    expect(under.contains(gear)).toBe(true)
+    expect(gear.parentElement!.firstElementChild).toBe(gear)
+    expect(gear.compareDocumentPosition(control) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(screen.queryByText('a-line')).toBeNull()
     expect(above.contains(runOn())).toBe(true)
     expect(above.contains(place)).toBe(true)
     expect(runOn().compareDocumentPosition(place) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
@@ -530,7 +532,8 @@ describe('the rows around the box', () => {
       expect(row.className).not.toContain('flex-wrap')
     }
     expect(place.parentElement!.className).toContain('min-w-0')
-    expect(select.parentElement!.className).toContain('shrink-0')
+    // The model is the row's last, so it ends on the box's right edge.
+    expect(under.lastElementChild).toBe(select)
   })
 
   test('with nothing of the caller\'s, the row above still carries "Run on", and the row under the select', async () => {
@@ -540,12 +543,28 @@ describe('the rows around the box', () => {
     expect(box().nextElementSibling!.contains(agentTrigger())).toBe(true)
   })
 
-  test('in a session the model is said in words where the select would be, and is no button', () => {
-    renderComposer({ inAgent: true, sessionModel: 'Opus 5.5' })
+  test("the gear's menu opens above the box, holds the caller's lines under \"This session\", and its hover says them with the menu shut; with no setup there is no gear", async () => {
+    renderComposer({ setup: { said: 'Profile Default · 3 skills', lines: <span>a-line</span> } })
+    const gear = screen.getByRole('button', { name: 'Session setup' })
+    expect((await hoverTooltip(gear)).textContent).toBe('Profile Default · 3 skills')
+    await openMenu(gear)
+    const menu = await screen.findByRole('menu')
+    expect(menu.textContent).toBe('This sessiona-line')
+    expect(menu.closest('[data-side]')!.getAttribute('data-side')).toBe('top')
+    cleanup()
+    renderComposer()
+    expect(screen.queryByRole('button', { name: 'Session setup' })).toBeNull()
+  })
+
+  test('in a session the model is said in words where the select would be, as the select says it, and is no button: the logo, the name, and the effort smaller', () => {
+    renderComposer({ inAgent: true, sessionModel: { driver: 'claude-code', name: 'Opus 5.5', effort: 'High' } })
     const row = box().nextElementSibling!
     const said = screen.getByText('Opus 5.5')
     expect(row.contains(said)).toBe(true)
     expect(said.closest('button')).toBeNull()
+    expect(said.className).toContain('font-medium')
+    expect(said.previousElementSibling!.querySelector('svg')).toBeTruthy()
+    expect(screen.getByText('High').className).toContain('text-xs')
     expect(screen.queryByRole('button', { name: /^Coding agent: / })).toBeNull()
   })
 

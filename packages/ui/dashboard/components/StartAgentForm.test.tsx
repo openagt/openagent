@@ -37,6 +37,7 @@ const profilesList = vi.hoisted(() => ({
   ],
 }))
 vi.mock('./ProfilesPage.js', () => ({ useProfilesList: () => ({ view: profilesList, reload: async () => {} }) }))
+const skillCount = vi.hoisted(() => ({ current: 18 as number | undefined }))
 vi.mock('./ProfileMenu.js', () => ({
   ProfileMenu: ({ picked, onPick }: { picked: string | undefined; onPick: (id: string) => void }) => (
     <button type="button" onClick={() => onPick('reviewer')}>{`profile:${picked ?? ''}`}</button>
@@ -54,11 +55,22 @@ vi.mock('./SkillsMenu.js', () => ({
       {`skills:${projectId ?? 'no project'}:${picks.without.join('+')}/${picks.project === undefined ? 'all' : picks.project === 'none' ? 'none' : picks.project.join('+')}`}
     </button>
   ),
+  // How many skills the session gets, for the gear's hover: none until they are read.
+  useSkillCount: () => skillCount.current,
 }))
 // The computer's account, and a press that picks another for this session.
 const runsAccount = vi.hoisted(() => ({ login: undefined as string | undefined }))
 vi.mock('./GitHosts.js', () => ({
-  GitAccountMenu: ({ onPick }: { onPick: (login: string) => void }) => <button type="button" onClick={() => onPick('octo-agent')}>pick-octo-agent</button>,
+  // The account's line of the gear's menu, for a project with a remote: a press that picks another; what the hover says of it; and its dialog.
+  useGitAccountSetup: (address: string | undefined, picked: string | undefined, onPick: (login: string) => void) => {
+    const account = picked ?? runsAccount.login
+    return {
+      line: address === undefined ? null : <button type="button" onClick={() => onPick('octo-agent')}>pick-octo-agent</button>,
+      said: address === undefined ? undefined : account !== undefined ? `@${account}` : 'no GitHub account',
+      missing: address !== undefined && account === undefined,
+      dialog: <div data-testid="account-dialog" />,
+    }
+  },
   useSessionAccount: (_address: string | undefined, picked: string | undefined) => picked ?? runsAccount.login,
 }))
 
@@ -81,12 +93,14 @@ vi.mock('../lib/use-start-agent.js', async () => ({
 }))
 
 // The Composer is exercised by its own tests; here it hands back a typed submit, shows whether
-// the form lets it submit at all, and renders the launcher's controls.
+// the form lets it submit at all, and renders the launcher's controls: the gear's lines in a menu
+// that stands open, as the gear's does once pressed, and what its hover says beside it.
 const composerProps = vi.hoisted(() => ({ current: {} as Record<string, unknown> }))
 const composerFocus = vi.hoisted(() => vi.fn())
 const composerClear = vi.hoisted(() => vi.fn())
 vi.mock('./Composer.js', async () => {
   const { forwardRef, useImperativeHandle } = await import('react')
+  const { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent } = await import('./ui/dropdown-menu.js')
   const Composer = forwardRef((props: any, ref: any) => {
     composerProps.current = props
     useImperativeHandle(ref, () => ({
@@ -97,7 +111,13 @@ vi.mock('./Composer.js', async () => {
       <>
         <div data-testid="starts-at">{props.startsAt}</div>
         <div data-testid="controls">{props.controls}</div>
-        <div data-testid="controls-end">{props.controlsEnd}</div>
+        {props.setup && (
+          <DropdownMenu open>
+            <DropdownMenuTrigger data-warn={props.setup.warn === true}>gear</DropdownMenuTrigger>
+            <DropdownMenuContent aria-label="This session">{props.setup.lines}</DropdownMenuContent>
+          </DropdownMenu>
+        )}
+        <div data-testid="said">{props.setup?.said}</div>
         <div data-testid="notes">{props.notes}</div>
         <button type="button" onClick={() => props.onSubmit('do the thing', { later: false, images: [] })}>
           submit-typed
@@ -124,6 +144,7 @@ beforeEach(() => {
 
 afterEach(() => {
   runsAccount.login = undefined
+  skillCount.current = 18
   cleanup()
   forgetRemembered()
   start.mockReset()
@@ -148,9 +169,17 @@ afterEach(() => {
 const COMMANDS = [{ name: 'work-queue', description: 'Work the agent queue' }]
 const noop = () => {}
 
-/** The launcher's "Auto" menu button; its text says the publish pick. */
-const autoMenu = () => screen.getByRole('button', { name: /^Auto: / })
-/** The labels of the publish options the open "Auto" menu lists. */
+/** The gear's menu, open. */
+const gearMenu = () => screen.getByRole('menu', { name: 'This session' })
+/** The gear's "When it finishes" line (the Auto level); its text says the publish pick. */
+const autoMenu = () => {
+  const line = screen.queryAllByRole('menuitem').find(item => item.textContent?.startsWith('When it finishes: '))
+  if (!line) throw new Error('the gear has no "When it finishes" line')
+  return line
+}
+/** What the gear's hover says with its menu shut. */
+const gearSaid = (): string => screen.getByTestId('said').textContent ?? ''
+/** The labels of the publish options the open "When it finishes" list has. */
 const publishOptions = () => screen.getAllByRole('menuitemradio').map(item => item.querySelector('span > span')!.textContent)
 /** The launcher's "start from" chip, when there is one. */
 const LOCAL = { kind: 'local' } as const
@@ -289,21 +318,81 @@ describe('StartAgentForm (#1774)', () => {
     expect(alert.parentElement!.dataset.testid).toBe('notes')
   })
 
-  test('under the box, at the left: the profile, then Skills, then the Context picker; at the right, before the model: the account, then the "Auto" menu', async () => {
-    onCommands.mockResolvedValue({ commands: [], gitHost: true, remote: true })
+  test("the gear's lines, in order: the profile, Skills, the account, then, set apart, \"When it finishes\"; after the gear, the Context picker alone", async () => {
+    onCommands.mockResolvedValue({ commands: [], gitHost: true, remote: true, address: 'github.com/acme/shop' })
+    runsAccount.login = 'octo'
     render(<StartAgentForm {...props} />)
-    const below = screen.getByTestId('controls')
-    const end = screen.getByTestId('controls-end')
-    await waitFor(() => expect(end.contains(autoMenu())).toBe(true))
-    expect(within(below).getAllByRole('button').map(button => button.textContent)).toEqual(['profile:default', 'skills:p1:/all', 'Context'])
-    expect(within(end).getAllByRole('button').map(button => button.textContent)).toEqual(['pick-octo-agent', 'Auto: Commit'])
+    await screen.findByText('pick-octo-agent')
+    expect(within(gearMenu()).getAllByRole('button').map(button => button.textContent)).toEqual(['profile:default', 'skills:p1:/all', 'pick-octo-agent'])
+    const auto = autoMenu()
+    expect(auto.textContent).toBe('When it finishes: Commit')
+    expect(auto.previousElementSibling?.getAttribute('role')).toBe('separator')
+    expect(screen.getByText('pick-octo-agent').compareDocumentPosition(auto) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(within(screen.getByTestId('controls')).getAllByRole('button').map(button => button.textContent)).toEqual(['Context'])
   })
 
-  test('the publish options: the button reads Commit until the person picks, and the Start carries no pick, left to the daemon; a saved pick is shown and carried, Off too; a change writes the saved setting', async () => {
+  test("the gear's hover says its picks with the menu shut: the profile, the skills counted, the account, the level and where its pull request goes", async () => {
+    onCommands.mockResolvedValue(WITH_BRANCHES)
+    runsAccount.login = 'octo'
+    prefs.current = { publish: 'merge' }
+    render(<StartAgentForm {...props} projectName="gemstack" />)
+    await waitFor(() => expect(gearSaid()).toBe('Profile Default · 18 skills · @octo · Merge on green'))
+    cleanup()
+    // One skill is said as one; a branch picked to start from is where the pull request goes.
+    skillCount.current = 1
+    prefs.current = { publish: 'pr', profile: 'reviewer', startFrom: { p1: { kind: 'published', branch: 'feature-x' } } }
+    render(<StartAgentForm {...props} projectName="gemstack" />)
+    await waitFor(() => expect(gearSaid()).toBe('Profile Reviewer · 1 skill · @octo-agent · Open PR → feature-x'))
+    cleanup()
+    // Until the skills are read, no count.
+    skillCount.current = undefined
+    prefs.current = {}
+    render(<StartAgentForm {...props} projectName="gemstack" />)
+    await waitFor(() => expect(gearSaid()).toBe('Profile Default · @octo · Commit'))
+  })
+
+  test("a host with no account logged in: the gear is in the warning's colour, and its hover says so; with an account, or no remote, it is not", async () => {
+    onCommands.mockResolvedValue(WITH_BRANCHES)
+    render(<StartAgentForm {...props} projectName="gemstack" />)
+    await waitFor(() => expect(gearSaid()).toBe('Profile Default · 18 skills · no GitHub account · Commit'))
+    expect(screen.getByText('gear').dataset.warn).toBe('true')
+    cleanup()
+    runsAccount.login = 'octo'
+    render(<StartAgentForm {...props} projectName="gemstack" />)
+    await waitFor(() => expect(gearSaid()).toContain('@octo'))
+    expect(screen.getByText('gear').dataset.warn).toBe('false')
+    cleanup()
+    // No remote: no account to be missing, and no line for one.
+    runsAccount.login = undefined
+    onCommands.mockResolvedValue({ commands: [], gitHost: false, remote: false, address: 'github.com/acme/shop' })
+    render(<StartAgentForm {...props} projectName="gemstack" />)
+    await waitFor(() => expect(gearSaid()).toBe('Profile Default · 18 skills · Commit'))
+    expect(screen.queryByText('pick-octo-agent')).toBeNull()
+    expect(screen.getByText('gear').dataset.warn).toBe('false')
+  })
+
+  test('a session with no project: the gear has the profile and the skills alone, no account and no "When it finishes", and no Context after it', async () => {
+    onCommands.mockResolvedValue(null)
+    runsAccount.login = 'octo'
+    render(<StartAgentForm {...props} projectId="session" />)
+    await waitFor(() => expect(gearSaid()).toBe('Profile Default · 18 skills'))
+    expect(within(gearMenu()).getAllByRole('button').map(button => button.textContent)).toEqual(['profile:default', 'skills:no project:/all'])
+    expect(screen.queryAllByRole('menuitem')).toEqual([])
+    expect(screen.getByTestId('controls').textContent).toBe('')
+    expect(screen.getByText('gear').dataset.warn).toBe('false')
+  })
+
+  test("the dialog that adds an account stands beside the box, outside the gear's menu, which a press closes", () => {
+    onCommands.mockResolvedValue(WITH_BRANCHES)
+    render(<StartAgentForm {...props} projectName="gemstack" />)
+    expect(gearMenu().contains(screen.getByTestId('account-dialog'))).toBe(false)
+  })
+
+  test('the publish options: the line reads Commit until the person picks, and the Start carries no pick, left to the daemon; a saved pick is shown and carried, Off too; a change writes the saved setting', async () => {
     onCommands.mockResolvedValue({ commands: [], gitHost: true })
     start.mockResolvedValue({ agentId: 'r1' })
     render(<StartAgentForm {...props} />)
-    expect(autoMenu().textContent).toBe('Auto: Commit')
+    expect(autoMenu().textContent).toBe('When it finishes: Commit')
     fireEvent.click(screen.getByText('submit-typed'))
     await waitFor(() => expect(start).toHaveBeenCalledWith('p1', 'do the thing', {}))
 
@@ -316,7 +405,7 @@ describe('StartAgentForm (#1774)', () => {
     start.mockClear()
     prefs.current = { publish: 'merge' }
     render(<StartAgentForm {...props} />)
-    expect(autoMenu().textContent).toBe('Auto: Merge on green')
+    expect(autoMenu().textContent).toBe('When it finishes: Merge on green')
     fireEvent.click(screen.getByText('submit-typed'))
     await waitFor(() => expect(start).toHaveBeenCalledWith('p1', 'do the thing', { publish: 'merge' }))
 
@@ -324,7 +413,7 @@ describe('StartAgentForm (#1774)', () => {
     start.mockClear()
     prefs.current = { publish: 'nothing' }
     render(<StartAgentForm {...props} />)
-    expect(autoMenu().textContent).toBe('Auto: Off')
+    expect(autoMenu().textContent).toBe('When it finishes: Auto off')
     fireEvent.click(screen.getByText('submit-typed'))
     await waitFor(() => expect(start).toHaveBeenCalledWith('p1', 'do the thing', { publish: 'nothing' }))
   })
@@ -334,18 +423,18 @@ describe('StartAgentForm (#1774)', () => {
     prefs.current = { publish: 'merge' }
     start.mockResolvedValue({ agentId: 'r1' })
     render(<StartAgentForm {...props} />)
-    await waitFor(() => expect(autoMenu().textContent).toBe('Auto: Publish branch'))
+    await waitFor(() => expect(autoMenu().textContent).toBe('When it finishes: Publish branch'))
     await openMenu(autoMenu())
     expect(publishOptions()).toEqual(['Off', 'Commit', 'Publish branch'])
     fireEvent.click(screen.getByText('submit-typed'))
     await waitFor(() => expect(start).toHaveBeenCalledWith('p1', 'do the thing', { publish: 'merge' }))
   })
 
-  test('a project with no remote is offered Off and Commit; its button reads Commit until the person picks, and with a saved publish pick too', async () => {
+  test('a project with no remote is offered Off and Commit; its line reads Commit until the person picks, and with a saved publish pick too', async () => {
     onCommands.mockResolvedValue({ commands: [], gitHost: false, remote: false })
     start.mockResolvedValue({ agentId: 'r1' })
     render(<StartAgentForm {...props} />)
-    await waitFor(() => expect(autoMenu().textContent).toBe('Auto: Commit'))
+    await waitFor(() => expect(autoMenu().textContent).toBe('When it finishes: Commit'))
     await openMenu(autoMenu())
     expect(publishOptions()).toEqual(['Off', 'Commit'])
     fireEvent.click(screen.getByText('submit-typed'))
@@ -355,7 +444,7 @@ describe('StartAgentForm (#1774)', () => {
     start.mockClear()
     prefs.current = { publish: 'merge' }
     render(<StartAgentForm {...props} />)
-    await waitFor(() => expect(autoMenu().textContent).toBe('Auto: Commit'))
+    await waitFor(() => expect(autoMenu().textContent).toBe('When it finishes: Commit'))
     fireEvent.click(screen.getByText('submit-typed'))
     await waitFor(() => expect(start).toHaveBeenCalledWith('p1', 'do the thing', { publish: 'merge' }))
   })
@@ -369,16 +458,16 @@ describe('StartAgentForm (#1774)', () => {
       return start.mock.lastCall![2] as { prBase?: string; base?: string }
     }
 
-    test('a picked branch on origin at Open PR: the button names it, it goes with the Start, and picking main sends none and reads so', async () => {
+    test('a picked branch on origin at Open PR: the line names it, it goes with the Start, and picking main sends none and reads so', async () => {
       onCommands.mockResolvedValue(WITH_BRANCHES)
       prefs.current = { publish: 'pr', startFrom: { p1: FEATURE } }
       render(<StartAgentForm {...props} projectName="gemstack" />)
-      await waitFor(() => expect(autoMenu().textContent).toBe('Auto: Open PR → feature-x'))
+      await waitFor(() => expect(autoMenu().textContent).toBe('When it finishes: Open PR → feature-x'))
       expect((await sent()).prBase).toBe('feature-x')
       start.mockClear()
       await openMenu(autoMenu())
       fireEvent.click(screen.getByRole('menuitemradio', { name: 'main' }))
-      await waitFor(() => expect(autoMenu().textContent).toBe('Auto: Open PR → main'))
+      await waitFor(() => expect(autoMenu().textContent).toBe('When it finishes: Open PR → main'))
       expect((await sent()).prBase).toBeUndefined()
     })
 
@@ -387,7 +476,7 @@ describe('StartAgentForm (#1774)', () => {
       prefs.current = { publish: 'merge' }
       render(<StartAgentForm {...props} projectName="gemstack" />)
       await waitFor(() => expect(startFromChip()).not.toBeNull())
-      expect(autoMenu().textContent).toBe('Auto: Merge on green')
+      expect(autoMenu().textContent).toBe('When it finishes: Merge on green')
     })
 
     test('My local branch: a target once origin is read to have it; not on origin, none and the pull request goes to main', async () => {
@@ -395,13 +484,13 @@ describe('StartAgentForm (#1774)', () => {
       onStartBranches.mockResolvedValueOnce({ branches: ['my/work'] })
       prefs.current = { publish: 'pr', startFrom: { p1: LOCAL } }
       render(<StartAgentForm {...props} projectName="gemstack" />)
-      await waitFor(() => expect(autoMenu().textContent).toBe('Auto: Open PR → my/work'))
+      await waitFor(() => expect(autoMenu().textContent).toBe('When it finishes: Open PR → my/work'))
       cleanup()
       onStartBranches.mockResolvedValueOnce({ branches: ['feature-x'] })
       render(<StartAgentForm {...props} projectName="gemstack" />)
       await waitFor(() => expect(onStartBranches).toHaveBeenCalledTimes(2))
       await waitFor(() => expect(startFromChip()).not.toBeNull())
-      expect(autoMenu().textContent).toBe('Auto: Open PR')
+      expect(autoMenu().textContent).toBe('When it finishes: Open PR')
       expect((await sent()).prBase).toBeUndefined()
     })
 
@@ -410,7 +499,7 @@ describe('StartAgentForm (#1774)', () => {
       prefs.current = { publish: 'commit', startFrom: { p1: FEATURE } }
       render(<StartAgentForm {...props} projectName="gemstack" />)
       await waitFor(() => expect(startFromChip()).not.toBeNull())
-      expect(autoMenu().textContent).toBe('Auto: Commit')
+      expect(autoMenu().textContent).toBe('When it finishes: Commit')
       expect((await sent()).prBase).toBe('feature-x')
     })
   })
@@ -422,7 +511,7 @@ describe('StartAgentForm (#1774)', () => {
     start.mockResolvedValue({ agentId: 'r1' })
     const onAgentStarted = vi.fn()
     render(<StartAgentForm {...props} projectName="gemstack" onAgentStarted={onAgentStarted} />)
-    await waitFor(() => expect(autoMenu().textContent).toBe('Auto: Open PR → feature-x'))
+    await waitFor(() => expect(autoMenu().textContent).toBe('When it finishes: Open PR → feature-x'))
     fireEvent.click(screen.getByText('submit-typed'))
     await waitFor(() => expect(onAgentStarted).toHaveBeenCalled())
     expect(onAgentStarted.mock.lastCall![3]).toEqual({ branch: 'feature-x', gitAccount: 'octo', publish: 'pr', prBase: 'feature-x', driver: 'codex', model: 'gpt-5', effort: 'high' })

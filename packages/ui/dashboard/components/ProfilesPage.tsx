@@ -121,7 +121,7 @@ export function ProfilesPage() {
   return (
     <Page
       title="Agent profiles"
-      description="An agent profile is a name and a saved set of run options: the accounts a run works as, the plugins it goes without, and the project skills it gets. Pick one under the message box; it works in any project, or in none."
+      description="An agent profile is a name and a saved set of run options: the accounts a run works as, the plugins it goes without, and the project skills it gets. Pick one from the gear under the message box; it works in any project, or in none."
       actions={
         <Button ref={newProfile} disabled={!view || adding} onClick={() => setAdding(true)}>
           <Plus className="size-4" aria-hidden />
@@ -406,8 +406,8 @@ function ProfileEditor({ profile, view, onAccounts, onDone }: { profile?: Profil
           name="Project skills"
           description={
             Array.isArray(draft.project)
-              ? `Its sessions get ${projectSaid(draft.project)}. Off, a session starts without them and can still pick them under the box.`
-              : 'The skills a project keeps in its repo go to this profile’s sessions too. Off, a session starts without them and can still pick them under the box.'
+              ? `Its sessions get ${projectSaid(draft.project)}. Off, a session starts without them and can still pick them from the gear under the box.`
+              : 'The skills a project keeps in its repo go to this profile’s sessions too. Off, a session starts without them and can still pick them from the gear under the box.'
           }
           checked={draft.project !== 'none'}
           onChange={on =>
@@ -458,7 +458,7 @@ function AccountPicks({ label, accounts: all, picked, busy, onTick, onAll }: { l
 
 /**
  * The plugins a profile's sessions get, each ticked, where it is on in their project: one ticked off
- * is left out of them, none of its skills nor its steps, until a session ticks it on under the box.
+ * is left out of them, none of its skills nor its steps, until a session ticks it on from the gear under the box.
  */
 function PluginPicks({ plugins, without, busy, onTick }: { plugins: readonly string[]; without: Set<string>; busy: boolean; onTick: (name: string, on: boolean) => void }) {
   if (plugins.length === 0) return null
@@ -477,7 +477,7 @@ function PluginPicks({ plugins, without, busy, onTick }: { plugins: readonly str
       <p className="text-xs text-muted-foreground">
         {left.length === 0
           ? 'Its sessions get every plugin on in their project. One ticked off is left out of them: none of its skills or steps.'
-          : `Its sessions go without ${inWords(left)}: none of their skills or steps, even in a project where they are on. A session can still tick them on under the box.`}
+          : `Its sessions go without ${inWords(left)}: none of their skills or steps, even in a project where they are on. A session can still tick them on from the gear under the box.`}
       </p>
     </fieldset>
   )
