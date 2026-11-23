@@ -52,9 +52,9 @@ interface StartName {
  */
 function refusedPicks(options: StartAgentOptions, noProject: boolean): string | undefined {
   // A session with no project: with no branch, and nothing committed or published; the repos it
-  // has are copied into its folder.
-  if (noProject && (options.base !== undefined || options.prBase !== undefined || options.publish !== undefined || options.account !== undefined || options.projectSkills !== undefined)) {
-    return 'A session with no project runs with no branch, nothing to publish, no account at a git host and no project skills.'
+  // has are copied into its folder. Its git host account goes with it: it may reach the host all the same.
+  if (noProject && (options.base !== undefined || options.prBase !== undefined || options.publish !== undefined || options.projectSkills !== undefined)) {
+    return 'A session with no project runs with no branch, nothing to publish and no project skills.'
   }
   if (options.images !== undefined && !(Array.isArray(options.images) && options.images.length <= IMAGES_PER_MESSAGE && options.images.every(isImageName))) return 'Images are named by the names the dashboard kept them under.'
   // Another host runs a project's run, on a machine of its own.

@@ -26,7 +26,7 @@ async function withConfigHome(body: (env: { XDG_CONFIG_HOME: string }) => Promis
   }
 }
 
-test('a Start with no project goes to the host with none, and no level, its home made first; a branch, a level or an account is refused', async () => {
+test('a Start with no project goes to the host with none, and no level, its home made first; a branch or a level is refused, and its git host account goes with it', async () => {
   await withConfigHome(async env => {
     const cwd = await realpath(await mkdtemp(join(tmpdir(), 'openagent-daemon-cwd-')))
     const host = fakeHost()
@@ -35,12 +35,14 @@ test('a Start with no project goes to the host with none, and no level, its home
       assert.deepEqual(await runtime.onStart('Read the news', {}, SESSIONS_ID), { ok: true, agentId: 'run-1', driver: 'claude-code' })
       assert.deepEqual(host.requests.map(request => [request.project, request.prompt, request.options]), [[undefined, 'Read the news', {}]])
       assert.equal((await stat(join(sessionsHome(env), '.openagent'))).isDirectory(), true, 'the home is made for it')
-      const refused = { ok: false, error: 'A session with no project runs with no branch, nothing to publish, no account at a git host and no project skills.' }
+      const refused = { ok: false, error: 'A session with no project runs with no branch, nothing to publish and no project skills.' }
       assert.deepEqual(await runtime.onStart('x', { publish: 'pr' }, SESSIONS_ID), refused)
       assert.deepEqual(await runtime.onStart('x', { base: 'main' }, SESSIONS_ID), refused)
-      assert.deepEqual(await runtime.onStart('x', { account: 'octo-agent' }, SESSIONS_ID), refused)
       assert.deepEqual(await runtime.onStart('x', { projectSkills: 'none' }, SESSIONS_ID), refused)
       assert.equal(host.requests.length, 1)
+      // The account picked for the session, or the computer's: the GitHub step works as it with no project too.
+      assert.equal((await runtime.onStart('Open an issue', { account: 'octo-agent' }, SESSIONS_ID)).ok, true)
+      assert.deepEqual(host.requests[1]!.options, { github: { account: 'octo-agent' } })
     } finally {
       await runtime.dispose()
       await rm(cwd, { recursive: true, force: true })
