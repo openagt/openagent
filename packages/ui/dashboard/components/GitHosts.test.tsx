@@ -99,6 +99,26 @@ describe("the git host in a session's gear menu, said and not offered", () => {
     expect(line.querySelector<HTMLElement>('[aria-hidden]')!.style.maskImage).toContain(encodeURIComponent('<svg'))
   })
 
+  test('a session with no project says the account its record keeps, at the host a package answers for; with no account recorded, no line', async () => {
+    logins.onGitHosts.mockResolvedValue({ hosts: [{ host: 'example.org', projects: ['notes'] }, { host: 'github.com', projects: [], provider: provider() }] })
+    const { rerender } = render(<GearMenu lines={<GitHostOff home={null} account="octo" />} />)
+    const line = await setupLine('GitHub account')
+    expect(heard(line)).toBe('GitHub account: @octo. This run works as @octo on GitHub')
+    rerender(<GearMenu lines={<GitHostOff home={null} />} />)
+    await noLine()
+  })
+
+  test('with no project, the account is the one at the first host a package answers for: the one picked while this computer has it, else the one its runs use', async () => {
+    logins.onGitHosts.mockResolvedValue({ hosts: [{ host: 'example.org', projects: ['notes'] }, { host: 'github.com', projects: [], provider: provider() }] })
+    const Probe = ({ picked, anyHost }: { picked?: string; anyHost: boolean }) => <output>{useSessionAccount(undefined, picked, anyHost) ?? 'none'}</output>
+    const { rerender } = render(<Probe anyHost />)
+    await waitFor(() => expect(screen.getByRole('status').textContent).toBe('octo'))
+    rerender(<Probe anyHost picked="octo-agent" />)
+    expect(screen.getByRole('status').textContent).toBe('octo-agent')
+    rerender(<Probe anyHost={false} />)
+    expect(screen.getByRole('status').textContent).toBe('none')
+  })
+
   test('no line for a project with no page on a git host, and none until the logo is read, so it lands whole', async () => {
     let answer: (view: unknown) => void = () => {}
     logins.onGitHosts.mockImplementation(() => new Promise(resolve => { answer = resolve }))

@@ -1,5 +1,6 @@
+import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { declaring, readManifest, runPackageCommand, type ProjectPackage, type ProvidedCommand } from '@openagt/agent-data'
+import { declaring, readManifest, runPackageCommand, sessionsHomeOf, type ProjectPackage, type ProvidedCommand } from '@openagt/agent-data'
 import { DISTRIBUTION_ENV, distributionItems, packageDirOf } from '@openagt/hooks'
 
 /**
@@ -44,14 +45,37 @@ export async function gitHostCommand(repo: string): Promise<ProvidedCommand | un
 
 /**
  * The environment a run gets to work as an account at the git host (`<command> env`), and that
- * account's login: the one the computer's runs use, or `user`, the project's own. Nothing when the
+ * account's login: the one the computer's runs use, or `user`, the session's own. Nothing when the
  * project has no git host. One the git host cannot give is a refusal, OpenAgent having no account
  * there among them: a run never goes on as someone else, the person's own login included.
  */
 export async function gitHostEnv(repo: string, user?: string): Promise<{ ok: true; env: Record<string, string>; login?: string } | { ok: false; error: string }> {
+  if ((await sessionsHomeOf(repo)) !== undefined) return sessionEnv(user)
   const command = await gitHostCommand(repo)
   if (!command) return user !== undefined ? { ok: false, error: `${NO_GIT_HOST}, so no run can work as ${user}` } : { ok: true, env: {} }
-  const result = await runPackageCommand(repo, command, ['env', ...(user !== undefined ? ['--user', user] : [])])
+  return envOf(await runPackageCommand(repo, command, ['env', ...(user !== undefined ? ['--user', user] : [])]))
+}
+
+/**
+ * The same for a session with no project, whose folder is on no host: the first of the
+ * distribution's git hosts that gives the account, since the session may reach any of them (a
+ * clone, a new repository, the person's pull requests). With no account named and none to give,
+ * nothing, and no refusal: such a session needs no git host. One named that no host gives is refused.
+ * The host is asked in the person's home folder: the sessions home is not made before its first session.
+ */
+async function sessionEnv(user: string | undefined): Promise<{ ok: true; env: Record<string, string>; login?: string } | { ok: false; error: string }> {
+  let refused: string | undefined
+  for (const host of await distributionGitHosts()) {
+    const given = envOf(await runPackageCommand(homedir(), host, ['env', ...(user !== undefined ? ['--user', user] : [])]))
+    if (given.ok) return given
+    refused ??= given.error
+  }
+  if (user === undefined) return { ok: true, env: {} }
+  return { ok: false, error: refused ?? `OpenAgent has no git host package here, so no run can work as ${user}` }
+}
+
+/** What a git host's `env` command answered, as a run's environment and its account's login. */
+function envOf(result: Awaited<ReturnType<typeof runPackageCommand>>): { ok: true; env: Record<string, string>; login?: string } | { ok: false; error: string } {
   if (!result.ok) return { ok: false, error: result.error }
   const { env, login } = (result.output ?? {}) as { env?: unknown; login?: unknown }
   const given: Record<string, string> = {}

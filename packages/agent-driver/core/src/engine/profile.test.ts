@@ -4,12 +4,13 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
-import { PLUGINS_WITHOUT_ENV, PROFILE_ENV, PROJECT_SKILLS_ENV } from '@openagt/agent-data'
+import { PLUGINS_WITHOUT_ENV, PROFILE_ENV, PROJECT_SKILLS_ENV, sessionsHome } from '@openagt/agent-data'
 import { PROFILES, chainStore, settingsIn } from '@openagt/hooks'
 import { memorySettings } from '@openagt/hooks/testing'
 import { accountsPath, addAccount } from '../accounts/accounts.js'
 import { anyPick, profileNamed, runProfile, sessionPicksNamed } from './profile.js'
 import { accountsOn, profileLoginFor } from './runner.js'
+import { gitHostEnv } from './git-host.js'
 import { testLogins } from './run-test-support.js'
 import { git, handDownDistribution, removeRepo, testRepo } from './test-repo.js'
 
@@ -67,21 +68,46 @@ test('a profile\'s Claude and Codex accounts apply where this computer has them:
   }
 })
 
-test("a profile's GitHub account applies where the project has a git host; in a session with no project, or a project on another host, the run goes as no account", async () => {
+test("a profile's GitHub account applies where the project has a git host, and in a session with no project; in a project on another host, or a folder that is neither, the run goes as no account", async () => {
   const repo = await testRepo()
   const home = await mkdtemp(join(tmpdir(), 'oa-sessions-'))
   // The git host is the distribution's github, as OpenAgent hands its distribution down to a run.
   const handBack = await handDownDistribution(home, { '@openagt/github': dirname(createRequire(import.meta.url).resolve('@openagt/github/package.json')) })
+  // The sessions home is beside the personal folder, under the configuration's.
+  const config = process.env.XDG_CONFIG_HOME
+  process.env.XDG_CONFIG_HOME = join(home, 'config')
   try {
     await git(['remote', 'set-url', 'origin', 'git@github.com:someone/project.git'], repo)
     assert.equal(await profileLoginFor(repo, { options: { github: { account: 'octo-agent' } } }), 'octo-agent')
     assert.equal(await profileLoginFor(repo, { options: {} }), undefined)
     await git(['remote', 'set-url', 'origin', 'https://gitlab.com/someone/project.git'], repo)
     assert.equal(await profileLoginFor(repo, { options: { github: { account: 'octo-agent' } } }), undefined, 'not on GitHub')
-    assert.equal(await profileLoginFor(home, { options: { github: { account: 'octo-agent' } } }), undefined, 'no project at all')
+    assert.equal(await profileLoginFor(home, { options: { github: { account: 'octo-agent' } } }), undefined, 'a folder that is no project and no session')
+    assert.equal(await profileLoginFor(sessionsHome(), { options: { github: { account: 'octo-agent' } } }), 'octo-agent', 'a session with no project may reach GitHub all the same')
+    assert.equal(await profileLoginFor(sessionsHome(), { options: {} }), undefined)
   } finally {
+    if (config === undefined) delete process.env.XDG_CONFIG_HOME
+    else process.env.XDG_CONFIG_HOME = config
     handBack()
     await removeRepo(repo)
+    await rm(home, { recursive: true, force: true })
+  }
+})
+
+test("a session with no project is given its account's environment by the distribution's git host, its folder being on none: no account named and none there, nothing and no refusal; one named that is not there, refused", async () => {
+  const home = await mkdtemp(join(tmpdir(), 'oa-sessions-'))
+  const handBack = await handDownDistribution(home, { '@openagt/github': dirname(createRequire(import.meta.url).resolve('@openagt/github/package.json')) })
+  const config = process.env.XDG_CONFIG_HOME
+  process.env.XDG_CONFIG_HOME = join(home, 'config')
+  try {
+    assert.deepEqual(await gitHostEnv(sessionsHome()), { ok: true, env: {} })
+    const refused = await gitHostEnv(sessionsHome(), 'stranger')
+    assert.equal(refused.ok, false)
+    assert.match(refused.ok ? '' : refused.error, /no GitHub account stranger/)
+  } finally {
+    if (config === undefined) delete process.env.XDG_CONFIG_HOME
+    else process.env.XDG_CONFIG_HOME = config
+    handBack()
     await rm(home, { recursive: true, force: true })
   }
 })

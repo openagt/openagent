@@ -265,8 +265,13 @@ already made, and lists it in its pull request; for anything else it proposes an
   record keeps the login it worked as, and a resumed run goes on as it, never as whatever the
   computer's pick is by then. An account this computer cannot use stops the run before it
   starts, naming it (the host's check); one that goes by then fails the run at that step. A
-  profile's account applies only where the project has a git host: in a session with no project,
-  or a project on another host, the run goes as no account rather than refused. On
+  profile's account applies where the project has a git host, and in a session with no project:
+  in a project on another host the run goes as no account rather than refused. A session with no
+  project has its account too, at the first of the distribution's git hosts that gives it: its
+  folder is on no host, and it reaches one all the same (a clone, a new repository, the
+  person's pull requests). With no account named and none there it goes on as no account, since
+  it may need none. Picked over no account for such a session, which left its work on a git
+  host to whatever login the computer happened to have. On
   Claude and Codex a profile's accounts apply where this computer has them, and none of them here
   is every account of the computer's: a profile made on another computer runs here without them.
   Picked over accounts named per project, which were kept on one computer for a repository

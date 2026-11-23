@@ -69,8 +69,8 @@ const STARTING_SAID_AFTER_MS = 300
 // project skills it gets (ProfileMenu.tsx); saved, like the model. Its GitHub account is what the
 // account line shows until the person picks another for the session.
 // With no project (`SESSIONS_ID`), the run starts in a folder of its own on this computer: the row
-// says "No project", and nothing about a repository is offered, no branch, no account, no Auto
-// level, no project skills. Its Context, under the box where a project's is, is the repos the session
+// says "No project", and nothing about a repository is offered, no branch, no Auto level, no
+// project skills. It has its git host account all the same: it may reach the host with no project. Its Context, under the box where a project's is, is the repos the session
 // works with (SessionRepos.tsx): each is copied into the session's folder, and none is made a project.
 export function StartAgentForm({
   projectId,
@@ -205,15 +205,16 @@ export function StartAgentForm({
     ...(skillPicks.without.length > 0 || profileWithout !== undefined ? { pluginsWithout: skillPicks.without } : {}),
     ...(noProject ? {} : skillPicks.project !== undefined ? { projectSkills: skillPicks.project } : profileProject !== undefined && profileProject !== 'all' ? { projectSkills: 'all' as const } : {}),
   }
-  const account = useSessionAccount(address, pickedAccount ?? onProfile?.options.github?.account)
+  // With no project the account is the one at the host a package answers for: the session may reach it all the same.
+  const account = useSessionAccount(address, pickedAccount ?? onProfile?.options.github?.account, noProject)
   // The gear's lines, and what its hover says of them with the menu shut. A session with no project
-  // has nothing of a repository: no account, no Auto level.
-  const gitAccount = useGitAccountSetup(remote ? address : undefined, pickedAccount ?? onProfile?.options.github?.account, setPickedAccount)
+  // has its account too, and no Auto level: it has no repository of its own to publish.
+  const gitAccount = useGitAccountSetup(remote ? address : undefined, pickedAccount ?? onProfile?.options.github?.account, setPickedAccount, noProject)
   const skillCount = useSkillCount(noProject ? undefined : projectId, skillPicks)
   const setupSaid = [
     onProfile && `Profile ${onProfile.name}`,
     skillCount !== undefined && `${skillCount} skill${skillCount === 1 ? '' : 's'}`,
-    !noProject && gitAccount.said,
+    gitAccount.said,
     !noProject && autoSaid(publishPick, prTarget),
   ]
     .filter(Boolean)
@@ -230,7 +231,7 @@ export function StartAgentForm({
       ...(prInto !== undefined ? { prBase: prInto } : {}),
       ...(host ? { host: host.id } : {}),
       ...(noProject && repos.length > 0 ? { repos: repos.map(repo => repo.path) } : {}),
-      ...(!noProject && remote && account !== undefined ? { account } : {}),
+      ...((noProject || remote) && account !== undefined ? { account } : {}),
       ...(profileId !== undefined ? { profile: profileId } : {}),
       ...pickedSkills,
     })
@@ -247,7 +248,7 @@ export function StartAgentForm({
         keepDraftImages(`launcher:${projectId}`, [])
         onAgentStarted?.(text, result.agentId, host?.label, {
           ...(started !== undefined ? { branch: started } : {}),
-          ...(!noProject && remote && account !== undefined ? { gitAccount: account } : {}),
+          ...((noProject || remote) && account !== undefined ? { gitAccount: account } : {}),
           ...(profileId !== undefined ? { profile: profileId } : {}),
           ...pickedSkills,
           ...(noProject ? {} : { publish: publishPick }),
@@ -306,7 +307,7 @@ export function StartAgentForm({
             <>
               <ProfileMenu profiles={profilesView?.profiles} picked={onProfile?.id} onPick={id => updatePreferences({ profile: id === DEFAULT_PROFILE ? '' : id })} />
               <SkillsMenu projectId={noProject ? undefined : projectId} picks={skillPicks} onChange={setSkillPicks} />
-              {!noProject && gitAccount.line}
+              {gitAccount.line}
               {!noProject && <AutoMenu publish={publishPick} picks={offeredPublishPicks(gitHost, remote)} onPublish={pick => updatePreferences({ publish: pick })} target={prTarget} />}
             </>
           ),

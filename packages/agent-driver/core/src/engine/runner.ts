@@ -14,7 +14,7 @@ import { publishChange, runnerMark, type NO_PUBLISH, type Publish } from './reco
 import { acquireRunLock, handOverRunLock, isPidAlive, releaseRunLock, runStderrPath } from './run-lock.js'
 import { accountRotation } from '../accounts/rotation.js'
 import { accountsPath, hasAddedAccount, readAccounts } from '../accounts/accounts.js'
-import { AGENT_ID_ENV, PLUGINS_WITHOUT_ENV, PROFILE_ENV, PROJECT_SKILLS_ENV } from '@openagt/agent-data'
+import { AGENT_ID_ENV, PLUGINS_WITHOUT_ENV, PROFILE_ENV, PROJECT_SKILLS_ENV, sessionsHomeOf } from '@openagt/agent-data'
 
 /**
  * The tool's process side: a run in this process, the same run detached in its own process and
@@ -301,15 +301,16 @@ export const ACCOUNT_ENV = 'OPENAGENT_ACCOUNT'
 export const GIT_ACCOUNT_ENV = 'OPENAGENT_GIT_ACCOUNT'
 
 /**
- * The login a run on `profile` works as at the git host, where the project has one: a profile's
- * account at GitHub means nothing in a session with no project, or in a project on another host,
- * and such a run goes as no account rather than refused. (A pick made for the session is another
- * matter: it was made among the host's accounts, and is asked for as it is.)
+ * The login a run on `profile` works as at the git host, where the project has one, and in a
+ * session with no project, which may reach the host all the same: a profile's account at GitHub
+ * means nothing in a project on another host, and such a run goes as no account rather than
+ * refused. (A pick made for the session is another matter: it was made among the host's accounts,
+ * and is asked for as it is.)
  */
 export async function profileLoginFor(repo: string, profile: Pick<Profile, 'options'>): Promise<string | undefined> {
   const account = profile.options.github?.account
   if (account === undefined) return undefined
-  return (await gitHostCommand(repo)) ? account : undefined
+  return (await sessionsHomeOf(repo)) !== undefined || (await gitHostCommand(repo)) ? account : undefined
 }
 
 /**

@@ -2,6 +2,7 @@ import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { RunOrder, type GithubFacts, type ProjectRef, type PullRequest, type RunContext, type RunFacts } from '@openagt/hooks'
 import { fakeRun } from '@openagt/hooks/testing'
+import { homedir } from 'node:os'
 import { githubModule, type GithubDeps } from './module.js'
 
 // github as a module: the account a run works as, and the pull request a run's branch has, read
@@ -76,30 +77,40 @@ test("a run on GitHub works as the account picked for it, else the one runs use:
   assert.deepEqual(asked, ['/projects/shop octo-agent, commits in /projects/shop', '/projects/shop (the account runs use), commits in /projects/shop'])
 })
 
-test('a session with no project works as the account on the first of its repos that is on GitHub; one on none works as no account', async () => {
+test('a session with no project works as its account whatever its repos, and with none: the one picked, else the one runs use; a project that is not on GitHub works as no account', async () => {
   const asked: string[] = []
-  const step = accountStep(['/repos/site', '/repos/app'], { octo: 'octo-token' }, 'octo', asked)
+  const step = accountStep(['/repos/site'], { octo: 'octo-token', 'octo-agent': 'agent-token' }, 'octo', asked)
   const repos = [
     { name: 'notes', from: '/repos/notes' },
     { name: 'site', from: '/repos/site' },
-    { name: 'app', from: '/repos/app' },
   ]
-  const session = fakeRun({ options: { 'git-branches': { repos } } })
-  await step.run(session)
-  assert.deepEqual([session.env, session.facts.github], [{ GH_TOKEN: 'octo-token' }, { account: 'octo' }])
-  assert.deepEqual(asked, ['/repos/site (the account runs use), commits in session run-1'], 'its commits are in its own folder, where its repos are copied')
-  for (const ctx of [fakeRun({}), fakeRun({ options: { 'git-branches': { repos: [repos[0]!] } } }), fakeRun({ project: { ...SHOP, dir: '/projects/elsewhere' } })]) {
-    await step.run(ctx)
-    assert.deepEqual([ctx.env, ctx.facts.github], [{}, undefined])
+  for (const session of [fakeRun({ options: { 'git-branches': { repos } } }), fakeRun({ options: { 'git-branches': { repos: [repos[0]!] } } }), fakeRun({})]) {
+    await step.run(session)
+    assert.deepEqual([session.env, session.facts.github], [{ GH_TOKEN: 'octo-token' }, { account: 'octo' }])
   }
-  assert.equal(asked.length, 1)
+  const picked = fakeRun({ options: { github: { account: 'octo-agent' } } })
+  await step.run(picked)
+  assert.deepEqual([picked.env, picked.facts.github], [{ GH_TOKEN: 'agent-token' }, { account: 'octo-agent' }])
+  assert.deepEqual(asked, [...Array(3).fill(`${homedir()} (the account runs use), commits in session run-1`), `${homedir()} octo-agent, commits in session run-1`], 'its commits are in its own folder, where its repos are copied')
+  const elsewhere = fakeRun({ project: { ...SHOP, dir: '/projects/elsewhere' } })
+  await step.run(elsewhere)
+  assert.deepEqual([elsewhere.env, elsewhere.facts.github], [{}, undefined])
+  assert.equal(asked.length, 4)
 })
 
-test('a run that cannot work as its account on GitHub is refused, and says which; one picked an account and on no GitHub repository too', async () => {
+test('a session with no project, no account picked, and none OpenAgent has goes on as no account: it may need none', async () => {
+  const step = accountStep([], {}, undefined)
+  const session = fakeRun({})
+  await step.run(session)
+  assert.deepEqual([session.env, session.facts.github], [{}, undefined])
+})
+
+test('a run that cannot work as its account on GitHub is refused, and says which: in a project, in a session with no project, and a project on no GitHub repository that picked one', async () => {
   const step = accountStep([SHOP.dir], { octo: 'octo-token' }, undefined)
   await assert.rejects(async () => step.run(fakeRun({ project: SHOP })), /^Error: OpenAgent has no GitHub account$/)
   await assert.rejects(async () => step.run(fakeRun({ project: SHOP, options: { github: { account: 'someone' } } })), /^Error: This session works as @someone on GitHub, and it cannot be used here: OpenAgent has no GitHub account someone$/)
-  await assert.rejects(async () => step.run(fakeRun({ options: { github: { account: 'octo' } } })), /This session works as @octo on GitHub, and it works in no repository on GitHub/)
+  await assert.rejects(async () => step.run(fakeRun({ options: { github: { account: 'someone' } } })), /^Error: This session works as @someone on GitHub, and it cannot be used here: OpenAgent has no GitHub account someone$/)
+  await assert.rejects(async () => step.run(fakeRun({ project: { ...SHOP, dir: '/projects/elsewhere' }, options: { github: { account: 'octo' } } })), /This session works as @octo on GitHub, and it works in no repository on GitHub/)
 })
 
 test("the request of the branch the run's work is on; none asked for a run with no branch or no project", async () => {
