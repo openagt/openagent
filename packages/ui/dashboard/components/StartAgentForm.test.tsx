@@ -61,13 +61,14 @@ vi.mock('./SkillsMenu.js', () => ({
 // The computer's account, and a press that picks another for this session.
 const runsAccount = vi.hoisted(() => ({ login: undefined as string | undefined }))
 vi.mock('./GitHosts.js', () => ({
-  // The account's line of the gear's menu, for a project with a remote: a press that picks another; what the hover says of it; and its dialog.
-  useGitAccountSetup: (address: string | undefined, picked: string | undefined, onPick: (login: string) => void) => {
+  // The account's line of the gear's menu, for a project with a remote and for a session with no project (`anyHost`): a press that picks another; what the hover says of it; and its dialog.
+  useGitAccountSetup: (address: string | undefined, picked: string | undefined, onPick: (login: string) => void, anyHost = false) => {
     const account = picked ?? runsAccount.login
+    const at = address !== undefined || anyHost
     return {
-      line: address === undefined ? null : <button type="button" onClick={() => onPick('octo-agent')}>pick-octo-agent</button>,
-      said: address === undefined ? undefined : account !== undefined ? `@${account}` : 'no GitHub account',
-      missing: address !== undefined && account === undefined,
+      line: at ? <button type="button" onClick={() => onPick('octo-agent')}>pick-octo-agent</button> : null,
+      said: !at ? undefined : account !== undefined ? `@${account}` : 'no GitHub account',
+      missing: at && account === undefined,
       dialog: <div data-testid="account-dialog" />,
     }
   },
@@ -328,7 +329,7 @@ describe('StartAgentForm (#1774)', () => {
     expect(auto.textContent).toBe('When it finishes: Commit')
     expect(auto.previousElementSibling?.getAttribute('role')).toBe('separator')
     expect(screen.getByText('pick-octo-agent').compareDocumentPosition(auto) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(within(screen.getByTestId('controls')).getAllByRole('button').map(button => button.textContent)).toEqual(['Context'])
+    expect(within(screen.getByTestId('controls')).getAllByRole('combobox').map(button => button.textContent)).toEqual(['Context'])
   })
 
   test("the gear's hover says its picks with the menu shut: the profile, the skills counted, the account, the level and where its pull request goes", async () => {
@@ -371,15 +372,33 @@ describe('StartAgentForm (#1774)', () => {
     expect(screen.getByText('gear').dataset.warn).toBe('false')
   })
 
-  test('a session with no project: the gear has the profile and the skills alone, no account and no "When it finishes"; after it, Context is the repos it works with', async () => {
+  test('a session with no project: the gear has the profile, the skills and the account, which goes with the Start, and no "When it finishes"; after it, Context is the repos it works with', async () => {
     onCommands.mockResolvedValue(null)
     runsAccount.login = 'octo'
-    render(<StartAgentForm {...props} projectId="session" />)
-    await waitFor(() => expect(gearSaid()).toBe('Profile Default · 18 skills'))
-    expect(within(gearMenu()).getAllByRole('button').map(button => button.textContent)).toEqual(['profile:default', 'skills:no project:/all'])
+    start.mockResolvedValue({ agentId: 'r1' })
+    const onAgentStarted = vi.fn()
+    render(<StartAgentForm {...props} projectId="session" onAgentStarted={onAgentStarted} />)
+    await waitFor(() => expect(gearSaid()).toBe('Profile Default · 18 skills · @octo'))
+    expect(within(gearMenu()).getAllByRole('button').map(button => button.textContent)).toEqual(['profile:default', 'skills:no project:/all', 'pick-octo-agent'])
     expect(screen.queryAllByRole('menuitem')).toEqual([])
     expect(within(screen.getByTestId('controls')).getByRole('combobox', { name: 'Context' })).toBeTruthy()
+    // One picked for the session goes with it, and to the run's page.
+    fireEvent.click(screen.getByText('pick-octo-agent'))
+    expect(gearSaid()).toBe('Profile Default · 18 skills · @octo-agent')
+    fireEvent.click(screen.getByText('submit-typed'))
+    await waitFor(() => expect(start).toHaveBeenCalledWith('session', 'do the thing', { account: 'octo-agent' }))
+    await waitFor(() => expect(onAgentStarted).toHaveBeenCalledWith('do the thing', 'r1', undefined, { gitAccount: 'octo-agent' }))
+  })
+
+  test('a session with no project and no account is not held by it: the gear has no warning, since such a session may need none', async () => {
+    onCommands.mockResolvedValue(null)
+    runsAccount.login = undefined
+    start.mockResolvedValue({ agentId: 'r1' })
+    render(<StartAgentForm {...props} projectId="session" />)
+    await waitFor(() => expect(gearSaid()).toBe('Profile Default · 18 skills · no GitHub account'))
     expect(screen.getByText('gear').dataset.warn).toBe('false')
+    fireEvent.click(screen.getByText('submit-typed'))
+    await waitFor(() => expect(start).toHaveBeenCalledWith('session', 'do the thing', {}))
   })
 
   test("the dialog that adds an account stands beside the box, outside the gear's menu, which a press closes", () => {
@@ -764,11 +783,17 @@ describe('StartAgentForm (#1774)', () => {
     await waitFor(() => expect(context().textContent).toBe('Context'))
   })
 
-  test("a project's Context is its own picker, not the repos' menu, and its Start sends no repos", async () => {
+  test("a project's Context is the same menu, and a repo ticked there is pointed at, not copied: it is told to the Context, and the Start sends no repos", async () => {
     onCommands.mockResolvedValue({ commands: [], gitHost: true })
+    onRepos.mockResolvedValue({ repos: [{ path: '/home/me/oss/vike', name: 'vike' }], canAddFolder: false })
     start.mockResolvedValue({ agentId: 'r1' })
-    render(<StartAgentForm {...props} projectName="gemstack" />)
-    expect(screen.queryByRole('combobox', { name: /^Context/ })).toBeNull()
+    const toggleContext = vi.fn()
+    render(<StartAgentForm {...props} projectName="gemstack" toggleContext={toggleContext} />)
+    const context = within(screen.getByTestId('controls')).getByRole('combobox', { name: 'Context' })
+    await openMenu(context)
+    fireEvent.click(await screen.findByRole('option', { name: /vike/ }))
+    expect(toggleContext).toHaveBeenCalledWith('/home/me/oss/vike')
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' })
     fireEvent.click(screen.getByText('submit-typed'))
     await waitFor(() => expect(start).toHaveBeenCalled())
     expect(start.mock.calls[0]![2]).not.toHaveProperty('repos')

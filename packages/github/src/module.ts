@@ -1,5 +1,6 @@
 import { realpathSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
+import { homedir } from 'node:os'
 import { errorMessage, nodeGitRunner, sessionFolder, sessionsHome } from '@openagt/agent-data'
 import { defineModule, RunOrder, type ModuleDefinition, type PullRequest, type RunContext } from '@openagt/hooks'
 import { readFacts, runEnv } from './accounts.js'
@@ -86,29 +87,25 @@ function realPath(path: string): string {
  * The run works as one of OpenAgent's GitHub accounts, never the person's own login: the one
  * picked for it (`options.github.account`), else the account runs use. What its environment gets
  * for it is the run's from here on, its agent's and its own git's, and its login goes on its
- * record. The repository that decides is the project's, or, for a session with no project, the
- * first of its repos that is on GitHub: the session's folder is on no host, its repos are. A run
- * on no GitHub repository works as no account of this module's; one picked an account it cannot
- * work as there is refused, rather than run as someone else.
+ * record. The repository that decides is the project's: a project on no GitHub repository works
+ * as no account of this module's, and one picked an account there is refused. A session with no
+ * project works as its account whatever its repos, and with none: its folder is on no host, and
+ * it may reach GitHub all the same (a clone, a new repository, the person's pull requests). With
+ * no account picked and none OpenAgent has, such a session goes on as no account: it may need
+ * none. An account picked that cannot be worked as is refused, rather than run as someone else.
  */
 async function workAsAccount(ctx: RunContext, onGithub: (dir: string) => Promise<boolean>, workAs: NonNullable<GithubDeps['workAs']>): Promise<void> {
   const picked = ctx.options.github?.account
-  const candidates = ctx.project ? [ctx.project.dir] : (ctx.options['git-branches']?.repos ?? []).map(repo => repo.from)
-  let dir: string | undefined
-  for (const candidate of candidates) {
-    if (await onGithub(candidate)) {
-      dir = candidate
-      break
-    }
-  }
-  if (dir === undefined) {
+  if (ctx.project && !(await onGithub(ctx.project.dir))) {
     if (picked !== undefined) throw new Error(`This session works as @${picked} on GitHub, and it works in no repository on GitHub.`)
     return
   }
   let working: WorkingAs
   try {
-    working = await workAs(dir, picked, ctx.project ? { project: ctx.project.dir } : { session: ctx.id })
+    // A session's own folder is made after its account is picked: gh is asked in the person's home folder.
+    working = await workAs(ctx.project?.dir ?? homedir(), picked, ctx.project ? { project: ctx.project.dir } : { session: ctx.id })
   } catch (err) {
+    if (!ctx.project && picked === undefined) return
     throw new Error(picked !== undefined ? `This session works as @${picked} on GitHub, and it cannot be used here: ${errorMessage(err)}` : errorMessage(err))
   }
   Object.assign(ctx.env, working.env)

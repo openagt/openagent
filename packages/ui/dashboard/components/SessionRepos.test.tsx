@@ -6,7 +6,7 @@ import { forgetRemembered } from '../lib/use-async.js'
 const onRepos = vi.hoisted(() => vi.fn())
 vi.mock('../rpc/projects.js', () => ({ onRepos }))
 
-const { repoGroups, reposSaid, folderName, SessionReposMenu, SessionReposSaid } = await import('./SessionRepos.js')
+const { repoGroups, reposSaid, folderName, ReposMenu, SessionReposSaid } = await import('./SessionRepos.js')
 
 afterEach(() => {
   cleanup()
@@ -53,15 +53,15 @@ describe("Context with no project: the session's repos", () => {
 
   test('the button says Context, then how many repos are picked; its name says the same, and its hover their names', async () => {
     onRepos.mockResolvedValue({ repos: [], ...READ })
-    render(<SessionReposMenu picked={[]} projects={[]} busy={false} onChange={() => {}} />)
+    render(<ReposMenu picked={[]} projects={[]} busy={false} onChange={() => {}} />)
     expect(context().textContent).toBe('Context')
     expect(context().getAttribute('aria-label')).toBe('Context')
     expect((await hoverTooltip(context())).textContent).toBe("Repos to copy into the session's folder")
     cleanup()
-    render(<SessionReposMenu picked={[{ path: '/home/me/oss/vike', name: 'vike' }]} projects={[]} busy={false} onChange={() => {}} />)
+    render(<ReposMenu picked={[{ path: '/home/me/oss/vike', name: 'vike' }]} projects={[]} busy={false} onChange={() => {}} />)
     expect(context().textContent).toBe('Context · 1 repo')
     cleanup()
-    render(<SessionReposMenu picked={[{ path: '/home/me/oss/vike', name: 'vike' }, { path: '/home/me/notes', name: 'notes' }]} projects={[]} busy={false} onChange={() => {}} />)
+    render(<ReposMenu picked={[{ path: '/home/me/oss/vike', name: 'vike' }, { path: '/home/me/notes', name: 'notes' }]} projects={[]} busy={false} onChange={() => {}} />)
     expect(context().textContent).toBe('Context · 2 repos')
     expect(context().getAttribute('aria-label')).toBe('Context: 2 repos')
     expect(reposSaid(['vike', 'notes'])).toBe("Copied into the session's folder: vike, notes")
@@ -70,7 +70,7 @@ describe("Context with no project: the session's repos", () => {
   test('the menu says what a tick does, marks the picked rows, and a press ticks one on or off without closing it', async () => {
     onRepos.mockResolvedValue({ repos: [{ path: '/home/me/oss/vike', name: 'vike' }, { path: '/home/me/notes', name: 'notes' }], ...READ })
     const onChange = vi.fn()
-    render(<SessionReposMenu picked={[{ path: '/home/me/notes', name: 'notes' }]} projects={[]} busy={false} onChange={onChange} />)
+    render(<ReposMenu picked={[{ path: '/home/me/notes', name: 'notes' }]} projects={[]} busy={false} onChange={onChange} />)
     await openMenu(context())
     expect(screen.getByText("Repos copied into the session's folder")).toBeTruthy()
     const notes = await screen.findByRole('option', { name: /notes/ })
@@ -86,7 +86,7 @@ describe("Context with no project: the session's repos", () => {
   test('the first match of a search is highlighted, so Enter ticks it', async () => {
     onRepos.mockResolvedValue({ repos: [{ path: '/home/me/oss/vike', name: 'vike' }, { path: '/home/me/notes', name: 'notes' }], ...READ })
     const onChange = vi.fn()
-    render(<SessionReposMenu picked={[]} projects={[]} busy={false} onChange={onChange} />)
+    render(<ReposMenu picked={[]} projects={[]} busy={false} onChange={onChange} />)
     await openMenu(context())
     await screen.findByRole('option', { name: /notes/ })
     const search = screen.getByRole('combobox', { name: 'Search repos' })
@@ -98,7 +98,7 @@ describe("Context with no project: the session's repos", () => {
 
   test('while the look through this computer is still on its way, the menu says so and asks again', async () => {
     onRepos.mockResolvedValue({ repos: [], ...READ, reposLoading: true })
-    render(<SessionReposMenu picked={[]} projects={[]} busy={false} onChange={() => {}} />)
+    render(<ReposMenu picked={[]} projects={[]} busy={false} onChange={() => {}} />)
     await openMenu(context())
     expect(await screen.findByText('Looking for repos on this computer…')).toBeTruthy()
     const before = onRepos.mock.calls.length
@@ -108,11 +108,26 @@ describe("Context with no project: the session's repos", () => {
     expect(screen.queryByText('Looking for repos on this computer…')).toBeNull()
   })
 
-  test("on a session's own page the repos are said, not offered: how many, and in the hover each with where it was copied from", async () => {
+  test("on a session's own page Context is the launcher's button, and its menu lists the repos it started with, each ticked with where it was copied from; a press on one changes nothing and closes nothing", async () => {
     render(<SessionReposSaid repos={[{ name: 'vike', from: '/home/me/oss/vike' }, { name: 'notes', from: '/home/me/notes' }]} />)
-    expect(screen.queryByRole('combobox')).toBeNull()
-    expect(screen.queryByRole('button')).toBeNull()
-    const said = screen.getByText(/Context · 2 repos/)
-    expect((await hoverTooltip(said.closest('[tabindex]')!)).textContent).toBe("Copies in this session's folder: vike (of /home/me/oss/vike), notes (of /home/me/notes)")
+    const button = screen.getByRole('button', { name: 'Context: 2 repos' })
+    expect(button.textContent).toBe('Context · 2 repos')
+    expect((await hoverTooltip(button)).textContent).toBe("Copies in this session's folder: vike, notes")
+    await openMenu(button)
+    expect(screen.getByText("Repos copied into this session's folder when it started")).toBeTruthy()
+    const rows = screen.getAllByRole('menuitem')
+    expect(rows.map(row => row.textContent?.startsWith('vike') || row.textContent?.startsWith('notes'))).toEqual([true, true])
+    expect(rows.map(row => row.querySelector('[data-line2]')!.getAttribute('title'))).toEqual(['/home/me/oss/vike', '/home/me/notes'])
+    expect(rows.every(row => row.getAttribute('aria-disabled') === 'true' && row.querySelector('.lucide-check'))).toBe(true)
+    fireEvent.click(rows[0]!)
+    expect(button.getAttribute('aria-expanded')).toBe('true')
+  })
+
+  test('a session that started with no repo says so in the same menu', async () => {
+    render(<SessionReposSaid repos={[]} />)
+    const button = screen.getByRole('button', { name: 'Context' })
+    expect(button.textContent).toBe('Context')
+    await openMenu(button)
+    expect(screen.getByText('None: this session started with no repo.')).toBeTruthy()
   })
 })

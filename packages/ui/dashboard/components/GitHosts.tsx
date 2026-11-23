@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { Check, ChevronDown, Loader2, MoreHorizontal, Plus } from 'lucide-react'
 import type { GitHostHome } from '../../src/index.js'
-import { sendForgetGitHostAccount, sendUseGitHostAccount, type GitHostRow } from '../rpc/logins.js'
+import { sendForgetGitHostAccount, sendUseGitHostAccount, type GitHostRow, type GitHostsView } from '../rpc/logins.js'
 import { cn } from '../lib/utils.js'
 import { FocusHome } from '../lib/focus-home.js'
 import { Button } from './ui/button.js'
@@ -216,13 +216,23 @@ function Avatar({ src, login }: { src: string | undefined; login: string }) {
 }
 
 /**
- * The account a session works as at the project's host: the one picked for this session, while
- * this computer still has it; else the one its runs use. Undefined with no account there.
+ * The host a session's account is at: its project's, by the project's address; with no project
+ * (`anyHost`), the first host a package answers for, since such a session may reach it all the
+ * same: a clone, a new repository, the person's pull requests.
  */
-export function useSessionAccount(address: string | undefined, picked: string | undefined): string | undefined {
-  const { view } = useGitHosts()
+function hostRow(view: GitHostsView | undefined, address: string | undefined, anyHost: boolean): GitHostRow | undefined {
   const host = address?.split('/')[0]
-  const accounts = view?.hosts.find(one => one.host === host)?.provider?.accounts
+  if (host !== undefined) return view?.hosts.find(one => one.host === host)
+  return anyHost ? view?.hosts.find(one => one.provider !== undefined) : undefined
+}
+
+/**
+ * The account a session works as at its host ({@link hostRow}): the one picked for this session,
+ * while this computer still has it; else the one its runs use. Undefined with no account there.
+ */
+export function useSessionAccount(address: string | undefined, picked: string | undefined, anyHost = false): string | undefined {
+  const { view } = useGitHosts()
+  const accounts = hostRow(view, address, anyHost)?.provider?.accounts
   return (picked !== undefined && accounts?.some(account => account.login === picked && account.ok) ? picked : undefined) ?? accounts?.find(account => account.runs)?.login
 }
 
@@ -240,17 +250,17 @@ export interface GitAccountSetup {
 
 /**
  * The git host account a session pushes and opens its pull request with, a line of the launcher's
- * gear menu: the project's host. Its list picks another of the accounts there, for this session
+ * gear menu: the project's host, or, with no project (`anyHost`), the host a package answers for.
+ * Its list picks another of the accounts there, for this session
  * only: the computer's own pick, which the Permissions page makes, stays what it is; or adds one.
  * A host with no account logged in says so, and the line's press adds one.
  */
-export function useGitAccountSetup(address: string | undefined, picked: string | undefined, onPick: (login: string) => void): GitAccountSetup {
+export function useGitAccountSetup(address: string | undefined, picked: string | undefined, onPick: (login: string) => void, anyHost = false): GitAccountSetup {
   const { view } = useGitHosts()
-  const account = useSessionAccount(address, picked)
+  const account = useSessionAccount(address, picked, anyHost)
   // One added from here is the one this session works as.
   const adding = useAddGitAccount(login => onPick(login))
-  const host = address?.split('/')[0]
-  const row = host === undefined ? undefined : view?.hosts.find(one => one.host === host)
+  const row = hostRow(view, address, anyHost)
   const p = row?.provider
   if (!row || !p) return { line: null, said: undefined, missing: false, dialog: adding.dialog }
   const onAdd = () => adding.add(row.host)
@@ -295,17 +305,21 @@ export function useGitAccountSetup(address: string | undefined, picked: string |
 /**
  * The project's git host in a session's gear menu, where the launcher has the account's line: the
  * account this run worked as, which its record keeps. A run recorded before that was kept says the
- * host's name: the one its project's runs use today need not be the one it pushed as. Nothing for a
- * project with no page on a git host, and until the logo is read, so it lands whole.
+ * host's name: the one its project's runs use today need not be the one it pushed as. A session with
+ * no project has no page on a host, and says the account its record keeps, at the host a package
+ * answers for. Nothing for a project with no page on a git host, a session with no project and no
+ * account, and until the logo is read, so it lands whole.
  */
 export function GitHostOff({ home, account }: { home: GitHostHome | null; account?: string | undefined }) {
   const { view } = useGitHosts()
-  if (!home || !view) return null
-  const provider = view.hosts.find(row => row.host === home.url.split('/')[2])?.provider
+  if (!view) return null
+  const provider = (home ? view.hosts.find(row => row.host === home.url.split('/')[2]) : account !== undefined ? hostRow(view, undefined, true) : undefined)?.provider
+  const name = home?.name ?? provider?.name
+  if (name === undefined) return null
   return (
     <SetupSaid
       icon={<PackageLogo svg={provider?.logo} className="size-4" />}
-      label={`${home.name} account`}
+      label={`${name} account`}
       value={
         account !== undefined ? (
           <>
@@ -316,7 +330,7 @@ export function GitHostOff({ home, account }: { home: GitHostHome | null; accoun
           'Not recorded'
         )
       }
-      tip={account !== undefined ? `This run works as @${account} on ${home.name}` : `This project is on ${home.name}`}
+      tip={account !== undefined ? `This run works as @${account} on ${name}` : `This project is on ${name}`}
     />
   )
 }

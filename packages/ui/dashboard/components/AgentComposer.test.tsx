@@ -110,22 +110,17 @@ describe('AgentComposer row under the box', () => {
     expect(screen.getByTestId('composer-controls').textContent).toBe('Context · src/app.ts')
   })
 
-  test('a session with no project: the profile and its skills alone in the gear, no account or Auto; after it Context says its repos, how many, with their names in its hover, and is no press', () => {
+  test("a session with no project: the profile and its skills in the gear, no Auto; after it Context is the launcher's button, saying how many repos it started with", () => {
     renderComposer({ projectId: 'session', repos: [{ name: 'vike', from: '/home/me/oss/vike' }, { name: 'notes', from: '/home/me/notes' }] })
     expect(screen.getByTestId('composer-setup').textContent).toBe('Profile · defaultSkills · no project')
     const controls = screen.getByTestId('composer-controls')
-    expect(controls.textContent).toContain('Context · 2 repos')
-    expect(controls.textContent).toContain("Copies in this session's folder: vike (of /home/me/oss/vike), notes (of /home/me/notes)")
-    expect(within(controls).queryByRole('button')).toBeNull()
+    expect(within(controls).getByRole('button', { name: 'Context: 2 repos' }).textContent).toBe('Context · 2 repos')
     expect(within(controls).queryByRole('combobox')).toBeNull()
   })
 
-  test('a session with no project and no repo says so in its Context', () => {
+  test('a session with no project and no repo has its Context all the same', () => {
     renderComposer({ projectId: 'session' })
-    const controls = screen.getByTestId('composer-controls')
-    expect(controls.textContent).toContain('Context')
-    expect(controls.textContent).not.toContain('repo ')
-    expect(controls.textContent).toContain('This session started with no repo')
+    expect(within(screen.getByTestId('composer-controls')).getByRole('button', { name: 'Context' }).textContent).toBe('Context')
   })
 
   test("the gear's hover says the setup with its menu shut: the profile, how many skills, the account, the level and where its pull request goes; each once it is known", () => {
