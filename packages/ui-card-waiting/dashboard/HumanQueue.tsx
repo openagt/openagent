@@ -21,7 +21,7 @@ export function HumanQueue({ projects }: UiCardProps) {
   }, [items, projects])
   return (
     <FadeWhileStale stale={state === 'kept'} className="flex flex-col *:flex-1">
-      <PanelGroup bare title={<span className="text-warning">Human Queue</span>} count={holdsBack(shown) ? shown.length : undefined}>
+      <PanelGroup bare title="Human Queue" count={holdsBack(shown) ? shown.length : undefined}>
         <PartDescription>Agents awaiting your approval, review, or input</PartDescription>
         <Slot of={{ state, value: shown }} shape={<SentenceShape />}>
           {() =>
