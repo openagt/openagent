@@ -329,7 +329,7 @@ describe('StartAgentForm (#1774)', () => {
     expect(auto.textContent).toBe('When it finishes: Commit')
     expect(auto.previousElementSibling?.getAttribute('role')).toBe('separator')
     expect(screen.getByText('pick-octo-agent').compareDocumentPosition(auto) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(within(screen.getByTestId('controls')).getAllByRole('button').map(button => button.textContent)).toEqual(['Context'])
+    expect(within(screen.getByTestId('controls')).getAllByRole('combobox').map(button => button.textContent)).toEqual(['Context'])
   })
 
   test("the gear's hover says its picks with the menu shut: the profile, the skills counted, the account, the level and where its pull request goes", async () => {
@@ -783,11 +783,17 @@ describe('StartAgentForm (#1774)', () => {
     await waitFor(() => expect(context().textContent).toBe('Context'))
   })
 
-  test("a project's Context is its own picker, not the repos' menu, and its Start sends no repos", async () => {
+  test("a project's Context is the same menu, and a repo ticked there is pointed at, not copied: it is told to the Context, and the Start sends no repos", async () => {
     onCommands.mockResolvedValue({ commands: [], gitHost: true })
+    onRepos.mockResolvedValue({ repos: [{ path: '/home/me/oss/vike', name: 'vike' }], canAddFolder: false })
     start.mockResolvedValue({ agentId: 'r1' })
-    render(<StartAgentForm {...props} projectName="gemstack" />)
-    expect(screen.queryByRole('combobox', { name: /^Context/ })).toBeNull()
+    const toggleContext = vi.fn()
+    render(<StartAgentForm {...props} projectName="gemstack" toggleContext={toggleContext} />)
+    const context = within(screen.getByTestId('controls')).getByRole('combobox', { name: 'Context' })
+    await openMenu(context)
+    fireEvent.click(await screen.findByRole('option', { name: /vike/ }))
+    expect(toggleContext).toHaveBeenCalledWith('/home/me/oss/vike')
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' })
     fireEvent.click(screen.getByText('submit-typed'))
     await waitFor(() => expect(start).toHaveBeenCalled())
     expect(start.mock.calls[0]![2]).not.toHaveProperty('repos')

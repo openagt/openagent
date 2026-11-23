@@ -522,7 +522,11 @@ already made, and lists it in its pull request; for anything else it proposes an
   requests with no project picked, and the account says as whom. A line that came and went with
   the project read as a fault. With no account there the gear has no warning: such a session may
   need none. "When it finishes" is still a project's alone: a session with no project has no
-  repository of its own to publish. A session's own page says its Context in the launcher's
+  repository of its own to publish. A project's Context is the same menu as with no project,
+  repos that are no project among its rows, and the files picked for it over them: before, it
+  listed the projects alone. What a tick does there is unchanged, and the menu's heading says
+  it: the agent is pointed at the repo where it is, and nothing is copied. The menu stands over
+  the box where the page has the room, under its own button otherwise. A session's own page says its Context in the launcher's
   button and a menu as the launcher's, its repos ticked and not offered: a session keeps them.
   Picked over words with a hover, which read as another control.
 - A session with no project may have repos as context, ticked in Context under the box, where

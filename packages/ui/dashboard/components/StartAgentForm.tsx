@@ -18,7 +18,7 @@ import { ProjectContextMenu } from './ContextMenu.js'
 import { Composer, type ComposerHandle } from './Composer.js'
 import { StartFromMenu, prTargetBranch, startFromBase } from './StartFromMenu.js'
 import { ProjectPicker } from './ProjectPicker.js'
-import { SessionReposMenu, type PickedRepo } from './SessionRepos.js'
+import { ReposMenu, type PickedRepo } from './SessionRepos.js'
 import { Dots } from './ToolCalls.js'
 import { AgentFix, agentWords, useAgentState } from './Logins.js'
 import { profilePicks, SkillsMenu, useSkillCount, type SkillPicks } from './SkillsMenu.js'
@@ -314,7 +314,7 @@ export function StartAgentForm({
         }}
         // After the gear, Context: a project's picker, or, with no project, the repos the session works with, folders
         // on this computer copied into the session's folder.
-        controls={noProject ? <SessionReposMenu picked={repos} projects={projects} busy={busy} onChange={setRepos} /> : <ProjectContextMenu projectId={projectId} context={context} busy={busy} onToggle={toggleContext} />}
+        controls={noProject ? <ReposMenu picked={repos} projects={projects} busy={busy} onChange={setRepos} /> : <ProjectContextMenu projectId={projectId} context={context} busy={busy} onToggle={toggleContext} />}
         onSubmit={submit}
         onPromptChange={value => {
           typed.current = value

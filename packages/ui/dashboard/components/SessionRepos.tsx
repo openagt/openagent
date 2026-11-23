@@ -1,4 +1,4 @@
-import { useContext, useEffect, useMemo, useState } from 'react'
+import { useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Combobox } from '@base-ui/react/combobox'
 import { Check, FolderGit2, Layers, Search } from 'lucide-react'
 import type { ProjectSummary } from '../../src/index.js'
@@ -13,6 +13,9 @@ import { usePopupPosition } from './ui/popup-placement.js'
 import { usePickerSearch } from './ui/picker-search.js'
 import { ASK_AGAIN_MS, REPOS_SHOWN, repoDetail } from './ProjectPicker.js'
 import { MiddleCut } from './MiddleCut.js'
+
+/** The room the menu takes over the box at its full height: its search, its list (20rem) and the page's edge. */
+const ROOM_ABOVE_PX = 400
 
 /** The most rows a search lists. */
 const SEARCH_SHOWN = 200
@@ -64,6 +67,19 @@ export function repoGroups(projects: readonly Row[], repos: readonly Row[], pick
   ].filter(group => group.items.length > 0)
 }
 
+/** The files of a project's Context in the menu, set apart from the repos by a hairline: before them, or after. */
+function filesPart(list: ReactNode, place: 'first' | 'last'): ReactNode {
+  const line = <div role="separator" className="mx-2 my-1 h-px bg-hairline" />
+  return (
+    <>
+      {place === 'last' && line}
+      <p className="px-2 pt-2 pb-1 text-xs font-semibold text-muted-foreground">Files</p>
+      {list}
+      {place === 'first' && line}
+    </>
+  )
+}
+
 /** What the Context button's hover says of a session's repos, with or without any. */
 export function reposSaid(names: readonly string[]): string {
   return names.length === 0 ? "Repos to copy into the session's folder" : `Copied into the session's folder: ${names.join(', ')}`
@@ -72,28 +88,45 @@ export function reposSaid(names: readonly string[]): string {
 /** How many repos, in words: what stands on the Context button after its name. */
 const counted = (count: number): string => `${count} repo${count === 1 ? '' : 's'}`
 
-// The Context of a session with no project, under the box where a project's Context picker is (his
-// pick, over "Add repo" and a chip per repo in the row above the box): the repos it works with
-// (Rom's "repos are just context"), ticked on and off in one menu, as many as wanted, from the
-// projects of this computer and the repos the picker lists. The button says how many, and its
-// hover their names. A repo ticked here stays no project: the run copies it into the session's
-// folder, and leaves the repo's own folder as it was.
-export function SessionReposMenu({
+// The Context menu under the box, one on both pages (his pick, over "Add repo" and a chip per repo
+// in the row above the box, and over a project's own shorter list): the repos the session works
+// with (Rom's "repos are just context"), ticked on and off, as many as wanted, from the projects
+// of this computer and the repos the picker lists. The button says how many, and its hover their
+// names. What a tick does is the caller's, and the menu's heading says it (`heading`): with no
+// project the run copies the repo into the session's folder, and leaves the repo's own folder as
+// it was; with a project the agent is pointed at it where it is (ContextMenu.tsx), and the files
+// picked for it are listed over the repos (`files`).
+export function ReposMenu({
   picked,
   projects,
   busy,
   onChange,
+  heading = "Repos copied into the session's folder",
+  said = reposSaid,
+  without,
+  files,
 }: {
   picked: readonly PickedRepo[]
   projects: readonly ProjectSummary[]
   busy: boolean
   onChange: (picked: PickedRepo[]) => void
+  /** What a tick does, over the list. */
+  heading?: string
+  /** What the button's hover says of the picked ones, by their names. */
+  said?: (names: readonly string[]) => string
+  /** A folder left out of the list: the session's own project. */
+  without?: string | undefined
+  /** The files picked beside the repos: how many, said on the button, and their list. */
+  files?: { count: number; list: ReactNode } | undefined
 }) {
   const search = usePickerSearch()
   const { open, typed } = search
   const position = usePopupPosition()
-  // Above the box on its left edge, as the gear's menu.
+  // Above the box on its left edge, as the gear's menu, where the page has the room over the box for its whole
+  // height; under its own button otherwise, as on a launcher whose box stands high: turned under the box, it
+  // would cover the row it was opened from.
   const box = useContext(BoxOfRow)
+  const above = open && box?.current != null && box.current.getBoundingClientRect().top >= ROOM_ABOVE_PX
   // Asked again shortly while the look through this computer is still on its way, and the menu is open.
   const [again, setAgain] = useState(0)
   const repos = useLoaded<ReposRead | null>(() => onRepos().catch(() => ({ repos: [], hosted: [], reposLoading: false, hostedLoading: false, canAddFolder: false })), null, [open, again])
@@ -103,16 +136,18 @@ export function SessionReposMenu({
     return () => clearTimeout(later)
   }, [open, repos])
   const projectRows = useMemo<Row[]>(
-    () => projects.map(p => ({ value: `project:${p.id}`, label: folderName(p.path), detail: p.path, path: p.path, search: p.path })),
-    [projects],
+    () => projects.filter(p => p.path !== without).map(p => ({ value: `project:${p.id}`, label: folderName(p.path), detail: p.path, path: p.path, search: p.path })),
+    [projects, without],
   )
   const repoRows = useMemo<Row[]>(
-    () => (repos?.repos ?? []).map(repo => ({ value: `repo:${repo.path}`, label: repo.name, detail: repoDetail(repo), path: repo.path, search: `${repo.path}\n${repo.url ?? ''}` })),
-    [repos],
+    () => (repos?.repos ?? []).filter(repo => repo.path !== without).map(repo => ({ value: `repo:${repo.path}`, label: repo.name, detail: repoDetail(repo), path: repo.path, search: `${repo.path}\n${repo.url ?? ''}` })),
+    [repos, without],
   )
   const groups = repoGroups(projectRows, repoRows, picked, typed)
   // The picked ones as the menu's rows: a row is the same repo as a pick by its folder.
   const pickedRows = picked.map<Row>(repo => ({ value: `picked:${repo.path}`, label: repo.name, detail: repo.path, path: repo.path, search: repo.path }))
+  // What is picked, on the button after its name: the repos, then the files.
+  const counts = [picked.length > 0 ? counted(picked.length) : null, files && files.count > 0 ? `${files.count} file${files.count === 1 ? '' : 's'}` : null].filter(Boolean).join(' · ')
 
   return (
     <Combobox.Root<Row, true>
@@ -131,24 +166,24 @@ export function SessionReposMenu({
           render={
             <Combobox.Trigger
               disabled={busy}
-              aria-label={picked.length > 0 ? `Context: ${counted(picked.length)}` : 'Context'}
+              aria-label={counts ? `Context: ${counts}` : 'Context'}
               className={MENU_TRIGGER_OPEN_CLASS}
               {...search.trigger}
               render={
                 <button type="button" className={rowButtonClass}>
                   <Layers className="size-4 shrink-0" aria-hidden />
                   <span className="truncate">
-                    Context{picked.length > 0 && <span className="text-primary"> · {counted(picked.length)}</span>}
+                    Context{counts && <span className="text-primary"> · {counts}</span>}
                   </span>
                 </button>
               }
             />
           }
         />
-        <TooltipContent>{reposSaid(picked.map(repo => repo.name))}</TooltipContent>
+        <TooltipContent>{said(picked.map(repo => repo.name))}</TooltipContent>
       </Tooltip>
       <Combobox.Portal>
-        <Combobox.Positioner {...position} {...(box ? { anchor: box, side: 'top' as const } : {})} sideOffset={6} align="start" className="z-50 outline-none">
+        <Combobox.Positioner {...position} {...(above ? { anchor: box, side: 'top' as const } : {})} sideOffset={6} align="start" className="z-50 outline-none">
           <Combobox.Popup data-overlay="picker" aria-label="Context" className={cn(MENU_POPUP_CLASS, 'w-[24rem] max-w-[var(--available-width)]')}>
             {/* The field one line tall, 16 in from the band's every edge, as the jump's is. */}
             <div className="flex h-13 items-center gap-3 border-b border-hairline px-4">
@@ -157,8 +192,10 @@ export function SessionReposMenu({
             </div>
             <ScrollArea viewportClassName="h-[min(20rem,calc(var(--available-height)-5rem))]">
               <div className={MENU_BODY_CLASS}>
-                {/* What a tick does, which a project's Context does not: there, a tick only narrows the agent's focus. */}
-                <p className="px-2 pt-1 pb-0.5 text-xs text-muted-foreground">Repos copied into the session's folder</p>
+                {/* What a tick does: it differs with and without a project. */}
+                {/* The picked files first: under some sixty repos they would be out of sight. */}
+                {files && files.count > 0 && filesPart(files.list, 'first')}
+                <p className="px-2 pt-1 pb-0.5 text-xs text-muted-foreground">{heading}</p>
                 <Combobox.Empty className="px-2 py-1.5 text-xs text-muted-foreground empty:hidden">{repos === null ? '' : 'No repo by that name.'}</Combobox.Empty>
                 <Combobox.List>
                   {(group: Group) => (
@@ -195,6 +232,8 @@ export function SessionReposMenu({
                 ) : !typed.trim() && repos.repos.length > REPOS_SHOWN ? (
                   <p className="px-2 py-1.5 text-xs text-muted-foreground">Search to see more of the {repos.repos.length} repos.</p>
                 ) : null}
+                {/* With none picked, how to pick one, last: nothing to look for. */}
+                {files && files.count === 0 && filesPart(files.list, 'last')}
               </div>
             </ScrollArea>
           </Combobox.Popup>

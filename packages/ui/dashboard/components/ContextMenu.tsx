@@ -1,130 +1,51 @@
 import type { ProjectSummary } from '../../src/index.js'
-import { Layers } from 'lucide-react'
 import { onProjects } from '../rpc/projects.js'
 import { useLoaded } from '../lib/use-async.js'
-import { useContext } from 'react'
-import { BoxOfRow, rowButtonClass } from './ui/row-item.js'
 import { ContextFiles } from './ContextFiles.js'
-import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuLabel,
-  DropdownMenuCheckboxItem,
-  DropdownMenuSeparator,
-} from './ui/dropdown-menu.js'
+import { ReposMenu, folderName } from './SessionRepos.js'
+
+/** Whether a path of the Context is a folder on this computer, a repo's, and not a file of the project's, which is said from the project's root. */
+export function isRepoPath(path: string): boolean {
+  return /^(\/|[A-Za-z]:[\\/])/.test(path)
+}
 
 /**
- * The Context picker of one project's box, the launcher's and a session's alike: the other
- * projects to tick, and the files a `#` mention or the file tree added. The Context mixes whole
- * projects (registered paths) and single files (relative paths): the files are listed to be
- * removed, and each kind is counted in the picker's summary. The current project is the run's own
- * checkout, so only the other projects are offered (#665).
+ * The Context picker of one project's box, the launcher's and a session's alike: the menu a
+ * session with no project has (ReposMenu), with the files a `#` mention or the file tree added
+ * over its repos. The Context mixes repos (their folders on this computer, a project's or one
+ * that is none) and single files (paths in the project): a tick on a repo points the agent at it
+ * where it is, which narrows its focus and copies nothing, and the menu's heading says so; the
+ * files are listed to be removed; and each kind is counted on the button. The current project is
+ * the run's own checkout, so it is not offered (#665).
  */
 export function ProjectContextMenu({ projectId, context, busy, onToggle }: { projectId: string; context: Set<string>; busy: boolean; onToggle: (path: string) => void }) {
   const projects = useLoaded<ProjectSummary[]>(onProjects, [], [])
-  const projectPaths = new Set(projects.map(p => p.path))
-  const contextFiles = [...context].filter(path => !projectPaths.has(path))
-  const otherProjects = projects.filter(p => p.id !== projectId)
-  const pickedProjects = otherProjects.filter(p => context.has(p.path)).length
-  const summary = [
-    pickedProjects > 0 ? `${pickedProjects} project${pickedProjects > 1 ? 's' : ''}` : null,
-    contextFiles.length > 0 ? `${contextFiles.length} file${contextFiles.length > 1 ? 's' : ''}` : null,
-  ]
-    .filter(Boolean)
-    .join(' · ')
-  return <ContextMenu otherProjects={otherProjects} context={context} contextFiles={contextFiles} summary={summary} busy={busy} onToggle={onToggle} />
-}
-
-// The agent Context picker (#439/#314) as a dropdown in the row under the box, beside the gear. It was an
-// inline disclosure that pushed the whole form down when opened; a dropdown keeps it folded away
-// until asked for. Ticking other repos narrows the agent's focus (it can still reach every repo);
-// the Files list shows what a `#` mention or the file tree added, each removable.
-export function ContextMenu({
-  otherProjects,
-  context,
-  contextFiles,
-  summary,
-  busy,
-  onToggle,
-}: {
-  /** The registered repos other than the current one — the focus targets (#665). */
-  otherProjects: ProjectSummary[]
-  /** The agent Context set (repo paths + file paths), for the checked state. */
-  context: Set<string>
-  /** The individual files in the Context, added via `#` or the tree. */
-  contextFiles: string[]
-  /** "2 projects · 1 file", or empty when nothing is picked. */
-  summary: string
-  busy: boolean
-  /** Toggle a repo or drop a file from the Context. */
-  onToggle: (path: string) => void
-}) {
-  // Above the box on its left edge, as the gear's menu.
-  const box = useContext(BoxOfRow)
+  const picked = [...context].filter(isRepoPath).map(path => ({ path, name: folderName(path) }))
+  const files = [...context].filter(path => !isRepoPath(path))
   return (
-    <DropdownMenu>
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <DropdownMenuTrigger
-              type="button"
-              disabled={busy}
-              aria-label={summary ? `Context: ${summary}` : 'Context'}
-              className={rowButtonClass}
-            />
-          }
-        >
-          <Layers className="size-4 shrink-0" aria-hidden />
-          <span className="truncate">
-            Context{summary && <span className="text-primary"> · {summary}</span>}
-          </span>
-        </TooltipTrigger>
-        <TooltipContent>Narrow the run to specific repos and files</TooltipContent>
-      </Tooltip>
-      <DropdownMenuContent align="start" {...(box ? { anchor: box, side: 'top' as const } : {})} className="min-w-[18rem] max-w-[24rem]">
-        <DropdownMenuGroup>
-          <Tooltip>
-            <TooltipTrigger render={<DropdownMenuLabel />}>Projects</TooltipTrigger>
-            <TooltipContent className="max-w-[22rem]">
-              The agent can still reach every repo; ticking some just narrows its focus.
-            </TooltipContent>
-          </Tooltip>
-          {otherProjects.length > 0 ? (
-            otherProjects.map(p => (
-              <Tooltip key={p.id}>
-                <TooltipTrigger
-                  render={
-                    <DropdownMenuCheckboxItem
-                      checked={context.has(p.path)}
-                      onCheckedChange={() => onToggle(p.path)}
-                      disabled={busy}
-                    />
-                  }
-                >
-                  <span className="truncate">{p.name}</span>
-                </TooltipTrigger>
-                <TooltipContent>{p.path}</TooltipContent>
-              </Tooltip>
-            ))
-          ) : (
-            <p className="px-2 py-1 text-xs text-muted-foreground">No other projects to add.</p>
-          )}
-        </DropdownMenuGroup>
-        <DropdownMenuSeparator />
-        <DropdownMenuGroup>
-          <DropdownMenuLabel>Files</DropdownMenuLabel>
-          {contextFiles.length > 0 ? (
+    <ReposMenu
+      picked={picked}
+      projects={projects}
+      without={projects.find(project => project.id === projectId)?.path}
+      busy={busy}
+      // The menu says the whole pick; the Context is told each repo that came or went.
+      onChange={next => {
+        for (const repo of picked) if (!next.some(one => one.path === repo.path)) onToggle(repo.path)
+        for (const repo of next) if (!context.has(repo.path)) onToggle(repo.path)
+      }}
+      heading="Repos the agent is pointed at, where they are: it can still reach every repo"
+      said={names => (names.length === 0 ? 'Narrow the run to specific repos and files' : `The agent is pointed at ${names.join(', ')}`)}
+      files={{
+        count: files.length,
+        list:
+          files.length > 0 ? (
             <div className="px-2 py-1">
-              <ContextFiles files={contextFiles} onRemove={onToggle} busy={busy} />
+              <ContextFiles files={files} onRemove={onToggle} busy={busy} />
             </div>
           ) : (
             <p className="px-2 py-1 text-xs text-muted-foreground">None yet — add with # or the Files pane.</p>
-          )}
-        </DropdownMenuGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
+          ),
+      }}
+    />
   )
 }

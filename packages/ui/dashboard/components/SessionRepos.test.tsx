@@ -6,7 +6,7 @@ import { forgetRemembered } from '../lib/use-async.js'
 const onRepos = vi.hoisted(() => vi.fn())
 vi.mock('../rpc/projects.js', () => ({ onRepos }))
 
-const { repoGroups, reposSaid, folderName, SessionReposMenu, SessionReposSaid } = await import('./SessionRepos.js')
+const { repoGroups, reposSaid, folderName, ReposMenu, SessionReposSaid } = await import('./SessionRepos.js')
 
 afterEach(() => {
   cleanup()
@@ -53,15 +53,15 @@ describe("Context with no project: the session's repos", () => {
 
   test('the button says Context, then how many repos are picked; its name says the same, and its hover their names', async () => {
     onRepos.mockResolvedValue({ repos: [], ...READ })
-    render(<SessionReposMenu picked={[]} projects={[]} busy={false} onChange={() => {}} />)
+    render(<ReposMenu picked={[]} projects={[]} busy={false} onChange={() => {}} />)
     expect(context().textContent).toBe('Context')
     expect(context().getAttribute('aria-label')).toBe('Context')
     expect((await hoverTooltip(context())).textContent).toBe("Repos to copy into the session's folder")
     cleanup()
-    render(<SessionReposMenu picked={[{ path: '/home/me/oss/vike', name: 'vike' }]} projects={[]} busy={false} onChange={() => {}} />)
+    render(<ReposMenu picked={[{ path: '/home/me/oss/vike', name: 'vike' }]} projects={[]} busy={false} onChange={() => {}} />)
     expect(context().textContent).toBe('Context · 1 repo')
     cleanup()
-    render(<SessionReposMenu picked={[{ path: '/home/me/oss/vike', name: 'vike' }, { path: '/home/me/notes', name: 'notes' }]} projects={[]} busy={false} onChange={() => {}} />)
+    render(<ReposMenu picked={[{ path: '/home/me/oss/vike', name: 'vike' }, { path: '/home/me/notes', name: 'notes' }]} projects={[]} busy={false} onChange={() => {}} />)
     expect(context().textContent).toBe('Context · 2 repos')
     expect(context().getAttribute('aria-label')).toBe('Context: 2 repos')
     expect(reposSaid(['vike', 'notes'])).toBe("Copied into the session's folder: vike, notes")
@@ -70,7 +70,7 @@ describe("Context with no project: the session's repos", () => {
   test('the menu says what a tick does, marks the picked rows, and a press ticks one on or off without closing it', async () => {
     onRepos.mockResolvedValue({ repos: [{ path: '/home/me/oss/vike', name: 'vike' }, { path: '/home/me/notes', name: 'notes' }], ...READ })
     const onChange = vi.fn()
-    render(<SessionReposMenu picked={[{ path: '/home/me/notes', name: 'notes' }]} projects={[]} busy={false} onChange={onChange} />)
+    render(<ReposMenu picked={[{ path: '/home/me/notes', name: 'notes' }]} projects={[]} busy={false} onChange={onChange} />)
     await openMenu(context())
     expect(screen.getByText("Repos copied into the session's folder")).toBeTruthy()
     const notes = await screen.findByRole('option', { name: /notes/ })
@@ -86,7 +86,7 @@ describe("Context with no project: the session's repos", () => {
   test('the first match of a search is highlighted, so Enter ticks it', async () => {
     onRepos.mockResolvedValue({ repos: [{ path: '/home/me/oss/vike', name: 'vike' }, { path: '/home/me/notes', name: 'notes' }], ...READ })
     const onChange = vi.fn()
-    render(<SessionReposMenu picked={[]} projects={[]} busy={false} onChange={onChange} />)
+    render(<ReposMenu picked={[]} projects={[]} busy={false} onChange={onChange} />)
     await openMenu(context())
     await screen.findByRole('option', { name: /notes/ })
     const search = screen.getByRole('combobox', { name: 'Search repos' })
@@ -98,7 +98,7 @@ describe("Context with no project: the session's repos", () => {
 
   test('while the look through this computer is still on its way, the menu says so and asks again', async () => {
     onRepos.mockResolvedValue({ repos: [], ...READ, reposLoading: true })
-    render(<SessionReposMenu picked={[]} projects={[]} busy={false} onChange={() => {}} />)
+    render(<ReposMenu picked={[]} projects={[]} busy={false} onChange={() => {}} />)
     await openMenu(context())
     expect(await screen.findByText('Looking for repos on this computer…')).toBeTruthy()
     const before = onRepos.mock.calls.length
