@@ -2,7 +2,8 @@ import type { ProjectSummary } from '../../src/index.js'
 import { Layers } from 'lucide-react'
 import { onProjects } from '../rpc/projects.js'
 import { useLoaded } from '../lib/use-async.js'
-import { rowButtonClass } from './ui/row-item.js'
+import { useContext } from 'react'
+import { BoxOfRow, rowButtonClass } from './ui/row-item.js'
 import { ContextFiles } from './ContextFiles.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import {
@@ -61,6 +62,8 @@ export function ContextMenu({
   /** Toggle a repo or drop a file from the Context. */
   onToggle: (path: string) => void
 }) {
+  // Above the box on its left edge, as the gear's menu.
+  const box = useContext(BoxOfRow)
   return (
     <DropdownMenu>
       <Tooltip>
@@ -81,7 +84,7 @@ export function ContextMenu({
         </TooltipTrigger>
         <TooltipContent>Narrow the run to specific repos and files</TooltipContent>
       </Tooltip>
-      <DropdownMenuContent align="start" className="min-w-[18rem] max-w-[24rem]">
+      <DropdownMenuContent align="start" {...(box ? { anchor: box, side: 'top' as const } : {})} className="min-w-[18rem] max-w-[24rem]">
         <DropdownMenuGroup>
           <Tooltip>
             <TooltipTrigger render={<DropdownMenuLabel />}>Projects</TooltipTrigger>

@@ -339,7 +339,7 @@ export function AgentView({
   const prs = useMemo(() => [...(earlierPrs ?? []), ...(labelPr && !earlierPrs?.some(earlier => earlier.url === labelPr.url) ? [labelPr] : [])], [earlierPrs, labelPr])
   // Where the session started, right above the message box, as the "New agent session" page has it. It is
   // there whatever stands in the box's place.
-  const row = <SessionRow runsOn={runsOn} target={target} elsewhere={elsewhere || card?.otherHost === true} projectName={projectName} startedFrom={startedFrom} worksOn={barCheckout?.branch ?? branch} repos={card?.repos ?? picks?.repos} prs={prs} />
+  const row = <SessionRow runsOn={runsOn} target={target} elsewhere={elsewhere || card?.otherHost === true} projectName={projectName} startedFrom={startedFrom} worksOn={barCheckout?.branch ?? branch} prs={prs} />
   // What the bar is about right now, so the ✕ hides this and not the next thing the agent does:
   // the run, its branch, how much work is on it, and where that work has got to.
   const workState = [agentId, barCheckout?.branch ?? '', onBranch?.commits.length ?? 0, onBranch?.pendingFiles?.length ?? 0, onBranch?.insertions ?? 0, onBranch?.deletions ?? 0, onBranch?.pushed ?? false, pr?.number ?? '', pr?.state ?? ''].join('|')
@@ -438,6 +438,7 @@ export function AgentView({
             publish={card ? card.publish : picks?.publish}
             prBase={card?.prBase ?? picks?.prBase}
             row={row}
+            repos={card?.repos ?? picks?.repos}
             profile={card?.profile ?? picks?.profile}
             gitHost={gitHostHome}
             gitAccount={card?.gitAccount ?? picks?.gitAccount}

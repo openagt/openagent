@@ -68,7 +68,7 @@ a remote whose folder is on a branch.
 A run started from another branch origin has opens its pull request into that branch, unless the
 Auto menu says main. Otherwise the pull request goes to main.
 
-A session with no project may have repos as context, picked with **Add repo** beside "No project":
+A session with no project may have repos as context, ticked in **Context** under the box:
 `agent-driver` copies each into the session's folder.
 
 The session's profile and its GitHub account (the **Profile** and **GitHub account** lines of the

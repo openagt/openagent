@@ -3,7 +3,6 @@ import type { AgentMeta } from '../../src/index.js'
 import { hostOf } from '../lib/run-hosts.js'
 import { HOST_ICON, RunOnWords } from './RunOnMenu.js'
 import { RowAboveBox, RowSaid } from './ui/row-item.js'
-import { RepoChip } from './SessionRepos.js'
 import { RunPrLabels } from './RunPrLabels.js'
 
 /** The icon of where a session runs, as "Run on" has a host's. */
@@ -18,8 +17,8 @@ function runsOnIcon(target: AgentMeta['target']): LucideIcon {
 // means what it means there and does not flip as the agent renames its own, which its hover names and
 // the bar above says. The row's height is fixed, and each item lands in place: the branch last, so
 // nothing beside it is pushed, and only with the project's name, as on "New agent session". A branch
-// that cannot be said (`lib/started-from.ts`) is left out. A session with no project shows the repos
-// it has instead, each copied into its folder.
+// that cannot be said (`lib/started-from.ts`) is left out. A session with no project says its repos
+// under the box, as Context.
 export function SessionRow({
   runsOn,
   target,
@@ -27,7 +26,6 @@ export function SessionRow({
   projectName,
   startedFrom,
   worksOn,
-  repos,
   prs = [],
 }: {
   /** Where the session runs, in a few words: this machine, another computer by its name, a host by its own. */
@@ -40,8 +38,6 @@ export function SessionRow({
   startedFrom?: string | undefined
   /** The branch the agent works on, when it is known. */
   worksOn?: string | undefined
-  /** The repos a session with no project has, as its record says. */
-  repos?: readonly { name: string; from: string }[] | undefined
   /** The run's pull requests, oldest first. */
   prs?: readonly { number: number; url: string; state?: string | undefined }[] | undefined
 }) {
@@ -65,7 +61,6 @@ export function SessionRow({
           )}
         </>
       )}
-      {repos?.map(repo => <RepoChip key={repo.name} repo={repo} tip={`A copy of ${repo.from}, in this session's folder`} />)}
     </RowAboveBox>
   )
 }
