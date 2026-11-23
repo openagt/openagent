@@ -53,13 +53,13 @@ const DRIVER_UI: Record<DriverName, { icon: DriverOption['icon'] }> = {
 /**
  * The message box, as Claude Code's (DECISIONS.md, his pick): the raised surface with the hairline,
  * holding only the +, the text and the send. Where the agent starts is a row above it, how it runs a
- * row under it. It is focused almost all the time it is on screen, so focus is its own edge and nothing
- * more: the caret says the rest. While its text has the keyboard the edge is a field's focus, 2 wide in
- * the focus colour over its edge, as the presses' ring is 2 wide. While the keyboard is on the + or
- * in the menu it opened, the edge is his 1 wide primary border, so the +'s own ring stands alone.
+ * row under it. It is focused almost all the time it is on screen, so focus is quiet, as Claude Code
+ * web's box (his pick, over a 2 wide edge in the focus colour and over shadcn's ring): no ring and no
+ * colour. With the keyboard in it, or in the menu its + opened, its hairline is a step brighter and
+ * its shadow a step deeper; the caret says the rest, and the +'s own ring stands alone.
  */
 const BOX =
-  '[view-transition-name:composer] flex flex-col rounded-box border border-hairline bg-card shadow-lg transition-colors focus-within:border-primary has-[[aria-expanded=true]]:border-primary has-[[role=textbox]:focus]:outline-2 has-[[role=textbox]:focus]:-outline-offset-1 has-[[role=textbox]:focus]:outline-focus'
+  '[view-transition-name:composer] flex flex-col rounded-box border border-hairline bg-card shadow-lg transition-[border-color,box-shadow] focus-within:border-hairline-strong focus-within:shadow-lift has-[[aria-expanded=true]]:border-hairline-strong has-[[aria-expanded=true]]:shadow-lift'
 
 /**
  * The box while the page it stands on is read: a {@link Slot}'s shape at the three bands' heights,
@@ -468,10 +468,10 @@ export const Composer = forwardRef<ComposerHandle, {
             The two stand 5 from the box's edges on every side, their corners following its corner (IN_BOX);
             on a touch screen, where the text's line is 24 high, 7, so they sit on its middle. */}
         {/* The images it goes with stand in a row above the text, inside the box; a drop anywhere on the
-            box, or a paste into it, adds one. Files dragged over it light its edge as the focus does. */}
+            box, or a paste into it, adds one. Files dragged over it light its edge in the primary colour: a place to drop, which focus is not. */}
         <div
           ref={surface}
-          className={cn(BOX, dragging && 'border-primary outline-2 -outline-offset-1 outline-focus')}
+          className={cn(BOX, dragging && 'border-primary!')}
           onPasteCapture={onPaste}
           onDragOverCapture={onDragOver}
           onDragLeave={onDragLeave}

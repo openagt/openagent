@@ -459,11 +459,11 @@ const box = (): HTMLElement => {
 const commands = () => screen.getByRole('button', { name: 'Commands' })
 
 describe('the box', () => {
-  test('its 2 wide focus edge is drawn while its text has the keyboard; on the + or in its menu the edge is a 1 wide primary border, so the +\'s own ring stands alone', () => {
+  test('with the keyboard in it, or in the menu its + opened, its hairline is a step brighter and its shadow a step deeper: no ring, and no colour', () => {
     renderComposer()
     const cls = box().className.split(' ')
-    expect(cls).toEqual(expect.arrayContaining(['has-[[role=textbox]:focus]:outline-2', 'focus-within:border-primary', 'has-[[aria-expanded=true]]:border-primary']))
-    expect(cls.filter(c => c.startsWith('focus-within:outline') || c.startsWith('has-[[aria-expanded=true]]:outline'))).toEqual([])
+    expect(cls).toEqual(expect.arrayContaining(['border-hairline', 'shadow-lg', 'focus-within:border-hairline-strong', 'focus-within:shadow-lift', 'has-[[aria-expanded=true]]:border-hairline-strong', 'has-[[aria-expanded=true]]:shadow-lift']))
+    expect(cls.filter(c => c.includes('outline') || c.includes('ring') || c.includes('border-primary'))).toEqual([])
   })
 
   test('it holds the commands menu, the text and the submit: the model and "Run on" are outside it, on rows of their own', async () => {
