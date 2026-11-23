@@ -29,6 +29,7 @@ import { SESSIONS_ID } from '../../src/project-address.js'
 import { shortcut } from '../lib/shortcut.js'
 import { useIsMobile } from '../lib/use-mobile.js'
 import { InlineMarkdown } from './Markdown.js'
+import { cn } from '../lib/utils.js'
 
 /** The note while the start is asked for: what the chat's first line says next. */
 const STARTING = 'Starting session'
@@ -84,11 +85,14 @@ export function StartAgentForm({
   projects,
   onPickProject,
   onProjectAdded,
+  onOverview = false,
 }: {
   projectId: string
+  /** The box is the Overview's: as wide as the page's cards, whose edges it stands on, where the launcher's is a session's message box's. */
+  onOverview?: boolean
   /** Every project, for the picker of where the session works (ProjectPicker). */
   projects: readonly ProjectSummary[]
-  /** Open the "New agent session" page of another project, or of no project. */
+  /** Another project, or no project, was picked for the session: the launcher opens its "New agent session" page, the Overview shows that project's. */
   onPickProject: (projectId: string) => void
   /** A repo was added as a project from the picker: the projects are to be read again. */
   onProjectAdded: () => void
@@ -272,8 +276,8 @@ export function StartAgentForm({
 
   return (
     // The width and the padding of an agent's message box (`AgentComposer.tsx`): the box is in the
-    // same place on both pages.
-    <form onSubmit={e => e.preventDefault()} className="@container mx-auto w-full max-w-3xl px-4 pt-2 pb-4">
+    // same place on both pages. On the Overview it is the page's column, as its cards are.
+    <form onSubmit={e => e.preventDefault()} className={cn('@container w-full', !onOverview && 'mx-auto max-w-3xl px-4 pt-2 pb-4')}>
       {gitAccount.dialog}
       <Composer
         // A box of its own per project, so the prompt carried over from the picker lands in it (below).

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within, waitFor } from '@testing-library/react'
 import type { ActiveAgent, Waiting } from '../../src/index.js'
 import type { ListedPage } from '../lib/use-modules.js'
 
@@ -60,7 +60,7 @@ let working: ActiveAgent[] = []
 /** The modules' pages as the sidebar lists them: none known until a test says. */
 let listed: readonly ListedPage[] | null = null
 const overview = (scope: string | null = null, kept = { waiting: false, active: false }, read = true) => (
-  <DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} onSelectAgent={() => {}} onAgentStarted={() => {}} waiting={[]} waitingState={!read ? 'unknown' : kept.waiting ? 'kept' : 'fresh'} active={{ active: working, state: !read ? 'unknown' : kept.active ? 'kept' : 'fresh' }} projects={projects} scope={scope} listedPages={listed} />
+  <DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} onSelectAgent={() => {}} onAgentStarted={() => {}} waiting={[]} waitingState={!read ? 'unknown' : kept.waiting ? 'kept' : 'fresh'} active={{ active: working, state: !read ? 'unknown' : kept.active ? 'kept' : 'fresh' }} projects={projects} scope={scope} listedPages={listed} start={null} />
 )
 const show = (...args: Parameters<typeof overview>) => render(overview(...args))
 /** The cards drawn, in order, each with its grid classes. */
@@ -155,6 +155,21 @@ describe('the Overview', () => {
     show('p2')
     await screen.findByText('Human Queue')
     expect(drawn()[0]!.id).toBe('human-queue')
+  })
+
+  test('the box that starts a session is the page\'s first part, before every card, and arranging the cards leaves it there', async () => {
+    working = [active('1-a')]
+    render(<DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} onSelectAgent={() => {}} onAgentStarted={() => {}} waiting={[]} waitingState="fresh" active={{ active: working, state: 'fresh' }} projects={projects} scope={null} listedPages={listed} start={<p>the box</p>} />)
+    const box = screen.getByText('the box')
+    const firstCard = await waitFor(() => {
+      const card = document.querySelector('[data-card]')
+      expect(card).toBeTruthy()
+      return card!
+    })
+    expect(box.compareDocumentPosition(firstCard) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    fireEvent.click(await screen.findByRole('button', { name: 'Customize' }))
+    await screen.findByRole('button', { name: 'Done' })
+    expect(screen.getByText('the box')).toBeTruthy()
   })
 
   test('Customize arranges the page on its cards: a width, ✕ to the tray, + back from it, the arrow keys to move; each change is this page\'s layout at once', async () => {
@@ -474,7 +489,7 @@ describe('the Overview', () => {
     const item = (mark: Waiting['mark'], n: number): Waiting => ({ projectId: 'p1', projectName: 'alpha', kind: 'waiting', module: 'm', scope: 'run', run: `r${n}`, words: 'Needs it', title: `t${n}`, ...(mark ? { mark } : {}) })
     const scrolled = vi.fn()
     Element.prototype.scrollIntoView = scrolled
-    render(<DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} onSelectAgent={() => {}} onAgentStarted={() => {}} waiting={[item('question', 1), item('question', 2), item('pull-request', 3), item(undefined, 4)]} waitingState="fresh" active={{ active: [], state: 'fresh' }} projects={projects} scope={null} listedPages={null} />)
+    render(<DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} onSelectAgent={() => {}} onAgentStarted={() => {}} waiting={[item('question', 1), item('question', 2), item('pull-request', 3), item(undefined, 4)]} waitingState="fresh" active={{ active: [], state: 'fresh' }} projects={projects} scope={null} listedPages={null} start={null} />)
     const part = await screen.findByRole('button', { name: '4 need you' })
     expect(part.getAttribute('title')).toBe('2 questions, 1 pull request, 1 more')
     fireEvent.click(part)

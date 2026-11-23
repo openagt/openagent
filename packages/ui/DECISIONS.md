@@ -370,6 +370,14 @@ already made, and lists it in its pull request; for anything else it proposes an
   sidebar and the box. Picked over every step open at once with its press under its words,
   boxes to tick that no click ticks, and buttons for the folder the dashboard happened to
   start in.
+- The Overview starts a session: the launcher's box is its first part, under the title and
+  its line and before the Human Queue, as wide as the cards. It starts in the project picked
+  in the sidebar, else in none, and a project picked in the box is the Overview's too. The
+  cursor is in it as the page opens, not on a phone. It is the page's, no card: arranging the
+  cards neither moves it nor takes it off. "New agent session" stays a page of its own.
+  Picked over the box under the Human Queue, which an empty queue pushes half a phone's
+  screen down; over the box at the page's foot, which covers the cards; and over the Overview
+  as the only place a session starts, two presses from a session's page.
 - The Overview's cards fill each row: a card starts at its width and takes a share of the
   row's leftover by it, so a card missing on this install, or a half beside a third, leaves no
   gap. The number tiles are quarters (a third in a middling column), the person's agents one
