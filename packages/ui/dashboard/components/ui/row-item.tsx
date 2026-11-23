@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { createContext, type ReactNode, type RefObject } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { cn } from '../../lib/utils.js'
 import { Tooltip, TooltipContent, TooltipTrigger } from './tooltip.js'
@@ -19,6 +19,12 @@ export const rowButtonClass = cn(rowItemClass, 'group/row focus-ring transition-
 export function RowChevron() {
   return <ChevronDown className="size-3 shrink-0 text-faint-foreground transition-colors group-hover/row:text-current @max-xl:hidden" aria-hidden />
 }
+
+/**
+ * The message box the row under it belongs to, for a menu opened from that row: it stands above the
+ * box on its left edge, as the gear's does, and covers none of what is typed.
+ */
+export const BoxOfRow = createContext<RefObject<HTMLElement | null> | null>(null)
 
 /** A row of items above or under the box: one line of a fixed height, no wrap. */
 export const rowClass = 'flex h-8 items-center gap-2'

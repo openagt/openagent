@@ -371,14 +371,14 @@ describe('StartAgentForm (#1774)', () => {
     expect(screen.getByText('gear').dataset.warn).toBe('false')
   })
 
-  test('a session with no project: the gear has the profile and the skills alone, no account and no "When it finishes", and no Context after it', async () => {
+  test('a session with no project: the gear has the profile and the skills alone, no account and no "When it finishes"; after it, Context is the repos it works with', async () => {
     onCommands.mockResolvedValue(null)
     runsAccount.login = 'octo'
     render(<StartAgentForm {...props} projectId="session" />)
     await waitFor(() => expect(gearSaid()).toBe('Profile Default · 18 skills'))
     expect(within(gearMenu()).getAllByRole('button').map(button => button.textContent)).toEqual(['profile:default', 'skills:no project:/all'])
     expect(screen.queryAllByRole('menuitem')).toEqual([])
-    expect(screen.getByTestId('controls').textContent).toBe('')
+    expect(within(screen.getByTestId('controls')).getByRole('combobox', { name: 'Context' })).toBeTruthy()
     expect(screen.getByText('gear').dataset.warn).toBe('false')
   })
 
@@ -731,7 +731,7 @@ describe('StartAgentForm (#1774)', () => {
     expect(takePendingDraft()).toBe('fix the login page')
   })
 
-  test('with no project, "Add repo" adds repos as chips, a project\'s or one that is none, and the Start sends their folders; nothing is made a project', async () => {
+  test("with no project, Context ticks repos on and off, a project's or one that is none, as many as wanted; its button says how many, and the Start sends their folders; nothing is made a project", async () => {
     onCommands.mockResolvedValue({ commands: [], gitHost: true })
     onRepos.mockResolvedValue({ repos: [{ path: '/home/me/oss/vike', name: 'vike', url: 'https://github.com/vikejs/vike.git' }], canAddFolder: false })
     start.mockResolvedValue({ agentId: 'r1' })
@@ -739,32 +739,36 @@ describe('StartAgentForm (#1774)', () => {
     const onPickProject = vi.fn()
     const alpha = { id: 'alpha-1', path: '/home/me/alpha', name: 'alpha', activated: true, gitHost: true }
     render(<StartAgentForm {...props} projectId="session" projects={[alpha]} onPickProject={onPickProject} onAgentStarted={onAgentStarted} />)
-    const addRepo = () => screen.getByRole('combobox', { name: 'Add repo' })
-    await openMenu(addRepo())
+    const context = () => within(screen.getByTestId('controls')).getByRole('combobox', { name: /^Context/ })
+    // The row above the box says where the session works, and nothing of its repos.
+    expect(startsAt()).toBe('No project')
+    expect(context().textContent).toBe('Context')
+    await openMenu(context())
+    // The menu stays open while its rows are ticked.
     fireEvent.click(await screen.findByRole('option', { name: /vike/ }))
-    await openMenu(addRepo())
     fireEvent.click(await screen.findByRole('option', { name: /alpha/ }))
-    expect(startsAt()).toBe('No projectvikealphaAdd repo')
-    // A repo picked once is not offered again.
-    await openMenu(addRepo())
-    await waitFor(() => expect(screen.queryAllByRole('option')).toEqual([]))
+    expect(context().getAttribute('aria-label')).toBe('Context: 2 repos')
+    expect(context().textContent).toBe('Context · 2 repos')
+    // A ticked repo stays in the list, marked, and a press on it takes it out.
+    expect(screen.getByRole('option', { name: /alpha/ }).getAttribute('aria-selected')).toBe('true')
+    fireEvent.click(screen.getByRole('option', { name: /alpha/ }))
+    expect(context().textContent).toBe('Context · 1 repo')
     fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' })
     expect(onPickProject).not.toHaveBeenCalled()
+    expect(startsAt()).toBe('No project')
 
-    fireEvent.click(screen.getByRole('button', { name: 'Remove alpha' }))
-    expect(startsAt()).toBe('No projectvikeAdd repo')
     fireEvent.click(screen.getByText('submit-typed'))
     await waitFor(() => expect(start).toHaveBeenCalledWith('session', 'do the thing', { repos: ['/home/me/oss/vike'] }))
     await waitFor(() => expect(onAgentStarted).toHaveBeenCalledWith('do the thing', 'r1', undefined, { repos: [{ name: 'vike', from: '/home/me/oss/vike' }] }))
     // Started: the next session starts with none.
-    expect(startsAt()).toBe('No projectAdd repo')
+    await waitFor(() => expect(context().textContent).toBe('Context'))
   })
 
-  test('a project has no "Add repo", and its Start sends no repos', async () => {
+  test("a project's Context is its own picker, not the repos' menu, and its Start sends no repos", async () => {
     onCommands.mockResolvedValue({ commands: [], gitHost: true })
     start.mockResolvedValue({ agentId: 'r1' })
     render(<StartAgentForm {...props} projectName="gemstack" />)
-    expect(screen.queryByRole('combobox', { name: 'Add repo' })).toBeNull()
+    expect(screen.queryByRole('combobox', { name: /^Context/ })).toBeNull()
     fireEvent.click(screen.getByText('submit-typed'))
     await waitFor(() => expect(start).toHaveBeenCalled())
     expect(start.mock.calls[0]![2]).not.toHaveProperty('repos')

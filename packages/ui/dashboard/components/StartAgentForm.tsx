@@ -18,7 +18,7 @@ import { ProjectContextMenu } from './ContextMenu.js'
 import { Composer, type ComposerHandle } from './Composer.js'
 import { StartFromMenu, prTargetBranch, startFromBase } from './StartFromMenu.js'
 import { ProjectPicker } from './ProjectPicker.js'
-import { SessionRepoPicks, type PickedRepo } from './SessionRepos.js'
+import { SessionReposMenu, type PickedRepo } from './SessionRepos.js'
 import { Dots } from './ToolCalls.js'
 import { AgentFix, agentWords, useAgentState } from './Logins.js'
 import { profilePicks, SkillsMenu, useSkillCount, type SkillPicks } from './SkillsMenu.js'
@@ -70,8 +70,8 @@ const STARTING_SAID_AFTER_MS = 300
 // account line shows until the person picks another for the session.
 // With no project (`SESSIONS_ID`), the run starts in a folder of its own on this computer: the row
 // says "No project", and nothing about a repository is offered, no branch, no account, no Auto
-// level, no project Context or skills. Beside "No project", the repos the session has as context
-// (SessionRepos.tsx): each is copied into the session's folder, and none is made a project.
+// level, no project skills. Its Context, under the box where a project's is, is the repos the session
+// works with (SessionRepos.tsx): each is copied into the session's folder, and none is made a project.
 export function StartAgentForm({
   projectId,
   projectName,
@@ -293,8 +293,6 @@ export function StartAgentForm({
         startsAt={
           <>
             <ProjectPicker look="row" none={{ label: 'No project', tip: 'The session works in a folder of its own' }} picked={noProject ? null : projectId} pickedName={projectName} projects={projects} busy={busy} onPick={id => pickProject(id ?? SESSIONS_ID)} onProjectAdded={onProjectAdded} />
-            {/* Repos are folders on this computer, copied into the session's folder. */}
-            {noProject && <SessionRepoPicks picked={repos} projects={projects} busy={busy} onChange={setRepos} />}
             {!noProject && projectName && startFrom && preferencesLoaded && <StartFromMenu projectId={projectId} main={startFrom.main} local={startFrom.local} pick={startFromPick} onPick={pickStartFrom} busy={busy} />}
           </>
         }
@@ -313,8 +311,9 @@ export function StartAgentForm({
             </>
           ),
         }}
-        // After the gear, the Context picker.
-        controls={!noProject && <ProjectContextMenu projectId={projectId} context={context} busy={busy} onToggle={toggleContext} />}
+        // After the gear, Context: a project's picker, or, with no project, the repos the session works with, folders
+        // on this computer copied into the session's folder.
+        controls={noProject ? <SessionReposMenu picked={repos} projects={projects} busy={busy} onChange={setRepos} /> : <ProjectContextMenu projectId={projectId} context={context} busy={busy} onToggle={toggleContext} />}
         onSubmit={submit}
         onPromptChange={value => {
           typed.current = value

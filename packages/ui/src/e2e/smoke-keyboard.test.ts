@@ -162,10 +162,10 @@ test("a letter typed on the launcher's branch picker starts its search and picks
   })
 })
 
-test('a letter typed on "Add repo" starts its search and adds nothing', needsChrome, async () => {
-  await flow('typed-add-repo', async page => {
+test("a letter typed on a no-project session's Context starts its search and ticks nothing", needsChrome, async () => {
+  await flow('typed-repos-context', async page => {
     await page.getByLabel('The session works in', { exact: true }).click()
     await page.getByRole('option', { name: 'No project' }).click()
-    await typedOnPicker(page, 'Add repo', 'Search repos', () => page.locator('[aria-label^="Remove "]').count())
+    await typedOnPicker(page, 'Context', 'Search repos', button => button.textContent())
   })
 })

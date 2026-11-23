@@ -517,8 +517,16 @@ already made, and lists it in its pull request; for anything else it proposes an
   is. The lists are read behind the menu and kept ten minutes. The names are kept in the
   person's own folder, the same on every computer; the folders added stay the computer's.
   Picked over asking the hosts each time the menu opens, which waits a second or more.
-- A session with no project may have repos as context, added beside "No project" from the
-  same search. Each is a copy in the session's folder, cloned from the repo's folder on a
+- A session with no project may have repos as context, ticked in Context under the box, where
+  a project's Context picker is, from the same search: as many as wanted, the button saying how
+  many and its hover their names. Context is under the box on both pages, and its menu, like
+  the gear's, stands above the box. Before, "Add repo" stood beside "No project" with a chip
+  per repo, and the row under the box had no Context: two controls for one question, what the
+  agent works with. Picked over the chips kept above the box with Context only adding, and over
+  the names on the button, both of which run off a phone's width; it costs the names at rest and
+  a second press to take one out. What a tick does differs, and the menu says so: with a project
+  it narrows the agent's focus, with none the repo is copied. A session's own page says its
+  repos in the same place, not offered. Each is a copy in the session's folder, cloned from the repo's folder on a
   new branch, its origin the repo's own; none is made a project. The agent starts in the
   session's folder and finds the repos as folders there; the prompt says nothing of them.
   The session's record names them, and a resumed session goes on with the same copies.

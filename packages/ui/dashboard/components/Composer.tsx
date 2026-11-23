@@ -28,7 +28,7 @@ import { driverOptions, modelEfforts, useModels } from '../lib/models.js'
 import { readyCommands, useProjectLauncher } from '../lib/use-project-launcher.js'
 import { AgentAccountItems, firstAccount, useAccountsOn } from './AgentAccounts.js'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipsPastBox } from './ui/tooltip.js'
-import { RowAboveBox, rowClass, rowItemClass, rowLeftClass } from './ui/row-item.js'
+import { BoxOfRow, RowAboveBox, rowClass, rowItemClass, rowLeftClass } from './ui/row-item.js'
 import { Skeleton } from './ui/skeleton.js'
 import { Slot } from './ui/slot.js'
 import { ImageTiles } from './ImageTiles.js'
@@ -492,7 +492,7 @@ export const Composer = forwardRef<ComposerHandle, {
           <div className={cn('mt-1', rowClass)}>
             <div className={rowLeftClass}>
               {setup && <SessionSetupMenu setup={setup} box={surface} busy={busy} />}
-              {controls}
+              <BoxOfRow.Provider value={surface}>{controls}</BoxOfRow.Provider>
             </div>
             {driverModelEl ||
               // Only with something in it: an empty one would still take the row's gap, and the

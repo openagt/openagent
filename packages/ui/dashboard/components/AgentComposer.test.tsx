@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 
 // The two writes this component makes: what the person says to the run, and the slot's Stop (#1455).
 const sendMessage = vi.hoisted(() => vi.fn())
@@ -110,10 +110,22 @@ describe('AgentComposer row under the box', () => {
     expect(screen.getByTestId('composer-controls').textContent).toBe('Context · src/app.ts')
   })
 
-  test('a session with no project: the profile and its skills alone in the gear, no account or Auto, and no Context, as the launcher with no project', () => {
-    renderComposer({ projectId: 'session' })
+  test('a session with no project: the profile and its skills alone in the gear, no account or Auto; after it Context says its repos, how many, with their names in its hover, and is no press', () => {
+    renderComposer({ projectId: 'session', repos: [{ name: 'vike', from: '/home/me/oss/vike' }, { name: 'notes', from: '/home/me/notes' }] })
     expect(screen.getByTestId('composer-setup').textContent).toBe('Profile · defaultSkills · no project')
-    expect(screen.getByTestId('composer-controls').textContent).toBe('')
+    const controls = screen.getByTestId('composer-controls')
+    expect(controls.textContent).toContain('Context · 2 repos')
+    expect(controls.textContent).toContain("Copies in this session's folder: vike (of /home/me/oss/vike), notes (of /home/me/notes)")
+    expect(within(controls).queryByRole('button')).toBeNull()
+    expect(within(controls).queryByRole('combobox')).toBeNull()
+  })
+
+  test('a session with no project and no repo says so in its Context', () => {
+    renderComposer({ projectId: 'session' })
+    const controls = screen.getByTestId('composer-controls')
+    expect(controls.textContent).toContain('Context')
+    expect(controls.textContent).not.toContain('repo ')
+    expect(controls.textContent).toContain('This session started with no repo')
   })
 
   test("the gear's hover says the setup with its menu shut: the profile, how many skills, the account, the level and where its pull request goes; each once it is known", () => {

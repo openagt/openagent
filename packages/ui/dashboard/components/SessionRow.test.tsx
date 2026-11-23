@@ -41,12 +41,10 @@ describe('a session\'s row above the box', () => {
     expect(container.firstElementChild!.childElementCount).toBe(1)
   })
 
-  test('a session with no project shows the repos it has, each said with where it was copied from', () => {
-    const { container } = render(<SessionRow runsOn="This machine" elsewhere={false} repos={[{ name: 'vike', from: '/home/me/oss/vike' }, { name: 'notes', from: '/home/me/notes' }]} />)
-    expect(container.textContent).toContain('vike')
-    expect(container.textContent).toContain('notes')
-    expect(screen.getByText("A copy of /home/me/oss/vike, in this session's folder")).toBeTruthy()
-    expect(screen.queryByRole('button', { name: /Remove/ })).toBeNull()
+  test('a session with no project says where it runs alone: its repos are under the box, as Context', () => {
+    const { container } = render(<SessionRow runsOn="This machine" elsewhere={false} />)
+    expect(container.textContent).toContain('This machine')
+    expect(container.querySelector('.lucide-folder-git-2')).toBeNull()
   })
 
   test('its height is the row\'s own, whatever has landed: nothing moves when a name lands', () => {
