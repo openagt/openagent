@@ -19,11 +19,13 @@ vi.mock('./ui/tooltip.js', async () => {
     Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
     TooltipTrigger: ({ render: trigger, children }: { render: React.ReactElement; children: React.ReactNode }) => cloneElement(trigger, {} as never, children),
     TooltipContent: ({ children }: { children: React.ReactNode }) => <span role="tooltip">{children}</span>,
+    TooltipsPastBox: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   }
 })
 
 const { ProfilesPage } = await import('./ProfilesPage.js')
 const { ProfileMenu } = await import('./ProfileMenu.js')
+const { GearMenu, gear, openMenu, openSetupLine, setupLine } = await import('../test-utils.js')
 
 const DEFAULT = { id: 'default', name: 'Default', options: {} }
 const REVIEWER = { id: 'reviewer', name: 'Reviewer', options: { github: { account: 'octo-agent' }, 'agent-driver': { claude: ['Dani'] }, skills: { project: 'none' as const } } }
@@ -351,20 +353,26 @@ describe('the Agent profiles page', () => {
   })
 })
 
-describe('the Profile menu under the box', () => {
-  test('the profile picked, by name; another picked is said back; "Manage profiles…" opens the page; nothing until the profiles are read', () => {
+describe("the Profile line of the gear's menu", () => {
+  test('the profile picked, by name; its list ticks it and says the account each profile works as; another picked is said back; "Manage profiles…" opens the page; no line until the profiles are read', async () => {
     const onPick = vi.fn()
-    const { container, rerender } = render(<ProfileMenu profiles={undefined} picked={undefined} busy={false} onPick={onPick} />)
-    expect(container.textContent).toBe('')
-    rerender(<ProfileMenu profiles={VIEW.profiles} picked={undefined} busy={false} onPick={onPick} />)
-    expect(screen.getByRole('button', { name: 'Profile: Default' }).textContent).toBe('Default')
-    rerender(<ProfileMenu profiles={VIEW.profiles} picked="reviewer" busy={false} onPick={onPick} />)
-    const trigger = screen.getByRole('button', { name: 'Profile: Reviewer' })
-    expect(screen.getByRole('tooltip').textContent).toBe('This session is on the profile Reviewer, as @octo-agent on GitHub')
-    fireEvent.click(trigger)
-    fireEvent.click(screen.getByRole('menuitem', { name: /^Default/ }))
+    const { rerender } = render(<GearMenu lines={<ProfileMenu profiles={undefined} picked={undefined} onPick={onPick} />} />)
+    await openMenu(gear())
+    expect(screen.queryAllByRole('menuitem')).toEqual([])
+    rerender(<GearMenu lines={<ProfileMenu profiles={VIEW.profiles} picked={undefined} onPick={onPick} />} />)
+    expect((await setupLine('Profile')).textContent).toBe('Profile: Default')
+    rerender(<GearMenu lines={<ProfileMenu profiles={VIEW.profiles} picked="reviewer" onPick={onPick} />} />)
+    const line = await openSetupLine('Profile')
+    expect(line.textContent).toBe('Profile: Reviewer')
+    // The list: the tick on the one picked, and at a row's end the GitHub account the profile works as.
+    const row = (name: RegExp) => screen.getByRole('menuitem', { name })
+    expect(row(/^Reviewer/).textContent).toBe('Reviewer@octo-agent')
+    expect(row(/^Reviewer/).querySelector('.lucide-check')!.classList.contains('opacity-100')).toBe(true)
+    expect(row(/^Default/).querySelector('.lucide-check')!.classList.contains('opacity-0')).toBe(true)
+    fireEvent.click(row(/^Default/))
     expect(onPick).toHaveBeenCalledWith('default')
-    fireEvent.click(trigger)
+    await waitFor(() => expect(screen.queryByRole('menu') === null && !gear().hasAttribute('data-popup-open')).toBe(true))
+    await openSetupLine('Profile')
     fireEvent.click(screen.getByRole('menuitem', { name: 'Manage profiles…' }))
     expect(route.openPage).toHaveBeenCalledWith('profiles')
   })

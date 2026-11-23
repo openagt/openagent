@@ -16,10 +16,11 @@ vi.mock('../lib/preferences.js', () => ({
 vi.mock('../lib/editors.js', () => ({ useDetectedEditors: () => [] }))
 vi.mock('../rpc/projects.js', () => ({ onProjects: () => Promise.resolve([]), onCommands: vi.fn(async () => ({ commands: [] })) }))
 vi.mock('../lib/use-project-launcher.js', async importOriginal => ({ ...(await importOriginal<object>()), useProjectLauncher: () => ({ gitHost: true, remote: true }) }))
-vi.mock('./AutoMenu.js', () => ({ AutoMenu: () => null }))
+vi.mock('./AutoMenu.js', () => ({ AutoMenu: () => null, autoSaid: () => '' }))
 vi.mock('./ContextMenu.js', () => ({ ProjectContextMenu: ({ context }: { context: Set<string> }) => <span data-testid="context">{[...context].join(', ')}</span> }))
 vi.mock('./ProfileMenu.js', () => ({ ProfileOff: () => null }))
-vi.mock('./SkillsMenu.js', () => ({ SkillsOff: () => null }))
+vi.mock('./SkillsMenu.js', () => ({ SkillsOff: () => null, useRecordedSkillCount: () => undefined }))
+vi.mock('./ProfilesPage.js', () => ({ useProfileName: () => undefined }))
 vi.mock('./GitHosts.js', () => ({ GitHostOff: () => null }))
 import { keptDraft } from '../lib/draft-handoff.js'
 

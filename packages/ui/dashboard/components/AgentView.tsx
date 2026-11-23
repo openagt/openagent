@@ -9,7 +9,6 @@ import { useAgentFeed } from '../lib/use-agent-feed.js'
 import { AgentActionBar } from './AgentActionBar.js'
 import { SessionRow } from './SessionRow.js'
 import { startedFromBranch, startedFromMain, type StartPicks } from '../lib/started-from.js'
-import { RunPrLabels } from './RunPrLabels.js'
 import type { ContextSet } from '../lib/use-context-set.js'
 import { AgentComposer, type QueuedMessage } from './AgentComposer.js'
 import { sendNow, withdrawMessage } from '../rpc/control.js'
@@ -150,12 +149,9 @@ export function AgentView({
   const models = useModels()
   const shownModel = model ?? picks?.model
   const modelLabel = shownModel ? modelName(picked ? models?.[picked] : undefined, shownModel) : undefined
-  // The model and how hard it was told to think, as Claude Code says them under its box: the two
-  // words of the session's own setup, which it keeps for its whole life.
-  // Two words with a space between them, as Claude Code sets them under its box ("Opus 5  High"):
-  // they are one setting read together, and a dot between made them read as two separate facts.
+  // Said as the launcher's model menu says them, the coding agent's logo first.
   const effort = card?.effort ?? picks?.effort
-  const underBox = [modelLabel, effort ? effortLabel(effort) : undefined].filter(Boolean).join('\u2002') || undefined
+  const underBox = modelLabel !== undefined || effort ? { driver: picked, name: modelLabel, effort: effort ? effortLabel(effort) : undefined } : undefined
   // How full this session's context is: the run's own last reading, against what the agent says
   // the model holds. Either missing, no circle.
   const contextWindow = modelContextWindow(models, picked, model)
@@ -286,7 +282,7 @@ export function AgentView({
       : undefined
   // Over: the pull request is merged or closed (his pick: the bar goes, it does not stay as a
   // label), or the work was landed without one, and the branch holds nothing the request does not.
-  // There is no step left. The request itself is not lost with the bar: it is under the message box.
+  // There is no step left. The request itself is not lost with the bar: it is in the row above the message box.
   const over =
     live === false &&
     (onBranch?.landed === true ||
@@ -325,7 +321,7 @@ export function AgentView({
             ? pr !== undefined || checkout?.checkout?.dirty === true || held
             : held)))
   lastSay.current = { agentId, say }
-  // Every pull request the run opened, for the row under the message box: the ones before, then the one it is on.
+  // Every pull request the run opened, for the row above the message box: the ones before, then the one it is on.
   const earlierPrs = card?.earlierPrs
   // How the request it is on stands is the git host's to say, and until it has answered the
   // page's read calls the request open: a merged request's label said "open" for a second, then
@@ -343,7 +339,7 @@ export function AgentView({
   const prs = useMemo(() => [...(earlierPrs ?? []), ...(labelPr && !earlierPrs?.some(earlier => earlier.url === labelPr.url) ? [labelPr] : [])], [earlierPrs, labelPr])
   // Where the session started, right above the message box, as the "New agent session" page has it. It is
   // there whatever stands in the box's place.
-  const row = <SessionRow runsOn={runsOn} target={target} elsewhere={elsewhere || card?.otherHost === true} projectName={projectName} startedFrom={startedFrom} worksOn={barCheckout?.branch ?? branch} repos={card?.repos ?? picks?.repos} />
+  const row = <SessionRow runsOn={runsOn} target={target} elsewhere={elsewhere || card?.otherHost === true} projectName={projectName} startedFrom={startedFrom} worksOn={barCheckout?.branch ?? branch} repos={card?.repos ?? picks?.repos} prs={prs} />
   // What the bar is about right now, so the ✕ hides this and not the next thing the agent does:
   // the run, its branch, how much work is on it, and where that work has got to.
   const workState = [agentId, barCheckout?.branch ?? '', onBranch?.commits.length ?? 0, onBranch?.pendingFiles?.length ?? 0, onBranch?.insertions ?? 0, onBranch?.deletions ?? 0, onBranch?.pushed ?? false, pr?.number ?? '', pr?.state ?? ''].join('|')
@@ -437,7 +433,6 @@ export function AgentView({
             focusBox={focusBox}
             model={underBox}
             {...(contextWindow !== undefined ? { context: <ContextCircle used={card?.contextTokens ?? 0} size={contextWindow} /> } : {})}
-            controls={<RunPrLabels prs={prs} />}
             contextSet={contextSet}
             // A card with no level has none: a message may have taken it away.
             publish={card ? card.publish : picks?.publish}

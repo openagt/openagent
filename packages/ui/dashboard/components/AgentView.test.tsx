@@ -81,33 +81,36 @@ vi.mock('./AgentWorkBar.js', () => ({
     </div>
   ),
 }))
-// The row above the box has its own tests: here it says what the view told it.
-vi.mock('./SessionRow.js', () => ({
-  SessionRow: ({ runsOn, elsewhere, startedFrom, worksOn, projectName }: { runsOn: string; elsewhere: boolean; startedFrom?: string; worksOn?: string; projectName?: string | null }) => (
+// The row above the box has its own tests: here it says what the view told it, the run's pull requests as their own labels.
+vi.mock('./SessionRow.js', async () => {
+  const { RunPrLabels } = await import('./RunPrLabels.js')
+  return {
+  SessionRow: ({ runsOn, elsewhere, startedFrom, worksOn, projectName, prs = [] }: { runsOn: string; elsewhere: boolean; startedFrom?: string; worksOn?: string; projectName?: string | null; prs?: { number: number; url: string; state?: string }[] }) => (
     <div data-testid="row">
       <span data-testid="row-runs-on">{runsOn}</span>
       <span data-testid="row-elsewhere">{String(elsewhere)}</span>
       <span data-testid="row-project">{projectName ?? ''}</span>
       <span data-testid="row-started-from" data-value={startedFrom ?? ''} />
       <span data-testid="row-works-on" data-value={worksOn ?? ''} />
+      <span data-testid="row-prs"><RunPrLabels prs={prs} /></span>
     </div>
   ),
-}))
+  }
+})
 // The composer shows only what the view tells it about the run going: the one fact of it under test here.
 let queuedIds = 0
 const edited: string[] = []
 const givenBack: string[] = []
 vi.mock('./AgentComposer.js', () => ({
-  AgentComposer: ({ live, asked, model, context, controls, onSending, onQueued, editInBox, giveBack, row, publish, prBase, profile, gitAccount, projectSkills }: { publish?: string; prBase?: string; live: boolean; asked?: boolean; model?: string; context?: ReactNode; controls?: ReactNode; onSending?: (text: string | null) => void; onQueued?: (message: { id: string; text: string; later: boolean }) => void; editInBox?: { current: ((text: string) => void) | null }; giveBack?: { current: ((text: string) => void) | null }; row?: ReactNode; profile?: string; gitAccount?: string; projectSkills?: 'all' | 'none' | string[] }) => {
+  AgentComposer: ({ live, asked, model, context, onSending, onQueued, editInBox, giveBack, row, publish, prBase, profile, gitAccount, projectSkills }: { publish?: string; prBase?: string; live: boolean; asked?: boolean; model?: { driver?: string; name?: string; effort?: string }; context?: ReactNode; onSending?: (text: string | null) => void; onQueued?: (message: { id: string; text: string; later: boolean }) => void; editInBox?: { current: ((text: string) => void) | null }; giveBack?: { current: ((text: string) => void) | null }; row?: ReactNode; profile?: string; gitAccount?: string; projectSkills?: 'all' | 'none' | string[] }) => {
     if (editInBox) editInBox.current = text => void edited.push(text)
     if (giveBack) giveBack.current = text => void givenBack.push(text)
     return (
       <>
         {row}
-        <span data-testid="composer-controls">{controls}</span>
         <button type="button" onClick={() => onQueued?.({ id: `m${++queuedIds}`, text: 'and then this', later: false })}>queue-one</button>
         <button type="button" onClick={() => onSending?.('add a logout button')}>continue-it</button>
-        <span data-testid="composer-model">{model ?? ''}</span>
+        <span data-testid="composer-model" data-driver={model?.driver ?? ''} data-effort={model?.effort ?? ''}>{model?.name ?? ''}</span>
         <span data-testid="composer-auto" data-publish={publish ?? ''} data-pr-base={prBase ?? ''} />
         <span data-testid="composer-profile" data-value={profile ?? ''} />
         <span data-testid="composer-account" data-value={gitAccount ?? ''} />
@@ -1132,6 +1135,8 @@ describe('the model under the message box', () => {
     expect(screen.getByTestId('composer-model').textContent).toBe('')
     rerender(view({ live: true, events: [], card: { status: 'running', driver: 'claude-code', model: 'opus' } }))
     expect(screen.getByTestId('composer-model').textContent).toMatch(/opus/i)
+    // Its coding agent goes with it, for the logo.
+    expect(screen.getByTestId('composer-model').dataset.driver).toBe('claude-code')
     rerender(view({ live: true, events: [], card: { status: 'running', driver: 'claude-code' } }))
     expect(screen.getByTestId('composer-model').textContent).toBe('')
   })
@@ -1148,13 +1153,14 @@ describe('the model under the message box', () => {
     expect(screen.queryByRole('img', { name: /of the context left/ })).toBeNull()
   })
 
-  test('how hard the model was told to think is said beside it, as Claude Code says it', () => {
+  test('how hard the model was told to think is handed to the box with it, in the words the launcher says it in', () => {
     const { rerender } = render(view({ live: true, events: [], card: { status: 'running', driver: 'claude-code', model: 'opus', effort: 'medium' } }))
-    // Two words with a space between, as Claude Code sets them: "Opus 5  High".
-    expect(screen.getByTestId('composer-model').textContent).toMatch(/opus\u2002Medium/i)
+    expect(screen.getByTestId('composer-model').textContent).toMatch(/opus/i)
+    expect(screen.getByTestId('composer-model').dataset.effort).toBe('Medium')
     // A run on the agent's own effort says the model alone.
     rerender(view({ live: true, events: [], card: { status: 'running', driver: 'claude-code', model: 'opus' } }))
     expect(screen.getByTestId('composer-model').textContent).toBe('opus')
+    expect(screen.getByTestId('composer-model').dataset.effort).toBe('')
   })
 })
 
@@ -1374,12 +1380,12 @@ describe('AgentView: the bar when the work is landed', () => {
     expect([checkout.branch, checkout.pr?.number]).toEqual(['agent-add-hello2', 7])
   })
 
-  test('every pull request the run opened is a label under the box, the earlier ones first', async () => {
+  test('every pull request the run opened is a label in the row above the box, the earlier ones first', async () => {
     onAgent.mockResolvedValue(ENDED)
     onAgentWorktree.mockResolvedValue({ branch: 'agent-b', pr: { number: 5, url: 'https://x/pull/5', state: 'OPEN', title: 'T' } })
     onAgentHandoff.mockResolvedValue({ ...PUSHED, pushed: true })
     render(view({ agentId: 'run-two', events: ENDED, card: { status: 'done', earlierPrs: [{ number: 4, url: 'https://x/pull/4', state: 'merged' }] } as never }))
-    await waitFor(() => expect(within(screen.getByTestId('composer-controls')).getAllByRole('link').map(link => link.getAttribute('aria-label'))).toEqual(['PR #4 merged, on the git host', 'PR #5 open, on the git host']))
+    await waitFor(() => expect(within(screen.getByTestId('row-prs')).getAllByRole('link').map(link => link.getAttribute('aria-label'))).toEqual(['PR #4 merged, on the git host', 'PR #5 open, on the git host']))
   })
 
   test("a merged request's label says merged from the first frame, and while the page's read still calls it open", async () => {
@@ -1389,7 +1395,7 @@ describe('AgentView: the bar when the work is landed', () => {
     const read = { ...PUSHED, pushed: true, pr: { number: 7, url: 'https://x/pull/7', state: 'OPEN', title: 'T' } }
     onAgentHandoff.mockResolvedValueOnce({ ...read, prPending: true })
     onAgentHandoff.mockReturnValue(new Promise(resolve => (lookup = resolve)))
-    const labels = () => within(screen.getByTestId('composer-controls')).getAllByRole('link').map(link => link.getAttribute('aria-label'))
+    const labels = () => within(screen.getByTestId('row-prs')).getAllByRole('link').map(link => link.getAttribute('aria-label'))
     render(view({ agentId: 'run-m', events: ENDED, card: { status: 'done', pr: { number: 7, url: 'https://x/pull/7' }, prState: 'merged' } }))
     expect(labels()).toEqual(['PR #7 merged, on the git host'])
     await waitFor(() => expect(onAgentHandoff).toHaveBeenCalledTimes(2))

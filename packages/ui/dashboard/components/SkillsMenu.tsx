@@ -6,34 +6,29 @@ import { useLoaded, usePolled } from '../lib/use-async.js'
 import { pluginsAgain } from '../lib/plugins-switched.js'
 import { inWords } from '../lib/in-words.js'
 import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
-import { RowChevron, RowSaid, rowButtonClass, rowWideClass } from './ui/row-item.js'
+import { SetupLine, SetupSaid } from './SessionSetup.js'
 import { useProfilesList } from './ProfilesPage.js'
 import { PLUGINS_ENTRY } from './PluginsSettings.js'
 import { DEFAULT_PROFILE } from '../../src/client.js'
 import { SESSIONS_ID } from '../../src/project-address.js'
-import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip.js'
 import {
-  DropdownMenu,
   DropdownMenuCheckboxItem,
-  DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
-  DropdownMenuTrigger,
 } from './ui/dropdown-menu.js'
 
-// The "Skills" menu under the launcher's box (the session's picks): what the session gets, for
+// The "Skills" line of the launcher's gear menu (the session's picks): what the session gets, for
 // this session alone, as the account beside it is picked. The plugins on in the project that give
 // its runs something, each ticked, tickable off: the session goes without it, so it gets none of
 // its skills nor its steps; then the project's own skills, all, none or each; both as its profile
 // has them until the session picks. Then the project's plugins and its skills in Settings. The
 // picks go with the Start in the run's environment and its record keeps them, so a resume applies
 // them again. The pick is not saved: the next session starts from its profile's. A session with no
-// project has no project skills. The skills module's own control under the box, once the box has
-// places for them (#2394).
+// project has no project skills.
 
 /** Settings › Skills, the skills module's entry: each project's own skills, listed. */
 const SKILLS_SETTINGS = 'skills'
@@ -92,25 +87,34 @@ function useProjectSkills(projectId: string | undefined): string[] | null {
   return useLoaded(projectId !== undefined ? () => onProjectSkillNames(projectId) : null, null, [projectId], projectId !== undefined ? { remember: `project-skill-names:${projectId}`, stored: true } : undefined)
 }
 
+/**
+ * How many skills a session with these picks gets, for the gear's hover; none until the plugins to pick from
+ * and the project's skills are read.
+ */
+export function useSkillCount(projectId: string | undefined, picks: { without: readonly string[]; project?: 'all' | 'none' | readonly string[] | undefined }): number | undefined {
+  const choices = useSkillChoices(projectId)
+  const project = useProjectSkills(projectId)
+  if (!choices || (projectId !== undefined && project === null)) return undefined
+  return skillCount(sessionSkills(choices, picks.without), projectId !== undefined ? projectKept(project ?? [], picks.project) : [])
+}
+
 export function SkillsMenu({
   projectId,
   picks,
   onChange,
-  busy,
 }: {
   /** The project, for its own skills and their list in Settings; none for a session with no project. */
   projectId: string | undefined
   picks: SkillPicks
   onChange: (picks: SkillPicks) => void
-  busy: boolean
 }) {
   const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
   const choices = useSkillChoices(projectId)
   const project = useProjectSkills(projectId)
   const held = project ?? []
   if (!choices) return null
-  // Counted only once the project's skills are read: a count of the others alone would be drawn, then change. Till
-  // then the item holds its place, a digit's room kept for the count, so nothing after it moves when it lands.
+  // Counted only once the project's skills are read: a count of the others alone would be drawn, then change.
+  // Till then the line is off: its list would say the project has none.
   const reading = projectId !== undefined && project === null
   const kept = projectKept(held, picks.project)
   const count = skillCount(sessionSkills(choices, picks.without), projectId !== undefined ? kept : [])
@@ -120,106 +124,101 @@ export function SkillsMenu({
     const { project: _all, ...rest } = picks
     onChange(next.length === held.length ? rest : { ...rest, project: next.length === 0 ? 'none' : next })
   }
-  const said = `This session gets ${skillPicksSaid({ pluginsWithout: picks.without.filter(name => choices.plugins.some(plugin => plugin.name === name)), ...(projectId !== undefined ? { projectSkills: picks.project } : { projectSkills: 'none' }) })}`
   return (
-    <DropdownMenu>
-      <Tooltip>
-        <TooltipTrigger render={<DropdownMenuTrigger type="button" disabled={busy || reading} aria-label={reading ? 'Skills' : `Skills: ${count}`} className={rowButtonClass} />}>
-          <Puzzle className="size-4 shrink-0" aria-hidden />
-          <span className="truncate tabular-nums">
-            <span className={rowWideClass}>Skills: </span>
-            {reading ? <span className="before:invisible before:content-['0']" /> : count}
-          </span>
-          <RowChevron />
-        </TooltipTrigger>
-        <TooltipContent>{said}</TooltipContent>
-      </Tooltip>
-      <DropdownMenuContent align="start" className="min-w-[16rem]">
-        <DropdownMenuGroup>
-          <DropdownMenuLabel>Plugins, this session</DropdownMenuLabel>
-          {choices.plugins.length === 0 ? (
-            <DropdownMenuItem disabled>
-              <span className="text-muted-foreground">None on</span>
-            </DropdownMenuItem>
-          ) : (
-            choices.plugins.map(plugin => (
-              <DropdownMenuCheckboxItem key={plugin.name} checked={!picks.without.includes(plugin.name)} onCheckedChange={() => togglePlugin(plugin.name)}>
-                <span className="truncate">{plugin.name}</span>
-              </DropdownMenuCheckboxItem>
-            ))
-          )}
-        </DropdownMenuGroup>
-        {projectId !== undefined && (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-              <DropdownMenuLabel>Project skills</DropdownMenuLabel>
-              {held.length === 0 ? (
-                <DropdownMenuItem disabled>
-                  <span className="text-muted-foreground">None yet</span>
-                </DropdownMenuItem>
-              ) : (
-                <>
-                  <DropdownMenuRadioGroup
-                    value={picks.project === undefined ? 'all' : picks.project === 'none' ? 'none' : null}
-                    onValueChange={(pick: 'all' | 'none') => onChange(pick === 'all' ? { without: picks.without } : { ...picks, project: 'none' })}
-                  >
-                    {/* Marked at the right, in the one column every skill's tick stands in. */}
-                    <DropdownMenuRadioItem value="all" closeOnClick={false}>
-                      All
-                      <span className="ml-auto flex size-4 shrink-0 items-center justify-center">{picks.project === undefined && <Check className="size-4" aria-hidden />}</span>
-                    </DropdownMenuRadioItem>
-                    <DropdownMenuRadioItem value="none" closeOnClick={false}>
-                      None
-                      <span className="ml-auto flex size-4 shrink-0 items-center justify-center">{picks.project === 'none' && <Check className="size-4" aria-hidden />}</span>
-                    </DropdownMenuRadioItem>
-                  </DropdownMenuRadioGroup>
-                  {held.map(name => (
-                    <DropdownMenuCheckboxItem key={name} checked={kept.includes(name)} onCheckedChange={() => toggleProject(name)}>
-                      <span className="truncate">{name}</span>
-                    </DropdownMenuCheckboxItem>
-                  ))}
-                </>
-              )}
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => services.openSettings(PLUGINS_ENTRY, projectId)}>
-              <Settings2 className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
-              Plugins in Settings…
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => services.openSettings(SKILLS_SETTINGS, projectId)}>
-              <Settings2 className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
-              Project skills in Settings…
-            </DropdownMenuItem>
-          </>
+    <SetupLine icon={<Puzzle aria-hidden />} label="Skills" value={<span className="tabular-nums">{reading ? '' : count}</span>} disabled={reading} className="min-w-[16rem]">
+      <DropdownMenuGroup>
+        <DropdownMenuLabel>Plugins, this session</DropdownMenuLabel>
+        {choices.plugins.length === 0 ? (
+          <DropdownMenuItem disabled>
+            <span className="text-muted-foreground">None on</span>
+          </DropdownMenuItem>
+        ) : (
+          choices.plugins.map(plugin => (
+            <DropdownMenuCheckboxItem key={plugin.name} checked={!picks.without.includes(plugin.name)} onCheckedChange={() => togglePlugin(plugin.name)}>
+              <span className="truncate">{plugin.name}</span>
+            </DropdownMenuCheckboxItem>
+          ))
         )}
-      </DropdownMenuContent>
-    </DropdownMenu>
+      </DropdownMenuGroup>
+      {projectId !== undefined && (
+        <>
+          <DropdownMenuSeparator />
+          <DropdownMenuGroup>
+            <DropdownMenuLabel>Project skills</DropdownMenuLabel>
+            {held.length === 0 ? (
+              <DropdownMenuItem disabled>
+                <span className="text-muted-foreground">None yet</span>
+              </DropdownMenuItem>
+            ) : (
+              <>
+                <DropdownMenuRadioGroup
+                  value={picks.project === undefined ? 'all' : picks.project === 'none' ? 'none' : null}
+                  onValueChange={(pick: 'all' | 'none') => onChange(pick === 'all' ? { without: picks.without } : { ...picks, project: 'none' })}
+                >
+                  {/* Marked at the right, in the one column every skill's tick stands in. */}
+                  <DropdownMenuRadioItem value="all" closeOnClick={false}>
+                    All
+                    <span className="ml-auto flex size-4 shrink-0 items-center justify-center">{picks.project === undefined && <Check className="size-4" aria-hidden />}</span>
+                  </DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="none" closeOnClick={false}>
+                    None
+                    <span className="ml-auto flex size-4 shrink-0 items-center justify-center">{picks.project === 'none' && <Check className="size-4" aria-hidden />}</span>
+                  </DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
+                {held.map(name => (
+                  <DropdownMenuCheckboxItem key={name} checked={kept.includes(name)} onCheckedChange={() => toggleProject(name)}>
+                    <span className="truncate">{name}</span>
+                  </DropdownMenuCheckboxItem>
+                ))}
+              </>
+            )}
+          </DropdownMenuGroup>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => services.openSettings(PLUGINS_ENTRY, projectId)}>
+            <Settings2 className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
+            Plugins in Settings…
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => services.openSettings(SKILLS_SETTINGS, projectId)}>
+            <Settings2 className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
+            Project skills in Settings…
+          </DropdownMenuItem>
+        </>
+      )}
+    </SetupLine>
   )
 }
 
+/** What a session's record says of its skills, over its profile's where the session picked none. */
+function useRecordedPicks(profile: string | undefined, pluginsWithout: string[] | undefined, projectSkills: 'all' | 'none' | string[] | undefined): { without: readonly string[]; project: 'all' | 'none' | readonly string[] | undefined } | undefined {
+  const { view } = useProfilesList()
+  if (!view) return undefined
+  const on = view.profiles.find(one => one.id === (profile ?? DEFAULT_PROFILE))?.options
+  return { without: pluginsWithout ?? on?.plugins?.without ?? [], project: projectSkills ?? on?.skills?.project }
+}
+
+/** How many skills a session got, as its record keeps its picks; none until all of it is read. */
+export function useRecordedSkillCount(projectId: string | undefined, profile: string | undefined, pluginsWithout?: string[] | undefined, projectSkills?: 'all' | 'none' | string[] | undefined): number | undefined {
+  const picks = useRecordedPicks(profile, pluginsWithout, projectSkills)
+  const count = useSkillCount(projectId, picks ?? NO_PICKS)
+  return picks ? count : undefined
+}
+
 /**
- * The session page's "Skills", in the launcher's place, as words, not a press: a session keeps the
+ * A session's "Skills" line, in the launcher's place, said and not offered: a session keeps the
  * picks it started with, counted as the launcher counts them, which their hover says as its record
  * keeps them; as its profile has them where the session picked none. Drawn once the plugins to pick
  * from, the profiles and the project's skills are read, so the count lands whole.
  */
 export function SkillsOff({ projectId, profile, pluginsWithout, projectSkills }: { projectId: string | undefined; profile: string | undefined; pluginsWithout?: string[] | undefined; projectSkills?: 'all' | 'none' | string[] | undefined }) {
-  const choices = useSkillChoices(projectId)
-  const { view } = useProfilesList()
-  const project = useProjectSkills(projectId)
-  if (!choices || !view || (projectId !== undefined && project === null)) return null
-  const on = view.profiles.find(one => one.id === (profile ?? DEFAULT_PROFILE))?.options
-  const without = pluginsWithout ?? on?.plugins?.without ?? []
-  const got = projectSkills ?? on?.skills?.project
-  const count = skillCount(sessionSkills(choices, without), projectId !== undefined ? projectKept(project ?? [], got) : [])
+  const picks = useRecordedPicks(profile, pluginsWithout, projectSkills)
+  const count = useRecordedSkillCount(projectId, profile, pluginsWithout, projectSkills)
+  if (!picks || count === undefined) return null
   return (
-    <RowSaid tip={`This session got ${skillPicksSaid({ pluginsWithout: without, projectSkills: projectId === undefined ? 'none' : got })}`}>
-      <Puzzle className="size-4 shrink-0" aria-hidden />
-      <span className="truncate">
-        <span className={rowWideClass}>Skills: </span>
-        {count}
-      </span>
-    </RowSaid>
+    <SetupSaid
+      icon={<Puzzle aria-hidden />}
+      label="Skills"
+      value={<span className="tabular-nums">{count}</span>}
+      tip={`This session got ${skillPicksSaid({ pluginsWithout: picks.without, projectSkills: projectId === undefined ? 'none' : picks.project })}`}
+    />
   )
 }

@@ -4,6 +4,7 @@ import { hostOf } from '../lib/run-hosts.js'
 import { HOST_ICON, RunOnWords } from './RunOnMenu.js'
 import { RowAboveBox, RowSaid } from './ui/row-item.js'
 import { RepoChip } from './SessionRepos.js'
+import { RunPrLabels } from './RunPrLabels.js'
 
 /** The icon of where a session runs, as "Run on" has a host's. */
 function runsOnIcon(target: AgentMeta['target']): LucideIcon {
@@ -12,7 +13,8 @@ function runsOnIcon(target: AgentMeta['target']): LucideIcon {
 
 // A session's row above the message box: the "New agent session" page's row, in its place, each item
 // said in words rather than offered as a menu, since a session keeps where it started. Where it runs, the project and the branch
-// it started from; the agent and the account are under the box, as on "New agent session". The branch
+// it started from; at its right end, the run's pull requests (RunPrLabels). The setup and the model
+// are under the box, as on "New agent session". The branch
 // means what it means there and does not flip as the agent renames its own, which its hover names and
 // the bar above says. The row's height is fixed, and each item lands in place: the branch last, so
 // nothing beside it is pushed, and only with the project's name, as on "New agent session". A branch
@@ -26,6 +28,7 @@ export function SessionRow({
   startedFrom,
   worksOn,
   repos,
+  prs = [],
 }: {
   /** Where the session runs, in a few words: this machine, another computer by its name, a host by its own. */
   runsOn: string
@@ -39,10 +42,12 @@ export function SessionRow({
   worksOn?: string | undefined
   /** The repos a session with no project has, as its record says. */
   repos?: readonly { name: string; from: string }[] | undefined
+  /** The run's pull requests, oldest first. */
+  prs?: readonly { number: number; url: string; state?: string | undefined }[] | undefined
 }) {
   const started = startedFrom && (worksOn && worksOn !== startedFrom ? `Started from ${startedFrom}, works on ${worksOn}` : `Started from ${startedFrom}`)
   return (
-    <RowAboveBox>
+    <RowAboveBox end={<RunPrLabels prs={prs} />}>
       <RowSaid tip={`Runs on — ${runsOn}`}>
         <RunOnWords icon={runsOnIcon(target)} elsewhere={elsewhere} label={runsOn} />
       </RowSaid>

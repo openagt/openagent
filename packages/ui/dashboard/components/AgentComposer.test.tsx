@@ -7,6 +7,7 @@ const sendStop = vi.hoisted(() => vi.fn())
 vi.mock('../rpc/control.js', () => ({ sendMessage, sendStop }))
 // The "Auto" menu is tested on its own; here a stand-in says the pick it shows and offers a pick.
 vi.mock('./AutoMenu.js', () => ({
+  autoSaid: (publish: string, target?: { into: string }) => `auto ${publish}${target ? ` → ${target.into}` : ''}`,
   AutoMenu: ({ publish, onPublish }: { publish: string; onPublish: (pick: string) => void }) => (
     <span>
       Auto: {publish}
@@ -20,7 +21,10 @@ vi.mock('../lib/use-project-launcher.js', () => ({ useProjectLauncher: () => ({ 
 vi.mock('./ContextMenu.js', () => ({ ProjectContextMenu: ({ context }: { context: Set<string> }) => <span>Context · {[...context].join(', ')}</span> }))
 // The launcher's other items, each tested on its own: stand-ins that say what they were given.
 vi.mock('./ProfileMenu.js', () => ({ ProfileOff: ({ profile }: { profile?: string }) => <span>Profile · {profile ?? 'default'}</span> }))
-vi.mock('./SkillsMenu.js', () => ({ SkillsOff: ({ projectId, pluginsWithout, projectSkills }: { projectId?: string; pluginsWithout?: string[]; projectSkills?: 'all' | 'none' | string[] }) => <span>Skills · {projectId === undefined ? 'no project' : `${(pluginsWithout ?? []).join('+') || 'all'}/${projectSkills === undefined || projectSkills === 'all' ? 'all' : projectSkills === 'none' ? 'none' : projectSkills.join('+')}`}</span> }))
+// How many skills the session got, for the gear's hover: a test sets it.
+const skillCount = vi.hoisted(() => ({ current: undefined as number | undefined }))
+vi.mock('./ProfilesPage.js', () => ({ useProfileName: (id: string) => (id === 'unread' ? undefined : id === 'default' ? 'Default' : id) }))
+vi.mock('./SkillsMenu.js', () => ({ useRecordedSkillCount: () => skillCount.current, SkillsOff: ({ projectId, pluginsWithout, projectSkills }: { projectId?: string; pluginsWithout?: string[]; projectSkills?: 'all' | 'none' | string[] }) => <span>Skills · {projectId === undefined ? 'no project' : `${(pluginsWithout ?? []).join('+') || 'all'}/${projectSkills === undefined || projectSkills === 'all' ? 'all' : projectSkills === 'none' ? 'none' : projectSkills.join('+')}`}</span> }))
 vi.mock('./GitHosts.js', () => ({ GitHostOff: ({ home, account }: { home: { name: string } | null; account?: string }) => (home ? <span>Account · {account ?? home.name}</span> : null) }))
 
 // The Composer is exercised by its own tests; here it only has to hand back a submit and report
@@ -47,8 +51,8 @@ vi.mock('./Composer.js', async () => {
       </span>
       {/* The empty-box slot control (#1455), rendered so the Stop/Resume tests can press it. */}
       {props.idleControl}
+      <span data-testid="composer-setup" data-said={props.setup?.said} data-warn={props.setup?.warn === true}>{props.setup?.lines}</span>
       <span data-testid="composer-controls">{props.controls}</span>
-      <span data-testid="composer-controls-end">{props.controlsEnd}</span>
       {props.sessionRow}
     </div>
     )
@@ -66,12 +70,13 @@ function renderComposer(over: Partial<Parameters<typeof AgentComposer>[0]> = {})
   return { onAgentStarted }
 }
 
-const props = (): { inAgent: boolean; busyLabel: string; placeholder: string; sessionModel?: string; autoFocus?: boolean } =>
+const props = (): { inAgent: boolean; busyLabel: string; placeholder: string; sessionModel?: { driver?: string; name?: string; effort?: string }; autoFocus?: boolean } =>
   JSON.parse(screen.getByTestId('composer-props').textContent ?? '{}')
 
 beforeEach(() => {
   sendMessage.mockReset()
   sendStop.mockReset()
+  skillCount.current = undefined
 })
 afterEach(() => {
   cleanup()
@@ -98,17 +103,33 @@ describe('AgentComposer row', () => {
 })
 
 describe('AgentComposer row under the box', () => {
-  test('the launcher\'s items in the launcher\'s places, the session\'s own off: the profile, Skills, Context, then the run\'s pull requests; at the right the account the run worked as, then Auto', () => {
+  test('the launcher\'s gear, line for line in its places, the session\'s own said and not offered: the profile, Skills, the account the run worked as, then Auto; after the gear, Context alone', () => {
     const contextSet = { context: new Set(['src/app.ts']), add: vi.fn(), remove: vi.fn(), toggle: vi.fn(), reset: vi.fn() }
-    renderComposer({ profile: 'reviewer', gitHost: { url: 'https://github.com/o/r', name: 'GitHub' }, gitAccount: 'octo-agent', publish: 'pr', contextSet, controls: <span>PR #7</span>, pluginsWithout: ['tickets'], projectSkills: ['deploy'] })
-    expect(screen.getByTestId('composer-controls').textContent).toBe('Profile · reviewerSkills · tickets/deployContext · src/app.tsPR #7')
-    expect(screen.getByTestId('composer-controls-end').textContent).toBe('Account · octo-agentAuto: prpick Open PRpick Commit')
+    renderComposer({ profile: 'reviewer', gitHost: { url: 'https://github.com/o/r', name: 'GitHub' }, gitAccount: 'octo-agent', publish: 'pr', contextSet, pluginsWithout: ['tickets'], projectSkills: ['deploy'] })
+    expect(screen.getByTestId('composer-setup').textContent).toBe('Profile · reviewerSkills · tickets/deployAccount · octo-agentAuto: prpick Open PRpick Commit')
+    expect(screen.getByTestId('composer-controls').textContent).toBe('Context · src/app.ts')
   })
 
-  test('a session with no project: the profile, its skills and its pull requests alone, no Context, Auto or account, as the launcher with no project', () => {
-    renderComposer({ projectId: 'session', controls: <span>PR #7</span> })
-    expect(screen.getByTestId('composer-controls').textContent).toBe('Profile · defaultSkills · no projectPR #7')
-    expect(screen.getByTestId('composer-controls-end').textContent).toBe('')
+  test('a session with no project: the profile and its skills alone in the gear, no account or Auto, and no Context, as the launcher with no project', () => {
+    renderComposer({ projectId: 'session' })
+    expect(screen.getByTestId('composer-setup').textContent).toBe('Profile · defaultSkills · no project')
+    expect(screen.getByTestId('composer-controls').textContent).toBe('')
+  })
+
+  test("the gear's hover says the setup with its menu shut: the profile, how many skills, the account, the level and where its pull request goes; each once it is known", () => {
+    skillCount.current = 12
+    renderComposer({ profile: 'reviewer', gitAccount: 'octo-agent', publish: 'pr', prBase: 'login-page' })
+    expect(screen.getByTestId('composer-setup').dataset.said).toBe('Profile reviewer · 12 skills · @octo-agent · auto pr → login-page')
+    cleanup()
+    skillCount.current = 1
+    renderComposer()
+    expect(screen.getByTestId('composer-setup').dataset.said).toBe('Profile Default · 1 skill · auto nothing')
+    // Nothing read yet, and no project: neither the profile, the count nor a level is said.
+    cleanup()
+    skillCount.current = undefined
+    renderComposer({ projectId: 'session', profile: 'unread' })
+    expect(screen.getByTestId('composer-setup').dataset.said).toBe('')
+    expect(screen.getByTestId('composer-setup').dataset.warn).toBe('false')
   })
 })
 
@@ -128,8 +149,8 @@ describe('AgentComposer box', () => {
 
 
   test('the model the session runs on is handed to the box, to be said under it; none when not known', () => {
-    renderComposer({ model: 'Opus 5.5' })
-    expect(props().sessionModel).toBe('Opus 5.5')
+    renderComposer({ model: { driver: 'claude-code', name: 'Opus 5.5', effort: 'High' } })
+    expect(props().sessionModel).toEqual({ driver: 'claude-code', name: 'Opus 5.5', effort: 'High' })
     cleanup()
     renderComposer()
     expect(props().sessionModel).toBeUndefined()

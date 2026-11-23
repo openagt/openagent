@@ -25,8 +25,8 @@ import { Facts } from './ui/panel.js'
 // them, how hard the model may think: the levels are the model's own, so a model that offers none
 // has no such part. Each driver's part also holds its accounts on the computer the run goes to,
 // under its models, and its row says the one its runs take first: who runs it is picked where what
-// runs is. The trigger says all three as Claude Code's does: the driver's logo, the
-// model, and the level in a quieter tone ("Opus 5.5 High"); the agent's default level says nothing.
+// runs is. The trigger says all three (ModelWords): the driver's logo, the model, and the level
+// smaller and quieter ("Opus 5.5 High"); the agent's default level says nothing.
 
 export interface ModelOption {
   value: string
@@ -46,6 +46,21 @@ export interface DriverOption {
   account?: { name: string; percent: string | undefined } | undefined
   /** Its accounts, under its models in its part: which one is first, and adding one. */
   accounts?: ReactNode
+}
+
+/**
+ * A model as the row under the box says it, on the launcher's menu button and in a session alike
+ * (his pick): the coding agent's logo, the model's name, and how hard it thinks as smaller, quieter
+ * words on the line's middle, neither raised nor a badge.
+ */
+export function ModelWords({ icon, name, effort }: { icon?: ReactNode; name?: string | undefined; effort?: string | undefined }) {
+  return (
+    <>
+      {icon && <span className="flex size-4 shrink-0 items-center justify-center [&>svg]:size-4">{icon}</span>}
+      {name !== undefined && <span className="truncate font-medium text-foreground">{name}</span>}
+      {effort !== undefined && <span className="mt-px shrink-0 text-xs leading-none text-muted-foreground">{effort}</span>}
+    </>
+  )
 }
 
 function driverOf(drivers: DriverOption[], value: string): DriverOption | undefined {
@@ -112,17 +127,11 @@ export function DriverModelMenu({
               type="button"
               disabled={busy}
               aria-label={said}
-              className={cn(rowButtonClass, 'text-foreground')}
+              className={rowButtonClass}
             />
           }
         >
-          {current?.icon ? (
-            <span className="flex size-4 items-center justify-center [&>svg]:size-4">{current.icon}</span>
-          ) : (
-            current?.label
-          )}
-          {currentModelLabel}
-          {level && <span className="text-muted-foreground">{level}</span>}
+          <ModelWords icon={current?.icon} name={current?.icon ? currentModelLabel : [current?.label, currentModelLabel].filter(Boolean).join(' ')} effort={level} />
           <RowChevron />
         </TooltipTrigger>
         <TooltipContent>{said}</TooltipContent>

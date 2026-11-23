@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { effortLabel } from '../lib/effort.js'
-import { DriverModelMenu, type DriverOption } from './DriverModelMenu.js'
+import { DriverModelMenu, ModelWords, type DriverOption } from './DriverModelMenu.js'
 import { hoverTooltip } from '../test-utils.js'
 
 afterEach(cleanup)
@@ -25,6 +25,37 @@ function renderMenu(over: Partial<Parameters<typeof DriverModelMenu>[0]> = {}) {
   render(<DriverModelMenu drivers={drivers} driver="claude" model="opus" onChange={onChange} busy={false} {...over} />)
   return { onChange }
 }
+
+describe('the model as the row under the box says it', () => {
+  test("the coding agent's logo, the model's name, and how hard it thinks smaller and quieter on the line's middle, neither raised nor a badge", () => {
+    const { container } = render(<ModelWords icon={<svg data-testid="logo" />} name="Opus 5.5" effort="High" />)
+    expect([...container.children].map(part => part.textContent)).toEqual(['', 'Opus 5.5', 'High'])
+    expect(container.firstElementChild!.querySelector('[data-testid="logo"]')).toBeTruthy()
+    expect(screen.getByText('Opus 5.5').className.split(' ')).toEqual(expect.arrayContaining(['font-medium', 'text-foreground']))
+    const effort = screen.getByText('High')
+    expect(effort.className.split(' ')).toEqual(expect.arrayContaining(['text-xs', 'text-muted-foreground']))
+    expect(effort.tagName).toBe('SPAN')
+    expect(effort.className).not.toMatch(/rounded|bg-|align-super|-translate-y/)
+  })
+
+  test('each part only when there is one: no logo, no name, no effort', () => {
+    const { container, rerender } = render(<ModelWords name="Opus 5.5" />)
+    expect(container.textContent).toBe('Opus 5.5')
+    expect(container.childElementCount).toBe(1)
+    rerender(<ModelWords />)
+    expect(container.innerHTML).toBe('')
+  })
+
+  test("the menu's button says them the same way; a driver with no logo is named in words before its model", () => {
+    renderMenu({ effort: { levels: ['low', 'high'], level: 'high', onChange: () => {} } })
+    const trigger = screen.getByRole('button')
+    expect(screen.getByText('Opus').className).toContain('font-medium')
+    expect(trigger.querySelector('.text-xs')!.textContent).toBe(effortLabel('high'))
+    cleanup()
+    renderMenu({ driver: 'codex', model: 'gpt-5-codex' })
+    expect(screen.getByText('Codex GPT-5 Codex')).toBeTruthy()
+  })
+})
 
 describe('DriverModelMenu tree (#658)', () => {
   test('the trigger shows the current driver logo and model', async () => {

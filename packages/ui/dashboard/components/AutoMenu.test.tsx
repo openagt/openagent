@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { PublishPick } from '../../src/client.js'
-import { hoverTooltip, openMenu } from '../test-utils.js'
-import { AutoMenu } from './AutoMenu.js'
+import { GearMenu, openSetupLine, setupLine } from '../test-utils.js'
+import { AutoMenu, autoSaid } from './AutoMenu.js'
 
 afterEach(cleanup)
 
@@ -10,30 +10,42 @@ const ALL: PublishPick[] = ['nothing', 'commit', 'branch', 'pr', 'merge']
 
 function renderMenu(over: Partial<Parameters<typeof AutoMenu>[0]> = {}) {
   const onPublish = vi.fn()
-  const view = render(<AutoMenu publish="nothing" picks={ALL} onPublish={onPublish} busy={false} {...over} />)
+  const view = render(<GearMenu lines={<AutoMenu publish="nothing" picks={ALL} onPublish={onPublish} {...over} />} />)
   return { onPublish, ...view }
 }
 
-const trigger = () => screen.getByRole('button', { name: /^Auto: / })
-/** What the button reads with the menu shut. */
-const label = (over: Partial<Parameters<typeof AutoMenu>[0]>): string => {
+/** What the gear's line reads, its menu open: "When it finishes: <the level>". */
+const label = async (over: Partial<Parameters<typeof AutoMenu>[0]>): Promise<string> => {
   cleanup()
   renderMenu(over)
-  return trigger().textContent ?? ''
+  return (await setupLine('When it finishes')).textContent ?? ''
 }
 
 describe('AutoMenu', () => {
-  test('the button reads what will happen: the publish pick', () => {
-    expect(label({ publish: 'nothing' })).toBe('Auto: Off')
-    expect(label({ publish: 'commit' })).toBe('Auto: Commit')
-    expect(label({ publish: 'branch' })).toBe('Auto: Publish branch')
-    expect(label({ publish: 'pr' })).toBe('Auto: Open PR')
-    expect(label({ publish: 'merge' })).toBe('Auto: Merge on green')
+  test('the line reads what will happen: the publish pick, and "Auto off" for Off, which alone would not say what is off', async () => {
+    expect(await label({ publish: 'nothing' })).toBe('When it finishes: Auto off')
+    expect(await label({ publish: 'commit' })).toBe('When it finishes: Commit')
+    expect(await label({ publish: 'branch' })).toBe('When it finishes: Publish branch')
+    expect(await label({ publish: 'pr' })).toBe('When it finishes: Open PR')
+    expect(await label({ publish: 'merge' })).toBe('When it finishes: Merge on green')
+  })
+
+  test("the gear's hover says the level in the line's words", () => {
+    expect(autoSaid('nothing')).toBe('Auto off')
+    expect(autoSaid('merge')).toBe('Merge on green')
+    expect(autoSaid('pr', { into: 'login-page' })).toBe('Open PR → login-page')
+    expect(autoSaid('commit', { into: 'login-page' })).toBe('Commit')
+  })
+
+  test('the line is set apart from the lines above it', async () => {
+    renderMenu()
+    const line = await setupLine('When it finishes')
+    expect(line.previousElementSibling?.getAttribute('role')).toBe('separator')
   })
 
   test('the menu lists the offered picks under its heading, each with its description, and the check is on the current one', async () => {
     renderMenu({ publish: 'pr' })
-    await openMenu(trigger())
+    await openSetupLine('When it finishes')
     expect(screen.getByText('When the agent finishes')).toBeTruthy()
     expect(screen.getAllByRole('menuitemradio').map(item => item.textContent)).toEqual([
       'OffAdds nothing to your message. The agent decides, and usually commits.',
@@ -49,26 +61,26 @@ describe('AutoMenu', () => {
 
   test('only the offered picks are listed', async () => {
     renderMenu({ publish: 'commit', picks: ['nothing', 'commit'] })
-    await openMenu(trigger())
+    await openSetupLine('When it finishes')
     expect(screen.getAllByRole('menuitemradio').map(item => item.getAttribute('aria-checked'))).toEqual(['false', 'true'])
   })
 
   test('picking an option reports it', async () => {
     const { onPublish } = renderMenu()
-    await openMenu(trigger())
+    await openSetupLine('When it finishes')
     fireEvent.click(screen.getByRole('menuitemradio', { name: /^Merge on green/ }))
     expect(onPublish).toHaveBeenCalledWith('merge')
   })
 
-  test('a target: the button names it and the menu offers its branches at the levels that open a request, and a pick reports the branch', async () => {
+  test('a target: the line names it and the list offers its branches at the levels that open a request, and a pick reports the branch', async () => {
     const onPick = vi.fn()
     const target = { into: 'login-page', picks: ['login-page', 'main'], onPick }
-    expect(label({ publish: 'pr', target })).toBe('Auto: Open PR → login-page')
-    expect(label({ publish: 'merge', target: { ...target, into: 'main' } })).toBe('Auto: Merge on green → main')
-    expect(label({ publish: 'commit', target })).toBe('Auto: Commit')
+    expect(await label({ publish: 'pr', target })).toBe('When it finishes: Open PR → login-page')
+    expect(await label({ publish: 'merge', target: { ...target, into: 'main' } })).toBe('When it finishes: Merge on green → main')
+    expect(await label({ publish: 'commit', target })).toBe('When it finishes: Commit')
     cleanup()
     renderMenu({ publish: 'pr', target })
-    await openMenu(trigger())
+    await openSetupLine('When it finishes')
     expect(screen.getByText('The pull request goes into')).toBeTruthy()
     const row = (name: string) => screen.getByRole('menuitemradio', { name })
     expect(row('login-page').getAttribute('aria-checked')).toBe('true')
@@ -77,32 +89,17 @@ describe('AutoMenu', () => {
     expect(onPick).toHaveBeenCalledWith('main')
   })
 
-  test('no section: at a level that opens no request, with no target, and on a session, whose button still names its target', async () => {
+  test('no section: at a level that opens no request, with no target, and on a session, whose line still names its target', async () => {
     renderMenu({ publish: 'commit', target: { into: 'login-page', picks: ['login-page', 'main'] } })
-    await openMenu(trigger())
+    await openSetupLine('When it finishes')
     expect(screen.queryByText('The pull request goes into')).toBeNull()
     cleanup()
     renderMenu({ publish: 'pr' })
-    await openMenu(trigger())
+    await openSetupLine('When it finishes')
     expect(screen.queryByText('The pull request goes into')).toBeNull()
     cleanup()
     renderMenu({ publish: 'pr', target: { into: 'login-page' } })
-    expect(trigger().textContent).toBe('Auto: Open PR → login-page')
-    await openMenu(trigger())
+    expect((await openSetupLine('When it finishes')).textContent).toBe('When it finishes: Open PR → login-page')
     expect(screen.queryByText('The pull request goes into')).toBeNull()
-  })
-
-  test('a name too long for the button is whole in the tooltip', async () => {
-    renderMenu({ publish: 'pr', target: { into: 'feature/a-long-name' } })
-    expect(trigger().className).toContain('max-w-[20rem]!')
-    expect((await hoverTooltip(trigger())).textContent).toBe('What the agent does by itself when it finishes. The pull request goes into feature/a-long-name.')
-  })
-
-  test('the tooltip says what the menu is for, and the button is off while busy', async () => {
-    renderMenu()
-    expect((await hoverTooltip(trigger())).textContent).toBe('What the agent does by itself when it finishes.')
-    cleanup()
-    renderMenu({ busy: true })
-    expect((trigger() as HTMLButtonElement).disabled).toBe(true)
   })
 })

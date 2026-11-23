@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { forgetRemembered } from '../lib/use-async.js'
-import { openMenu } from '../test-utils.js'
+import { GearMenu, gear, hoverTooltip, openMenu, setupLine } from '../test-utils.js'
 
 const logins = vi.hoisted(() => ({ onGitHosts: vi.fn(), sendUseGitHostAccount: vi.fn(), sendForgetGitHostAccount: vi.fn(), sendGitHostLogin: vi.fn(), sendStopGitHostLogin: vi.fn(), sendGitHostInstall: vi.fn(), onAgentState: vi.fn(), sendAgentFix: vi.fn() }))
 vi.mock('../rpc/logins.js', () => logins)
@@ -53,38 +53,61 @@ describe('the account a run started now would work as', () => {
   })
 })
 
-describe('the git host in a session\'s row', () => {
+describe("the git host in a session's gear menu, said and not offered", () => {
   const home = { url: 'https://github.com/o/r', name: 'GitHub' }
+  /** A line's words as a screen reader hears them: without the account's picture, or the letter in its place. */
+  const heard = (line: HTMLElement): string => {
+    const copy = line.cloneNode(true) as HTMLElement
+    for (const hidden of copy.querySelectorAll('[aria-hidden]')) hidden.remove()
+    return copy.textContent ?? ''
+  }
+  /** No line in the gear's open menu. */
+  const noLine = async () => {
+    await openMenu(gear())
+    await new Promise(resolve => setTimeout(resolve, 20))
+    expect(screen.queryAllByRole('menuitem')).toEqual([])
+  }
 
-  test('the account its record keeps, off, with the host\'s logo, whichever account is in use now', async () => {
+  test("the account its record keeps, a line that opens no list, with the host's logo, whichever account is in use now", async () => {
     logins.onGitHosts.mockResolvedValue({ hosts: [{ host: 'github.com', projects: ['site'], provider: provider() }] })
-    const { container } = render(<GitHostOff home={home} account="suleimansh" />)
-    const item = (await screen.findByText('@suleimansh')).parentElement!
-    expect(container.querySelector('button')).toBeNull()
-    expect(item.textContent).toBe('@suleimansh. This run works as @suleimansh on GitHub')
-    expect(item.querySelector<HTMLElement>('[aria-hidden]')!.style.maskImage).toContain(encodeURIComponent('<svg'))
+    render(<GearMenu lines={<GitHostOff home={home} account="suleimansh" />} />)
+    const line = await setupLine('GitHub account')
+    expect(line.getAttribute('aria-haspopup')).toBeNull()
+    expect(line.getAttribute('aria-disabled')).toBe('true')
+    expect(heard(line)).toBe('GitHub account: @suleimansh. This run works as @suleimansh on GitHub')
+    expect(line.querySelector<HTMLElement>('[aria-hidden]')!.style.maskImage).toContain(encodeURIComponent('<svg'))
+    expect((await hoverTooltip(line)).textContent).toBe('This run works as @suleimansh on GitHub')
   })
 
-  test('a record with no account: its logo and name, off; no account, whichever is in use now', async () => {
+  test("the account's picture stands before its name while this computer has the account; its first letter otherwise", async () => {
+    logins.onGitHosts.mockResolvedValue({ hosts: [{ host: 'github.com', projects: ['site'], provider: provider({ accounts: [{ login: 'octo', runs: true, ok: true, avatar: 'https://avatars.example/octo' }] }) }] })
+    const { rerender } = render(<GearMenu lines={<GitHostOff home={home} account="octo" />} />)
+    expect((await setupLine('GitHub account')).querySelector('img')?.getAttribute('src')).toBe('https://avatars.example/octo')
+    rerender(<GearMenu lines={<GitHostOff home={home} account="suleimansh" />} />)
+    const line = await setupLine('GitHub account')
+    expect(line.querySelector('img')).toBeNull()
+    expect([...line.querySelectorAll('[aria-hidden]')].map(part => part.textContent)).toContain('S')
+  })
+
+  test('a record with no account: its logo, and that none was recorded; no account, whichever is in use now', async () => {
     logins.onGitHosts.mockResolvedValue({ hosts: [{ host: 'github.com', projects: ['site'], provider: provider() }] })
-    const { container } = render(<GitHostOff home={home} />)
-    const item = (await screen.findByText('GitHub')).parentElement!
-    expect(container.querySelector('button')).toBeNull()
-    expect(item.textContent).toBe('GitHub. This project is on GitHub')
-    expect(container.textContent).not.toMatch(/@|octo/)
+    render(<GearMenu lines={<GitHostOff home={home} />} />)
+    const line = await setupLine('GitHub account')
+    expect(line.textContent).toBe('GitHub account: Not recorded. This project is on GitHub')
+    expect(line.textContent).not.toMatch(/@|octo/)
     // The host's own logo, from its package.
-    expect(item.querySelector<HTMLElement>('[aria-hidden]')!.style.maskImage).toContain(encodeURIComponent('<svg'))
+    expect(line.querySelector<HTMLElement>('[aria-hidden]')!.style.maskImage).toContain(encodeURIComponent('<svg'))
   })
 
-  test('nothing for a project with no page on a git host, and nothing until the logo is read, so it lands whole', async () => {
+  test('no line for a project with no page on a git host, and none until the logo is read, so it lands whole', async () => {
     let answer: (view: unknown) => void = () => {}
     logins.onGitHosts.mockImplementation(() => new Promise(resolve => { answer = resolve }))
-    const { container, rerender } = render(<GitHostOff home={home} />)
-    expect(container.textContent).toBe('')
-    answer({ hosts: [{ host: 'github.com', projects: [], provider: provider() }] })
-    await screen.findByText('GitHub')
-    rerender(<GitHostOff home={null} />)
-    expect(container.textContent).toBe('')
+    const { rerender } = render(<GearMenu lines={<GitHostOff home={home} />} />)
+    await noLine()
+    await act(async () => answer({ hosts: [{ host: 'github.com', projects: [], provider: provider() }] }))
+    await setupLine('GitHub account')
+    rerender(<GearMenu lines={<GitHostOff home={null} />} />)
+    await noLine()
   })
 })
 

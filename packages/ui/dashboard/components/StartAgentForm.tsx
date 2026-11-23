@@ -13,7 +13,7 @@ import { useLoaded } from '../lib/use-async.js'
 
 import { promptWithContext } from '../lib/use-context-set.js'
 import { keepDraft, keepDraftImages, stashPendingDraft } from '../lib/draft-handoff.js'
-import { AutoMenu } from './AutoMenu.js'
+import { AutoMenu, autoSaid } from './AutoMenu.js'
 import { ProjectContextMenu } from './ContextMenu.js'
 import { Composer, type ComposerHandle } from './Composer.js'
 import { StartFromMenu, prTargetBranch, startFromBase } from './StartFromMenu.js'
@@ -21,8 +21,8 @@ import { ProjectPicker } from './ProjectPicker.js'
 import { SessionRepoPicks, type PickedRepo } from './SessionRepos.js'
 import { Dots } from './ToolCalls.js'
 import { AgentFix, agentWords, useAgentState } from './Logins.js'
-import { profilePicks, SkillsMenu, type SkillPicks } from './SkillsMenu.js'
-import { GitAccountMenu, useSessionAccount } from './GitHosts.js'
+import { profilePicks, SkillsMenu, useSkillCount, type SkillPicks } from './SkillsMenu.js'
+import { useGitAccountSetup, useSessionAccount } from './GitHosts.js'
 import { ProfileMenu } from './ProfileMenu.js'
 import { useProfilesList } from './ProfilesPage.js'
 import { SESSIONS_ID } from '../../src/project-address.js'
@@ -54,19 +54,20 @@ const STARTING_SAID_AFTER_MS = 300
 // branch its checkout is made from: the local branch's name, or origin's copy of the branch by its
 // full name; the main branch names none. The pick is drawn only where it is obeyed: the daemon
 // offers it only for a project with a remote whose folder is on a branch.
-// The "Auto" menu, under the box at the left (the model menu is at the right): what the agent
-// does by itself when it finishes. Its button reads the picks, so nothing is hidden.
+// Under the box, first, the gear: the session's setup in one menu (SessionSetup.tsx), then the
+// Context picker; the model menu is at the right. The gear's hover says its picks, so nothing is hidden.
+// Its last line, set apart, "When it finishes": what the agent does by itself then (the Auto level).
 // In it, how far the run takes its work: Off, Commit, Publish branch, Open PR, Merge on green.
 // The level goes with the Start; Off sends none. Until the person
 // picks, the button shows the pick the daemon will start the run at: Commit, which pushes
 // nothing. Saved, so the pick holds for every next run. A project with no git host package
 // is offered Off, Commit and Publish branch only, and one with no remote Off and Commit.
-// At the right of that row, before the model: the git host account this session pushes as. A pick
-// there is for this session alone: it goes with the Start, and the computer's own pick, the
-// Permissions page's, stays. Not saved: the next session starts on the computer's again.
-// First under the box, the "Profile" menu: which profile the session is on, its accounts and the
+// Above it, the git host account this session pushes as. A pick there is for this session alone:
+// it goes with the Start, and the computer's own pick, the Permissions page's, stays. Not saved:
+// the next session starts on the computer's again.
+// The gear's first line, "Profile": which profile the session is on, its accounts and the
 // project skills it gets (ProfileMenu.tsx); saved, like the model. Its GitHub account is what the
-// account control shows until the person picks another for the session.
+// account line shows until the person picks another for the session.
 // With no project (`SESSIONS_ID`), the run starts in a folder of its own on this computer: the row
 // says "No project", and nothing about a repository is offered, no branch, no account, no Auto
 // level, no project Context or skills. Beside "No project", the repos the session has as context
@@ -205,6 +206,18 @@ export function StartAgentForm({
     ...(noProject ? {} : skillPicks.project !== undefined ? { projectSkills: skillPicks.project } : profileProject !== undefined && profileProject !== 'all' ? { projectSkills: 'all' as const } : {}),
   }
   const account = useSessionAccount(address, pickedAccount ?? onProfile?.options.github?.account)
+  // The gear's lines, and what its hover says of them with the menu shut. A session with no project
+  // has nothing of a repository: no account, no Auto level.
+  const gitAccount = useGitAccountSetup(remote ? address : undefined, pickedAccount ?? onProfile?.options.github?.account, setPickedAccount)
+  const skillCount = useSkillCount(noProject ? undefined : projectId, skillPicks)
+  const setupSaid = [
+    onProfile && `Profile ${onProfile.name}`,
+    skillCount !== undefined && `${skillCount} skill${skillCount === 1 ? '' : 's'}`,
+    !noProject && gitAccount.said,
+    !noProject && autoSaid(publishPick, prTarget),
+  ]
+    .filter(Boolean)
+    .join(' · ')
 
   const submit = async (text: string, { images }: { images: string[] }) => {
     setNote(STARTING)
@@ -260,6 +273,7 @@ export function StartAgentForm({
     // The width and the padding of an agent's message box (`AgentComposer.tsx`): the box is in the
     // same place on both pages.
     <form onSubmit={e => e.preventDefault()} className="@container mx-auto w-full max-w-3xl px-4 pt-2 pb-4">
+      {gitAccount.dialog}
       <Composer
         // A box of its own per project, so the prompt carried over from the picker lands in it (below).
         key={projectId}
@@ -284,27 +298,23 @@ export function StartAgentForm({
             {!noProject && projectName && startFrom && preferencesLoaded && <StartFromMenu projectId={projectId} main={startFrom.main} local={startFrom.local} pick={startFromPick} onPick={pickStartFrom} busy={busy} />}
           </>
         }
-        // Who runs, under the box at the left (his order): the profile, the skills this session gets, then the Context picker.
-        // All three land together once the profiles are read, so the profile's and the skills' landing moves no Context.
-        controls={
-          profilesView !== undefined && (
-          <>
-            <ProfileMenu profiles={profilesView.profiles} picked={onProfile?.id} busy={busy} onPick={id => updatePreferences({ profile: id === DEFAULT_PROFILE ? '' : id })} />
-            <SkillsMenu projectId={noProject ? undefined : projectId} picks={skillPicks} onChange={setSkillPicks} busy={busy} />
-            {!noProject && <ProjectContextMenu projectId={projectId} context={context} busy={busy} onToggle={toggleContext} />}
-          </>
-          )
-        }
-        // What becomes of the work, at that row's right, before the model: who it pushes as (the
-        // project's git host account, picked for this session), then the "Auto" menu.
-        controlsEnd={
-          !noProject && (
+        // The gear's lines (his order): who runs, the profile and the skills this session gets; who it
+        // pushes as, the project's git host account, picked for this session; and, set apart, what
+        // becomes of the work. The gear is in the warning's colour while the host has no account.
+        setup={{
+          said: setupSaid,
+          warn: !noProject && gitAccount.missing,
+          lines: (
             <>
-              {remote && <GitAccountMenu address={address} busy={busy} picked={pickedAccount} onPick={setPickedAccount} />}
-              <AutoMenu publish={publishPick} picks={offeredPublishPicks(gitHost, remote)} onPublish={pick => updatePreferences({ publish: pick })} target={prTarget} busy={busy} />
+              <ProfileMenu profiles={profilesView?.profiles} picked={onProfile?.id} onPick={id => updatePreferences({ profile: id === DEFAULT_PROFILE ? '' : id })} />
+              <SkillsMenu projectId={noProject ? undefined : projectId} picks={skillPicks} onChange={setSkillPicks} />
+              {!noProject && gitAccount.line}
+              {!noProject && <AutoMenu publish={publishPick} picks={offeredPublishPicks(gitHost, remote)} onPublish={pick => updatePreferences({ publish: pick })} target={prTarget} />}
             </>
-          )
-        }
+          ),
+        }}
+        // After the gear, the Context picker.
+        controls={!noProject && <ProjectContextMenu projectId={projectId} context={context} busy={busy} onToggle={toggleContext} />}
         onSubmit={submit}
         onPromptChange={value => {
           typed.current = value
