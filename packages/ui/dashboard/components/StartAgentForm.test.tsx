@@ -264,6 +264,15 @@ describe('StartAgentForm (#1774)', () => {
     await waitFor(() => expect(screen.queryByRole('status')).toBeNull())
   })
 
+  test('on the Overview the notes hang under the box\'s row: the page\'s own line is right above the box, and a note there would be drawn across it', async () => {
+    onCommands.mockResolvedValue({ commands: [], gitHost: true })
+    const { unmount } = render(<StartAgentForm {...props} onOverview />)
+    await waitFor(() => expect(composerProps.current.notesUnder).toBe(true))
+    unmount()
+    render(<StartAgentForm {...props} />)
+    await waitFor(() => expect(composerProps.current.notesUnder).toBe(false))
+  })
+
   test('a loaded prompt is said above the box, over the page, so the box does not move', async () => {
     onCommands.mockResolvedValue({ commands: [], gitHost: true })
     render(<StartAgentForm {...props} />)

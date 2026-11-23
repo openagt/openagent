@@ -331,6 +331,8 @@ export function StartAgentForm({
         submitLabel="Start agent"
         submitBusyLabel="Starting…"
         // Feedback right where the action is (#948): above the box, over the page, so the box never moves.
+        // On the Overview under the box's row: the page's own line is right above the box.
+        notesUnder={onOverview}
         notes={
           <>
             {/* A start that hit what the check says says nothing the boxes below do not. */}
