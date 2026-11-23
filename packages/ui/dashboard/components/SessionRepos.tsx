@@ -5,10 +5,10 @@ import type { ProjectSummary } from '../../src/index.js'
 import { onRepos, type ReposRead } from '../rpc/projects.js'
 import { useLoaded } from '../lib/use-async.js'
 import { cn } from '../lib/utils.js'
-import { BoxOfRow, rowButtonClass, RowSaid } from './ui/row-item.js'
+import { BoxOfRow, rowButtonClass } from './ui/row-item.js'
 import { ScrollArea } from './ui/scroll-area.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
-import { MENU_BODY_CLASS, MENU_ITEM_CLASS, MENU_POPUP_CLASS, MENU_TRIGGER_OPEN_CLASS, MenuMark } from './ui/dropdown-menu.js'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger, MENU_BODY_CLASS, MENU_ITEM_CLASS, MENU_POPUP_CLASS, MENU_TRIGGER_OPEN_CLASS, MenuMark } from './ui/dropdown-menu.js'
 import { usePopupPosition } from './ui/popup-placement.js'
 import { usePickerSearch } from './ui/picker-search.js'
 import { ASK_AGAIN_MS, REPOS_SHOWN, repoDetail } from './ProjectPicker.js'
@@ -205,17 +205,50 @@ export function SessionReposMenu({
 }
 
 /**
- * The Context of a session with no project on its own page, where the launcher has the menu, said
- * and not offered: a session keeps the repos it started with. How many, and in its hover their names.
+ * The Context of a session with no project on its own page: the launcher's button in the launcher's
+ * place, and a menu above the box as the launcher's is (his pick, over words with a hover: the
+ * same control on both pages). It lists the repos the session started with, each ticked, with
+ * where it was copied from. A session keeps them, so the rows are said, not offered, and the
+ * menu's heading says so.
  */
 export function SessionReposSaid({ repos }: { repos: readonly { name: string; from: string }[] }) {
-  const tip = repos.length === 0 ? 'This session started with no repo' : `Copies in this session's folder: ${repos.map(repo => `${repo.name} (of ${repo.from})`).join(', ')}`
+  const box = useContext(BoxOfRow)
   return (
-    <RowSaid tip={tip}>
-      <Layers className="size-4 shrink-0" aria-hidden />
-      <span className="truncate">
-        Context{repos.length > 0 && ` · ${counted(repos.length)}`}
-      </span>
-    </RowSaid>
+    <DropdownMenu>
+      <Tooltip>
+        <TooltipTrigger render={<DropdownMenuTrigger type="button" aria-label={repos.length > 0 ? `Context: ${counted(repos.length)}` : 'Context'} className={rowButtonClass} />}>
+          <Layers className="size-4 shrink-0" aria-hidden />
+          <span className="truncate">
+            Context{repos.length > 0 && <span className="text-primary"> · {counted(repos.length)}</span>}
+          </span>
+        </TooltipTrigger>
+        <TooltipContent>{repos.length === 0 ? 'This session started with no repo' : `Copies in this session's folder: ${repos.map(repo => repo.name).join(', ')}`}</TooltipContent>
+      </Tooltip>
+      <DropdownMenuContent align="start" {...(box ? { anchor: box, side: 'top' as const } : {})} className="w-[24rem] max-w-[var(--available-width)]">
+        <DropdownMenuGroup>
+          <DropdownMenuLabel className="font-normal">Repos copied into this session's folder when it started</DropdownMenuLabel>
+          {repos.length === 0 ? (
+            <p className="px-2 py-1 text-xs text-muted-foreground">None: this session started with no repo.</p>
+          ) : (
+            repos.map(repo => (
+              <DropdownMenuItem key={repo.name} closeOnClick={false} aria-disabled className="cursor-default">
+                <MenuMark>
+                  <FolderGit2 className="size-3.5" aria-hidden />
+                </MenuMark>
+                <span className="min-w-0 flex-1 leading-5">
+                  <span className="block truncate">{repo.name}</span>
+                  <span data-line2 title={repo.from} className="flex min-w-0 text-xs leading-4 text-muted-foreground">
+                    <MiddleCut text={repo.from} />
+                  </span>
+                </span>
+                <MenuMark className="w-4 justify-center">
+                  <Check className="size-4" aria-hidden />
+                </MenuMark>
+              </DropdownMenuItem>
+            ))
+          )}
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }

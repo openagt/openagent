@@ -108,11 +108,26 @@ describe("Context with no project: the session's repos", () => {
     expect(screen.queryByText('Looking for repos on this computer…')).toBeNull()
   })
 
-  test("on a session's own page the repos are said, not offered: how many, and in the hover each with where it was copied from", async () => {
+  test("on a session's own page Context is the launcher's button, and its menu lists the repos it started with, each ticked with where it was copied from; a press on one changes nothing and closes nothing", async () => {
     render(<SessionReposSaid repos={[{ name: 'vike', from: '/home/me/oss/vike' }, { name: 'notes', from: '/home/me/notes' }]} />)
-    expect(screen.queryByRole('combobox')).toBeNull()
-    expect(screen.queryByRole('button')).toBeNull()
-    const said = screen.getByText(/Context · 2 repos/)
-    expect((await hoverTooltip(said.closest('[tabindex]')!)).textContent).toBe("Copies in this session's folder: vike (of /home/me/oss/vike), notes (of /home/me/notes)")
+    const button = screen.getByRole('button', { name: 'Context: 2 repos' })
+    expect(button.textContent).toBe('Context · 2 repos')
+    expect((await hoverTooltip(button)).textContent).toBe("Copies in this session's folder: vike, notes")
+    await openMenu(button)
+    expect(screen.getByText("Repos copied into this session's folder when it started")).toBeTruthy()
+    const rows = screen.getAllByRole('menuitem')
+    expect(rows.map(row => row.textContent?.startsWith('vike') || row.textContent?.startsWith('notes'))).toEqual([true, true])
+    expect(rows.map(row => row.querySelector('[data-line2]')!.getAttribute('title'))).toEqual(['/home/me/oss/vike', '/home/me/notes'])
+    expect(rows.every(row => row.getAttribute('aria-disabled') === 'true' && row.querySelector('.lucide-check'))).toBe(true)
+    fireEvent.click(rows[0]!)
+    expect(button.getAttribute('aria-expanded')).toBe('true')
+  })
+
+  test('a session that started with no repo says so in the same menu', async () => {
+    render(<SessionReposSaid repos={[]} />)
+    const button = screen.getByRole('button', { name: 'Context' })
+    expect(button.textContent).toBe('Context')
+    await openMenu(button)
+    expect(screen.getByText('None: this session started with no repo.')).toBeTruthy()
   })
 })
