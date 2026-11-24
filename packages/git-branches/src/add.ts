@@ -1,3 +1,4 @@
+import { realpath } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { GitRunner } from '@openagt/hooks'
 import { checkoutRoot, nodeGitRunner } from './git.js'
@@ -51,8 +52,10 @@ export async function addProject(home: string, id: string | undefined, projects:
   if (!project) return { ok: false, reason: 'unknown-project', project: name, projects: projects.map(one => one.name) }
   const branch = agentBranchName(id)
   const have = await foundCopies(home, id, [], git)
-  const root = await checkoutRoot(project.dir, git)
-  const there = have.find(repo => repo.from === root)
+  // The project's folder, however a copy of it spelt it: the copy it has already is answered.
+  const real = (path: string): Promise<string> => realpath(path).catch(() => path)
+  const root = await real(await checkoutRoot(project.dir, git))
+  const there = (await Promise.all(have.map(async repo => ((await real(repo.from)) === root ? repo : undefined)))).find(repo => repo !== undefined)
   if (there) return { ok: true, project: project.name, copy: join(sessionFolder(home, id), there.name), branch, existing: true }
   const { repos } = await addSessionRepos(home, id, have, [project.dir], git)
   return { ok: true, project: project.name, copy: join(sessionFolder(home, id), repos[repos.length - 1]!.name), branch, existing: false }

@@ -1,5 +1,5 @@
 import { mkdir, readdir, realpath, rm, rmdir, stat } from 'node:fs/promises'
-import { isAbsolute, join } from 'node:path'
+import { isAbsolute, join, resolve } from 'node:path'
 import { checkoutRoot, nodeGitRunner, originDefaultBranch } from './git.js'
 import { type GitRunner, originUrl } from '@openagt/hooks'
 import { sessionFolder } from './sessions.js'
@@ -12,15 +12,25 @@ export type { SessionRepo } from './repo-names.js'
  * The repos given to a session, each by a folder in it: the repo's own top folder, named as
  * {@link nameRepos} names them, beside the repos the session has (`have`) and the other names its
  * folder holds (`taken`). Rejects a folder that is no git repository, saying which.
+ *
+ * A repo is named by its top folder as it was given, when the folder given is that top: on a disk
+ * that ignores case, a project added as ~/projects/shop is ~/Projects/shop to git, and the dashboard,
+ * which lists the project as it was added, tells the copy its own only by the same words. The same
+ * repo, however its folder was spelt, counts once.
  */
 export async function sessionRepos(folders: readonly string[], git: GitRunner = nodeGitRunner(), have: readonly SessionRepo[] = [], taken: readonly string[] = []): Promise<SessionRepo[]> {
+  const real = (path: string): Promise<string> => realpath(path).catch(() => path)
+  const seen = new Set(await Promise.all(have.map(repo => real(repo.from))))
   const tops: string[] = []
   for (const folder of folders) {
-    tops.push(
-      await checkoutRoot(folder, git).catch(() => {
-        throw new Error(`${folder} is not a git repository`)
-      }),
-    )
+    const root = await checkoutRoot(folder, git).catch(() => {
+      throw new Error(`${folder} is not a git repository`)
+    })
+    const given = resolve(folder)
+    const top = await real(root)
+    if (seen.has(top)) continue
+    seen.add(top)
+    tops.push((await real(given)) === top ? given : root)
   }
   return nameRepos(tops, have, taken)
 }

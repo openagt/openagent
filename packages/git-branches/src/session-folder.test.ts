@@ -1,10 +1,10 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { mkdtemp, realpath, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdtemp, realpath, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { nodeGitRunner } from './git.js'
-import { addSessionRepos, copiedFrom, dropUntouchedCopies, foundCopies, openSessionFolder } from './session-folder.js'
+import { addSessionRepos, copiedFrom, dropUntouchedCopies, foundCopies, openSessionFolder, sessionRepos } from './session-folder.js'
 import { readBranchStates } from './branch-state.js'
 
 // Where a session's copy of a repo starts, with real git: origin's default branch as origin has
@@ -138,6 +138,24 @@ test("the copies made while a run went on are found by the folder they name; one
     // Its end drops every untouched copy its folder holds, the one added on the way too; a clone that names no start stays.
     assert.deepEqual(await dropUntouchedCopies(home, 'run6', git), ['app'])
     assert.equal(await exists(join(home, 'run6', 'cloned')), true)
+  } finally {
+    await rm(at.dir, { recursive: true, force: true })
+  }
+})
+
+test("a repo is named by its top folder as it was given, the way the dashboard lists it; given by two ways to it, it counts once", async () => {
+  const at = await repoAhead()
+  try {
+    // Another way to the same folder, as ~/projects is to ~/Projects on a disk that ignores case.
+    const other = join(at.dir, 'other-way')
+    await symlink(at.dir, other)
+    const given = join(other, 'app')
+    assert.deepEqual(await sessionRepos([given, at.repo], git), [{ name: 'app', from: given }])
+    // A folder inside the repo is named by the repo's top, as git says it.
+    await git(['checkout', '-q', 'main'], at.repo)
+    const inside = join(at.repo, 'docs')
+    await import('node:fs/promises').then(fs => fs.mkdir(inside))
+    assert.deepEqual(await sessionRepos([inside], git), [{ name: 'app', from: at.repo }])
   } finally {
     await rm(at.dir, { recursive: true, force: true })
   }
