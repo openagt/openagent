@@ -14,7 +14,7 @@ import { Button } from './ui/button.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { SessionContextMenu } from './ContextMenu.js'
 import { SessionReposSaid } from './SessionRepos.js'
-import { AutoMenu, autoSaid } from './AutoMenu.js'
+import { AutoMenu, autoCovers, autoSaid } from './AutoMenu.js'
 import { ProfileOff } from './ProfileMenu.js'
 import { useProfileName } from './ProfilesPage.js'
 import { GitHostOff } from './GitHosts.js'
@@ -295,6 +295,8 @@ export function AgentComposer({
 
   // What the gear's hover says of the session's setup with its menu shut.
   const noProject = projectId === SESSIONS_ID
+  // What a level acts on: the project, or with none the session's copies of repos.
+  const publishes = !noProject || (repos?.length ?? 0) > 0
   const profileName = useProfileName(profile ?? DEFAULT_PROFILE)
   const skillCount = useRecordedSkillCount(noProject ? undefined : projectId, profile, pluginsWithout, projectSkills)
   const autoTarget = prBase !== undefined ? { into: prBase } : undefined
@@ -302,7 +304,7 @@ export function AgentComposer({
     profileName !== undefined && `Profile ${profileName}`,
     skillCount !== undefined && `${skillCount} skill${skillCount === 1 ? '' : 's'}`,
     gitAccount !== undefined && `@${gitAccount}`,
-    !noProject && autoSaid(picked ?? recorded, autoTarget),
+    publishes && autoSaid(picked ?? recorded, autoTarget),
   ]
     .filter(Boolean)
     .join(' · ')
@@ -340,7 +342,7 @@ export function AgentComposer({
               <ProfileOff profile={profile} />
               <SkillsOff projectId={noProject ? undefined : projectId} profile={profile} pluginsWithout={pluginsWithout} projectSkills={projectSkills} />
               <GitHostOff home={gitHost ?? null} account={gitAccount} />
-              {!noProject && <AutoMenu publish={picked ?? recorded} picks={offeredPublishPicks(launcher?.gitHost ?? true, launcher?.remote ?? true)} onPublish={pick => setPicked(pick === recorded ? null : pick)} target={autoTarget} />}
+              {publishes && <AutoMenu publish={picked ?? recorded} picks={noProject ? offeredPublishPicks(true, true) : offeredPublishPicks(launcher?.gitHost ?? true, launcher?.remote ?? true)} onPublish={pick => setPicked(pick === recorded ? null : pick)} covers={autoCovers(noProject ? null : 'the project', repos?.length ?? 0)} target={autoTarget} />}
             </>
           ),
         }}

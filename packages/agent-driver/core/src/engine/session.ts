@@ -51,14 +51,32 @@ export const PUBLISH_LINES: Readonly<Record<Publish, string>> = {
 const OPENS_REQUEST = 'open its pull request'
 
 /**
+ * The copies of the repos a run has as context: their folders, and whether they are all the run
+ * has to publish, as in a session with no project, or stand beside its checkout of a project.
+ */
+export interface Copies {
+  folders: readonly string[]
+  alone: boolean
+}
+
+/**
  * The sentence a run adds after every prompt of its agent, the first and each message after it:
  * that of its publish level, none for a run with none, naming the branch its pull request goes
  * into at a level that opens one. The session sends it after the prompt and writes it down apart
  * from it, so a reader shows the person's words as the person wrote them.
+ *
+ * One level holds for all the run works in (his pick, over a level per repo): a run with copies
+ * of repos is told to take each one it changed as far, on the copy's own branch. A session with
+ * no project and no copy has nothing to publish, and gets no sentence.
  */
-export function addedLine(publish: Publish | undefined, prBase?: string): string | undefined {
+export function addedLine(publish: Publish | undefined, prBase?: string, copies?: Copies): string | undefined {
   if (publish === undefined) return undefined
-  return prBase !== undefined ? PUBLISH_LINES[publish].replace(OPENS_REQUEST, `${OPENS_REQUEST} into the branch ${prBase}`) : PUBLISH_LINES[publish]
+  const folders = copies?.folders ?? []
+  if (copies?.alone === true && folders.length === 0) return undefined
+  const line = prBase !== undefined ? PUBLISH_LINES[publish].replace(OPENS_REQUEST, `${OPENS_REQUEST} into the branch ${prBase}`) : PUBLISH_LINES[publish]
+  if (folders.length === 0) return line
+  const each = `each copied repo you changed, on its own branch there: ${folders.join(', ')}.`
+  return copies?.alone === true ? `${line} That is for ${each}` : `${line} Do the same in ${each}`
 }
 
 /** The model as a card or a session takes it: named, or left out so the tool starts on its own default. */
@@ -90,9 +108,10 @@ function queued(line: PromptLine): Queued {
  * turn where it is; `leg.killed` ends its process tree at once. `asking` is how the run asks the
  * person, when it does. `context` is what the steps before had to tell the agent
  * (`RunContext.context`): handed over with the first prompt this process sends, after the text
- * the run was given to attach.
+ * the run was given to attach. `copies` is the copies of repos the run has, which its publish
+ * sentence names.
  */
-export async function sessionTurns(leg: Leg, workspace: string, dir: string, stopped: AbortSignal, env: Readonly<Record<string, string>>, asking?: RunAsking, context: readonly string[] = []): Promise<RunOutcome> {
+export async function sessionTurns(leg: Leg, workspace: string, dir: string, stopped: AbortSignal, env: Readonly<Record<string, string>>, asking?: RunAsking, context: readonly string[] = [], copies?: Copies): Promise<RunOutcome> {
   const { id: _id, status: _status, endedAt: _endedAt, ...startCard } = leg.card
   const continued = leg.earlier !== undefined
   const resumeSessionId = leg.earlier?.sessionId
@@ -115,7 +134,7 @@ export async function sessionTurns(leg: Leg, workspace: string, dir: string, sto
   }
   if (driverSession?.log) leg.live = driverSession.log
   const naming = nameSession(leg, driverSession, stopped)
-  const level = publishLevel(leg, driverSession)
+  const level = publishLevel(leg, driverSession, copies)
   try {
     // The prompts this process owes the agent: the run's own, then the lines that reached the
     // inbox after the last turn took it but while the card still said running. Whoever wrote
@@ -241,14 +260,14 @@ function nameSession(leg: Leg, session: DriverSession | undefined, stopped: Abor
  * the level from there on (`publish` on its inbox line, or on a line queued after the run's last
  * turn), and the record says so then.
  */
-function publishLevel(leg: Leg, session: DriverSession | undefined): { added(): { added?: string }; take(word: string | undefined): Promise<void>; onInboxLine(line: PromptLine, sent: DriverPromptOptions): Promise<DriverPromptOptions> } {
-  let added = addedLine(leg.mark.publish, leg.mark.prBase)
+function publishLevel(leg: Leg, session: DriverSession | undefined, copies: Copies | undefined): { added(): { added?: string }; take(word: string | undefined): Promise<void>; onInboxLine(line: PromptLine, sent: DriverPromptOptions): Promise<DriverPromptOptions> } {
+  let added = addedLine(leg.mark.publish, leg.mark.prBase, copies)
   const take = async (word: string | undefined): Promise<void> => {
     const level = publishChange(word)
     if (level === undefined) return
     const { publish: _was, ...rest } = leg.mark
     leg.mark = { ...rest, ...(level !== null ? { publish: level } : {}) }
-    added = addedLine(leg.mark.publish, leg.mark.prBase)
+    added = addedLine(leg.mark.publish, leg.mark.prBase, copies)
     await session?.log?.patch({ caller: { runner: leg.mark, publish: leg.mark.publish } })
   }
   return {

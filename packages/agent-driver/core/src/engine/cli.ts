@@ -36,7 +36,7 @@ ${helpRows([
   ['--repos <folders>', `with --repos, each git repository among <folders>, one per line, is copied into the session's folder (below)`],
 ])}
 
-${helpText(`In the sessions home (~/.openagent-sessions, or $XDG_CONFIG_HOME/openagent-sessions) a run has no project: it works in a folder of its own there, <home>/<id>, with no git, kept when it ends; its record is kept with the other sessions' in the personal folder, and --publish, --base, --pr-base and --branch are refused. Each repo given with --repos is a clone in it, <home>/<id>/<repo's folder name>, on a new branch agent-<id>, its origin the repo's own (none when the repo has none); the run's record names them, and a resumed run goes on with the same ones. A run in a project given --repos has the same folder for the copies alone, its own work being in its checkout of the project, and its prompt is followed by where the copies are.`)}
+${helpText(`In the sessions home (~/.openagent-sessions, or $XDG_CONFIG_HOME/openagent-sessions) a run has no project: it works in a folder of its own there, <home>/<id>, with no git, kept when it ends; its record is kept with the other sessions' in the personal folder, and --base, --pr-base and --branch are refused, as is --publish with no --repos. Each repo given with --repos is a clone in it, <home>/<id>/<repo's folder name>, on a new branch agent-<id>, its origin the repo's own (none when the repo has none); the run's record names them, and a resumed run goes on with the same ones. A run in a project given --repos has the same folder for the copies alone, its own work being in its checkout of the project, and its prompt is followed by where the copies are. The --publish sentence names the copies too: one level holds for the project and for each copy the agent changed.`)}
 
 ${helpText(`A run is on a profile (a name and a saved set of run options, kept with the person in their folder), the one OPENAGENT_PROFILE names, else Default; its options are the run's where the session picked none: at the git host its login, unless OPENAGENT_GIT_ACCOUNT names the pick for that session, on Claude and Codex the accounts it names that this computer has, the plugins it goes without and the project's own skills it names. The record keeps the profile and the login, and a resumed run goes on with them, on the profile as it stands then. An account this computer cannot use at the git host stops the run before it starts, naming it.`)}
 
@@ -126,11 +126,13 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
     const missing = (await Promise.all(images.map(async name => ((await hasImage(name)) ? undefined : name)))).find(name => name !== undefined)
     if (missing !== undefined) throw new UsageError(`the image ${missing} is not kept on this computer`)
     if (values.attach !== undefined && !values.attach.trim()) throw new UsageError('--attach needs a text')
-    // A session with no project works in a folder with no git: no branch to start from or work on, nothing to commit or publish.
+    // A session with no project works in a folder with no git: no branch to start from or work on. What it publishes is its
+    // copies of repos: a level goes with them, and with a resume, whose record names them.
     const noProject = (await sessionsHomeOf(repo)) !== undefined
     if (noProject) {
-      const gitFlag = (['publish', 'base', 'pr-base', 'branch'] as const).find(flag => values[flag] !== undefined && !(flag === 'publish' && noLevel))
+      const gitFlag = (['base', 'pr-base', 'branch'] as const).find(flag => values[flag] !== undefined)
       if (gitFlag !== undefined) throw new UsageError(`--${gitFlag} is for a run in a project: a session with no project has no git`)
+      if (publish !== undefined && values.repos === undefined && values.resume === undefined) throw new UsageError('--publish needs --repos in a session with no project: its copies of repos are what it publishes')
     }
     // The repos a session has as context, in a project or with none, one folder per line, each copied into the session's folder.
     const folders = (values.repos ?? '').split('\n').map(line => line.trim()).filter(Boolean)

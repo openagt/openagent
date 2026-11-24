@@ -8,6 +8,7 @@ import type { Driver } from '@openagt/hooks'
 import { personalFolder, sessionFolder, sessionsHome, SESSIONS_DIR } from '@openagt/agent-data'
 import { readLiveCard } from './live-card.js'
 import { resumeRun, runCommand } from './run.js'
+import { addedLine, PUBLISH_LINES } from './session.js'
 import { markerCard, writeMarker } from './records.js'
 import { sweep } from './sweep.js'
 import { runCli } from './cli.js'
@@ -92,12 +93,33 @@ test('the sweep closes a session whose process died, and leaves its folder', asy
   assert.deepEqual(await sweep(home, { host: 'this-box', isAlive: () => false, now: () => NOW }), { recorded: [], reclaimed: [], kept: [] })
 })
 
-test('a run in the sessions home takes no flag about git', async () => {
+test('a run in the sessions home takes no flag about a branch, and a level only with repos to publish', async () => {
   const home = await freshHome()
   const err: string[] = []
-  const code = await runCli(['run', '--publish', 'pr', 'Read the news'], { cwd: home, stdout: () => {}, stderr: line => err.push(line) })
-  assert.equal(code, 2)
-  assert.match(err[0] ?? '', /--publish is for a run in a project: a session with no project has no git/)
+  assert.equal(await runCli(['run', '--base', 'main', 'Read the news'], { cwd: home, stdout: () => {}, stderr: line => err.push(line) }), 2)
+  assert.match(err[0] ?? '', /--base is for a run in a project: a session with no project has no git/)
+  err.length = 0
+  assert.equal(await runCli(['run', '--publish', 'pr', 'Read the news'], { cwd: home, stdout: () => {}, stderr: line => err.push(line) }), 2)
+  assert.match(err[0] ?? '', /--publish needs --repos in a session with no project/)
+})
+
+test('a session with repos and a level: its agent is told to take each copy it changed that far; one with no repo is told nothing', async () => {
+  const home = await freshHome()
+  const repo = await repoWithoutOrigin()
+  try {
+    const repos = await sessionRepos([repo])
+    const outcome = await runCommand(home, { prompt: 'Fix it', publish: 'pr', driver: writingDriver(), host: 'this-box', pid: 4242, now: () => NOW, modules: testModules(), repos })
+    assert.equal(outcome.status, 'done')
+    const copy = join(sessionFolder(home, ID), 'repo')
+    const line = `${PUBLISH_LINES.pr} That is for each copied repo you changed, on its own branch there: ${copy}.`
+    assert.equal(addedLine('pr', undefined, { folders: [copy], alone: true }), line)
+    assert.equal((await readDiary(home, ID))?.find(entry => entry.kind === 'start')?.['added'], line)
+    assert.equal(addedLine('pr', undefined, { folders: [], alone: true }), undefined, 'no project and no repo: nothing to publish')
+    assert.equal(addedLine('commit', undefined, { folders: ['/s/api', '/s/site'], alone: false }), `${PUBLISH_LINES.commit} Do the same in each copied repo you changed, on its own branch there: /s/api, /s/site.`, "in a project: the project's sentence, then the copies")
+    assert.equal(addedLine('commit', undefined, { folders: [], alone: false }), PUBLISH_LINES.commit, 'a project with no copy: as before')
+  } finally {
+    await removeRepo(repo)
+  }
 })
 
 /** A repo with no remote: one commit on `main`. */

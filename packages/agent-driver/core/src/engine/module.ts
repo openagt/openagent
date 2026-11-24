@@ -4,7 +4,7 @@ import { findRun } from '../record-store.js'
 import { logDiaryFile } from '../session-log.js'
 import { takeInbox } from '../inbox.js'
 import { type AnyDiaryLine, type RunCard } from '../record.js'
-import { errorMessage } from '@openagt/agent-data'
+import { errorMessage, sessionFolder, sessionsHome } from '@openagt/agent-data'
 import { defineModule, RunOrder, type RunContext, type RunOutcome } from '@openagt/hooks'
 import { localHost } from './host.js'
 import { legOf, type EarlierLeg, type Leg } from './leg.js'
@@ -98,7 +98,10 @@ async function runAgent(ctx: RunContext): Promise<void> {
   }
   // A checkout with an untracked directory in it is a dirty tree, which the branches rule never reclaims.
   await hideLiveDir(workspace).catch(() => {})
-  ctx.outcome = await sessionTurns(leg, workspace, dir, ctx.signal, ctx.env, ctx.asking, ctx.context)
+  // The copies of the run's repos, in its session folder: all it has to publish with no project, beside its checkout in one.
+  const session = sessionFolder(sessionsHome(), ctx.id)
+  const copies = { folders: (ctx.options['git-branches']?.repos ?? []).map(repo => join(session, repo.name)), alone: !ctx.project }
+  ctx.outcome = await sessionTurns(leg, workspace, dir, ctx.signal, ctx.env, ctx.asking, ctx.context, copies)
 }
 
 /**

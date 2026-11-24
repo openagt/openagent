@@ -804,8 +804,9 @@ describe('StartAgentForm (#1774)', () => {
     expect(startsAt()).toBe('No project')
 
     fireEvent.click(screen.getByText('submit-typed'))
-    await waitFor(() => expect(start).toHaveBeenCalledWith('session', 'do the thing', { repos: ['/home/me/oss/vike'] }))
-    await waitFor(() => expect(onAgentStarted).toHaveBeenCalledWith('do the thing', 'r1', undefined, { repos: [{ name: 'vike', from: '/home/me/oss/vike' }] }))
+    // The level in force goes with the repos it is for: Commit until the person picks.
+    await waitFor(() => expect(start).toHaveBeenCalledWith('session', 'do the thing', { repos: ['/home/me/oss/vike'], publish: 'commit' }))
+    await waitFor(() => expect(onAgentStarted).toHaveBeenCalledWith('do the thing', 'r1', undefined, { publish: 'commit', repos: [{ name: 'vike', from: '/home/me/oss/vike' }] }))
     // Started: the next session starts with none.
     await waitFor(() => expect(context().textContent).toBe('Context'))
   })

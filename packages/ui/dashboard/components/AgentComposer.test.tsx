@@ -8,9 +8,11 @@ vi.mock('../rpc/control.js', () => ({ sendMessage, sendStop }))
 // The "Auto" menu is tested on its own; here a stand-in says the pick it shows and offers a pick.
 vi.mock('./AutoMenu.js', () => ({
   autoSaid: (publish: string, target?: { into: string }) => `auto ${publish}${target ? ` → ${target.into}` : ''}`,
-  AutoMenu: ({ publish, onPublish }: { publish: string; onPublish: (pick: string) => void }) => (
+  autoCovers: (project: string | null, copies: number) => (copies === 0 ? undefined : project ? `for ${project} and copies` : 'for copies'),
+  AutoMenu: ({ publish, onPublish, covers }: { publish: string; onPublish: (pick: string) => void; covers?: string }) => (
     <span>
       Auto: {publish}
+      {covers !== undefined && ` (${covers})`}
       <button type="button" onClick={() => onPublish('pr')}>pick Open PR</button>
       <button type="button" onClick={() => onPublish('commit')}>pick Commit</button>
     </span>
@@ -118,9 +120,9 @@ describe('AgentComposer row under the box', () => {
     expect(screen.getByTestId('composer-controls').textContent).toBe('Context · api, src/app.ts')
   })
 
-  test("a session with no project: the profile and its skills in the gear, no Auto; after it Context is the launcher's button, saying how many repos it started with", () => {
+  test("a session with no project: the profile and its skills in the gear, and Auto for its copies of repos; after it Context is the launcher's button, saying how many repos it started with", () => {
     renderComposer({ projectId: 'session', repos: [{ name: 'vike', from: '/home/me/oss/vike' }, { name: 'notes', from: '/home/me/notes' }] })
-    expect(screen.getByTestId('composer-setup').textContent).toBe('Profile · defaultSkills · no project')
+    expect(screen.getByTestId('composer-setup').textContent).toBe('Profile · defaultSkills · no projectAuto: nothing (for copies)pick Open PRpick Commit')
     const controls = screen.getByTestId('composer-controls')
     expect(within(controls).getByRole('button', { name: 'Context: 2 repos' }).textContent).toBe('Context · 2 repos')
     expect(within(controls).queryByRole('combobox')).toBeNull()
