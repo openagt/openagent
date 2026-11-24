@@ -105,8 +105,6 @@ function answerShell(modules: unknown[]): void {
   answers.set('onRecentAgents', () => [])
   answers.set('onAgents', () => [])
   answers.set('onOverview', () => ({ active: [] }))
-  answers.set('onProfilesList', () => ({ profiles: [], claude: [], codex: [], plugins: [] }))
-  answers.set('onSkillChoices', () => ({ core: [], plugins: [] }))
   answers.set('onAgentUpdates', () => [])
   // A project's Overview reads its files, for its box's `#`.
   answers.set('onProjectFiles', () => [])
@@ -327,11 +325,37 @@ describe('module pages in the shell (#1774)', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'No such page' })).toBeTruthy()
   })
 
+  test("the modules' pages stand in the rail by their order, the ones of the same order as the modules are loaded, and the dashboard's own Permissions after them", async () => {
+    answerShell([
+      { package: '@acme/agents', url: moduleModule('__orderedAgents', { place: 'app.page', id: 'agents', label: 'Agents', order: 90, View: () => null }), projects: [], computer: true },
+      { package: '@acme/logs', url: moduleModule('__orderedLogs', { place: 'app.page', id: 'logs', label: 'Logs', View: () => null }), projects: [PROJECT.id] },
+      { package: '@acme/queue', url: moduleModule('__orderedQueue', { place: 'app.page', id: 'queue', label: 'Queue', View: () => null }), projects: [PROJECT.id] },
+    ])
+    render(<App />)
+    const rail = await screen.findByRole('link', { name: 'Agents' }).then(link => link.closest('nav') ?? document.body)
+    const labels = () => within(rail as HTMLElement).getAllByRole('link').map(link => link.textContent)
+    await waitFor(() => expect(labels().filter(label => ['Logs', 'Queue', 'Agents', 'Permissions'].includes(label ?? ''))).toEqual(['Logs', 'Queue', 'Agents', 'Permissions']))
+  })
+
+  test("with a project picked, the rail lists the pages of its packages and of this computer's, and the computer's page opens in it", async () => {
+    answerShell([
+      { package: '@acme/agents', url: moduleModule('__scopedAgents', { place: 'app.page', id: 'agents', label: 'Agents', View: () => createElement('p', null, 'the agents page') }), projects: [], computer: true },
+      { package: '@acme/logs', url: moduleModule('__scopedLogs', { place: 'app.page', id: 'logs', label: 'Logs', View: () => null }), projects: [PROJECT.id] },
+      { package: '@acme/queue', url: moduleModule('__scopedQueue', { place: 'app.page', id: 'queue', label: 'Queue', View: () => null }), projects: ['elsewhere-1'] },
+    ])
+    window.history.replaceState(null, '', '/app/agents')
+    render(<App />)
+    expect(await screen.findByText('the agents page')).toBeTruthy()
+    const rail = (await screen.findByRole('link', { name: 'Agents' })).closest('nav') ?? document.body
+    await waitFor(() => expect(within(rail as HTMLElement).getAllByRole('link').map(link => link.textContent).filter(label => ['Logs', 'Queue', 'Agents'].includes(label ?? ''))).toEqual(['Agents', 'Logs']))
+    expect(window.location.pathname).toBe('/app/agents')
+  })
+
   test("on a phone the bar names the dashboard's own pages, as it names a module's", async () => {
     answerShell([{ package: '@acme/logs', url: moduleModule('__phoneLogs', { place: 'app.page', id: 'logs', label: 'Logs', View: () => null }), projects: [PROJECT.id] }])
     const wide = phoneScreen()
     try {
-      for (const [path, name] of [['/logs', 'Logs'], ['/profiles', 'Profiles'], ['/permissions', 'Permissions']]) {
+      for (const [path, name] of [['/logs', 'Logs'], ['/permissions', 'Permissions']]) {
         window.history.replaceState(null, '', path)
         render(<App />)
         // The name alone: the page's count stands beside it in the bar once the page has read it. Read in the wait: the first
@@ -468,10 +492,10 @@ describe('a first visit, the projects not read yet', () => {
     holdProjects()
     const wide = phoneScreen()
     try {
-      window.history.replaceState(null, '', '/profiles')
+      window.history.replaceState(null, '', '/permissions')
       render(<App />)
       // The bar holds the page's name alone.
-      expect(document.querySelector('[data-phone-bar]')!.textContent).toBe('Profiles')
+      expect(document.querySelector('[data-phone-bar]')!.textContent).toBe('Permissions')
     } finally {
       wide()
     }

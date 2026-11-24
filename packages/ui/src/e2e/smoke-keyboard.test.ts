@@ -48,7 +48,7 @@ test('Remove in "Remove project" keeps the keyboard while it waits and takes no 
 
 test("Save in the profile editor keeps the keyboard while it waits and takes no second press", needsChrome, async () => {
   await flow('waiting-save', async page => {
-    const save = hold(page, 'sendSaveProfile')
+    const save = hold(page, `${encodeURIComponent('@openagt/profiles')}/saveProfile`)
     await page.getByRole('link', { name: 'Profiles', exact: true }).click()
     await page.getByRole('button', { name: 'New profile' }).click()
     await page.getByRole('dialog').getByRole('textbox').first().fill('Reviewer')
@@ -85,8 +85,9 @@ test('Escape in a question over a working run closes the question and stops noth
     await page.getByRole('menuitem', { name: 'Create a repository on GitHub…' }).click()
     const question = page.getByRole('alertdialog', { name: 'Create a private repository on GitHub?' })
     await question.waitFor()
-    // The menu that opened it gone, as it is by the time a person has read the question.
-    await page.locator('[role="menu"]').waitFor({ state: 'detached' })
+    // The menu that opened it gone, as it is by the time a person has read the question. Found by its
+    // item: the session's gear menu stays mounted, shut, for what its lines say.
+    await page.locator('[role="menu"]', { hasText: 'Create a repository on GitHub' }).waitFor({ state: 'detached' })
     await page.keyboard.press('Escape')
     await question.waitFor({ state: 'detached' })
     await page.waitForTimeout(500)

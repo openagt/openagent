@@ -26,7 +26,7 @@ import { usePinnedPage } from './lib/use-pinned-page.js'
 import { NotFound } from './components/NotFound.js'
 import { ProjectRemovedReport } from './components/RemoveProjectDialog.js'
 import { ModulePageView, ModuleSlot } from './components/ModulePageView.js'
-import { useListedPages, useModules, ModulesContext, type ListedPage } from './lib/use-modules.js'
+import { pageIn, useListedPages, useModules, ModulesContext, type ListedPage } from './lib/use-modules.js'
 import type { UiIcon } from './module/index.js'
 import { HostServicesContext, useSteadyServices } from './lib/host-services.js'
 import { DAEMON_SERVICES } from './lib/daemon-services.js'
@@ -161,8 +161,8 @@ export function App() {
   const scopePending = scope === null && (route.scope !== undefined || pageSegment !== null) && !addressesRead
   const scopedProjects = useMemo(() => (scope ? projects.filter(p => p.id === scope) : projects), [projects, scope])
   // The modules' pages the dashboard has: every one, or with a project picked only the pages of the
-  // packages that project has. The sidebar lists these, and a URL names a page only among these.
-  const shownPages = useMemo(() => (scope ? modulePages.filter(page => page.projects.includes(scope)) : modulePages), [modulePages, scope])
+  // packages that project has and this computer's. The sidebar lists these, and a URL names a page only among these.
+  const shownPages = useMemo(() => (scope ? modulePages.filter(page => pageIn(page, scope)) : modulePages), [modulePages, scope])
   const modulePage = pageSegment ? shownPages.find(page => page.id === pageSegment) : undefined
   // The sidebar's rows of them, there from the first frame: the last load's until the modules are imported.
   const listedPages = useListedPages(modules)
@@ -191,7 +191,7 @@ export function App() {
       if (here.projectId !== next) return navigate(here.agentId === null ? { projectId: next, agentId: null, scope: next } : { projectId: null, agentId: null, scope: next })
     }
     const mounted = modulePages.find(page => page.id === here.page)
-    if (next !== null && mounted && !mounted.projects.includes(next)) return navigate({ projectId: null, agentId: null, scope: next })
+    if (next !== null && mounted && !pageIn(mounted, next)) return navigate({ projectId: null, agentId: null, scope: next })
     const { pagePath, ...page } = here
     navigate({ ...page, ...(next !== null ? { scope: next } : {}) }, { keepQuery: !pagePath?.length })
   }
@@ -433,7 +433,7 @@ export function App() {
   // they are known, so nothing moves; with the daemon not answering it draws the rest without them.
   const sidebarPages = useMemo(() => {
     const known = listedPages ?? (healthy ? null : [])
-    return known && (scope ? known.filter(page => page.projects.includes(scope)) : known).map(barPage)
+    return known && (scope ? known.filter(page => pageIn(page, scope)) : known).map(barPage)
   }, [listedPages, healthy, scope])
 
   // Route the main pane: the Overview dashboard when no project is selected (#471); else the

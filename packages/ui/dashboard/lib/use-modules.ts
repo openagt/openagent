@@ -307,7 +307,12 @@ export function useMountedModules(): MountedModules {
 const LISTED_PAGES_KEY = 'openagent:listed-pages'
 
 /** A module's page as the sidebar lists it: before its module is imported, without its icon. */
-export type ListedPage = Pick<MountedView<'app.page'>, 'id' | 'label' | 'projects'> & Partial<Pick<MountedView<'app.page'>, 'icon'>>
+export type ListedPage = Pick<MountedView<'app.page'>, 'id' | 'label' | 'projects'> & Partial<Pick<MountedView<'app.page'>, 'icon' | 'computer'>>
+
+/** Whether a picked project shows a module's page: one of the packages it has, or of this computer's, which is every project's. */
+export function pageIn(page: Pick<ListedPage, 'projects' | 'computer'>, projectId: string): boolean {
+  return page.computer === true || page.projects.includes(projectId)
+}
 
 /**
  * The pages the sidebar lists: the imported ones, and until every module is, those of the last load;
@@ -319,7 +324,7 @@ export function useListedPages({ views, loaded }: MountedModules): readonly List
   useEffect(() => {
     if (!loaded) return
     try {
-      globalThis.localStorage?.setItem(LISTED_PAGES_KEY, JSON.stringify(pages.map(({ id, label, projects }) => ({ id, label, projects }))))
+      globalThis.localStorage?.setItem(LISTED_PAGES_KEY, JSON.stringify(pages.map(({ id, label, projects, computer }) => ({ id, label, projects, ...(computer ? { computer } : {}) }))))
     } catch {
       // No room, or no storage: the next load lists the pages once they are imported.
     }
