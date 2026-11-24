@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import type { GitAccess } from './account.js'
 import type { ProjectRef } from './project.js'
 import type { RunOptions, RunQuestion } from './run.js'
 import type { Settings } from './settings.js'
@@ -104,13 +105,18 @@ export interface AttentionItem {
 
 /**
  * What a module is asked what needs the person with: the project shown, the run options picked
- * when there are some, and, with a project, its runs that wait on the person.
+ * when there are some, and, with a project, its runs that wait on the person. The loader adds
+ * what every module answers with: the settings, and how git reaches a remote as an account.
  */
 export interface AttentionArgs {
   project?: ProjectRef
   options?: RunOptions
   /** The project's runs that ended waiting on the person, newest first, each with what it waits on. */
   waiting?: () => Promise<WaitingRun[]>
+  /** The settings, the loader's: what a pick made for every next run is read from. */
+  readonly settings?: Settings
+  /** How git reaches `remote` as an account, as the loader's `account.access` says: none when no module has an account for it. */
+  readonly gitAccess?: (remote: string) => Promise<GitAccess | undefined>
 }
 
 /** A run that ended waiting on the person, as a module that says what needs them reads it. */

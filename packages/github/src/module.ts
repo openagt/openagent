@@ -1,9 +1,9 @@
 import { realpathSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 import { homedir } from 'node:os'
-import { errorMessage, nodeGitRunner, sessionFolder, sessionsHome } from '@openagt/agent-data'
-import { defineModule, RunOrder, type ModuleDefinition, type PullRequest, type RunContext } from '@openagt/hooks'
-import { readFacts, runEnv } from './accounts.js'
+import { errorMessage, nodeGitRunner, remoteHostOf, sessionFolder, sessionsHome } from '@openagt/agent-data'
+import { defineModule, RunOrder, type GitAccess, type ModuleDefinition, type PullRequest, type RunContext } from '@openagt/hooks'
+import { HOST, readFacts, runEnv } from './accounts.js'
 import { nodeGhRunner } from './gh.js'
 import { homeUrlFor } from './home.js'
 import { listRequests } from './requests.js'
@@ -12,7 +12,8 @@ import { accountNamed, tokenOf } from './working-account.js'
 /**
  * github, the module (#2394): the account a run works as on GitHub, first of its steps, and the
  * pull request its branch has, read back once the branch is, into the run's facts
- * (`RunFacts.github`), which the run's record keeps. Its skill, with the command it teaches, is in
+ * (`RunFacts.github`), which the run's record keeps; and the account git work outside a run goes
+ * as on GitHub (`account.access`): a push or a fetch a person's press makes. Its skill, with the command it teaches, is in
  * every run of a project on GitHub: its text says the project's pull requests are there, which is
  * wrong anywhere else.
  */
@@ -31,6 +32,8 @@ export interface GithubDeps {
   onGithub?: (dir: string) => Promise<boolean>
   /** OpenAgent's account `user`, else the one runs use, as a run in the repository at `dir` works as it, its commits made in `commitsIn`; throws when OpenAgent has no such account. */
   workAs?: (dir: string, user: string | undefined, commitsIn: CommitsIn) => Promise<WorkingAs>
+  /** How git outside a run reaches a repository on GitHub: as the account runs use; none when OpenAgent has none. */
+  reach?: () => Promise<GitAccess | undefined>
 }
 
 /** Where a run's commits are made, and go as its account: its project's repository, or a session's own folder, with the copies of its repos. */
@@ -41,9 +44,11 @@ export function githubModule(deps: GithubDeps = {}): ModuleDefinition {
   const requestOfBranch = deps.requestOfBranch ?? branchRequest
   const onGithub = deps.onGithub ?? (async (dir: string) => (await homeUrlFor(dir).catch(() => undefined)) !== undefined)
   const workAs = deps.workAs ?? openagentAccount
+  const reach = deps.reach ?? runsAccountAccess
   return defineModule({
     name: 'github',
     hooks: {
+      'account.access': { git: async remote => (remoteHostOf(remote) === HOST ? reach() : undefined) },
       'run.skills': async ({ project }) => (project && (await onGithub(project.dir)) ? [{ name: 'github', dir: new URL('../', import.meta.url), command: 'github' }] : []),
       'run.step': [
         { order: RunOrder.ACCOUNTS, name: "work as the run's account", run: ctx => workAsAccount(ctx, onGithub, workAs) },
@@ -60,6 +65,22 @@ async function openagentAccount(dir: string, user: string | undefined, commitsIn
   const gh = nodeGhRunner()
   const { login, dir: home } = await accountNamed(user, dir, gh, process.env)
   return { login, env: runEnv(await tokenOf(login, home, dir, gh), home, readFacts(home), process.env, await gitDirsOf(commitsIn)) }
+}
+
+/**
+ * git's way to GitHub as the account runs use, for git work outside a run: its token, never the
+ * person's own login; no commit is made with it, so no name on commits. None when OpenAgent has no
+ * account there, or its token cannot be read: the work is then refused by git, not done as someone else.
+ */
+async function runsAccountAccess(): Promise<GitAccess | undefined> {
+  const gh = nodeGhRunner()
+  const home = homedir()
+  try {
+    const { login, dir } = await accountNamed(undefined, home, gh, process.env)
+    return { env: runEnv(await tokenOf(login, dir, home, gh), dir, readFacts(dir), process.env) }
+  } catch {
+    return undefined
+  }
 }
 
 /**

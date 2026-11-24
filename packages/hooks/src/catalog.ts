@@ -204,6 +204,52 @@ export const SCHEDULED_COMMANDS = defineSetting<Record<string, ScheduledCommands
   },
 })
 
+/**
+ * Whether `value` names a branch the way git lets a branch be named (`git check-ref-format
+ * --branch`), told without running git. A branch a run starts from ends up on a command line, so a
+ * word that could be read there as an option (a leading `-`), or that git would read as something
+ * other than one branch (`a..b`, `x@{1}`, `HEAD`), is not a name.
+ */
+export function isBranchName(value: unknown): value is string {
+  if (typeof value !== 'string' || value === '' || value.length > 255) return false
+  if (value === 'HEAD' || value === '@' || value.startsWith('-')) return false
+  // What git refuses anywhere in a ref: a space, a control character, and the characters its
+  // revision syntax uses.
+  if (/[\x00-\x20\x7f~^:?*[\\]/.test(value) || value.includes('..') || value.includes('@{')) return false
+  if (value.endsWith('.')) return false
+  return value.split('/').every(part => part !== '' && !part.startsWith('.') && !part.endsWith('.lock'))
+}
+
+/**
+ * Where a project's runs start their own branch, when it is not origin's default branch: the
+ * branch the project's folder is on, whatever that is by then, or one of origin's branches, by name.
+ */
+export type StartFrom = { kind: 'local' } | { kind: 'published'; branch: string }
+
+/** The cap on the projects {@link START_FROM} keeps, so a hand-edited file cannot bloat. */
+const START_FROM_LIMIT = 200
+
+/**
+ * git-branches': where every next run of a project started on this computer starts from, picked in
+ * the row above the launcher's box, by the project's id; a project with none starts from origin's
+ * default branch. A run whose options name a branch to start from (`GitBranchesOptions.base`)
+ * starts there instead. A pick that is not one reads as none.
+ */
+export const START_FROM = defineSetting<Record<string, StartFrom>>({
+  key: 'git-branches.startFrom',
+  scope: 'computer',
+  default: {},
+  parse: value => {
+    if (!isMap(value)) return undefined
+    const picks = Object.entries(value).flatMap(([id, pick]): [string, StartFrom][] => {
+      if (id === '' || !isMap(pick)) return []
+      if (pick['kind'] === 'local') return [[id, { kind: 'local' }]]
+      return pick['kind'] === 'published' && isBranchName(pick['branch']) ? [[id, { kind: 'published', branch: pick['branch'] }]] : []
+    })
+    return Object.fromEntries(picks.slice(0, START_FROM_LIMIT))
+  },
+})
+
 /** Where a person changes {@link SCHEDULED_COMMANDS}: scheduled-agents' page, by its segment and its name. */
 export const SCHEDULED_COMMANDS_PAGE = { segment: 'automations', label: 'Automations' } as const
 

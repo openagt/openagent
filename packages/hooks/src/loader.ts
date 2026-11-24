@@ -211,7 +211,7 @@ export function createHooks(entries: readonly DistributionEntry[], opts: HooksOp
     return all.sort((a, b) => a.order - b.order)
   }
 
-  return {
+  const hooks: Hooks = {
     modules,
     store,
     settings,
@@ -277,7 +277,7 @@ export function createHooks(entries: readonly DistributionEntry[], opts: HooksOp
           const hook = module.hooks['app.attention']
           if (!hook) return []
           try {
-            return (await hook(args)).map(item => ({ ...item, module: module.name }))
+            return (await hook({ ...args, settings, gitAccess: remote => hooks.gitAccess(remote) })).map(item => ({ ...item, module: module.name }))
           } catch (error) {
             report(module.name, 'app.attention', error)
             return undefined
@@ -323,6 +323,7 @@ export function createHooks(entries: readonly DistributionEntry[], opts: HooksOp
       }
     },
   }
+  return hooks
 }
 
 /** The store, each file read once while what asks of it goes on: many rows asked at once read each scope's settings once. A fresh read is the store's every time. */

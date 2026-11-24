@@ -203,8 +203,8 @@ export function fakeRun(given: Partial<Omit<RunContext, 'store' | 'settings'>> &
 
 /**
  * The host a function of a project's module is handed, for the module's server tests: the project
- * `project` at `/work/project`, settings in memory, and no run, merge or question known, and every
- * line said refused, unless `given` says how it answers.
+ * `project` at `/work/project`, settings in memory, and no run, merge, question or account known,
+ * and every line said and every landing written down refused, unless `given` says how it answers.
  */
 export function rpcHost(given: Partial<RpcHost> = {}): RpcHost {
   return {
@@ -217,6 +217,10 @@ export function rpcHost(given: Partial<RpcHost> = {}): RpcHost {
     say: async () => {
       throw new Error('no run of this test takes a line')
     },
+    landed: async () => {
+      throw new Error('no run of this test keeps a record')
+    },
+    gitAccess: async () => undefined,
     modulesOn: async () => [],
     ...given,
   }

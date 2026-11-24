@@ -11,6 +11,7 @@ import type { ModuleOn } from '@openagt/hooks/rpc'
 import { loadAgentEvents } from '../store/index.js'
 import { pendingChoices } from '../open-choices.js'
 import { sayForModule } from '../dashboard/run-inbox.js'
+import { projectRuns } from '../store/runs.js'
 
 // A module's functions (`@openagt/hooks/rpc`), which the page calls at `/_rpc/<module>/<name>`
 // (rpc-serve.ts) and no other way: this file is none of the RPCs the page calls by name.
@@ -39,6 +40,8 @@ export async function callModule(projectId: string | null, pkg: string, name: st
     find: runsFound(projectId, root),
     questions: agentId => runQuestions(root, agentId),
     say: (agentId, line) => sayForModule(projectId, root, agentId, line),
+    landed: (agentId, landed) => landedFor(root, agentId, landed),
+    gitAccess: async remote => (await distributionHooks()).gitAccess(remote),
     modulesOn: async opts => modulesOn(await project(), opts?.every === true),
   })
   const result = await callModuleFunction(module.server, name, host, input)
@@ -83,6 +86,14 @@ function runsFound(projectId: string, root: string): (agentId: string) => Promis
     const run = await ref
     return (await runHostOf(run)).find(run)
   }
+}
+
+/** Write down on run `agentId`'s record, in the project at `root`, that its work was landed: the record is what its page reads once the branch is gone. */
+async function landedFor(root: string, agentId: string, landed: { commit: string; from: string }): Promise<void> {
+  const runs = await projectRuns(root).catch(() => undefined)
+  if (!runs) throw new Error('this project keeps no records of its runs')
+  const recorded = await runs.patch(agentId, { landed })
+  if (!recorded.ok) throw new Error(`the record was not updated: ${recorded.error}`)
 }
 
 /** The questions run `agentId` of the project at `root` still waits on, read off its events by the rule every surface reads them by. */
