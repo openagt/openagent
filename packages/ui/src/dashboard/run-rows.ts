@@ -1,43 +1,13 @@
 import { hostname } from 'node:os'
-import { nodeGitRunner } from '@openagt/agent-data'
-import { isPidAlive, readAllAgents, type AgentMeta, type BranchesFor } from '../store/index.js'
+import type { AgentMeta, BranchesFor } from '../store/index.js'
 import { cachedOpenPrs, cachedPrStates, type PrStates } from './pull-requests.js'
 import { projectGitHost } from '../store/git-host.js'
 import { unpublishedRuns, type Unpublished } from './unpublished.js'
-import { isHostName } from '../registry.js'
 
-// A run's row, as the dashboard's lists show it (dashboard-rpc/reads.ts): the run as its record
-// says it, with what only this daemon knows and the disk cannot marked on it. Kept apart from the
-// RPCs that serve the rows, since every function an RPC module exports is a call the page can make.
-
-/**
- * A project's runs as its records and checkouts say them, each as recorded: the ones this
- * computer runs, and every other computer's whose record came through the project's shared records.
- * A run of this computer's that has no record yet is its project's git user's, as its record will be.
- */
-export async function recordedRuns(cwd: string): Promise<AgentMeta[]> {
-  const runs = (await readAllAgents(cwd)).map(asRecorded)
-  const thisHost = hostname()
-  if (!runs.some(run => run.person === undefined && run.host === thisHost)) return runs
-  const person = await gitUserOf(cwd)
-  return person === undefined ? runs : runs.map(run => (run.person === undefined && run.host === thisHost ? { ...run, person } : run))
-}
-
-/** How long a project's git user is trusted before git is asked again. */
-const GIT_USER_KEPT_MS = 60_000
-const gitUsers = new Map<string, { person?: string; until: number }>()
-
-/** Whom git commits as in the project, as the runs' records are kept under it: its email, lowered. */
-async function gitUserOf(cwd: string): Promise<string | undefined> {
-  const kept = gitUsers.get(cwd)
-  if (kept && kept.until > Date.now()) return kept.person
-  const said = await nodeGitRunner()(['config', 'user.email'], cwd).then(
-    out => out.trim().toLowerCase(),
-    () => '',
-  )
-  gitUsers.set(cwd, { ...(said ? { person: said } : {}), until: Date.now() + GIT_USER_KEPT_MS })
-  return said || undefined
-}
+// A run's row, as the dashboard's lists show it (dashboard-rpc/reads.ts): the run as its host says
+// it, with what the modules read of it beside marked on it (its pull request's state, the work it
+// left on this machine), and whether it is another computer's. Kept apart from the RPCs that serve
+// the rows, since every function an RPC module exports is a call the page can make.
 
 /**
  * What a run's row marks beside its name, for both lists of runs, a project's and all projects'
@@ -90,32 +60,4 @@ export async function withUnpublished(cwd: string, agents: AgentMeta[], branches
 export function markOtherHost(agent: AgentMeta, thisHost: string = hostname()): AgentMeta {
   if (agent.host === undefined || agent.host === thisHost) return agent
   return { ...agent, otherHost: true }
-}
-
-/**
- * A run that ended clean while the process its card names is still alive on this host is marked
- * saving: the tool that runs it saves the run's record and cleans up its checkout after the card says
- * done, and a row that said "done" through that window read as finished with nothing coming. A
- * run of another host, or with no recorded process, passes through untouched.
- */
-export function markSaving(agent: AgentMeta, thisHost: string = hostname(), alive: (pid: number) => boolean = isPidAlive): AgentMeta {
-  if (agent.status !== 'done' || agent.pid === undefined || agent.host !== thisHost || !alive(agent.pid)) return agent
-  return { ...agent, saving: true }
-}
-
-/** Every annotation a run gets on its way to the dashboard, once it is as recorded ({@link asRecorded}): what the daemon knows and the disk cannot. */
-export function forDashboard(agent: AgentMeta): AgentMeta {
-  return markSaving(markOtherHost(agent))
-}
-
-/**
- * A run as its record may say it. A record is a file anyone with the project can write, and its
- * tool's own words are read into the row as they are, so the words only this daemon gives a row
- * are taken off it first: that it is another computer's, that it is being saved. A computer's name
- * that is no name is none.
- */
-export function asRecorded(agent: AgentMeta): AgentMeta {
-  const { otherHost: _other, saving: _saving, ...said } = agent
-  if (said.host !== undefined && !isHostName(said.host)) delete said.host
-  return said
 }

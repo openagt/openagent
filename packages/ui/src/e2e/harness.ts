@@ -12,17 +12,18 @@ import { setDashboardContext } from '../dashboard-rpc/context.js'
 import { createProjectRuntime, type ProjectRuntime } from '../daemon-runtime.js'
 import { projectId } from '@openagt/agent-data'
 import { registryPreferencesStore } from '../registry.js'
-import { fromDiaryLine, projectBranches, projectRuns, resolveAgentDiary, type AgentMeta, type AgentStatus, type AnyDiaryLine } from '../store/index.js'
+import { projectBranches, type AgentMeta, type AgentStatus } from '../store/index.js'
+import { findRun } from '@openagt/agent-driver'
 import { worktreePath } from '@openagt/git-branches'
 import { FIXTURE_PLUGINS, makeFixtureRepo } from './fixture.js'
 import { fakeRunHost, STARTS_FILE_ENV, type HostCall } from './fake-runs.js'
-import { tailAgentEvents } from '../dashboard-rpc/events-tail.js'
+import { streamAgentEvents } from '../dashboard-rpc/events.js'
 import { sendAddProject } from '../dashboard-rpc/projects.js'
 import { callModule } from '../dashboard-rpc/module-calls.js'
 import { sendSwitchPlugin } from '../dashboard-rpc/plugins.js'
 import { sendStart, sendStop } from '../dashboard-rpc/control.js'
 import { onAgents } from '../dashboard-rpc/reads.js'
-import type { OpenAgentEvent } from '../events.js'
+import type { RunEvent } from '@openagt/hooks'
 import type { StartAgentOptions } from '../dashboard/types.js'
 
 export { git } from './fixture.js'
@@ -44,7 +45,7 @@ export interface StoryProject {
 /** A live tail of one agent's event log — the same source `onEvents` streams to the browser. */
 export interface AgentTail {
   /** Every event seen so far, in arrival order. Poll with {@link waitFor}. */
-  events: OpenAgentEvent[]
+  events: RunEvent[]
   stop(): void
 }
 
@@ -217,25 +218,21 @@ export async function makeWorld(): Promise<StoryWorld> {
 
     async waitRecorded(project, agentId, timeoutMs = 30_000) {
       await waitFor(
-        async () => ((await (await projectRuns(project.cwd))?.show(agentId)) ? true : undefined),
+        async () => ((await findRun(project.cwd, agentId).catch(() => undefined)) ? true : undefined),
         `run ${agentId} to be recorded on the data branch`,
         timeoutMs,
       )
     },
 
     async tailAgent(project, agentId) {
-      const events: OpenAgentEvent[] = []
-      // The relocating tail — the same seam the dashboard's onEvents rides: when the run's tool
-      // records the run and reclaims the checkout, the tail asks again and sends the finished run's
-      // lines it had not sent, so the feed keeps the final lines even when their fs.watch signal was lost.
-      const stop = tailAgentEvents<AnyDiaryLine>(
-        () => resolveAgentDiary(project.cwd, agentId),
-        line => {
-          const event = fromDiaryLine(line)
-          if (event) events.push(event)
-        },
-      )
-      const tail = { events, stop }
+      const events: RunEvent[] = []
+      // The stream the dashboard's `GET /_rpc/events` relays, as the run's host says it: across the
+      // run's records and the reclaim of its checkout, so the feed keeps the final lines even when
+      // their fs.watch signal was lost.
+      const stopping = streamAgentEvents(project.id, agentId, event => {
+        if (event.kind !== 'stream-sync' && event.kind !== 'partial') events.push(event)
+      })
+      const tail = { events, stop: () => void stopping.then(stop => stop?.()) }
       tails.push(tail)
       return tail
     },

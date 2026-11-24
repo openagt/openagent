@@ -6,7 +6,8 @@ import type { InboxLine } from './agent.js'
 import type { GitAccounts } from './account.js'
 import type { AppContext } from './app.js'
 import type { RpcComputerHost, RpcHost } from './rpc.js'
-import type { RunContext, RunEvent, RunFound, RunHost, RunInput, RunRef, RunRequest, RunStatus, RunSummary } from './run.js'
+import type { RunFeedEvent } from './run-event.js'
+import type { RunContext, RunFound, RunHost, RunInput, RunRef, RunRequest, RunStatus, RunSummary } from './run.js'
 import { settingsIn, type Settings } from './settings.js'
 import { chainStore, changesOf, checkPath, isUnder, messageOf, scopeKey, type Scope, type Store, type StoreBackend } from './store.js'
 
@@ -91,9 +92,9 @@ export interface FakeHost extends RunHost {
   /** The lines said to a working run, in order. */
   readonly steered: readonly { id: string; line: InboxLine }[]
   readonly stopped: readonly { id: string; force: boolean }[]
-  events(run: RunRef, signal: AbortSignal): AsyncIterable<RunEvent>
+  events(run: RunRef, signal: AbortSignal): AsyncIterable<RunFeedEvent>
   /** A run's next event: its streams get it. */
-  emit(id: string, event: RunEvent): void
+  emit(id: string, event: RunFeedEvent): void
   /** A run ends: its streams end after the events they have not read yet. */
   end(id: string, status: Exclude<RunStatus, 'working'>): void
   /** Where a run's work is, as `find` answers it from then on: a run the host started is found with nothing known of its work until then. */
@@ -101,7 +102,7 @@ export interface FakeHost extends RunHost {
 }
 
 export function fakeHost(opts: { id?: string; label?: string } = {}): FakeHost {
-  const runs = new Map<string, { summary: RunSummary; events: RunEvent[]; waiting: Set<() => void> }>()
+  const runs = new Map<string, { summary: RunSummary; events: RunFeedEvent[]; waiting: Set<() => void> }>()
   const requests: RunRequest[] = []
   const resumed: { id: string; input: RunInput }[] = []
   const steered: { id: string; line: InboxLine }[] = []
@@ -138,7 +139,7 @@ export function fakeHost(opts: { id?: string; label?: string } = {}): FakeHost {
     async start(request) {
       requests.push(request)
       const id = `run-${next++}`
-      const summary: RunSummary = { id, status: 'working', startedAt: new Date().toISOString(), prompt: request.prompt, ...(request.project !== undefined ? { project: request.project.id } : {}) }
+      const summary: RunSummary = { id, host: opts.id ?? 'fake', status: 'working', startedAt: new Date().toISOString(), prompt: request.prompt, ...(request.project !== undefined ? { project: request.project.id } : {}) }
       runs.set(id, { summary, events: [], waiting: new Set() })
       return { id }
     },
@@ -152,11 +153,11 @@ export function fakeHost(opts: { id?: string; label?: string } = {}): FakeHost {
       stopped.push({ id, force: stopOpts?.force ?? false })
       end(id, 'stopped')
     },
-    async list(project) {
+    async list(project, wanted = {}) {
       return [...runs.values()]
         .reverse()
         .map(run => run.summary)
-        .filter(summary => summary.project === project?.id)
+        .filter(summary => summary.project === project?.id && (!wanted.ids || wanted.ids.includes(summary.id)) && (wanted.since === undefined || summary.startedAt >= wanted.since))
     },
     async find({ id }) {
       return places.get(id) ?? (runs.has(id) ? { changedNothing: false } : undefined)

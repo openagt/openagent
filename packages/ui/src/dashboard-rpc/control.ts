@@ -1,13 +1,13 @@
 import { agentLockKey, sayToRun, startedElsewhere, type SteerResult } from '../dashboard/run-inbox.js'
 export type { SteerResult }
 import { openInApp, type OpenTarget, type OpenResult } from '../dashboard/open-in-app.js'
-import { contextPreferences, contextStartAgent, resolveProjectPath, resolveAgentPath, runHostOf } from './context.js'
+import { contextPreferences, contextRun, contextStartAgent, resolveProjectPath, resolveAgentPath, runHostOf } from './context.js'
 import { runRefAt } from '../distribution-hooks.js'
 import { errorMessage } from '@openagt/agent-data'
-import { hasImage, isImageName, keepImage } from '@openagt/agent-driver'
+import { hasImage, isImageName, keepImage, patchRun } from '@openagt/agent-driver'
 import { IMAGES_PER_MESSAGE } from '../images.js'
 
-import { findAgent, isRunId, projectRuns, type AgentMeta } from '../store/index.js'
+import { isRunId, type AgentMeta } from '../store/index.js'
 import { withAgentLock } from '../agent-locks.js'
 import { deleteProjectAgent } from '../worktrees.js'
 import { mergeAgentPr, openAgentPullRequest, pushAgentBranch, readRunHandoff, type HandoffResult } from '../dashboard/agent-handoff.js'
@@ -67,7 +67,7 @@ export async function sendMessage(projectId: string, text: string, agentId?: str
   const later = sent?.later === true
   const cwd = await resolveProjectPath(projectId)
   if (!cwd || !agentId || !isRunId(agentId)) return { ok: false, error: 'unknown session' }
-  return (await startedElsewhere(cwd, agentId)) ?? sayToRun(projectId, cwd, agentId, { kind: 'message', text: message, ...(level !== undefined ? { publish: level } : {}), ...(id !== undefined ? { id } : {}), ...(later ? { later: true as const } : {}), ...(images.length > 0 ? { images } : {}) })
+  return (await startedElsewhere(projectId, agentId)) ?? sayToRun(projectId, cwd, agentId, { kind: 'message', text: message, ...(level !== undefined ? { publish: level } : {}), ...(id !== undefined ? { id } : {}), ...(later ? { later: true as const } : {}), ...(images.length > 0 ? { images } : {}) })
 }
 
 /**
@@ -123,7 +123,7 @@ async function withWorktreeRemoval<T>(projectId: string, agentId: string, remove
  * commits) are all {@link deleteProjectAgent}'s; this adds only the agent lock around them.
  */
 export async function sendDeleteAgent(projectId: string, agentId: string): Promise<DeleteAgentResult> {
-  return withWorktreeRemoval(projectId, agentId, cwd => deleteProjectAgent(cwd, agentId))
+  return withWorktreeRemoval(projectId, agentId, async cwd => deleteProjectAgent(cwd, agentId, await contextRun(projectId, agentId).catch(() => undefined)))
 }
 
 /**
@@ -168,7 +168,7 @@ async function handoffTargetFor(
 ): Promise<{ cwd: string; agent: AgentMeta; checkout: string } | undefined> {
   const cwd = await resolveProjectPath(projectId)
   if (!cwd || !isRunId(agentId)) return undefined
-  const agent = await findAgent(cwd, agentId).catch(() => undefined)
+  const agent = await contextRun(projectId, agentId).catch(() => undefined)
   // One of the session's copies of repos (`session-copies.ts`): its own folder and the branch it is on.
   if (repo !== undefined) {
     const copy = agent && (await copyTarget(agent, repo))
@@ -194,13 +194,13 @@ export async function sendOpenPullRequest(projectId: string, agentId: string, op
   // Under the agent lock, so the provider's push inside `openAgentPullRequest` cannot race a
   // Remove of the same checkout.
   const opened = await withAgentLock(agentLockKey(target.cwd, agentId), () => openAgentPullRequest(target.cwd, target.agent, options.draft === true ? { draft: true } : {}))
-  // Record it on the finished run (E6), through the project's runs provider. The session's own
-  // process is gone by now, so there is no event stream to carry the fact — but it is the same
-  // fact, and every surface reads it from the same place either way rather than re-deriving it
-  // from branch names. No provider: there is no record to carry it, and the PR is still open.
+  // Record it on the finished run (E6), on its record. The session's own process is gone by now,
+  // so there is no event stream to carry the fact — but it is the same fact, and every surface
+  // reads it from the same place either way rather than re-deriving it from branch names. No
+  // record: there is none to carry it, and the PR is still open.
   // A copy's request is not the run's: the record names the project's alone, and the copy's is read off its branch.
   if (options.repo === undefined && opened.ok && opened.number !== undefined && opened.url) {
-    await (await projectRuns(target.cwd).catch(() => undefined))?.patch(agentId, { pr: { number: opened.number, url: opened.url } })
+    await patchRun(target.cwd, agentId, { pr: { number: opened.number, url: opened.url } }).catch(() => false)
   }
   return opened
 }

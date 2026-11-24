@@ -1,11 +1,11 @@
-import type { OpenAgentEvent } from '../../src/index.js'
+import type { RunEvent } from '@openagt/hooks'
 import { AgentActionsMenu } from './AgentActionsMenu.js'
 import { PaneToggles, TopBar } from './Panes.js'
 import { ShowSidebarButton } from './SidebarToggle.js'
 import { SESSIONS_ID } from '../../src/project-address.js'
 
 /** The menu is given no session, so no events: it acts on the project. Stable, so it does not churn on every render. */
-const NO_EVENTS: OpenAgentEvent[] = []
+const NO_EVENTS: RunEvent[] = []
 
 /** The ⋮ of actions on the project, on the "New agent session" page's bar and on a session's, before the panes' icons. */
 export function ProjectMenu({ projectId, onProjectRemoved }: { projectId: string; onProjectRemoved?: (() => void) | undefined }) {

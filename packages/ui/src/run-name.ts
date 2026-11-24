@@ -1,4 +1,4 @@
-import type { AgentMeta } from './store/agent-store.js'
+import type { AgentMeta } from './store/index.js'
 
 /**
  * What every list calls a run, one rule for all of them (the sidebar, the Human Queue, the

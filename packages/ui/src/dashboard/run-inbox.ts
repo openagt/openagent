@@ -1,10 +1,9 @@
 import { hostname } from 'node:os'
 import { errorMessage } from '@openagt/agent-data'
-import { runHostOf } from '../dashboard-rpc/context.js'
+import { contextRun, runHostOf } from '../dashboard-rpc/context.js'
 
 import { runRefAt } from '../distribution-hooks.js'
 import { withAgentLock } from '../agent-locks.js'
-import { findAgent } from '../store/index.js'
 import { LOCAL_HOST, type InboxLine } from '@openagt/hooks'
 
 /**
@@ -33,8 +32,8 @@ export function agentLockKey(cwd: string, agentId: string): string {
  * the project's shared records, is only read. Continued here it would move to this computer under
  * its id, with this computer's logins and none of its conversation.
  */
-export async function startedElsewhere(cwd: string, agentId: string): Promise<SteerResult | undefined> {
-  const host = (await findAgent(cwd, agentId).catch(() => undefined))?.host
+export async function startedElsewhere(projectId: string, agentId: string): Promise<SteerResult | undefined> {
+  const host = (await contextRun(projectId, agentId).catch(() => undefined))?.host
   return host !== undefined && host !== hostname() ? { ok: false, error: `This run is on ${host}. Continue it there.` } : undefined
 }
 
@@ -58,6 +57,6 @@ export async function sayToRun(projectId: string, cwd: string, agentId: string, 
  * Throws why it was not said.
  */
 export async function sayForModule(projectId: string, cwd: string, agentId: string, line: InboxLine): Promise<void> {
-  const said = await withAgentLock(agentLockKey(cwd, agentId), async () => (await startedElsewhere(cwd, agentId)) ?? sayToRun(projectId, cwd, agentId, line))
+  const said = await withAgentLock(agentLockKey(cwd, agentId), async () => (await startedElsewhere(projectId, agentId)) ?? sayToRun(projectId, cwd, agentId, line))
   if (!said.ok) throw new Error(said.error)
 }

@@ -17,7 +17,6 @@ const active = (agentId: string, over: Partial<ActiveAgent> = {}): ActiveAgent =
   projectId: 'p1',
   projectName: 'gemstack',
   agentId: agentId,
-  cwd: `/repos/gemstack/.openagent/worktrees/${agentId}`,
   status: 'running',
   startedAt: '2026-07-25T09:00:00.000Z',
   updatedAt: '2026-07-25T10:00:00.000Z',

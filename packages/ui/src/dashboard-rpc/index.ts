@@ -2,7 +2,6 @@
 // the daemon's own `startAgent`. The browser calls the functions of the modules below by name over
 // `POST /_rpc/<name>`; the dashboard's `rpc/` modules are typed stubs against their signatures, so
 // a rename that misses one is a type error rather than a 404 at runtime.
-export type { LiveFeedEvent } from './events.js'
 
 import * as reads from './reads.js'
 import * as control from './control.js'

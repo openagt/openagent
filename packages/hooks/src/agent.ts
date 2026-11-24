@@ -100,6 +100,12 @@ export interface RunAgent {
   ready(opts: RunAgentReadyOptions): Promise<DriverReadiness>
   /** The driver one run's sessions start on, unrestricted: nobody is there to approve what its agent does in the run's checkout. */
   driver(opts: RunAgentOptions): Driver
+  /**
+   * The command that picks one of its sessions back up in a person's terminal (`claude --resume
+   * <id>`): `cwd` is the folder the session ran in, which may be gone by then. None: its sessions
+   * are not picked up outside a run.
+   */
+  resumeCommand?(session: { id: string; cwd?: string }): string
 }
 
 /** What a coding agent's readiness is asked with. */

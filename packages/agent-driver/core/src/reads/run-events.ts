@@ -1,21 +1,11 @@
-import type { AnyDiaryLine, RunCard } from './runs.js'
-import type { ChoiceOption, OpenAgentEvent } from '../events.js'
-import type { AgentMeta } from './agent-store.js'
-import type { DriverEvent } from '@openagt/hooks'
+import type { ChoiceOption, DriverEvent, RunEvent } from '@openagt/hooks'
+import type { AnyDiaryLine } from '../record.js'
 
 /**
- * A run's card and diary (`runs.ts`), read as OpenAgent's own shapes (#1769): the card as the
- * meta every list shows, the diary as the events the run page replays and tails. The card's
- * eleven plain fields and four kinds of diary line are the shape; whoever ran the agent keeps the
- * rest of what it knows under one key, `caller`, and writes its other lines as they are.
- * OpenAgent records no run of its own (#1774), so there is no writing half.
+ * A run's diary, read as the events its host streams (`RunHost.events`, #1769): what the run page
+ * replays and tails. The record's four kinds of diary line are the shape; the lines agent-driver's
+ * own log writes are read beside them, and whatever else a writer put there as it is.
  */
-
-/** A card as OpenAgent's meta: `caller` unfolded, the card's own fields winning. */
-export function fromRunCard(card: RunCard): AgentMeta {
-  const { caller, ...own } = card
-  return { updatedAt: card.endedAt ?? card.startedAt, ...(caller as Partial<AgentMeta>), ...own } as AgentMeta
-}
 
 /**
  * One diary line as one OpenAgent event: what the agent said, its result, the run's end and its
@@ -24,7 +14,7 @@ export function fromRunCard(card: RunCard): AgentMeta {
  * running agents) reads as nothing. The line's time, `at`, is the event's, whatever the kind, and a
  * question's id: a run's second question is not its first.
  */
-export function fromDiaryLine(line: AnyDiaryLine): OpenAgentEvent | undefined {
+export function fromDiaryLine(line: AnyDiaryLine): RunEvent | undefined {
   const { at, ...rest } = line
   const event = eventOf(rest as AnyDiaryLine)
   if (!event) return undefined
@@ -33,7 +23,7 @@ export function fromDiaryLine(line: AnyDiaryLine): OpenAgentEvent | undefined {
 }
 
 /** Every kind of event there is: a line of another kind has nothing to show. */
-const EVENT_KINDS: Record<OpenAgentEvent['kind'], true> = {
+const EVENT_KINDS: Record<RunEvent['kind'], true> = {
   session: true,
   'session-update': true,
   screen: true,
@@ -52,7 +42,7 @@ const EVENT_KINDS: Record<OpenAgentEvent['kind'], true> = {
 }
 
 /** A diary line with no time on it, as the event it reads as. */
-function eventOf(line: AnyDiaryLine): OpenAgentEvent | undefined {
+function eventOf(line: AnyDiaryLine): RunEvent | undefined {
   switch (line.kind) {
     case 'said':
       return { kind: 'driver', event: { type: 'text', text: String(line['text']), ...(typeof line['subagent'] === 'string' ? { subagent: line['subagent'] } : {}) } }
@@ -95,7 +85,7 @@ function eventOf(line: AnyDiaryLine): OpenAgentEvent | undefined {
     }
     case 'session':
       if (typeof line['sessionId'] === 'string' && line['driver'] === undefined) return { kind: 'session-update', sessionId: line['sessionId'] }
-      return line as unknown as OpenAgentEvent
+      return line as unknown as RunEvent
     case 'question': {
       const { kind: _kind, title, header, options, recommended, multi, file } = line
       return {
@@ -107,16 +97,16 @@ function eventOf(line: AnyDiaryLine): OpenAgentEvent | undefined {
         ...(typeof recommended === 'string' ? { recommended } : {}),
         ...(multi === true ? { multi: true } : {}),
         ...(typeof file === 'string' ? { file } : {}),
-      } as OpenAgentEvent
+      } as RunEvent
     }
     case 'cost':
       return { kind: 'usage', costUsd: line['usd'] as number }
     default:
-      return Object.hasOwn(EVENT_KINDS, line.kind) ? (line as unknown as OpenAgentEvent) : undefined
+      return Object.hasOwn(EVENT_KINDS, line.kind) ? (line as unknown as RunEvent) : undefined
   }
 }
 
 /** A diary as the run's events, for a reader that replays them. */
-export function eventsOf(lines: readonly AnyDiaryLine[]): OpenAgentEvent[] {
+export function eventsOf(lines: readonly AnyDiaryLine[]): RunEvent[] {
   return lines.flatMap(line => fromDiaryLine(line) ?? [])
 }

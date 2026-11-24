@@ -1,5 +1,6 @@
 import { ArrowLeft } from 'lucide-react'
-import type { AgentWorktree, OpenAgentEvent } from '../../src/index.js'
+import type { AgentWorktree } from '../../src/index.js'
+import type { RunEvent } from '@openagt/hooks'
 import { AgentActionsMenu } from './AgentActionsMenu.js'
 import { AgentErrorCount } from './AgentErrorCount.js'
 import { PaneToggles, TopBar } from './Panes.js'
@@ -34,15 +35,18 @@ export function AgentActionBar({
   checkout,
   status,
   onBack,
+  resumeCommand,
 }: {
   projectId: string
   /** Which run Stop addresses (#749). */
   agentId?: string | null | undefined
-  events: OpenAgentEvent[]
+  events: RunEvent[]
   /** The run works, as its page knows it: its menu offers Stop. */
   live?: boolean
   /** The session's name: it leads the bar, and is the button of the session's menu. */
   label?: string | undefined
+  /** The command that picks the session's agent session back up in a terminal, as its coding agent says it: the session's menu copies it. */
+  resumeCommand?: string | undefined
   /** The name is still being made: see AgentActionsMenu. */
   naming?: boolean | undefined
   /** True when this finished agent still has a worktree on disk (#737): its menu opens that folder. */
@@ -93,6 +97,7 @@ export function AgentActionBar({
           retainedWorktree={retainedWorktree}
           onDeleted={onDeleted}
           {...(onToggle ? { details: { open: expanded, onToggle } } : {})}
+          resumeCommand={resumeCommand}
         />
         {/* The run's state after its name on a desktop; a phone's bar keeps its width for the name, and
             the first screenful shows the state (the failed end, the commits and their press, the question): a screen reader still hears it here. */}

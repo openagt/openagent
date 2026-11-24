@@ -1,4 +1,5 @@
-import { readAllAgents, type AgentMeta, type AgentStatus } from '../store/index.js'
+import type { AgentMeta, AgentStatus } from '../store/index.js'
+import { contextRuns } from '../dashboard-rpc/context.js'
 import type { ProjectSummary, ProjectionRead } from './projects.js'
 
 // The "New activity" feed (#627): the cross-project stream of run lifecycle transitions that
@@ -69,7 +70,7 @@ export async function buildActivity(
   projects: ProjectSummary[],
   deps: ActivityDeps = {},
 ): Promise<ProjectionRead<Activity>> {
-  const readAgents = deps.readAgents ?? (project => readAllAgents(project.path))
+  const readAgents = deps.readAgents ?? contextRuns
   const items: Activity[] = []
   const whole: string[] = []
   for (const project of projects) {

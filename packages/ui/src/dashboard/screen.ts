@@ -1,8 +1,6 @@
-import { readFile } from 'node:fs/promises'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { Readable } from 'node:stream'
-import { eventsOf, isRunId, type AnyDiaryLine } from '../store/index.js'
-import { liveScreen } from '../screens.js'
+import { isRunId } from '../store/index.js'
 import { end, readJsonBody } from './http.js'
 
 /**
@@ -57,24 +55,6 @@ export function screenCallAddress(screen: string, call: ScreenCall): string | un
   }
   if (at.protocol !== 'http:' || at.hostname !== '127.0.0.1' || !at.port || at.pathname !== '/') return undefined
   return `http://127.0.0.1:${at.port}/${call}${at.search}`
-}
-
-/**
- * Where the live screen of the run whose diary is the file at `diary` answers; nothing when it
- * has none, or no diary. Only the lines that can say so are read as JSON, a screen's and a run's
- * end: a diary is as long as the run, and this is asked for as long as someone looks.
- */
-export async function screenInDiary(diary: string): Promise<string | undefined> {
-  const text = await readFile(diary, 'utf8').catch(() => '')
-  const lines = text.split('\n').flatMap(line => {
-    if (!line.includes('"screen"') && !line.includes('"ended"')) return []
-    try {
-      return [JSON.parse(line) as AnyDiaryLine]
-    } catch {
-      return []
-    }
-  })
-  return liveScreen(eventsOf(lines))
 }
 
 /** How long an answer of {@link kept} is good for: a person's clicks come in bursts, and each would read the whole diary. */

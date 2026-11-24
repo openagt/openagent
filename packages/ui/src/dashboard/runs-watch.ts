@@ -1,34 +1,25 @@
-import { projectBranches, readLiveMeta, type AgentMeta, type Checkout } from '../store/index.js'
+import { basename } from 'node:path'
+import { metaOf, type AgentMeta } from '../store/index.js'
+import { contextHost } from '../dashboard-rpc/context.js'
 
 /**
  * Who is told at once when this computer's runs of a project change: a page that lists them
- * (`/_rpc/changes`). Nothing tells
- * OpenAgent when a run changes: a run's tool writes its card in the run's checkout. So while
- * someone listens, the cards are read every second and compared by what a list shows of a run;
- * the checkouts themselves are listed again less often, since that runs the branches provider,
- * and at once when a run was just started here ({@link RunsWatch.poke}). Nobody listening,
- * nothing is read.
+ * (`/_rpc/changes`). Nothing tells OpenAgent when a run changes: a run's process writes it as it
+ * goes. So while someone listens, this computer's host is asked for the project's runs every
+ * second, and they are compared by what a list shows of a run; at once when a run was just
+ * started here ({@link RunsWatch.poke}). Nobody listening, nothing is read.
  */
 
-/** Where a project's runs with a checkout are read: its checkouts, and each one's card. */
+/** Where a project's runs are read, by its folder. */
 export interface RunsWatchSource {
-  /** `fresh`: a checkout may have just come, and a list read a moment ago does not hold it. */
-  checkouts(cwd: string, fresh: boolean): Promise<readonly Checkout[]>
-  card(checkout: Checkout): Promise<AgentMeta | undefined>
+  runs(cwd: string): Promise<readonly AgentMeta[]>
 }
 
-/** How often the cards are read while someone listens. */
+/** How often the runs are read while someone listens. */
 const LOOK_EVERY_MS = 1_000
-/** How often the checkouts are listed again while someone listens: a run started elsewhere than this OpenAgent shows within it. */
-const LIST_EVERY_MS = 15_000
-/**
- * How long the checkouts are listed at every look after a run was started here: the start answers
- * before the run's checkout is there, and a run that ends within seconds is gone by the next list.
- */
-const POKED_MS = 10_000
 /**
  * How long a project is still read after its last listener left: a page that reloads listens again
- * at once, and its checkouts are not listed again for that.
+ * at once, and finds what was last read of it.
  */
 const LINGER_MS = 30_000
 
@@ -46,11 +37,6 @@ interface Watched {
   listeners: Set<() => void>
   /** Until when it is read with nobody listening. */
   lingers: number
-  checkouts?: readonly Checkout[]
-  /** When the checkouts were listed. */
-  listedAt: number
-  /** Until when they are listed at every look: a run was just started here. */
-  poked: number
   /** What a list showed of the runs at the last look; none before the first. */
   shown?: string
   timer?: ReturnType<typeof setTimeout>
@@ -70,7 +56,7 @@ export class RunsWatch {
   follow(cwd: string, changed: () => void): () => void {
     let watched = this.watched.get(cwd)
     if (!watched) {
-      this.watched.set(cwd, (watched = { listeners: new Set(), lingers: 0, listedAt: 0, poked: 0, looking: false }))
+      this.watched.set(cwd, (watched = { listeners: new Set(), lingers: 0, looking: false }))
       this.lookIn(watched, cwd, 0)
     }
     // Its own entry, so one listener given twice is told twice and stopped once each.
@@ -83,12 +69,10 @@ export class RunsWatch {
     }
   }
 
-  /** A run of the project was just started here: its checkouts are listed again at every look for a while, from now. */
+  /** A run of the project was just started here: its runs are read again now. */
   poke(cwd: string): void {
     const watched = this.watched.get(cwd)
-    if (!watched) return
-    watched.poked = this.now() + POKED_MS
-    if (!watched.looking) this.lookIn(watched, cwd, 0)
+    if (watched && !watched.looking) this.lookIn(watched, cwd, 0)
   }
 
   private lookIn(watched: Watched, cwd: string, ms: number): void {
@@ -104,13 +88,9 @@ export class RunsWatch {
     }
     watched.looking = true
     try {
-      const poked = this.now() < watched.poked
-      if (watched.checkouts === undefined || poked || this.now() - watched.listedAt >= LIST_EVERY_MS) {
-        watched.listedAt = this.now()
-        watched.checkouts = await this.source.checkouts(cwd, poked).catch(() => watched.checkouts ?? [])
-      }
-      const cards = await Promise.all(watched.checkouts.map(checkout => this.source.card(checkout).catch(() => undefined)))
-      const shown = cards.flatMap(card => (card ? [shownOf(card)] : [])).join('\n')
+      const runs = await this.source.runs(cwd).catch(() => undefined)
+      if (runs === undefined) return
+      const shown = runs.map(shownOf).join('\n')
       const before = watched.shown
       watched.shown = shown
       if (before !== undefined && before !== shown) for (const listener of [...watched.listeners]) listener()
@@ -121,8 +101,10 @@ export class RunsWatch {
   }
 }
 
-/** This computer's own runs, watched for whoever listens. */
+/** This computer's own runs, watched for whoever listens: its host is asked of the folder's runs (a project's, or the sessions home's). */
 export const ownRunsWatch = new RunsWatch({
-  checkouts: async (cwd, fresh) => (await (await projectBranches(cwd))?.list({ fresh })) ?? [],
-  card: checkout => readLiveMeta(checkout),
+  runs: async cwd => {
+    const host = contextHost()
+    return (await host.list({ id: basename(cwd), name: basename(cwd), dir: cwd })).map(run => metaOf(run, host.id))
+  },
 })

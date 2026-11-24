@@ -1,15 +1,15 @@
 import { describe, expect, test } from 'vitest'
-import type { OpenAgentEvent } from '../../src/index.js'
+import type { RunEvent } from '@openagt/hooks'
 import { pendingChoices, isAgentActive, currentAgentEvents, agentOutcome, cardOutcome, shownStatus } from './live-state.js'
 
-const choice = (id: string, title: string): OpenAgentEvent => ({
+const choice = (id: string, title: string): RunEvent => ({
   kind: 'choice',
   id,
   title,
   options: [{ id: 'a', label: 'A' }],
   recommended: 'a',
 })
-const resolved = (id: string): OpenAgentEvent => ({ kind: 'choice-resolved', id, picked: 'a', by: 'user' })
+const resolved = (id: string): RunEvent => ({ kind: 'choice-resolved', id, picked: 'a', by: 'user' })
 
 describe('pendingChoices', () => {
   test('an open choice is pending; a resolved one is not', () => {
@@ -31,7 +31,7 @@ describe('pendingChoices', () => {
   test('an end event expires every open gate (#1359)', () => {
     // An agent that died mid-gate never wrote choice-resolved; the store's surrogate end is what
     // says the question's audience is gone. Rendering past it left the panel answerable forever.
-    const end: OpenAgentEvent = { kind: 'end', ok: false, stopped: true, detail: 'its process died without reporting an end' }
+    const end: RunEvent = { kind: 'end', ok: false, stopped: true, detail: 'its process died without reporting an end' }
     expect(pendingChoices([choice('c1', 'One?'), choice('c2', 'Two?'), end])).toEqual([])
     // A gate asked after a (continued) run's next leg opens fresh — end only closes what came before.
     expect(pendingChoices([choice('c1', 'One?'), end, choice('c2', 'Two?')]).map(c => c.id)).toEqual(['c2'])
@@ -39,21 +39,21 @@ describe('pendingChoices', () => {
 
   // A run that asks ENDS on its question (#1774): waiting, its checkout kept for the answer.
   test('a question stays open through an end that says waiting', () => {
-    const waiting: OpenAgentEvent = { kind: 'end', ok: false, waiting: true }
+    const waiting: RunEvent = { kind: 'end', ok: false, waiting: true }
     expect(pendingChoices([choice('q', 'Which?'), waiting]).map(c => c.id)).toEqual(['q'])
   })
 
   test('the agent going on closes the question: the answer, or the person\'s text, began a new turn', () => {
-    const waiting: OpenAgentEvent = { kind: 'end', ok: false, waiting: true }
-    const next: OpenAgentEvent = { kind: 'driver', event: { type: 'text', text: 'On it.' } }
+    const waiting: RunEvent = { kind: 'end', ok: false, waiting: true }
+    const next: RunEvent = { kind: 'driver', event: { type: 'text', text: 'On it.' } }
     expect(pendingChoices([choice('q', 'Which?'), waiting, next])).toEqual([])
     // What is not the agent's own (its cost, a log line) closes nothing.
     expect(pendingChoices([choice('q', 'Which?'), { kind: 'usage', costUsd: 0.1 }, waiting]).map(c => c.id)).toEqual(['q'])
   })
 
   test('an end that does not say waiting still closes it, also after a waiting one', () => {
-    const waiting: OpenAgentEvent = { kind: 'end', ok: false, waiting: true }
-    const stopped: OpenAgentEvent = { kind: 'end', ok: false, stopped: true }
+    const waiting: RunEvent = { kind: 'end', ok: false, waiting: true }
+    const stopped: RunEvent = { kind: 'end', ok: false, stopped: true }
     expect(pendingChoices([choice('q', 'Which?'), waiting, stopped])).toEqual([])
   })
 })
@@ -73,26 +73,26 @@ describe('isAgentActive', () => {
       { kind: 'end', ok: false, stopped: true },
       { kind: 'session' },
       { kind: 'log', message: 'back at it' },
-    ] as OpenAgentEvent[]
+    ] as RunEvent[]
     expect(isAgentActive(resumed)).toBe(true)
   })
 })
 
 describe('currentAgentEvents', () => {
-  const session = (workspace: string): OpenAgentEvent => ({ kind: 'session', driver: 'claude', workspace, fake: false })
+  const session = (workspace: string): RunEvent => ({ kind: 'session', driver: 'claude', workspace, fake: false })
 
   test('returns the feed whole when no run has opened yet', () => {
-    const events: OpenAgentEvent[] = [{ kind: 'log', message: 'warming up' }]
+    const events: RunEvent[] = [{ kind: 'log', message: 'warming up' }]
     expect(currentAgentEvents(events)).toEqual(events)
   })
 
   test('keeps a single run intact, session-first', () => {
-    const events: OpenAgentEvent[] = [session('/repo'), { kind: 'log', message: 'go' }, { kind: 'end', ok: true }]
+    const events: RunEvent[] = [session('/repo'), { kind: 'log', message: 'go' }, { kind: 'end', ok: true }]
     expect(currentAgentEvents(events)).toEqual(events)
   })
 
   test('drops a previous run once a new run opens (the bug)', () => {
-    const events: OpenAgentEvent[] = [
+    const events: RunEvent[] = [
       session('/repo'),
       { kind: 'log', message: 'run 1' },
       { kind: 'end', ok: true },
@@ -103,7 +103,7 @@ describe('currentAgentEvents', () => {
   })
 
   test('a just-finished second run keeps its own end, not the first run', () => {
-    const events: OpenAgentEvent[] = [
+    const events: RunEvent[] = [
       session('/repo'),
       { kind: 'log', message: 'run 1' },
       { kind: 'end', ok: true },
@@ -155,9 +155,9 @@ describe('agentOutcome', () => {
     // First-end-wins kept a resumed agent "stopped" for ever: while it was live again, and even
     // after it later finished clean. The ending is the current segment's, or nothing yet.
     const stopped = { kind: 'end', ok: false, stopped: true }
-    const midResume = [{ kind: 'session' }, stopped, { kind: 'session' }, { kind: 'log', message: 'go' }] as OpenAgentEvent[]
+    const midResume = [{ kind: 'session' }, stopped, { kind: 'session' }, { kind: 'log', message: 'go' }] as RunEvent[]
     expect(agentOutcome(midResume)).toBeUndefined()
-    const finishedClean = [...midResume, { kind: 'end', ok: true }] as OpenAgentEvent[]
+    const finishedClean = [...midResume, { kind: 'end', ok: true }] as RunEvent[]
     expect(agentOutcome(finishedClean)).toEqual({ ok: true, stopped: false })
   })
 })

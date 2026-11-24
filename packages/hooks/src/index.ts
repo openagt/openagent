@@ -74,15 +74,16 @@ export {
   type RunSkill,
   type SkillArgs,
   type RunSkills,
-  type RunEvent,
   type RunRequest,
   type RunRef,
   type RunReadiness,
   type RunSummary,
+  type RunsWanted,
   type RunHost,
   type RunFound,
   LOCAL_HOST,
 } from './run.js'
+export type { RunEvent, RunFeedEvent, RunReplayed, RunPartial, ChoiceOption, ChoiceRequest, ChoiceBy } from './run-event.js'
 export {
   PERSON,
   COMPUTER,

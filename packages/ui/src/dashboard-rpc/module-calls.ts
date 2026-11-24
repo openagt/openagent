@@ -7,12 +7,12 @@ import { distributionHooks, distributionSettings, projectRefAt, runRefAt } from 
 import { SESSIONS_ID } from '../project-address.js'
 
 import { pullProjectData } from '@openagt/agent-data'
+import { patchRun } from '@openagt/agent-driver'
 import type { ProjectRef, RunFound, RunQuestion, RunRef } from '@openagt/hooks'
 import type { ModuleOn } from '@openagt/hooks/rpc'
-import { loadAgentEvents } from '../store/index.js'
+import { readRunEvents } from '../store/index.js'
 import { pendingChoices } from '../open-choices.js'
 import { sayForModule } from '../dashboard/run-inbox.js'
-import { projectRuns } from '../store/runs.js'
 
 // A module's functions (`@openagt/hooks/rpc`), which the page calls at `/_rpc/<module>/<name>`
 // (rpc-serve.ts) and no other way: this file is none of the RPCs the page calls by name.
@@ -40,7 +40,7 @@ export async function callModule(projectId: string | null, pkg: string, name: st
     ...COMPUTER,
     project,
     find: runsFound(projectId, root),
-    questions: agentId => runQuestions(root, agentId),
+    questions: agentId => runQuestions(projectId, root, agentId),
     say: (agentId, line) => sayForModule(projectId, root, agentId, line),
     landed: (agentId, landed) => landedFor(root, agentId, landed),
     gitAccess: async remote => (await distributionHooks()).gitAccess(remote),
@@ -98,15 +98,14 @@ function runsFound(projectId: string, root: string): (agentId: string) => Promis
 
 /** Write down on run `agentId`'s record, in the project at `root`, that its work was landed: the record is what its page reads once the branch is gone. */
 async function landedFor(root: string, agentId: string, landed: { commit: string; from: string }): Promise<void> {
-  const runs = await projectRuns(root).catch(() => undefined)
-  if (!runs) throw new Error('this project keeps no records of its runs')
-  const recorded = await runs.patch(agentId, { landed })
-  if (!recorded.ok) throw new Error(`the record was not updated: ${recorded.error}`)
+  if (!(await patchRun(root, agentId, { landed }).catch(() => false))) throw new Error('the record was not updated')
 }
 
-/** The questions run `agentId` of the project at `root` still waits on, read off its events by the rule every surface reads them by. */
-async function runQuestions(root: string, agentId: string): Promise<RunQuestion[]> {
-  return pendingChoices((await loadAgentEvents(root, agentId).catch(() => undefined)) ?? []).map(question => ({ ...question, options: [...question.options] }))
+/** The questions run `agentId` of the project at `root` still waits on, read off its events (as its host says them) by the rule every surface reads them by. */
+async function runQuestions(projectId: string, root: string, agentId: string): Promise<RunQuestion[]> {
+  const run = await runRefAt(projectId, root, agentId)
+  const events = await readRunEvents(await runHostOf(run), run).catch(() => undefined)
+  return pendingChoices(events ?? []).map(question => ({ ...question, options: [...question.options] }))
 }
 
 /**

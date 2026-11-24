@@ -5,7 +5,6 @@ import type { Cached } from './cache.js'
 import type { AgentMeta } from '../store/index.js'
 import { projectBranches, type BranchesFor } from '../store/branches.js'
 import { projectGitHost, type GitHostFor } from '../store/git-host.js'
-import { projectRuns, type RunsFor } from '../store/runs.js'
 // What a finished session produced, and what is left to do with it (#799).
 //
 // Everything up to "the agent is done" was covered; the handoff back to the human was not. A

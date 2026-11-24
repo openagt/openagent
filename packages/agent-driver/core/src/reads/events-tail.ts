@@ -1,8 +1,8 @@
 import { existsSync, statSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
-import { logLiveFile } from '@openagt/agent-driver'
-import { JsonlTailer, followFile } from '../jsonl-tail.js'
+import { logLiveFile } from '../session-log.js'
+import { JsonlTailer, followFile } from './jsonl-tail.js'
 
 /** How often the poll backstop re-reads the log when `fs.watch` says nothing. */
 const POLL_MS = 1000
@@ -24,7 +24,7 @@ const POLL_MS = 1000
  * waiting on it forever would freeze its feed.
  *
  * Kept transport-agnostic (a plain `onEvent` callback, not a stream) so the file
- * side can be driven on its own; `events.ts` wires it to the SSE endpoint.
+ * side can be driven on its own; `run-reads.ts` wires it to the host's stream of a run.
  */
 export function tailEvents<T = unknown>(path: string, onEvent: (event: T) => void, onReplayed?: () => void): () => void {
   const tailer = new JsonlTailer<T>(path, onEvent)
@@ -75,11 +75,11 @@ function holdsSomething(path: string): boolean {
  *
  * A run's diary does not sit still. While the run works it is a file in the run's checkout; when
  * the run ends its tool records it and reclaims the checkout, and from then on the diary is the
- * finished run's, read whole from the project's runs provider. A fixed-path tail whose file was
+ * finished run's, read whole from the project's records. A fixed-path tail whose file was
  * retired went silent *without the final lines* whenever the last `fs.watch` signal was lost —
  * the 1s poll then found the file gone and had nothing to read, so the feed never learned the run
  * ended. This tail treats a missing file as the question it is: it asks `resolve` where the diary
- * is now (`resolveAgentDiary` answers the finished run once the checkout is gone, #1472). A new
+ * is now (`diaryOf` answers the finished run once the checkout is gone, #1472). A new
  * file retargets the same tailer and follows it. A finished run's lines are the same lines the
  * file had, in the same order, so the ones past the count already delivered are sent and the tail
  * ends: a finished diary does not grow. The same file, or no answer, means the diary has not

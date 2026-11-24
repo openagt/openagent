@@ -140,6 +140,7 @@ export async function writeRun(root: string, card: RunCard, diary: readonly AnyD
   const r = resolveRecordDeps(deps)
   if (!isRunId(card.id)) return { ok: false, committed: false, error: `not a run id: ${card.id}` }
   const person = personDir((await ownEmail(root)) || (await r.git(['config', 'user.email'], root).catch(() => '')))
+  kept.delete(root)
   return r.funnel(root, `logs: record run ${card.id}`, async checkout => {
     const existing = await locate(checkout, card.id, r)
     const files = existing ?? {
@@ -170,6 +171,7 @@ export async function patchRun(root: string, id: string, patch: RunPatch, deps: 
     await r.write(files.card, formatRunCard(next))
     patched = true
   })
+  kept.delete(root)
   return patched && (result.ok || result.committed)
 }
 
@@ -179,10 +181,37 @@ export async function patchRun(root: string, id: string, patch: RunPatch, deps: 
  */
 export async function deleteRun(root: string, id: string, deps: RecordDeps = {}): Promise<FileBranchWrite> {
   const r = resolveRecordDeps(deps)
-  return r.funnel(root, `logs: delete run ${id}`, async checkout => {
+  const result = await r.funnel(root, `logs: delete run ${id}`, async checkout => {
     const files = await locate(checkout, id, r)
     if (!files) return
     const dir = dirname(files.card)
     for (const name of await r.list(dir)) if (name.startsWith(`${id}.`)) await r.remove(join(dir, name))
   })
+  kept.delete(root)
+  return result
+}
+
+/** How long a project's records, once read, answer the lists of them: a dashboard asks many lists at each poll. */
+const RECORDS_KEPT_MS = 2_000
+
+/** The records each project's last kept list read, and the runs that had a folder then. */
+const kept = new Map<string, { at: number; records: Promise<ListedRun[]>; working: Set<string> }>()
+
+/**
+ * A project's runs as {@link listRuns} reads them, from the last read while it is fresh: for a reader
+ * that lists them again and again. `working` are the runs with a folder now: one whose folder went
+ * since that read was recorded a moment before it went, so the records are read again then, or its
+ * row would blink out until the next read. A write through this module reads them again too.
+ */
+export function keptRuns(root: string, working: readonly string[]): Promise<ListedRun[]> {
+  const now = new Set(working)
+  const last = kept.get(root)
+  const gone = last !== undefined && [...last.working].some(id => !now.has(id))
+  if (last && !gone && Date.now() - last.at < RECORDS_KEPT_MS) {
+    last.working = now
+    return last.records
+  }
+  const records = listRuns(root).catch((): ListedRun[] => [])
+  kept.set(root, { at: Date.now(), records, working: now })
+  return records
 }

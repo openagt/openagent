@@ -1,4 +1,4 @@
-import type { AgentMeta, AgentStatus } from '../store/agent-store.js'
+import type { AgentMeta, AgentStatus } from '../store/index.js'
 
 /** One run of a project, as a module sees it: what a page or a card shows of a run, and no more. */
 export interface ModuleAgent {

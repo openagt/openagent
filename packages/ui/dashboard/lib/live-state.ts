@@ -1,4 +1,5 @@
-import type { AgentMeta, OpenAgentEvent } from '../../src/index.js'
+import type { AgentMeta } from '../../src/index.js'
+import type { RunEvent } from '@openagt/hooks'
 
 // Live-run state derived from the event stream — kept pure so it can be driven and
 // tested on its own, away from React. The dashboard is a projection of the diary the
@@ -11,7 +12,7 @@ export { pendingChoices } from '../../src/client.js'
  * Whether the agent is still going, i.e. worth showing a Stop button. An agent ends with a
  * single `end` event; until one arrives (and once anything has streamed) it is live.
  */
-export function isAgentActive(events: readonly OpenAgentEvent[]): boolean {
+export function isAgentActive(events: readonly RunEvent[]): boolean {
   // Asked of the CURRENT segment, not the whole feed: a resumed session (#762) appends a second
   // `session` boundary after its `end` to the same journal, and "was there ever an end" read a
   // resumed-live run as inactive — hiding Stop and settling the pill while the agent worked.
@@ -33,7 +34,7 @@ export interface AgentOutcome {
  * about a finished agent used to live only in one small `✗ failed` feed line — the overview
  * pill said "finished" for a crash and a clean pass alike.
  */
-export function agentOutcome(events: readonly OpenAgentEvent[]): AgentOutcome | undefined {
+export function agentOutcome(events: readonly RunEvent[]): AgentOutcome | undefined {
   // The ending of the CURRENT segment: a resumed session (#762) carries its stopped segment's
   // `end` in the same journal, and the first-end-wins read kept a resumed agent "stopped" for
   // ever — while it was live again, and even after it later finished clean. Mid-resume there is
@@ -62,7 +63,7 @@ export function cardOutcome(status: AgentMeta['status']): AgentOutcome | undefin
  * end" must not answer with a leg the run has since left behind (#762). A feed with no boundary
  * is returned whole.
  */
-export function currentAgentEvents(events: readonly OpenAgentEvent[]): OpenAgentEvent[] {
+export function currentAgentEvents(events: readonly RunEvent[]): RunEvent[] {
   let start = 0
   let wentOn = false
   for (let i = events.length - 1; i >= 0; i--) {

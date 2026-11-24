@@ -1,4 +1,4 @@
-import type { OpenAgentEvent } from '../../src/index.js'
+import type { RunEvent } from '@openagt/hooks'
 import type { ReactElement, ReactNode } from 'react'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { act, cleanup, fireEvent, render as rendered, screen, waitFor, within } from '@testing-library/react'
@@ -36,7 +36,7 @@ afterEach(() => {
 // as Markdown, no row wears a label saying its kind, and a long prompt is cut short behind "Show more".
 describe('EventList conversation rows', () => {
   test('a quota reading is a row only when the quota is running low or used up', () => {
-    const quota = (status: string): OpenAgentEvent => ({ kind: 'driver', event: { type: 'rate-limit', limit: { status, window: 'five_hour', resetsAt: Date.UTC(2026, 8, 30, 11, 30) } } })
+    const quota = (status: string): RunEvent => ({ kind: 'driver', event: { type: 'rate-limit', limit: { status, window: 'five_hour', resetsAt: Date.UTC(2026, 8, 30, 11, 30) } } })
     render(<EventList events={[{ kind: 'driver', event: { type: 'start', prompt: 'hello' } }, quota('allowed'), quota('allowed_warning'), quota('rejected')]} stick={false} />)
     // Two rows, not three: a quota that is fine is no row at all.
     expect(screen.queryAllByText(/quota/)).toHaveLength(2)
@@ -48,7 +48,7 @@ describe('EventList conversation rows', () => {
   })
 
   test('the name the session was given is no row: it is the name, not a step the agent took', () => {
-    const events: OpenAgentEvent[] = [
+    const events: RunEvent[] = [
       { kind: 'driver', event: { type: 'start', prompt: 'make readme.md shorter' } },
       { kind: 'title', text: 'README.md condensing' },
       { kind: 'driver', event: { type: 'text', text: 'done' } },
@@ -60,7 +60,7 @@ describe('EventList conversation rows', () => {
   })
 
   test("the agent's session id is not a row: it is plumbing, read by the run's menu", () => {
-    const events: OpenAgentEvent[] = [
+    const events: RunEvent[] = [
       { kind: 'driver', event: { type: 'start', prompt: 'hello' } },
       { kind: 'session-update', sessionId: '88cd200f-6f76-4e3e-b694-b161ea9b5e3e' },
       { kind: 'driver', event: { type: 'text', text: 'hi' } },
@@ -71,7 +71,7 @@ describe('EventList conversation rows', () => {
   })
 
   test('a message just sent shows at once as the last prompt, a box of its own', () => {
-    const events: OpenAgentEvent[] = [
+    const events: RunEvent[] = [
       { kind: 'driver', event: { type: 'start', prompt: 'first' } },
       { kind: 'driver', event: { type: 'text', text: 'done' } },
     ]
@@ -82,7 +82,7 @@ describe('EventList conversation rows', () => {
   })
 
   test('a prompt is a card on the right, and neither it nor the reply wears a label', () => {
-    const events: OpenAgentEvent[] = [
+    const events: RunEvent[] = [
       { kind: 'driver', event: { type: 'start', prompt: 'what is your name?' } },
       { kind: 'driver', event: { type: 'text', text: 'I am **Claude**.' } },
     ]
@@ -97,7 +97,7 @@ describe('EventList conversation rows', () => {
   })
 
   test('no row wears a label saying its kind, and the rows sit in one centered column', () => {
-    const events: OpenAgentEvent[] = [
+    const events: RunEvent[] = [
       { kind: 'driver', event: { type: 'start', prompt: 'go' } },
       { kind: 'driver', event: { type: 'text', text: 'On it.' } },
       { kind: 'log', message: 'A note.' },
@@ -135,7 +135,7 @@ describe('EventList conversation rows', () => {
 
   test('the first of a run of rows holds the time its line was written, shown while the pointer is on the row; a line with no time holds none', () => {
     const at = '2026-09-25T10:04:05.000Z'
-    const events: OpenAgentEvent[] = [
+    const events: RunEvent[] = [
       { kind: 'driver', event: { type: 'start', prompt: 'hello' }, at },
       { kind: 'driver', event: { type: 'text', text: 'hi' } },
     ]
@@ -211,7 +211,7 @@ describe('EventList conversation rows', () => {
 
   test('the message being written and the finished message are drawn the same, so one takes the other\'s place without a jump', () => {
     const text = 'word '.repeat(40) + 'end'
-    const prompt: OpenAgentEvent = { kind: 'driver', event: { type: 'start', prompt: 'go' } }
+    const prompt: RunEvent = { kind: 'driver', event: { type: 'start', prompt: 'go' } }
     // Its words come in one by one while it is written: the same words, in the same box.
     const shape = () => {
       const box = screen.getByText(/end$/).closest('.font-sans')!
@@ -243,10 +243,10 @@ describe('EventList conversation rows', () => {
 // The agent's steps between two messages (tool calls, thoughts) are one folded line, as Claude Code
 // on the web draws them, and the chat has no thinking row.
 describe('EventList tool calls', () => {
-  const prompt: OpenAgentEvent = { kind: 'driver', event: { type: 'start', prompt: 'go' } }
-  const call = (label: string, detail: string): OpenAgentEvent => ({ kind: 'driver', event: { type: 'action', label, detail } })
-  const thought = (text: string): OpenAgentEvent => ({ kind: 'driver', event: { type: 'thought', text } })
-  const said = (text: string): OpenAgentEvent => ({ kind: 'driver', event: { type: 'text', text } })
+  const prompt: RunEvent = { kind: 'driver', event: { type: 'start', prompt: 'go' } }
+  const call = (label: string, detail: string): RunEvent => ({ kind: 'driver', event: { type: 'action', label, detail } })
+  const thought = (text: string): RunEvent => ({ kind: 'driver', event: { type: 'thought', text } })
+  const said = (text: string): RunEvent => ({ kind: 'driver', event: { type: 'text', text } })
   const ids = () => Array.from(document.querySelectorAll('[data-message-id]')).map(n => n.getAttribute('data-message-id'))
 
   test('calls in a row are one line, and a message between two runs makes two lines', () => {
@@ -300,8 +300,8 @@ describe('EventList tool calls', () => {
   })
 
   test('what a call printed is no row: it is inside its call, by the call\'s id, also across a message', () => {
-    const run = (id: string, detail: string): OpenAgentEvent => ({ kind: 'driver', event: { type: 'action', label: 'Bash', detail, id } })
-    const printed = (id: string, text: string): OpenAgentEvent => ({ kind: 'driver', event: { type: 'output', id, text } })
+    const run = (id: string, detail: string): RunEvent => ({ kind: 'driver', event: { type: 'action', label: 'Bash', detail, id } })
+    const printed = (id: string, text: string): RunEvent => ({ kind: 'driver', event: { type: 'output', id, text } })
     // Two calls at once: their outputs come after both, the second one first, one after a message.
     render(<EventList events={[prompt, run('t1', 'ls'), run('t2', 'pwd'), printed('t2', '/repo'), said('Looking.'), printed('t1', 'a.ts'), printed('gone', 'lost')]} stick={false} />)
     expect(ids()).toEqual(['turn:1', '1', '4'])
@@ -315,7 +315,7 @@ describe('EventList tool calls', () => {
   })
 
   test('once a call has printed, it is over: it joins its run and the last line names no step', () => {
-    const run: OpenAgentEvent = { kind: 'driver', event: { type: 'action', label: 'Bash', detail: 'ls', id: 't1' } }
+    const run: RunEvent = { kind: 'driver', event: { type: 'action', label: 'Bash', detail: 'ls', id: 't1' } }
     const { rerender } = render(<EventList events={[prompt, run]} working stick={false} />)
     expect(screen.getByRole('status').textContent).toBe('Runningls')
     rerender(<EventList events={[prompt, run, { kind: 'driver', event: { type: 'output', id: 't1', text: 'a.ts' } }]} working stick={false} />)
@@ -325,7 +325,7 @@ describe('EventList tool calls', () => {
   })
 
   test('the moving line counts the tokens the turn went through once it has answered something, as Claude Code on the web does', () => {
-    const tokens = (n: number): OpenAgentEvent => ({ kind: 'driver', event: { type: 'tokens', tokens: n } })
+    const tokens = (n: number): RunEvent => ({ kind: 'driver', event: { type: 'tokens', tokens: n } })
     const { rerender } = render(<EventList events={[prompt, tokens(12_000), call('Bash', 'ls'), tokens(96_912)]} working stick={false} />)
     expect(screen.getByRole('status').textContent).toBe('Runningls')
     rerender(<EventList events={[prompt, tokens(12_000), call('Bash', 'ls'), tokens(96_912), { kind: 'driver', event: { type: 'text', text: 'Listed.' } }, tokens(98_100)]} working stick={false} />)
@@ -333,17 +333,17 @@ describe('EventList tool calls', () => {
   })
 
   test("while its turn is over and its own subagents still work it waits with no moving line; a subagent's message wakes it, and the line counts from then", () => {
-    const started: OpenAgentEvent = { kind: 'driver', event: { type: 'subagent', id: 'toolu_a', status: 'working', name: 'Map' }, at: '2026-10-01T10:00:10.000Z' }
-    const over: OpenAgentEvent = { kind: 'driver', event: { type: 'result', text: 'Both run.' }, at: '2026-10-01T10:00:20.000Z' }
+    const started: RunEvent = { kind: 'driver', event: { type: 'subagent', id: 'toolu_a', status: 'working', name: 'Map' }, at: '2026-10-01T10:00:10.000Z' }
+    const over: RunEvent = { kind: 'driver', event: { type: 'result', text: 'Both run.' }, at: '2026-10-01T10:00:20.000Z' }
     const { rerender } = render(<EventList events={[prompt, started, { kind: 'driver', event: { type: 'text', text: 'Both run.' }, at: '2026-10-01T10:00:19.000Z' }, over]} working stick={false} />)
     expect(screen.queryByRole('status')).toBeNull()
-    const woke: OpenAgentEvent = { kind: 'driver', event: { type: 'thinking' }, at: new Date().toISOString() }
+    const woke: RunEvent = { kind: 'driver', event: { type: 'thinking' }, at: new Date().toISOString() }
     rerender(<EventList events={[prompt, started, { kind: 'driver', event: { type: 'text', text: 'Both run.' }, at: '2026-10-01T10:00:19.000Z' }, over, woke]} working stick={false} />)
     expect(screen.getByRole('status')).toBeTruthy()
   })
 
   test('while the agent thinks the moving line is its dots and seconds, with no word for it, as Claude Code on the web\u2019s is', () => {
-    const thinking: OpenAgentEvent = { kind: 'driver', event: { type: 'thinking' } }
+    const thinking: RunEvent = { kind: 'driver', event: { type: 'thinking' } }
     const { rerender } = render(<EventList events={[prompt]} working stick={false} />)
     expect(screen.getByRole('status').textContent).toBe('')
     rerender(<EventList events={[prompt, thinking]} working stick={false} />)
@@ -396,14 +396,14 @@ describe('EventList tool calls', () => {
 // A question in the flow, as Claude Code on the web draws it: a grey "Asking …" line while it
 // waits, and, once answered, a small box holding the question and the answer.
 describe('EventList question and answer', () => {
-  const asked: OpenAgentEvent[] = [
+  const asked: RunEvent[] = [
     { kind: 'driver', event: { type: 'start', prompt: 'Ask me which color' } },
     { kind: 'driver', event: { type: 'text', text: 'Which color do you prefer?\n\n```await-choices\n{ "title": "Which color do you prefer?" }\n```' } },
     { kind: 'choice', id: 'question', title: 'Which color do you prefer?', options: [{ id: 'opt:0', label: 'Red' }, { id: 'opt:1', label: 'Blue' }] },
     { kind: 'end', ok: false, waiting: true },
-  ] as OpenAgentEvent[]
-  const resumed = (prompt: string): OpenAgentEvent[] =>
-    [...asked, { kind: 'driver', event: { type: 'start', prompt } }, { kind: 'driver', event: { type: 'text', text: 'Red it is.' } }, { kind: 'end', ok: true }] as OpenAgentEvent[]
+  ] as RunEvent[]
+  const resumed = (prompt: string): RunEvent[] =>
+    [...asked, { kind: 'driver', event: { type: 'start', prompt } }, { kind: 'driver', event: { type: 'text', text: 'Red it is.' } }, { kind: 'end', ok: true }] as RunEvent[]
 
   test("a question that waits is the card of the module that asks, in the chat, with its choices, answered there", () => {
     render(<EventList events={asked} projectId="p1" agentId="r1" stick={false} />)
@@ -430,7 +430,7 @@ describe('EventList question and answer', () => {
 
   test('a question passed by with a message instead is one grey line, named by its header, opening to the question', () => {
     const header = asked.map(e => (e.kind === 'choice' ? { ...e, header: 'Colour' } : e))
-    render(<EventList events={[...header, { kind: 'driver', event: { type: 'start', prompt: 'run ls first' } }, { kind: 'driver', event: { type: 'text', text: 'Done.' } }] as OpenAgentEvent[]} projectId="p1" agentId="r1" stick={false} />)
+    render(<EventList events={[...header, { kind: 'driver', event: { type: 'start', prompt: 'run ls first' } }, { kind: 'driver', event: { type: 'text', text: 'Done.' } }] as RunEvent[]} projectId="p1" agentId="r1" stick={false} />)
     expect(screen.queryByRole('region', { name: 'Which color do you prefer?' })).toBeNull()
     const line = screen.getByRole('button', { name: /Asked “Colour”\s*Replied in chat/ })
     expect(screen.queryByText('Which color do you prefer?', { selector: 'div:not([data-markdown])' })).toBeNull()
@@ -439,13 +439,13 @@ describe('EventList question and answer', () => {
   })
 
   test('with no header, the passed question is named by the question itself', () => {
-    render(<EventList events={[...asked, { kind: 'driver', event: { type: 'start', prompt: 'run ls first' } }] as OpenAgentEvent[]} projectId="p1" agentId="r1" stick={false} />)
+    render(<EventList events={[...asked, { kind: 'driver', event: { type: 'start', prompt: 'run ls first' } }] as RunEvent[]} projectId="p1" agentId="r1" stick={false} />)
     expect(screen.getByRole('button', { name: /Asked “Which color do you prefer\?”/ })).toBeTruthy()
   })
 
   test('the card waits for the words above it: not while they are being typed, nor while more are coming', async () => {
     const long = 'Three tasks, each with its own files. '.repeat(10)
-    const said: OpenAgentEvent = { kind: 'driver', event: { type: 'text', text: long } }
+    const said: RunEvent = { kind: 'driver', event: { type: 'text', text: long } }
     const events = [asked[0]!, said, asked[2]!, asked[3]!]
     const card = () => screen.queryByRole('region', { name: 'Which color do you prefer?' })
     // The setup file asks for less motion; this reader did not.
@@ -465,7 +465,7 @@ describe('EventList question and answer', () => {
   test('a message that came whole is shown whole, and its question card with it', () => {
     const media = window.matchMedia
     window.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} }) as unknown as MediaQueryList
-    const said: OpenAgentEvent = { kind: 'driver', event: { type: 'text', text: 'A reply nobody saw being written.' }, at: new Date().toISOString() }
+    const said: RunEvent = { kind: 'driver', event: { type: 'text', text: 'A reply nobody saw being written.' }, at: new Date().toISOString() }
     render(<EventList events={[asked[0]!, said, asked[2]!, asked[3]!]} working projectId="p1" agentId="r1" stick={false} />)
     expect(screen.getByText('A reply nobody saw being written.')).toBeTruthy()
     expect(screen.getByRole('region', { name: 'Which color do you prefer?' })).toBeTruthy()
@@ -474,8 +474,8 @@ describe('EventList question and answer', () => {
 
   test('the turn a question ended has its copy and time under the card, not under what was said before it; the copy takes what was said, and a reply that was only the question\'s block adds nothing', async () => {
     const at = '2026-09-25T10:04:05.000Z'
-    const said: OpenAgentEvent = { kind: 'driver', event: { type: 'text', text: 'Here is the plan.' }, at }
-    const block: OpenAgentEvent = { kind: 'driver', event: { type: 'text', text: '```await-choices\n{ "title": "Which color do you prefer?", "options": [{ "label": "Red" }] }\n```' }, at }
+    const said: RunEvent = { kind: 'driver', event: { type: 'text', text: 'Here is the plan.' }, at }
+    const block: RunEvent = { kind: 'driver', event: { type: 'text', text: '```await-choices\n{ "title": "Which color do you prefer?", "options": [{ "label": "Red" }] }\n```' }, at }
     render(<EventList events={[asked[0]!, said, block, { ...asked[2]!, at }, asked[3]!]} projectId="p1" agentId="r1" stick={false} />)
     const row = screen.getByRole('region', { name: 'Which color do you prefer?' }).closest('[data-message-id]') as HTMLElement
     const copy = within(row).getByRole('button', { name: 'Copy this message' })
@@ -501,12 +501,12 @@ describe('EventList question and answer', () => {
   })
 
   test('an agent that asks twice under one id: each answered question is said once, by its box', () => {
-    const second: OpenAgentEvent[] = [
+    const second: RunEvent[] = [
       ...resumed('You paused to ask: "Which color do you prefer?". The user chose: Red. Continue with that decision.'),
       { kind: 'choice', id: 'question', title: 'Which size?', options: [{ id: 'opt:0', label: 'Small' }] },
       { kind: 'end', ok: false, waiting: true },
       { kind: 'driver', event: { type: 'start', prompt: 'You paused to ask: "Which size?". The user chose: Small. Continue with that decision.' } },
-    ] as OpenAgentEvent[]
+    ] as RunEvent[]
     render(<EventList events={second} projectId="p1" stick={false} />)
     expect(screen.getAllByRole('group', { name: 'Your answer' }).map(n => n.textContent)).toEqual(['Which color do you prefer?Red', 'Which size?Small'])
     expect(screen.queryByText(/\? Which/)).toBeNull()
@@ -523,7 +523,7 @@ describe('EventList question and answer', () => {
   })
 
   test('an answered question goes on the same turn: one footer at its end, whose copy takes all the agent said since my message', async () => {
-    const before: OpenAgentEvent = { kind: 'driver', event: { type: 'text', text: 'Here are the words.' } }
+    const before: RunEvent = { kind: 'driver', event: { type: 'text', text: 'Here are the words.' } }
     const events = resumed('You paused to ask: "Which color do you prefer?". The user chose: Red. Continue with that decision.')
     render(<EventList events={[events[0]!, before, ...events.slice(1)]} projectId="p1" stick={false} />)
     // Besides my message's own copy, one: under the turn's last message.
@@ -550,11 +550,11 @@ describe('EventList question and answer', () => {
 describe('EventList session line', () => {
   const setup = { workspace: '/repo/.branches/agent-1', branch: 'agent-1', driver: 'codex' }
   const ids = () => Array.from(document.querySelectorAll('[data-message-id]')).map(n => n.getAttribute('data-message-id'))
-  const prompt: OpenAgentEvent = { kind: 'driver', event: { type: 'start', prompt: 'go' } }
-  const said: OpenAgentEvent = { kind: 'driver', event: { type: 'text', text: 'Hello.' } }
+  const prompt: RunEvent = { kind: 'driver', event: { type: 'start', prompt: 'go' } }
+  const said: RunEvent = { kind: 'driver', event: { type: 'text', text: 'Hello.' } }
 
   test('a prompt with a sentence added after it shows the person\'s words alone; the sentence is in the opened setup line', () => {
-    const told: OpenAgentEvent = { kind: 'driver', event: { type: 'start', prompt: 'Fix the typo', added: 'When you finish, if you changed any file, commit your work.' } }
+    const told: RunEvent = { kind: 'driver', event: { type: 'start', prompt: 'Fix the typo', added: 'When you finish, if you changed any file, commit your work.' } }
     render(<EventList events={[told, { kind: 'driver', event: { type: 'text', text: 'Fixed.' } }]} setup={{ workspace: '/w', branch: 'agent-1' }} stick={false} />)
     expect(screen.getByText('Fix the typo')).toBeTruthy()
     expect(screen.queryByText(/When you finish/)).toBeNull()
@@ -564,7 +564,7 @@ describe('EventList session line', () => {
 
   test('a prompt with a text attached shows the person\'s words alone, and "Sent with this message" under them opens to the text as it was sent; a prompt with none has no such line', () => {
     const found = 'What the check printed is below.\n[{"url":"https://example.test/1"}]'
-    const handed: OpenAgentEvent = { kind: 'driver', event: { type: 'start', prompt: '/answer-comments', attached: found, added: 'When you finish, if you changed any file, commit your work.' } }
+    const handed: RunEvent = { kind: 'driver', event: { type: 'start', prompt: '/answer-comments', attached: found, added: 'When you finish, if you changed any file, commit your work.' } }
     const { container } = render(<EventList events={[handed, said, { kind: 'driver', event: { type: 'start', prompt: 'And this one' } }]} setup={{ workspace: '/w', branch: 'agent-1' }} stick={false} />)
     expect(screen.getByText('/answer-comments')).toBeTruthy()
     expect(container.textContent).not.toContain('What the check printed')
@@ -581,7 +581,7 @@ describe('EventList session line', () => {
   test('a message\'s images stand as tiles over its box, from the dashboard\'s copy, for a message read mid-turn and one still waiting too; one this computer no longer keeps says so', () => {
     const shot = `${'a'.repeat(64)}.png`
     const other = `${'b'.repeat(64)}.jpg`
-    const events: OpenAgentEvent[] = [
+    const events: RunEvent[] = [
       { kind: 'driver', event: { type: 'start', prompt: 'What word is in it?', images: [shot] } },
       said,
       { kind: 'driver', event: { type: 'steered', text: 'And this one?', id: 'm1', images: [other] } },
@@ -635,7 +635,7 @@ describe('EventList session line', () => {
   })
 
   test('a first call with nothing of its own to open still opens to the set-up it carries', () => {
-    const call: OpenAgentEvent = { kind: 'driver', event: { type: 'action', label: 'TodoWrite' } }
+    const call: RunEvent = { kind: 'driver', event: { type: 'action', label: 'TodoWrite' } }
     render(<EventList events={[prompt, call, said]} setup={setup} stick={false} />)
     fireEvent.click(screen.getByRole('button', { name: 'Updated todos' }))
     expect(screen.getByRole('button', { name: 'Initialized session' })).toBeTruthy()
@@ -643,7 +643,7 @@ describe('EventList session line', () => {
 
   test('as the first row of a box of steps, opened, its lines have no box of their own; alone, they do; the line of steps has no time', () => {
     const at = '2026-09-25T10:04:05.000Z'
-    const call: OpenAgentEvent = { kind: 'driver', event: { type: 'action', label: 'Bash', detail: 'ls' }, at }
+    const call: RunEvent = { kind: 'driver', event: { type: 'action', label: 'Bash', detail: 'ls' }, at }
     const { unmount } = render(<EventList events={[prompt, call, said]} setup={setup} stick={false} />)
     // The first command is named, as every later one is: the set-up it carries opens with it.
     fireEvent.click(screen.getByRole('button', { name: 'Ran ls' }))
@@ -703,7 +703,7 @@ describe('EventList prompt placement', () => {
   const rowText = () => Array.from(document.querySelectorAll('[data-message-id]')).map(n => n.textContent ?? '')
 
   test('the first prompt is hoisted above the session row (#1170)', () => {
-    const events: OpenAgentEvent[] = [
+    const events: RunEvent[] = [
       { kind: 'session', driver: 'claude-code', workspace: '/repo', fake: false },
       { kind: 'driver', event: { type: 'start', prompt: 'add a search box' } },
       { kind: 'driver', event: { type: 'text', text: 'done' } },
@@ -713,7 +713,7 @@ describe('EventList prompt placement', () => {
   })
 
   test('a later turn stays where it happened, in the conversation (#1170)', () => {
-    const events: OpenAgentEvent[] = [
+    const events: RunEvent[] = [
       { kind: 'session', driver: 'claude-code', workspace: '/repo', fake: false },
       { kind: 'driver', event: { type: 'start', prompt: 'first question' } },
       { kind: 'driver', event: { type: 'text', text: 'first answer' } },
@@ -727,7 +727,7 @@ describe('EventList prompt placement', () => {
   })
 
   test('a log with no prompt at all is left alone (#1170)', () => {
-    const events: OpenAgentEvent[] = [
+    const events: RunEvent[] = [
       { kind: 'session', driver: 'claude-code', workspace: '/repo', fake: false },
       { kind: 'driver', event: { type: 'text', text: 'resumed reply' } },
     ]
@@ -739,7 +739,7 @@ describe('EventList prompt placement', () => {
 // With a projectId, an open `choice` is no row (its page asks it above the message box), and a
 // resolved one collapses to the AnsweredChoice ✓ card.
 describe('EventList choice rows', () => {
-  const gate = (id = 'gate-1'): OpenAgentEvent => ({
+  const gate = (id = 'gate-1'): RunEvent => ({
     kind: 'choice',
     id,
     title: 'Start the next backlog item?',
@@ -749,12 +749,12 @@ describe('EventList choice rows', () => {
     ],
     recommended: 'work',
   })
-  const resolved = (id = 'gate-1'): OpenAgentEvent => ({ kind: 'choice-resolved', id, picked: 'work', by: 'user' })
+  const resolved = (id = 'gate-1'): RunEvent => ({ kind: 'choice-resolved', id, picked: 'work', by: 'user' })
 
   test('a turn that ended on a question the person answered has no copy and time under what was said before it: the answer stands where the card was', async () => {
-    const said: OpenAgentEvent = { kind: 'driver', event: { type: 'text', text: 'Here is the plan.' } }
-    const answered: OpenAgentEvent = { kind: 'driver', event: { type: 'start', prompt: continuationPrompt('Start the next backlog item?', 'Work on it') } }
-    const first: OpenAgentEvent = { kind: 'driver', event: { type: 'start', prompt: 'Plan the next item' } }
+    const said: RunEvent = { kind: 'driver', event: { type: 'text', text: 'Here is the plan.' } }
+    const answered: RunEvent = { kind: 'driver', event: { type: 'start', prompt: continuationPrompt('Start the next backlog item?', 'Work on it') } }
+    const first: RunEvent = { kind: 'driver', event: { type: 'start', prompt: 'Plan the next item' } }
     render(<EventList events={[first, said, gate(), answered, { kind: 'driver', event: { type: 'text', text: 'On it.' } }]} stick={false} projectId="p1" agentId="r1" />)
     expect(screen.getByRole('group', { name: 'Your answer' }).textContent).toBe('Start the next backlog item?Work on it')
     const before = screen.getByText('Here is the plan.').closest('[data-message-id]') as HTMLElement
@@ -762,9 +762,9 @@ describe('EventList choice rows', () => {
   })
 
   test('an answer just given stands where the card was, and the agent\'s own line of it lands in that same place: nothing comes at the end and goes back up', async () => {
-    const first: OpenAgentEvent = { kind: 'driver', event: { type: 'start', prompt: 'Plan the next item' } }
-    const said: OpenAgentEvent = { kind: 'driver', event: { type: 'text', text: 'Here is the plan.' } }
-    const waiting: OpenAgentEvent = { kind: 'end', ok: false, waiting: true }
+    const first: RunEvent = { kind: 'driver', event: { type: 'start', prompt: 'Plan the next item' } }
+    const said: RunEvent = { kind: 'driver', event: { type: 'text', text: 'Here is the plan.' } }
+    const waiting: RunEvent = { kind: 'end', ok: false, waiting: true }
     const answer = continuationPrompt('Start the next backlog item?', 'Work on it')
     const order = () => [...document.querySelectorAll('[data-message-id]')].map(row => (row.querySelector('[aria-label="Your answer"]') ? 'answer' : (row.textContent ?? '').slice(0, 9)))
     const { rerender } = render(<EventList events={[first, said, gate(), waiting]} sending={answer} stick={false} projectId="p1" agentId="r1" />)
@@ -780,7 +780,7 @@ describe('EventList choice rows', () => {
   })
 
   test('an open gate is its card in the flow, right under what the agent said', () => {
-    const said: OpenAgentEvent = { kind: 'driver', event: { type: 'text', text: 'Here is the plan.' } }
+    const said: RunEvent = { kind: 'driver', event: { type: 'text', text: 'Here is the plan.' } }
     render(<EventList events={[said, gate()]} stick={false} projectId="p1" agentId="r1" />)
     expect(screen.getByText('Here is the plan.')).toBeTruthy()
     const rows = document.querySelectorAll('[data-message-id]')
@@ -827,12 +827,12 @@ describe('EventList choice rows', () => {
   })
 
   test('a run that ended waiting on its question asks it in its card; once the agent went on with no recorded pick, the question is its text (#1774)', () => {
-    const waiting: OpenAgentEvent = { kind: 'end', ok: false, waiting: true }
+    const waiting: RunEvent = { kind: 'end', ok: false, waiting: true }
     const { rerender } = render(<EventList events={[gate(), waiting]} stick={false} projectId="p1" agentId="r1" />)
     expect(screen.getByRole('region', { name: 'Start the next backlog item?' })).toBeTruthy()
     expect(screen.queryByText(/\? Start the next backlog item\?/)).toBeNull()
     // The person's own message resumed the run: no pick was recorded, so the question stays as text.
-    const next: OpenAgentEvent = { kind: 'driver', event: { type: 'text', text: 'On it.' } }
+    const next: RunEvent = { kind: 'driver', event: { type: 'text', text: 'On it.' } }
     rerender(<EventList events={[gate(), waiting, next]} stick={false} projectId="p1" agentId="r1" />)
     expect(screen.queryByRole('region', { name: 'Start the next backlog item?' })).toBeNull()
     expect(screen.getByText(/Start the next backlog item\?/)).toBeTruthy()
@@ -886,7 +886,7 @@ describe('EventList row wash (#1508)', () => {
 describe('EventList screen rows', () => {
   const at = (n: number) => `http://127.0.0.1:${n}/?t=x`
   const opens = () => screen.queryAllByRole('button', { name: /^browser/ }).map(row => row.textContent)
-  const show = (events: OpenAgentEvent[]) => {
+  const show = (events: RunEvent[]) => {
     const onOpenScreen = vi.fn()
     render(<EventList events={events} stick={false} onOpenScreen={onOpenScreen} />)
     return onOpenScreen
@@ -960,13 +960,13 @@ describe('EventList screen rows', () => {
 describe('EventList subagent rows', () => {
   const time = (at: string) => `2026-10-01T10:${at}.000Z`
   /** A subagent the coding agent starts at `at`: the `Agent` call and the subagent's first event. */
-  const started = (id: string, name: string, at: string, more: { model?: string } = {}): OpenAgentEvent[] => [
+  const started = (id: string, name: string, at: string, more: { model?: string } = {}): RunEvent[] => [
     { kind: 'driver', event: { type: 'action', label: 'Agent', detail: name, id }, at: time(at) },
     { kind: 'driver', event: { type: 'subagent', id, status: 'working', name, ...more }, at: time(at) },
   ]
   /** How it ended, at `at`. */
-  const ended = (id: string, name: string, at: string, status: 'ended' | 'failed' = 'ended'): OpenAgentEvent => ({ kind: 'driver', event: { type: 'subagent', id, status, name }, at: time(at) })
-  const events: OpenAgentEvent[] = [
+  const ended = (id: string, name: string, at: string, status: 'ended' | 'failed' = 'ended'): RunEvent => ({ kind: 'driver', event: { type: 'subagent', id, status, name }, at: time(at) })
+  const events: RunEvent[] = [
     { kind: 'driver', event: { type: 'start', prompt: 'split the work' }, at: time('00:00') },
     { kind: 'driver', event: { type: 'action', label: 'Bash', detail: 'git status', id: 'b1' }, at: time('00:59') },
     ...started('toolu_v', 'Validate the form', '01:00', { model: 'claude-sonnet-5-5' }),
@@ -974,7 +974,7 @@ describe('EventList subagent rows', () => {
   ]
 
   test('a working subagent has a row where it was started, saying its task, its model, the tool it is on and how many calls it made', () => {
-    const steps: OpenAgentEvent[] = ['01:01', '01:02', '01:03'].map((at, n) => ({ kind: 'driver', event: { type: 'action', label: 'Edit', detail: 'login.ts', id: `e${n}`, subagent: 'toolu_v' }, at: time(at) }))
+    const steps: RunEvent[] = ['01:01', '01:02', '01:03'].map((at, n) => ({ kind: 'driver', event: { type: 'action', label: 'Edit', detail: 'login.ts', id: `e${n}`, subagent: 'toolu_v' }, at: time(at) }))
     const { container } = render(<EventList events={[...events.slice(0, 4), ...steps, ...events.slice(4)]} working stick={false} />)
     expect(screen.getByText('Validate the form')).toBeTruthy()
     expect(screen.getByText('claude-sonnet-5-5')).toBeTruthy()
@@ -995,7 +995,7 @@ describe('EventList subagent rows', () => {
   })
 
   test('the subagents started with nothing said between them are one line where the first was started, saying what came of them, opening to a row each; words part them', () => {
-    const later: OpenAgentEvent[] = [
+    const later: RunEvent[] = [
       ...events.slice(0, 4),
       ...started('toolu_d', 'Write the docs', '01:02'),
       events[4]!,
@@ -1031,7 +1031,7 @@ describe('EventList subagent rows', () => {
   })
 
   // What a coding agent's own `Agent` call says in the log, beside the call's own row.
-  const agentCall: OpenAgentEvent[] = [
+  const agentCall: RunEvent[] = [
     { kind: 'driver', event: { type: 'start', prompt: 'look around' }, at: '2026-10-01T10:00:00.000Z' },
     { kind: 'driver', event: { type: 'action', label: 'Agent', detail: 'Map the pages', id: 'toolu_a' }, at: '2026-10-01T10:00:10.000Z' },
     { kind: 'driver', event: { type: 'subagent', id: 'toolu_a', status: 'working', name: 'Map the pages', role: 'Explore', prompt: 'Read how the pages are served.' }, at: '2026-10-01T10:00:10.000Z' },
@@ -1040,7 +1040,7 @@ describe('EventList subagent rows', () => {
     { kind: 'driver', event: { type: 'output', id: 'toolu_b', text: 'export…', subagent: 'toolu_a' }, at: '2026-10-01T10:00:13.000Z' },
     { kind: 'driver', event: { type: 'text', text: 'The pages are served by server.ts.', subagent: 'toolu_a' }, at: '2026-10-01T10:00:20.000Z' },
   ]
-  const callEnded: OpenAgentEvent[] = [
+  const callEnded: RunEvent[] = [
     { kind: 'driver', event: { type: 'output', id: 'toolu_a', text: 'The pages are served by server.ts.' }, at: '2026-10-01T10:00:41.000Z' },
     { kind: 'driver', event: { type: 'subagent', id: 'toolu_a', status: 'ended', name: 'Map the pages', role: 'Explore', prompt: 'Read how the pages are served.', model: 'claude-haiku-5-5' }, at: '2026-10-01T10:00:41.000Z' },
     { kind: 'driver', event: { type: 'text', text: 'It found the server.' }, at: '2026-10-01T10:00:45.000Z' },
@@ -1074,7 +1074,7 @@ describe('EventList subagent rows', () => {
   })
 
   test('on Codex a call that concerns two agents is two rows, and the call itself is no row', () => {
-    const codex: OpenAgentEvent[] = [
+    const codex: RunEvent[] = [
       { kind: 'driver', event: { type: 'start', prompt: 'split it' }, at: '2026-10-01T10:00:00.000Z' },
       { kind: 'driver', event: { type: 'action', label: 'collabAgentToolCall', id: 'item_1' }, at: '2026-10-01T10:00:10.000Z' },
       { kind: 'driver', event: { type: 'subagent', id: 'item_1:t1', status: 'working', name: 'Ada', role: 'worker' }, at: '2026-10-01T10:00:10.000Z' },
@@ -1093,11 +1093,11 @@ describe('EventList subagent rows', () => {
 // What the run's details already count is not said again in the chat, and a turn that ended
 // cleanly or on a question has no end line: only a stopped or failed end is said.
 describe('EventList turn ends', () => {
-  const prompt = (text: string): OpenAgentEvent => ({ kind: 'driver', event: { type: 'start', prompt: text } })
-  const reply = (text: string): OpenAgentEvent => ({ kind: 'driver', event: { type: 'text', text } })
-  const turnEnd = { kind: 'driver', event: { type: 'result', text: '' } } as OpenAgentEvent
-  const cost: OpenAgentEvent = { kind: 'usage', costUsd: 0.12 }
-  const end = (over: Record<string, unknown> = {}) => ({ kind: 'end', ok: true, ...over }) as OpenAgentEvent
+  const prompt = (text: string): RunEvent => ({ kind: 'driver', event: { type: 'start', prompt: text } })
+  const reply = (text: string): RunEvent => ({ kind: 'driver', event: { type: 'text', text } })
+  const turnEnd = { kind: 'driver', event: { type: 'result', text: '' } } as RunEvent
+  const cost: RunEvent = { kind: 'usage', costUsd: 0.12 }
+  const end = (over: Record<string, unknown> = {}) => ({ kind: 'end', ok: true, ...over }) as RunEvent
 
   test("a turn's end and the spend so far are not rows", () => {
     render(<EventList events={[prompt('go'), reply('did it'), turnEnd, cost, end()]} stick={false} />)
@@ -1137,25 +1137,25 @@ describe('EventList turn ends', () => {
 
 describe('EventList replies a question follows', () => {
   const long = 'The plan is saved. '.repeat(10)
-  const prompt: OpenAgentEvent = { kind: 'driver', event: { type: 'start', prompt: 'plan it' } }
-  const reply = (text: string): OpenAgentEvent => ({ kind: 'driver', event: { type: 'text', text } })
-  const choice = { kind: 'choice', id: 'question', title: 'Start?', options: [{ id: 'a', label: 'Approve' }] } as OpenAgentEvent
+  const prompt: RunEvent = { kind: 'driver', event: { type: 'start', prompt: 'plan it' } }
+  const reply = (text: string): RunEvent => ({ kind: 'driver', event: { type: 'text', text } })
+  const choice = { kind: 'choice', id: 'question', title: 'Start?', options: [{ id: 'a', label: 'Approve' }] } as RunEvent
 
   test('the reply a question follows is the last reply before the question in its turn', () => {
     const early = reply(long + 'early')
     const asked = reply(long + 'asked')
     const later = reply(long + 'later')
-    const events = [prompt, early, asked, choice, { kind: 'driver', event: { type: 'start', prompt: 'Approve' } } as OpenAgentEvent, later, { kind: 'usage', costUsd: 0.2 } as OpenAgentEvent]
+    const events = [prompt, early, asked, choice, { kind: 'driver', event: { type: 'start', prompt: 'Approve' } } as RunEvent, later, { kind: 'usage', costUsd: 0.2 } as RunEvent]
     expect([...askedReplies(events)]).toEqual([asked])
     // A question in a later turn is not about a reply of the turn before.
-    expect(askedReplies([prompt, early, { kind: 'driver', event: { type: 'start', prompt: 'go on' } } as OpenAgentEvent, choice]).size).toBe(0)
+    expect(askedReplies([prompt, early, { kind: 'driver', event: { type: 'start', prompt: 'go on' } } as RunEvent, choice]).size).toBe(0)
   })
 })
 
 describe('EventList hides the block a question is written in', () => {
-  const prompt: OpenAgentEvent = { kind: 'driver', event: { type: 'start', prompt: 'ask me' } }
-  const reply = (text: string): OpenAgentEvent => ({ kind: 'driver', event: { type: 'text', text } })
-  const choice = { kind: 'choice', id: 'question', title: 'Which color?', options: [{ id: 'a', label: 'Blue' }] } as OpenAgentEvent
+  const prompt: RunEvent = { kind: 'driver', event: { type: 'start', prompt: 'ask me' } }
+  const reply = (text: string): RunEvent => ({ kind: 'driver', event: { type: 'text', text } })
+  const choice = { kind: 'choice', id: 'question', title: 'Which color?', options: [{ id: 'a', label: 'Blue' }] } as RunEvent
   const block = '```await-choices\n{ "title": "Which color?", "options": [{ "label": "Blue" }] }\n```'
 
   test('the reply a question follows shows its words and not the block', () => {
@@ -1172,7 +1172,7 @@ describe('EventList hides the block a question is written in', () => {
 
   test('a block no question came of stays as written, once its turn is over: it is how the reader sees it did not parse', () => {
     const broken = '```await-choices\n{ "title": "Which color?", "options": [ }\n```'
-    render(<EventList events={[prompt, reply(`Pick one.\n\n${broken}`), { kind: 'end', ok: true } as OpenAgentEvent]} stick={false} />)
+    render(<EventList events={[prompt, reply(`Pick one.\n\n${broken}`), { kind: 'end', ok: true } as RunEvent]} stick={false} />)
     expect(screen.getByText(/"title"/)).toBeTruthy()
   })
 
@@ -1182,20 +1182,20 @@ describe('EventList hides the block a question is written in', () => {
     expect(screen.getByText('Pick one.')).toBeTruthy()
     expect(screen.queryByText(/"title"/)).toBeNull()
     // Things that only count or time the turn do not end it; an empty message after it neither.
-    const usage = { kind: 'usage', costUsd: 0.1 } as OpenAgentEvent
+    const usage = { kind: 'usage', costUsd: 0.1 } as RunEvent
     expect(replyBeforeEnd([prompt, asking, usage, reply(' ')])).toBe(asking)
   })
 
   test('a block the agent went on from, or one of a turn that is over, is no question to come', () => {
     const asking = reply(block)
-    const step: OpenAgentEvent = { kind: 'driver', event: { type: 'action', label: 'Bash', detail: 'ls' } }
+    const step: RunEvent = { kind: 'driver', event: { type: 'action', label: 'Bash', detail: 'ls' } }
     expect(replyBeforeEnd([prompt, asking, step])).toBeUndefined()
-    expect(replyBeforeEnd([prompt, asking, { kind: 'end', ok: true } as OpenAgentEvent])).toBeUndefined()
+    expect(replyBeforeEnd([prompt, asking, { kind: 'end', ok: true } as RunEvent])).toBeUndefined()
     // A subagent's message is not the agent's last word.
     expect(replyBeforeEnd([prompt, { kind: 'driver', event: { type: 'text', text: block, subagent: 'toolu_1' } }])).toBeUndefined()
     // Once the question came, the message is the one it follows; nor is one of a turn before.
     expect(replyBeforeEnd([prompt, asking, choice])).toBeUndefined()
-    expect(replyBeforeEnd([prompt, asking, choice, { kind: 'driver', event: { type: 'start', prompt: 'Blue' } } as OpenAgentEvent])).toBeUndefined()
+    expect(replyBeforeEnd([prompt, asking, choice, { kind: 'driver', event: { type: 'start', prompt: 'Blue' } } as RunEvent])).toBeUndefined()
   })
 
   test('where ask is off, no block is left out: nothing asks its question', () => {
@@ -1215,12 +1215,12 @@ describe('EventList hides the block a question is written in', () => {
 
 // The scroller brings its anchor to the top; only the newest prompt may be one.
 describe('EventList scroll anchor', () => {
-  const prompt = (text: string): OpenAgentEvent => ({ kind: 'driver', event: { type: 'start', prompt: text } })
-  const reply = (text: string): OpenAgentEvent => ({ kind: 'driver', event: { type: 'text', text } })
+  const prompt = (text: string): RunEvent => ({ kind: 'driver', event: { type: 'start', prompt: text } })
+  const reply = (text: string): RunEvent => ({ kind: 'driver', event: { type: 'text', text } })
   const anchors = (container: HTMLElement) => [...container.querySelectorAll('[data-scroll-anchor="true"]')].map(el => el.textContent)
 
   test('no row is the anchor: a message sent lands under the last answer, sliding in, and the page is not lifted to it', () => {
-    const events = [prompt('first'), reply('one'), { kind: 'end', ok: true } as OpenAgentEvent, prompt('second'), reply('two')]
+    const events = [prompt('first'), reply('one'), { kind: 'end', ok: true } as RunEvent, prompt('second'), reply('two')]
     const { container, rerender } = render(<EventList events={events} stick={false} />)
     expect(anchors(container)).toEqual([])
     rerender(<EventList events={events} sending="third" stick={false} />)
@@ -1233,7 +1233,7 @@ describe('EventList scroll anchor', () => {
   })
 
   test('a row keeps its identity when a row above it stops being shown', () => {
-    const events = [prompt('first'), reply('one'), { kind: 'end', ok: true } as OpenAgentEvent]
+    const events = [prompt('first'), reply('one'), { kind: 'end', ok: true } as RunEvent]
     const { container, rerender } = render(<EventList events={events} stick={false} />)
     const ids = () => [...container.querySelectorAll('[data-message-id]')].map(el => el.getAttribute('data-message-id'))
     expect(ids()).toEqual(['turn:1', '1'])
@@ -1246,12 +1246,12 @@ describe('EventList scroll anchor', () => {
     const events = [prompt('first'), reply('one')]
     const { rerender } = render(<EventList events={events} working stick={false} />)
     expect(screen.getByTestId('live-line').querySelector('[role="status"]')).toBeTruthy()
-    rerender(<EventList events={[...events, { kind: 'end', ok: true } as OpenAgentEvent]} stick={false} />)
+    rerender(<EventList events={[...events, { kind: 'end', ok: true } as RunEvent]} stick={false} />)
     expect(screen.getByTestId('live-line').querySelector('[role="status"]')).toBeNull()
   })
 
   test('a main agent blocked on its subagents has no live line; once one ended and it thinks again, the line is back', () => {
-    const ev = (event: Extract<OpenAgentEvent, { kind: 'driver' }>['event'], at: string): OpenAgentEvent => ({ kind: 'driver', event, at: `2026-10-01T10:${at}.000Z` })
+    const ev = (event: Extract<RunEvent, { kind: 'driver' }>['event'], at: string): RunEvent => ({ kind: 'driver', event, at: `2026-10-01T10:${at}.000Z` })
     const events = [
       ev({ type: 'start', prompt: 'two subagents' }, '00:00'),
       ev({ type: 'text', text: "I'll start both." }, '00:02'),
@@ -1269,8 +1269,8 @@ describe('EventList scroll anchor', () => {
 // What the chat says in place of the line that was above the message box.
 describe('EventList queued messages', () => {
   const ids = () => Array.from(document.querySelectorAll('[data-message-id]')).map(n => n.getAttribute('data-message-id'))
-  const prompt: OpenAgentEvent = { kind: 'driver', event: { type: 'start', prompt: 'go' } }
-  const said: OpenAgentEvent = { kind: 'driver', event: { type: 'text', text: 'Hello.' } }
+  const prompt: RunEvent = { kind: 'driver', event: { type: 'start', prompt: 'go' } }
+  const said: RunEvent = { kind: 'driver', event: { type: 'text', text: 'Hello.' } }
 
   test('a message the working agent has not read yet is the last row: my box, with Send now under it, and on hover Cancel and edit', () => {
     const onSendNow = vi.fn()
@@ -1313,7 +1313,7 @@ describe('EventList queued messages', () => {
   })
 
   test('a message the agent read as it worked is my message where it landed, between its steps', () => {
-    const events: OpenAgentEvent[] = [
+    const events: RunEvent[] = [
       prompt,
       { kind: 'driver', event: { type: 'action', label: 'Bash', detail: 'sleep 3', id: 'c1' } },
       { kind: 'driver', event: { type: 'steered', text: 'Also the README.', id: 'm1' } },
@@ -1334,10 +1334,10 @@ describe('EventList queued messages', () => {
 // A row for each file a turn's edits changed, at the end of the turn.
 describe('EventList changed files', () => {
   const ids = () => Array.from(document.querySelectorAll('[data-message-id]')).map(n => n.getAttribute('data-message-id'))
-  const prompt = (text: string): OpenAgentEvent => ({ kind: 'driver', event: { type: 'start', prompt: text } })
-  const said: OpenAgentEvent = { kind: 'driver', event: { type: 'text', text: 'Done.' } }
+  const prompt = (text: string): RunEvent => ({ kind: 'driver', event: { type: 'start', prompt: text } })
+  const said: RunEvent = { kind: 'driver', event: { type: 'text', text: 'Done.' } }
   const WS = '/repo/.branches/agent-1'
-  const edit = (id: string, path: string, added: number, removed: number): OpenAgentEvent[] => [
+  const edit = (id: string, path: string, added: number, removed: number): RunEvent[] => [
     { kind: 'driver', event: { type: 'action', label: 'Edit', detail: path, id } },
     { kind: 'driver', event: { type: 'output', id, text: 'ok', changed: [{ path, added, removed }] } },
   ]
@@ -1385,7 +1385,7 @@ describe('EventList changed files', () => {
   })
 
   test("the folded line of the turn's calls counts the commands and names the edited file; inside, the edit has its size", () => {
-    const events = [prompt('go'), { kind: 'driver', event: { type: 'action', label: 'Bash', detail: 'ls', id: 'b1' } } as OpenAgentEvent, ...edit('c1', `${WS}/A.md`, 2, 1), said]
+    const events = [prompt('go'), { kind: 'driver', event: { type: 'action', label: 'Bash', detail: 'ls', id: 'b1' } } as RunEvent, ...edit('c1', `${WS}/A.md`, 2, 1), said]
     render(<EventList events={events} setup={{ workspace: WS }} stick={false} />)
     const line = screen.getByRole('button', { name: 'Ran a command, edited A.md' }).parentElement!
     expect(line.textContent).toBe('Ran a command, edited A.md+2−12 added, 1 removed')
@@ -1412,7 +1412,7 @@ describe('EventList changed files', () => {
 // A message sent after a turn ended: the run writes its prompt line seconds later, and Claude Code
 // on the web shows its moving line the moment the message is sent.
 describe('EventList a message just sent', () => {
-  const done: OpenAgentEvent[] = [
+  const done: RunEvent[] = [
     { kind: 'driver', event: { type: 'start', prompt: 'go' }, at: '2026-11-04T10:00:00.000Z' },
     { kind: 'driver', event: { type: 'text', text: 'did it' }, at: '2026-11-04T10:00:05.000Z' },
     { kind: 'driver', event: { type: 'result', text: '' }, at: '2026-11-04T10:00:06.000Z' },
@@ -1430,7 +1430,7 @@ describe('EventList a message just sent', () => {
     vi.setSystemTime(new Date('2026-11-04T10:01:00.000Z'))
     const { rerender } = render(<EventList events={done} working sending="and again" stick={false} />)
     vi.setSystemTime(new Date('2026-11-04T10:01:07.000Z'))
-    const again: OpenAgentEvent[] = [
+    const again: RunEvent[] = [
       { kind: 'driver', event: { type: 'start', prompt: 'and again' }, at: '2026-11-04T10:01:06.000Z' },
       { kind: 'driver', event: { type: 'thought', text: 'hm' }, at: '2026-11-04T10:01:06.500Z' },
     ]
@@ -1452,7 +1452,7 @@ describe('EventList a message just sent', () => {
 // The agent idle on a command it left running in the background: a full test run can take twenty
 // minutes, and a line that only counts from the turn's start reads the same as a stuck agent.
 describe('EventList an agent waiting on work in the background', () => {
-  const waiting: OpenAgentEvent[] = [
+  const waiting: RunEvent[] = [
     { kind: 'driver', event: { type: 'start', prompt: 'run the tests' }, at: '2026-11-21T19:13:00.000Z' },
     { kind: 'driver', event: { type: 'action', label: 'Bash', detail: 'pnpm test > /tmp/test.log 2>&1', id: 'toolu_1' }, at: '2026-11-21T19:13:09.000Z' },
     { kind: 'driver', event: { type: 'output', id: 'toolu_1', text: 'Command running in background with ID: b1.' }, at: '2026-11-21T19:13:10.000Z' },
@@ -1472,7 +1472,7 @@ describe('EventList an agent waiting on work in the background', () => {
       expect(line.textContent).toContain('17m 6s')
       // Not a row of the chat: the line under it says it.
       expect(screen.queryAllByText(/pnpm test/).filter(el => !line.contains(el))).toHaveLength(1)
-      const woke: OpenAgentEvent[] = [
+      const woke: RunEvent[] = [
         { kind: 'driver', event: { type: 'background', tasks: [] }, at: '2026-11-21T19:30:20.000Z' },
         { kind: 'driver', event: { type: 'text', text: 'All pass.' }, at: '2026-11-21T19:30:21.000Z' },
       ]
@@ -1485,7 +1485,7 @@ describe('EventList an agent waiting on work in the background', () => {
   })
 
   test('several: names the oldest and how many more', () => {
-    const two: OpenAgentEvent = { kind: 'driver', event: { type: 'background', tasks: [{ id: 'b2', command: 'node dist/bin.js', since: '2026-11-21T19:20:00.000Z' }, { id: 'b1', command: 'pnpm test', since: '2026-11-21T19:13:10.000Z' }] } }
+    const two: RunEvent = { kind: 'driver', event: { type: 'background', tasks: [{ id: 'b2', command: 'node dist/bin.js', since: '2026-11-21T19:20:00.000Z' }, { id: 'b1', command: 'pnpm test', since: '2026-11-21T19:13:10.000Z' }] } }
     render(<EventList events={[...waiting, two]} working stick={false} />)
     const line = screen.getByTestId('live-line')
     expect(line.textContent).toContain('Waiting on 2 background commands:')

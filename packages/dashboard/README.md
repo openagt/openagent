@@ -103,7 +103,9 @@ them through the package's server part, as `scheduler status` says them, and sav
 The dashboard is a **projection of the agent's own files**. The agent's tool keeps the
 agent's card (`<id>.json`) and diary (`<id>.jsonl`) under `.openagent/` in the agent's
 checkout, and copies both onto the project's `agent-data` branch when the agent ends.
-Everything the dashboard shows — live, and months later — it reads from those two files.
+Everything the dashboard shows — live, and months later — comes from those two files, read
+through this computer's run host (`agent-driver`'s), which merges a working run's card over its
+record and streams its diary.
 
 Steering goes back the same way, never over a channel:
 

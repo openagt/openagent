@@ -56,10 +56,9 @@ test("every package the distribution lists is read from its install, in its orde
   assert.deepEqual(await distributionPackages({}), [], 'no distribution handed down: no package')
 })
 
-test("a project with nothing installed gets its runs, its branches and a repository to create from the distribution's packages, and nothing of a plugin that is off", async () => {
+test("a project with nothing installed gets its branches and a repository to create from the distribution's packages, and nothing of a plugin that is off", async () => {
   const root = await scratch('packages')
   try {
-    assert.equal((await providedCommand(root, 'runs'))?.package, '@openagt/logs', "the runs' records, whatever logs says")
     assert.equal((await providedCommand(root, 'branches'))?.package, '@openagt/git-branches')
     assert.equal((await providedCommand(root, 'repository'))?.package, '@openagt/github', 'the package that can create its repository')
     assert.deepEqual(
@@ -73,14 +72,13 @@ test("a project with nothing installed gets its runs, its branches and a reposit
   }
 })
 
-test("every project keeps its runs' records through the logs package, and shows its Logs page once logs is on there", async () => {
+test("a project shows its Logs page once logs is on there", async () => {
   const root = await scratch('logs')
   const modules = async (): Promise<string[]> => (await readProjectModules(root)).map(module => module.package)
   try {
     assert.deepEqual(await modules(), ['@openagt/ask', '@openagt/git-branches', '@openagt/saved-prompts', '@openagt/skills', '@openagt/store-git-branch', '@openagt/ui-pane-changes', '@openagt/ui-pane-files'])
     await switchPlugin(root, 'logs')
     assert.deepEqual(await modules(), ['@openagt/ask', '@openagt/git-branches', '@openagt/logs', '@openagt/saved-prompts', '@openagt/skills', '@openagt/store-git-branch', '@openagt/ui-pane-changes', '@openagt/ui-pane-files'])
-    assert.equal((await providedCommand(root, 'runs'))?.package, '@openagt/logs')
   } finally {
     await rm(root, { recursive: true, force: true })
   }
@@ -155,11 +153,10 @@ test("a project's own dependencies bring nothing: neither a copy of the distribu
     await writeFile(join(listed, 'd.js'), 'export default {}')
     const own = join(root, 'node_modules', 'my-logs')
     await mkdir(join(own, 'bin'), { recursive: true })
-    await writeFile(join(own, 'package.json'), JSON.stringify({ name: 'my-logs', bin: { mine: 'bin/mine' }, openagent: { runs: 'mine' }, exports: { './dashboard': './d.js' } }))
+    await writeFile(join(own, 'package.json'), JSON.stringify({ name: 'my-logs', bin: { mine: 'bin/mine' }, exports: { './dashboard': './d.js' } }))
     await writeFile(join(own, 'bin', 'mine'), '')
     await writeFile(join(own, 'd.js'), 'export default {}')
-    await writeFile(join(root, 'package.json'), JSON.stringify({ dependencies: { 'my-logs': '1.0.0' }, devDependencies: { '@openagt/tickets': '9.9.9' }, openagent: { runs: 'my-logs' } }))
-    assert.equal((await providedCommand(root, 'runs'))?.package, '@openagt/logs', 'not what its package.json names')
+    await writeFile(join(root, 'package.json'), JSON.stringify({ dependencies: { 'my-logs': '1.0.0' }, devDependencies: { '@openagt/tickets': '9.9.9' } }))
     assert.ok(!(await readProjectModules(root)).some(module => module.package === 'my-logs' || module.package === '@openagt/tickets'), "listed and installed, with its plugin off: not the project's")
 
     await switchPlugin(root, 'tickets')

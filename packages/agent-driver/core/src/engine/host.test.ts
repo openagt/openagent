@@ -262,17 +262,84 @@ test("a Stop signals the process the run's card names, here; a run that ended, o
   }
 })
 
-test("the runs it lists are the project's records, newest first", async () => {
+test("the runs it lists are the project's records and its runs at work, newest first, each as it stands: the working run's live card over its record, fact by fact", async () => {
+  const repo = await testRepo()
+  try {
+    const project = projectAt(repo)
+    const agents = async () => [{ id: 'claude-code', label: 'Claude Code', ready: async () => NOTHING_WRONG, driver: () => { throw new Error('no driver here') }, resumeCommand: ({ id }: { id: string }) => `claude --resume ${id}` }]
+    const { host: here } = host({ agents, isAlive: pid => pid === 4242 })
+    const first = '2026-09-16T14-01-00-000Z'
+    const second = '2026-09-16T14-05-00-000Z'
+    await writeMarker(repo, { ...markerCard({ id: first, startedAt: '2026-09-16T14:01:00.000Z', prompt: 'first', driver: 'claude-code', model: 'opus', mark: { host: HERE, publish: 'pr' } }), status: 'done', endedAt: '2026-09-16T14:02:00.000Z', cost: 0.5 })
+    await writeMarker(repo, markerCard({ id: second, startedAt: '2026-09-16T14:05:00.000Z', prompt: 'second', driver: 'claude-code', mark: { host: HERE } }))
+    const listed = await here.list(project)
+    assert.deepEqual(listed.map(run => [run.id, run.status, run.prompt]), [[second, 'working', 'second'], [first, 'done', 'first']])
+    const done = listed[1]!
+    assert.deepEqual(
+      [done.host, done.project, done.computer, done.cost, done.agent, done.options?.publish, done.endedAt],
+      [LOCAL_HOST, 'shop', HERE, 0.5, { id: 'claude-code', model: 'opus' }, 'pr', '2026-09-16T14:02:00.000Z'],
+    )
+    assert.ok(done.person, 'kept under the person its record is filed under')
+
+    // Resumed in its checkout: its live card says it works, on the branch the checkout has out, its session's command said by its coding agent; the pull request a press wrote on the record stays.
+    await patchRun(repo, first, { pr: { number: 7, url: 'https://github.com/o/r/pull/7' } })
+    await git(['worktree', 'add', '-q', '-b', 'agent-first', worktreePath(repo, first), 'main'], repo)
+    await liveCard(repo, first, 'running', { pid: 4242, host: HERE, sessionId: 's-1', workspace: '/w' })
+    const [, again] = await here.list(project)
+    assert.deepEqual([again!.status, again!.facts?.['git-branches']?.branch, again!.facts?.github?.pr?.number, again!.session], ['working', 'agent-first', 7, { id: 's-1', resume: 'claude --resume s-1' }])
+
+    // Asked for some of them: by id, or since a time.
+    assert.deepEqual((await here.list(project, { ids: [first] })).map(run => run.id), [first])
+    assert.deepEqual((await here.list(project, { since: '2026-09-16T14:03:00.000Z' })).map(run => run.id), [second])
+
+    // A read never writes: a run whose process died still says it works, until its sweep ends it.
+    await liveCard(repo, first, 'running', { pid: 9999, host: HERE })
+    assert.deepEqual([(await here.list(project, { ids: [first] }))[0]?.status, (await here.list(project, { ids: [first] }))[0]?.gone], ['working', true])
+    // Ended clean, its process still alive here: saving its record.
+    await liveCard(repo, first, 'done', { pid: 4242, host: HERE })
+    assert.equal((await here.list(project, { ids: [first] }))[0]?.saving, true)
+
+    // A run another host ran is that host's to list.
+    const elsewhere = '2026-09-16T14-09-00-000Z'
+    await writeMarker(repo, { ...markerCard({ id: elsewhere, startedAt: '2026-09-16T14:09:00.000Z', prompt: 'on the web', driver: 'claude-code', mark: { host: HERE } }), caller: { target: 'web', host: HERE } })
+    assert.ok(!(await here.list(project)).some(run => run.id === elsewhere))
+  } finally {
+    await removeRepo(repo)
+  }
+})
+
+test("a run's events are its diary's, read as events, from its checkout while it has one, then its record's, with the marker after what is already there", async () => {
   const repo = await testRepo()
   try {
     const project = projectAt(repo)
     const { host: here } = host()
-    await writeMarker(repo, markerCard({ id: '2026-09-16T14-01-00-000Z', startedAt: '2026-09-16T14:01:00.000Z', prompt: 'first', driver: 'claude-code', mark: { host: HERE } }))
-    await writeMarker(repo, markerCard({ id: '2026-09-16T14-05-00-000Z', startedAt: '2026-09-16T14:05:00.000Z', prompt: 'second', driver: 'claude-code', mark: { host: HERE } }))
-    assert.deepEqual(await here.list(project), [
-      { id: '2026-09-16T14-05-00-000Z', project: 'shop', status: 'working', startedAt: '2026-09-16T14:05:00.000Z', prompt: 'second' },
-      { id: '2026-09-16T14-01-00-000Z', project: 'shop', status: 'working', startedAt: '2026-09-16T14:01:00.000Z', prompt: 'first' },
-    ])
+    const id = '2026-09-16T14-01-00-000Z'
+    await git(['worktree', 'add', '-q', '-b', 'agent-x', worktreePath(repo, id), 'main'], repo)
+    await liveCard(repo, id, 'running', { host: HERE })
+    await writeFile(join(liveDir(worktreePath(repo, id)), `${id}.jsonl`), JSON.stringify({ kind: 'said', text: 'hello', at: 't1' }) + '\n')
+    const stop = new AbortController()
+    const seen: unknown[] = []
+    for await (const event of here.events!({ id, project }, stop.signal)) {
+      seen.push(event)
+      if (event.kind === 'stream-sync') break
+    }
+    assert.deepEqual(seen, [{ kind: 'driver', event: { type: 'text', text: 'hello' }, at: 't1' }, { kind: 'stream-sync' }])
+
+    // Recorded, its checkout gone: the record's lines.
+    const ended = '2026-09-16T14-05-00-000Z'
+    await writeMarker(repo, { ...markerCard({ id: ended, startedAt: NOW.toISOString(), prompt: 'tidy', driver: 'claude-code', mark: { host: HERE } }), status: 'done', endedAt: NOW.toISOString() })
+    const lines: unknown[] = []
+    for await (const event of here.events!({ id: ended, project }, stop.signal)) {
+      lines.push(event.kind)
+      if (event.kind === 'stream-sync') break
+    }
+    assert.equal(lines.at(-1), 'stream-sync')
+
+    // No such run, long after its start: nothing comes.
+    const none: unknown[] = []
+    for await (const event of here.events!({ id: '2020-01-01T00-00-00-000Z', project }, stop.signal)) none.push(event)
+    assert.deepEqual(none, [])
+    stop.abort()
   } finally {
     await removeRepo(repo)
   }

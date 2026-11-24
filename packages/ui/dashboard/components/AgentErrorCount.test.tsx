@@ -1,4 +1,4 @@
-import type { OpenAgentEvent } from '../../src/index.js'
+import type { RunEvent } from '@openagt/hooks'
 import { afterEach, describe, expect, test } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
 import { AgentErrorCount } from './AgentErrorCount.js'
@@ -21,7 +21,7 @@ describe('AgentErrorCount', () => {
 
   test("the error a failed run's state already names is not counted again", () => {
     const usage = "You've hit your usage limit."
-    const failed: OpenAgentEvent[] = [
+    const failed: RunEvent[] = [
       { kind: 'driver', event: { type: 'error', message: usage } },
       { kind: 'end', ok: false, detail: `codex exited (1): ${usage}` },
     ]
@@ -34,7 +34,7 @@ describe('AgentErrorCount', () => {
   })
 
   test('several errors read plural', () => {
-    const events: OpenAgentEvent[] = [
+    const events: RunEvent[] = [
       { kind: 'error', headline: 'first thing broke' },
       { kind: 'error', headline: 'second thing broke' },
     ]

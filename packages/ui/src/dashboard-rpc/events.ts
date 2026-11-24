@@ -1,63 +1,28 @@
-import { fromDiaryLine, resolveAgentDiary, type AgentDiarySource, type AnyDiaryLine } from '../store/index.js'
-import { resolveProjectPath } from './context.js'
-import type { OpenAgentEvent } from '../events.js'
-import { partialReader, tailAgentEvents } from './events-tail.js'
+import type { RunFeedEvent, RunRef } from '@openagt/hooks'
+import { contextProject, runHostOf } from './context.js'
 
-// The live event stream behind the dashboard (#405): the selected run's diary, the file the run's
-// tool writes as the agent works. Each new line becomes one `send(event)`, which the mount writes
-// out as one SSE frame. Runs, docs, and the project log come over the read-model RPCs (reads.ts).
-
-/** The diary to follow, or undefined when the project or the run is unknown. */
-async function resolveEventsDiary(projectId: string, agentId?: string, opts: { cached?: boolean } = {}): Promise<AgentDiarySource | undefined> {
-  const cwd = await resolveProjectPath(projectId)
-  return cwd ? resolveAgentDiary(cwd, agentId, undefined, undefined, opts) : undefined
-}
+// The live event stream behind the dashboard (#405): the selected run's events, as its host
+// streams them (`RunHost.events`). Each one becomes one `send(event)`, which the mount writes out
+// as one SSE frame. Runs, docs, and the project log come over the read-model RPCs (reads.ts).
 
 /**
- * The end-of-replay marker (#1383). A subscribe replays the whole log before following live,
- * and without a boundary a reconnecting client cannot tell "replay still streaming" from "the
- * log is genuinely this short" — so it blanked a populated feed and refilled it line by line.
- * Sent once per subscription, after the replay of what the source held is delivered. Wire-only: it is not a
- * {@link OpenAgentEvent}, is never written to any journal, and the client swallows it.
+ * Follow one run's events: `send` is called per event until the returned stop function runs.
+ * Returns undefined when there is nothing to stream (no run named, an unknown project, a host that
+ * streams no events), which the mount ends as a clean close, mirroring the read model's empty
+ * results rather than throwing at the client. The host's end-of-replay marker is passed on: what
+ * comes after it is live.
  */
-export type StreamSync = { kind: 'stream-sync' }
-
-/**
- * The message the agent is writing, as far as it has got (the run's live file, beside its diary);
- * empty once there is none. Wire-only like {@link StreamSync}: the pieces are never in the diary,
- * and the page shows them until the whole message's line arrives.
- */
-export type PartialMessage = { kind: 'partial'; text: string }
-
-/** What `onEvents` streams: the agent's events, plus the wire-only end-of-replay marker and partial message. */
-export type LiveFeedEvent = OpenAgentEvent | StreamSync | PartialMessage
-
-/**
- * Follow one agent's events: `send` is called per event until the returned stop function runs.
- * Returns undefined when there is nothing to stream (an unknown project), which the mount ends as
- * a clean close — mirroring the read model's empty results rather than throwing at the client.
- *
- * The `agentId` names the run whose diary is followed; without one there is nothing to stream.
- * The {@link StreamSync} marker is sent once the lines on disk are: what comes after it is live.
- */
-export async function streamAgentEvents(
-  projectId: string,
-  agentId: string | undefined,
-  send: (value: LiveFeedEvent) => void,
-): Promise<(() => void) | undefined> {
-  // Tail the run's diary. The relocating tail, because the diary moves
-  // mid-subscription: when the run ends its tool records it and reclaims the checkout, and a
-  // fixed-path tail whose fs.watch missed the final appends went silent without the run's `end`.
-  // On the move it asks again and sends the finished run's lines it had not sent, so the feed
-  // gets exactly the lines the move would have swallowed.
-  if ((await resolveEventsDiary(projectId, agentId)) === undefined) return undefined
-  return tailAgentEvents<AnyDiaryLine>(
-    opts => resolveEventsDiary(projectId, agentId, opts),
-    line => {
-      const event = fromDiaryLine(line)
-      if (event) send(event)
-    },
-    () => send({ kind: 'stream-sync' }),
-    partialReader(text => send({ kind: 'partial', text })),
-  )
+export async function streamAgentEvents(projectId: string, agentId: string | undefined, send: (value: RunFeedEvent) => void): Promise<(() => void) | undefined> {
+  if (agentId === undefined) return undefined
+  const at = await contextProject(projectId)
+  if (!at) return undefined
+  const run: RunRef = { id: agentId, ...(at.project ? { project: at.project } : {}) }
+  const host = await runHostOf(run)
+  if (!host.events) return undefined
+  const stop = new AbortController()
+  const events = host.events(run, stop.signal)
+  void (async () => {
+    for await (const event of events) send(event)
+  })().catch(() => {})
+  return () => stop.abort()
 }

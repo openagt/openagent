@@ -1,15 +1,13 @@
-import { isAbsolute, join, resolve, sep } from 'node:path'
-import { hostname } from 'node:os'
+import { basename, isAbsolute, resolve, sep } from 'node:path'
 import { stat } from 'node:fs/promises'
 import { hasImage, isImageName } from '@openagt/agent-driver'
 import { IMAGES_PER_MESSAGE } from './images.js'
 import { MODULE_NAME, isBranchName, type Hooks, type ProjectRef, type RunHost, type RunOptions } from '@openagt/hooks'
 import { sessionRepos } from '@openagt/git-branches'
-import { findCheckout, isPidAlive, projectBranches, readLiveMetas } from './store/index.js'
-import { OPENAGENT_DIR } from './openagent-dir.js'
+import { projectBranches, readRunEvents } from './store/index.js'
 import type { StartAgentOptions, StartAgentResult, AddProjectResult, RemoveProjectResult, StartedInResult } from './dashboard/types.js'
 import { ownRunsWatch } from './dashboard/runs-watch.js'
-import { screenInDiary } from './dashboard/screen.js'
+import { liveScreen } from './screens.js'
 import { addProject, listProjects, removeProject } from './registry.js'
 import { errorMessage, fileBranchRepo, installProject, projectKey, sessionsHome, writeSharing, projectId } from '@openagt/agent-data'
 import { removeProjectFiles } from './remove-files.js'
@@ -200,13 +198,9 @@ export function createProjectRuntime({ cwd, env, host, otherHosts = async () => 
     if (!record) return { ok: false, error: 'no project with that id is on the list' }
     const here = await stat(record.path).then(s => s.isDirectory()).catch(() => false)
     if (here) {
-      // The checkouts are read fresh: a run started a moment ago must be seen.
-      projectBranches.changed(record.path)
-      // An agent at work would go on working in a project the dashboard no longer shows. A card
-      // left "running" by a process that died does not count: nothing is working there.
-      const working = (await readLiveMetas(record.path).catch(() => [])).some(
-        agent => agent.status === 'running' && agent.pid !== undefined && agent.host === hostname() && isPidAlive(agent.pid),
-      )
+      // An agent at work would go on working in a project the dashboard no longer shows, as this
+      // computer's host says its runs. A run whose process died does not count: nothing is working there.
+      const working = (await host.list({ id: record.id, name: basename(record.path), dir: record.path }).catch(() => [])).some(run => run.status === 'working' && !run.gone)
       if (working) return { ok: false, error: 'An agent is working in this project. Stop it, then remove the project.' }
     }
     await removeProject(id, env)
@@ -232,12 +226,16 @@ export function createProjectRuntime({ cwd, env, host, otherHosts = async () => 
     return { ok: true, cleanup }
   }
 
-  // A screen lives while its run has a checkout: a finished run's diary names none that answers,
-  // so it is not read. Asked of the shared list only: a tab open on a run asks every few seconds.
+  // A screen is on this computer's loopback, and lives while its run has a checkout: a finished
+  // run's events name none that answers, so they are not read. Read off its events as this
+  // computer's host says them.
   const screenOf = async (project: string, agentId: string): Promise<string | undefined> => {
     const projectCwd = await resolveProject(project)
-    const checkout = projectCwd ? await findCheckout(projectCwd, agentId, projectBranches, { cached: true }) : undefined
-    return checkout ? screenInDiary(join(checkout.path, OPENAGENT_DIR, `${agentId}.jsonl`)) : undefined
+    if (!projectCwd) return undefined
+    const run = { id: agentId, ...(project === SESSIONS_ID ? {} : { project: { id: project, name: basename(projectCwd), dir: projectCwd } }) }
+    if ((await host.find(run).catch(() => undefined))?.checkout === undefined) return undefined
+    const events = await readRunEvents(host, run).catch(() => undefined)
+    return events ? liveScreen(events) : undefined
   }
 
   return { onStart, onAddProject, onStartedIn, onRemoveProject, screenOf }

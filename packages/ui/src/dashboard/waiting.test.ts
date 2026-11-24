@@ -6,13 +6,12 @@ import ask from '@openagt/ask/module'
 import { buildWaiting, waitingKey, type Waiting, type WaitingDeps } from './waiting.js'
 import { forgetStartedNames, nameStarted } from '@openagt/agent-driver'
 import { pendingChoices } from '../open-choices.js'
-import { eventsOf } from '../store/run-record.js'
-import type { AnyDiaryLine } from '../store/runs.js'
+import { eventsOf, type AnyDiaryLine } from '@openagt/agent-driver'
 import type { OpenPr } from './pull-requests.js'
 import type { BranchAhead, BranchesFor } from '../store/branches.js'
 import type { ProjectSummary } from './projects.js'
-import type { LiveAgent, AgentMeta } from '../store/index.js'
-import type { OpenAgentEvent } from '../events.js'
+import type { AgentMeta } from '../store/index.js'
+import type { RunEvent } from '@openagt/hooks'
 
 const project = (id: string, path: string): ProjectSummary => ({ id, path, name: id, activated: true, gitHost: false })
 
@@ -22,14 +21,38 @@ const noModules = async (): Promise<Hooks> => createHooks([])
 /** A distribution where ask is on, as it starts: a run waiting on its question is ask's to say. */
 const withAsk = async (): Promise<Hooks> => createHooks([{ module: defineModule({ name: 'memory', hooks: { 'store.backend': memoryStore() } }) }, { module: ask, on: true }], { onError: () => {} })
 
+/**
+ * A project's runs as a test has them, by the project's folder: the ones at work in a checkout
+ * (`liveAgents`) and the recorded ones (`agents`), the first winning for a run that is both, as
+ * a host says a run that works again. A run's events by the project's folder too.
+ */
+type TestDeps = Omit<WaitingDeps, 'agents' | 'events'> & {
+  liveAgents?: (cwd: string) => Promise<AgentMeta[]>
+  agents?: (cwd: string) => Promise<AgentMeta[]>
+  events?: (cwd: string, agentId: string) => Promise<RunEvent[] | undefined>
+}
+
+/** The folder of the sessions with no project, in these tests. */
+const SESSIONS = '/sessions'
+
+/** The deps a test gives, as {@link buildWaiting} takes them. */
+function waitingDeps({ liveAgents, agents, events, ...deps }: TestDeps): WaitingDeps {
+  const runs = async (project: ProjectSummary | undefined): Promise<AgentMeta[]> => {
+    const cwd = project?.path ?? SESSIONS
+    const [live, recorded] = await Promise.all([(liveAgents ?? noAgents)(cwd), (agents ?? noAgents)(cwd)])
+    return [...live, ...recorded.filter(run => !live.some(other => other.id === run.id))]
+  }
+  return { ...deps, agents: runs, ...(events ? { events: (project, agentId) => events(project?.path ?? SESSIONS, agentId) } : {}) }
+}
+
 /** What waits on the person in `projects`, with the modules of `deps.hooks`, none unless said. */
-const build = (projects: ProjectSummary[], deps: WaitingDeps = {}) => buildWaiting(projects, { hooks: noModules, ...deps })
+const build = (projects: ProjectSummary[], deps: TestDeps = {}) => buildWaiting(projects, { hooks: noModules, ...waitingDeps(deps) })
 
 /** No paused run anywhere — keeps the PR-only tests hermetic (no disk read). */
-const noAgents = async (): Promise<LiveAgent[]> => []
+const noAgents = async (): Promise<AgentMeta[]> => []
 
-/** A live agent in its own worktree (#738), which is what the reader now returns. */
-const live = (meta: AgentMeta, cwd = '/a/.openagent/worktrees/r1'): LiveAgent => ({ ...meta, cwd })
+/** A run at work in its own worktree (#738). */
+const live = (meta: AgentMeta): AgentMeta => meta
 
 const runningAgentMeta = (over: Partial<AgentMeta> = {}): AgentMeta => ({
   status: 'running',
@@ -82,7 +105,7 @@ test('build calls a project read when it answers with nothing (#1623)', async ()
 })
 
 test('build does not call a project read when its live-agent read throws (#1623)', async () => {
-  const liveAgents = async (): Promise<LiveAgent[]> => {
+  const liveAgents = async (): Promise<AgentMeta[]> => {
     throw new Error('store unreadable')
   }
   const prs = async (): Promise<OpenPr[]> => [{ number: 7, title: 'open', url: 'u7', isDraft: false }]
@@ -107,13 +130,13 @@ test('build dedupes a PR shared by two registered projects (same repo), keeping 
 const noPrs = async (): Promise<OpenPr[]> => []
 
 /** A run that ended on a question: its meta says `waiting`, its diary holds the question. */
-const waitingOn = (id: string, title: string): OpenAgentEvent[] => [
+const waitingOn = (id: string, title: string): RunEvent[] => [
   { kind: 'choice', id, title, options: [{ id: 'yes', label: 'Yes' }, { id: 'no', label: 'No' }] },
   { kind: 'end', ok: false, waiting: true },
 ]
 
 test("a run waiting on the question it ended on is ask's to say, given the project's runs that wait (#636/#1774)", async () => {
-  const liveAgents = async (cwd: string): Promise<LiveAgent[]> => (cwd === '/a' ? [live(runningAgentMeta({ status: 'waiting', title: 'Auth store caching' }))] : [])
+  const liveAgents = async (cwd: string): Promise<AgentMeta[]> => (cwd === '/a' ? [live(runningAgentMeta({ status: 'waiting', title: 'Auth store caching' }))] : [])
   const read: string[] = []
   const events = async (cwd: string, agentId: string) => (read.push(`${cwd} ${agentId}`), waitingOn('gate-1', 'Cache the auth store?'))
   const { items } = await build([project('a', '/a'), project('b', '/b')], { prs: noPrs, liveAgents, events, hooks: withAsk })
@@ -139,9 +162,9 @@ test("a run waiting on the question it ended on is ask's to say, given the proje
 })
 
 test('a session with no project that waits on its question is in the list too, and its sessions are read whole', async () => {
-  const liveAgents = async (cwd: string): Promise<LiveAgent[]> => (cwd === '/sessions' ? [live(runningAgentMeta({ id: 's1', status: 'waiting', title: 'Greeting exchange' }), '/sessions/s1')] : [])
+  const liveAgents = async (cwd: string): Promise<AgentMeta[]> => (cwd === '/sessions' ? [live(runningAgentMeta({ id: 's1', status: 'waiting', title: 'Greeting exchange' }))] : [])
   const events = async () => waitingOn('gate-1', 'What would you like to do?')
-  const { items, whole } = await buildWaiting([project('a', '/a')], { prs: noPrs, liveAgents, events, hooks: withAsk }, '/sessions')
+  const { items, whole } = await buildWaiting([project('a', '/a')], waitingDeps({ prs: noPrs, liveAgents, events, hooks: withAsk }), SESSIONS)
 
   assert.deepEqual(items, [
     { kind: 'waiting', module: 'ask', scope: 'run', run: 's1', id: 's1:gate-1', words: 'Needs answer', title: 'Greeting exchange', detail: 'What would you like to do?', mark: 'question', since: '2026-07-16T00:00:00Z', projectId: 'session', projectName: '' },
@@ -149,14 +172,14 @@ test('a session with no project that waits on its question is in the list too, a
   // Read whole, so a notification says a session's question as it says a project's.
   assert.deepEqual(whole, ['a', 'session'])
   // No sessions home named: the projects alone.
-  assert.deepEqual((await buildWaiting([project('a', '/a')], { prs: noPrs, liveAgents, events, hooks: withAsk })).items, [])
+  assert.deepEqual((await buildWaiting([project('a', '/a')], waitingDeps({ prs: noPrs, liveAgents, events, hooks: withAsk }))).items, [])
 })
 
 test('a module is given the runs of its project that wait, newest first, each with its name, when it ended and the questions it still waits on; their diaries read only when it asks', async () => {
   const given: WaitingRun[][] = []
   const asking = (read: boolean) => async (): Promise<Hooks> =>
     createHooks([{ module: defineModule({ name: 'watcher', hooks: { 'app.attention': async ({ waiting }) => (read && given.push(await waiting!()), []) } }) }], { onError: () => {} })
-  const liveAgents = async (): Promise<LiveAgent[]> => [
+  const liveAgents = async (): Promise<AgentMeta[]> => [
     live(runningAgentMeta({ id: 'r1', status: 'waiting', title: 'Older', startedAt: '2026-07-15T00:00:00Z', endedAt: '2026-07-15T01:00:00Z' })),
     live(runningAgentMeta({ id: 'r2', status: 'running' })),
     live(runningAgentMeta({ id: 'r3', status: 'waiting', startedAt: '2026-07-16T00:00:00Z', updatedAt: '2026-07-16T02:00:00Z' })),
@@ -177,7 +200,7 @@ test('a module is given the runs of its project that wait, newest first, each wi
 })
 
 test('runs that cannot be read are no runs that wait: the module asking about them fails, and its project is not read whole', async () => {
-  const liveAgents = async (): Promise<LiveAgent[]> => {
+  const liveAgents = async (): Promise<AgentMeta[]> => {
     throw new Error('disk gone')
   }
   const { items, whole } = await build([project('a', '/a')], { prs: noPrs, liveAgents, hooks: withAsk })
@@ -189,7 +212,7 @@ test('a run just started goes by the name asked for it, as the sidebar names it,
   nameStarted('r1', Promise.resolve('Auth store caching'))
   await new Promise(resolve => setImmediate(resolve))
   try {
-    const liveAgents = async (): Promise<LiveAgent[]> => [live(runningAgentMeta({ status: 'waiting', intent: 'please look at how the auth store caches its reads and decide' }))]
+    const liveAgents = async (): Promise<AgentMeta[]> => [live(runningAgentMeta({ status: 'waiting', intent: 'please look at how the auth store caches its reads and decide' }))]
     const { items } = await build([project('a', '/a')], { prs: noPrs, liveAgents, events: async () => waitingOn('gate-1', 'q?'), hooks: withAsk })
     assert.equal(items[0]?.title, 'Auth store caching')
   } finally {
@@ -199,10 +222,10 @@ test('a run just started goes by the name asked for it, as the sidebar names it,
 
 test('build adds no awaiting item for a run that is not waiting, or whose diary shows no open question', async () => {
   const events = async () => waitingOn('gate-1', 'stale')
-  const running = async (): Promise<LiveAgent[]> => [live(runningAgentMeta())]
+  const running = async (): Promise<AgentMeta[]> => [live(runningAgentMeta())]
   assert.deepEqual((await build([project('a', '/a')], { prs: noPrs, liveAgents: running, events, hooks: withAsk })).items, [])
-  const waiting = async (): Promise<LiveAgent[]> => [live(runningAgentMeta({ status: 'waiting' }))]
-  const answered = async (): Promise<OpenAgentEvent[]> => [...waitingOn('gate-1', 'q?'), { kind: 'driver', event: { type: 'start', prompt: 'Yes' } }]
+  const waiting = async (): Promise<AgentMeta[]> => [live(runningAgentMeta({ status: 'waiting' }))]
+  const answered = async (): Promise<RunEvent[]> => [...waitingOn('gate-1', 'q?'), { kind: 'driver', event: { type: 'start', prompt: 'Yes' } }]
   assert.deepEqual((await build([project('a', '/a')], { prs: noPrs, liveAgents: waiting, events: answered, hooks: withAsk })).items, [])
   const unreadable = async () => undefined
   assert.deepEqual((await build([project('a', '/a')], { prs: noPrs, liveAgents: waiting, events: unreadable, hooks: withAsk })).items, [])
@@ -211,7 +234,7 @@ test('build adds no awaiting item for a run that is not waiting, or whose diary 
 test('build surfaces PRs and awaiting runs together, newest first', async () => {
   const prs = async (cwd: string): Promise<OpenPr[]> =>
     cwd === '/a' ? [{ number: 5, title: 'pr', url: 'u5', isDraft: false, createdAt: '2026-07-10T00:00:00Z' }] : []
-  const liveAgents = async (cwd: string): Promise<LiveAgent[]> =>
+  const liveAgents = async (cwd: string): Promise<AgentMeta[]> =>
     cwd === '/b' ? [live(runningAgentMeta({ status: 'waiting', updatedAt: '2026-07-16T00:00:00Z' }))] : []
   const { items } = await build([project('a', '/a'), project('b', '/b')], { prs, liveAgents, events: async () => waitingOn('g', 'q?'), hooks: withAsk })
   assert.deepEqual(items.map(i => i.words), ['Needs answer', 'Needs merge']) // the question is newer
@@ -355,7 +378,7 @@ test('a finished run continued, working again in its checkout, is not unpushed w
   // Its record still says how its first leg ended; its checkout's card says it works again, as the list of runs shows it.
   const recorded = doneMeta()
   const read = (status: AgentMeta['status']) =>
-    build([project('a', '/a')], { ...onlyUnpushed([recorded], counting(branch => waiting({ branch }))), liveAgents: async () => [{ ...recorded, status, cwd: '/a/.branches/agent-add-cart' }] })
+    build([project('a', '/a')], { ...onlyUnpushed([recorded], counting(branch => waiting({ branch }))), liveAgents: async () => [{ ...recorded, status }] })
   assert.deepEqual((await read('running')).items, [])
   assert.deepEqual((await read('done')).items.map(i => [i.id, i.run]), [['unpushed:r1', 'r1']], 'and listed once, ended again')
 })
@@ -433,7 +456,7 @@ test('a run waits on one step at a time: files left uncommitted after its reques
 })
 
 test('a run waiting on its question waits on that first, though its request is open', async () => {
-  const liveAgents = async (): Promise<LiveAgent[]> => [live(runningAgentMeta({ status: 'waiting', branch: 'agent-add-cart' }))]
+  const liveAgents = async (): Promise<AgentMeta[]> => [live(runningAgentMeta({ status: 'waiting', branch: 'agent-add-cart' }))]
   const prs = async (): Promise<OpenPr[]> => [{ number: 4, title: 'Add the cart', url: 'u4', isDraft: false, headRefName: 'agent-add-cart' }]
   const { items } = await build([project('a', '/a')], { prs, liveAgents, events: async () => waitingOn('gate-1', 'q?'), hooks: withAsk, branches: async () => undefined })
   assert.deepEqual(items.map(i => [i.run, i.words]), [['r1', 'Needs answer']])
@@ -498,7 +521,7 @@ test("a session's own draft PR still reaches the queue; a hand-made draft does n
   const recorded: AgentMeta = { id: 'x', status: 'done', startedAt: '2026-07-16T00:00:00Z', updatedAt: '2026-07-16T01:00:00Z', branch: 'agent-x' }
   const { items } = await build([project('a', '/a')], { prs, liveAgents: noAgents, agents: async () => [recorded] })
   assert.deepEqual(items.map(i => i.detail), ['#9'])
-  const { items: live } = await build([project('a', '/a')], { prs, liveAgents: async () => [{ ...recorded, status: 'running', cwd: '/a/.branches/agent-x' }], agents: async () => [] })
+  const { items: live } = await build([project('a', '/a')], { prs, liveAgents: async () => [{ ...recorded, status: 'running' }], agents: async () => [] })
   assert.deepEqual(live.map(i => i.detail), ['#9'], 'a running agent\'s draft counts too')
   const { items: nobody } = await build([project('a', '/a')], { prs, liveAgents: noAgents, agents: async () => [] })
   assert.deepEqual(nobody, [], 'a draft on a branch no run names is hand-made')

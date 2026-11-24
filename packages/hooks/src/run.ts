@@ -1,4 +1,5 @@
-import type { DriverEvent, DriverReadiness, InboxLine, Question, RunAgent } from './agent.js'
+import type { DriverReadiness, InboxLine, Question, RunAgent } from './agent.js'
+import type { RunFeedEvent } from './run-event.js'
 import type { ProjectRef } from './project.js'
 import type { Settings } from './settings.js'
 import type { Store } from './store.js'
@@ -92,6 +93,8 @@ export interface GitBranchesFacts {
   branch?: string
   /** The commit the run's own branch was made at, where its own work begins; none for a branch it was given. */
   baseCommit?: string
+  /** The last commit of the run's work, once its main agent landed it: its branch is gone, and its work is read here. */
+  landed?: string
   /** The run's branch was gone everywhere, and was made again for this resume from where its base is now. */
   again?: true
   /** How the run's checkout went once the run ended: reclaimed, with the branches that went with it, or kept and why. */
@@ -218,9 +221,6 @@ export interface SkillArgs {
 /** A module's skills for a run: none where they do not apply (github's on a project that is not on GitHub). */
 export type RunSkills = (args: SkillArgs) => RunSkill[] | Promise<RunSkill[]>
 
-/** What a run's stream carries. */
-export type RunEvent = DriverEvent
-
 /** Starting a run, as a host is asked it. */
 export interface RunRequest {
   /** The project the run is in; none for a session with no project. */
@@ -245,17 +245,53 @@ export interface RunRef {
 /** What stands in the way of a run on a host: problems stop it, warnings do not, and a fix a press can run. */
 export type RunReadiness = DriverReadiness
 
-/** A run, as a host lists it. */
+/** A run, as a host lists it and a page shows it: what it was asked, how it stands, and what its record keeps. */
 export interface RunSummary {
   id: string
   /** The project it is in, by its id; none for a session with no project. */
   project?: string
+  /** The host that has it, by its id (`RunHost.id`). */
+  host: string
   status: RunStatus
   startedAt: string
   endedAt?: string
   /** Its short name, once something named it. */
   title?: string
+  /** Set while that name is being asked for: a list holds the run's place for it then. */
+  naming?: true
   prompt: string
+  /** Whose run it is, by the email its record is kept under. */
+  person?: string
+  /** What it cost so far, in US dollars. */
+  cost?: number
+  /** How much of the model's context the conversation filled at its last turn. */
+  contextTokens?: number
+  /** The coding agent it is on (`RunAgent.id`), with the model and effort it was started with. */
+  agent?: { id: string; model?: string; effort?: string }
+  /** Its options, one slice per module, as its record keeps them: what its box's controls say. */
+  options?: RunOptions
+  /** What each module found out about it, as its record keeps it: its branch, its pull request. */
+  facts?: RunFacts
+  /** The computer it runs or ran on, by its name. */
+  computer?: string
+  /** The ticket it works on, by its id. */
+  ticket?: string
+  /** The folder its agent works or worked in: what the paths of its tool calls are relative to. */
+  workspace?: string
+  /** Its coding agent's own session, once it reported one, with the command that picks it back up in a terminal (`RunAgent.resumeCommand`). */
+  session?: { id: string; resume?: string }
+  /** It ended, and the process that ran it is still saving its record and cleaning up its checkout. */
+  saving?: true
+  /** Its record says it works, and the process that ran it is gone: nothing works on it, and its host's sweep ends it. */
+  gone?: true
+}
+
+/** Which of a host's runs a list asks for, when not all of them; given both, a run must be both. */
+export interface RunsWanted {
+  /** These runs only, by id. */
+  ids?: string[]
+  /** The runs started at this time or later, ISO 8601. */
+  since?: string
 }
 
 /**
@@ -312,10 +348,14 @@ export interface RunHost {
   steer(run: RunRef, line: InboxLine): Promise<void>
   /** Stop a working run: politely, letting the agent end its turn where it is; with `force`, at once. */
   stop(run: RunRef, opts?: { force?: boolean }): Promise<void>
-  /** The runs it has in a project, or with no project, newest first. */
-  list(project?: ProjectRef): Promise<RunSummary[]>
+  /** The runs it has in a project, or with no project, newest first: a working run as it stands now. */
+  list(project?: ProjectRef, wanted?: RunsWanted): Promise<RunSummary[]>
   /** Where a run's work is, for the panes that show it (`RpcHost.run`); none for a run this host does not have. */
   find(run: RunRef): Promise<RunFound | undefined>
-  /** A run's events from its start, then each one as it comes, until the run ends or `signal` aborts. Not asked yet: the dashboard tails the diary of a run of this computer's itself. */
-  events?(run: RunRef, signal: AbortSignal): AsyncIterable<RunEvent>
+  /**
+   * A run's events from its start, the end-of-replay marker once they are in, then each one as it
+   * comes with the message the agent is writing, until `signal` aborts; nothing for a run this host
+   * does not have. A run that ended is followed still: a resume brings it more.
+   */
+  events?(run: RunRef, signal: AbortSignal): AsyncIterable<RunFeedEvent>
 }

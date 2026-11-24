@@ -103,18 +103,12 @@ export async function computerPackages(): Promise<OwnPackage[]> {
 }
 
 /**
- * The kinds every project reads whatever its plugins say: the runs' records, which agent-driver
- * keeps, read through logs' command until agent-driver reads them itself.
- */
-const EVERY_PROJECT_KINDS: readonly string[] = ['runs']
-
-/**
  * What provides `kind` in the project at `root`: the one package it has that declares it
  * (`"openagent": { "<kind>": "<command>" }`). Two that both do are the distribution's mistake,
  * which the project's banner says.
  */
 export async function lookupProvided(root: string, kind: string): Promise<ProvidedCommandLookup> {
-  const providers = declaring(EVERY_PROJECT_KINDS.includes(kind) ? await projectsPackages() : await packagesOf(root), kind)
+  const providers = declaring(await packagesOf(root), kind)
   if (providers.length === 1) return { command: providers[0]! }
   if (providers.length === 0) return {}
   return { problem: `${providers.length} packages of the distribution provide ${kind}: ${providers.map(p => p.package).join(', ')}` }
