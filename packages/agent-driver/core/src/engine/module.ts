@@ -10,6 +10,7 @@ import { liftSkillRules, skillLink } from '@openagt/git-branches'
 import { cleanup } from './cleanup.js'
 import { runsAlive } from './run-lock.js'
 import { localHost } from './host.js'
+import { sweepSessions } from './sessions-sweep.js'
 import { agentAttention } from '../attention.js'
 import { endInstalls } from '../setup.js'
 import { handedDownSettings } from './profile.js'
@@ -26,7 +27,7 @@ import { detailOf, effortOf, modelOf, sessionTurns } from './session.js'
  * first; the record saved from what the session kept, with where the work ended up, as the run's
  * facts say; and the record said again without the branch the reclaim deleted. And what the coding
  * agents need of the person (`attention.ts`), with the installs a press started ended as the app
- * stops. A project is not taken off the list while a run's process is alive there, and one taken
+ * stops; and the sessions with no project swept while the app runs (`sessions-sweep.ts`). A project is not taken off the list while a run's process is alive there, and one taken
  * off with its files loses what this tool left in it (`cleanup.ts`).
  */
 const agentDriver = defineModule({
@@ -34,6 +35,7 @@ const agentDriver = defineModule({
   hooks: {
     'app.attention': async args => agentAttention(args, await handedDownSettings()),
     'app.lifecycle': {
+      started: sweepSessions,
       stopping: endInstalls,
       refuseRemoval: async project => ((await runsAlive(project.dir)).length > 0 ? 'An agent is working in this project. Stop it, then remove the project.' : undefined),
       projectRemoved: (project, app, { files }) => (files ? removeOwnFiles(project, app) : undefined),

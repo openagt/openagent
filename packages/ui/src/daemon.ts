@@ -7,7 +7,7 @@ import { projectStateReader } from './project-state.js'
 import { resolveDashboardBundle } from './dashboard/bundle.js'
 import { resolveWebsite } from './dashboard/website.js'
 import { registryPreferencesStore } from './registry.js'
-import { readySessionsHome, startSessionsSweep } from './sessions-home.js'
+import { readySessionsHome } from './sessions-home.js'
 import { distributionHooks, localHostOf } from './distribution-hooks.js'
 import type { Hooks, ProjectRef, RunHost } from '@openagt/hooks'
 import { sessionsHome } from '@openagt/agent-data'
@@ -148,10 +148,8 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
       opts.onProject?.(undefined)
     }
   }
-  // The sessions with no project: their home made, and a session whose process died swept, as a
-  // project's scheduler sweeps its runs.
-  const sessions = await readySessionsHome(sessionsHome(env))
-  const stopSessionsSweep = startSessionsSweep(sessions)
+  // The sessions with no project: their home made, before the modules start their work there.
+  await readySessionsHome(sessionsHome(env))
 
   // The modules' own work (`app.lifecycle`), once the dashboard listens, so it never delays the
   // URL: the projects' schedulers. Each module on starts it, told where OpenAgent answers, and a
@@ -160,7 +158,6 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
   await hooks.started({ signal: lifecycle.signal, url: dashboard.url })
 
   await waitForShutdown(opts.signal)
-  stopSessionsSweep()
 
   await stopWithin(opts.shutdownDeadlineMs ?? SHUTDOWN_DEADLINE_MS, async step => {
     step("the modules' own work")
