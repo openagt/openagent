@@ -20,7 +20,6 @@ import { updatePreferences, usePreferences } from '../lib/preferences.js'
 import { RECENTS_GROUP_LABELS, RECENTS_SORT_LABELS, groupRuns, sortRuns, type RecentsGroup, type RecentsSort } from '../lib/recents-sort.js'
 import { useGlide } from '../lib/glide.js'
 import { useRailScroll } from '../lib/rail-scroll.js'
-import { WAITING_MARKS, WAITING_PLAIN } from './WaitingList.js'
 import { useProjectLabel } from '../lib/project-labels.js'
 import { runState } from '../lib/run-words.js'
 import { RunMark } from './RunMark.js'
@@ -577,8 +576,13 @@ const WAITING_SHOWN = 5
 const WAITING_COUNT = 'flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-warning/15 px-1 text-xs leading-none font-semibold text-warning tabular-nums'
 
 /** A row of the sidebar's lists, the navigation's row (ui/nav-row): 32 high (44 on a phone), corners 8, the picked one filled, the one under the pointer half filled. Placed, so one that travels is drawn over the rows it passes (`useGlide`). */
-const railRowClass = (active: boolean): string =>
-  cn('focus-ring rail-row relative flex w-full items-center gap-3 rounded-lg px-2 text-left text-sm text-foreground transition-colors md:h-8 max-md:h-11', active ? 'bg-foreground/8' : 'hover:bg-foreground/4 active:bg-foreground/8')
+const railRowClass = (active: boolean, lines: 1 | 2 = 1): string =>
+  cn(
+    'focus-ring rail-row relative flex w-full items-center gap-3 rounded-lg px-2 text-left text-sm text-foreground transition-colors',
+    // Two lines: 32 (44 on a phone) at the least, grown by its lines.
+    lines === 1 ? 'md:h-8 max-md:h-11' : 'py-1.5 md:min-h-8 max-md:min-h-11',
+    active ? 'bg-foreground/8' : 'hover:bg-foreground/4 active:bg-foreground/8',
+  )
 
 /** The marks a row has just before its age, 4 from it and so closer to it than to the name they would otherwise cut into. */
 const BEFORE_AGE = '-mr-2 flex shrink-0 items-center gap-1'
@@ -599,12 +603,13 @@ function RailLabel({ part, stuck, children }: { /** Which part it names: it move
 }
 
 /**
- * What waits on the person, over the Log, each a row of the Log's own shape (his pick, 2026-11-24):
- * the waiting hexagon, the run's name cut at the row's end, what it needs as its mark in the
- * waiting colour, and how long it has waited. Pointed at, the row says the name whole and what it
- * needs in words. Past five, a row that opens the Overview, where the Human Queue lists them all.
- * A run listed here is not listed again in the Log; once answered it is back in the Log, in its
- * order, and its row is seen going there and back.
+ * What waits on the person, over the Log: each a row of the Log's (the waiting hexagon, the run's
+ * name cut at the row's end, how long it has waited) with a second line, what it needs in the
+ * Human Queue's two words, in the waiting colour (his pick, 2026-11-24, over the need as a mark
+ * before the age). Pointed at, the row says the name whole and what the need is about. Past five,
+ * a row that opens the Overview, where the Human Queue lists them all. A run listed here is not
+ * listed again in the Log; once answered it is back in the Log, in its order, and its row is seen
+ * going there and back.
  */
 function WaitingOnYou({
   waiting,
@@ -645,7 +650,6 @@ function WaitingOnYou({
             const { state, word: need } = runState({ status: 'waiting' }, item)
             const external = item.run === undefined
             const name = item.title ?? item.projectName
-            const { Icon } = item.mark ? WAITING_MARKS[item.mark] : WAITING_PLAIN
             return (
               <SidebarMenuItem key={waitingKey(item)}>
                 <Tooltip>
@@ -658,19 +662,25 @@ function WaitingOnYou({
                         data-glide={item.run !== undefined ? `${item.projectId}:${item.run}` : waitingKey(item)}
                         data-glide-part="waiting"
                         {...(external ? { target: '_blank', rel: 'noreferrer' } : { onClick: inPlace(() => onOpen(item)) })}
-                        className={railRowClass(isOpen(item))}
+                        className={railRowClass(isOpen(item), 2)}
                       />
                     }
                   >
-                    <span data-glide-new className="flex size-4 shrink-0 items-center justify-center">
-                      <RunMark status={state} />
-                    </span>
-                    <span className="min-w-0 flex-1 truncate">{name}</span>
-                    <span aria-hidden data-glide-new className={cn(BEFORE_AGE, 'text-warning')}>
-                      <Icon className="size-3.5" />
-                    </span>
-                    <span aria-hidden className={AGE}>
-                      {formatSince(item.since)}
+                    <span className="flex min-w-0 flex-1 flex-col">
+                      {/* The mark and the age on the name's line, never between the two (spacing.md 3). */}
+                      <span className="flex min-w-0 items-start gap-3">
+                        <span data-glide-new className="flex h-5 w-4 shrink-0 items-center justify-center">
+                          <RunMark status={state} />
+                        </span>
+                        <span className="min-w-0 flex-1 truncate">{name}</span>
+                        <span aria-hidden className={cn(AGE, 'leading-5')}>
+                          {formatSince(item.since)}
+                        </span>
+                      </span>
+                      {/* Under the name, 16 for the mark and 12 after it: the words start where the name does. */}
+                      <span aria-hidden data-glide-new className="truncate pl-7 text-xs text-warning">
+                        {need}
+                      </span>
                     </span>
                   </TooltipTrigger>
                   <TooltipContent side="right" align="start" className="max-w-80">

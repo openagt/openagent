@@ -456,11 +456,11 @@ already made, and lists it in its pull request; for anything else it proposes an
   label of the part scrolled into sticks at the top, and the Log's says how many wait once those
   rows are out of view. Picked over the pages standing still with only the lists scrolling,
   which left the Log what was left under them, and over "New agent session" alone standing still.
-- What waits on the person is a row of the Log's own shape, what it needs said by its mark in
-  the waiting colour and in words when pointed at. A run that starts or stops waiting is seen
-  going from one list to the other: its own row travels, and the rows it passes make room.
-  Picked over two lines a row with the need in words, over a wash of colour where the row
-  lands, and over the row fading out of one list and into the other.
+- What waits on the person is a row of the Log's with a second line, what it needs in words,
+  in the waiting colour. A run that starts or stops waiting is seen going from one list to the
+  other: its own row travels, and the rows it passes make room. Picked over one line a row with
+  the need as a mark before the age, over a wash of colour where the row lands, and over the
+  row fading out of one list and into the other.
 
 ## The profiles
 - A profile (#2394) is a name and a saved set of run options, made once on the Profiles page

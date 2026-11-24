@@ -62,7 +62,7 @@ function agent(over: Partial<AgentMeta> = {}): AgentMeta {
 const renderRail = (ui: ReactElement) => render(<SidebarProvider>{ui}</SidebarProvider>)
 
 describe('AgentHistory (#785)', () => {
-  test('what waits on the person is its own part over the Log, each a row of the Log\'s shape: a run\'s name, what it needs as a mark, how long it has waited; five, then a row that opens the Overview', () => {
+  test('what waits on the person is its own part over the Log: a run\'s name and how long it has waited, what it needs under them in the waiting colour; five, then a row that opens the Overview', () => {
     const asks = (n: number) => ({ projectId: 'p1', projectName: 'p1', kind: 'waiting' as const, module: 'ask', scope: 'run' as const, run: `r${n}`, id: `r${n}:q${n}`, words: 'Needs answer', title: `Run ${n}`, mark: 'question' as const, since: new Date(Date.now() - 3 * 60_000).toISOString() })
     const onSelectRecent = vi.fn()
     const onDashboard = vi.fn()
@@ -72,9 +72,9 @@ describe('AgentHistory (#785)', () => {
     expect(screen.getByText('Waiting on you')).toBeTruthy()
     const row = screen.getByRole('link', { name: 'Run 1 · Needs answer' })
     expect(row.getAttribute('href')).toBe('/p1/r1')
-    // One line, as a row of the Log: the name and its age, and between them what it needs, as its mark in the waiting colour.
-    expect(row.textContent).toBe('Run 13m')
-    expect(row.querySelector('.text-warning .lucide-circle-question-mark, .text-warning .lucide-circle-help')).toBeTruthy()
+    // Two lines: the name and its age, then what it needs, in the waiting colour.
+    expect([...row.firstElementChild!.children].map(line => line.textContent)).toEqual(['Run 13m', 'Needs answer'])
+    expect(row.firstElementChild!.lastElementChild!.className).toContain('text-warning')
     // The row is known by its run as it travels between the two lists.
     expect([row.getAttribute('data-glide'), row.getAttribute('data-glide-part')]).toEqual(['p1:r1', 'waiting'])
     fireEvent.click(row)
