@@ -1,8 +1,7 @@
 {
   "id": "2026-11-24T13-04-37-924Z",
   "startedAt": "2026-11-24T13:04:38.203Z",
-  "endedAt": "2026-11-24T13:05:32.369Z",
-  "status": "waiting",
+  "status": "running",
   "intent": "ask me simple question with options",
   "title": "Simple question with options",
   "driver": "claude-code",
@@ -14,11 +13,11 @@
   "caller": {
     "runner": {
       "host": "Suleimans-MacBook-Pro.local",
-      "pid": 96224,
+      "pid": 5061,
       "gitAccount": "suleimansh",
       "baseCommit": "dd95e524d18b5026bb7eae79db0adf596d1cce6e"
     },
-    "pid": 96224,
+    "pid": 5061,
     "host": "Suleimans-MacBook-Pro.local",
     "gitAccount": "suleimansh",
     "baseCommit": "dd95e524d18b5026bb7eae79db0adf596d1cce6e",
