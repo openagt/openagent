@@ -1,7 +1,7 @@
 import type { ChoiceRequest, RunEvent } from '@openagt/hooks'
 import type { BackgroundTask } from '@openagt/hooks'
 import { foldScreenRows, formatRunEvent } from '../../src/client.js'
-import { answeredQuestion } from '@openagt/agent-driver/question'
+import { answeredQuestion } from '@openagt/hooks'
 import { Fragment, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { Check, ChevronRight, Copy, PencilLine } from 'lucide-react'
 import { pendingChoices } from '../lib/live-state.js'

@@ -27,10 +27,6 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
-    "./question": {
-      "types": "./dist/question.d.ts",
-      "default": "./dist/question.js"
-    },
     "./record": {
       "types": "./dist/run-record.d.ts",
       "default": "./dist/run-record.js"

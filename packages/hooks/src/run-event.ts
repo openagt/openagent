@@ -185,3 +185,29 @@ export interface RunPartial {
 
 /** What a host's stream of a run carries: its events, the end-of-replay marker, and the message being written. */
 export type RunFeedEvent = RunEvent | RunReplayed | RunPartial
+
+// The answer to a question a run stopped on goes back to its agent as one sentence, and a skip as
+// another, the same for every module that answers and every host that resumes: a reader of the
+// run's prompts (the chat) reads the question and its answer back off them ({@link answeredQuestion}).
+
+/**
+ * The prompt that resumes the agent after the person answered its question. One wording for every
+ * caller: the agent knows what it is working on from its session, so nothing else is said, and no
+ * "do not ask again" tail, since a capable agent does not re-ask a settled question.
+ */
+export function continuationPrompt(question: string, answer: string): string {
+  return `You paused to ask: "${question}". The user chose: ${answer}. Continue with that decision.`
+}
+
+/** What a skip tells the agent: its question, and that it goes on without an answer. */
+export function skipPrompt(question: string): string {
+  return `You paused to ask: "${question}". The user skipped it. Continue without an answer.`
+}
+
+/** The question and the answer a prompt that answers one carries (no answer: it was skipped), or undefined for any other prompt. */
+export function answeredQuestion(prompt: string): { question: string; answer?: string } | undefined {
+  const chose = /^You paused to ask: "([\s\S]*)"\. The user chose: ([\s\S]*)\. Continue with that decision\.$/.exec(prompt)
+  if (chose) return { question: chose[1]!, answer: chose[2]! }
+  const skipped = /^You paused to ask: "([\s\S]*)"\. The user skipped it\. Continue without an answer\.$/.exec(prompt)
+  return skipped ? { question: skipped[1]! } : undefined
+}

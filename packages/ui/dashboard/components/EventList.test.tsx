@@ -2,7 +2,7 @@ import type { RunEvent } from '@openagt/hooks'
 import type { ReactElement, ReactNode } from 'react'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { act, cleanup, fireEvent, render as rendered, screen, waitFor, within } from '@testing-library/react'
-import { continuationPrompt } from '@openagt/agent-driver/question'
+import { continuationPrompt } from '@openagt/hooks'
 import { ModulesContext, mountedOf } from '../lib/use-modules.js'
 import { MARKDOWN_RENDER, questionCard } from '../test-utils.js'
 

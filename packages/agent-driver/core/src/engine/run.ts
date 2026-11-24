@@ -1,5 +1,5 @@
 import { errorMessage, projectId, projectNameOf, repositoryAddress, sessionsHomeOf, type GitRunner } from '@openagt/agent-data'
-import { continuationPrompt } from '../question.js'
+import { continuationPrompt } from '@openagt/hooks'
 import { findRun, readDiary } from '../record-store.js'
 import { type RunCard, type RunStatus } from '../record.js'
 import { createHooks, type DistributionEntry, type ProjectRef, type RunFacts, type RunInput, type RunOptions as ModuleOptions } from '@openagt/hooks'

@@ -1,6 +1,6 @@
 import { appendFile, mkdir, readFile, rename, rm } from 'node:fs/promises'
 import { dirname } from 'node:path'
-import { continuationPrompt } from './question.js'
+import { continuationPrompt } from '@openagt/hooks'
 import { promptSent } from './session-support.js'
 import { isImageName } from './images.js'
 import type { DriverPromptOptions, DriverSession, DriverTurn, InboxLine, PromptLine, Question } from '@openagt/hooks'

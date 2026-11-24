@@ -40,7 +40,6 @@
     "clean": "rm -rf dist dist-test"
   },
   "dependencies": {
-    "@openagt/agent-driver": "workspace:*",
     "@openagt/hooks": "workspace:*"
   },
   "devDependencies": {

@@ -1,4 +1,4 @@
-export { toolQuestion, continuationPrompt, skipPrompt, answeredQuestion } from './question.js'
+export { toolQuestion } from './question.js'
 export { appendInbox, takeInbox, promptOf, promptLines, steeredWords, finishTurn } from './inbox.js'
 export { attachLog, logCardFile, logDiaryFile, logLiveFile, agentEnv, DIARY_ENV } from './session-log.js'
 export { checkCliReady, probeCli, type CliProbe, type CliSpec, type DriverReadyOptions } from './ready.js'

@@ -1,5 +1,5 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react'
-import { continuationPrompt } from '@openagt/agent-driver/question'
+import { continuationPrompt } from '@openagt/hooks'
 import { mountedOf, type Mounted, type MountedModules } from './lib/use-modules.js'
 import type { UiMarkdownProps, UiQuestionProps, UiRender } from './module/index.js'
 

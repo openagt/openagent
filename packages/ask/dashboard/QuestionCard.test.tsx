@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
 import type { KeyboardEvent, ReactElement } from 'react'
-import { continuationPrompt, skipPrompt } from '@openagt/agent-driver/question'
+import { continuationPrompt, skipPrompt } from '@openagt/hooks'
 import { fakeHost, OpenAgentDown, renderWithHost, type FakeHost } from '@openagt/ui/module/testing'
 import { QuestionCard } from './QuestionCard.js'
 
