@@ -7,3 +7,13 @@
 {"kind":"cost","usd":0.0695192,"at":"2026-11-24T13:04:46.849Z"}
 {"kind":"question","title":"Which would you rather drink right now?","header":"Drink","options":[{"id":"opt:0","label":"Coffee","detail":"Hot or iced, your call."},{"id":"opt:1","label":"Tea","detail":"Green, black, or herbal."},{"id":"opt:2","label":"Water","detail":"Keep it simple."},{"id":"opt:3","label":"Juice","detail":"Something fruity."}],"at":"2026-11-24T13:04:46.849Z"}
 {"kind":"ended","status":"waiting","at":"2026-11-24T13:04:46.850Z"}
+{"kind":"start","prompt":"You paused to ask: \"Which would you rather drink right now?\". The user chose: Coffee. Continue with that decision.","at":"2026-11-24T13:05:05.002Z"}
+{"kind":"session","sessionId":"52a08fdd-bcb4-46ca-a242-d728a566680e","at":"2026-11-24T13:05:05.003Z"}
+{"kind":"thinking","at":"2026-11-24T13:05:05.003Z"}
+{"kind":"tokens","tokens":21509,"at":"2026-11-24T13:05:06.167Z"}
+{"kind":"thought","text":"Coffee is the pick, so I'll acknowledge that and keep things simple.","at":"2026-11-24T13:05:06.167Z"}
+{"kind":"said","text":"You picked coffee. Want to try another question?","at":"2026-11-24T13:05:06.168Z"}
+{"kind":"rate-limit","limit":{"status":"allowed","window":"five_hour","resetsAt":1795542000000,"windows":[{"window":"five_hour","percentUsed":11,"resetsAt":1795542000000},{"window":"seven_day","percentUsed":46,"resetsAt":1795838400000}]},"at":"2026-11-24T13:05:06.177Z"}
+{"kind":"result","text":"You picked coffee. Want to try another question?","sessionId":"52a08fdd-bcb4-46ca-a242-d728a566680e","at":"2026-11-24T13:05:06.705Z"}
+{"kind":"cost","usd":0.0773408,"at":"2026-11-24T13:05:06.705Z"}
+{"kind":"ended","status":"done","at":"2026-11-24T13:05:06.706Z"}
