@@ -101,6 +101,17 @@ export const PROFILES = defineSetting<Profile[]>({
   parse: value => (Array.isArray(value) ? value.flatMap(item => profileFrom(item) ?? []) : undefined),
 })
 
+/**
+ * profiles': the profile a run started on this computer is on when its options name none, the
+ * one picked under the message box for every next run, by its id; Default when unset.
+ */
+export const PICKED_PROFILE = defineSetting<string | undefined>({
+  key: 'profiles.picked',
+  scope: 'computer',
+  default: undefined,
+  parse: value => (isProfileId(value) && value !== DEFAULT_PROFILE ? value : undefined),
+})
+
 /** Every profile, as a list shows them: Default first, as saved or built in, then the others by name. */
 export function profilesIn(saved: readonly Profile[]): Profile[] {
   const others = saved.filter(profile => profile.id !== DEFAULT_PROFILE).sort((a, b) => a.name.localeCompare(b.name))

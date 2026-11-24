@@ -6,7 +6,7 @@ import { findRun, listRuns } from '../record-store.js'
 import { isRunId, parseRunCard, type RunCard } from '../record.js'
 import { logCardFile } from '../session-log.js'
 import { PLUGINS_WITHOUT_ENV, PROFILE_ENV, PROJECT_SKILLS_ENV, isSkillName, sessionFolder, sessionsHome, sessionsHomeOf } from '@openagt/agent-data'
-import { LOCAL_HOST, MODULE_NAME, isProfileId, type ProjectRef, type RunFound, type RunHost, type RunInput, type RunOptions, type RunReadiness, type RunRef, type RunStatus, type RunSummary, type InboxLine, type PromptLine } from '@openagt/hooks'
+import { LOCAL_HOST, MODULE_NAME, PICKED_PROFILE, isProfileId, type ProjectRef, type RunFound, type RunHost, type RunInput, type RunOptions, type RunReadiness, type RunRef, type RunStatus, type RunSummary, type InboxLine, type PromptLine } from '@openagt/hooks'
 import { currentBranch, worktreePath } from '@openagt/git-branches'
 import { handedDownSettings, runProfile } from './profile.js'
 import { inboxPath, liveDir } from './live-card.js'
@@ -93,8 +93,10 @@ export function localHost(deps: LocalHostDeps = {}): RunHost {
       return ready(placeOf(project), options['agent-driver']?.driver)
     },
 
-    async start({ project, prompt, images, options, title }) {
-      refuse(project, options)
+    async start({ project, prompt, images, options: given, title }) {
+      refuse(project, given)
+      // A run whose options name no profile is on the one picked for every next run on this computer.
+      const options = await withPickedProfile(given)
       const dir = placeOf(project)
       const driver = options['agent-driver']?.driver
       // A run is refused before it spends a checkout when its coding agent cannot start, or the account it works as cannot be used here.
@@ -304,4 +306,13 @@ function summaryOf(card: RunCard, project: ProjectRef | undefined): RunSummary {
     ...(card.title !== undefined ? { title: card.title } : {}),
     prompt: card.intent ?? '',
   }
+}
+
+/** The run's options, on the profile picked for every next run on this computer where they name none (`PICKED_PROFILE`); a store that cannot be read picks none. */
+async function withPickedProfile(options: RunOptions): Promise<RunOptions> {
+  if (options.profiles?.profile !== undefined) return options
+  const picked = await handedDownSettings()
+    .then(settings => settings.get(PICKED_PROFILE))
+    .catch(() => undefined)
+  return picked === undefined ? options : { ...options, profiles: { ...options.profiles, profile: picked } }
 }
