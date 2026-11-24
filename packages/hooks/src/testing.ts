@@ -3,7 +3,7 @@
 // part's function is handed.
 import { StoreOrder } from './order.js'
 import type { InboxLine } from './agent.js'
-import type { RpcHost } from './rpc.js'
+import type { RpcComputerHost, RpcHost } from './rpc.js'
 import type { RunContext, RunEvent, RunFound, RunHost, RunInput, RunRef, RunRequest, RunStatus, RunSummary } from './run.js'
 import { settingsIn, type Settings } from './settings.js'
 import { chainStore, changesOf, checkPath, isUnder, messageOf, scopeKey, type Scope, type Store, type StoreBackend } from './store.js'
@@ -208,7 +208,7 @@ export function fakeRun(given: Partial<Omit<RunContext, 'store' | 'settings'>> &
  */
 export function rpcHost(given: Partial<RpcHost> = {}): RpcHost {
   return {
-    settings: memorySettings(),
+    ...computerRpcHost(),
     root: '/work/project',
     project: async () => ({ id: 'project', name: 'project', dir: '/work/project' }),
     run: async () => undefined,
@@ -217,6 +217,20 @@ export function rpcHost(given: Partial<RpcHost> = {}): RpcHost {
     say: async () => {
       throw new Error('no run of this test takes a line')
     },
+    ...given,
+  }
+}
+
+/**
+ * The host a function of a module of the computer's is handed, for its server tests: settings in
+ * memory, no account for any remote, and a list of projects whose changes nobody is told of and
+ * that refuses no removal, unless `given` says otherwise.
+ */
+export function computerRpcHost(given: Partial<RpcComputerHost> = {}): RpcComputerHost {
+  return {
+    settings: memorySettings(),
+    gitAccess: async () => undefined,
+    lifecycle: { added: async () => {}, refusal: async () => undefined, removed: async () => ({ removed: [], kept: [], failed: [] }) },
     ...given,
   }
 }

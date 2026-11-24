@@ -105,9 +105,9 @@ export {
   type StoreBackend,
 } from './store.js'
 export { SETTING_SCOPES, SETTINGS_FILE, defineSetting, settingsIn, enabledSetting, type Setting, type SettingScope, type Settings } from './settings.js'
-export { PERSON_INFO, isPersonName, isPictureAddress, type PersonInfo, PROFILES, PICKED_PROFILE, DEFAULT_PROFILE, builtInDefault, isProfileId, isProfileName, profileIdOf, profileOf, profilesIn, type Profile, SCHEDULED_COMMANDS, SCHEDULED_COMMANDS_PAGE, type ScheduledCommands, type ScheduledCommandPicks, type SchedulePace } from './catalog.js'
+export { PERSON_INFO, isPersonName, isPictureAddress, type PersonInfo, PROFILES, PICKED_PROFILE, DEFAULT_PROFILE, builtInDefault, isProfileId, isProfileName, profileIdOf, profileOf, profilesIn, type Profile, SCHEDULED_COMMANDS, SCHEDULED_COMMANDS_PAGE, type ScheduledCommands, type ScheduledCommandPicks, type SchedulePace, PROJECTS, type ProjectRecord } from './catalog.js'
 export type { GitAccess, AccountAccess } from './account.js'
-export { ROUTE_PATH, type AppContext, type AppLifecycle, type AppRoute, type AppStart, type AttentionFix, type AttentionMark, type AttentionItem, type AttentionArgs, type WaitingRun, type AppAttention, type Attention, type AttentionRead } from './app.js'
+export { ROUTE_PATH, type AppContext, type AppLifecycle, type ProjectsLifecycle, type ProjectRemoval, type ProjectCleanup, type CleanupReport, type GivenFolder, type AppRoute, type AppStart, type AttentionFix, type AttentionMark, type AttentionItem, type AttentionArgs, type WaitingRun, type AppAttention, type Attention, type AttentionRead } from './app.js'
 export { HOOK_NAMES, MODULE_NAME, defineModule, type NodeHooks, type HookName, type PluginInfo, type OwnRow, type ModuleDefinition } from './module.js'
 export { runPipeline, type OrderedStep, type StepError, type PipelineResult } from './pipeline.js'
 export { createHooks, loadModules, loadDistribution, loadHandedDown, distributionItems, packageDirOf, DISTRIBUTION_ENV, type DistributionEntry, type DistributionPackage, type DistributionItem, type HandlerError, type HooksOptions, type GivenSkill, type Hooks } from './loader.js'
