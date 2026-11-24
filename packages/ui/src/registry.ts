@@ -2,7 +2,6 @@ import { accentOf, isCodeFont, isDocumentFont, isFont, isPalette, type Accent, t
 import { sanitizeOverviewLayouts, type OverviewLayouts } from './overview-layout.js'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { projectId } from '@openagt/agent-data'
-import { isBranchName } from './branch-name.js'
 import { isPublishPick, type PublishPick } from './publish-levels.js'
 import { nodeFs } from './node-fs.js'
 
@@ -24,23 +23,6 @@ export interface ProjectRecord {
   addedAt: string
 }
 
-/** The cap on the projects `startFrom` lists, so a hand-edited file cannot bloat. */
-const START_FROM_LIMIT = 200
-
-/**
- * Where agents started from the launcher start, when it is not the project's main branch: the
- * branch the project's folder is on, whatever that is by then, or one of origin's branches, by name.
- */
-export type StartFromPick = { kind: 'local' } | { kind: 'published'; branch: string }
-
-/** A value read as a {@link StartFromPick}: nothing for anything else, a word that is no branch name included. */
-export function startFromPick(value: unknown): StartFromPick | undefined {
-  if (typeof value !== 'object' || value === null) return undefined
-  const { kind, branch } = value as { kind?: unknown; branch?: unknown }
-  if (kind === 'local') return { kind }
-  return kind === 'published' && isBranchName(branch) ? { kind, branch } : undefined
-}
-
 /**
  * The dashboard's Global options (#410), persisted next to the project list so they
  * survive restarts without localStorage — the daemon reads/writes them, the SPA reads
@@ -51,12 +33,6 @@ export function startFromPick(value: unknown): StartFromPick | undefined {
 export interface Preferences {
   /** How far a run started from the dashboard publishes its work: `nothing`, or the level handed to the run, `commit`, `branch`, `pr` or `merge`. The launcher's menu shows it and writes it. Absent = none saved: the daemon decides where a Start goes. */
   publish?: PublishPick
-  /**
-   * Where an agent started from the launcher starts, per project, by its id: "My local branch",
-   * or a branch of origin's. The launcher's branch menu shows it and writes it. **A project not
-   * listed starts from its main branch**, so the default stores nothing.
-   */
-  startFrom?: Record<string, StartFromPick>
   /**
    * How the sidebar orders its list of runs: `created` (newest started first), `updated` (the one
    * that last did something first, as Claude Code's list does by default) or `name`. **Absent =
@@ -222,8 +198,6 @@ function sanitizePreferences(value: unknown): Preferences {
   }
   // `publish` is constrained to the picks the launcher's menu lists.
   if (isPublishPick(input['publish'])) preferences.publish = input['publish']
-  const startFrom = sanitizeStartFrom(input['startFrom'])
-  if (Object.keys(startFrom).length) preferences.startFrom = startFrom
   // `editor` (#727) is a free-form CLI name, trimmed and length-capped so junk / a huge string
   // never lands in the file. A blank string is "no choice" (fall back to env / `code`), so dropped.
   if (typeof input['editor'] === 'string' && input['editor'].trim())
@@ -246,21 +220,6 @@ function sanitizePreferences(value: unknown): Preferences {
   const overviewLayouts = sanitizeOverviewLayouts(input['overviewLayouts'])
   if (Object.keys(overviewLayouts).length) preferences.overviewLayouts = overviewLayouts
   return preferences
-}
-
-/**
- * Keep only the projects set to start from the local branch: a map from a project's id to the one
- * word `local`. Any other value is dropped (the main branch is the absent entry), and the map is
- * capped at {@link START_FROM_LIMIT} projects. An id is not checked against the project list: a
- * project removed and added again has the same id, and its pick with it.
- */
-function sanitizeStartFrom(value: unknown): Record<string, StartFromPick> {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return {}
-  const picks = Object.entries(value).flatMap(([id, from]) => {
-    const pick = startFromPick(from)
-    return id !== '' && pick ? [[id, pick] as const] : []
-  })
-  return Object.fromEntries(picks.slice(0, START_FROM_LIMIT))
 }
 
 /** Whether a value reads as a computer's own name: the letters a host name has, at a host name's length. A page shows it. */

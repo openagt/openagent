@@ -1,4 +1,4 @@
-import { accountGit, nodeGitRunner, noAccountSentence, originUrl, readRemoteAccount, remoteHostOf, type GitRunner, type RemoteAccount } from '@openagt/agent-data'
+import { noAccountSentence, originUrl, readRemoteAccount, remoteHostOf, type RemoteAccount } from '@openagt/agent-data'
 import { typedRepository } from '../typed-repository.js'
 import { gitHostPackages, onGitHosts } from './logins.js'
 
@@ -77,13 +77,4 @@ export async function originAccountOf(root: string): Promise<{ ok: true; account
   if (kept) return { ok: true, account: kept }
   const runs = (await accountsByHost()).find(row => row.host === host)?.runs
   return remoteAccount(host, runs)
-}
-
-/**
- * git for the repository at `root`, its talks with origin going as {@link originAccountOf} says:
- * never as the person's own login. With no account to go as, those talks are refused in words.
- */
-export async function originGit(root: string): Promise<GitRunner> {
-  const as = await originAccountOf(root).catch(() => ({ ok: false as const, error: '' }))
-  return accountGit(nodeGitRunner(), as.ok ? as.account : undefined)
 }

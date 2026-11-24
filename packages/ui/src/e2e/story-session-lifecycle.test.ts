@@ -17,7 +17,7 @@ test("start a run on this computer's host, watch it live, and read the recorded 
   const rpc = world.rpc
   try {
     const project = await world.addProject()
-    const agentId = await world.startAgent(project, 'Add a login page and commit it', { options: { 'agent-driver': { driver: 'codex', model: 'gpt-5' } }, publish: 'merge', base: 'main' })
+    const agentId = await world.startAgent(project, 'Add a login page and commit it', { options: { 'agent-driver': { driver: 'codex', model: 'gpt-5' }, 'git-branches': { base: 'main' } }, publish: 'merge' })
     const tail = await world.tailAgent(project, agentId)
 
     // The run's process got the prompt and the person's picks, and the id the host answered is the

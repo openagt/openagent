@@ -280,13 +280,16 @@ export { rowButtonClass, rowItemClass, RowChevron, RowSaid, RowItem, BoxOfRow } 
 // A line of the gear's menu under the message box (`composer.control` at `setup`).
 export { SetupLine, SetupPress, SetupSaid } from '../components/SessionSetup.js'
 // The places a module draws itself: a profile's editor draws every control of the message box, the usage card the usage bar's line.
-export { ComposerControls, ViewsAt, useViewsAt, useControlsSaid, type ControlBox, type ControlsSaid } from '../components/Places.js'
+export { ComposerControls, HandoffOffers, ViewsAt, useViewsAt, useControlsSaid, type ControlBox, type ControlsSaid } from '../components/Places.js'
 export { ModuleSlot } from '../components/ModulePageView.js'
+// A row of the panel of a session's work above its message box (`chat.work`): a repo's name, its branch, what it holds, its next steps.
+export { WorkRow } from '../components/AgentWorkPanel.js'
 /** For a read of what a pick for every next run decides (the profile picked under the box): read again the moment one is saved, which its control tells. */
 export { nextRunAgain, tellNextRunPicked } from '../lib/next-run-picked.js'
 /** Keep the page's entry while something typed would be lost by leaving it: Back asks first, and so does the browser on a reload. */
 export { holdEntry } from '../lib/use-route.js'
 export { inWords } from '../lib/in-words.js'
+export { formatBytes } from '../../src/format-bytes.js'
 /** For a read of what the plugins give: read again the moment a plugin is switched in Settings. */
 export { pluginsAgain } from '../lib/plugins-switched.js'
 export { ContextMenu, ContextMenuTrigger } from '../components/ui/context-menu.js'

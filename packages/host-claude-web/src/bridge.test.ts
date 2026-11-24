@@ -6,8 +6,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import { runIdFrom } from '@openagt/agent-driver'
-import { chainStore, type AppContext, type ProjectRef } from '@openagt/hooks'
-import { memorySettings, memoryStore } from '@openagt/hooks/testing'
+import type { AppContext, ProjectRef } from '@openagt/hooks'
+import { fakeApp } from '@openagt/hooks/testing'
 import { bridgeBrowser, bridgeLifecycle, bridgeRoute, type BridgeDeps } from './bridge.js'
 import type { BridgeBrowser } from './bridge-browser.js'
 import { EXPECTED_EXTENSION_VERSION, EXTENSION_VERSION_HEADER } from './bridge-endpoints.js'
@@ -36,9 +36,9 @@ async function served(): Promise<{ url: string; close: () => Promise<void> }> {
 
 /** The app, as the plugin is told it: its address, its projects, and the browser the person picked. */
 async function appAt(url: string, projects: ProjectRef[] = [], browser: 'app' | 'yours' = 'yours'): Promise<AppContext> {
-  const settings = memorySettings()
-  await settings.set(BROWSER, browser)
-  return { url, projects: async () => projects, store: chainStore([memoryStore()]), settings, signal: new AbortController().signal }
+  const app = fakeApp({ url, projects: async () => projects })
+  await app.settings.set(BROWSER, browser)
+  return app
 }
 
 /** Run `body` with a config folder of its own, the app's server, and the bridge as it starts. */

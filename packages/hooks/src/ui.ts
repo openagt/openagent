@@ -273,8 +273,17 @@ export interface ViewPlaces {
     }
     props: UiPaneProps
   }
-  /** A few words in the bar above a run's message box, until the run has ended and its branch was read. */
-  'chat.summary': { entry: { id: string }; props: UiRunProps }
+  /**
+   * A few words in the bar above a run's message box, until the run has ended and its branch was
+   * read; an entry that says `ended` is drawn from then on instead (git-branches': what the branch holds).
+   */
+  'chat.summary': { entry: { id: string; ended?: true }; props: UiRunProps }
+  /**
+   * Rows of the panel of a session's work above its message box, after the project's own row: one
+   * per repo the session holds work in beside its project (git-branches' copies of repos), each
+   * with its next steps (`chat.handoff` with the repo).
+   */
+  'chat.work': { entry: { id: string; order?: number }; props: UiRunProps }
   /** A strip above a run's chat, with a word on the run: a host's, on a run it runs, say where the run is and when its news comes. */
   'chat.notice': { entry: { id: string }; props: UiRunNoticeProps }
   /** Words at the end of the row above a session's message box: github's pull request labels. */
@@ -451,7 +460,13 @@ export interface OptionPlaces {
    * it where `offered` says so (a pull request where the project is on the module's git host), and a session with no project
    * (`project` none) where its copies of repos may be.
    */
-  'composer.auto': { label: string; sentence: string; offered?(project: UiProject | undefined): boolean }
+  'composer.auto': {
+    label: string
+    /** What the menu says under the label: what the agent does when it finishes. */
+    description?: string
+    sentence: string
+    offered?(project: UiProject | undefined): boolean
+  }
   /**
    * The project picker's entries beside the registered projects: the repos a module's accounts
    * reach, which a pick adds as a project, cloned as the account that reaches it

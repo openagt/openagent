@@ -18,6 +18,10 @@ const NO_RUNS: ServerHostDeps = {
   say: async () => {
     throw new Error('unknown session')
   },
+  landed: async () => {
+    throw new Error('unknown session')
+  },
+  gitAccess: async () => undefined,
   modulesOn: async () => [],
 }
 

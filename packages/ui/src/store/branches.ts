@@ -22,7 +22,6 @@ import { isRunId } from './runs.js'
  *                                                       a full commit id in place of a branch is read as a branch that ends there
  *   `<command> ahead [--from <commit>] <branch>...`     how far each branch is past the base, whether the remote has it, and what its checkout left uncommitted,
  *                                                       as an array of {@link BranchAhead}: no file lists, so every run's branch can be asked on a poll
- *   `<command> merge <b>`                               merge the branch into the default branch, on this machine, then delete it
  *   `<command> push --branch <b>`                       push the branch to the remote; a branch only the remote has is answered as it is
  *   `<command> remove <id> [--from <commit>] [--discard]`  reclaim a run's checkout once its branch holds everything, pushing nothing, its branch measured from the commit it started from; `--discard` drops uncommitted work
  * `list`, `show` and `ahead` read this machine, no network: OpenAgent polls. `show` answers the branch's
@@ -117,19 +116,6 @@ export interface BranchAhead {
 /** What pushing a branch did: `pushed` is false when only the remote had it, so there was nothing here to push. */
 export type PushOutcome = { ok: true; pushed: boolean } | { ok: false; error: string }
 
-/**
- * What merging a branch into the project's default branch did: `into` names that branch, `commit`
- * is the merged branch's last commit and `from` the commit its work began at, and `deleted` says
- * the branch went once its work was in.
- */
-export type MergeOutcome = { ok: true; into: string; commit: string; from: string; deleted: boolean } | { ok: false; error: string }
-
-/**
- * What bringing a copy's branch to the folder it was copied from did: `folder` names that folder,
- * and `merged` names the branch it was merged into there, when it was asked to merge.
- */
-export type BringOutcome = { ok: true; folder: string; merged?: string } | { ok: false; error: string }
-
 /** What reclaiming a checkout did: done, with the branches that went with it when any did, or the provider's reason it stayed. */
 export type RemoveOutcome = { ok: true; branchesDeleted?: string[] } | { ok: false; error: string }
 
@@ -153,13 +139,6 @@ export interface BranchesSource {
   ahead(branches: readonly string[], from?: string): Promise<BranchAhead[]>
   /** Push a branch to the remote: the checkout on it under its clean rule, else the branch itself. */
   push(branch: string): Promise<PushOutcome>
-  /** Merge a branch into the project's default branch, on this machine, then delete it; a merge that conflicts changes nothing. */
-  merge(branch: string): Promise<MergeOutcome>
-  /**
-   * In a session's copy of a repo with no remote: add a branch to the folder the copy was made from,
-   * changing nothing else there, and with `merge` merge it into that folder's default branch too.
-   */
-  bring(branch: string, opts?: { merge?: boolean }): Promise<BringOutcome>
   /**
    * Reclaim a run's checkout, or why it stayed. `from` is the commit the run's branch started
    * from, when that is not the default branch: what tells a branch with nothing of its own.
@@ -322,24 +301,6 @@ function commandBranches(root: string, command: ProvidedCommand, now: () => numb
       const pushed = result.output && typeof result.output === 'object' ? (result.output as Record<string, unknown>)['pushed'] : undefined
       return { ok: true, pushed: pushed !== false }
     },
-    async merge(branch) {
-      const result = await runPackageCommand(root, command, ['merge', branch])
-      drop()
-      if (!result.ok) return { ok: false, error: result.error }
-      const out = (result.output && typeof result.output === 'object' ? result.output : {}) as Record<string, unknown>
-      const { into, commit, from } = out
-      if (typeof into !== 'string' || typeof commit !== 'string' || typeof from !== 'string') return { ok: false, error: 'the branches provider answered no merge' }
-      return { ok: true, into, commit, from, deleted: out['deleted'] === true }
-    },
-    async bring(branch, opts = {}) {
-      const result = await runPackageCommand(root, command, ['bring', branch, ...(opts.merge ? ['--merge'] : [])])
-      drop()
-      if (!result.ok) return { ok: false, error: result.error }
-      const out = (result.output && typeof result.output === 'object' ? result.output : {}) as Record<string, unknown>
-      const merged = (out['merged'] && typeof out['merged'] === 'object' ? out['merged'] : {}) as Record<string, unknown>
-      if (typeof out['folder'] !== 'string') return { ok: false, error: 'the branches provider answered no folder' }
-      return { ok: true, folder: out['folder'], ...(typeof merged['into'] === 'string' ? { merged: merged['into'] } : {}) }
-    },
     async remove(id, opts = {}) {
       if (!isRunId(id)) return { ok: false, error: `not a run id: ${id}` }
       const result = await runPackageCommand(root, command, ['remove', id, ...(opts.discard ? ['--discard'] : opts.from ? ['--from', opts.from] : [])])
@@ -367,8 +328,6 @@ export function sessionFolders(home: string): BranchesSource {
     show: async () => [],
     ahead: async () => [],
     push: async () => ({ ok: false, error: NO_BRANCH }),
-    merge: async () => ({ ok: false, error: NO_BRANCH }),
-    bring: async () => ({ ok: false, error: NO_BRANCH }),
     // A session's folder holds its work, nothing of it committed anywhere: it goes only when that work is dropped with it, as when the session is deleted.
     async remove(id, opts = {}) {
       if (!isRunId(id)) return { ok: false, error: `not a run id: ${id}` }

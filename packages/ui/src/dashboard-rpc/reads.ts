@@ -15,7 +15,7 @@ import { buildActivity, type Activity } from '../dashboard/activity.js'
 import { buildDashboard, type DashboardData } from '../dashboard/dashboard.js'
 import { readGitStatus } from '../dashboard/git-status.js'
 import { readRunHandoff, resolveAgentPr, type AgentHandoff } from '../dashboard/agent-handoff.js'
-import { copyTarget, sessionCopies } from '../dashboard/session-copies.js'
+import { copyTarget } from '../dashboard/session-copies.js'
 import type { AgentWorktree } from '../dashboard/types.js'
 import { crawlRepoFiles } from '../project.js'
 import { contextProjects, resolveProjectPath, resolveAgentPath } from './context.js'
@@ -257,18 +257,6 @@ export async function onProjectFiles(projectId: string, agentId?: string): Promi
   return cwd ? crawlRepoFiles(cwd).catch(() => []) : []
 }
 
-/**
- * The name of origin's default branch in the project's clone: what a run that made its own branch
- * and was told no other started from, read by the rule the start itself goes by. Null for a clone
- * with none: such a run started from whatever was checked out, which nobody wrote down.
- */
-export async function onAgentMainBranch(projectId: string): Promise<string | null> {
-  const root = await resolveProjectPath(projectId)
-  if (!root) return null
-  const main = await originDefaultBranch(root).catch(() => undefined)
-  return main?.slice('origin/'.length) ?? null
-}
-
 /** The project's page on its git host and the git host's name (#489, #1820), or null: no git host package, or no remote there. */
 export async function onGitHostHome(projectId: string): Promise<GitHostHome | null> {
   const cwd = await resolveProjectPath(projectId)
@@ -306,11 +294,4 @@ export async function onAgentHandoff(projectId: string, agentId: string, repo?: 
     return (copy && (await readRunHandoff(copy.cwd, copy.agent).catch(() => undefined))) ?? null
   }
   return (await readRunHandoff(cwd, agent).catch(() => undefined)) ?? null
-}
-
-/** The session's copies of repos, by their names in its folder: the rows its work bar has beside the project's. */
-export async function onAgentCopies(projectId: string, agentId: string): Promise<string[]> {
-  const cwd = await resolveProjectPath(projectId)
-  if (!cwd || !isRunId(agentId)) return []
-  return sessionCopies(agentId)
 }

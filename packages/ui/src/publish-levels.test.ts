@@ -1,10 +1,12 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { offeredPublishPicks, publishLevelOf, publishPickIn } from './publish-levels.js'
+import { pickIn, publishLevelOf, publishPickIn } from './publish-levels.js'
 
-test('a project with a git host is offered every pick; one without is offered Off, Commit and Publish branch', () => {
-  assert.deepEqual(offeredPublishPicks(true), ['nothing', 'commit', 'branch', 'pr', 'merge'])
-  assert.deepEqual(offeredPublishPicks(false), ['nothing', 'commit', 'branch'])
+test('among the levels offered, the pick in force is the one saved, else Commit, else the furthest offered short of the saved one', () => {
+  assert.equal(pickIn('pr', ['nothing', 'commit', 'branch', 'pr']), 'pr')
+  assert.equal(pickIn(undefined, ['nothing', 'commit', 'branch']), 'commit')
+  assert.equal(pickIn('merge', ['nothing', 'commit', 'branch']), 'branch')
+  assert.equal(pickIn('branch', ['nothing', 'commit']), 'commit')
 })
 
 test('the pick in force: Commit until one is saved; a pull request pick is Publish branch where there is no git host', () => {
@@ -28,8 +30,6 @@ test('Off hands the run no level; every other pick is its own level', () => {
 })
 
 test('a project with no remote is offered Off and Commit; a publish pick is Commit there, and so is no pick', () => {
-  assert.deepEqual(offeredPublishPicks(true, false), ['nothing', 'commit'])
-  assert.deepEqual(offeredPublishPicks(false, false), ['nothing', 'commit'])
   assert.equal(publishPickIn('merge', true, false), 'commit')
   assert.equal(publishPickIn('branch', false, false), 'commit')
   assert.equal(publishPickIn(undefined, true, false), 'commit')

@@ -9,7 +9,7 @@ import type { RunHost } from '@openagt/hooks'
 import { fakeHost } from '@openagt/hooks/testing'
 import type { ProjectState } from '../project-state.js'
 import { provideTestContext } from './test-context.js'
-import { onCommands, onProjects, onRunHosts, onStartBranches, onStartCheck, sendAddProject, sendRemoveProject } from './projects.js'
+import { onCommands, onProjects, onRunHosts, onStartCheck, sendAddProject, sendRemoveProject } from './projects.js'
 import { SESSIONS_ID } from '../project-address.js'
 
 // Against the real registry, pointed at a temp $XDG_CONFIG_HOME so the user's own is never touched.
@@ -58,61 +58,16 @@ test('onProjects carries what each project’s state says: its errors, and nothi
   }
 })
 
-test('onStartBranches lists what origin has now, by asking origin: not the main branch, not the records\' branch, not this clone\'s old copies; and says so where origin cannot be read', async () => {
+test('onCommands says whether the project has a git host and a remote, and its address only with a remote', async () => {
   const { dir, restore } = await registered()
-  const origin = await realpath(await mkdtemp(join(tmpdir(), 'openagent-start-branches-')))
-  const git = (cwd: string, ...args: string[]) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', ...args], { cwd, encoding: 'utf8' })
+  const git = (...args: string[]): string => execFileSync('git', args, { cwd: dir, encoding: 'utf8' })
   try {
     provideTestContext()
     const id = (await listProjects())[0]!.id
-    git(origin, 'init', '-q', '--bare', '-b', 'main')
-    git(dir, 'init', '-q', '-b', 'main')
-    git(dir, 'commit', '-q', '--allow-empty', '-m', 'first')
-    git(dir, 'remote', 'add', 'origin', origin)
-    git(dir, 'push', '-q', 'origin', 'main', 'main:agent-data', 'main:agent-fix-it', 'main:feature/x', 'main:old')
-    git(dir, 'fetch', '-q', 'origin')
-    git(dir, 'symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main')
-    git(origin, 'update-ref', '-d', 'refs/heads/old')
-    // A branch only this clone has is no published one.
-    git(dir, 'branch', 'mine')
-    assert.deepEqual(await onStartBranches(id), { branches: ['agent-fix-it', 'feature/x'] })
-
-    git(dir, 'remote', 'set-url', 'origin', join(origin, 'nowhere'))
-    assert.deepEqual(await onStartBranches(id), {})
-    assert.equal(await onStartBranches('no-such-project'), null)
-  } finally {
-    await restore()
-    await rm(origin, { recursive: true, force: true })
-  }
-})
-
-// The launcher's branch menu is offered only where the pick would be obeyed: a real
-// repository, its branches changed one step at a time.
-test('onCommands names the two branches an agent can start from only when the repository has a remote and the folder is on a branch', async () => {
-  const { dir, restore } = await registered()
-  const git = (...args: string[]): string => execFileSync('git', args, { cwd: dir, encoding: 'utf8', env: { ...process.env, GIT_AUTHOR_NAME: 'T', GIT_AUTHOR_EMAIL: 't@example.com', GIT_COMMITTER_NAME: 'T', GIT_COMMITTER_EMAIL: 't@example.com' } })
-  try {
-    provideTestContext()
-    const id = (await listProjects())[0]!.id
-    const startFrom = async () => (await onCommands(id))?.startFrom
     git('init', '-q', '-b', 'main')
-    git('commit', '-q', '--allow-empty', '-m', 'first')
-    git('checkout', '-q', '-b', 'my/work')
-    assert.equal(await startFrom(), undefined, 'no remote: one place to start from, nothing to pick')
-    assert.equal((await onCommands(id))?.address, undefined, 'no remote: no address, so no git host to push to')
-
+    assert.deepEqual(await onCommands(id), { gitHost: false, remote: false }, 'no remote: no address, so no git host to push to')
     git('remote', 'add', 'origin', 'https://example.com/x.git')
-    git('update-ref', 'refs/remotes/origin/main', 'main')
-    assert.deepEqual(await startFrom(), { main: 'main', local: 'my/work' })
-
-    git('checkout', '-q', 'main')
-    assert.deepEqual(await startFrom(), { main: 'main', local: 'main' }, 'on the default branch itself: the local one may hold commits that are not pushed')
-
-    git('checkout', '-q', '--detach')
-    assert.equal(await startFrom(), undefined, 'the folder is on no branch')
-
-    git('checkout', '-q', 'main')
-    assert.deepEqual(await onCommands(id), { gitHost: false, remote: true, address: 'example.com/x', startFrom: { main: 'main', local: 'main' } })
+    assert.deepEqual(await onCommands(id), { gitHost: false, remote: true, address: 'example.com/x' })
     assert.equal(await onCommands('no-such-project'), null)
   } finally {
     await restore()

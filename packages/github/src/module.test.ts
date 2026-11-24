@@ -132,3 +132,13 @@ test('a run that opens another request keeps the one before among its earlier on
   assert.deepEqual(await after({ ...branch, github: { pr: PR_12 } }, () => undefined), { pr: PR_12 }, 'nothing read: the request the run had stays')
   assert.deepEqual(await after({ ...branch, github: { pr: PR_12 } }, () => { throw new Error('gh: not logged in') }), { pr: PR_12 }, 'GitHub could not say: the same')
 })
+
+test('git work outside a run reaches a repository on GitHub as the account runs use, and no repository elsewhere', async () => {
+  const access = { env: { GH_TOKEN: 'token' } }
+  const git = githubModule({ reach: async () => access }).hooks['account.access']?.git
+  assert.ok(git)
+  assert.deepEqual(await git('https://github.com/me/shop.git'), access)
+  assert.deepEqual(await git('git@github.com:me/shop.git'), access)
+  assert.equal(await git('https://gitlab.com/me/shop.git'), undefined)
+  assert.equal(await githubModule({ reach: async () => undefined }).hooks['account.access']?.git?.('https://github.com/me/shop.git'), undefined)
+})

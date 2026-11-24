@@ -4,14 +4,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import { nodeGitRunner, syncPersonalFolder, withPersonalFolder } from '@openagt/agent-data'
-import type { AppContext, ProjectRef } from '@openagt/hooks'
-import { fakeApp, memorySettings } from '@openagt/hooks/testing'
+import type { ProjectRef } from '@openagt/hooks'
+import { fakeApp } from '@openagt/hooks/testing'
 import { NOT_SYNCING, folderSync, type SyncFolder } from './sync.js'
-
-/** The app as a module's life is told it. */
-function app(): AppContext {
-  return { projects: async () => [], store: undefined as never, settings: memorySettings(), signal: new AbortController().signal }
-}
 
 /** Wait until `done` says so, asking every few milliseconds. */
 async function until(done: () => boolean | Promise<boolean>, what: string): Promise<void> {
@@ -33,7 +28,7 @@ test('a folder that does not converge with its repository needs the person, abou
   let clock = Date.parse('2026-11-20T10:00:00Z')
   const logged: string[] = []
   const folder = folderSync({ syncs: async () => syncs, sync, keptHere: async dir => dir === kept.dir, everyMs: 10, now: () => new Date(clock), log: line => logged.push(line) })
-  folder.lifecycle.started?.(app())
+  folder.lifecycle.started?.(fakeApp())
   try {
     await new Promise(resolvePromise => setTimeout(resolvePromise, 40))
     assert.equal(synced, 0, 'a folder with no repository is not synced')
@@ -83,7 +78,7 @@ test('the real sync: a folder whose repository is out of reach needs the person,
     // One turn as it starts, and none after it for a minute: each start below is one turn.
     const folder = folderSync({ keptHere: async () => true, log: () => {} })
     const turn = async (done: () => Promise<boolean>, what: string): Promise<void> => {
-      folder.lifecycle.started?.(app())
+      folder.lifecycle.started?.(fakeApp())
       try {
         await until(done, what)
       } finally {

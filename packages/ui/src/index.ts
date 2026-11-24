@@ -15,7 +15,7 @@
 
 export type { AgentError, SessionInfo } from './agent-view.js'
 export type { ChoiceRequest, OpenAgentEvent } from './events.js'
-export type { Preferences, StartFromPick } from './registry.js'
+export type { Preferences } from './registry.js'
 export type { PublishPick } from './publish-levels.js'
 export type { AgentDoing, AgentMeta, AgentStatus } from './store/agent-store.js'
 export type { Activity } from './dashboard/activity.js'

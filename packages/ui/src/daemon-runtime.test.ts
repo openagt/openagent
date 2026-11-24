@@ -10,7 +10,6 @@ import { fakeHost, type FakeHost } from '@openagt/hooks/testing'
 import { OPENAGENT_DIR } from './openagent-dir.js'
 import { addProject, listProjects } from './registry.js'
 import { projectId } from '@openagt/agent-data'
-import { publishedBase } from '@openagt/agent-data/names'
 import { SESSIONS_ID } from './project-address.js'
 import { DATA_BRANCH, SHARE_SETTING, excludeFromGit, readSharing, withFileBranch, writeSharing } from '@openagt/agent-data'
 import { handDownTestDistribution } from './test-distribution.js'
@@ -133,21 +132,17 @@ test('a Start goes no further than the project can, the commit with no remote, t
   }
 })
 
-test('a Start hands the host the branch to start from, and refuses a word that is no branch name before the host is asked', async () => {
+test('a Start hands the host the branch a pull request goes into, and refuses a word that is no branch name before the host is asked', async () => {
   const home = await project()
   const env = { XDG_CONFIG_HOME: join(home, 'cfg') }
   await mkdir(env.XDG_CONFIG_HOME, { recursive: true })
   const host = fakeHost()
   const runtime = createProjectRuntime({ cwd: home, env, host })
   try {
-    await runtime.onStart('Fix it', { base: 'my/branch', prBase: 'develop' })
-    assert.deepEqual([lastStart(host).options?.['git-branches'], lastStart(host).options?.github], [{ base: 'my/branch' }, { prBase: 'develop' }])
-    await runtime.onStart('Fix it')
-    assert.equal(lastStart(host).options?.['git-branches'], undefined, 'no pick: the run is given no branch')
-    assert.deepEqual(await runtime.onStart('Fix it', { base: '--upload-pack=x' }), { ok: false, error: 'not a branch name: --upload-pack=x' })
-    assert.deepEqual(await runtime.onStart('Fix it', { base: '' }), { ok: false, error: 'not a branch name: ' })
+    await runtime.onStart('Fix it', { prBase: 'develop' })
+    assert.deepEqual(lastStart(host).options?.github, { prBase: 'develop' })
     assert.deepEqual(await runtime.onStart('Fix it', { prBase: '--upload-pack=x' }), { ok: false, error: 'not a branch name: --upload-pack=x' })
-    assert.equal(host.requests.length, 2, 'the host was not asked')
+    assert.equal(host.requests.length, 1, 'the host was not asked')
   } finally {
     await rm(home, { recursive: true, force: true })
   }
@@ -173,41 +168,6 @@ test("a Start hands the host the session's account at the git host and its contr
     assert.equal(host.requests.length, asked, 'the host was not asked')
   } finally {
     await rm(home, { recursive: true, force: true })
-  }
-})
-
-test("a Start from a branch of origin's hands the host origin's copy; one gone from origin, or an origin that cannot be read, refuses in plain words before the host is asked", async () => {
-  const home = await project()
-  const env = { XDG_CONFIG_HOME: join(home, 'cfg') }
-  await mkdir(env.XDG_CONFIG_HOME, { recursive: true })
-  const origin = await realpath(await mkdtemp(join(tmpdir(), 'openagent-origin-')))
-  const host = fakeHost()
-  const runtime = createProjectRuntime({ cwd: home, env, host })
-  const git = (cwd: string, ...args: string[]) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', ...args], { cwd })
-  const base = (): unknown => lastStart(host).options?.['git-branches']?.base
-  try {
-    git(origin, 'init', '-q', '--bare', '-b', 'main')
-    git(home, 'init', '-q', '-b', 'main')
-    git(home, 'commit', '-q', '--allow-empty', '-m', 'first')
-    git(home, 'remote', 'add', 'origin', origin)
-    git(home, 'push', '-q', 'origin', 'main', 'main:feature/x')
-    // This clone's copy outlives the branch, as it does in any clone: origin is what is asked.
-    git(home, 'fetch', '-q', 'origin')
-    assert.deepEqual(await runtime.onStart('Fix it', { base: publishedBase('feature/x') }), { ok: true, agentId: 'run-1' })
-    assert.equal(base(), publishedBase('feature/x'))
-
-    git(origin, 'update-ref', '-d', 'refs/heads/feature/x')
-    assert.deepEqual(await runtime.onStart('Fix it', { base: publishedBase('feature/x') }), { ok: false, error: 'The branch feature/x is no longer on origin. Pick another branch to start from.' })
-    git(home, 'remote', 'set-url', 'origin', join(origin, 'nowhere'))
-    assert.deepEqual(await runtime.onStart('Fix it', { base: publishedBase('main') }), { ok: false, error: 'Could not read the branch main from origin. Check the connection, or pick another branch to start from.' })
-    assert.equal(host.requests.length, 1, 'the host was not asked')
-
-    // The local pick asks nothing of origin: it starts where the origin cannot be read too.
-    await runtime.onStart('Fix it', { base: 'main' })
-    assert.equal(base(), 'main')
-  } finally {
-    await rm(home, { recursive: true, force: true })
-    await rm(origin, { recursive: true, force: true })
   }
 })
 

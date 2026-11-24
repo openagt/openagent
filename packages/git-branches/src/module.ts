@@ -1,17 +1,23 @@
 import { stat } from 'node:fs/promises'
 import { errorMessage, nodeGitRunner, sessionsHome, type GitRunner } from '@openagt/agent-data'
-import { defineModule, RunOrder, type ModuleDefinition, type RunContext } from '@openagt/hooks'
+import { publishedBase } from '@openagt/agent-data/names'
+import { START_FROM, defineModule, isBranchName, RunOrder, type AppContext, type AttentionArgs, type AttentionItem, type ModuleDefinition, type RunContext, type Settings } from '@openagt/hooks'
 import { agentBranchName } from './branch-names.js'
 import { attachCheckout, createCheckout } from './checkout.js'
+import { readFolderBehind } from './folder-behind.js'
+import { branchesOnOrigin } from './origin-branches.js'
+import { originGit } from './origin-git.js'
 import { reclaimWorktree } from './reclaim.js'
 import { copiesLine, dropUntouchedCopies, openSessionFolder, SESSION_FOLDER_STAYS } from './session-folder.js'
-import { worktreeBranch, worktreePath, type AddedWorktree } from './worktree.js'
+import { currentBranch, worktreeBranch, worktreePath, type AddedWorktree } from './worktree.js'
 
 /**
  * git-branches, the module (#2394): where a run works, made before anything is linked into it;
  * the branch the agent left its work on, read back once its turns are over; and the checkout
  * reclaimed once the record says how the run ended. What it finds out is in the run's facts
- * (`RunFacts['git-branches']`), which the run's record keeps and a resume starts from.
+ * (`RunFacts['git-branches']`), which the run's record keeps and a resume starts from. What needs
+ * the person (`app.attention`): a project's folder behind its remote, and a branch picked to start
+ * from that origin no longer has.
  */
 
 /** What the module works with; the real one when absent. */
@@ -29,6 +35,7 @@ export function gitBranchesModule(deps: GitBranchesDeps = {}): ModuleDefinition 
         { order: RunOrder.RECORD - 20, name: 'read the branch back', run: ctx => readBranch(ctx, git) },
         { order: RunOrder.CLEANUP, name: 'reclaim the checkout', run: ctx => reclaim(ctx, git) },
       ],
+      'app.attention': (args, app) => attention(args, app, git),
     },
   })
 }
@@ -57,6 +64,10 @@ async function makeCheckout(ctx: RunContext, git: GitRunner): Promise<void> {
   }
   const { dir } = ctx.project
   const before = ctx.facts['git-branches'] ?? {}
+  // The branch ends up on git's command line: only a branch name goes there. Refused, not dropped:
+  // a run started from the main branch instead would be a silent swap.
+  for (const named of [options.base, options.branch]) if (named !== undefined && !isBranchName(named.replace(/^refs\/remotes\//, ''))) throw new Error(`not a branch name: ${named}`)
+  const base = options.base ?? (options.branch === undefined && !ctx.resume ? await pickedBase(ctx.project.id, dir, ctx.settings, git) : undefined)
   if (ctx.resume) {
     const checkout = await keptCheckout(dir, ctx.id, before.branch, options.base, git)
     ctx.workspace = checkout.path
@@ -65,13 +76,25 @@ async function makeCheckout(ctx: RunContext, git: GitRunner): Promise<void> {
     const checkout =
       options.branch !== undefined
         ? await attachCheckout(dir, { agentId: ctx.id, branch: options.branch }, git)
-        : await createCheckout(dir, { agentId: ctx.id, ...(options.base !== undefined ? { base: options.base } : {}) }, git)
+        : await createCheckout(dir, { agentId: ctx.id, ...(base !== undefined ? { base } : {}) }, git)
     ctx.workspace = checkout.path
     ctx.facts['git-branches'] = { branch: checkout.branch, ...(options.branch === undefined ? await startCommit(checkout.path, git) : {}) }
   }
   if (options.repos === undefined || options.repos.length === 0) return
   const copies = await openSessionFolder(sessionsHome(), ctx.id, options.repos, git)
   if (copies.made.length > 0) ctx.context.push(copiesLine(copies.path, ctx.id, copies.made))
+}
+
+/**
+ * Where a run of the project starts from when its options name nothing: the pick made in the
+ * launcher for every next run of the project (`START_FROM`), the branch its folder is on now, or
+ * origin's copy of one of its branches; origin's default branch with none. A folder on no branch
+ * has no local branch to start from.
+ */
+async function pickedBase(projectId: string, dir: string, settings: Settings, git: GitRunner): Promise<string | undefined> {
+  const pick = (await settings.get(START_FROM).catch(() => ({}) as Record<string, never>))[projectId]
+  if (pick?.kind === 'local') return currentBranch(dir, git)
+  return pick?.kind === 'published' ? publishedBase(pick.branch) : undefined
 }
 
 /**
@@ -121,4 +144,50 @@ async function reclaim(ctx: RunContext, git: GitRunner): Promise<void> {
     const repos = ctx.options['git-branches']?.repos ?? []
     if (repos.length > 0) await dropUntouchedCopies(sessionsHome(), ctx.id, repos, git).catch(() => {})
   }
+}
+
+/** How long what origin was found to have is kept, per project: the launcher asks what needs the person every few seconds. */
+const ORIGIN_KEPT_MS = 60_000
+const onOrigin = new Map<string, { at: number; branches: Promise<string[] | undefined> }>()
+
+/**
+ * What needs the person, as this module sees it: a project's folder behind its remote's main
+ * branch, which a press brings up (`attention.fix` `update-folder`); and, for the run the launcher
+ * would start, a branch picked to start from that origin no longer has, so the person is told
+ * above the box rather than by a run that fails to make its checkout. Origin is asked as an
+ * account of OpenAgent's; where none reaches it, the clone's own copy counts, and a pick is not
+ * doubted.
+ */
+async function attention(args: AttentionArgs, app: AppContext, git: GitRunner): Promise<AttentionItem[]> {
+  const project = args.project
+  if (!project) return []
+  const origin = await originGit(project.dir, remote => app.gitAccess(remote), git).catch(() => undefined)
+  const items: AttentionItem[] = []
+  const behind = await readFolderBehind(project.dir, { git, origin }).catch(() => undefined)
+  if (behind) {
+    items.push({
+      kind: 'setup',
+      scope: 'project',
+      id: 'folder-behind',
+      words: `This project’s folder is ${counted(behind.behind)} behind ${behind.branch}.`,
+      fix: { label: 'Update folder', action: 'update-folder' },
+    })
+  }
+  const options = args.options?.['git-branches']
+  const pick = options?.base === undefined && options?.branch === undefined ? (await app.settings.get(START_FROM).catch(() => ({}) as Record<string, never>))[project.id] : undefined
+  if (pick?.kind === 'published' && origin) {
+    const known = onOrigin.get(project.dir)
+    const read = known && Date.now() - known.at < ORIGIN_KEPT_MS ? known : { at: Date.now(), branches: branchesOnOrigin(project.dir, origin) }
+    onOrigin.set(project.dir, read)
+    const branches = await read.branches
+    if (branches && !branches.includes(pick.branch)) {
+      items.push({ kind: 'setup', scope: 'run', id: 'start-branch-gone', words: `The branch ${pick.branch} is no longer on origin.`, detail: 'Pick another branch to start from.' })
+    }
+  }
+  return items
+}
+
+/** `1 commit`, `1,863 commits`. */
+function counted(n: number): string {
+  return `${n.toLocaleString('en-US')} ${n === 1 ? 'commit' : 'commits'}`
 }

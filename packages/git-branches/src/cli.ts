@@ -162,7 +162,7 @@ const COMMANDS: Record<string, Command<[string, GitRunner]>> = {
     const from = commitArg(values.from)
     const agentId = agentIdArg(positionals[0]!)
     const repo = await project(cwd, git)
-    const outcome = values.discard ? await discard(repo, agentId, git) : await reclaim(repo, agentId, git, from)
+    const outcome = values.discard ? await discard(repo, agentId, git) : await reclaimCheckout(repo, agentId, git, from)
     if (!outcome.ok) throw new Refused(outcome, refusalLine(agentId, outcome))
     // A link named after a branch that just went with its checkout is stale from this moment.
     await reconcileBranchLinks(repo, { git })
@@ -175,7 +175,7 @@ const COMMANDS: Record<string, Command<[string, GitRunner]>> = {
     const removed: string[] = []
     const skipped: { agentId: string; reason: string; detail: string }[] = []
     for (const { agentId } of await worktreeDirEntries(repo)) {
-      const outcome = await reclaim(repo, agentId, git)
+      const outcome = await reclaimCheckout(repo, agentId, git)
       if (outcome.ok) removed.push(agentId)
       else skipped.push({ agentId, reason: outcome.reason, detail: refusalLine(agentId, outcome) })
     }
@@ -187,19 +187,19 @@ const COMMANDS: Record<string, Command<[string, GitRunner]>> = {
   async cleanup(args, cwd, git) {
     parseCommandArgs(args, {}, 0)
     const repo = await project(cwd, git)
-    return cleanup(repo, agentId => reclaim(repo, agentId, git).then(outcome => (outcome.ok ? undefined : refusalLine(agentId, outcome))), git)
+    return cleanup(repo, agentId => reclaimCheckout(repo, agentId, git).then(outcome => (outcome.ok ? undefined : refusalLine(agentId, outcome))), git)
   },
 }
 
 /** A refusal `remove` and `prune` can add to the reclaim rule's own: there is no such checkout. */
-type RemoveRefusal = { ok: false; reason: 'no-checkout'; agentId: string }
+export type RemoveRefusal = { ok: false; reason: 'no-checkout'; agentId: string }
 
 /**
  * The directory of agent `agentId`'s checkout, as it really is; none when there is no such
  * directory. The argument may be the session name a rename link carries rather than the id: the
  * link leads to the checkout itself.
  */
-async function checkoutDir(repo: string, agentId: string): Promise<string | undefined> {
+export async function checkoutDir(repo: string, agentId: string): Promise<string | undefined> {
   const path = worktreePath(repo, agentId)
   return (await stat(path).then(s => s.isDirectory(), () => false)) ? realpath(path) : undefined
 }
@@ -209,7 +209,7 @@ async function checkoutDir(repo: string, agentId: string): Promise<string | unde
  * branch is read off the checkout's own directory, never off the argument (#1757): a link's
  * name is the branch the agent chose, and that one is not the birth branch.
  */
-async function reclaim(repo: string, agentId: string, git: GitRunner, from?: string): Promise<ReclaimOutcome | RemoveRefusal> {
+export async function reclaimCheckout(repo: string, agentId: string, git: GitRunner, from?: string): Promise<ReclaimOutcome | RemoveRefusal> {
   const checkout = await checkoutDir(repo, agentId)
   if (checkout === undefined) return { ok: false, reason: 'no-checkout', agentId }
   return reclaimWorktree(repo, checkout, { birthBranch: agentBranchName(agentIdFromWorktreeDir(basename(checkout))), ...(from !== undefined ? { from } : {}), git })
@@ -223,7 +223,7 @@ async function discard(repo: string, agentId: string, git: GitRunner): Promise<R
 }
 
 /** Why a checkout stayed, as one line for a person. */
-function refusalLine(agentId: string, outcome: Extract<ReclaimOutcome, { ok: false }> | RemoveRefusal): string {
+export function refusalLine(agentId: string, outcome: Extract<ReclaimOutcome, { ok: false }> | RemoveRefusal): string {
   switch (outcome.reason) {
     case 'no-checkout':
       return `no checkout for agent ${agentId}`
@@ -237,7 +237,7 @@ function refusalLine(agentId: string, outcome: Extract<ReclaimOutcome, { ok: fal
 }
 
 /** Why a branch was not merged, as one line for a person. */
-function mergeRefusalLine(outcome: MergeOutcome & { ok: false }): string {
+export function mergeRefusalLine(outcome: MergeOutcome & { ok: false }): string {
   switch (outcome.reason) {
     case 'no-branch':
       return `no branch ${outcome.branch} on this machine`
@@ -255,7 +255,7 @@ function mergeRefusalLine(outcome: MergeOutcome & { ok: false }): string {
 }
 
 /** Why a copy's branch was not brought to its folder, as one line for a person. */
-function bringRefusalLine(outcome: BringOutcome & { ok: false }): string {
+export function bringRefusalLine(outcome: BringOutcome & { ok: false }): string {
   switch (outcome.reason) {
     case 'not-a-copy':
       return 'this is no session copy of a repo: it names no folder it was copied from'
@@ -275,7 +275,7 @@ function bringRefusalLine(outcome: BringOutcome & { ok: false }): string {
 }
 
 /** Why a branch was not pushed, as one line for a person. */
-function pushRefusalLine(subject: string, outcome: PushOutcome & { ok: false }): string {
+export function pushRefusalLine(subject: string, outcome: PushOutcome & { ok: false }): string {
   switch (outcome.reason) {
     case 'not-a-worktree':
       return `${subject} is not a git worktree`

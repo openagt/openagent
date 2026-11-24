@@ -63,10 +63,10 @@ describe('preferences', () => {
     const { result } = renderHook(() => ({ preferences: usePreferences(), loaded: usePreferencesLoaded() }))
     expect(result.current.loaded).toBe(false)
     await act(async () => {
-      resolveLoad({ startFrom: { p1: { kind: 'local' } } })
+      resolveLoad({ publish: 'pr' })
       await Promise.resolve()
     })
-    expect(result.current).toEqual({ preferences: { startFrom: { p1: { kind: 'local' } } }, loaded: true })
+    expect(result.current).toEqual({ preferences: { publish: 'pr' }, loaded: true })
   })
 
   // A stale tab reverting settings it never touched (#1148).

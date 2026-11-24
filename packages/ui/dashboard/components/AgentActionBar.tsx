@@ -1,6 +1,5 @@
 import { ArrowLeft } from 'lucide-react'
 import type { AgentWorktree, OpenAgentEvent } from '../../src/index.js'
-import { formatBytes } from '../../src/client.js'
 import { AgentActionsMenu } from './AgentActionsMenu.js'
 import { AgentErrorCount } from './AgentErrorCount.js'
 import { PaneToggles, TopBar } from './Panes.js'
@@ -25,7 +24,6 @@ export function AgentActionBar({
   events,
   live = false,
   retainedWorktree = false,
-  onWorktreeRemoved,
   onDeleted,
   onProjectRemoved,
   label,
@@ -47,10 +45,8 @@ export function AgentActionBar({
   label?: string | undefined
   /** The name is still being made: see AgentActionsMenu. */
   naming?: boolean | undefined
-  /** True when this finished agent still has a worktree on disk, so it can be removed (#737). */
+  /** True when this finished agent still has a worktree on disk (#737): its menu opens that folder. */
   retainedWorktree?: boolean
-  /** Told after that worktree is removed, so the menu item goes. */
-  onWorktreeRemoved?: () => void
   /** Told after this session is deleted, so the caller can leave it (#1032). Given only for a
    * finished run: absent, no delete is offered. */
   onDeleted?: (() => void) | undefined
@@ -73,8 +69,6 @@ export function AgentActionBar({
   /** Given, a phone's bar starts with a back arrow that calls it: a phone's session page has no bar of pages. */
   onBack?: (() => void) | undefined
 }) {
-  // Only once nothing is writing to the worktree is there a size to say (#798).
-  const size = ready ? formatBytes(checkout?.checkout?.sizeBytes, '') : ''
   return (
     // The row is as tall as the "New agent session" page's (ProjectActions) and as an
     // open pane's header, so the three stand level; unlike a pane's, it has no line under it.
@@ -97,10 +91,8 @@ export function AgentActionBar({
           label={label}
           {...(naming ? { naming } : {})}
           retainedWorktree={retainedWorktree}
-          onWorktreeRemoved={onWorktreeRemoved}
           onDeleted={onDeleted}
           {...(onToggle ? { details: { open: expanded, onToggle } } : {})}
-          size={size}
         />
         {/* The run's state after its name on a desktop; a phone's bar keeps its width for the name, and
             the first screenful shows the state (the failed end, the commits and their press, the question): a screen reader still hears it here. */}

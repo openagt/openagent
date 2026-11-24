@@ -175,6 +175,7 @@ export function createHooks(entries: readonly DistributionEntry[], opts: HooksOp
     },
     store,
     settings,
+    gitAccess: remote => hooks.gitAccess(remote),
     get signal() {
       return live.get(module)?.signal ?? app?.signal ?? new AbortController().signal
     },
@@ -214,7 +215,7 @@ export function createHooks(entries: readonly DistributionEntry[], opts: HooksOp
     return all.sort((a, b) => a.order - b.order)
   }
 
-  return {
+  const hooks: Hooks = {
     modules,
     store,
     settings,
@@ -338,6 +339,7 @@ export function createHooks(entries: readonly DistributionEntry[], opts: HooksOp
       }
     },
   }
+  return hooks
 }
 
 /** The store, each file read once while what asks of it goes on: many rows asked at once read each scope's settings once. A fresh read is the store's every time. */

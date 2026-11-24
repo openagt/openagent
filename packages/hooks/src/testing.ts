@@ -203,10 +203,10 @@ export function fakeRun(given: Partial<Omit<RunContext, 'store' | 'settings'>> &
   }
 }
 
-/** What a module's life in the app is handed, for its tests: `projects` its projects (none when unsaid), a store and its settings in memory, and a signal never aborted. */
+/** What a module's life in the app is handed, for its tests: `projects` its projects (none when unsaid), a store and its settings in memory, no account at any git host, and a signal never aborted. */
 export function fakeApp(given: Partial<AppContext> = {}): AppContext {
   const store = given.store ?? chainStore([memoryStore()])
-  return { projects: async () => [], store, settings: settingsIn(store), signal: new AbortController().signal, ...given }
+  return { projects: async () => [], store, settings: settingsIn(store), gitAccess: async () => undefined, signal: new AbortController().signal, ...given }
 }
 
 /** OpenAgent's accounts for a test: none at any host, so nothing can be sent. */
@@ -225,8 +225,8 @@ export function computerRpcHost(given: Partial<RpcComputerHost> = {}): RpcComput
 
 /**
  * The host a function of a project's module is handed, for the module's server tests: the project
- * `project` at `/work/project`, settings in memory, and no run, merge or question known, and every
- * line said refused, unless `given` says how it answers.
+ * `project` at `/work/project`, settings in memory, and no run, merge, question or account known,
+ * and every line said and every landing written down refused, unless `given` says how it answers.
  */
 export function rpcHost(given: Partial<RpcHost> = {}): RpcHost {
   return {
@@ -241,6 +241,10 @@ export function rpcHost(given: Partial<RpcHost> = {}): RpcHost {
     say: async () => {
       throw new Error('no run of this test takes a line')
     },
+    landed: async () => {
+      throw new Error('no run of this test keeps a record')
+    },
+    gitAccess: async () => undefined,
     modulesOn: async () => [],
     ...given,
   }

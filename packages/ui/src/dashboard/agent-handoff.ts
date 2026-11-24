@@ -431,42 +431,6 @@ export async function pushAgentBranch(cwd: string, agent: Pick<AgentMeta, 'id' |
 }
 
 /**
- * Merge a finished session's branch into the project's default branch, on this machine: how the
- * work reaches the project's own folder where there is no remote to push to. The branches provider
- * merges and deletes the branch; the session's record then keeps the branch's last commit and the
- * commit its work began at, so what it changed is still read once the branch is gone.
- */
-export async function mergeAgentBranch(cwd: string, agent: Pick<AgentMeta, 'id' | 'branch'>, deps: { branches?: BranchesFor; runs?: RunsFor } = {}): Promise<HandoffResult> {
-  const branch = agent.branch
-  if (branch === undefined) return { ok: false, error: 'this session recorded no branch to merge' }
-  const source = await (deps.branches ?? projectBranches)(cwd).catch(() => undefined)
-  if (!source) return { ok: false, error: 'this project has no branches provider to merge with' }
-  const merged = await source.merge(branch)
-  if (!merged.ok) return { ok: false, error: merged.error }
-  if (!merged.deleted) return { ok: true }
-  const runs = await (deps.runs ?? projectRuns)(cwd).catch(() => undefined)
-  const recorded = await runs?.patch(agent.id, { landed: { commit: merged.commit, from: merged.from } })
-  // The merge is in whatever the record says; a record that could not be written is said, since the page reads the record.
-  if (recorded && !recorded.ok) return { ok: false, error: `merged into ${merged.into}, but the record was not updated: ${recorded.error}` }
-  return { ok: true }
-}
-
-/**
- * Bring a session's copy of a repo with no remote back to the folder it was copied from: its
- * branch added there, and with `merge` merged into that folder's default branch. The branches
- * provider does it, in the copy; the copy's own default branch then holds the work, so its row
- * reads it as merged.
- */
-export async function bringAgentBranch(cwd: string, agent: Pick<AgentMeta, 'id' | 'branch'>, opts: { merge?: boolean } = {}, deps: { branches?: BranchesFor } = {}): Promise<HandoffResult> {
-  const branch = agent.branch
-  if (branch === undefined) return { ok: false, error: 'this session recorded no branch to bring' }
-  const source = await (deps.branches ?? projectBranches)(cwd).catch(() => undefined)
-  if (!source) return { ok: false, error: 'this copy has no branches provider to bring its branch with' }
-  const brought = await source.bring(branch, opts.merge ? { merge: true } : {})
-  return brought.ok ? { ok: true } : { ok: false, error: brought.error }
-}
-
-/**
  * Whether the session kept committing after its PR merged or closed (#1512): the PR carries a
  * head, the branch has a tip, and they disagree. False for an open PR (pushed commits still land
  * on it), for a headless read (an older cache or injected lookup — never risk a duplicate PR on

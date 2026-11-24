@@ -151,12 +151,10 @@ test("a letter typed on the launcher's project picker starts its search and pick
 
 test("a letter typed on the launcher's branch picker starts its search and picks nothing", needsChrome, async () => {
   await flow('typed-branch-picker', async page => {
-    // The demo's project has no origin, so its launcher offers no branch: this one says it has one.
-    await page.route('**/_rpc/onCommands', async route => {
-      const answer = await (await route.fetch()).json()
-      await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ ret: { ...answer.ret, startFrom: { main: 'main', local: 'main' } } }) })
-    })
-    await page.route('**/_rpc/onStartBranches', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ ret: { branches: ['black', 'blue'] } }) }))
+    // The demo's project has no origin, so git-branches offers no branch to start from: here it says it has one.
+    const answer = (output: unknown) => ({ contentType: 'application/json', body: JSON.stringify({ ret: { ok: true, output } }) })
+    await page.route('**/_rpc/%40openagt%2Fgit-branches/startPlaces', route => route.fulfill(answer({ main: 'main', local: 'main' })))
+    await page.route('**/_rpc/%40openagt%2Fgit-branches/startBranches', route => route.fulfill(answer({ branches: ['black', 'blue'] })))
     await page.reload()
     await page.getByLabel('The agent starts from', { exact: true }).waitFor()
     await typedOnPicker(page, 'The agent starts from', 'Search branches', button => button.textContent())

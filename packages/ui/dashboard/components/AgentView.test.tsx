@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import type { OpenAgentEvent } from '../../src/index.js'
-import { ModulesContext, mountedOf, type MountedView } from '../lib/use-modules.js'
+import { ModulesContext, mountedOf, type MountedAction, type MountedView } from '../lib/use-modules.js'
 import { questionCard } from '../test-utils.js'
 import type { UiRunNoticeProps, UiRunProps } from '../module/index.js'
 
@@ -14,14 +14,13 @@ const onBridgeEvents = vi.fn(async () => [] as unknown)
 const onBridgeAnswer = vi.fn(async () => null as unknown)
 const onAgentWorktree = vi.fn(async () => ({ branch: 'agent-x' }) as unknown)
 const onGitHostHome = vi.fn(async () => null as unknown)
-const onAgentMainBranch = vi.fn(async () => 'trunk' as string | null)
 // The models each agent lists, with what one of them holds: the daemon's read, stubbed here so the
 // context circle has a window to measure against.
 vi.mock('../rpc/agents.js', () => ({
   onCodingAgents: () => Promise.resolve([{ id: 'claude-code', label: 'Claude Code', logo: '<svg/>', models: { models: [{ id: 'opus', name: 'Opus 5.5', resolvedId: 'claude-opus-5-5', contextWindow: 200_000 }] } }, { id: 'codex', label: 'Codex', models: { models: [] } }]),
   onNamesRuns: () => Promise.resolve(true),
 }))
-vi.mock('../rpc/reads.js', () => ({ onAgent, onRetainedWorktrees, onAgentHandoff, onBridgeQuestion, onBridgeEvents, onBridgeAnswer, onAgentWorktree, onAgentMainBranch, onGitHostHome }))
+vi.mock('../rpc/reads.js', () => ({ onAgent, onRetainedWorktrees, onAgentHandoff, onBridgeQuestion, onBridgeEvents, onBridgeAnswer, onAgentWorktree, onGitHostHome }))
 const sendMessage = vi.fn(async () => ({ ok: true }) as unknown)
 const withdrawMessage = vi.fn(async () => ({ ok: true }) as unknown)
 const sendNow = vi.fn(async () => ({ ok: true }) as unknown)
@@ -71,8 +70,7 @@ vi.mock('./AgentActionBar.js', () => ({
     </>
   ),
 }))
-let copies: string[] = []
-// The panel has its own tests: here the project's row says what the view told it, and each copy of a repo its name.
+// The panel has its own tests: here the project's row says what the view told it.
 vi.mock('./AgentWorkPanel.js', () => ({
   AgentWorkPanel: ({ children }: { children: ReactNode }) => <>{children}</>,
   ProjectWorkRow: ({ actions, summary, checkout, show, name }: { actions?: ReactNode; summary?: ReactNode; checkout: unknown; show: boolean; name?: string | null }) => (
@@ -82,20 +80,16 @@ vi.mock('./AgentWorkPanel.js', () => ({
       {actions}
     </div>
   ),
-  CopyWorkRow: ({ repo, ended }: { repo: string; ended: boolean }) => <div data-testid="copy-row" data-ended={String(ended)}>{repo}</div>,
-  useAgentCopies: () => copies,
 }))
 // The row above the box has its own tests: here it says what the view told it, the run's pull requests as their own labels.
 vi.mock('./SessionRow.js', async () => {
   const { RunPrLabels } = await import('./RunPrLabels.js')
   return {
-  SessionRow: ({ runsOn, elsewhere, startedFrom, worksOn, projectName, prs = [] }: { runsOn: string; elsewhere: boolean; startedFrom?: string; worksOn?: string; projectName?: string | null; prs?: { number: number; url: string; state?: string }[] }) => (
+  SessionRow: ({ runsOn, elsewhere, projectName, prs = [] }: { runsOn: string; elsewhere: boolean; projectName?: string | null; prs?: { number: number; url: string; state?: string }[] }) => (
     <div data-testid="row">
       <span data-testid="row-runs-on">{runsOn}</span>
       <span data-testid="row-elsewhere">{String(elsewhere)}</span>
       <span data-testid="row-project">{projectName ?? ''}</span>
-      <span data-testid="row-started-from" data-value={startedFrom ?? ''} />
-      <span data-testid="row-works-on" data-value={worksOn ?? ''} />
       <span data-testid="row-prs"><RunPrLabels prs={prs} /></span>
     </div>
   ),
@@ -137,7 +131,6 @@ const view = (over: Partial<Parameters<typeof AgentView>[0]> = {}) => (
 
 beforeEach(() => {
   vi.clearAllMocks()
-  copies = []
   onRetainedWorktrees.mockResolvedValue([])
   onAgentHandoff.mockResolvedValue(null)
   onAgentWorktree.mockResolvedValue({ branch: 'agent-x' })
@@ -359,14 +352,15 @@ describe('AgentView: when the bar above the message box is there', () => {
     await waitFor(() => expect(shown()).toBe('true'))
   })
 
-  test('each copy of a repo the session has gets a row of its own after the project\'s, told whether the run has ended', async () => {
-    copies = ['oa-newuser', 'recipe-box']
+  test("the modules' rows of the session's other work (git-branches' copies of repos) come after the project's, told whether the run works", async () => {
+    const Copies = ({ agentId, working }: UiRunProps) => <div data-testid="copy-rows">{`${agentId} ${String(working)}`}</div>
+    const modules = mountedOf({ views: { 'chat.work': [{ place: 'chat.work', id: 'copies', View: Copies, package: '@openagt/git-branches', projects: ['p1'] }] } })
     onAgent.mockResolvedValue(ARCHIVED)
     onAgentWorktree.mockResolvedValue({ branch: 'agent-w', pr: { number: 4, url: 'https://x/pull/4', state: 'OPEN', title: 'T' } })
-    render(view({ agentId: 'run-4' }))
+    render(<ModulesContext.Provider value={modules}>{view({ agentId: 'run-4' })}</ModulesContext.Provider>)
     await waitFor(() => expect(shown()).toBe('true'))
-    await waitFor(() => expect(screen.getAllByTestId('copy-row').map(row => [row.textContent, row.dataset.ended])).toEqual([['oa-newuser', 'true'], ['recipe-box', 'true']]))
-    expect(screen.getByTestId('work-bar').compareDocumentPosition(screen.getAllByTestId('copy-row')[0]!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    await waitFor(() => expect(screen.getByTestId('copy-rows').textContent).toBe('run-4 false'))
+    expect(screen.getByTestId('work-bar').compareDocumentPosition(screen.getByTestId('copy-rows')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
   test('on a first visit, a run whose pull request turns out merged never shows the bar while the request is read', async () => {
@@ -602,26 +596,37 @@ describe('a changed file\'s row in the chat', () => {
 
 describe('what the modules add to a run’s page (#817)', () => {
   const Summary = ({ agentId, working }: UiRunProps) => <span>summary {agentId} {String(working)}</span>
+  const Branch = ({ agentId }: UiRunProps) => <span>branch of {agentId}</span>
   const withSlots = (ui: ReactNode, projects = ['p1']) => {
-    const modules = mountedOf({ views: { 'chat.summary': [{ place: 'chat.summary', id: 'changes', View: Summary, package: '@openagt/ui-pane-changes', projects }] } })
+    const modules = mountedOf({
+      views: {
+        'chat.summary': [
+          { place: 'chat.summary', id: 'changes', View: Summary, package: '@openagt/ui-pane-changes', projects },
+          { place: 'chat.summary', id: 'branch', ended: true, View: Branch, package: '@openagt/git-branches', projects },
+        ],
+      },
+    })
     return <ModulesContext.Provider value={modules}>{ui}</ModulesContext.Provider>
   }
 
-  test('a working run shows the modules’ summary in the bar above the message box', async () => {
+  test('a working run shows the modules’ summary in the bar above the message box, and not the one for its end', async () => {
     render(withSlots(view({ live: true })))
     expect(screen.getByTestId('work-bar').contains(screen.getByText('summary run-1 true'))).toBe(true)
+    expect(screen.queryByText(/^branch of/)).toBeNull()
   })
 
-  test('once an ended run’s branch is read, the handoff replaces the summary', async () => {
+  test('once an ended run’s branch is read, the summary for its end replaces the others', async () => {
     onAgent.mockResolvedValue(ARCHIVED)
     onAgentHandoff.mockResolvedValue({ branch: 'agent-x', exists: true, commits: [], files: [], insertions: 0, deletions: 0, pushed: false })
     render(withSlots(view({ live: false })))
-    await waitFor(() => expect(screen.queryByText(/^summary/)).toBeNull())
+    expect(await screen.findByText('branch of run-1')).toBeTruthy()
+    expect(screen.queryByText(/^summary/)).toBeNull()
   })
 
   test('a project without the module gets none of it', () => {
     render(withSlots(view({ live: true }), ['p2']))
     expect(screen.queryByText(/^summary/)).toBeNull()
+    expect(screen.queryByText(/^branch of/)).toBeNull()
   })
 })
 
@@ -1050,18 +1055,16 @@ describe('the page\'s two bars', () => {
 })
 
 describe('a run the launcher just started, before its record is there', () => {
-  const picks = { branch: 'gh-pages', gitAccount: 'octo', publish: 'pr', prBase: 'gh-pages', effort: 'high', options: { skills: { project: 'none' as const } } }
+  const picks = { gitAccount: 'octo', publish: 'pr', prBase: 'gh-pages', effort: 'high', options: { skills: { project: 'none' as const } } }
   const row = (id: string, name: string) => screen.getByTestId(id).dataset[name]
 
   test('its page says what the launcher said at once; the record says it from then on', () => {
     const { rerender } = render(view({ live: true, events: [], picks }))
-    expect(row('row-started-from', 'value')).toBe('gh-pages')
     expect(row('composer-account', 'value')).toBe('octo')
     expect(row('composer-project-skills', 'value')).toBe('none')
     expect(row('composer-auto', 'publish')).toBe('pr')
     expect(row('composer-auto', 'prBase')).toBe('gh-pages')
     rerender(view({ live: true, events: [], picks, card: { status: 'running' as const, base: 'other', gitAccount: 'hubot', publish: 'commit' } }))
-    expect(row('row-started-from', 'value')).toBe('other')
     expect(row('composer-account', 'value')).toBe('hubot')
     expect(row('composer-auto', 'publish')).toBe('commit')
     // The record says no pick: the launcher's does not come back.
@@ -1074,51 +1077,11 @@ describe('a run the launcher just started, before its record is there', () => {
   })
 })
 
-describe('the branch the row says the session started from', () => {
-  beforeEach(() => onAgentMainBranch.mockClear())
-
-  test('a run that made its own branch and was told none: origin\'s default branch, by the name it has where the run is', async () => {
-    render(view({ card: { status: 'done' as const, baseCommit: 'abc123' } }))
-    await waitFor(() => expect(screen.getByTestId('row-started-from').dataset['value']).toBe('trunk'))
-    expect(onAgentMainBranch).toHaveBeenCalledWith('p1')
-    expect(onAgentMainBranch).toHaveBeenCalledTimes(1)
-  })
-
-  test('a run told a branch: the card says it, and nothing is read', async () => {
-    render(view({ card: { status: 'done' as const, base: 'feature/x', baseCommit: 'abc123' } }))
-    expect(screen.getByTestId('row-started-from').dataset['value']).toBe('feature/x')
-    await act(async () => {})
-    expect(onAgentMainBranch).not.toHaveBeenCalled()
-  })
-
-  test('an old card, or a run given a branch that exists: no branch at all, and nothing is read', async () => {
-    render(view({ card: { status: 'done' as const, branch: 'agent-theirs' } }))
-    await act(async () => {})
-    expect(screen.getByTestId('row-started-from').dataset['value']).toBe('')
-    expect(onAgentMainBranch).not.toHaveBeenCalled()
-  })
-
-  test('a clone with no default branch to name: no branch', async () => {
-    onAgentMainBranch.mockImplementationOnce(async () => null)
-    render(view({ card: { status: 'done' as const, baseCommit: 'abc123' } }))
-    await waitFor(() => expect(onAgentMainBranch).toHaveBeenCalled())
-    await act(async () => {})
-    expect(screen.getByTestId('row-started-from').dataset['value']).toBe('')
-  })
-
-  test('its hover has the branch the agent works on: the checkout\'s, and without one the card\'s', async () => {
-    onAgentWorktree.mockImplementationOnce(async () => ({ branch: 'agent-renamed' }))
-    render(view({ card: { status: 'done' as const, branch: 'agent-first', base: 'feature/x' } }))
-    expect(screen.getByTestId('row-works-on').dataset['value']).toBe('agent-first')
-    await waitFor(() => expect(screen.getByTestId('row-works-on').dataset['value']).toBe('agent-renamed'))
-  })
-
-  test('the top bar is told what to do once the project is removed', () => {
-    const removed = vi.fn()
-    render(view({ card: { status: 'done' as const }, onProjectRemoved: removed }))
-    fireEvent.click(screen.getByRole('button', { name: 'project removed' }))
-    expect(removed).toHaveBeenCalledOnce()
-  })
+test('the top bar is told what to do once the project is removed', () => {
+  const removed = vi.fn()
+  render(view({ card: { status: 'done' as const }, onProjectRemoved: removed }))
+  fireEvent.click(screen.getByRole('button', { name: 'project removed' }))
+  expect(removed).toHaveBeenCalledOnce()
 })
 
 describe('the row under the message box', () => {
@@ -1253,70 +1216,6 @@ describe('a run just started', () => {
   })
 })
 
-describe('AgentView: while the agent commits', () => {
-  /** An ended run that left a file uncommitted: what the Commit button is offered for. */
-  const LEFT = { ...PUSHED, empty: true, pushed: false, hasRemote: false, gitHost: false, commits: [], pendingFiles: ['index.html'] }
-  const ended = [{ kind: 'session', driver: 'claude-code', workspace: '/w' }, { kind: 'driver', event: { type: 'start', prompt: 'Add a page' } }, { kind: 'end', ok: true }] as OpenAgentEvent[]
-
-  test('Commit pressed: the ask shows in the feed at once and "Committing…" takes the button\'s place; an ask that did not go through gives the button back', async () => {
-    onAgent.mockResolvedValue(ended)
-    onAgentHandoff.mockResolvedValue(LEFT)
-    let answer: (sent: { ok: boolean; error?: string }) => void = () => {}
-    sendMessage.mockReturnValue(new Promise(resolve => (answer = resolve)))
-    render(view({ events: ended }))
-    fireEvent.click(await screen.findByRole('button', { name: 'Commit' }))
-    await waitFor(() => expect(screen.getByText('Committing…')).toBeTruthy())
-    expect(screen.queryByRole('button', { name: /Commit|Asking/ })).toBeNull()
-    expect(screen.getByText('Commit your work.')).toBeTruthy()
-    expect(sendMessage).toHaveBeenCalledWith('p1', 'Commit your work.', 'run-1')
-
-    answer({ ok: false, error: 'this project has no resume hook' })
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Commit' })).toBeTruthy())
-    expect(screen.queryByText('Committing…')).toBeNull()
-  })
-
-  test('a working agent whose last prompt is the Commit ask says "Committing…", also with a sentence added after it; any other prompt says nothing, and so does an agent that ended', async () => {
-    onAgent.mockResolvedValue(ended)
-    onAgentHandoff.mockResolvedValue(LEFT)
-    const asked = (prompt: string, added?: string) => [...ended, { kind: 'session', driver: 'claude-code', workspace: '/w' }, { kind: 'driver', event: { type: 'start', prompt, ...(added !== undefined ? { added } : {}) } }] as OpenAgentEvent[]
-    const { rerender } = render(view({ events: asked('Commit your work.'), live: true }))
-    await waitFor(() => expect(screen.getByText('Committing…')).toBeTruthy())
-    rerender(view({ events: asked('Commit your work.', 'When you finish, if you changed any file, commit your work, push your branch and open no pull request.'), live: true }))
-    expect(screen.getByText('Committing…')).toBeTruthy()
-    rerender(view({ events: asked('Commit your work. Then add a footer.'), live: true }))
-    expect(screen.queryByText('Committing…')).toBeNull()
-    // Ended: the next step is back, whatever the last prompt was.
-    const over = [...asked('Commit your work.'), { kind: 'end', ok: true }] as OpenAgentEvent[]
-    onAgent.mockResolvedValue(over)
-    rerender(view({ events: over, live: false }))
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Commit' })).toBeTruthy())
-    expect(screen.queryByText('Committing…')).toBeNull()
-  })
-  test('the agent ended and its checkout is being cleaned up: "Committing…" stays until the branch is read, then the next step takes its place', async () => {
-    const asked = [...ended, { kind: 'session', driver: 'claude-code', workspace: '/w' }, { kind: 'driver', event: { type: 'start', prompt: 'Commit your work.' } }] as OpenAgentEvent[]
-    const over = [...asked, { kind: 'end', ok: true }] as OpenAgentEvent[]
-    onAgent.mockResolvedValue(ended)
-    onAgentHandoff.mockResolvedValue(LEFT)
-    // The answer read before the ask is remembered: it is not what the branch holds after it.
-    const { rerender } = render(view({ events: ended }))
-    await screen.findByRole('button', { name: 'Commit' })
-    rerender(view({ events: asked, live: true }))
-    expect(screen.getByText('Committing…')).toBeTruthy()
-    let answer: (handoff: unknown) => void = () => {}
-    onAgentHandoff.mockReturnValue(new Promise(resolve => (answer = resolve)) as never)
-    onAgent.mockResolvedValue(over)
-    rerender(view({ events: over, live: false, card: { status: 'done', saving: true } }))
-    expect(screen.getByText('Committing…')).toBeTruthy()
-    rerender(view({ events: over, live: false, card: { status: 'done' } }))
-    await new Promise(resolve => setTimeout(resolve, 20))
-    expect(screen.getByText('Committing…')).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Commit' })).toBeNull()
-    answer({ ...LEFT, empty: false, commits: [{ sha: 'abc1234', subject: 'Add a page' }], pendingFiles: [] })
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Merge' })).toBeTruthy())
-    expect(screen.queryByText('Committing…')).toBeNull()
-  })
-})
-
 describe('AgentView: the bar when the work is landed', () => {
   const LANDED = { ...PUSHED, hasRemote: false, gitHost: false, pushed: false, landed: true }
   const ENDED = [{ kind: 'session', driver: 'claude-code', workspace: '/w' }, { kind: 'driver', event: { type: 'start', prompt: 'Add a page' } }, { kind: 'end', ok: true }] as OpenAgentEvent[]
@@ -1389,8 +1288,7 @@ describe('AgentView: the bar when the work is landed', () => {
     onAgentWorktree.mockResolvedValue({ branch: 'agent-p', pr: { number: 9, url: 'https://x/pull/9', state: 'MERGED', title: 'T' } })
     onAgentHandoff.mockResolvedValue({ ...PUSHED, merged: true, pushed: true, pendingFiles: ['index.html'] })
     render(view({ agentId: 'run-p', events: ENDED }))
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Commit' })).toBeTruthy())
-    expect(screen.getByTestId('work-bar').dataset.show).toBe('true')
+    await waitFor(() => expect(screen.getByTestId('work-bar').dataset.show).toBe('true'))
   })
 })
 
@@ -1502,25 +1400,24 @@ describe('AgentView: the next step while the agent works again', () => {
   const LEFT = { ...PUSHED, hasRemote: false, gitHost: false, pushed: false }
   const ended = [{ kind: 'session', driver: 'claude-code', workspace: '/w' }, { kind: 'driver', event: { type: 'start', prompt: 'Add a page' } }, { kind: 'end', ok: true }] as OpenAgentEvent[]
 
-  test('a message sent to an ended agent takes the last step out of the bar at once, before the agents poll says it works', async () => {
+  test("a message sent to an ended agent takes the modules' next steps out of the bar at once, before the agents poll says it works", async () => {
+    // A module's next step for the run's work (`chat.handoff`), offered whenever it is asked.
+    const step: MountedAction<'chat.handoff'> = { place: 'chat.handoff', id: 'step', label: 'Next step', run: async () => ({ ok: true }), package: '@openagt/git-branches', module: 'git-branches', projects: ['p1'] }
+    const modules = mountedOf({ actions: { 'chat.handoff': [step] } })
+    const page = (over: Parameters<typeof view>[0]) => <ModulesContext.Provider value={modules}>{view(over)}</ModulesContext.Provider>
     onAgent.mockResolvedValue(ended)
     onAgentHandoff.mockResolvedValue(LEFT)
-    const { rerender } = render(view({ events: ended }))
-    await waitFor(() => expect(screen.getByText(/Not in the main branch yet/)).toBeTruthy())
+    const { rerender } = render(page({ events: ended }))
+    expect(await screen.findByRole('button', { name: 'Next step' })).toBeTruthy()
     expect(screen.getByTestId('work-bar').dataset.show).toBe('true')
     // The feed shows the new turn; the poll still says ended.
     const again = [...ended, { kind: 'session', driver: 'claude-code', workspace: '/w' }, { kind: 'driver', event: { type: 'start', prompt: 'Add a footer' } }] as OpenAgentEvent[]
-    rerender(view({ events: again, live: false }))
-    await waitFor(() => expect(screen.queryByText(/Not in the main branch yet/)).toBeNull())
-    // It ends with a file left: the bar goes from empty to the new step, the old one never back.
+    rerender(page({ events: again, live: false }))
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Next step' })).toBeNull())
+    // It ends: the step is offered again for what the branch holds now.
     const over = [...again, { kind: 'end', ok: true }] as OpenAgentEvent[]
-    let answer: (handoff: unknown) => void = () => {}
-    onAgentHandoff.mockReturnValue(new Promise(resolve => (answer = resolve)) as never)
     onAgent.mockResolvedValue(over)
-    rerender(view({ events: over, live: false }))
-    await new Promise(resolve => setTimeout(resolve, 20))
-    expect(screen.queryByText(/Not in the main branch yet/)).toBeNull()
-    answer({ ...LEFT, empty: true, commits: [], pendingFiles: ['index.html'] })
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Commit' })).toBeTruthy())
+    rerender(page({ events: over, live: false }))
+    expect(await screen.findByRole('button', { name: 'Next step' })).toBeTruthy()
   })
 })

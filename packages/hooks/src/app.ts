@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import type { GitAccess } from './account.js'
 import type { ProjectRef } from './project.js'
 import type { RunOptions, RunQuestion } from './run.js'
 import type { Settings } from './settings.js'
@@ -14,6 +15,8 @@ export interface AppContext {
   projects(): Promise<ProjectRef[]>
   readonly store: Store
   readonly settings: Settings
+  /** How git reaches `remote` as an account, as the modules' `account.access` says: none when no module has an account for it. */
+  gitAccess(remote: string): Promise<GitAccess | undefined>
   /** Aborted when the app stops, or a plugin kept per person or per computer is switched off: a module's own timers end with it. */
   readonly signal: AbortSignal
   /** Where the app answers on this computer, for a module's own process to call it at; none before the app started. */
@@ -104,7 +107,8 @@ export interface AttentionItem {
 
 /**
  * What a module is asked what needs the person with: the project shown, the run options picked
- * when there are some, and, with a project, its runs that wait on the person.
+ * when there are some, and, with a project, its runs that wait on the person. The loader adds
+ * what every module answers with: the settings, and how git reaches a remote as an account.
  */
 export interface AttentionArgs {
   project?: ProjectRef

@@ -5,7 +5,7 @@
 // {@link ComputerRpcClient}), so renaming a function on one side is a type error on the other.
 // Whether a function only reads is its own word: after one that changes something, the project's
 // data is taken in from origin again, and what was read of it is read anew.
-import type { GitAccounts } from './account.js'
+import type { GitAccess, GitAccounts } from './account.js'
 import type { InboxLine } from './agent.js'
 import type { ProjectRef } from './project.js'
 import type { RunFound, RunQuestion } from './run.js'
@@ -43,6 +43,15 @@ export interface RpcHost extends RpcComputerHost {
    * person, where it cannot be said: a run another computer started, say.
    */
   say(agentId: string, line: InboxLine): Promise<void>
+  /**
+   * Write down on a run's record that its work was landed on this computer, its branch merged into
+   * the project's default branch and gone: `commit` is the branch's last commit, `from` the commit
+   * its work began at, so what it changed is still read once the branch is gone. Throws, in words
+   * for the person, where the record cannot be written.
+   */
+  landed(agentId: string, landed: { commit: string; from: string }): Promise<void>
+  /** How git reaches `remote` as an account, as the distribution's `account.access` says: none when no module has an account for it. */
+  gitAccess(remote: string): Promise<GitAccess | undefined>
   /**
    * The modules on in the project, in the distribution's order, each with what it gives the
    * project's runs; for a session with no project, the ones it has as the distribution starts them.

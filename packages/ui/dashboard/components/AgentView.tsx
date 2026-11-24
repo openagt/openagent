@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type MutableRefObject } from 'react'
 import type { AgentMeta, AgentWorktree, OpenAgentEvent } from '../../src/index.js'
-import { onAgentMainBranch, onGitHostHome, onRetainedWorktrees } from '../rpc/reads.js'
+import { onGitHostHome, onRetainedWorktrees } from '../rpc/reads.js'
 import { useLoaded } from '../lib/use-async.js'
 import { handoffSays, useAgentHandoff } from '../lib/use-agent-handoff.js'
 import { useCheckoutStatus } from '../lib/use-checkout-status.js'
@@ -8,13 +8,13 @@ import { agentOutcome, cardOutcome, pendingChoices, shownStatus } from '../lib/l
 import { useAgentFeed } from '../lib/use-agent-feed.js'
 import { AgentActionBar } from './AgentActionBar.js'
 import { SessionRow } from './SessionRow.js'
-import { startedFromBranch, startedFromMain, type StartPicks } from '../lib/started-from.js'
+import type { StartPicks } from '../lib/started-from.js'
 import type { ContextSet } from '../lib/use-context-set.js'
 import { AgentComposer, type QueuedMessage } from './AgentComposer.js'
 import { sendNow, withdrawMessage } from '../rpc/control.js'
 import type { WaitingMessage } from './EventList.js'
-import { AgentWorkPanel, CopyWorkRow, ProjectWorkRow, useAgentCopies } from './AgentWorkPanel.js'
-import { HandoffOffers } from './Places.js'
+import { AgentWorkPanel, ProjectWorkRow } from './AgentWorkPanel.js'
+import { HandoffOffers, ViewsAt } from './Places.js'
 import { useAction } from '../lib/use-action.js'
 import { keepSending, keepWaiting, keptSending, keptWaiting, onKeptWaiting } from '../lib/draft-handoff.js'
 import { AgentFeed } from './AgentFeed.js'
@@ -24,7 +24,7 @@ import { ChatNote, ChatPane } from './ChatPane.js'
 import { LostStreamNotice } from './LostStreamNotice.js'
 import { ModuleSlot } from './ModulePageView.js'
 import { useMountedModules } from '../lib/use-modules.js'
-import { Committing, HandoffActions, HandoffSummary, isCommitAsk } from './AgentHandoff.js'
+import { HandoffActions } from './AgentHandoff.js'
 import { AgentDetails, type AgentDetailsCard } from './AgentDetails.js'
 import { usePaneOpeners } from '../lib/reveal-change.js'
 import { agentOf, modelContextWindow, useAgents } from '../lib/agents.js'
@@ -118,19 +118,13 @@ export function AgentView({
   // The log on screen: the live channel's while the agent works, its archive once it has ended.
   const { archived, shown, active, feedLive } = useAgentFeed(projectId, agentId, live, events, replayed)
   // Whether this agent kept its worktree (#737): a failed/stopped run does, a clean one had it
-  // removed when it finished. Drives the Remove button, and is cleared locally once removed so
-  // the button goes without waiting for a refetch.
+  // removed when it finished. Its menu opens that folder.
   const retained = useLoaded<string[]>(live === false ? () => onRetainedWorktrees(projectId) : null, [], [projectId, agentId, live], { remember: `retained:${projectId}` })
-  const [removed, setRemoved] = useState(false)
-  const onWorktreeRemoved = useCallback(() => setRemoved(true), [])
   // The project's page on GitHub, where `#12` in an answer leads. Another host names its issues
   // under another path, so its numbers stay text.
   const gitHostHome = useLoaded(() => onGitHostHome(projectId), null, [projectId], { remember: `git-host-home:${projectId}` })
   const issueLinks = gitHostHome?.name === 'GitHub' ? gitHostHome.url : undefined
-  // The view is mounted un-keyed, so switching agents only swaps props: per-agent latches must
-  // reset by hand or the previous agent's Remove press hides this one's offer.
-  useEffect(() => setRemoved(false), [agentId])
-  const hasWorktree = live === false && !removed && retained.includes(agentId)
+  const hasWorktree = live === false && retained.includes(agentId)
 
   // Whether the agent is still working. A run that stops on a question ends `waiting` rather than
   // staying up, so a live run is a working one. One not known yet is neither working nor ended:
@@ -150,11 +144,6 @@ export function AgentView({
   const host = hostOf(target)
   const hosts = useRunHosts(host !== undefined ? projectId : null)
   const runsOn = startedOn ?? (host !== undefined ? (hosts.find(one => one.id === host)?.label ?? 'Another host') : card?.otherHost && card.host ? card.host : THIS_MACHINE)
-  // The branch it started from, for that row: its card's, or, where the card says it was origin's
-  // default branch, the name that has in the project's clone. Read once: it never changes.
-  const fromMain = startedFromMain(card)
-  const mainBranch = useLoaded<string | null>(fromMain ? () => onAgentMainBranch(projectId) : null, null, [projectId, fromMain], { remember: `main-branch:${projectId}` })
-  const startedFrom = startedFromBranch(card, mainBranch) ?? picks?.branch
   const [open, setOpen] = useState(false)
   // What the installed modules add to this run's page: a summary in the bar above the message box.
   const summaries = useMountedModules().views['chat.summary'].filter(summary => summary.projects.includes(projectId))
@@ -200,13 +189,6 @@ export function AgentView({
   const kept = read.handoff !== null && read.handoff.exists && !read.handoff.empty
   const handoff = card?.saving && !kept ? { ...read, handoff: null, state: 'unknown' as const } : read
   const branchKnown = handoff.state !== 'unknown'
-  // The agent is doing what the Commit button asked: said where the button was, from the ask going
-  // out until the next step is known, so the place is never empty in between: the agent's turn
-  // ends, its checkout is cleaned up, and only then is its branch read. Read off the last prompt,
-  // so a refresh says the same.
-  const lastPrompt = shownSending ?? [...shown].reverse().find(e => e.kind === 'driver' && e.event.type === 'start')
-  const commitAsked = isCommitAsk(typeof lastPrompt === 'string' ? lastPrompt : lastPrompt?.kind === 'driver' && lastPrompt.event.type === 'start' ? lastPrompt.event.prompt : undefined)
-  const committing = commitAsked && (going || (live === false && !branchKnown))
   // How the agent ended (#948), read once for the Resume offer below:
   // its events say it, and until they are read (or when they hold no ending) its card does, so
   // both are right from the first frame.
@@ -301,15 +283,14 @@ export function AgentView({
   // moment later. So does a run not known yet to be going or ended, until the list of runs says.
   const say =
     !over &&
-    (committing ||
-      (!prUnknown &&
-        (live === false
-          ? branchKnown
-            ? pr !== undefined || handoffSays(onBranch) || held
-            : held
-          : live === true
-            ? pr !== undefined || checkout?.checkout?.dirty === true || held
-            : held)))
+    !prUnknown &&
+    (live === false
+      ? branchKnown
+        ? pr !== undefined || handoffSays(onBranch) || held
+        : held
+      : live === true
+        ? pr !== undefined || checkout?.checkout?.dirty === true || held
+        : held)
   lastSay.current = { agentId, say }
   // Every pull request the run opened, for the row above the message box: the ones before, then the one it is on.
   const earlierPrs = card?.earlierPrs
@@ -336,15 +317,11 @@ export function AgentView({
       target={target}
       elsewhere={elsewhere || card?.otherHost === true}
       projectName={projectName}
-      startedFrom={startedFrom}
-      worksOn={barCheckout?.branch ?? branch}
       prs={prs}
       box={sessionBox}
       run={{ projectId, agentId, working }}
     />
   )
-  // The session's copies of repos: each has a row of its own in the panel, after the project's.
-  const copies = useAgentCopies(projectId, agentId, live)
 
   return (
     <ChatPane
@@ -358,7 +335,6 @@ export function AgentView({
             label={label}
             naming={naming}
             retainedWorktree={hasWorktree}
-            onWorktreeRemoved={onWorktreeRemoved}
             onDeleted={onDeleted}
             onBack={onBack}
             onProjectRemoved={onProjectRemoved}
@@ -388,24 +364,20 @@ export function AgentView({
               checkout={barCheckout}
               summary={
                 ready &&
-                (showHandoff ? (
-                  <HandoffSummary handoff={handoff.handoff} />
-                ) : (
-                  summaries.map(({ View: Summary, id, package: pkg }) => (
+                summaries
+                  .filter(summary => (summary.ended === true) === showHandoff)
+                  .map(({ View: Summary, id, package: pkg }) => (
                     <ModuleSlot key={`${pkg}/${id}`} package={pkg} label="run summary">
                       <Summary projectId={projectId} agentId={agentId} working={working} />
                     </ModuleSlot>
                   ))
-                ))
               }
               actions={
                 // A run that is working is still writing its branch; the next step is offered once it has ended.
                 // Keyed: what a press said, and a merge it armed, are that session's alone.
-                committing ? (
-                  <Committing />
-                ) : ended ? (
+                ended ? (
                   <>
-                    <HandoffActions key={`${projectId}/${agentId}`} projectId={projectId} agentId={agentId} state={handoff} onAsked={onSending} />
+                    <HandoffActions key={`${projectId}/${agentId}`} projectId={projectId} agentId={agentId} state={handoff} />
                     <HandoffOffers projectId={projectId} agentId={agentId} again={card?.updatedAt} />
                   </>
                 ) : undefined
@@ -413,9 +385,8 @@ export function AgentView({
               error={ready && showHandoff ? handoff.error : undefined}
               show={say}
             />
-            {copies.map(repo => (
-              <CopyWorkRow key={repo} projectId={projectId} agentId={agentId} repo={repo} ended={ended} saving={card?.saving === true} working={going} committing={committing} onAsked={onSending} />
-            ))}
+            {/* The session's copies of repos: a row each, after the project's (git-branches'). */}
+            <ViewsAt place="chat.work" projectId={projectId} props={{ projectId, agentId, working: going }} label="copies of repos" />
           </AgentWorkPanel>
           {/* Until the run's record or its feed says whether it works, no box: it would say an ended run's words. */}
           {live === null && !feedLive ? null : card?.otherHost && card.host ? (

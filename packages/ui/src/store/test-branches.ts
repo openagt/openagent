@@ -2,8 +2,7 @@ import type { BranchesFor, BranchesSource, BranchState, Checkout } from './branc
 
 /**
  * A branches provider as a test would have it: the checkouts of every project held in memory,
- * answering what a real provider's command would. `writes` records every publish, merge and
- * remove; a remove takes the checkout out of the list, the way the command would.
+ * answering what a real provider's command would. `writes` records every publish and remove; a remove takes the checkout out of the list, the way the command would.
  */
 export function testBranches(byProject: Record<string, Checkout[]> = {}, states: BranchState[] = []): BranchesFor & { writes: string[] } {
   const writes: string[] = []
@@ -26,14 +25,6 @@ export function testBranches(byProject: Record<string, Checkout[]> = {}, states:
     async push(branch) {
       writes.push(`push ${branch}`)
       return { ok: true, pushed: true }
-    },
-    async merge(branch) {
-      writes.push(`merge ${branch}`)
-      return { ok: true, into: 'main', commit: 'c'.repeat(40), from: 'b'.repeat(40), deleted: true }
-    },
-    async bring(branch, opts = {}) {
-      writes.push(`bring ${branch}${opts.merge ? ' --merge' : ''}`)
-      return { ok: true, folder: '/folder', ...(opts.merge ? { merged: 'main' } : {}) }
     },
     async remove(id, opts = {}) {
       writes.push(`remove ${id}${opts.discard ? ' --discard' : ''}`)

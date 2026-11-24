@@ -2,7 +2,7 @@ import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { makeWorld, waitFor, release } from './harness.js'
 import { onWaiting, onAgents, onAgent, onRetainedWorktrees, onAgentWorktree } from '../dashboard-rpc/reads.js'
-import { sendMessage, sendStop, sendDeleteAgent, sendRemoveWorktree } from '../dashboard-rpc/control.js'
+import { sendMessage, sendStop, sendDeleteAgent } from '../dashboard-rpc/control.js'
 import { callModule } from '../dashboard-rpc/module-calls.js'
 
 // The steering stories (README.md): everything the user does TO a run — answer its question (through
@@ -155,8 +155,9 @@ test('a waiting run’s kept checkout can be removed by hand (#737)', async () =
     // does would take away the only copy there is.
     await world.waitRecorded(project, agentId)
     await waitFor(async () => ((await rpc(onRetainedWorktrees)(project.id)).includes(agentId) ? true : undefined), 'the kept checkout to reach the Remove list')
-    const removed = await rpc(sendRemoveWorktree)(project.id, agentId)
-    assert.equal(removed.ok, true, `remove failed: ${'error' in removed ? removed.error : ''}`)
+    // git-branches' Remove worktree, in the session's menu.
+    const removed = await rpc(callModule)(project.id, '@openagt/git-branches', 'removeCheckout', { agentId })
+    assert.equal(removed.ok && (removed.output as { ok: boolean }).ok, true, `remove failed: ${JSON.stringify(removed)}`)
     assert.deepEqual(await rpc(onRetainedWorktrees)(project.id), [])
     assert.ok((await rpc(onAgents)(project.id)).some(r => r.id === agentId && r.status === 'waiting'), 'the run\'s row survives, still waiting')
   } finally {

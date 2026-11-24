@@ -1,5 +1,9 @@
 import { Check, GitMerge } from 'lucide-react'
-import { PUBLISH_LABELS, type PublishPick } from '../../src/client.js'
+import type { UiProject } from '@openagt/hooks/ui'
+import type { PublishPick } from '../../src/client.js'
+import { pickIn } from '../../src/client.js'
+import { useMountedModules } from '../lib/use-modules.js'
+import { onIn } from './Places.js'
 import { SetupLine } from './SessionSetup.js'
 import { OptionLabel } from './ui/option-label.js'
 import {
@@ -10,12 +14,38 @@ import {
   DropdownMenuSeparator,
 } from './ui/dropdown-menu.js'
 
-const PUBLISH_DESCRIPTIONS: Readonly<Record<PublishPick, string>> = {
-  nothing: 'Adds nothing to your message. The agent decides, and usually commits.',
-  commit: 'It commits its work on its branch.',
-  branch: 'It commits and pushes its branch.',
-  pr: 'It commits, pushes its branch and opens a pull request.',
-  merge: 'It commits, pushes its branch and opens a pull request set to merge once its checks pass.',
+/** A level of the menu: its pick, and what the menu says of it. */
+export interface AutoLevel {
+  id: PublishPick
+  label: string
+  description?: string | undefined
+}
+
+/** The menu's first line, the shell's own: no level, so nothing is added to the message. */
+const OFF: AutoLevel = { id: 'nothing', label: 'Off', description: 'Adds nothing to your message. The agent decides, and usually commits.' }
+
+/** The levels that open a pull request, drawn here until the git host's module offers its own. */
+const REQUEST_LEVELS: readonly AutoLevel[] = [
+  { id: 'pr', label: 'Open PR', description: 'It commits, pushes its branch and opens a pull request.' },
+  { id: 'merge', label: 'Merge on green', description: 'It commits, pushes its branch and opens a pull request set to merge once its checks pass.' },
+]
+
+/**
+ * The levels the menu offers in the project `projectId` (`project`, as a place is given it; none
+ * for a session with no project, or one not read yet), in order: Off, then each module's
+ * (`composer.auto`) where it says it is offered, then the levels that open a pull request where
+ * the project has a git host. A session with no project is offered every level: it publishes its
+ * copies of repos, wherever each is.
+ */
+export function useAutoLevels(projectId: string, project: UiProject | undefined, gitHost: boolean): AutoLevel[] {
+  const options = useMountedModules().options['composer.auto']
+  const modules = options.filter(option => onIn(option, projectId) && (option.offered?.(project) ?? true)).map((option): AutoLevel => ({ id: option.id as PublishPick, label: option.label, description: option.description }))
+  return [OFF, ...modules, ...(gitHost ? REQUEST_LEVELS : [])]
+}
+
+/** The pick in force among `levels`: the one saved, else Commit, else the furthest offered short of the saved one. */
+export function autoPickIn(saved: PublishPick | undefined, levels: readonly AutoLevel[]): PublishPick {
+  return pickIn(saved, levels.map(level => level.id))
 }
 
 /** Where a pull request goes: the branch now, and, on the launcher, the branches to pick from. */
@@ -26,9 +56,9 @@ export interface PrTarget {
 }
 
 /** The level in the words the gear's menu and its hover say: "Off" alone would not say what is off. */
-export function autoSaid(publish: PublishPick, target?: PrTarget | undefined): string {
+export function autoSaid(publish: PublishPick, levels: readonly AutoLevel[], target?: PrTarget | undefined): string {
   const into = publish === 'pr' || publish === 'merge' ? target : undefined
-  return `${publish === 'nothing' ? 'Auto off' : PUBLISH_LABELS[publish]}${into ? ` → ${into.into}` : ''}`
+  return `${publish === 'nothing' ? 'Auto off' : (levels.find(level => level.id === publish)?.label ?? publish)}${into ? ` → ${into.into}` : ''}`
 }
 
 // The "When it finishes" line of the gear's menu, set apart under the session's own lines: how far
@@ -39,15 +69,15 @@ export function autoSaid(publish: PublishPick, target?: PrTarget | undefined): s
 // repos, a small line under it says what the level is for (`covers`).
 export function AutoMenu({
   publish,
-  picks,
+  levels,
   onPublish,
   target,
   covers,
 }: {
   /** The publish pick in force. */
   publish: PublishPick
-  /** The publish picks the project is offered. */
-  picks: readonly PublishPick[]
+  /** The levels the project is offered ({@link useAutoLevels}). */
+  levels: readonly AutoLevel[]
   onPublish: (pick: PublishPick) => void
   /** Absent where the pull request goes into the default branch with no say. */
   target?: PrTarget | undefined
@@ -60,14 +90,14 @@ export function AutoMenu({
   return (
     <>
       <DropdownMenuSeparator />
-      <SetupLine icon={<GitMerge aria-hidden />} label="When it finishes" value={<span className="truncate">{autoSaid(publish, target)}</span>} className="min-w-[19rem] max-w-[22rem]">
+      <SetupLine icon={<GitMerge aria-hidden />} label="When it finishes" value={<span className="truncate">{autoSaid(publish, levels, target)}</span>} className="min-w-[19rem] max-w-[22rem]">
         <DropdownMenuGroup>
           <DropdownMenuLabel className="font-normal">When the agent finishes</DropdownMenuLabel>
           <DropdownMenuRadioGroup value={publish} onValueChange={(pick: PublishPick) => onPublish(pick)}>
-            {picks.map(pick => (
-              <DropdownMenuRadioItem key={pick} value={pick} className="items-start">
-                <OptionLabel label={PUBLISH_LABELS[pick]} description={PUBLISH_DESCRIPTIONS[pick]} />
-                {pick === publish && <Check className="ml-auto mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />}
+            {levels.map(level => (
+              <DropdownMenuRadioItem key={level.id} value={level.id} className="items-start">
+                <OptionLabel label={level.label} {...(level.description !== undefined ? { description: level.description } : {})} />
+                {level.id === publish && <Check className="ml-auto mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />}
               </DropdownMenuRadioItem>
             ))}
           </DropdownMenuRadioGroup>

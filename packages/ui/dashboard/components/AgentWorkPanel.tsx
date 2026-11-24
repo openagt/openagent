@@ -1,11 +1,6 @@
 import type { ReactNode } from 'react'
 import type { AgentWorktree } from '../../src/index.js'
 import { Folder, FolderGit2, GitBranch } from 'lucide-react'
-import { useLoaded } from '../lib/use-async.js'
-import { handoffSays, useAgentHandoff } from '../lib/use-agent-handoff.js'
-import { HandoffOffers } from './Places.js'
-import { onAgentCopies } from '../rpc/reads.js'
-import { Committing, HandoffActions, HandoffSummary } from './AgentHandoff.js'
 import { MiddleCut } from './MiddleCut.js'
 import { Panel, PanelRow } from './ui/panel.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
@@ -113,52 +108,4 @@ export function ProjectWorkRow({ name, checkout, summary, actions, error, show }
   const branch = checkout?.branch
   if (branch === undefined || !show) return null
   return <WorkRow project name={name || 'This project'} branch={branch} path={checkout?.checkout?.path} summary={summary} pr={checkout?.pr} actions={actions} error={error} />
-}
-
-/** The names of the session's copies of repos, read again when the run stops or goes on: a copy is made as it starts. */
-export function useAgentCopies(projectId: string, agentId: string, live: boolean | null): string[] {
-  // A daemon that does not know the question answers nothing: no copies.
-  const names = useLoaded<string[] | null>(() => onAgentCopies(projectId, agentId), [], [projectId, agentId, live], { remember: `copies:${projectId}:${agentId}` })
-  return names ?? []
-}
-
-/**
- * A copy's row: its own read of its branch, taken as the project's is, once the run has stopped
- * (a branch still being written to has nothing to hand off). Nothing while the copy holds no work.
- */
-export function CopyWorkRow({ projectId, agentId, repo, ended, saving, working, committing, onAsked }: {
-  projectId: string
-  agentId: string
-  /** The copy's name in the session's folder. */
-  repo: string
-  /** The run has ended: its work is read, and its next step offered. */
-  ended: boolean
-  saving: boolean
-  working: boolean
-  /** The agent is doing what a Commit press asked. */
-  committing: boolean
-  onAsked?: ((text: string | null) => void) | undefined
-}) {
-  const state = useAgentHandoff(projectId, agentId, ended, saving, working, repo)
-  const handoff = state.handoff
-  if (!ended || !handoff || handoff.prPending || !(handoff.pr !== undefined || handoffSays(handoff))) return null
-  return (
-    <WorkRow
-      name={repo}
-      branch={handoff.branch}
-      summary={<HandoffSummary handoff={handoff} />}
-      pr={handoff.pr}
-      actions={
-        committing ? (
-          <Committing />
-        ) : (
-          <>
-            <HandoffActions key={`${projectId}/${agentId}/${repo}`} projectId={projectId} agentId={agentId} repo={repo} state={state} onAsked={onAsked} />
-            <HandoffOffers projectId={projectId} agentId={agentId} repo={repo} again={handoff} />
-          </>
-        )
-      }
-      error={state.error}
-    />
-  )
 }

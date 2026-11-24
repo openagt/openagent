@@ -138,7 +138,7 @@ test('a read of the registry never fails, whatever the disk does or the file hol
   assert.deepEqual(await readRegistry(ENV, unreadable), { projects: [], preferences: {} })
   assert.deepEqual(await readPreferences(ENV, unreadable), {})
   // Every field of the wrong shape, as a hand edit could leave it.
-  const junk = { projects: [1, null, {}], preferences: { model: 3, startFrom: [1], overviewLayouts: 'x' }, repoFolders: [3] }
+  const junk = { projects: [1, null, {}], preferences: { model: 3, overviewLayouts: 'x' }, repoFolders: [3] }
   assert.deepEqual(await readRegistry(ENV, memFs({ [FILE]: JSON.stringify(junk) })), { projects: [], preferences: {} })
 })
 
@@ -261,18 +261,6 @@ test('sanitizePreferences reads only the current spellings', async () => {
   assert.deepEqual(await stored({ publish: 'merge' }), { publish: 'merge' })
   assert.deepEqual(await stored({ publish: 'nothing' }), { publish: 'nothing' })
   assert.deepEqual(await stored({ publish: 'push' }), {}, 'a word the launcher\'s menu does not list is dropped')
-  // Where an agent starts, per project: the local branch or a branch of origin's, the main branch is the absent entry.
-  const local = { kind: 'local' }
-  const published = { kind: 'published', branch: 'local' }
-  assert.deepEqual(await stored({ startFrom: { 'app-1a2b': local, 'web-3c4d': 'main', '': local, 'api-5e6f': true } }), { startFrom: { 'app-1a2b': local } })
-  assert.deepEqual(await stored({ startFrom: { 'app-1a2b': published, 'web-3c4d': local } }), { startFrom: { 'app-1a2b': published, 'web-3c4d': local } }, 'a branch literally named local is no local pick')
-  assert.deepEqual(await stored({ startFrom: { 'app-1a2b': 'local' } }), {}, 'a bare word is no pick')
-  assert.deepEqual(await stored({ startFrom: { a: { kind: 'published' }, b: { kind: 'published', branch: '--upload-pack=x' }, c: { kind: 'published', branch: 'a b' }, d: { kind: 'main' } } }), {}, 'a pick names a branch')
-  assert.deepEqual(await stored({ startFrom: {} }), {}, 'no project left: the key is left out')
-  assert.deepEqual(await stored({ startFrom: ['app-1a2b'] }), {})
-  assert.deepEqual(await stored({ startFrom: 'local' }), {})
-  const many = Object.fromEntries(Array.from({ length: 250 }, (_, i) => [`p-${i}`, local]))
-  assert.equal(Object.keys((await stored({ startFrom: many })).startFrom ?? {}).length, 200, 'bounded')
 })
 
 test('the sidebar\'s order keeps only the orders it offers; the default, by creation, is stored as nothing', async () => {

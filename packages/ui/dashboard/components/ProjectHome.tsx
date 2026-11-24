@@ -7,7 +7,7 @@ import { ComposerShape } from './Composer.js'
 import { TopBar } from './Panes.js'
 import { ProjectErrorBanner } from './ProjectErrorBanner.js'
 import { WaitingList } from './WaitingList.js'
-import { FolderBehindLine } from './FolderBehind.js'
+import { ProjectItemsLine } from './Attention.js'
 import { ScrollArea } from './ui/scroll-area.js'
 import type { StartPicks } from '../lib/started-from.js'
 import { useIsMobile } from '../lib/use-mobile.js'
@@ -97,10 +97,10 @@ export function ProjectHome({
           box (his pick): the bar names the page, and the box says what it is for. The column keeps a scroll bar's room at its right, as the chat's does
           (ChatPane), so the box stands on a session's box's edges and is carried without a sideways step. */}
       <div className="scrollbar-thin scrollbar-gutter-stable flex min-h-0 flex-1 flex-col overflow-y-auto">
-        {/* With nothing waiting the list is empty, so the folder's line stands in the room over the box: at the page's top either way. */}
+        {/* With nothing waiting the list is empty, so what the project needs stands in the room over the box: at the page's top either way. */}
         {!listFirst && (
           <Lift>
-            <FolderBehindLine projectId={projectId} />
+            <ProjectItemsLine projectId={projectId} />
           </Lift>
         )}
         <div className={cn('shrink-0', listFirst && 'order-last')}>
@@ -130,8 +130,8 @@ export function ProjectHome({
                   <WaitingList key={projectId} items={waiting} onOpenAgent={onOpenAgent} />
                 </section>
               )}
-              {/* Under what waits (his pick): the folder behind its remote, and the press that updates it. */}
-              {listFirst && <FolderBehindLine projectId={projectId} />}
+              {/* Under what waits (his pick): what the project needs (`app.attention`, about the project), each with its fix. */}
+              {listFirst && <ProjectItemsLine projectId={projectId} />}
             </div>
           </div>
         </ScrollArea>
