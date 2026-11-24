@@ -1,13 +1,11 @@
-import { readFile, stat } from 'node:fs/promises'
 import { hostname } from 'node:os'
-import { join } from 'node:path'
 import { appendInbox, imagesOf, promptLines, takeInbox } from '../inbox.js'
-import { findRun, listRuns } from '../record-store.js'
-import { isRunId, parseRunCard, type RunCard } from '../record.js'
-import { logCardFile } from '../session-log.js'
+import { findRun } from '../record-store.js'
+import { isRunId, type RunCard } from '../record.js'
 import { PLUGINS_WITHOUT_ENV, PROFILE_ENV, PROJECT_SKILLS_ENV, isSkillName, sessionFolder, sessionsHome, sessionsHomeOf } from '@openagt/agent-data'
-import { LOCAL_HOST, MODULE_NAME, NAME_RUNS, PICKED_AGENT, PICKED_PROFILE, isProfileId, type AgentPick, type ProjectRef, type Settings, type RunFound, type RunHost, type RunInput, type RunOptions, type RunReadiness, type RunRef, type RunRequest, type RunStatus, type RunSummary, type InboxLine, type PromptLine } from '@openagt/hooks'
-import { currentBranch, worktreePath } from '@openagt/git-branches'
+import { LOCAL_HOST, MODULE_NAME, NAME_RUNS, PICKED_AGENT, PICKED_PROFILE, isProfileId, type AgentPick, type ProjectRef, type Settings, type RunFound, type RunHost, type RunInput, type RunOptions, type RunReadiness, type RunRef, type RunRequest, type InboxLine, type PromptLine, type RunAgent } from '@openagt/hooks'
+import { worktreePath } from '@openagt/git-branches'
+import { listedRuns, liveCard, ownFolder, runEvents, standing, type RunReadsDeps } from '../reads/run-reads.js'
 import { handedDownSettings, runProfile } from './profile.js'
 import { inboxPath, liveDir } from './live-card.js'
 import { isPublish, NO_PUBLISH } from './records.js'
@@ -44,6 +42,8 @@ export interface LocalHostDeps {
   settings?: () => Promise<Settings>
   /** Where a run's name is asked as it starts: the naming sessions this process keeps waiting. */
   naming?: Pick<ReadyNaming, 'names' | 'name' | 'prepare'>
+  /** The coding agents, which say how one of their sessions is picked back up: the distribution's. */
+  agents?: () => Promise<readonly RunAgent[]>
 }
 
 /** How long a Stop waits for a run just started to name its process: as long as a page shows a run as starting. */
@@ -59,6 +59,8 @@ export function localHost(deps: LocalHostDeps = {}): RunHost {
   const naming = (): Pick<ReadyNaming, 'names' | 'name' | 'prepare'> => deps.naming ?? (readyNaming ??= new ReadyNaming())
   /** The coding agent a run that names none is on: the distribution's first. */
   const firstAgent = async (): Promise<string | undefined> => (await codingAgents().catch(() => []))[0]?.id
+  /** How this host's runs are read: its summaries name it, and each coding agent says how its sessions are picked back up. */
+  const reads: RunReadsDeps = { host: LOCAL_HOST, here, isAlive, agents: () => deps.agents?.() ?? codingAgents() }
   /** Whether runs started here are named: the person's setting, read as each run starts; a store that cannot be read names them. */
   const namesRuns = (): Promise<boolean> => settings().then(read => read.get(NAME_RUNS), () => true)
 
@@ -186,24 +188,21 @@ export function localHost(deps: LocalHostDeps = {}): RunHost {
       }
     },
 
-    async list(project) {
-      const cards = await listRuns(placeOf(project))
-      return cards.map(card => summaryOf(card, project)).sort((a, b) => b.startedAt.localeCompare(a.startedAt))
+    list(project, wanted = {}) {
+      return listedRuns(placeOf(project), project?.id, wanted, reads)
     },
 
     async find(run) {
       if (!isRunId(run.id)) return undefined
       const dir = placeOf(run.project)
-      const path = await ownFolder(dir, run.id)
-      const [live, record, branch] = await Promise.all([
-        path !== undefined ? liveCard(path, run.id) : undefined,
-        findRun(dir, run.id).catch(() => undefined),
-        path !== undefined ? currentBranch(path) : undefined,
-      ])
-      if (path === undefined && !record) return undefined
-      const pr = live?.pr ?? record?.pr
-      const caller = { ...record?.caller, ...live?.caller }
-      return foundOf({ ...record, ...live, ...(pr ? { pr } : {}), caller }, path !== undefined ? { path, branch } : undefined, here)
+      const folder = await ownFolder(dir, run.id)
+      const [live, record] = await Promise.all([folder !== undefined ? liveCard(folder.path, run.id) : undefined, findRun(dir, run.id).catch(() => undefined)])
+      if (folder === undefined && !record) return undefined
+      return foundOf(standing(record, live) ?? {}, folder !== undefined ? { path: folder.path, branch: folder.branch } : undefined, here)
+    },
+
+    events(run, signal) {
+      return runEvents(placeOf(run.project), run.id, signal)
     },
   }
 }
@@ -249,24 +248,6 @@ function placeOf(project: ProjectRef | undefined): string {
 async function checkoutOf(dir: string, id: string): Promise<string> {
   const home = await sessionsHomeOf(dir)
   return home !== undefined ? sessionFolder(home, id) : worktreePath(dir, id)
-}
-
-/**
- * The folder a run works in, while it is there: a session's folder, or a checkout of the project
- * with a `.git` of its own; without one, git in that folder would read the project's own checkout,
- * and its branch would pass for the run's.
- */
-async function ownFolder(dir: string, id: string): Promise<string | undefined> {
-  const home = await sessionsHomeOf(dir)
-  const path = home !== undefined ? sessionFolder(home, id) : worktreePath(dir, id)
-  const there = await stat(home !== undefined ? path : join(path, '.git')).then(() => true, () => false)
-  return there ? path : undefined
-}
-
-/** A run's live card, in its checkout while it works there; none when it has none, whatever tool wrote it. */
-async function liveCard(checkout: string, id: string): Promise<RunCard | undefined> {
-  const raw = await readFile(join(liveDir(checkout), logCardFile(id)), 'utf8').catch(() => undefined)
-  return raw === undefined ? undefined : parseRunCard(raw)
 }
 
 /** A run's card as it stands: its live one while it has a checkout, its record's once it has none. */
@@ -336,20 +317,6 @@ function inputOf(line: PromptLine): RunInput {
   if (line.kind === 'answer') return { answer: line.answer }
   const publish = line.publish
   return { text: line.text, ...(publish !== undefined && (isPublish(publish) || publish === NO_PUBLISH) ? { publish } : {}), ...imagesOf(line) }
-}
-
-/** A run's record, as a host lists it. */
-function summaryOf(card: RunCard, project: ProjectRef | undefined): RunSummary {
-  const status: RunStatus = card.status === 'running' ? 'working' : card.status
-  return {
-    id: card.id,
-    ...(project ? { project: project.id } : {}),
-    status,
-    startedAt: card.startedAt,
-    ...(card.endedAt !== undefined ? { endedAt: card.endedAt } : {}),
-    ...(card.title !== undefined ? { title: card.title } : {}),
-    prompt: card.intent ?? '',
-  }
 }
 
 /** The naming sessions this process keeps waiting for the runs it starts, made at the first that is named. */

@@ -3,13 +3,10 @@ import { test } from 'node:test'
 import { appendFile, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { OpenAgentEvent } from '../events.js'
+import type { RunEvent } from '@openagt/hooks'
 import { partialReader, tailEvents, tailAgentEvents, type TailTarget } from './events-tail.js'
-import { handDownTestDistribution } from '../test-distribution.js'
 
-handDownTestDistribution()
-
-const line = (message: string): string => JSON.stringify({ kind: 'log', message } satisfies OpenAgentEvent) + '\n'
+const line = (message: string): string => JSON.stringify({ kind: 'log', message } satisfies RunEvent) + '\n'
 const sleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms))
 
 async function tmpWorkspace(): Promise<string> {
@@ -21,7 +18,7 @@ test('tailEvents seeds with what is already logged, then follows appends', async
   const path = join(cwd, 'events.jsonl')
   await writeFile(path, line('first'))
   const seen: string[] = []
-  const stop = tailEvents<OpenAgentEvent>(path, e => void (e.kind === 'log' && seen.push(e.message)))
+  const stop = tailEvents<RunEvent>(path, e => void (e.kind === 'log' && seen.push(e.message)))
   try {
     await sleep(150)
     assert.deepEqual(seen, ['first'])
@@ -46,7 +43,7 @@ test('tailEvents resets when a fresh run rewrites the log to the same length (#5
   assert.equal(Buffer.byteLength(line('old-run')), Buffer.byteLength(line('new-run')))
   await writeFile(path, line('old-run'))
   const seen: string[] = []
-  const stop = tailEvents<OpenAgentEvent>(path, e => void (e.kind === 'log' && seen.push(e.message)))
+  const stop = tailEvents<RunEvent>(path, e => void (e.kind === 'log' && seen.push(e.message)))
   try {
     await sleep(150)
     assert.deepEqual(seen, ['old-run'])
@@ -65,7 +62,7 @@ test('tailEvents stops pulling once stopped, and skips malformed lines', async (
   const path = join(cwd, 'events.jsonl')
   await writeFile(path, line('kept') + 'not json at all\n')
   const seen: string[] = []
-  const stop = tailEvents<OpenAgentEvent>(path, e => void (e.kind === 'log' && seen.push(e.message)))
+  const stop = tailEvents<RunEvent>(path, e => void (e.kind === 'log' && seen.push(e.message)))
   try {
     await sleep(150)
     assert.deepEqual(seen, ['kept']) // the malformed line never breaks the stream
@@ -83,7 +80,7 @@ test('tailEvents reports the replay boundary after the backlog, before any follo
   const path = join(cwd, 'events.jsonl')
   await writeFile(path, line('first') + line('second'))
   const order: string[] = []
-  const stop = tailEvents<OpenAgentEvent>(
+  const stop = tailEvents<RunEvent>(
     path,
     e => void (e.kind === 'log' && order.push(e.message)),
     () => order.push('<sync>'),
@@ -105,7 +102,7 @@ test('tailEvents reports the replay boundary even when the log does not exist ye
   const cwd = await tmpWorkspace()
   const path = join(cwd, 'events.jsonl')
   const order: string[] = []
-  const stop = tailEvents<OpenAgentEvent>(
+  const stop = tailEvents<RunEvent>(
     path,
     e => void (e.kind === 'log' && order.push(e.message)),
     () => order.push('<sync>'),
@@ -127,9 +124,9 @@ test('tailEvents reports the replay boundary even when the log does not exist ye
 // the finished lines past the count it already delivered — once, with no replay.
 
 /** A finished run's lines, as the runs provider answers them: the diary file's lines, in order. */
-async function finished(path: string): Promise<{ finished: OpenAgentEvent[] }> {
+async function finished(path: string): Promise<{ finished: RunEvent[] }> {
   const { readFile } = await import('node:fs/promises')
-  return { finished: (await readFile(path, 'utf8')).split('\n').filter(Boolean).map(l => JSON.parse(l) as OpenAgentEvent) }
+  return { finished: (await readFile(path, 'utf8')).split('\n').filter(Boolean).map(l => JSON.parse(l) as RunEvent) }
 }
 
 test('tailAgentEvents follows the diary into the finished run: missed lines arrive exactly once', async () => {
@@ -140,7 +137,7 @@ test('tailAgentEvents follows the diary into the finished run: missed lines arri
   const seen: string[] = []
   let sync = 0
   const { rename } = await import('node:fs/promises')
-  const stop = tailAgentEvents<OpenAgentEvent>(
+  const stop = tailAgentEvents<RunEvent>(
     async () => ((await import('node:fs')).existsSync(live) ? { file: live } : finished(archive)),
     e => void (e.kind === 'log' && seen.push(e.message)),
     () => sync++,
@@ -171,7 +168,7 @@ test('tailAgentEvents does not replay a fully-consumed diary once the run is fin
   await writeFile(live, line('one') + line('two'))
   const seen: string[] = []
   const { copyFile, rm: rmFile } = await import('node:fs/promises')
-  const stop = tailAgentEvents<OpenAgentEvent>(
+  const stop = tailAgentEvents<RunEvent>(
     async () => ((await import('node:fs')).existsSync(live) ? { file: live } : finished(archive)),
     e => void (e.kind === 'log' && seen.push(e.message)),
   )
@@ -196,7 +193,7 @@ test('tailAgentEvents still follows a diary that moves to another file, carrying
   const seen: string[] = []
   const { rename } = await import('node:fs/promises')
   const { existsSync } = await import('node:fs')
-  const stop = tailAgentEvents<OpenAgentEvent>(
+  const stop = tailAgentEvents<RunEvent>(
     async () => ({ file: existsSync(first) ? first : second }),
     e => void (e.kind === 'log' && seen.push(e.message)),
   )
@@ -222,7 +219,7 @@ test('tailAgentEvents stays put while the resolver has no better answer', async 
   const seen: string[] = []
   const { copyFile, rm: rmFile } = await import('node:fs/promises')
   let archiveVisible = false
-  const stop = tailAgentEvents<OpenAgentEvent>(
+  const stop = tailAgentEvents<RunEvent>(
     // The window where the live file is gone but the finished run is not readable yet: the
     // resolver answers undefined (a deleted session resolves like this forever), and the tail
     // must idle rather than hop somewhere wrong — then catch up once the finished run appears.
@@ -252,7 +249,7 @@ test('tailAgentEvents finds a diary it never saw in its checkout: a short run, s
   const seen: string[] = []
   let sync = 0
   const { existsSync } = await import('node:fs')
-  const stop = tailAgentEvents<OpenAgentEvent>(
+  const stop = tailAgentEvents<RunEvent>(
     async () => (existsSync(recorded) ? finished(recorded) : { file: checkout }),
     e => void (e.kind === 'log' && seen.push(e.message)),
     () => sync++,
@@ -276,7 +273,7 @@ test('tailAgentEvents on a diary that is nowhere yet: the file once it has a hom
   const seen: string[] = []
   let sync = 0
   let home = false
-  const stop = tailAgentEvents<OpenAgentEvent>(
+  const stop = tailAgentEvents<RunEvent>(
     async () => (home ? { file: live } : { pending: true }),
     e => void (e.kind === 'log' && seen.push(e.message)),
     () => sync++,
@@ -305,8 +302,8 @@ test('tailAgentEvents on a diary that is nowhere yet: the file once it has a hom
 test('tailAgentEvents on a run already finished: every line, then the replay marker, and nothing follows', async () => {
   const seen: string[] = []
   let sync = 0
-  const stop = tailAgentEvents<OpenAgentEvent>(
-    async () => ({ finished: [{ kind: 'log', message: 'one' }, { kind: 'log', message: 'two' }] as OpenAgentEvent[] }),
+  const stop = tailAgentEvents<RunEvent>(
+    async () => ({ finished: [{ kind: 'log', message: 'one' }, { kind: 'log', message: 'two' }] as RunEvent[] }),
     e => void (e.kind === 'log' && seen.push(e.message)),
     () => sync++,
   )
@@ -325,7 +322,7 @@ test('tailAgentEvents reads the message being written beside the diary: each cha
   const live = join(cwd, 'r1.live')
   await writeFile(diary, line('one'))
   const partials: string[] = []
-  const stop = tailAgentEvents<OpenAgentEvent>(async () => ({ file: diary }), () => {}, undefined, partialReader(text => partials.push(text)))
+  const stop = tailAgentEvents<RunEvent>(async () => ({ file: diary }), () => {}, undefined, partialReader(text => partials.push(text)))
   try {
     await sleep(200)
     assert.deepEqual(partials, [])
@@ -346,11 +343,11 @@ test('tailAgentEvents reads the message being written beside the diary: each cha
 test('tailAgentEvents keeps asking after a run finished: a resume is followed from its first new line, and its end too', async () => {
   const cwd = await tmpWorkspace()
   const diary = join(cwd, 'r1.jsonl')
-  const leg1 = [{ kind: 'log', message: 'one' }, { kind: 'log', message: 'two' }] as OpenAgentEvent[]
-  let answer: TailTarget<OpenAgentEvent> = { finished: leg1 }
+  const leg1 = [{ kind: 'log', message: 'one' }, { kind: 'log', message: 'two' }] as RunEvent[]
+  let answer: TailTarget<RunEvent> = { finished: leg1 }
   const asks: (boolean | undefined)[] = []
   const seen: string[] = []
-  const stop = tailAgentEvents<OpenAgentEvent>(
+  const stop = tailAgentEvents<RunEvent>(
     async opts => {
       asks.push(opts?.cached)
       return answer
@@ -369,7 +366,7 @@ test('tailAgentEvents keeps asking after a run finished: a resume is followed fr
     await sleep(1400)
     assert.deepEqual(seen, ['one', 'two', 'three', 'four'])
     // Ended again: recorded, the checkout reclaimed.
-    answer = { finished: [...leg1, { kind: 'log', message: 'three' }, { kind: 'log', message: 'four' }, { kind: 'log', message: 'five' }] as OpenAgentEvent[] }
+    answer = { finished: [...leg1, { kind: 'log', message: 'three' }, { kind: 'log', message: 'four' }, { kind: 'log', message: 'five' }] as RunEvent[] }
     await rm(diary)
     await sleep(1400)
     assert.deepEqual(seen, ['one', 'two', 'three', 'four', 'five'])
@@ -386,7 +383,7 @@ test('tailAgentEvents on a diary rewritten in place: a run continued in the chec
   const diary = join(cwd, 'r1.jsonl')
   await writeFile(diary, line('one') + line('two'))
   const seen: string[] = []
-  const stop = tailAgentEvents<OpenAgentEvent>(async () => ({ file: diary }), e => void (e.kind === 'log' && seen.push(e.message)))
+  const stop = tailAgentEvents<RunEvent>(async () => ({ file: diary }), e => void (e.kind === 'log' && seen.push(e.message)))
   try {
     await sleep(200)
     assert.deepEqual(seen, ['one', 'two'])
@@ -411,8 +408,8 @@ test('tailAgentEvents on a diary rewritten in place: a run continued in the chec
 test('tailAgentEvents on a diary that is nowhere yet and turns up finished: its lines, then the replay marker', async () => {
   const order: string[] = []
   let finished = false
-  const stop = tailAgentEvents<OpenAgentEvent>(
-    async () => (finished ? { finished: [{ kind: 'log', message: 'one' }] as OpenAgentEvent[] } : { pending: true }),
+  const stop = tailAgentEvents<RunEvent>(
+    async () => (finished ? { finished: [{ kind: 'log', message: 'one' }] as RunEvent[] } : { pending: true }),
     e => void (e.kind === 'log' && order.push(e.message)),
     () => order.push('boundary'),
   )
@@ -435,7 +432,7 @@ test('tailAgentEvents on a diary that is there and still empty: the replay marke
   const order: string[] = []
   // The file exists before anything is in it: what a writer leaves between creating it and writing.
   await writeFile(diary, '')
-  const stop = tailAgentEvents<OpenAgentEvent>(async () => ({ file: diary }), e => void (e.kind === 'log' && order.push(e.message)), () => order.push('boundary'))
+  const stop = tailAgentEvents<RunEvent>(async () => ({ file: diary }), e => void (e.kind === 'log' && order.push(e.message)), () => order.push('boundary'))
   try {
     await sleep(1400)
     assert.deepEqual(order, [], 'no boundary over a file that holds nothing: it would say an empty replay')
@@ -452,7 +449,7 @@ test('tailAgentEvents on a checkout whose diary is not written yet: the replay m
   const cwd = await tmpWorkspace()
   const diary = join(cwd, 'r1.jsonl')
   const order: string[] = []
-  const stop = tailAgentEvents<OpenAgentEvent>(async () => ({ file: diary }), e => void (e.kind === 'log' && order.push(e.message)), () => order.push('boundary'))
+  const stop = tailAgentEvents<RunEvent>(async () => ({ file: diary }), e => void (e.kind === 'log' && order.push(e.message)), () => order.push('boundary'))
   try {
     await sleep(300)
     assert.deepEqual(order, [], 'no boundary over a file that is not there: it would say an empty replay')

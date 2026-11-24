@@ -1,4 +1,4 @@
-import { accountRotation, firstAccountOf, modelsAskedOnce, type DriverReadyOptions } from '@openagt/agent-driver'
+import { accountRotation, firstAccountOf, inFolder, modelsAskedOnce, type DriverReadyOptions } from '@openagt/agent-driver'
 import { defineModule, type RunAgent } from '@openagt/hooks'
 import { ClaudeCodeDriver, claudeCodeReady } from './claude-code.js'
 import { CLAUDE_CODE_LOGO } from './logo.js'
@@ -24,6 +24,9 @@ export function claudeCodeAgent(checks: Pick<DriverReadyOptions, 'probe' | 'isRo
     // Every part of the person's setup has a switch in Claude Code: none is a warning.
     ready: ({ addedAccount }) => claudeCodeReady({ ...checks, addedAccount }),
     driver: ({ env, personal, accounts }) => new ClaudeCodeDriver({ permissionMode: 'bypassPermissions', env, personal, ...(accounts ? { accounts } : {}) }),
+    // The CLI finds a session by the folder it ran in, usually gone by then (a run that ends clean
+    // has its checkout removed): made again first, empty, which is enough to read the conversation back.
+    resumeCommand: ({ id, cwd }) => inFolder(cwd, `claude --resume ${id}`),
   }
 }
 

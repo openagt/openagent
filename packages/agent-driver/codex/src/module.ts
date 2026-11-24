@@ -1,4 +1,4 @@
-import { accountRotation, firstAccountOf, modelsAskedOnce } from '@openagt/agent-driver'
+import { accountRotation, firstAccountOf, inFolder, modelsAskedOnce } from '@openagt/agent-driver'
 import { defineModule, type RunAgent } from '@openagt/hooks'
 import { CodexDriver, codexReady, type CodexReadyOptions } from './codex.js'
 import { CODEX_LOGO } from './logo.js'
@@ -22,6 +22,8 @@ export function codexAgent(checks: Pick<CodexReadyOptions, 'probe' | 'isRoot' | 
     models: opts => models.read(opts),
     ready: ({ personal, addedAccount }) => codexReady({ ...checks, personal, addedAccount }),
     driver: ({ env, personal, accounts }) => new CodexDriver({ sandbox: 'danger-full-access', env, personal, ...(accounts ? { accounts } : {}) }),
+    // Codex finds a session by its id wherever it is asked; in the folder it ran in, it works where it worked.
+    resumeCommand: ({ id, cwd }) => inFolder(cwd, `codex resume ${id}`),
   }
 }
 

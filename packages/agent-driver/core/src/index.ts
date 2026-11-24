@@ -34,7 +34,7 @@ export {
   type AnyDiaryLine,
 } from './record.js'
 export { runIdsOf, runEntries, findEntry, readCard, readRunDiary, type RecordsReader, type RunEntry } from './records.js'
-export { listRuns, findRun, runFiles, readDiary, writeRun, patchRun, deleteRun, runsPath, recordFunnel, resolveRecordDeps, type RecordDeps, type RecordFiles, type RecordFunnel } from './record-store.js'
+export { listRuns, keptRuns, findRun, runFiles, readDiary, writeRun, patchRun, deleteRun, runsPath, recordFunnel, resolveRecordDeps, type RecordDeps, type RecordFiles, type RecordFunnel } from './record-store.js'
 export { accountTurn } from './accounts/turn.js'
 export { configFile, writePrivate } from './private-files.js'
 // The images a person's messages go with, kept on this computer only.
@@ -89,3 +89,5 @@ export {
 export { accountRotation, goOn, UsageLimitError, type AccountsOption } from './accounts/rotation.js'
 export { removeAdded } from './accounts/login.js'
 export { loginWiring, type LoginWiring } from './accounts/wiring.js'
+export { summaryOf, standing, runEvents, inFolder, type SummaryAt } from './reads/run-reads.js'
+export { fromDiaryLine, eventsOf } from './reads/run-events.js'

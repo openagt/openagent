@@ -11,13 +11,13 @@ const P2: ProjectRef = { id: 'p2', name: 'blog', dir: '/work/blog' }
 test('a run started streams the events emitted, before it is read and after, and its stream ends when the run does', async () => {
   const host = fakeHost()
   const { id } = await host.start({ project: P1, prompt: 'fix the login', options: {} })
-  host.emit(id, { type: 'text', text: 'one' })
+  host.emit(id, { kind: 'log', message: 'one' })
   const read: string[] = []
   const reading = (async () => {
-    for await (const event of host.events({ id, project: P1 }, new AbortController().signal)) read.push(event.type === 'text' ? event.text : event.type)
+    for await (const event of host.events({ id, project: P1 }, new AbortController().signal)) read.push(event.kind === 'log' ? event.message : event.kind)
   })()
   await new Promise(resolve => setImmediate(resolve))
-  host.emit(id, { type: 'text', text: 'two' })
+  host.emit(id, { kind: 'log', message: 'two' })
   host.end(id, 'done')
   await reading
   assert.deepEqual(read, ['one', 'two'])
