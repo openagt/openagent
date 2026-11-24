@@ -434,6 +434,29 @@ already made, and lists it in its pull request; for anything else it proposes an
   checkout first, which moved a run answered days later to the top and back once its checkout
   went, and over the last update as the default, Claude Code's, which moves a row while a
   person talks to it.
+- A row of the sidebar's list is one line: the run's mark, its name and its age, with its pull
+  requests and the work it left on the machine as marks just before the age. Whose run it is
+  and which coding agent ran it show only once asked for, from the button beside "Log", the
+  agent's logo then on the person's picture; that button is the list's one menu, for its order,
+  what a row shows and what the list is cut by (nothing, the project, the day). Everything else
+  about a run, its project too, is said when its row is pointed at. Picked over the project, the
+  person and the logo on every row where the rows differed in them, which left the name three
+  letters at the rail's usual width; over two lines a row; and over a second button for the view.
+- Several pull requests of one run that stand alike are one mark with their count at its top
+  right corner. Picked over a mark each, and over the count after the mark.
+- In a list of runs, colour and motion are for what is alive or wrong: a working run's mark is
+  a solid cell that pulses, a waiting one the same in the waiting colour, a done one a faint
+  outline. Picked over a green cell for done, which made a list of finished runs the loudest
+  thing in the rail, and over a ring turning around a working run's core.
+- Everything under the project select is one scroll: the pages, "Waiting on you", the Log. The
+  label of the part scrolled into sticks at the top, and the Log's says how many wait once those
+  rows are out of view. Picked over the pages standing still with only the lists scrolling,
+  which left the Log what was left under them, and over "New agent session" alone standing still.
+- What waits on the person is a row of the Log's own shape, what it needs said by its mark in
+  the waiting colour and in words when pointed at. A run that starts or stops waiting is seen
+  going from one list to the other: its own row travels, and the rows it passes make room.
+  Picked over two lines a row with the need in words, over a wash of colour where the row
+  lands, and over the row fading out of one list and into the other.
 
 ## The profiles
 - A profile (#2394) is a name and a saved set of run options, made once on the Profiles page

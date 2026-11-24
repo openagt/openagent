@@ -89,6 +89,18 @@ export interface Preferences {
    */
   recentsSort?: 'created' | 'updated' | 'name'
   /**
+   * What a row of the sidebar's list shows beside the run's name and age: whose run it is
+   * (`recentsPerson`) and which coding agent ran it (`recentsAgent`). **Absent = neither**: the
+   * row's hover says both, and a row is its name first.
+   */
+  recentsPerson?: boolean
+  recentsAgent?: boolean
+  /**
+   * What the sidebar's list is grouped by, each group under its own line: the runs' `project`, or
+   * the `day` they are ordered by. **Absent = `none`**, one list.
+   */
+  recentsGroup?: 'none' | 'project' | 'day'
+  /**
    * Show what the agent thought between its steps: a row of its own inside the panel a run of calls
    * opens, saying the thought's first words. Thinking is not a step the agent took, and Claude Code
    * on the web shows none of it, so it is off unless a person asks to read it. **Absent = off.**
@@ -216,6 +228,8 @@ const BOOLEAN_PREFERENCES: Record<BooleanPreferenceKey, true> = {
   onboardingDismissed: true,
   nameRuns: true,
   showThinking: true,
+  recentsPerson: true,
+  recentsAgent: true,
 }
 
 const PREFERENCE_KEYS = Object.keys(BOOLEAN_PREFERENCES) as BooleanPreferenceKey[]
@@ -270,6 +284,8 @@ function sanitizePreferences(value: unknown): Preferences {
   if (isDocumentFont(input['documentFont']) && input['documentFont'] !== 'source-serif-4') preferences.documentFont = input['documentFont']
   // `recentsSort` is constrained to the known set; the default, `created`, is stored as nothing.
   if (input['recentsSort'] === 'updated' || input['recentsSort'] === 'name') preferences.recentsSort = input['recentsSort']
+  // How the list is grouped: constrained to the known set; the default, one list, is stored as nothing.
+  if (input['recentsGroup'] === 'project' || input['recentsGroup'] === 'day') preferences.recentsGroup = input['recentsGroup']
   const overviewLayouts = sanitizeOverviewLayouts(input['overviewLayouts'])
   if (Object.keys(overviewLayouts).length) preferences.overviewLayouts = overviewLayouts
   return preferences

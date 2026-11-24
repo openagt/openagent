@@ -1,7 +1,7 @@
 import { PROFILES_PAGE, PERMISSIONS_PAGE } from '../lib/use-route.js'
 import { RevealedTitle } from './RevealedTitle.js'
-import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Plus, Bot, ArrowDownUp, Check, Laptop, LayoutDashboard, Blocks, FilePen, GitBranch, KeyRound } from 'lucide-react'
+import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
+import { Plus, Bot, SlidersHorizontal, Check, Laptop, LayoutDashboard, Blocks, FilePen, GitBranch, KeyRound } from 'lucide-react'
 import { HOST_ICON } from './RunOnMenu.js'
 import { hostOf, useRunHosts } from '../lib/run-hosts.js'
 import { PersonMark } from './PersonMark.js'
@@ -17,7 +17,10 @@ import { NO_PROJECTS } from '../../src/project-address.js'
 import { cn } from '../lib/utils.js'
 import { formatRelative, formatSince } from '../lib/format-date.js'
 import { updatePreferences, usePreferences } from '../lib/preferences.js'
-import { RECENTS_SORT_LABELS, sortRuns, type RecentsSort } from '../lib/recents-sort.js'
+import { RECENTS_GROUP_LABELS, RECENTS_SORT_LABELS, groupRuns, sortRuns, type RecentsGroup, type RecentsSort } from '../lib/recents-sort.js'
+import { useGlide } from '../lib/glide.js'
+import { useRailScroll } from '../lib/rail-scroll.js'
+import { WAITING_MARKS, WAITING_PLAIN } from './WaitingList.js'
 import { useProjectLabel } from '../lib/project-labels.js'
 import { runState } from '../lib/run-words.js'
 import { RunMark } from './RunMark.js'
@@ -25,7 +28,7 @@ import { DriverLogo } from './driver-logos.js'
 import { modelName, useModels } from '../lib/models.js'
 import { PR_MARKS, type PrState } from '../lib/pr-marks.js'
 import { agentLabel, awaitingName } from '../lib/agent-label.js'
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuGroup, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem } from './ui/dropdown-menu.js'
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuGroup, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuCheckboxItem, DropdownMenuSeparator } from './ui/dropdown-menu.js'
 import { SESSIONS_ID } from '../../src/project-address.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { ProjectPicker } from './ProjectPicker.js'
@@ -171,7 +174,12 @@ export function AgentHistory({
 }) {
   // On a phone the rail is a sheet over the page, opened from the bar of pages (PagesBar): going
   // somewhere from it closes it.
-  const { isMobile, open, setOpenMobile } = useSidebar()
+  const { isMobile, open, openMobile, setOpenMobile } = useSidebar()
+  // The one scroll under the project select, as it stands: which label is held at its top, and
+  // whether what waits is scrolled out. The rows of its two lists travel between them (`useGlide`).
+  const list = useRef<HTMLDivElement>(null)
+  useGlide(list)
+  const railScroll = useRailScroll(list, `${open}:${isMobile}:${openMobile}:${waiting.length > 0}:${pages === null}`)
   // What stands under the modules' rows waits while their pages are not known, and comes in at its
   // place once they are; drawn with the first frame wherever they were known from the start.
   const modulePages = { state: pages === null ? 'unknown' : 'fresh', value: pages ?? [] } as const
@@ -269,13 +277,14 @@ export function AgentHistory({
   // belongs to the Overview item instead, so the two are never active at once. A Not found page is none of them.
   const atProjectLauncher = !notFound && projectId !== null && selectedAgentId === null
 
-  // Whose run, which coding agent and which project are marked only where the listed rows differ in them.
-  const differ = (of: (row: Row) => string | undefined) => new Set(rows.map(of)).size > 1
-  const telling: Telling = { person: differ(row => row.agent.person?.toLowerCase()), driver: differ(row => driverFromImpl(row.agent.driver)), project: differ(row => row.project) }
-
   // A run listed in "Waiting on you" is not listed again in the Log.
   const waitingListed = new Set(waiting.slice(0, WAITING_SHOWN).flatMap(item => (item.run !== undefined ? [`${item.projectId}:${item.run}`] : [])))
   const logged = rows.filter(row => !waitingListed.has(`${row.projectId}:${row.agent.id}`))
+  // What a row shows beside its name and its age, and what the list is cut by: the person's picks
+  // from the button beside "Log", all off until asked for. One project's list has no projects to cut it by.
+  const show: Showing = { person: preferences.recentsPerson === true, agent: preferences.recentsAgent === true }
+  const groupBy = preferences.recentsGroup ?? 'none'
+  const groups = groupRuns(logged, groupBy === 'project' && !crossProject ? 'none' : groupBy, order)
 
   const hasRecents = rows.length > 0 || showOptimistic
 
@@ -292,7 +301,8 @@ export function AgentHistory({
   const renderRow = (row: Row) => (
     <AgentHistoryRow
       status={row.agent.status}
-      telling={telling}
+      show={show}
+      glide={`${row.projectId}:${row.agent.id}`}
       saving={row.agent.saving === true}
       intent={agentLabel(row.agent)}
       // A name is seconds away: the row holds the place rather than printing the whole prompt and
@@ -309,7 +319,7 @@ export function AgentHistory({
       active={row.active}
       {...(hostOf(row.agent.target) !== undefined ? { host: { id: hostOf(row.agent.target)!, projectId: row.projectId } } : {})}
       {...(row.agent.otherHost && row.agent.host ? { startedOn: row.agent.host } : {})}
-      {...(row.agent.pr ? { pr: { number: row.agent.pr.number, ...(row.agent.prState ? { state: row.agent.prState } : {}) } } : {})}
+      prs={runPrs(row.agent)}
       {...(row.agent.unpublished ? { unpublished: row.agent.unpublished } : {})}
       {...(row.agent.uncommitted ? { uncommitted: row.agent.uncommitted } : {})}
       gitHost={projects.find(p => p.id === row.projectId)?.gitHost !== false}
@@ -352,128 +362,139 @@ export function AgentHistory({
           <ViewToggle />
           <ProjectPicker look="sidebar" none={{ label: 'All projects' }} picked={scope ?? null} pending={scopePending} projects={projects} onPick={onScope} onProjectAdded={onProjectAdded ?? (() => {})} />
         </SidebarHeader>
-        {/* New/Overview/the modules' pages stack as one nav group, row against row, close under the
-            project select (no top padding: the select's own section has its room below it), with a
-            little space below the group (pb-2) before the session list. The `!` because a module's
-            stylesheet, loaded after the dashboard's, redefines the header's own `p-2`, which would
-            otherwise win over a plain `pt-0`. */}
-        <SidebarHeader className="gap-0.5 pt-0! pb-2">
-          {/* "New" starts a session — but where depends on what exists: with no project it prompts to
-              add one first, with one project it starts there, with several it opens a picker. With
-              one project picked at the top, it starts there. */}
-          <NewButton
-            scope={scope}
-            href={hrefOf({ projectId: scope ?? SESSIONS_ID, agentId: null })}
-            active={atProjectLauncher}
-            onNewAgentInProject={onNewAgentInProject && leave(onNewAgentInProject)}
-            onSelect={leave(onSelect)}
-          />
-          {/* The Overview entry (Rom): the way home, pinned above the session list and more prominent than a
-              menu row. Carries the Human Queue count (#632) so the one cross-project signal stays visible, and
-              highlights while it is the current view: only this carries the active fill. */}
-          <NavRow icon={LayoutDashboard} label="Overview" active={projectId === null && activePage === null} href={homeHref} onClick={leave(onDashboard)}>
-            {waiting.length > 0 && (
-              <Tooltip>
-                <TooltipTrigger render={<span className="flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-warning/15 px-1 text-xs leading-none font-semibold text-warning tabular-nums" />}>
-                  {waiting.length}
-                </TooltipTrigger>
-                <TooltipContent>
-                  {waiting.length} item{waiting.length === 1 ? '' : 's'} in your Human Queue
-                </TooltipContent>
-              </Tooltip>
-            )}
-          </NavRow>
-          {/* The modules' pages the shell hands over (#1774), the picked project's only when one is
-              picked: destinations with no project selected, like the Overview, named by the module,
-              never by the dashboard — the tickets' page among them, when a package brings one. */}
-          <Slot of={modulePages} shape={<NavShapes />} className="flex flex-col gap-0.5">
-            {known => (
-              <>
-                {known.map(page => (
-                  <NavRow key={page.segment} icon={page.icon ?? Blocks} label={page.label} active={activePage === page.segment} href={pageHref(page.segment)} onClick={leave(() => onPage(page.segment))} />
-                ))}
-                {/* The agents (Rom): each a name, skills and accounts, on a page of the dashboard's own; then the accounts they work with. */}
-                <NavRow icon={Bot} label="Profiles" active={activePage === PROFILES_PAGE} href={pageHref(PROFILES_PAGE)} onClick={leave(() => onPage(PROFILES_PAGE))} />
-                <NavRow icon={KeyRound} label="Permissions" active={activePage === PERMISSIONS_PAGE} href={pageHref(PERMISSIONS_PAGE)} onClick={leave(() => onPage(PERMISSIONS_PAGE))} />
-              </>
-            )}
-          </Slot>
-        </SidebarHeader>
-        {/* The themed ScrollArea (#913) instead of the sidebar's native overflow bar, matching the
-            Overview: suppress SidebarContent's own `overflow-auto` and let the ScrollArea own it. */}
-        <Slot of={modulePages} shape={null} className="flex min-h-0 flex-1 flex-col">
-          {() => (
-            <SidebarContent className="overflow-hidden">
-              <ScrollArea className="min-h-0 flex-1">
-                {/* The rows keep the nav's edges, the scrollbar laid over their right padding while it shows. The `!`, as on the
-                    nav above: a module's stylesheet has the group's own `p-2`, which would otherwise win on its page. */}
-                {waiting.length > 0 && (
-                  <WaitingOnYou
-                    waiting={waiting}
-                    hrefOf={item => (item.run !== undefined ? hrefOf({ projectId: item.projectId, agentId: item.run }) : item.fix !== undefined && 'href' in item.fix ? item.fix.href : undefined)}
-                    isOpen={item => item.run !== undefined && item.run === selectedAgentId && item.projectId === (crossProject ? projectId : listOf)}
-                    onOpen={item => (item.run !== undefined ? leave(onSelectRecent ?? (() => {}))(item.projectId, item.run) : undefined)}
-                    moreHref={homeHref}
-                    onMore={leave(onDashboard)}
-                  />
-                )}
-                <SidebarGroup className="pt-3!">
-                  {/* The label sticks to the top of the scroll; the gradient strip under it (also sticky)
-                      fades the rows into the background as they scroll up beneath the label. Shown even
-                      when the list is empty (#1147): the heading is what makes "No sessions yet." read as
-                      the state of this list rather than a lonely line in the sidebar. */}
-                  <div className="sticky top-0 z-10">
-                    <SidebarGroupLabel className="rounded-none bg-sidebar px-2">
-                      Log
-                      <RecentsSortMenu order={order} />
-                    </SidebarGroupLabel>
-                    {/* Absolute (hanging just below the label) so it does not push the first row down; it
-                        still overlays the rows scrolling up under it. `rail-fade` keeps it invisible at
-                        the top of the scroll (so it never dims the first row) and fades it in on scroll. */}
-                    <div aria-hidden className="rail-fade pointer-events-none absolute inset-x-0 top-full h-4 bg-gradient-to-b from-sidebar to-transparent" />
-                  </div>
-                  {/* A row brought into view (the keyboard's focus, the page's own row) stops under the label
-                      and its fade, 32 + 16, so the label never covers the row it is about. */}
-                  <SidebarGroupContent className="[&_:is(a,button)]:scroll-mt-12">
-                    <SidebarMenu className="gap-0.5">
-                      {/* A just-started run, before its run.json exists — highlighted while following it. */}
-                      {showOptimistic && (
-                        <SidebarMenuItem>
-                          {/* Drawn as the run's own row will be a few seconds on (the same logo, not
-                              dimmed), so that row taking its place changes nothing on screen. With naming
-                              on that row will carry a name, so this one holds the place rather than
-                              printing the prompt and having it swapped a second later. */}
-                          <AgentHistoryRow
-                            status="running"
-                            {...(preferences.nameRuns === false ? { intent: optimistic?.intent ?? undefined } : startTitle !== undefined ? { intent: startTitle } : { intent: undefined, naming: true })}
-                            {...(crossProject && startProjectName ? { project: startProjectName } : {})}
-                            subtitle="just now"
-                            age="now"
-                            telling={telling}
-                            driver={preferences.driver}
-                            active={starting}
-                            standIn
-                            onClick={leave(() => onSelect(null))}
-                          />
-                        </SidebarMenuItem>
-                      )}
-                      {logged.map(row => (
-                        <SidebarMenuItem key={row.key}>{renderRow(row)}</SidebarMenuItem>
+        {/* Everything under the project select is one scroll (his pick, 2026-11-24): the pages, what
+            waits and the Log. The pages used to stand still over the lists, which left the Log only
+            what was left under them. The themed ScrollArea (#913) instead of the sidebar's native
+            overflow bar, matching the Overview: SidebarContent's own `overflow-auto` is suppressed. */}
+        <SidebarContent className="overflow-hidden">
+          <ScrollArea className="min-h-0 flex-1">
+            <div ref={list}>
+              {/* New/Overview/the modules' pages stack as one nav group, row against row, close under
+                  the project select (the select's own section has its room below it), with a little
+                  space below the group before the lists. */}
+              <div className="flex flex-col gap-0.5 px-2 pb-2">
+                {/* "New" starts a session — but where depends on what exists: with no project it prompts to
+                    add one first, with one project it starts there, with several it opens a picker. With
+                    one project picked at the top, it starts there. */}
+                <NewButton
+                  scope={scope}
+                  href={hrefOf({ projectId: scope ?? SESSIONS_ID, agentId: null })}
+                  active={atProjectLauncher}
+                  onNewAgentInProject={onNewAgentInProject && leave(onNewAgentInProject)}
+                  onSelect={leave(onSelect)}
+                />
+                {/* The Overview entry (Rom): the way home, over the lists and more prominent than a
+                    menu row. Carries the Human Queue count (#632) so the one cross-project signal stays visible, and
+                    highlights while it is the current view: only this carries the active fill. */}
+                <NavRow icon={LayoutDashboard} label="Overview" active={projectId === null && activePage === null} href={homeHref} onClick={leave(onDashboard)}>
+                  {waiting.length > 0 && (
+                    <Tooltip>
+                      <TooltipTrigger render={<span className={WAITING_COUNT} />}>{waiting.length}</TooltipTrigger>
+                      <TooltipContent>
+                        {waiting.length} item{waiting.length === 1 ? '' : 's'} in your Human Queue
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
+                </NavRow>
+                {/* The modules' pages the shell hands over (#1774), the picked project's only when one is
+                    picked: destinations with no project selected, like the Overview, named by the module,
+                    never by the dashboard — the tickets' page among them, when a package brings one. */}
+                <Slot of={modulePages} shape={<NavShapes />} className="flex flex-col gap-0.5">
+                  {known => (
+                    <>
+                      {known.map(page => (
+                        <NavRow key={page.segment} icon={page.icon ?? Blocks} label={page.label} active={activePage === page.segment} href={pageHref(page.segment)} onClick={leave(() => onPage(page.segment))} />
                       ))}
-                    </SidebarMenu>
-                    {/* Nothing while the list is read: it takes a moment, and "No sessions yet." would not be true yet. */}
-                    {!hasRecents && listLoaded && (
-                      <p className="whitespace-nowrap px-2 py-1 text-sm text-muted-foreground">No sessions yet.</p>
+                      {/* The agents (Rom): each a name, skills and accounts, on a page of the dashboard's own; then the accounts they work with. */}
+                      <NavRow icon={Bot} label="Profiles" active={activePage === PROFILES_PAGE} href={pageHref(PROFILES_PAGE)} onClick={leave(() => onPage(PROFILES_PAGE))} />
+                      <NavRow icon={KeyRound} label="Permissions" active={activePage === PERMISSIONS_PAGE} href={pageHref(PERMISSIONS_PAGE)} onClick={leave(() => onPage(PERMISSIONS_PAGE))} />
+                    </>
+                  )}
+                </Slot>
+              </div>
+              {/* What stands under the modules' rows waits while they are not known, so nothing moves. */}
+              <Slot of={modulePages} shape={null}>
+                {() => (
+                  <>
+                    {waiting.length > 0 && (
+                      <WaitingOnYou
+                        waiting={waiting}
+                        stuck={railScroll.stuck.has('waiting')}
+                        severalProjects={crossProject}
+                        hrefOf={item => (item.run !== undefined ? hrefOf({ projectId: item.projectId, agentId: item.run }) : item.fix !== undefined && 'href' in item.fix ? item.fix.href : undefined)}
+                        isOpen={item => item.run !== undefined && item.run === selectedAgentId && item.projectId === (crossProject ? projectId : listOf)}
+                        onOpen={item => (item.run !== undefined ? leave(onSelectRecent ?? (() => {}))(item.projectId, item.run) : undefined)}
+                        moreHref={homeHref}
+                        onMore={leave(onDashboard)}
+                      />
                     )}
-                  </SidebarGroupContent>
-                </SidebarGroup>
-              </ScrollArea>
-            </SidebarContent>
-          )}
-        </Slot>
+                    {/* The rows keep the nav's edges, the scrollbar laid over their right padding while it shows. The `!`:
+                        a module's stylesheet has the group's own `p-2`, which would otherwise win on its page. */}
+                    <SidebarGroup data-rail-part="log" className="pt-3!">
+                      {/* Shown even when the list is empty (#1147): the heading is what makes "No sessions
+                          yet." read as the state of this list rather than a lonely line in the sidebar. */}
+                      <RailLabel part="log" stuck={railScroll.stuck.has('log')}>
+                        Log
+                        {/* What waits has scrolled out above, and the Overview's count with it: the label
+                            says how many wait, and a press brings them back into view. */}
+                        {railScroll.waitingGone && waiting.length > 0 && (
+                          <button type="button" onClick={() => list.current?.querySelector('[data-rail-part="waiting"]')?.scrollIntoView?.({ block: 'start', behavior: 'smooth' })} className={cn(WAITING_COUNT, 'focus-ring ml-2 px-1.5')}>
+                            {waiting.length} waiting
+                          </button>
+                        )}
+                        <LogViewMenu order={order} show={show} group={groupBy} byProject={crossProject} />
+                      </RailLabel>
+                      {/* A row brought into view (the keyboard's focus, the page's own row) stops under the label
+                          and its fade, 32 + 16, so the label never covers the row it is about. */}
+                      <SidebarGroupContent className="[&_:is(a,button)]:scroll-mt-12">
+                        <SidebarMenu className="gap-0.5">
+                          {/* A just-started run, before its run.json exists — highlighted while following it. */}
+                          {showOptimistic && (
+                            <SidebarMenuItem>
+                              {/* Drawn as the run's own row will be a few seconds on (the same marks, not
+                                  dimmed), so that row taking its place changes nothing on screen. With naming
+                                  on that row will carry a name, so this one holds the place rather than
+                                  printing the prompt and having it swapped a second later. */}
+                              <AgentHistoryRow
+                                status="running"
+                                {...(preferences.nameRuns === false ? { intent: optimistic?.intent ?? undefined } : startTitle !== undefined ? { intent: startTitle } : { intent: undefined, naming: true })}
+                                {...(crossProject && startProjectName ? { project: startProjectName } : {})}
+                                subtitle="just now"
+                                age="now"
+                                show={show}
+                                driver={preferences.driver}
+                                active={starting}
+                                standIn
+                                onClick={leave(() => onSelect(null))}
+                              />
+                            </SidebarMenuItem>
+                          )}
+                          {groups.map(group => (
+                            <Fragment key={group.label ?? ''}>
+                              {group.label !== undefined && (
+                                <SidebarMenuItem role="presentation" className="flex h-6 items-center gap-2 px-2 text-xs text-faint-foreground not-first:mt-1.5 after:h-px after:flex-1 after:bg-border">
+                                  <span className="min-w-0 truncate">{group.label}</span>
+                                </SidebarMenuItem>
+                              )}
+                              {group.rows.map(row => (
+                                <SidebarMenuItem key={row.key}>{renderRow(row)}</SidebarMenuItem>
+                              ))}
+                            </Fragment>
+                          ))}
+                        </SidebarMenu>
+                        {/* Nothing while the list is read: it takes a moment, and "No sessions yet." would not be true yet. */}
+                        {!hasRecents && listLoaded && <p className="whitespace-nowrap px-2 py-1 text-sm text-muted-foreground">No sessions yet.</p>}
+                      </SidebarGroupContent>
+                    </SidebarGroup>
+                  </>
+                )}
+              </Slot>
+            </div>
+          </ScrollArea>
+        </SidebarContent>
         {/* The person at this dashboard, as one row that opens their menu: the theme and Settings
             (PersonMenu). */}
-        {/* At the bottom, the Log there or not yet. */}
+        {/* At the bottom, under the scroll. */}
         <SidebarFooter className="mt-auto">
           <PersonMenu onSettings={leave(onSettings)} />
         </SidebarFooter>
@@ -553,15 +574,43 @@ function NewButton({
 /** How many of what waits on the person the sidebar lists before a row offers the rest, as the Human Queue does. */
 const WAITING_SHOWN = 5
 
+/** How many wait, in the waiting colour on its own soft fill: the Overview row's count, and the Log label's once what waits is scrolled out. */
+const WAITING_COUNT = 'flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-warning/15 px-1 text-xs leading-none font-semibold text-warning tabular-nums'
+
+/** A row of the sidebar's lists, the navigation's row (ui/nav-row): 32 high (44 on a phone), corners 8, the picked one filled, the one under the pointer half filled. Placed, so one that travels is drawn over the rows it passes (`useGlide`). */
+const railRowClass = (active: boolean): string =>
+  cn('focus-ring rail-row relative flex w-full items-center gap-3 rounded-lg px-2 text-left text-sm text-foreground transition-colors md:h-8 max-md:h-11', active ? 'bg-foreground/8' : 'hover:bg-foreground/4 active:bg-foreground/8')
+
+/** The marks a row has just before its age, 4 from it and so closer to it than to the name they would otherwise cut into. */
+const BEFORE_AGE = '-mr-2 flex shrink-0 items-center gap-1'
+
 /**
- * What waits on the person, over the Log: each the compact two-line row (spacing.md 3), the waiting
- * hexagon and the run's name, cut at the row's end, with how long it has waited at its end as the Log's
- * rows have it, and under the name, quiet, what it needs in the Human Queue's two words; past five, a
- * row that opens the Overview, where the Human Queue lists them all. A run listed here is not listed
- * again in the Log; once answered it is back in the Log, in its order.
+ * A part's label, which sticks at the top of the sidebar's scroll while its rows pass: "Waiting on
+ * you" first, then "Log" takes its place. While it is held, a strip under it fades the rows going
+ * up beneath; at rest there is none, so it never dims the first row.
+ */
+function RailLabel({ part, stuck, children }: { /** Which part it names: it moves with its rows as one travels between the parts. */ part: string; stuck: boolean; children: ReactNode }) {
+  return (
+    <div data-glide={`label:${part}`} data-glide-part={part} className="sticky top-0 z-10">
+      <SidebarGroupLabel className="rounded-none bg-sidebar px-2">{children}</SidebarGroupLabel>
+      {/* Absolute (hanging just below the label) so it does not push the first row down. */}
+      <div aria-hidden data-stuck={stuck || undefined} className={cn('pointer-events-none absolute inset-x-0 top-full h-4 bg-gradient-to-b from-sidebar to-transparent transition-opacity', stuck ? 'opacity-100' : 'opacity-0')} />
+    </div>
+  )
+}
+
+/**
+ * What waits on the person, over the Log, each a row of the Log's own shape (his pick, 2026-11-24):
+ * the waiting hexagon, the run's name cut at the row's end, what it needs as its mark in the
+ * waiting colour, and how long it has waited. Pointed at, the row says the name whole and what it
+ * needs in words. Past five, a row that opens the Overview, where the Human Queue lists them all.
+ * A run listed here is not listed again in the Log; once answered it is back in the Log, in its
+ * order, and its row is seen going there and back.
  */
 function WaitingOnYou({
   waiting,
+  stuck,
+  severalProjects,
   hrefOf,
   isOpen,
   onOpen,
@@ -569,6 +618,10 @@ function WaitingOnYou({
   onMore,
 }: {
   waiting: readonly Waiting[]
+  /** Its label is held at the top of the scroll. */
+  stuck: boolean
+  /** The rows are of several projects: a row's hover names its own. */
+  severalProjects: boolean
   /** Where a row goes: its run's page, or the page that fixes it, a pull request no run here opened. */
   hrefOf: (item: Waiting) => string | undefined
   /** Whether a row's run is the page shown: its row is the picked one, as the Log's would be. */
@@ -580,12 +633,12 @@ function WaitingOnYou({
 }) {
   const shown = waiting.slice(0, WAITING_SHOWN)
   const rest = waiting.length - shown.length
-  // The navigation's row (ui/nav-row): corners 8, 2 apart, and 32 high (44 on a phone) at the least, grown by its lines.
-  const rowClass = 'focus-ring flex w-full items-center gap-3 rounded-lg px-2 text-left text-sm text-foreground transition-colors'
   return (
-    <SidebarGroup className="pt-3! pb-0!">
-      <SidebarGroupLabel>Waiting on you</SidebarGroupLabel>
-      <SidebarGroupContent>
+    <SidebarGroup data-rail-part="waiting" className="pt-3! pb-0!">
+      <RailLabel part="waiting" stuck={stuck}>
+        Waiting on you
+      </RailLabel>
+      <SidebarGroupContent className="[&_:is(a,button)]:scroll-mt-12">
         <SidebarMenu className="gap-0.5">
           {shown.map(item => {
             const href = hrefOf(item)
@@ -593,37 +646,45 @@ function WaitingOnYou({
             const { state, word: need } = runState({ status: 'waiting' }, item)
             const external = item.run === undefined
             const name = item.title ?? item.projectName
+            const { Icon } = item.mark ? WAITING_MARKS[item.mark] : WAITING_PLAIN
             return (
               <SidebarMenuItem key={waitingKey(item)}>
-                <a
-                  href={href}
-                  aria-label={`${name} · ${need}`}
-                  aria-current={isOpen(item) ? 'page' : undefined}
-                  {...(external ? { target: '_blank', rel: 'noreferrer' } : { onClick: inPlace(() => onOpen(item)) })}
-                  className={cn(rowClass, 'py-1.5 md:min-h-8 max-md:min-h-11', isOpen(item) ? 'bg-foreground/8' : 'hover:bg-foreground/4 active:bg-foreground/8')}
-                >
-                  <span className="flex min-w-0 flex-1 flex-col">
-                    {/* The mark and the age on the name's first line, never between the two (spacing.md 3). The
-                        name takes two lines before it is cut: what waits on the person is told apart by it. */}
-                    <span className="flex min-w-0 items-start gap-3">
-                      <span className="flex h-5 w-4 shrink-0 items-center justify-center">
-                        <RunMark status={state} />
-                      </span>
-                      <span className="line-clamp-2 min-w-0 flex-1 break-words">{name}</span>
-                      <span aria-hidden className={cn(AGE, 'leading-5')}>
-                        {formatSince(item.since)}
-                      </span>
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <a
+                        href={href}
+                        aria-label={`${name} · ${need}`}
+                        aria-current={isOpen(item) ? 'page' : undefined}
+                        data-glide={item.run !== undefined ? `${item.projectId}:${item.run}` : waitingKey(item)}
+                        data-glide-part="waiting"
+                        {...(external ? { target: '_blank', rel: 'noreferrer' } : { onClick: inPlace(() => onOpen(item)) })}
+                        className={railRowClass(isOpen(item))}
+                      />
+                    }
+                  >
+                    <span data-glide-new className="flex size-4 shrink-0 items-center justify-center">
+                      <RunMark status={state} />
                     </span>
-                    {/* Under the name, 16 for the mark and 12 after it: the words start where the name does. */}
-                    <span aria-hidden className="truncate pl-7 text-xs text-muted-foreground">{need}</span>
-                  </span>
-                </a>
+                    <span className="min-w-0 flex-1 truncate">{name}</span>
+                    <span aria-hidden data-glide-new className={cn(BEFORE_AGE, 'text-warning')}>
+                      <Icon className="size-3.5" />
+                    </span>
+                    <span aria-hidden className={AGE}>
+                      {formatSince(item.since)}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="right" align="start" className="max-w-80">
+                    <span className="block whitespace-pre-wrap break-words">{name}</span>
+                    <span className="block text-xs text-muted-foreground">{[need, item.detail, ...(severalProjects && item.title !== undefined ? [item.projectName] : [])].filter(Boolean).join(' · ')}</span>
+                  </TooltipContent>
+                </Tooltip>
               </SidebarMenuItem>
             )
           })}
           {rest > 0 && (
             <SidebarMenuItem>
-              <a href={moreHref} onClick={inPlace(onMore)} className={cn(rowClass, 'text-muted-foreground hover:bg-foreground/4 active:bg-foreground/8 md:h-8 max-md:h-11')}>
+              <a href={moreHref} onClick={inPlace(onMore)} className={cn(railRowClass(false), 'text-muted-foreground')}>
                 <span aria-hidden className="size-4 shrink-0" />
                 {rest} more
               </a>
@@ -636,11 +697,15 @@ function WaitingOnYou({
 }
 
 /**
- * The button beside "Log" (his pick, after Claude Code's own beside its "Recents"): the
- * order of the list, kept in the person's preferences. By creation unless picked otherwise, so a
- * run does not move while a person talks to it.
+ * The button beside "Log", the list's one menu (his pick, after Claude Code's own beside its
+ * "Recents"): its order, what its rows show beside a name and its age, and what it is cut by, each
+ * kept in the person's preferences. By creation unless picked otherwise, so a run does not move
+ * while a person talks to it; a row is its name and its age until more is asked for.
  */
-function RecentsSortMenu({ order }: { order: RecentsSort }) {
+function LogViewMenu({ order, show, group, byProject }: { order: RecentsSort; show: Showing; group: RecentsGroup; /** The list is of several projects: it can be cut by them. */ byProject: boolean }) {
+  // A list ordered by name has no days to cut it by, and one project's list no projects.
+  const offered = (Object.keys(RECENTS_GROUP_LABELS) as RecentsGroup[]).filter(pick => pick !== 'project' || byProject)
+  const marked = (on: boolean) => <Check className={cn('ml-auto size-4 shrink-0', on ? 'opacity-100' : 'opacity-0')} aria-hidden />
   return (
     <DropdownMenu>
       <Tooltip>
@@ -648,24 +713,46 @@ function RecentsSortMenu({ order }: { order: RecentsSort }) {
           render={
             <DropdownMenuTrigger
               type="button"
-              aria-label="Sort agents"
+              aria-label="Sort and view"
               // A ghost press of 24 (a finger's 48 on a phone), its glyph on the rows' right edge.
               className={cn(buttonVariants({ variant: 'ghost', size: 'icon-sm' }), 'relative -mr-1 ml-auto size-6 text-muted-foreground max-md:after:absolute max-md:after:-inset-3')}
             />
           }
         >
-          <ArrowDownUp className="size-4 shrink-0" aria-hidden />
+          <SlidersHorizontal className="size-4 shrink-0" aria-hidden />
         </TooltipTrigger>
-        <TooltipContent>Sort by: {RECENTS_SORT_LABELS[order]}</TooltipContent>
+        <TooltipContent>Sort and view</TooltipContent>
       </Tooltip>
-      <DropdownMenuContent side="top" align="end" className="min-w-40">
+      <DropdownMenuContent align="end" className="min-w-44">
         <DropdownMenuGroup>
           <DropdownMenuLabel className="font-normal">Sort by</DropdownMenuLabel>
           <DropdownMenuRadioGroup value={order} onValueChange={(pick: RecentsSort) => updatePreferences({ recentsSort: pick })}>
             {(Object.keys(RECENTS_SORT_LABELS) as RecentsSort[]).map(pick => (
-              <DropdownMenuRadioItem key={pick} value={pick}>
+              <DropdownMenuRadioItem key={pick} value={pick} closeOnClick={false}>
                 {RECENTS_SORT_LABELS[pick]}
-                <Check className={cn('ml-auto size-4 shrink-0', pick === order ? 'opacity-100' : 'opacity-0')} aria-hidden />
+                {marked(pick === order)}
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuGroup>
+          <DropdownMenuLabel className="font-normal">Show</DropdownMenuLabel>
+          <DropdownMenuCheckboxItem checked={show.person} onCheckedChange={(on: boolean) => updatePreferences({ recentsPerson: on })}>
+            Who started it
+          </DropdownMenuCheckboxItem>
+          <DropdownMenuCheckboxItem checked={show.agent} onCheckedChange={(on: boolean) => updatePreferences({ recentsAgent: on })}>
+            Coding agent
+          </DropdownMenuCheckboxItem>
+        </DropdownMenuGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuGroup>
+          <DropdownMenuLabel className="font-normal">Group by</DropdownMenuLabel>
+          <DropdownMenuRadioGroup value={group} onValueChange={(pick: RecentsGroup) => updatePreferences({ recentsGroup: pick })}>
+            {offered.map(pick => (
+              <DropdownMenuRadioItem key={pick} value={pick} closeOnClick={false} disabled={pick === 'day' && order === 'name'}>
+                {RECENTS_GROUP_LABELS[pick]}
+                {marked(pick === group)}
               </DropdownMenuRadioItem>
             ))}
           </DropdownMenuRadioGroup>
@@ -681,17 +768,53 @@ const PERSON_MARK = 'size-5 text-xs font-medium'
 /** A row's time, in a box as wide as its longest word ("59m", "23h", "now") and set to its right, so it stands on one x down a list. */
 const AGE = 'w-7 shrink-0 text-right text-xs text-muted-foreground tabular-nums'
 
-/** Which of the marks that tell runs apart a list draws: one only where its rows differ in it, else it would say the same on every row. */
-type Telling = { person: boolean; driver: boolean; project: boolean }
+/** What a row shows beside its name and its age, by the person's picks: whose run it is, and which coding agent ran it. */
+type Showing = { person: boolean; agent: boolean }
 
-// One agent row, one line: a small circle and the session's name, as Claude Code on the web lists
-// its sessions. The row used to be two lines — a status word, the project, the time and the agent's
-// logo above the name — which made the list a column of paragraphs and fitted half as many sessions
-// on the screen. What those words said is now the circle (what the run is doing, by its colour and
-// whether it is filled) and the row's hover, which says all of it in a sentence.
+/** One of a run's pull requests, and how it stands when the git host said. */
+type RunPr = { number: number; state?: PrState | undefined }
+
+/** A run's pull requests, the earlier ones first and each once: the ones it opened before, then the one it has now. */
+function runPrs(agent: AgentMeta): RunPr[] {
+  const now = agent.pr ? [{ number: agent.pr.number, ...(agent.prState ? { state: agent.prState } : {}) }] : []
+  return [...(agent.earlierPrs ?? []).filter(earlier => !now.some(pr => pr.number === earlier.number)).map(({ number, state }) => ({ number, ...(state ? { state } : {}) })), ...now]
+}
+
+/**
+ * A run's pull requests as marks: one glyph per state they stand in, in the git host's colours, and
+ * how many stand in it at the glyph's top right corner once there are several (his pick,
+ * 2026-11-24), so two merged requests are one mark and not two. A request whose state is not known
+ * has no mark (`PR_MARKS`).
+ */
+function PrMarks({ prs }: { prs: readonly RunPr[] }) {
+  const states = [...new Set(prs.flatMap(pr => (pr.state ? [pr.state] : [])))]
+  return states.map(state => {
+    const { Icon, tone } = PR_MARKS[state]
+    const count = prs.filter(pr => pr.state === state).length
+    return (
+      <span key={state} data-pr={state} className={cn('relative flex shrink-0 items-center', tone, count > 1 && 'mr-0.5')}>
+        <Icon className="size-3.5" aria-hidden />
+        {/* The smallest type step, drawn at three quarters: a count at a 14 glyph's corner. */}
+        {count > 1 && <span className="absolute -top-2 -right-2.5 scale-75 rounded-full bg-sidebar px-0.5 text-xs leading-none font-bold tabular-nums">{count}</span>}
+      </span>
+    )
+  })
+}
+
+/** A state's word as a line of its own starts: "Open", "Needs answer". */
+const capitalised = (word: string): string => word.charAt(0).toUpperCase() + word.slice(1)
+
+// One agent row, one line: the state's mark, the session's name and how long ago it started, as
+// Claude Code on the web lists its sessions. The name comes first (his pick, 2026-11-24): the row
+// used to carry the project, the person and the coding agent's logo too, wherever the rows of a
+// list differed in them, and at the rail's usual width that left the name three letters. What a
+// row has beyond its name is now its pull requests and the work it left on the machine, just
+// before its age, and whose run it is and which agent ran it once the person asks for them; all
+// of it, and the project, is said when the row is pointed at.
 function AgentHistoryRow({
   status,
-  telling,
+  show,
+  glide,
   intent,
   naming = false,
   project,
@@ -707,7 +830,7 @@ function AgentHistoryRow({
   saving = false,
   host,
   startedOn,
-  pr,
+  prs = [],
   unpublished,
   uncommitted,
   gitHost = true,
@@ -717,19 +840,21 @@ function AgentHistoryRow({
   picture,
 }: {
   status: AgentStatus
-  /** Which of the marks that tell runs apart its list draws; the row's hover and its name say them all. */
-  telling: Telling
+  /** Which of the marks that tell runs apart the person asked for; the row's hover and its name say them all. */
+  show: Showing
+  /** What the row is known by as it travels between the Log and "Waiting on you"; none for a stand-in. */
+  glide?: string | undefined
   intent: string | undefined
   /** The run's name is on its way: the row shows where it will go, not the prompt it would replace. */
   naming?: boolean
-  /** When the sessions come from several projects, which one this is: it is what tells the rows apart there. */
+  /** When the sessions come from several projects, which one this is: the row's hover says it. */
   project?: string | undefined
   subtitle: string
   /** How long ago it started, in a word ("2m"), at the row's end: the order the list is in by default. */
   age: string
   /** The agent that ran it, so the row can show whose session it was. */
   driver?: string | undefined
-  /** The model it ran on, by the name its coding agent gives it: said when the agent's logo is pointed at. */
+  /** The model it ran on, by the name its coding agent gives it: said with the agent. */
   model?: string | undefined
   active: boolean
   /** The run's page; the stand-in for a run not listed yet has none, and is a button. */
@@ -742,12 +867,12 @@ function AgentHistoryRow({
   /** Ended clean, its process still saving its record and cleaning up its checkout (#1455): the row must
    *  not say "done" while the session's own pill says "saving…". */
   saving?: boolean
-  /** Runs on a host beside this computer's (`run.host`, #1263, #2394), by its id, a host of its project's: the row gets the host's glyph beside the agent logo. */
+  /** Runs on a host beside this computer's (`run.host`, #1263, #2394), by its id, a host of its project's: the row gets the host's glyph. */
   host?: { id: string; projectId: string | null } | undefined
   /** The computer whose daemon started the run, when that is another computer (#1648): a glyph names it. */
   startedOn?: string | undefined
-  /** The run's pull request, and how it stands when the git host said: a glyph before the agent's logo. */
-  pr?: { number: number; state?: PrState } | undefined
+  /** The run's pull requests, each with how it stands when the git host said: glyphs before the age. */
+  prs?: readonly RunPr[]
   /** How many commits of its own wait on its branch, never pushed: the Human Queue's "Needs PR", marked where a pull request would be. */
   unpublished?: number | undefined
   /** How many files its checkout left uncommitted: the Human Queue's "Needs commit", in the same place. */
@@ -771,15 +896,12 @@ function AgentHistoryRow({
   // A name that comes to a row that waited for it comes in as a new session's does.
   const waitedForName = useRef(false)
   if (naming) waitedForName.current = true
-  const titleClass = 'rail-title min-w-0 flex-1 truncate text-sm font-normal'
-  // What the row says in a word, the one the status badge used to print: it names the circle, and
-  // opens the sentence the row's hover says.
-  // The mark: the state's hexagon, by the rule every row of a run reads (`runState`, the Logs' too).
-  // A run that ended on its question waits on you (#785), and only a working run's ring turns. Its
-  // pull request merged is said by the request's own mark, beside it.
+  // The mark: the state's hexagon, by the rule every row of a run reads (`runState`, the Logs' too),
+  // and the word that names it. A run that ended on its question waits on you (#785). Its pull
+  // request merged is said by the request's own mark, beside it.
   const { state: marked, word } = runState({ status, saving })
-  const prMark = pr?.state ? PR_MARKS[pr.state] : undefined
-  const prSaid = pr ? `PR #${pr.number}${prMark ? ` ${prMark.word}` : ''}` : undefined
+  const prWords = prs.map(pr => `#${pr.number}${pr.state ? ` ${PR_MARKS[pr.state].word}` : ''}`)
+  const prSaid = prs.length > 0 ? `${prs.length === 1 ? 'PR' : 'PRs'} ${prWords.join(', ')}` : undefined
   // Work that never left the machine, in the Human Queue's words and icon, gray (his pick): files left
   // uncommitted first, since committing them is the run's next step.
   const left = uncommitted
@@ -788,9 +910,10 @@ function AgentHistoryRow({
       ? { Icon: GitBranch, said: `${needsWord('unpushed', gitHost)} · ${unpublished} commit${unpublished === 1 ? '' : 's'}` }
       : undefined
   const personWords = person ? personSaid(person, account) : undefined
-  // Everything the two-line row used to print, in one sentence, for a reader that cannot see the
-  // marks: the word, where the run is and when it started, which coding agent ran it, and the
-  // computer or host it ran on.
+  const agentSaid = picked ? [DRIVER_LABELS[picked], ...(model ? [model] : [])].join(' · ') : undefined
+  // Everything about the run in one sentence, the row's name for a reader that cannot see its
+  // marks or point at it: the word, where the run is and when it started, whose it is, which
+  // coding agent ran it, and the computer or host it ran on.
   const said = [
     word,
     ...(project ? [project] : []),
@@ -802,31 +925,76 @@ function AgentHistoryRow({
     ...(prSaid ? [prSaid] : []),
     ...(left ? [left.said] : []),
   ].join(' · ')
-  // The row is a circle, a name and its marks. Pointed at, a name too long for the rail shows whole
-  // beside it, as Claude Code on the web shows one, and each mark says what it is; the sentence the
-  // two-line row used to print is the row's name for a reader that cannot see the marks.
-  const agentSaid = picked ? [DRIVER_LABELS[picked], ...(model ? [model] : [])].join(' · ') : undefined
+  // The same, pointed at: the name whole, then a line per thing known of the run.
+  const facts: [string, ReactNode][] = [
+    ['State', capitalised(word)],
+    ...(project ? [['Project', project] as [string, ReactNode]] : []),
+    ...(personWords
+      ? [
+          [
+            'Started by',
+            personWords,
+          ] as [string, ReactNode],
+        ]
+      : []),
+    ...(picked && agentSaid
+      ? [
+          [
+            'Agent',
+            <>
+              <DriverLogo driver={picked} className="size-3 shrink-0" />
+              {agentSaid}
+            </>,
+          ] as [string, ReactNode],
+        ]
+      : []),
+    ['Started', capitalised(subtitle)],
+    ...(startedOn ? [['Started on', startedOn] as [string, ReactNode]] : []),
+    ...(host ? [['Runs on', hostLabel ?? 'another host'] as [string, ReactNode]] : []),
+    ...(prs.length > 0
+      ? [
+          [
+            prs.length === 1 ? 'PR' : 'PRs',
+            <span className="flex flex-wrap items-center gap-x-2">
+              {prs.map(pr => {
+                const mark = pr.state ? PR_MARKS[pr.state] : undefined
+                return (
+                  <span key={pr.number} className="flex items-center gap-1">
+                    {mark && <mark.Icon className={cn('size-3 shrink-0', mark.tone)} aria-hidden />}#{pr.number}
+                    {mark ? ` ${mark.word}` : ''}
+                  </span>
+                )
+              })}
+            </span>,
+          ] as [string, ReactNode],
+        ]
+      : []),
+    ...(left
+      ? [
+          [
+            'Work',
+            <>
+              <left.Icon className="size-3 shrink-0" aria-hidden />
+              {left.said}
+            </>,
+          ] as [string, ReactNode],
+        ]
+      : []),
+  ]
   const marks = (
     <>
-      {/* The mark stands where the status word stood, and carries that word for a reader who
+      {/* The mark stands where a status word would, and carries that word for a reader who
           cannot see a colour. */}
-      <span className="flex size-4 shrink-0 items-center justify-center">
+      <span data-glide-new className="flex size-4 shrink-0 items-center justify-center">
         <RunMark status={marked} label={word} />
       </span>
-      <Tooltip>
-        <TooltipTrigger render={<span className={titleClass} />}>
-          {/* Nothing yet, and something coming: a bar where the name goes, rather than a blank row or
-              the prompt it is about to replace. */}
-          {naming ? <span aria-hidden className="block h-3.5 w-2/3 animate-pulse rounded-sm bg-muted-foreground/20" /> : <RevealedTitle text={titleText} start={standIn || waitedForName.current} />}
-        </TooltipTrigger>
-        {/* The whole title, and under it what the marks the list leaves out would say. */}
-        <TooltipContent side="right" className="max-w-96">
-          <span className="block whitespace-pre-wrap break-words">{titleText}</span>
-          <span className="block text-xs text-muted-foreground">{said}</span>
-        </TooltipContent>
-      </Tooltip>
+      <span className="rail-title min-w-0 flex-1 truncate text-sm font-normal">
+        {/* Nothing yet, and something coming: a bar where the name goes, rather than a blank row or
+            the prompt it is about to replace. */}
+        {naming ? <span aria-hidden className="block h-3.5 w-2/3 animate-pulse rounded-sm bg-muted-foreground/20" /> : <RevealedTitle text={titleText} start={standIn || waitedForName.current} />}
+      </span>
       {/* What is unusual about where the run is, kept on the row as one small glyph: another
-          computer, a host. Rare, so the row stays a circle and a name nearly always. */}
+          computer, a host. Rare, so the row stays a mark and a name nearly always. */}
       {startedOn && (
         <RowMark said={`Started on ${startedOn}`}>
           <Laptop className="size-3.5 text-muted-foreground" />
@@ -837,43 +1005,48 @@ function AgentHistoryRow({
           <HOST_ICON className="size-3.5 text-muted-foreground" />
         </RowMark>
       )}
-      {/* Where the sessions of several projects are listed together, the project is what tells one
-          row from the next, so it stays on the row: small, after the marks, and the first to give
-          up width: a long name never takes the row's title. A project's own rail knows its project
-          and shows none. */}
-      {project && telling.project && <span className="max-w-[35%] min-w-0 shrink truncate text-xs text-muted-foreground">{project}</span>}
-      {/* Its pull request, just before the logo, so the marks of the rows that have one stand in a
-          column too. */}
-      {prMark && prSaid && (
-        <RowMark said={prSaid}>
-          <prMark.Icon className={cn('size-3.5', prMark.tone)} />
-        </RowMark>
+      {/* Its pull requests and the work it left on the machine, just before its age. */}
+      {(prs.some(pr => pr.state) || left) && (
+        <span className={BEFORE_AGE}>
+          {prSaid && prs.some(pr => pr.state) && (
+            <RowMark said={prSaid}>
+              <PrMarks prs={prs} />
+            </RowMark>
+          )}
+          {left && (
+            <RowMark said={left.said}>
+              <left.Icon className="size-3.5 text-muted-foreground" />
+            </RowMark>
+          )}
+        </span>
       )}
-      {left && (
-        <RowMark said={left.said}>
-          <left.Icon className="size-3.5 text-muted-foreground" />
-        </RowMark>
-      )}
-      {/* When it started, in a word: the list's own order, read down the rows' end. After the marks a
-          row may have and before the person and the logo every row of a list has, so it stands on one x. */}
+      {/* When it started, in a word: the list's own order, read down the rows' end. */}
       <span aria-hidden className={AGE}>
         {age}
       </span>
-      {/* Whose run it is, beside which coding agent ran it. The row of a run just started holds its
+      {/* Whose run it is and which coding agent ran it, once the person asks for them (the menu
+          beside "Log"). With both, the agent's logo rides on the person's picture, one mark for
+          the two, so the name keeps its room. The row of a run just started holds the picture's
           place with an empty circle, so its title has the same room when the run's own row lands. */}
-      {telling.person &&
-        (personWords ? (
-          <RowMark said={personWords}>
-            <PersonMark email={person} name={name} picture={account?.avatar ?? picture} className={PERSON_MARK} />
-          </RowMark>
-        ) : (
-          standIn && <PersonMark className={PERSON_MARK} />
-        ))}
-      {/* Which coding agent ran it, as its own mark at the very end of the row (his pick): a
-          session is told from the next by its agent as much as by its words, and a logo reads
-          faster than a word. Last, after every other mark, so the logos of all rows stand in one
-          column. Pointed at, it says the model too. */}
-      {picked && agentSaid && telling.driver && (
+      {show.person && (personWords || standIn) && (
+        <span className="relative flex shrink-0">
+          {personWords ? (
+            <RowMark said={personWords}>
+              <PersonMark email={person} name={name} picture={account?.avatar ?? picture} className={PERSON_MARK} />
+            </RowMark>
+          ) : (
+            <PersonMark className={PERSON_MARK} />
+          )}
+          {show.agent && picked && agentSaid && (
+            <span className="absolute -right-1.5 -bottom-1 flex size-3 items-center justify-center rounded-full bg-sidebar">
+              <RowMark said={agentSaid}>
+                <DriverLogo driver={picked} className="size-2.5 text-muted-foreground" />
+              </RowMark>
+            </span>
+          )}
+        </span>
+      )}
+      {show.agent && !(show.person && (personWords || standIn)) && picked && agentSaid && (
         <RowMark said={agentSaid}>
           <DriverLogo driver={picked} className="size-3.5 text-muted-foreground" />
         </RowMark>
@@ -883,29 +1056,37 @@ function AgentHistoryRow({
   const row = {
     'aria-label': `${naming ? 'Naming this session' : titleText} · ${said}`,
     'aria-current': active ? ('page' as const) : undefined,
-    // The navigation's row: 32 high (44 on a phone), the picked one filled, the one under the pointer half filled.
-    className: cn('focus-ring rail-row flex w-full items-center gap-3 rounded-lg px-2 text-left text-sm text-foreground transition-colors md:h-8 max-md:h-11', active ? 'bg-foreground/8' : 'hover:bg-foreground/4 active:bg-foreground/8'),
+    className: railRowClass(active),
     ...(standIn ? { 'data-stand-in': '' } : {}),
+    ...(glide !== undefined ? { 'data-glide': glide, 'data-glide-part': 'log' } : {}),
     onPointerEnter: onNear,
     onFocus: onNear,
   }
-  return href !== undefined ? (
-    <a href={href} {...row} onClick={inPlace(onClick)}>
-      {marks}
-    </a>
-  ) : (
-    <button type="button" {...row} onClick={onClick}>
-      {marks}
-    </button>
+  return (
+    <Tooltip>
+      <TooltipTrigger render={href !== undefined ? <a href={href} {...row} onClick={inPlace(onClick)} /> : <button type="button" {...row} onClick={onClick} />}>{marks}</TooltipTrigger>
+      {/* Pointed at, the row says all of it beside itself: the name whole, as Claude Code on the web
+          shows one too long for its list, and under it what is known of the run, a line each. */}
+      <TooltipContent side="right" align="start" className="max-w-80 px-3 py-2">
+        <span className="block text-sm whitespace-pre-wrap break-words">{titleText}</span>
+        <span role="list" className="mt-1.5 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5">
+          {facts.map(([fact, value]) => (
+            <span key={fact} role="listitem" className="col-span-2 grid grid-cols-subgrid">
+              <span className="text-faint-foreground">{fact}</span>
+              <span className="flex min-w-0 items-center gap-1.5 text-muted-foreground">{value}</span>
+            </span>
+          ))}
+        </span>
+      </TooltipContent>
+    </Tooltip>
   )
 }
 
-/** One small mark at a row's end, which says what it is when pointed at. */
+/** One small mark on a row, named for a reader that cannot see it; the row's hover says it in words. */
 function RowMark({ said, children }: { said: string; children: ReactNode }) {
   return (
-    <Tooltip>
-      <TooltipTrigger render={<span role="img" aria-label={said} className="flex shrink-0 items-center" />}>{children}</TooltipTrigger>
-      <TooltipContent>{said}</TooltipContent>
-    </Tooltip>
+    <span role="img" aria-label={said} className="flex shrink-0 items-center">
+      {children}
+    </span>
   )
 }

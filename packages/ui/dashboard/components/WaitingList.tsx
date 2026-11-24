@@ -12,7 +12,7 @@ import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.j
 const SHOWN_AT_FIRST = 5
 
 /** Each mark's icon and colour: what is needed reads at a glance. */
-const MARKS: Record<NonNullable<Waiting['mark']>, { Icon: ComponentType<{ className?: string }>; tone: string }> = {
+export const WAITING_MARKS: Record<NonNullable<Waiting['mark']>, { Icon: ComponentType<{ className?: string }>; tone: string }> = {
   question: { Icon: CircleHelp, tone: 'text-warning' },
   changes: { Icon: FilePen, tone: 'text-info' },
   branch: { Icon: GitBranch, tone: 'text-info' },
@@ -20,7 +20,7 @@ const MARKS: Record<NonNullable<Waiting['mark']>, { Icon: ComponentType<{ classN
 }
 
 /** An item that names no mark: a plain dot, quiet. */
-const PLAIN = { Icon: CircleDot, tone: 'text-muted-foreground' }
+export const WAITING_PLAIN = { Icon: CircleDot, tone: 'text-muted-foreground' }
 
 /** Where a click on the row takes the person, said on its hover: the session it is about, else the page that fixes it. */
 function hoverOf(item: Waiting): string {
@@ -117,7 +117,7 @@ export function WaitingList({
     <div className="-mx-2">
       <ul>
         {rows.map(({ key, item, hint, since, href, open }) => {
-          const { Icon, tone } = item.mark ? MARKS[item.mark] : PLAIN
+          const { Icon, tone } = item.mark ? WAITING_MARKS[item.mark] : WAITING_PLAIN
           const row = (
             <>
               <span className={cn('flex w-28 shrink-0 items-center gap-1.5 text-xs max-md:w-auto max-md:flex-1', tone)}>

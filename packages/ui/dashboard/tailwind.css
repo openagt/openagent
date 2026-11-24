@@ -391,25 +391,6 @@ html[data-pinned] body {
   }
 }
 
-/* The Recents fade strip only appears once the list is scrolled, so it never dims the first row at
-   rest. Its opacity is driven by the rail's own scroll position, on a scroll timeline. Without
-   scroll-timeline support it stays hidden. */
-.rail-fade {
-  opacity: 0;
-}
-@supports (animation-timeline: scroll()) {
-  .rail-fade {
-    animation: rail-fade-appear 1ms linear both;
-    animation-timeline: scroll(nearest y);
-    animation-range: 0 1.5rem;
-  }
-}
-@keyframes rail-fade-appear {
-  to {
-    opacity: 1;
-  }
-}
-
 /* The jump's list on a phone (JumpPalette): a fade over its foot while rows go on under it, as the Subagents
    list's foot fades, gone once its last row is in view. Driven by the list's own scroll, on a timeline the popup
    shares with it; with nothing to scroll, or without scroll-timeline support, it is not drawn. */
