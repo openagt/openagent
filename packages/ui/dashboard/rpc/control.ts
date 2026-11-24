@@ -23,4 +23,5 @@ export const sendOpenPullRequest = rpc<typeof impl.sendOpenPullRequest>('sendOpe
 export const sendMerge = rpc<typeof impl.sendMerge>('sendMerge')
 export const sendPush = rpc<typeof impl.sendPush>('sendPush')
 export const sendMergeBranch = rpc<typeof impl.sendMergeBranch>('sendMergeBranch')
+export const sendBringBranch = rpc<typeof impl.sendBringBranch>('sendBringBranch')
 export const sendCreateRepository = rpc<typeof impl.sendCreateRepository>('sendCreateRepository')

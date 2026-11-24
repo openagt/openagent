@@ -9,6 +9,7 @@ import { reconcileBranchLinks } from './branch-links.js'
 import { discardWorktree, reclaimWorktree, type ReclaimOutcome } from './reclaim.js'
 import { pushBranchByName, pushCheckout, type PushOutcome } from './push.js'
 import { mergeBranch, type MergeOutcome } from './merge.js'
+import { bringBranch, type BringOutcome } from './bring.js'
 import { readBranchStates } from './branch-state.js'
 import { readBranchesAhead } from './branch-ahead.js'
 import { cleanup } from './cleanup.js'
@@ -40,6 +41,7 @@ ${helpRows([
   ['ahead [--from <commit>] <branch>...', 'how many commits of its own each branch has beyond the base, whether it is pushed or was and is gone from origin, whether it is merged, how many paths its checkout left uncommitted: no file lists, every branch in one read'],
   ['push [--branch <b>]', `push this checkout's branch, or branch <b>, to origin; a dirty checkout is refused`],
   ['merge <branch>', `merge branch <branch> into the default branch, in the project's folder, then delete it; a conflict changes nothing and names the files`],
+  ['bring <branch> [--merge]', `in a session's copy of a repo with no remote: add branch <branch> to the folder the copy was made from, changing nothing else there; with --merge, merge it into that folder's default branch too, as merge does`],
   ['list [--sizes]', 'every agent checkout under .branches/'],
   ['remove <id> [--from <commit>]', `reclaim agent <id>'s checkout, once its branch holds everything in it; the branch stays, nothing is pushed; <commit> is the one its branch started from, in place of the default branch`],
   ['       [--discard]', '... or drop it whatever it holds, uncommitted work included; the branch stays'],
@@ -132,6 +134,13 @@ const COMMANDS: Record<string, Command<[string, GitRunner]>> = {
     if (!outcome.ok) throw new Refused(outcome, mergeRefusalLine(outcome))
     // A link named after a branch that just went is stale from this moment.
     if (outcome.deleted) await reconcileBranchLinks(repo, { git })
+    return outcome
+  },
+
+  async bring(args, cwd, git) {
+    const { positionals, values } = parseCommandArgs(args, { merge: { type: 'boolean' } }, 1)
+    const outcome = await bringBranch(await project(cwd, git), positionals[0]!, values.merge ? { merge: true } : {}, git)
+    if (!outcome.ok) throw new Refused(outcome, bringRefusalLine(outcome))
     return outcome
   },
 
@@ -242,6 +251,26 @@ function mergeRefusalLine(outcome: MergeOutcome & { ok: false }): string {
       return `${outcome.branch} does not merge cleanly into ${outcome.into}: it conflicts in ${outcome.files.join(', ')}; nothing was changed`
     case 'merge-failed':
       return `${outcome.branch} could not be merged into ${outcome.into}: ${outcome.detail}`
+  }
+}
+
+/** Why a copy's branch was not brought to its folder, as one line for a person. */
+function bringRefusalLine(outcome: BringOutcome & { ok: false }): string {
+  switch (outcome.reason) {
+    case 'not-a-copy':
+      return 'this is no session copy of a repo: it names no folder it was copied from'
+    case 'no-branch':
+      return `no branch ${outcome.branch} here`
+    case 'checked-out':
+      return `${outcome.folder} is on ${outcome.branch}; switch it to another branch, then bring the work`
+    case 'diverged':
+      return `${outcome.folder} has a branch ${outcome.branch} with commits this copy does not have; nothing was changed`
+    case 'fetch-failed':
+      return `${outcome.branch} could not be added to ${outcome.folder}: ${outcome.detail}`
+    case 'not-on-default':
+      return `${outcome.folder} is on ${outcome.current ?? 'no branch'}, not on ${outcome.into}; switch it to ${outcome.into}, then merge`
+    default:
+      return mergeRefusalLine(outcome)
   }
 }
 

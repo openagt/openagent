@@ -83,6 +83,15 @@ already made, and lists it in its pull request; for anything else it proposes an
   is deleted once no checkout holds it, and the run's record then keeps its last commit and
   where its work began, so the page still shows what the agent changed. Picked over "No remote to push to", which left
   the work on a branch the person could only reach from a terminal.
+- A session's copy of a repo with no remote is offered the same "Merge" on its row: the
+  copy's branch goes to the folder it was copied from and is merged into that folder's
+  main branch. The press's arrow holds "Only add the branch", which adds the branch to
+  that folder and changes nothing else there, for a folder busy on another branch; once
+  the folder has the branch, "Merge" is the one step left. The row says "your folder",
+  since it names the repo already, and its hover the folder's path. A copy's work is measured from
+  the commit the copy was made at, so a merged copy still shows what it changed. Picked
+  over "No remote: the work stays in this copy", which left it reachable from a terminal
+  only, over "Merge" alone, and over adding the branch alone (his pick C, 11-24).
 - A project with no remote is offered "Create a repository on <host>…" in its project menu,
   when a package can create one: private, under the person's account, named after the folder,
   pushed. It asks once before it does it, naming the repository, since the project's code

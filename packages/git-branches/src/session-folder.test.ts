@@ -4,7 +4,8 @@ import { mkdtemp, realpath, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { nodeGitRunner } from '@openagt/agent-data'
-import { openSessionFolder } from './session-folder.js'
+import { copiedFrom, openSessionFolder } from './session-folder.js'
+import { readBranchStates } from './branch-state.js'
 
 // Where a session's copy of a repo starts, with real git: origin's default branch as origin has
 // it, whatever the repo's own folder is on.
@@ -60,6 +61,39 @@ test('a repo with no origin, or whose origin does not answer, is copied as its f
     const none = await openSessionFolder(join(at.dir, 'home'), 'run3', [{ name: 'app', from: at.repo }], git)
     assert.equal(await headOf(join(none.path, 'app')), at.local)
     assert.equal((await git(['remote'], join(none.path, 'app'))).trim(), '', 'and has no origin')
+  } finally {
+    await rm(at.dir, { recursive: true, force: true })
+  }
+})
+
+test("a copy names the folder it was copied from; with no remote, its branch's state says that folder and whether the folder has the branch", async () => {
+  const at = await repoAhead()
+  try {
+    await git(['remote', 'remove', 'origin'], at.repo)
+    const { path } = await openSessionFolder(join(at.dir, 'home'), 'run1', [{ name: 'app', from: at.repo }], git)
+    const copy = join(path, 'app')
+    assert.equal(await copiedFrom(copy, git), at.repo)
+    assert.equal(await copiedFrom(at.repo, git), undefined, 'a folder that is no copy names none')
+    await commit(copy, 'work.md', 'the agent')
+    const [state] = await readBranchStates(copy, ['agent-run1'], git)
+    assert.deepEqual(state?.copiedFrom, { path: at.repo, hasBranch: false })
+    await git(['fetch', '-q', copy, 'agent-run1:agent-run1'], at.repo)
+    const [brought] = await readBranchStates(copy, ['agent-run1'], git)
+    assert.deepEqual(brought?.copiedFrom, { path: at.repo, hasBranch: true })
+    const [gone] = await readBranchStates(copy, ['agent-gone'], git)
+    assert.equal(gone?.copiedFrom, undefined, 'a branch that is gone has nothing to bring')
+  } finally {
+    await rm(at.dir, { recursive: true, force: true })
+  }
+})
+
+test("a copy with a remote goes back by a pull request: its branch's state names no folder", async () => {
+  const at = await repoAhead()
+  try {
+    const { path } = await openSessionFolder(join(at.dir, 'home'), 'run1', [{ name: 'app', from: at.repo }], git)
+    const [state] = await readBranchStates(join(path, 'app'), ['agent-run1'], git)
+    assert.equal(state?.hasRemote, true)
+    assert.equal(state?.copiedFrom, undefined)
   } finally {
     await rm(at.dir, { recursive: true, force: true })
   }

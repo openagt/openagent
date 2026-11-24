@@ -62,6 +62,7 @@ test('the page is told when a read finds a pull request moved, once for the read
     requests: async () => ({ ok: true, requests: [{ ...request, state }] }),
     open: async () => ({ ok: false, error: 'not here' }),
     merge: async () => ({ ok: false, error: 'not here' }),
+    bring: async () => ({ ok: false, error: 'not here' }),
     home: async () => undefined,
     people: async () => [],
   })

@@ -2,6 +2,7 @@ import { nodeGitRunner, type GitRunner } from '@openagt/agent-data'
 import { basename } from 'node:path'
 import { agentIdFromWorktreeDir, sessionNameOf } from './branch-names.js'
 import { checkoutsByBranch, repoHasRemote } from './worktree.js'
+import { copiedFrom } from './session-folder.js'
 
 /**
  * What a branch holds and where it stands (#1774): the caller's read of a finished agent's
@@ -59,6 +60,11 @@ export interface BranchState {
   merged: boolean
   /** The uncommitted paths of the checkout under `.branches/` that is on this branch; absent when no checkout is. */
   pendingFiles?: string[]
+  /**
+   * A session's copy of a repo with no remote: the folder it was copied from, where its work goes
+   * back to, and whether that folder has a branch of this name. Absent for any other repository.
+   */
+  copiedFrom?: { path: string; hasBranch: boolean }
 }
 
 /** A subject can hold anything, so the fields are unit-separated rather than space-split. */
@@ -72,8 +78,14 @@ const SEP = String.fromCharCode(31)
 export async function readBranchStates(repo: string, branches: readonly string[], git: GitRunner = nodeGitRunner(), from?: string): Promise<BranchState[]> {
   const ask = soft(git, repo)
   const [hasRemote, base, checkouts, start] = await Promise.all([repoHasRemote(repo, git), detectBase(ask), checkoutsByBranch(repo, git), from !== undefined ? commitOf(ask, from) : undefined])
+  // Only a copy with nowhere to push has its folder to answer for: one with a remote goes back by a pull request.
+  const folder = hasRemote ? undefined : await copiedFrom(repo, git)
   const states: BranchState[] = []
-  for (const branch of branches) states.push(await readOne(repo, branch, { git, ask, hasRemote, base, from: start, checkouts }))
+  for (const branch of branches) {
+    const state = await readOne(repo, branch, { git, ask, hasRemote, base, from: start, checkouts })
+    if (folder === undefined || !state.exists) states.push(state)
+    else states.push({ ...state, copiedFrom: { path: folder, hasBranch: (await commitOf(soft(git, folder), `refs/heads/${branch}`)) !== undefined } })
+  }
   return states
 }
 

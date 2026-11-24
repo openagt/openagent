@@ -23,7 +23,7 @@ export type AgentHandoffState = {
 }
 
 /** The bar's presses. */
-type Press = 'pr' | 'merge' | 'push' | 'merge-branch' | 'commit'
+type Press = 'pr' | 'merge' | 'push' | 'merge-branch' | 'bring' | 'commit'
 
 // The handoff read lifted out of its panel: the same answer feeds two places in the bar above the
 // message box, the summary and the actions. Reading it once keeps them from disagreeing and halves

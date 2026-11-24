@@ -59,6 +59,22 @@ async function originStart(copy: string, git: GitRunner): Promise<string | undef
 /** The copy's own git setting that names the commit it was made at. */
 const START_KEY = 'openagent.start'
 
+/** The copy's own git setting that names the folder it was copied from. */
+const FROM_KEY = 'openagent.from'
+
+/** The commit a session's copy of a repo was made at, as the copy names it: what it holds beyond it is the session's work. Nothing for any other repository. */
+export async function copyStart(repo: string, git: GitRunner = nodeGitRunner()): Promise<string | undefined> {
+  return (await git(['config', '--get', START_KEY], repo).catch(() => '')).trim() || undefined
+}
+
+/**
+ * The folder a session's copy of a repo was copied from, as the copy names it: where the work of a
+ * copy with no remote goes back to (`bring.ts`). Nothing for any other repository.
+ */
+export async function copiedFrom(repo: string, git: GitRunner = nodeGitRunner()): Promise<string | undefined> {
+  return (await git(['config', '--get', FROM_KEY], repo).catch(() => '')).trim() || undefined
+}
+
 /** Why a run with no project keeps where it worked, whatever its end: see {@link openSessionFolder}. */
 export const SESSION_FOLDER_STAYS = 'a session folder stays'
 
@@ -94,6 +110,7 @@ export async function openSessionFolder(home: string, id: string, repos: readonl
     await git(['checkout', '--quiet', '--no-track', '-b', agentBranchName(id), ...(start !== undefined ? [start] : [])], copy)
     // Where the copy starts, kept in the copy itself: what it holds beyond it is the session's work, pushed or not.
     await git(['config', START_KEY, (await git(['rev-parse', 'HEAD'], copy)).trim()], copy)
+    await git(['config', FROM_KEY, repo.from], copy)
   }
   return { path, made }
 }
@@ -121,9 +138,9 @@ export async function dropUntouchedCopies(home: string, id: string, repos: reado
   for (const repo of repos) {
     const copy = join(path, repo.name)
     if (!(await stat(join(copy, '.git')).then(() => true, () => false))) continue
-    const start = (await git(['config', '--get', START_KEY], copy).catch(() => '')).trim()
+    const start = await copyStart(copy, git)
     const untouched =
-      start !== '' &&
+      start !== undefined &&
       (await Promise.all([git(['status', '--porcelain'], copy), git(['rev-list', '--max-count=1', '--branches', '--not', start], copy)]).then(([dirty, own]) => dirty.trim() === '' && own.trim() === '', () => false))
     if (!untouched) continue
     await rm(copy, { recursive: true, force: true })

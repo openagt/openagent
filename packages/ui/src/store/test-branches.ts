@@ -31,6 +31,10 @@ export function testBranches(byProject: Record<string, Checkout[]> = {}, states:
       writes.push(`merge ${branch}`)
       return { ok: true, into: 'main', commit: 'c'.repeat(40), from: 'b'.repeat(40), deleted: true }
     },
+    async bring(branch, opts = {}) {
+      writes.push(`bring ${branch}${opts.merge ? ' --merge' : ''}`)
+      return { ok: true, folder: '/folder', ...(opts.merge ? { merged: 'main' } : {}) }
+    },
     async remove(id, opts = {}) {
       writes.push(`remove ${id}${opts.discard ? ' --discard' : ''}`)
       const rows = checkouts.get(root) ?? []

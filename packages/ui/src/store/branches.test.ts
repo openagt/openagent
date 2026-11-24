@@ -25,6 +25,7 @@ if (args[0] === 'list') answer('list.json')
 else if (args[0] === 'show') answer('show.json')
 else if (args[0] === 'push') process.stdout.write(args[2] === 'remote-only' ? '{"ok":true,"branch":"remote-only","pushed":false}' : args[2] === 'dirty' ? (process.stderr.write('agent-dirty has uncommitted work; commit or delete it, then push\\n'), process.exit(1)) : '{"ok":true,"branch":"agent-run-1","pushed":true}')
 else if (args[0] === 'merge') { if (args[1] === 'clash') { process.stderr.write('agent-clash does not merge cleanly into main: it conflicts in a.ts; nothing was changed\\n'); process.exit(1) } process.stdout.write('{"ok":true,"branch":"' + args[1] + '","into":"main","commit":"c1","from":"b1","deleted":true}') }
+else if (args[0] === 'bring') { if (args[1] === 'busy') { process.stderr.write('/me/app is on agent-busy; switch it to another branch, then bring the work\\n'); process.exit(1) } process.stdout.write('{"ok":true,"branch":"' + args[1] + '","folder":"/me/app"' + (args.includes('--merge') ? ',"merged":{"ok":true,"into":"main","commit":"c1","from":"b1","deleted":true}' : '') + '}') }
 else if (args[0] === 'remove') { if (args[1] === 'kept') { process.stderr.write('agent-kept has uncommitted work; the checkout was kept\\n'); process.exit(1) } process.stdout.write(args[1] === 'run-1' && !args.includes('--discard') ? '{"ok":true,"branchesDeleted":["agent-run-1"]}' : '{"ok":true}') }
 `
 
@@ -70,6 +71,9 @@ test('a project with no branches provider has no branches; one with a provider i
     assert.deepEqual(await branches.show(['agent-run-1'], 'abc123'), [STATE], 'measured from the commit the branch started at')
     assert.deepEqual(await branches.merge('agent-run-1'), { ok: true, into: 'main', commit: 'c1', from: 'b1', deleted: true })
     assert.deepEqual(await branches.merge('clash'), { ok: false, error: 'agent-clash does not merge cleanly into main: it conflicts in a.ts; nothing was changed' }, "a conflict is the provider's own line")
+    assert.deepEqual(await branches.bring('agent-run-1'), { ok: true, folder: '/me/app' })
+    assert.deepEqual(await branches.bring('agent-run-1', { merge: true }), { ok: true, folder: '/me/app', merged: 'main' })
+    assert.deepEqual(await branches.bring('busy'), { ok: false, error: '/me/app is on agent-busy; switch it to another branch, then bring the work' }, "a refusal is the provider's own line")
     assert.deepEqual(await branches.push('agent-run-1'), { ok: true, pushed: true })
     assert.deepEqual(await branches.push('remote-only'), { ok: true, pushed: false }, 'a branch only the remote has: nothing to push, and nothing missing')
     assert.deepEqual(await branches.push('dirty'), { ok: false, error: 'agent-dirty has uncommitted work; commit or delete it, then push' }, "a refusal is the provider's own line")
@@ -85,6 +89,9 @@ test('a project with no branches provider has no branches; one with a provider i
       'show --from abc123 agent-run-1',
       'merge agent-run-1',
       'merge clash',
+      'bring agent-run-1',
+      'bring agent-run-1 --merge',
+      'bring busy',
       'push --branch agent-run-1',
       'push --branch remote-only',
       'push --branch dirty',
@@ -146,6 +153,8 @@ test('parseCheckouts keeps the rows with an id and a path; parseBranchStates the
   // The name the provider answers is kept as printed, and only as a non-empty string: OpenAgent never derives one.
   assert.deepEqual(parseCheckouts([{ ...ROW, name: 'fix-login' }, { ...ROW, name: '' }]), [{ id: 'run-1', path: ROW.path, branch: ROW.branch, name: 'fix-login' }, { id: 'run-1', path: ROW.path, branch: ROW.branch }])
   assert.deepEqual(parseBranchStates([{ ...STATE, name: 'fix-login' }, { ...STATE, name: 7 }]), [{ ...STATE, name: 'fix-login' }, STATE])
+  // A copy with no remote names the folder it came from; a folder without a path is no folder.
+  assert.deepEqual(parseBranchStates([{ ...STATE, copiedFrom: { path: '/me/app', hasBranch: true } }, { ...STATE, copiedFrom: { hasBranch: true } }]), [{ ...STATE, copiedFrom: { path: '/me/app', hasBranch: true } }, STATE])
   assert.deepEqual(parseBranchStates([STATE, { branch: 'b', exists: false, pushed: false, merged: false, commits: 'x', files: [{ path: '' }, { path: 'f' }] }, { branch: 'c' }]), [
     STATE,
     { branch: 'b', exists: false, commits: [], files: [{ path: 'f', insertions: 0, deletions: 0, binary: false }], hasRemote: false, pushed: false, merged: false },
@@ -193,6 +202,7 @@ test("in the sessions home the checkouts are the sessions' folders, with no bran
     const source = await providedBranches()(home)
     assert.deepEqual(await source?.list(), [{ id, path: join(home, id) }])
     assert.deepEqual(await source?.push('main'), { ok: false, error: 'a session with no project has no branch' })
+    assert.deepEqual(await source?.bring('main'), { ok: false, error: 'a session with no project has no branch' })
     assert.deepEqual(await source?.remove(id), { ok: false, error: "a session's folder holds its work: delete the session to remove it" })
     assert.deepEqual(await source?.remove(id, { discard: true }), { ok: true })
     assert.deepEqual(await source?.list(), [])

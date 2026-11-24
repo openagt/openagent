@@ -91,6 +91,14 @@ already made, and lists it in its pull request; for anything else it proposes an
   pushed or not: a resumed run goes on in it, and its branch is where the session's work
   is read. Picked over removing a copy once its work is pushed, which a resume would make
   again without that work. A session with no project keeps its whole folder, as before.
+- A copy of a repo with no remote brings its work back to the folder it was copied
+  from, which the copy names in its git settings: `bring <branch>` adds the copy's
+  branch to that folder and changes nothing else there; `--merge` then merges it into
+  the folder's default branch, by the rule `merge` has, and moves the copy's own
+  default branch to the folder's, so the copy reads its work as merged. The folder's
+  branch of that name only moves forward, and one the folder is on is left alone.
+  Picked over leaving the work in the copy, which only a terminal could reach, and
+  over a merge alone, which a folder busy on another branch cannot take.
 - Everything after the worktree is best-effort: a checkout missing any of it is a worse
   run, not a failed one.
 

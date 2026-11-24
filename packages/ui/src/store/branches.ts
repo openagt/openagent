@@ -86,6 +86,11 @@ export interface BranchState {
   merged: boolean
   /** The uncommitted paths in the checkout that is on this branch; absent when no checkout is. */
   pendingFiles?: string[]
+  /**
+   * A session's copy of a repo with no remote: the folder it was copied from, where its work goes
+   * back to, and whether that folder has a branch of this name. Absent for any other repository.
+   */
+  copiedFrom?: { path: string; hasBranch: boolean }
 }
 
 /** How far a branch is past its base and whether the remote has it, as a provider answers `ahead`: counts, no files. */
@@ -119,6 +124,12 @@ export type PushOutcome = { ok: true; pushed: boolean } | { ok: false; error: st
  */
 export type MergeOutcome = { ok: true; into: string; commit: string; from: string; deleted: boolean } | { ok: false; error: string }
 
+/**
+ * What bringing a copy's branch to the folder it was copied from did: `folder` names that folder,
+ * and `merged` names the branch it was merged into there, when it was asked to merge.
+ */
+export type BringOutcome = { ok: true; folder: string; merged?: string } | { ok: false; error: string }
+
 /** What reclaiming a checkout did: done, with the branches that went with it when any did, or the provider's reason it stayed. */
 export type RemoveOutcome = { ok: true; branchesDeleted?: string[] } | { ok: false; error: string }
 
@@ -144,6 +155,11 @@ export interface BranchesSource {
   push(branch: string): Promise<PushOutcome>
   /** Merge a branch into the project's default branch, on this machine, then delete it; a merge that conflicts changes nothing. */
   merge(branch: string): Promise<MergeOutcome>
+  /**
+   * In a session's copy of a repo with no remote: add a branch to the folder the copy was made from,
+   * changing nothing else there, and with `merge` merge it into that folder's default branch too.
+   */
+  bring(branch: string, opts?: { merge?: boolean }): Promise<BringOutcome>
   /**
    * Reclaim a run's checkout, or why it stayed. `from` is the commit the run's branch started
    * from, when that is not the default branch: what tells a branch with nothing of its own.
@@ -203,6 +219,7 @@ export function parseBranchStates(output: unknown): BranchState[] {
       pushed: row['pushed'],
       merged: row['merged'],
       ...(Array.isArray(row['pendingFiles']) ? { pendingFiles: row['pendingFiles'].filter((path): path is string => typeof path === 'string') } : {}),
+      ...copiedFromOf(row['copiedFrom']),
     })
   }
   return states
@@ -218,6 +235,11 @@ export function parseBranchesAhead(output: unknown): BranchAhead[] {
     const flag = (name: (typeof flags)[number]): boolean => row[name] === true
     return [{ branch: row['branch'], exists: flag('exists'), agent: flag('agent'), ahead: row['ahead'], hasRemote: flag('hasRemote'), pushed: flag('pushed'), gone: flag('gone'), merged: flag('merged'), uncommitted: row['uncommitted'] }]
   })
+}
+
+function copiedFromOf(value: unknown): Pick<BranchState, 'copiedFrom'> {
+  const from = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>
+  return typeof from['path'] === 'string' && from['path'] !== '' ? { copiedFrom: { path: from['path'], hasBranch: from['hasBranch'] === true } } : {}
 }
 
 function commitsOf(value: unknown): BranchCommit[] {
@@ -309,6 +331,15 @@ function commandBranches(root: string, command: ProvidedCommand, now: () => numb
       if (typeof into !== 'string' || typeof commit !== 'string' || typeof from !== 'string') return { ok: false, error: 'the branches provider answered no merge' }
       return { ok: true, into, commit, from, deleted: out['deleted'] === true }
     },
+    async bring(branch, opts = {}) {
+      const result = await runPackageCommand(root, command, ['bring', branch, ...(opts.merge ? ['--merge'] : [])])
+      drop()
+      if (!result.ok) return { ok: false, error: result.error }
+      const out = (result.output && typeof result.output === 'object' ? result.output : {}) as Record<string, unknown>
+      const merged = (out['merged'] && typeof out['merged'] === 'object' ? out['merged'] : {}) as Record<string, unknown>
+      if (typeof out['folder'] !== 'string') return { ok: false, error: 'the branches provider answered no folder' }
+      return { ok: true, folder: out['folder'], ...(typeof merged['into'] === 'string' ? { merged: merged['into'] } : {}) }
+    },
     async remove(id, opts = {}) {
       if (!isRunId(id)) return { ok: false, error: `not a run id: ${id}` }
       const result = await runPackageCommand(root, command, ['remove', id, ...(opts.discard ? ['--discard'] : opts.from ? ['--from', opts.from] : [])])
@@ -337,6 +368,7 @@ export function sessionFolders(home: string): BranchesSource {
     ahead: async () => [],
     push: async () => ({ ok: false, error: NO_BRANCH }),
     merge: async () => ({ ok: false, error: NO_BRANCH }),
+    bring: async () => ({ ok: false, error: NO_BRANCH }),
     // A session's folder holds its work, nothing of it committed anywhere: it goes only when that work is dropped with it, as when the session is deleted.
     async remove(id, opts = {}) {
       if (!isRunId(id)) return { ok: false, error: `not a run id: ${id}` }
