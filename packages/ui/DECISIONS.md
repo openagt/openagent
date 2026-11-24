@@ -446,6 +446,14 @@ already made, and lists it in its pull request; for anything else it proposes an
   about a run, its project too, is said when its row is pointed at. Picked over the project, the
   person and the logo on every row where the rows differed in them, which left the name three
   letters at the rail's usual width; over two lines a row; and over a second button for the view.
+- The card a row opens when pointed at has the work on top and who at its foot: the name whole,
+  how the run stands and since when, a chip each for its project (with the branch it started
+  from), its pull requests, the work it left and where it runs; under a rule, the person's
+  picture, name and address at the left, and at the right the model by its maker's logo with how
+  hard it thought. The coding agent's name is not written: the logo says it. One width for every
+  row, so the card keeps its size down the list and nothing runs past its edge. Picked
+  (Suleiman, 2026-11-24) over a table of labels ("State", "Started by", "Agent"), cleaned or
+  not, and over a line each led by an icon with the person first.
 - Several pull requests of one run that stand alike are one mark with their count at its top
   right corner. Picked over a mark each, and over the count after the mark.
 - In a list of runs, colour and motion are for what is alive or wrong: a working run's mark is

@@ -1,10 +1,11 @@
 import { PROFILES_PAGE, PERMISSIONS_PAGE } from '../lib/use-route.js'
 import { RevealedTitle } from './RevealedTitle.js'
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
-import { Plus, Bot, SlidersHorizontal, Check, Laptop, LayoutDashboard, Blocks, FilePen, GitBranch, KeyRound } from 'lucide-react'
+import { Plus, Bot, SlidersHorizontal, Check, Folder, Laptop, LayoutDashboard, Blocks, FilePen, GitBranch, KeyRound } from 'lucide-react'
 import { HOST_ICON } from './RunOnMenu.js'
 import { hostOf, useRunHosts } from '../lib/run-hosts.js'
-import { PersonMark } from './PersonMark.js'
+import { PersonMark, personName } from './PersonMark.js'
+import { effortLabel } from '../lib/effort.js'
 import type { ComponentType } from 'react'
 import type { AgentMeta, AgentStatus, RecentAgent, ProjectSummary, Waiting } from '../../src/index.js'
 import { needsWord, waitingKey } from '../../src/client.js'
@@ -287,7 +288,16 @@ export function AgentHistory({
   const hasRecents = rows.length > 0 || showOptimistic
 
   // Each row's person, in its own project.
-  const accountOf = useGitHostPeople(rows.map(row => ({ projectId: row.projectId, person: row.agent.person })), onGitHostPeople, 'sidebar:people')
+  const accountIn = useGitHostPeople(rows.map(row => ({ projectId: row.projectId, person: row.agent.person })), onGitHostPeople, 'sidebar:people')
+  // A session with no project has no git host to ask who its person is: they are who a project's
+  // host said they are, on another row of the list, so one person has one picture down the list.
+  // Between two projects nothing is carried over: a project's host may know another person by the address.
+  const knownElsewhere = new Map<string, ModuleHostPerson>()
+  for (const row of rows) {
+    const account = row.agent.person ? accountIn(row.projectId, row.agent.person) : undefined
+    if (account && !knownElsewhere.has(row.agent.person!.toLowerCase())) knownElsewhere.set(row.agent.person!.toLowerCase(), account)
+  }
+  const accountOf = (projectId: string | null, person: string): ModuleHostPerson | undefined => accountIn(projectId, person) ?? (projectId === SESSIONS_ID ? knownElsewhere.get(person.toLowerCase()) : undefined)
   // Your own runs are marked as the sidebar's foot marks you: the letters of your own name, not of
   // your email, and with no git host to ask (a session with no project), your own picture.
   const { person: me } = usePerson()
@@ -309,6 +319,8 @@ export function AgentHistory({
       driver={row.agent.driver}
       {...(row.agent.person ? { person: row.agent.person, account: accountOf(row.projectId, row.agent.person), ...ownMark(row.agent.person) } : {})}
       {...(row.agent.model ? { model: modelName(models?.[driverFromImpl(row.agent.driver) ?? 'claude-code'], row.agent.model) } : {})}
+      {...(row.agent.effort ? { effort: row.agent.effort } : {})}
+      {...(row.agent.base ? { base: row.agent.base } : {})}
       // On the Overview the project is what tells the rows apart, so the row still names it; a
       // project's own rail already knows its project.
       {...(row.project ? { project: row.project } : {})}
@@ -835,6 +847,8 @@ function AgentHistoryRow({
   onNear,
   driver,
   model,
+  effort,
+  base,
   standIn = false,
   saving = false,
   host,
@@ -865,6 +879,10 @@ function AgentHistoryRow({
   driver?: string | undefined
   /** The model it ran on, by the name its coding agent gives it: said with the agent. */
   model?: string | undefined
+  /** How hard that model was told to think, by the coding agent's own word; none when it thought as it does by default. */
+  effort?: string | undefined
+  /** The branch it was told to start from; none for a run started from the default branch. */
+  base?: string | undefined
   active: boolean
   /** The run's page; the stand-in for a run not listed yet has none, and is a button. */
   href?: string | undefined
@@ -934,62 +952,22 @@ function AgentHistoryRow({
     ...(prSaid ? [prSaid] : []),
     ...(left ? [left.said] : []),
   ].join(' · ')
-  // The same, pointed at: the name whole, then a line per thing known of the run.
-  const facts: [string, ReactNode][] = [
-    ['State', capitalised(word)],
-    ...(project ? [['Project', project] as [string, ReactNode]] : []),
-    ...(personWords
-      ? [
-          [
-            'Started by',
-            personWords,
-          ] as [string, ReactNode],
-        ]
-      : []),
-    ...(picked && agentSaid
-      ? [
-          [
-            'Agent',
-            <>
-              <DriverLogo driver={picked} className="size-3 shrink-0" />
-              {agentSaid}
-            </>,
-          ] as [string, ReactNode],
-        ]
-      : []),
-    ['Started', capitalised(subtitle)],
-    ...(startedOn ? [['Started on', startedOn] as [string, ReactNode]] : []),
-    ...(host ? [['Runs on', hostLabel ?? 'another host'] as [string, ReactNode]] : []),
-    ...(prs.length > 0
-      ? [
-          [
-            prs.length === 1 ? 'PR' : 'PRs',
-            <span className="flex flex-wrap items-center gap-x-2">
-              {prs.map(pr => {
-                const mark = pr.state ? PR_MARKS[pr.state] : undefined
-                return (
-                  <span key={pr.number} className="flex items-center gap-1">
-                    {mark && <mark.Icon className={cn('size-3 shrink-0', mark.tone)} aria-hidden />}#{pr.number}
-                    {mark ? ` ${mark.word}` : ''}
-                  </span>
-                )
-              })}
-            </span>,
-          ] as [string, ReactNode],
-        ]
-      : []),
-    ...(left
-      ? [
-          [
-            'Work',
-            <>
-              <left.Icon className="size-3 shrink-0" aria-hidden />
-              {left.said}
-            </>,
-          ] as [string, ReactNode],
-        ]
-      : []),
+  // The same, pointed at (his pick of three): the work on top, its name whole, how it stands and
+  // since when, then what is known of where it is as a chip each; under a rule, who started it at
+  // the left, their picture, name and address, and what ran it at the right, the model by its
+  // maker's logo with how hard it thought. The logo says the coding agent: its name is not written.
+  const chips: { fact: string; said: string; node: ReactNode }[] = [
+    ...(project ? [{ fact: 'Project', said: [project, base].filter(Boolean).join(' · '), node: <Folder className="size-3 shrink-0" aria-hidden /> }] : []),
+    ...prs.map(pr => {
+      const mark = pr.state ? PR_MARKS[pr.state] : undefined
+      return { fact: 'PR', said: `#${pr.number}${mark ? ` · ${capitalised(mark.word)}` : ''}`, node: mark ? <mark.Icon className={cn('size-3 shrink-0', mark.tone)} aria-hidden /> : null }
+    }),
+    ...(left ? [{ fact: 'Work', said: left.said, node: <left.Icon className="size-3 shrink-0" aria-hidden /> }] : []),
+    ...(startedOn ? [{ fact: 'Started on', said: startedOn, node: <Laptop className="size-3 shrink-0" aria-hidden /> }] : []),
+    ...(host ? [{ fact: 'Runs on', said: hostLabel ?? 'another host', node: <HOST_ICON className="size-3 shrink-0" aria-hidden /> }] : []),
   ]
+  // A run whose model its record does not say is its coding agent's logo alone.
+  const ranOn = picked ? [...(model ? [model] : []), ...(model && effort ? [effortLabel(effort)] : [])] : undefined
   const marks = (
     <>
       {/* The mark stands where a status word would, and carries that word for a reader who
@@ -1074,18 +1052,50 @@ function AgentHistoryRow({
   return (
     <Tooltip>
       <TooltipTrigger render={href !== undefined ? <a href={href} {...row} onClick={inPlace(onClick)} /> : <button type="button" {...row} onClick={onClick} />}>{marks}</TooltipTrigger>
-      {/* Pointed at, the row says all of it beside itself: the name whole, as Claude Code on the web
-          shows one too long for its list, and under it what is known of the run, a line each. */}
-      <TooltipContent side="right" align="start" className="max-w-80 px-3 py-2">
-        <span className="block text-sm whitespace-pre-wrap break-words">{titleText}</span>
-        <span role="list" className="mt-1.5 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5">
-          {facts.map(([fact, value]) => (
-            <span key={fact} role="listitem" className="col-span-2 grid grid-cols-subgrid">
-              <span className="text-faint-foreground">{fact}</span>
-              <span className="flex min-w-0 items-center gap-1.5 text-muted-foreground">{value}</span>
+      {/* Pointed at, the row says all of it beside itself. One width for every row, so the card
+          never changes size as the pointer goes down the list, and a long name or address wraps
+          or is cut inside it. */}
+      <TooltipContent side="right" align="start" className="w-75 max-w-[calc(100vw-2rem)] p-0">
+        <span className="block space-y-2 px-3 py-3">
+          <span data-card="name" className="block text-sm font-medium whitespace-pre-wrap break-words">
+            {titleText}
+          </span>
+          <span data-card="state" className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <RunMark status={marked} />
+            {capitalised(word)} · {subtitle}
+          </span>
+          {chips.length > 0 && (
+            <span role="list" className="flex flex-wrap gap-1.5 pt-0.5">
+              {chips.map(chip => (
+                <span key={`${chip.fact} ${chip.said}`} role="listitem" aria-label={`${chip.fact}: ${chip.said}`} className="inline-flex max-w-full items-center gap-1 rounded-full border border-border px-2 py-px text-xs text-muted-foreground">
+                  {chip.node}
+                  <span className="truncate">{chip.said}</span>
+                </span>
+              ))}
             </span>
-          ))}
+          )}
         </span>
+        {(person || ranOn) && (
+          <span data-card="foot" className="flex items-center gap-3 border-t border-border px-3 py-2">
+            {person && (
+              <>
+                <PersonMark email={person} name={name} picture={account?.avatar ?? picture} className="size-7" />
+                <span className="flex min-w-0 flex-1 flex-col leading-tight">
+                  {/* By their first name, as the sidebar's foot calls them: the foot shares its line with the model. */}
+                  <span className="truncate text-sm">{personName(person, name).split(/\s+/)[0]}</span>
+                  <span className="truncate text-xs text-muted-foreground">{person}</span>
+                </span>
+              </>
+            )}
+            {picked && ranOn && (
+              <span role="img" aria-label={[DRIVER_LABELS[picked], ...ranOn].join(' · ')} className={cn('flex shrink-0 items-center gap-1.5 text-xs whitespace-nowrap', !person && 'flex-1')}>
+                <DriverLogo driver={picked} className="size-3.5 shrink-0" />
+                {ranOn[0] && <span>{ranOn[0]}</span>}
+                {ranOn[1] && <span className="text-muted-foreground">· {ranOn[1]}</span>}
+              </span>
+            )}
+          </span>
+        )}
       </TooltipContent>
     </Tooltip>
   )
