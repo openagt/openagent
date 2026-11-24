@@ -71,13 +71,19 @@ export function DropdownMenuContent({
   align = 'start',
   anchor,
   collisionBoundary,
+  keepMounted = false,
   children,
   ...props
 }: ComponentProps<typeof Menu.Popup> &
-  Partial<Pick<ComponentProps<typeof Menu.Positioner>, 'side' | 'anchor' | 'collisionBoundary'>> & { sideOffset?: number; align?: 'start' | 'center' | 'end' }) {
+  Partial<Pick<ComponentProps<typeof Menu.Positioner>, 'side' | 'anchor' | 'collisionBoundary'>> & {
+    sideOffset?: number
+    align?: 'start' | 'center' | 'end'
+    /** What is inside stays mounted, hidden, while the menu is shut: a part of it that says something of itself, or opens a dialog, goes on doing so. */
+    keepMounted?: boolean
+  }) {
   const position = usePopupPosition()
   return (
-    <Menu.Portal>
+    <Menu.Portal keepMounted={keepMounted}>
       <Menu.Positioner
         {...position}
         side={side}

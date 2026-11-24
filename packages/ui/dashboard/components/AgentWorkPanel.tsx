@@ -3,6 +3,7 @@ import type { AgentWorktree } from '../../src/index.js'
 import { Folder, FolderGit2, GitBranch } from 'lucide-react'
 import { useLoaded } from '../lib/use-async.js'
 import { handoffSays, useAgentHandoff } from '../lib/use-agent-handoff.js'
+import { HandoffOffers } from './Places.js'
 import { onAgentCopies } from '../rpc/reads.js'
 import { Committing, HandoffActions, HandoffSummary } from './AgentHandoff.js'
 import { MiddleCut } from './MiddleCut.js'
@@ -147,7 +148,16 @@ export function CopyWorkRow({ projectId, agentId, repo, ended, saving, working, 
       branch={handoff.branch}
       summary={<HandoffSummary handoff={handoff} />}
       pr={handoff.pr}
-      actions={committing ? <Committing /> : <HandoffActions key={`${projectId}/${agentId}/${repo}`} projectId={projectId} agentId={agentId} repo={repo} state={state} onAsked={onAsked} />}
+      actions={
+        committing ? (
+          <Committing />
+        ) : (
+          <>
+            <HandoffActions key={`${projectId}/${agentId}/${repo}`} projectId={projectId} agentId={agentId} repo={repo} state={state} onAsked={onAsked} />
+            <HandoffOffers projectId={projectId} agentId={agentId} repo={repo} again={handoff} />
+          </>
+        )
+      }
       error={state.error}
     />
   )

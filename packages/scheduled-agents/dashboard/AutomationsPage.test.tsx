@@ -16,8 +16,8 @@ vi.mock('../../ui/dashboard/rpc/models.js', () => ({
   })),
 }))
 
-const GEMSTACK = { id: 'p1', name: 'gemstack', gitHost: true }
-const OTHER = { id: 'p2', name: 'other', gitHost: false }
+const GEMSTACK = { id: 'p1', name: 'gemstack', remote: 'github.com/me/project' }
+const OTHER = { id: 'p2', name: 'other' }
 
 function show(host: ModuleHost, projects: UiProject[] = [GEMSTACK]) {
   return render(
@@ -682,7 +682,7 @@ describe('the Automations page: its rows', () => {
       p3: { ok: true, output: { ok: true, on: true, keepAlive: false, running: true, model: 'opus', spendOffset: 7, schedule: [], unreadable: [], lastTick: { at: '2026-10-03T10:00:00.000Z', decisions: [], schedule: [], note: 'no skill of this project schedules a command' } } },
     }
     const { host } = hostAnswering(projectId => answers[projectId]!)
-    show(host, [GEMSTACK, OTHER, { id: 'p3', name: 'third', gitHost: true }])
+    show(host, [GEMSTACK, OTHER, { id: 'p3', name: 'third', remote: 'github.com/me/project' }])
     const gemstack = await screen.findByRole('region', { name: 'gemstack' })
     expect(within(gemstack).getByText((_, element) => element?.tagName === 'P' && element.textContent === 'No automations yet: make one with New automation, or pick a skill that schedules one in Settings › Skills.')).toBeTruthy()
     expect(screen.queryByText(/has not looked at its skills/)).toBeNull()

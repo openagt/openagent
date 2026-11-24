@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
-import type { UiAction } from '@openagt/ui/module'
+import type { UiActionAt } from '@openagt/ui/module'
 import { mountedOf, type MountedModules } from '@openagt/ui/module/testing'
 import { HotTicketsCard } from './HotTicketsCard.js'
 import { priorityTone } from './lib/ticket-priority.js'
@@ -10,8 +10,8 @@ import { fakeHost, renderWithHost, NO_MODULES, type Answers, type FakeHost } fro
 // command and the project's runs, and, unless a test mounts one, no other module. Whether a row
 // leads to a queue is the installed modules' business, not the card's.
 
-const alpha = { id: 'p1', name: 'alpha', gitHost: true }
-const beta = { id: 'p2', name: 'beta', gitHost: true }
+const alpha = { id: 'p1', name: 'alpha', remote: 'github.com/me/project' }
+const beta = { id: 'p2', name: 'beta', remote: 'github.com/me/project' }
 
 const ticket = (file: string, over: Record<string, unknown> = {}) => ({ file, title: file.replace(/\.md$/, ''), summary: '', date: '2026-08-01T00:00:00.000Z', planned: false, ...over })
 
@@ -114,7 +114,7 @@ describe('HotTicketsCard', () => {
   })
 
   test('a claim whose run stopped is gone on with in its run, or let go: the claim is lifted, whoever holds it, and the card reads again; it offers no link action meanwhile', async () => {
-    const run = vi.fn<UiAction['run']>(async () => ({ ok: true as const }))
+    const run = vi.fn<NonNullable<UiActionAt<'link.menu'>['run']>>(async () => ({ ok: true as const }))
     render(
       { p1: { list: [ticket('left.md', { locked: true, lockedBy: 'run-3' })], 'release left.md --force': { ok: true } }, p2: { list: [] } },
       { p1: [{ id: 'run-3', status: 'stopped', startedAt: '2026-08-01T00:00:00.000Z' }] },
@@ -131,7 +131,7 @@ describe('HotTicketsCard', () => {
   })
 
   test('a claimed ticket in review stays in Claimed but offers no link action', async () => {
-    const run = vi.fn<UiAction['run']>(async () => ({ ok: true as const }))
+    const run = vi.fn<NonNullable<UiActionAt<'link.menu'>['run']>>(async () => ({ ok: true as const }))
     render(
       { p1: { list: [ticket('held.md', { locked: true, lockedBy: 'someone', pr: { label: '#12', url: 'u' } }), ticket('urgent.md', { priority: '8' })] }, p2: { list: [] } },
       {},
@@ -149,7 +149,7 @@ describe('HotTicketsCard', () => {
     expect(screen.queryByRole('button', { name: /Add to queue/ })).toBeNull()
     cleanup()
 
-    const run = vi.fn<UiAction['run']>(async () => ({ ok: true as const }))
+    const run = vi.fn<NonNullable<UiActionAt<'link.menu'>['run']>>(async () => ({ ok: true as const }))
     render(answers, {}, mountedOf({ actions: { 'link.menu': [{ place: 'link.menu', id: 'add-to-queue', label: 'Add to queue', doneLabel: 'Queued', run, package: '@x/queue', projects: ['p1'] }] } }))
     fireEvent.click(await screen.findByRole('button', { name: 'Add to queue' }))
     await waitFor(() => expect(run).toHaveBeenCalledTimes(1))
@@ -158,7 +158,7 @@ describe('HotTicketsCard', () => {
   })
 
   test('a row\'s press shows beside its priority, never over it: the press sits just before the row\'s end', async () => {
-    const run = vi.fn<UiAction['run']>(async () => ({ ok: true as const }))
+    const run = vi.fn<NonNullable<UiActionAt<'link.menu'>['run']>>(async () => ({ ok: true as const }))
     render({ p1: { list: [ticket('urgent.md', { priority: '8' })] }, p2: { list: [] } }, {}, mountedOf({ actions: { 'link.menu': [{ place: 'link.menu', id: 'add-to-queue', label: 'Add to queue', doneLabel: 'Queued', run, package: '@x/queue', projects: ['p1'] }] } }))
     const press = await screen.findByRole('button', { name: 'Add to queue' })
     const fact = screen.getByText(/^Priority 8/)

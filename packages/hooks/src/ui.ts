@@ -5,6 +5,7 @@
 // (`ui.action`), something to pick in a shared menu (`ui.option`), and how a kind of content looks
 // (`ui.render`). Each place's props are typed here, so a new place needs no new hook.
 import type { ComponentType } from 'react'
+import type { RunOptions } from './run.js'
 
 /** An icon, drawn at the size its `className` gives. */
 export type UiIcon = ComponentType<{ className?: string; 'aria-hidden'?: boolean }>
@@ -13,8 +14,12 @@ export type UiIcon = ComponentType<{ className?: string; 'aria-hidden'?: boolean
 export interface UiProject {
   id: string
   name: string
-  /** Whether the project has a git host; without one no pull request can be opened there. */
-  gitHost: boolean
+  /**
+   * Its repository's address, origin's, as `ProjectRef.remote` names it (`github.com/me/shop`):
+   * where a module tells whether the project is on its git host. None for a project with no
+   * remote, whose work stays on this computer.
+   */
+  remote?: string
 }
 
 /** What the shell does for an entry's functions, as a view gets it from the shell's `useModuleHost`: the module's own package's commands, run in a project. */
@@ -156,6 +161,49 @@ export interface UiConnectAgentProps {
   onConnected: () => void
 }
 
+/** Which box a control under the message box is drawn in. */
+export type UiComposerIn =
+  /** The launcher's: the picks of the next run, which go with its Start. */
+  | 'launcher'
+  /** A session's: the picks it started with, as its record keeps them; said, and not offered, unless the control can change them for its next message. */
+  | 'session'
+  /** A profile's editor: the profile's options, which a run on it gets where it picks none. */
+  | 'profile'
+
+/** What a control says of its pick with the gear's menu shut, in its hover; and whether a run needs a press of it first. */
+export interface UiControlSaid {
+  /** A few words: "3 skills", "@octocat". */
+  words: string
+  /** It needs a press before a run can do its work (no account to push as): the gear is in the warning's colour. */
+  warn?: boolean
+}
+
+/** What a control under the message box is given: the box it is in, the run options picked there, and how it changes them. */
+export interface UiComposerControlProps {
+  in: UiComposerIn
+  /** The project the box is in; none for a session with no project, and in a profile's editor, which is for any project. */
+  projectId?: string
+  /** The session whose box it is, in a session's box. */
+  agentId?: string
+  /**
+   * The options picked: the next run's in the launcher (the ones picked for that run alone: a pick
+   * made for every run is its module's setting, which its step reads where the run's options say
+   * nothing), the session's as its record keeps them, the profile's in its editor.
+   */
+  options: RunOptions
+  /** Change the options picked, whole: the next run's, the next message's in a session's box, the profile's in its editor. */
+  onChange(options: RunOptions): void
+  /** A start or a send is under way: the control takes no pick. */
+  busy: boolean
+  /** In the launcher: move it to another project, or to no project (`undefined`), what is typed in the box taken along. */
+  pickProject?(projectId: string | undefined): void
+  /** Say what the control picks, for the gear's hover with its menu shut; nothing to say when it is not drawn. A control in the gear's menu stays mounted while the menu is shut. */
+  say(said: UiControlSaid | undefined): void
+}
+
+/** What the labels at the end of the row above a session's message box are given: the run, and whether its agent is working. */
+export type UiChatLabelsProps = UiRunProps
+
 /**
  * The view places, by name: what an entry says of itself there (`entry`), and what its
  * component is given (`props`).
@@ -226,6 +274,15 @@ export interface ViewPlaces {
   'chat.summary': { entry: { id: string }; props: UiRunProps }
   /** A strip above a run's chat, with a word on the run: a host's, on a run it runs, say where the run is and when its news comes. */
   'chat.notice': { entry: { id: string }; props: UiRunNoticeProps }
+  /** Words at the end of the row above a session's message box: github's pull request labels. */
+  'chat.labels': { entry: { id: string; order?: number }; props: UiChatLabelsProps }
+  /**
+   * A control of the message box, writing its module's run options: in the row above the box
+   * (`start`: where the run starts, after the project), a line of the gear's menu (`setup`), after
+   * the gear in the row under the box (`context`), or at the right of that row (`row`: the model).
+   * Drawn in the launcher, in a session's box, and in a profile's editor.
+   */
+  'composer.control': { entry: { id: string; at: 'start' | 'setup' | 'context' | 'row'; order?: number }; props: UiComposerControlProps }
   /**
    * Prompts a person saved, which the message box offers in its `/` menu and its Commands menu,
    * each loading its text into the box. The view is the panel that saves what the box holds as
@@ -292,43 +349,127 @@ export interface UiLink {
   priority?: number
 }
 
-/** What an action did: done, or stopped, with the reason. */
-export type UiActionResult = { ok: true } | { ok: false; error: string }
+/** What an action did: done, with what it did in a few words when the place says it ("Opened PR #12."), or stopped, with the reason. */
+export type UiActionResult = { ok: true; said?: string } | { ok: false; error: string }
+
+/** What is asked before an action runs. */
+export interface UiConfirm {
+  title: string
+  description?: string
+  /** The press that runs it: "Remove". */
+  confirmLabel: string
+  /** It loses something: the press is in the danger colour. */
+  danger?: true
+}
+
+/**
+ * What an action offers now, at a place whose actions come and go with what they act on (a
+ * branch's next step, a project's menu): asked each time the place is drawn or what it is about
+ * changes, and after any of its actions ran. None: it is not offered now.
+ */
+export interface UiOffer {
+  /** Its label now, in place of the action's: "Update PR". */
+  label?: string
+  /** What its hover says. */
+  title?: string
+  /** A few words said beside it, in the bar under a run: "not in the PR yet". */
+  note?: string
+  /** Only the note is said: there is nothing to press now ("Merged into main."). */
+  noteOnly?: true
+  /** It opens this address in a new tab, in place of running. */
+  href?: string
+  /** Asked before it runs. */
+  confirm?: UiConfirm
+  /** It loses something: drawn in the danger colour. */
+  danger?: true
+  /** Its place among the place's offers, lower first; the action's `order`, else 50, when unsaid. In the bar under a run the first is its press, the others are under its arrow. */
+  rank?: number
+}
 
 /** The action places, by name: what an action there is done on. */
 export interface ActionPlaces {
   /** Beside a link a page shows, of a project that has the module: the queue's "Add to queue". */
   'link.menu': { projectId: string; links: UiLink[] }
+  /**
+   * The bar above an ended run's message box: its work's next step (Commit, Open PR, Merge…),
+   * for the run's own checkout, or for one of its copies of repos (`repo`, by its name).
+   */
+  'chat.handoff': { projectId: string; agentId: string; repo?: string }
+  /** The menu of a session, under its name. */
+  'chat.menu': { projectId: string; agentId: string }
+  /** The menu of a project, on its pages' bars. */
+  'project.menu': { projectId: string }
+  /** The menu under the person's picture. */
+  'person.menu': Record<string, never>
+  /**
+   * What fixes an item the module said needs the person (`AttentionFix.action` names the action by
+   * its id), wherever the item is shown: the project it is about, and the item's id.
+   */
+  'attention.fix': { projectId?: string; item?: string }
 }
 
 export type ActionPlace = keyof ActionPlaces
 
+/** Something to do at the place `P`. */
+export interface UiActionAt<P extends ActionPlace> {
+  place: P
+  /** Which action this is among the module's own. */
+  id: string
+  /** Its label, a short verb phrase: "Add to queue". */
+  label: string
+  /** What it says while it runs: "Adding…". The label with a spinner otherwise. */
+  busyLabel?: string
+  /** What it says once done: "Queued". The label with a check mark otherwise. */
+  doneLabel?: string
+  icon?: UiIcon
+  /** Its place among the place's actions, lower first; 50 when unsaid, ties by package name. */
+  order?: number
+  /** Do it, through the module's own commands or server; a batch stops at its first failure and says why. None for one that only opens a link or a dialog. */
+  run?(host: UiHost, on: ActionPlaces[P]): Promise<UiActionResult>
+  /** What of the place it is done on already: an action whose targets all are rests on its done label. */
+  done?(host: UiHost, on: Omit<ActionPlaces[P], 'links'>): Promise<(link: UiLink) => boolean>
+  /** Whether it is offered now, and how: offered as it is declared when unsaid. */
+  offer?(host: UiHost, on: ActionPlaces[P]): UiOffer | undefined | Promise<UiOffer | undefined>
+  /** What it opens when pressed, in place of running: a dialog of the module's own, told when it is done. */
+  Dialog?: ComponentType<{ on: ActionPlaces[P]; onDone(result?: UiActionResult): void }>
+}
+
 /** Something to do at a place. */
-export type UiAction = {
-  [P in ActionPlace]: {
-    place: P
-    /** Which action this is among the module's own. */
-    id: string
-    /** Its label, a short verb phrase: "Add to queue". */
-    label: string
-    /** What it says while it runs: "Adding…". The label with a spinner otherwise. */
-    busyLabel?: string
-    /** What it says once done: "Queued". The label with a check mark otherwise. */
-    doneLabel?: string
-    icon?: UiIcon
-    /** Do it, through the module's own commands; a batch stops at its first failure and says why. */
-    run(host: UiHost, on: ActionPlaces[P]): Promise<UiActionResult>
-    /** What of the place it is done on already: an action whose targets all are rests on its done label. */
-    done?(host: UiHost, on: Omit<ActionPlaces[P], 'links'>): Promise<(link: UiLink) => boolean>
-  }
-}[ActionPlace]
+export type UiAction = { [P in ActionPlace]: UiActionAt<P> }[ActionPlace]
 
 /** The option places, by name: what an option there is. */
 export interface OptionPlaces {
-  /** The Auto menu's levels: how far a run takes its work, each with the sentence its pick adds to the prompt. */
-  'composer.auto': { label: string; sentence: string }
-  /** The project picker's entries beside the registered projects, such as the repos an account can reach. */
-  'composer.where': { label: string; description?: string }
+  /**
+   * The Auto menu's levels: how far a run takes its work, each with the sentence its pick adds to
+   * the prompt. The option's id is the level it picks (`RunOptions.publish`); a project is offered
+   * it where `offered` says so (a pull request where the project is on the module's git host), and a session with no project
+   * (`project` none) where its copies of repos may be.
+   */
+  'composer.auto': { label: string; sentence: string; offered?(project: UiProject | undefined): boolean }
+  /**
+   * The project picker's entries beside the registered projects: the repos a module's accounts
+   * reach, which a pick adds as a project, cloned as the account that reaches it
+   * (`account.access`). The picker leaves out the ones on this computer already.
+   */
+  'composer.where': {
+    /** The heading the repos are listed under: "On GitHub". */
+    label: string
+    description?: string
+    /** The repos it offers now; `loading` while some are still being read, `unreached` in words when an account could not be read. */
+    repos(host: UiHost): Promise<{ repos: UiWhereRepo[]; loading?: boolean; unreached?: string }>
+  }
+}
+
+/** A repository the project picker offers to add as a project. */
+export interface UiWhereRepo {
+  /** Its address, as `ProjectRef.remote` names a repository (`github.com/me/shop`): what a pick clones. */
+  address: string
+  /** Its name in the list: `me/shop`. */
+  label: string
+  /** What the list says after its name: its description. */
+  detail?: string
+  /** When it was last pushed to, ISO: the list shows the newest first. */
+  pushedAt?: string
 }
 
 export type OptionPlace = keyof OptionPlaces

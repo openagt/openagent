@@ -51,6 +51,7 @@ interface StartName {
  * reads as the thing it names goes on to the host.
  */
 function refusedPicks(options: StartAgentOptions, noProject: boolean): string | undefined {
+  if (options.options !== undefined && !isRunOptions(options.options)) return 'The run options are one object per module.'
   // A session with no project: with no branch; the repos it has are copied into its folder, and are
   // what it publishes. Its git host account goes with it: it may reach the host all the same.
   if (noProject && (options.base !== undefined || options.prBase !== undefined || options.projectSkills !== undefined)) {
@@ -324,7 +325,34 @@ export function createProjectRuntime({ cwd, env, naming, host, otherHosts = asyn
 }
 
 /** A Start's picks as the run's options: one slice per module that acts on them (#2394). */
+/**
+ * Whether `value` reads as run options: an object of the modules' slices, each an object, beside
+ * the two picks every run has (where it runs, how far it takes its work), each a word. What a
+ * slice holds is its module's to check: its steps refuse what they do not take.
+ */
+function isRunOptions(value: unknown): value is RunOptions {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
+  return Object.entries(value).every(([key, slice]) =>
+    key === 'host' || key === 'publish' ? typeof slice === 'string' : MODULE_NAME.test(key) && typeof slice === 'object' && slice !== null && !Array.isArray(slice),
+  )
+}
+
+/** The picks a Start's controls made (`options`) over the ones it names flat, slice by slice. */
+function withPicked(flat: RunOptions, picked: RunOptions | undefined): RunOptions {
+  if (picked === undefined) return flat
+  const merged: Record<string, unknown> = { ...flat }
+  for (const [key, slice] of Object.entries(picked)) {
+    const was = merged[key]
+    merged[key] = typeof slice === 'object' && typeof was === 'object' && was !== null ? { ...was, ...slice } : slice
+  }
+  return merged as RunOptions
+}
+
 function runOptionsOf(options: StartAgentOptions, publish: RunOptions['publish'], repos: { name: string; from: string }[] | undefined): RunOptions {
+  return withPicked(flatOptionsOf(options, publish, repos), options.options)
+}
+
+function flatOptionsOf(options: StartAgentOptions, publish: RunOptions['publish'], repos: { name: string; from: string }[] | undefined): RunOptions {
   const agentDriver = {
     ...(options.driver !== undefined ? { driver: options.driver } : {}),
     ...(options.model !== undefined ? { model: options.model } : {}),

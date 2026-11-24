@@ -111,7 +111,7 @@ describe("Quota's stop line is a module's", () => {
   test('the module is asked with only the projects that have its package, and its answer is where the handle rests', async () => {
     view = reading(20, 15)
     await show()
-    expect(readOffset.mock.calls[0]![1]).toEqual([{ id: 'p1', name: 'gemstack', gitHost: true }])
+    expect(readOffset.mock.calls[0]![1]).toEqual([{ id: 'p1', name: 'gemstack' }])
     expect(Number((screen.getByLabelText('Unattended work stops at') as HTMLInputElement).value)).toBeCloseTo((4 / 7) * 100 + 15, 5)
   })
 

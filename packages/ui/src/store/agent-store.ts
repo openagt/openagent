@@ -5,6 +5,7 @@ import { OPENAGENT_DIR } from '../openagent-dir.js'
 import { projectBranches, type BranchesFor, type Checkout } from './branches.js'
 import { isRunId, parseRunCard, projectRuns, type AnyDiaryLine, type RunsFor } from './runs.js'
 import { eventsOf, fromRunCard } from './run-record.js'
+import type { RunOptions } from '@openagt/hooks'
 
 /**
  * The read side of a project's runs (#1774). The daemon runs no agent and writes no run: a run's
@@ -89,6 +90,8 @@ export interface AgentMeta {
    * branch is gone, and its changes are read from this commit. Absent on a run that is not landed.
    */
   landed?: string
+  /** The run's options, one slice per module, as its record keeps them: what its box's controls say. */
+  options?: RunOptions
   /** The wrapped agent (from the `session` event). */
   driver?: string
   /** The workspace the agent builds in (from the `session` event). */

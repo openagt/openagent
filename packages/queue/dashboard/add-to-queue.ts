@@ -1,5 +1,5 @@
 import { ListPlus } from 'lucide-react'
-import { rpcClient, type UiAction, type UiHost } from '@openagt/ui/module'
+import { rpcClient, type UiActionAt, type UiHost } from '@openagt/ui/module'
 import { addToQueue, alreadyQueued } from '../src/module.js'
 
 const server = (host: UiHost) => rpcClient<typeof import('../src/server.js')>(host)
@@ -10,7 +10,7 @@ const server = (host: UiHost) => rpcClient<typeof import('../src/server.js')>(ho
  * (`[text](href)`, or the plain text when it points nowhere), in its priority's section when the
  * page gave one. The module knows nothing of what the links name: a ticket, a plan, anything.
  */
-export const ADD_TO_QUEUE: UiAction = {
+export const ADD_TO_QUEUE: UiActionAt<'link.menu'> = {
   place: 'link.menu',
   id: 'add-to-queue',
   label: 'Add to queue',

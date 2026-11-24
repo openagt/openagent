@@ -2,8 +2,8 @@ import { describe, expect, test } from 'vitest'
 import { STATUS, hostAnswering } from './fixtures.js'
 import { agentOf, modelLabel, modelOf, runsOnWords, agentsArgs, agentsDraftOf, atOnce, atOnceWords, saysAtOnce, cannotRun, decided, draftOf, heldBy, isOwn, outcomeWords, loosestSpendOffset, nextWords, offsetsThatDiffer, ownPace, pace, paceArgs, paceProblem, publishChoices, publishLabel, publishes, readSchedulers, saveSpendOffset, schedulerRow, schedulerStatus, schedulerStopped, nextStart, startsNext, spelled, typedOffset, withDraft, rowTitle, unlistedWords } from './schedulers.js'
 
-const GEMSTACK = { id: 'p1', name: 'gemstack', gitHost: true }
-const OTHER = { id: 'p2', name: 'other', gitHost: false }
+const GEMSTACK = { id: 'p1', name: 'gemstack', remote: 'github.com/me/project' }
+const OTHER = { id: 'p2', name: 'other' }
 
 /** What a row carries of who runs it when a test is about something else: made for Claude Code, and either agent can run it. */
 const MADE = { home: 'claude-code', able: ['claude-code', 'codex'] } as const
@@ -163,7 +163,7 @@ describe('reading through the server part, saving through the command', () => {
   })
 
   test('the projects whose offset is not the one in force are named with their own; none when they agree or did not answer', () => {
-    const row = (name: string, spendOffset?: number) => ({ ...schedulerRow({ id: name, name, gitHost: true }, {}), ...(spendOffset !== undefined ? { spendOffset } : {}) })
+    const row = (name: string, spendOffset?: number) => ({ ...schedulerRow({ id: name, name, remote: 'github.com/me/project' }, {}), ...(spendOffset !== undefined ? { spendOffset } : {}) })
     expect(offsetsThatDiffer([row('a', 12), row('b', -5.04), row('c'), row('d', 12)])).toEqual([{ name: 'b', offset: -5 }])
     expect(offsetsThatDiffer([row('a', 4), row('b', 4)])).toEqual([])
     expect(offsetsThatDiffer([row('a')])).toEqual([])

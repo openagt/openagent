@@ -1,3 +1,4 @@
+import type { RunOptions } from '@openagt/hooks'
 import type { AgentMeta } from '../../src/index.js'
 
 type StartFacts = Pick<AgentMeta, 'base' | 'baseCommit'> | undefined
@@ -14,6 +15,8 @@ type StartFacts = Pick<AgentMeta, 'base' | 'baseCommit'> | undefined
  * the record comes seconds later, and the row above the box would change under the person's eyes.
  */
 export interface StartPicks {
+  /** What the modules' controls picked for the run (`composer.control`). */
+  options?: RunOptions
   branch?: string
   gitAccount?: string
   publish?: string

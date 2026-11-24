@@ -21,6 +21,8 @@ import { AgentFix, agentLoginState, hostLoginState, hostWords, useAgentState, us
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
 import type { ListedPage } from '../lib/use-modules.js'
+import { useAttention } from '../lib/use-attention.js'
+import { attentionDetail, attentionKey, useAttentionFixes } from './Attention.js'
 
 // "Discover OpenAgent", the Overview's first steps (#958): what a new install can set up, each with
 // the state it is actually in rather than a static list to read past.
@@ -109,6 +111,8 @@ export function OnboardingChecklist({
   const connect = views['agent.connect'][0]
   // The step the person opened; by default, the first one not done.
   const [picked, setPicked] = useState<string | undefined>()
+  const setupItems = (useAttention(null) ?? []).filter(item => item.kind === 'setup' && item.scope === 'computer')
+  const fixes = useAttentionFixes(undefined, () => void reload())
 
   // The project the steps act on: the only/most recent one. A first-session flow rarely has a second.
   const targetProjectId = data?.projects[0]?.projectId ?? null
@@ -170,9 +174,23 @@ export function OnboardingChecklist({
     ]
   })
 
+  // What the modules say needs setting up on this computer (`app.attention`), each a step with its fix.
+  const moduleSteps: Step[] = setupItems.map(item => {
+    const fix = fixes.fixOf(item)
+    const detail = attentionDetail(item)
+    return {
+      key: `attention:${attentionKey(item)}`,
+      label: item.words,
+      ...(detail !== undefined ? { description: detail } : {}),
+      done: false,
+      ...(fix && item.fix ? { action: <Button size="sm" loading={fixes.pending} onClick={fix}>{item.fix.label}</Button> } : {}),
+    }
+  })
+
   const steps: Step[] = [
     agentStep,
     ...hostSteps,
+    ...moduleSteps,
     {
       key: 'project',
       label: 'Add your first project',
@@ -264,6 +282,8 @@ export function OnboardingChecklist({
   // read, where every one known so far is done: no frame is drawn that the answer would take away.
   if ((reading ? frame : steps).every(step => step.done)) return null
   return (
+    <>
+    {fixes.overlay}
     <PanelGroup
       bare
       title="Discover OpenAgent"
@@ -392,6 +412,7 @@ export function OnboardingChecklist({
         </Panel>
       )}
     </PanelGroup>
+    </>
   )
 }
 

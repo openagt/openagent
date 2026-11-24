@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, type ComponentType } fr
 import { flushSync } from 'react-dom'
 import { RENDER_KINDS } from '@openagt/hooks/ui'
 import { onModules, type DashboardModule } from '../rpc/modules.js'
-import type { ActionPlace, OptionPlace, RenderKind, RenderKinds, UiAction, UiModuleDefinition, UiOption, UiRender, UiTextRender, UiView, ViewPlace } from '../module/index.js'
+import type { ActionPlace, OptionPlace, RenderKind, RenderKinds, UiAction, UiActionAt, UiModuleDefinition, UiOption, UiRender, UiTextRender, UiView, ViewPlace } from '../module/index.js'
 import { usePolled } from './use-async.js'
 import { pluginsAgain } from './plugins-switched.js'
 import { isPageSegment, SESSIONS_ID } from '../../src/project-address.js'
@@ -14,6 +14,8 @@ import { isPageSegment, SESSIONS_ID } from '../../src/project-address.js'
  */
 interface Of {
   package: string
+  /** The module's name, as its Node part's: what an item it says needs the person names it by (`Attention.module`). */
+  module?: string
   projects: string[]
   sessions?: true
   computer?: true
@@ -25,7 +27,7 @@ export type Mounted<Brought> = Brought & Of
 /** The view at `place`, as the shell mounts it. */
 export type MountedView<P extends ViewPlace> = Mounted<Extract<UiView, { place: P }>>
 /** The action at `place`, as the shell mounts it. */
-export type MountedAction<P extends ActionPlace> = Mounted<Extract<UiAction, { place: P }>>
+export type MountedAction<P extends ActionPlace> = Mounted<UiActionAt<P>>
 /** The option at `place`, as the shell mounts it. */
 export type MountedOption<P extends OptionPlace> = Mounted<Extract<UiOption, { place: P }>>
 
@@ -41,7 +43,9 @@ export interface MountedModules {
    * The views, by place: the pages (a word two modules claim going to the first), the Overview's
    * cards and line and the Settings entries by their `order` then their package, the panes, the
    * parts of a run's page, what this computer's modules draw over every page, and the usage
-   * bar's line (the first module's that has one); every other place in package order.
+   * bar's line (the first module's that has one); the message box's controls and the labels of a
+   * session's row by their `order`; every other place in package order. Actions and options by
+   * their `order`, then their package.
    */
   views: { [P in ViewPlace]: MountedView<P>[] }
   actions: { [P in ActionPlace]: MountedAction<P>[] }
@@ -52,8 +56,8 @@ export interface MountedModules {
   loaded: boolean
 }
 
-const VIEW_PLACES: readonly ViewPlace[] = ['app.page', 'app.overlay', 'overview.card', 'overview.line', 'chat.pane', 'chat.summary', 'chat.notice', 'composer.prompts', 'settings.section', 'permissions.section', 'usage.line', 'agent.connect']
-const ACTION_PLACES: readonly ActionPlace[] = ['link.menu']
+const VIEW_PLACES: readonly ViewPlace[] = ['app.page', 'app.overlay', 'overview.card', 'overview.line', 'chat.pane', 'chat.summary', 'chat.notice', 'chat.labels', 'composer.control', 'composer.prompts', 'settings.section', 'permissions.section', 'usage.line', 'agent.connect']
+const ACTION_PLACES: readonly ActionPlace[] = ['link.menu', 'chat.handoff', 'chat.menu', 'project.menu', 'person.menu', 'attention.fix']
 const OPTION_PLACES: readonly OptionPlace[] = ['composer.auto', 'composer.where']
 
 /** Nothing mounted at any place. */
@@ -70,9 +74,17 @@ function nothingAt(loaded: boolean): MountedModules {
 const NOTHING_MOUNTED: MountedModules = nothingAt(false)
 
 /** What is mounted when the modules bring only `parts`, at their places; loaded unless said. For the shell's tests and the modules'. */
-export function mountedOf(parts: { views?: { [P in ViewPlace]?: MountedView<P>[] }; actions?: { [P in ActionPlace]?: MountedAction<P>[] }; renders?: Mounted<UiRender>[]; loaded?: boolean } = {}): MountedModules {
+export function mountedOf(
+  parts: { views?: { [P in ViewPlace]?: MountedView<P>[] }; actions?: { [P in ActionPlace]?: MountedAction<P>[] }; options?: { [P in OptionPlace]?: MountedOption<P>[] }; renders?: Mounted<UiRender>[]; loaded?: boolean } = {},
+): MountedModules {
   const nothing = nothingAt(parts.loaded ?? true)
-  return { ...nothing, views: { ...nothing.views, ...parts.views }, actions: { ...nothing.actions, ...parts.actions }, ...(parts.renders ? { renders: parts.renders } : {}) }
+  return {
+    ...nothing,
+    views: { ...nothing.views, ...parts.views },
+    actions: { ...nothing.actions, ...parts.actions },
+    options: { ...nothing.options, ...parts.options },
+    ...(parts.renders ? { renders: parts.renders } : {}),
+  }
 }
 
 /** Each module's browser part, imported once per page load, by URL; a module that fails to load is skipped. */
@@ -212,7 +224,7 @@ function mount(loadedModules: { module: DashboardModule; definition: UiModuleDef
   const options = mounted.options as Record<OptionPlace, Mounted<UiOption>[]>
   for (const { module, definition } of loadedModules) {
     if (!definition) continue
-    const of: Of = { package: module.package, projects: module.projects, ...(module.sessions ? { sessions: true as const } : {}), ...(module.computer ? { computer: true as const } : {}) }
+    const of: Of = { package: module.package, module: definition.name, projects: module.projects, ...(module.sessions ? { sessions: true as const } : {}), ...(module.computer ? { computer: true as const } : {}) }
     for (const view of definition.hooks['ui.view'] ?? []) {
       const at = views[view.place]
       if (!at) continue
@@ -230,7 +242,8 @@ function mount(loadedModules: { module: DashboardModule; definition: UiModuleDef
     for (const render of definition.hooks['ui.render'] ?? []) if (!mounted.renders.some(each => each.kind === render.kind)) mounted.renders.push({ ...render, ...of })
   }
   // Numbers, not a list the shell keeps: a third package sits between two others without the shell knowing it exists.
-  for (const place of ['overview.card', 'overview.line', 'settings.section', 'permissions.section'] as const) views[place].sort(byMountOrder)
+  for (const place of ['overview.card', 'overview.line', 'settings.section', 'permissions.section', 'chat.labels', 'composer.control'] as const) views[place].sort(byMountOrder)
+  for (const place of ACTION_PLACES) actions[place].sort(byMountOrder)
   for (const place of OPTION_PLACES) options[place].sort(byMountOrder)
   return mounted
 }

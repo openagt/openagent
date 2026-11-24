@@ -5,7 +5,7 @@ import { isActivated } from '../project.js'
 import { readAllAgents, type AgentMeta } from '../store/index.js'
 import type { ProjectError, StaysLocal } from '../project-state.js'
 import { projectGitHost, type GitHostFor } from '../store/git-host.js'
-import { projectNameOf, sessionsHome } from '@openagt/agent-data'
+import { projectNameOf, repositoryAddress, sessionsHome } from '@openagt/agent-data'
 import { SESSIONS_ID } from '../project-address.js'
 
 /**
@@ -27,6 +27,8 @@ export interface ProjectSummary {
   activated: boolean
   /** Whether one of the project's packages provides a git host; without one no pull request can be opened there. */
   gitHost: boolean
+  /** Its repository's address, origin's (`github.com/me/shop`), as the hooks name it; none for a project with no remote. */
+  remote?: string
   /** ISO timestamp of the project's newest activity: its most recent session. */
   lastActivityAt?: string
   /**
@@ -67,6 +69,8 @@ export interface SummarizeDeps {
   gitHost?: GitHostFor
   /** The project's name. Defaults to {@link projectNameOf}: its repository's. */
   name?: (path: string) => Promise<string>
+  /** Its repository's address. Defaults to {@link repositoryAddress}: origin's. */
+  remote?: (path: string) => Promise<string | undefined>
 }
 
 /**
@@ -94,6 +98,8 @@ export async function summarizeProject(record: ProjectRecord, deps: SummarizeDep
     gitHost: (await (deps.gitHost ?? projectGitHost)(record.path).catch(() => undefined)) !== undefined,
   }
   if (lastActivityAt) summary.lastActivityAt = lastActivityAt
+  const remote = await (deps.remote ?? (path => repositoryAddress(path)))(record.path).catch(() => undefined)
+  if (remote !== undefined) summary.remote = remote
   return summary
 }
 

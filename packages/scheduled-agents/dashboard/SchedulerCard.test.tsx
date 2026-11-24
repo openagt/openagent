@@ -4,8 +4,8 @@ import { ModuleHostContext, type ModuleHost, type UiProject } from '@openagt/ui/
 import { SchedulerCard, offWords } from './SchedulerCard.js'
 import { ON_CLAUDE, STATUS, hostAnswering } from './fixtures.js'
 
-const GEMSTACK = { id: 'p1', name: 'gemstack', gitHost: true }
-const OTHER = { id: 'p2', name: 'other', gitHost: false }
+const GEMSTACK = { id: 'p1', name: 'gemstack', remote: 'github.com/me/project' }
+const OTHER = { id: 'p2', name: 'other' }
 
 function show(host: ModuleHost, projects: UiProject[] = [GEMSTACK, OTHER]) {
   return render(

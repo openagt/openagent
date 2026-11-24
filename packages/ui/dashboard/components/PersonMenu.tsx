@@ -11,6 +11,9 @@ import { useBackup } from '../lib/use-backup.js'
 import { AGENT_DATA_ENTRY } from './AgentDataSettings.js'
 import { personLetters } from './PersonMark.js'
 import { cn } from '../lib/utils.js'
+import { useMenuActions } from './Places.js'
+import { useAttention } from '../lib/use-attention.js'
+import { attentionDetail, attentionKey, useAttentionFixes } from './Attention.js'
 
 // The foot of the sidebar: the person at this dashboard, their picture and first name, as one row
 // that opens their menu (his pick, over a row of three icons): the theme and
@@ -46,9 +49,16 @@ export function PersonMenu({ onSettings }: { onSettings: (entry?: string) => voi
   const { missing } = useMissing()
   const { view: backup } = useBackup()
   const notBackedUp = (backup?.gaps.length ?? 0) > 0
-  const needs = missing.length > 0 || notBackedUp
+  // What the modules say needs the person on this computer (`app.attention`): listed here, each opening its fix, and the dot on the picture.
+  const attention = (useAttention(null) ?? []).filter(item => item.kind === 'setup' && item.scope === 'computer')
+  const fixes = useAttentionFixes(undefined)
+  const needs = missing.length > 0 || notBackedUp || attention.length > 0
+  // What the modules offer in the person's menu (`person.menu`), asked again as it opens.
+  const [open, setOpen] = useState(false)
+  const offered = useMenuActions('person.menu', NOTHING_ON, undefined, open)
   return (
-    <DropdownMenu>
+    <>
+    <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger
         aria-label={`${person ? `${person.name}: settings` : 'Settings'}${needs ? ', something is missing' : ''}`}
         // A row of the sidebar's: 32 high (44 on a phone), the text's colour at 4% under the pointer, at 8% while its menu is open.
@@ -80,12 +90,27 @@ export function PersonMenu({ onSettings }: { onSettings: (entry?: string) => voi
                 <span className="flex-1">{item.action}</span>
               </DropdownMenuItem>
             ))}
+            {attention.map(item => {
+              const fix = fixes.fixOf(item)
+              return (
+                <DropdownMenuItem key={attentionKey(item)} {...(fix ? { onClick: fix } : { disabled: true })} {...(attentionDetail(item) !== undefined ? { title: attentionDetail(item) } : {})}>
+                  <CircleAlert className="size-4 shrink-0 text-warning" aria-hidden />
+                  <span className="flex-1">{item.fix?.label ?? item.words}</span>
+                </DropdownMenuItem>
+              )
+            })}
             {notBackedUp && (
               <DropdownMenuItem onClick={() => onSettings(AGENT_DATA_ENTRY)}>
                 <CircleAlert className="size-4 shrink-0 text-warning" aria-hidden />
                 <span className="flex-1">Back up your agent data…</span>
               </DropdownMenuItem>
             )}
+            <DropdownMenuSeparator />
+          </>
+        )}
+        {offered.offered > 0 && (
+          <>
+            {offered.items}
             <DropdownMenuSeparator />
           </>
         )}
@@ -97,5 +122,11 @@ export function PersonMenu({ onSettings }: { onSettings: (entry?: string) => voi
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+    {offered.overlay}
+    {fixes.overlay}
+    </>
   )
 }
+
+/** The person's menu acts on nothing but the person. */
+const NOTHING_ON = {}

@@ -4,8 +4,8 @@ import { ModuleHostContext, type ModuleCommandResult, type ModuleHost, type UiPr
 import { SchedulerSettings } from './SchedulerSettings.js'
 import { STATUS, hostAnswering } from './fixtures.js'
 
-const GEMSTACK = { id: 'p1', name: 'gemstack', gitHost: true }
-const OTHER = { id: 'p2', name: 'other', gitHost: false }
+const GEMSTACK = { id: 'p1', name: 'gemstack', remote: 'github.com/me/project' }
+const OTHER = { id: 'p2', name: 'other' }
 
 function show(host: ModuleHost, projects: UiProject[] = [GEMSTACK]) {
   return render(
@@ -33,7 +33,7 @@ describe('Settings → Scheduler', () => {
     const { host, call } = scheduler()
     call.mockImplementation(() => new Promise<ModuleCommandResult>(() => {}))
     // A project of its own: a read is shared by everything that asks it under the same projects, and this one never answers.
-    show(host, [{ id: 'p3', name: 'slow', gitHost: false }])
+    show(host, [{ id: 'p3', name: 'slow' }])
     expect(screen.getByText('Loading…')).toBeTruthy()
     expect(screen.queryByLabelText('Spend offset')).toBeNull()
   })

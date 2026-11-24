@@ -24,6 +24,7 @@ import { buildResumeCommand } from '../lib/resume-command.js'
 import { PreferredEditorItems } from './PreferredEditorItems.js'
 import { ConfirmDialog } from './ui/confirm-dialog.js'
 import { RemoveProjectDialog } from './RemoveProjectDialog.js'
+import { useMenuActions } from './Places.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import {
   DropdownMenu,
@@ -162,10 +163,13 @@ export function AgentActionsMenu({
       <ExternalLink className="h-3.5 w-3.5 shrink-0" /> Open on {home.name}
     </DropdownMenuItem>
   )
+  // What the modules offer in the session's menu (`chat.menu`), or in the project's (`project.menu`), asked again as it opens.
+  const [open, setOpen] = useState(false)
+  const offered = useMenuActions(session ? 'chat.menu' : 'project.menu', session ? { projectId, agentId: agentId! } : projectId !== SESSIONS_ID ? { projectId } : null, projectId, open)
 
   return (
     <>
-      <DropdownMenu>
+      <DropdownMenu open={open} onOpenChange={setOpen}>
         {session ? (
           // The session's name is the menu's button: the name, cut short when the bar is tight, and a
           // small ⌄. A name not known yet is a grey bar in its place, so the bar is laid out the
@@ -269,6 +273,8 @@ export function AgentActionsMenu({
             </DropdownMenuItem>
           )}
 
+          {offered.items}
+
           {/* A rule only above something: a menu with nothing to stop, remove or delete ends on its last item. */}
           {(live || removable || deletable) && <DropdownMenuSeparator />}
 
@@ -304,6 +310,7 @@ export function AgentActionsMenu({
         </DropdownMenuContent>
       </DropdownMenu>
 
+      {offered.overlay}
       {offer && (
         <ConfirmDialog
           open={confirmCreate}

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { flushSync } from 'react-dom'
 import { CircleAlert, TriangleAlert } from 'lucide-react'
+import type { RunOptions } from '@openagt/hooks'
 import type { ProjectSummary, StartFromPick } from '../../src/index.js'
 import { onStartBranches, onStartCheck } from '../rpc/projects.js'
 import { usePreferences, usePreferencesLoaded, updatePreferences } from '../lib/preferences.js'
@@ -30,6 +31,8 @@ import { shortcut } from '../lib/shortcut.js'
 import { useIsMobile } from '../lib/use-mobile.js'
 import { InlineMarkdown } from './Markdown.js'
 import { cn } from '../lib/utils.js'
+import { useAttention } from '../lib/use-attention.js'
+import { SetupItemsLine } from './Attention.js'
 
 /** The note while the start is asked for: what the chat's first line says next. */
 const STARTING = 'Starting session'
@@ -138,6 +141,11 @@ export function StartAgentForm({
   // The repos a session with no project has as context, until it starts or another project is picked.
   const [repos, setRepos] = useState<PickedRepo[]>([])
   useEffect(() => setRepos([]), [projectId])
+  // What the modules' controls picked for the next run alone (`composer.control`), until it starts or another project is picked.
+  const [options, setOptions] = useState<RunOptions>({})
+  useEffect(() => setOptions({}), [projectId])
+  // What would stop the run these picks start, as the modules say it (`app.attention`): said above the box, each with its fix.
+  const attention = useAttention(projectId, options)
   // What the box holds, so another project picked takes the prompt along to its page.
   const typed = useRef('')
   const pickProject = (id: string) => {
@@ -238,6 +246,7 @@ export function StartAgentForm({
     const withImages = images.length > 0 ? { images } : {}
     const result = await start(projectId, promptWithContext(text, [...context].filter(path => !isRepoPath(path))), {
       ...withImages,
+      ...(Object.keys(options).length > 0 ? { options } : {}),
       // A project's Start carries the saved pick alone, and the daemon holds it to what the project is offered; with no
       // project the pick in force goes with the repos it is for, and none with no repo.
       ...(noProject ? (publishes ? { ...unpublished, publish: publishPick } : unpublished) : startPicks(preferences)),
@@ -261,6 +270,7 @@ export function StartAgentForm({
         keepDraft(`launcher:${projectId}`, '')
         keepDraftImages(`launcher:${projectId}`, [])
         onAgentStarted?.(text, result.agentId, host?.label, {
+          ...(Object.keys(options).length > 0 ? { options } : {}),
           ...(started !== undefined ? { branch: started } : {}),
           ...((noProject || remote) && account !== undefined ? { gitAccount: account } : {}),
           ...(profileId !== undefined ? { profile: profileId } : {}),
@@ -275,6 +285,7 @@ export function StartAgentForm({
         }) // select the run we just started (#761)
       }).finally(() => composerRef.current?.clear())
       setRepos([])
+      setOptions({})
       setSkillPicks(profilePicks(onProfile))
     } else setRefused(true)
   }
@@ -311,6 +322,7 @@ export function StartAgentForm({
             {!noProject && projectName && startFrom && preferencesLoaded && <StartFromMenu projectId={projectId} main={startFrom.main} local={startFrom.local} pick={startFromPick} onPick={pickStartFrom} busy={busy} />}
           </>
         }
+        controlBox={{ in: 'launcher', projectId, options, onChange: setOptions, busy, pickProject: id => pickProject(id ?? SESSIONS_ID) }}
         // The gear's lines (his order): who runs, the profile and the skills this session gets; who it
         // pushes as, the project's git host account, picked for this session; and, set apart, what
         // becomes of the work. The gear is in the warning's colour while the host has no account.
@@ -357,6 +369,7 @@ export function StartAgentForm({
                 <Refusal key={problem} {...said(problem)} />
               ),
             )}
+            <SetupItemsLine items={attention ?? []} projectId={projectId} />
             {readiness?.warnings.map(warning => (
               <p key={warning} role="alert" className="flex items-start gap-2 rounded-lg bg-[color-mix(in_oklab,var(--color-warning)_8%,var(--color-background))] px-3 py-2 text-sm text-foreground">
                 <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden />

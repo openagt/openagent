@@ -17,6 +17,7 @@ import { usePrompts } from '../lib/use-prompts.js'
 import { IN_BOX } from '../lib/in-box.js'
 import { DriverModelMenu, ModelWords, type DriverOption } from './DriverModelMenu.js'
 import { SessionSetupMenu, type SessionSetup } from './SessionSetup.js'
+import { ComposerControls, type ControlBox } from './Places.js'
 import { RunOnMenu } from './RunOnMenu.js'
 import { PERMISSIONS_PAGE } from '../lib/use-route.js'
 import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
@@ -130,6 +131,12 @@ export const Composer = forwardRef<ComposerHandle, {
   startsAt?: ReactNode
   /** The session's setup, behind the gear that leads the row under the box: the profile, the skills, the git host account and the Auto level. */
   setup?: SessionSetup | undefined
+  /**
+   * The box the modules' controls are drawn for (`composer.control`): the launcher's picks, or the
+   * session's. Its controls stand after `startsAt` above the box (the launcher's), in the gear's
+   * menu after the setup's lines, after the caller's controls under the box, and at that row's right.
+   */
+  controlBox?: ControlBox | undefined
   /** The caller's controls in the row under the box, after the gear: the Context picker. */
   controls?: ReactNode
   /** Inside a session: the model it runs on, said at the right of the row under the box, where
@@ -169,7 +176,7 @@ export const Composer = forwardRef<ComposerHandle, {
   /** The box takes the caret when it opens. */
   autoFocus?: boolean | undefined
 }>(function Composer(
-  { files, addContext, removeContext, startsAt, setup, controls, sessionModel, sessionContext, onSubmit, onPromptChange, onLoaded, busy, submitLabel, submitBusyLabel, placeholder, inAgent = false, sessionRow, idleControl, notes, notesUnder = false, draftKey, autoFocus = false },
+  { files, addContext, removeContext, startsAt, setup, controlBox, controls, sessionModel, sessionContext, onSubmit, onPromptChange, onLoaded, busy, submitLabel, submitBusyLabel, placeholder, inAgent = false, sessionRow, idleControl, notes, notesUnder = false, draftKey, autoFocus = false },
   ref,
 ) {
   const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
@@ -461,6 +468,7 @@ export const Composer = forwardRef<ComposerHandle, {
           <RowAboveBox>
             {runOnEl}
             {startsAt}
+            {controlBox && <ComposerControls at="start" box={controlBox} />}
           </RowAboveBox>
         )}
 
@@ -493,9 +501,17 @@ export const Composer = forwardRef<ComposerHandle, {
         <TooltipsPastBox value={surface}>
           <div className={cn('mt-1', rowClass)}>
             <div className={rowLeftClass}>
-              {setup && <SessionSetupMenu setup={setup} box={surface} busy={busy} />}
-              <BoxOfRow.Provider value={surface}>{controls}</BoxOfRow.Provider>
+              {setup && <SessionSetupMenu setup={setup} box={surface} busy={busy} controls={controlBox} />}
+              <BoxOfRow.Provider value={surface}>
+                {controls}
+                {controlBox && <ComposerControls at="context" box={controlBox} />}
+              </BoxOfRow.Provider>
             </div>
+            {controlBox && (
+              <BoxOfRow.Provider value={surface}>
+                <ComposerControls at="row" box={controlBox} />
+              </BoxOfRow.Provider>
+            )}
             {driverModelEl ||
               // Only with something in it: an empty one would still take the row's gap, and the
               // row's last item would end off the row's end.

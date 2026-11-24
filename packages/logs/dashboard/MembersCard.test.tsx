@@ -27,7 +27,7 @@ function hostWith(people: unknown[], accounts: ModuleHostPerson[], runs?: unknow
 const show = (host: ModuleHost) =>
   render(
     <ModuleHostContext.Provider value={host}>
-      <MembersCard projects={[{ id: 'p1', name: 'alpha', gitHost: true }]} />
+      <MembersCard projects={[{ id: 'p1', name: 'alpha', remote: 'github.com/me/project' }]} />
     </ModuleHostContext.Provider>,
   )
 
@@ -130,8 +130,8 @@ test("each project's people of the last 30 days are read through the server part
     <ModuleHostContext.Provider value={fakeHost('@openagt/logs', { call, agents: async () => [], gitHostPeople: async () => [] })}>
       <MembersCard
         projects={[
-          { id: 'p1', name: 'alpha', gitHost: true },
-          { id: 'p2', name: 'beta', gitHost: true },
+          { id: 'p1', name: 'alpha', remote: 'github.com/me/project' },
+          { id: 'p2', name: 'beta', remote: 'github.com/me/project' },
         ]}
       />
     </ModuleHostContext.Provider>,

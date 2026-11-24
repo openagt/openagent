@@ -25,6 +25,8 @@ import { useProjectLauncher } from '../lib/use-project-launcher.js'
 import { promptWithContext, type ContextSet } from '../lib/use-context-set.js'
 import { overlayOpen, pressed, shortcut } from '../lib/shortcut.js'
 import { useIsMobile } from '../lib/use-mobile.js'
+import type { RunOptions } from '@openagt/hooks'
+import type { ControlBox } from './Places.js'
 
 /** How long after an Esc that closed something a second Esc is still that press, said twice: a double press. */
 const DOUBLE_PRESS_MS = 500
@@ -77,6 +79,7 @@ export function AgentComposer({
   gitAccount,
   pluginsWithout,
   projectSkills,
+  options,
 }: {
   projectId: string
   /** Which run this addresses (#749). */
@@ -122,6 +125,8 @@ export function AgentComposer({
   /** The session's picks, as its record says: the plugins it went without, which of the project's own skills stayed. */
   pluginsWithout?: string[] | undefined
   projectSkills?: 'all' | 'none' | string[] | undefined
+  /** The session's run options, as its record keeps them: what its box's controls say (`composer.control`). */
+  options?: RunOptions | undefined
 }) {
   const composerRef = useRef<ComposerHandle>(null)
   useEffect(() => {
@@ -174,6 +179,8 @@ export function AgentComposer({
   const recorded: PublishPick = isPublishPick(publish) ? publish : 'nothing'
   const [picked, setPicked] = useState<PublishPick | null>(null)
   useEffect(() => setPicked(null), [agentId])
+  // The session's controls, as its record keeps their options: said, not offered.
+  const controlBox: ControlBox = { in: 'session', projectId, agentId, options: options ?? {}, onChange: () => {}, busy }
   useEffect(() => {
     if (picked === recorded) setPicked(null)
   }, [picked, recorded])
@@ -335,6 +342,7 @@ export function AgentComposer({
         // account the run worked as; then, set apart and still a pick, "When it finishes". After the
         // gear, Context: the repos the session started with, said, and in a project the files picked for the next message; for a session with no project,
         // no git to take its work further with.
+        controlBox={controlBox}
         setup={{
           said: setupSaid,
           lines: (

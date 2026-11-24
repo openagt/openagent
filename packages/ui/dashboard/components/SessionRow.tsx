@@ -4,6 +4,8 @@ import { hostOf } from '../lib/run-hosts.js'
 import { HOST_ICON, RunOnWords } from './RunOnMenu.js'
 import { RowAboveBox, RowSaid } from './ui/row-item.js'
 import { RunPrLabels } from './RunPrLabels.js'
+import { ComposerControls, ViewsAt, type ControlBox } from './Places.js'
+import type { UiRunProps } from '../module/index.js'
 
 /** The icon of where a session runs, as "Run on" has a host's. */
 function runsOnIcon(target: AgentMeta['target']): LucideIcon {
@@ -27,7 +29,13 @@ export function SessionRow({
   startedFrom,
   worksOn,
   prs = [],
+  box,
+  run,
 }: {
+  /** The session's box, whose controls above it (`composer.control` at `start`) say where it started. */
+  box?: ControlBox | undefined
+  /** The session, for the labels at the row's end (`chat.labels`). */
+  run?: UiRunProps | undefined
   /** Where the session runs, in a few words: this machine, another computer by its name, a host by its own. */
   runsOn: string
   target?: AgentMeta['target'] | undefined
@@ -43,7 +51,14 @@ export function SessionRow({
 }) {
   const started = startedFrom && (worksOn && worksOn !== startedFrom ? `Started from ${startedFrom}, works on ${worksOn}` : `Started from ${startedFrom}`)
   return (
-    <RowAboveBox end={<RunPrLabels prs={prs} />}>
+    <RowAboveBox
+      end={
+        <>
+          <RunPrLabels prs={prs} />
+          {run && <ViewsAt place="chat.labels" projectId={run.projectId} props={run} label="session labels" />}
+        </>
+      }
+    >
       <RowSaid tip={`Runs on — ${runsOn}`}>
         <RunOnWords icon={runsOnIcon(target)} elsewhere={elsewhere} label={runsOn} />
       </RowSaid>
@@ -61,6 +76,7 @@ export function SessionRow({
           )}
         </>
       )}
+      {box && <ComposerControls at="start" box={box} />}
     </RowAboveBox>
   )
 }

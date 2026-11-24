@@ -73,9 +73,15 @@ export type AttentionMark = 'question' | 'pull-request' | 'branch' | 'changes'
  */
 export interface AttentionItem {
   kind: 'setup' | 'waiting'
-  /** What it is about: this computer, the project asked about, or one of its runs. */
+  /**
+   * What it is about: this computer, the project asked about, or a run: one of its runs (`run`),
+   * or, with no `run`, the run the options asked with would start, which it stops. The shell draws
+   * the `setup` items about this computer in its onboarding card and the person's menu, those
+   * about the project on the project's pages, and those about the run to start above the message
+   * box that would start it.
+   */
   scope: 'computer' | 'project' | 'run'
-  /** The run it is about, for an item about a run. */
+  /** The run it is about, for an item about one of the project's runs. */
   run?: string
   /**
    * Which of the module's items about the project this is: the same thing said again keeps its

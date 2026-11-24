@@ -4,8 +4,8 @@ import { ModuleHostContext, forgetRemembered, type ModuleHost, type UiProject } 
 import { StopLine } from './StopLine.js'
 import { STATUS, hostAnswering } from './fixtures.js'
 
-const GEMSTACK = { id: 'p1', name: 'gemstack', gitHost: true }
-const OTHER = { id: 'p2', name: 'other', gitHost: false }
+const GEMSTACK = { id: 'p1', name: 'gemstack', remote: 'github.com/me/project' }
+const OTHER = { id: 'p2', name: 'other' }
 
 /** The shell's bar, stood in: where its handle rests, and the handle as a button that moves it to 12. */
 function Bar({ offset, onChangeOffset }: { offset?: number; onChangeOffset?: (points: number) => void }) {

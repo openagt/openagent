@@ -14,6 +14,7 @@ import { AgentComposer, type QueuedMessage } from './AgentComposer.js'
 import { sendNow, withdrawMessage } from '../rpc/control.js'
 import type { WaitingMessage } from './EventList.js'
 import { AgentWorkPanel, CopyWorkRow, ProjectWorkRow, useAgentCopies } from './AgentWorkPanel.js'
+import { HandoffOffers } from './Places.js'
 import { useAction } from '../lib/use-action.js'
 import { keepSending, keepWaiting, keptSending, keptWaiting, onKeptWaiting } from '../lib/draft-handoff.js'
 import { AgentFeed } from './AgentFeed.js'
@@ -81,7 +82,7 @@ export function AgentView({
   /** Whether the agent is still running; `null` while the daemon's list of agents has not been read, so it is not known yet. */
   live: boolean | null
   /** What the run's card says, off the runs poll: what the feed cannot carry (the details strip's facts, how the agent was set up, whether its record is being saved). Absent until the card is listed. */
-  card?: (AgentDetailsCard & Pick<AgentMeta, 'status' | 'intent' | 'saving' | 'workspace' | 'branch' | 'base' | 'baseCommit' | 'host' | 'otherHost' | 'publish' | 'prBase' | 'gitAccount' | 'earlierPrs' | 'pr' | 'prState' | 'repos' | 'profile' | 'pluginsWithout' | 'projectSkills'> & Partial<Pick<AgentMeta, 'endedAt'>>) | undefined
+  card?: (AgentDetailsCard & Pick<AgentMeta, 'status' | 'intent' | 'saving' | 'workspace' | 'branch' | 'base' | 'baseCommit' | 'host' | 'otherHost' | 'publish' | 'prBase' | 'gitAccount' | 'earlierPrs' | 'pr' | 'prState' | 'repos' | 'profile' | 'pluginsWithout' | 'projectSkills' | 'options'> & Partial<Pick<AgentMeta, 'endedAt' | 'updatedAt'>>) | undefined
   /** What the launcher said about this run as it started it: shown until the run's record says it. */
   picks?: StartPicks | undefined
   /** The session's own name — the same label the rail shows (#1030). It leads the action bar as
@@ -338,7 +339,20 @@ export function AgentView({
   const prs = useMemo(() => [...(earlierPrs ?? []), ...(labelPr && !earlierPrs?.some(earlier => earlier.url === labelPr.url) ? [labelPr] : [])], [earlierPrs, labelPr])
   // Where the session started, right above the message box, as the "New agent session" page has it. It is
   // there whatever stands in the box's place.
-  const row = <SessionRow runsOn={runsOn} target={target} elsewhere={elsewhere || card?.otherHost === true} projectName={projectName} startedFrom={startedFrom} worksOn={barCheckout?.branch ?? branch} prs={prs} />
+  const sessionBox = useMemo(() => ({ in: 'session' as const, projectId, agentId, options: card?.options ?? picks?.options ?? {}, onChange: () => {}, busy: false }), [projectId, agentId, card?.options, picks?.options])
+  const row = (
+    <SessionRow
+      runsOn={runsOn}
+      target={target}
+      elsewhere={elsewhere || card?.otherHost === true}
+      projectName={projectName}
+      startedFrom={startedFrom}
+      worksOn={barCheckout?.branch ?? branch}
+      prs={prs}
+      box={sessionBox}
+      run={{ projectId, agentId, working }}
+    />
+  )
   // The session's copies of repos: each has a row of its own in the panel, after the project's.
   const copies = useAgentCopies(projectId, agentId, live)
 
@@ -397,7 +411,14 @@ export function AgentView({
               actions={
                 // A run that is working is still writing its branch; the next step is offered once it has ended.
                 // Keyed: what a press said, and a merge it armed, are that session's alone.
-                committing ? <Committing /> : ended ? <HandoffActions key={`${projectId}/${agentId}`} projectId={projectId} agentId={agentId} state={handoff} onAsked={onSending} /> : undefined
+                committing ? (
+                  <Committing />
+                ) : ended ? (
+                  <>
+                    <HandoffActions key={`${projectId}/${agentId}`} projectId={projectId} agentId={agentId} state={handoff} onAsked={onSending} />
+                    <HandoffOffers projectId={projectId} agentId={agentId} again={card?.updatedAt} />
+                  </>
+                ) : undefined
               }
               error={ready && showHandoff ? handoff.error : undefined}
               show={say}
@@ -443,6 +464,7 @@ export function AgentView({
             gitAccount={card?.gitAccount ?? picks?.gitAccount}
             // The picks as the record keeps them; the launcher's until it is there.
             {...(card ? { pluginsWithout: card.pluginsWithout, projectSkills: card.projectSkills } : { pluginsWithout: picks?.pluginsWithout, projectSkills: picks?.projectSkills })}
+            options={card?.options ?? picks?.options}
           />
           )}
         </>

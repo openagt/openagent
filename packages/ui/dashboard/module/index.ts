@@ -244,7 +244,40 @@ export { Separator } from '../components/ui/separator.js'
 export { DiffStat } from '../components/DiffStat.js'
 export { ScrollArea } from '../components/ui/scroll-area.js'
 export { Tooltip, TooltipTrigger, TooltipContent } from '../components/ui/tooltip.js'
-export { DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from '../components/ui/dropdown-menu.js'
+export {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuCheckboxItem,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+  MenuMark,
+  MENU_BODY_CLASS,
+  MENU_ITEM_CLASS,
+  MENU_POPUP_CLASS,
+  MENU_TRIGGER_OPEN_CLASS,
+} from '../components/ui/dropdown-menu.js'
+// A searchable list in a popup, drawn as the module draws it: the same Base UI as the dashboard's pickers.
+export { Combobox } from '@base-ui/react/combobox'
+export { usePickerSearch } from '../components/ui/picker-search.js'
+export { usePopupPosition } from '../components/ui/popup-placement.js'
+export { OptionLabel } from '../components/ui/option-label.js'
+// The message box's rows, as a control there draws its item (`composer.control`).
+export { rowButtonClass, rowItemClass, RowChevron, RowSaid, RowItem, BoxOfRow } from '../components/ui/row-item.js'
+// A line of the gear's menu under the message box (`composer.control` at `setup`).
+export { SetupLine, SetupPress, SetupSaid } from '../components/SessionSetup.js'
+// The places a module draws itself: a profile's editor draws every control of the message box, the usage card the usage bar's line.
+export { ComposerControls, ViewsAt, useViewsAt, type ControlBox, type ControlsSaid } from '../components/Places.js'
+export { inWords } from '../lib/in-words.js'
+/** For a read of what the plugins give: read again the moment a plugin is switched in Settings. */
+export { pluginsAgain } from '../lib/plugins-switched.js'
 export { ContextMenu, ContextMenuTrigger } from '../components/ui/context-menu.js'
 export { PaneTitle, PaneActions } from '../components/PaneHeader.js'
 export { Page, PageColumn, PagePresses } from '../components/Page.js'

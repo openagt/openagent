@@ -11,7 +11,7 @@ const { LinkActions } = await import('./LinkActions.js')
 type MountedLinkAction = MountedAction<'link.menu'>
 
 /** One mounted action, the queue module's shape, whose `run` is a spy answering `result`. */
-const mounted = (run: MountedLinkAction['run'], over: Partial<MountedLinkAction> = {}): MountedLinkAction => ({
+const mounted = (run: NonNullable<MountedLinkAction['run']>, over: Partial<MountedLinkAction> = {}): MountedLinkAction => ({
   place: 'link.menu',
   id: 'add-to-queue',
   label: 'Add to queue',

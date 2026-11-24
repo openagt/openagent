@@ -7,7 +7,7 @@ import { SkillsSettings } from './SkillsSettings.js'
 
 // The module's own call as a test answers it: each project's skills, or why they could not be read.
 
-const project = (id: string) => ({ id, name: id, gitHost: true })
+const project = (id: string) => ({ id, name: id, remote: 'github.com/me/project' })
 
 function render(projects: ReturnType<typeof project>[], answers: Record<string, ProjectSkills | string>) {
   const call = vi.fn(async (projectId: string, name: string): Promise<ModuleCallResult> => {

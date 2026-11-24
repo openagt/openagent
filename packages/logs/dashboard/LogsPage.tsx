@@ -286,7 +286,7 @@ export function LogsPage({ projects }: UiPageProps) {
                           // On a phone the time stands in the line, so the name has the row's width and the row keeps its two lines.
                           phone && <span title={formatDateTime(card.startedAt)}>{clock(card.startedAt)}</span>,
                           // What its work still needs before it leaves this machine, in the sidebar's words.
-                          ...leftParts(card, project.gitHost, need !== undefined),
+                          ...leftParts(card, project.remote !== undefined, need !== undefined),
                           many && project.name,
                           card.cost !== undefined && dollars(card.cost),
                           // Last, as the part that gives way, and cut in its middle: runs started the same minute differ only at

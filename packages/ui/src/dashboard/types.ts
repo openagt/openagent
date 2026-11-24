@@ -1,3 +1,4 @@
+import type { RunOptions } from '@openagt/hooks'
 import type { LinkedPr } from './pull-requests.js'
 import type { PublishPick } from '../publish-levels.js'
 
@@ -54,6 +55,12 @@ export type RemoveProjectResult = { ok: true; cleanup?: CleanupReport } | { ok: 
  * options, each module's slice (#2394, decision 12). Absent leaves each to the run's own default.
  */
 export interface StartAgentOptions {
+  /**
+   * The run's options as the controls under the message box picked them (`composer.control`): one
+   * slice per module, each read by its module's steps, which refuse a slice that is not what they
+   * take. What is picked here goes over the picks below.
+   */
+  options?: RunOptions
   /** The images the prompt goes with, by the names the dashboard kept them under (`sendImage`): the agent looks at them with it. Only a run on this computer takes them. */
   images?: string[]
   /** The model to run on. */
