@@ -20,9 +20,7 @@ import { holderOf } from './holder.js'
  *
  * Two flags are the dashboard's, never an agent's: `--local` on the reads (this machine's copy, no
  * fetch — the dashboard polls, and the writer on that machine keeps it synced), and `--force` on `release` (lift whoever's claim: a person's answer to a dead agent).
- * OpenAgent finds this command through the package's `openagent.tickets` declaration, and reads
- * `list --local`; the package's own module changes the tickets through it, and reads them through
- * its server part.
+ * The package's own module changes the tickets through it, and reads them through its server part.
  */
 
 export const USAGE = `usage: tickets <command>

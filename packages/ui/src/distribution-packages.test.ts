@@ -61,7 +61,6 @@ test("a project with nothing installed gets its runs, its branches and a reposit
   try {
     assert.equal((await providedCommand(root, 'runs'))?.package, '@openagt/logs', "the runs' records, whatever logs says")
     assert.equal((await providedCommand(root, 'branches'))?.package, '@openagt/git-branches')
-    assert.deepEqual(await lookupProvided(root, 'tickets'), {})
     assert.equal((await providedCommand(root, 'repository'))?.package, '@openagt/github', 'the package that can create its repository')
     assert.deepEqual(
       (await packagesOf(root)).map(pkg => pkg.name),
@@ -107,22 +106,23 @@ test("a plugin's package, its data and its page are a project's once the plugin 
   const root = await scratch('plugin')
   const other = await scratch('other')
   const modules = async (): Promise<string[]> => (await readProjectModules(root)).map(module => module.package)
+  const has = async (at: string, name: string): Promise<boolean> => (await packagesOf(at)).some(pkg => pkg.name === name)
   try {
-    assert.deepEqual(await lookupProvided(root, 'tickets'), {})
+    assert.equal(await has(root, '@openagt/tickets'), false)
     await switchPlugin(root, 'tickets')
-    assert.equal((await providedCommand(root, 'tickets'))?.package, '@openagt/tickets')
-    assert.deepEqual(await lookupProvided(other, 'tickets'), {}, "another project's row is its own")
-    assert.deepEqual(await lookupProvided(root, 'queue'), {}, 'a plugin that is off stays out')
+    assert.equal(await has(root, '@openagt/tickets'), true)
+    assert.equal(await has(other, '@openagt/tickets'), false, "another project's row is its own")
+    assert.equal(await has(root, '@openagt/queue'), false, 'a plugin that is off stays out')
     assert.deepEqual(await modules(), ['@openagt/ask', '@openagt/saved-prompts', '@openagt/skills', '@openagt/store-git-branch', '@openagt/tickets', '@openagt/ui-pane-changes', '@openagt/ui-pane-files'])
 
     await switchPlugin(root, 'queue')
     await switchPlugin(root, 'scheduled-agents')
-    assert.equal((await providedCommand(root, 'queue'))?.package, '@openagt/queue')
+    assert.equal(await has(root, '@openagt/queue'), true)
     assert.deepEqual(await modules(), ['@openagt/ask', '@openagt/queue', '@openagt/saved-prompts', '@openagt/scheduled-agents', '@openagt/skills', '@openagt/store-git-branch', '@openagt/tickets', '@openagt/ui-pane-changes', '@openagt/ui-pane-files'])
 
     await switchPlugin(root, 'tickets', false)
     await switchPlugin(root, 'queue', false)
-    assert.deepEqual(await lookupProvided(root, 'tickets'), {})
+    assert.equal(await has(root, '@openagt/tickets'), false)
     assert.deepEqual(await modules(), ['@openagt/ask', '@openagt/saved-prompts', '@openagt/scheduled-agents', '@openagt/skills', '@openagt/store-git-branch', '@openagt/ui-pane-changes', '@openagt/ui-pane-files'])
     await switchPlugin(root, 'ask', false)
     assert.ok(!(await packagesOf(root)).some(pkg => pkg.name === '@openagt/ask'), 'one that starts on goes off the same way')
@@ -150,9 +150,8 @@ test("a project's own dependencies bring nothing: neither a copy of the distribu
   const root = await scratch('own')
   try {
     const listed = join(root, 'node_modules', '@openagt', 'tickets')
-    await mkdir(join(listed, 'bin'), { recursive: true })
-    await writeFile(join(listed, 'package.json'), JSON.stringify({ name: '@openagt/tickets', version: '9.9.9', bin: { tickets: 'bin/tickets' }, openagent: { tickets: 'tickets' }, exports: { './dashboard': './d.js' } }))
-    await writeFile(join(listed, 'bin', 'tickets'), '')
+    await mkdir(listed, { recursive: true })
+    await writeFile(join(listed, 'package.json'), JSON.stringify({ name: '@openagt/tickets', version: '9.9.9', exports: { './dashboard': './d.js' } }))
     await writeFile(join(listed, 'd.js'), 'export default {}')
     const own = join(root, 'node_modules', 'my-logs')
     await mkdir(join(own, 'bin'), { recursive: true })
@@ -160,16 +159,12 @@ test("a project's own dependencies bring nothing: neither a copy of the distribu
     await writeFile(join(own, 'bin', 'mine'), '')
     await writeFile(join(own, 'd.js'), 'export default {}')
     await writeFile(join(root, 'package.json'), JSON.stringify({ dependencies: { 'my-logs': '1.0.0' }, devDependencies: { '@openagt/tickets': '9.9.9' }, openagent: { runs: 'my-logs' } }))
-    assert.deepEqual(await lookupProvided(root, 'tickets'), {}, "listed and installed, with its plugin off: not the project's")
-    assert.equal((await providedCommand(root, 'runs'))?.package, '@openagt/logs', 'nor what its package.json names')
-    assert.ok(!(await readProjectModules(root)).some(module => module.package === 'my-logs' || module.package === '@openagt/tickets'))
+    assert.equal((await providedCommand(root, 'runs'))?.package, '@openagt/logs', 'not what its package.json names')
+    assert.ok(!(await readProjectModules(root)).some(module => module.package === 'my-logs' || module.package === '@openagt/tickets'), "listed and installed, with its plugin off: not the project's")
 
     await switchPlugin(root, 'tickets')
-    const command = await providedCommand(root, 'tickets')
-    assert.equal(command?.package, '@openagt/tickets')
-    assert.ok(!command!.bin.startsWith(root), "the distribution's copy runs, not the one in the project")
     const module = (await readProjectModules(root)).find(module => module.package === '@openagt/tickets')
-    assert.ok(module && module.version !== '9.9.9' && !module.dir.startsWith(root), "its page is the distribution's copy too")
+    assert.ok(module && module.version !== '9.9.9' && !module.dir.startsWith(root), "its page is the distribution's copy, not the one in the project")
   } finally {
     await rm(root, { recursive: true, force: true })
   }

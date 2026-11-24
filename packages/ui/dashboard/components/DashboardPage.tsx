@@ -21,13 +21,6 @@ import { LinePart, NEEDS_YOU_ID, WORKING_ID, counted, scrollToPart } from './Lin
 import { YourProfilesPart } from './YourProfilesPart.js'
 import { useIsMobile } from '../lib/use-mobile.js'
 
-/**
- * The place in the line under the title that the Overview leaves for the packages' parts: its own
- * stand at 1, 2 and from 4 on. A package's part that names another order still stands there; this is
- * only where the line waits for them.
- */
-const PACKAGES_PLACE = 3
-
 // The Overview landing page (#1139): what a new install can still set up ("Discover OpenAgent") while a step is open,
 // the box that starts a session, then a focused at-a-glance
 // board — what needs a human (the Human Queue, `ui-card-waiting`'s card), then usage and the agents
@@ -46,9 +39,7 @@ const PACKAGES_PLACE = 3
 // rendered only by the design gallery from then on, and the daemon went on computing their inputs
 // for nobody. Both are in the history, where a component nothing renders belongs.
 export function DashboardPage({
-  onSelectProject,
   onSelectAgent,
-  onAgentStarted,
   waiting,
   waitingState,
   active,
@@ -60,11 +51,8 @@ export function DashboardPage({
 }: {
   /** The box that starts a session (StartAgentForm), the page's first part: in the picked project, else in none. */
   start: ReactNode
-  onSelectProject: (id: string) => void
   /** Open one session (project + run): the Agents rows link straight to a session. */
   onSelectAgent: (projectId: string, agentId: string) => void
-  /** Where a session the onboarding checklist starts lands (#1169): on that session. */
-  onAgentStarted: (projectId: string, intent: string, agentId: string) => void
   /** What waits on the person, already only the picked project's when one is picked. */
   waiting: readonly Waiting[]
   /** What is known of what waits on the person: until it is read, by this visit or an earlier one, its part of the line has no count, and no card is drawn after the card of it. */
@@ -77,7 +65,7 @@ export function DashboardPage({
   scope: string | null
   /** A project was added from the first steps: the app reads its projects again. */
   onProjectAdded: () => void
-  /** The modules' pages as the sidebar lists them, null where none is known yet: which projects have the Queue and the Tickets, before the packages' code is in. */
+  /** The modules' pages as the sidebar lists them, null where none is known yet: whether a project has a package, before the packages' code is in. */
   listedPages: readonly ListedPage[] | null
 }) {
   // Its ✕ hides it (#958), and a switch in Settings › Appearance shows it again.
@@ -89,9 +77,8 @@ export function DashboardPage({
   // Every card the Overview can show here, each with the widths it stands at; the person's layout
   // for this page (the picked project's, else all projects') orders them, sizes them, and hides some.
   const { cards: moduleCards, line: moduleLine, loaded: modulesLoaded } = useModuleCards(shownProjects)
-  const queueComing = !modulesLoaded && moduleLine.length === 0 && listedPages?.some(page => page.id === 'queue' && shownProjects.some(project => page.projects.includes(project.id))) === true
-  // Until the pages are known (a browser's first visit) nor any package's part is in, whether the queue's part comes is
-  // not known: the parts after its place wait, so a part coming in before them pushes nothing.
+  // Until the pages are known (a browser's first visit) nor any package's part is in, whether the packages' parts come is
+  // not known: the parts after their place wait, so a part coming in before them pushes nothing.
   const placeKnown = modulesLoaded || moduleLine.length > 0 || listedPages !== null
   // What the number counts, mark by mark: "1 question, 1 to publish".
   const counts = waitingCounts(waiting)
@@ -101,7 +88,7 @@ export function DashboardPage({
   const needsYou = needsYouCard?.id
   const needsYouWaits = needsYouCard !== undefined && (waitingState === 'unknown' || needsYouCard.holding === true)
   // How things stand, in one line under the title, each part a link to where it is: what needs the
-  // person, who is at work, the queue's own part (its package's, by its order) and the person's agents.
+  // person, who is at work, the packages' own parts (the queue's, by their order) and the person's agents.
   const line: { id: string; order: number; node: ReactNode }[] = [
     {
       id: 'needs-you',
@@ -126,10 +113,7 @@ export function DashboardPage({
         </LinePart>
       ),
     },
-    // Until the packages' code is in, the queue's part waits in its place, as wide as it, where the sidebar's pages say a
-    // shown project has the Queue: a part that came after the line was drawn would lengthen it (on a phone pushing the
-    // Customize press and the page under it), and a place no part takes would shorten it.
-    ...(queueComing ? [{ id: 'packages', order: PACKAGES_PLACE, node: <LinePart reading shape="4 queued">{null}</LinePart> }] : moduleLine),
+    ...moduleLine,
     // The person's agents (Rom's design: an agent is a name, skills and accounts): how many, by name, a press from their page.
     ...(placeKnown ? [{ id: 'your-profiles', order: 4, node: <YourProfilesPart /> }] : []),
   ].sort((one, other) => one.order - other.order)
@@ -240,7 +224,7 @@ export function DashboardPage({
       {/* Arranging keeps the parts in their order and where they stand: the updates stay, and what arranging adds comes after the parts. */}
       <div className="space-y-10">
         {/* What a new install can still set up, first while a step is open (his pick): a session cannot start before its first one. */}
-        {!onboardingDismissed && <OnboardingChecklist projects={projects} onAgentStarted={onAgentStarted} onSelectProject={onSelectProject} onProjectAdded={onProjectAdded} listedPages={listedPages} />}
+        {!onboardingDismissed && <OnboardingChecklist projects={projects} onProjectAdded={onProjectAdded} />}
         {/* The page's own, before every card (his and Rom's pick): arranging the cards neither moves it nor takes it off. */}
         {start}
         {!layoutRead ? null : editing ? (

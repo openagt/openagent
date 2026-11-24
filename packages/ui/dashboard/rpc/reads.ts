@@ -18,7 +18,6 @@ export const onAgentMainBranch = rpc<typeof impl.onAgentMainBranch>('onAgentMain
 export const onAgent = rpc<typeof impl.onAgent>('onAgent')
 export const onAgentsDoing = rpc<typeof impl.onAgentsDoing>('onAgentsDoing')
 export const onDocs = rpc<typeof impl.onDocs>('onDocs')
-export const onQueue = rpc<typeof impl.onQueue>('onQueue')
 export const onOverview = rpc<typeof impl.onOverview>('onOverview')
 export const onRecentAgents = rpc<typeof impl.onRecentAgents>('onRecentAgents')
 export const onAllAgents = rpc<typeof impl.onAllAgents>('onAllAgents')

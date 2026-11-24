@@ -49,7 +49,7 @@ let working: ActiveAgent[] = []
 /** The modules' pages as the sidebar lists them: none known until a test says. */
 let listed: readonly ListedPage[] | null = null
 const overview = (scope: string | null = null, kept = { waiting: false, active: false }, read = true) => (
-  <DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} onSelectAgent={() => {}} onAgentStarted={() => {}} waiting={[]} waitingState={!read ? 'unknown' : kept.waiting ? 'kept' : 'fresh'} active={{ active: working, state: !read ? 'unknown' : kept.active ? 'kept' : 'fresh' }} projects={projects} scope={scope} listedPages={listed} start={null} />
+  <DashboardPage onProjectAdded={() => {}} onSelectAgent={() => {}} waiting={[]} waitingState={!read ? 'unknown' : kept.waiting ? 'kept' : 'fresh'} active={{ active: working, state: !read ? 'unknown' : kept.active ? 'kept' : 'fresh' }} projects={projects} scope={scope} listedPages={listed} start={null} />
 )
 const show = (...args: Parameters<typeof overview>) => render(overview(...args))
 /** The cards drawn, in order, each with its grid classes. */
@@ -102,7 +102,7 @@ describe('the Overview', () => {
 
   test('"Discover OpenAgent" is the first part of the page, above the box that starts a session, whatever the layout; its ✕ takes it off', async () => {
     working = []
-    const withBox = () => render(<DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} onSelectAgent={() => {}} onAgentStarted={() => {}} waiting={[]} waitingState="fresh" active={{ active: working, state: 'fresh' }} projects={projects} scope={null} listedPages={listed} start={<p>the box</p>} />)
+    const withBox = () => render(<DashboardPage onProjectAdded={() => {}} onSelectAgent={() => {}} waiting={[]} waitingState="fresh" active={{ active: working, state: 'fresh' }} projects={projects} scope={null} listedPages={listed} start={<p>the box</p>} />)
     prefs.value = {}
     withBox()
     const discover = await screen.findByText('onboarding')
@@ -149,7 +149,7 @@ describe('the Overview', () => {
 
   test('the box that starts a session is the page\'s first part, before every card, and arranging the cards leaves it there', async () => {
     working = [active('1-a')]
-    render(<DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} onSelectAgent={() => {}} onAgentStarted={() => {}} waiting={[]} waitingState="fresh" active={{ active: working, state: 'fresh' }} projects={projects} scope={null} listedPages={listed} start={<p>the box</p>} />)
+    render(<DashboardPage onProjectAdded={() => {}} onSelectAgent={() => {}} waiting={[]} waitingState="fresh" active={{ active: working, state: 'fresh' }} projects={projects} scope={null} listedPages={listed} start={<p>the box</p>} />)
     const box = screen.getByText('the box')
     const firstCard = await waitFor(() => {
       const card = document.querySelector('[data-card]')
@@ -424,32 +424,21 @@ describe('the Overview', () => {
     expect(screen.getByText('no agent working')).toBeTruthy()
   })
 
-  test("before the packages' code is in, their part of the line waits in its place, and the part that comes takes it", async () => {
+  test("before the packages' code is in, the line is its own parts, and a package's part that comes takes its place by its order", async () => {
     modules.loaded = false
-    // The sidebar's pages say a shown project has the Queue: its part will stand there.
     listed = [{ id: 'queue', label: 'Queue', projects: ['p2'] }]
     const { rerender } = show()
     const line = (await screen.findByText('no agent working')).closest('p')!
-    expect(line.textContent).toBe('·nothing needs you·no agent working·Loading…·your profiles')
+    expect(line.textContent).toBe('·nothing needs you·no agent working·your profiles')
     // A phone shows it too, beside Customize.
     expect(line.className).not.toContain('sr-only')
     modules.line = [{ id: '@x/queue/queued', order: 3, node: <span>nothing queued</span> }]
     rerender(overview())
     expect(line.textContent).toBe('·nothing needs you·no agent working·nothing queued·your profiles')
-    // Every package in, none with a part: the line is its own parts only.
-    modules.loaded = true
-    modules.line = []
-    rerender(overview())
-    expect(line.textContent).toBe('·nothing needs you·no agent working·your profiles')
   })
 
-  test("before the packages' code is in, no place waits for the queue's part where the sidebar's pages say no shown project has the Queue; while they say nothing yet, the parts after its place wait", async () => {
+  test("before the packages' code is in, while the sidebar's pages say nothing yet, the parts after the packages' place wait", async () => {
     modules.loaded = false
-    listed = [{ id: 'queue', label: 'Queue', projects: ['p2'] }, { id: 'logs', label: 'Logs', projects: ['p1'] }]
-    show('p1')
-    const line = (await screen.findByText('no agent working')).closest('p')!
-    expect(line.textContent).toBe('·nothing needs you·no agent working·your profiles')
-    cleanup()
     // A browser's first visit: no page known, no place held, and what stands after it waits until a part or the pages come.
     listed = null
     const { rerender } = show()
@@ -465,7 +454,7 @@ describe('the Overview', () => {
     const item = (mark: Waiting['mark'], n: number): Waiting => ({ projectId: 'p1', projectName: 'alpha', kind: 'waiting', module: 'm', scope: 'run', run: `r${n}`, words: 'Needs it', title: `t${n}`, ...(mark ? { mark } : {}) })
     const scrolled = vi.fn()
     Element.prototype.scrollIntoView = scrolled
-    render(<DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} onSelectAgent={() => {}} onAgentStarted={() => {}} waiting={[item('question', 1), item('question', 2), item('pull-request', 3), item(undefined, 4)]} waitingState="fresh" active={{ active: [], state: 'fresh' }} projects={projects} scope={null} listedPages={null} start={null} />)
+    render(<DashboardPage onProjectAdded={() => {}} onSelectAgent={() => {}} waiting={[item('question', 1), item('question', 2), item('pull-request', 3), item(undefined, 4)]} waitingState="fresh" active={{ active: [], state: 'fresh' }} projects={projects} scope={null} listedPages={null} start={null} />)
     const part = await screen.findByRole('button', { name: '4 need you' })
     expect(part.getAttribute('title')).toBe('2 questions, 1 pull request, 1 more')
     fireEvent.click(part)

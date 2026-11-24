@@ -299,7 +299,6 @@ export { Markdown, InlineMarkdown, ModuleBlock } from '../components/Markdown.js
 export { FileLinks, IssueLinks } from '../lib/markdown-links.js'
 export { wordShownAt } from '../lib/use-steady-text.js'
 export { StartAgentButton, StartAgentPress, type StartMenuItem } from '../components/StartAgentButton.js'
-export { UpdateTicketsButton } from '../components/UpdateTicketsButton.js'
 export { ButtonGroup, ButtonGroupSeparator } from '../components/ui/button-group.js'
 export { LinkActions, useLinkActions, type LinkActionOffer, type ProjectLinks, type LinkTargets } from '../components/LinkActions.js'
 export { PersonMark, personName } from '../components/PersonMark.js'

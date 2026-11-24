@@ -1,14 +1,13 @@
 import { readAllAgents, readLiveMetas, type LiveAgent, type AgentMeta, type AgentStatus } from '../store/index.js'
 import type { ProjectSummary } from './projects.js'
-import { collectQueue, type ProjectQueue } from './queue.js'
 import { hostname } from 'node:os'
 import { SESSIONS_ID } from '../project-address.js'
 
 // The first-sidebar Overview (#437, part of #314): a cross-project glance at what the agent
-// is working on right now, the size of the backlog, and the recently active projects. It
-// rolls up three existing file projections across the whole registry — the card a run's tool
-// keeps in the run's own checkout, the TODO queue (queue.ts), and each project's last activity
-// (ProjectSummary.lastActivityAt from its runs).
+// is working on right now, and the recently active projects. It rolls up two existing file
+// projections across the whole registry — the card a run's tool keeps in the run's own checkout,
+// and each project's last activity (ProjectSummary.lastActivityAt from its runs). The queue's size
+// is the queue's own part of the Overview's line.
 
 /** One project's in-flight run, surfaced in the Overview's "working now" list. */
 export interface ActiveAgent {
@@ -51,8 +50,6 @@ export interface RecentProject {
 export interface Overview {
   /** Projects with a running agent, most-recently-updated first. */
   active: ActiveAgent[]
-  /** Total open TODO items across every project. */
-  queueOpen: number
   /** The most recently active projects (capped). */
   recent: RecentProject[]
 }
@@ -111,7 +108,6 @@ export async function buildRecentAgents(projects: ProjectSummary[], deps: Recent
 /** Injectable readers so {@link buildOverview} is unit-testable off disk. */
 export interface OverviewDeps {
   liveAgents?: (cwd: string) => Promise<LiveAgent[]>
-  queue?: (projects: ProjectSummary[]) => Promise<ProjectQueue[]>
   /** Every run of a project, archived included (default {@link readAllAgents}): where the runs on other hosts are. */
   agents?: (cwd: string) => Promise<AgentMeta[]>
   /** This machine's hostname; `node:os` in production. */
@@ -120,13 +116,11 @@ export interface OverviewDeps {
 
 /**
  * Build the cross-project Overview: the running agents (every live agent of each project, one per
- * worktree since #736), the total of open queue entries (from {@link collectQueue}), and the most
- * recently active projects (by {@link ProjectSummary.lastActivityAt}). Forgiving — a project with
+ * worktree since #736), and the most recently active projects (by {@link ProjectSummary.lastActivityAt}). Forgiving — a project with
  * no live run, or none running, simply contributes nothing to `active`.
  */
 export async function buildOverview(projects: ProjectSummary[], deps: OverviewDeps = {}): Promise<Overview> {
   const liveAgents = deps.liveAgents ?? readLiveMetas
-  const queue = deps.queue ?? (p => collectQueue(p))
   const agents = deps.agents ?? readAllAgents
   const thisHost = deps.host ?? hostname()
 
@@ -166,14 +160,11 @@ export async function buildOverview(projects: ProjectSummary[], deps: OverviewDe
   }
   active.sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''))
 
-  const queues = await queue(projects)
-  const queueOpen = queues.reduce((sum, q) => sum + q.entries.length, 0)
-
   const recent = projects
     .filter(p => p.lastActivityAt)
     .sort((a, b) => (b.lastActivityAt ?? '').localeCompare(a.lastActivityAt ?? ''))
     .slice(0, RECENT_LIMIT)
     .map(p => ({ projectId: p.id, projectName: p.name, lastActivityAt: p.lastActivityAt! }))
 
-  return { active, queueOpen, recent }
+  return { active, recent }
 }

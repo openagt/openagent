@@ -8,7 +8,6 @@ import { listProjectWorktrees } from '../worktrees.js'
 import { projectGitHost, type GitHostHome } from '../store/git-host.js'
 import { repositoryOffer, type RepositoryOffer } from '../store/repository.js'
 import { readDocs, type WorkspaceDoc } from '../dashboard/docs.js'
-import { collectQueue, type ProjectQueue } from '../dashboard/queue.js'
 import { buildOverview, buildRecentAgents, type FoundAgent, type Overview, type RecentAgent } from '../dashboard/overview.js'
 import { buildWaiting, type Waiting } from '../dashboard/waiting.js'
 import type { ProjectionRead, ProjectSummary } from '../dashboard/projects.js'
@@ -168,12 +167,7 @@ export async function onDocs(projectId: string): Promise<WorkspaceDoc[]> {
   return cwd ? readDocs(cwd).catch(() => []) : []
 }
 
-/** The aggregated open TODO queue across every registered project (#438), most-open first. */
-export async function onQueue(): Promise<ProjectQueue[]> {
-  return withProjects(collectQueue)
-}
-
-/** The cross-project Overview (#437): what is running now, the queue size, and recent projects. */
+/** The cross-project Overview (#437): what is running now, and recent projects. */
 export async function onOverview(): Promise<Overview> {
   return withProjects(projects => buildOverview(projects))
 }
@@ -229,7 +223,7 @@ export async function onActivity(): Promise<ProjectionRead<Activity>> {
   return withProjects(projects => buildActivity(projects, { readAgents: project => recordedRuns(project.path) }))
 }
 
-/** The Overview dashboard page (#471): the {@link onOverview} rollup plus agent counts, run-status totals, and activity. */
+/** The Overview dashboard page (#471): the {@link onOverview} rollup, and how many projects there are. */
 export async function onDashboard(): Promise<DashboardData> {
   const projects = await contextProjects().list().catch(() => [])
   const of = projects.map(project => project.path).join('\n')
@@ -243,9 +237,9 @@ export async function onDashboard(): Promise<DashboardData> {
 }
 
 /**
- * The Overview's summary as last built, and the build under way: it reads every project's queue and
- * tickets through their packages, a second and more on a small server, so a page is answered at
- * once with the last summary for the same projects while it is built again behind it.
+ * The Overview's summary as last built, and the build under way: it reads every project's runs at
+ * work, so a page is answered at once with the last summary for the same projects while it is
+ * built again behind it.
  */
 let lastDashboard: { of: string; view: DashboardData } | undefined
 let buildingDashboard: Promise<DashboardData> | undefined

@@ -767,14 +767,13 @@ describe('the project select (#1513)', () => {
       whole: [],
     }))
     answers.set('onRetainedWorktrees', () => [])
-    answers.set('onDashboard', () => ({ totals: { projects: 2, openTodos: 0 }, projects: [], queue: [], active: [] }))
+    answers.set('onDashboard', () => ({ totals: { projects: 2 }, active: [] }))
     // The agents at work, as the shell reads them for the mark and the Overview alike.
     answers.set('onOverview', () => ({
       active: [
         { projectId: PROJECT.id, projectName: 'app', agentId: 'a2', status: 'running', intent: 'app works' },
         { projectId: OTHER.id, projectName: 'site', agentId: 's2', status: 'running', intent: 'site works' },
       ],
-      queueOpen: 0,
       recent: [],
     }))
     answers.set('onRecentAgents', () => [

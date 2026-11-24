@@ -2,7 +2,6 @@ import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { buildOverview, buildRecentAgents } from './overview.js'
 import type { ProjectSummary } from './projects.js'
-import type { ProjectQueue } from './queue.js'
 import type { AgentMeta } from '../store/index.js'
 
 const project = (id: string, path: string, lastActivityAt?: string): ProjectSummary => ({
@@ -25,7 +24,6 @@ test('buildOverview surfaces only running runs, most-recently-updated first', as
   }
   const overview = await buildOverview([project('a', '/a'), project('b', '/b'), project('c', '/c')], {
     liveAgents: async cwd => (metas[cwd] ? [{ ...metas[cwd]!, cwd }] : []),
-    queue: async () => [],
   })
   assert.deepEqual(
     overview.active.map(r => ({ id: r.projectId, intent: r.intent })),
@@ -36,17 +34,12 @@ test('buildOverview surfaces only running runs, most-recently-updated first', as
   )
 })
 
-test('buildOverview sums the open queue and lists recent projects newest-first (capped at 5)', async () => {
+test('buildOverview lists recent projects newest-first (capped at 5)', async () => {
   const projects = Array.from({ length: 7 }, (_, i) =>
     project(`p${i}`, `/p${i}`, `2026-07-${String(10 + i).padStart(2, '0')}T00:00:00Z`),
   )
-  const queues: ProjectQueue[] = [
-    { projectId: 'p0', projectName: 'p0', entries: ['a', 'b', 'c'] },
-    { projectId: 'p1', projectName: 'p1', entries: ['d', 'e'] },
-  ]
-  const overview = await buildOverview(projects, { liveAgents: async () => [], queue: async () => queues })
+  const overview = await buildOverview(projects, { liveAgents: async () => [] })
   assert.equal(overview.active.length, 0)
-  assert.equal(overview.queueOpen, 5)
   assert.equal(overview.recent.length, 5)
   assert.deepEqual(
     overview.recent.map(r => r.projectId),
@@ -57,7 +50,6 @@ test('buildOverview sums the open queue and lists recent projects newest-first (
 test('buildOverview omits projects with no activity from recent', async () => {
   const overview = await buildOverview([project('a', '/a'), project('b', '/b', '2026-07-13T00:00:00Z')], {
     liveAgents: async () => [],
-    queue: async () => [],
   })
   assert.deepEqual(overview.recent.map(r => r.projectId), ['b'])
 })
@@ -131,7 +123,6 @@ test('buildOverview lists a run at work on a host beside this computer\'s, and s
       run('here', {}),
       run('local', { target: 'local' }),
     ],
-    queue: async () => [],
   })
   assert.deepEqual(
     overview.active.map(r => ({ id: r.agentId, host: r.host, cwd: r.cwd })),
@@ -163,7 +154,6 @@ test('buildOverview names the machine that started a run when it is not this one
   const overview = await buildOverview([project('a', '/a')], {
     liveAgents: async () => [run('mine', 'this-mac'), run('theirs', 'rom-thinkpad-x280'), run('unknown')] as never,
     agents: async () => [],
-    queue: async () => [],
     host: 'this-mac',
   })
   assert.deepEqual(

@@ -1,41 +1,37 @@
-import { useContext, useState, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import type { DashboardData, ProjectSummary } from '../../src/index.js'
 import { Check, Info, X } from 'lucide-react'
 import { onDashboard } from '../rpc/reads.js'
 import { usePolled } from '../lib/use-async.js'
 import { cn } from '../lib/utils.js'
-import { Button, buttonVariants } from './ui/button.js'
+import { Button } from './ui/button.js'
 import { useMountedModules } from '../lib/use-modules.js'
 import { useAgentAccounts } from './AgentAccounts.js'
 import { ModuleSlot } from './ModulePageView.js'
-import { inPlace } from '../lib/in-place.js'
 import { Facts, Panel, PanelGroup, StepNumber } from './ui/panel.js'
 import { Skeleton } from './ui/skeleton.js'
-import { usePreferences, updatePreferences } from '../lib/preferences.js'
-import { startPicks, useStartAgent } from '../lib/use-start-agent.js'
+import { updatePreferences } from '../lib/preferences.js'
 import { AddProjectEffects } from './AddProjectEffects.js'
 import { ProjectPicker } from './ProjectPicker.js'
-import { UpdateTicketsButton, UPDATE_TICKETS_PROMPT } from './UpdateTicketsButton.js'
 import { HostFix } from './AddGitAccount.js'
 import { AgentFix, agentLoginState, hostLoginState, hostWords, useAgentState, useGitHosts } from './Logins.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
-import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
-import type { ListedPage } from '../lib/use-modules.js'
 import { useAttention } from '../lib/use-attention.js'
 import { attentionDetail, attentionKey, useAttentionFixes } from './Attention.js'
 
 // "Discover OpenAgent", the Overview's first steps (#958): what a new install can set up, each with
 // the state it is actually in rather than a static list to read past.
 //
-// Every "done" is derived from a real fact — a login, a registered project, a non-empty queue, a
-// ticket on disk — so a step cannot be ticked by clicking it, and a step done outside the dashboard
-// shows up ticked anyway. Numbered, not boxes: a box invites a
+// Every "done" is derived from a real fact — a login, a registered project — so a step cannot be
+// ticked by clicking it, and a step done outside the dashboard shows up ticked anyway. What the
+// modules say needs setting up on this computer (`app.attention`: the tickets and the queue to
+// populate, say) are steps too, each there until it is done. Numbered, not boxes: a box invites a
 // click that can tick nothing.
 //
 // One step is open at a time (his pick): the next one to do, its words and its button at the row's
 // end; a step done is one line with a ✓ and what was done; the steps after it, only their titles,
-// each a press from open. A step stays once shown, done or not, so the count never moves under a
-// person: "Connect GitHub" turns into a ✓, it does not vanish.
+// each a press from open. A step of the dashboard's stays once shown, done or not, so the count
+// never moves under a person: "Connect GitHub" turns into a ✓, it does not vanish.
 //
 // It is the Overview's first part, above the box that starts a session, while a step is open (his
 // pick). With every step done it is gone: the box is how a session starts. Its ✕ hides it, and the
@@ -62,43 +58,22 @@ interface Step {
   done: boolean
   /** What was done, beside a done step's title: the account, the project. */
   doneNote?: string
-  /**
-   * Nothing breaks if this one is never done (#1139). Marked per step rather than by position, so
-   * the list can be reordered without the promise moving with it.
-   */
-  optional?: boolean
   /** The press that does it, at the row's end while the step is open. */
   action?: ReactNode
 }
 
 export function OnboardingChecklist({
   projects,
-  onAgentStarted,
-  onSelectProject,
   onProjectAdded,
-  listedPages,
 }: {
   /** The projects as the app read them: the picker sees one it added land, and closes on it. */
   projects: readonly ProjectSummary[]
-  /**
-   * Told about the session a step started, so the shell can land on it (#1169). The project
-   * travels with it: this renders on the Overview, which has none selected. Required, so a new mounting surface cannot quietly drop the navigation.
-   */
-  onAgentStarted: (projectId: string, intent: string, agentId: string) => void
-  /** Where "Configure first, then run" lands (#1507): the launcher of the project the steps act on. */
-  onSelectProject: (id: string) => void
   /** A project was added here: the app reads its projects again. */
   onProjectAdded: () => void
-  /** The modules' pages as the sidebar lists them, null where none is known yet: which projects have the Queue and the Tickets. */
-  listedPages: readonly ListedPage[] | null
 }) {
-  // Slower than the Overview's own 5s poll: these change at human speed, and this read fans out
-  // over every project to answer the tickets question.
+  // Slower than the Overview's own 5s poll: these change at human speed.
   // Kept for the next visit: the steps open where they stood, not as titles that then grow.
   const { value: data, reload, state } = usePolled<DashboardData | null>(onDashboard, null, 10_000, [], { remember: 'onboarding:dashboard', stored: true })
-  const preferences = usePreferences()
-  const { start, busy: starting, error: startError } = useStartAgent()
-  const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
   // What sessions need on this computer: a coding agent with an account, and an account at each git host.
   const claude = useAgentState('claude-code')
   const codex = useAgentState('codex')
@@ -114,20 +89,8 @@ export function OnboardingChecklist({
   const setupItems = (useAttention(null) ?? []).filter(item => item.kind === 'setup' && item.scope === 'computer')
   const fixes = useAttentionFixes(undefined, () => void reload())
 
-  // The project the steps act on: the only/most recent one. A first-session flow rarely has a second.
-  const targetProjectId = data?.projects[0]?.projectId ?? null
-
   // Before the projects are read, the app's own list says whether there is one.
   const projectCount = data?.totals.projects ?? projects.length
-  const hasTickets = data?.projects.some(p => p.hasTickets) ?? false
-
-  const populateTickets = async () => {
-    if (!targetProjectId) return
-    const started = await start(targetProjectId, UPDATE_TICKETS_PROMPT, startPicks(preferences))
-    // Land on the session doing the import, not the project's launcher (#1169): its id is what
-    // the shell needs to show the live output. A refusal keeps you here, with `startError` shown.
-    if (started) onAgentStarted(targetProjectId, UPDATE_TICKETS_PROMPT, started.agentId)
-  }
 
   const connected = agents.filter(agent => agent.state?.ready)
   // One connected: which, and whose account. Both: which.
@@ -213,54 +176,6 @@ export function OnboardingChecklist({
         />
       ),
     },
-    // Only when some project has a queue at all (#1774): a project gets one from a package it
-    // depends on, and a step asking to fill a queue no project has would ask for nothing.
-    ...((data?.queue.length ?? 0) > 0
-      ? [
-          {
-            key: 'todos',
-            label: 'Populate the queue of AI tasks',
-            description: 'The agent queue: each entry is work the agent picks up on its own, so a filled queue is what lets it keep going without you.',
-            done: (data?.totals.openTodos ?? 0) > 0,
-            // A press to a page, so a modified click opens it where the browser would.
-            action: (
-              <a href={services.pageHref('queue')} onClick={inPlace(() => services.openPage('queue'))} className={buttonVariants({ variant: 'outline' })}>
-                Open the Queue
-              </a>
-            ),
-          },
-        ]
-      : []),
-    // Only when some project can have tickets at all (#1774): a project gets them from a package it
-    // depends on, and a step asking to populate tickets no project provides would ask for nothing.
-    ...(data?.projects.some(p => p.providesTickets)
-      ? [
-          {
-            key: 'tickets',
-            label: 'Populate the tickets',
-            description: (
-              <p className="text-xs text-muted-foreground">
-                <code className="rounded-sm bg-muted px-1">tickets/</code> holds the bigger things to work on, in the repo. The agent researches and plans them, and they are the input the queue is filled from.
-              </p>
-            ),
-            done: hasTickets,
-            optional: true,
-            action: (
-              <div className="flex flex-col items-end gap-1">
-                <UpdateTicketsButton
-                  variant="default"
-                  busy={starting}
-                  disabled={!targetProjectId}
-                  onStart={() => void populateTickets()}
-                  onConfigure={() => targetProjectId && onSelectProject(targetProjectId)}
-                />
-                {!targetProjectId && <span className="text-xs text-muted-foreground">Add a project first</span>}
-                {startError && <span className="text-xs text-destructive">{startError}</span>}
-              </div>
-            ),
-          },
-        ]
-      : []),
   ]
 
   // No step before its reads have said where it stands: an unread project count is not "no project".
@@ -269,18 +184,9 @@ export function OnboardingChecklist({
   const open = picked !== undefined && steps.some(step => step.key === picked && !step.done) ? picked : steps.find(step => !step.done)?.key
 
   const doneCount = steps.filter(step => step.done).length
-  // While the projects are not read: the queue's and the tickets' steps hold their places at the end exactly where the
-  // sidebar's pages say a project has the Queue or the Tickets, as the same packages bring the page and the step. Until
-  // those pages are known (a browser's first visit) the frame is not drawn.
-  const listed = (segment: string) => listedPages?.some(page => page.id === segment && page.projects.length > 0) === true
-  const coming = [...(listed('queue') ? [{ key: 'todos', done: false }] : []), ...(listed('tickets') ? [{ key: 'tickets', done: false }] : [])]
-  const frame: { key: string; label?: string; description?: ReactNode; done: boolean }[] = [
-    ...steps.map(step => ({ key: step.key, label: step.label, description: step.description, done: step.done })),
-    ...(data === null ? coming : []),
-  ]
   // Every step done: nothing to discover, and the box under it is how a session starts. The same while the steps are
-  // read, where every one known so far is done: no frame is drawn that the answer would take away.
-  if ((reading ? frame : steps).every(step => step.done)) return null
+  // read, where every one known so far is done.
+  if (steps.every(step => step.done)) return null
   return (
     <>
     {fixes.overlay}
@@ -291,7 +197,7 @@ export function OnboardingChecklist({
       count={
         reading ? (
           // As wide as the words it stands for (the steps drawn below, none done yet), drawn unseen before it (not text of the page, nor said).
-          <span aria-hidden data-shape={`0 of ${frame.length}`} className="inline-block h-4 animate-skeleton rounded-md bg-accent align-middle leading-4 before:invisible before:content-[attr(data-shape)] motion-reduce:animate-skeleton-still" />
+          <span aria-hidden data-shape={`0 of ${steps.length}`} className="inline-block h-4 animate-skeleton rounded-md bg-accent align-middle leading-4 before:invisible before:content-[attr(data-shape)] motion-reduce:animate-skeleton-still" />
         ) : (
           `${doneCount} of ${steps.length}`
         )
@@ -312,22 +218,15 @@ export function OnboardingChecklist({
         <>
           <p className="sr-only">Loading…</p>
           {/* The steps as they will stand once read, so nothing in them moves when the answer comes: each its mark and its
-              title, the open step its words under its name (read with the git hosts, or fixed) and
-              its presses' shapes at the row's end, centred on the row; the steps only the projects' read can add (the
-              queue's, the tickets') hold their places as shapes. Only once the coding agent and the git hosts are read
-              (each can add a step at the top, which would push the rows drawn), and the sidebar's pages are known where
-              the projects' read is not in (they say which places to hold): nothing under the steps is drawn before they
-              are, so the frame coming late pushes nothing. */}
-          {loginsRead && (data !== null || listedPages !== null) && (
+              title, the open step its words under its name (read with the git hosts, or fixed) and its presses' shapes at
+              the row's end, centred on the row. Only once the coding agent and the git hosts are read (each can add a
+              step at the top, which would push the rows drawn): nothing under the steps is drawn before they are. */}
+          {loginsRead && (
             <Panel ordered aria-hidden>
-              {frame.map((step, at) => (
+              {steps.map((step, at) => (
                 <li key={step.key} className={STEP_ROW}>
-                  {step.label === undefined ? <MarkShape /> : step.done ? <DoneMark /> : <StepNumber at={at} current={step.key === open} />}
-                  {step.label === undefined ? (
-                    <span className="flex h-5 items-center">
-                      <Skeleton className="h-4 w-48" />
-                    </span>
-                  ) : step.key === open ? (
+                  {step.done ? <DoneMark /> : <StepNumber at={at} current={step.key === open} />}
+                  {step.key === open ? (
                     <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-2">
                       <div className="min-w-0 flex-[1_1_16rem] space-y-1">
                         <span className="block text-sm font-medium">{step.label}</span>
@@ -391,7 +290,6 @@ export function OnboardingChecklist({
                       >
                         {/* What was done after its name, as every line of facts joins them. */}
                         <Facts oneLine facts={[step.label, step.done && step.doneNote && { fact: step.doneNote, className: 'text-xs text-muted-foreground' }]} />
-                        {step.optional && !step.done && <span className="text-xs font-normal text-muted-foreground">Optional</span>}
                       </button>
                       {isOpen && step.info && (
                         <Tooltip>
@@ -424,15 +322,6 @@ function DoneMark() {
   return (
     <span aria-label="Done" className="flex h-5 w-4 shrink-0 items-center text-primary">
       <Check className="size-4" aria-hidden />
-    </span>
-  )
-}
-
-/** A step the projects' read may add: a shape in its mark's place. */
-function MarkShape() {
-  return (
-    <span className="flex h-5 w-4 shrink-0 items-center">
-      <Skeleton className="size-4 rounded-full" />
     </span>
   )
 }
