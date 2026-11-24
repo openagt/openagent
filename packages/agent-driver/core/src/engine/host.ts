@@ -1,10 +1,11 @@
+import { rm, stat } from 'node:fs/promises'
 import { hostname } from 'node:os'
 import { appendInbox, imagesOf, promptLines, takeInbox } from '../inbox.js'
-import { findRun } from '../record-store.js'
-import { isRunId, type RunCard } from '../record.js'
+import { deleteRun, findRun, patchRun } from '../record-store.js'
+import { isRunId, type RunCard, type RunPatch } from '../record.js'
 import { PLUGINS_WITHOUT_ENV, PROFILE_ENV, PROJECT_SKILLS_ENV, isSkillName, sessionFolder, sessionsHome, sessionsHomeOf } from '@openagt/agent-data'
-import { LOCAL_HOST, MODULE_NAME, NAME_RUNS, PICKED_AGENT, PICKED_PROFILE, isProfileId, type AgentPick, type ProjectRef, type Settings, type RunFound, type RunHost, type RunInput, type RunOptions, type RunReadiness, type RunRef, type RunRequest, type InboxLine, type PromptLine, type RunAgent } from '@openagt/hooks'
-import { worktreePath } from '@openagt/git-branches'
+import { LOCAL_HOST, MODULE_NAME, NAME_RUNS, PICKED_AGENT, PICKED_PROFILE, isProfileId, type AgentPick, type ProjectRef, type Settings, type RunFacts, type RunFound, type RunHost, type RunInput, type RunOptions, type RunReadiness, type RunRef, type RunRequest, type InboxLine, type PromptLine, type RunAgent } from '@openagt/hooks'
+import { discardWorktree, worktreePath } from '@openagt/git-branches'
 import { listedRuns, liveCard, ownFolder, runEvents, standing, type RunReadsDeps } from '../reads/run-reads.js'
 import { handedDownSettings, runProfile } from './profile.js'
 import { inboxPath, liveDir } from './live-card.js'
@@ -188,6 +189,25 @@ export function localHost(deps: LocalHostDeps = {}): RunHost {
       }
     },
 
+    async delete(run) {
+      if (!isRunId(run.id)) throw new Error(`invalid session id: ${run.id}`)
+      const dir = placeOf(run.project)
+      if ((await cardOf(dir, run.id))?.status === 'running') throw new Error('that session is still going; stop it before deleting it')
+      await dropFolder(dir, run.id)
+      // Then the record that put the row in the list. A run with none (its checkout was all there
+      // was, or a delete stopped half-way) is done once its folder is.
+      if (await findRun(dir, run.id).catch(() => undefined)) {
+        const removed = await deleteRun(dir, run.id)
+        if (!removed.ok) throw new Error(removed.error)
+      }
+    },
+
+    async record(run, facts) {
+      const patch = patchOf(facts)
+      if (patch === undefined) throw new Error('Nothing of this is kept on a run\'s record.')
+      if (!(await patchRun(placeOf(run.project), run.id, patch).catch(() => false))) throw new Error('the record was not updated')
+    },
+
     list(project, wanted = {}) {
       return listedRuns(placeOf(project), project?.id, wanted, reads)
     },
@@ -248,6 +268,38 @@ function placeOf(project: ProjectRef | undefined): string {
 async function checkoutOf(dir: string, id: string): Promise<string> {
   const home = await sessionsHomeOf(dir)
   return home !== undefined ? sessionFolder(home, id) : worktreePath(dir, id)
+}
+
+/**
+ * A deleted run's folder gone, whatever it holds: a session's folder in the sessions home, or the
+ * run's checkout of the project, its uncommitted work with it (the session is being thrown away;
+ * git-branches' Remove worktree would keep a checkout holding any). Its branch and its commits
+ * stay: a branch may carry merged work or an open pull request, and that is git's. A folder that is
+ * no git worktree is left alone, and the delete refused.
+ */
+async function dropFolder(dir: string, id: string): Promise<void> {
+  const home = await sessionsHomeOf(dir)
+  if (home !== undefined) {
+    await rm(sessionFolder(home, id), { recursive: true, force: true })
+    return
+  }
+  const checkout = worktreePath(dir, id)
+  if (!(await stat(checkout).then(found => found.isDirectory(), () => false))) return
+  const dropped = await discardWorktree(dir, checkout)
+  if (!dropped.ok) throw new Error(`its folder ${checkout} is not a git worktree; left alone`)
+}
+
+/**
+ * What a run's record keeps of the facts a module found out once the run's process was gone: its
+ * pull request, and the work landed, the branch's last commit with the commit its work began at,
+ * which the record keeps as the run's own tools do. None when the facts hold neither.
+ */
+function patchOf(facts: RunFacts): RunPatch | undefined {
+  const pr = facts.github?.pr
+  const branches = facts['git-branches']
+  const landed = branches?.landed !== undefined && branches.baseCommit !== undefined ? { commit: branches.landed, from: branches.baseCommit } : undefined
+  if (!pr && !landed) return undefined
+  return { ...(pr ? { pr: { number: pr.number, url: pr.url } } : {}), ...(landed ? { landed } : {}) }
 }
 
 /** A run's card as it stands: its live one while it has a checkout, its record's once it has none. */

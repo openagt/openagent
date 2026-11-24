@@ -354,6 +354,19 @@ export interface RunHost {
   steer(run: RunRef, line: InboxLine): Promise<void>
   /** Stop a working run: politely, letting the agent end its turn where it is; with `force`, at once. */
   stop(run: RunRef, opts?: { force?: boolean }): Promise<void>
+  /**
+   * Delete a run that is not working: its checkout, whatever it holds, and its record, so no list
+   * has it any more. Its branch and their commits stay: they are git's. None for a host whose runs
+   * cannot be deleted from here.
+   */
+  delete?(run: RunRef): Promise<void>
+  /**
+   * Write down on a run's record what a module found out about it once its process was gone: the
+   * pull request a press opened (`github.pr`), the work a press landed (`git-branches.landed`, the
+   * branch's last commit, with `baseCommit`, the commit its work began at). None for a host that
+   * keeps no record.
+   */
+  record?(run: RunRef, facts: RunFacts): Promise<void>
   /** The runs it has in a project, or with no project, newest first: a working run as it stands now. */
   list(project?: ProjectRef, wanted?: RunsWanted): Promise<RunSummary[]>
   /** Where a run's work is, for the panes that show it (`RpcHost.run`); none for a run this host does not have. */

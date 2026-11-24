@@ -7,9 +7,8 @@ import { errorMessage } from '@openagt/agent-data'
 import { hasImage, isImageName, keepImage, patchRun } from '@openagt/agent-driver'
 import { IMAGES_PER_MESSAGE } from '../images.js'
 
-import { isRunId, type AgentMeta } from '../store/index.js'
+import { isRunId, projectBranches, type AgentMeta } from '../store/index.js'
 import { withAgentLock } from '../agent-locks.js'
-import { deleteProjectAgent } from '../worktrees.js'
 import { mergeAgentPr, openAgentPullRequest, pushAgentBranch, readRunHandoff, type HandoffResult } from '../dashboard/agent-handoff.js'
 import { copyTarget } from '../dashboard/session-copies.js'
 import { createRepository, type CreateRepositoryResult } from '../store/repository.js'
@@ -119,11 +118,23 @@ async function withWorktreeRemoval<T>(projectId: string, agentId: string, remove
 /**
  * Delete a session (#1032): remove it from the dashboard, records and all — the sibling of
  * git-branches' Remove worktree, and the one destructive-of-history action, so its surface confirms
- * first. The checks, the worktree removal and what it leaves behind (the branch and its
- * commits) are all {@link deleteProjectAgent}'s; this adds only the agent lock around them.
+ * first. What goes and what stays (its checkout and its record go, its branch and their commits
+ * stay) is its host's (`RunHost.delete`); this adds only the agent lock around it.
  */
 export async function sendDeleteAgent(projectId: string, agentId: string): Promise<DeleteAgentResult> {
-  return withWorktreeRemoval(projectId, agentId, async cwd => deleteProjectAgent(cwd, agentId, await contextRun(projectId, agentId).catch(() => undefined)))
+  return withWorktreeRemoval(projectId, agentId, async cwd => {
+    try {
+      const run = await runRefAt(projectId, cwd, agentId)
+      const host = await runHostOf(run)
+      if (!host.delete) return { ok: false, error: `A session on ${host.label} is not deleted from here.` }
+      await host.delete(run)
+      // Its checkout went: the project's checkouts are read again on the next look.
+      projectBranches.changed(cwd)
+      return { ok: true }
+    } catch (err) {
+      return { ok: false, error: errorMessage(err) }
+    }
+  })
 }
 
 /**
