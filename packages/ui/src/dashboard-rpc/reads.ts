@@ -16,6 +16,7 @@ import { buildActivity, type Activity } from '../dashboard/activity.js'
 import { buildDashboard, type DashboardData } from '../dashboard/dashboard.js'
 import { readGitStatus } from '../dashboard/git-status.js'
 import { readRunHandoff, resolveAgentPr, type AgentHandoff } from '../dashboard/agent-handoff.js'
+import { copyTarget, sessionCopies } from '../dashboard/session-copies.js'
 import type { AgentWorktree } from '../dashboard/types.js'
 import { crawlRepoFiles } from '../project.js'
 import { contextProjects, resolveProjectPath, resolveAgentPath } from './context.js'
@@ -300,9 +301,22 @@ export async function onRepositoryOffer(projectId: string): Promise<RepositoryOf
  * uncommitted changes as though they were the session's. The branch is what outlives the agent, so
  * the branch is what this asks about.
  */
-export async function onAgentHandoff(projectId: string, agentId: string): Promise<AgentHandoff | null> {
+export async function onAgentHandoff(projectId: string, agentId: string, repo?: string): Promise<AgentHandoff | null> {
   const cwd = await resolveProjectPath(projectId)
   if (!cwd || !isRunId(agentId)) return null
   const agent = await findAgent(cwd, agentId).catch(() => undefined)
-  return (agent && (await readRunHandoff(cwd, agent).catch(() => undefined))) ?? null
+  if (!agent) return null
+  // One of the session's copies of repos: the same read, of the copy's own folder and branch.
+  if (repo !== undefined) {
+    const copy = await copyTarget(agent, repo)
+    return (copy && (await readRunHandoff(copy.cwd, copy.agent).catch(() => undefined))) ?? null
+  }
+  return (await readRunHandoff(cwd, agent).catch(() => undefined)) ?? null
+}
+
+/** The session's copies of repos, by their names in its folder: the rows its work bar has beside the project's. */
+export async function onAgentCopies(projectId: string, agentId: string): Promise<string[]> {
+  const cwd = await resolveProjectPath(projectId)
+  if (!cwd || !isRunId(agentId)) return []
+  return sessionCopies(agentId)
 }

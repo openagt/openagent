@@ -13,8 +13,7 @@ import type { ContextSet } from '../lib/use-context-set.js'
 import { AgentComposer, type QueuedMessage } from './AgentComposer.js'
 import { sendNow, withdrawMessage } from '../rpc/control.js'
 import type { WaitingMessage } from './EventList.js'
-import { AgentWorkBar } from './AgentWorkBar.js'
-import { useWorkBarAway } from '../lib/work-bar-away.js'
+import { AgentWorkPanel, CopyWorkRow, ProjectWorkRow, useAgentCopies } from './AgentWorkPanel.js'
 import { useAction } from '../lib/use-action.js'
 import { keepSending, keepWaiting, keptSending, keptWaiting, onKeptWaiting } from '../lib/draft-handoff.js'
 import { AgentFeed } from './AgentFeed.js'
@@ -340,11 +339,8 @@ export function AgentView({
   // Where the session started, right above the message box, as the "New agent session" page has it. It is
   // there whatever stands in the box's place.
   const row = <SessionRow runsOn={runsOn} target={target} elsewhere={elsewhere || card?.otherHost === true} projectName={projectName} startedFrom={startedFrom} worksOn={barCheckout?.branch ?? branch} prs={prs} />
-  // What the bar is about right now, so the ✕ hides this and not the next thing the agent does:
-  // the run, its branch, how much work is on it, and where that work has got to.
-  const workState = [agentId, barCheckout?.branch ?? '', onBranch?.commits.length ?? 0, onBranch?.pendingFiles?.length ?? 0, onBranch?.insertions ?? 0, onBranch?.deletions ?? 0, onBranch?.pushed ?? false, pr?.number ?? '', pr?.state ?? ''].join('|')
-  // Put away, Session actions brings it back: the run may still wait on the person for its next step.
-  const workBar = useWorkBarAway(agentId, workState)
+  // The session's copies of repos: each has a row of its own in the panel, after the project's.
+  const copies = useAgentCopies(projectId, agentId, live)
 
   return (
     <ChatPane
@@ -367,7 +363,6 @@ export function AgentView({
             ready={ready}
             checkout={checkout}
             status={status}
-            {...(workBar.away && say ? { onShowWorkBar: workBar.show } : {})}
           />
           {/* The always-available session-details strip: agent + spend (#322). What the run changed is
               in the Changes pane, not here. */}
@@ -383,30 +378,34 @@ export function AgentView({
       bottom={
         <>
           {/* Where the work is and the next step, above the message box and its row. */}
-          <AgentWorkBar
-            checkout={barCheckout}
-            summary={
-              ready &&
-              (showHandoff ? (
-                <HandoffSummary handoff={handoff.handoff} />
-              ) : (
-                summaries.map(({ View: Summary, id, package: pkg }) => (
-                  <ModuleSlot key={`${pkg}/${id}`} package={pkg} label="run summary">
-                    <Summary projectId={projectId} agentId={agentId} working={working} />
-                  </ModuleSlot>
+          <AgentWorkPanel>
+            <ProjectWorkRow
+              name={projectName}
+              checkout={barCheckout}
+              summary={
+                ready &&
+                (showHandoff ? (
+                  <HandoffSummary handoff={handoff.handoff} />
+                ) : (
+                  summaries.map(({ View: Summary, id, package: pkg }) => (
+                    <ModuleSlot key={`${pkg}/${id}`} package={pkg} label="run summary">
+                      <Summary projectId={projectId} agentId={agentId} working={working} />
+                    </ModuleSlot>
+                  ))
                 ))
-              ))
-            }
-            actions={
-              // A run that is working is still writing its branch; the next step is offered once it has ended.
-              // Keyed: what a press said, and a merge it armed, are that session's alone.
-              committing ? <Committing /> : ended ? <HandoffActions key={`${projectId}/${agentId}`} projectId={projectId} agentId={agentId} state={handoff} onAsked={onSending} /> : undefined
-            }
-            error={ready && showHandoff ? handoff.error : undefined}
-            show={say}
-            away={workBar.away}
-            onHide={workBar.hide}
-          />
+              }
+              actions={
+                // A run that is working is still writing its branch; the next step is offered once it has ended.
+                // Keyed: what a press said, and a merge it armed, are that session's alone.
+                committing ? <Committing /> : ended ? <HandoffActions key={`${projectId}/${agentId}`} projectId={projectId} agentId={agentId} state={handoff} onAsked={onSending} /> : undefined
+              }
+              error={ready && showHandoff ? handoff.error : undefined}
+              show={say}
+            />
+            {copies.map(repo => (
+              <CopyWorkRow key={repo} projectId={projectId} agentId={agentId} repo={repo} ended={ended} saving={card?.saving === true} working={going} committing={committing} onAsked={onSending} />
+            ))}
+          </AgentWorkPanel>
           {/* Until the run's record or its feed says whether it works, no box: it would say an ended run's words. */}
           {live === null && !feedLive ? null : card?.otherHost && card.host ? (
             // A run another computer started is only read here: a

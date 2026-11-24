@@ -1,4 +1,5 @@
-import { rm } from 'node:fs/promises'
+import { realpath, rm, stat } from 'node:fs/promises'
+import { join, relative, resolve, sep } from 'node:path'
 import { callPackageCommand, listSessionFolders, runPackageCommand, sessionFolder, sessionsHomeOf, type ProvidedCommand } from '@openagt/agent-data'
 import { gitHostEnv } from '@openagt/agent-driver'
 import { providedCommand } from '../distribution-packages.js'
@@ -347,6 +348,18 @@ export function sessionFolders(home: string): BranchesSource {
 }
 
 /**
+ * Whether `root` is a copy of a repo a session has: a repository's top folder right in a session's
+ * folder, `<sessions home>/<id>/<name>` (`dashboard/session-copies.ts`). Its branch is read and
+ * published through the branches provider, as a project's is.
+ */
+export async function isSessionCopy(root: string, home: string): Promise<boolean> {
+  const [at, of] = await Promise.all([realpath(root).catch(() => resolve(root)), realpath(home).catch(() => resolve(home))])
+  const parts = relative(of, at).split(sep)
+  if (parts.length !== 2 || parts.some(part => part === '' || part === '..')) return false
+  return stat(join(at, '.git')).then(() => true, () => false)
+}
+
+/**
  * The production {@link BranchesReader}: the project's provider, looked up among the packages the project has (`distribution-packages.ts`),
  * one source per project kept while the same command provides — so the cache holds across the
  * many reads of one poll, and a project whose provider changes (a plugin switched on or off) is read
@@ -357,8 +370,9 @@ export function sessionFolders(home: string): BranchesSource {
 export function providedBranches(now: () => number = Date.now): BranchesReader {
   const sources = new Map<string, { at: number; command?: ProvidedCommand; source?: ReturnType<typeof commandBranches> }>()
   const reader: BranchesFor = async root => {
+    // The sessions home has folders, not branches; a copy of a repo in one of them is a repository, read as any other.
     const sessions = await sessionsHomeOf(root)
-    if (sessions !== undefined) return sessionFolders(sessions)
+    if (sessions !== undefined && !(await isSessionCopy(root, sessions))) return sessionFolders(sessions)
     let known = sources.get(root)
     if (!known || now() - known.at >= CACHE_MS) {
       const command = await providedCommand(root, 'branches').catch(() => undefined)
