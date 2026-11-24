@@ -43,7 +43,7 @@ test('a project with no run recorded says so where the runs would stand, and lis
   expect(screen.queryByRole('list')).toBeNull()
 })
 
-test('with every project showing, the sessions with no project are listed too, as the dashboard lists them; with one project picked, they are not', async () => {
+test('the page is the projects\' own: a session with no project is not listed, with every project showing or one picked', async () => {
   const host = hostWith([{ id: 'r1', startedAt: at(now - 2000), endedAt: at(now), status: 'done', title: 'In the project' }], [], [{ id: 's1', startedAt: at(now - 1000), status: 'waiting', title: 'Greeting exchange' }])
   const page = (projectId: string | null) => (
     <ModuleHostContext.Provider value={host}>
@@ -51,11 +51,9 @@ test('with every project showing, the sessions with no project are listed too, a
     </ModuleHostContext.Provider>
   )
   const every = render(page(null))
-  expect(await screen.findByText('Greeting exchange')).toBeTruthy()
-  expect(screen.getByText('In the project')).toBeTruthy()
-  expect(screen.getByText('Every run recorded in alpha, and the sessions with no project, newest first.')).toBeTruthy()
-  // Its row opens the session where its address is, under no project.
-  expect(screen.getByText('Greeting exchange').closest('a')!.getAttribute('href')).toBe(host.agentHref('session', 's1'))
+  expect(await screen.findByText('In the project')).toBeTruthy()
+  expect(screen.queryByText('Greeting exchange')).toBeNull()
+  expect(screen.getByText('Every run recorded in alpha, newest first.')).toBeTruthy()
   every.unmount()
   forgetRemembered()
   localStorage.clear()
