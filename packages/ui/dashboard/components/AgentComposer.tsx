@@ -15,11 +15,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { SessionContextMenu } from './ContextMenu.js'
 import { SessionReposSaid } from './SessionRepos.js'
 import { AutoMenu, autoCovers, autoSaid } from './AutoMenu.js'
-import { ProfileOff } from './ProfileMenu.js'
-import { useProfileName } from './ProfilesPage.js'
 import { GitHostOff } from './GitHosts.js'
-import { SkillsOff, useRecordedSkillCount } from './SkillsMenu.js'
-import { DEFAULT_PROFILE } from '../../src/client.js'
 import { isPublishPick, offeredPublishPicks, type PublishPick } from '../../src/client.js'
 import { useProjectLauncher } from '../lib/use-project-launcher.js'
 import { promptWithContext, type ContextSet } from '../lib/use-context-set.js'
@@ -74,11 +70,8 @@ export function AgentComposer({
   prBase,
   row,
   repos,
-  profile,
   gitHost,
   gitAccount,
-  pluginsWithout,
-  projectSkills,
   options,
 }: {
   projectId: string
@@ -116,15 +109,10 @@ export function AgentComposer({
   row?: ReactNode
   /** The repos the session has as copies, as its record says. */
   repos?: readonly { name: string; from: string }[] | undefined
-  /** The profile the session is on, by its id, as its record says; Default when absent. */
-  profile?: string | undefined
   /** The project's page on its git host, when it has one. */
   gitHost?: GitHostHome | null | undefined
   /** The account the run worked as there, as its record says. */
   gitAccount?: string | undefined
-  /** The session's picks, as its record says: the plugins it went without, which of the project's own skills stayed. */
-  pluginsWithout?: string[] | undefined
-  projectSkills?: 'all' | 'none' | string[] | undefined
   /** The session's run options, as its record keeps them: what its box's controls say (`composer.control`). */
   options?: RunOptions | undefined
 }) {
@@ -304,12 +292,8 @@ export function AgentComposer({
   const noProject = projectId === SESSIONS_ID
   // What a level acts on: the project, or with none the session's copies of repos.
   const publishes = !noProject || (repos?.length ?? 0) > 0
-  const profileName = useProfileName(profile ?? DEFAULT_PROFILE)
-  const skillCount = useRecordedSkillCount(noProject ? undefined : projectId, profile, pluginsWithout, projectSkills)
   const autoTarget = prBase !== undefined ? { into: prBase } : undefined
   const setupSaid = [
-    profileName !== undefined && `Profile ${profileName}`,
-    skillCount !== undefined && `${skillCount} skill${skillCount === 1 ? '' : 's'}`,
     gitAccount !== undefined && `@${gitAccount}`,
     publishes && autoSaid(picked ?? recorded, autoTarget),
   ]
@@ -337,9 +321,8 @@ export function AgentComposer({
         sessionModel={model}
         sessionContext={context}
         {...(contextSet ? { addContext: contextSet.add, removeContext: contextSet.remove } : {})}
-        // The launcher's gear, line for line in its places: the profile, said and not offered, since a
-        // session keeps the one it started on; "Skills", the picks it started with in its hover; the
-        // account the run worked as; then, set apart and still a pick, "When it finishes". After the
+        // The launcher's gear, line for line in its places: the modules' lines, as the session's record
+        // keeps its options; the account the run worked as; then, set apart and still a pick, "When it finishes". After the
         // gear, Context: the repos the session started with, said, and in a project the files picked for the next message; for a session with no project,
         // no git to take its work further with.
         controlBox={controlBox}
@@ -347,8 +330,6 @@ export function AgentComposer({
           said: setupSaid,
           lines: (
             <>
-              <ProfileOff profile={profile} />
-              <SkillsOff projectId={noProject ? undefined : projectId} profile={profile} pluginsWithout={pluginsWithout} projectSkills={projectSkills} />
               <GitHostOff home={gitHost ?? null} account={gitAccount} />
               {publishes && <AutoMenu publish={picked ?? recorded} picks={noProject ? offeredPublishPicks(true, true) : offeredPublishPicks(launcher?.gitHost ?? true, launcher?.remote ?? true)} onPublish={pick => setPicked(pick === recorded ? null : pick)} covers={autoCovers(noProject ? null : 'the project', repos?.length ?? 0)} target={autoTarget} />}
             </>

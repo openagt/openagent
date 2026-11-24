@@ -82,7 +82,7 @@ export function AgentView({
   /** Whether the agent is still running; `null` while the daemon's list of agents has not been read, so it is not known yet. */
   live: boolean | null
   /** What the run's card says, off the runs poll: what the feed cannot carry (the details strip's facts, how the agent was set up, whether its record is being saved). Absent until the card is listed. */
-  card?: (AgentDetailsCard & Pick<AgentMeta, 'status' | 'intent' | 'saving' | 'workspace' | 'branch' | 'base' | 'baseCommit' | 'host' | 'otherHost' | 'publish' | 'prBase' | 'gitAccount' | 'earlierPrs' | 'pr' | 'prState' | 'repos' | 'profile' | 'pluginsWithout' | 'projectSkills' | 'options'> & Partial<Pick<AgentMeta, 'endedAt' | 'updatedAt'>>) | undefined
+  card?: (AgentDetailsCard & Pick<AgentMeta, 'status' | 'intent' | 'saving' | 'workspace' | 'branch' | 'base' | 'baseCommit' | 'host' | 'otherHost' | 'publish' | 'prBase' | 'gitAccount' | 'earlierPrs' | 'pr' | 'prState' | 'repos' | 'options'> & Partial<Pick<AgentMeta, 'endedAt' | 'updatedAt'>>) | undefined
   /** What the launcher said about this run as it started it: shown until the run's record says it. */
   picks?: StartPicks | undefined
   /** The session's own name — the same label the rail shows (#1030). It leads the action bar as
@@ -459,11 +459,9 @@ export function AgentView({
             prBase={card?.prBase ?? picks?.prBase}
             row={row}
             repos={card?.repos ?? picks?.repos}
-            profile={card?.profile ?? picks?.profile}
             gitHost={gitHostHome}
             gitAccount={card?.gitAccount ?? picks?.gitAccount}
-            // The picks as the record keeps them; the launcher's until it is there.
-            {...(card ? { pluginsWithout: card.pluginsWithout, projectSkills: card.projectSkills } : { pluginsWithout: picks?.pluginsWithout, projectSkills: picks?.projectSkills })}
+            // The options as the record keeps them; the launcher's until it is there.
             options={card?.options ?? picks?.options}
           />
           )}

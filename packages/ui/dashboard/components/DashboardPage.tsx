@@ -18,7 +18,6 @@ import type { ListedPage } from '../lib/use-modules.js'
 import { Page } from './Page.js'
 import { overlayOpen, pressed } from '../lib/shortcut.js'
 import { LinePart, NEEDS_YOU_ID, WORKING_ID, counted, scrollToPart } from './LinePart.js'
-import { YourProfilesPart } from './YourProfilesPart.js'
 import { useIsMobile } from '../lib/use-mobile.js'
 
 /**
@@ -90,9 +89,6 @@ export function DashboardPage({
   // for this page (the picked project's, else all projects') orders them, sizes them, and hides some.
   const { cards: moduleCards, line: moduleLine, loaded: modulesLoaded } = useModuleCards(shownProjects)
   const queueComing = !modulesLoaded && moduleLine.length === 0 && listedPages?.some(page => page.id === 'queue' && shownProjects.some(project => page.projects.includes(project.id))) === true
-  // Until the pages are known (a browser's first visit) nor any package's part is in, whether the queue's part comes is
-  // not known: the parts after its place wait, so a part coming in before them pushes nothing.
-  const placeKnown = modulesLoaded || moduleLine.length > 0 || listedPages !== null
   // What the number counts, mark by mark: "1 question, 1 to publish".
   const counts = waitingCounts(waiting)
   // The card of what needs the person, a module's: the agents' updates stand under it, and the cards after
@@ -101,7 +97,7 @@ export function DashboardPage({
   const needsYou = needsYouCard?.id
   const needsYouWaits = needsYouCard !== undefined && (waitingState === 'unknown' || needsYouCard.holding === true)
   // How things stand, in one line under the title, each part a link to where it is: what needs the
-  // person, who is at work, the queue's own part (its package's, by its order) and the person's agents.
+  // person, who is at work, then the modules' parts, each by its order.
   const line: { id: string; order: number; node: ReactNode }[] = [
     {
       id: 'needs-you',
@@ -130,8 +126,6 @@ export function DashboardPage({
     // shown project has the Queue: a part that came after the line was drawn would lengthen it (on a phone pushing the
     // Customize press and the page under it), and a place no part takes would shorten it.
     ...(queueComing ? [{ id: 'packages', order: PACKAGES_PLACE, node: <LinePart reading shape="4 queued">{null}</LinePart> }] : moduleLine),
-    // The person's agents (Rom's design: an agent is a name, skills and accounts): how many, by name, a press from their page.
-    ...(placeKnown ? [{ id: 'your-profiles', order: 4, node: <YourProfilesPart /> }] : []),
   ].sort((one, other) => one.order - other.order)
   const cards: OverviewCard[] = [
     // Under what needs the person, what is at work and the usage a half each (his pick: the usage's sentence needs the room), then a column two thirds wide down the page's left and one a third wide

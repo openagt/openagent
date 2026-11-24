@@ -19,8 +19,6 @@ import * as logins from './logins.js'
 
 import * as personalFolder from './personal-folder.js'
 import * as projectAgentData from './project-agent-data.js'
-import * as profiles from './profiles.js'
-import * as skillChoices from './skill-choices.js'
 import * as plugins from './plugins.js'
 import * as backup from './backup.js'
 import * as attention from './attention.js'
@@ -44,7 +42,7 @@ export type RpcHandler = (...args: never[]) => unknown
 export const RPC_HANDLERS: Record<string, RpcHandler> = Object.assign(
   Object.create(null) as Record<string, RpcHandler>,
   Object.fromEntries(
-    [reads, control, projects, preferences, quota, models, modules, person, people, accounts, logins, personalFolder, projectAgentData, profiles, skillChoices, plugins, backup, attention]
+    [reads, control, projects, preferences, quota, models, modules, person, people, accounts, logins, personalFolder, projectAgentData, plugins, backup, attention]
       .flatMap(module => Object.entries(module))
       .filter((entry): entry is [string, RpcHandler] => typeof entry[1] === 'function'),
   ),

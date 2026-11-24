@@ -2,7 +2,6 @@ import { accentOf, isCodeFont, isDocumentFont, isFont, isPalette, type Accent, t
 import { sanitizeOverviewLayouts, type OverviewLayouts } from './overview-layout.js'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { projectId } from '@openagt/agent-data'
-import { DEFAULT_PROFILE, isProfileId } from '@openagt/hooks'
 import { isBranchName } from './branch-name.js'
 import { isDriverName } from './driver-names.js'
 import { isPublishPick, type PublishPick } from './publish-levels.js'
@@ -69,11 +68,6 @@ export interface Preferences {
    * listed starts from its main branch**, so the default stores nothing.
    */
   startFrom?: Record<string, StartFromPick>
-  /**
-   * The profile a run started from the launcher is on, by its id. The launcher's "Profile" pick
-   * writes it. **Absent = Default.**
-   */
-  profile?: string
   /**
    * Name each run: a small model is asked for the two to five words a list of runs shows in place
    * of the first line of the prompt (agent-driver's `engine/title.ts`). It is one short turn of the
@@ -262,9 +256,6 @@ function sanitizePreferences(value: unknown): Preferences {
   if (isDriverName(input['driver'] as string | undefined)) preferences.driver = input['driver'] as string
   // `publish` is constrained to the picks the launcher's menu lists.
   if (isPublishPick(input['publish'])) preferences.publish = input['publish']
-  // `profile` names a profile by its id; Default is the absent entry.
-  const profile = typeof input['profile'] === 'string' ? input['profile'].trim() : ''
-  if (isProfileId(profile) && profile !== DEFAULT_PROFILE) preferences.profile = profile
   const startFrom = sanitizeStartFrom(input['startFrom'])
   if (Object.keys(startFrom).length) preferences.startFrom = startFrom
   // `editor` (#727) is a free-form CLI name, trimmed and length-capped so junk / a huge string

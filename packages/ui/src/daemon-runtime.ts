@@ -4,7 +4,7 @@ import { stat } from 'node:fs/promises'
 import { hasImage, isImageName, type ReadyNaming } from '@openagt/agent-driver'
 import { IMAGES_PER_MESSAGE } from './images.js'
 import { isDriverName } from './driver-names.js'
-import { isProfileId, MODULE_NAME, type Hooks, type ProjectRef, type RunHost, type RunOptions, type RunRequest } from '@openagt/hooks'
+import { MODULE_NAME, type Hooks, type ProjectRef, type RunHost, type RunOptions, type RunRequest } from '@openagt/hooks'
 import { sessionRepos } from '@openagt/git-branches'
 import { nameStarted } from './started-names.js'
 import { findCheckout, isPidAlive, projectBranches, readLiveMetas } from './store/index.js'
@@ -13,7 +13,7 @@ import type { StartAgentOptions, StartAgentResult, AddProjectResult, RemoveProje
 import { ownRunsWatch } from './dashboard/runs-watch.js'
 import { screenInDiary } from './dashboard/screen.js'
 import { addProject, listProjects, readPreferences, removeProject } from './registry.js'
-import { errorMessage, fileBranchRepo, installProject, projectKey, sessionsHome, writeSharing, isSkillName, projectId } from '@openagt/agent-data'
+import { errorMessage, fileBranchRepo, installProject, projectKey, sessionsHome, writeSharing, projectId } from '@openagt/agent-data'
 import { publishedBranch } from '@openagt/agent-data/names'
 import { branchesOnOrigin } from './dashboard/start-branch.js'
 import { removeProjectFiles } from './remove-files.js'
@@ -54,9 +54,7 @@ function refusedPicks(options: StartAgentOptions, noProject: boolean): string | 
   if (options.options !== undefined && !isRunOptions(options.options)) return 'The run options are one object per module.'
   // A session with no project: with no branch; the repos it has are copied into its folder, and are
   // what it publishes. Its git host account goes with it: it may reach the host all the same.
-  if (noProject && (options.base !== undefined || options.prBase !== undefined || options.projectSkills !== undefined)) {
-    return 'A session with no project runs with no branch and no project skills.'
-  }
+  if (noProject && (options.base !== undefined || options.prBase !== undefined)) return 'A session with no project runs with no branch.'
   if (noProject && options.publish !== undefined && !(Array.isArray(options.repos) && options.repos.length > 0)) return 'A session with no project and no repo has nothing to publish.'
   if (options.images !== undefined && !(Array.isArray(options.images) && options.images.length <= IMAGES_PER_MESSAGE && options.images.every(isImageName))) return 'Images are named by the names the dashboard kept them under.'
   // Another host runs a project's run, on a machine of its own.
@@ -64,11 +62,6 @@ function refusedPicks(options: StartAgentOptions, noProject: boolean): string | 
   if (noProject && options.host !== undefined) return 'A session with no project runs on this computer.'
   // A login is one word.
   if (options.account !== undefined && !(typeof options.account === 'string' && /^\S+$/.test(options.account))) return 'An account is named by its login.'
-  if (options.profile !== undefined && !isProfileId(options.profile)) return 'A profile is named by its id.'
-  // The picks are lists of names.
-  const skillList = (value: unknown): value is string[] => Array.isArray(value) && value.length > 0 && value.every(isSkillName)
-  if (options.pluginsWithout !== undefined && !(Array.isArray(options.pluginsWithout) && options.pluginsWithout.every(name => typeof name === 'string' && MODULE_NAME.test(name)))) return 'Plugins are named by their names.'
-  if (options.projectSkills !== undefined && options.projectSkills !== 'all' && options.projectSkills !== 'none' && !skillList(options.projectSkills)) return 'Project skills are all, none, or named by their names.'
   // A repo is a whole path, and the run's process is handed them one per line.
   if (options.repos !== undefined && !(Array.isArray(options.repos) && options.repos.every(folder => typeof folder === 'string' && isAbsolute(folder) && !folder.includes('\n')))) {
     return 'A repo is named by the path of its folder on this computer.'
@@ -365,8 +358,5 @@ function flatOptionsOf(options: StartAgentOptions, publish: RunOptions['publish'
     ...(publish !== undefined ? { publish } : {}),
     ...(Object.keys(branches).length > 0 ? { 'git-branches': branches } : {}),
     ...(Object.keys(github).length > 0 ? { github } : {}),
-    ...(options.projectSkills !== undefined ? { skills: { project: options.projectSkills } } : {}),
-    ...(options.pluginsWithout !== undefined ? { plugins: { without: options.pluginsWithout } } : {}),
-    ...(options.profile !== undefined ? { profiles: { profile: options.profile } } : {}),
   }
 }

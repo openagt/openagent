@@ -25,11 +25,6 @@ export interface StartPicks {
   model?: string
   effort?: string
   repos?: { name: string; from: string }[]
-  /** The profile the run is on, by its id. */
-  profile?: string
-  /** The session's picks: the plugins it goes without, by name, which of the project's own skills stay (`all`, `none`, or names; absent, its profile's). */
-  pluginsWithout?: string[]
-  projectSkills?: 'all' | 'none' | string[]
   /** The images the prompt went with, by the names the dashboard kept them under. */
   images?: string[]
 }

@@ -1,7 +1,7 @@
-import { PROFILES_PAGE, PERMISSIONS_PAGE } from '../lib/use-route.js'
+import { PERMISSIONS_PAGE } from '../lib/use-route.js'
 import { RevealedTitle } from './RevealedTitle.js'
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
-import { Plus, Bot, SlidersHorizontal, Check, Folder, Laptop, LayoutDashboard, Blocks, FilePen, GitBranch, KeyRound } from 'lucide-react'
+import { Plus, SlidersHorizontal, Check, Folder, Laptop, LayoutDashboard, Blocks, FilePen, GitBranch, KeyRound } from 'lucide-react'
 import { HOST_ICON } from './RunOnMenu.js'
 import { hostOf, useRunHosts } from '../lib/run-hosts.js'
 import { PersonMark, personName } from './PersonMark.js'
@@ -415,8 +415,7 @@ export function AgentHistory({
                       {known.map(page => (
                         <NavRow key={page.segment} icon={page.icon ?? Blocks} label={page.label} active={activePage === page.segment} href={pageHref(page.segment)} onClick={leave(() => onPage(page.segment))} />
                       ))}
-                      {/* The agents (Rom): each a name, skills and accounts, on a page of the dashboard's own; then the accounts they work with. */}
-                      <NavRow icon={Bot} label="Profiles" active={activePage === PROFILES_PAGE} href={pageHref(PROFILES_PAGE)} onClick={leave(() => onPage(PROFILES_PAGE))} />
+                      {/* Then the accounts OpenAgent's work goes as, on a page of the dashboard's own. */}
                       <NavRow icon={KeyRound} label="Permissions" active={activePage === PERMISSIONS_PAGE} href={pageHref(PERMISSIONS_PAGE)} onClick={leave(() => onPage(PERMISSIONS_PAGE))} />
                     </>
                   )}

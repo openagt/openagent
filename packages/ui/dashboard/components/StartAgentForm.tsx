@@ -5,7 +5,7 @@ import type { RunOptions } from '@openagt/hooks'
 import type { ProjectSummary, StartFromPick } from '../../src/index.js'
 import { onStartBranches, onStartCheck } from '../rpc/projects.js'
 import { usePreferences, usePreferencesLoaded, updatePreferences } from '../lib/preferences.js'
-import { DEFAULT_PROFILE, isDriverName, offeredPublishPicks, publishPickIn } from '../../src/client.js'
+import { isDriverName, offeredPublishPicks, publishPickIn } from '../../src/client.js'
 import { hostTarget, useRunHosts, useSelectedHost } from '../lib/run-hosts.js'
 import type { StartPicks } from '../lib/started-from.js'
 import { startPicks, useStartAgent } from '../lib/use-start-agent.js'
@@ -22,10 +22,7 @@ import { ProjectPicker } from './ProjectPicker.js'
 import { ReposMenu, folderName, type PickedRepo } from './SessionRepos.js'
 import { Dots } from './ToolCalls.js'
 import { AgentFix, agentWords, useAgentState } from './Logins.js'
-import { profilePicks, SkillsMenu, useSkillCount, type SkillPicks } from './SkillsMenu.js'
 import { useGitAccountSetup, useSessionAccount } from './GitHosts.js'
-import { ProfileMenu } from './ProfileMenu.js'
-import { useProfilesList } from './ProfilesPage.js'
 import { SESSIONS_ID } from '../../src/project-address.js'
 import { shortcut } from '../lib/shortcut.js'
 import { useIsMobile } from '../lib/use-mobile.js'
@@ -70,12 +67,10 @@ const STARTING_SAID_AFTER_MS = 300
 // Above it, the git host account this session pushes as. A pick there is for this session alone:
 // it goes with the Start, and the computer's own pick, the Permissions page's, stays. Not saved:
 // the next session starts on the computer's again.
-// The gear's first line, "Profile": which profile the session is on, its accounts and the
-// project skills it gets (ProfileMenu.tsx); saved, like the model. Its GitHub account is what the
-// account line shows until the person picks another for the session.
+// The gear's first lines are the modules' (`composer.control` at `setup`): what they pick goes with
+// the Start in its run options.
 // With no project (`SESSIONS_ID`), the run starts in a folder of its own on this computer: the row
-// says "No project", and nothing about a repository is offered, no branch, no Auto level, no
-// project skills. It has its git host account all the same: it may reach the host with no project. Its Context, under the box where a project's is, is the repos the session
+// says "No project", and nothing about a repository is offered, no branch, no Auto level. It has its git host account all the same: it may reach the host with no project. Its Context, under the box where a project's is, is the repos the session
 // works with (SessionRepos.tsx): each is copied into the session's folder, and none is made a project. A repo
 // ticked in a project's Context is copied the same way, beside the run's checkout of the project.
 export function StartAgentForm({
@@ -204,36 +199,19 @@ export function StartAgentForm({
     wasReady.current = ready
   }, [fixable, agent?.ready])
 
-  // The profile the session is on: the saved pick, while there is such a profile; Default otherwise.
-  const { view: profilesView } = useProfilesList()
-  const onProfile = profilesView?.profiles.find(one => one.id === (preferences.profile ?? DEFAULT_PROFILE)) ?? profilesView?.profiles[0]
-  const profileId = onProfile !== undefined && onProfile.id !== DEFAULT_PROFILE ? onProfile.id : undefined
-  // The git host account picked for this session, when the person picked one; the profile's, else the computer's, otherwise.
+  // The git host account picked for this session, when the person picked one; the computer's otherwise.
   const [pickedAccount, setPickedAccount] = useState<string | undefined>()
   useEffect(() => setPickedAccount(undefined), [projectId])
-  // The plugins this session goes without and the project skills it gets: what its profile starts from, until the person picks.
-  const [skillPicks, setSkillPicks] = useState<SkillPicks>(() => profilePicks(onProfile))
-  const profileProject = onProfile?.options.skills?.project
-  const profileWithout = onProfile?.options.plugins?.without
-  useEffect(() => setSkillPicks(profilePicks(onProfile)), [projectId, onProfile?.id, JSON.stringify(profileProject), JSON.stringify(profileWithout)])
-  // None left out, and every project skill, are said where the profile names its own: the session's pick goes over the profile's.
-  const pickedSkills = {
-    ...(skillPicks.without.length > 0 || profileWithout !== undefined ? { pluginsWithout: skillPicks.without } : {}),
-    ...(noProject ? {} : skillPicks.project !== undefined ? { projectSkills: skillPicks.project } : profileProject !== undefined && profileProject !== 'all' ? { projectSkills: 'all' as const } : {}),
-  }
   // With no project the account is the one at the host a package answers for: the session may reach it all the same.
-  const account = useSessionAccount(address, pickedAccount ?? onProfile?.options.github?.account, noProject)
+  const account = useSessionAccount(address, pickedAccount, noProject)
   // The gear's lines, and what its hover says of them with the menu shut. A session with no project
   // has its account too, and no Auto level: it has no repository of its own to publish.
-  const gitAccount = useGitAccountSetup(remote ? address : undefined, pickedAccount ?? onProfile?.options.github?.account, setPickedAccount, noProject)
-  const skillCount = useSkillCount(noProject ? undefined : projectId, skillPicks)
+  const gitAccount = useGitAccountSetup(remote ? address : undefined, pickedAccount, setPickedAccount, noProject)
   // A project's Context holds files, said at the prompt's end, and repos, which the run copies as it does with no project.
   const ticked = noProject ? repos : [...context].filter(isRepoPath).map(path => ({ path, name: folderName(path) }))
   // What a level acts on: the project, or with none the copies of repos, once one is ticked.
   const publishes = !noProject || ticked.length > 0
   const setupSaid = [
-    onProfile && `Profile ${onProfile.name}`,
-    skillCount !== undefined && `${skillCount} skill${skillCount === 1 ? '' : 's'}`,
     gitAccount.said,
     publishes && autoSaid(publishPick, prTarget),
   ]
@@ -255,8 +233,6 @@ export function StartAgentForm({
       ...(host ? { host: host.id } : {}),
       ...(ticked.length > 0 ? { repos: ticked.map(repo => repo.path) } : {}),
       ...((noProject || remote) && account !== undefined ? { account } : {}),
-      ...(profileId !== undefined ? { profile: profileId } : {}),
-      ...pickedSkills,
     })
     setNote(null)
     if (result) {
@@ -273,8 +249,6 @@ export function StartAgentForm({
           ...(Object.keys(options).length > 0 ? { options } : {}),
           ...(started !== undefined ? { branch: started } : {}),
           ...((noProject || remote) && account !== undefined ? { gitAccount: account } : {}),
-          ...(profileId !== undefined ? { profile: profileId } : {}),
-          ...pickedSkills,
           ...(publishes ? { publish: publishPick } : {}),
           ...(prInto !== undefined ? { prBase: prInto } : {}),
           ...(preferences.driver ? { driver: preferences.driver } : {}),
@@ -286,7 +260,6 @@ export function StartAgentForm({
       }).finally(() => composerRef.current?.clear())
       setRepos([])
       setOptions({})
-      setSkillPicks(profilePicks(onProfile))
     } else setRefused(true)
   }
 
@@ -323,16 +296,13 @@ export function StartAgentForm({
           </>
         }
         controlBox={{ in: 'launcher', projectId, options, onChange: setOptions, busy, pickProject: id => pickProject(id ?? SESSIONS_ID) }}
-        // The gear's lines (his order): who runs, the profile and the skills this session gets; who it
-        // pushes as, the project's git host account, picked for this session; and, set apart, what
-        // becomes of the work. The gear is in the warning's colour while the host has no account.
+        // The gear's lines (his order), after the modules': who it pushes as, the project's git host
+        // account, picked for this session; and, set apart, what becomes of the work. The gear is in the warning's colour while the host has no account.
         setup={{
           said: setupSaid,
           warn: !noProject && gitAccount.missing,
           lines: (
             <>
-              <ProfileMenu profiles={profilesView?.profiles} picked={onProfile?.id} onPick={id => updatePreferences({ profile: id === DEFAULT_PROFILE ? '' : id })} />
-              <SkillsMenu projectId={noProject ? undefined : projectId} picks={skillPicks} onChange={setSkillPicks} />
               {gitAccount.line}
               {publishes && <AutoMenu publish={publishPick} picks={publishPicks} onPublish={pick => updatePreferences({ publish: pick })} target={prTarget} covers={autoCovers(noProject ? null : projectName, ticked.length)} />}
             </>
