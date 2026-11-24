@@ -1,7 +1,8 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { GitAccess } from './account.js'
 import type { ProjectRef } from './project.js'
-import type { RunOptions, RunQuestion } from './run.js'
+import type { GivenSkill } from './loader.js'
+import type { RunOptions, RunQuestion, SkillArgs } from './run.js'
 import type { Settings } from './settings.js'
 import type { Store } from './store.js'
 
@@ -23,6 +24,8 @@ export interface AppContext {
   gitAccess(remote: string): Promise<GitAccess | undefined>
   /** Tell the other modules the list of projects changed: what the module that keeps the list does. */
   readonly lifecycle: ProjectsLifecycle
+  /** The skills the modules give a run, as the app's `skills` answers them: with `every`, every module's, the plugins that are off too. */
+  skills(args: SkillArgs, opts?: { every?: boolean }): Promise<GivenSkill[]>
 }
 
 /**

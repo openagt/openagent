@@ -17,7 +17,8 @@ import { worktreePath } from '@openagt/git-branches'
 import { FIXTURE_PLUGINS, makeFixtureRepo } from './fixture.js'
 import { fakeRunHost, STARTS_FILE_ENV, type HostCall } from './fake-runs.js'
 import { tailAgentEvents } from '../dashboard-rpc/events-tail.js'
-import { sendAddProject, sendShareRecords } from '../dashboard-rpc/projects.js'
+import { sendShareRecords } from '../dashboard-rpc/projects.js'
+import { callModule } from '../dashboard-rpc/module-calls.js'
 import { sendSwitchPlugin } from '../dashboard-rpc/plugins.js'
 import { sendStart, sendStop } from '../dashboard-rpc/control.js'
 import { onAgents } from '../dashboard-rpc/reads.js'
@@ -68,8 +69,8 @@ export interface StoryWorld {
   /** What every start and resume of this world was handed, oldest first. */
   hostCalls(): Promise<HostCall[]>
   /**
-   * Create a real git repo (initial commit included) and register it through the same
-   * `sendAddProject` RPC the dashboard's Add-project dialog calls.
+   * Create a real git repo (initial commit included) and add it through the same function of the
+   * projects module (`addProject`) the dashboard's Add-project dialog calls.
    */
   addProject(files?: Record<string, string>): Promise<StoryProject>
   /** Start an agent through the same `sendStart` RPC the launcher calls; returns the agent id. */
@@ -136,9 +137,7 @@ export async function makeWorld(): Promise<StoryWorld> {
     // The demo's runs are all this computer's: no host beside it.
     otherHosts: async () => [],
     startAgent: runtime.onStart,
-    addProject: runtime.onAddProject,
     startedIn: runtime.onStartedIn,
-    removeProject: runtime.onRemoveProject,
     prepareStart: runtime.onPrepareStart,
     preferences: registryPreferencesStore(),
     // The story sets one view; both questions are answered off it, since a story that cares about
@@ -180,8 +179,9 @@ export async function makeWorld(): Promise<StoryWorld> {
       const cwd = mkdtempSync(join(tmpdir(), 'openagent-e2e-repo-'))
       repos.push(cwd)
       await makeFixtureRepo(cwd, files)
-      const added = await rpc(sendAddProject)(cwd)
-      if (!added.ok) throw new Error(`could not register the fixture repo: ${added.error}`)
+      const called = await rpc(callModule)(null, '@openagt/projects', 'addProject', { path: cwd })
+      const added = called.ok ? (called.output as { ok: boolean; error?: string }) : called
+      if (!added.ok) throw new Error(`could not add the fixture repo: ${added.error}`)
       const id = projectId(resolve(cwd))
       // Its records go to its remote, as a team's do.
       const shared = await rpc(sendShareRecords)(id, true)

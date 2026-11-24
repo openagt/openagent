@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { HOSTED_MAX_AGE_MS, forgetHosted, hostedWiring, readHosted } from './hosted-repos.js'
-import { onRepoSources, sendAddRepoOwner, sendRemoveRepoOwner } from './projects.js'
+import { onRepoOwners, sendAddRepoOwner, sendRemoveRepoOwner } from './projects.js'
 
 // The git hosts' repositories the picker lists: each OpenAgent account's own, as itself, and each
 // owner the person named, as the account runs use; read behind the answer and kept.
@@ -96,10 +96,10 @@ test('Settings › Repos names an owner as a person types it, GitHub when no hos
   Object.assign(hostedWiring, { hosts: async () => [], owners: async () => [] })
   try {
     for (const typed of ['vikejs', '@brillout', 'https://github.com/Vikejs/', 'gitlab.example.com/team']) assert.deepEqual(await sendAddRepoOwner(typed), { ok: true })
-    assert.deepEqual((await onRepoSources()).owners, ['github.com/vikejs', 'github.com/brillout', 'gitlab.example.com/team'], 'the same owner once')
+    assert.deepEqual(await onRepoOwners(), ['github.com/vikejs', 'github.com/brillout', 'gitlab.example.com/team'], 'the same owner once')
     assert.equal((await sendAddRepoOwner('vikejs/vike')).ok, false, 'a repository is no owner')
     assert.deepEqual(await sendRemoveRepoOwner('github.com/brillout'), { ok: true })
-    assert.deepEqual((await onRepoSources()).owners, ['github.com/vikejs', 'gitlab.example.com/team'])
+    assert.deepEqual(await onRepoOwners(), ['github.com/vikejs', 'gitlab.example.com/team'])
   } finally {
     Object.assign(hostedWiring, before)
     forgetHosted()

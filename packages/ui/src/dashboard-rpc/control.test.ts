@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { projectId } from '@openagt/agent-data'
 import type { RunHost, RunRef } from '@openagt/hooks'
 import { fakeHost } from '@openagt/hooks/testing'
-import { addProject } from '../registry.js'
+import { listTestProject } from '../test-projects.js'
 import { provideTestContext } from './test-context.js'
 import { sendMessage, sendStart, sendStop } from './control.js'
 import type { StartAgentOptions } from '../dashboard/types.js'
@@ -29,7 +29,7 @@ test('sendStart hands the trimmed prompt, the picks and the project to the daemo
 test("a Stop and what a person says to a run go to the host the run is on: the first of its project's other hosts that has it, else this computer's (#2394)", async () => {
   const dir = await realpath(await mkdtemp(join(tmpdir(), 'openagent-control-')))
   try {
-    await addProject(dir, '2026-11-19T00:00:00.000Z')
+    await listTestProject(dir, '2026-11-19T00:00:00.000Z')
     const id = projectId(dir)
     const ON_ACTIONS = '2026-11-19T10-00-00-000Z'
     const HERE = '2026-11-19T11-00-00-000Z'

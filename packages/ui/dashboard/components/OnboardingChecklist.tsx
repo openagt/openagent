@@ -1,5 +1,5 @@
 import { useContext, useState, type ReactNode } from 'react'
-import type { DashboardData, ProjectSummary } from '../../src/index.js'
+import type { DashboardData } from '../../src/index.js'
 import { Check, Info, X } from 'lucide-react'
 import { onDashboard } from '../rpc/reads.js'
 import { usePolled } from '../lib/use-async.js'
@@ -13,8 +13,6 @@ import { Facts, Panel, PanelGroup, StepNumber } from './ui/panel.js'
 import { Skeleton } from './ui/skeleton.js'
 import { usePreferences, updatePreferences } from '../lib/preferences.js'
 import { startPicks, useStartAgent } from '../lib/use-start-agent.js'
-import { AddProjectEffects } from './AddProjectEffects.js'
-import { ProjectPicker } from './ProjectPicker.js'
 import { UpdateTicketsButton, UPDATE_TICKETS_PROMPT } from './UpdateTicketsButton.js'
 import { HostFix } from './AddGitAccount.js'
 import { AgentFix, agentLoginState, hostLoginState, hostWords, useAgentState, useGitHosts } from './Logins.js'
@@ -27,7 +25,7 @@ import { attentionDetail, attentionKey, useAttentionFixes } from './Attention.js
 // "Discover OpenAgent", the Overview's first steps (#958): what a new install can set up, each with
 // the state it is actually in rather than a static list to read past.
 //
-// Every "done" is derived from a real fact — a login, a registered project, a non-empty queue, a
+// Every "done" is derived from a real fact — a login, a non-empty queue, a
 // ticket on disk — so a step cannot be ticked by clicking it, and a step done outside the dashboard
 // shows up ticked anyway. Numbered, not boxes: a box invites a
 // click that can tick nothing.
@@ -72,14 +70,10 @@ interface Step {
 }
 
 export function OnboardingChecklist({
-  projects,
   onAgentStarted,
   onSelectProject,
-  onProjectAdded,
   listedPages,
 }: {
-  /** The projects as the app read them: the picker sees one it added land, and closes on it. */
-  projects: readonly ProjectSummary[]
   /**
    * Told about the session a step started, so the shell can land on it (#1169). The project
    * travels with it: this renders on the Overview, which has none selected. Required, so a new mounting surface cannot quietly drop the navigation.
@@ -87,8 +81,6 @@ export function OnboardingChecklist({
   onAgentStarted: (projectId: string, intent: string, agentId: string) => void
   /** Where "Configure first, then run" lands (#1507): the launcher of the project the steps act on. */
   onSelectProject: (id: string) => void
-  /** A project was added here: the app reads its projects again. */
-  onProjectAdded: () => void
   /** The modules' pages as the sidebar lists them, null where none is known yet: which projects have the Queue and the Tickets. */
   listedPages: readonly ListedPage[] | null
 }) {
@@ -111,14 +103,13 @@ export function OnboardingChecklist({
   const connect = views['agent.connect'][0]
   // The step the person opened; by default, the first one not done.
   const [picked, setPicked] = useState<string | undefined>()
-  const setupItems = (useAttention(null) ?? []).filter(item => item.kind === 'setup' && item.scope === 'computer')
+  const attention = useAttention(null)
+  const setupItems = (attention ?? []).filter(item => item.kind === 'setup' && item.scope === 'computer')
   const fixes = useAttentionFixes(undefined, () => void reload())
 
   // The project the steps act on: the only/most recent one. A first-session flow rarely has a second.
   const targetProjectId = data?.projects[0]?.projectId ?? null
 
-  // Before the projects are read, the app's own list says whether there is one.
-  const projectCount = data?.totals.projects ?? projects.length
   const hasTickets = data?.projects.some(p => p.hasTickets) ?? false
 
   const populateTickets = async () => {
@@ -191,28 +182,6 @@ export function OnboardingChecklist({
     agentStep,
     ...hostSteps,
     ...moduleSteps,
-    {
-      key: 'project',
-      label: 'Add your first project',
-      description: 'A git repo your agents work in, each in its own copy and on its own branch. Your files and your branch stay as they are.',
-      info: <AddProjectEffects />,
-      done: projectCount > 0,
-      ...(projects.length > 0 ? { doneNote: projects.map(project => project.name).join(', ') } : {}),
-      // The picker of the sidebar and the box: the repos on this computer and at GitHub, another folder, an address.
-      action: (
-        <ProjectPicker
-          look="add"
-          none={{ label: 'Add a project' }}
-          picked={null}
-          projects={projects}
-          onPick={() => void reload()}
-          onProjectAdded={() => {
-            onProjectAdded()
-            void reload()
-          }}
-        />
-      ),
-    },
     // Only when some project has a queue at all (#1774): a project gets one from a package it
     // depends on, and a step asking to fill a queue no project has would ask for nothing.
     ...((data?.queue.length ?? 0) > 0
@@ -263,9 +232,10 @@ export function OnboardingChecklist({
       : []),
   ]
 
-  // No step before its reads have said where it stands: an unread project count is not "no project".
+  // No step before its reads have said where it stands: an unread project count is not "no project",
+  // and the modules' steps (the projects module's "Add your first project") come with what they say.
   const loginsRead = claude.state !== undefined && codex.state !== undefined && hosts !== undefined
-  const reading = state === 'unknown' || !loginsRead
+  const reading = state === 'unknown' || !loginsRead || attention === null
   const open = picked !== undefined && steps.some(step => step.key === picked && !step.done) ? picked : steps.find(step => !step.done)?.key
 
   const doneCount = steps.filter(step => step.done).length

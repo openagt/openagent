@@ -5,10 +5,9 @@ import { RUNNER_CONFIG, RUNNER_DIR, RUNS_DIR } from './names.js'
 import { isPidAlive, lockHolder } from './run-lock.js'
 
 /**
- * `cleanup`: what this tool left in a project, removed, for a person who takes the project out of
- * a dashboard and asks for the tool's files to go too. The tool removes its own and nothing else:
- * a dashboard asks for it by the `cleanup` kind the package declares under `openagent` in its
- * package.json, and holds no list of this tool's files.
+ * What this tool left in a project, removed, for a person who takes the project off the list and
+ * asks for the tool's files to go too (`app.lifecycle`'s `projectRemoved`, `module.ts`). The tool
+ * removes its own and nothing else: the projects module holds no list of this tool's files.
  *
  * What goes is the runs' locks and stderr files, one by one, and then the directories they left
  * empty. The settings file is the person's own writing and stays, and so does anything else

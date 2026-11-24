@@ -22,9 +22,6 @@
     "agent-runner": "bin/agent-runner",
     "account-rotation": "bin/account-rotation"
   },
-  "openagent": {
-    "cleanup": "agent-runner"
-  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -63,6 +60,7 @@
   "devDependencies": {
     "@openagt/github": "workspace:*",
     "@openagt/notifications-command": "workspace:*",
+    "@openagt/projects": "workspace:*",
     "@openagt/skills": "workspace:*",
     "@tailwindcss/vite": "^4.0.0",
     "@testing-library/dom": "^10.4.1",

@@ -31,6 +31,10 @@ are on as their repositories stand: your folder's sync with a repository of your
 agent data**. A run gets the skills of the core modules (github's on a GitHub project) and of the
 plugins on in its project, linked into its checkout; nothing is written into the project.
 
+The projects are [`@openagt/projects`](../projects/README.md)'s: the list, the project picker
+above the launcher's box, **Remove project…** in a project's menu, after which every module cleans
+up what it left there, and **Settings › Repos**, the folders searched for repos.
+
 ## The command is four options and no verbs
 
 ```

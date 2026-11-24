@@ -7,14 +7,14 @@ import { test } from 'node:test'
 import { promisify } from 'node:util'
 import { writeSharing } from '@openagt/agent-data'
 import type { AppContext, AttentionItem, ProjectRef } from '@openagt/hooks'
-import { memorySettings } from '@openagt/hooks/testing'
+import { fakeApp } from '@openagt/hooks/testing'
 import { NOT_SYNCING, dataSync, type PullData } from './sync.js'
 
 const git = promisify(execFile)
 
 /** The app as a module's life is told it: the projects the module is on in, asked again each time. */
 function appWith(projects: () => ProjectRef[], signal = new AbortController().signal): AppContext {
-  return { projects: async () => projects(), store: undefined as never, settings: memorySettings(), signal }
+  return fakeApp({ projects: async () => projects(), signal })
 }
 
 /** Wait until `done` says so, asking every few milliseconds. */
@@ -69,7 +69,7 @@ test('a project taken off the list is pulled no more, and one no longer shared s
   const sync = dataSync({ pull, everyMs: 10, log: () => {} })
   sync.lifecycle.started?.(appWith(() => shared))
   await until(async () => (await sync.attention({ project: blog })).length === 1, 'both fail at first')
-  await sync.lifecycle.projectRemoved?.(shop, appWith(() => shared))
+  await sync.lifecycle.projectRemoved?.(shop, appWith(() => shared), { files: false })
   assert.deepEqual(await sync.attention({ project: shop }), [], 'a removed project says nothing')
   pulled.length = 0
   await until(() => pulled.length >= 2, 'two more pulls')

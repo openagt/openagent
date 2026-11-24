@@ -1,8 +1,8 @@
 import { useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ChevronDown, Loader2 } from 'lucide-react'
 import type { RunOptions } from '@openagt/hooks'
-import { moduleHost, type ActionPlace, type ActionPlaces, type UiActionResult, type UiComposerControlProps, type UiComposerIn, type UiControlSaid, type UiOffer, type ViewPlace, type ViewPlaces } from '../module/index.js'
-import { DEFAULT_ORDER, useMountedModules, type MountedAction, type MountedView } from '../lib/use-modules.js'
+import { moduleHost, type ActionPlace, type ActionPlaces, type ModuleHost, type OptionPlace, type UiActionResult, type UiComposerControlProps, type UiComposerIn, type UiControlSaid, type UiOffer, type ViewPlace, type ViewPlaces } from '../module/index.js'
+import { DEFAULT_ORDER, useMountedModules, type MountedAction, type MountedOption, type MountedView } from '../lib/use-modules.js'
 import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.js'
 import { SESSIONS_ID } from '../../src/project-address.js'
 import { ModuleSlot } from './ModulePageView.js'
@@ -29,6 +29,13 @@ export function onIn(of: { projects: readonly string[]; sessions?: true; compute
 export function useViewsAt<P extends ViewPlace>(place: P, projectId: string | undefined): MountedView<P>[] {
   const views = useMountedModules().views[place] as MountedView<P>[]
   return useMemo(() => views.filter(view => onIn(view, projectId)), [views, projectId])
+}
+
+/** The options at `place` on where it is drawn ({@link onIn}), in the place's order, each with its module's host: what a shared menu calls them with. */
+export function useOptionsAt<P extends OptionPlace>(place: P, projectId: string | undefined): { option: MountedOption<P>; host: ModuleHost }[] {
+  const options = useMountedModules().options[place] as MountedOption<P>[]
+  const services = useContext(HostServicesContext) ?? INERT_HOST_SERVICES
+  return useMemo(() => options.filter(option => onIn(option, projectId)).map(option => ({ option, host: moduleHost({ ...services, package: option.package }) })), [options, projectId, services])
 }
 
 /** Each view at `place` on where it is drawn, in its module's slot, given `props`. */

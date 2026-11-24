@@ -8,8 +8,11 @@ import { followRunsChanged, type RunsChanged } from './runs-changed.js'
 import { ownRunsWatch } from '../dashboard/runs-watch.js'
 import { prStates, prsForBranch } from '../dashboard/pull-requests.js'
 import type { GitHostFor, GitHostRequest } from '../store/git-host.js'
-import { addProject } from '../registry.js'
+import { listTestProject } from '../test-projects.js'
 import { SESSIONS_ID } from '../project-address.js'
+import { handDownTestDistribution } from '../test-distribution.js'
+
+handDownTestDistribution()
 
 test("the page is told when the runs of a project, or of the sessions with no project, change: once for changes that come together, and no more once it stops listening", async () => {
   const dir = await realpath(await mkdtemp(join(tmpdir(), 'openagent-runs-changed-')))
@@ -26,7 +29,7 @@ test("the page is told when the runs of a project, or of the sessions with no pr
     await mkdir(process.env.XDG_CONFIG_HOME, { recursive: true })
     const app = join(dir, 'app')
     await mkdir(app)
-    await addProject(app, new Date().toISOString())
+    await listTestProject(app, new Date().toISOString())
     const told: RunsChanged[] = []
     const stop = followRunsChanged(change => told.push(change))
     for (let i = 0; i < 50 && changed.size < 2; i++) await new Promise(resolve => setTimeout(resolve, 10))

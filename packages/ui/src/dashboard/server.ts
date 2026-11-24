@@ -67,7 +67,7 @@ export interface Dashboard {
  * mounts its RPC surface at `/_rpc` — the calls and the live-event stream. The dashboard reads a
  * run's own diary over that stream and steers the run through the files its tool reads, so there is
  * no in-process event stream here; the server is a static-bundle + RPC host. The RPCs run in the
- * daemon's own process, so `sendStart` / `sendAddProject` call the daemon's own closures through
+ * daemon's own process, so `sendStart` / `sendStartedAgain` call the daemon's own closures through
  * {@link DashboardOptions.context}.
  */
 export async function startDashboard(opts: DashboardOptions): Promise<Dashboard> {

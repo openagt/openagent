@@ -191,7 +191,9 @@ export async function startDemo(options: DemoOptions = {}): Promise<Demo> {
   }
 
   try {
-    const added = await call<{ ok: boolean; error?: string }>('sendAddProject', shop)
+    // As the Add-project dialog adds one: the projects module's own function.
+    const called = await call<{ ok: true; output: { ok: boolean; error?: string } } | { ok: false; error: string }>(`${encodeURIComponent('@openagt/projects')}/addProject`, null, { path: shop })
+    const added = called.ok ? called.output : called
     if (!added.ok) throw new Error(`could not add the demo project: ${added.error}`)
     // Its records go to its remote, as a team's do.
     const shared = await call<{ ok: boolean; error?: string }>('sendShareRecords', id, true)

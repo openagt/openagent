@@ -49,7 +49,7 @@ let working: ActiveAgent[] = []
 /** The modules' pages as the sidebar lists them: none known until a test says. */
 let listed: readonly ListedPage[] | null = null
 const overview = (scope: string | null = null, kept = { waiting: false, active: false }, read = true) => (
-  <DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} onSelectAgent={() => {}} onAgentStarted={() => {}} waiting={[]} waitingState={!read ? 'unknown' : kept.waiting ? 'kept' : 'fresh'} active={{ active: working, state: !read ? 'unknown' : kept.active ? 'kept' : 'fresh' }} projects={projects} scope={scope} listedPages={listed} start={null} />
+  <DashboardPage onSelectProject={() => {}} onSelectAgent={() => {}} onAgentStarted={() => {}} waiting={[]} waitingState={!read ? 'unknown' : kept.waiting ? 'kept' : 'fresh'} active={{ active: working, state: !read ? 'unknown' : kept.active ? 'kept' : 'fresh' }} projects={projects} scope={scope} listedPages={listed} start={null} />
 )
 const show = (...args: Parameters<typeof overview>) => render(overview(...args))
 /** The cards drawn, in order, each with its grid classes. */
@@ -102,7 +102,7 @@ describe('the Overview', () => {
 
   test('"Discover OpenAgent" is the first part of the page, above the box that starts a session, whatever the layout; its ✕ takes it off', async () => {
     working = []
-    const withBox = () => render(<DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} onSelectAgent={() => {}} onAgentStarted={() => {}} waiting={[]} waitingState="fresh" active={{ active: working, state: 'fresh' }} projects={projects} scope={null} listedPages={listed} start={<p>the box</p>} />)
+    const withBox = () => render(<DashboardPage onSelectProject={() => {}} onSelectAgent={() => {}} onAgentStarted={() => {}} waiting={[]} waitingState="fresh" active={{ active: working, state: 'fresh' }} projects={projects} scope={null} listedPages={listed} start={<p>the box</p>} />)
     prefs.value = {}
     withBox()
     const discover = await screen.findByText('onboarding')
@@ -149,7 +149,7 @@ describe('the Overview', () => {
 
   test('the box that starts a session is the page\'s first part, before every card, and arranging the cards leaves it there', async () => {
     working = [active('1-a')]
-    render(<DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} onSelectAgent={() => {}} onAgentStarted={() => {}} waiting={[]} waitingState="fresh" active={{ active: working, state: 'fresh' }} projects={projects} scope={null} listedPages={listed} start={<p>the box</p>} />)
+    render(<DashboardPage onSelectProject={() => {}} onSelectAgent={() => {}} onAgentStarted={() => {}} waiting={[]} waitingState="fresh" active={{ active: working, state: 'fresh' }} projects={projects} scope={null} listedPages={listed} start={<p>the box</p>} />)
     const box = screen.getByText('the box')
     const firstCard = await waitFor(() => {
       const card = document.querySelector('[data-card]')
@@ -465,7 +465,7 @@ describe('the Overview', () => {
     const item = (mark: Waiting['mark'], n: number): Waiting => ({ projectId: 'p1', projectName: 'alpha', kind: 'waiting', module: 'm', scope: 'run', run: `r${n}`, words: 'Needs it', title: `t${n}`, ...(mark ? { mark } : {}) })
     const scrolled = vi.fn()
     Element.prototype.scrollIntoView = scrolled
-    render(<DashboardPage onProjectAdded={() => {}} onSelectProject={() => {}} onSelectAgent={() => {}} onAgentStarted={() => {}} waiting={[item('question', 1), item('question', 2), item('pull-request', 3), item(undefined, 4)]} waitingState="fresh" active={{ active: [], state: 'fresh' }} projects={projects} scope={null} listedPages={null} start={null} />)
+    render(<DashboardPage onSelectProject={() => {}} onSelectAgent={() => {}} onAgentStarted={() => {}} waiting={[item('question', 1), item('question', 2), item('pull-request', 3), item(undefined, 4)]} waitingState="fresh" active={{ active: [], state: 'fresh' }} projects={projects} scope={null} listedPages={null} start={null} />)
     const part = await screen.findByRole('button', { name: '4 need you' })
     expect(part.getAttribute('title')).toBe('2 questions, 1 pull request, 1 more')
     fireEvent.click(part)

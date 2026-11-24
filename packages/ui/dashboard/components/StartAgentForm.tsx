@@ -18,7 +18,6 @@ import { AutoMenu, autoCovers, autoSaid } from './AutoMenu.js'
 import { ProjectContextMenu, isRepoPath } from './ContextMenu.js'
 import { Composer, type ComposerHandle } from './Composer.js'
 import { StartFromMenu, prTargetBranch, startFromBase } from './StartFromMenu.js'
-import { ProjectPicker } from './ProjectPicker.js'
 import { ReposMenu, folderName, type PickedRepo } from './SessionRepos.js'
 import { Dots } from './ToolCalls.js'
 import { AgentFix, agentWords, useAgentState } from './Logins.js'
@@ -89,18 +88,15 @@ export function StartAgentForm({
   toggleContext,
   projects,
   onPickProject,
-  onProjectAdded,
   onOverview = false,
 }: {
   projectId: string
   /** The box is the Overview's: as wide as the page's cards, whose edges it stands on, where the launcher's is a session's message box's. */
   onOverview?: boolean
-  /** Every project, for the picker of where the session works (ProjectPicker). */
+  /** Every project, for the repos a session with no project works with (SessionRepos). */
   projects: readonly ProjectSummary[]
   /** Another project, or no project, was picked for the session: the launcher opens its "New agent session" page, the Overview shows that project's. */
   onPickProject: (projectId: string) => void
-  /** A repo was added as a project from the picker: the projects are to be read again. */
-  onProjectAdded: () => void
   /** The project's name, for the row above the box; absent until the projects are read. */
   projectName?: string | null | undefined
   /** `runsOn` names the host a run on one beside this computer goes to, for the "runs on <host>" marker. */
@@ -310,18 +306,12 @@ export function StartAgentForm({
         files={files}
         addContext={addContext}
         removeContext={removeContext}
-        // Where the agent starts, above the box after the "Run on" pick: the project, then the branch
-        // it starts from. No project word until the name is known, never a wrong one: the row's
-        // height is fixed, so the name landing moves nothing. The branch is the row's last, so
-        // nothing beside it is pushed when it lands or its words change; it waits for the name,
-        // which would otherwise land before it and push it, and for the saved pick, which would
-        // otherwise flip its words.
-        startsAt={
-          <>
-            <ProjectPicker look="row" none={{ label: 'No project', tip: 'The session works in a folder of its own' }} picked={noProject ? null : projectId} pickedName={projectName} projects={projects} busy={busy} onPick={id => pickProject(id ?? SESSIONS_ID)} onProjectAdded={onProjectAdded} />
-            {!noProject && projectName && startFrom && preferencesLoaded && <StartFromMenu projectId={projectId} main={startFrom.main} local={startFrom.local} pick={startFromPick} onPick={pickStartFrom} busy={busy} />}
-          </>
-        }
+        // Where the agent starts, above the box after the "Run on" pick: the project (the projects
+        // module's control, drawn before this), then the branch it starts from. The branch is the
+        // row's last, so nothing beside it is pushed when it lands or its words change; it waits for
+        // the project's name, which would otherwise land before it and push it, and for the saved
+        // pick, which would otherwise flip its words.
+        startsAt={!noProject && projectName && startFrom && preferencesLoaded && <StartFromMenu projectId={projectId} main={startFrom.main} local={startFrom.local} pick={startFromPick} onPick={pickStartFrom} busy={busy} />}
         controlBox={{ in: 'launcher', projectId, options, onChange: setOptions, busy, pickProject: id => pickProject(id ?? SESSIONS_ID) }}
         // The gear's lines (his order): who runs, the profile and the skills this session gets; who it
         // pushes as, the project's git host account, picked for this session; and, set apart, what

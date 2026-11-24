@@ -2,7 +2,7 @@ import { resolveProjectPath, runHostOf } from './context.js'
 import { findComputerModule, findProjectModule } from '../project-modules.js'
 import { providedDataChanged } from '../store/provided.js'
 import { callModuleFunction, computerHost, functionKind, serverHost, type ModuleCallResult } from '../dashboard/module-host.js'
-import { distributionSettings, projectRefAt, runRefAt } from '../distribution-hooks.js'
+import { distributionHooks, projectRefAt, runRefAt } from '../distribution-hooks.js'
 import { SESSIONS_ID } from '../project-address.js'
 
 import { pullProjectData } from '@openagt/agent-data'
@@ -32,7 +32,7 @@ export async function callModule(projectId: string | null, pkg: string, name: st
   if (!root) return { ok: false, error: 'unknown project' }
   if (!module) return { ok: false, error: `${pkg} is no module of this project` }
   if (!module.server) return { ok: false, error: `${pkg} has no server part` }
-  const host = serverHost(root, await distributionSettings(), {
+  const host = serverHost(root, await distributionHooks(), {
     project: projectOnce(projectId, root),
     find: runsFound(projectId, root),
     questions: agentId => runQuestions(root, agentId),
@@ -80,5 +80,5 @@ async function callComputerModule(pkg: string, name: string, input: unknown): Pr
   const module = await findComputerModule(pkg).catch(() => undefined)
   if (!module) return { ok: false, error: `${pkg} is not this computer's` }
   if (!module.server) return { ok: false, error: `${pkg} has no server part` }
-  return callModuleFunction(module.server, name, computerHost(await distributionSettings()), input)
+  return callModuleFunction(module.server, name, computerHost(await distributionHooks()), input)
 }

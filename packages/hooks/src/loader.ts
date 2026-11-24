@@ -233,6 +233,7 @@ export function createHooks(entries: readonly DistributionEntry[], opts: HooksOp
     ...(app !== undefined ? { url: app.url } : {}),
     gitAccess,
     lifecycle,
+    skills: (args, opts) => hooks.skills(args, opts),
   })
   const startOne = async (module: ModuleDefinition, start: AppStart): Promise<void> => {
     const stop = new AbortController()
@@ -268,7 +269,7 @@ export function createHooks(entries: readonly DistributionEntry[], opts: HooksOp
     return all.sort((a, b) => a.order - b.order)
   }
 
-  return {
+  const hooks: Hooks = {
     modules,
     store,
     settings,
@@ -360,6 +361,7 @@ export function createHooks(entries: readonly DistributionEntry[], opts: HooksOp
     },
     lifecycle,
   }
+  return hooks
 }
 
 /** The store, each file read once while what asks of it goes on: many rows asked at once read each scope's settings once. A fresh read is the store's every time. */

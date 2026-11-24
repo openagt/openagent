@@ -3,14 +3,16 @@ import { errorMessage, nodeGitRunner, sessionsHome, type GitRunner } from '@open
 import { defineModule, RunOrder, type ModuleDefinition, type RunContext } from '@openagt/hooks'
 import { agentBranchName } from './branch-names.js'
 import { attachCheckout, createCheckout } from './checkout.js'
+import { cleanup } from './cleanup.js'
 import { reclaimWorktree } from './reclaim.js'
-import { copiesLine, dropUntouchedCopies, openSessionFolder, SESSION_FOLDER_STAYS } from './session-folder.js'
+import { dropUntouchedCopies, openSessionFolder, SESSION_FOLDER_STAYS } from './session-folder.js'
 import { worktreeBranch, worktreePath, type AddedWorktree } from './worktree.js'
 
 /**
  * git-branches, the module (#2394): where a run works, made before anything is linked into it;
  * the branch the agent left its work on, read back once its turns are over; and the checkout
- * reclaimed once the record says how the run ended. What it finds out is in the run's facts
+ * reclaimed once the record says how the run ended; a project removed with its files, the agents'
+ * checkouts taken back (`cleanup.ts`). What it finds out is in the run's facts
  * (`RunFacts['git-branches']`), which the run's record keeps and a resume starts from.
  */
 
@@ -29,6 +31,8 @@ export function gitBranchesModule(deps: GitBranchesDeps = {}): ModuleDefinition 
         { order: RunOrder.RECORD - 20, name: 'read the branch back', run: ctx => readBranch(ctx, git) },
         { order: RunOrder.CLEANUP, name: 'reclaim the checkout', run: ctx => reclaim(ctx, git) },
       ],
+      // A project taken off the list with its files: the agents' checkouts go, under the reclaim rule.
+      'app.lifecycle': { projectRemoved: (project, _app, { files }) => (files ? cleanup(project.dir, git) : undefined) },
     },
   })
 }
@@ -71,7 +75,7 @@ async function makeCheckout(ctx: RunContext, git: GitRunner): Promise<void> {
   }
   if (options.repos === undefined || options.repos.length === 0) return
   const copies = await openSessionFolder(sessionsHome(), ctx.id, options.repos, git)
-  if (copies.made.length > 0) ctx.context.push(copiesLine(copies.path, ctx.id, copies.made))
+  ctx.facts['git-branches'] = { ...ctx.facts['git-branches'], copies: { folder: copies.path, branch: agentBranchName(ctx.id), made: copies.made.map(({ name, from }) => ({ name, from })) } }
 }
 
 /**

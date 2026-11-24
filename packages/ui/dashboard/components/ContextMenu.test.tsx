@@ -1,13 +1,41 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render as renderInPage, screen } from '@testing-library/react'
+import type { ReactElement } from 'react'
+import { ModulesContext, mountedOf } from '../lib/use-modules.js'
 import { hoverTooltip, openMenu } from '../test-utils.js'
 import { forgetRemembered } from '../lib/use-async.js'
 
 const onProjects = vi.hoisted(() => vi.fn())
-const onRepos = vi.hoisted(() => vi.fn())
-vi.mock('../rpc/projects.js', () => ({ onProjects, onRepos }))
+const onRepos = vi.fn()
+vi.mock('../rpc/projects.js', () => ({ onProjects }))
 
 const { ProjectContextMenu, SessionContextMenu, isRepoPath } = await import('./ContextMenu.js')
+
+
+/**
+ * The repos on this computer as the projects module offers them (`composer.where`), each by its
+ * folder, read from `onRepos` as the test answers it: what the Context menu lists beside the projects.
+ */
+const THIS_COMPUTER = mountedOf({
+  options: {
+    'composer.where': [
+      {
+        place: 'composer.where',
+        id: 'this-computer',
+        label: 'Repos',
+        order: 0,
+        repos: async () => {
+          const read = (await onRepos()) as { repos: { path: string; name: string; url?: string }[]; reposLoading: boolean }
+          return { repos: read.repos.map(repo => ({ folder: repo.path, label: repo.name, detail: repo.url ? repo.url.replace(/^https:\/\//, '').replace(/\.git$/, '') : repo.path })), loading: read.reposLoading }
+        },
+        package: '@openagt/projects',
+        projects: [],
+        computer: true,
+      },
+    ],
+  },
+})
+const render = (ui: ReactElement) => renderInPage(<ModulesContext.Provider value={THIS_COMPUTER}>{ui}</ModulesContext.Provider>)
 
 afterEach(() => {
   cleanup()

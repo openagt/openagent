@@ -4,12 +4,13 @@ import { execFileSync } from 'node:child_process'
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { addProject, listProjects } from '../registry.js'
+import { listProjects } from '../distribution-hooks.js'
+import { listTestProject } from '../test-projects.js'
 import type { RunHost } from '@openagt/hooks'
 import { fakeHost } from '@openagt/hooks/testing'
 import type { ProjectState } from '../project-state.js'
 import { provideTestContext } from './test-context.js'
-import { onCommands, onProjects, onRunHosts, onStartBranches, onStartCheck, sendAddProject, sendRemoveProject, sendShareRecords } from './projects.js'
+import { onCommands, onProjects, onRunHosts, onStartBranches, onStartCheck, sendShareRecords } from './projects.js'
 import { SESSIONS_ID } from '../project-address.js'
 import { onProjectAgentData } from './project-agent-data.js'
 
@@ -21,7 +22,7 @@ async function registered(): Promise<{ dir: string; restore: () => Promise<void>
   await mkdir(process.env.XDG_CONFIG_HOME, { recursive: true })
   const project = join(dir, 'app')
   await mkdir(project)
-  await addProject(project, new Date().toISOString())
+  await listTestProject(project)
   return {
     dir: project,
     restore: async () => {
@@ -212,38 +213,6 @@ test('the records switch: in your folder until turned on, and a remote that refu
     await restore()
     await rm(remote, { recursive: true, force: true })
   }
-})
-
-test('sendAddProject adds the path, trimmed, with the agents\u2019 records kept on this machine', async () => {
-  const seen: [string, boolean][] = []
-  provideTestContext({
-    addProject: (path, share) => {
-      seen.push([path, share])
-      return { ok: true, alreadyActivated: false }
-    },
-  })
-  await sendAddProject(' /repos/a ')
-  assert.deepEqual(seen, [['/repos/a', false]])
-  assert.deepEqual(await sendAddProject('  '), { ok: false, error: 'a project path is required' })
-})
-
-test('sendRemoveProject hands the project’s id to the daemon, with whether its files go too, and answers what it answers; no id is refused before the daemon is asked', async () => {
-  const asked: string[] = []
-  const cleanup = { removed: ['.openagent'], kept: [], failed: [] }
-  provideTestContext({
-    removeProject: (id, files) => {
-      asked.push(files ? `${id} with files` : id)
-      if (files) return { ok: true, cleanup }
-      return id === 'busy-1' ? { ok: false, error: 'An agent is working in this project. Stop it, then remove the project.' } : { ok: true }
-    },
-  })
-  assert.deepEqual(await sendRemoveProject('app-1', false), { ok: true })
-  assert.deepEqual(await sendRemoveProject('app-2', true), { ok: true, cleanup })
-  // Only a plain `true` deletes anything.
-  assert.deepEqual(await sendRemoveProject('app-3', 'yes' as unknown as boolean), { ok: true })
-  assert.deepEqual(await sendRemoveProject('busy-1', false), { ok: false, error: 'An agent is working in this project. Stop it, then remove the project.' })
-  assert.deepEqual(await sendRemoveProject('', true), { ok: false, error: 'a project id is required' })
-  assert.deepEqual(asked, ['app-1', 'app-2 with files', 'app-3', 'busy-1'])
 })
 
 test("the launcher's check is this computer's host's, for the agent picked, and a Start drawing near: the run's naming session is started for its project and agent", async () => {

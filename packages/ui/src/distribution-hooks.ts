@@ -1,8 +1,9 @@
 import { stat } from 'node:fs/promises'
+import { hostname } from 'node:os'
 import { projectNameOf, repositoryAddress } from '@openagt/agent-data'
-import { createHooks, DISTRIBUTION_ENV, loadHandedDown, LOCAL_HOST, type Hooks, type ProjectRef, type RunHost, type RunRef, type Settings } from '@openagt/hooks'
+import { createHooks, DISTRIBUTION_ENV, loadHandedDown, LOCAL_HOST, PROJECTS, type Hooks, type ProjectRecord, type ProjectRef, type RunHost, type RunRef, type Settings } from '@openagt/hooks'
 import { SESSIONS_ID } from './project-address.js'
-import { listProjects } from './registry.js'
+import { isPidAlive, projectBranches, readLiveMetas } from './store/index.js'
 
 /**
  * The modules the dashboard runs (#2394): those of the distribution handed down to its process
@@ -12,7 +13,23 @@ import { listProjects } from './registry.js'
 export async function loadHooks(env: NodeJS.ProcessEnv = process.env): Promise<Hooks> {
   const modules = await loadHandedDown(env)
   if (!modules) throw new Error(`the dashboard runs the modules of a distribution, and none was handed to it (${DISTRIBUTION_ENV}): start it with a distribution's openagent command, such as @openagt/dashboard's`)
-  return createHooks(modules, { projects: () => listedProjects(env) })
+  return createHooks(modules, { projects: () => listedProjects(env), refusal: agentAtWork })
+}
+
+/**
+ * Why a project may not be removed now: an agent at work there would go on working in a project
+ * the dashboard no longer shows. A card left "running" by a process that died does not count:
+ * nothing is working there. The checkouts are read fresh: a run started a moment ago must be seen.
+ */
+async function agentAtWork(project: ProjectRef): Promise<string | undefined> {
+  projectBranches.changed(project.dir)
+  const working = (await readLiveMetas(project.dir).catch(() => [])).some(agent => agent.status === 'running' && agent.pid !== undefined && agent.host === hostname() && isPidAlive(agent.pid))
+  return working ? 'An agent is working in this project. Stop it, then remove the project.' : undefined
+}
+
+/** The projects on this computer's list, as the projects module keeps it (`PROJECTS`): read through the distribution's settings. */
+export async function listProjects(env: NodeJS.ProcessEnv = process.env): Promise<ProjectRecord[]> {
+  return (await distributionSettings(env)).get(PROJECTS)
 }
 
 /** The projects on this computer's list whose folder is there, as a module's life is told them: one whose folder is gone has nothing to run in. */

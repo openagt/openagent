@@ -72,7 +72,6 @@ export function AgentView({
   contextSet,
   onDeleted,
   onBack,
-  onProjectRemoved,
 }: {
   projectId: string
   /** Which run this is (#749). */
@@ -114,8 +113,6 @@ export function AgentView({
   onDeleted?: (() => void) | undefined
   /** A phone's back arrow in the top bar: to the page shown before. */
   onBack?: (() => void) | undefined
-  /** Told once the project is removed from the project's menu in the top bar, to leave its page; absent, no remove is offered. */
-  onProjectRemoved?: (() => void) | undefined
 }) {
   // The log on screen: the live channel's while the agent works, its archive once it has ended.
   const { archived, shown, active, feedLive } = useAgentFeed(projectId, agentId, live, events, replayed)
@@ -371,7 +368,6 @@ export function AgentView({
             onWorktreeRemoved={onWorktreeRemoved}
             onDeleted={onDeleted}
             onBack={onBack}
-            onProjectRemoved={onProjectRemoved}
             expanded={open}
             onToggle={toggle}
             ready={ready}

@@ -5,7 +5,7 @@ import type { QuotaSource } from '../dashboard/quota.js'
 import type { ModelsSource } from '../dashboard/models.js'
 import type { AgentUpdates } from '../dashboard/agent-updates.js'
 import type { ProjectStateReader } from '../project-state.js'
-import type { AddProjectResult, RemoveProjectResult, StartAgentOptions, StartAgentResult, StartedInResult } from '../dashboard/types.js'
+import type { StartAgentOptions, StartAgentResult, StartedInResult } from '../dashboard/types.js'
 import type { ProjectRef, RunHost, RunRef } from '@openagt/hooks'
 
 /** Wired by the daemon so `sendStart` can reach the daemon's own `startAgent` closure. */
@@ -15,14 +15,10 @@ export type StartAgentHandler = (
   projectId?: string,
 ) => StartAgentResult | Promise<StartAgentResult>
 
-/** Wired by the daemon so `sendAddProject` can install + register a repo (#433). */
-export type AddProjectHandler = (path: string, share: boolean) => AddProjectResult | Promise<AddProjectResult>
 
 /** Wired by the daemon so `sendStartedAgain` can find or add the project a second `openagent` was started in. */
-export type StartedInHandler = (folder: string) => StartedInResult | Promise<StartedInResult>
+export type StartedInHandler = (folder: string) => StartedInResult | undefined | Promise<StartedInResult | undefined>
 
-/** Wired by the daemon so `sendRemoveProject` can take a project off the list, by its id, and with `files` remove what OpenAgent left in its folder. */
-export type RemoveProjectHandler = (projectId: string, files: boolean) => RemoveProjectResult | Promise<RemoveProjectResult>
 
 /**
  * What every RPC acts through.
@@ -34,9 +30,7 @@ export type RemoveProjectHandler = (projectId: string, files: boolean) => Remove
  */
 export interface DashboardContext {
   startAgent: StartAgentHandler
-  addProject: AddProjectHandler
   startedIn: StartedInHandler
-  removeProject: RemoveProjectHandler
   /** A Start is near in a project, on a coding agent: have what the run will want first ready for it (its name). Never throws. */
   prepareStart: (projectId: string, driver?: string) => void
   /** This computer's host (`run.host`, #2394): where a run starts when no other host is picked. */
@@ -165,11 +159,6 @@ export function contextStartAgent(): DashboardContext['startAgent'] {
   return fromContext('startAgent')
 }
 
-/** Install + register a repo (#433), which only the daemon can do. */
-export function contextAddProject(): DashboardContext['addProject'] {
-  return fromContext('addProject')
-}
-
 /** Have what a Start near in a project will want ready for it (its name), which only the daemon can do. */
 export function contextPrepareStart(): DashboardContext['prepareStart'] {
   return fromContext('prepareStart')
@@ -180,7 +169,3 @@ export function contextStartedIn(): DashboardContext['startedIn'] {
   return fromContext('startedIn')
 }
 
-/** Take a project off the list, which only the daemon can do: it runs the project's close hooks first. */
-export function contextRemoveProject(): DashboardContext['removeProject'] {
-  return fromContext('removeProject')
-}

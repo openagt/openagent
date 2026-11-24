@@ -2,7 +2,8 @@ import { execFile } from 'node:child_process'
 import { lstat, mkdir, mkdtemp, rename, rm } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
-import { repositoryAddress, type RemoteAccount } from '@openagt/agent-data'
+import { repositoryAddress } from '@openagt/agent-data'
+import type { GitAccess } from '@openagt/hooks'
 import { typedRepository } from './typed-repository.js'
 
 /**
@@ -12,7 +13,8 @@ import { typedRepository } from './typed-repository.js'
  * and that folder is then added like any other. Nothing is asked about where: the page says
  * where it went.
  *
- * git clones as one of OpenAgent's accounts at the repository's host (`account`), never with the
+ * git clones as one of OpenAgent's accounts at the repository's host (`access`, the account a
+ * module gives through `account.access`), never with the
  * person's own logins: their credential helpers are dropped, and an SSH address, which would use
  * their own key, is refused unless the account's settings take it over the web. With no account
  * there, only a public repository can be cloned. git is never let ask a person for a login: a
@@ -76,7 +78,27 @@ export interface CloneOptions {
   env?: NodeJS.ProcessEnv
   timeoutMs?: number
   /** The account of OpenAgent's the repository is read as: its git settings. None: no login at all. */
-  account?: RemoteAccount
+  access?: GitAccess
+}
+
+/**
+ * An account's git settings, read out of its environment (`GIT_CONFIG_COUNT`, `GIT_CONFIG_KEY_<n>`,
+ * `GIT_CONFIG_VALUE_<n>`) as git's `-c` pairs, so each comes after the person's helpers are dropped;
+ * the rest of its environment as it is.
+ */
+export function accountSettings(access: GitAccess | undefined): { config: [string, string][]; env: Record<string, string> } {
+  const env = { ...(access?.env ?? {}) }
+  const count = Number(env['GIT_CONFIG_COUNT'] ?? 0)
+  const config: [string, string][] = []
+  for (let i = 0; i < count; i++) {
+    const key = env[`GIT_CONFIG_KEY_${i}`]
+    const value = env[`GIT_CONFIG_VALUE_${i}`]
+    delete env[`GIT_CONFIG_KEY_${i}`]
+    delete env[`GIT_CONFIG_VALUE_${i}`]
+    if (key !== undefined && value !== undefined) config.push([key, value])
+  }
+  delete env['GIT_CONFIG_COUNT']
+  return { config, env }
 }
 
 /** The clones on their way, by the folder each ends in: a second ask for the same folder waits for the first. */
@@ -134,20 +156,21 @@ async function cloneTo({ url, address, path }: CloneTarget, opts: CloneOptions):
 function overSsh(url: string, address: string, opts: CloneOptions): { ok: false; error: string } | undefined {
   if (/^https:\/\//i.test(url)) return undefined
   const host = address.split('/')[0]!
-  const rewritten = opts.account?.config.some(([key, value]) => key === `url.https://${host}/.insteadOf` && url.startsWith(value))
+  const rewritten = accountSettings(opts.access).config.some(([key, value]) => key === `url.https://${host}/.insteadOf` && url.startsWith(value))
   if (rewritten) return undefined
-  return { ok: false, error: `OpenAgent reads ${address} over SSH only through one of its own accounts, never with your own key. Paste its https:// address${opts.account ? '' : `, or add an account at ${host} in Permissions`}.` }
+  return { ok: false, error: `OpenAgent reads ${address} over SSH only through one of its own accounts, never with your own key. Paste its https:// address${opts.access ? '' : `, or add an account at ${host} in Permissions`}.` }
 }
 
 /** Run git about a repository the way a clone does: over the web only, as the account given or no login, never a question to a person. */
 function askGit(args: readonly string[], opts: CloneOptions, timeoutMs: number): ReturnType<CloneRunner> {
   // The person's credential helpers dropped, the keychain's too; the account's in their place.
-  const login = ['-c', 'credential.helper=', ...(opts.account?.config ?? []).flatMap(([key, value]) => ['-c', `${key}=${value}`])]
+  const account = accountSettings(opts.access)
+  const login = ['-c', 'credential.helper=', ...account.config.flatMap(([key, value]) => ['-c', `${key}=${value}`])]
   return (opts.run ?? nodeCloneRunner)(
     // Over the web only: SSH would use the person's own key, and git never runs a program an address could name.
     [...login, '-c', 'protocol.allow=never', '-c', 'protocol.https.allow=always', ...args],
     // Never a question to a person, in a terminal or in a window: nobody is there to answer one.
-    { ...(opts.env ?? process.env), GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: '' },
+    { ...(opts.env ?? process.env), ...account.env, GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: '' },
     opts.timeoutMs ?? timeoutMs,
   )
 }

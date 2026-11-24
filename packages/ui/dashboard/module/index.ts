@@ -274,7 +274,11 @@ export { rowButtonClass, rowItemClass, RowChevron, RowSaid, RowItem, BoxOfRow } 
 // A line of the gear's menu under the message box (`composer.control` at `setup`).
 export { SetupLine, SetupPress, SetupSaid } from '../components/SessionSetup.js'
 // The places a module draws itself: a profile's editor draws every control of the message box, the usage card the usage bar's line.
-export { ComposerControls, ViewsAt, useViewsAt, type ControlBox, type ControlsSaid } from '../components/Places.js'
+export { ComposerControls, ViewsAt, useViewsAt, useOptionsAt, type ControlBox, type ControlsSaid } from '../components/Places.js'
+// The projects the shell lists, and the word a module that changes the list sends it (the projects module's).
+export { useProjects, projectsChanged, type ProjectsChange } from '../lib/shell-projects.js'
+export { useProjectLabel } from '../lib/project-labels.js'
+export type { ProjectSummary } from '../../src/dashboard/projects.js'
 export { inWords } from '../lib/in-words.js'
 /** For a read of what the plugins give: read again the moment a plugin is switched in Settings. */
 export { pluginsAgain } from '../lib/plugins-switched.js'
@@ -313,7 +317,10 @@ export { Avatar } from '../components/PersonMenu.js'
 export { usePerson, personChanged } from '../lib/use-person.js'
 export { AgentFix, useAgentState } from '../components/Logins.js'
 
-export { Dialog } from '../components/ui/dialog.js'
+export { Dialog, BACKDROP_CLASS, DIALOG_POPUP_CLASS, DIALOG_PRESSES_CLASS } from '../components/ui/dialog.js'
+// A question that is a dialog of its own, drawn as the module draws it: the same Base UI as the dashboard's confirmations.
+export { AlertDialog } from '@base-ui/react/alert-dialog'
+export { PathStrip } from '../components/PathStrip.js'
 export { useCodingAgents, type CodingAgent } from '../lib/models.js'
 export { MAX_SPEND_OFFSET } from '../../src/preference-defaults.js'
 export { formatRelative, formatDateTime, formatDuration, formatAge, formatDay } from '../lib/format-date.js'

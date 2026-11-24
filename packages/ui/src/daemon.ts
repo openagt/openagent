@@ -58,13 +58,14 @@ export interface RunDaemonOptions {
   /** Called once the server has bound, before it blocks. The only way a caller learns the port. */
   onListening?: (state: DaemonState) => void
   /**
-   * A folder to add to the projects once the dashboard listens, as Add project does with the
-   * records kept on this computer. One already on the list, or inside one that is, is left as it is.
-   * The dashboard adds no folder by itself: this is the caller's.
+   * The folder `openagent` was typed in, made a project once the dashboard listens (`folderGiven`,
+   * the projects module's): the repository it is in, added as Add project adds one. One already
+   * on the list, or inside one that is, is left as it is. The dashboard adds no folder by itself:
+   * this is the caller's.
    */
   project?: string
-  /** Called once {@link project} is on the list: its id, which always opens its page, the address the page shows, and whether it was added now. */
-  onProject?: (project: StartedProject) => void
+  /** Called once {@link project} was asked about: its id, which always opens its page, the address the page shows, and whether it was added now; none for a folder that is no project, outside any repository. */
+  onProject?: (project: StartedProject | undefined) => void
   /** How long the teardown after Ctrl+C may take; default {@link SHUTDOWN_DEADLINE_MS}. For tests. */
   shutdownDeadlineMs?: number
   /** The modules the dashboard runs, loaded; its distribution's when unsaid (`distribution-hooks.ts`). For tests. */
@@ -97,8 +98,8 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
   const host = await localHostOf(hooks)
   // The hosts beside it, of the modules on in a project (a GitHub Actions runner): a run may be picked to run on one.
   const otherHosts = async (project?: ProjectRef): Promise<RunHost[]> => (await hooks.hosts(project)).filter(other => other.id !== host.id)
-  // A project added or removed is told to the modules (`app.lifecycle`): a scheduler starts or stops with it.
-  const runtime = createProjectRuntime({ cwd, env, naming: new ReadyNaming(), host, otherHosts, lifecycle: hooks })
+  // The folder `openagent` was typed in is made a project by the modules (`app.lifecycle`): the projects module's.
+  const runtime = createProjectRuntime({ cwd, env, naming: new ReadyNaming(), host, otherHosts, folderGiven: folder => hooks.folderGiven(folder) })
   // The daemon serves the built dashboard bundle (#405/#426): the SPA reads each run's files over
   // `GET /_rpc/events`, so there is no in-process event stream to feed here. The runtime's RPCs reach the browser through the
   // dashboard context the mount is wired with. A missing bundle (a broken install) surfaces as a
@@ -118,10 +119,8 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
     port,
     context: {
       startAgent: runtime.onStart,
-      addProject: runtime.onAddProject,
       startedIn: runtime.onStartedIn,
       prepareStart: runtime.onPrepareStart,
-      removeProject: runtime.onRemoveProject,
       host,
       otherHosts,
       preferences: registryPreferencesStore(env),
@@ -159,8 +158,11 @@ export async function runDaemon(cwd: string, opts: RunDaemonOptions = {}): Promi
   // work: adding it tells the modules on in it (`projectAdded`).
   if (opts.project !== undefined) {
     const started = await runtime.onStartedIn(opts.project)
-    if (started.ok) opts.onProject?.({ id: started.id, path: started.path, added: started.added, address: started.address })
-    else console.log(`[openagent] could not add ${opts.project}: ${started.error}`)
+    if (started === undefined || started.ok) opts.onProject?.(started && { id: started.id, path: started.path, added: started.added, address: started.address })
+    else {
+      console.log(`[openagent] could not add ${opts.project}: ${started.error}`)
+      opts.onProject?.(undefined)
+    }
   }
   // The sessions with no project: their home made, and a session whose process died swept, as a
   // project's scheduler sweeps its runs.

@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { projectId } from '@openagt/agent-data'
-import { addProject } from '../registry.js'
+import { listTestProject } from '../test-projects.js'
 import { packagesOf } from '../distribution-packages.js'
 import { handDownTestDistribution } from '../test-distribution.js'
 import { onComputerPlugins, onProjectPlugins, sendSwitchPlugin } from './plugins.js'
@@ -21,7 +21,7 @@ test("Settings › Plugins lists the distribution's plugins with their rows, the
     await mkdir(process.env.XDG_CONFIG_HOME, { recursive: true })
     const shop = join(dir, 'shop')
     await mkdir(shop)
-    await addProject(shop, '2026-09-19T00:00:00.000Z')
+    await listTestProject(shop, '2026-09-19T00:00:00.000Z')
     const id = projectId(shop)
     const rows = await onProjectPlugins(id)
     assert.deepEqual(

@@ -5,12 +5,12 @@ import { join } from 'node:path'
 import { test } from 'node:test'
 import { nodeGitRunner, syncPersonalFolder, withPersonalFolder } from '@openagt/agent-data'
 import type { AppContext, ProjectRef } from '@openagt/hooks'
-import { memorySettings } from '@openagt/hooks/testing'
+import { fakeApp } from '@openagt/hooks/testing'
 import { NOT_SYNCING, folderSync, type SyncFolder } from './sync.js'
 
 /** The app as a module's life is told it. */
 function app(): AppContext {
-  return { projects: async () => [], store: undefined as never, settings: memorySettings(), signal: new AbortController().signal }
+  return fakeApp()
 }
 
 /** Wait until `done` says so, asking every few milliseconds. */

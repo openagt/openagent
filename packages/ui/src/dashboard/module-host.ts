@@ -1,14 +1,15 @@
 import { pathToFileURL } from 'node:url'
 import { isRunId } from '../store/index.js'
+import { providedDataChanged } from '../store/provided.js'
 import { cachedPrsForBranch, type LinkedPr } from './pull-requests.js'
 import type { Cached } from './cache.js'
-import type { ProjectRef, RunFound, RunQuestion, Settings, InboxLine } from '@openagt/hooks'
+import type { Hooks, ProjectRef, RunFound, RunQuestion, Settings, InboxLine } from '@openagt/hooks'
 import { rpcKind, type MergeLookup, type RpcComputerHost, type RpcFunction, type RpcHost, type RpcKind } from '@openagt/hooks/rpc'
 
 // The daemon's side of a module's server part (`@openagt/hooks/rpc`): the host a function is given
-// (the settings; for a project's module, the project's folder and the project, where its runs have
-// their work, the questions they wait on, and a line said to one) and the one way a function is
-// called. Where a run's work is, is its host's to say; what a module makes of it is its own.
+// (the settings, the modules' accounts and the app's word to the modules; for a project's module,
+// the project's folder and the project, where its runs have their work, the questions they wait
+// on, and a line said to one) and the one way a function is called. Where a run's work is, is its host's to say; what a module makes of it is its own.
 
 /** What {@link serverHost} reads and says through. */
 export interface ServerHostDeps {
@@ -24,15 +25,34 @@ export interface ServerHostDeps {
   prs?: (root: string, branch: string) => Promise<Cached<LinkedPr[]>>
 }
 
-/** The host a function of a module of the computer's is given, called in no project. */
-export function computerHost(settings: Settings): RpcComputerHost {
-  return { settings }
+/** What every function's host is made of: the distribution's settings, its modules' accounts, and its lifecycle. */
+export type AppOfHost = Pick<Hooks, 'settings' | 'gitAccess' | 'lifecycle'>
+
+/**
+ * The host a function of a module of the computer's is given, called in no project. A project
+ * taken off the list is told to every module through `app`, and what this daemon read of its data
+ * is read anew.
+ */
+export function computerHost(app: AppOfHost): RpcComputerHost {
+  return {
+    settings: app.settings,
+    gitAccess: remote => app.gitAccess(remote),
+    lifecycle: {
+      added: project => app.lifecycle.added(project),
+      refusal: project => app.lifecycle.refusal(project),
+      async removed(project, removal) {
+        const cleaned = await app.lifecycle.removed(project, removal)
+        providedDataChanged(project.dir)
+        return cleaned
+      },
+    },
+  }
 }
 
 /** The host a function called in the project at `root` is given. A string that is no run's id is never asked about, nor said anything. */
-export function serverHost(root: string, settings: Settings, deps: ServerHostDeps): RpcHost {
+export function serverHost(root: string, app: AppOfHost, deps: ServerHostDeps): RpcHost {
   return {
-    settings,
+    ...computerHost(app),
     root,
     project: deps.project,
     async run(agentId: string): Promise<RunFound | undefined> {

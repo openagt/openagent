@@ -1,5 +1,4 @@
-import { isAbsolute, join, resolve, sep } from 'node:path'
-import { hostname } from 'node:os'
+import { isAbsolute, join, resolve } from 'node:path'
 import { stat } from 'node:fs/promises'
 import { hasImage, isImageName, type ReadyNaming } from '@openagt/agent-driver'
 import { IMAGES_PER_MESSAGE } from './images.js'
@@ -7,30 +6,29 @@ import { isDriverName } from './driver-names.js'
 import { isProfileId, MODULE_NAME, type Hooks, type ProjectRef, type RunHost, type RunOptions, type RunRequest } from '@openagt/hooks'
 import { sessionRepos } from '@openagt/git-branches'
 import { nameStarted } from './started-names.js'
-import { findCheckout, isPidAlive, projectBranches, readLiveMetas } from './store/index.js'
+import { findCheckout, projectBranches } from './store/index.js'
 import { OPENAGENT_DIR } from './openagent-dir.js'
-import type { StartAgentOptions, StartAgentResult, AddProjectResult, RemoveProjectResult, StartedInResult } from './dashboard/types.js'
+import type { StartAgentOptions, StartAgentResult, StartedInResult } from './dashboard/types.js'
 import { ownRunsWatch } from './dashboard/runs-watch.js'
 import { screenInDiary } from './dashboard/screen.js'
-import { addProject, listProjects, readPreferences, removeProject } from './registry.js'
-import { errorMessage, fileBranchRepo, installProject, projectKey, sessionsHome, writeSharing, isSkillName, projectId } from '@openagt/agent-data'
+import { readPreferences } from './registry.js'
+import { errorMessage, sessionsHome, isSkillName, projectId } from '@openagt/agent-data'
 import { publishedBranch } from '@openagt/agent-data/names'
 import { branchesOnOrigin } from './dashboard/start-branch.js'
-import { removeProjectFiles } from './remove-files.js'
-import { projectRefAt } from './distribution-hooks.js'
+import { listProjects, projectRefAt } from './distribution-hooks.js'
 import { isPublishPick, publishLevelOf, publishPickIn } from './publish-levels.js'
 import { isBranchName } from './branch-name.js'
 import { hasRemote } from './has-remote.js'
 import { projectGitHost } from './store/git-host.js'
-import { providedDataChanged } from './store/provided.js'
 import { projectAddresses, SESSIONS_ID } from './project-address.js'
 import { readySessionsHome } from './sessions-home.js'
 
 /**
- * What the daemon does for a project (#393): start a run, add, find and remove a project. Split
- * from daemon.ts so that file reads as the daemon's lifecycle (ports, boot, shutdown). The daemon
- * runs no agent itself: a Start here goes to this computer's host (`run.host`, #2394), the module
- * of the distribution that gives it, and the run belongs to that module.
+ * What the daemon does for a project (#393): start a run, and find the project the folder
+ * `openagent` was typed in is. Split from daemon.ts so that file reads as the daemon's lifecycle
+ * (ports, boot, shutdown). The daemon runs no agent itself: a Start here goes to this computer's
+ * host (`run.host`, #2394), the module of the distribution that gives it, and the run belongs to
+ * that module. Adding and removing a project is the projects module's.
  */
 
 /** The coding agent a Start goes to when none was picked: this computer's host's own default (agent-driver's). */
@@ -88,22 +86,20 @@ export interface ProjectRuntimeOptions {
   host: RunHost
   /** The hosts beside this computer's of the modules on in a project, where a run may be picked to run (`options.host`); none when unsaid. */
   otherHosts?: (project?: ProjectRef) => Promise<RunHost[]>
-  /** Who is told of a project added or removed: the distribution's modules (`app.lifecycle`). */
-  lifecycle?: Pick<Hooks, 'projectAdded' | 'projectRemoved'>
+  /** What makes the folder `openagent` was typed in a project: the distribution's modules (`app.lifecycle`). */
+  folderGiven?: Hooks['folderGiven']
 }
 
 /** The per-project surface the dashboard drives, plus its teardown. */
 export interface ProjectRuntime {
   onStart: (prompt: string, options?: StartAgentOptions, targetProjectId?: string) => Promise<StartAgentResult>
-  onAddProject: (path: string, share?: boolean) => Promise<AddProjectResult>
   /**
-   * The folder `openagent` was started in: the listed project that holds it, so starting again
-   * inside a project, or inside one of its folders, adds nothing; else the folder, added as Add
-   * project adds one, with no answer on the agents' records: the repository keeps the one it has. Asked in-process by the daemon that starts there, and over RPC (`sendStartedAgain`) by
-   * a second `openagent` that finds the dashboard running already.
+   * The folder `openagent` was started in, made a project by the modules (`folderGiven`, the
+   * projects module's): the listed project that holds it, or the repository it is in, added; none
+   * outside a repository. Asked in-process by the daemon that starts there, and over RPC
+   * (`sendStartedAgain`) by a second `openagent` that finds the dashboard running already.
    */
-  onStartedIn: (folder: string) => Promise<StartedInResult>
-  onRemoveProject: (projectId: string, files?: boolean) => Promise<RemoveProjectResult>
+  onStartedIn: (folder: string) => Promise<StartedInResult | undefined>
   /** A Start is near in a project, on a coding agent: the run's naming session is started for it. */
   onPrepareStart: (projectId: string, driver?: string) => void
   /** Where the live screen of a run on this computer answers, as its diary names it; nothing when
@@ -117,7 +113,7 @@ export interface ProjectRuntime {
  * The daemon's per-project runtime (#393). The home `cwd` is the default target: a request with
  * no project id (or the home id) resolves to it without a registry lookup.
  */
-export function createProjectRuntime({ cwd, env, naming, host, otherHosts = async () => [], lifecycle }: ProjectRuntimeOptions): ProjectRuntime {
+export function createProjectRuntime({ cwd, env, naming, host, otherHosts = async () => [], folderGiven = async () => undefined }: ProjectRuntimeOptions): ProjectRuntime {
   const homeId = projectId(resolve(cwd))
 
   // A project id resolves to its repo path via the registry; the home id (or none)
@@ -211,89 +207,20 @@ export function createProjectRuntime({ cwd, env, naming, host, otherHosts = asyn
     }
   }
 
-  // Add a project (#396): install the repo, then register it so it appears in the Projects
-  // list. installProject is idempotent (an already-activated repo is a no-op success). `share`
-  // is the person's answer on the agents' records, written before the project is registered:
-  // the first sync of a project added with `false` sends nothing. No answer leaves the
-  // repository's own as it is: one never asked reads as kept, and a yes given before stays a yes.
-  const onAddProject = async (path: string, share?: boolean): Promise<AddProjectResult> => {
-    // Resolve relative input against the daemon cwd, and check the directory really
-    // exists first: without this a bad path reaches git as a missing cwd, which
-    // surfaces as the confusing "spawn git ENOENT" rather than a path error.
-    const abs = resolve(path)
-    const isDir = await stat(abs).then(s => s.isDirectory()).catch(() => false)
-    if (!isDir) return { ok: false, error: `path does not exist or is not a directory: ${abs}` }
-    const result = await installProject(abs)
-    if (!result.ok) return { ok: false, error: result.error }
-    // A yes is to the remote that is there: with none the records are kept, so a remote the
-    // project gets later is asked about, in the project's menu, before anything goes to it.
-    const shared = share === true && (await hasRemote(abs))
-    if (share !== undefined) {
-      const written = await writeSharing(abs, shared).then(() => undefined, (err: unknown) => (err instanceof Error ? err.message : String(err)))
-      if (written !== undefined) return { ok: false, error: written }
-    }
-    const at = new Date().toISOString()
-    const listed = await addProject(abs, at, env).catch(() => undefined)
-    // Put on the list by this add: the modules on in it start their work there, its scheduler
-    // where scheduled-agents is on. One on the list already has had it started.
-    if (listed?.addedAt === at) await lifecycle?.projectAdded(await projectRefAt(listed.id, abs))
-    return { ok: true, alreadyActivated: result.alreadyActivated === true, ...(share && !shared ? { noRemote: true as const } : {}) }
-  }
-
-  const onStartedIn = async (folder: string): Promise<StartedInResult> => {
-    const path = resolve(folder)
-    const holding = (await listProjects(env)).find(project => path === project.path || path.startsWith(project.path + sep))
-    if (!holding) {
-      const added = await onAddProject(path)
-      if (!added.ok) return added
-    }
-    const id = holding?.id ?? projectId(path)
+  const onStartedIn = async (folder: string): Promise<StartedInResult | undefined> => {
+    const given = await folderGiven(resolve(folder)).then(
+      found => found,
+      (err: unknown) => ({ error: errorMessage(err) }),
+    )
+    if (given === undefined) return undefined
+    if ('error' in given) return { ok: false, error: given.error }
     // The address the page writes: by the projects it lists, those whose folder is there, in the
     // registry's order. A module's page words are the browser's alone, so a folder named as one
     // (`logs`) is printed by its name where the page shows its id; both open it.
     const listed = await listProjects(env)
     const present = await Promise.all(listed.map(async project => ((await stat(project.path).then(s => s.isDirectory(), () => false)) ? [project.id] : [])))
-    return { ok: true, id, path: holding?.path ?? path, added: !holding, address: projectAddresses(present.flat(), []).addressOf(id) }
-  }
-
-  // Remove a project: it leaves the Projects list and nothing in its folder is deleted. Found in
-  // the list by its id and not through its folder, so a project whose folder is gone goes too.
-  const onRemoveProject = async (id: string, files = false): Promise<RemoveProjectResult> => {
-    const listed = await listProjects(env)
-    const record = listed.find(project => project.id === id)
-    if (!record) return { ok: false, error: 'no project with that id is on the list' }
-    const here = await stat(record.path).then(s => s.isDirectory()).catch(() => false)
-    if (here) {
-      // The checkouts are read fresh: a run started a moment ago must be seen.
-      projectBranches.changed(record.path)
-      // An agent at work would go on working in a project the dashboard no longer shows. A card
-      // left "running" by a process that died does not count: nothing is working there.
-      const working = (await readLiveMetas(record.path).catch(() => [])).some(
-        agent => agent.status === 'running' && agent.pid !== undefined && agent.host === hostname() && isPidAlive(agent.pid),
-      )
-      if (working) return { ok: false, error: 'An agent is working in this project. Stop it, then remove the project.' }
-    }
-    await removeProject(id, env)
-    providedDataChanged(record.path)
-    // Every module is told, so what it started there stops: off the list, nothing else would stop
-    // the project's scheduler.
-    await lifecycle?.projectRemoved(await projectRefAt(id, record.path))
-    if (!files || !here) return { ok: true }
-    // Off the list first, so no background job of this daemon starts on the folder again; then
-    // what OpenAgent left in it. The records are the repository's: while another project on the
-    // list is a checkout of the same repository, or a clone of it whose records the personal
-    // folder keeps in the same directory, they stay.
-    const repository = await fileBranchRepo(record.path)
-    const key = await projectKey(repository ?? record.path)
-    let recordsUsedBy: string | undefined
-    for (const other of listed) {
-      if (other.id === id) continue
-      const otherRepository = await fileBranchRepo(other.path)
-      if ((repository !== undefined && otherRepository === repository) || (await projectKey(otherRepository ?? other.path)) === key) recordsUsedBy = other.path
-    }
-    const cleanup = await removeProjectFiles(record.path, { recordsUsedBy })
-    providedDataChanged(record.path)
-    return { ok: true, cleanup }
+    const { project, added } = given
+    return { ok: true, id: project.id, path: project.dir, added, address: projectAddresses(present.flat(), []).addressOf(project.id) }
   }
 
   // A screen lives while its run has a checkout: a finished run's diary names none that answers,
@@ -321,7 +248,7 @@ export function createProjectRuntime({ cwd, env, naming, host, otherHosts = asyn
     await naming?.close()
   }
 
-  return { onStart, onAddProject, onStartedIn, onRemoveProject, onPrepareStart, screenOf, dispose }
+  return { onStart, onStartedIn, onPrepareStart, screenOf, dispose }
 }
 
 /** A Start's picks as the run's options: one slice per module that acts on them (#2394). */

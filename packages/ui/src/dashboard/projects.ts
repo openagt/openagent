@@ -1,5 +1,6 @@
 import { basename } from 'node:path'
-import { listProjects, type ProjectRecord } from '../registry.js'
+import type { ProjectRecord } from '@openagt/hooks'
+import { listProjects } from '../distribution-hooks.js'
 import { nodeFs } from '../node-fs.js'
 import { isActivated } from '../project.js'
 import { readAllAgents, type AgentMeta } from '../store/index.js'
@@ -9,15 +10,15 @@ import { projectNameOf, repositoryAddress, sessionsHome } from '@openagt/agent-d
 import { SESSIONS_ID } from '../project-address.js'
 
 /**
- * The multi-project read side (#392): projects the daemon serves come from the registry (#390),
- * and every read resolves a project id to that project's path before running the per-cwd reader
+ * The multi-project read side (#392): projects the daemon serves come from the list the projects
+ * module keeps (`PROJECTS`), and every read resolves a project id to that project's path before running the per-cwd reader
  * underneath. One daemon serves them all, running as many agents per project as their own
  * concurrency allows (#736), each in its own checkout.
  */
 
 /** One project's summary for the Projects sidebar (#314). */
 export interface ProjectSummary {
-  /** Registry id (stable, URL-safe). */
+  /** Its id on the list (stable, URL-safe). */
   id: string
   /** Absolute repo path. */
   path: string
@@ -74,7 +75,7 @@ export interface SummarizeDeps {
 }
 
 /**
- * Derive a {@link ProjectSummary} from a registry record: its name (its repository's), whether
+ * Derive a {@link ProjectSummary} from a record of the list: its name (its repository's), whether
  * it is still activated, and its last activity. Forgiving: a failed read reads as an
  * inactive project with no activity, never a throw.
  *
@@ -104,20 +105,20 @@ export async function summarizeProject(record: ProjectRecord, deps: SummarizeDep
 }
 
 /**
- * Reads the registry to serve the multi-project endpoints. The dashboard server
- * holds one of these; the daemon uses the default (the real registry), tests pass
- * a fake so the server is exercised without touching the user's registry.
+ * Reads the list of projects to serve the multi-project endpoints. The dashboard server
+ * holds one of these; the daemon uses the default (the real list), tests pass
+ * a fake so the server is exercised without touching the person's list.
  */
 export interface ProjectsProvider {
   /** Every registered project, summarized, for the projects read. */
   list(): Promise<ProjectSummary[]>
-  /** The absolute path for a registry id, or `undefined` when unknown. */
+  /** The absolute path for a project's id, or `undefined` when unknown. */
   resolvePath(id: string): Promise<string | undefined>
 }
 
-/** Injectable readers so {@link defaultProjectsProvider} is unit-testable off the user's registry. */
+/** Injectable readers so {@link defaultProjectsProvider} is unit-testable off the person's list. */
 export interface ProviderDeps {
-  /** The registry's records. Defaults to {@link listProjects}, forgiving. */
+  /** The list's records. Defaults to {@link listProjects}. */
   listRecords?: () => Promise<ProjectRecord[]>
   /** Whether a project's directory is on disk. Defaults to a directory stat. */
   isDirectory?: (path: string) => Promise<boolean>
@@ -126,12 +127,12 @@ export interface ProviderDeps {
 }
 
 /**
- * A {@link ProjectsProvider} backed by the global registry (#390).
+ * A {@link ProjectsProvider} backed by the list of projects on this computer (#390).
  *
  * Only projects whose directory is still on disk are served (#1140): a repo the user renamed or
  * deleted used to stay in the sidebar as a grey "not activated" entry with no files (#1142),
  * indistinguishable from a repo that merely lost its marker, and with nothing to click to make it
- * go away. The registry itself is left alone — the record is skipped, not pruned — so a directory
+ * go away. The list itself is left alone — the record is skipped, not pruned — so a directory
  * that comes back (renamed back, a volume remounted) is a project again on the next read.
  */
 export function defaultProjectsProvider(deps: ProviderDeps = {}): ProjectsProvider {

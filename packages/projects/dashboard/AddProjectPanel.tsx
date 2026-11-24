@@ -1,22 +1,19 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type RefObject } from 'react'
-import { onCloneTarget, sendAddProject, sendAddProjectFromAddress, sendPickProjectDirectory } from '../rpc/projects.js'
-import { useAction } from '../lib/use-action.js'
-import { Button } from './ui/button.js'
-import { Input } from './ui/input.js'
-import { BACKDROP_CLASS, DIALOG_POPUP_CLASS, DIALOG_PRESSES_CLASS } from './ui/dialog.js'
-import { cn } from '../lib/utils.js'
-import { PathStrip } from './PathStrip.js'
+import { createPortal } from 'react-dom'
+import { BACKDROP_CLASS, Button, cn, DIALOG_POPUP_CLASS, DIALOG_PRESSES_CLASS, Input, PathStrip, projectsChanged, useAction, useModuleHost } from '@openagt/ui/module'
+import { addFromAddress, addProject, cloneTargetFor, pickDirectory } from './calls.js'
+import { AddProjectEffects } from './AddProjectEffects.js'
 
 /** The dialog's title, as every dialog's. */
 const TITLE = 'mb-3 text-base font-semibold'
 /** Its presses, under what it says, primary last. */
 const PRESSES = cn('mt-6 flex gap-2', DIALOG_PRESSES_CLASS)
 
-// Add a project (#396/#1150): the OS's own folder picker instead of a typed path — the daemon
-// opens the dialog (a browser page cannot learn an absolute path from a picker of its own) and
-// hands the choice back, the user confirms they trust the repo, and the daemon installs and
-// registers it. Opened as a small modal from the projects picker and the onboarding checklist.
-// The checklist may hand it the folder the dashboard runs in: then there is nothing to pick.
+// Add a project (#396/#1150): the OS's own folder picker instead of a typed path — the module's
+// server opens the dialog (a browser page cannot learn an absolute path from a picker of its own)
+// and hands the choice back, the user confirms they trust the repo, and the server installs and
+// lists it. Opened as a small modal from the project picker, where a repo on this computer hands
+// it its folder: then there is nothing to pick.
 //
 // The question is short: who adds a project wants it added. The agents' records stay on this
 // machine; the project's Agent data page shares them later.
@@ -34,6 +31,7 @@ export function AddProjectPanel({
   address,
   fromAddress = address !== undefined,
   opener,
+  effects = false,
   onAdded,
   onClose,
 }: {
@@ -44,6 +42,8 @@ export function AddProjectPanel({
   fromAddress?: boolean
   /** The control that opened it, given focus back when it closes: the menu it was picked in is gone by then. */
   opener: RefObject<HTMLElement | null>
+  /** Say, under the trust question, what adding a project does to its folder: for a person adding their first. */
+  effects?: boolean
   /** The project was added: its folder, for the picker to pick it once the projects are read again. */
   onAdded: (path: string) => void
   onClose: () => void
@@ -60,6 +60,7 @@ export function AddProjectPanel({
   const [pickError, setPickError] = useState<string | null>(null)
   const { busy, error, reset, run } = useAction()
   const panelRef = useRef<HTMLDivElement>(null)
+  const host = useModuleHost()
 
   // Closed, it hands the keyboard back to the control that opened it, unless the person has it
   // elsewhere by then: a project just added opens on its message box, which takes the caret, and
@@ -76,7 +77,7 @@ export function AddProjectPanel({
   // closes the modal too — the user said "not now" once already.
   const pick = async () => {
     setPickError(null)
-    const picked = await sendPickProjectDirectory().catch(() => ({ ok: false as const, error: 'Could not reach the daemon.' }))
+    const picked = await pickDirectory(host).catch(() => ({ ok: false as const, error: 'Could not reach the daemon.' }))
     if (!picked.ok) {
       setPickError(picked.error)
       return
@@ -107,7 +108,7 @@ export function AddProjectPanel({
     event?.preventDefault()
     const address = typed.trim()
     if (busy || !address) return
-    const outcome = await run(() => onCloneTarget(address), 'Could not reach the daemon.')
+    const outcome = await run(() => cloneTargetFor(host, address), 'Could not reach the daemon.')
     if (outcome.ok) setTarget({ typed: address, address: outcome.value.address, path: outcome.value.path })
   }
   useEffect(() => {
@@ -118,8 +119,9 @@ export function AddProjectPanel({
   // Trust confirmed (#439) -> install + register; by address, clone first.
   const confirmAdd = async () => {
     if (busy || (!path && !target)) return
-    const outcome = await run(() => (target ? sendAddProjectFromAddress(target.typed) : sendAddProject(path!)), 'Failed to add the project.')
+    const outcome = await run(() => (target ? addFromAddress(host, target.typed) : addProject(host, path!)), 'Failed to add the project.')
     if (outcome.ok) {
+      projectsChanged({ added: true })
       setAdded({ alreadyActivated: outcome.value.alreadyActivated, ...(outcome.value.path ? { path: outcome.value.path } : {}) })
       onAdded(outcome.value.path ?? path!)
     }
@@ -148,7 +150,9 @@ export function AddProjectPanel({
     }
   }
 
-  return (
+  // On the page's body: opened from a control inside a form (the launcher's), its own form would be
+  // nested in that one, and a press of its Next would send the page's.
+  return createPortal(
     <div className="fixed inset-0 z-50" onKeyDown={onKeyDown}>
       {/* Click-away closes, same as dismissing the dropdown it was opened from. */}
       <div className={BACKDROP_CLASS} onClick={onClose} />
@@ -239,6 +243,11 @@ export function AddProjectPanel({
               Agents will read its files. Hidden instructions in a repository can take over an agent, so add only the
               ones you trust.
             </p>
+            {effects && (
+              <div className="mt-3">
+                <AddProjectEffects />
+              </div>
+            )}
             {error && <p className="mt-3 text-sm text-danger">{error}</p>}
             <div className={cn(PRESSES, 'justify-end')}>
               {/* A question about trust opens on the press that adds nothing: a second Enter, meant for the picker, trusts no repository unread. */}
@@ -275,6 +284,7 @@ export function AddProjectPanel({
           </>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

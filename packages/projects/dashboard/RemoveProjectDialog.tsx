@@ -1,72 +1,49 @@
-'use client'
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
-import { AlertDialog } from '@base-ui/react/alert-dialog'
-import type { CleanupReport } from '../../src/index.js'
-import { sendRemoveProject } from '../rpc/projects.js'
-import { ProjectLabelsContext } from '../lib/project-labels.js'
-import { useMountedModules } from '../lib/use-modules.js'
-import { useAction } from '../lib/use-action.js'
-import { cn } from '../lib/utils.js'
-import { Button } from './ui/button.js'
-import { Checkbox } from './ui/checkbox.js'
-import { BACKDROP_CLASS, DIALOG_POPUP_CLASS, DIALOG_PRESSES_CLASS } from './ui/dialog.js'
+import { useRef, useState } from 'react'
+import type { CleanupReport } from '@openagt/hooks'
+import { AlertDialog, BACKDROP_CLASS, Button, Checkbox, cn, DIALOG_POPUP_CLASS, DIALOG_PRESSES_CLASS, projectsChanged, useAction, useModuleHost, useProjectLabel, useProjects, type UiActionResult } from '@openagt/ui/module'
+import { removeProject } from './calls.js'
 
 const name = 'font-medium text-foreground'
 /** The question and its report alike: the dialog every question has, its own width on a wide screen. */
 const POPUP = cn(DIALOG_POPUP_CLASS, 'overflow-y-auto md:w-[min(28rem,calc(100vw-2rem))]')
 
-// "Remove project…", asked first. Removing takes the project off the list and deletes nothing,
-// unless the person ticks the box: then OpenAgent's own files in the folder go too. Either way the
-// page leaves the project's address as soon as it is off the list, and `ProjectRemovedReport` says it
-// is done over the page it moved on to, with the box ticked what went and what stayed. The box is
-// never ticked for them, and what it deletes is said the moment it is ticked, not after.
-export function RemoveProjectDialog({
-  projectId,
-  open,
-  onOpenChange,
-  onRemoved,
-}: {
-  projectId: string
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  /** Fires once the project is off the list and the dialog has closed: safe to navigate away in. */
-  onRemoved: () => void
-}) {
+// "Remove project…" (`project.menu`), asked first. Removing takes the project off the list and
+// deletes nothing, unless the person ticks the box: then OpenAgent's own files in the folder go too.
+// Once it is off the list the dialog says it is done, with the box ticked what went and what stayed,
+// and Done tells the shell, which leaves the project's page for every project's. The box is never
+// ticked for them, and what it deletes is said the moment it is ticked, not after.
+export function RemoveProjectDialog({ on: { projectId }, onDone }: { on: { projectId: string }; onDone(result?: UiActionResult): void }) {
+  const host = useModuleHost()
   const [files, setFiles] = useState(false)
-  const { busy, error, run, reset } = useAction()
-  const sayRemoved = useContext(SayRemovedContext)
+  const [removed, setRemoved] = useState<{ report?: CleanupReport } | null>(null)
+  const { busy, error, run } = useAction()
   // It opens on Cancel, as the other confirmations do, never on the box that widens the deletion.
   const cancel = useRef<HTMLButtonElement>(null)
-  const label = useContext(ProjectLabelsContext).get(projectId)
-  // Only a project that has the scheduler has one to stop.
-  const scheduled = useMountedModules().views['app.page'].some(page => page.package === '@openagt/scheduled-agents' && page.projects.includes(projectId))
-
-  // Each time it opens the box is unticked and an old error is gone: the menu opens it from
-  // outside, so the dialog is not told through its own open-change.
-  useEffect(() => {
-    if (!open) return
-    setFiles(false)
-    reset()
-  }, [open, reset])
+  const project = useProjects().find(one => one.id === projectId)
+  const label = useProjectLabel()(projectId, project?.name ?? '')
 
   const remove = (): void => {
-    void run(() => sendRemoveProject(projectId, files), 'Could not remove the project.').then(outcome => {
+    void run(() => removeProject(host, projectId, files), 'Could not remove the project.').then(outcome => {
       if (!outcome.ok) return
       const cleanup = outcome.value.cleanup
-      sayRemoved(cleanup ? { report: cleanup } : {})
-      onOpenChange(false)
-      // After the close, so a page that unmounts this does not tear the dialog down mid-transition.
-      queueMicrotask(onRemoved)
+      setRemoved(cleanup ? { report: cleanup } : {})
     })
   }
+  // Told once Done is pressed, so the page under the report stays until then.
+  const done = (): void => {
+    if (removed === null) return onDone()
+    projectsChanged({ removed: projectId })
+    onDone({ ok: true })
+  }
 
+  if (removed !== null) return <RemovedReport report={removed.report} onDone={done} />
   return (
     <AlertDialog.Root
-      open={open}
+      open
       onOpenChange={next => {
         // Never closed while the removal runs.
-        if (busy) return
-        onOpenChange(next)
+        if (busy || next) return
+        onDone()
       }}
     >
       <AlertDialog.Portal>
@@ -74,7 +51,7 @@ export function RemoveProjectDialog({
         <AlertDialog.Popup data-overlay="question" initialFocus={cancel} className={POPUP}>
           <AlertDialog.Title className="text-base font-semibold">{label ? `Remove the project ${label}?` : 'Remove this project?'}</AlertDialog.Title>
           <AlertDialog.Description className="mt-2 text-sm text-muted-foreground">
-            It leaves the dashboard&rsquo;s list{scheduled && <>, and its scheduler stops unless you set it to keep running</>}.{' '}
+            It leaves the dashboard&rsquo;s list.{' '}
             {files ? (
               <>Your files and your commits stay.</>
             ) : (
@@ -136,48 +113,38 @@ export function RemoveProjectDialog({
   )
 }
 
-type Removed = { report?: CleanupReport }
-const SayRemovedContext = createContext<(removed: Removed) => void>(() => {})
-
-/**
- * "Project removed", around the shell: the project's own page, and the menu that asked, go with the
- * project, so what the removal did is said over the page the shell moved on to, until Done. With the
- * box ticked, what happened to OpenAgent's files in the folder.
- */
-export function ProjectRemovedReport({ children }: { children: ReactNode }) {
-  const [removed, setRemoved] = useState<Removed | null>(null)
+/** "Project removed": what the removal did, with the box ticked what happened to OpenAgent's files in the folder, until Done. */
+function RemovedReport({ report, onDone }: { report: CleanupReport | undefined; onDone: () => void }) {
   const done = useRef<HTMLButtonElement>(null)
-  const report = removed?.report
+  // Closed first, which hands the keyboard on, and only then done: the shell takes the dialog away.
+  const [open, setOpen] = useState(true)
   return (
-    <SayRemovedContext.Provider value={setRemoved}>
-      {children}
-      <AlertDialog.Root open={removed !== null} onOpenChange={open => open || setRemoved(null)}>
-        <AlertDialog.Portal>
-          <AlertDialog.Backdrop className={BACKDROP_CLASS} />
-          {/* The menu that opened the question is gone with the project: the project picker, where the next project is picked, takes the focus. */}
-          <AlertDialog.Popup data-overlay="question" initialFocus={done} finalFocus={() => document.querySelector<HTMLElement>('[data-project-picker]')} className={POPUP}>
-            <AlertDialog.Title className="text-base font-semibold">Project removed</AlertDialog.Title>
-            {report ? (
-              <>
-                <AlertDialog.Description className="mt-2 text-sm text-muted-foreground">
-                  It left the dashboard&rsquo;s list. This is what happened to OpenAgent&rsquo;s files in the folder.
-                </AlertDialog.Description>
-                <ReportList title="Deleted" empty="Nothing: there was nothing of OpenAgent&rsquo;s to delete." lines={report.removed} />
-                {report.kept.length > 0 && <ReportList title="Kept" lines={report.kept.map(kept => `${kept.path}: ${kept.reason}`)} />}
-                {report.failed.length > 0 && <ReportList title="Could not be cleaned" lines={report.failed} danger />}
-              </>
-            ) : (
+    <AlertDialog.Root open={open} onOpenChange={next => next || setOpen(false)} onOpenChangeComplete={next => next || onDone()}>
+      <AlertDialog.Portal>
+        <AlertDialog.Backdrop className={BACKDROP_CLASS} />
+        {/* The menu that opened the question is gone with the project: the project picker, where the next project is picked, takes the focus. */}
+        <AlertDialog.Popup data-overlay="question" initialFocus={done} finalFocus={() => document.querySelector<HTMLElement>('[data-project-picker]')} className={POPUP}>
+          <AlertDialog.Title className="text-base font-semibold">Project removed</AlertDialog.Title>
+          {report ? (
+            <>
               <AlertDialog.Description className="mt-2 text-sm text-muted-foreground">
-                It left the dashboard&rsquo;s list, and nothing in the folder was deleted. Add the folder again to bring the project back.
+                It left the dashboard&rsquo;s list. This is what happened to OpenAgent&rsquo;s files in the folder.
               </AlertDialog.Description>
-            )}
-            <div className={cn('mt-6 flex justify-end', DIALOG_PRESSES_CLASS)}>
-              <AlertDialog.Close ref={done} render={<Button>Done</Button>} />
-            </div>
-          </AlertDialog.Popup>
-        </AlertDialog.Portal>
-      </AlertDialog.Root>
-    </SayRemovedContext.Provider>
+              <ReportList title="Deleted" empty="Nothing: there was nothing of OpenAgent&rsquo;s to delete." lines={report.removed} />
+              {report.kept.length > 0 && <ReportList title="Kept" lines={report.kept.map(kept => `${kept.path}: ${kept.reason}`)} />}
+              {report.failed.length > 0 && <ReportList title="Could not be cleaned" lines={report.failed} danger />}
+            </>
+          ) : (
+            <AlertDialog.Description className="mt-2 text-sm text-muted-foreground">
+              It left the dashboard&rsquo;s list, and nothing in the folder was deleted. Add the folder again to bring the project back.
+            </AlertDialog.Description>
+          )}
+          <div className={cn('mt-6 flex justify-end', DIALOG_PRESSES_CLASS)}>
+            <AlertDialog.Close ref={done} render={<Button>Done</Button>} />
+          </div>
+        </AlertDialog.Popup>
+      </AlertDialog.Portal>
+    </AlertDialog.Root>
   )
 }
 

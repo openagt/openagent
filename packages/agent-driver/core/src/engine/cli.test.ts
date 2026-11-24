@@ -27,7 +27,7 @@ test('usage errors exit 2 with what was wrong on stderr and nothing on stdout; o
   const repo = await testRepo()
   const elsewhere = await mkdtemp(join(tmpdir(), 'not-a-repo-'))
   try {
-    for (const argv of [[], ['nope'], ['check', 'extra'], ['init', 'extra'], ['cleanup', 'extra'], ['tick'], ['status']]) {
+    for (const argv of [[], ['nope'], ['check', 'extra'], ['init', 'extra'], ['tick'], ['status']]) {
       const bad = await run(repo, ...argv)
       assert.equal(bad.code, 2, argv.join(' '))
       assert.equal(bad.out, undefined)

@@ -19,6 +19,7 @@ test("the dashboard runs the modules of the distribution handed down, and this c
     'store-filesystem',
     'store-git-repository',
     'store-git-branch',
+    'projects',
     'git-branches',
     'github',
     'skills',

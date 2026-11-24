@@ -1,9 +1,9 @@
-import { contextAddProject, contextHost, contextOtherHosts, contextPrepareStart, contextProjectState, contextProjects, contextRemoveProject, contextStartedIn, resolveProjectPath } from './context.js'
+import { contextHost, contextOtherHosts, contextPrepareStart, contextProjectState, contextProjects, contextStartedIn, resolveProjectPath } from './context.js'
 import { projectRefAt } from '../distribution-hooks.js'
 import { readProjectSkills } from '@openagt/skills'
-import { DATA_BRANCH, addressOfRemote, errorMessage, isRepoOwner, originDefaultBranch, readRepoOwners, repositoryAddress, shareProjectData, writeRepoOwners } from '@openagt/agent-data'
-import { readHosted, refreshHosted, type HostedRepo } from './hosted-repos.js'
-import { cloneAccountFor, originGit, originHost, remoteAccount } from './send-as.js'
+import { DATA_BRANCH, errorMessage, isRepoOwner, originDefaultBranch, readRepoOwners, repositoryAddress, shareProjectData, writeRepoOwners } from '@openagt/agent-data'
+import { readHosted, refreshHosted, type HostedRead } from './hosted-repos.js'
+import { originGit, originHost, remoteAccount } from './send-as.js'
 import type { StartReadiness } from '../start-readiness.js'
 import { SESSIONS_ID } from '../project-address.js'
 import { hasRemote } from '../has-remote.js'
@@ -11,16 +11,13 @@ import { openagentVersion } from '../version.js'
 import { currentBranch } from '../dashboard/git-status.js'
 import { branchesOnOrigin, waitingSkills } from '../dashboard/start-branch.js'
 import { readFolderBehind, updateFolder, type FolderBehind } from '../dashboard/folder-behind.js'
-import { addRepoFolder, listProjects, listRepoFolders, removeRepoFolder, startFromPick, type StartFromPick } from '../registry.js'
-import { thisComputersRepos, type FoundRepo } from '../dashboard/repos.js'
-import { cloneProject, cloneTargetOf } from '../clone-project.js'
-import { canPickDirectory, pickDirectory, type PickDirectoryResult } from '../pick-directory.js'
+import { startFromPick, type StartFromPick } from '../registry.js'
 import { projectGitHost } from '../store/git-host.js'
 import type { ProjectSummary } from '../dashboard/projects.js'
-import type { AddProjectResult, RemoveProjectResult, StartedInResult } from '../dashboard/types.js'
+import type { StartedInResult } from '../dashboard/types.js'
 
-// The Projects sidebar behind the new dashboard (#405): the global registry (#390) the
-// daemon and CLI write — id, path, name, activated, last activity. The live event stream is its
+// The Projects sidebar behind the new dashboard (#405): the list of projects the projects module
+// keeps (`PROJECTS`) — id, path, name, activated, last activity. The live event stream is its
 // own endpoint rather than a call (`GET /_rpc/events`).
 //
 // Each project also carries what the person has to fix there (#1500), what the modules on in it
@@ -39,65 +36,18 @@ export async function onProjects(): Promise<ProjectSummary[]> {
 }
 
 /**
- * Add a project from the dashboard (#396/#433): install the repo and register it so it joins the
- * Projects list. Like `sendStart` this needs the daemon (it spawns git + writes the shared
- * registry), so it calls the daemon's own `addProject` closure off the wired dashboard context.
- * Returns the daemon's {@link AddProjectResult}.
- * The agents' records stay on this machine; the project's Agent data page shares them later.
- */
-export async function sendAddProject(path: string): Promise<AddProjectResult> {
-  // Throws on an unwired context (D3), like `sendStart`: a missing capability is a wiring bug.
-  const addProject = contextAddProject()
-  const trimmed = path.trim()
-  if (!trimmed) return { ok: false, error: 'a project path is required' }
-  return addProject(trimmed, false)
-}
-
-/**
  * A second `openagent` started while this dashboard listens on its port (#2141): it serves
- * nothing itself, and hands over the folder it was started in, if it is in a repository. The
- * answer says which OpenAgent runs here, and the project that holds the folder, else the folder,
- * added. A page's own call is answered the same, and adds no more than Add project.
+ * nothing itself, and hands over the folder it was started in. The answer says which OpenAgent
+ * runs here, and the project that holds the folder, else the repository it is in, added; no
+ * project outside a repository. A page's own call is answered the same, and adds no more than Add
+ * project.
  */
 export async function sendStartedAgain(folder: string | null): Promise<{ version: string; project?: StartedInResult }> {
   const startedIn = contextStartedIn()
   const version = openagentVersion()
   if (typeof folder !== 'string' || !folder.trim()) return { version }
-  return { version, project: await startedIn(folder) }
-}
-
-/** Where the repository a person typed the address of would be cloned to on this computer, or why what was typed is no address: asked before anything is cloned. */
-export async function onCloneTarget(address: string): Promise<{ ok: true; address: string; path: string } | { ok: false; error: string }> {
-  return cloneTargetOf(typeof address === 'string' ? address : '')
-}
-
-/**
- * Add a project by its repository's address, for a computer that does not have its folder: the
- * repository is cloned into `~/projects/<its name>` with the logins this computer has, and the
- * folder is then added as {@link sendAddProject} adds one. A folder already there with this
- * repository in it is added as it is. The answer says where the project is.
- */
-export async function sendAddProjectFromAddress(address: string): Promise<AddProjectResult> {
-  const addProject = contextAddProject()
-  const typed = typeof address === 'string' ? address : ''
-  const account = await cloneAccountFor(typed)
-  const cloned = await cloneProject(typed, account ? { account } : {})
-  if (!cloned.ok) return cloned
-  const added = await addProject(cloned.path, false)
-  return added.ok ? { ...added, path: cloned.path } : added
-}
-
-/**
- * Remove a project from the dashboard: it leaves the Projects list. Nothing in its folder is
- * deleted unless `files` is true: then what OpenAgent left there is removed too, and the answer
- * says what went and what stayed. Like `sendAddProject` this is the daemon's to do (it runs the project's close hooks and
- * writes the shared registry), so it calls the daemon's own closure off the wired dashboard context.
- * Addressed by id and not by path, so a project whose folder is gone can still be removed.
- */
-export async function sendRemoveProject(projectId: string, files: boolean): Promise<RemoveProjectResult> {
-  const removeProject = contextRemoveProject()
-  if (typeof projectId !== 'string' || !projectId) return { ok: false, error: 'a project id is required' }
-  return removeProject(projectId, files === true)
+  const project = await startedIn(folder)
+  return project ? { version, project } : { version }
 }
 
 /**
@@ -120,67 +70,17 @@ export async function sendShareRecords(projectId: string, on: boolean, login?: s
 }
 
 /**
- * Open the OS folder picker on the daemon's machine and wait for the user's choice (#1150). The
- * browser cannot learn an absolute path from any picker of its own, and the daemon — which runs on
- * the machine the user is sitting at — can, so the dialog is the daemon's. A dismissed dialog
- * comes back as `path: null`.
+ * The repositories at the git hosts the project picker lists beside this computer's: the accounts'
+ * and those of the owners Settings › Repos on GitHub names, as kept, while one still being read
+ * says so. The shell's own `composer.where` (`shell-where.ts`) until the github module offers them.
  */
-export async function sendPickProjectDirectory(): Promise<PickDirectoryResult> {
-  return pickDirectory()
+export async function onHostedRepos(): Promise<HostedRead> {
+  return readHosted()
 }
 
-/** The repos on this computer that are not projects yet, the ones at the git hosts not here, and whether a folder can be added to look in. */
-export interface ReposRead {
-  repos: FoundRepo[]
-  /** The repositories OpenAgent's accounts and the owners the person named have at the hosts, none of them on this computer: picked, one is cloned. */
-  hosted: HostedRepo[]
-  /** The look through this computer was cut short, and one with more time is on its way: the picker asks again shortly. */
-  reposLoading: boolean
-  /** The hosts are being asked: the picker asks again shortly. */
-  hostedLoading: boolean
-  /** A host did not answer the last time it was asked: the picker says its repos are missing. */
-  hostedUnreached?: true
-  /** This computer can show a folder dialog, so the picker offers "Search another folder…". */
-  canAddFolder: boolean
-}
-
-/**
- * The repos a new session can start in besides the projects (Rom's "a project is a sticky repo"):
- * every repository the daemon's crawl found on this computer, less those that are projects
- * already. The kept list, so the picker opens at once; an old one is crawled again behind it.
- */
-export async function onRepos(): Promise<ReposRead> {
-  const [found, projects, hosted] = await Promise.all([thisComputersRepos().read(), listProjects(), readHosted()])
-  const repos = found.repos
-  const pinned = new Set(projects.map(project => project.path))
-  // A repository at a host that is here already, as a repo or a project, is listed once: by its folder.
-  const here = new Set<string>()
-  for (const repo of repos) if (repo.url && addressOfRemote(repo.url)) here.add(addressOfRemote(repo.url)!)
-  for (const project of projects) {
-    const address = await repositoryAddress(project.path).catch(() => undefined)
-    if (address) here.add(address)
-  }
-  return {
-    repos: repos.filter(repo => !pinned.has(repo.path)),
-    hosted: hosted.repos.filter(repo => !here.has(repo.address.toLowerCase())),
-    reposLoading: found.looking,
-    hostedLoading: hosted.loading,
-    ...(hosted.unreached ? { hostedUnreached: hosted.unreached } : {}),
-    canAddFolder: canPickDirectory(),
-  }
-}
-
-/** Settings › Repos: where repos are looked for, on this computer and at the git hosts. */
-export interface RepoSources {
-  /** The folders the person added, looked in beside the home folder. */
-  folders: string[]
-  /** The users and organizations at a git host whose repositories are listed, as `<host>/<name>`. */
-  owners: string[]
-}
-
-export async function onRepoSources(): Promise<RepoSources> {
-  const [folders, owners] = await Promise.all([listRepoFolders(), readRepoOwners()])
-  return { folders, owners }
+/** Settings › Repos on GitHub: the users and organizations at a git host whose repositories are listed, as `<host>/<name>`. */
+export async function onRepoOwners(): Promise<string[]> {
+  return readRepoOwners()
 }
 
 /** List one more user's or organization's repositories: `vikejs`, `github.com/vikejs` or its page's address. GitHub when no host is named. */
@@ -204,27 +104,6 @@ export async function sendRemoveRepoOwner(owner: string): Promise<{ ok: true } |
   if (!written.ok) return { ok: false, error: written.error }
   void refreshHosted()
   return { ok: true }
-}
-
-/** Stop looking for repos in a folder the person added. */
-export async function sendRemoveRepoFolder(folder: string): Promise<{ ok: true } | { ok: false; error: string }> {
-  if (typeof folder !== 'string') return { ok: false, error: 'no folder named' }
-  await removeRepoFolder(folder)
-  await thisComputersRepos().refresh()
-  return { ok: true }
-}
-
-/**
- * "Search another folder…": the OS folder dialog, and the folder picked joins those the crawl
- * looks in, which then runs again before the answer. A dismissed dialog adds nothing.
- */
-export async function sendAddRepoFolder(): Promise<{ ok: true; added: boolean } | { ok: false; error: string }> {
-  const picked = await pickDirectory()
-  if (!picked.ok) return picked
-  if (!picked.path) return { ok: true, added: false }
-  await addRepoFolder(picked.path)
-  await thisComputersRepos().refresh()
-  return { ok: true, added: true }
 }
 
 /**

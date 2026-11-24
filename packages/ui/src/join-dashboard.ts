@@ -7,7 +7,7 @@ import { readSecureAddress } from './secure-address.js'
  * only on `EADDRINUSE` leaves the common start as it was, with no race between a look and a bind.
  *
  * The call is a plain RPC: with no `Origin` and a loopback `Host`, the dashboard's guards let it
- * by, as they let any program on this computer call `sendAddProject`.
+ * by, as they let any program on this computer call any of its RPCs.
  */
 
 /**
@@ -19,7 +19,7 @@ export type JoinedDashboard =
   | { joined: true; url: string; version: string; project?: StartedInResult }
   | { joined: false }
 
-/** Hand `folder` (undefined outside a repository) to the dashboard on `port` of this computer. */
+/** Hand `folder`, the one `openagent` was typed in, to the dashboard on `port` of this computer: it makes it a project when it is in a repository. */
 export async function joinRunningDashboard(port: number, folder: string | undefined, env: NodeJS.ProcessEnv = process.env): Promise<JoinedDashboard> {
   const url = `http://127.0.0.1:${port}`
   // Asked first with no folder, which a dashboard answers at once, so a program that holds the port

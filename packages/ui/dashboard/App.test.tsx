@@ -51,11 +51,15 @@ vi.mock('./components/SettingsDialog.js', async () => {
     },
   }
 })
-vi.mock('./components/ProjectHome.js', async importOriginal => ({
-  ProjectHomeShape: (await importOriginal<typeof import('./components/ProjectHome.js')>()).ProjectHomeShape,
-  ProjectHome: ({ projectName, onProjectRemoved }: { projectName?: string; onProjectRemoved?: () => void }) =>
-    createElement('p', null, `the launcher of ${projectName}`, createElement('button', { onClick: onProjectRemoved }, 'remove the project')),
-}))
+// A project's launcher, stood in for: its press removes the project as the projects module's Remove project does.
+vi.mock('./components/ProjectHome.js', async importOriginal => {
+  const { projectsChanged } = await import('./lib/shell-projects.js')
+  return {
+    ProjectHomeShape: (await importOriginal<typeof import('./components/ProjectHome.js')>()).ProjectHomeShape,
+    ProjectHome: ({ projectId, projectName }: { projectId: string; projectName?: string }) =>
+      createElement('p', null, `the launcher of ${projectName}`, createElement('button', { onClick: () => projectsChanged({ removed: projectId }) }, 'remove the project')),
+  }
+})
 // The Overview's box, stood in for: it says the project it starts in, and has a press that picks the project `app`, one that picks none, and one that starts.
 vi.mock('./components/StartAgentForm.js', () => ({
   StartAgentForm: ({ projectId, projectName, onPickProject, onAgentStarted }: { projectId: string; projectName?: string | null; onPickProject: (id: string) => void; onAgentStarted?: (intent: string, agentId: string) => void }) =>
@@ -68,10 +72,13 @@ vi.mock('./components/StartAgentForm.js', () => ({
       createElement('button', { onClick: () => onAgentStarted?.('from the box', '9-box') }, 'start from the box'),
     ),
 }))
-vi.mock('./components/ProjectActions.js', async importOriginal => ({
-  ...(await importOriginal<typeof import('./components/ProjectActions.js')>()),
-  ProjectMenu: ({ onProjectRemoved }: { onProjectRemoved?: () => void }) => (onProjectRemoved ? createElement('button', { onClick: onProjectRemoved }, 'remove the project from its menu') : null),
-}))
+vi.mock('./components/ProjectActions.js', async importOriginal => {
+  const { projectsChanged } = await import('./lib/shell-projects.js')
+  return {
+    ...(await importOriginal<typeof import('./components/ProjectActions.js')>()),
+    ProjectMenu: ({ projectId }: { projectId: string }) => createElement('button', { onClick: () => projectsChanged({ removed: projectId }) }, 'remove the project from its menu'),
+  }
+})
 
 // A session's page, as itself unless a test stands in for it: the stand-in gets what the shell hands the page.
 const agentView = vi.hoisted(() => ({ standIn: null as null | ((props: Record<string, unknown>) => unknown) }))
@@ -1060,19 +1067,16 @@ describe('the project select (#1513)', () => {
     expect(screen.getByText('card for app')).toBeTruthy()
   })
 
-  test('adding a project reads the modules again at once', async () => {
+  test('a project a module added reads the projects and the modules again at once', async () => {
     answerTwo()
-    // A repo on this computer that is no project yet, picked at the top of the sidebar, is made one.
-    answers.set('onRepos', () => ({ repos: [{ path: '/work/new', name: 'new' }], canAddFolder: false }))
-    answers.set('sendAddProject', () => ({ ok: true, alreadyActivated: false }))
     render(<App />)
     await screen.findByRole('link', { name: 'Logs' })
-    const reads = () => calls.filter(call => call.name === 'onModules').length
-    const before = reads()
-    await openMenu(screen.getByRole('combobox', { name: 'Project: All projects' }))
-    fireEvent.click(await screen.findByRole('option', { name: /new/ }))
-    fireEvent.click(await screen.findByRole('button', { name: 'I trust it, add it' }))
-    await waitFor(() => expect(reads()).toBe(before + 1))
+    const reads = (name: string) => calls.filter(call => call.name === name).length
+    const [modules, projects] = [reads('onModules'), reads('onProjects')]
+    const { projectsChanged } = await import('./lib/shell-projects.js')
+    act(() => projectsChanged({ added: true }))
+    await waitFor(() => expect(reads('onModules')).toBe(modules + 1))
+    expect(reads('onProjects')).toBeGreaterThan(projects)
   })
 
   test('removing a project reads the modules again at once, and goes to the Overview', async () => {

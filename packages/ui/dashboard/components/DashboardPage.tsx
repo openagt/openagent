@@ -54,7 +54,6 @@ export function DashboardPage({
   active,
   projects,
   scope,
-  onProjectAdded,
   listedPages,
   start,
 }: {
@@ -75,8 +74,6 @@ export function DashboardPage({
   projects: ProjectSummary[]
   /** The one project the page shows (#1513), or null for all: the agents at work and the packages' cards show only its, and a card of a package it does not have is not drawn. */
   scope: string | null
-  /** A project was added from the first steps: the app reads its projects again. */
-  onProjectAdded: () => void
   /** The modules' pages as the sidebar lists them, null where none is known yet: which projects have the Queue and the Tickets, before the packages' code is in. */
   listedPages: readonly ListedPage[] | null
 }) {
@@ -240,7 +237,7 @@ export function DashboardPage({
       {/* Arranging keeps the parts in their order and where they stand: the updates stay, and what arranging adds comes after the parts. */}
       <div className="space-y-10">
         {/* What a new install can still set up, first while a step is open (his pick): a session cannot start before its first one. */}
-        {!onboardingDismissed && <OnboardingChecklist projects={projects} onAgentStarted={onAgentStarted} onSelectProject={onSelectProject} onProjectAdded={onProjectAdded} listedPages={listedPages} />}
+        {!onboardingDismissed && <OnboardingChecklist onAgentStarted={onAgentStarted} onSelectProject={onSelectProject} listedPages={listedPages} />}
         {/* The page's own, before every card (his and Rom's pick): arranging the cards neither moves it nor takes it off. */}
         {start}
         {!layoutRead ? null : editing ? (

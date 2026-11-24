@@ -33,18 +33,14 @@ export function ProjectHome({
   toggleContext,
   onOpenAgent,
   errors,
-  onProjectRemoved,
   projects,
   onPickProject,
-  onProjectAdded,
 }: {
   projectId: string
   /** Every project, for the picker of where the session works. */
   projects: readonly ProjectSummary[]
   /** Open the "New agent session" page of another project, or of no project. */
   onPickProject: (projectId: string) => void
-  /** A repo was added as a project from the picker. */
-  onProjectAdded: () => void
   /** The project's name, for the launcher's chip; absent until the projects are read. */
   projectName?: string | null | undefined
   /** The Human Queue, already only the project picked in the sidebar's (#1513) when one is picked. */
@@ -61,8 +57,6 @@ export function ProjectHome({
   onOpenAgent: (projectId: string, agentId: string) => void
   /** What the daemon currently finds wrong with the project (#1500), off the shell's project list. */
   errors?: ProjectError[] | undefined
-  /** Told once the project is off the list, so the shell leaves its page. */
-  onProjectRemoved?: (() => void) | undefined
 }) {
   // The list comes first, the box at the foot: while something waits, and on a phone.
   const isMobile = useIsMobile()
@@ -85,7 +79,7 @@ export function ProjectHome({
           It stops short of the list's scroll bar (ui/scroll-area, 10 wide), which is drawn over the
           page's whole height; only the bar's line crosses it, to the page's edge. */}
       <div ref={top} data-testid="home-top" className="absolute top-0 right-2.5 left-0 z-20 bg-background/80 backdrop-blur-md">
-        <ProjectActions projectId={projectId} onProjectRemoved={onProjectRemoved} />
+        <ProjectActions projectId={projectId} />
         {/* Above everything, because an agent started on a project whose agent-data branch cannot
             reach origin (#1599) works from stale tickets and a queue nobody else will see. */}
         <ProjectErrorBanner errors={errors} />
@@ -115,7 +109,6 @@ export function ProjectHome({
             toggleContext={toggleContext}
             projects={projects}
             onPickProject={onPickProject}
-            onProjectAdded={onProjectAdded}
           />
         </div>
         <ScrollArea className="min-h-0 flex-1" viewportClassName="h-full">

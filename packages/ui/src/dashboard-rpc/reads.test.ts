@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import { onProjectFiles, onAgentMainBranch, onAgentWorktree } from './reads.js'
 import { provideTestContext } from './test-context.js'
 import { projectId } from '@openagt/agent-data'
-import { addProject } from '../registry.js'
+import { listTestProject } from '../test-projects.js'
 
 // A project id nobody registered has no local path, so these reads have no checkout to answer
 // from. They must say so — an empty list, null — rather than throwing.
@@ -44,13 +44,13 @@ test('onAgentMainBranch names origin\'s default branch as the clone has it, by t
     git(dir, 'clone', '-q', origin, clone)
     // What the folder has out says nothing of it.
     git(clone, 'checkout', '-q', '-b', 'mine')
-    await addProject(clone, new Date().toISOString())
+    await listTestProject(clone, new Date().toISOString())
     assert.equal(await onAgentMainBranch(projectId(clone)), 'trunk')
     // No remote: nothing to name, not the branch the folder is on.
     const lone = join(dir, 'lone')
     git(dir, 'init', '-q', '-b', 'main', lone)
     git(lone, '-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-q', '--allow-empty', '-m', 'seed')
-    await addProject(lone, new Date().toISOString())
+    await listTestProject(lone, new Date().toISOString())
     assert.equal(await onAgentMainBranch(projectId(lone)), null)
     assert.equal(await onAgentMainBranch('project-that-does-not-exist'), null)
   } finally {

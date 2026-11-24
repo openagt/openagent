@@ -5,7 +5,9 @@ import { logDiaryFile } from '../session-log.js'
 import { takeInbox } from '../inbox.js'
 import { type AnyDiaryLine, type RunCard } from '../record.js'
 import { errorMessage, sessionFolder, sessionsHome } from '@openagt/agent-data'
-import { defineModule, RunOrder, type RunContext, type RunOutcome } from '@openagt/hooks'
+import { defineModule, RunOrder, type AppContext, type ProjectCleanup, type ProjectRef, type RunContext, type RunOutcome } from '@openagt/hooks'
+import { liftSkillRules, skillLink } from '@openagt/git-branches'
+import { cleanup } from './cleanup.js'
 import { localHost } from './host.js'
 import { legOf, type EarlierLeg, type Leg } from './leg.js'
 import { hideLiveDir, inboxPath, liveDir, readLiveCard, readLiveDiary } from './live-card.js'
@@ -18,7 +20,8 @@ import { detailOf, effortOf, modelOf, sessionTurns } from './session.js'
  * this process runs (`leg.ts`): this process working in the run's environment once the run's
  * accounts are set, and the run's marker pushed; the agent's turns, opening the run's live record
  * first; the record saved from what the session kept, with where the work ended up, as the run's
- * facts say; and the record said again without the branch the reclaim deleted.
+ * facts say; and the record said again without the branch the reclaim deleted. A project taken
+ * off the list with its files loses what this tool left in it (`cleanup.ts`).
  */
 const agentDriver = defineModule({
   name: 'agent-driver',
@@ -30,10 +33,24 @@ const agentDriver = defineModule({
       { order: RunOrder.RECORD, name: 'save the record', run: saveRecord },
       { order: RunOrder.CLEANUP + 10, name: 'record the branch gone', run: recordGone },
     ],
+    'app.lifecycle': { projectRemoved: (project, app, { files }) => (files ? removeOwnFiles(project, app) : undefined) },
   },
 })
 
 export default agentDriver
+
+/**
+ * What this tool left in `project`, removed (`cleanup.ts`), and the rules that hid the links of the
+ * skills the runs there got: whichever modules were on for them, every module's. Refused while a
+ * run's process is alive there: nothing is removed.
+ */
+async function removeOwnFiles(project: ProjectRef, app: AppContext): Promise<ProjectCleanup> {
+  const outcome = await cleanup(project.dir)
+  if (!outcome.ok) throw new Error(`a run is still working here (${outcome.runs.join(', ')}): stop it first`)
+  const given = await app.skills({ project }, { every: true })
+  await liftSkillRules(project.dir, await Promise.all(given.map(skillLink)))
+  return { removed: outcome.removed, kept: outcome.kept }
+}
 
 /**
  * This process works in the run's environment from here on, as its agent does: what the steps at

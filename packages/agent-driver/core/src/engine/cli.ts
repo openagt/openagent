@@ -1,11 +1,9 @@
 import { PLUGINS_WITHOUT_ENV, PROFILE_ENV, Refused, UsageError, errorMessage, inRepo, nodeGitRunner, parseCommandArgs, runCommandLine, sessionsHomeOf, PROJECT_SKILLS_ENV, helpRows, helpText, type Command, type GitRunner } from '@openagt/agent-data'
 import { UnknownAgent, agentNames, codingAgents } from '../agents.js'
-import { createHooks, loadHandedDown } from '@openagt/hooks'
-import { liftSkillRules, projectRoot, sessionRepos, skillLink } from '@openagt/git-branches'
+import { projectRoot, sessionRepos } from '@openagt/git-branches'
 import { GIT_ACCOUNT_ENV, detachResume, detachRun, profileLoginFor, readyToRun, resumeProject, runProject, type SpawnedResume } from './runner.js'
-import { projectOf, type RunOutcome, type RunRequest } from './run.js'
+import type { RunOutcome, RunRequest } from './run.js'
 import { anyPick, handedDownSettings, profileNamed, runProfile, sessionPicksNamed } from './profile.js'
-import { cleanup } from './cleanup.js'
 import { hasImage, isImageName } from '../images.js'
 import { isPublish, NO_PUBLISH, PUBLISH_LEVELS } from './records.js'
 
@@ -24,7 +22,6 @@ ${helpRows([
   ['run --detach --resume <id> …', `the same continuing in its own process, answered at once`],
   ['run --resume <id> … --by <who>', `kept on the run's record with the time, until its next resume: a scheduler's row that resumed it, which counts the run as its own`],
   ['check [--driver <agent>]', `whether a run can start here: the coding agent's CLI installed and logged in, and its warnings; what this computer's host answers before a Start`],
-  ['cleanup', `remove what this tool left in the project: the runs' locks and stderr files, then .agent-runner/ and the rule hiding it from git once it is empty; config.yml is yours and stays; refused while a run's process is alive; the command a dashboard asks for when a project is removed with its files`],
   'Options of run:',
   ['--publish <commit|branch|pr|merge>', 'with --publish, the agent is told, in one sentence after the prompt, how far to take its work when it finishes: commit it, and from there push its branch, open its pull request, or set the request to merge once its checks pass; without it the prompt goes as written, and nothing is committed or published unless the prompt asks'],
   ['--attach <text>', `with --attach, the agent is handed <text> with the prompt, after it and before the --publish sentence, and with no later message; the run's record keeps it apart from the prompt, which alone names the run`],
@@ -213,20 +210,6 @@ const COMMANDS: Record<string, Command<[CliIo, GitRunner]>> = {
     await knownAgent(values.driver)
     const repo = await project(io.cwd, git)
     return { ok: true, ...(await readyToRun(repo, values.driver)) }
-  },
-
-  async cleanup(args, io, git) {
-    parseWithTexts(args, {}, 0)
-    const repo = await project(io.cwd, git)
-    const outcome = await cleanup(repo, { git })
-    if (outcome.ok) {
-      // The rules that hid the links of the skills the runs here got: whichever modules were on for them, every module's.
-      const project = await projectOf(repo, git)
-      const given = await createHooks((await loadHandedDown()) ?? []).skills(project ? { project } : {}, { every: true })
-      await liftSkillRules(repo, await Promise.all(given.map(skillLink)), git)
-      return outcome
-    }
-    throw new Refused(outcome, `a run is still working here (${outcome.runs.join(', ')}): stop it first`)
   },
 }
 

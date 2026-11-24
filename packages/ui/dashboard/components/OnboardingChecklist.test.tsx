@@ -10,7 +10,11 @@ import { HostServicesContext, INERT_HOST_SERVICES } from '../lib/host-services.j
 // reaches for a daemon and each step's "done" comes from a fixture instead.
 const onDashboard = vi.hoisted(() => vi.fn())
 vi.mock('../rpc/reads.js', () => ({ onDashboard }))
-vi.mock('../rpc/projects.js', () => ({ onRepos: vi.fn(async () => ({ repos: [], hosted: [], reposLoading: false, hostedLoading: false, canAddFolder: false })), sendAddRepoFolder: vi.fn(), sendAddProject: vi.fn(), sendPickProjectDirectory: vi.fn(), onCloneTarget: vi.fn(), sendAddProjectFromAddress: vi.fn() }))
+// What the modules say needs setting up on this computer: the projects module's "Add your first
+// project" while there is none (`app.attention`), as `steps` lists the projects.
+const attention = vi.hoisted(() => ({ items: [] as unknown[] }))
+vi.mock('../rpc/attention.js', () => ({ onAttention: vi.fn(async () => ({ items: attention.items })) }))
+const NO_PROJECT_YET = { module: 'projects', kind: 'setup', scope: 'computer', id: 'no-project', words: 'Add your first project', detail: 'A git repo your agents work in, each in its own copy and on its own branch. Your files and your branch stay as they are.', fix: { label: 'Add a project', action: 'add-project' } }
 vi.mock('../rpc/person.js', () => ({ onPerson: vi.fn(async () => ({ name: 'Ada Lovelace' })) }))
 const updatePreferences = vi.hoisted(() => vi.fn())
 vi.mock('../lib/preferences.js', () => ({
@@ -84,8 +88,10 @@ const WITH_PROJECT: DashboardData = {
 
 const SHOP: ProjectSummary = { id: 'p1', path: '/home/ada/shop', name: 'shop', activated: true, gitHost: true }
 
-const steps = ({ projects = [] as ProjectSummary[], onAgentStarted = vi.fn(), onSelectProject = vi.fn(), listedPages = [] as readonly ListedPage[] | null } = {}) =>
-  render(<OnboardingChecklist projects={projects} onAgentStarted={onAgentStarted} onSelectProject={onSelectProject} onProjectAdded={vi.fn()} listedPages={listedPages} />)
+const steps = ({ projects = [] as ProjectSummary[], onAgentStarted = vi.fn(), onSelectProject = vi.fn(), listedPages = [] as readonly ListedPage[] | null } = {}) => {
+  attention.items = projects.length === 0 ? [NO_PROJECT_YET] : []
+  return render(<OnboardingChecklist onAgentStarted={onAgentStarted} onSelectProject={onSelectProject} listedPages={listedPages} />)
+}
 
 /** A step's row, by its title. */
 const row = (label: string) => screen.getByRole('listitem', { name: label })
@@ -130,7 +136,7 @@ describe('the first steps on the Overview', () => {
     expect(screen.getByText('Loading…')).toBeTruthy()
     expect(screen.queryAllByRole('listitem')).toEqual([])
     await act(async () => answers[last]!(values[last]))
-    expect(within(row('Add your first project')).getByLabelText('Done')).toBeTruthy()
+    expect(within(row('Connect GitHub')).getByLabelText('Done')).toBeTruthy()
     expect(screen.queryByText('Loading…')).toBeNull()
   })
 
@@ -168,22 +174,11 @@ describe('the first steps on the Overview', () => {
     cleanup()
     const none = await frame([{ id: 'logs', label: 'Logs', projects: ['p1'] }])
     expect(none).not.toContain('a place')
-    expect(none.at(-1)).toBe('Add your first project')
+    expect(none).not.toContain('Add your first project')
     const queue = await frame([{ id: 'queue', label: 'Queue', projects: ['p1'] }, { id: 'logs', label: 'Logs', projects: ['p1'] }])
     expect(queue).toEqual([...none, 'a place'])
     const both = await frame([{ id: 'queue', label: 'Queue', projects: ['p1'] }, { id: 'tickets', label: 'Tickets', projects: ['p1'] }])
     expect(both).toEqual([...none, 'a place', 'a place'])
-  })
-
-  test('what adding a project does is behind an ⓘ beside the open step, not in its way', async () => {
-    onDashboard.mockResolvedValue(EMPTY)
-    steps()
-    await waitFor(() => expect(row('Add your first project').getAttribute('aria-current')).toBe('step'))
-    expect(row('Add your first project').textContent).not.toContain('makes no commit on your branch')
-    const info = within(row('Add your first project')).getByRole('button', { name: 'More on Add your first project' })
-    fireEvent.focus(info)
-    fireEvent.mouseEnter(info)
-    await waitFor(() => expect(document.body.textContent).toContain('makes no commit on your branch and pushes nothing'))
   })
 
   test('the account is added in a dialog: its code is shown there, and Cancel gives the login up', async () => {
@@ -212,20 +207,19 @@ describe('the first steps on the Overview', () => {
     expect(within(row('Connect GitHub')).getByRole('button', { name: 'Add a GitHub account' })).toBeTruthy()
     // Numbers, not boxes: a box invites a click that can tick nothing.
     expect(within(row('Add your first project')).getByText('3')).toBeTruthy()
-    expect(within(row('Add your first project')).queryByRole('combobox', { name: 'Add a project' })).toBeNull()
+    expect(within(row('Add your first project')).queryByText(/A git repo your agents work in/)).toBeNull()
 
     await openStep('Add your first project')
     expect(row('Add your first project').getAttribute('aria-current')).toBe('step')
-    expect(within(row('Add your first project')).getByRole('combobox', { name: 'Add a project' })).toBeTruthy()
+    expect(within(row('Add your first project')).getByText(/A git repo your agents work in/)).toBeTruthy()
     expect(within(row('Connect GitHub')).queryByRole('button', { name: 'Add a GitHub account' })).toBeNull()
   })
 
-  test('a step done stays, one line with a ✓ and what was done: the account, the project', async () => {
+  test('a step done stays, one line with a ✓ and what was done: the account', async () => {
     onDashboard.mockResolvedValue(WITH_PROJECT)
     steps({ projects: [SHOP] })
     await waitFor(() => expect(within(row('Connect GitHub')).getByLabelText('Done')).toBeTruthy())
     expect(within(row('Connect GitHub')).getByText('@octo')).toBeTruthy()
-    expect(within(row('Add your first project')).getByText('shop')).toBeTruthy()
   })
 
   test('the first step connects a coding agent, a press an agent, Claude the primary; one whose program is missing is installed first', async () => {
@@ -274,7 +268,7 @@ describe('the first steps on the Overview', () => {
     const openPage = vi.fn()
     render(
       <HostServicesContext.Provider value={{ ...INERT_HOST_SERVICES, openPage }}>
-        <OnboardingChecklist projects={[SHOP]} onAgentStarted={vi.fn()} onSelectProject={vi.fn()} onProjectAdded={vi.fn()} listedPages={null} />
+        <OnboardingChecklist onAgentStarted={vi.fn()} onSelectProject={vi.fn()} listedPages={null} />
       </HostServicesContext.Provider>,
     )
     await openStep('Populate the queue of AI tasks')
@@ -292,7 +286,7 @@ describe('the first steps on the Overview', () => {
     // A step still open, so the card is there.
     logins.onGitHosts.mockResolvedValue(github([]))
     steps({ projects: [SHOP] })
-    await waitFor(() => expect(row('Add your first project')).toBeTruthy())
+    await waitFor(() => expect(row('Connect GitHub')).toBeTruthy())
     expect(screen.queryByRole('listitem', { name: 'Populate the queue of AI tasks' })).toBeNull()
     expect(screen.queryByRole('listitem', { name: 'Populate the tickets' })).toBeNull()
   })
@@ -308,7 +302,7 @@ describe('the first steps on the Overview', () => {
   test('an optional step still open keeps it: only every step done takes it away', async () => {
     onDashboard.mockResolvedValue(WITH_PROJECT)
     steps({ projects: [SHOP] })
-    expect(await screen.findByRole('heading', { level: 2, name: 'Discover OpenAgent 3 of 4' })).toBeTruthy()
+    expect(await screen.findByRole('heading', { level: 2, name: 'Discover OpenAgent 2 of 3' })).toBeTruthy()
   })
 
   test('with no project yet, there is no import to offer: no project provides tickets', async () => {

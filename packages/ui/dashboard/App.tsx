@@ -1,6 +1,6 @@
 import { PermissionsPage } from './components/Accounts.js'
 import { ProfilesPage } from './components/ProfilesPage.js'
-import { useEffect, useMemo, useReducer, useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useReducer, useRef, useState, type CSSProperties } from 'react'
 import type { ProjectionRead, ProjectSummary, Waiting } from '../src/index.js'
 import { onProjectFiles, onWaiting, onStartedName } from './rpc/reads.js'
 import { sendStart } from './rpc/control.js'
@@ -25,7 +25,6 @@ import { usePolled } from './lib/use-async.js'
 import { useIsMobile } from './lib/use-mobile.js'
 import { usePinnedPage } from './lib/use-pinned-page.js'
 import { NotFound } from './components/NotFound.js'
-import { ProjectRemovedReport } from './components/RemoveProjectDialog.js'
 import { ModulePageView, ModuleSlot } from './components/ModulePageView.js'
 import { useListedPages, useModules, ModulesContext, type ListedPage } from './lib/use-modules.js'
 import type { UiIcon } from './module/index.js'
@@ -44,6 +43,8 @@ import { WaitingContext } from './lib/use-waiting.js'
 import { usePreferences, OpenProjectContext } from './lib/preferences.js'
 import { useDocumentTitle } from './lib/document-title.js'
 import { projectLabels, ProjectLabelsContext } from './lib/project-labels.js'
+import { onProjectsChanged, ShellProjectsContext, type ProjectsChange } from './lib/shell-projects.js'
+import { withShellWhere } from './lib/shell-where.js'
 import { useActiveAgents } from './lib/use-working.js'
 import { useFavicon } from './lib/favicon.js'
 import { DaemonDown, INSTALLED_RESTARTS, useDaemonHealth } from './lib/use-daemon-health.js'
@@ -123,14 +124,15 @@ export function App() {
   // needs attention — and for the sidebar's project select. Polled rather than read once (#1500):
   // each project carries what the daemon currently finds wrong with it, a state that appears and
   // clears on the daemon's own minute cadence, so the sidebar dot and the project's banner have to
-  // follow it. Slow, and reloadable so adding a project from the sidebar's "New" reflects at once
+  // follow it. Slow, and reloadable so a project a module added or removed reflects at once
   // (`reloadProjects` bumps the key).
   const [projectsKey, reloadProjects] = useReducer((key: number) => key + 1, 0)
   // Kept for the next visit too: the Overview's cards are drawn for the projects before they are read again.
   const { value: projects, state: projectsState } = usePolled<ProjectSummary[]>(onProjects, EMPTY_PROJECTS, 30_000, [projectsKey], { remember: 'projects', stored: true })
-  // Read again when a project is added from the sidebar or removed from its project home: which
-  // project has which module changes then.
-  const modules = useModules(projectsKey)
+  // Read again when a project is added or removed: which project has which module changes then.
+  // The shell's own repos at the git hosts are among the project picker's (`shell-where.ts`).
+  const mounted = useModules(projectsKey)
+  const modules = useMemo(() => withShellWhere(mounted), [mounted])
   const { loaded: modulesLoaded } = modules
   const modulePages = modules.views['app.page']
   // A project's address is its name unless another project or a page has it: what the address
@@ -213,6 +215,16 @@ export function App() {
     if (startedId === null || agentStart.listed || !agents.some(agent => agent.id === startedId)) return
     setAgentStart(prev => (prev.id === startedId ? { ...prev, listed: true } : prev))
   }, [agents, agentStart.id, agentStart.listed])
+  // A module changed the list of projects (`projectsChanged`: the projects module's Add project
+  // and Remove project): it is read again at once. A project removed while its page shows, or
+  // while every page shows it, leaves for the Overview of every project, since it is gone.
+  const listChanged = useRef<(change: ProjectsChange) => void>(() => {})
+  listChanged.current = change => {
+    reloadProjects()
+    if (!('removed' in change)) return reload()
+    if (change.removed === projectId || change.removed === scope) navigate({ projectId: null, agentId: null })
+  }
+  useEffect(() => onProjectsChanged(change => listChanged.current(change)), [])
 
   // The Context set lives in the shell (#492/#504) so the two surfaces that feed it share one
   // source of truth: the launcher's `@`/`#` chips and Context picker, and the Files pane's tree.
@@ -453,12 +465,6 @@ export function App() {
   const sessionGone = agentId !== null && !selectedAgent && agentsState === 'fresh' && (agentId !== agentStart.id || agentStart.listed === true)
   // Whether the selected run's coding agent started subagents: they get a pane beside the chat.
   const hasSubagents = useMemo(() => callSubagents(events).length > 0, [events])
-  // The project is off the list: read the list again and leave its page for the Overview of every
-  // project at once, since the one it was picked as is gone; "Project removed" is said over it.
-  const leaveRemovedProject = () => {
-    reloadProjects()
-    navigate({ projectId: null, agentId: null })
-  }
   const justStarted = agentId === agentStart.id
   // The name the daemon had for the run just started, before the run's record has one.
   const startedTitle = justStarted ? agentStart.title : undefined
@@ -512,7 +518,6 @@ export function App() {
           active={activeAgents}
           projects={projects}
           scope={scope}
-          onProjectAdded={reloadProjects}
           listedPages={listedPages}
           start={
             <StartAgentForm
@@ -527,7 +532,6 @@ export function App() {
               toggleContext={toggleContext}
               projects={projects}
               onPickProject={id => selectScope(id === SESSIONS_ID ? null : id)}
-              onProjectAdded={reloadProjects}
             />
           }
         />
@@ -559,10 +563,8 @@ export function App() {
           toggleContext={toggleContext}
           onOpenAgent={selectAgentInProject}
           errors={project?.errors}
-          onProjectRemoved={leaveRemovedProject}
           projects={projects}
           onPickProject={newAgentInProject}
-          onProjectAdded={reloadProjects}
         />
       )
     }
@@ -580,7 +582,6 @@ export function App() {
       picks: justStarted ? agentStart.picks : undefined,
       onAgentStarted,
       contextSet,
-      onProjectRemoved: leaveRemovedProject,
       onBack: backFromSession,
     }
     if (!selectedAgent) {
@@ -666,8 +667,8 @@ export function App() {
     <HostServicesContext.Provider value={hostServices}>
     <OpenProjectContext.Provider value={projectId}>
     <ProjectLabelsContext.Provider value={labels}>
+    <ShellProjectsContext.Provider value={projects}>
     <DaemonDown.Provider value={!healthy}>
-    <ProjectRemovedReport>
     {/* As tall as what the screen shows, never taller: a phone's 100vh reaches under its browser's
         bars, and the page then scrolled around the column that scrolls. */}
     {/* `--top-banner`: the height of the daemon's banner while it shows, which a page that scrolls
@@ -725,10 +726,6 @@ export function App() {
           onSelectRecent={selectAgentInProject}
           projects={projects}
           onNewAgentInProject={newAgentInProject}
-          onProjectAdded={() => {
-            reloadProjects()
-            reload()
-          }}
           startTick={agentStart.tick}
           startIntent={agentStart.intent}
           startTitle={agentStart.title}
@@ -802,8 +799,8 @@ export function App() {
       {/* Once what the address names is read: the project its "Project" group opens on, and the entries the projects and their packages add. */}
       {route.settings !== undefined && addressesRead && <SettingsDialog entry={route.settings} openItem={route.settingsItem} onEntry={showSettings} onClose={closeSettings} scope={scope} projects={projects} />}
     </SidebarProvider>
-    </ProjectRemovedReport>
     </DaemonDown.Provider>
+    </ShellProjectsContext.Provider>
     </ProjectLabelsContext.Provider>
     </OpenProjectContext.Provider>
     </HostServicesContext.Provider>

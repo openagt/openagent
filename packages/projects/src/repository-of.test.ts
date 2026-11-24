@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdir, mkdtemp, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { repositoryOf } from './project.js'
+import { repositoryOf } from './repository-of.js'
 
 test('the project is the repository the folder is in, by its top folder; outside one there is none', async () => {
   const outside = await realpath(await mkdtemp(join(tmpdir(), 'openagent-cli-')))

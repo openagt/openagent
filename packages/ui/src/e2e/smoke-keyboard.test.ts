@@ -11,7 +11,7 @@ const { flow, start, runIn } = smoke()
 /** The calls to one of the daemon's RPCs, each held unanswered until `answer`. */
 function hold(page: Page, name: string) {
   const held: Route[] = []
-  const ready = page.route(`**/_rpc/${name}`, route => void held.push(route))
+  const ready = page.route(url => url.pathname === `/_rpc/${name}`, route => void held.push(route))
   return {
     ready,
     count: () => held.length,
@@ -39,7 +39,7 @@ async function waits(page: Page, call: ReturnType<typeof hold>, press: () => Pro
 
 test('Remove in "Remove project" keeps the keyboard while it waits and takes no second press', needsChrome, async () => {
   await flow('waiting-remove', async page => {
-    const remove = hold(page, 'sendRemoveProject')
+    const remove = hold(page, '%40openagt%2Fprojects/removeProject')
     await page.getByRole('button', { name: 'Project actions' }).click()
     await page.getByRole('menuitem', { name: 'Remove project…' }).click()
     await waits(page, remove, () => page.getByRole('alertdialog').getByRole('button', { name: 'Remove', exact: true }).click(), /^Removing…$/)
@@ -59,12 +59,12 @@ test("Save in the profile editor keeps the keyboard while it waits and takes no 
 test('Next in "Add project" keeps the keyboard while it waits and takes no second press', needsChrome, async () => {
   await flow('waiting-next', async page => {
     // The address is read once as the panel opens: that read is refused, so the form with Next stands.
-    const next = hold(page, 'onCloneTarget')
+    const next = hold(page, '%40openagt%2Fprojects/cloneTargetFor')
     let reads = 0
-    await page.route('**/_rpc/onCloneTarget', route =>
+    await page.route(url => url.pathname === '/_rpc/%40openagt%2Fprojects/cloneTargetFor', route =>
       ++reads === 1 ? route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'not read yet' }) }) : route.fallback(),
     )
-    await page.getByLabel('Project: shop').click()
+    await page.getByLabel('The session works in', { exact: true }).click()
     await page.getByLabel('Search projects and repos').fill('github.com/demo/elsewhere')
     await page.getByRole('option', { name: /github\.com\/demo\/elsewhere/ }).click()
     const form = page.getByRole('dialog', { name: 'Add project' })
@@ -86,7 +86,7 @@ test('Escape in a question over a working run closes the question and stops noth
     const question = page.getByRole('alertdialog', { name: 'Create a private repository on GitHub?' })
     await question.waitFor()
     // The menu that opened it gone, as it is by the time a person has read the question.
-    await page.locator('[role="menu"]').waitFor({ state: 'detached' })
+    await page.getByRole('menuitem', { name: 'Create a repository on GitHub…' }).waitFor({ state: 'detached' })
     await page.keyboard.press('Escape')
     await question.waitFor({ state: 'detached' })
     await page.waitForTimeout(500)
@@ -138,7 +138,7 @@ async function typedOnPicker(page: Page, name: string, search: string, unchanged
 
 test("a letter typed on the sidebar's project picker starts its search and picks nothing", needsChrome, async () => {
   await flow('typed-sidebar-picker', async page => {
-    await typedOnPicker(page, 'Project: shop', 'Search projects and repos', button => button.getAttribute('aria-label'))
+    await typedOnPicker(page, 'Project: shop', 'Search projects', button => button.getAttribute('aria-label'))
   })
 })
 

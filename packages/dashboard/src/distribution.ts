@@ -17,6 +17,10 @@ const DISTRIBUTION: DashboardDistribution = [
   { package: '@openagt/store-filesystem' },
   { package: '@openagt/store-git-repository' },
   { package: '@openagt/store-git-branch' },
+  // projects: the list of projects on this computer, a project added and removed, the project
+  // picker and Settings › Repos; in a run, the repository there and where its repos are. This
+  // computer's: the list is.
+  { package: '@openagt/projects', for: 'computer' },
   // git-branches: the run's checkout, its branch read back, the checkout reclaimed.
   { package: '@openagt/git-branches' },
   // github: the run's account and pull request; its skill is in every run of a project on GitHub.

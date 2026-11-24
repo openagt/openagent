@@ -5,7 +5,7 @@ import { mkdir, mkdtemp, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { projectId } from '@openagt/agent-data'
-import { addProject } from '../registry.js'
+import { listTestProject } from '../test-projects.js'
 import { distributionHooks, projectRefAt } from '../distribution-hooks.js'
 import { SESSIONS_ID } from '../project-address.js'
 import { handDownTestDistribution } from '../test-distribution.js'
@@ -29,7 +29,7 @@ test("a session picks from the plugins on in its project that give its runs a sk
     await mkdir(shop)
     execFileSync('git', ['init', '-q'], { cwd: shop })
     execFileSync('git', ['remote', 'add', 'origin', 'git@github.com:o/shop.git'], { cwd: shop })
-    await addProject(shop, '2026-09-19T00:00:00.000Z')
+    await listTestProject(shop, '2026-09-19T00:00:00.000Z')
     await (await distributionHooks()).setEnabled('tickets', true, await projectRefAt(projectId(shop), shop))
     assert.deepEqual(await onSkillChoices(projectId(shop)), { core: ['github'], plugins: [{ name: 'ask', skills: ['ask'] }, { name: 'tickets', skills: ['tickets', 'plan', 'plan-tickets', 'triage', 'update-tickets', 'suggest-tickets-to-work-on'] }] })
   } finally {

@@ -1,7 +1,8 @@
 // `@openagt/hooks/testing`: fakes of the hooks, so a module is tested alone: a store kept in
-// memory, a host whose runs a test drives, a run's context for a step, and the host a server
-// part's function is handed.
+// memory, a host whose runs a test drives, a run's context for a step, the app a module's life is
+// told, and the host a server part's function is handed.
 import { StoreOrder } from './order.js'
+import type { AppContext } from './app.js'
 import type { InboxLine } from './agent.js'
 import type { RpcComputerHost, RpcHost } from './rpc.js'
 import type { RunContext, RunEvent, RunFound, RunHost, RunInput, RunRef, RunRequest, RunStatus, RunSummary } from './run.js'
@@ -199,6 +200,17 @@ export function fakeRun(given: Partial<Omit<RunContext, 'store' | 'settings'>> &
     store,
     settings: settingsIn(store),
   }
+}
+
+/**
+ * The app a module's life is told (`app.lifecycle`), for its tests: no project, a store and settings
+ * in memory, never aborted, and the rest as {@link computerRpcHost}'s, with no skill given, unless
+ * `given` says otherwise.
+ */
+export function fakeApp(given: Partial<AppContext> = {}): AppContext {
+  const store = given.store ?? chainStore([memoryStore()])
+  const { gitAccess, lifecycle } = computerRpcHost()
+  return { projects: async () => [], store, settings: settingsIn(store), signal: new AbortController().signal, gitAccess, lifecycle, skills: async () => [], ...given }
 }
 
 /**

@@ -1,8 +1,8 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { execFileSync } from 'node:child_process'
-import { mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises'
-import { hostname, tmpdir } from 'node:os'
+import { mkdir, mkdtemp, realpath, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createProjectRuntime } from './daemon-runtime.js'
 import { forgetStartedNames, nameStarted, startedName, withStartedNames } from './started-names.js'
@@ -11,11 +11,10 @@ import { ReadyNaming, readyPrompt } from '@openagt/agent-driver'
 import type { Hooks, ProjectRef, RunHost, RunOptions, Driver } from '@openagt/hooks'
 import { fakeHost, type FakeHost } from '@openagt/hooks/testing'
 import { OPENAGENT_DIR } from './openagent-dir.js'
-import { addProject, listProjects } from './registry.js'
+import { listTestProject } from './test-projects.js'
 import { projectId } from '@openagt/agent-data'
 import { publishedBase } from '@openagt/agent-data/names'
 import { SESSIONS_ID } from './project-address.js'
-import { DATA_BRANCH, SHARE_SETTING, excludeFromGit, readSharing, withFileBranch, writeSharing } from '@openagt/agent-data'
 import { handDownTestDistribution } from './test-distribution.js'
 
 handDownTestDistribution()
@@ -29,13 +28,6 @@ async function project(): Promise<string> {
   return cwd
 }
 
-/** What the modules are told of the projects added and removed, as `added <id> <dir>` and `removed <id> <dir>`. */
-function toldModules(): { told: string[]; lifecycle: Pick<Hooks, 'projectAdded' | 'projectRemoved'> } {
-  const told: string[] = []
-  const said = (what: string) => async (project: ProjectRef): Promise<void> => void told.push(`${what} ${project.id} ${project.dir}`)
-  return { told, lifecycle: { projectAdded: said('added'), projectRemoved: said('removed') } }
-}
-
 /** What the host was asked last: the project's folder, the prompt, and the run's options. */
 function lastStart(host: FakeHost): { dir?: string; prompt?: string; options?: RunOptions } {
   const request = host.requests.at(-1)
@@ -45,9 +37,9 @@ function lastStart(host: FakeHost): { dir?: string; prompt?: string; options?: R
 test("onStart starts the run on this computer's host, in the project addressed, home or registered, and answers the run it began", async () => {
   const home = await project()
   const other = await project()
-  const env = { XDG_CONFIG_HOME: join(home, 'cfg') }
+  const env = { ...process.env, XDG_CONFIG_HOME: join(home, 'cfg') }
   await mkdir(env.XDG_CONFIG_HOME, { recursive: true })
-  const record = await addProject(other, new Date().toISOString(), env)
+  const record = await listTestProject(other)
   const host = fakeHost()
   const runtime = createProjectRuntime({ cwd: home, env, host })
   try {
@@ -66,7 +58,7 @@ test("onStart starts the run on this computer's host, in the project addressed, 
 
 test('onStart refuses in words: an unknown project, a start the host refuses', async () => {
   const home = await project()
-  const env = { XDG_CONFIG_HOME: join(home, 'cfg') }
+  const env = { ...process.env, XDG_CONFIG_HOME: join(home, 'cfg') }
   await mkdir(env.XDG_CONFIG_HOME, { recursive: true })
   const host: RunHost = { ...fakeHost(), start: async () => { throw new Error('Codex is not installed.') } }
   const runtime = createProjectRuntime({ cwd: home, env, host })
@@ -81,7 +73,7 @@ test('onStart refuses in words: an unknown project, a start the host refuses', a
 
 test('a Start picked to run on another host goes to that host, one a module on in the project brings, its options naming it; one the project has not is refused before any host is asked (#2394)', async () => {
   const home = await project()
-  const env = { XDG_CONFIG_HOME: join(home, 'cfg') }
+  const env = { ...process.env, XDG_CONFIG_HOME: join(home, 'cfg') }
   await mkdir(env.XDG_CONFIG_HOME, { recursive: true })
   const host = fakeHost()
   const actions = fakeHost({ id: 'actions', label: 'GitHub Actions' })
@@ -112,7 +104,7 @@ test('a Start picked to run on another host goes to that host, one a module on i
 
 test('a Start goes no further than the project can, the commit with no remote, the branch with a remote and no git host; with no pick it commits, and with Nothing it is given no level', async () => {
   const home = await project()
-  const env = { XDG_CONFIG_HOME: join(home, 'cfg') }
+  const env = { ...process.env, XDG_CONFIG_HOME: join(home, 'cfg') }
   await mkdir(env.XDG_CONFIG_HOME, { recursive: true })
   const host = fakeHost()
   const runtime = createProjectRuntime({ cwd: home, env, host })
@@ -142,7 +134,7 @@ test('a Start goes no further than the project can, the commit with no remote, t
 
 test('a Start hands the host the branch to start from, and refuses a word that is no branch name before the host is asked', async () => {
   const home = await project()
-  const env = { XDG_CONFIG_HOME: join(home, 'cfg') }
+  const env = { ...process.env, XDG_CONFIG_HOME: join(home, 'cfg') }
   await mkdir(env.XDG_CONFIG_HOME, { recursive: true })
   const host = fakeHost()
   const runtime = createProjectRuntime({ cwd: home, env, host })
@@ -163,7 +155,7 @@ test('a Start hands the host the branch to start from, and refuses a word that i
 
 test("a Start hands the host the session's account at the git host, its profile and its picks, and refuses what is no login, no profile id, no plugin name or no skill name before the host is asked", async () => {
   const home = await project()
-  const env = { XDG_CONFIG_HOME: join(home, 'cfg') }
+  const env = { ...process.env, XDG_CONFIG_HOME: join(home, 'cfg') }
   await mkdir(env.XDG_CONFIG_HOME, { recursive: true })
   const host = fakeHost()
   const runtime = createProjectRuntime({ cwd: home, env, host })
@@ -202,7 +194,7 @@ test("a Start hands the host the session's account at the git host, its profile 
 
 test("a Start from a branch of origin's hands the host origin's copy; one gone from origin, or an origin that cannot be read, refuses in plain words before the host is asked", async () => {
   const home = await project()
-  const env = { XDG_CONFIG_HOME: join(home, 'cfg') }
+  const env = { ...process.env, XDG_CONFIG_HOME: join(home, 'cfg') }
   await mkdir(env.XDG_CONFIG_HOME, { recursive: true })
   const origin = await realpath(await mkdtemp(join(tmpdir(), 'openagent-origin-')))
   const host = fakeHost()
@@ -236,309 +228,35 @@ test("a Start from a branch of origin's hands the host origin's copy; one gone f
   }
 })
 
-test('adding a project makes it one, an empty folder included, and tells the modules once, as it is put on the list (app.lifecycle)', async () => {
-  const folder = await realpath(await mkdtemp(join(tmpdir(), 'openagent-add-')))
-  const cfg = await realpath(await mkdtemp(join(tmpdir(), 'openagent-add-cfg-')))
-  // The add's git reads the process's own environment, and a new folder's first commit needs an author.
-  const env = { XDG_CONFIG_HOME: cfg, GIT_AUTHOR_NAME: 'Test', GIT_AUTHOR_EMAIL: 'test@example.com', GIT_COMMITTER_NAME: 'Test', GIT_COMMITTER_EMAIL: 'test@example.com' }
-  const before = Object.fromEntries(Object.keys(env).map(key => [key, process.env[key]]))
-  Object.assign(process.env, env)
-  const { told, lifecycle } = toldModules()
-  const runtime = createProjectRuntime({ cwd: folder, env, host: fakeHost(), lifecycle })
-  try {
-    assert.deepEqual(await runtime.onAddProject(folder, false), { ok: true, alreadyActivated: false })
-    // The person's answer on the agents' records is written with the add: kept on this machine.
-    assert.equal(await readSharing(folder), false)
-    assert.deepEqual(told, [`added ${projectId(folder)} ${folder}`], 'the modules on in it start their work there')
-
-    // A yes is to the remote that is there: this folder has none, so the records stay kept.
-    assert.deepEqual(await runtime.onAddProject(folder, true), { ok: true, alreadyActivated: true, noRemote: true })
-    assert.equal(await readSharing(folder), false)
-    // With a remote, the same answer shares them from now on.
-    execFileSync('git', ['remote', 'add', 'origin', join(cfg, 'origin.git')], { cwd: folder })
-    assert.deepEqual(await runtime.onAddProject(folder, true), { ok: true, alreadyActivated: true })
-    assert.equal(await readSharing(folder), true)
-    assert.equal(told.length, 1, 'added again, it was on the list already: the modules are not told twice')
-  } finally {
-    await runtime.dispose()
-    for (const [key, value] of Object.entries(before)) {
-      if (value === undefined) delete process.env[key]
-      else process.env[key] = value
-    }
-    await rm(folder, { recursive: true, force: true })
-    await rm(cfg, { recursive: true, force: true })
-  }
-})
-
-test('starting inside a folder not on the list adds it and leaves the repository\'s answer on the records as it is', async () => {
-  const folder = await realpath(await mkdtemp(join(tmpdir(), 'openagent-started-')))
-  const other = await realpath(await mkdtemp(join(tmpdir(), 'openagent-started-other-')))
+test('starting inside a folder asks the modules to make it a project, and answers it with the address the page writes; a folder no module takes, or one that fails, is said so', async () => {
   const cfg = await realpath(await mkdtemp(join(tmpdir(), 'openagent-started-cfg-')))
-  const env = { XDG_CONFIG_HOME: cfg, GIT_AUTHOR_NAME: 'Test', GIT_AUTHOR_EMAIL: 'test@example.com', GIT_COMMITTER_NAME: 'Test', GIT_COMMITTER_EMAIL: 'test@example.com' }
-  const before = Object.fromEntries(Object.keys(env).map(key => [key, process.env[key]]))
-  Object.assign(process.env, env)
-  const runtime = createProjectRuntime({ cwd: cfg, env, host: fakeHost() })
-  try {
-    // A clone whose person said yes before: its folder moved, so it is not on the list any more.
-    execFileSync('git', ['init', '-q'], { cwd: folder })
-    execFileSync('git', ['remote', 'add', 'origin', join(cfg, 'origin.git')], { cwd: folder })
-    await writeSharing(folder, true)
-    const started = await runtime.onStartedIn(folder)
-    assert.equal(started.ok && started.added, true)
-    assert.equal(await readSharing(folder), true, 'the yes stays: starting there is no answer')
-    // A repository never asked stays unasked: it reads as kept, and nothing is written for it.
-    const fresh = await runtime.onStartedIn(other)
-    assert.equal(fresh.ok && fresh.added, true)
-    assert.throws(() => execFileSync('git', ['config', '--local', '--get', SHARE_SETTING], { cwd: other, stdio: 'pipe' }))
-  } finally {
-    await runtime.dispose()
-    for (const [key, value] of Object.entries(before)) {
-      if (value === undefined) delete process.env[key]
-      else process.env[key] = value
-    }
-    for (const dir of [folder, other, cfg]) await rm(dir, { recursive: true, force: true })
+  const env = { ...process.env, XDG_CONFIG_HOME: cfg }
+  const folder = await project()
+  const asked: string[] = []
+  let answer: 'project' | 'none' | 'broken' = 'project'
+  const folderGiven: Hooks['folderGiven'] = async given => {
+    asked.push(given)
+    if (answer === 'broken') throw new Error('the folder could not be read')
+    if (answer === 'none') return undefined
+    const record = await listTestProject(given)
+    return { project: { id: record.id, dir: record.path, name: 'app' }, added: true }
   }
-})
-
-test('removing a project takes it off the list, tells every module, and deletes nothing in its folder; an id not on the list is refused', async () => {
-  const folder = await realpath(await mkdtemp(join(tmpdir(), 'openagent-remove-')))
-  const cfg = await realpath(await mkdtemp(join(tmpdir(), 'openagent-remove-cfg-')))
-  const env = { XDG_CONFIG_HOME: cfg, GIT_AUTHOR_NAME: 'Test', GIT_AUTHOR_EMAIL: 'test@example.com', GIT_COMMITTER_NAME: 'Test', GIT_COMMITTER_EMAIL: 'test@example.com' }
-  const before = Object.fromEntries(Object.keys(env).map(key => [key, process.env[key]]))
-  Object.assign(process.env, env)
-  // The daemon runs elsewhere: the project is not its own start folder.
-  const { told, lifecycle } = toldModules()
-  const runtime = createProjectRuntime({ cwd: cfg, env, host: fakeHost(), lifecycle })
+  const runtime = createProjectRuntime({ cwd: cfg, env, host: fakeHost(), folderGiven })
   try {
-    assert.deepEqual(await runtime.onAddProject(folder, false), { ok: true, alreadyActivated: false })
-    const [project] = await listProjects(env)
-    assert.equal(project?.path, folder)
-    await writeFile(join(folder, 'mine.txt'), 'mine\n')
-    await writeFile(join(folder, OPENAGENT_DIR, 'kept.txt'), 'kept\n')
-    const kept = execFileSync('git', ['log', '--format=%H'], { cwd: folder, encoding: 'utf8' })
-
-    assert.deepEqual(await runtime.onRemoveProject('nope-123'), { ok: false, error: 'no project with that id is on the list' })
-    assert.equal((await listProjects(env)).length, 1)
-
-    assert.deepEqual(await runtime.onRemoveProject(project!.id), { ok: true })
-    assert.deepEqual(await listProjects(env), [])
-    assert.deepEqual(told, [`added ${project!.id} ${folder}`, `removed ${project!.id} ${folder}`], 'each module stops what it started there')
-    // Nothing of the folder is deleted: the person's file, OpenAgent's directory, the commits.
-    assert.equal(await readFile(join(folder, 'mine.txt'), 'utf8'), 'mine\n')
-    assert.equal(await readFile(join(folder, OPENAGENT_DIR, 'kept.txt'), 'utf8'), 'kept\n')
-    assert.equal(execFileSync('git', ['log', '--format=%H'], { cwd: folder, encoding: 'utf8' }), kept)
-
-    // Removed twice: the second time there is no such project.
-    assert.deepEqual(await runtime.onRemoveProject(project!.id), { ok: false, error: 'no project with that id is on the list' })
+    const started = await runtime.onStartedIn(join(folder, '.', OPENAGENT_DIR, '..'))
+    assert.deepEqual(asked, [folder], 'the folder is handed over resolved')
+    assert.ok(started?.ok)
+    assert.equal(started.id, projectId(folder))
+    assert.equal(started.path, folder)
+    assert.equal(started.added, true)
+    assert.equal(typeof started.address, 'string')
+    answer = 'none'
+    assert.equal(await runtime.onStartedIn(folder), undefined, 'outside a repository: no project, the dashboard opens as it is')
+    answer = 'broken'
+    assert.deepEqual(await runtime.onStartedIn(folder), { ok: false, error: 'the folder could not be read' })
   } finally {
     await runtime.dispose()
-    for (const [key, value] of Object.entries(before)) {
-      if (value === undefined) delete process.env[key]
-      else process.env[key] = value
-    }
-    await rm(folder, { recursive: true, force: true })
-    await rm(cfg, { recursive: true, force: true })
-  }
-})
-
-test('a project with an agent at work is not removed, a card left "running" by a dead process does not count, and a project whose folder is gone is removed', async () => {
-  const folder = await realpath(await mkdtemp(join(tmpdir(), 'openagent-remove-busy-')))
-  const cfg = await realpath(await mkdtemp(join(tmpdir(), 'openagent-remove-busy-cfg-')))
-  const env = { XDG_CONFIG_HOME: cfg, GIT_AUTHOR_NAME: 'Test', GIT_AUTHOR_EMAIL: 'test@example.com', GIT_COMMITTER_NAME: 'Test', GIT_COMMITTER_EMAIL: 'test@example.com' }
-  const before = Object.fromEntries(Object.keys(env).map(key => [key, process.env[key]]))
-  Object.assign(process.env, env)
-  const runtime = createProjectRuntime({ cwd: cfg, env, host: fakeHost() })
-  try {
-    assert.deepEqual(await runtime.onAddProject(folder, false), { ok: true, alreadyActivated: false })
-    const [project] = await listProjects(env)
-    // A run's checkout with its live card: this process stands in for the agent at work.
-    const id = '2026-10-06T10-00-00-000Z'
-    const checkout = join(folder, '.branches', `agent-${id}`)
-    execFileSync('git', ['worktree', 'add', '-q', '-b', `agent-${id}`, checkout], { cwd: folder })
-    await mkdir(join(checkout, '.openagent'), { recursive: true })
-    const card = (pid: number): string => JSON.stringify({ id, status: 'running', startedAt: '2026-10-06T10:00:00.000Z', intent: 'x', caller: { pid, host: hostname() } })
-    await writeFile(join(checkout, '.openagent', `${id}.json`), card(process.pid))
-
-    assert.deepEqual(await runtime.onRemoveProject(project!.id), { ok: false, error: 'An agent is working in this project. Stop it, then remove the project.' })
-    assert.equal((await listProjects(env)).length, 1, 'still on the list')
-
-    // The process died and nothing healed the card: nothing is working there.
-    await writeFile(join(checkout, '.openagent', `${id}.json`), card(2 ** 31 - 1))
-    assert.deepEqual(await runtime.onRemoveProject(project!.id), { ok: true })
-    assert.deepEqual(await listProjects(env), [])
-
-    // A project whose folder was deleted by hand can still be taken off the list.
-    assert.deepEqual(await runtime.onAddProject(folder, false), { ok: true, alreadyActivated: true })
-    await rm(folder, { recursive: true, force: true })
-    assert.deepEqual(await runtime.onRemoveProject(project!.id), { ok: true })
-    assert.deepEqual(await listProjects(env), [])
-  } finally {
-    await runtime.dispose()
-    for (const [key, value] of Object.entries(before)) {
-      if (value === undefined) delete process.env[key]
-      else process.env[key] = value
-    }
-    await rm(folder, { recursive: true, force: true })
-    await rm(cfg, { recursive: true, force: true })
-  }
-})
-
-/** A project the dashboard added, with an agent at rest, an agent with work on its branch, records and a run's leftovers. */
-async function usedProject(runtime: ReturnType<typeof createProjectRuntime>, folder: string): Promise<void> {
-  assert.deepEqual(await runtime.onAddProject(folder, false), { ok: true, alreadyActivated: false })
-  const git = (...args: string[]): string => execFileSync('git', args, { cwd: folder, encoding: 'utf8' })
-  // An agent that changed nothing, and one whose branch holds a commit.
-  git('worktree', 'add', '-q', '-b', 'agent-idle', join(folder, '.branches', 'agent-idle'))
-  git('worktree', 'add', '-q', '-b', 'agent-worked', join(folder, '.branches', 'agent-worked'))
-  await writeFile(join(folder, '.branches', 'agent-worked', 'made.txt'), 'made\n')
-  execFileSync('git', ['add', '-A'], { cwd: join(folder, '.branches', 'agent-worked') })
-  execFileSync('git', ['commit', '-q', '-m', 'work'], { cwd: join(folder, '.branches', 'agent-worked') })
-  // The agents' records, and what a run leaves in the runner's directory.
-  assert.equal((await withFileBranch(folder, DATA_BRANCH, 'a record', async dir => writeFile(join(dir, 'card.json'), '{}\n'))).ok, true)
-  await mkdir(join(folder, '.agent-runner', 'runs'), { recursive: true })
-  await writeFile(join(folder, '.agent-runner', 'runs', 'r1.stderr'), 'a warning\n')
-  // Hidden from git, as the tools hide their own.
-  for (const rule of ['/.agent-runner', '/.branches']) await excludeFromGit(folder, rule)
-}
-
-test('removing a project with its files: OpenAgent\'s own go, each named; the person\'s files, commits, a branch with work and the remote stay', async () => {
-  const base = await realpath(await mkdtemp(join(tmpdir(), 'openagent-remove-files-')))
-  const folder = join(base, 'project')
-  const cfg = join(base, 'cfg')
-  await mkdir(folder)
-  await mkdir(cfg)
-  const env = { XDG_CONFIG_HOME: cfg, GIT_AUTHOR_NAME: 'Test', GIT_AUTHOR_EMAIL: 'test@example.com', GIT_COMMITTER_NAME: 'Test', GIT_COMMITTER_EMAIL: 'test@example.com' }
-  const before = Object.fromEntries(Object.keys(env).map(key => [key, process.env[key]]))
-  Object.assign(process.env, env)
-  const runtime = createProjectRuntime({ cwd: cfg, env, host: fakeHost() })
-  const git = (...args: string[]): string => execFileSync('git', args, { cwd: folder, encoding: 'utf8' })
-  try {
-    await usedProject(runtime, folder)
-    await writeFile(join(folder, 'mine.txt'), 'mine\n')
-    // A remote that holds the person's branch and an older copy of the records.
-    execFileSync('git', ['init', '-q', '--bare', join(base, 'origin.git')])
-    git('remote', 'add', 'origin', join(base, 'origin.git'))
-    git('push', '-q', 'origin', 'HEAD:refs/heads/main', `${DATA_BRANCH}:refs/heads/${DATA_BRANCH}`)
-    const remote = git('ls-remote', 'origin')
-    const head = git('rev-parse', 'HEAD')
-    const worked = git('rev-parse', 'agent-worked')
-    const [project] = await listProjects(env)
-
-    const outcome = await runtime.onRemoveProject(project!.id, true)
-    assert.deepEqual(outcome, {
-      ok: true,
-      cleanup: {
-        removed: ['.branches/agent-idle', '.branches/agent-worked', '.agent-runner/runs', '.agent-runner', `.branches/${DATA_BRANCH}`, `branch ${DATA_BRANCH}`, '.branches', 'setting agent-data.share', '.openagent'],
-        kept: [],
-        failed: [],
-      },
-    })
-    assert.deepEqual(await listProjects(env), [])
-    assert.deepEqual((await readdir(folder)).sort(), ['.git', 'mine.txt'], 'only the person\'s own is left in the folder')
-    assert.equal(await readFile(join(folder, 'mine.txt'), 'utf8'), 'mine\n')
-    assert.equal(git('rev-parse', 'HEAD'), head, 'the person\'s branch is where it was')
-    assert.equal(git('rev-parse', 'agent-worked'), worked, 'the branch with work on it stays')
-    assert.deepEqual(git('for-each-ref', '--format=%(refname:short)', 'refs/heads').trim().split('\n').filter(name => name === 'agent-idle' || name === DATA_BRANCH), [], 'the empty branch and the records\' branch went')
-    assert.equal(git('ls-remote', 'origin'), remote, 'nothing on the remote changed')
-    assert.equal(git('status', '--porcelain').trim(), '?? mine.txt')
-    assert.doesNotMatch(await readFile(join(folder, '.git', 'info', 'exclude'), 'utf8'), /^\/\.(agent-runner|branches)$/m, 'the rules that hid them went with them')
-    assert.equal(git('worktree', 'list', '--porcelain').match(/^worktree /gm)?.length, 1)
-  } finally {
-    await runtime.dispose()
-    for (const [key, value] of Object.entries(before)) {
-      if (value === undefined) delete process.env[key]
-      else process.env[key] = value
-    }
-    await rm(base, { recursive: true, force: true })
-  }
-})
-
-test('removing a project with its files keeps what is not OpenAgent\'s to delete: a tracked file, uncommitted work, the person\'s settings, and records another listed project uses', async () => {
-  const base = await realpath(await mkdtemp(join(tmpdir(), 'openagent-remove-kept-')))
-  const folder = join(base, 'project')
-  const second = join(base, 'second')
-  const cfg = join(base, 'cfg')
-  await mkdir(folder)
-  await mkdir(cfg)
-  const env = { XDG_CONFIG_HOME: cfg, GIT_AUTHOR_NAME: 'Test', GIT_AUTHOR_EMAIL: 'test@example.com', GIT_COMMITTER_NAME: 'Test', GIT_COMMITTER_EMAIL: 'test@example.com' }
-  const before = Object.fromEntries(Object.keys(env).map(key => [key, process.env[key]]))
-  Object.assign(process.env, env)
-  const runtime = createProjectRuntime({ cwd: cfg, env, host: fakeHost() })
-  const git = (...args: string[]): string => execFileSync('git', args, { cwd: folder, encoding: 'utf8' })
-  try {
-    await usedProject(runtime, folder)
-    // A file of the dashboard's directory that the person committed.
-    await writeFile(join(folder, '.openagent', 'notes.md'), 'notes\n')
-    git('add', '-f', '.openagent/notes.md')
-    git('commit', '-q', '-m', 'notes')
-    // Work an agent left uncommitted, and the person's own settings for the runner.
-    await writeFile(join(folder, '.branches', 'agent-idle', 'draft.txt'), 'draft\n')
-    await writeFile(join(folder, '.agent-runner', 'config.yml'), 'personal:\n  memory: off\n')
-    // A second checkout of the same repository, on the list as a project of its own.
-    git('worktree', 'add', '-q', '-b', 'second', second)
-    assert.deepEqual(await runtime.onAddProject(second, false), { ok: true, alreadyActivated: false })
-    const project = (await listProjects(env)).find(listed => listed.path === folder)
-
-    const outcome = await runtime.onRemoveProject(project!.id, true)
-    assert.equal(outcome.ok, true)
-    const cleanup = outcome.ok ? outcome.cleanup : undefined
-    assert.deepEqual(cleanup?.failed, [])
-    assert.deepEqual(cleanup?.kept, [
-      { path: '.branches/agent-idle', reason: 'agent-idle has uncommitted work; the checkout was kept' },
-      { path: `.branches/${DATA_BRANCH}`, reason: 'not made by branches' },
-      { path: '.agent-runner/config.yml', reason: 'your settings for agent-runner' },
-      { path: `branch ${DATA_BRANCH}`, reason: `another project on the list uses it: ${second}` },
-      { path: '.openagent/notes.md', reason: 'git tracks it' },
-    ])
-    assert.deepEqual(cleanup?.removed, ['.branches/agent-worked', '.agent-runner/runs', '.openagent/.gitignore'])
-    assert.equal(await readFile(join(folder, '.branches', 'agent-idle', 'draft.txt'), 'utf8'), 'draft\n')
-    assert.equal(await readFile(join(folder, '.agent-runner', 'config.yml'), 'utf8'), 'personal:\n  memory: off\n')
-    assert.equal(await readFile(join(folder, '.branches', DATA_BRANCH, 'card.json'), 'utf8'), '{}\n', 'the records the other project reads are whole')
-    assert.equal(git('status', '--porcelain').trim(), '', 'what stays is still hidden from git')
-    assert.deepEqual((await listProjects(env)).map(listed => listed.path), [second])
-  } finally {
-    await runtime.dispose()
-    for (const [key, value] of Object.entries(before)) {
-      if (value === undefined) delete process.env[key]
-      else process.env[key] = value
-    }
-    await rm(base, { recursive: true, force: true })
-  }
-})
-
-test('removing a project with its files while a run of this machine is still alive: the runner refuses, and the records and the dashboard\'s directory stay', async () => {
-  const base = await realpath(await mkdtemp(join(tmpdir(), 'openagent-remove-live-')))
-  const folder = join(base, 'project')
-  const cfg = join(base, 'cfg')
-  await mkdir(folder)
-  await mkdir(cfg)
-  const env = { XDG_CONFIG_HOME: cfg, GIT_AUTHOR_NAME: 'Test', GIT_AUTHOR_EMAIL: 'test@example.com', GIT_COMMITTER_NAME: 'Test', GIT_COMMITTER_EMAIL: 'test@example.com' }
-  const before = Object.fromEntries(Object.keys(env).map(key => [key, process.env[key]]))
-  Object.assign(process.env, env)
-  const runtime = createProjectRuntime({ cwd: cfg, env, host: fakeHost() })
-  try {
-    await usedProject(runtime, folder)
-    // A run that holds its lock and has no card yet: still booting, so the dashboard's own check sees no agent at work.
-    await writeFile(join(folder, '.agent-runner', 'runs', 'booting.lock'), `${process.pid}\n`)
-    const [project] = await listProjects(env)
-
-    const outcome = await runtime.onRemoveProject(project!.id, true)
-    const cleanup = outcome.ok ? outcome.cleanup : undefined
-    assert.deepEqual(cleanup?.failed, ['@openagt/agent-driver: a run is still working here (booting): stop it first'])
-    assert.deepEqual(cleanup?.kept.filter(kept => kept.reason === 'a clean-up before it did not finish'), [
-      { path: `branch ${DATA_BRANCH}`, reason: 'a clean-up before it did not finish' },
-      { path: '.openagent', reason: 'a clean-up before it did not finish' },
-    ])
-    assert.equal(await readFile(join(folder, '.branches', DATA_BRANCH, 'card.json'), 'utf8'), '{}\n', 'the records are whole')
-    assert.equal(await readFile(join(folder, OPENAGENT_DIR, '.gitignore'), 'utf8').then(() => true, () => false), true, "and so is the dashboard's directory")
-    assert.deepEqual((await readdir(join(folder, '.agent-runner', 'runs'))).sort(), ['booting.lock', 'r1.stderr'])
-  } finally {
-    await runtime.dispose()
-    for (const [key, value] of Object.entries(before)) {
-      if (value === undefined) delete process.env[key]
-      else process.env[key] = value
-    }
-    await rm(base, { recursive: true, force: true })
+    for (const dir of [folder, cfg]) await rm(dir, { recursive: true, force: true })
   }
 })
 
@@ -561,7 +279,7 @@ function readyNaming(title: string): ReadyNaming {
 
 test('a Start is named here as the run starts: the page asks for the name, and the host is handed it as it is asked', async () => {
   const home = await project()
-  const env = { XDG_CONFIG_HOME: join(home, 'cfg') }
+  const env = { ...process.env, XDG_CONFIG_HOME: join(home, 'cfg') }
   await mkdir(env.XDG_CONFIG_HOME, { recursive: true })
   const host = fakeHost()
   const runtime = createProjectRuntime({ cwd: home, env, naming: readyNaming('Fix flaky login test'), host })
