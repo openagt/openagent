@@ -80,7 +80,8 @@ already made, and lists it in its pull request; for anything else it proposes an
   folder, as with no project.
 - When a run in a project ends, the copies it never touched go, and its session folder
   with them once it is empty: a copy is untouched when its tree is clean and no branch
-  of it holds a commit the repo it was cloned from did not have. A copy with work stays,
+  of it holds a commit beyond the one it was made at, which the copy keeps in its own
+  git settings. A copy with work stays,
   pushed or not: a resumed run goes on in it, and its branch is where the session's work
   is read. Picked over removing a copy once its work is pushed, which a resume would make
   again without that work. A session with no project keeps its whole folder, as before.

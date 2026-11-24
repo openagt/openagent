@@ -140,7 +140,7 @@ test('a run in a project with repos: its checkout of the project, a copy of each
   const before = process.env.XDG_CONFIG_HOME
   process.env.XDG_CONFIG_HOME = home
   try {
-    // The repo has an origin, as a repo on a git host has: what its copy started with is what the origin's branches say.
+    // The repo has an origin, as a repo on a git host has: its copy's work can be pushed.
     await git(['init', '-q', '--bare', join(home, 'other-origin.git')], home)
     await git(['remote', 'add', 'origin', join(home, 'other-origin.git')], other.dir)
     const { checkout, reclaim } = steps()
@@ -168,6 +168,10 @@ test('a run in a project with repos: its checkout of the project, a copy of each
     resumed.outcome = { status: 'done' }
     await reclaim.run(resumed)
     assert.equal(await exists(join(folder, 'other')), true, 'a copy with a commit of its own stays')
+    // Pushed, its work is still its own: the copy stays, where a resumed run goes on and the work bar reads it.
+    await git(['push', '-q', 'origin', 'agent-run1'], join(folder, 'other'))
+    await reclaim.run(resumed)
+    assert.equal(await exists(join(folder, 'other')), true, 'a copy whose commit was pushed stays')
     const untouched: RunContext = fakeRun({ id: 'run2', project: p, options: { 'git-branches': { repos } } })
     await checkout.run(untouched)
     const second = join(home, 'openagent-sessions', 'run2')

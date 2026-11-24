@@ -33,6 +33,9 @@ export async function sessionRepos(folders: readonly string[], git: GitRunner = 
   return repos
 }
 
+/** The copy's own git setting that names the commit it was made at. */
+const START_KEY = 'openagent.start'
+
 /** Why a run with no project keeps where it worked, whatever its end: see {@link openSessionFolder}. */
 export const SESSION_FOLDER_STAYS = 'a session folder stays'
 
@@ -61,6 +64,8 @@ export async function openSessionFolder(home: string, id: string, repos: readonl
     const origin = await originUrl(repo.from, git)
     await git(origin ? ['remote', 'set-url', 'origin', origin] : ['remote', 'remove', 'origin'], copy)
     await git(['checkout', '--quiet', '-b', agentBranchName(id)], copy)
+    // Where the copy starts, kept in the copy itself: what it holds beyond it is the session's work, pushed or not.
+    await git(['config', START_KEY, (await git(['rev-parse', 'HEAD'], copy)).trim()], copy)
   }
   return { path, made }
 }
@@ -77,10 +82,10 @@ export function copiesLine(folder: string, id: string, made: readonly SessionRep
 /**
  * A run in a project is over: the copies it never touched go, and its session folder with them
  * once it is empty. A copy is untouched when its tree is clean and no branch of it holds a commit
- * the repo it was cloned from did not have. One with work stays, pushed or not: a resumed run goes
- * on in it, and its branch is where the session's work bar reads it. A copy that went is made again
- * by a resume ({@link openSessionFolder}). A copy of a repo with no origin lost its remote as it
- * was made, so nothing says what it started with: it stays. Answers the names that went.
+ * beyond the one it was made at, which the copy itself names. One with work stays, pushed or not:
+ * a resumed run goes on in it, and its branch is where the session's work bar reads it. A copy that
+ * went is made again by a resume ({@link openSessionFolder}). A copy that does not say where it
+ * started stays. Answers the names that went.
  */
 export async function dropUntouchedCopies(home: string, id: string, repos: readonly SessionRepo[], git: GitRunner = nodeGitRunner()): Promise<string[]> {
   const path = sessionFolder(home, id)
@@ -88,11 +93,10 @@ export async function dropUntouchedCopies(home: string, id: string, repos: reado
   for (const repo of repos) {
     const copy = join(path, repo.name)
     if (!(await stat(join(copy, '.git')).then(() => true, () => false))) continue
-    const untouched = await Promise.all([
-      git(['status', '--porcelain'], copy),
-      git(['for-each-ref', '--count=1', 'refs/remotes'], copy),
-      git(['rev-list', '--max-count=1', '--branches', '--not', '--remotes'], copy),
-    ]).then(([dirty, remotes, own]) => dirty.trim() === '' && remotes.trim() !== '' && own.trim() === '', () => false)
+    const start = (await git(['config', '--get', START_KEY], copy).catch(() => '')).trim()
+    const untouched =
+      start !== '' &&
+      (await Promise.all([git(['status', '--porcelain'], copy), git(['rev-list', '--max-count=1', '--branches', '--not', start], copy)]).then(([dirty, own]) => dirty.trim() === '' && own.trim() === '', () => false))
     if (!untouched) continue
     await rm(copy, { recursive: true, force: true })
     gone.push(repo.name)

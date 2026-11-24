@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 import { lstat, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { FakeDriver } from '../fake.js'
 import { findRun, readDiary } from '../record-store.js'
 import type { Driver } from '@openagt/hooks'
@@ -188,7 +188,16 @@ test('a run in a project with repos works in its checkout of the project, has a 
   try {
     const repos = await sessionRepos([other])
     const cwds: string[] = []
-    const driver = (): Driver => ({ id: 'fake', start: async opts => (cwds.push(opts.cwd), new FakeDriver({ turns: [{ text: 'Done.' }], sessionId: 's-1' }).start(opts)) })
+    // The agent leaves a file in its copy on its first turn: a copy it never touched would go with the run.
+    const driver = (): Driver => ({
+      id: 'fake',
+      start: async opts => {
+        cwds.push(opts.cwd)
+        const work = join(sessionFolder(home, basename(opts.cwd).replace(/^agent-/, '')), 'repo', 'work.txt')
+        if (cwds.length === 1) await writeFile(work, 'the agent was here\n')
+        return new FakeDriver({ turns: [{ text: 'Done.' }], sessionId: 's-1' }).start(opts)
+      },
+    })
     const first = await runCommand(project, { prompt: 'Compare them', driver: driver(), host: 'this-box', pid: 4242, now: () => NOW, modules: testModules(), repos })
     assert.equal(first.status, 'done')
     assert.equal(cwds[0], worktreePath(project, first.id), 'the agent works in its checkout of the project')
@@ -203,7 +212,6 @@ test('a run in a project with repos works in its checkout of the project, has a 
     assert.ok(told.includes(`${copy} (copied from ${other})`), 'the line names the copy and where it came from')
     assert.equal((await readDiary(project, first.id))?.find(line => line.kind === 'start')?.['attached'], told, 'the agent is handed where the copies are, with its prompt')
 
-    await writeFile(join(copy, 'work.txt'), 'the agent was here\n')
     const resumed = await resumeRun(project, { id: first.id, text: 'Go on', driver: driver(), host: 'this-box', pid: 4243, modules: testModules() })
     assert.equal(resumed.status, 'done')
     assert.equal(await readFile(join(copy, 'work.txt'), 'utf8'), 'the agent was here\n', 'a resumed run keeps its copy as it is')
