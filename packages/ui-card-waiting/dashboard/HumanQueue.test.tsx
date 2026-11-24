@@ -35,11 +35,12 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe('the Human Queue', () => {
-  test('lists what waits in the projects it is given, in the order the shell read it, each project named when there are several', () => {
-    shell.items = [question('shop', 'r1'), request('blog', 7), question('other', 'r9')]
+  test('lists what the shell read waits, in its order, each project named when there are several; a session with no project is listed too', () => {
+    // A session with no project is of none of the projects the card is given: the sidebar lists its question, and so does the card.
+    shell.items = [question('shop', 'r1'), request('blog', 7), { ...question('session', 'r9', 'Tea or coffee?'), projectName: '' }]
     const host = fakeHost('@openagt/ui-card-waiting')
     renderWithHost(<HumanQueue projects={[project('shop'), project('blog')]} />, host)
-    expect(screen.getAllByRole('listitem').map(row => row.textContent)).toEqual(['Needs answerRun r1Which way?shop', 'Needs mergeOpened by hand#7blog'])
+    expect(screen.getAllByRole('listitem').map(row => row.textContent)).toEqual(['Needs answerRun r1Which way?shop', 'Needs mergeOpened by hand#7blog', 'Needs answerRun r9Tea or coffee?'])
     // A row about a run opens it here; a request no run opened, on its git host.
     const [asked, opened] = screen.getAllByRole('link') as HTMLAnchorElement[]
     expect(asked!.getAttribute('href')).toBe('/shop/r1')
