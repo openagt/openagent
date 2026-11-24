@@ -26,8 +26,7 @@ import { BoxOfRow, RowAboveBox, rowClass, rowLeftClass } from './ui/row-item.js'
 import { Skeleton } from './ui/skeleton.js'
 import { Slot } from './ui/slot.js'
 import { ImageTiles } from './ImageTiles.js'
-import { imageFiles, imageNames, imagesHold, useBoxImages } from '../lib/box-images.js'
-import { IMAGES_PER_MESSAGE } from '../../src/images.js'
+import { imageFiles, imageNames, imagesHold, useBoxImages, useImageStore } from '../lib/box-images.js'
 
 /**
  * The message box, as Claude Code's (DECISIONS.md, his pick): the raised surface with the hairline,
@@ -168,8 +167,9 @@ export const Composer = forwardRef<ComposerHandle, {
   const selectedHostId = useSelectedHost()
   // OpenAgent is not answering: nothing typed can be sent, and the box keeps it.
   const down = useContext(DaemonDown)
-  // The images dropped or pasted into the box, kept on this computer as they come, and with its draft.
-  const images = useBoxImages(draftKey)
+  // The images dropped or pasted into the box, kept as they come by the module that keeps them, and with its draft.
+  const imageStore = useImageStore()
+  const images = useBoxImages(draftKey, imageStore)
   // Words about what was dropped or pasted, above the box until the next drop or send.
   const [imageNote, setImageNote] = useState<string | null>(null)
   // What holds a send, whatever the box holds: the one list the arrow and the keyboard both read.
@@ -251,11 +251,12 @@ export const Composer = forwardRef<ComposerHandle, {
   }
 
   // An image dropped or pasted anywhere on the box goes with the message, above its text. A paste of
-  // words stays the editor's, as does a drop of anything else; the launcher's box takes none while it starts.
-  const takesImages = !(busy && !inAgent)
+  // words stays the editor's, as does a drop of anything else; the launcher's box takes none while it
+  // starts, and no box takes one where no module keeps images.
+  const takesImages = imageStore !== undefined && !(busy && !inAgent)
   const addImages = (files: File[]) => {
     const left = images.add(files)
-    setImageNote(left > 0 ? `${IMAGES_PER_MESSAGE} images go with one message at most: ${left === 1 ? 'one was' : `${left} were`} left out.` : null)
+    setImageNote(left > 0 ? `${imageStore?.option.perMessage ?? 0} images go with one message at most: ${left === 1 ? 'one was' : `${left} were`} left out.` : null)
     editorRef.current?.focus()
   }
   const [dragging, setDragging] = useState(false)

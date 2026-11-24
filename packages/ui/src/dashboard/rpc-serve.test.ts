@@ -135,29 +135,18 @@ test('a call that is not sent as JSON is refused before its handler runs: what a
   }
 })
 
-test('an image the page sends is kept, then served by its name alone, for good; any other name is a 404, and a page of another origin cannot have it', async () => {
-  const home = await mkdtemp(join(tmpdir(), 'rpc-images-'))
-  const was = process.env['XDG_CONFIG_HOME']
-  process.env['XDG_CONFIG_HOME'] = home
+test('a call may carry an image whole, as base64, and no more: a body past the bound is refused, not buffered', async () => {
   const server = await mounted()
+  const files = `${encodeURIComponent('@openagt/ui-pane-files')}/tree`
   try {
-    const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
-    // Past the 4 MB every other call is held to: an image goes whole, as base64.
-    const big = Buffer.concat([Buffer.from(png, 'base64'), Buffer.alloc(3 * 1024 * 1024)]).toString('base64')
-    assert.equal(JSON.parse((await call(server.url, 'sendImage', ['image/png', big])).body).ret.ok, true)
-    const { ret } = JSON.parse((await call(server.url, 'sendImage', ['image/png', png])).body) as { ret: { ok: true; name: string } }
-    const served = await fetch(`${server.url}/_rpc/images/${ret.name}`)
-    assert.equal(served.status, 200)
-    assert.equal(served.headers.get('content-type'), 'image/png')
-    assert.match(served.headers.get('cache-control') ?? '', /immutable/)
-    assert.deepEqual(Buffer.from(await served.arrayBuffer()), Buffer.from(png, 'base64'))
-    for (const name of [`${'f'.repeat(64)}.png`, '..%2F..%2Fetc%2Fpasswd', 'nope']) assert.equal((await fetch(`${server.url}/_rpc/images/${name}`)).status, 404, name)
-    assert.equal((await fetch(`${server.url}/_rpc/images/${ret.name}`, { headers: { origin: 'https://evil.example' } })).status, 403)
+    // An image a module keeps goes whole, as base64: a third more than its 3.75 MB.
+    const image = 'A'.repeat(5_300_000)
+    assert.deepEqual(JSON.parse((await call(server.url, files, ['nowhere-1', { data: image }])).body), { ret: { ok: false, error: 'unknown project' } })
+    const past = await call(server.url, files, ['nowhere-1', { data: 'A'.repeat(6_500_000) }])
+    assert.equal(past.status, 500)
+    assert.match(JSON.parse(past.body).error, /request body too large/)
   } finally {
     await server.close()
-    if (was === undefined) delete process.env['XDG_CONFIG_HOME']
-    else process.env['XDG_CONFIG_HOME'] = was
-    await rm(home, { recursive: true, force: true })
   }
 })
 

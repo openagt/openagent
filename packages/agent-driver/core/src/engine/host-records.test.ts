@@ -13,8 +13,8 @@ import { localHost } from './host.js'
 import { liveDir } from './live-card.js'
 import { git, removeRepo, testRepo } from './test-repo.js'
 
-// This computer's host deleting a run, its checkout and its record, and writing on a run's record
-// what a module found out once the run's process was gone. Against real git: "was the work
+// This computer's host deleting a run, its checkout and its record, writing on a run's record what
+// a module found out once the run's process was gone, and refusing images it does not keep. Against real git: "was the work
 // actually gone, and the branch kept" is not a question a fake answers.
 
 const here = localHost({ host: 'this-box' })
@@ -101,6 +101,23 @@ test("a run's record takes the pull request a press opened, and the work a press
     assert.equal(landed?.caller?.['baseCommit'], 'def456')
     await assert.rejects(() => here.record!({ id: 'run-pr', project: projectAt(repo) }, { 'git-branches': { branch: 'agent-x' } }), /Nothing of this is kept/)
     await assert.rejects(() => here.record!({ id: 'run-none', project: projectAt(repo) }, { github: { pr: { number: 8, url: 'https://github.com/o/r/pull/8' } } }), /not updated/)
+  } finally {
+    await removeRepo(repo)
+  }
+})
+
+test('a Start, a message and a resume naming an image this computer does not keep are refused before anything is spawned or said', async () => {
+  const repo = await testRepo()
+  const spawned: string[] = []
+  const strict = localHost({ host: 'this-box', spawnRun: async () => void spawned.push('run'), spawnResume: async () => void spawned.push('resume'), ready: async () => ({ problems: [], warnings: [] }), loginFor: async () => undefined, naming: { names: () => false, name: async () => undefined, prepare: async () => {} } })
+  const missing = `${'f'.repeat(64)}.png`
+  try {
+    const project = projectAt(repo)
+    await assert.rejects(() => strict.start({ project, prompt: 'look', images: ['/etc/passwd'], options: {} }), /Images are named by the names the dashboard kept them under/)
+    await assert.rejects(() => strict.start({ project, prompt: 'look', images: [missing], options: {} }), /An image is no longer on this computer/)
+    await assert.rejects(() => strict.steer({ id: 'run-1', project }, { kind: 'message', text: 'and this', images: [missing] }), /An image is no longer on this computer/)
+    await assert.rejects(() => strict.resume({ id: 'run-1', project }, { text: 'and this', images: [missing] }), /An image is no longer on this computer/)
+    assert.deepEqual(spawned, [])
   } finally {
     await removeRepo(repo)
   }

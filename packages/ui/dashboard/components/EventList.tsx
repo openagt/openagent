@@ -22,7 +22,7 @@ import { useSteadyText, useStillWriting } from '../lib/use-steady-text.js'
 import { BackgroundLine, Caret, LiveLine, ToolCalls, type CallOutput, type ToolStep } from './ToolCalls.js'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip.js'
 import { ImageTiles } from './ImageTiles.js'
-import { imageAddress } from '../../src/images.js'
+import { useImageStore } from '../lib/box-images.js'
 import {
   MessageScroller,
   MessageScrollerButton,
@@ -395,16 +395,19 @@ function TurnFiles({ files, onOpen, footer }: { files: readonly ChangedFile[]; o
 // on hover the copy and Cancel and edit, which takes it back into the box.
 // `attached`: what the run handed the agent with this message, folded under the box.
 // `images`: the images it went with, by their names, as tiles in a row over the box, at its right;
-// one this computer no longer keeps (a record from another computer) says so on its tile.
+// shown from the module that keeps them; one this computer no longer keeps (a record from another
+// computer) says so on its tile.
 // `fresh`: a message just sent, which slides in where it lands, as Claude Code on the web's does.
 function Prompt({ text, at, waiting, attached, images, fresh = false }: { text: string; at?: string | undefined; waiting?: Waiting | undefined; attached?: string | undefined; images?: string[] | undefined; fresh?: boolean }) {
   const [open, setOpen] = useState(false)
   const tall = isTall(text)
   // OpenAgent is not answering: a waiting message can be neither sent now nor taken back.
   const down = useContext(DaemonDown)
+  // Where the images are shown from: the module that keeps them.
+  const store = useImageStore()
   return (
     <div className={`group/prompt flex min-w-0 flex-1 flex-col items-end font-sans text-foreground ${fresh ? 'bubble-in' : ''}`}>
-      {images !== undefined && images.length > 0 && <ImageTiles tiles={images.map((name, at) => ({ key: `${at}:${name}`, src: imageAddress(name) }))} className="mb-2 max-w-[80%] justify-end" />}
+      {store && images !== undefined && images.length > 0 && <ImageTiles tiles={images.map((name, at) => ({ key: `${at}:${name}`, src: store.option.src(name) }))} className="mb-2 max-w-[80%] justify-end" />}
       <div role="group" aria-label={waiting ? 'Your message, waiting' : 'Your message'} className="max-w-[80%] min-w-0 rounded-lg rounded-br-sm bg-card px-4 py-2 shadow-sm ring-1 ring-hairline">
         <div className={tall && !open ? PROMPT_CUT : ''}>
           <Markdown text={text} />

@@ -84,10 +84,9 @@ test('a Start picked to run on another host goes to that host, one a module on i
     assert.deepEqual(await runtime.onStart('go', { host: 'claude-web' }), { ok: false, error: 'No host claude-web is on in this project. Pick another place to run.' })
     assert.deepEqual(await runtime.onStart('go', { host: '../actions' }), { ok: false, error: 'A host is named by its id.' })
     assert.deepEqual(await runtime.onStart('go', { host: 'actions' }, SESSIONS_ID), { ok: false, error: 'A session with no project runs on this computer.' })
-    // The images a Start goes with stay on this computer, and so does its run.
+    // The images a Start goes with stay on this computer, and so does its run; which names it takes is its host's.
     const screenshot = `${'a'.repeat(64)}.png`
     assert.deepEqual(await runtime.onStart('what does it say?', { host: 'actions', images: [screenshot] }), { ok: false, error: 'Images stay on this computer: a session with images runs here, not on GitHub Actions.' })
-    assert.deepEqual(await runtime.onStart('what does it say?', { images: ['../../secret.png'] }), { ok: false, error: 'Images are named by the names the dashboard kept them under.' })
     assert.equal(actions.requests.length, 1)
     assert.equal(host.requests.length, 1)
   } finally {

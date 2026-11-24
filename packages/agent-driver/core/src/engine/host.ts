@@ -17,6 +17,7 @@ import { nameHandOver } from './title.js'
 import { ReadyNaming } from './ready-naming.js'
 import { nameStarted, withStartedNames } from './started-names.js'
 import { codingAgents } from '../agents.js'
+import { refusedImages } from '../images.js'
 
 /**
  * This computer's host (`run.host`, #2394): a run started here is a process of its own, detached,
@@ -106,6 +107,7 @@ export function localHost(deps: LocalHostDeps = {}): RunHost {
 
   const resume = async (run: RunRef, input: RunInput): Promise<void> => {
     if (input.text === undefined && input.answer === undefined) throw new Error('A run goes on with a message or an answer.')
+    await refuseImages(input.images)
     await detachResume(
       placeOf(run.project),
       {
@@ -137,6 +139,7 @@ export function localHost(deps: LocalHostDeps = {}): RunHost {
 
     async start({ project, prompt, images, options: given, title }) {
       refuse(project, given)
+      await refuseImages(images)
       // A run whose options name no profile, or no coding agent, is on the ones picked for every next run on this computer.
       const options = await withPicks(given, settings)
       const dir = placeOf(project)
@@ -159,6 +162,7 @@ export function localHost(deps: LocalHostDeps = {}): RunHost {
     resume,
 
     async steer(run, line) {
+      if (line.kind === 'message') await refuseImages(line.images)
       const dir = placeOf(run.project)
       const lines: InboxLine[] = [line]
       if (await working(dir, run.id)) {
@@ -313,6 +317,12 @@ function processOf(card: RunCard | undefined): { pid?: number; host?: string } {
   const pid = card?.caller?.['pid']
   const host = card?.caller?.['host']
   return { ...(typeof pid === 'number' ? { pid } : {}), ...(typeof host === 'string' ? { host } : {}) }
+}
+
+/** Refuse images a run cannot be handed, in words for the person ({@link refusedImages}): before anything is spent, or said to the run. */
+async function refuseImages(images: unknown): Promise<void> {
+  const refused = await refusedImages(images)
+  if (refused !== undefined) throw new Error(refused)
 }
 
 /**

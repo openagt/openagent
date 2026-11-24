@@ -11,6 +11,7 @@ import { cleanup } from './cleanup.js'
 import { runsAlive } from './run-lock.js'
 import { localHost } from './host.js'
 import { sweepSessions } from './sessions-sweep.js'
+import { imagesRoute } from '../images-route.js'
 import { agentAttention } from '../attention.js'
 import { endInstalls } from '../setup.js'
 import { handedDownSettings } from './profile.js'
@@ -27,8 +28,10 @@ import { detailOf, effortOf, modelOf, sessionTurns } from './session.js'
  * first; the record saved from what the session kept, with where the work ended up, as the run's
  * facts say; and the record said again without the branch the reclaim deleted. And what the coding
  * agents need of the person (`attention.ts`), with the installs a press started ended as the app
- * stops; and the sessions with no project swept while the app runs (`sessions-sweep.ts`). A project is not taken off the list while a run's process is alive there, and one taken
- * off with its files loses what this tool left in it (`cleanup.ts`).
+ * stops; the sessions with no project swept while the app runs (`sessions-sweep.ts`); and the
+ * images a person's messages go with, served to the page (`images-route.ts`). A project is not
+ * taken off the list while a run's process is alive there, and one taken off with its files loses
+ * what this tool left in it (`cleanup.ts`).
  */
 const agentDriver = defineModule({
   name: 'agent-driver',
@@ -40,6 +43,7 @@ const agentDriver = defineModule({
       refuseRemoval: async project => ((await runsAlive(project.dir)).length > 0 ? 'An agent is working in this project. Stop it, then remove the project.' : undefined),
       projectRemoved: (project, app, { files }) => (files ? removeOwnFiles(project, app) : undefined),
     },
+    'app.route': [imagesRoute],
     'run.host': [localHost()],
     'run.step': [
       { order: RunOrder.ACCOUNTS + 10, name: "work in the run's environment", run: workInEnvironment },

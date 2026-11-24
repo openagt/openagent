@@ -4,7 +4,7 @@ import { afterEach, describe, expect, test, vi } from 'vitest'
 import { act, cleanup, fireEvent, render as rendered, screen, waitFor, within } from '@testing-library/react'
 import { continuationPrompt } from '@openagt/hooks'
 import { ModulesContext, mountedOf } from '../lib/use-modules.js'
-import { MARKDOWN_RENDER, questionCard } from '../test-utils.js'
+import { MARKDOWN_RENDER, imageStore, questionCard } from '../test-utils.js'
 
 /** What a reader gets of an element: its words less the ones fading out of it (CrossFade). */
 const shownText = (el: Element): string | null => {
@@ -578,7 +578,7 @@ describe('EventList session line', () => {
     expect(container.querySelector('pre')).toBeNull()
   })
 
-  test('a message\'s images stand as tiles over its box, from the dashboard\'s copy, for a message read mid-turn and one still waiting too; one this computer no longer keeps says so', () => {
+  test('a message\'s images stand as tiles over its box, from the copy of the module that keeps them, for a message read mid-turn and one still waiting too; one this computer no longer keeps says so', () => {
     const shot = `${'a'.repeat(64)}.png`
     const other = `${'b'.repeat(64)}.jpg`
     const events: RunEvent[] = [
@@ -586,9 +586,10 @@ describe('EventList session line', () => {
       said,
       { kind: 'driver', event: { type: 'steered', text: 'And this one?', id: 'm1', images: [other] } },
     ]
+    card = { ...card, modules: { ...card.modules, options: { ...card.modules.options, 'composer.images': [imageStore()] } } }
     render(<EventList events={events} working queued={[{ id: 'm2', text: 'And a third', later: false, images: [shot] }]} setup={{ workspace: '/w', branch: 'agent-1' }} stick={false} />)
     const rows = screen.getAllByRole('list', { name: 'Images' })
-    expect(rows.map(row => [...row.querySelectorAll('img')].map(img => img.getAttribute('src')))).toEqual([[`/_rpc/images/${shot}`], [`/_rpc/images/${other}`], [`/_rpc/images/${shot}`]])
+    expect(rows.map(row => [...row.querySelectorAll('img')].map(img => img.getAttribute('src')))).toEqual([[`/_images/${shot}`], [`/_images/${other}`], [`/_images/${shot}`]])
     // In the chat a tile has no X: what was sent stays sent.
     expect(screen.queryByRole('button', { name: /^Remove image/ })).toBeNull()
     fireEvent.error(rows[1]!.querySelector('img')!)

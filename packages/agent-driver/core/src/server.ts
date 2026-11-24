@@ -1,6 +1,7 @@
 import { act, read, type RpcComputerHost } from '@openagt/hooks/rpc'
 import { NAME_RUNS, PICKED_AGENT, PICKED_PROFILE, PROFILES, profileOf, type AgentPick } from '@openagt/hooks'
 import { codingAgents } from './agents.js'
+import { keepImage as keepImageHere } from './images.js'
 import { addingAll, listing } from './accounts/reads.js'
 import { readUsage } from './accounts/usage.js'
 import { loginWiring } from './accounts/wiring.js'
@@ -13,7 +14,7 @@ import { quotaHere, type QuotaView } from './usage/quota.js'
 // this computer's: the coding agents with their models, the picks made for every next run, the
 // accounts each agent's runs take (what the command's reads answer: the accounts card changes them
 // through the command, as an agent does), how full the account is against its boundary, what each
-// agent needs to run here, and its newer versions.
+// agent needs to run here, and its newer versions; and the images a message box keeps for its message.
 
 export type { AgentModels, AgentState, AgentUpdate, AgentUpdateResult, QuotaView }
 
@@ -96,3 +97,14 @@ export const updates = read((_host: RpcComputerHost, _input: object): Promise<Ag
 
 /** Update a coding agent on this computer, by its own `update` command: `update`. */
 export const update = act((_host: RpcComputerHost, input: { agent: string }): Promise<AgentUpdateResult> => updatesHere().update(String(input.agent)))
+
+/**
+ * Keep an image dropped or pasted into a message box on this computer (`images.ts`), its bytes sent
+ * as base64: the name a message names it by, or why it was not kept: `keepImage`.
+ */
+export const keepImage = act(async (_host: RpcComputerHost, input: { type: string; data: string }): Promise<{ ok: true; name: string } | { ok: false; error: string }> => {
+  if (typeof input?.type !== 'string' || typeof input.data !== 'string' || !BASE64.test(input.data)) return { ok: false, error: 'An image is sent as its kind and its bytes in base64.' }
+  return keepImageHere(input.type, Buffer.from(input.data, 'base64'))
+})
+
+const BASE64 = /^[A-Za-z0-9+/]*={0,2}$/

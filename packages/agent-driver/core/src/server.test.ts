@@ -20,6 +20,7 @@ test('the server part reads with reads and changes with acts; the accounts chang
     install: 'act',
     updates: 'read',
     update: 'act',
+    keepImage: 'act',
   })
 })
 

@@ -35,7 +35,7 @@ export interface StartAgentOptions {
    * take. What is picked here goes over the picks below.
    */
   options?: RunOptions
-  /** The images the prompt goes with, by the names the dashboard kept them under (`sendImage`): the agent looks at them with it. Only a run on this computer takes them. */
+  /** The images the prompt goes with, by the names they were kept under (`composer.images`): the agent looks at them with it. Only a run on this computer takes them. */
   images?: string[]
   /** The person's saved pick of how far the run takes its work when the agent finishes. Absent, none is saved: the daemon starts the run at `commit`. A saved pick the project is not offered is held to the furthest the project goes with no pull request. */
   publish?: PublishPick

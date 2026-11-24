@@ -483,6 +483,27 @@ export interface OptionPlaces {
     repos(host: UiHost): Promise<{ repos: UiWhereRepo[]; loading?: boolean; unreached?: string }>
   }
   /**
+   * Where the images a message goes with are kept: what the message box's attach button, a drop and
+   * a paste take, the box's tiles and the chat's show, and a run is handed by the names they are kept
+   * under (`RunInput.images`). The first module's; with none, a box takes no image.
+   */
+  'composer.images': {
+    /** The kinds it keeps, by media type. A box draws an image past the bounds below smaller, as a PNG or else a JPEG: keep both. */
+    types: readonly string[]
+    /** Those kinds in words, for a file of another kind: "PNG, JPEG, GIF or WebP". */
+    kinds: string
+    /** The most bytes an image is kept at. */
+    maxBytes: number
+    /** The longest edge an image is kept at, in pixels. */
+    maxEdge: number
+    /** The most images one message goes with. */
+    perMessage: number
+    /** Keep an image of the media type `type`, its bytes in base64: the name a message names it by, or why it was not kept, in words. */
+    keep(host: UiHost, image: { type: string; data: string }): Promise<{ ok: true; name: string } | { ok: false; error: string }>
+    /** Where the page loads the image kept under `name`. */
+    src(name: string): string
+  }
+  /**
    * The commands the message box offers in its `/` menu and its Commands menu: a module's, in the
    * project the box is in, none for a session with no project. A pick puts `/<name> ` in the box.
    */
