@@ -15,9 +15,9 @@ describe("the session's menu: Remove worktree", () => {
   }
   const on = { projectId: 'p1', agentId: 'r1' }
 
-  test('offered only for a run that kept its checkout, its size on disk its hover', async () => {
+  test('offered only for a run that kept its checkout, its size on disk said beside it and in its hover', async () => {
     expect(await action('chat.menu', 'remove-worktree').offer!(removing({ kept: false }).host, on)).toBeUndefined()
-    expect(await action('chat.menu', 'remove-worktree').offer!(removing({ kept: true, sizeBytes: 1_258_291 }).host, on)).toEqual({ title: 'Its checkout takes 1.2 MB on disk' })
+    expect(await action('chat.menu', 'remove-worktree').offer!(removing({ kept: true, sizeBytes: 1_258_291 }).host, on)).toEqual({ note: '1.2 MB', title: 'Its checkout takes 1.2 MB on disk' })
     expect(await action('chat.menu', 'remove-worktree').offer!(removing({ kept: true }).host, on)).toEqual({})
   })
 

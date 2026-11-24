@@ -1,5 +1,6 @@
 // git-branches' UI part: the package's `./dashboard` export. What an ended session's branch holds,
-// in the bar above its message box (`chat.summary`), and its next steps there (`chat.handoff`):
+// in the bar above its message box (`chat.summary`), "Committing…" there while the agent does what
+// its Commit press asked, and its next steps there (`chat.handoff`):
 // Commit, Publish branch, Merge on this machine, a copy's work brought back to its folder, and
 // uncommitted work discarded; a row per copy of a repo the session holds work in (`chat.work`);
 // Remove worktree in the session's menu (`chat.menu`); the branch a run starts from, in the row
@@ -10,6 +11,7 @@
 import { defineUiModule, formatBytes, type UiActionAt } from '@openagt/ui/module'
 import { FolderX } from 'lucide-react'
 import { server } from './calls.js'
+import { Committing } from './Committing.js'
 import { CopyRows } from './CopyRows.js'
 import { handoffActions } from './handoff.js'
 import { RunSummary } from './HandoffSummary.js'
@@ -33,7 +35,7 @@ const removeWorktree: UiActionAt<'chat.menu'> = {
     const kept = await server(host).checkout(on.projectId, { agentId: on.agentId })
     if (!kept.kept) return undefined
     const size = formatBytes(kept.sizeBytes, '')
-    return size ? { title: `Its checkout takes ${size} on disk` } : {}
+    return size ? { note: size, title: `Its checkout takes ${size} on disk` } : {}
   },
   run: (host, on) => server(host).removeCheckout(on.projectId, { agentId: on.agentId }),
 }
@@ -51,6 +53,7 @@ export default defineUiModule({
   name: 'git-branches',
   hooks: {
     'ui.view': [
+      { place: 'chat.summary', id: 'committing', View: Committing },
       { place: 'chat.summary', id: 'branch', ended: true, View: RunSummary },
       { place: 'chat.work', id: 'copies', View: CopyRows },
       { place: 'composer.control', id: 'start-from', at: 'start', order: 10, View: StartControl },

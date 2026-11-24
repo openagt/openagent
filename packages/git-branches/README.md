@@ -13,11 +13,11 @@ What it brings:
   size of the change, its commits and files in the hover. A row per copy of a repo the session
   holds work in follows the project's (`chat.work`).
 - **The next steps there** (`chat.handoff`), each offered from what the branch holds: Commit, which
-  asks the agent to commit what it left uncommitted; Discard changes, asked first; Publish branch, a
+  asks the agent to commit what it left uncommitted, the bar saying "Committing…" while it does; Discard changes, asked first; Publish branch, a
   push as one of OpenAgent's accounts; Merge, for a project with no remote, on this machine; and a
   copy's work brought back to the folder it was copied from. A pull request is the git host module's.
-- **Remove worktree** in the session's menu (`chat.menu`), with the checkout's size on disk in its
-  hover.
+- **Remove worktree** in the session's menu (`chat.menu`), with the checkout's size on disk beside
+  it.
 - **The branch a run starts from**, in the row above the message box (`composer.control` at
   `start`): in the launcher a menu of the project's main branch, the folder's own branch and what
   origin has now, its pick kept for every next run of the project on this computer (the

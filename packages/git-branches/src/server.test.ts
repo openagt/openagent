@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import { START_FROM } from '@openagt/hooks'
 import { rpcHost } from '@openagt/hooks/testing'
 import { agentBranchName } from './branch-names.js'
-import { checkout, discard, merge, pickStart, removeCheckout, startBranches, startedFrom, startPlaces } from './server.js'
+import { checkout, commit, committing, discard, merge, pickStart, removeCheckout, startBranches, startedFrom, startPlaces } from './server.js'
 import { addWorktree } from './worktree.js'
 
 // What the launcher's start menu reads and saves, against real repositories.
@@ -180,4 +180,20 @@ test("a session says the branch it started from as its record vouches for it, an
     await rm(dir, { recursive: true, force: true })
     await rm(origin, { recursive: true, force: true })
   }
+})
+
+test('Commit asks the run, and the bar says it is committing while the run works on that ask; once the run is seen ended the ask is forgotten', async () => {
+  let status = 'done'
+  const said: string[] = []
+  const host = rpcHost({ root: tmpdir(), run: async () => ({ record: { status }, changedNothing: false }), say: async (_id, line) => void said.push(line.kind === 'message' ? line.text : '') })
+  assert.equal(await committing(host, { agentId: 'run1' }), false, 'nothing asked: nothing said')
+  assert.deepEqual(await commit(host, { agentId: 'run1' }), { ok: true })
+  assert.deepEqual(said, ['Commit your work.'])
+  status = 'running'
+  assert.equal(await committing(host, { agentId: 'run1' }), true)
+  assert.equal(await committing(host, { agentId: 'run2' }), false, 'another run was not asked')
+  status = 'done'
+  assert.equal(await committing(host, { agentId: 'run1' }), false)
+  status = 'running'
+  assert.equal(await committing(host, { agentId: 'run1' }), false, 'a later turn of the run is no commit asked')
 })

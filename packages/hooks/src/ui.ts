@@ -387,7 +387,7 @@ export interface UiOffer {
   label?: string
   /** What its hover says. */
   title?: string
-  /** A few words said beside it, in the bar under a run: "not in the PR yet". */
+  /** A few words said beside it: in the bar under a run, "not in the PR yet"; at a menu item's right, "1.2 GB". */
   note?: string
   /** Only the note is said: there is nothing to press now ("Merged into main."). */
   noteOnly?: true
