@@ -378,9 +378,16 @@ already made, and lists it in its pull request; for anything else it proposes an
   Settings could reach it.
 - The card adds an account from "Add" at its title, a menu of the coding agents, and the sign-in
   is a dialog: whose account it is, then the sign-in followed there until the account is in the
-  list, which closes it; closing it stops the sign-in. A card with no account at all also says so
-  in its body, with a press for each agent. Picked over the sign-in unfolding inside the card
-  under a row of agent names that read as a label.
+  list, which closes it; closing it stops the sign-in. Picked over the sign-in unfolding inside
+  the card under a row of agent names that read as a label.
+- An agent with no account keeps its place on the card, as a row with its name, "No account"
+  and an "Add account" press; one whose program is missing says "Not installed", with the press
+  that installs it. Adding an account is the one way to give an agent a login from a page: the
+  command that logs the computer's own CLI in is a line of the dialog, for a person who wants
+  their terminal's agent logged in too. Picked (Suleiman, 2026-11-24, from his own picture of
+  the page) over a sentence with a press for each agent, over only "Add" at the title, where
+  nothing says the other agent exists, and over a "Log this computer in" press beside the
+  card: two ways to add each agent on one page.
 - The dialog that adds an account is also a press of its own, one per agent (`agent.connect`),
   which the Overview's "Connect a coding agent" step draws: one sign-in to learn, wherever an
   account is asked for. Its field opens with the person's own first name, unless an account of

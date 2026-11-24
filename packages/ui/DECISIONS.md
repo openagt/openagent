@@ -475,7 +475,16 @@ already made, and lists it in its pull request; for anything else it proposes an
   account, the one runs use too, after a yes that says runs then have none until one is added.
   Picked over a ⋯ seen only on a hover and the account in use kept until another was picked,
   which left a person with one account no way to take it off.
-  A card is green when there is nothing to do, amber for a step, grey for a tool not here.
+- The Permissions page is two plain cards, each with "Add" at its title and its accounts as
+  rows: no part of its own for a coding agent that cannot run, no sentence over the git
+  hosts' accounts, and with one host no line that names it and what uses it (with more, each
+  host's accounts stand under its name). A host with no account is a row with its name, "No
+  account" and an "Add account" press, as an agent with none is in its card. The dashboard
+  logs no coding agent's own CLI in: a press installs a missing program, and an agent with no
+  account gets one in its package's window, on this page, the Overview's first step and the
+  start form's red line alike. Picked (Suleiman, 2026-11-24, from his own picture of the
+  page) over a "Claude Code" and a "Codex" part with "Log this computer in" above the
+  accounts' own presses, which were two ways to add each agent.
 - What runs need and do not have is a first step of the Overview's onboarding: "Connect a
   coding agent" always, with a press for Claude and one for Codex (the agents' package's,
   `agent.connect`: the window an account is added in), done once either has an account; each

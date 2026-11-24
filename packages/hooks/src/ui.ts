@@ -148,6 +148,10 @@ export interface UiConnectAgentProps {
   agent: 'claude' | 'codex'
   /** Whether it is the page's one primary press. */
   primary: boolean
+  /** What it says, where the agent's name stands beside it already ("Add account"); the agent's mark and name when unsaid. */
+  label?: string
+  /** A smaller press, for a line of a form. */
+  small?: boolean
   /** An account was added, or a sign-in ended without one: what the page knows of the agent is read again. */
   onConnected: () => void
 }

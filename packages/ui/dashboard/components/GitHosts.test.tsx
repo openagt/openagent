@@ -132,13 +132,16 @@ describe("the git host in a session's gear menu, said and not offered", () => {
 })
 
 describe('Git hosts', () => {
-  test('one card, "Git host accounts", a section per host drawn from its package: OpenAgent\u2019s own accounts, the one runs use; another is used for runs with a press; one more is added from the card\u2019s title; a host with no package is one line', async () => {
+  test('one card, "Git host accounts", its rows drawn from the host\u2019s package: OpenAgent\u2019s own accounts, the one runs use; another is used for runs with a press; one more is added from the card\u2019s title; a host with no package is one line', async () => {
     logins.onGitHosts.mockResolvedValue({ hosts: [{ host: 'github.com', projects: ['site', 'gemskills'], provider: provider() }, { host: 'gitlab.example.com', projects: ['tool'] }] })
     render(<GitHostsCard />)
     const card = await screen.findByRole('region', { name: 'GitHub' })
     expect(within(card).queryByText('Connected')).toBeNull()
     expect(screen.getByText('Git host accounts')).toBeTruthy()
-    expect(within(card).getByText('Used by site, gemskills')).toBeTruthy()
+    // One host a package answers for: its accounts stand alone, with no line that names it, nor a sentence over them (his pick).
+    expect(within(card).queryByRole('heading', { name: 'GitHub' })).toBeNull()
+    expect(card.textContent).not.toContain('Used by')
+    expect(screen.queryByText(/never your own login/)).toBeNull()
     const octo = within(card).getByRole('listitem', { name: '@octo' })
     expect(octo.textContent).toContain('Added to OpenAgent')
     // One host an account can be added at: its press is at the card's title, and none at the host's own line.
@@ -216,8 +219,13 @@ describe('Git hosts', () => {
     logins.onGitHosts.mockResolvedValue({ hosts: [{ host: 'github.com', projects: ['site'], provider: provider({ installed: false, accounts: [], installFailed: 'curl: could not resolve host' }) }] })
     render(<GitHostsCard />)
     const card = await screen.findByRole('region', { name: 'GitHub' })
-    expect(within(card).getByText('gh, the tool for GitHub, is not installed.')).toBeTruthy()
-    fireEvent.click(within(card).getByRole('button', { name: 'Add a GitHub account' }))
+    // A host with no account is a row of the card: its name, what is missing, and its press.
+    const row = within(card).getByRole('listitem', { name: 'GitHub' })
+    expect(within(row).getByText('gh, the tool for GitHub, is not installed.')).toBeTruthy()
+    // Its tool is not here: nothing to add an account with at the card's title.
+    expect(screen.getAllByRole('button', { name: 'Add a GitHub account' })).toHaveLength(1)
+    expect(within(row).getByRole('button', { name: 'Add a GitHub account' }).textContent).toBe('Add account')
+    fireEvent.click(within(row).getByRole('button', { name: 'Add a GitHub account' }))
     const dialog = await screen.findByRole('dialog', { name: 'Add a GitHub account' })
     expect(within(dialog).getByText('brew install gh')).toBeTruthy()
     expect(within(dialog).getByRole('alert').textContent).toBe('curl: could not resolve host')
@@ -230,17 +238,21 @@ describe('Git hosts', () => {
     logins.onGitHosts.mockResolvedValue({ hosts: [{ host: 'github.com', projects: ['site'], provider: provider({ accounts: [] }) }] })
     render(<GitHostsCard />)
     const out = await screen.findByRole('region', { name: 'GitHub' })
-    expect(within(out).getByText('OpenAgent has no GitHub account yet.')).toBeTruthy()
-    // One press, where what is missing is said: not a second one at the card's title.
-    expect(screen.getAllByRole('button', { name: 'Add a GitHub account' })).toHaveLength(1)
-    fireEvent.click(within(out).getByRole('button', { name: 'Add a GitHub account' }))
+    const none = within(out).getByRole('listitem', { name: 'GitHub' })
+    expect(within(none).getByText('No account')).toBeTruthy()
+    // The row's own press, and "Add" at the card's title as with accounts there (his pick).
+    expect(screen.getAllByRole('button', { name: 'Add a GitHub account' }).map(press => press.textContent)).toEqual(['Add', 'Add account'])
+    fireEvent.click(within(none).getByRole('button', { name: 'Add a GitHub account' }))
     await waitFor(() => expect(logins.sendGitHostLogin).toHaveBeenCalledWith('github.com'))
   })
 
   test('two hosts with a package: Add is a menu of them', async () => {
     logins.onGitHosts.mockResolvedValue({ hosts: [{ host: 'github.com', projects: ['site'], provider: provider() }, { host: 'git.example.com', projects: ['tool'], provider: provider({ name: 'Forge', tool: 'forge', accounts: [] }) }] })
     render(<GitHostsCard />)
-    await screen.findByRole('region', { name: 'Forge' })
+    const forge = await screen.findByRole('region', { name: 'Forge' })
+    // With more than one host, each one's accounts stand under its name and what uses it.
+    expect(within(forge).getByRole('heading', { name: 'Forge' })).toBeTruthy()
+    expect(within(forge).getByText('Used by tool')).toBeTruthy()
     await openMenu(screen.getByRole('button', { name: 'Add a git host account' }))
     expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toEqual(['GitHub', 'Forge'])
     fireEvent.click(screen.getByRole('menuitem', { name: 'Forge' }))
