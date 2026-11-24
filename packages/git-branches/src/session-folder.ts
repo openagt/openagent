@@ -1,6 +1,6 @@
 import { mkdir, rm, rmdir, stat } from 'node:fs/promises'
 import { basename, join } from 'node:path'
-import { checkoutRoot, nodeGitRunner, originUrl, sessionFolder, type GitRunner } from '@openagt/agent-data'
+import { checkoutRoot, nodeGitRunner, originDefaultBranch, originUrl, sessionFolder, type GitRunner } from '@openagt/agent-data'
 import { agentBranchName } from './branch-names.js'
 
 /**
@@ -33,6 +33,29 @@ export async function sessionRepos(folders: readonly string[], git: GitRunner = 
   return repos
 }
 
+/** How long a new copy waits for its origin: a host that does not answer must not hold the run's start. */
+const ORIGIN_FETCH_MS = 20_000
+
+/**
+ * Origin's default branch as origin has it now, for a copy just cloned from a folder: its
+ * branches are read from origin, which replaces what the clone took for them (the folder's own
+ * branches), and its default branch is asked of origin too, where the clone had the branch the
+ * folder was on. Nothing when origin does not answer in time or has no default branch to name.
+ */
+async function originStart(copy: string, git: GitRunner): Promise<string | undefined> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const capped = new Promise<false>(resolve => {
+    timer = setTimeout(() => resolve(false), ORIGIN_FETCH_MS)
+    timer.unref()
+  })
+  const fetched = await Promise.race([git(['fetch', '--quiet', '--prune', 'origin'], copy).then(() => true, () => false), capped])
+  clearTimeout(timer)
+  if (!fetched) return undefined
+  // The clone's `origin/HEAD` names the branch the folder was on: origin says its own, or it names none.
+  await git(['remote', 'set-head', 'origin', '--auto'], copy).catch(() => git(['remote', 'set-head', 'origin', '--delete'], copy).catch(() => {}))
+  return originDefaultBranch(copy, git)
+}
+
 /** The copy's own git setting that names the commit it was made at. */
 const START_KEY = 'openagent.start'
 
@@ -45,9 +68,13 @@ export const SESSION_FOLDER_STAYS = 'a session folder stays'
  * its own work being in its checkout of the project. The folder itself has no branch and no git:
  * it stays when the run ends, holding what the agent made, and a resumed run goes on in it.
  *
- * Each repo the session has is a copy in it, under its name: a clone of the repo's folder as it is
- * committed, on a new branch `agent-<id>`, its `origin` the repo's own (none when the repo has none,
- * so nothing goes back into the folder it came from). A clone and not a worktree: the repo is not
+ * Each repo the session has is a copy in it, under its name: a clone of the repo's folder, on a new
+ * branch `agent-<id>`, its `origin` the repo's own (none when the repo has none, so nothing goes
+ * back into the folder it came from). The branch starts from origin's default branch as origin has
+ * it now, as a project's run does: what the folder is on, and commits it holds that were never
+ * pushed, are the person's, and a pull request of the copy carries the session's work alone. A
+ * repo with no origin, or one whose origin does not answer, starts from the folder as it is
+ * committed. A clone and not a worktree: the repo is not
  * the session's project, and the session leaves nothing in it; deleting the session's folder takes
  * it all. A copy already there is kept as it is, with the agent's work; one that is gone is made
  * again. `made` names the copies this call made, for the agent to be told of.
@@ -63,7 +90,8 @@ export async function openSessionFolder(home: string, id: string, repos: readonl
     await git(['clone', '--quiet', '--', repo.from, copy], path)
     const origin = await originUrl(repo.from, git)
     await git(origin ? ['remote', 'set-url', 'origin', origin] : ['remote', 'remove', 'origin'], copy)
-    await git(['checkout', '--quiet', '-b', agentBranchName(id)], copy)
+    const start = origin ? await originStart(copy, git) : undefined
+    await git(['checkout', '--quiet', '--no-track', '-b', agentBranchName(id), ...(start !== undefined ? [start] : [])], copy)
     // Where the copy starts, kept in the copy itself: what it holds beyond it is the session's work, pushed or not.
     await git(['config', START_KEY, (await git(['rev-parse', 'HEAD'], copy)).trim()], copy)
   }

@@ -76,8 +76,14 @@ already made, and lists it in its pull request; for anything else it proposes an
   agent worked in the person's own checkout of it, on the branch that was on. Picked over
   the copies inside the project's checkout, which git would read as the project's own new
   files, and over a worktree in the repo, which leaves a folder and a branch in a repo
-  that is not the session's project. The copy holds what is committed in the repo's
-  folder, as with no project.
+  that is not the session's project.
+- A copy's branch starts from origin's default branch as origin has it when the copy is
+  made, as a project's run does. Before, it started from whatever the repo's folder was
+  on: a pull request of the copy carried the person's commits that were never pushed, and
+  a folder left on a side branch started the agent there. Picked over a clone from the
+  repo's address, which needs a login and the network for all of it; it costs that
+  commits not pushed are not in the copy. A repo with no origin, or one whose origin
+  does not answer in twenty seconds, is copied as its folder is committed.
 - When a run in a project ends, the copies it never touched go, and its session folder
   with them once it is empty: a copy is untouched when its tree is clean and no branch
   of it holds a commit beyond the one it was made at, which the copy keeps in its own
