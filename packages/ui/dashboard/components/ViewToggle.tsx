@@ -16,6 +16,11 @@ function onWebsiteName(): boolean {
  * and the lit side is a thumb of its own, which the page switch slides from one side to the other
  * (`view-transition-name`, tailwind.css). Anywhere else (`localhost:4200`, a server) there is no
  * landing page to go to, and no toggle.
+ *
+ * Hidden for now (Rom and Suleiman, 2026-11-24): too unusual at this point, so the dashboard is the
+ * only view and nothing draws this. Kept, with its routes and the website's own side, for the day
+ * `openagent.build` is where a person chooses a server: to show it again, draw it in the sidebar's
+ * header under the brand (`AgentHistory.tsx`) and give the website's its rule back (`styles.css`).
  */
 export function ViewToggle() {
   if (!onWebsiteName()) return null

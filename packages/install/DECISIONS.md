@@ -40,6 +40,12 @@ already made, and lists it in its pull request; for anything else it proposes an
   (`dash.openagent.build`), a second address to know; the price is that an installed
   computer shows the website of its installed version, and nothing when the dashboard is
   down.
+- The "Landing page | Dashboard" toggle is hidden for now, in the dashboard and on its copy
+  of the website: the name shows the dashboard, and the landing page's "Dashboard" button
+  leads back to it for a browser that picked the landing page before. Its code and routes
+  stay. Picked (Rom and Suleiman, 2026-11-24) over removing it: it comes back if
+  `openagent.build` becomes where a person chooses a server. Hidden because two views at
+  one address is too unusual at this point.
 - The toggle is under the logo at the same place and size on both pages, the top of the
   dashboard's sidebar, so a switch moves neither; the switch slides the lit side over and
   fades the rest (the browser's page transitions; a browser without them just switches).

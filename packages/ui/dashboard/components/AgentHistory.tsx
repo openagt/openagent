@@ -49,7 +49,6 @@ import { PopupPlacementContext } from './ui/popup-placement.js'
 // Global chrome relocated off the removed top navbar (#772 follow-up): the sidebar is the app's
 // chrome now, so the workspace keeps the full width.
 import { BrandLink } from './BrandLink.js'
-import { ViewToggle } from './ViewToggle.js'
 import { PersonMenu } from './PersonMenu.js'
 import { SidebarResizer } from './SidebarResizer.js'
 import { HideSidebarButton } from './SidebarToggle.js'
@@ -349,7 +348,7 @@ export function AgentHistory({
               <HideSidebarButton />
             </span>
           </div>
-          <ViewToggle />
+          {/* The "Landing page | Dashboard" switch (`ViewToggle`) stood here: hidden for now, its code kept. */}
           <ProjectPicker look="sidebar" none={{ label: 'All projects' }} picked={scope ?? null} pending={scopePending} projects={projects} onPick={onScope} onProjectAdded={onProjectAdded ?? (() => {})} />
         </SidebarHeader>
         {/* New/Overview/the modules' pages stack as one nav group, row against row, close under the
